@@ -715,3 +715,14 @@ goes in git.
   --format json` lists providers but not whether they are signed in, which
   only `usage --provider X` shows; `codexbar --version` printed `unknown` on
   the dev box.
+- 2026-10-05: permission hook probes (#57), Claude Code 2.1.289 in a
+  terminal (tmux, Haiku), a throwaway `PermissionRequest` command hook that
+  waits, then allows. The dialog shows while the hook waits, and the hook's
+  answer resolves it. Under `--dangerously-skip-permissions` an `ask` rule's
+  prompt still reaches the hook (`permission_mode: "bypassPermissions"`),
+  although the docs say the hook does not fire in that mode. When the
+  keyboard picks Yes first, the hook gets no signal and its answer is
+  dropped; Esc or No interrupts the turn and sends the hook SIGTERM within
+  0.1 s. `permission_suggestions` holds SDK `PermissionUpdate` objects (here
+  `addDirectories`). Codex 0.160.0 asks the user to trust any new or changed
+  hook at launch; its race test waits for the Codex limit to reset.
