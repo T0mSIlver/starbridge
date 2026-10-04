@@ -232,6 +232,18 @@ test("answers fetches an answer the owner gave while nothing polled before sayin
   ]);
 });
 
+test("answers --wait wakes at the session's next default time", async () => {
+  const ctx = await paired(server);
+  const at = new Date(Date.now() + 1_500).toISOString();
+  await run([...ASK, "--session", "s1", "--default-at", at], ctx);
+  const id = ctx.lines[0] as string;
+  ctx.lines.length = 0;
+  const started = Date.now();
+  expect(await run(["answers", "--session", "s1", "--wait", "20"], ctx)).toBe(0);
+  expect(Date.now() - started).toBeLessThan(5_000);
+  expect(JSON.parse(ctx.lines[0] as string).ack).toBe(`${id}:default`);
+});
+
 test("answers exits 1 on a server error and keeps the cursor", async () => {
   const ctx = await paired(server);
   await run([...ASK, "--session", "s1"], ctx);

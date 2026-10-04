@@ -71,6 +71,11 @@ export function configDir(env: {
   return `${env.XDG_CONFIG_HOME || `${env.HOME}/.config`}/starbridge`;
 }
 
+/** The CLI's first error line, without the "starbridge: " the status line adds again. */
+function firstLine(stderr: string): string {
+  return (stderr.trim().split("\n")[0] ?? "").replace(/^starbridge:\s*/, "");
+}
+
 export class Poller {
   private stopped = false;
   private failures = 0;
@@ -148,7 +153,7 @@ export class Poller {
     const base = [this.command, "answers", "--session", me];
     const r = await this.host.run([...base, ...extra], timeoutMs);
     if (r.exitCode !== 0) {
-      await this.fail(r.stderr.trim().split("\n")[0] || `exit ${r.exitCode}`);
+      await this.fail(firstLine(r.stderr) || `exit ${r.exitCode}`);
       return undefined;
     }
     // Warnings on success, such as an answer that failed its checks.
@@ -186,7 +191,7 @@ export class Poller {
     if (done.length > 0) {
       const ack = await this.host.run([...base, ...done.flatMap((id) => ["--ack", id])], timeoutMs);
       if (ack.exitCode !== 0) {
-        await this.fail(ack.stderr.trim().split("\n")[0] || `exit ${ack.exitCode}`);
+        await this.fail(firstLine(ack.stderr) || `exit ${ack.exitCode}`);
         return undefined;
       }
       for (const id of done) this.unconfirmed.delete(id);

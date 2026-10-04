@@ -8,7 +8,7 @@
  *                                              machine's CLI config must be paired with it
  *   bun e2e/run.ts --by-hand --only owner      this machine's server; the owner answers on
  *                                              a phone, in a session under Remote Control
- * Options: --only <case,...>, --model <alias> (default haiku), --out <file.md>, --bin <dir>
+ * Options: --only <case,...>, --model <alias> (default sonnet), --out <file.md>, --bin <dir>
  * (put its `starbridge` first on PATH), --keep (leave the scratch folder).
  *
  * Needs `claude`, `tmux` and `starbridge` on PATH. Sessions run in tmux windows `sb-e2e-*`, in a
@@ -41,7 +41,7 @@ const { values: opt } = parseArgs({
     device: { type: "string" },
     "by-hand": { type: "boolean" },
     only: { type: "string" },
-    model: { type: "string", default: "haiku" },
+    model: { type: "string", default: "sonnet" },
     out: { type: "string" },
     keep: { type: "boolean" },
     bin: { type: "string" },
@@ -466,6 +466,7 @@ try {
       rows.push({ name, result: "FAIL", timing: "", note: (e as Error).message });
       say(`${name}: FAIL ${(e as Error).message}`);
     }
+    for (const s of sessions.splice(0)) await s.stop();
   }
 } finally {
   for (const s of sessions) await s.stop();

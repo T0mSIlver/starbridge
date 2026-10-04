@@ -360,9 +360,17 @@ export async function answers(
   const seconds = Number(opts.wait);
   if (!Number.isInteger(seconds) || seconds < 0 || seconds > MAX_CYCLE_SECONDS)
     throw new UsageError(`--wait takes whole seconds from 0 to ${MAX_CYCLE_SECONDS}`);
+  // Wake for this session's next default time, so its notice is not a whole cycle late.
+  const now = ctx.now().getTime();
+  const st2 = ctx.store.state();
+  const pending = Object.entries(st2.asked)
+    .filter(([id, a]) => a.session === target && !a.defaulted && !st2.answers[id] && a.defaultAt)
+    .map(([, a]) => Date.parse(a.defaultAt as string) - now)
+    .filter((ms) => ms > 0);
+  const hold = Math.min(seconds, ...pending.map((ms) => Math.ceil(ms / 1000)));
   const s = session(ctx);
   try {
-    await poll(ctx, s, { cursor: ctx.store.state().cursor, seconds, shared: true });
+    await poll(ctx, s, { cursor: ctx.store.state().cursor, seconds: hold, shared: true });
   } catch (e) {
     if (e instanceof UsageError || e instanceof ProtocolError) throw e;
     ctx.err(`starbridge: ${(e as Error).message}`);
