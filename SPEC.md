@@ -205,6 +205,13 @@ How it generalizes is open.
 - 2026-10-04. Name: Starbridge (a starship's bridge, where the captain
   commands, and the bridge between all your agents). Domains not registered yet.
 
+- 2026-10-04. Ideation done; the build plan below is approved. Stack: a pnpm
+  monorepo on Bun (not Node), with `bun:sqlite`, Hono, and the CLI shipped as
+  `bun build --compile` binaries as well as on npm; Next.js web; Kotlin and
+  Compose on Android. Quota snapshots are end-to-end encrypted like
+  decisions. Version 1 is quotas and decisions; owner panels wait for
+  version 2. Web Push is in version 1.
+
 ## Encryption, with existing libraries
 
 - libsodium sealed boxes (`crypto_box_seal`, X25519 + XSalsa20-Poly1305): an
@@ -254,11 +261,7 @@ Approved 2026-10-04:
   distributor) instead.
 - iOS later would need Apple's push service and a $99/year developer account.
 
-## Open questions
-
-1. Technology. Proposed below.
-
-## Technology (proposed, not decided)
+## Technology (decided 2026-10-04, Bun replaces Node)
 
 The owner's vidtheque already uses: Kotlin, Jetpack Compose with Material 3
 Expressive, Hilt, Navigation 3, OkHttp and Firebase on Android; Next.js 16 and
@@ -274,7 +277,7 @@ React 19 on the web; design tokens generated from `DESIGN.md` frontmatter
 - Deploy: Docker Compose and Caddy on the VPS; the same image is the self-hosted
   build.
 
-## Build plan (proposed 2026-10-04)
+## Build plan (approved 2026-10-04)
 
 Ideation closes with this plan. Owner panels (the Mac, the prompt cache, the
 release) wait for version 2; version 1 is quotas and decisions.
@@ -292,7 +295,7 @@ One pnpm monorepo:
 | Path | What |
 |---|---|
 | `packages/protocol` | zod schemas, the envelope code on libsodium, test vectors as JSON that the Android tests read too |
-| `server` | Hono on Node, SQLite, one Docker image; a flag runs it as the push relay |
+| `server` | Hono on Bun, `bun:sqlite`, one Docker image; a flag runs it as the push relay |
 | `cli` | `starbridge` on npm: `pair`, `ask`, `wait`, `quota push` (the uploader) |
 | `mod` | the Claude Code mod: long-poll, then `$.prompt.submit` |
 | `skill` | the decision skill and the `CLAUDE.md` rule |

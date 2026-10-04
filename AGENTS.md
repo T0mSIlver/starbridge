@@ -8,38 +8,20 @@ the open questions and the research log. Read it first.
 
 ## Status (2026-10-04)
 
-Ideation. No code. Do not start implementation until the owner says the
-ideation is done; then both features get built in parallel, fully.
+Building version 1: quota windows and decisions. The plan, the waves and the
+issue for each piece are in `SPEC.md`, "Build plan". Stack: pnpm monorepo on
+Bun, Hono, `bun:sqlite`, Next.js, Kotlin and Compose. Domain and hosting
+accounts not set up yet; use local stubs until they are.
 
-Decided (details and dates in `SPEC.md`, "Decided"): MIT; free hosting on a
-small EU VPS (Hetzner first, then netcup) and self-hostable from the same
-image; GitHub sign-in; end-to-end encryption with a key pair per device and a
-printed recovery key, built on libsodium; push through an owner-hosted relay to
-Firebase, UnifiedPush for self-hosters; any agent posts decisions through HTTP
-and a CLI; a Claude Code mod long-polls the server and submits the answer as a
-prompt; quotas come from `codexbar` JSON through a small local uploader; a
-separate project from CodexBar, to be linked from its README later.
+## How sessions work here
 
-Not decided:
-- The technology. Proposed in `SPEC.md`: the owner's vidtheque stack (Kotlin,
-  Compose, Material 3 Expressive on Android; Next.js on the web; design tokens
-  from `DESIGN.md`), TypeScript for the server, CLI and mod, SQLite.
-- The domain: later, something like `starbridge-app.dev`. starbridge.dev,
-  .app, .com and .ai are taken; Starbridge.ai is an AI startup selling to the
-  public sector.
-- The repo stays private until there is something to show.
-
-## Next topics to work through with the owner
-
-1. The decision skill and the global `CLAUDE.md` rule that points agents to it:
-   how to write a decision that stands alone on a lock screen.
-2. Screens of the web page and the Android app.
-3. The extension format for owner panels: what the owner's Mac is running
-   (inference, builds, the CI runner and its queue), the prompt cache meter,
-   the orchestrator keep-warm switch, today's release.
-4. Probes before design hardens: does a long-poll `$.http.fetch` in a Claude
-   Code mod time out; does `$.prompt.submit` from a mod reach a session open in
-   the Desktop Code tab and one driven through Remote Control.
+- One session per GitHub issue, in its own worktree and branch, one PR that
+  says `Closes #n`. Never push `main`.
+- Stay inside your issue's paths. Changes to `packages/protocol` from another
+  issue go in their own small PR first.
+- Before `gh pr ready`, run the `cross-review` skill and fix what it finds.
+  Then message the orchestrator; it merges (squash).
+- Never credit an AI in commits or PRs.
 
 ## Where the owner's related work lives (dev box)
 
