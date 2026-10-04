@@ -43,9 +43,10 @@ function githubConfig() {
 async function githubSignIn(
   s: Awaited<ReturnType<typeof makeServer>>,
   user: number,
-  opts: { app?: boolean; state?: string } = {},
+  opts: { challenge?: string; state?: string } = {},
 ) {
-  const start = await s.app.request(`/v1/auth/github${opts.app ? "?app=1" : ""}`);
+  const query = opts.challenge ? `?app=1&challenge=${opts.challenge}` : "";
+  const start = await s.app.request(`/v1/auth/github${query}`);
   expect(start.status).toBe(302);
   const authorize = new URL(start.headers.get("location") ?? "");
   expect(authorize.searchParams.get("client_id")).toBe("gh-client");
@@ -80,13 +81,60 @@ test("GitHub sign-in sets an HTTP-only session cookie on one account per GitHub 
   expect(other.json.account).not.toBe(first.account);
 });
 
-test("GitHub sign-in for the app puts the session in the redirect fragment", async () => {
+/** RFC 7636 S256: the challenge is the base64url SHA-256 of the verifier. */
+function pkce() {
+  const verifier = Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url");
+  const challenge = new Bun.CryptoHasher("sha256").update(verifier).digest("base64url");
+  return { verifier, challenge };
+}
+
+async function appSignIn(s: Awaited<ReturnType<typeof makeServer>>, user: number) {
+  const { verifier, challenge } = pkce();
+  const res = await githubSignIn(s, user, { challenge });
+  expect(res.status).toBe(302);
+  const location = new URL(res.headers.get("location") ?? "");
+  return { location, code: location.searchParams.get("code") ?? "", verifier };
+}
+
+test("GitHub sign-in for the app redirects with a code, never the session", async () => {
   const s = await makeServer(githubConfig());
-  const res = await githubSignIn(s, 42, { app: true });
-  const location = res.headers.get("location") ?? "";
-  expect(location).toStartWith("starbridge://auth#session=sbs_");
-  const me = await s.call("GET", "/v1/me", { token: location.split("session=")[1] });
-  expect(me.status).toBe(200);
+  const { location, code } = await appSignIn(s, 42);
+  expect(location.protocol + location.host + location.pathname).toBe("starbridge:auth");
+  expect(location.href).not.toContain("sbs_");
+  expect(code).toStartWith("sbc_");
+  expect((await s.call("GET", "/v1/me", { token: code })).status).toBe(401);
+});
+
+test("the app trades its code and verifier for a session, once", async () => {
+  const s = await makeServer(githubConfig());
+  const { code, verifier } = await appSignIn(s, 42);
+  const r = await s.call("POST", "/v1/auth/app/session", { body: { code, verifier } });
+  expect(r.status).toBe(200);
+  const me = await s.call("GET", "/v1/me", { token: r.json.session });
+  expect(me.json).toMatchObject({ role: "device", member: null });
+  const again = await s.call("POST", "/v1/auth/app/session", { body: { code, verifier } });
+  expect(again.status).toBe(400);
+});
+
+test("an app that caught the redirect cannot trade the code without the verifier", async () => {
+  const s = await makeServer(githubConfig());
+  const { code, verifier } = await appSignIn(s, 42);
+  const stolen = await s.call("POST", "/v1/auth/app/session", {
+    body: { code, verifier: pkce().verifier },
+  });
+  expect(stolen.status).toBe(400);
+  // A failed try burns the code, so the thief cannot keep guessing.
+  const late = await s.call("POST", "/v1/auth/app/session", { body: { code, verifier } });
+  expect(late.status).toBe(400);
+});
+
+test("app sign-in needs a challenge and its code expires", async () => {
+  const s = await makeServer(githubConfig());
+  expect((await s.app.request("/v1/auth/github?app=1")).status).toBe(400);
+  const { code, verifier } = await appSignIn(s, 42);
+  s.deps.db.query("UPDATE app_codes SET expires_at = 0").run();
+  const r = await s.call("POST", "/v1/auth/app/session", { body: { code, verifier } });
+  expect(r.status).toBe(400);
 });
 
 test("GitHub sign-in refuses a callback whose state does not match", async () => {

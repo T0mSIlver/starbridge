@@ -19,7 +19,7 @@ export interface Config {
   };
   /** Self-hosted sign-in: whoever presents this token owns the server's one account. */
   ownerToken?: string;
-  /** Where the GitHub callback sends the Android app, with the session in the fragment. */
+  /** Where the GitHub callback sends the Android app, with a code it trades for a session. */
   appRedirectUri: string;
 
   /** Most machines an account may hold at once. */

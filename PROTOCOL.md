@@ -62,6 +62,10 @@ errors use the codes in `packages/protocol/src/sodium.ts`.
   (self-hosted). The web page holds an HTTP-only session cookie; Android sends
   `Authorization: Bearer <session>`. A session belongs to an account and, once paired, to one
   device member id.
+- **App sign-in** follows PKCE (RFC 7636, S256), because any app can claim the `starbridge://`
+  scheme. The app keeps a random verifier and sends only its challenge,
+  base64url(SHA-256(verifier)). The redirect carries a single-use code, never the session, and
+  the app trades code and verifier for the session over HTTPS. Any trade attempt burns the code.
 - **Machines** send `Authorization: Bearer <machine token>`, issued when their pairing is
   approved. The server stores a hash of it and drops it when the directory revokes the machine.
 - Pairing requests are unauthenticated and rate-limited per IP.
@@ -71,8 +75,9 @@ errors use the codes in `packages/protocol/src/sodium.ts`.
 
 | Route | Who | What |
 |---|---|---|
-| `GET /auth/github` | anyone | start GitHub sign-in |
-| `GET /auth/github/callback` | anyone | finish it, set the session; with `?app=1` on the start, redirect to `starbridge://auth#session=<token>` instead |
+| `GET /auth/github` | anyone | start GitHub sign-in; the app adds `?app=1&challenge=<S256 challenge>` |
+| `GET /auth/github/callback` | anyone | finish it, set the session; for the app, redirect to `starbridge://auth?code=<code>` instead |
+| `POST /auth/app/session` | the app | `{code, verifier}` → `{session}`; 400 `bad-code` when the code is unknown, used, older than 60 s or the verifier does not match; rate-limited per IP |
 | `POST /auth/owner` | anyone | self-hosted: `{token}` against `OWNER_TOKEN`; sets the session and returns `{session}` |
 | `POST /auth/logout` | device | end the session |
 | `GET /me` | device, machine | `{account, member, role}`; `member` is null until a device pairs |

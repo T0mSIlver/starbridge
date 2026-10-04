@@ -286,6 +286,16 @@ How it generalizes is open.
   `deploy` with the dev box key and sudo; root login and passwords are off. The web page is not
   served yet (#8); Caddy will route it on the same origin.
 
+- 2026-10-04. App sign-in (#34): the GitHub redirect to `starbridge://auth` carries a
+  single-use code bound to a PKCE S256 challenge, and the app trades code and verifier for the
+  session at `POST /v1/auth/app/session`. Chosen over Android App Links on
+  `https://starbridge.run` because App Links bind one domain into the APK, so self-hosted servers
+  could not use them, and verification can fail silently and fall back to the browser, which
+  would leave the token in its URL. Left open: a hostile app can start its own sign-in with its
+  own verifier, and if GitHub skips the consent screen for an app already authorized, it gets a
+  session. App Links on the hosted domain, added on top later, would close that for
+  `starbridge.run`.
+
 ## Encryption, with existing libraries
 
 - libsodium sealed boxes (`crypto_box_seal`, X25519 + XSalsa20-Poly1305): an
