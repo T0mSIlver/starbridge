@@ -32,6 +32,21 @@ export function sign<K extends Kind>(
   return { v: 1, kind, signer, body: text, sig: toB64(sig) };
 }
 
+/** Signs a message with a key held outside libsodium, such as a non-extractable WebCrypto key. */
+export type SignFn = (message: Uint8Array) => Promise<Uint8Array>;
+
+/** `sign` with a `SignFn`. Ed25519 is deterministic, so both give the same envelope. */
+export async function signAsync<K extends Kind>(
+  kind: K,
+  body: BodyOf<K>,
+  signer: string,
+  signFn: SignFn,
+): Promise<SignedEnvelope> {
+  const text = JSON.stringify(body);
+  const sig = await signFn(signatureMessage(kind, signer, text));
+  return { v: 1, kind, signer, body: text, sig: toB64(sig) };
+}
+
 /** Throws `bad-signature` unless `signPk` signed this envelope. */
 export function verify(env: SignedEnvelope, signPk: string): void {
   let ok = false;
@@ -82,17 +97,45 @@ export function seal<K extends ItemKind>(
   signer: { id: string; signKey: Uint8Array },
   recipients: Pick<Member, "id" | "boxPk">[],
 ): SealedItem & { kind: K } {
+  checkRecipients(kind, body, recipients);
+  return sealEnvelope(kind, body, sign(kind, body, signer.id, signer.signKey), recipients);
+}
+
+/** `seal` with a `SignFn`. */
+export async function sealAsync<K extends ItemKind>(
+  kind: K,
+  body: BodyOf<K>,
+  signer: { id: string; sign: SignFn },
+  recipients: Pick<Member, "id" | "boxPk">[],
+): Promise<SealedItem & { kind: K }> {
+  checkRecipients(kind, body, recipients);
+  return sealEnvelope(kind, body, await signAsync(kind, body, signer.id, signer.sign), recipients);
+}
+
+function checkRecipients<K extends ItemKind>(
+  kind: K,
+  body: BodyOf<K>,
+  recipients: Pick<Member, "id" | "boxPk">[],
+): void {
   const named = typeof body.to === "string" ? [body.to] : body.to;
   const ids = recipients.map((r) => r.id);
   if (named.length !== ids.length || !ids.every((id) => named.includes(id)))
     throw new Error("body.to must list exactly the recipients");
   parseWith(BODY_SCHEMAS[kind], body);
-  const plain = utf8(JSON.stringify(sign(kind, body, signer.id, signer.signKey)));
+}
+
+function sealEnvelope<K extends ItemKind>(
+  kind: K,
+  body: BodyOf<K>,
+  env: SignedEnvelope,
+  recipients: Pick<Member, "id" | "boxPk">[],
+): SealedItem & { kind: K } {
+  const plain = utf8(JSON.stringify(env));
   return {
     v: 1,
     kind,
     id: body.id,
-    from: signer.id,
+    from: env.signer,
     ...("decisionId" in body ? { re: body.decisionId } : {}),
     boxes: recipients.map((r) => ({
       to: r.id,
@@ -103,14 +146,23 @@ export function seal<K extends ItemKind>(
 
 /** Opens this member's box. The envelope inside is not verified yet. */
 export function openBox(item: SealedItem, me: { id: string; box: KeyPair }): SignedEnvelope {
-  const mine = item.boxes.find((b) => b.to === me.id);
-  if (!mine) throw new ProtocolError("wrong-recipient", `no box for ${me.id}`);
+  const box = myBox(item, me.id);
   let plain: Uint8Array;
   try {
-    plain = sodium.crypto_box_seal_open(fromB64(mine.box), me.box.publicKey, me.box.privateKey);
+    plain = sodium.crypto_box_seal_open(fromB64(box), me.box.publicKey, me.box.privateKey);
   } catch {
     throw new ProtocolError("cannot-open");
   }
+  return envelopeOf(item, plain);
+}
+
+function myBox(item: SealedItem, me: string): string {
+  const mine = item.boxes.find((b) => b.to === me);
+  if (!mine) throw new ProtocolError("wrong-recipient", `no box for ${me}`);
+  return mine.box;
+}
+
+function envelopeOf(item: SealedItem, plain: Uint8Array): SignedEnvelope {
   let json: unknown;
   try {
     json = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(plain));
@@ -138,7 +190,38 @@ export function open<K extends ItemKind>(
   directory: Directory,
 ): Opened<K> {
   const parsed = parseWith(SealedItem, item);
-  const env = openBox(parsed, me);
+  return check(item, openBox(parsed, me), me.id, directory);
+}
+
+/**
+ * Opens a sealed box with a key held outside libsodium. Rejects when the box does not open;
+ * resolves to the plaintext otherwise.
+ */
+export type OpenSealFn = (box: Uint8Array) => Promise<Uint8Array>;
+
+/** `open` with an `OpenSealFn`, running the same checks. */
+export async function openAsync<K extends ItemKind>(
+  item: SealedItem & { kind: K },
+  me: { id: string; openSeal: OpenSealFn },
+  directory: Directory,
+): Promise<Opened<K>> {
+  const parsed = parseWith(SealedItem, item);
+  const box = myBox(parsed, me.id);
+  let plain: Uint8Array;
+  try {
+    plain = await me.openSeal(fromB64(box));
+  } catch {
+    throw new ProtocolError("cannot-open");
+  }
+  return check(item, envelopeOf(parsed, plain), me.id, directory);
+}
+
+function check<K extends ItemKind>(
+  item: SealedItem & { kind: K },
+  env: SignedEnvelope,
+  me: string,
+  directory: Directory,
+): Opened<K> {
   if (env.signer !== item.from) throw new ProtocolError("id-mismatch", "from is not the signer");
   const entry = directory.members.get(env.signer);
   if (!entry) throw new ProtocolError("unknown-signer", env.signer);
@@ -151,6 +234,6 @@ export function open<K extends ItemKind>(
   const re = "decisionId" in body ? body.decisionId : undefined;
   if (item.re !== re) throw new ProtocolError("id-mismatch", "re is not the answered decision");
   const named = typeof body.to === "string" ? [body.to] : body.to;
-  if (!named.includes(me.id)) throw new ProtocolError("wrong-recipient", "body does not name me");
+  if (!named.includes(me)) throw new ProtocolError("wrong-recipient", "body does not name me");
   return { signer: entry.member, body };
 }
