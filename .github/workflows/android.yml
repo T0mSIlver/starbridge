@@ -1,0 +1,57 @@
+name: android
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "android/**"
+      - "packages/protocol/vectors/**"
+      - ".github/workflows/android.yml"
+  pull_request:
+    paths:
+      - "android/**"
+      - "packages/protocol/vectors/**"
+      - ".github/workflows/android.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: android
+
+jobs:
+  build:
+    name: build, unit tests, screenshots
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: gradle/actions/setup-gradle@v6
+
+      # verifyRoborazziDebug runs every unit test and fails when a screen drifts
+      # from app/screenshots/.
+      - name: Build and test
+        run: ./gradlew --console=plain assembleRelease verifyRoborazziDebug
+
+      - name: Screenshot diffs
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: screenshot-diffs
+          if-no-files-found: ignore
+          path: |
+            android/app/screenshots/*_compare.png
+            android/app/build/outputs/roborazzi/
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: starbridge-apk
+          path: android/app/build/outputs/apk/release/*.apk

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- DESIGN.md bg and accent, for the window and the splash before Compose draws. -->
+    <color name="ground">#F4F5F8</color>
+    <color name="mark">#B45F06</color>
+</resources>

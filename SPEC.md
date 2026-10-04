@@ -212,9 +212,22 @@ How it generalizes is open.
   decisions. Version 1 is quotas and decisions; owner panels wait for
   version 2. Web Push is in version 1.
 
+- 2026-10-04. Look: function over form. Monospace only for code (Markdown
+  code blocks in a decision's context); numbers, ids and machine names use the
+  sans face with tabular figures. Colours stay generic: on Android, Material
+  You dynamic colour from the wallpaper, with `DESIGN.md`'s neutral palette as
+  the fallback; on the web, that neutral palette. Fixed colours only where
+  they carry meaning: the "needs you" accent and the quota states (on pace,
+  will run out, unused). Material 3 Expressive parts are used where they do a
+  job: connected button groups for a decision's options, the large
+  notification action buttons, spring motion on state changes (answered,
+  approved), progress indicators for quota windows, predictive back and
+  adaptive layouts (list and detail side by side on wide screens).
+
 - 2026-10-04. Protocol (`PROTOCOL.md`, `packages/protocol`): sign, then seal;
   signatures cover the JSON body text as sent, so nothing re-serializes JSON.
-  The directory is a hash chain (BLAKE2b) that clients pin. A pairing code
+  The directory is a hash chain (BLAKE2b) that clients pin; the recovery key
+  co-signs its first entry. A pairing code
   carries an 80-bit secret the server never sees, which keys an HMAC on both
   pairing messages. The recovery seed shows as 24 BIP-39 words
   (`@scure/bip39`, audited, MIT).
@@ -387,3 +400,8 @@ two vendors at high effort. The orchestrator merges on green, squash.
   frequencies"; hailing.dev, .app and .sh show no nameservers; no Play app;
   "ride-hailing" is the common sense of the word). No nameservers is not proof a
   domain is free; confirm at a registrar.
+- 2026-10-04: Android crypto. `lazysodium-android` 5.2.0 needs JNA's AAR
+  (`jna@aar`) for its per-ABI native library; JVM unit tests use
+  `lazysodium-java`, which bundles libsodium for desktop, so the same
+  `LazySodium` API runs in both. The release build keeps JNA and Lazysodium
+  from R8.
