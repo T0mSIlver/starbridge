@@ -3,6 +3,9 @@ package dev.starbridge.app.ui
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Devices
+import androidx.compose.material.icons.outlined.Inbox
+import androidx.compose.material.icons.outlined.Speed
 import androidx.compose.material.icons.rounded.Devices
 import androidx.compose.material.icons.rounded.Inbox
 import androidx.compose.material.icons.rounded.Speed
@@ -16,8 +19,17 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi
 import androidx.compose.material3.adaptive.navigation3.ListDetailSceneStrategy
 import androidx.compose.material3.adaptive.navigation3.rememberListDetailSceneStrategy
+import androidx.compose.material3.WideNavigationRailDefaults
+import androidx.compose.material3.adaptive.currentWindowAdaptiveInfo
+import androidx.compose.material3.adaptive.layout.calculatePaneScaffoldDirective
+import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteDefaults
+import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteItem
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteType
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import androidx.window.core.layout.WindowSizeClass
+import dev.starbridge.app.ui.theme.StarbridgeTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -55,12 +67,13 @@ import java.time.Instant
 @Serializable data object QuotasKey : NavKey
 @Serializable data object DevicesKey : NavKey
 
-private class Tab(val key: NavKey, val label: String, val icon: ImageVector)
+/** A tab: outlined icon at rest, filled when selected, as Material's navigation bar does. */
+private class Tab(val key: NavKey, val label: String, val icon: ImageVector, val selected: ImageVector)
 
 private val tabs = listOf(
-    Tab(InboxKey, "Inbox", Icons.Rounded.Inbox),
-    Tab(QuotasKey, "Quotas", Icons.Rounded.Speed),
-    Tab(DevicesKey, "Devices", Icons.Rounded.Devices),
+    Tab(InboxKey, "Inbox", Icons.Outlined.Inbox, Icons.Rounded.Inbox),
+    Tab(QuotasKey, "Quotas", Icons.Outlined.Speed, Icons.Rounded.Speed),
+    Tab(DevicesKey, "Devices", Icons.Outlined.Devices, Icons.Rounded.Devices),
 )
 
 /** The clock relative times read; it ticks each minute. */
@@ -97,10 +110,21 @@ fun Setup(phase: Phase, notice: StateFlow<String?>, dismiss: () -> Unit, openUrl
     }
 }
 
+/** The navigation suite for the window: the short bar on phones, the wide rail beside wider content. */
+@Composable
+private fun suiteType(): NavigationSuiteType {
+    val width = currentWindowAdaptiveInfo().windowSizeClass
+    return when {
+        width.isWidthAtLeastBreakpoint(WindowSizeClass.WIDTH_DP_EXPANDED_LOWER_BOUND) -> NavigationSuiteType.WideNavigationRailExpanded
+        width.isWidthAtLeastBreakpoint(WindowSizeClass.WIDTH_DP_MEDIUM_LOWER_BOUND) -> NavigationSuiteType.WideNavigationRailCollapsed
+        else -> NavigationSuiteType.ShortNavigationBarCompact
+    }
+}
+
 /**
- * Three tabs in a navigation bar, or a rail on wide screens. The inbox is a list and detail:
+ * Three tabs in the navigation bar, or a rail on wide screens. The inbox is a list and detail:
  * side by side when the window is wide enough, else the detail stacks on the list and back
- * (predictive back included) returns to it.
+ * (predictive back included) returns to it. Back from another tab returns to the inbox.
  */
 @OptIn(ExperimentalMaterial3AdaptiveApi::class)
 @Composable
@@ -109,6 +133,8 @@ fun Main(openDecisions: Int, notice: StateFlow<String?>, dismiss: () -> Unit, op
     val now = now()
     val host = Notices(notice, dismiss)
     val listDetail = rememberListDetailSceneStrategy<NavKey>()
+    val twoPane = calculatePaneScaffoldDirective(currentWindowAdaptiveInfo()).maxHorizontalPartitions > 1
+    val colors = StarbridgeTheme.colors
     LaunchedEffect(openDecision) {
         openDecision.collect { id ->
             backStack.clear()
@@ -117,23 +143,39 @@ fun Main(openDecisions: Int, notice: StateFlow<String?>, dismiss: () -> Unit, op
         }
     }
     val current = backStack.lastOrNull()
+    val suite = suiteType()
     NavigationSuiteScaffold(
-        navigationSuiteItems = {
+        navigationSuiteType = suite,
+        navigationSuiteColors = NavigationSuiteDefaults.colors(
+            shortNavigationBarContainerColor = colors.surface,
+            wideNavigationRailColors = WideNavigationRailDefaults.colors(containerColor = colors.bg),
+        ),
+        containerColor = colors.bg,
+        navigationItems = {
             for (tab in tabs) {
                 val selected = current == tab.key || (tab.key == InboxKey && current is DecisionKey)
-                item(
+                NavigationSuiteItem(
+                    navigationSuiteType = suite,
                     selected = selected,
-                    onClick = { backStack.clear(); backStack.add(tab.key) },
+                    onClick = {
+                        backStack.clear()
+                        backStack.add(InboxKey)
+                        if (tab.key != InboxKey) backStack.add(tab.key)
+                    },
                     icon = {
-                        val count = if (tab.key == InboxKey) openDecisions else 0
-                        BadgedBox(badge = { if (count > 0) Badge { Text("$count") } }) { Icon(tab.icon, contentDescription = null) }
+                        // Open decisions need the owner: the beacon, a dot, not a count in error red.
+                        val beacon = tab.key == InboxKey && openDecisions > 0
+                        BadgedBox(badge = { if (beacon) Badge(containerColor = colors.accent) }) {
+                            Icon(if (selected) tab.selected else tab.icon, contentDescription = null)
+                        }
                     },
                     label = { Text(tab.label) },
+                    modifier = Modifier.semantics { if (tab.key == InboxKey && openDecisions > 0) stateDescription = "$openDecisions need you" },
                 )
             }
         },
     ) {
-        Scaffold(snackbarHost = { SnackbarHost(host) }) { padding ->
+        Scaffold(snackbarHost = { SnackbarHost(host) }, containerColor = colors.bg) { padding ->
             NavDisplay(
                 backStack = backStack,
                 modifier = Modifier.fillMaxSize().padding(padding),
@@ -146,27 +188,31 @@ fun Main(openDecisions: Int, notice: StateFlow<String?>, dismiss: () -> Unit, op
                         val vm: InboxViewModel = hiltViewModel()
                         val decisions by vm.decisions.collectAsStateWithLifecycle()
                         val selected = (backStack.lastOrNull() as? DecisionKey)?.id
-                        Refreshing(vm::refresh) {
-                            InboxScreen(
-                                decisions,
-                                now,
-                                DecisionActions(answer = vm::answer, open = { id ->
-                                    if (backStack.lastOrNull() is DecisionKey) backStack.removeAt(backStack.lastIndex)
-                                    backStack.add(DecisionKey(id))
-                                }),
-                                selected = selected,
-                            )
-                        }
+                        InboxScreen(
+                            decisions,
+                            now,
+                            DecisionActions(answer = vm::answer, open = { id ->
+                                if (backStack.lastOrNull() is DecisionKey) backStack.removeAt(backStack.lastIndex)
+                                backStack.add(DecisionKey(id))
+                            }),
+                            selected = selected,
+                            refresh = refresh(vm::refresh),
+                        )
                     }
                     entry<DecisionKey>(metadata = ListDetailSceneStrategy.detailPane()) { key ->
                         val vm: InboxViewModel = hiltViewModel()
                         val decisions by vm.decisions.collectAsStateWithLifecycle()
-                        DecisionScreen(decisions.find { it.id == key.id }, now, onAnswer = vm::answer)
+                        DecisionScreen(
+                            decisions.find { it.id == key.id },
+                            now,
+                            onAnswer = vm::answer,
+                            onBack = if (twoPane) null else ({ backStack.removeAt(backStack.lastIndex) }),
+                        )
                     }
                     entry<QuotasKey> {
                         val vm: QuotasViewModel = hiltViewModel()
                         val windows by vm.windows.collectAsStateWithLifecycle()
-                        Refreshing(vm::refresh) { QuotasScreen(windows, now) }
+                        QuotasScreen(windows, now, refresh = refresh(vm::refresh))
                     }
                     entry<DevicesKey> {
                         val vm: DevicesViewModel = hiltViewModel()
@@ -174,7 +220,8 @@ fun Main(openDecisions: Int, notice: StateFlow<String?>, dismiss: () -> Unit, op
                         val approval by vm.approval.collectAsStateWithLifecycle()
                         val push by vm.push.collectAsStateWithLifecycle()
                         val server by vm.server.collectAsStateWithLifecycle()
-                        DevicesScreen(members, approval, push, server, now, vm.actions)
+                        val colours by vm.colours.collectAsStateWithLifecycle()
+                        DevicesScreen(members, approval, push, server, now, vm.actions, colours = colours)
                     }
                 },
             )
@@ -184,10 +231,10 @@ fun Main(openDecisions: Int, notice: StateFlow<String?>, dismiss: () -> Unit, op
 
 /** Pull to refresh; the store syncs the directory, decisions and quotas. */
 @Composable
-private fun Refreshing(refresh: () -> Unit, content: @Composable () -> Unit) {
+private fun refresh(run: () -> Unit): Refresh {
     val vm: RefreshViewModel = hiltViewModel()
     val busy by vm.busy.collectAsStateWithLifecycle()
-    PullToRefreshBox(isRefreshing = busy, onRefresh = refresh) { content() }
+    return Refresh(busy, run)
 }
 
 @dagger.hilt.android.lifecycle.HiltViewModel

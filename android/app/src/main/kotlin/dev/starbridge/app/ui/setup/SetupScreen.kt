@@ -8,19 +8,20 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextField
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -32,7 +33,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.starbridge.app.BuildConfig
@@ -40,8 +40,7 @@ import dev.starbridge.app.data.Phase
 import dev.starbridge.app.data.Store
 import dev.starbridge.app.ui.Label
 import dev.starbridge.app.ui.Panel
-import dev.starbridge.app.ui.Title
-import dev.starbridge.app.ui.theme.Radius
+import dev.starbridge.app.ui.fieldColors
 import dev.starbridge.app.ui.theme.Sizes
 import dev.starbridge.app.ui.theme.Spacing
 import dev.starbridge.app.ui.theme.StarbridgeTheme
@@ -82,8 +81,8 @@ class SetupActions(
 @Composable
 fun SetupScreen(phase: Phase, server: String, busy: Boolean, actions: SetupActions, openUrl: (String) -> Unit, modifier: Modifier = Modifier) {
     Column(
-        modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = Spacing.s4, vertical = Spacing.s4),
-        verticalArrangement = Arrangement.spacedBy(Spacing.s3),
+        modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = Spacing.s5, vertical = Spacing.s6),
+        verticalArrangement = Arrangement.spacedBy(Spacing.s4),
     ) {
         when (phase) {
             Phase.SignedOut -> SignIn(server, busy, actions, openUrl)
@@ -95,16 +94,22 @@ fun SetupScreen(phase: Phase, server: String, busy: Boolean, actions: SetupActio
     }
 }
 
+/** A setup step's headline, in the type of a screen title. */
+@Composable
+private fun Title(text: String) {
+    Text(text, style = StarbridgeTheme.type.title, color = StarbridgeTheme.colors.fg, modifier = Modifier.padding(top = Spacing.s8, bottom = Spacing.s1))
+}
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun Primary(text: String, busy: Boolean, enabled: Boolean = true, onClick: () -> Unit) {
     val colors = StarbridgeTheme.colors
     Button(
         onClick = onClick,
         enabled = enabled && !busy,
-        shape = RoundedCornerShape(Radius.pill),
         modifier = Modifier.fillMaxWidth().heightIn(min = Sizes.tap),
     ) {
-        if (busy) CircularProgressIndicator(Modifier.width(Spacing.s5), color = colors.fg2, strokeWidth = 2.dp)
+        if (busy) LoadingIndicator(Modifier.size(Spacing.s6), color = colors.fg2)
         else Text(text, style = StarbridgeTheme.type.action)
     }
 }
@@ -121,7 +126,7 @@ private fun SignIn(server: String, busy: Boolean, actions: SetupActions, openUrl
         style = StarbridgeTheme.type.body,
         color = colors.fg2,
     )
-    Panel(Modifier.fillMaxWidth().padding(top = Spacing.s4)) {
+    Panel(Modifier.fillMaxWidth().padding(top = Spacing.s2)) {
         Label("This phone makes its own keys")
         Spacer(Modifier.padding(top = Spacing.s2))
         Text(
@@ -137,24 +142,24 @@ private fun SignIn(server: String, busy: Boolean, actions: SetupActions, openUrl
             Text("Use your own server", style = StarbridgeTheme.type.action)
         }
     } else {
-        OutlinedTextField(
+        TextField(
             value = url,
             onValueChange = { url = it },
             label = { Text("Server") },
             singleLine = true,
             textStyle = StarbridgeTheme.type.machine,
-            shape = RoundedCornerShape(Radius.md),
+            colors = fieldColors(),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, autoCorrectEnabled = false),
             modifier = Modifier.fillMaxWidth(),
         )
-        OutlinedTextField(
+        TextField(
             value = token,
             onValueChange = { token = it },
             label = { Text("Owner token") },
             supportingText = { Text("OWNER_TOKEN from the server's environment") },
             singleLine = true,
             visualTransformation = PasswordVisualTransformation(),
-            shape = RoundedCornerShape(Radius.md),
+            colors = fieldColors(),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, autoCorrectEnabled = false),
             modifier = Modifier.fillMaxWidth(),
         )
@@ -162,7 +167,6 @@ private fun SignIn(server: String, busy: Boolean, actions: SetupActions, openUrl
         OutlinedButton(
             onClick = { openUrl(actions.gitHub(url)) },
             enabled = url.isNotBlank() && !busy,
-            shape = RoundedCornerShape(Radius.pill),
             modifier = Modifier.fillMaxWidth().heightIn(min = Sizes.tap),
         ) { Text("Sign in with GitHub on this server", style = StarbridgeTheme.type.action) }
         TextButton(onClick = { selfHosted = false; url = BuildConfig.DEFAULT_SERVER }, modifier = Modifier.heightIn(min = Sizes.tap)) {
@@ -198,12 +202,12 @@ private fun NoDevice(accountExists: Boolean, busy: Boolean, actions: SetupAction
     } else {
         Title("Recover with the words")
         Text("Type the 24 words in order, separated by spaces.", style = StarbridgeTheme.type.body, color = colors.fg2)
-        OutlinedTextField(
+        TextField(
             value = words,
             onValueChange = { words = it },
             minLines = 4,
             textStyle = StarbridgeTheme.type.machine,
-            shape = RoundedCornerShape(Radius.md),
+            colors = fieldColors(),
             keyboardOptions = KeyboardOptions(autoCorrectEnabled = false, keyboardType = KeyboardType.Password),
             modifier = Modifier.fillMaxWidth(),
         )
@@ -219,6 +223,7 @@ private fun NoDevice(accountExists: Boolean, busy: Boolean, actions: SetupAction
     ) { Text("Sign out", style = StarbridgeTheme.type.action) }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun Joining(code: String, onCancel: () -> Unit) {
     val colors = StarbridgeTheme.colors
@@ -228,11 +233,11 @@ private fun Joining(code: String, onCancel: () -> Unit) {
         style = StarbridgeTheme.type.body,
         color = colors.fg2,
     )
-    Panel(Modifier.fillMaxWidth().padding(vertical = Spacing.s2), border = colors.accent) {
+    Panel(Modifier.fillMaxWidth().padding(vertical = Spacing.s2)) {
         Text(code, style = StarbridgeTheme.type.figure, color = colors.fg)
     }
     Row(verticalAlignment = Alignment.CenterVertically) {
-        CircularProgressIndicator(Modifier.width(Spacing.s5), color = colors.accent, strokeWidth = 2.dp)
+        LoadingIndicator(Modifier.size(Spacing.s8), color = colors.fg2)
         Spacer(Modifier.width(Spacing.s3))
         Text("Waiting for the approval", style = StarbridgeTheme.type.small, color = colors.fg2)
     }
@@ -249,7 +254,7 @@ private fun RecoveryKey(words: List<String>, onDone: () -> Unit) {
         style = StarbridgeTheme.type.body,
         color = colors.fg2,
     )
-    Panel(Modifier.fillMaxWidth().padding(top = Spacing.s2), border = colors.lineStrong) {
+    Panel(Modifier.fillMaxWidth().padding(top = Spacing.s2)) {
         words.chunked(3).forEachIndexed { row, three ->
             Row(Modifier.padding(vertical = Spacing.s1)) {
                 three.forEachIndexed { col, word ->

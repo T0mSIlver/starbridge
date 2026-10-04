@@ -677,6 +677,7 @@ class ServerStore(
                     else -> Pace.Even
                 },
                 alert = alerts.isNotEmpty(),
+                steadyPercent = pace?.expectedUsedPercent?.roundToInt()?.coerceIn(0, 100),
             )
         }
     }

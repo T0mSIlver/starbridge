@@ -45,7 +45,10 @@ sealed interface Pace {
     data object Unknown : Pace
 }
 
-/** One quota window of one AI plan; [alert] is set when the uploader raised an alert for it. */
+/**
+ * One quota window of one AI plan. [steadyPercent] is where a steady pace would be now, when the
+ * uploader knows; [alert] is set when it raised an alert for the window.
+ */
 data class QuotaWindow(
     val id: String,
     val provider: String,
@@ -54,6 +57,7 @@ data class QuotaWindow(
     val resetsAt: Instant?,
     val pace: Pace,
     val alert: Boolean = false,
+    val steadyPercent: Int? = null,
 )
 
 enum class Kind { Device, Machine }

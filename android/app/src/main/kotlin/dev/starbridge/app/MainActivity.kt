@@ -19,6 +19,7 @@ import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dagger.hilt.android.AndroidEntryPoint
 import dev.starbridge.app.data.Phase
+import dev.starbridge.app.data.Prefs
 import dev.starbridge.app.data.Store
 import dev.starbridge.app.ui.Main
 import dev.starbridge.app.ui.Setup
@@ -30,6 +31,7 @@ import javax.inject.Inject
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     @Inject lateinit var store: Store
+    @Inject lateinit var prefs: Prefs
 
     /** Decisions to open, from a notification tap. */
     private val openDecision = Channel<String>(Channel.CONFLATED)
@@ -43,7 +45,8 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         handle(intent)
         setContent {
-            StarbridgeTheme {
+            val colours by prefs.colours.collectAsStateWithLifecycle()
+            StarbridgeTheme(colours = colours) {
                 val phase by store.phase.collectAsStateWithLifecycle()
                 val decisions by store.decisions.collectAsStateWithLifecycle()
                 LaunchedEffect(phase) {
