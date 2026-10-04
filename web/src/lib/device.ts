@@ -5,8 +5,10 @@ import {
   activeMembers,
   addEntry,
   addEntryAsync,
+  approverKeys,
   bindMessage,
   checkJoined,
+  codeFromLink,
   type Decision,
   type Directory,
   DirectoryEntry,
@@ -15,15 +17,25 @@ import {
   fromB64,
   genesisEntryAsync,
   claimHash as hashClaim,
+  type JoinKeys,
+  joinApproval,
+  joinCommitment,
+  joinerKeys,
+  joinRequest,
   type Member,
   newClaimSecret,
+  newJoinId,
+  newJoinKeyPair,
   newPairingCode,
   openAsync,
+  openJoinApproval,
+  openJoinRequest,
   openPairingApproval,
   openPairingRequest,
   type PairingCode,
   ProtocolError,
   pairingApproval,
+  pairingLink,
   pairingRequest,
   parsePairingCode,
   RECOVERY,
@@ -41,7 +53,15 @@ import {
 import { ApiError, api, type Stored } from "./api";
 import { generateDeviceKeys, sealOpener, signer } from "./crypto/keys";
 import * as store from "./store";
-import type { Device, InboxItem, PairingRequest, QuotaCardData, Reply } from "./types";
+import type {
+  Device,
+  InboxItem,
+  JoinAsk,
+  JoinView,
+  PairingRequest,
+  QuotaCardData,
+  Reply,
+} from "./types";
 
 export { ApiError };
 
@@ -317,6 +337,202 @@ async function finishJoin(account: string, code: PairingCode, approval: unknown,
   await pinTo(account, entries, dir);
 }
 
+/** Joining by digits: no code to type; the owner compares 6 digits on both devices. */
+export interface DigitJoin {
+  /** Resolves once a device took the request: the digits it shows too. */
+  digits: Promise<string>;
+  /** Resolves once that device approved and the directory holds this browser's keys. */
+  done: Promise<void>;
+  cancel: () => void;
+}
+
+export async function startDigitJoin(account: string, name: string): Promise<DigitJoin> {
+  await ready;
+  const { record, member } = await newDevice(account, name);
+  const eph = newJoinKeyPair();
+  const id = newJoinId();
+  const { role: _, ...keys } = member;
+  const request = joinRequest({ v: 1, join: id, account, ...keys, at: now() });
+  await store.put("device", record, account);
+  await api.postJoin(request, joinCommitment(eph.publicKey, request));
+  const abort = new AbortController();
+  let shown: (digits: string) => void = () => {};
+  const digits = new Promise<string>((resolve) => {
+    shown = resolve;
+  });
+  const done = (async () => {
+    let derived: JoinKeys | undefined;
+    let after = 0;
+    try {
+      for (;;) {
+        if (abort.signal.aborted) throw new Error("cancelled");
+        const { join } = await api.join(id, after, 25, abort.signal);
+        after = join.version;
+        if (join.state === "cancelled") throw new Error("The request was refused. Ask again.");
+        // The first approver key is the only one: the digits commit to it, so a second one the
+        // server offers later is never answered.
+        if (!derived && join.approverKey) {
+          derived = joinerKeys({ mine: eph, approverKey: join.approverKey, request });
+          await api.revealJoin(id, toB64(eph.publicKey));
+          shown(derived.digits);
+        }
+        if (derived && join.approval !== undefined) {
+          const body = openJoinApproval(join.approval, derived, id);
+          if (body.account !== account) throw new ProtocolError("wrong-account", body.account);
+          const entries = await api.directory();
+          const dir = verifyDirectory(entries, {
+            account,
+            pin: { length: body.length, head: body.head },
+          });
+          checkJoined(dir, member);
+          await pinTo(account, entries, dir);
+          return;
+        }
+      }
+    } finally {
+      eph.privateKey.fill(0);
+    }
+  })();
+  return {
+    digits,
+    done,
+    cancel: () => {
+      abort.abort();
+      api.cancelJoin(id).catch(() => {});
+    },
+  };
+}
+
+function toAsk(view: JoinView): JoinAsk | undefined {
+  try {
+    const body = openJoinRequest(view.request);
+    return {
+      id: view.id,
+      name: body.name,
+      at: body.at,
+      ...(view.approver ? { approver: view.approver } : {}),
+      view,
+    };
+  } catch {
+    return undefined;
+  }
+}
+
+/** Calls `onChange` with the account's open join requests until `signal` aborts. */
+export async function watchJoins(signal: AbortSignal, onChange: (asks: JoinAsk[]) => void) {
+  await ready;
+  let cursor = "0";
+  while (!signal.aborted) {
+    try {
+      const page = await api.joins(cursor, 25, signal);
+      cursor = page.cursor;
+      onChange(page.joins.flatMap((v) => toAsk(v) ?? []));
+    } catch {
+      if (signal.aborted) return;
+      await new Promise((r) => setTimeout(r, 5_000));
+    }
+  }
+}
+
+/** Digits this device derived for a join request, and what approving it does. */
+export interface Comparison {
+  digits: string;
+  approve: (ctx: Ctx) => Promise<Ctx>;
+}
+
+/**
+ * Takes the request as listed: posts this device's key, waits for the joining device to reveal
+ * its key, and checks the reveal against the commitment listed before this key went out.
+ */
+export async function compareJoin(
+  ctx: Ctx,
+  ask: JoinAsk,
+  signal: AbortSignal,
+): Promise<Comparison> {
+  await ready;
+  const { request, commitment } = ask.view;
+  const body = openJoinRequest(request);
+  if (body.account !== ctx.account) throw new ProtocolError("wrong-account", body.account);
+  if (body.join !== ask.id) throw new ProtocolError("id-mismatch", "join");
+  const eph = newJoinKeyPair();
+  let after = (await api.claimJoin(ask.id, toB64(eph.publicKey), ctx.device.id)).join.version - 1;
+  let keys: JoinKeys;
+  try {
+    for (;;) {
+      const { join } = await api.join(ask.id, after, 25, signal);
+      after = join.version;
+      if (join.state === "cancelled") throw new Error(`${body.name} cancelled the request.`);
+      if (join.joinerKey) {
+        keys = approverKeys({ mine: eph, joinerKey: join.joinerKey, request, commitment });
+        break;
+      }
+      if (Date.parse(join.expiresAt) < Date.now()) throw new Error("The request expired.");
+    }
+  } finally {
+    eph.privateKey.fill(0);
+  }
+  const member: Member = {
+    id: body.id,
+    role: "device",
+    name: body.name,
+    boxPk: body.boxPk,
+    signPk: body.signPk,
+  };
+  return {
+    digits: keys.digits,
+    approve: async (current) => {
+      const next = await append(current, (dir) => addEntryAsync(dir, me(current), member, now()));
+      const approval = joinApproval(
+        {
+          v: 1,
+          join: ask.id,
+          account: current.account,
+          length: next.dir.length,
+          head: next.dir.head,
+          approver: current.device.id,
+        },
+        keys,
+      );
+      await api.approveJoin(ask.id, approval);
+      return next;
+    },
+  };
+}
+
+export function refuseJoin(id: string): Promise<void> {
+  return api.cancelJoin(id);
+}
+
+/** A code this device shows as a QR, for a new phone to scan; the phone posts under it. */
+export interface ShownCode {
+  code: string;
+  link: string;
+  /** Resolves with the request once the phone posted it and its MAC checked out. */
+  request: Promise<PairingRequest>;
+  cancel: () => void;
+}
+
+export async function showPairingCode(): Promise<ShownCode> {
+  await ready;
+  const code = newPairingCode();
+  const abort = new AbortController();
+  const until = Date.now() + 10 * 60_000;
+  const request = (async () => {
+    for (;;) {
+      if (abort.signal.aborted) throw new Error("cancelled");
+      if (Date.now() > until) throw new Error("The code expired. Show a new one.");
+      const res = await api.awaitPairing(code.rendezvous, 25, abort.signal);
+      if (res) return readRequest(code, res.request);
+    }
+  })();
+  return {
+    code: formatPairingCode(code),
+    link: pairingLink(location.origin, code),
+    request,
+    cancel: () => abort.abort(),
+  };
+}
+
 // --- As a device ----------------------------------------------------------------------------
 
 /** This browser's device for the account, with a verified directory, if it is still active. */
@@ -386,8 +602,12 @@ export function devices(ctx: Ctx): Device[] {
 /** Fetches the request under the typed code and checks its MAC: the server cannot swap keys. */
 export async function readPairing(codeText: string): Promise<PairingRequest> {
   await ready;
-  const code = parsePairingCode(codeText);
+  const code = codeFromLink(codeText);
   const { request } = await api.pairing(code.rendezvous);
+  return readRequest(code, request);
+}
+
+function readRequest(code: PairingCode, request: unknown): PairingRequest {
   const body = openPairingRequest(request, code);
   return {
     code: formatPairingCode(code),

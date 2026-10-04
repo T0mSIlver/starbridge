@@ -19,7 +19,9 @@ type Payload =
       re?: string;
       box?: string;
     }
-  | { v: 1; kind: "answered"; id: string };
+  | { v: 1; kind: "answered"; id: string }
+  /** A browser or phone signed in to the account asks to join (PROTOCOL.md). */
+  | { v: 1; kind: "join"; id: string };
 
 const tag = (decisionId: string) => `d:${decisionId}`;
 
@@ -68,6 +70,13 @@ async function onPush(text: string): Promise<void> {
     return;
   }
   if (payload.kind === "answer") return;
+  if (payload.kind === "join") {
+    await self.registration.showNotification("A device wants to join", {
+      body: "Open Starbridge to compare digits with it and approve it.",
+      tag: `j:${payload.id}`,
+    });
+    return;
+  }
 
   const ctx = account ? await deviceContext(account) : undefined;
   if (!ctx) return;
