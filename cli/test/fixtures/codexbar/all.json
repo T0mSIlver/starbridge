@@ -1,0 +1,542 @@
+[
+  {
+    "source": "oauth",
+    "pace": {
+      "secondary": {
+        "stage": "farAhead",
+        "etaSeconds": 28309,
+        "deltaPercent": 61,
+        "summary": "61% in deficit | Expected 14% used | Runs out in 7h 52m",
+        "expectedUsedPercent": 14,
+        "willLastToReset": false
+      },
+      "primary": {
+        "stage": "farAhead",
+        "etaSeconds": 2591,
+        "deltaPercent": 13,
+        "summary": "13% in deficit | Expected 70% used | Projected empty in 44m",
+        "expectedUsedPercent": 70,
+        "willLastToReset": false
+      }
+    },
+    "usage": {
+      "updatedAt": "2026-10-04T19:08:57Z",
+      "secondary": {
+        "windowMinutes": 10080,
+        "usedPercent": 75,
+        "resetsAt": "2026-10-10T19:33:29Z",
+        "resetDescription": "Oct 10 at 9:33\u202fPM"
+      },
+      "tertiary": null,
+      "providerCost": {
+        "currencyCode": "Credits",
+        "period": "Extra usage",
+        "used": 0,
+        "limit": 0,
+        "balanceUpdatedAt": "2026-10-04T19:08:57Z",
+        "updatedAt": "2026-10-04T19:08:57Z"
+      },
+      "codexResetCredits": {
+        "availableCount": 2,
+        "credits": [
+          {
+            "status": "available",
+            "title": "Full reset (Weekly + 5 hr)",
+            "id": "codex-reset-credit-v1-redacted",
+            "granted_at": "2026-09-22T20:04:20Z",
+            "reset_type": "codex_rate_limits",
+            "expires_at": "2026-10-22T20:04:20Z",
+            "description": "Thanks for using Codex! You've been granted one free rate limit reset."
+          },
+          {
+            "status": "available",
+            "title": "Full reset (Weekly + 5 hr)",
+            "id": "codex-reset-credit-v1-redacted",
+            "granted_at": "2026-09-29T17:09:19Z",
+            "reset_type": "codex_rate_limits",
+            "expires_at": "2026-10-29T17:09:19Z",
+            "description": "Thanks for using Codex! You've been granted one free rate limit reset."
+          }
+        ],
+        "updatedAt": "2026-10-04T19:08:57Z"
+      },
+      "accountEmail": "owner@example.com",
+      "primary": {
+        "usedPercent": 83,
+        "windowMinutes": 300,
+        "resetDescription": "10:38\u202fPM",
+        "resetsAt": "2026-10-04T20:38:05Z"
+      },
+      "identity": {
+        "accountEmail": "owner@example.com",
+        "providerID": "codex",
+        "loginMethod": "plus"
+      },
+      "dataConfidence": "exact",
+      "loginMethod": "plus"
+    },
+    "credits": {
+      "balanceReadSucceeded": true,
+      "creditsAvailable": false,
+      "events": [],
+      "remaining": 0,
+      "updatedAt": "2026-10-04T19:08:57Z",
+      "balanceIsWorkspace": false
+    },
+    "provider": "codex",
+    "version": "0.160.0",
+    "rateWindowLabels": {
+      "secondary": "Weekly",
+      "primary": "Session"
+    }
+  },
+  {
+    "usage": {
+      "tertiary": null,
+      "secondary": null,
+      "updatedAt": "2026-10-04T19:08:57Z",
+      "primary": {
+        "windowMinutes": 300,
+        "resetsAt": "2026-10-04T19:09:58Z",
+        "resetDescription": "5-hour",
+        "usedPercent": 100
+      },
+      "extraRateWindows": [
+        {
+          "title": "MCP",
+          "id": "zai-mcp",
+          "window": {
+            "resetDescription": "MCP",
+            "resetsAt": "2026-11-03T14:47:47Z",
+            "windowMinutes": 43200,
+            "usedPercent": 0
+          }
+        }
+      ],
+      "identity": {
+        "providerID": "zai",
+        "loginMethod": "lite"
+      },
+      "details": [
+        {
+          "rows": [
+            {
+              "value": "100% used",
+              "label": "Token quota"
+            },
+            {
+              "secondaryValue": "100 limit \u00b7 100 remaining",
+              "value": "0% used",
+              "label": "MCP quota"
+            },
+            {
+              "value": "0",
+              "label": "search-prime"
+            },
+            {
+              "value": "0",
+              "label": "web-reader"
+            },
+            {
+              "value": "0",
+              "label": "zread"
+            }
+          ],
+          "title": "Quota details"
+        },
+        {
+          "rows": [
+            {
+              "value": "169M",
+              "label": "GLM-5.3"
+            }
+          ],
+          "chart": {
+            "points": [
+              {
+                "label": "2026-10-03 02:00",
+                "value": 4490573
+              },
+              {
+                "label": "2026-10-03 03:00",
+                "value": 2862915
+              },
+              {
+                "label": "2026-10-03 04:00",
+                "value": 6770401
+              },
+              {
+                "label": "2026-10-03 05:00",
+                "value": 13014512
+              },
+              {
+                "label": "2026-10-03 06:00",
+                "value": 3378221
+              },
+              {
+                "label": "2026-10-03 16:00",
+                "value": 14549720
+              },
+              {
+                "label": "2026-10-03 17:00",
+                "value": 2981302
+              },
+              {
+                "label": "2026-10-03 18:00",
+                "value": 848038
+              },
+              {
+                "label": "2026-10-03 19:00",
+                "value": 14970893
+              },
+              {
+                "label": "2026-10-03 22:00",
+                "value": 82349
+              },
+              {
+                "label": "2026-10-03 23:00",
+                "value": 2082848
+              },
+              {
+                "label": "2026-10-04 00:00",
+                "value": 15181734
+              },
+              {
+                "label": "2026-10-04 01:00",
+                "value": 13867083
+              },
+              {
+                "label": "2026-10-04 02:00",
+                "value": 2509431
+              },
+              {
+                "label": "2026-10-04 03:00",
+                "value": 7517840
+              },
+              {
+                "label": "2026-10-04 04:00",
+                "value": 13047117
+              },
+              {
+                "label": "2026-10-04 05:00",
+                "value": 8646727
+              },
+              {
+                "label": "2026-10-04 06:00",
+                "value": 726463
+              },
+              {
+                "label": "2026-10-04 07:00",
+                "value": 2180368
+              },
+              {
+                "label": "2026-10-04 08:00",
+                "value": 472550
+              },
+              {
+                "label": "2026-10-04 09:00",
+                "value": 4446116
+              },
+              {
+                "label": "2026-10-04 17:00",
+                "value": 32235819
+              },
+              {
+                "label": "2026-10-04 18:00",
+                "value": 1767500
+              }
+            ],
+            "kind": "bars",
+            "title": "Hourly tokens",
+            "unit": "tokens"
+          },
+          "title": "Hourly tokens"
+        },
+        {
+          "rows": [
+            {
+              "label": "GLM-5.3",
+              "value": "1.27B"
+            },
+            {
+              "label": "GLM-5.3-Flash",
+              "value": "20.7M"
+            }
+          ],
+          "chart": {
+            "unit": "tokens",
+            "points": [
+              {
+                "label": "2026-09-04",
+                "value": 3390761
+              },
+              {
+                "label": "2026-09-05",
+                "value": 25090091
+              },
+              {
+                "label": "2026-09-06",
+                "value": 38001983
+              },
+              {
+                "label": "2026-09-07",
+                "value": 68149111
+              },
+              {
+                "label": "2026-09-08",
+                "value": 74007931
+              },
+              {
+                "label": "2026-09-09",
+                "value": 51024442
+              },
+              {
+                "label": "2026-09-10",
+                "value": 40446522
+              },
+              {
+                "label": "2026-09-11",
+                "value": 20356186
+              },
+              {
+                "label": "2026-09-12",
+                "value": 27353720
+              },
+              {
+                "label": "2026-09-13",
+                "value": 34867452
+              },
+              {
+                "label": "2026-09-14",
+                "value": 688850
+              },
+              {
+                "label": "2026-09-16",
+                "value": 45426019
+              },
+              {
+                "label": "2026-09-17",
+                "value": 13282858
+              },
+              {
+                "label": "2026-09-18",
+                "value": 46958295
+              },
+              {
+                "label": "2026-09-19",
+                "value": 14775207
+              },
+              {
+                "label": "2026-09-20",
+                "value": 5583398
+              },
+              {
+                "label": "2026-09-21",
+                "value": 28259693
+              },
+              {
+                "label": "2026-09-22",
+                "value": 51851528
+              },
+              {
+                "label": "2026-09-23",
+                "value": 28530094
+              },
+              {
+                "label": "2026-09-24",
+                "value": 4971065
+              },
+              {
+                "label": "2026-09-25",
+                "value": 49837186
+              },
+              {
+                "label": "2026-09-26",
+                "value": 75557835
+              },
+              {
+                "label": "2026-09-27",
+                "value": 115508787
+              },
+              {
+                "label": "2026-09-28",
+                "value": 45735851
+              },
+              {
+                "label": "2026-09-29",
+                "value": 61355406
+              },
+              {
+                "label": "2026-09-30",
+                "value": 30894209
+              },
+              {
+                "label": "2026-10-01",
+                "value": 37667684
+              },
+              {
+                "label": "2026-10-02",
+                "value": 60732282
+              },
+              {
+                "label": "2026-10-03",
+                "value": 66031772
+              },
+              {
+                "label": "2026-10-04",
+                "value": 124769303
+              }
+            ],
+            "kind": "bars",
+            "title": "Daily tokens"
+          },
+          "title": "Daily tokens"
+        }
+      ],
+      "loginMethod": "lite"
+    },
+    "provider": "zai",
+    "source": "api",
+    "rateWindowLabels": {
+      "primary": "5-hour"
+    }
+  },
+  {
+    "usage": {
+      "tertiary": null,
+      "secondary": null,
+      "mistralUsage": {
+        "totalOutputTokens": 4005342,
+        "daily": [
+          {
+            "outputTokens": 7107,
+            "models": [
+              {
+                "inputTokens": 76352,
+                "name": "zai-glm-5-3",
+                "cost": 0.3073260518,
+                "cachedTokens": 418624,
+                "outputTokens": 6801
+              },
+              {
+                "inputTokens": 2583,
+                "name": "mistral-vibe-cli-latest",
+                "cost": 0.4096289598999999,
+                "cachedTokens": 14848,
+                "outputTokens": 306
+              }
+            ],
+            "cachedTokens": 433472,
+            "day": "2026-10-01",
+            "cost": 0.7169550116999999,
+            "inputTokens": 78935
+          },
+          {
+            "outputTokens": 287326,
+            "models": [
+              {
+                "cost": 6.505941985500001,
+                "inputTokens": 1163237,
+                "cachedTokens": 8887680,
+                "name": "zai-glm-5-3",
+                "outputTokens": 287326
+              }
+            ],
+            "cachedTokens": 8887680,
+            "day": "2026-10-02",
+            "cost": 6.505941985500001,
+            "inputTokens": 1163237
+          },
+          {
+            "outputTokens": 2151044,
+            "models": [
+              {
+                "name": "zai-glm-5-3",
+                "cost": 51.88741215820001,
+                "inputTokens": 13629504,
+                "cachedTokens": 31784896,
+                "outputTokens": 2151037
+              },
+              {
+                "name": "mistral-embed",
+                "cost": 6.921200000000001e-6,
+                "inputTokens": 44,
+                "cachedTokens": 0,
+                "outputTokens": 0
+              },
+              {
+                "name": "mistral-small-2603",
+                "cost": 9.1994e-6,
+                "inputTokens": 11,
+                "cachedTokens": 0,
+                "outputTokens": 7
+              }
+            ],
+            "cachedTokens": 31784896,
+            "day": "2026-10-03",
+            "cost": 51.8874282788,
+            "inputTokens": 13629559
+          },
+          {
+            "outputTokens": 1559865,
+            "models": [
+              {
+                "outputTokens": 1559865,
+                "name": "zai-glm-5-3",
+                "cost": 40.258447343,
+                "inputTokens": 7143488,
+                "cachedTokens": 62394880
+              }
+            ],
+            "cachedTokens": 62394880,
+            "day": "2026-10-04",
+            "cost": 40.258447343,
+            "inputTokens": 7143488
+          }
+        ],
+        "updatedAt": "2026-10-04T19:08:58Z",
+        "totalCachedTokens": 103500928,
+        "totalCost": 99.368772619,
+        "currency": "EUR",
+        "modelCount": 4,
+        "startDate": "2026-09-30T22:00:00Z",
+        "credits": {
+          "ongoingUsageBalance": 0,
+          "walletAmount": 0,
+          "creditNotesAmount": 0,
+          "currency": "EUR"
+        },
+        "endDate": "2026-10-31T22:59:59Z",
+        "totalInputTokens": 22015219,
+        "currencySymbol": "\u20ac"
+      },
+      "updatedAt": "2026-10-04T19:08:58Z",
+      "primary": {
+        "resetDescription": "\u20ac0.00 / \u20ac25.50 \u00b7 \u20ac25.50 left",
+        "usedPercent": 1.4666666666666666e-5,
+        "resetsAt": "2026-11-01T00:00:00Z"
+      },
+      "extraRateWindows": [
+        {
+          "window": {
+            "resetsAt": "2026-11-01T00:00:00Z",
+            "resetDescription": "\u20ac53.55 / \u20ac255.00 \u00b7 \u20ac201.45 left",
+            "usedPercent": 20.99984825
+          },
+          "id": "mistral-monthly-plan",
+          "title": "Monthly Plan"
+        }
+      ],
+      "identity": {
+        "providerID": "mistral",
+        "loginMethod": "API spend: \u20ac99.3688 this month"
+      },
+      "loginMethod": "API spend: \u20ac99.3688 this month"
+    },
+    "provider": "mistral",
+    "source": "web",
+    "rateWindowLabels": {
+      "primary": "Included API"
+    }
+  }
+]

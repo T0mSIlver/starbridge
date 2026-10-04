@@ -1,0 +1,98 @@
+.page {
+  max-width: 560px;
+  margin: 0 auto;
+  padding: var(--s8) var(--s4) var(--s10);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  margin-bottom: var(--s4);
+}
+
+.mark {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-sm);
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.step {
+  color: var(--fg2);
+}
+
+.lede {
+  color: var(--fg2);
+}
+
+.words {
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s2);
+  padding: var(--s4);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+}
+
+.words li {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s2);
+  padding: var(--s1) var(--s2);
+}
+
+.n {
+  color: var(--fg3);
+  min-width: 2ch;
+  text-align: right;
+}
+
+.word {
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.copy {
+  align-self: flex-start;
+}
+
+.confirm {
+  display: flex;
+  gap: var(--s3);
+  align-items: flex-start;
+  padding: var(--s3) var(--s4);
+  border-radius: var(--radius-md);
+  background: var(--accent-soft);
+  cursor: pointer;
+}
+
+.confirm input {
+  width: 20px;
+  height: 20px;
+  margin-top: 1px;
+  flex: none;
+  accent-color: var(--accent);
+}
+
+.go {
+  width: 100%;
+}
+
+@media (min-width: 600px) {
+  .page {
+    padding-top: var(--s10);
+  }
+
+  .words {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}

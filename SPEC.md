@@ -240,6 +240,17 @@ How it generalizes is open.
   always goes direct. The relay is open, rate-limited per IP, and only pushes ciphertext or ids.
   The answer long-poll's cap is `MAX_WAIT_SECONDS` (300) until #2 reports the mod's fetch timeout.
 
+- 2026-10-04. CLI (#6): keys, token, directory cache and state live in
+  `~/.config/starbridge` (or `$XDG_CONFIG_HOME`, `$STARBRIDGE_CONFIG_DIR`),
+  files 0600, directory 0700. `starbridge wait` exits 2 when the default time
+  passes unanswered. An answer reaches the agent as one line, `Answer to <id>
+  (<question>): <choice>`; the mod (#7) should submit the same line. The npm
+  package is a Node bundle (Node 22+); the release workflow builds
+  `bun build --compile` binaries for Linux and macOS on a `cli-v*` tag and
+  publishes to npm once `NPM_TOKEN` is set. The skill is `starbridge`, with
+  the rule "Whenever you need me to decide something, use the `starbridge`
+  skill."
+
 ## Encryption, with existing libraries
 
 - libsodium sealed boxes (`crypto_box_seal`, X25519 + XSalsa20-Poly1305): an
@@ -413,3 +424,7 @@ two vendors at high effort. The orchestrator merges on green, squash.
   `lazysodium-java`, which bundles libsodium for desktop, so the same
   `LazySodium` API runs in both. The release build keeps JNA and Lazysodium
   from R8.
+- 2026-10-04: CodexBar 0.160.0 on the dev box. `codexbar usage --provider
+  <unknown>` exits 0 and prints every enabled provider, so the uploader keeps
+  only rows whose `provider` matches. Mistral's windows carry no
+  `windowMinutes`, so they get no pace and no alerts until CodexBar adds it.

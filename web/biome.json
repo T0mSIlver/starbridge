@@ -1,0 +1,16 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.5.15/schema.json",
+  "files": {
+    "includes": [
+      "src/**",
+      "scripts/**",
+      "*.json",
+      "*.ts",
+      "!src/styles/tokens.css",
+      "!src/styles/type.css"
+    ]
+  },
+  "formatter": { "indentStyle": "space", "lineWidth": 100 },
+  "css": { "parser": { "cssModules": true } },
+  "linter": { "enabled": true, "rules": { "preset": "recommended" } }
+}

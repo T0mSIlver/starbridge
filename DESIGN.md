@@ -49,11 +49,13 @@ colors:
     info: "#7aa7ff"
     info-soft: "#7aa7ff1f"
     scrim: "#000000a6"
-# Two faces. `sans` and `mono` name them; each platform binds its own files.
+# Two faces. `sans` sets everything; `mono` sets code only (the `code` role).
+# Each platform binds its own files.
 fonts:
   sans: "Archivo VF, system-ui, -apple-system, sans-serif"
   mono: "JetBrains Mono VF, ui-monospace, SFMono-Regular, monospace"
 # Sizes in px (sp on Android), lineHeight as a multiple, letterSpacing in em.
+# `tabular: true` turns on tabular figures (tnum) so numbers line up.
 typography:
   title:
     font: sans
@@ -92,24 +94,31 @@ typography:
     lineHeight: 1.4
     letterSpacing: 0
   figure:
-    font: mono
+    font: sans
     size: 28
-    weight: 500
+    weight: 600
     lineHeight: 1
-    letterSpacing: -0.03
+    letterSpacing: -0.02
+    tabular: true
   machine:
-    font: mono
-    size: 12.5
+    font: sans
+    size: 13
     weight: 400
     lineHeight: 1.4
     letterSpacing: 0
+    tabular: true
   label:
-    font: mono
-    size: 11
+    font: sans
+    size: 13
     weight: 600
     lineHeight: 1.3
-    letterSpacing: 0.08
-    uppercase: true
+    letterSpacing: 0
+  code:
+    font: mono
+    size: 13
+    weight: 400
+    lineHeight: 1.5
+    letterSpacing: 0
 # px on the web, dp on Android.
 spacing:
   s1: 4
@@ -145,11 +154,17 @@ clients share colours, type and spacing. Change a value here, then run
 
 ## The look
 
-A ship's bridge at night. The ground is a calm instrument panel: blue-black in
-the dark scheme, cool paper in the light one. One amber beacon marks what needs
-the owner: open decisions, the recommended answer, the primary button.
-Numbers, ids and machine names are set in mono, because the machine said them;
-everything a person reads to decide is set in sans.
+Function over form (decided 2026-10-04, SPEC.md). The palette is a neutral
+default: blue-black in the dark scheme, cool paper in the light one. Colour is
+fixed only where it carries meaning: the amber accent marks what needs the
+owner (open decisions, the recommended answer, the primary button), and `ok`,
+`warn` and `bad` mark quota states. On Android the app uses Material You
+dynamic colour from the wallpaper, and these tokens are the fallback; the
+meaning colours stay fixed there too.
+
+One face, the sans, sets everything a person reads, numbers included, with
+tabular figures where they line up. Mono is for code only: Markdown code in a
+decision's context.
 
 ## Rules
 
@@ -162,6 +177,7 @@ everything a person reads to decide is set in sans.
   in both.
 - Mobile width first. Tap targets are at least `size.tap`. Wider screens add a
   side rail (`size.rail`) and cap content at `size.content`.
+- Labels are sentence case, never uppercase.
 - Cards use `radius.md`, buttons `radius.pill`, matching Material 3 Expressive
   on Android.
 
@@ -176,3 +192,14 @@ everything a person reads to decide is set in sans.
 | `accent`, `on-accent`, `accent-soft` | the beacon; text on it; its tint behind a recommended option |
 | `ok`, `warn`, `bad`, `info` (+ `-soft`) | quota pace and device states, with a word |
 | `scrim` | behind a dialog |
+
+| Type role | Use |
+|---|---|
+| `title`, `heading` | screen title; card title |
+| `question` | a decision's question |
+| `body`, `small` | text; secondary lines |
+| `action` | buttons |
+| `label` | section names and status pills |
+| `figure` | a large number, such as used percent |
+| `machine` | ids, keys, machine and session names, in the sans |
+| `code` | Markdown code in a decision's context, the only mono |

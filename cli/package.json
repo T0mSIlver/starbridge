@@ -1,0 +1,32 @@
+{
+  "name": "starbridge",
+  "version": "0.1.0",
+  "description": "Post decisions to your Starbridge devices and upload quota windows from CodexBar",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "starbridge": "dist/starbridge.js"
+  },
+  "files": [
+    "dist/starbridge.js"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "bun run src/main.ts",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check .",
+    "build": "bun build src/main.ts --target node --outfile dist/starbridge.js",
+    "build:bin": "bun run scripts/build-bin.ts",
+    "prepack": "bun run build"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.15",
+    "@starbridge/protocol": "workspace:*",
+    "@types/bun": "^1.4.2",
+    "@types/node": "^26.6.4",
+    "typescript": "^7.0.2"
+  }
+}
