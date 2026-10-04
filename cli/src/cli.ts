@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { parseArgs } from "node:util";
 import { ProtocolError, ready, type SessionLink } from "@starbridge/protocol";
-import { AgentError, withAgent } from "./agent/client";
+import { AgentError, Interrupted, withAgent } from "./agent/client";
 import { answersVia, askVia, quotaVia, waitVia } from "./agent/commands";
 import { runAgent } from "./agent/main";
 import { ApiError } from "./api";
@@ -232,6 +232,8 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
         throw new UsageError(`unknown command: ${command} (try starbridge --help)`);
     }
   } catch (e) {
+    // Ctrl-C during a call held at the agent, as a shell reports SIGINT.
+    if (e instanceof Interrupted) return 130;
     if (
       e instanceof UsageError ||
       e instanceof ApiError ||

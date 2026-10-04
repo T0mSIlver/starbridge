@@ -167,7 +167,14 @@ export class Agent implements Hub {
     try {
       if (lstatSync(this.socket).isSocket()) unlinkSync(this.socket);
     } catch {}
-    const server = createServer((req, res) => void this.serve(req, res));
+    const server = createServer((req, res) =>
+      this.serve(req, res).catch((e) => {
+        // A request must never take the agent down with it.
+        this.log(`${req.method} ${req.url}: ${(e as Error).stack ?? e}`);
+        if (!res.headersSent) res.writeHead(500);
+        res.end();
+      }),
+    );
     // Held requests last up to MAX_HOLD_SECONDS; Node's default timeouts would cut them.
     server.requestTimeout = 0;
     server.headersTimeout = 10_000;
@@ -225,10 +232,12 @@ export class Agent implements Hub {
       if (r.method !== req.method) return false;
       const m = r.pattern.exec(url.pathname);
       if (!m) return false;
-      params = Object.fromEntries(r.names.map((n, i) => [n, decodeURIComponent(m[i + 1] ?? "")]));
+      params = Object.fromEntries(r.names.map((n, i) => [n, decode(m[i + 1] ?? "")]));
       return true;
     });
     if (!route || !params) return fail(404, { error: "not-found", detail: url.pathname });
+    if (Object.values(params).includes(BAD_ESCAPE))
+      return fail(400, { error: "bad-path", detail: "a malformed escape in the path" });
     const gone = new AbortController();
     const onStop = () => gone.abort();
     this.stopping.signal.addEventListener("abort", onStop);
@@ -347,6 +356,17 @@ export class Agent implements Hub {
     this.touch(id, req);
     for (const f of this.features) f.ack?.(id, acks);
     return {};
+  }
+}
+
+const BAD_ESCAPE = "\u0000bad-escape";
+
+/** A path segment decoded, or BAD_ESCAPE when its percent escapes are malformed. */
+function decode(segment: string): string {
+  try {
+    return decodeURIComponent(segment);
+  } catch {
+    return BAD_ESCAPE;
   }
 }
 

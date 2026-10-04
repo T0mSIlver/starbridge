@@ -290,3 +290,47 @@ test("the agent uploads quotas on its timer", async () => {
   expect(status.quota.providers).toEqual(["claude", "codex"]);
   expect(status.quota.lastPostAt).toBeDefined();
 });
+
+test("a malformed path gets 400 and the agent keeps serving", async () => {
+  const { socket } = await machine();
+  await expect(
+    new AgentClient(socket).call("GET", "/v1/sessions/%zz/events"),
+  ).rejects.toMatchObject({ status: 400, body: { error: "bad-path" } });
+  expect((await new AgentClient(socket).call<Status>("GET", "/v1/status")).version).toBeDefined();
+});
+
+test("Ctrl-C cuts a wait held at the agent at once", async () => {
+  const { socket } = await machine();
+  const c = client(socket);
+  const id = await ask(c, "--session", "s1", "--project", "p");
+  const controller = new AbortController();
+  c.signal = controller.signal;
+  const done = run(["wait", id], c);
+  await Bun.sleep(300);
+  const started = Date.now();
+  controller.abort();
+  expect(await done).toBe(130);
+  expect(Date.now() - started).toBeLessThan(1_000);
+});
+
+test("once the agent posted the decision, a 426 on the wait never posts it again", async () => {
+  const ctx = await paired(server);
+  const socket = join(ctx.store.dir, "agent.sock");
+  // The agent posts, then a newer agent from an upgrade answers the wait.
+  const fake = createServer((req, res) => {
+    const posted = req.url === "/v1/decisions";
+    res.writeHead(posted ? 200 : 426, { "content-type": "application/json" });
+    res.end(
+      JSON.stringify(posted ? { id: "d_fake" } : { error: "client-too-old", detail: "update it" }),
+    );
+  });
+  await new Promise<void>((r) => fake.listen(socket, r));
+  try {
+    expect(await run([...ASK, "--default", "x", "--wait"], ctx)).toBe(1);
+    expect(ctx.lines).toEqual(["d_fake"]);
+    expect(ctx.errors.at(-1)).toBe("starbridge: update it");
+  } finally {
+    await new Promise<void>((r) => fake.close(() => r()));
+  }
+  expect(await server.opened("decision")).toEqual([]);
+});

@@ -16,6 +16,9 @@ export class AgentError extends Error {
   }
 }
 
+/** Ctrl-C or SIGTERM cut a call short. */
+export class Interrupted extends Error {}
+
 /**
  * A connection error that proves the agent never saw the request, so falling back cannot do
  * anything twice: no socket file, nobody listening on it, or not a socket.
@@ -23,7 +26,7 @@ export class AgentError extends Error {
 const NOT_LISTENING = new Set(["ENOENT", "ECONNREFUSED", "ENOTSOCK"]);
 
 export class AgentClient {
-  /** Set once the agent answered a call: from then on, falling back could act twice. */
+  /** Set once the agent carried out a call: from then on, falling back could act twice. */
   answered = false;
 
   constructor(
@@ -41,7 +44,13 @@ export class AgentClient {
    * One call. Throws NoAgent when nothing listens, AgentError on a 4xx or 5xx. `timeoutMs`
    * covers the whole call, so it must exceed any `wait` the request asks the agent for.
    */
-  call<T>(method: string, path: string, body?: unknown, timeoutMs = 60_000): Promise<T> {
+  call<T>(
+    method: string,
+    path: string,
+    body?: unknown,
+    timeoutMs = 60_000,
+    signal?: AbortSignal,
+  ): Promise<T> {
     const text = body === undefined ? undefined : JSON.stringify(body);
     return new Promise<T>((resolve, reject) => {
       const req = request(
@@ -74,7 +83,8 @@ export class AgentClient {
               json = undefined;
             }
             const status = res.statusCode ?? 0;
-            this.answered = true;
+            // A refusal (4xx) did nothing, so a fallback after one cannot act twice.
+            if (status < 400) this.answered = true;
             if (status >= 400) {
               const e = (json ?? {}) as ErrorBody;
               reject(new AgentError(status, { ...e, error: e.error ?? `status ${status}` }));
@@ -83,6 +93,16 @@ export class AgentClient {
           res.on("error", reject);
         },
       );
+      if (signal?.aborted) {
+        req.destroy();
+        return reject(new Interrupted("interrupted"));
+      }
+      const onAbort = () => {
+        req.destroy();
+        reject(new Interrupted("interrupted"));
+      };
+      signal?.addEventListener("abort", onAbort, { once: true });
+      req.on("close", () => signal?.removeEventListener("abort", onAbort));
       req.on("timeout", () => req.destroy(new Error(`agent: no answer within ${timeoutMs} ms`)));
       req.on("error", (e: NodeJS.ErrnoException) => {
         if (e.code && NOT_LISTENING.has(e.code)) reject(new NoAgent(`no agent on ${this.socket}`));
@@ -110,7 +130,7 @@ export async function withAgent<T>(
   } catch (e) {
     if (e instanceof NoAgent && !agent.answered) return direct();
     if (e instanceof NoAgent) throw new Error("the agent stopped in the middle of the command");
-    if (e instanceof AgentError && e.status === 426) {
+    if (e instanceof AgentError && e.status === 426 && !agent.answered) {
       ctx.err(`starbridge: ${e.body.detail ?? e.message}; going to the server directly`);
       return direct();
     }

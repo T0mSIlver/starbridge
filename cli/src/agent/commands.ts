@@ -38,6 +38,7 @@ export async function waitVia(
       "/v1/answers/next",
       { ...(opts.id ? { id: opts.id } : {}), wait },
       wait * 1000 + SLACK_MS,
+      ctx.signal,
     );
   let r = await next(0);
   let deadline = Number.POSITIVE_INFINITY;
@@ -74,6 +75,7 @@ export async function answersVia(
     `${path}/events?wait=${wait}`,
     undefined,
     wait * 1000 + SLACK_MS,
+    ctx.signal,
   );
   for (const e of events) {
     // The mod built for `answers` takes these fields; it skips lines without a decision id.
