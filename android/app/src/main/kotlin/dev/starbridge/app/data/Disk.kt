@@ -7,6 +7,7 @@ import dev.starbridge.app.protocol.Pin
 import dev.starbridge.app.protocol.ProtocolJson
 import dev.starbridge.app.protocol.QuotaSnapshot
 import dev.starbridge.app.protocol.Settled
+import dev.starbridge.app.protocol.Run
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
@@ -40,6 +41,10 @@ data class SavedPrompt(
 @Serializable
 data class SavedQuota(val from: String, val body: QuotaSnapshot)
 
+/** The latest verified update of one run. */
+@Serializable
+data class SavedRun(val from: String, val body: Run)
+
 @Serializable
 data class SavedPush(val type: String, val id: String, val endpoint: String)
 
@@ -61,6 +66,7 @@ data class Saved(
     val promptCursor: String = "",
     val prompts: List<SavedPrompt> = emptyList(),
     val quotas: List<SavedQuota> = emptyList(),
+    val runs: List<SavedRun> = emptyList(),
     /** "fcm" or "unifiedpush". */
     val pushType: String = "fcm",
     val push: SavedPush? = null,

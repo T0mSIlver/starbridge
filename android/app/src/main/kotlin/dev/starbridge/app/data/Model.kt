@@ -1,5 +1,7 @@
 package dev.starbridge.app.data
 
+import dev.starbridge.app.protocol.RUN_STALE_MS
+import java.time.Duration
 import java.time.Instant
 
 // The shapes the screens render, made from verified protocol bodies (protocol/Schemas.kt).
@@ -57,6 +59,57 @@ data class Prompt(
     val endedAt: Instant? = null,
 ) {
     fun waiting(now: Instant) = ended == null && now.isBefore(expiresAt)
+}
+
+/**
+ * A command an agent wrapped in `starbridge run` because one of the owner's rules named it, as
+ * its latest update says. [exitCode] and [endedAt] are set once it exited.
+ */
+data class Run(
+    val id: String,
+    val title: String,
+    /** Why the owner hears of it, e.g. "uses your session and keyboard". */
+    val reason: String,
+    val source: Source,
+    val startedAt: Instant,
+    /** When the machine sent this update. */
+    val at: Instant,
+    val progress: Progress? = null,
+    val exitCode: Int? = null,
+    val endedAt: Instant? = null,
+) {
+    /** The last progress the output printed: steps such as 3/7, or a percent. */
+    data class Progress(val done: Int, val total: Int, val percent: Boolean) {
+        val fraction get() = done.toFloat() / total
+        val text get() = if (percent) "$done%" else "$done/$total"
+    }
+
+    enum class State { Running, Passed, Failed, Lost }
+
+    /** Running until it exits; lost once its machine is quiet for RUN_STALE_MS. */
+    fun state(now: Instant): State = when {
+        exitCode == 0 -> State.Passed
+        exitCode != null -> State.Failed
+        Duration.between(at, now).toMillis() > RUN_STALE_MS -> State.Lost
+        else -> State.Running
+    }
+
+    /** When the last news came: the exit, else the last update. */
+    val lastNews get() = endedAt ?: at
+
+    companion object {
+        /** A finished or lost run stays on the screen this long, so its result is seen. */
+        val SHOWN_AFTER: Duration = Duration.ofMinutes(30)
+
+        /** Running runs, newest first, then the others still shown, latest news first. */
+        fun shown(runs: List<Run>, now: Instant): List<Run> {
+            val running = runs.filter { it.state(now) == State.Running }.sortedByDescending { it.startedAt }
+            val done = runs
+                .filter { it.state(now) != State.Running && Duration.between(it.lastNews, now) <= SHOWN_AFTER }
+                .sortedByDescending { it.lastNews }
+            return running + done
+        }
+    }
 }
 
 /** Where a window is headed by its reset, as the uploader computed it. */

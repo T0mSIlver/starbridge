@@ -9,6 +9,7 @@ import dev.starbridge.app.data.Prompt
 import dev.starbridge.app.data.PromptScope
 import dev.starbridge.app.data.PushSetting
 import dev.starbridge.app.data.QuotaWindow
+import dev.starbridge.app.data.Run
 import dev.starbridge.app.data.SessionLink
 import dev.starbridge.app.data.Source
 import java.time.Duration
@@ -114,6 +115,49 @@ class Fake(private val now: Instant) {
             createdAt = ago(150),
             answer = "Not yet",
             answeredAt = ago(95),
+        ),
+    )
+
+    private fun secondsAgo(s: Long) = now.minusSeconds(s)
+
+    val runs = listOf(
+        Run(
+            id = "r1",
+            title = "Mac e2e",
+            reason = "uses your session and keyboard",
+            source = Source("mac", "localvoxtral", "e2e", title = "localvoxtral e2e"),
+            startedAt = secondsAgo(125),
+            at = secondsAgo(4),
+            progress = Run.Progress(3, 7, percent = false),
+        ),
+        Run(
+            id = "r2",
+            title = "Speech inference",
+            reason = "loads the Mac's GPU",
+            source = Source("mac", "localvoxtral", "eval-runner"),
+            startedAt = secondsAgo(600),
+            at = secondsAgo(20),
+            progress = Run.Progress(42, 100, percent = true),
+        ),
+        Run(
+            id = "r3",
+            title = "Android e2e",
+            reason = "runs the emulator on the dev box",
+            source = Source("dev box", "starbridge", "s1"),
+            startedAt = secondsAgo(900),
+            at = secondsAgo(420),
+            exitCode = 1,
+            endedAt = secondsAgo(420),
+        ),
+        Run(
+            id = "r4",
+            title = "Release build",
+            reason = "uses the Mac's signing keychain",
+            source = Source("mac", "localvoxtral", "release"),
+            startedAt = secondsAgo(1500),
+            at = secondsAgo(1200),
+            exitCode = 0,
+            endedAt = secondsAgo(1200),
         ),
     )
 

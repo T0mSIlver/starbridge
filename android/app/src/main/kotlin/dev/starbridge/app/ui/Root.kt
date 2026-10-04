@@ -98,6 +98,18 @@ private fun now(): Instant = produceState(Instant.now()) {
     }
 }.value
 
+/** A clock that ticks each second while [live], for a run's time elapsed; else [slow]. */
+@Composable
+private fun seconds(live: Boolean, slow: Instant): Instant {
+    val fast = produceState(Instant.now(), live) {
+        while (live) {
+            value = Instant.now()
+            delay(1_000)
+        }
+    }.value
+    return if (live) fast else slow
+}
+
 /** Shows the store's notices as snackbars. */
 @Composable
 private fun Notices(notice: StateFlow<String?>, dismiss: () -> Unit): SnackbarHostState {
@@ -205,10 +217,11 @@ fun Main(openDecisions: Int, notice: StateFlow<String?>, dismiss: () -> Unit, op
                         val vm: InboxViewModel = hiltViewModel()
                         val decisions by vm.decisions.collectAsStateWithLifecycle()
                         val prompts by vm.prompts.collectAsStateWithLifecycle()
+                        val runs by vm.runs.collectAsStateWithLifecycle()
                         val selected = (backStack.lastOrNull() as? DecisionKey)?.id
                         InboxScreen(
                             decisions,
-                            now,
+                            seconds(runs.any { it.exitCode == null }, now),
                             DecisionActions(answer = vm::answer, open = { id ->
                                 if (backStack.lastOrNull() is DecisionKey) backStack.removeAt(backStack.lastIndex)
                                 backStack.add(DecisionKey(id))
@@ -218,6 +231,7 @@ fun Main(openDecisions: Int, notice: StateFlow<String?>, dismiss: () -> Unit, op
                             prompts = prompts,
                             promptActions = PromptActions(answer = vm::answerPrompt, openLog = { backStack.add(PromptLogKey) }),
                             pollPrompts = vm::refreshPrompts,
+                            runs = runs,
                         )
                     }
                     entry<PromptLogKey> {

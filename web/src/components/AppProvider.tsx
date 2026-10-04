@@ -2,7 +2,7 @@
 
 import type { Settled } from "@starbridge/protocol";
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
-import type { Boot, Ctx, Inbox, Quotas } from "@/lib/device";
+import type { Boot, Ctx, Inbox, Quotas, Runs } from "@/lib/device";
 import type { InboxItem, PromptItem, PromptReply, Reply } from "@/lib/types";
 
 // The protocol code and libsodium load here, after the first paint.
@@ -12,6 +12,7 @@ type Store = {
   boot: Boot | { state: "loading" } | { state: "error"; error: string };
   inbox: Inbox;
   quotas?: Quotas;
+  runs?: Runs;
   /** Runs boot again, after sign-in, setup, pairing or recovery. */
   reload: () => Promise<void>;
   answer: (item: InboxItem, reply: Reply) => Promise<void>;
@@ -33,6 +34,8 @@ const Ctx_ = createContext<Store | null>(null);
 const POLL_MS = 20_000;
 /** While a prompt waits, it leaves within a second or two of being settled elsewhere. */
 const PROMPT_POLL_MS = 1_500;
+/** Runs skip Web Push (PROTOCOL.md, "Push"), so the page polls them while it is visible. */
+const RUNS_POLL_MS = 10_000;
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [boot, setBoot] = useState<Store["boot"]>({ state: "loading" });
@@ -45,6 +48,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const settledRef = useRef<{ cursor?: string; byKey: Map<string, Settled> }>({
     byKey: new Map(),
   });
+  const [runs, setRuns] = useState<Runs>();
   const inboxRef = useRef(inbox);
   inboxRef.current = inbox;
   const ctx = boot.state === "ready" ? boot.ctx : undefined;
@@ -132,6 +136,27 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const d = await load();
     setQuotas(await d.loadQuotas(fresh));
   }, [current]);
+
+  const refreshRuns = useCallback(async () => {
+    const fresh = await current();
+    if (!fresh) return;
+    const d = await load();
+    setRuns(await d.loadRuns(fresh));
+  }, [current]);
+
+  useEffect(() => {
+    if (!ctx) return;
+    const tick = () => {
+      if (document.visibilityState === "visible") refreshRuns().catch(() => {});
+    };
+    tick();
+    const timer = setInterval(tick, RUNS_POLL_MS);
+    document.addEventListener("visibilitychange", tick);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", tick);
+    };
+  }, [ctx, refreshRuns]);
 
   // Poll while the page is visible, and refresh as soon as the service worker sees a push.
   useEffect(() => {
@@ -235,6 +260,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         boot,
         inbox,
         quotas,
+        runs,
         reload,
         answer,
         update,

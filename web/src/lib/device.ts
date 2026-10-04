@@ -65,6 +65,7 @@ import type {
   PromptReply,
   QuotaCardData,
   Reply,
+  RunItem,
 } from "./types";
 
 export { ApiError };
@@ -997,6 +998,34 @@ export async function loadQuotas(ctx: Ctx): Promise<Quotas> {
         });
       }
     }
+  }
+  return out;
+}
+
+// --- Runs -----------------------------------------------------------------------------------
+
+export interface Runs {
+  items: RunItem[];
+  rejected: { id: string; error: string }[];
+}
+
+/** Every stored run: the server keeps the latest update of each, for a day. */
+export async function loadRuns(ctx: Ctx): Promise<Runs> {
+  const out: Runs = { items: [], rejected: [] };
+  let cursor: string | undefined;
+  for (;;) {
+    const page = await api.items("run", cursor);
+    for (const s of page.items) {
+      try {
+        const { signer, body } = await openAsync(expectKind(s.item, "run"), me(ctx), ctx.dir);
+        out.items.push({ run: body, machine: signer.name });
+      } catch (e) {
+        if (e instanceof ProtocolError && e.code === "revoked-signer") continue;
+        out.rejected.push({ id: s.item.id, error: e instanceof Error ? e.message : String(e) });
+      }
+    }
+    cursor = page.cursor;
+    if (page.items.length < 100) break;
   }
   return out;
 }

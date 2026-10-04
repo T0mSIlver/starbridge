@@ -1,0 +1,142 @@
+/* A run: what it is and why the owner hears of it, then its time and progress, then pass or
+   fail. Nothing here is amber: a run needs nobody until the owner's own rule says so. */
+.runs {
+  margin-bottom: var(--s8);
+}
+
+.head {
+  margin-bottom: var(--s3);
+  color: var(--fg2);
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+
+.top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--s1) var(--s3);
+}
+
+.title {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.reason {
+  color: var(--fg2);
+}
+
+.word {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  font-variant-numeric: tabular-nums;
+  color: var(--fg2);
+}
+
+.word::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.word.passed {
+  color: var(--ok);
+}
+
+.word.failed {
+  color: var(--bad);
+}
+
+.word.lost {
+  color: var(--fg3);
+}
+
+/* Material 3's linear progress, as on quota cards: an active part, a gap, the track and its
+   stop mark. Without a value, an indeterminate sweep. */
+.bar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--s1);
+  height: var(--size-track);
+  margin: var(--s1) 0;
+  overflow: hidden;
+}
+
+.fill,
+.rest,
+.indeterminate {
+  height: 100%;
+  border-radius: var(--radius-pill);
+}
+
+.fill {
+  flex: 0 1 auto;
+  min-width: var(--size-track);
+  background: var(--fg);
+}
+
+.rest {
+  position: relative;
+  flex: 1;
+  background: var(--surface2);
+}
+
+.rest::after {
+  content: "";
+  position: absolute;
+  top: calc(50% - 2px);
+  right: 3px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--fg3);
+}
+
+.indeterminate {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    var(--surface2) 0 35%,
+    var(--fg) 35% 65%,
+    var(--surface2) 65% 100%
+  );
+  background-size: 200% 100%;
+  animation: sweep 1.6s linear infinite;
+}
+
+@keyframes sweep {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .indeterminate {
+    animation: none;
+  }
+}
+
+.source {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--s3);
+  color: var(--fg2);
+}
+
+.progress {
+  font-variant-numeric: tabular-nums;
+}
