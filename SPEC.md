@@ -248,8 +248,9 @@ How it generalizes is open.
 
 - 2026-10-04 (late). Android is a flagship-standard Material 3 Expressive app,
   used fully and by the guidelines, nothing generic or improvised. Fonts are what a
-  flagship Android app uses (the platform's Material type scale, not Archivo);
-  monospace only for code. This replaces "Expressive parts only where they do a
+  flagship Android app uses: Google Sans Flex (OFL on Google Fonts, the face of
+  Google's own apps) on the Material type scale, not Archivo; monospace only
+  for code. This replaces "Expressive parts only where they do a
   job" below. The web pairs with it without imitating Android.
 - 2026-10-04 (late). Before the owner starts using Starbridge: (1) the mod's push
   path must work end to end without any agent waiting on an answer: an agent
