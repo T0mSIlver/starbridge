@@ -45,6 +45,27 @@ starbridge wait d_Xk3…             # exit 2: nobody answered in time
 starbridge quota push --provider claude --provider codex   # every 5 minutes
 ```
 
+`starbridge run` wraps a command the owner wants to hear about, as their
+rules say (below). The owner's devices show its title, its reason, the time
+elapsed and the progress its output prints (an OSC 9;4 sequence, `[3/7]`,
+`42%`), then pass or fail with the exit code and duration:
+
+```bash
+starbridge run --title "Mac e2e" --reason "uses your session and keyboard" \
+  -- bash -c 'make build && make e2e'
+```
+
+The output passes through unchanged, and `run` exits with the command's code,
+or 128 + n when signal n ended it. Nothing stops the command: when the
+machine is not paired or the server is down, `run` warns once and goes on.
+The command's output is a pipe, not a terminal; tools that print progress
+only to a terminal print none here.
+
+The owner's rules go in `rules.md` in the config directory, in plain words,
+for example "Tell me when you run the e2e tests that take over my Mac, or
+local inference." The `starbridge` Claude Code plugin loads them into every
+session (`plugin/README.md`).
+
 `starbridge answers` is for the Claude Code mod (`mod/README.md`): it hands a
 session the answers to the decisions it asked.
 

@@ -1,6 +1,6 @@
 ---
 name: starbridge
-description: "Ask the owner a decision through Starbridge: a notification on their phone and web page with the options as buttons, answered with one tap and sent back into this session. Use whenever you need the owner to decide something you should not decide alone, instead of asking in chat, where questions get buried. Covers when to ask, how to write a decision that stands alone on a lock screen, and how the answer comes back."
+description: "Ask the owner a decision through Starbridge, and report the commands their rules name. A decision is a notification on their phone and web page with the options as buttons, answered with one tap and sent back into this session; use it whenever you need the owner to decide something you should not decide alone, instead of asking in chat, where questions get buried. A run wraps a command in `starbridge run` so their phone shows it running, its progress, then pass or fail; use it whenever a command matches one of the owner's rules for runs in your context. Covers when to ask, how to write a decision that stands alone on a lock screen, how the answer comes back, and how to wrap a run."
 compatibility: The `starbridge` CLI on PATH, paired with `starbridge pair`, and the Starbridge mod loaded in this Claude Code session.
 ---
 
@@ -88,6 +88,32 @@ minute or in three hours.
 
 An answer can still come after you applied the default. If the owner chose
 something else, undo what you can and tell them.
+
+## Report a run the owner asked about
+
+The owner's rules for runs, if they wrote any, are in your context under
+"My rules for runs", in plain words, such as "tell me when you run e2e tests
+that take over my Mac, or local inference". When a command you are about to
+run matches one, wrap it in `starbridge run`. Their phone then shows the
+title, the reason, the time elapsed and any progress the output prints, then
+pass or fail.
+
+```bash
+starbridge run --title "Mac e2e" --reason "uses your session and keyboard" \
+  -- bash -c 'make build && make e2e'
+```
+
+- Wrap the whole command, chained or not: `-- bash -c '...'` around
+  `a && b; c`, never one part of it. The owner wants to know when the
+  machine is busy and when it is free again.
+- `--title`: what it is in a few words, at most 100 characters.
+- `--reason`: always. Why the owner hears of it, from their rule, at most
+  200 characters: "uses your session and keyboard", "loads the GPU".
+- Nothing else changes. The output passes through unchanged, and the exit
+  code is the command's own, so read both as usual. Progress lines such as
+  `[3/7]` or `42%` reach the phone on their own; there is nothing to add.
+- When no rule matches, run the command as usual. Do not wrap commands the
+  rules do not name.
 
 ## Permission prompts may be answered from a phone
 
