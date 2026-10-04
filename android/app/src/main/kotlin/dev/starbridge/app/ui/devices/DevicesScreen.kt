@@ -3,33 +3,33 @@ package dev.starbridge.app.ui.devices
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Computer
-import androidx.compose.material.icons.rounded.Devices
+import androidx.compose.material.icons.rounded.Smartphone
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.LoadingIndicator
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -37,21 +37,29 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.starbridge.app.data.Approval
+import dev.starbridge.app.data.Colours
 import dev.starbridge.app.data.Kind
 import dev.starbridge.app.data.Member
+import dev.starbridge.app.data.Prefs
 import dev.starbridge.app.data.PushSetting
 import dev.starbridge.app.data.Store
+import dev.starbridge.app.ui.Beacon
+import dev.starbridge.app.ui.Choice
 import dev.starbridge.app.ui.Label
 import dev.starbridge.app.ui.Panel
-import dev.starbridge.app.ui.Title
+import dev.starbridge.app.ui.Screen
+import dev.starbridge.app.ui.StatusWord
 import dev.starbridge.app.ui.ago
-import dev.starbridge.app.ui.theme.Radius
+import dev.starbridge.app.ui.fieldColors
+import dev.starbridge.app.ui.groupGap
+import dev.starbridge.app.ui.groupShape
+import dev.starbridge.app.ui.listPadding
 import dev.starbridge.app.ui.theme.Sizes
 import dev.starbridge.app.ui.theme.Spacing
 import dev.starbridge.app.ui.theme.StarbridgeTheme
@@ -59,12 +67,13 @@ import java.time.Instant
 import javax.inject.Inject
 
 @HiltViewModel
-class DevicesViewModel @Inject constructor(private val store: Store) : ViewModel() {
+class DevicesViewModel @Inject constructor(private val store: Store, prefs: Prefs) : ViewModel() {
     val members = store.members
     val approval = store.approval
     val push = store.push
     val server = store.server
-    val actions = DeviceActions(store::lookUpPairing, store::approvePairing, store::closePairing, store::revoke, store::setPushType, store::signOut)
+    val colours = prefs.colours
+    val actions = DeviceActions(store::lookUpPairing, store::approvePairing, store::closePairing, store::revoke, store::setPushType, store::signOut, prefs::setColours)
 }
 
 class DeviceActions(
@@ -74,9 +83,10 @@ class DeviceActions(
     val revoke: (String) -> Unit,
     val setPush: (String) -> Unit,
     val signOut: () -> Unit,
+    val setColours: (Colours) -> Unit,
 )
 
-/** Pairing first, then the devices that read decisions and the machines that post them. */
+/** Pairing first, then the devices that read decisions, the machines that post them, and this phone. */
 @Composable
 fun DevicesScreen(
     members: List<Member>,
@@ -86,27 +96,38 @@ fun DevicesScreen(
     now: Instant,
     actions: DeviceActions,
     modifier: Modifier = Modifier,
+    colours: Colours = Colours.Starbridge,
 ) {
     val devices = members.filter { it.kind == Kind.Device }
     val machines = members.filter { it.kind == Kind.Machine }
     var revoking by rememberSaveable { mutableStateOf<String?>(null) }
     var signingOut by rememberSaveable { mutableStateOf(false) }
-    LazyColumn(
-        modifier = modifier,
-        contentPadding = PaddingValues(horizontal = Spacing.s4, vertical = Spacing.s4),
-        verticalArrangement = Arrangement.spacedBy(Spacing.s3),
-    ) {
-        item { Title("Devices and machines") }
-        item { PairCard(approval, actions) }
-        item { Label("Devices", Modifier.padding(top = Spacing.s2)) }
-        items(devices, key = { it.id }) { MemberRow(it, now) { revoking = it.id } }
-        item { Label("Machines", Modifier.padding(top = Spacing.s2)) }
-        if (machines.isEmpty()) {
-            item { Text("None yet. Run starbridge pair on a machine and type its code above.", style = StarbridgeTheme.type.small, color = StarbridgeTheme.colors.fg3) }
+    Screen("Devices", modifier) { padding ->
+        LazyColumn(
+            contentPadding = listPadding(padding),
+            verticalArrangement = Arrangement.spacedBy(groupGap),
+        ) {
+            item { PairCard(approval, actions) }
+            item { Section("Devices") }
+            itemsIndexed(devices, key = { _, it -> it.id }) { i, it -> MemberRow(it, now, groupShape(i, devices.size)) { revoking = it.id } }
+            item { Section("Machines") }
+            if (machines.isEmpty()) {
+                item { Text("None yet. Run starbridge pair on a machine and type its code above.", style = StarbridgeTheme.type.small, color = StarbridgeTheme.colors.fg2, modifier = Modifier.padding(horizontal = Spacing.s1)) }
+            }
+            itemsIndexed(machines, key = { _, it -> it.id }) { i, it -> MemberRow(it, now, groupShape(i, machines.size)) { revoking = it.id } }
+            item { Section("This phone") }
+            item { Notifications(push, actions.setPush, groupShape(0, 3)) }
+            item { ColoursSetting(colours, actions.setColours, groupShape(1, 3)) }
+            item { Account(server, groupShape(2, 3)) { signingOut = true } }
+            item {
+                Text(
+                    "The recovery words were shown once, when you set up your first device. They can add a new device if you lose all of them.",
+                    style = StarbridgeTheme.type.small,
+                    color = StarbridgeTheme.colors.fg2,
+                    modifier = Modifier.padding(top = Spacing.s3, start = Spacing.s1, end = Spacing.s1),
+                )
+            }
         }
-        items(machines, key = { it.id }) { MemberRow(it, now) { revoking = it.id } }
-        item { Label("This phone", Modifier.padding(top = Spacing.s4)) }
-        item { ThisPhone(push, server, actions.setPush) { signingOut = true } }
     }
     revoking?.let { id ->
         val name = members.find { it.id == id }?.name ?: id
@@ -129,6 +150,12 @@ fun DevicesScreen(
     }
 }
 
+/** A group's name, above its rows. */
+@Composable
+private fun Section(text: String) {
+    Label(text, Modifier.padding(start = Spacing.s1, top = Spacing.s6, bottom = Spacing.s2))
+}
+
 @Composable
 private fun Confirm(title: String, text: String, action: String, onConfirm: () -> Unit, onDismiss: () -> Unit) {
     AlertDialog(
@@ -144,62 +171,72 @@ private fun Confirm(title: String, text: String, action: String, onConfirm: () -
 
 /**
  * Typing a new member's code: the request is checked against the code's secret before anything
- * is shown, and approving appends its keys to the directory.
+ * is shown, and approving appends its keys to the directory. A request to approve needs the
+ * owner, so it carries the beacon.
  */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun PairCard(approval: Approval, actions: DeviceActions) {
     val colors = StarbridgeTheme.colors
     var code by rememberSaveable { mutableStateOf("") }
-    val found = approval is Approval.Found || approval is Approval.Approving
-    Panel(Modifier.fillMaxWidth(), border = if (found) colors.accent else colors.line) {
+    Panel(Modifier.fillMaxWidth()) {
         AnimatedContent(approval, contentKey = { it::class }, label = "pairing") { state ->
-            Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+            Column(verticalArrangement = Arrangement.spacedBy(Spacing.s3)) {
                 when (state) {
                     is Approval.Found, is Approval.Approving -> {
                         val f = state as? Approval.Found ?: (state as Approval.Approving).found
-                        Label("Wants to join", color = colors.accent)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Beacon()
+                            Spacer(Modifier.width(Spacing.s2))
+                            Label("Wants to join", color = colors.fg)
+                        }
                         Text(f.name, style = StarbridgeTheme.type.question, color = colors.fg)
                         Text(
                             if (f.kind == Kind.Machine) "A machine: its agents can ask you decisions and send quotas." else "A device: it can read and answer decisions.",
                             style = StarbridgeTheme.type.body,
                             color = colors.fg2,
                         )
-                        Text(f.code, style = StarbridgeTheme.type.machine, color = colors.fg3)
+                        Text(f.code, style = StarbridgeTheme.type.machine, color = colors.fg2)
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Button(
                                 onClick = actions.approve,
                                 enabled = state is Approval.Found,
-                                shape = RoundedCornerShape(Radius.pill),
-                                colors = ButtonDefaults.buttonColors(containerColor = colors.accent, contentColor = colors.onAccent),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = colors.accent,
+                                    contentColor = colors.onAccent,
+                                    disabledContainerColor = colors.accent,
+                                    disabledContentColor = colors.onAccent,
+                                ),
                                 modifier = Modifier.weight(1f).heightIn(min = Sizes.tap),
                             ) {
-                                if (state is Approval.Approving) CircularProgressIndicator(Modifier.size(Spacing.s5), color = colors.onAccent, strokeWidth = 2.dp)
+                                if (state is Approval.Approving) LoadingIndicator(Modifier.size(Spacing.s6), color = colors.onAccent)
                                 else Text("Approve", style = StarbridgeTheme.type.action)
                             }
-                            Spacer(Modifier.padding(start = Spacing.s2))
-                            TextButton(onClick = { actions.close(); code = "" }, modifier = Modifier.heightIn(min = Sizes.tap)) { Text("Cancel", style = StarbridgeTheme.type.action) }
+                            Spacer(Modifier.width(Spacing.s2))
+                            OutlinedButton(onClick = { actions.close(); code = "" }, modifier = Modifier.heightIn(min = Sizes.tap)) { Text("Cancel", style = StarbridgeTheme.type.action) }
                         }
                     }
                     is Approval.Done -> {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Rounded.CheckCircle, contentDescription = null, tint = colors.ok)
-                            Spacer(Modifier.padding(start = Spacing.s2))
+                            Spacer(Modifier.width(Spacing.s2))
                             Text("${state.name} joined.", style = StarbridgeTheme.type.body, color = colors.fg)
                         }
-                        TextButton(onClick = { actions.close(); code = "" }) { Text("Pair another", style = StarbridgeTheme.type.action) }
+                        OutlinedButton(onClick = { actions.close(); code = "" }, modifier = Modifier.heightIn(min = Sizes.tap)) { Text("Pair another", style = StarbridgeTheme.type.action) }
                     }
                     else -> {
-                        Label("Add a machine or device")
+                        Text("Add a machine or device", style = StarbridgeTheme.type.heading, color = colors.fg)
                         Text("Type the code it shows: starbridge pair on a machine, or Join on a new phone or browser.", style = StarbridgeTheme.type.small, color = colors.fg2)
-                        OutlinedTextField(
+                        TextField(
                             value = code,
                             onValueChange = { code = it.take(40) },
+                            label = { Text("Pairing code") },
                             placeholder = { Text("XXXX-XXXX-XXXX-XXXX-XXXX-XXXX") },
                             singleLine = true,
                             textStyle = StarbridgeTheme.type.machine,
-                            shape = RoundedCornerShape(Radius.md),
                             keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters, autoCorrectEnabled = false, imeAction = ImeAction.Go),
                             keyboardActions = KeyboardActions(onGo = { actions.lookUp(code) }),
+                            colors = fieldColors(),
                             modifier = Modifier.fillMaxWidth(),
                             isError = state is Approval.Failed,
                             supportingText = (state as? Approval.Failed)?.let { { Text(it.message) } },
@@ -207,9 +244,11 @@ fun PairCard(approval: Approval, actions: DeviceActions) {
                         Button(
                             onClick = { actions.lookUp(code) },
                             enabled = code.isNotBlank() && state != Approval.Checking,
-                            shape = RoundedCornerShape(Radius.pill),
                             modifier = Modifier.fillMaxWidth().heightIn(min = Sizes.tap),
-                        ) { Text(if (state == Approval.Checking) "Checking…" else "Check code", style = StarbridgeTheme.type.action) }
+                        ) {
+                            if (state == Approval.Checking) LoadingIndicator(Modifier.size(Spacing.s6), color = colors.fg2)
+                            else Text("Check code", style = StarbridgeTheme.type.action)
+                        }
                     }
                 }
             }
@@ -217,16 +256,24 @@ fun PairCard(approval: Approval, actions: DeviceActions) {
     }
 }
 
+/** One row of a grouped list: [content] on `surface` in its group's [shape]. */
 @Composable
-private fun MemberRow(member: Member, now: Instant, onRevoke: () -> Unit) {
+private fun GroupRow(shape: Shape, content: @Composable ColumnScope.() -> Unit) {
+    Surface(Modifier.fillMaxWidth(), shape = shape, color = StarbridgeTheme.colors.surface) {
+        Column(Modifier.padding(horizontal = Spacing.s5, vertical = Spacing.s4), content = content)
+    }
+}
+
+@Composable
+private fun MemberRow(member: Member, now: Instant, shape: Shape, onRevoke: () -> Unit) {
     val colors = StarbridgeTheme.colors
-    Panel(Modifier.fillMaxWidth()) {
+    GroupRow(shape) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(if (member.kind == Kind.Machine) Icons.Rounded.Computer else Icons.Rounded.Devices, contentDescription = null, tint = colors.fg2, modifier = Modifier.size(Spacing.s6))
-            Spacer(Modifier.padding(start = Spacing.s3))
+            Icon(if (member.kind == Kind.Machine) Icons.Rounded.Computer else Icons.Rounded.Smartphone, contentDescription = null, tint = colors.fg2, modifier = Modifier.size(Spacing.s6))
+            Spacer(Modifier.width(Spacing.s4))
             Column(Modifier.weight(1f)) {
-                Text(member.name, style = if (member.kind == Kind.Machine) StarbridgeTheme.type.machine else StarbridgeTheme.type.body, color = colors.fg)
-                Text(if (member.current) "This phone" else "Added ${ago(now, member.addedAt)}", style = StarbridgeTheme.type.small, color = colors.fg3)
+                Text(member.name, style = if (member.kind == Kind.Machine) StarbridgeTheme.type.machine.copy(fontSize = StarbridgeTheme.type.body.fontSize) else StarbridgeTheme.type.body, color = colors.fg)
+                Text(if (member.current) "This phone" else "Added ${ago(now, member.addedAt)}", style = StarbridgeTheme.type.small, color = colors.fg2)
             }
             if (!member.current) {
                 TextButton(
@@ -239,41 +286,51 @@ private fun MemberRow(member: Member, now: Instant, onRevoke: () -> Unit) {
     }
 }
 
-/** How pushes arrive, the server, and signing out. */
+/** How pushes arrive on this phone. */
 @Composable
-private fun ThisPhone(push: PushSetting, server: String, onPush: (String) -> Unit, onSignOut: () -> Unit) {
+private fun Notifications(push: PushSetting, onPush: (String) -> Unit, shape: Shape) {
     val colors = StarbridgeTheme.colors
-    Panel(Modifier.fillMaxWidth()) {
+    GroupRow(shape) {
         Text("Notifications through", style = StarbridgeTheme.type.body, color = colors.fg)
-        Spacer(Modifier.padding(top = Spacing.s2))
-        val choices = listOf("fcm" to "Google", "unifiedpush" to "UnifiedPush")
-        SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-            choices.forEachIndexed { i, (type, label) ->
-                SegmentedButton(
-                    selected = push.type == type,
-                    onClick = { onPush(type) },
-                    shape = SegmentedButtonDefaults.itemShape(i, choices.size),
-                ) { Text(label, style = StarbridgeTheme.type.action) }
+        Spacer(Modifier.padding(top = Spacing.s3))
+        Choice(listOf("fcm" to "Google", "unifiedpush" to "UnifiedPush"), push.type, onPush, Modifier.fillMaxWidth())
+        Spacer(Modifier.padding(top = Spacing.s3))
+        val (status, color) = when {
+            push.registered -> "Registered with your server" to colors.ok
+            push.type == "unifiedpush" && push.distributors.isEmpty() -> "Install a UnifiedPush distributor, such as ntfy, then pick UnifiedPush again" to colors.warn
+            push.type == "fcm" && !push.fcmAvailable -> "This build has no Firebase project; pick UnifiedPush" to colors.warn
+            else -> "Not registered yet" to colors.warn
+        }
+        StatusWord(status, color)
+    }
+}
+
+/** The "Colours" setting: DESIGN.md's palette, or Material You; amber and the quota colours stay. */
+@Composable
+private fun ColoursSetting(colours: Colours, onColours: (Colours) -> Unit, shape: Shape) {
+    val colors = StarbridgeTheme.colors
+    GroupRow(shape) {
+        Text("Colours", style = StarbridgeTheme.type.body, color = colors.fg)
+        Spacer(Modifier.padding(top = Spacing.s3))
+        Choice(listOf(Colours.Starbridge to "Starbridge", Colours.Wallpaper to "Match wallpaper"), colours, onColours, Modifier.fillMaxWidth())
+        Spacer(Modifier.padding(top = Spacing.s3))
+        Text("Amber and the quota colours stay the same under both.", style = StarbridgeTheme.type.small, color = colors.fg2)
+    }
+}
+
+/** The server this phone uses, and signing out. */
+@Composable
+private fun Account(server: String, shape: Shape, onSignOut: () -> Unit) {
+    val colors = StarbridgeTheme.colors
+    GroupRow(shape) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("Server", style = StarbridgeTheme.type.body, color = colors.fg)
+                Text(server, style = StarbridgeTheme.type.machine, color = colors.fg2)
+            }
+            TextButton(onClick = onSignOut, colors = ButtonDefaults.textButtonColors(contentColor = colors.bad), modifier = Modifier.heightIn(min = Sizes.tap)) {
+                Text("Sign out", style = StarbridgeTheme.type.action)
             }
         }
-        Spacer(Modifier.padding(top = Spacing.s2))
-        val status = when {
-            push.registered -> "Registered with your server."
-            push.type == "unifiedpush" && push.distributors.isEmpty() -> "Install a UnifiedPush distributor, such as ntfy, then pick UnifiedPush again."
-            push.type == "fcm" && !push.fcmAvailable -> "This build has no Firebase project; pick UnifiedPush."
-            else -> "Not registered yet."
-        }
-        Text(status, style = StarbridgeTheme.type.small, color = if (push.registered) colors.fg2 else colors.warn)
-        Spacer(Modifier.padding(top = Spacing.s3))
-        Text(server, style = StarbridgeTheme.type.machine, color = colors.fg3)
-        TextButton(onClick = onSignOut, colors = ButtonDefaults.textButtonColors(contentColor = colors.bad), modifier = Modifier.heightIn(min = Sizes.tap)) {
-            Text("Sign out", style = StarbridgeTheme.type.action)
-        }
     }
-    Spacer(Modifier.padding(top = Spacing.s2))
-    Text(
-        "The recovery words were shown once, when you set up your first device. They can add a new device if you lose all of them.",
-        style = StarbridgeTheme.type.small,
-        color = colors.fg3,
-    )
 }

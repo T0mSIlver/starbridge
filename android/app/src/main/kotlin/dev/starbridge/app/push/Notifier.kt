@@ -51,6 +51,8 @@ class Notifier(private val context: Context) : Alerts {
         )
         return NotificationCompat.Builder(context, CHANNEL)
             .setSmallIcon(R.drawable.ic_notification)
+            // The beacon: the icon's circle and the action labels in amber (DESIGN.md).
+            .setColor(context.getColor(R.color.accent))
             .setContentTitle(d.question)
             .setContentText(d.context)
             .setSubText(d.source.machine)
@@ -61,6 +63,7 @@ class Notifier(private val context: Context) : Alerts {
             .setPublicVersion(
                 NotificationCompat.Builder(context, CHANNEL)
                     .setSmallIcon(R.drawable.ic_notification)
+                    .setColor(context.getColor(R.color.accent))
                     .setContentTitle("A decision needs you")
                     .setSubText(d.source.machine)
                     .build(),
