@@ -41,7 +41,7 @@ accounts not set up yet; use local stubs until they are.
 
 - The owner reaches the dev box over SSH and his phone; give ports and paths,
   not LAN URLs. His network: WireGuard on a mini PC, a reverse proxy by LAN IP,
-  Proxmox (the self-hosted server would run in an LXC there).
+  Proxmox. His own Starbridge instance is the hosted one on the VPS.
 - Write every decision and research finding into `SPEC.md` with its date, and
   commit and push.
 - Subagents only for read-only research, on Sonnet.
