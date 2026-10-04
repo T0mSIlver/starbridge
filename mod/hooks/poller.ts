@@ -35,6 +35,8 @@ export interface Timing {
   waitSeconds: number;
   /** How often a session that does not poll checks the state file. */
   checkMs: number;
+  /** How often it reads its answers even when the state file did not change: defaults fall due. */
+  recheckMs: number;
   /** How long a lease lasts past its last renewal. */
   leaseMs: number;
   /** A poll that comes back sooner than this with nothing waits out the rest. */
@@ -47,10 +49,11 @@ export interface Timing {
 export const TIMING: Timing = {
   waitSeconds: 25,
   checkMs: 2_000,
+  recheckMs: 30_000,
   leaseMs: 60_000,
   minCycleMs: 2_000,
   backoffMs: 2_000,
-  maxBackoffMs: 300_000,
+  maxBackoffMs: 60_000,
 };
 
 interface Lease {
@@ -72,10 +75,10 @@ export class Poller {
   private stopped = false;
   private failures = 0;
   /** The state file's time when this session last read it; a /clear makes it unread again. */
-  private seen: { session: string; mtime: number } | undefined;
+  private seen: { session: string; mtime: number; at: number } | undefined;
   /** The session id this poller last held the lease under; a `/clear` changes the id. */
   private leasedAs: string | undefined;
-  /** Answers submitted but not yet confirmed to the CLI, so a retried confirm submits nothing twice. */
+  /** Lines submitted but not yet confirmed to the CLI, so a retried confirm submits nothing twice. */
   private readonly unconfirmed = new Set<string>();
   private readonly leasePath: string;
   private readonly statePath: string;
@@ -127,11 +130,13 @@ export class Poller {
       return;
     }
     const mtime = await this.host.mtime(this.statePath);
-    if (mtime === undefined || (this.seen?.session === me && this.seen.mtime === mtime)) {
+    const now = await this.host.now();
+    const unchanged = this.seen?.session === me && this.seen.mtime === mtime;
+    if (mtime === undefined || (unchanged && now - (this.seen?.at ?? 0) < this.t.recheckMs)) {
       await this.host.sleep(this.t.checkMs);
       return;
     }
-    if ((await this.answers(me, [])) !== undefined) this.seen = { session: me, mtime };
+    if ((await this.answers(me, [])) !== undefined) this.seen = { session: me, mtime, at: now };
   }
 
   /**
@@ -154,7 +159,7 @@ export class Poller {
     const done: string[] = [];
     for (const text of r.stdout.split("\n")) {
       if (!text.trim()) continue;
-      let parsed: { decisionId?: unknown; line?: unknown };
+      let parsed: { decisionId?: unknown; ack?: unknown; line?: unknown };
       try {
         parsed = JSON.parse(text);
       } catch {
@@ -163,18 +168,20 @@ export class Poller {
       }
       const { decisionId: id, line } = parsed;
       if (typeof id !== "string" || typeof line !== "string") continue;
+      // An answer and its default-time notice confirm separately.
+      const ack = typeof parsed.ack === "string" ? parsed.ack : id;
       // A /clear during the call made another session current: the answer waits, unconfirmed,
       // until session `me` is resumed.
       if ((await this.host.sessionId()) !== me) {
         this.host.log(`starbridge: held back the answer to ${id}: its session ${me} ended`);
         continue;
       }
-      if (!this.unconfirmed.has(id)) {
+      if (!this.unconfirmed.has(ack)) {
         this.host.submit(line);
-        this.unconfirmed.add(id);
+        this.unconfirmed.add(ack);
         handed++;
       }
-      done.push(id);
+      done.push(ack);
     }
     if (done.length > 0) {
       const ack = await this.host.run([...base, ...done.flatMap((id) => ["--ack", id])], timeoutMs);
