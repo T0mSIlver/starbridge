@@ -1,7 +1,8 @@
 // Emits the design tokens from the YAML frontmatter of ../../DESIGN.md, the
 // single source of truth, for both clients:
 //
-//   web/src/styles/tokens.css   custom properties, light and dark
+//   web/src/styles/tokens.css   custom properties, light and dark, with a
+//                               --provider-<id> colour per provider
 //   web/src/styles/type.css     one .t-<role> class per typography role
 //   android/.../ui/theme/Tokens.kt
 //
@@ -30,6 +31,7 @@ type Role = {
 };
 type Design = {
   colors: { light: Record<string, string>; dark: Record<string, string> };
+  providers: Record<string, string>;
   fonts: { sans: string; mono: string };
   typography: Record<string, Role>;
   spacing: Record<string, number>;
@@ -59,7 +61,108 @@ function load(): Design {
     if (!(role.font in design.fonts))
       throw new Error(`typography.${name}: unknown font ${role.font}`);
   }
+  for (const [id, value] of Object.entries(design.providers)) {
+    if (!/^[a-z0-9]+$/.test(id))
+      throw new Error(`providers.${id}: ids are lowercase letters and digits`);
+    if (!/^#[0-9a-f]{6}$/i.test(value)) throw new Error(`providers.${id}: ${value} is not #rrggbb`);
+  }
   return design;
+}
+
+// Colour maths for the provider dots: sRGB, WCAG contrast, and OKLCH (Björn Ottosson's OKLab).
+
+type Rgb = [number, number, number];
+
+const toRgb = (hex: string): Rgb =>
+  [1, 3, 5].map((i) => Number.parseInt(hex.slice(i, i + 2), 16) / 255) as Rgb;
+const toHex = (rgb: Rgb) =>
+  `#${rgb
+    .map((v) =>
+      Math.round(Math.min(Math.max(v, 0), 1) * 255)
+        .toString(16)
+        .padStart(2, "0"),
+    )
+    .join("")}`;
+const linear = (v: number) => (v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
+const gamma = (v: number) => (v <= 0.0031308 ? 12.92 * v : 1.055 * v ** (1 / 2.4) - 0.055);
+
+function luminance(hex: string): number {
+  const [r, g, b] = toRgb(hex).map(linear) as Rgb;
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+export function contrast(a: string, b: string): number {
+  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x) as [number, number];
+  return (hi + 0.05) / (lo + 0.05);
+}
+
+function toOklch(hex: string): [number, number, number] {
+  const [r, g, b] = toRgb(hex).map(linear) as Rgb;
+  const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
+  const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+  const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+  const L = 0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s;
+  const A = 1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s;
+  const B = 0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s;
+  return [L, Math.hypot(A, B), Math.atan2(B, A)];
+}
+
+// Linear sRGB, possibly out of gamut.
+function fromOklch(L: number, C: number, H: number): Rgb {
+  const A = C * Math.cos(H);
+  const B = C * Math.sin(H);
+  const l = (L + 0.3963377774 * A + 0.2158037573 * B) ** 3;
+  const m = (L - 0.1055613458 * A - 0.0638541728 * B) ** 3;
+  const s = (L - 0.0894841775 * A - 1.291485548 * B) ** 3;
+  return [
+    4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
+    -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
+    -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s,
+  ];
+}
+
+// The colour at lightness L and hue H, with as much of chroma C as sRGB can show.
+function inGamut(L: number, C: number, H: number): string {
+  const fits = (c: number) => fromOklch(L, c, H).every((v) => v >= -1e-4 && v <= 1 + 1e-4);
+  let lo = 0;
+  let hi = C;
+  if (!fits(hi)) {
+    for (let i = 0; i < 24; i++) {
+      const mid = (lo + hi) / 2;
+      if (fits(mid)) lo = mid;
+      else hi = mid;
+    }
+    hi = lo;
+  }
+  return toHex(fromOklch(L, hi, H).map(gamma) as Rgb);
+}
+
+/** A dot needs 3:1 against what it sits on (WCAG 1.4.11, non-text contrast). */
+export const DOT_CONTRAST = 3;
+
+/**
+ * [hex] moved in OKLCH lightness, away from the grounds, just far enough to reach
+ * [DOT_CONTRAST] against each of them; [hex] itself when it already does.
+ */
+export function fitDot(hex: string, grounds: string[]): string {
+  const passes = (c: string) => grounds.every((g) => contrast(c, g) >= DOT_CONTRAST);
+  if (passes(hex)) return hex;
+  const [L, C, H] = toOklch(hex);
+  const lighter = grounds.every((g) => luminance(g) < 0.18);
+  for (let step = 1; step <= 200; step++) {
+    const l = lighter ? L + step * 0.005 : L - step * 0.005;
+    if (l < 0 || l > 1) break;
+    const c = inGamut(l, C, H);
+    if (passes(c)) return c;
+  }
+  throw new Error(`no lightness of ${hex} reaches ${DOT_CONTRAST}:1 on ${grounds.join(", ")}`);
+}
+
+/** Each provider's dot per scheme, checked against the grounds it sits on. */
+function providerDots(d: Design, scheme: "light" | "dark"): [string, string][] {
+  const c = d.colors[scheme];
+  const grounds = [c.bg, c.surface, c.surface2].map((g) => (g ?? "").slice(0, 7));
+  return Object.entries(d.providers).map(([id, hex]) => [id, fitDot(hex.toLowerCase(), grounds)]);
 }
 
 const num = (n: number) => String(Number(n.toFixed(4)));
@@ -75,6 +178,8 @@ const KT_HEADER = `// ${GENERATED[0]}\n// ${GENERATED[1]}\n`;
 function tokensCss(d: Design): string {
   const colors = (scheme: Record<string, string>, indent: string) =>
     Object.entries(scheme).map(([k, v]) => `${indent}--${k}: ${v};`);
+  const dots = (scheme: "light" | "dark", indent: string) =>
+    providerDots(d, scheme).map(([id, v]) => `${indent}--provider-${id}: ${v};`);
   const px = (prefix: string, group: Record<string, number>) =>
     Object.entries(group).map(([k, v]) => `  --${prefix}${k}: ${num(v)}px;`);
   return [
@@ -82,6 +187,7 @@ function tokensCss(d: Design): string {
     ":root {",
     "  color-scheme: dark light;",
     ...colors(d.colors.dark, "  "),
+    ...dots("dark", "  "),
     "",
     ...px("", d.spacing),
     ...px("radius-", d.radius),
@@ -92,6 +198,7 @@ function tokensCss(d: Design): string {
     "@media (prefers-color-scheme: light) {",
     "  :root {",
     ...colors(d.colors.light, "    "),
+    ...dots("light", "    "),
     "  }",
     "}",
     "",
@@ -128,6 +235,12 @@ function tokensKt(d: Design): string {
   const scheme = (name: string, colors: Record<string, string>) => [
     `val ${name} = StarbridgeColors(`,
     ...names.map((k) => `    ${camel(k)} = ${kColor(colors[k] ?? "")},`),
+    ")",
+    "",
+  ];
+  const dots = (name: string, scheme: "light" | "dark") => [
+    `val ${name}: Map<String, Color> = mapOf(`,
+    ...providerDots(d, scheme).map(([id, v]) => `    "${id}" to ${kColor(v)},`),
     ")",
     "",
   ];
@@ -170,6 +283,9 @@ function tokensKt(d: Design): string {
     "",
     ...scheme("LightColors", d.colors.light),
     ...scheme("DarkColors", d.colors.dark),
+    "// Each provider's dot, by CodexBar provider id.",
+    ...dots("LightProviders", "light"),
+    ...dots("DarkProviders", "dark"),
     ...dims("Spacing", d.spacing, "dp"),
     ...dims("Radius", d.radius, "dp"),
     ...dims("Sizes", d.size, "dp"),

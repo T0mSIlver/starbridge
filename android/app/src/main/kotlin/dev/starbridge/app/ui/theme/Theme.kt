@@ -16,6 +16,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
@@ -71,12 +72,21 @@ class StarbridgeFaces internal constructor(t: StarbridgeType) {
 private val type = StarbridgeFaces(StarbridgeType(family(R.font.google_sans_flex, 400, 500, 600), family(R.font.google_sans_code, 400, 500)))
 
 private val LocalColors = staticCompositionLocalOf { DarkColors }
+private val LocalProviders = staticCompositionLocalOf { DarkProviders }
 
-/** DESIGN.md's tokens; screens read these for meaning (amber, quota states), Material's roles for the rest. */
+/**
+ * DESIGN.md's tokens. Screens read these for what the design fixes (amber, the quota and device
+ * states, `fg3`, the provider dots) and Material's roles for everything else, so that "Match
+ * wallpaper" reaches every surface, container and component.
+ */
 object StarbridgeTheme {
     val colors: StarbridgeColors
         @Composable @ReadOnlyComposable get() = LocalColors.current
     val type: StarbridgeFaces get() = dev.starbridge.app.ui.theme.type
+
+    /** [provider]'s dot, by its CodexBar id; `fg3` for a provider DESIGN.md lacks. */
+    @Composable @ReadOnlyComposable
+    fun provider(provider: String): Color = LocalProviders.current[provider.lowercase().filter { it in 'a'..'z' || it in '0'..'9' }] ?: colors.fg3
 }
 
 /**
@@ -127,10 +137,11 @@ private fun scheme(c: StarbridgeColors, dark: Boolean): ColorScheme {
 }
 
 /**
- * "Match wallpaper": Material You builds the scheme and the neutral tokens; the meaning colours
- * (`accent`, the quota and device states) stay DESIGN.md's, so amber still means "needs you".
+ * "Match wallpaper": Material You builds the scheme, and the neutral tokens and `info` follow it;
+ * the amber and the quota states stay DESIGN.md's, so amber still means "needs you". `fg3` has no
+ * Material role: it is `onSurfaceVariant` faded towards the ground.
  */
-private fun wallpaper(c: StarbridgeColors, m: ColorScheme): Pair<StarbridgeColors, ColorScheme> = c.copy(
+internal fun wallpaper(c: StarbridgeColors, m: ColorScheme): Pair<StarbridgeColors, ColorScheme> = c.copy(
     bg = m.surface,
     surface = m.surfaceContainer,
     surface2 = m.surfaceContainerHighest,
@@ -139,6 +150,8 @@ private fun wallpaper(c: StarbridgeColors, m: ColorScheme): Pair<StarbridgeColor
     fg = m.onSurface,
     fg2 = m.onSurfaceVariant,
     fg3 = m.onSurfaceVariant.copy(alpha = 0.72f).compositeOver(m.surface),
+    info = m.onSurfaceVariant,
+    infoSoft = m.onSurfaceVariant.copy(alpha = c.infoSoft.alpha),
 ) to m.copy(
     error = c.bad,
     onError = c.bg,
@@ -177,18 +190,27 @@ private val shapes = Shapes(
     extraLarge = RoundedCornerShape(Radius.xl),
 )
 
-/** [colours] defaults to DESIGN.md's palette, which screenshots use so they stay stable. */
+/**
+ * [colours] defaults to DESIGN.md's palette, which screenshots use so they stay stable. Under
+ * "Match wallpaper", [dynamic] stands in for the system's scheme; tests pass one built from a seed.
+ */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun StarbridgeTheme(darkTheme: Boolean = isSystemInDarkTheme(), colours: Colours = Colours.Starbridge, content: @Composable () -> Unit) {
+fun StarbridgeTheme(
+    darkTheme: Boolean = isSystemInDarkTheme(),
+    colours: Colours = Colours.Starbridge,
+    dynamic: ColorScheme? = null,
+    content: @Composable () -> Unit,
+) {
     val tokens = if (darkTheme) DarkColors else LightColors
     val (colors, scheme) = if (colours == Colours.Wallpaper) {
         val context = LocalContext.current
-        wallpaper(tokens, if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context))
+        wallpaper(tokens, dynamic ?: if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context))
     } else {
         tokens to scheme(tokens, darkTheme)
     }
-    CompositionLocalProvider(LocalColors provides colors) {
+    val providers = if (darkTheme) DarkProviders else LightProviders
+    CompositionLocalProvider(LocalColors provides colors, LocalProviders provides providers) {
         MaterialExpressiveTheme(
             colorScheme = scheme,
             motionScheme = MotionScheme.expressive(),

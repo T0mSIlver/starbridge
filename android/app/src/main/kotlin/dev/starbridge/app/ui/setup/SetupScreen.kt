@@ -14,6 +14,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
@@ -97,26 +98,24 @@ fun SetupScreen(phase: Phase, server: String, busy: Boolean, actions: SetupActio
 /** A setup step's headline, in the type of a screen title. */
 @Composable
 private fun Title(text: String) {
-    Text(text, style = StarbridgeTheme.type.title, color = StarbridgeTheme.colors.fg, modifier = Modifier.padding(top = Spacing.s8, bottom = Spacing.s1))
+    Text(text, style = StarbridgeTheme.type.title, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(top = Spacing.s8, bottom = Spacing.s1))
 }
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun Primary(text: String, busy: Boolean, enabled: Boolean = true, onClick: () -> Unit) {
-    val colors = StarbridgeTheme.colors
     Button(
         onClick = onClick,
         enabled = enabled && !busy,
         modifier = Modifier.fillMaxWidth().heightIn(min = Sizes.tap),
     ) {
-        if (busy) LoadingIndicator(Modifier.size(Spacing.s6), color = colors.fg2)
+        if (busy) LoadingIndicator(Modifier.size(Spacing.s6), color = MaterialTheme.colorScheme.onSurfaceVariant)
         else Text(text, style = StarbridgeTheme.type.action)
     }
 }
 
 @Composable
 private fun SignIn(server: String, busy: Boolean, actions: SetupActions, openUrl: (String) -> Unit) {
-    val colors = StarbridgeTheme.colors
     var selfHosted by rememberSaveable { mutableStateOf(server != BuildConfig.DEFAULT_SERVER) }
     var url by rememberSaveable { mutableStateOf(server) }
     var token by rememberSaveable { mutableStateOf("") }
@@ -124,7 +123,7 @@ private fun SignIn(server: String, busy: Boolean, actions: SetupActions, openUrl
     Text(
         "Answer your agents' questions and watch your AI plans' quotas, from this phone and the web.",
         style = StarbridgeTheme.type.body,
-        color = colors.fg2,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
     Panel(Modifier.fillMaxWidth().padding(top = Spacing.s2)) {
         Label("This phone makes its own keys")
@@ -132,7 +131,7 @@ private fun SignIn(server: String, busy: Boolean, actions: SetupActions, openUrl
         Text(
             "Your agents encrypt every question to them, so the server stores only ciphertext. The keys never leave the phone.",
             style = StarbridgeTheme.type.body,
-            color = colors.fg,
+            color = MaterialTheme.colorScheme.onSurface,
         )
     }
     Spacer(Modifier.padding(top = Spacing.s2))
@@ -177,7 +176,6 @@ private fun SignIn(server: String, busy: Boolean, actions: SetupActions, openUrl
 
 @Composable
 private fun NoDevice(accountExists: Boolean, busy: Boolean, actions: SetupActions) {
-    val colors = StarbridgeTheme.colors
     var recovering by rememberSaveable { mutableStateOf(false) }
     var words by rememberSaveable { mutableStateOf("") }
     if (!accountExists) {
@@ -185,7 +183,7 @@ private fun NoDevice(accountExists: Boolean, busy: Boolean, actions: SetupAction
         Text(
             "This phone becomes the first device of your account. Next it shows a recovery key: 24 words that can add a new device if you ever lose every one.",
             style = StarbridgeTheme.type.body,
-            color = colors.fg2,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Primary("Set up this phone", busy, onClick = actions.firstDevice)
     } else if (!recovering) {
@@ -193,7 +191,7 @@ private fun NoDevice(accountExists: Boolean, busy: Boolean, actions: SetupAction
         Text(
             "Your account already has devices. One of them approves this phone: it shows a code, which you type on the other device under Devices.",
             style = StarbridgeTheme.type.body,
-            color = colors.fg2,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Primary("Show a code", busy, onClick = actions.join)
         TextButton(onClick = { recovering = true }, modifier = Modifier.heightIn(min = Sizes.tap)) {
@@ -201,7 +199,7 @@ private fun NoDevice(accountExists: Boolean, busy: Boolean, actions: SetupAction
         }
     } else {
         Title("Recover with the words")
-        Text("Type the 24 words in order, separated by spaces.", style = StarbridgeTheme.type.body, color = colors.fg2)
+        Text("Type the 24 words in order, separated by spaces.", style = StarbridgeTheme.type.body, color = MaterialTheme.colorScheme.onSurfaceVariant)
         TextField(
             value = words,
             onValueChange = { words = it },
@@ -218,7 +216,7 @@ private fun NoDevice(accountExists: Boolean, busy: Boolean, actions: SetupAction
     }
     TextButton(
         onClick = actions.signOut,
-        colors = ButtonDefaults.textButtonColors(contentColor = colors.fg2),
+        colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurfaceVariant),
         modifier = Modifier.heightIn(min = Sizes.tap),
     ) { Text("Sign out", style = StarbridgeTheme.type.action) }
 }
@@ -226,20 +224,19 @@ private fun NoDevice(accountExists: Boolean, busy: Boolean, actions: SetupAction
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun Joining(code: String, onCancel: () -> Unit) {
-    val colors = StarbridgeTheme.colors
     Title("Approve this phone")
     Text(
         "On a device that's already set up, open Devices and type this code. It expires in 10 minutes.",
         style = StarbridgeTheme.type.body,
-        color = colors.fg2,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
     Panel(Modifier.fillMaxWidth().padding(vertical = Spacing.s2)) {
-        Text(code, style = StarbridgeTheme.type.figure, color = colors.fg)
+        Text(code, style = StarbridgeTheme.type.figure, color = MaterialTheme.colorScheme.onSurface)
     }
     Row(verticalAlignment = Alignment.CenterVertically) {
-        LoadingIndicator(Modifier.size(Spacing.s8), color = colors.fg2)
+        LoadingIndicator(Modifier.size(Spacing.s8), color = MaterialTheme.colorScheme.secondary)
         Spacer(Modifier.width(Spacing.s3))
-        Text("Waiting for the approval", style = StarbridgeTheme.type.small, color = colors.fg2)
+        Text("Waiting for the approval", style = StarbridgeTheme.type.small, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
     TextButton(onClick = onCancel, modifier = Modifier.heightIn(min = Sizes.tap)) { Text("Cancel", style = StarbridgeTheme.type.action) }
 }
@@ -252,7 +249,7 @@ private fun RecoveryKey(words: List<String>, onDone: () -> Unit) {
     Text(
         "Write these ${words.size} words down and keep them offline. If you lose every device, they add a new one. This is the only time they are shown.",
         style = StarbridgeTheme.type.body,
-        color = colors.fg2,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
     Panel(Modifier.fillMaxWidth().padding(top = Spacing.s2)) {
         words.chunked(3).forEachIndexed { row, three ->
@@ -261,7 +258,7 @@ private fun RecoveryKey(words: List<String>, onDone: () -> Unit) {
                     Row(Modifier.weight(1f)) {
                         Text("${row * 3 + col + 1}".padStart(2), style = StarbridgeTheme.type.machine, color = colors.fg3)
                         Spacer(Modifier.width(Spacing.s2))
-                        Text(word, style = StarbridgeTheme.type.machine, color = colors.fg)
+                        Text(word, style = StarbridgeTheme.type.machine, color = MaterialTheme.colorScheme.onSurface)
                     }
                 }
             }
@@ -273,7 +270,7 @@ private fun RecoveryKey(words: List<String>, onDone: () -> Unit) {
     ) {
         Checkbox(checked = saved, onCheckedChange = null)
         Spacer(Modifier.width(Spacing.s3))
-        Text("I wrote these words down", style = StarbridgeTheme.type.body, color = colors.fg)
+        Text("I wrote these words down", style = StarbridgeTheme.type.body, color = MaterialTheme.colorScheme.onSurface)
     }
     Primary("Continue", busy = false, enabled = saved, onClick = onDone)
 }
