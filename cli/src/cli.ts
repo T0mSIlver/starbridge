@@ -31,8 +31,11 @@ const HELP = `starbridge: post decisions to your devices, upload quota windows
       Exits 2 when nobody answered in time: apply the default.
 
   starbridge answers --session <id> [--wait <seconds>]
-      For the Claude Code mod: print, as JSON lines, the unprinted answers to decisions that
+      For the Claude Code mod: print, as JSON lines, the unconfirmed answers to decisions that
       session asked. With --wait (at most 25), poll the server once first when there are none.
+
+  starbridge answers --session <id> --ack <decision id>...
+      For the Claude Code mod: confirm it submitted these answers, so they are not printed again.
 
   starbridge quota push [--provider <name>]... [--interval 5m] [--once] [--codexbar <path>]
       Run \`codexbar usage --format json\` for each provider (or for every enabled one),
@@ -105,7 +108,11 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
       case "answers": {
         const { values } = parseArgs({
           args: rest,
-          options: { session: { type: "string" }, wait: { type: "string" } },
+          options: {
+            session: { type: "string" },
+            wait: { type: "string" },
+            ack: { type: "string", multiple: true },
+          },
         });
         return await answers(ctx, values);
       }

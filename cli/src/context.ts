@@ -38,19 +38,35 @@ export function session(ctx: Ctx): Session {
 /**
  * Fetches the directory entries added since the last call and verifies the whole chain against
  * the pin, so the server can neither add a key nor roll back a revocation. Then moves the pin.
+ * Another process may have moved it meanwhile from a longer fetch: under the lock, the longer
+ * chain wins, and each must extend the other's pin.
  */
 export async function refreshDirectory(ctx: Ctx, s: Session): Promise<Directory> {
+  const account = s.machine.account;
   const cached = ctx.store.directory();
   const fresh = await s.api.directory(cached.length);
   const entries = [...cached, ...fresh];
-  const dir = verifyDirectory(entries, { account: s.machine.account, pin: s.machine.pin });
+  const ours = verifyDirectory(entries, { account, pin: s.machine.pin });
+  const dir = ctx.store.locked(() => {
+    const machine = ctx.store.machine();
+    if (machine?.id !== s.machine.id || machine.account !== account)
+      throw new UsageError("this machine was paired again meanwhile: run the command again");
+    const saved = ctx.store.directory();
+    if (saved.length >= ours.length) {
+      verifyDirectory(saved, { account, pin: { length: ours.length, head: ours.head } });
+      s.machine = machine;
+      return saved.length === ours.length
+        ? ours
+        : verifyDirectory(saved, { account, pin: machine.pin });
+    }
+    verifyDirectory(entries, { account, pin: machine.pin });
+    ctx.store.saveDirectory(entries);
+    s.machine = { ...machine, pin: { length: ours.length, head: ours.head } };
+    ctx.store.saveMachine(s.machine);
+    return ours;
+  });
   const me = dir.members.get(s.machine.id);
   if (!me?.active) throw new UsageError("this machine was revoked: run `starbridge pair` again");
-  if (fresh.length > 0) {
-    ctx.store.saveDirectory(entries);
-    s.machine = { ...s.machine, pin: { length: dir.length, head: dir.head } };
-    ctx.store.saveMachine(s.machine);
-  }
   return dir;
 }
 

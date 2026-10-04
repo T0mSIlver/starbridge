@@ -34,6 +34,8 @@ function session(id: string) {
     runs: [] as string[][],
     status: undefined as string | undefined,
     logs: [] as string[],
+    /** Called when a CLI run returns, before the poller sees its output. */
+    afterRun: undefined as ((stdout: string) => void) | undefined,
   };
   const host: Host = {
     sessionId: async () => s.id,
@@ -46,7 +48,9 @@ function session(id: string) {
         out: (l) => out.push(l),
         err: (l) => err.push(l),
       });
-      return { exitCode, stdout: out.map((l) => `${l}\n`).join(""), stderr: err.join("\n") };
+      const stdout = out.map((l) => `${l}\n`).join("");
+      s.afterRun?.(stdout);
+      return { exitCode, stdout, stderr: err.join("\n") };
     },
     read: async (path) => readFileSync(path, "utf8"),
     write: async (path, text) => writeFileSync(path, text),
@@ -180,4 +184,45 @@ test("the poller keeps its lease across a /clear, under the new session id", asy
   await until(() => leader.get().submitted.length === 1, 1500);
   const lease = JSON.parse(readFileSync(`${cli.store.dir}/mod-poller.json`, "utf8"));
   expect(lease.session).toBe("s-cleared");
+});
+
+test("an answer in flight during a /clear waits for its own session", async () => {
+  const a = session("s-a");
+  const da = await ask("Merge #12 now?", "s-a");
+  await until(() => polling(a) > 0);
+  // The /clear lands while the poll that carries the answer is running.
+  a.get().afterRun = (stdout) => {
+    if (stdout.includes(da)) a.get().id = "s-new";
+  };
+  await server.answer(da, { choice: "Yes" });
+  await until(() => a.get().id === "s-new");
+  await Bun.sleep(200);
+  expect(a.get().submitted).toEqual([]);
+  expect(a.get().logs.some((l) => l.includes(da))).toBe(true);
+
+  // Resuming the old session hands it over there, once.
+  a.get().afterRun = undefined;
+  a.get().id = "s-a";
+  await until(() => a.get().submitted.length === 1);
+  await Bun.sleep(200);
+  expect(a.get().submitted).toEqual([`Answer to ${da} (Merge #12 now?): Yes`]);
+});
+
+test("a session that does not poll also keeps an answer through a /clear", async () => {
+  const lead = session("s-lead");
+  await until(() => polling(lead) > 0);
+  const a = session("s-a");
+  const da = await ask("Merge #12 now?", "s-a");
+  a.get().afterRun = (stdout) => {
+    if (stdout.includes(da)) a.get().id = "s-new";
+  };
+  await server.answer(da, { choice: "Yes" });
+  await until(() => a.get().id === "s-new");
+  await Bun.sleep(200);
+  expect(a.get().submitted).toEqual([]);
+
+  a.get().afterRun = undefined;
+  a.get().id = "s-a";
+  await until(() => a.get().submitted.length === 1);
+  expect(polling(a)).toBe(0);
 });
