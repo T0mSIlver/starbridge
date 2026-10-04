@@ -415,6 +415,18 @@ How it generalizes is open.
   only deploy a commit that is on GitHub's main: the box fetches that commit itself with a
   read-only GitHub deploy key. `deploy/deploy.sh` stays for rollbacks and other refs. The
   `cli-v*` workflow folded into the release one.
+- 2026-10-05. Setup (#68, spec on the issue): one `starbridge agent` per
+  machine, a user service (systemd or launchd), owns the keys and the server
+  connection, uploads quotas, and routes answers, permission prompts,
+  control sets and runs to sessions over a unix socket. The mod becomes a
+  thin client of it; CLI commands fall back to talking to the server
+  themselves when no agent runs (owner's choice). Entry points: `curl
+  -fsSL https://starbridge.run/install.sh | sh`, a Homebrew tap and npm
+  (owner's choice). The repo is a Claude Code marketplace with two plugins,
+  `starbridge` (skill, hooks, setup command) and `starbridge-mod`, split
+  so that builds refusing mods keep the rest. The plugin's `SessionStart`
+  hook injects the skill rule instead of editing CLAUDE.md (owner's choice).
+  No public release date: the owner ships when satisfied.
 
 ## Encryption, with existing libraries
 
@@ -711,3 +723,26 @@ goes in git.
   Apps (SEP-1865) has been a stable MCP extension since 2026-01-26:
   `ui://` resources of type `text/html;profile=mcp-app`, JSON-RPC over
   `postMessage`, and a sandboxed iframe with a CSP the host builds.
+- 2026-10-05: setup research (#68). Claude Code 2.1.289 plugins can ship
+  skills, command hooks, `bin/`, `userConfig` and mods (a plugin whose
+  `hooks/hooks.json` lists `modules`); the owner's localvoxtral marketplace
+  already installs a mod at user scope. A plugin-root `CLAUDE.md` is not
+  loaded. `claude plugin marketplace add` and `claude plugin install
+  --scope user` run unprompted from a script for git sources. CodexBar:
+  macOS `brew install --cask codexbar` with the CLI inside the app; release
+  tarballs for macOS and Linux (glibc and musl); a brew tap and AUR on
+  Linux; browser cookie import is macOS-only; `codexbar config providers
+  --format json` lists providers but not whether they are signed in, which
+  only `usage --provider X` shows; `codexbar --version` printed `unknown` on
+  the dev box.
+- 2026-10-05: permission hook probes (#57), Claude Code 2.1.289 in a
+  terminal (tmux, Haiku), a throwaway `PermissionRequest` command hook that
+  waits, then allows. The dialog shows while the hook waits, and the hook's
+  answer resolves it. Under `--dangerously-skip-permissions` an `ask` rule's
+  prompt still reaches the hook (`permission_mode: "bypassPermissions"`),
+  although the docs say the hook does not fire in that mode. When the
+  keyboard picks Yes first, the hook gets no signal and its answer is
+  dropped; Esc or No interrupts the turn and sends the hook SIGTERM within
+  0.1 s. `permission_suggestions` holds SDK `PermissionUpdate` objects (here
+  `addDirectories`). Codex 0.160.0 asks the user to trust any new or changed
+  hook at launch; its race test waits for the Codex limit to reset.
