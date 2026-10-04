@@ -389,7 +389,9 @@ goes in git.
   `Ov23liEVyfnca8hO548x`, redirect URI
   `https://starbridge.run/v1/auth/github/callback`, user tokens expire. Secret:
   `github-oauth-client-secret`.
-- Firebase project `starbridge-476f2`, Android app `dev.starbridge.app`.
+- Firebase project `starbridge-476f2`, Android app `dev.starbridge.app`
+  (app id `1:342630184902:android:a77b6cd3da382eed23e4c7`, config
+  `google-services.json`).
   Service account
   `firebase-adminsdk-fbsvc@starbridge-476f2.iam.gserviceaccount.com`, key:
   `fcm-service-account.json`.
