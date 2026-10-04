@@ -7,6 +7,7 @@ import dev.starbridge.app.data.Member
 import dev.starbridge.app.data.Pace
 import dev.starbridge.app.data.PushSetting
 import dev.starbridge.app.data.QuotaWindow
+import dev.starbridge.app.data.SessionLink
 import dev.starbridge.app.data.Source
 import java.time.Duration
 import java.time.Instant
@@ -36,7 +37,13 @@ class Fake(private val now: Instant) {
             recommended = "Server first",
             default = "Merges the server first",
             defaultAt = later(30),
-            source = Source("dev box", "starbridge", "orchestrator"),
+            source = Source(
+                "dev box",
+                "starbridge",
+                "8f3c2a1e-5b7d-4c9a-a1f2-3e4d5c6b7a89",
+                title = "Starbridge orchestrator",
+                links = listOf(SessionLink("web", "https://claude.ai/code/session_01")),
+            ),
             createdAt = ago(12),
         ),
         Decision(
@@ -66,11 +73,11 @@ class Fake(private val now: Instant) {
     )
 
     val windows = listOf(
-        QuotaWindow("claude-5h", "Claude", "5-hour", 81, later(110), Pace.RunsOut(later(50))),
-        QuotaWindow("claude-week", "Claude", "Weekly", 62, later(3120), Pace.Even),
-        QuotaWindow("zai-5h", "Z.ai GLM", "5-hour", 12, later(38), Pace.Unused(86), alert = true),
-        QuotaWindow("codex-week", "Codex", "Weekly", 34, later(1140), Pace.Unused(41)),
-        QuotaWindow("mistral-month", "Mistral", "Monthly credits", 55, later(12960), Pace.Even),
+        QuotaWindow("claude-5h", "Claude", "5-hour", 81, later(110), Pace.RunsOut(later(50)), steadyPercent = 63),
+        QuotaWindow("claude-week", "Claude", "Weekly", 62, later(3120), Pace.Even, steadyPercent = 58),
+        QuotaWindow("zai-5h", "Z.ai GLM", "5-hour", 12, later(38), Pace.Unused(86), alert = true, steadyPercent = 87),
+        QuotaWindow("codex-week", "Codex", "Weekly", 34, later(1140), Pace.Unused(41), steadyPercent = 89),
+        QuotaWindow("mistral-month", "Mistral", "Monthly credits", 55, later(12960), Pace.Even, steadyPercent = 52),
         QuotaWindow("gemini-day", "Gemini", "Daily", 3, later(1400), Pace.Unknown),
     )
 
