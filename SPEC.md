@@ -246,6 +246,12 @@ How it generalizes is open.
   decisions. Version 1 is quotas and decisions; owner panels wait for
   version 2. Web Push is in version 1.
 
+- 2026-10-04 (late). Before the owner starts using Starbridge: (1) the mod's push
+  path must work end to end without any agent waiting on an answer: an agent
+  posts a decision and keeps working; the answer arrives later as a prompt;
+  (2) a design overhaul. The current look reads generic. The base becomes black
+  and white (neutral greys), not blue-black, with few accents. A research session
+  drafts directions from similar apps and the owner picks.
 - 2026-10-04. Look: function over form. Monospace only for code (Markdown
   code blocks in a decision's context); numbers, ids and machine names use the
   sans face with tabular figures. Colours stay generic: on Android, Material
