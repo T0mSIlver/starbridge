@@ -4,6 +4,7 @@ import { buildVectors, render } from "../scripts/gen-vectors";
 import {
   Answer,
   alertsFor,
+  claimHash,
   computePace,
   Decision,
   formatPairingCode,
@@ -101,6 +102,7 @@ describe("pairing.json", () => {
     const code = parsePairingCode(v.code);
     expect(code).toEqual({ rendezvous: v.rendezvous, secret: v.secret });
     expect(toB64(pairingKey(code))).toBe(v.key);
+    expect(claimHash(v.claim.secret)).toBe(v.claim.hash);
   });
   for (const c of v.parse) {
     test(`parse ${c.input}`, () => {

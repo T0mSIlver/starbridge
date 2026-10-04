@@ -6,6 +6,7 @@
 import {
   addEntry,
   alertsFor,
+  claimHash,
   computePace,
   type Directory,
   encodeCrockford,
@@ -631,6 +632,7 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
     rendezvous: code.rendezvous,
     secret: code.secret,
     key: toB64(pairingKey(code)),
+    claim: { secret: toB64(seed(7)), hash: claimHash(toB64(seed(7))) },
     parse: [
       { input: formatPairingCode(code).toLowerCase(), expect: formatPairingCode(code) },
       { input: "0123 4567 89ab cdef ghjk mnpq", expect: "0123-4567-89AB-CDEF-GHJK-MNPQ" },
