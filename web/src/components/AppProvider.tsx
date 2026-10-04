@@ -51,17 +51,37 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     reload();
   }, [reload]);
 
-  const refreshInbox = useCallback(async () => {
-    if (!ctx) return;
+  // The directory as last verified; read again before every load.
+  const ctxRef = useRef(ctx);
+  ctxRef.current = ctx;
+  const current = useCallback(async () => {
+    const was = ctxRef.current;
+    if (!was) return undefined;
     const d = await load();
-    setInbox(await d.loadInbox(ctx, inboxRef.current));
-  }, [ctx]);
+    const fresh = await d.reverify(was);
+    if (!fresh) {
+      // Revoked from another device: boot shows why.
+      await reload();
+      return undefined;
+    }
+    ctxRef.current = fresh;
+    if (fresh.dir.length !== was.dir.length) setBoot({ state: "ready", ctx: fresh });
+    return fresh;
+  }, [reload]);
+
+  const refreshInbox = useCallback(async () => {
+    const fresh = await current();
+    if (!fresh) return;
+    const d = await load();
+    setInbox(await d.loadInbox(fresh, inboxRef.current));
+  }, [current]);
 
   const refreshQuotas = useCallback(async () => {
-    if (!ctx) return;
+    const fresh = await current();
+    if (!fresh) return;
     const d = await load();
-    setQuotas(await d.loadQuotas(ctx));
-  }, [ctx]);
+    setQuotas(await d.loadQuotas(fresh));
+  }, [current]);
 
   // Poll while the page is visible, and refresh as soon as the service worker sees a push.
   useEffect(() => {

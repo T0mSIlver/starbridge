@@ -361,6 +361,11 @@ export interface Inbox {
   cursor?: string;
   /** Items that failed to open or verify, and why. */
   rejected: { id: string; error: string }[];
+  /**
+   * Items signed by a member this directory does not hold yet: one paired after the last
+   * read. They are tried again on the next load, after the directory is read again.
+   */
+  retry?: Stored[];
 }
 
 async function openDecision(ctx: Ctx, s: Stored, sent: store.SentAnswers): Promise<InboxItem> {
@@ -391,29 +396,46 @@ export async function openPushedQuota(ctx: Ctx, item: SealedItem) {
   return (await openAsync(item as SealedItem & { kind: "quota" }, me(ctx), ctx.dir)).body;
 }
 
+/**
+ * Reads the directory again and checks this device is still in it; undefined once revoked. Run
+ * before each load, so items from members paired elsewhere since boot verify.
+ */
+export async function reverify(ctx: Ctx): Promise<Ctx | undefined> {
+  const fresh = await refresh(ctx);
+  const self = fresh.dir.members.get(ctx.device.id);
+  return self?.active ? fresh : undefined;
+}
+
 /** Reads decisions after `inbox.cursor` and merges them in: answered ones come back answered. */
 export async function loadInbox(ctx: Ctx, inbox: Inbox = { items: [], rejected: [] }) {
   const sent = (await store.get("answers", ctx.account)) ?? {};
   const byId = new Map(inbox.items.map((i) => [i.decision.id, i]));
   const rejected = [...inbox.rejected];
+  const retry: Stored[] = [];
+  const take = async (s: Stored, again: boolean) => {
+    try {
+      const item = await openDecision(ctx, s, sent);
+      byId.set(item.decision.id, item);
+    } catch (e) {
+      // A revoked machine's old decisions no longer verify; nothing to show or warn about.
+      if (e instanceof ProtocolError && e.code === "revoked-signer") return;
+      if (e instanceof ProtocolError && e.code === "unknown-signer" && !again) {
+        retry.push(s);
+        return;
+      }
+      if (!rejected.some((r) => r.id === s.item.id))
+        rejected.push({ id: s.item.id, error: e instanceof Error ? e.message : String(e) });
+    }
+  };
+  for (const s of inbox.retry ?? []) await take(s, true);
   let cursor = inbox.cursor;
   for (;;) {
     const page = await api.items("decision", cursor);
-    for (const s of page.items) {
-      try {
-        const item = await openDecision(ctx, s, sent);
-        byId.set(item.decision.id, item);
-      } catch (e) {
-        // A revoked machine's old decisions no longer verify; nothing to show or warn about.
-        if (e instanceof ProtocolError && e.code === "revoked-signer") continue;
-        if (!rejected.some((r) => r.id === s.item.id))
-          rejected.push({ id: s.item.id, error: e instanceof Error ? e.message : String(e) });
-      }
-    }
+    for (const s of page.items) await take(s, false);
     cursor = page.cursor;
     if (page.items.length < 100) break;
   }
-  return { items: [...byId.values()], cursor, rejected } satisfies Inbox;
+  return { items: [...byId.values()], cursor, rejected, retry } satisfies Inbox;
 }
 
 /** Signs the answer and seals it to the machine that asked, which must still be active. */
