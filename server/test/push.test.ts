@@ -187,6 +187,7 @@ test("subscriptions to private or plain-HTTP addresses are refused unless allowe
   for (const e of [
     "http://push.example/x",
     "https://localhost/x",
+    "https://localhost./x",
     "https://127.0.0.1/x",
     "https://10.1.2.3/x",
     "https://192.168.1.10/x",
@@ -362,4 +363,33 @@ test("a relay without credentials of its own does not forward onward", async () 
     body: { type: "fcm", endpoint: "tok-ok", payload: "{}" },
   });
   expect(r.json).toEqual({ result: "no-route" });
+});
+
+test("a push host that resolves to a private address is not called", async () => {
+  const { openDb } = await import("../src/db");
+  const { Push } = await import("../src/push");
+  const calls: string[] = [];
+  const fetchFn = (async (url: string) => {
+    calls.push(url);
+    return new Response("", { status: 201 });
+  }) as unknown as typeof fetch;
+  const dns: Record<string, string[]> = {
+    "push.example": ["93.184.216.34"],
+    "rebound.example": ["93.184.216.34", "10.0.0.7"],
+  };
+  const push = new Push(
+    testConfig({ allowPrivatePushEndpoints: false }),
+    openDb(":memory:"),
+    fetchFn,
+    async (host) => dns[host] ?? [],
+  );
+  const target = (host: string) => ({
+    type: "unifiedpush" as const,
+    endpoint: `https://${host}/up`,
+  });
+  expect(await push.send(target("rebound.example"), "{}")).toBe("failed");
+  expect(await push.send(target("localhost."), "{}")).toBe("failed");
+  expect(calls).toEqual([]);
+  expect(await push.send(target("push.example"), "{}")).toBe("ok");
+  expect(calls).toEqual(["https://push.example/up"]);
 });

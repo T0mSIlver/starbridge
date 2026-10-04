@@ -1,7 +1,7 @@
 import type { Database } from "bun:sqlite";
 import { SealedItem } from "@starbridge/protocol";
 import { Hono } from "hono";
-import { fail, memberOf, requireCaller } from "../auth";
+import { fail, memberOf, recheck, requireCaller } from "../auth";
 import { nextSeq } from "../db";
 import type { Env } from "../env";
 import { holdOpen, json, waitSeconds } from "../http";
@@ -104,6 +104,7 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
 
   let decisionDevices: string[] = [];
   const seq = db.transaction(() => {
+    recheck(c);
     if (item.kind === "answer") {
       const machine = to[0] as string;
       if (to.length !== 1 || !activeMember(db, caller.account, machine, "machine"))

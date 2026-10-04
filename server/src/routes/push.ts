@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { z } from "zod";
-import { fail, memberOf, randomToken, requireCaller } from "../auth";
+import { fail, memberOf, randomToken, recheck, requireCaller } from "../auth";
 import type { Env } from "../env";
 import { clientIp, json } from "../http";
 import { checkTarget, PushTarget } from "../push";
@@ -9,6 +9,7 @@ export const pushRoutes = new Hono<Env>();
 
 pushRoutes.post("/push/subscriptions", requireCaller("paired-device"), async (c) => {
   const target = await json(c, PushTarget);
+  recheck(c);
   const why = checkTarget(target, c.var.config.allowPrivatePushEndpoints);
   if (why) fail(400, "bad-endpoint", why);
   const caller = c.var.caller;

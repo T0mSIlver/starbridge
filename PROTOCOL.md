@@ -93,7 +93,7 @@ never rely on that check.
 |---|---|---|
 | `POST /pairings` | new member | `{request, claimHash}`: the request message and BLAKE2b-256 of a random claim secret's text (`claimHash`); 409 if the rendezvous id is taken |
 | `GET /pairings/:rendezvous` | device | `{request}` |
-| `POST /pairings/:rendezvous/approve` | device | `{approval}`; the directory must already hold the new member's entry |
+| `POST /pairings/:rendezvous/approve` | device | `{approval}`; the directory must already hold the new member's entry; 409 `already-paired` when that member already holds a session or token |
 | `GET /pairings/:rendezvous/result?wait=<s>` | new member, with `X-Claim: <secret>` | long-poll: `{approval, token?}` once approved, `token` for machines only; 204 when `wait` passes |
 
 ### Items

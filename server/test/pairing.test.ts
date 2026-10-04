@@ -26,14 +26,18 @@ import {
 } from "./helpers";
 
 /** Posts a pairing request for a new machine and returns what the flow needs. */
-async function request(s: Server, id = "devbox") {
-  const keys = generateMemberKeys();
-  const code = newPairingCode();
+async function request(
+  s: Server,
+  id = "devbox",
+  keys = generateMemberKeys(),
+  code = newPairingCode(),
+  role: "device" | "machine" = "machine",
+) {
   const claim = toB64(crypto.getRandomValues(new Uint8Array(32)));
   const body = {
     v: 1 as const,
     rendezvous: code.rendezvous,
-    role: "machine" as const,
+    role,
     id,
     name: id,
     ...publicKeys(keys),
@@ -274,4 +278,56 @@ test("an expired pairing is gone with the machine token it held", async () => {
   });
   expect(r.status).toBe(404);
   expect(s.deps.db.query("SELECT token FROM pairings").all()).toEqual([]);
+});
+
+/** An approval for the directory as it stands, without appending anything. */
+async function approveAsIs(s: Server, acct: Account, p: Awaited<ReturnType<typeof request>>) {
+  const dir = await directory(s, acct.device.token);
+  const approval = pairingApproval(
+    {
+      v: 1,
+      rendezvous: p.code.rendezvous,
+      account: acct.id,
+      length: dir.length,
+      head: dir.head,
+      approver: acct.device.id,
+    },
+    p.code,
+  );
+  return s.call("POST", `/v1/pairings/${p.code.rendezvous}/approve`, {
+    token: acct.device.token,
+    body: { approval },
+  });
+}
+
+test("pairing an existing member's keys again mints no new credential", async () => {
+  const s = await makeServer();
+  const acct = await setupAccount(s);
+  const devbox = await pair(s, acct, "devbox", "machine");
+  const again = await request(s, "devbox", devbox.keys);
+  const r = await approveAsIs(s, acct, again);
+  expect(r.status).toBe(409);
+  expect(r.json.error).toBe("already-paired");
+  // Nor can the first device be paired onto another session.
+  const phone = await request(s, "phone", acct.device.keys, newPairingCode(), "device");
+  const r2 = await approveAsIs(s, acct, phone);
+  expect(r2.status).toBe(409);
+  expect(r2.json.error).toBe("already-paired");
+});
+
+test("a result long-poll whose pairing expired and was replaced gets nothing", async () => {
+  const s = await makeServer();
+  const acct = await setupAccount(s);
+  const first = await request(s);
+  const url = `/v1/pairings/${first.code.rendezvous}/result?wait=30`;
+  const polling = s.call("GET", url, { headers: { "x-claim": first.claim } });
+  await Bun.sleep(20);
+  s.deps.db.query("UPDATE pairings SET created_at = created_at - 11 * 60000").run();
+  // Someone else's pairing lands on the same rendezvous id and is approved.
+  const second = await request(s, "other", generateMemberKeys(), first.code);
+  expect(second.r.status).toBe(201);
+  expect((await approve(s, acct, second)).status).toBe(200);
+  const r = await polling;
+  expect(r.status).toBe(404);
+  expect(r.json.token).toBeUndefined();
 });

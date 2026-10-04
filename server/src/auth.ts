@@ -96,6 +96,18 @@ export function requireCaller(...needs: Need[]): MiddlewareHandler<Env> {
   };
 }
 
+/**
+ * Identifies the caller again and fails unless it is still the one admitted. Write routes call
+ * it inside their transaction, after the body arrived, so a revocation that landed while the
+ * body was uploading still counts.
+ */
+export function recheck(c: Context<Env>): void {
+  const now = identify(c);
+  const was = c.var.caller;
+  if (!now || now.role !== was.role || now.account !== was.account || now.member !== was.member)
+    fail(401, "unauthenticated", "credentials changed during the request");
+}
+
 /** The member id of a caller admitted as paired. */
 export function memberOf(caller: Caller): string {
   if (caller.member === null) fail(403, "forbidden", "not paired");

@@ -8,7 +8,7 @@ import {
 } from "@starbridge/protocol";
 import { Hono } from "hono";
 import { z } from "zod";
-import { fail, hashToken, identify, randomToken, requireCaller, safeEqual } from "../auth";
+import { fail, hashToken, identify, randomToken, recheck, requireCaller, safeEqual } from "../auth";
 import type { Env } from "../env";
 import { clientIp, holdOpen, json, waitSeconds } from "../http";
 import { activeMember } from "./directory";
@@ -119,11 +119,17 @@ pairingRoutes.post("/pairings/:rendezvous/approve", requireCaller("paired-device
     fail(400, "bad-schema", "approval names another rendezvous, account or approver");
 
   db.transaction(() => {
+    recheck(c);
     const p = load(c, rendezvous);
     if (p.approval) fail(409, "already-approved");
     const m = activeMember(db, caller.account, p.member_id, p.role);
     if (!m || m.box_pk !== p.box_pk || m.sign_pk !== p.sign_pk)
       fail(409, "not-in-directory", "append the new member's entry to the directory first");
+    if (m.claimed) fail(409, "already-paired", "this member already holds credentials");
+    db.query("UPDATE members SET claimed = 1 WHERE account_id = ? AND id = ?").run(
+      caller.account,
+      p.member_id,
+    );
     let token: string | null = null;
     if (p.role === "machine") {
       token = randomToken("sbm_");
@@ -150,7 +156,11 @@ pairingRoutes.get("/pairings/:rendezvous/result", async (c) => {
     if (seconds > 0) {
       holdOpen(c);
       await c.var.pairings.wait(rendezvous, seconds, c.req.raw.signal);
-      p = load(c, rendezvous);
+      const again = load(c, rendezvous);
+      // The pairing may have expired and its rendezvous id been reused while this request waited.
+      if (again.created_at !== p.created_at || !safeEqual(claimHash(claim), again.claim_hash))
+        fail(404, "not-found", "no such pairing, or it expired");
+      p = again;
     }
     if (!p.approval) return c.body(null, 204);
   }

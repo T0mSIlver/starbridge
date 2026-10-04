@@ -9,7 +9,7 @@ import {
 } from "@starbridge/protocol";
 import { Hono } from "hono";
 import { z } from "zod";
-import { fail, requireCaller } from "../auth";
+import { fail, recheck, requireCaller } from "../auth";
 import type { Env } from "../env";
 import { json } from "../http";
 
@@ -20,18 +20,26 @@ export function loadEntries(db: Database, account: string, from = 0): SignedEnve
   return rows.map((r) => JSON.parse(r.entry));
 }
 
+interface ActiveMember {
+  id: string;
+  role: string;
+  box_pk: string;
+  sign_pk: string;
+  claimed: number;
+}
+
 /** The active member with this id and role, from what the server derived of the chain. */
 export function activeMember(
   db: Database,
   account: string,
   id: string,
   role?: "device" | "machine",
-): { id: string; role: string; box_pk: string; sign_pk: string } | null {
+): ActiveMember | null {
   const m = db
     .query(
-      "SELECT id, role, box_pk, sign_pk FROM members WHERE account_id = ? AND id = ? AND active = 1",
+      "SELECT id, role, box_pk, sign_pk, claimed FROM members WHERE account_id = ? AND id = ? AND active = 1",
     )
-    .get(account, id) as { id: string; role: string; box_pk: string; sign_pk: string } | null;
+    .get(account, id) as ActiveMember | null;
   return m && (!role || m.role === role) ? m : null;
 }
 
@@ -84,6 +92,7 @@ directoryRoutes.post("/directory", requireCaller("device"), async (c) => {
   const { db, config } = c.var;
 
   const result = db.transaction(() => {
+    recheck(c);
     const entries = loadEntries(db, caller.account);
     if (seqOf(entry) !== entries.length)
       fail(409, "not-next", `the next entry has seq ${entries.length}`);
@@ -109,11 +118,16 @@ directoryRoutes.post("/directory", requireCaller("device"), async (c) => {
     syncMembers(db, caller.account, dir);
     // The device that wrote the genesis, or recovered with the words, is this session's device.
     const body = JSON.parse(entry.body) as { op: string; member?: { id: string } };
-    if ((genesis || entry.signer === RECOVERY) && caller.member === null && body.member)
+    if ((genesis || entry.signer === RECOVERY) && caller.member === null && body.member) {
       db.query("UPDATE sessions SET member_id = ? WHERE token_hash = ?").run(
         body.member.id,
         caller.session,
       );
+      db.query("UPDATE members SET claimed = 1 WHERE account_id = ? AND id = ?").run(
+        caller.account,
+        body.member.id,
+      );
+    }
     return { length: dir.length, head: dir.head };
   })();
   return c.json(result, 201);

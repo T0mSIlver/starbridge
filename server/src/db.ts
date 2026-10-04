@@ -42,6 +42,9 @@ CREATE TABLE IF NOT EXISTS members (
   box_pk TEXT NOT NULL,
   sign_pk TEXT NOT NULL,
   active INTEGER NOT NULL,
+  -- Set once the member holds a credential (a session or a machine token): each member gets
+  -- credentials once, so nobody can pair an existing member's keys again to mint new ones.
+  claimed INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (account_id, id)
 );
 

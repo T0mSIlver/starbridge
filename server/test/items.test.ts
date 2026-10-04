@@ -219,3 +219,39 @@ test("GET /quota returns the latest snapshot of each active machine", async () =
   await revoke(s, acct, "devbox");
   expect((await s.call("GET", "/v1/quota", { token: phone.token })).json.items).toEqual([]);
 });
+
+test("a device revoked while its answer is still uploading cannot answer", async () => {
+  const d = decision();
+  await post(devbox, d);
+  const server = Bun.serve({ port: 0, fetch: (req, srv) => s.app.fetch(req, { server: srv }) });
+  try {
+    const body = Buffer.from(JSON.stringify(answer(d, laptop)));
+    let reply = "";
+    const replied = Promise.withResolvers<void>();
+    const socket = await Bun.connect({
+      hostname: "localhost",
+      port: server.port as number,
+      socket: {
+        data(_, chunk) {
+          reply += chunk.toString();
+          replied.resolve();
+        },
+      },
+    });
+    socket.write(
+      `POST /v1/items HTTP/1.1\r\nHost: localhost\r\nAuthorization: Bearer ${laptop.token}\r\n` +
+        `Content-Type: application/json\r\nContent-Length: ${body.length}\r\n\r\n`,
+    );
+    socket.write(body.subarray(0, 10));
+    await Bun.sleep(50);
+    // The headers passed authentication; the device is revoked before the body finishes.
+    await revoke(s, acct, "laptop");
+    socket.write(body.subarray(10));
+    await replied.promise;
+    socket.end();
+    expect(reply).toStartWith("HTTP/1.1 401");
+    expect((await post(phone, answer(d))).status).toBe(201);
+  } finally {
+    server.stop(true);
+  }
+});

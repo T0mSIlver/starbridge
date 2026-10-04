@@ -1,4 +1,5 @@
 import type { Database } from "bun:sqlite";
+import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
 import webpush from "web-push";
 import { z } from "zod";
@@ -41,10 +42,13 @@ export function checkTarget(target: PushTarget, allowPrivate: boolean): string |
 
 /**
  * Refuses hosts that name this machine or a private network, so a subscription cannot make the
- * server call into its own network. Names that resolve to private addresses are not caught.
+ * server call into its own network. `Push` also checks the addresses a name resolves to.
  */
 export function isPrivateHost(hostname: string): boolean {
-  const h = hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  const h = hostname
+    .toLowerCase()
+    .replace(/^\[|\]$/g, "")
+    .replace(/\.+$/, "");
   if (
     h === "localhost" ||
     h.endsWith(".localhost") ||
@@ -90,7 +94,22 @@ export class Push {
     private readonly config: Config,
     private readonly db: Database,
     private readonly fetchFn: typeof fetch = fetch,
+    private readonly resolve: (host: string) => Promise<string[]> = async (host) =>
+      (await lookup(host, { all: true })).map((a) => a.address),
   ) {}
+
+  /**
+   * True when every address `url`'s host resolves to is public. The connection resolves the
+   * name again, so a DNS answer that changes in between is not caught.
+   */
+  private async publicDestination(url: string): Promise<boolean> {
+    if (this.config.allowPrivatePushEndpoints) return true;
+    const host = new URL(url).hostname.replace(/^\[|\]$/g, "");
+    if (isPrivateHost(host)) return false;
+    if (isIP(host)) return true;
+    const addresses = await this.resolve(host);
+    return addresses.length > 0 && !addresses.some(isPrivateHost);
+  }
 
   /** Pushes `payload(member)` to every subscription of each member, without waiting. */
   notify(account: string, members: string[], payload: (member: string) => string): void {
@@ -181,6 +200,12 @@ export class Push {
     payload: string,
     vapid: boolean,
   ): Promise<PushResult> {
+    if (!(await this.publicDestination(target.endpoint))) {
+      console.error(
+        `push endpoint resolves to a private address: ${new URL(target.endpoint).host}`,
+      );
+      return "failed";
+    }
     let req: {
       method: string;
       headers: Record<string, string | number>;
