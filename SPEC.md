@@ -274,6 +274,81 @@ React 19 on the web; design tokens generated from `DESIGN.md` frontmatter
 - Deploy: Docker Compose and Caddy on the VPS; the same image is the self-hosted
   build.
 
+## Build plan (proposed 2026-10-04)
+
+Ideation closes with this plan. Owner panels (the Mac, the prompt cache, the
+release) wait for version 2; version 1 is quotas and decisions.
+
+### Pieces
+
+```
+agents --CLI/HTTP--> server <-- web page (Next.js, decrypts in the browser)
+  ^  mod long-poll     |  --> push relay --> FCM --> Android app
+uploader (codexbar) ---+
+```
+
+One pnpm monorepo:
+
+| Path | What |
+|---|---|
+| `packages/protocol` | zod schemas, the envelope code on libsodium, test vectors as JSON that the Android tests read too |
+| `server` | Hono on Node, SQLite, one Docker image; a flag runs it as the push relay |
+| `cli` | `starbridge` on npm: `pair`, `ask`, `wait`, `quota push` (the uploader) |
+| `mod` | the Claude Code mod: long-poll, then `$.prompt.submit` |
+| `skill` | the decision skill and the `CLAUDE.md` rule |
+| `web` | Next.js page |
+| `android` | Kotlin and Compose app |
+| `DESIGN.md` | design tokens, generated to CSS and to Kotlin |
+
+### Keys and trust
+
+- Every device (phone, browser) and every machine (where agents run) makes an
+  X25519 key pair for sealed boxes and an Ed25519 key pair for signatures.
+  Private keys never leave it.
+- The account's directory lists those public keys. Each entry is signed by a
+  device already in it; the first device signs itself. A machine joins with a
+  pairing code that the CLI prints and a device approves. The recovery key,
+  an Ed25519 seed printed as words when the first device is set up, can sign
+  a new device once all are lost. Clients check the signatures, so the server
+  cannot slip its own key in. Revoking is a signed entry too.
+- A decision is sealed to each device's key and signed by the machine. The
+  answer is sealed to the asking machine and signed by the device. Quota
+  snapshots and alerts use the same envelope, so the server holds ciphertext
+  only.
+- Push carries the device's own ciphertext when it fits FCM's 4 KB, else the
+  item id for the app to fetch.
+- The uploader computes pace and the unused-headroom alerts (TypeScript, in
+  `packages/protocol`), so the clients only render them.
+
+### Screens (both clients)
+
+- Inbox: open decisions, recommended option first, free-text answer when
+  there are no options; answered ones below.
+- Quotas: one card per window with used percent, reset time and pace.
+- Devices and machines: approve a pairing, revoke, show the recovery key once.
+- Android: answer from the notification's buttons, lock screen included.
+- Web: Web Push notifications, decrypted in the service worker.
+
+### Order
+
+Wave 1 starts now; each later session starts when what it builds on merges.
+
+1. Protocol, repo layout and CI (wave 1). Everything else imports it.
+2. Mod probes (wave 1): long-poll timeout, `prompt.submit` in the Desktop
+   Code tab and through Remote Control.
+3. Web shell and `DESIGN.md` (wave 1): screens on fake data, token pipeline.
+4. Android shell (wave 1): screens on fake data, Kotlin tokens from
+   `DESIGN.md` once 3 pushes it.
+5. Server with relay mode and Docker image (after 1).
+6. CLI, uploader and decision skill (after 1).
+7. Mod (after 2 and 5).
+8. Web wired to the server, crypto, Web Push (after 3 and 5).
+9. Android wired, crypto, FCM, notification actions (after 4 and 5).
+10. Deploy on the VPS with Caddy (after 5; needs the owner's accounts).
+
+Every PR gets a cross-vendor review; PRs touching keys or the directory get
+two vendors at high effort. The orchestrator merges on green, squash.
+
 ## Research log
 
 - 2026-10-04: CodexBar facts from the owner's checkout and upstream docs. Mod
