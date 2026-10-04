@@ -22,10 +22,12 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -39,6 +41,8 @@ import dev.starbridge.app.data.openLink
 import dev.starbridge.app.ui.theme.Radius
 import dev.starbridge.app.ui.theme.Spacing
 import dev.starbridge.app.ui.theme.StarbridgeTheme
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import dev.starbridge.app.data.Image as Attached
 
 /**
@@ -62,7 +66,11 @@ fun Images(images: List<Attached>, maxHeight: Dp, modifier: Modifier = Modifier)
 @Composable
 private fun ImageBox(image: Attached, maxHeight: Dp, modifier: Modifier) {
     val edge = with(LocalDensity.current) { maxHeight.roundToPx() * 2 }
-    val bitmap = remember(image.data, edge) { image.bitmap(edge)?.asImageBitmap() }
+    // Decoded off the main thread, so a list of image decisions scrolls smoothly; the inset
+    // colour shows until it lands.
+    val bitmap by produceState<ImageBitmap?>(null, image.data, edge) {
+        value = withContext(Dispatchers.Default) { image.bitmap(edge)?.asImageBitmap() }
+    }
     BoxWithConstraints(modifier) {
         Box(
             Modifier
@@ -72,10 +80,9 @@ private fun ImageBox(image: Attached, maxHeight: Dp, modifier: Modifier) {
                 .background(MaterialTheme.colorScheme.surfaceContainerHighest),
             contentAlignment = Alignment.Center,
         ) {
-            if (bitmap != null) {
-                Image(bitmap, contentDescription = image.alt, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
-            } else {
-                Text("Image did not load", style = StarbridgeTheme.type.small, color = StarbridgeTheme.colors.fg3)
+            val loaded = bitmap
+            if (loaded != null) {
+                Image(loaded, contentDescription = image.alt, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
             }
         }
     }

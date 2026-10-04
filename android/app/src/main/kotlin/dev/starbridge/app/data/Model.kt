@@ -37,11 +37,20 @@ data class Decision(
     val createdAt: Instant,
     val images: List<Image> = emptyList(),
     val links: List<Link> = emptyList(),
+    /** The page the owner answers on instead of here, such as a Claude artifact. */
+    val answerIn: Link? = null,
     /** This device's answer; null when it was answered elsewhere or is still open. */
     val answer: String? = null,
     val answeredAt: Instant? = null,
 ) {
-    val open get() = answeredAt == null && answer == null
+    /**
+     * Waiting for the owner. A decision answered on another page also stops waiting at its default
+     * time: no answer reaches Starbridge, and the agent applies its default then.
+     */
+    fun isOpen(now: Instant) = answeredAt == null && answer == null && !lapsed(now)
+
+    /** Answered elsewhere, and its default time passed before the agent settled it. */
+    fun lapsed(now: Instant) = answerIn != null && answeredAt == null && defaultAt?.let { !it.isAfter(now) } == true
 }
 
 /** Where a window is headed by its reset, as the uploader computed it. */

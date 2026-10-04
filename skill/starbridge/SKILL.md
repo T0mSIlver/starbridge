@@ -34,7 +34,8 @@ have answered costs the owner an interruption.
 | default | `--default` | What you will do if nobody answers. Required. |
 | default time | `--default-at` | When you apply the default: `30m`, `2h`, or an ISO time. Always set it. |
 | images | `--image`, up to 4 times | PNG or JPEG files the owner should see to decide: two mockups to compare, the failing screen, a chart. The CLI scales them down to fit. |
-| links | `--link`, up to 4 times | HTTPS pages to open, such as a claude.ai artifact you built. For anything interactive, build an artifact and link it; the Claude app opens it on the phone. |
+| links | `--link`, up to 4 times | HTTPS pages to open, such as a claude.ai artifact you built. Context only: the owner still answers in Starbridge. The Claude app opens them on the phone. |
+| answer in | `--answer-in`, once | The page where the owner answers instead, such as an artifact whose buttons send the pick to this session. Takes no `--option`. |
 
 Checks before posting:
 
@@ -78,6 +79,27 @@ override them. Long context goes in a file:
 `--context-file notes.md`, or `--json decision.json` with the fields
 `question`, `context`, `options`, `recommended`, `default`, `defaultAt`,
 `images` (file paths, or `{path, alt}`) and `links` (URLs, or `{url, title}`).
+
+## One question, one place to answer it
+
+An artifact can have buttons that send a message to this session. When yours
+does, the owner answers there, so post the decision with `--answer-in` and
+no options: Starbridge shows only a button that opens the page. When the
+artifact is only something to look at, link it with `--link` and keep the
+options in Starbridge. Never put the same question on both: the owner would
+answer it twice, or answer one surface and leave the other open.
+
+When the artifact's message arrives, close the decision so it leaves the
+owner's inbox, then act on the answer:
+
+```bash
+starbridge settle d_Xk3…
+```
+
+`settle` also withdraws a decision you no longer need (`--outcome
+withdrawn`), for example after the owner answered in chat. If nothing came
+from the artifact by the default time, the decision leaves the inbox on its
+own and the mod tells you to apply your default.
 
 ## After you post: keep working
 

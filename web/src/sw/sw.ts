@@ -4,16 +4,20 @@
 // notification actions where the browser supports them. Built to public/sw.js by `bun run sw`.
 import type { QuotaSnapshot, SealedItem } from "@starbridge/protocol";
 import { answer, deviceContext, openPushedDecision, openPushedQuota } from "../lib/device";
+import { answerPlace } from "../lib/outcome";
 import * as store from "../lib/store";
 import type { InboxItem, Reply } from "../lib/types";
 
 declare const self: ServiceWorkerGlobalScope;
 
-/** What the server pushes: a new item with this device's box when it fits, or "answered". */
+/**
+ * What the server pushes: a new item with this device's box when it fits, or "answered". A
+ * settled notice closes the decision its `re` names, as "answered" does.
+ */
 type Payload =
   | {
       v: 1;
-      kind: "decision" | "quota" | "answer";
+      kind: "decision" | "quota" | "answer" | "settled";
       id: string;
       from: string;
       re?: string;
@@ -61,10 +65,13 @@ async function onPush(text: string): Promise<void> {
   }
   await tellPages(payload.kind);
   const account = await store.get("current");
-  if (payload.kind === "answered") {
+  const closes =
+    payload.kind === "answered" ? payload.id : payload.kind === "settled" ? payload.re : undefined;
+  if (payload.kind === "answered" || payload.kind === "settled") {
     // Answered elsewhere: the question is settled, so its notification goes.
-    answered.add(`${account}/${payload.id}`);
-    for (const n of await self.registration.getNotifications({ tag: tag(payload.id) })) n.close();
+    if (!closes) return;
+    answered.add(`${account}/${closes}`);
+    for (const n of await self.registration.getNotifications({ tag: tag(closes) })) n.close();
     return;
   }
   if (payload.kind === "answer") return;
@@ -116,8 +123,12 @@ async function showDecision(account: string, item: InboxItem): Promise<void> {
     ? [d.recommended, ...d.options.filter((o) => o !== d.recommended)]
     : d.options;
   // Only when every option fits: a notification that hides an option would bias the answer.
-  const actions =
-    options.length > 0 && options.length <= maxActions()
+  // A decision answered on another page gets one action that opens it.
+  const actions = d.answerIn
+    ? maxActions() > 0
+      ? [{ action: "page", title: `Answer in ${answerPlace(d.answerIn)}` }]
+      : []
+    : options.length > 0 && options.length <= maxActions()
       ? options.map((o, i) => ({ action: `o${i}`, title: o }))
       : [];
   const options_: NotificationOptions & { actions?: { action: string; title: string }[] } = {
@@ -174,6 +185,11 @@ async function onClick(n: Notification, action: string): Promise<void> {
       });
       return;
     }
+  }
+  const page = data?.item?.decision.answerIn;
+  if (action === "page" && page) {
+    await self.clients.openWindow(page.url);
+    return;
   }
   const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
   const open = windows[0];

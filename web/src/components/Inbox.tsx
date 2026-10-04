@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { relative, sessionName } from "@/lib/format";
+import { closedAt, outcomeText } from "@/lib/outcome";
 import { afterAnswer, selectedId, step } from "@/lib/selection";
 import type { InboxItem, Reply } from "@/lib/types";
 import { useApp } from "./AppProvider";
@@ -30,11 +31,11 @@ export function Inbox() {
   const { inbox, answer } = useApp();
   const wide = useWide();
   const open = inbox.items
-    .filter((item) => !item.answeredAt)
+    .filter((item) => !closedAt(item))
     .sort((a, b) => b.decision.createdAt.localeCompare(a.decision.createdAt));
   const answered = inbox.items
-    .filter((item) => item.answeredAt)
-    .sort((a, b) => (b.answeredAt ?? "").localeCompare(a.answeredAt ?? ""));
+    .filter((item) => closedAt(item))
+    .sort((a, b) => (closedAt(b) ?? "").localeCompare(closedAt(a) ?? ""));
 
   return (
     <>
@@ -143,25 +144,26 @@ function Panes({
   }, []);
 
   if (!selected) return <p className={ui.empty}>Nothing needs you.</p>;
-  const options = selected.answeredAt ? [] : ordered(selected.decision);
+  const options = closedAt(selected) ? [] : ordered(selected.decision);
   return (
     <div className={s.panes}>
       <ul className={s.list} ref={listRef} aria-label="Decisions">
         {all.map((item) => {
           const d = item.decision;
           const on = item === selected;
+          const closed = closedAt(item);
           return (
             <li key={d.id}>
               <button
                 type="button"
                 data-id={d.id}
-                className={`${s.row} ${item.answeredAt ? s.done : ""}`}
+                className={`${s.row} ${closed ? s.done : ""}`}
                 aria-current={on ? "true" : undefined}
                 tabIndex={on ? 0 : -1}
                 onClick={() => setPicked(d.id)}
               >
                 <span className={s.rowQ}>
-                  {item.answeredAt ? (
+                  {closed ? (
                     <span className={s.spacer} />
                   ) : (
                     <span className={`${ui.dot} ${s.rowDot}`} aria-hidden="true" />
@@ -171,10 +173,10 @@ function Panes({
                 </span>
                 <span
                   className={`t-small ${s.rowSub}`}
-                  title={item.answeredAt ? undefined : d.source.session || undefined}
+                  title={closed ? undefined : d.source.session || undefined}
                 >
-                  {item.answeredAt
-                    ? `${item.reply ? ("choice" in item.reply ? item.reply.choice : item.reply.text) : "Answered"} · ${relative(item.answeredAt)}`
+                  {closed
+                    ? `${outcomeText(item)} · ${relative(closed)}`
                     : `${sessionName(d.source)} · ${relative(d.createdAt)}`}
                 </span>
               </button>
@@ -183,7 +185,7 @@ function Panes({
         })}
       </ul>
       <section className={s.detail} aria-label="Selected decision">
-        {selected.answeredAt ? (
+        {closedAt(selected) ? (
           <AnsweredDecision item={selected} />
         ) : (
           <OpenDecision

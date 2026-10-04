@@ -1,5 +1,7 @@
 import { expect, test } from "bun:test";
 import { imageBlob, imageSrc, linkLabel } from "./attachments";
+import { closedAt, closedBy, outcomeText } from "./outcome";
+import type { InboxItem } from "./types";
 
 // A 1x1 PNG, base64url with "-" and "_" where base64 has "+" and "/".
 const pixel = {
@@ -25,4 +27,24 @@ test("a link reads as its title, a Claude artifact, or its host and path", () =>
   expect(linkLabel({ url: "https://claude.ai/code/artifact/7c1d" })).toBe("Claude artifact");
   expect(linkLabel({ url: "https://www.example.com/" })).toBe("example.com");
   expect(linkLabel({ url: `https://example.com/${"a".repeat(60)}` })).toHaveLength(40);
+});
+
+test("a decision answered elsewhere closes when settled, or at its default time", () => {
+  const decision = {
+    default: { action: "Ship roomy", at: "2026-10-05T12:00:00Z" },
+    answerIn: { url: "https://claude.ai/artifact/2ig2" },
+  } as InboxItem["decision"];
+  const item = { decision } as InboxItem;
+  const before = new Date("2026-10-05T11:59:00Z");
+  const after = new Date("2026-10-05T12:00:00Z");
+  expect(closedAt(item, before)).toBeUndefined();
+  expect(closedAt(item, after)).toBe("2026-10-05T12:00:00Z");
+  expect(outcomeText(item)).toBe("No answer by its default time");
+  const settled = { ...item, answeredAt: "2026-10-05T11:30:00Z" };
+  expect(closedAt(settled, before)).toBe("2026-10-05T11:30:00Z");
+  expect(outcomeText(settled)).toBe("Answered in the artifact");
+  expect(closedBy(settled)).toBe("The agent");
+  // A plain decision never closes by itself.
+  const plain = { decision: { ...decision, answerIn: undefined } } as InboxItem;
+  expect(closedAt(plain, after)).toBeUndefined();
 });

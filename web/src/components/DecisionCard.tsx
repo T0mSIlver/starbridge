@@ -1,7 +1,9 @@
 "use client";
 
+import type { DecisionLink } from "@starbridge/protocol";
 import { useEffect, useRef, useState } from "react";
 import { relative, sessionName } from "@/lib/format";
+import { answerPlace, closedAt, closedBy, outcomeText } from "@/lib/outcome";
 import type { Decision, InboxItem, Reply } from "@/lib/types";
 import { Images, Links } from "./Attachments";
 import { Context } from "./Context";
@@ -60,12 +62,24 @@ function SessionLinks({ d }: { d: Decision }) {
   );
 }
 
-const answerText = (item: InboxItem) =>
-  // Answers are sealed to the asking machine: only the device that sent one can show it.
-  item.reply ? ("choice" in item.reply ? item.reply.choice : item.reply.text) : "Answered";
+const answeredBy = (item: InboxItem) => `${closedBy(item)} · ${relative(closedAt(item) ?? "")}`;
 
-const answeredBy = (item: InboxItem) =>
-  `${item.reply ? "This browser" : "Another device"} · ${relative(item.answeredAt ?? "")}`;
+/**
+ * The owner answers this decision on another page, never here: the one action opens it, in
+ * amber because it is what needs the owner.
+ */
+function AnswerElsewhere({ page }: { page: DecisionLink }) {
+  return (
+    <a
+      className={`${ui.button} ${ui.beaconFill} ${s.elsewhere}`}
+      href={page.url}
+      target="_blank"
+      rel="noopener noreferrer"
+    >
+      Answer in {answerPlace(page)}
+    </a>
+  );
+}
 
 export function OpenDecision({
   d,
@@ -126,7 +140,9 @@ export function OpenDecision({
       <Context text={d.context} className={`t-body ${s.context}`} />
       <Images d={d} />
       <Links d={d} />
-      {options.length > 0 ? (
+      {d.answerIn ? (
+        <AnswerElsewhere page={d.answerIn} />
+      ) : options.length > 0 ? (
         <fieldset className={`${s.group} ${fitsRow(options) ? s.row : s.stack}`}>
           <legend className="sr-only">Answer</legend>
           {options.map((o, i) => (
@@ -182,10 +198,10 @@ export function OpenDecision({
 
 /** One line: the answer, the question, which device answered and when (DESIGN.md). */
 export function AnsweredLine({ item }: { item: InboxItem }) {
-  if (!item.answeredAt) return null;
+  if (!closedAt(item)) return null;
   return (
     <div className={`t-small ${s.line}`}>
-      <b className={s.lineAnswer}>{answerText(item)}</b>
+      <b className={s.lineAnswer}>{outcomeText(item)}</b>
       <span className={s.lineQ}>{item.decision.question}</span>
       <span className={s.lineBy}>{answeredBy(item)}</span>
     </div>
@@ -194,8 +210,8 @@ export function AnsweredLine({ item }: { item: InboxItem }) {
 
 /** An answered decision in the detail pane. */
 export function AnsweredDecision({ item }: { item: InboxItem }) {
-  const { decision: d, answeredAt } = item;
-  if (!answeredAt) return null;
+  const d = item.decision;
+  if (!closedAt(item)) return null;
   return (
     <article className={`${ui.card} ${s.open}`}>
       <div className={s.meta}>
@@ -207,7 +223,7 @@ export function AnsweredDecision({ item }: { item: InboxItem }) {
       <Images d={d} />
       <Links d={d} />
       <p className={s.answer}>
-        <b>{answerText(item)}</b>
+        <b>{outcomeText(item)}</b>
         <span className="t-small">{answeredBy(item)}</span>
       </p>
       <SessionLinks d={d} />

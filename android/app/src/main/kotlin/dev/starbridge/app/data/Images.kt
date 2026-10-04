@@ -29,6 +29,9 @@ fun Link.label(): String {
     return if (text.length > 40) text.take(39) + "…" else text
 }
 
+/** Where the owner answers a decision with `answerIn`: "the artifact" for a Claude one. */
+fun Link.place() = title ?: if (label() == "Claude artifact") "the artifact" else label()
+
 private val ARTIFACT_PATH = Regex("/artifacts?/")
 
 private const val CLAUDE_APP = "com.anthropic.claude"

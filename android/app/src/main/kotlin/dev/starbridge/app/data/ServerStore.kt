@@ -486,7 +486,8 @@ class ServerStore(
 
     /**
      * A push payload (PROTOCOL.md, "Push"): a new item with this device's box when it fits, else
-     * its id to fetch; or `answered` once a decision is answered anywhere.
+     * its id to fetch; or `answered` once a decision is answered anywhere. A `settled` notice
+     * closes the decision its `re` names.
      */
     suspend fun onPush(payload: String) = lock.withLock {
         if (phase.value != Phase.Ready) return@withLock
@@ -494,7 +495,9 @@ class ServerStore(
         val kind = p["kind"]?.jsonPrimitive?.content
         val id = p["id"]?.jsonPrimitive?.content ?: return@withLock
         when (kind) {
-            "answered" -> {
+            // Answered by a device, or settled by the machine that asked: `re` names the decision.
+            "answered", "settled" -> {
+                val id = if (kind == "settled") p["re"]?.jsonPrimitive?.content ?: return@withLock else id
                 alerts.cancel(id)
                 val d = saved.decisions.find { it.body.id == id }
                 if (d != null && d.answeredAt == null) persist(saved.copy(decisions = saved.decisions.map { if (it === d) it.copy(answeredAt = now()) else it }))
@@ -654,6 +657,7 @@ class ServerStore(
             createdAt = instant(b.createdAt) ?: Instant.EPOCH,
             images = b.images.orEmpty().map { Image(it.data, it.width, it.height, it.alt) },
             links = b.links.orEmpty().map { Link(it.url, it.title) },
+            answerIn = b.answerIn?.let { Link(it.url, it.title) },
             answer = d.answer,
             answeredAt = instant(d.answeredAt) ?: d.answer?.let { Instant.now() },
         )

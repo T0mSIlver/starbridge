@@ -31,6 +31,8 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.automirrored.rounded.Send
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ButtonGroup
 import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.DropdownMenuItem
@@ -83,6 +85,8 @@ import androidx.compose.ui.text.withStyle
 import androidx.lifecycle.ViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.starbridge.app.data.Decision
+import dev.starbridge.app.data.Link
+import dev.starbridge.app.data.place
 import dev.starbridge.app.data.Source
 import dev.starbridge.app.data.Store
 import dev.starbridge.app.data.openLink
@@ -124,8 +128,8 @@ fun InboxScreen(
     selected: String? = null,
     refresh: Refresh? = null,
 ) {
-    val open = decisions.filter { it.open }.sortedByDescending { it.createdAt }
-    val answered = decisions.filterNot { it.open }.sortedByDescending { it.answeredAt }
+    val open = decisions.filter { it.isOpen(now) }.sortedByDescending { it.createdAt }
+    val answered = decisions.filterNot { it.isOpen(now) }.sortedByDescending { it.answeredAt ?: it.defaultAt }
     Screen("Inbox", modifier, subtitle = { NeedsYou(open.size) }) { padding ->
         Refreshable(refresh) {
             LazyColumn(
@@ -186,7 +190,7 @@ private fun Source(decision: Decision, now: Instant, revealable: Boolean = false
         Modifier
     }
     Row(reveal, verticalAlignment = Alignment.CenterVertically) {
-        if (decision.open) {
+        if (decision.isOpen(now)) {
             Beacon()
             Spacer(Modifier.width(Spacing.s2))
         }
@@ -259,11 +263,17 @@ private fun OpenDecision(decision: Decision, now: Instant, actions: DecisionActi
     }
 }
 
-/** The options as a connected button group, or a reply field when there are none. */
+/**
+ * The options as a connected button group, or a reply field when there are none; or, for a
+ * decision answered on another page, the one button that opens it.
+ */
 @Composable
 private fun Answer(decision: Decision, answer: (String, String?, String?) -> Unit) {
     val haptics = LocalHapticFeedback.current
-    if (decision.options.isEmpty()) {
+    val page = decision.answerIn
+    if (page != null) {
+        AnswerElsewhere(page)
+    } else if (decision.options.isEmpty()) {
         FreeText {
             haptics.performHapticFeedback(HapticFeedbackType.Confirm)
             answer(decision.id, null, it)
@@ -444,8 +454,38 @@ private fun FreeText(onAnswer: (String) -> Unit) {
     }
 }
 
-/** Who answered: this phone with its answer, or another device. */
-private fun answeredBy(decision: Decision) = if (decision.answer != null) "This phone" else "Another device"
+/**
+ * The owner answers on that page, never here: the decision's only action, filled in amber
+ * because it is what needs the owner.
+ */
+@Composable
+private fun AnswerElsewhere(page: Link) {
+    val context = LocalContext.current
+    val colors = StarbridgeTheme.colors
+    Button(
+        onClick = { openLink(context, page.url) },
+        colors = ButtonDefaults.buttonColors(containerColor = colors.accent, contentColor = colors.onAccent),
+        modifier = Modifier.fillMaxWidth().heightIn(min = Sizes.tap),
+    ) {
+        Icon(Icons.AutoMirrored.Rounded.OpenInNew, contentDescription = null, modifier = Modifier.size(Spacing.s5))
+        Spacer(Modifier.width(Spacing.s2))
+        Text("Answer in ${page.place()}", style = StarbridgeTheme.type.action, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+/** The answer, or how a decision answered on another page closed. */
+private fun outcome(decision: Decision, now: Instant) = decision.answer ?: when {
+    decision.lapsed(now) -> "No answer by its default time"
+    decision.answerIn != null -> "Answered in ${decision.answerIn.place()}"
+    else -> "Answered"
+}
+
+/** Who answered: this phone with its answer, the agent for another page, or another device. */
+private fun answeredBy(decision: Decision) = when {
+    decision.answer != null -> "This phone"
+    decision.answerIn != null -> "The agent"
+    else -> "Another device"
+}
 
 /** An answered decision in one line: the answer, the question, which device answered and when. */
 @Composable
@@ -457,7 +497,7 @@ private fun AnsweredLine(decision: Decision, now: Instant, onOpen: () -> Unit) {
     ) {
         Text(
             buildAnnotatedString {
-                withStyle(SpanStyle(color = MaterialTheme.colorScheme.onSurface, fontWeight = StarbridgeTheme.type.label.fontWeight)) { append(decision.answer ?: "Answered") }
+                withStyle(SpanStyle(color = MaterialTheme.colorScheme.onSurface, fontWeight = StarbridgeTheme.type.label.fontWeight)) { append(outcome(decision, now)) }
                 append("  ")
                 append(decision.question)
             },
@@ -485,7 +525,7 @@ private fun Outcome(decision: Decision, now: Instant) {
         val at = decision.answeredAt?.let { " · ${ago(now, it)}" }.orEmpty()
         Text(
             buildAnnotatedString {
-                withStyle(SpanStyle(color = MaterialTheme.colorScheme.onSurface)) { append(decision.answer ?: "Answered") }
+                withStyle(SpanStyle(color = MaterialTheme.colorScheme.onSurface)) { append(outcome(decision, now)) }
                 append(" · ${answeredBy(decision)}$at")
             },
             style = StarbridgeTheme.type.body,
@@ -537,7 +577,7 @@ fun DecisionScreen(decision: Decision?, now: Instant, onAnswer: (String, String?
                 Images(decision.images, maxHeight = Sizes.media)
                 Links(decision.links)
                 Spacer(Modifier.padding(top = Spacing.s1))
-                if (decision.open) Answer(decision, onAnswer) else Outcome(decision, now)
+                if (decision.isOpen(now)) Answer(decision, onAnswer) else Outcome(decision, now)
                 Fallback(decision)
             }
         }

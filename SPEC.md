@@ -466,6 +466,15 @@ How it generalizes is open.
   `--session-link`. Android opens a claude.ai link in the Claude app
   (`com.anthropic.claude`) when that app takes it, else in the browser, and
   uses the first image as the notification's big picture.
+- 2026-10-05. One question has one answer surface (owner, #62). A Claude
+  artifact's button can message the agent (the Needs You page does), so a
+  decision's links are context only, and a decision with `answerIn` is
+  answered on that page: no options, a single "Answer in the artifact"
+  button, and it closes when the agent runs `starbridge settle` (a `settled`
+  notice, shared with permission prompts, #57) or at its default time. Both
+  at once has no legitimate case, so the schema refuses `answerIn` beside
+  options. `settle --outcome withdrawn` also closes a decision the agent no
+  longer needs.
 
 - 2026-10-05. Permission prompts' protocol (#57): `ITEM_KINDS` in `packages/protocol` lists each
   sealed kind's signing role and the item it refers to, and the server and both clients derive

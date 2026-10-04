@@ -71,6 +71,18 @@ class Fake(private val now: Instant) {
             links = listOf(Link("https://claude.ai/public/artifacts/0b3f0e7c")),
         ),
         Decision(
+            id = "d6",
+            question = "Which of the three settings layouts should ship?",
+            context = "Each layout is live in the artifact, with your real devices. Its buttons send your pick straight to this session.",
+            options = emptyList(),
+            recommended = null,
+            default = "Ships the roomy layout",
+            defaultAt = later(240),
+            source = Source("dev box", "starbridge", "settings", title = "Settings screen (#88)"),
+            createdAt = ago(6),
+            answerIn = Link("https://claude.ai/artifact/2ig2MyNRD484b7oZea5vkZ"),
+        ),
+        Decision(
             id = "d3",
             question = "Which Hetzner location for the VPS?",
             context = "A CX23 costs the same in Falkenstein, Nuremberg and Helsinki; latency from home differs by a few ms.",

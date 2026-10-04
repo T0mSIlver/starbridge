@@ -10,8 +10,10 @@ import {
   parseWith,
   SealedItem,
   type SessionLink,
+  type Settled,
   seal,
 } from "@starbridge/protocol";
+import { ApiError } from "./api";
 import { claudeSession } from "./claude";
 import type { State } from "./config";
 import {
@@ -42,6 +44,8 @@ export interface AskInput {
   images?: (string | { path: string; alt?: string })[];
   /** Pages to open, such as a claude.ai artifact. */
   links?: (string | DecisionLink)[];
+  /** The page the owner answers on instead of Starbridge; the decision then has no options. */
+  answerIn?: string | DecisionLink;
 }
 
 /** What the server stores at most for one decision, all boxes together (PROTOCOL.md, Limits). */
@@ -90,7 +94,12 @@ export function buildDecision(input: AskInput, ctx: Ctx, machine: string, to: st
   if (!input.question) throw new UsageError("ask needs --question");
   if (!input.default) throw new UsageError("ask needs --default: what you do if nobody answers");
   const options = input.options ?? [];
-  const links = (input.links ?? []).map((l) => (typeof l === "string" ? { url: l } : l));
+  const link = (l: string | DecisionLink) => (typeof l === "string" ? { url: l } : l);
+  const links = (input.links ?? []).map(link);
+  if (input.answerIn !== undefined && options.length > 0)
+    throw new UsageError(
+      "--answer-in takes no --option: the owner answers on that page, never in two places",
+    );
   const decision = {
     v: 1 as const,
     id: `d_${randomBytes(12).toString("base64url")}`,
@@ -106,6 +115,7 @@ export function buildDecision(input: AskInput, ctx: Ctx, machine: string, to: st
     },
     source: sourceFor(input, ctx, machine),
     ...(links.length > 0 ? { links } : {}),
+    ...(input.answerIn !== undefined ? { answerIn: link(input.answerIn) } : {}),
   };
   return checked(decision);
 }
@@ -155,6 +165,8 @@ export async function ask(
   input: AskInput,
   opts: { wait?: boolean; timeout?: string; json?: boolean },
 ): Promise<number> {
+  if (opts.wait && input.answerIn !== undefined)
+    throw new UsageError("--answer-in takes no --wait: the answer comes from that page");
   const s = session(ctx);
   const dir = await refreshDirectory(ctx, s);
   const pictures = (input.images ?? []).map((i) =>
@@ -185,11 +197,52 @@ export async function ask(
       default: decision.default.action,
       ...(cursor !== undefined ? { cursor } : {}),
       ...(decision.source.session ? { session: decision.source.session } : {}),
+      ...(decision.answerIn ? { answerIn: true } : {}),
     };
   });
   ctx.out(decision.id);
   if (!opts.wait) return 0;
   return wait(ctx, { id: decision.id, timeout: opts.timeout, json: opts.json }, s, dir);
+}
+
+/**
+ * Closes a decision this machine asked without a Starbridge answer: answered on its `answerIn`
+ * page (`elsewhere`), or no longer needed (`withdrawn`). Every device moves it out of the open
+ * inbox, and the mod no longer reports its default time.
+ */
+export async function settle(ctx: Ctx, opts: { id?: string; outcome?: string }): Promise<number> {
+  const id = opts.id;
+  if (!id) throw new UsageError("settle needs a decision id");
+  const asked = ctx.store.state().asked[id];
+  if (!asked) throw new UsageError(`${id} is not a decision this machine asked`);
+  const outcome = opts.outcome ?? (asked.answerIn ? "elsewhere" : "withdrawn");
+  if (outcome !== "elsewhere" && outcome !== "withdrawn")
+    throw new UsageError("--outcome is elsewhere or withdrawn");
+  const s = session(ctx);
+  const to = devices(await refreshDirectory(ctx, s));
+  const body = {
+    v: 1 as const,
+    id: `s_${randomBytes(12).toString("base64url")}`,
+    itemId: id,
+    to: to.map((d) => d.id),
+    at: iso(ctx.now()),
+    outcome,
+  } satisfies Settled;
+  try {
+    await s.api.postItem(
+      seal("settled", body, { id: s.machine.id, signKey: s.keys.sign.privateKey }, to),
+    );
+  } catch (e) {
+    // Answered or settled already: either way it is closed, which is what was asked.
+    const closed =
+      e instanceof ApiError && ["already-answered", "already-settled"].includes(e.code);
+    if (!closed) throw e;
+  }
+  ctx.store.updateState((st) => {
+    const a = st.asked[id];
+    if (a) a.settled = true;
+  });
+  return 0;
 }
 
 /**
@@ -367,6 +420,7 @@ export async function answers(
     return (
       asked?.session === target &&
       !asked.defaulted &&
+      !asked.settled &&
       !st.answers[id] &&
       asked.defaultAt !== undefined &&
       Date.parse(asked.defaultAt) <= ctx.now().getTime()
@@ -434,7 +488,10 @@ export async function answers(
   const now = ctx.now().getTime();
   const st2 = ctx.store.state();
   const pending = Object.entries(st2.asked)
-    .filter(([id, a]) => a.session === target && !a.defaulted && !st2.answers[id] && a.defaultAt)
+    .filter(
+      ([id, a]) =>
+        a.session === target && !a.defaulted && !a.settled && !st2.answers[id] && a.defaultAt,
+    )
     .map(([, a]) => Date.parse(a.defaultAt as string) - now)
     .filter((ms) => ms > 0);
   const hold = Math.min(seconds, ...pending.map((ms) => Math.ceil(ms / 1000)));

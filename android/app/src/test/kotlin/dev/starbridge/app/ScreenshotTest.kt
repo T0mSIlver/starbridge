@@ -60,6 +60,14 @@ class ScreenshotTest(private val dark: Boolean) {
                 Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) { content() }
             }
         }
+        // Images decode off the main thread: let them land before the capture.
+        compose.waitForIdle()
+        Thread.sleep(300)
+        compose.waitForIdle()
+        // Images decode off the main thread: let them land before the capture.
+        compose.waitForIdle()
+        Thread.sleep(300)
+        compose.waitForIdle()
         compose.onRoot().captureRoboImage("screenshots/$name-${if (dark) "dark" else "light"}.png")
     }
 
@@ -68,6 +76,8 @@ class ScreenshotTest(private val dark: Boolean) {
     @Test fun decision() = capture("decision") { DecisionScreen(fake.decisions[1], now, onAnswer = { _, _, _ -> }) }
 
     @Test fun decisionImages() = capture("decision-images") { DecisionScreen(fake.decisions.first { it.images.isNotEmpty() }, now, onAnswer = { _, _, _ -> }) }
+
+    @Test fun decisionAnswerIn() = capture("decision-answer-in") { DecisionScreen(fake.decisions.first { it.answerIn != null }, now, onAnswer = { _, _, _ -> }) }
 
     @Test fun quotas() = capture("quotas") { QuotasScreen(fake.windows, now) }
 

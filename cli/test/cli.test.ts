@@ -2,7 +2,9 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fromB64 } from "@starbridge/protocol";
 import { LiveServer } from "@starbridge/server/test-support";
+import jpeg from "jpeg-js";
 import { PNG } from "pngjs";
 import { run } from "../src/cli";
 import { FAKE_CODEXBAR, paired, until } from "./helpers";
@@ -141,6 +143,69 @@ test("ask attaches images scaled to fit the server's cap, and links", async () =
   expect(ctx.errors.at(-1)).toContain("PNG or JPEG");
   expect(await run([...ASK, "--link", "http://example.com"], ctx)).toBe(1);
   expect(await server.opened("decision")).toHaveLength(1);
+});
+
+/** A landscape JPEG stored the way a phone stores a portrait: EXIF orientation 6. */
+function sidewaysJpeg(): string {
+  const w = 40;
+  const h = 20;
+  const data = Buffer.alloc(w * h * 4, 255);
+  // A red left column, which shows on top once the photo is turned upright.
+  for (let y = 0; y < h; y++) data.set([255, 0, 0, 255], y * w * 4);
+  const plain = jpeg.encode({ data, width: w, height: h }, 90).data;
+  const tiff = Buffer.from([
+    ...[0x4d, 0x4d, 0, 42, 0, 0, 0, 8],
+    ...[0, 1, 0x01, 0x12, 0, 3, 0, 0, 0, 1, 0, 6, 0, 0],
+    ...[0, 0, 0, 0],
+  ]);
+  const body = Buffer.concat([Buffer.from("Exif\0\0", "latin1"), tiff]);
+  const app1 = Buffer.concat([Buffer.from([0xff, 0xe1, 0, body.length + 2]), body]);
+  const path = join(mkdtempSync(join(tmpdir(), "starbridge-img-")), "photo.jpg");
+  writeFileSync(path, Buffer.concat([plain.subarray(0, 2), app1, plain.subarray(2)]));
+  return path;
+}
+
+test("ask turns a sideways phone photo upright", async () => {
+  const ctx = await paired(server);
+  expect(await run([...ASK, "--image", sidewaysJpeg()], ctx)).toBe(0);
+  const [img] = (await server.opened("decision"))[0]?.images ?? [];
+  expect(img).toMatchObject({ type: "image/jpeg", width: 20, height: 40 });
+  const px = jpeg.decode(fromB64(img?.data ?? ""), { useTArray: true });
+  // The top row is red; the bottom row is white.
+  expect(px.data[0]).toBeGreaterThan(200);
+  expect(px.data[1]).toBeLessThan(80);
+  expect(px.data[(39 * 20 + 10) * 4 + 1]).toBeGreaterThan(200);
+});
+
+test("ask --answer-in posts a pointer decision, and settle closes it", async () => {
+  const ctx = await paired(server);
+  const page = "https://claude.ai/artifact/2ig2MyNRD484b7oZea5vkZ";
+  const pointer = [
+    ...["ask", "--question", "Pick a layout?", "--default", "Roomy"],
+    ...["--default-at", "1s", "--session", "s"],
+  ];
+  expect(await run([...pointer, "--answer-in", page, "--option", "A", "--option", "B"], ctx)).toBe(
+    1,
+  );
+  expect(ctx.errors.at(-1)).toContain("never in two places");
+  expect(await run([...pointer, "--answer-in", page], ctx)).toBe(0);
+  const id = ctx.lines.at(-1) as string;
+  expect((await server.opened("decision"))[0]).toMatchObject({
+    answerIn: { url: page },
+    options: [],
+  });
+
+  expect(await run(["settle", id], ctx)).toBe(0);
+  const listed = (await server.listed("decision"))[0];
+  expect(listed?.answeredAt).toBeDefined();
+  // Settled before its default time passed: the mod is never told to apply the default.
+  await Bun.sleep(1100);
+  ctx.lines.length = 0;
+  expect(await run(["answers", "--session", "s"], ctx)).toBe(0);
+  expect(ctx.lines).toEqual([]);
+  // A second settle finds it closed already, which is fine.
+  expect(await run(["settle", id], ctx)).toBe(0);
+  expect(await run(["settle", "d_unknown"], ctx)).toBe(1);
 });
 
 test("ask refuses a decision that would not stand alone", async () => {
