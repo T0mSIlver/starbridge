@@ -1,7 +1,8 @@
 name: release
 
-# A v1.2.3 or v1.2.3-rc.4 tag publishes a GitHub Release with the signed APK, the CLI binaries and
-# their checksums. Run by hand, it builds the same files as a workflow artifact and releases nothing.
+# A v1.2.3 or v1.2.3-rc.4 tag publishes a GitHub Release with the signed APK, the CLI binaries,
+# install.sh and their checksums, signed with minisign, then updates the Homebrew tap (not for -rc)
+# and npm. Run by hand, it builds the same files as workflow artifacts and releases nothing.
 on:
   push:
     tags: ["v*"]
@@ -77,11 +78,19 @@ jobs:
           bun-version: 1.4.2
       - run: pnpm install --frozen-lockfile
       - run: pnpm test
-      - run: bun run build:bin
+      - name: Build the binaries
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          npm pkg set version="$VERSION"
+          bun run build:bin
+          cp install.sh dist/
       - uses: actions/upload-artifact@v7
         with:
           name: cli
-          path: cli/dist/starbridge-*
+          path: |
+            cli/dist/starbridge-*
+            cli/dist/install.sh
 
   release:
     needs: [version, apk, cli]
@@ -89,6 +98,10 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
       - uses: actions/download-artifact@v7
         with:
           path: out
@@ -96,6 +109,33 @@ jobs:
       - name: Checksums
         working-directory: out
         run: sha256sum -- * > SHA256SUMS && cat SHA256SUMS
+      # The secret key is cli/minisign.pub's; install.sh and `starbridge update` check this signature.
+      - name: Sign the checksums
+        env:
+          MINISIGN_SECRET_KEY: ${{ secrets.MINISIGN_SECRET_KEY }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          curl -fsSLo "$RUNNER_TEMP/minisign.tgz" \
+            https://github.com/jedisct1/minisign/releases/download/0.12/minisign-0.12-linux.tar.gz
+          echo "9a599b48ba6eb7b1e80f12f36b94ceca7c00b7a5173c95c3efc88d9822957e73  $RUNNER_TEMP/minisign.tgz" | sha256sum -c
+          tar xzf "$RUNNER_TEMP/minisign.tgz" -C "$RUNNER_TEMP" minisign-linux/x86_64/minisign
+          minisign=$RUNNER_TEMP/minisign-linux/x86_64/minisign
+          umask 077
+          printf '%s\n' "$MINISIGN_SECRET_KEY" > "$RUNNER_TEMP/minisign.key"
+          "$minisign" -S -s "$RUNNER_TEMP/minisign.key" -m out/SHA256SUMS -t "starbridge v$VERSION"
+          rm "$RUNNER_TEMP/minisign.key"
+          "$minisign" -V -p cli/minisign.pub -m out/SHA256SUMS
+      - name: Homebrew formula
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          mkdir formula
+          bun run cli/scripts/brew-formula.ts "$VERSION" out/SHA256SUMS > formula/starbridge.rb
+          cat formula/starbridge.rb
+      - uses: actions/upload-artifact@v7
+        with:
+          name: formula
+          path: formula/
       - name: Release notes
         env:
           GH_TOKEN: ${{ github.token }}
@@ -119,9 +159,36 @@ jobs:
           gh release create "v$VERSION" out/* --repo "$GITHUB_REPOSITORY" --title "v$VERSION" --notes-file notes.md \
             $(case $VERSION in *-rc.*) echo --prerelease ;; esac)
 
+  homebrew:
+    needs: [version, release]
+    if: startsWith(github.ref, 'refs/tags/v') && !contains(github.ref_name, '-rc.')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          name: formula
+          path: formula
+      - name: Commit the formula to T0mSIlver/homebrew-starbridge
+        env:
+          DEPLOY_KEY: ${{ secrets.HOMEBREW_TAP_DEPLOY_KEY }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          umask 077
+          printf '%s\n' "$DEPLOY_KEY" > "$RUNNER_TEMP/tap_key"
+          echo "github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl" > "$RUNNER_TEMP/known_hosts"
+          export GIT_SSH_COMMAND="ssh -i $RUNNER_TEMP/tap_key -o IdentitiesOnly=yes -o UserKnownHostsFile=$RUNNER_TEMP/known_hosts"
+          git clone git@github.com:T0mSIlver/homebrew-starbridge.git tap
+          mkdir -p tap/Formula
+          cp formula/starbridge.rb tap/Formula/starbridge.rb
+          cd tap
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Formula/starbridge.rb
+          git diff --cached --quiet || git commit -m "starbridge $VERSION"
+          git push
+
   npm:
-    needs: release
-    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [version, release]
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -137,10 +204,12 @@ jobs:
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org
+      - run: npm pkg set version="${{ needs.version.outputs.version }}"
+      - if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        run: pnpm publish --dry-run --no-git-checks --access public
       # Skipped until the owner's npm account exists and NPM_TOKEN is set.
-      - if: env.NODE_AUTH_TOKEN != ''
-        run: |
-          npm pkg set version="${GITHUB_REF_NAME#v}"
-          pnpm publish --no-git-checks --access public
+      - if: startsWith(github.ref, 'refs/tags/v') && env.NODE_AUTH_TOKEN != ''
+        run: pnpm publish --no-git-checks --access public $(case $VERSION in *-rc.*) echo --tag next ;; esac)
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          VERSION: ${{ needs.version.outputs.version }}

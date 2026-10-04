@@ -458,6 +458,18 @@ How it generalizes is open.
   provider dots stay fixed. Measured on warm, cool and low-chroma seeds:
   the fixed colours keep 4.5:1 as text and 3:1 as dots; the wallpaper's
   `fg3` reaches 3.8:1 on light cards, above the default palette's 3.3:1.
+- 2026-10-05. Install, update and signing (#68, part 4): the release workflow signs `SHA256SUMS`
+  with minisign in CI (the owner's call, replacing "not in CI" in #68's spec); the secret key is
+  in `~/.config/starbridge/secrets/minisign.key` and the `MINISIGN_SECRET_KEY` Actions secret, the
+  public key in `cli/minisign.pub`, `install.sh`, the binary and the CLI README. `install.sh` is a
+  release asset and checks the signature with minisign, or with OpenSSL 3 when minisign is
+  missing, so most machines need nothing extra. The tap is `T0mSIlver/homebrew-starbridge`
+  (`brew install T0mSIlver/starbridge/starbridge`, not `T0mSIlver/tap`), private like the main
+  repo until both go public; the workflow commits the formula there with a write deploy key
+  (`HOMEBREW_TAP_DEPLOY_KEY`) on non-rc tags. npm gets rc versions under the `next` dist-tag.
+  `starbridge update` replaces script installs only and points brew and npm installs at their
+  manager; `starbridge uninstall` removes the binary, and part 3 adds the service, plugins and
+  config to it. Release downloads need the repo public.
 
 ## Encryption, with existing libraries
 
