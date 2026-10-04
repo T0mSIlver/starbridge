@@ -76,7 +76,7 @@ function settled(p: SealedItem, from: Actor = devbox): SealedItem {
   const body: Settled = {
     v: 1,
     id: `st${++n}`,
-    permissionId: p.id,
+    itemId: p.id,
     to: [phone.id, laptop.id],
     outcome: "keyboard",
     at,
@@ -176,4 +176,44 @@ test("a permission pushes the device's box, an answer pushes answered", async ()
   expect(kinds[0].box).toBeString();
   expect(kinds[1].id).toBe(p.id);
   expect(kinds[2].re).toBe(p.id);
+});
+
+test("a machine can settle its own decision; devices then cannot answer it", async () => {
+  const body = {
+    v: 1 as const,
+    id: `d${++n}`,
+    to: [phone.id, laptop.id],
+    createdAt: at,
+    question: "Ship it?",
+    context: "",
+    options: ["yes", "no"],
+    recommended: "yes",
+    default: { action: "ship" },
+    source: { machine: "devbox", project: "starbridge", session: "s1" },
+  };
+  const d = seal("decision", body, key(devbox), [phone.member, laptop.member]);
+  await post(devbox, d);
+  const notice: Settled = {
+    v: 1,
+    id: `st${++n}`,
+    itemId: d.id,
+    to: [phone.id, laptop.id],
+    at,
+    outcome: "withdrawn",
+  };
+  expect(
+    (await post(otherbox, seal("settled", notice, key(otherbox), [phone.member, laptop.member])))
+      .status,
+  ).toBe(404);
+  expect(
+    (await post(devbox, seal("settled", notice, key(devbox), [phone.member, laptop.member])))
+      .status,
+  ).toBe(201);
+  const answer = seal(
+    "answer",
+    { v: 1, id: `a${++n}`, decisionId: d.id, to: devbox.id, answeredAt: at, choice: "yes" },
+    key(phone),
+    [devbox.member],
+  );
+  expect((await post(phone, answer)).json.error).toBe("already-answered");
 });

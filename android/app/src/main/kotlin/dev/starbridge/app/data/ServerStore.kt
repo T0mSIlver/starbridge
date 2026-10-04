@@ -450,12 +450,16 @@ class ServerStore(
     private suspend fun syncPrompts() {
         var cursor = saved.promptCursor
         val byId = saved.prompts.associateBy { it.body.id }.toMutableMap()
+        val read = mutableListOf<Listed>()
         while (true) {
             val page = api().items("permission,settled", cursor)
-            for (listed in page.items) takePrompt(listed.item, listed.answeredAt, byId)
+            read += page.items
             cursor = page.cursor
             if (page.items.size < 100) break
         }
+        // A settled prompt comes back after its notice, so prompts go first: a notice whose
+        // prompt is new to this phone would otherwise find nothing to close.
+        for (listed in read.sortedBy { if (it.item.kind == "permission") 0 else 1 }) takePrompt(listed.item, listed.answeredAt, byId)
         keepPrompts(byId, cursor)
     }
 
@@ -477,7 +481,7 @@ class ServerStore(
             "settled" -> {
                 val (from, body) = open(item) ?: return null
                 val notice = body as Settled
-                val p = byId[notice.permissionId] ?: return null
+                val p = byId[notice.itemId] ?: return null
                 if (p.from != from) return null
                 byId[p.body.id] = p.copy(settled = notice, answeredAt = p.answeredAt ?: notice.at)
                 alerts.cancelPrompt(toUi(p))

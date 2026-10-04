@@ -19,6 +19,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Computer
 import androidx.compose.material.icons.rounded.Smartphone
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -113,7 +114,7 @@ fun DevicesScreen(
             itemsIndexed(devices, key = { _, it -> it.id }) { i, it -> MemberRow(it, now, groupShape(i, devices.size)) { revoking = it.id } }
             item { Section("Machines") }
             if (machines.isEmpty()) {
-                item { Text("None yet. Run starbridge pair on a machine and type its code above.", style = StarbridgeTheme.type.small, color = StarbridgeTheme.colors.fg2, modifier = Modifier.padding(horizontal = Spacing.s1)) }
+                item { Text("None yet. Run starbridge pair on a machine and type its code above.", style = StarbridgeTheme.type.small, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = Spacing.s1)) }
             }
             itemsIndexed(machines, key = { _, it -> it.id }) { i, it -> MemberRow(it, now, groupShape(i, machines.size)) { revoking = it.id } }
             item { Section("This phone") }
@@ -124,7 +125,7 @@ fun DevicesScreen(
                 Text(
                     "The recovery words were shown once, when you set up your first device. They can add a new device if you lose all of them.",
                     style = StarbridgeTheme.type.small,
-                    color = StarbridgeTheme.colors.fg2,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = Spacing.s3, start = Spacing.s1, end = Spacing.s1),
                 )
             }
@@ -189,15 +190,15 @@ fun PairCard(approval: Approval, actions: DeviceActions, otherWays: @Composable 
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Beacon()
                             Spacer(Modifier.width(Spacing.s2))
-                            Label("Wants to join", color = colors.fg)
+                            Label("Wants to join", color = MaterialTheme.colorScheme.onSurface)
                         }
-                        Text(f.name, style = StarbridgeTheme.type.question, color = colors.fg)
+                        Text(f.name, style = StarbridgeTheme.type.question, color = MaterialTheme.colorScheme.onSurface)
                         Text(
                             if (f.kind == Kind.Machine) "A machine: its agents can ask you decisions and send quotas." else "A device: it can read and answer decisions.",
                             style = StarbridgeTheme.type.body,
-                            color = colors.fg2,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
-                        Text(f.code, style = StarbridgeTheme.type.machine, color = colors.fg2)
+                        Text(f.code, style = StarbridgeTheme.type.machine, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Button(
                                 onClick = actions.approve,
@@ -221,13 +222,13 @@ fun PairCard(approval: Approval, actions: DeviceActions, otherWays: @Composable 
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Rounded.CheckCircle, contentDescription = null, tint = colors.ok)
                             Spacer(Modifier.width(Spacing.s2))
-                            Text("${state.name} joined.", style = StarbridgeTheme.type.body, color = colors.fg)
+                            Text("${state.name} joined.", style = StarbridgeTheme.type.body, color = MaterialTheme.colorScheme.onSurface)
                         }
                         OutlinedButton(onClick = { actions.close(); code = "" }, modifier = Modifier.heightIn(min = Sizes.tap)) { Text("Pair another", style = StarbridgeTheme.type.action) }
                     }
                     else -> {
-                        Text("Add a machine or device", style = StarbridgeTheme.type.heading, color = colors.fg)
-                        Text("Type the code it shows: starbridge pair on a machine, or Join on a new phone or browser.", style = StarbridgeTheme.type.small, color = colors.fg2)
+                        Text("Add a machine or device", style = StarbridgeTheme.type.heading, color = MaterialTheme.colorScheme.onSurface)
+                        Text("Type the code it shows: starbridge pair on a machine, or Join on a new phone or browser.", style = StarbridgeTheme.type.small, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         TextField(
                             value = code,
                             onValueChange = { code = it.take(40) },
@@ -247,7 +248,7 @@ fun PairCard(approval: Approval, actions: DeviceActions, otherWays: @Composable 
                             enabled = code.isNotBlank() && state != Approval.Checking,
                             modifier = Modifier.fillMaxWidth().heightIn(min = Sizes.tap),
                         ) {
-                            if (state == Approval.Checking) LoadingIndicator(Modifier.size(Spacing.s6), color = colors.fg2)
+                            if (state == Approval.Checking) LoadingIndicator(Modifier.size(Spacing.s6), color = MaterialTheme.colorScheme.secondary)
                             else Text("Check code", style = StarbridgeTheme.type.action)
                         }
                         // Other ways to add a device (a 6-digit check, a QR code: #66) go here.
@@ -262,7 +263,7 @@ fun PairCard(approval: Approval, actions: DeviceActions, otherWays: @Composable 
 /** One row of a grouped list: [content] on `surface` in its group's [shape]. */
 @Composable
 private fun GroupRow(shape: Shape, content: @Composable ColumnScope.() -> Unit) {
-    Surface(Modifier.fillMaxWidth(), shape = shape, color = StarbridgeTheme.colors.surface) {
+    Surface(Modifier.fillMaxWidth(), shape = shape, color = MaterialTheme.colorScheme.surfaceContainer) {
         Column(Modifier.padding(horizontal = Spacing.s5, vertical = Spacing.s4), content = content)
     }
 }
@@ -272,11 +273,11 @@ private fun MemberRow(member: Member, now: Instant, shape: Shape, onRevoke: () -
     val colors = StarbridgeTheme.colors
     GroupRow(shape) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(if (member.kind == Kind.Machine) Icons.Rounded.Computer else Icons.Rounded.Smartphone, contentDescription = null, tint = colors.fg2, modifier = Modifier.size(Spacing.s6))
+            Icon(if (member.kind == Kind.Machine) Icons.Rounded.Computer else Icons.Rounded.Smartphone, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(Spacing.s6))
             Spacer(Modifier.width(Spacing.s4))
             Column(Modifier.weight(1f)) {
-                Text(member.name, style = if (member.kind == Kind.Machine) StarbridgeTheme.type.machine.copy(fontSize = StarbridgeTheme.type.body.fontSize) else StarbridgeTheme.type.body, color = colors.fg)
-                Text(if (member.current) "This phone" else "Added ${ago(now, member.addedAt)}", style = StarbridgeTheme.type.small, color = colors.fg2)
+                Text(member.name, style = if (member.kind == Kind.Machine) StarbridgeTheme.type.machine.copy(fontSize = StarbridgeTheme.type.body.fontSize) else StarbridgeTheme.type.body, color = MaterialTheme.colorScheme.onSurface)
+                Text(if (member.current) "This phone" else "Added ${ago(now, member.addedAt)}", style = StarbridgeTheme.type.small, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             if (!member.current) {
                 TextButton(
@@ -294,7 +295,7 @@ private fun MemberRow(member: Member, now: Instant, shape: Shape, onRevoke: () -
 private fun Notifications(push: PushSetting, onPush: (String) -> Unit, shape: Shape) {
     val colors = StarbridgeTheme.colors
     GroupRow(shape) {
-        Text("Notifications through", style = StarbridgeTheme.type.body, color = colors.fg)
+        Text("Notifications through", style = StarbridgeTheme.type.body, color = MaterialTheme.colorScheme.onSurface)
         Spacer(Modifier.padding(top = Spacing.s3))
         Choice(listOf("fcm" to "Google", "unifiedpush" to "UnifiedPush"), push.type, onPush, Modifier.fillMaxWidth())
         Spacer(Modifier.padding(top = Spacing.s3))
@@ -308,16 +309,15 @@ private fun Notifications(push: PushSetting, onPush: (String) -> Unit, shape: Sh
     }
 }
 
-/** The "Colours" setting: DESIGN.md's palette, or Material You; amber and the quota colours stay. */
+/** The "Colours" setting: DESIGN.md's palette, or Material You; amber, the quota colours and the provider dots stay. */
 @Composable
 private fun ColoursSetting(colours: Colours, onColours: (Colours) -> Unit, shape: Shape) {
-    val colors = StarbridgeTheme.colors
     GroupRow(shape) {
-        Text("Colours", style = StarbridgeTheme.type.body, color = colors.fg)
+        Text("Colours", style = StarbridgeTheme.type.body, color = MaterialTheme.colorScheme.onSurface)
         Spacer(Modifier.padding(top = Spacing.s3))
         Choice(listOf(Colours.Starbridge to "Starbridge", Colours.Wallpaper to "Match wallpaper"), colours, onColours, Modifier.fillMaxWidth())
         Spacer(Modifier.padding(top = Spacing.s3))
-        Text("Amber and the quota colours stay the same under both.", style = StarbridgeTheme.type.small, color = colors.fg2)
+        Text("Amber, the quota colours and the provider dots stay the same under both.", style = StarbridgeTheme.type.small, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
@@ -328,8 +328,8 @@ private fun Account(server: String, shape: Shape, onSignOut: () -> Unit) {
     GroupRow(shape) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("Server", style = StarbridgeTheme.type.body, color = colors.fg)
-                Text(server, style = StarbridgeTheme.type.machine, color = colors.fg2)
+                Text("Server", style = StarbridgeTheme.type.body, color = MaterialTheme.colorScheme.onSurface)
+                Text(server, style = StarbridgeTheme.type.machine, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             TextButton(onClick = onSignOut, colors = ButtonDefaults.textButtonColors(contentColor = colors.bad), modifier = Modifier.heightIn(min = Sizes.tap)) {
                 Text("Sign out", style = StarbridgeTheme.type.action)

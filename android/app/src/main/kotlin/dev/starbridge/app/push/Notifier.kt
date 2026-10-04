@@ -15,7 +15,9 @@ import androidx.core.app.RemoteInput
 import dev.starbridge.app.MainActivity
 import dev.starbridge.app.R
 import dev.starbridge.app.data.Alerts
+import dev.starbridge.app.data.Colours
 import dev.starbridge.app.data.Decision
+import dev.starbridge.app.data.Prefs
 import dev.starbridge.app.data.Prompt
 
 /**
@@ -23,7 +25,7 @@ import dev.starbridge.app.data.Prompt
  * and answer through [AnswerReceiver] without opening the app, from the lock screen too. A
  * decision without options gets a reply field instead.
  */
-class Notifier(private val context: Context) : Alerts {
+class Notifier(private val context: Context, private val prefs: Prefs) : Alerts {
     private val manager = NotificationManagerCompat.from(context)
 
     init {
@@ -48,6 +50,12 @@ class Notifier(private val context: Context) : Alerts {
 
     private fun tag(id: String) = id.hashCode()
 
+    /**
+     * The icon's circle and the action labels: amber, or the wallpaper's primary under "Match
+     * wallpaper". Android 12 to 15 show it; 16 tints them itself.
+     */
+    private fun accent() = context.getColor(if (prefs.colours.value == Colours.Wallpaper) R.color.accent_wallpaper else R.color.accent)
+
     private fun base(d: Decision): NotificationCompat.Builder {
         val open = PendingIntent.getActivity(
             context,
@@ -57,8 +65,7 @@ class Notifier(private val context: Context) : Alerts {
         )
         return NotificationCompat.Builder(context, CHANNEL)
             .setSmallIcon(R.drawable.ic_notification)
-            // The beacon: the icon's circle and the action labels in amber (DESIGN.md).
-            .setColor(context.getColor(R.color.accent))
+            .setColor(accent())
             .setContentTitle(d.question)
             .setContentText(d.context)
             .setSubText(d.source.machine)
@@ -69,7 +76,7 @@ class Notifier(private val context: Context) : Alerts {
             .setPublicVersion(
                 NotificationCompat.Builder(context, CHANNEL)
                     .setSmallIcon(R.drawable.ic_notification)
-                    .setColor(context.getColor(R.color.accent))
+                    .setColor(accent())
                     .setContentTitle("A decision needs you")
                     .setSubText(d.source.machine)
                     .build(),
@@ -140,7 +147,7 @@ class Notifier(private val context: Context) : Alerts {
     // --- Permission prompts ------------------------------------------------------
 
     /** One notification per session, updated in place: the prompt it shows now. */
-    private val shown = mutableMapOf<Int, String>()
+    private val shown = java.util.Collections.synchronizedMap(mutableMapOf<Int, String>())
 
     private fun promptTag(p: Prompt) = "p:${p.source.machine}/${p.source.session}".hashCode()
 
@@ -166,7 +173,7 @@ class Notifier(private val context: Context) : Alerts {
         )
         return NotificationCompat.Builder(context, PROMPTS)
             .setSmallIcon(R.drawable.ic_notification)
-            .setColor(context.getColor(R.color.accent))
+            .setColor(accent())
             .setContentTitle(title)
             .setContentText(p.summary)
             .setSubText(p.source.project)
@@ -178,7 +185,7 @@ class Notifier(private val context: Context) : Alerts {
             .setPublicVersion(
                 NotificationCompat.Builder(context, PROMPTS)
                     .setSmallIcon(R.drawable.ic_notification)
-                    .setColor(context.getColor(R.color.accent))
+                    .setColor(accent())
                     .setContentTitle(title)
                     .build(),
             )
@@ -234,9 +241,12 @@ class Notifier(private val context: Context) : Alerts {
     /** Clears the session's notification if it still shows this prompt. */
     override fun cancelPrompt(prompt: Prompt) {
         val tag = promptTag(prompt)
-        if (shown[tag] != null && shown[tag] != prompt.id) return
-        shown.remove(tag)
-        manager.cancel(tag)
+        // Store runs and notification buttons call in from different threads.
+        synchronized(shown) {
+            if (shown[tag] != null && shown[tag] != prompt.id) return
+            shown.remove(tag)
+            manager.cancel(tag)
+        }
     }
 
     companion object {

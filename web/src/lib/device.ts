@@ -610,7 +610,7 @@ export async function loadSettled(ctx: Ctx, cursor?: string) {
     for (const s of page.items) {
       try {
         const { machine, settled } = await openSettled(ctx, s.item);
-        out.set(`${machine}/${settled.permissionId}`, settled);
+        out.set(`${machine}/${settled.itemId}`, settled);
       } catch {}
     }
     at = page.cursor;
@@ -654,7 +654,7 @@ export async function loadPromptLog(ctx: Ctx): Promise<PromptItem[]> {
     openAsync(expectKind(s.item, "settled"), me(ctx), ctx.dir),
   );
   // A notice counts only from the machine that asked.
-  const byId = new Map(settled.map((x) => [`${x.signer.id}/${x.body.permissionId}`, x.body]));
+  const byId = new Map(settled.map((x) => [`${x.signer.id}/${x.body.itemId}`, x.body]));
   return permissions.map((p) => {
     const st = byId.get(`${p.machine.id}/${p.permission.id}`);
     return st ? { ...p, settled: st as Settled } : p;

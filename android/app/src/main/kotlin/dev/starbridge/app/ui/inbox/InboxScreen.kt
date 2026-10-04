@@ -50,7 +50,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.ToggleButton
 import androidx.compose.material3.ToggleButtonDefaults
 import androidx.compose.material3.ToggleButtonShapes
@@ -97,6 +96,7 @@ import dev.starbridge.app.ui.Refreshable
 import dev.starbridge.app.ui.Screen
 import dev.starbridge.app.ui.ago
 import dev.starbridge.app.ui.clock
+import dev.starbridge.app.ui.fieldColors
 import dev.starbridge.app.ui.listPadding
 import dev.starbridge.app.ui.theme.Radius
 import dev.starbridge.app.ui.theme.Sizes
@@ -171,7 +171,7 @@ fun InboxScreen(
                     item(key = "answered") { Label("Answered", Modifier.padding(top = Spacing.s4, start = Spacing.s1).animateItem()) }
                     itemsIndexed(answered, key = { _, it -> it.id }) { i, it ->
                         Column(Modifier.animateItem()) {
-                            if (i > 0) HorizontalDivider(color = StarbridgeTheme.colors.line)
+                            if (i > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                             AnsweredLine(it, now, onOpen = { actions.open(it.id) })
                         }
                     }
@@ -186,13 +186,12 @@ private const val PROMPT_POLL_MS = 1_500L
 /** The top app bar's subtitle: how many decisions wait, with the beacon when any do. */
 @Composable
 private fun NeedsYou(count: Int) {
-    val colors = StarbridgeTheme.colors
     Row(verticalAlignment = Alignment.CenterVertically) {
         if (count > 0) {
             Beacon()
             Spacer(Modifier.width(Spacing.s2))
         }
-        Text(if (count == 0) "Nothing needs you" else "$count need you", style = StarbridgeTheme.type.small, color = colors.fg2)
+        Text(if (count == 0) "Nothing needs you" else "$count need you", style = StarbridgeTheme.type.small, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
@@ -229,12 +228,12 @@ private fun Source(decision: Decision, now: Instant, revealable: Boolean = false
         Text(
             listOf(s.machine, s.project, sessionName(s, full)).filter { it.isNotBlank() }.joinToString(" · "),
             style = StarbridgeTheme.type.machine,
-            color = StarbridgeTheme.colors.fg2,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = if (full) Int.MAX_VALUE else 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f, fill = false),
         )
-        Text(" · ${ago(now, decision.createdAt)}", style = StarbridgeTheme.type.machine, color = StarbridgeTheme.colors.fg2, maxLines = 1)
+        Text(" · ${ago(now, decision.createdAt)}", style = StarbridgeTheme.type.machine, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
     }
 }
 
@@ -260,31 +259,29 @@ private fun SessionLinks(source: Source) {
 /** "If nobody answers: Waits until tonight, at 22:00", the default in the text colour. */
 @Composable
 private fun Fallback(decision: Decision) {
-    val colors = StarbridgeTheme.colors
     Text(
         buildAnnotatedString {
             append("If nobody answers: ")
-            withStyle(SpanStyle(color = colors.fg)) { append(decision.default) }
+            withStyle(SpanStyle(color = MaterialTheme.colorScheme.onSurface)) { append(decision.default) }
             decision.defaultAt?.let { append(", at ${clock(it)}") }
         },
         style = StarbridgeTheme.type.small,
-        color = colors.fg2,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
 }
 
 @Composable
 private fun OpenDecision(decision: Decision, now: Instant, actions: DecisionActions, selected: Boolean, modifier: Modifier = Modifier) {
-    val colors = StarbridgeTheme.colors
     // On wide screens the card shown in the detail pane steps up a surface.
-    Panel(modifier.fillMaxWidth(), color = if (selected) colors.surface2 else colors.surface) {
+    Panel(modifier.fillMaxWidth(), color = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainer) {
         Column(
             Modifier.fillMaxWidth().clickable(onClickLabel = "Read the whole decision") { actions.open(decision.id) },
             verticalArrangement = Arrangement.spacedBy(Spacing.s2),
         ) {
             Source(decision, now)
-            Text(decision.question, style = StarbridgeTheme.type.question, color = colors.fg)
+            Text(decision.question, style = StarbridgeTheme.type.question, color = MaterialTheme.colorScheme.onSurface)
             if (decision.context.isNotBlank()) {
-                Text(plain(decision.context), style = StarbridgeTheme.type.body, color = colors.fg2, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                Text(plain(decision.context), style = StarbridgeTheme.type.body, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 3, overflow = TextOverflow.Ellipsis)
             }
         }
         Spacer(Modifier.padding(top = Spacing.s4))
@@ -425,9 +422,9 @@ private fun OptionButton(option: String, recommended: Boolean, checked: Boolean,
             modifier = modifier.then(semantics),
             shapes = shapes,
             colors = OutlinedToggleButtonDefaults.colors(
-                contentColor = colors.fg,
-                checkedContainerColor = colors.fg,
-                checkedContentColor = colors.bg,
+                contentColor = MaterialTheme.colorScheme.primary,
+                checkedContainerColor = MaterialTheme.colorScheme.primary,
+                checkedContentColor = MaterialTheme.colorScheme.onPrimary,
             ),
             contentPadding = content,
         ) { label() }
@@ -461,7 +458,6 @@ private fun stacked(index: Int, count: Int): ToggleButtonShapes {
 private fun FreeText(onAnswer: (String) -> Unit) {
     var text by rememberSaveable { mutableStateOf("") }
     val send = { if (text.isNotBlank()) onAnswer(text.trim()) }
-    val colors = StarbridgeTheme.colors
     Row(verticalAlignment = Alignment.CenterVertically) {
         TextField(
             value = text,
@@ -470,12 +466,7 @@ private fun FreeText(onAnswer: (String) -> Unit) {
             textStyle = StarbridgeTheme.type.body,
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
             keyboardActions = KeyboardActions(onSend = { send() }),
-            colors = TextFieldDefaults.colors(
-                focusedContainerColor = colors.surface2,
-                unfocusedContainerColor = colors.surface2,
-                focusedIndicatorColor = colors.fg,
-                unfocusedIndicatorColor = colors.lineStrong,
-            ),
+            colors = fieldColors(),
             modifier = Modifier.weight(1f),
         )
         Spacer(Modifier.width(Spacing.s2))
@@ -498,12 +489,12 @@ private fun AnsweredLine(decision: Decision, now: Instant, onOpen: () -> Unit) {
     ) {
         Text(
             buildAnnotatedString {
-                withStyle(SpanStyle(color = colors.fg, fontWeight = StarbridgeTheme.type.label.fontWeight)) { append(decision.answer ?: "Answered") }
+                withStyle(SpanStyle(color = MaterialTheme.colorScheme.onSurface, fontWeight = StarbridgeTheme.type.label.fontWeight)) { append(decision.answer ?: "Answered") }
                 append("  ")
                 append(decision.question)
             },
             style = StarbridgeTheme.type.small,
-            color = colors.fg2,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
@@ -526,11 +517,11 @@ private fun Outcome(decision: Decision, now: Instant) {
         val at = decision.answeredAt?.let { " · ${ago(now, it)}" }.orEmpty()
         Text(
             buildAnnotatedString {
-                withStyle(SpanStyle(color = colors.fg)) { append(decision.answer ?: "Answered") }
+                withStyle(SpanStyle(color = MaterialTheme.colorScheme.onSurface)) { append(decision.answer ?: "Answered") }
                 append(" · ${answeredBy(decision)}$at")
             },
             style = StarbridgeTheme.type.body,
-            color = colors.fg2,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }
@@ -552,7 +543,7 @@ fun DecisionScreen(decision: Decision?, now: Instant, onAnswer: (String, String?
     Scaffold(
         modifier = modifier,
         contentWindowInsets = WindowInsets(0),
-        containerColor = colors.bg,
+        containerColor = MaterialTheme.colorScheme.surface,
         topBar = {
             TopAppBar(
                 title = {},
@@ -563,7 +554,7 @@ fun DecisionScreen(decision: Decision?, now: Instant, onAnswer: (String, String?
                 },
                 actions = { SessionLinks(decision.source) },
                 windowInsets = WindowInsets(0),
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = colors.bg),
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface),
             )
         },
     ) { padding ->
@@ -573,7 +564,7 @@ fun DecisionScreen(decision: Decision?, now: Instant, onAnswer: (String, String?
         ) {
             Column(Modifier.widthIn(max = Sizes.content), verticalArrangement = Arrangement.spacedBy(Spacing.s4)) {
                 Source(decision, now, revealable = true)
-                Text(decision.question, style = StarbridgeTheme.type.heading, color = colors.fg)
+                Text(decision.question, style = StarbridgeTheme.type.heading, color = MaterialTheme.colorScheme.onSurface)
                 Context(decision.context)
                 Spacer(Modifier.padding(top = Spacing.s1))
                 if (decision.open) Answer(decision, onAnswer) else Outcome(decision, now)
@@ -586,15 +577,14 @@ fun DecisionScreen(decision: Decision?, now: Instant, onAnswer: (String, String?
 /** Markdown's code, fenced or inline, in mono; everything else in the sans. */
 @Composable
 private fun Context(text: String) {
-    val colors = StarbridgeTheme.colors
     text.split("```").forEachIndexed { i, part ->
         if (i % 2 == 1) {
             val code = part.substringAfter('\n', part).trimEnd()
-            Surface(shape = RoundedCornerShape(Radius.lg), color = colors.surface2, modifier = Modifier.fillMaxWidth()) {
-                Text(code, style = StarbridgeTheme.type.code, color = colors.fg, modifier = Modifier.padding(Spacing.s4))
+            Surface(shape = RoundedCornerShape(Radius.lg), color = MaterialTheme.colorScheme.surfaceContainerHighest, modifier = Modifier.fillMaxWidth()) {
+                Text(code, style = StarbridgeTheme.type.code, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(Spacing.s4))
             }
         } else if (part.isNotBlank()) {
-            Text(inline(part.trim(), colors.surface2), style = StarbridgeTheme.type.body, color = colors.fg2)
+            Text(inline(part.trim(), MaterialTheme.colorScheme.surfaceContainerHighest), style = StarbridgeTheme.type.body, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

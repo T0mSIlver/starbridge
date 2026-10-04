@@ -106,9 +106,9 @@ async function onPush(text: string): Promise<void> {
   } else if (payload.kind === "settled") {
     // Checked like any item, so a forged notice cannot clear a real prompt.
     const { settled } = await openSettled(ctx, item);
-    answered.add(`${account}/${settled.permissionId}`);
+    answered.add(`${account}/${settled.itemId}`);
     const tagged = await self.registration.getNotifications({
-      tag: promptTag(settled.permissionId),
+      tag: promptTag(settled.itemId),
     });
     for (const n of tagged) n.close();
   } else await showAlerts(account as string, await openPushedQuota(ctx, item));

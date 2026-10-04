@@ -25,7 +25,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -46,7 +48,9 @@ import dev.starbridge.app.ui.theme.Radius
 import dev.starbridge.app.ui.theme.Sizes
 import dev.starbridge.app.ui.theme.Spacing
 import dev.starbridge.app.ui.theme.StarbridgeTheme
+import kotlinx.coroutines.delay
 import kotlinx.serialization.json.Json
+import kotlinx.coroutines.delay
 import kotlinx.serialization.json.JsonElement
 import java.time.Instant
 
@@ -55,6 +59,9 @@ class PromptActions(
     val answer: (id: String, allow: Boolean, scope: String, message: String?) -> Unit,
     val openLog: () -> Unit,
 )
+
+/** How long the buttons wait after a tap before taking taps again, should the send have failed. */
+private const val RETRY_AFTER_MS = 8_000L
 
 /** How long a prompt settled elsewhere stays, saying where, before it leaves. */
 const val CLOSING_MS = 3_000L
@@ -117,7 +124,14 @@ fun PromptCard(prompt: Prompt, now: Instant, actions: PromptActions, modifier: M
     var showInput by rememberSaveable(prompt.id) { mutableStateOf(false) }
     var denying by rememberSaveable(prompt.id) { mutableStateOf(false) }
     var note by rememberSaveable(prompt.id) { mutableStateOf("") }
-    var sent by rememberSaveable(prompt.id) { mutableStateOf(false) }
+    var sent by remember(prompt.id) { mutableStateOf(false) }
+    // A send that failed leaves the prompt waiting: its buttons take taps again.
+    LaunchedEffect(sent) {
+        if (sent) {
+            delay(RETRY_AFTER_MS)
+            sent = false
+        }
+    }
     val send = { allow: Boolean, scope: String, message: String? ->
         if (!sent) {
             sent = true

@@ -433,7 +433,7 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
   const settledBody = {
     v: 1 as const,
     id: "set_1",
-    permissionId: "perm_1",
+    itemId: "perm_1",
     to: ["phone", "phone2"],
     outcome: "device" as const,
     device: "phone",
@@ -1025,6 +1025,26 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
         name: "at the keyboard",
         body: { ...settledBody, outcome: "keyboard", device: undefined },
         valid: true,
+      },
+      {
+        name: "a withdrawn decision",
+        body: { ...settledBody, itemId: "dec_1", outcome: "withdrawn", device: undefined },
+        valid: true,
+      },
+      {
+        name: "a decision answered elsewhere",
+        body: { ...settledBody, itemId: "dec_1", outcome: "elsewhere", device: undefined },
+        valid: true,
+      },
+      {
+        name: "no outcome",
+        body: { ...settledBody, outcome: undefined, device: undefined },
+        valid: true,
+      },
+      {
+        name: "unknown outcome",
+        body: { ...settledBody, outcome: "lost", device: undefined },
+        valid: false,
       },
       {
         name: "device without its outcome",

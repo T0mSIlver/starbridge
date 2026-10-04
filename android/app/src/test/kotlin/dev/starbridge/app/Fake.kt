@@ -118,12 +118,12 @@ class Fake(private val now: Instant) {
     )
 
     val windows = listOf(
-        QuotaWindow("claude-5h", "Claude", "5-hour", 81, later(110), Pace.RunsOut(later(50)), steadyPercent = 63),
-        QuotaWindow("claude-week", "Claude", "Weekly", 62, later(3120), Pace.Even, steadyPercent = 58),
-        QuotaWindow("zai-5h", "Z.ai GLM", "5-hour", 12, later(38), Pace.Unused(86), alert = true, steadyPercent = 87),
-        QuotaWindow("codex-week", "Codex", "Weekly", 34, later(1140), Pace.Unused(41), steadyPercent = 89),
-        QuotaWindow("mistral-month", "Mistral", "Monthly credits", 55, later(12960), Pace.Even, steadyPercent = 52),
-        QuotaWindow("gemini-day", "Gemini", "Daily", 3, later(1400), Pace.Unknown),
+        QuotaWindow("claude-5h", "claude", "5-hour", 81, later(110), Pace.RunsOut(later(50)), steadyPercent = 63),
+        QuotaWindow("claude-week", "claude", "Weekly", 62, later(3120), Pace.Even, steadyPercent = 58),
+        QuotaWindow("zai-5h", "zai", "5-hour", 12, later(38), Pace.Unused(86), alert = true, steadyPercent = 87),
+        QuotaWindow("codex-week", "codex", "Weekly", 34, later(1140), Pace.Unused(41), steadyPercent = 89),
+        QuotaWindow("mistral-month", "mistral", "Monthly credits", 55, later(12960), Pace.Even, steadyPercent = 52),
+        QuotaWindow("gemini-day", "gemini", "Daily", 3, later(1400), Pace.Unknown),
     )
 
     val members = listOf(
