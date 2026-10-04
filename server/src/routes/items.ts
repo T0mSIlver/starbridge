@@ -10,7 +10,10 @@ import { activeMember } from "./directory";
 
 const PAGE = 100;
 
-type KindRule = { signer: "device" | "machine"; re?: { field: string; kind: ItemKind } };
+type KindRule = {
+  signer: "device" | "machine";
+  re?: { field: string; kinds: readonly ItemKind[] };
+};
 
 /** How long after it arrives an item can still be answered; unlisted kinds have no limit. */
 const ANSWERABLE_FOR: Partial<Record<ItemKind, number>> = { permission: PERMISSION_TTL_MS };
@@ -18,7 +21,7 @@ const ANSWERABLE_FOR: Partial<Record<ItemKind, number>> = { permission: PERMISSI
 /** Kinds a device answers: what device-signed kinds refer to. */
 const ANSWERABLE = ItemKind.options.flatMap((k) => {
   const rule: KindRule = ITEM_KINDS[k];
-  return rule.signer === "device" && rule.re ? [rule.re.kind] : [];
+  return rule.signer === "device" && rule.re ? [...rule.re.kinds] : [];
 });
 /** Kinds devices list: what machines sign. */
 const DEVICE_KINDS = ItemKind.options.filter((k) => ITEM_KINDS[k].signer === "machine");
@@ -162,9 +165,11 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
       if (!item.re) fail(400, "bad-schema", `a ${item.kind} needs re`);
       const target = db
         .query(
-          "SELECT from_id, received_at, answered_at FROM items WHERE account_id = ? AND id = ? AND kind = ?",
+          `SELECT kind, from_id, received_at, answered_at FROM items WHERE account_id = ? AND id = ?
+           AND kind IN (SELECT value FROM json_each(?))`,
         )
-        .get(caller.account, item.re, rule.re.kind) as {
+        .get(caller.account, item.re, JSON.stringify(rule.re.kinds)) as {
+        kind: ItemKind;
         from_id: string;
         received_at: string;
         answered_at: string | null;
@@ -174,20 +179,21 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
           .query("SELECT 1 FROM boxes WHERE account_id = ? AND item_id = ? AND to_id = ?")
           .get(caller.account, item.re, me);
         if (!target || target.from_id !== to[0] || !mine)
-          fail(404, "not-found", `no such ${rule.re.kind} for this device`);
+          fail(404, "not-found", `no such ${rule.re.kinds.join(" or ")} for this device`);
         if (target.answered_at) fail(409, "already-answered");
-        const ttl = ANSWERABLE_FOR[rule.re.kind];
+        const ttl = ANSWERABLE_FOR[target.kind];
         if (ttl !== undefined && now.getTime() > Date.parse(target.received_at) + ttl)
-          fail(409, "expired", `a ${rule.re.kind} can be answered for ${ttl / 60_000} minutes`);
+          fail(409, "expired", `a ${target.kind} can be answered for ${ttl / 60_000} minutes`);
         answeredDevices = (
           db
             .query("SELECT to_id FROM boxes WHERE account_id = ? AND item_id = ?")
             .all(caller.account, item.re) as { to_id: string }[]
         ).map((r) => r.to_id);
       } else {
-        // A machine's notice about one of its own items, such as a settled prompt: one each.
+        // A machine's notice that one of its own items is over (a settled prompt, a withdrawn
+        // decision): one each.
         if (!target || target.from_id !== me)
-          fail(404, "not-found", `no such ${rule.re.kind} from this machine`);
+          fail(404, "not-found", `no such ${rule.re.kinds.join(" or ")} from this machine`);
         if (
           db
             .query("SELECT 1 FROM items WHERE account_id = ? AND kind = ? AND re = ?")

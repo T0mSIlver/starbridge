@@ -439,7 +439,9 @@ How it generalizes is open.
   sealed kind's signing role and the item it refers to, and the server and both clients derive
   their checks from it, so #58, #60 and #62 add kinds as table rows. Beyond the issue's spec:
   `settled` carries `to` (every sealed body names its recipients) and, for `outcome: "device"`,
-  the device whose answer the machine applied, for the clients' log; a second `settled` gets 409
+  the device whose answer the machine applied, for the clients' log. It closes any item its
+  machine posted (`itemId`), so #62 closes decisions with it (outcomes `elsewhere`,
+  `withdrawn`) instead of a kind of its own; a second `settled` gets 409
   `already-settled`. The server, which cannot read `expiresAt`, refuses answers 10 minutes after
   the permission arrived. `GET /items` takes a comma-separated `kind` list and `open=1`; the
   machine's `checkPermissionAnswer` lives in the protocol package.

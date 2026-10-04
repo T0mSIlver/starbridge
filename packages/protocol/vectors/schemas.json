@@ -943,7 +943,7 @@
       "body": {
         "v": 1,
         "id": "set_1",
-        "permissionId": "perm_1",
+        "itemId": "perm_1",
         "to": [
           "phone",
           "phone2"
@@ -959,7 +959,7 @@
       "body": {
         "v": 1,
         "id": "set_1",
-        "permissionId": "perm_1",
+        "itemId": "perm_1",
         "to": [
           "phone",
           "phone2"
@@ -970,11 +970,70 @@
       "valid": true
     },
     {
+      "name": "a withdrawn decision",
+      "body": {
+        "v": 1,
+        "id": "set_1",
+        "itemId": "dec_1",
+        "to": [
+          "phone",
+          "phone2"
+        ],
+        "outcome": "withdrawn",
+        "at": "2026-10-04T10:01:00Z"
+      },
+      "valid": true
+    },
+    {
+      "name": "a decision answered elsewhere",
+      "body": {
+        "v": 1,
+        "id": "set_1",
+        "itemId": "dec_1",
+        "to": [
+          "phone",
+          "phone2"
+        ],
+        "outcome": "elsewhere",
+        "at": "2026-10-04T10:01:00Z"
+      },
+      "valid": true
+    },
+    {
+      "name": "no outcome",
+      "body": {
+        "v": 1,
+        "id": "set_1",
+        "itemId": "perm_1",
+        "to": [
+          "phone",
+          "phone2"
+        ],
+        "at": "2026-10-04T10:01:00Z"
+      },
+      "valid": true
+    },
+    {
+      "name": "unknown outcome",
+      "body": {
+        "v": 1,
+        "id": "set_1",
+        "itemId": "perm_1",
+        "to": [
+          "phone",
+          "phone2"
+        ],
+        "outcome": "lost",
+        "at": "2026-10-04T10:01:00Z"
+      },
+      "valid": false
+    },
+    {
       "name": "device without its outcome",
       "body": {
         "v": 1,
         "id": "set_1",
-        "permissionId": "perm_1",
+        "itemId": "perm_1",
         "to": [
           "phone",
           "phone2"
@@ -990,7 +1049,7 @@
       "body": {
         "v": 1,
         "id": "set_1",
-        "permissionId": "perm_1",
+        "itemId": "perm_1",
         "to": [
           "phone",
           "phone2"
