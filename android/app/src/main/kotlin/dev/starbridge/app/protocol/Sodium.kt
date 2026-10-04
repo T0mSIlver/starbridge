@@ -36,6 +36,29 @@ class Sodium(private val ls: LazySodium) {
         return KeyPair(pk, sk)
     }
 
+    /** X25519 keys from a 32-byte seed, as crypto_box_seed_keypair; for test vectors. */
+    fun boxSeedKeyPair(seed: ByteArray): KeyPair {
+        require(seed.size == Box.SEEDBYTES)
+        val pk = ByteArray(Box.PUBLICKEYBYTES)
+        val sk = ByteArray(Box.SECRETKEYBYTES)
+        check(ls.cryptoBoxSeedKeypair(pk, sk, seed))
+        return KeyPair(pk, sk)
+    }
+
+    /** X25519; null when libsodium refuses the result (all zeros: a low-order point). */
+    fun scalarMult(secret: ByteArray, public: ByteArray): ByteArray? {
+        if (secret.size != 32 || public.size != 32) return null
+        val out = ByteArray(32)
+        return if (ls.cryptoScalarMult(out, secret, public)) out else null
+    }
+
+    /** BLAKE2b-256 keyed with [key]. */
+    fun keyedHash(message: ByteArray, key: ByteArray): ByteArray {
+        val out = ByteArray(32)
+        check(ls.cryptoGenericHash(out, out.size, message, message.size.toLong(), key, key.size))
+        return out
+    }
+
     fun seal(message: ByteArray, recipient: ByteArray): ByteArray {
         val sealed = ByteArray(message.size + Box.SEALBYTES)
         check(ls.cryptoBoxSeal(sealed, message, message.size.toLong(), recipient))
