@@ -310,7 +310,7 @@ async function main() {
       "--project",
       "starbridge",
       "--session",
-      "orchestrator",
+      "3f2a9c1e-5b7d-4e8a-9c0f-1d2e3f4a5b6c",
     ],
     machineHome,
   );
@@ -321,6 +321,21 @@ async function main() {
     .first()
     .waitFor({ timeout: 30_000 });
   await shoot(page, "inbox");
+
+  // Desktop: one selection, whether picked by click or by J and K; focus follows it in the list.
+  const row = page.locator('button[aria-current="true"]');
+  const detail = page.locator('section[aria-label="Selected decision"] h2');
+  await page.locator("button[data-id]").first().click();
+  for (const key of ["j", "j", "k"]) {
+    await page.keyboard.press(key);
+    const question = await detail.innerText();
+    if (!(await row.innerText()).includes(question))
+      throw new Error(
+        `after ${key}, the list selects "${await row.innerText()}" but the detail shows "${question}"`,
+      );
+    if (!(await row.evaluate((el) => el === document.activeElement)))
+      throw new Error(`after ${key}, focus is not on the selected row`);
+  }
   await page.getByRole("link", { name: "Quotas" }).click();
   await page.locator("article").first().waitFor();
   await shoot(page, "quotas");

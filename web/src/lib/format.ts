@@ -15,3 +15,8 @@ export function relative(iso: string, now: Date = new Date()): string {
   }
   return minutes < 0 ? `${text} ago` : `in ${text}`;
 }
+
+/** A session id short enough to read: the first 8 characters of a UUID. */
+export function shortSession(id: string): string {
+  return id.length > 8 ? id.slice(0, 8) : id;
+}
