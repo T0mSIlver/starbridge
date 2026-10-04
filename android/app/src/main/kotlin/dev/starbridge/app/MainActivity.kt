@@ -22,6 +22,8 @@ import dev.starbridge.app.data.Phase
 import dev.starbridge.app.data.Store
 import dev.starbridge.app.ui.Main
 import dev.starbridge.app.ui.Setup
+import dev.starbridge.app.ui.pairing.JoinActions
+import dev.starbridge.app.ui.pairing.JoinPrompt
 import dev.starbridge.app.ui.theme.StarbridgeTheme
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.receiveAsFlow
@@ -57,6 +59,9 @@ class MainActivity : ComponentActivity() {
                 }
                 if (phase == Phase.Ready) {
                     Main(decisions.count { it.open }, store.notice, store::dismissNotice, openDecision.receiveAsFlow())
+                    val asks by store.joinAsks.collectAsStateWithLifecycle()
+                    val comparison by store.comparison.collectAsStateWithLifecycle()
+                    JoinPrompt(asks, comparison, JoinActions(store::compareJoin, store::approveJoin, store::refuseJoin, store::closeComparison))
                 } else {
                     Setup(phase, store.notice, store::dismissNotice, ::openInBrowser)
                 }
@@ -72,6 +77,13 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         if (store.phase.value == Phase.Ready) store.refresh()
+        // Join requests arrive live while the app is in front; a push covers the rest.
+        store.watchJoins(true)
+    }
+
+    override fun onPause() {
+        super.onPause()
+        store.watchJoins(false)
     }
 
     private fun handle(intent: Intent?) {

@@ -51,6 +51,8 @@ import dev.starbridge.app.ui.Label
 import dev.starbridge.app.ui.Panel
 import dev.starbridge.app.ui.Title
 import dev.starbridge.app.ui.ago
+import dev.starbridge.app.ui.pairing.QrImage
+import dev.starbridge.app.ui.pairing.rememberScanner
 import dev.starbridge.app.ui.theme.Radius
 import dev.starbridge.app.ui.theme.Sizes
 import dev.starbridge.app.ui.theme.Spacing
@@ -64,7 +66,7 @@ class DevicesViewModel @Inject constructor(private val store: Store) : ViewModel
     val approval = store.approval
     val push = store.push
     val server = store.server
-    val actions = DeviceActions(store::lookUpPairing, store::approvePairing, store::closePairing, store::revoke, store::setPushType, store::signOut)
+    val actions = DeviceActions(store::lookUpPairing, store::approvePairing, store::closePairing, store::revoke, store::setPushType, store::signOut, store::showCode)
 }
 
 class DeviceActions(
@@ -74,6 +76,7 @@ class DeviceActions(
     val revoke: (String) -> Unit,
     val setPush: (String) -> Unit,
     val signOut: () -> Unit,
+    val showCode: () -> Unit,
 )
 
 /** Pairing first, then the devices that read decisions and the machines that post them. */
@@ -150,6 +153,7 @@ private fun Confirm(title: String, text: String, action: String, onConfirm: () -
 fun PairCard(approval: Approval, actions: DeviceActions) {
     val colors = StarbridgeTheme.colors
     var code by rememberSaveable { mutableStateOf("") }
+    val scan = rememberScanner(onResult = { code = it.substringAfter('#'); actions.lookUp(it) }, onError = { code = "" })
     val found = approval is Approval.Found || approval is Approval.Approving
     Panel(Modifier.fillMaxWidth(), border = if (found) colors.accent else colors.line) {
         AnimatedContent(approval, contentKey = { it::class }, label = "pairing") { state ->
@@ -180,6 +184,13 @@ fun PairCard(approval: Approval, actions: DeviceActions) {
                             TextButton(onClick = { actions.close(); code = "" }, modifier = Modifier.heightIn(min = Sizes.tap)) { Text("Cancel", style = StarbridgeTheme.type.action) }
                         }
                     }
+                    is Approval.Showing -> {
+                        Label("Scan with the new phone", color = colors.accent)
+                        Text("On the new phone, sign in to Starbridge and tap Scan a QR code. It expires in 10 minutes.", style = StarbridgeTheme.type.small, color = colors.fg2)
+                        QrImage(state.link, "QR code for pairing code ${state.code}")
+                        Text(state.code, style = StarbridgeTheme.type.machine, color = colors.fg3)
+                        TextButton(onClick = { actions.close(); code = "" }, modifier = Modifier.heightIn(min = Sizes.tap)) { Text("Cancel", style = StarbridgeTheme.type.action) }
+                    }
                     is Approval.Done -> {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Rounded.CheckCircle, contentDescription = null, tint = colors.ok)
@@ -190,7 +201,7 @@ fun PairCard(approval: Approval, actions: DeviceActions) {
                     }
                     else -> {
                         Label("Add a machine or device")
-                        Text("Type the code it shows: starbridge pair on a machine, or Join on a new phone or browser.", style = StarbridgeTheme.type.small, color = colors.fg2)
+                        Text("Scan or type the code it shows: starbridge pair on a machine, or Join on a new phone or browser. Or show a QR code for a new phone to scan.", style = StarbridgeTheme.type.small, color = colors.fg2)
                         OutlinedTextField(
                             value = code,
                             onValueChange = { code = it.take(40) },
@@ -210,6 +221,10 @@ fun PairCard(approval: Approval, actions: DeviceActions) {
                             shape = RoundedCornerShape(Radius.pill),
                             modifier = Modifier.fillMaxWidth().heightIn(min = Sizes.tap),
                         ) { Text(if (state == Approval.Checking) "Checking…" else "Check code", style = StarbridgeTheme.type.action) }
+                        Row {
+                            TextButton(onClick = scan, modifier = Modifier.weight(1f).heightIn(min = Sizes.tap)) { Text("Scan a QR code", style = StarbridgeTheme.type.action) }
+                            TextButton(onClick = actions.showCode, modifier = Modifier.weight(1f).heightIn(min = Sizes.tap)) { Text("Show a QR code", style = StarbridgeTheme.type.action) }
+                        }
                     }
                 }
             }

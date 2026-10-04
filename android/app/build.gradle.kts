@@ -74,6 +74,9 @@ dependencies {
     implementation(libs.browser)
     implementation(libs.firebase.messaging)
     implementation(libs.unifiedpush)
+    // Scanning needs no camera permission: Google's scanner runs in Play services.
+    implementation(libs.code.scanner)
+    implementation(libs.zxing.core)
     implementation(libs.lifecycle.viewmodel.navigation3)
     // Lazysodium loads libsodium through JNA; Android needs JNA's AAR, which carries
     // its native dispatch library per ABI.

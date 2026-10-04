@@ -22,6 +22,8 @@ browser = "1.10.0"
 firebase-messaging = "25.1.3"
 unifiedpush = "3.3.5"
 coroutines = "1.11.0"
+code-scanner = "16.1.0"
+zxing = "3.5.3"
 
 [libraries]
 compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "compose-bom" }
@@ -59,6 +61,8 @@ okhttp-mockwebserver = { group = "com.squareup.okhttp3", name = "mockwebserver3"
 browser = { group = "androidx.browser", name = "browser", version.ref = "browser" }
 firebase-messaging = { group = "com.google.firebase", name = "firebase-messaging", version.ref = "firebase-messaging" }
 unifiedpush = { group = "org.unifiedpush.android", name = "connector", version.ref = "unifiedpush" }
+code-scanner = { group = "com.google.android.gms", name = "play-services-code-scanner", version.ref = "code-scanner" }
+zxing-core = { group = "com.google.zxing", name = "core", version.ref = "zxing" }
 coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "coroutines" }
 
 [plugins]

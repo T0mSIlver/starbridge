@@ -41,6 +41,8 @@ import dev.starbridge.app.data.Store
 import dev.starbridge.app.ui.Label
 import dev.starbridge.app.ui.Panel
 import dev.starbridge.app.ui.Title
+import dev.starbridge.app.ui.pairing.rememberScanner
+import dev.starbridge.app.protocol.formatDigits
 import dev.starbridge.app.ui.theme.Radius
 import dev.starbridge.app.ui.theme.Sizes
 import dev.starbridge.app.ui.theme.Spacing
@@ -56,6 +58,8 @@ class SetupViewModel @Inject constructor(private val store: Store) : ViewModel()
         ownerToken = store::signInWithOwnerToken,
         firstDevice = store::setUpFirstDevice,
         join = store::joinAccount,
+        joinWithCode = store::joinWithCode,
+        askDevices = store::askDevices,
         cancelJoin = store::cancelJoin,
         recover = store::recover,
         saved = store::confirmRecoveryKey,
@@ -69,6 +73,9 @@ class SetupActions(
     val ownerToken: (server: String, token: String) -> Unit,
     val firstDevice: () -> Unit,
     val join: () -> Unit,
+    /** A scanned pairing link, from another device's QR code. */
+    val joinWithCode: (String) -> Unit,
+    val askDevices: () -> Unit,
     val cancelJoin: () -> Unit,
     val recover: (words: String) -> Unit,
     val saved: () -> Unit,
@@ -88,7 +95,8 @@ fun SetupScreen(phase: Phase, server: String, busy: Boolean, actions: SetupActio
         when (phase) {
             Phase.SignedOut -> SignIn(server, busy, actions, openUrl)
             is Phase.NoDevice -> NoDevice(phase.accountExists, busy, actions)
-            is Phase.Joining -> Joining(phase.code, actions.cancelJoin)
+            is Phase.Joining -> Joining(phase.code, phase.scanned, actions.cancelJoin)
+            is Phase.JoiningByDigits -> JoiningByDigits(phase.digits, actions.cancelJoin)
             is Phase.RecoveryKey -> RecoveryKey(phase.words, actions.saved)
             Phase.Ready -> Unit
         }
@@ -185,13 +193,25 @@ private fun NoDevice(accountExists: Boolean, busy: Boolean, actions: SetupAction
         )
         Primary("Set up this phone", busy, onClick = actions.firstDevice)
     } else if (!recovering) {
+        var scanError by rememberSaveable { mutableStateOf<String?>(null) }
+        val scan = rememberScanner(onResult = { scanError = null; actions.joinWithCode(it) }, onError = { scanError = it })
         Title("Join your account")
         Text(
-            "Your account already has devices. One of them approves this phone: it shows a code, which you type on the other device under Devices.",
+            "Your account already has devices. One of them approves this phone: it compares digits with this phone, or shows a QR code under Devices for this phone to scan.",
             style = StarbridgeTheme.type.body,
             color = colors.fg2,
         )
-        Primary("Show a code", busy, onClick = actions.join)
+        Primary("Ask my other devices", busy, onClick = actions.askDevices)
+        OutlinedButton(
+            onClick = scan,
+            enabled = !busy,
+            shape = RoundedCornerShape(Radius.pill),
+            modifier = Modifier.fillMaxWidth().heightIn(min = Sizes.tap),
+        ) { Text("Scan a QR code", style = StarbridgeTheme.type.action) }
+        scanError?.let { Text(it, style = StarbridgeTheme.type.small, color = colors.bad) }
+        TextButton(onClick = actions.join, enabled = !busy, modifier = Modifier.heightIn(min = Sizes.tap)) {
+            Text("Show a code to type instead", style = StarbridgeTheme.type.action)
+        }
         TextButton(onClick = { recovering = true }, modifier = Modifier.heightIn(min = Sizes.tap)) {
             Text("I lost every device: use the recovery words", style = StarbridgeTheme.type.action)
         }
@@ -220,11 +240,11 @@ private fun NoDevice(accountExists: Boolean, busy: Boolean, actions: SetupAction
 }
 
 @Composable
-private fun Joining(code: String, onCancel: () -> Unit) {
+private fun Joining(code: String, scanned: Boolean, onCancel: () -> Unit) {
     val colors = StarbridgeTheme.colors
     Title("Approve this phone")
     Text(
-        "On a device that's already set up, open Devices and type this code. It expires in 10 minutes.",
+        if (scanned) "The device that shows the QR code asks whether to let this phone join. Approve it there." else "On a device that's already set up, open Devices and type this code. It expires in 10 minutes.",
         style = StarbridgeTheme.type.body,
         color = colors.fg2,
     )
@@ -237,6 +257,31 @@ private fun Joining(code: String, onCancel: () -> Unit) {
         Text("Waiting for the approval", style = StarbridgeTheme.type.small, color = colors.fg2)
     }
     TextButton(onClick = onCancel, modifier = Modifier.heightIn(min = Sizes.tap)) { Text("Cancel", style = StarbridgeTheme.type.action) }
+}
+
+@Composable
+private fun JoiningByDigits(digits: String?, onCancel: () -> Unit) {
+    val colors = StarbridgeTheme.colors
+    Title("Approve this phone")
+    Text(
+        if (digits == null) "Open Starbridge on a device you already use. It asks whether to let this phone join; tap Compare digits there."
+        else "Check that your other device shows these digits, then approve this phone there.",
+        style = StarbridgeTheme.type.body,
+        color = colors.fg2,
+    )
+    if (digits != null) {
+        Panel(Modifier.fillMaxWidth().padding(vertical = Spacing.s2), border = colors.accent) {
+            Text(formatDigits(digits), style = StarbridgeTheme.type.figure, color = colors.fg)
+        }
+    }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        CircularProgressIndicator(Modifier.width(Spacing.s5), color = colors.accent, strokeWidth = 2.dp)
+        Spacer(Modifier.width(Spacing.s3))
+        Text("Waiting for the approval", style = StarbridgeTheme.type.small, color = colors.fg2)
+    }
+    TextButton(onClick = onCancel, modifier = Modifier.heightIn(min = Sizes.tap)) {
+        Text(if (digits == null) "Cancel" else "Digits differ: cancel", style = StarbridgeTheme.type.action)
+    }
 }
 
 @Composable
