@@ -18,6 +18,7 @@ import dev.starbridge.app.BuildConfig
 import dev.starbridge.app.data.Alerts
 import dev.starbridge.app.data.Disk
 import dev.starbridge.app.data.KeystoreVault
+import dev.starbridge.app.data.Prefs
 import dev.starbridge.app.data.ServerStore
 import dev.starbridge.app.data.Store
 import dev.starbridge.app.protocol.Directories
@@ -51,7 +52,7 @@ object AppModule {
     fun sodium(): Sodium = Sodium(LazySodiumAndroid(SodiumAndroid()))
 
     @Provides @Singleton
-    fun notifier(@ApplicationContext context: Context): Notifier = Notifier(context)
+    fun notifier(@ApplicationContext context: Context, prefs: Prefs): Notifier = Notifier(context, prefs)
 
     @Provides @Singleton
     fun store(@ApplicationContext context: Context, http: OkHttpClient, sodium: Sodium, notifier: Notifier, scope: CoroutineScope): ServerStore {

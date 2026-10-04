@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Android 14 names Material You's roles: the same ones the app's scheme takes. -->
+    <color name="ground_wallpaper">@android:color/system_surface_light</color>
+    <color name="accent_wallpaper">@android:color/system_primary_light</color>
+</resources>

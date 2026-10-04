@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -102,12 +103,11 @@ fun ColumnScope.QrWays(onScan: (String) -> Unit, onShow: () -> Unit) {
 /** This phone shows a pairing link as a QR code and waits for a new phone to scan it. */
 @Composable
 fun ShowingQr(state: Approval.Showing, onCancel: () -> Unit) {
-    val colors = StarbridgeTheme.colors
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.s3)) {
-        Text("Scan with the new phone", style = StarbridgeTheme.type.heading, color = colors.fg)
-        Text("On the new phone, sign in to Starbridge and tap Scan a QR code. It expires in 10 minutes.", style = StarbridgeTheme.type.small, color = colors.fg2)
+        Text("Scan with the new phone", style = StarbridgeTheme.type.heading, color = MaterialTheme.colorScheme.onSurface)
+        Text("On the new phone, sign in to Starbridge and tap Scan a QR code. It expires in 10 minutes.", style = StarbridgeTheme.type.small, color = MaterialTheme.colorScheme.onSurfaceVariant)
         QrImage(state.link, "QR code for pairing code ${state.code}")
-        Text(state.code, style = StarbridgeTheme.type.machine, color = colors.fg2)
+        Text(state.code, style = StarbridgeTheme.type.machine, color = MaterialTheme.colorScheme.onSurfaceVariant)
         OutlinedButton(onClick = onCancel, modifier = Modifier.heightIn(min = Sizes.tap)) { Text("Cancel", style = StarbridgeTheme.type.action) }
     }
 }

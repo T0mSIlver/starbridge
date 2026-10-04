@@ -2,7 +2,9 @@ package dev.starbridge.app
 
 import android.Manifest
 import android.content.Intent
+import android.content.res.Resources
 import android.graphics.Color
+import android.graphics.drawable.ColorDrawable
 import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
@@ -12,12 +14,16 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.browser.customtabs.CustomTabsIntent
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.graphics.toArgb
 import androidx.core.net.toUri
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dagger.hilt.android.AndroidEntryPoint
+import dev.starbridge.app.data.Colours
 import dev.starbridge.app.data.Phase
 import dev.starbridge.app.data.Prefs
 import dev.starbridge.app.data.Store
@@ -48,7 +54,11 @@ class MainActivity : ComponentActivity() {
         handle(intent)
         setContent {
             val colours by prefs.colours.collectAsStateWithLifecycle()
+            LaunchedEffect(colours) { splashFor(colours) }
             StarbridgeTheme(colours = colours) {
+                // The window shows behind the keyboard and between screens: the theme's ground.
+                val ground = MaterialTheme.colorScheme.surface
+                SideEffect { window.setBackgroundDrawable(ColorDrawable(ground.toArgb())) }
                 val phase by store.phase.collectAsStateWithLifecycle()
                 val decisions by store.decisions.collectAsStateWithLifecycle()
                 LaunchedEffect(phase) {
@@ -99,6 +109,12 @@ class MainActivity : ComponentActivity() {
             openDecision.trySend(it)
             intent.removeExtra(EXTRA_DECISION)
         }
+    }
+
+    /** The next cold start's splash: the manifest's, or the wallpaper's ground (Android 13 and later). */
+    private fun splashFor(colours: Colours) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+        splashScreen.setSplashScreenTheme(if (colours == Colours.Wallpaper) R.style.Theme_Starbridge_Starting_Wallpaper else Resources.ID_NULL)
     }
 
     private fun openInBrowser(url: String) {

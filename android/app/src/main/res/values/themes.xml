@@ -12,4 +12,10 @@
         <item name="windowSplashScreenIconBackgroundColor">@color/icon_ground</item>
         <item name="postSplashScreenTheme">@style/Theme.Starbridge</item>
     </style>
+    <!-- "Match wallpaper": MainActivity hands this to the system for the next cold start
+         (Android 13 and later); the icon keeps its own ground, as the launcher shows it. -->
+    <style name="Theme.Starbridge.Starting.Wallpaper">
+        <item name="windowSplashScreenBackground">@color/ground_wallpaper</item>
+        <item name="android:windowSplashScreenBackground">@color/ground_wallpaper</item>
+    </style>
 </resources>

@@ -447,6 +447,17 @@ How it generalizes is open.
   attached to a decision, encrypted like its text, plus links. For anything
   interactive the agent links a Claude artifact, which the Claude app opens.
   MCP Apps are dropped from v1, which supersedes the visuals choice above.
+- 2026-10-05. Provider colours and "Match wallpaper" (#72): a quota card shows
+  a dot in the provider's lab colour before its name (owner's choice: no
+  logos). The colours are CodexBar's `ProviderBranding.color` for all 87
+  providers, made lighter or darker per scheme, only as far as 3:1 against
+  the grounds needs. Under "Match wallpaper", Android screens take every
+  neutral and component colour from Material's roles, so all of them follow
+  the wallpaper, the splash (Android 13+) and the notification accent
+  (Android 12 to 15) included. Only amber, the quota states and the
+  provider dots stay fixed. Measured on warm, cool and low-chroma seeds:
+  the fixed colours keep 4.5:1 as text and 3:1 as dots; the wallpaper's
+  `fg3` reaches 3.8:1 on light cards, above the default palette's 3.3:1.
 
 ## Encryption, with existing libraries
 

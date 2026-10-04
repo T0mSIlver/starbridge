@@ -10,6 +10,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -79,7 +80,7 @@ fun JoinPrompt(asks: List<JoinAsk>, comparison: Comparison, actions: JoinActions
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(Spacing.s3)) {
                     Text("Approve only if ${comparison.ask.name} shows these same digits.", style = StarbridgeTheme.type.body)
-                    Text(formatDigits(comparison.digits), style = StarbridgeTheme.type.figure, color = colors.fg)
+                    Text(formatDigits(comparison.digits), style = StarbridgeTheme.type.figure, color = MaterialTheme.colorScheme.onSurface)
                 }
             },
             confirmButton = {

@@ -24,6 +24,7 @@ unifiedpush = "3.3.5"
 coroutines = "1.11.0"
 code-scanner = "16.1.0"
 zxing = "3.5.3"
+material-components = "1.14.0"
 
 [libraries]
 compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "compose-bom" }
@@ -63,6 +64,8 @@ firebase-messaging = { group = "com.google.firebase", name = "firebase-messaging
 unifiedpush = { group = "org.unifiedpush.android", name = "connector", version.ref = "unifiedpush" }
 code-scanner = { group = "com.google.android.gms", name = "play-services-code-scanner", version.ref = "code-scanner" }
 zxing-core = { group = "com.google.zxing", name = "core", version.ref = "zxing" }
+# Only its colour utilities, to build Material You schemes from a seed in tests.
+material-components = { group = "com.google.android.material", name = "material", version.ref = "material-components" }
 coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "coroutines" }
 
 [plugins]
