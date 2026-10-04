@@ -1,9 +1,14 @@
 package dev.starbridge.app.ui.quotas
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -15,7 +20,15 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Speed
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialShapes
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
+import androidx.compose.material3.toShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ProgressIndicatorDefaults
 import androidx.compose.material3.Text
@@ -25,6 +38,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.buildAnnotatedString
@@ -65,19 +79,43 @@ fun QuotasScreen(windows: List<QuotaWindow>, now: Instant, modifier: Modifier = 
                 contentPadding = listPadding(padding),
                 verticalArrangement = Arrangement.spacedBy(Spacing.s3),
             ) {
-                if (windows.isEmpty()) {
-                    item {
-                        Text(
-                            "No quota snapshots yet. A paired machine sends them with starbridge quota push.",
-                            style = StarbridgeTheme.type.body,
-                            color = StarbridgeTheme.colors.fg2,
-                            modifier = Modifier.padding(horizontal = Spacing.s1),
-                        )
-                    }
-                }
+                if (windows.isEmpty()) item { NoQuotas() }
                 items(windows.sortedByDescending { it.alert }, key = { it.id }) { WindowCard(it, now, Modifier.animateItem()) }
             }
         }
+    }
+}
+
+private const val QUOTA_DOCS = "https://github.com/T0mSIlver/starbridge/tree/main/cli#readme"
+
+/** Nothing uploaded yet: what sends quotas, and how to start it. */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun NoQuotas() {
+    val colors = StarbridgeTheme.colors
+    val context = LocalContext.current
+    Column(
+        Modifier.fillMaxWidth().padding(horizontal = Spacing.s4, vertical = Spacing.s10),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(Spacing.s4),
+    ) {
+        Box(Modifier.size(Spacing.s10 * 2).background(colors.surface2, MaterialShapes.Cookie9Sided.toShape()), contentAlignment = Alignment.Center) {
+            Icon(Icons.Outlined.Speed, contentDescription = null, tint = colors.fg2, modifier = Modifier.size(Spacing.s10))
+        }
+        Text("No machine sends quotas yet", style = StarbridgeTheme.type.heading, color = colors.fg, textAlign = TextAlign.Center)
+        Text(
+            "On a paired machine with CodexBar, run this. It sends your plans' windows every 5 minutes.",
+            style = StarbridgeTheme.type.body,
+            color = colors.fg2,
+            textAlign = TextAlign.Center,
+        )
+        Surface(shape = RoundedCornerShape(Radius.lg), color = colors.surface2, modifier = Modifier.fillMaxWidth()) {
+            Text("starbridge quota push", style = StarbridgeTheme.type.code, color = colors.fg, modifier = Modifier.padding(Spacing.s4))
+        }
+        OutlinedButton(
+            onClick = { runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(QUOTA_DOCS))) } },
+            modifier = Modifier.heightIn(min = Sizes.tap),
+        ) { Text("How to set it up", style = StarbridgeTheme.type.action) }
     }
 }
 

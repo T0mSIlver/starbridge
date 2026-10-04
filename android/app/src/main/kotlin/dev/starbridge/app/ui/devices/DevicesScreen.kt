@@ -97,6 +97,7 @@ fun DevicesScreen(
     actions: DeviceActions,
     modifier: Modifier = Modifier,
     colours: Colours = Colours.Starbridge,
+    otherWaysToPair: @Composable ColumnScope.() -> Unit = {},
 ) {
     val devices = members.filter { it.kind == Kind.Device }
     val machines = members.filter { it.kind == Kind.Machine }
@@ -107,7 +108,7 @@ fun DevicesScreen(
             contentPadding = listPadding(padding),
             verticalArrangement = Arrangement.spacedBy(groupGap),
         ) {
-            item { PairCard(approval, actions) }
+            item { PairCard(approval, actions, otherWaysToPair) }
             item { Section("Devices") }
             itemsIndexed(devices, key = { _, it -> it.id }) { i, it -> MemberRow(it, now, groupShape(i, devices.size)) { revoking = it.id } }
             item { Section("Machines") }
@@ -172,11 +173,11 @@ private fun Confirm(title: String, text: String, action: String, onConfirm: () -
 /**
  * Typing a new member's code: the request is checked against the code's secret before anything
  * is shown, and approving appends its keys to the directory. A request to approve needs the
- * owner, so it carries the beacon.
+ * owner, so it carries the beacon. [otherWays] adds other ways to pair under the code field.
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun PairCard(approval: Approval, actions: DeviceActions) {
+fun PairCard(approval: Approval, actions: DeviceActions, otherWays: @Composable ColumnScope.() -> Unit = {}) {
     val colors = StarbridgeTheme.colors
     var code by rememberSaveable { mutableStateOf("") }
     Panel(Modifier.fillMaxWidth()) {
@@ -249,6 +250,8 @@ fun PairCard(approval: Approval, actions: DeviceActions) {
                             if (state == Approval.Checking) LoadingIndicator(Modifier.size(Spacing.s6), color = colors.fg2)
                             else Text("Check code", style = StarbridgeTheme.type.action)
                         }
+                        // Other ways to add a device (a 6-digit check, a QR code: #66) go here.
+                        otherWays()
                     }
                 }
             }
