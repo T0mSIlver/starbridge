@@ -111,14 +111,15 @@ export type PinnedSend = (
 
 export const pinnedHttps: PinnedSend = (url, address, req, timeoutMs) =>
   new Promise((resolve, reject) => {
+    const host = url.hostname.replace(/^\[|\]$/g, "");
     const r = request(
       {
-        host: url.hostname,
+        host,
         port: url.port || 443,
         path: url.pathname + url.search,
         method: req.method,
         headers: req.headers,
-        servername: isIP(url.hostname) ? undefined : url.hostname,
+        servername: isIP(host) ? undefined : host,
         // No pooled connection may skip the lookup below.
         agent: false,
         lookup: (_host, opts, cb) => {
@@ -126,7 +127,6 @@ export const pinnedHttps: PinnedSend = (url, address, req, timeoutMs) =>
           if ((opts as { all?: boolean }).all) cb(null, [{ address, family }]);
           else (cb as (e: null, a: string, f: number) => void)(null, address, family);
         },
-        timeout: timeoutMs,
       },
       (res) => {
         res.resume();
@@ -134,7 +134,10 @@ export const pinnedHttps: PinnedSend = (url, address, req, timeoutMs) =>
         res.on("error", reject);
       },
     );
-    r.on("timeout", () => r.destroy(new Error("push timed out")));
+    // A deadline for the whole exchange, which a service sending a byte now and then cannot
+    // stretch the way it stretches a socket idle timeout.
+    const deadline = setTimeout(() => r.destroy(new Error("push timed out")), timeoutMs);
+    r.on("close", () => clearTimeout(deadline));
     r.on("error", reject);
     r.end(req.body ?? undefined);
   });
@@ -163,7 +166,16 @@ export class Push {
     const host = url.hostname.replace(/^\[|\]$/g, "");
     if (isPrivateHost(host)) return undefined;
     if (isIP(host)) return host;
-    const addresses = await this.resolve(host);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const addresses = await Promise.race([
+      this.resolve(host),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(
+          () => reject(new Error("push host lookup timed out")),
+          this.config.pushTimeoutMs,
+        );
+      }),
+    ]).finally(() => clearTimeout(timer));
     if (addresses.length === 0 || addresses.some(isPrivateHost)) return undefined;
     return addresses[0];
   }
