@@ -278,6 +278,14 @@ How it generalizes is open.
   the rule "Whenever you need me to decide something, use the `starbridge`
   skill."
 
+- 2026-10-04. Deploy (#10): `starbridge.run` runs from `deploy/`: Docker Compose with Caddy
+  (host networking, so rate limits see real IPv4 and IPv6 clients) in front of one server
+  process with `RELAY_MODE` on, FCM and VAPID keys of its own, and GitHub sign-in. The image is
+  built on the box by `deploy/deploy.sh` from a ref pushed to GitHub; a GitHub Actions deploy is
+  a follow-up. Nightly `sqlite3 .backup` kept 14 days in `/var/backups/starbridge`. Login is
+  `deploy` with the dev box key and sudo; root login and passwords are off. The web page is not
+  served yet (#8); Caddy will route it on the same origin.
+
 ## Encryption, with existing libraries
 
 - libsodium sealed boxes (`crypto_box_seal`, X25519 + XSalsa20-Poly1305): an
@@ -428,9 +436,9 @@ goes in git.
   at Porkbun: `A 2.29.61.225`, `AAAA 2a01:4f9:c015:ac83::1`.
 - Server: Hetzner Cloud project `starbridge`, `starbridge-1`, a CX23 in
   Helsinki, Ubuntu 26.04 LTS, backups on. Firewall `web` lets in only TCP 22,
-  80 and 443. Root logs in with the dev box key `~/.ssh/starbridge_ed25519`.
-  sshd still accepts passwords for other users; the deploy adds a non-root
-  user and turns password login off.
+  80 and 443. User `deploy` logs in with the dev box key
+  `~/.ssh/starbridge_ed25519` and uses sudo; root login and passwords are off
+  since 2026-10-04 (`deploy/README.md`).
 - GitHub OAuth app `Starbridge` under T0mSIlver: client id
   `Ov23liEVyfnca8hO548x`, redirect URI
   `https://starbridge.run/v1/auth/github/callback`, user tokens expire. Secret:
