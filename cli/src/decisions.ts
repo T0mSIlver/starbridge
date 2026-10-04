@@ -376,6 +376,7 @@ export async function answers(
     ctx.err(`starbridge: ${(e as Error).message}`);
     return 1;
   }
-  claim(notices);
+  // That poll fetched every waiting answer, so a due notice can go now.
+  claim(true);
   return 0;
 }
