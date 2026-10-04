@@ -202,6 +202,8 @@ How it generalizes is open.
   once. Use existing, audited libraries; invent no cryptography (below).
 - 2026-10-04. Not a "bar". Version 1 is a web page and an Android app; a menu
   bar app may come later. Names ending in "bar" are out.
+- 2026-10-04. Name: Starbridge (a starship's bridge, where the captain
+  commands, and the bridge between all your agents). Domains not registered yet.
 
 ## Encryption, with existing libraries
 
@@ -218,9 +220,6 @@ How it generalizes is open.
   (encrypted rooms, device verification, its own push gateway), which brings a
   whole homeserver; Jazz, an end-to-end encrypted sync framework, TypeScript
   only.
-
-- 2026-10-04. Name: Starbridge (a starship's bridge, where the captain
-  commands, and the bridge between all your agents). Domains not registered yet.
 
 ## Fully hosted
 
