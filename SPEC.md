@@ -135,9 +135,9 @@ What the probe showed (2026-10-04, in the Desktop Code tab):
 - Mid-turn: the prompt waits and starts its own turn about 0.1 s after the
   running turn ends; it is never folded into the running turn. `submit`
   resolves only when that turn starts, so the poll loop must not await it.
-- Remote Control: a prompt the mod submitted showed on the owner's phone with
-  the answer. Prompts the owner sent from the phone reached the mod with origin
-  `composer`, the same as typed ones, so a mod cannot tell them apart.
+- Remote Control: a prompt the mod submitted, idle or queued behind a turn the
+  owner started from the phone, showed on the phone with the answer. Prompts
+  from the phone reach hooks with origin `bridge`; typed ones with `composer`.
 - Idle: polling and held requests kept running while the session idled.
 - A hot reload of the mod aborts its in-flight requests at once.
 
@@ -446,6 +446,7 @@ two vendors at high effort. The orchestrator merges on green, squash.
   `$.process.spawn` running `curl -N`: 60 and 300 s holds answered;
   HOLDS_PENDING. `$.prompt.submit` from an idle session: turn started after
   0.17 s. Pushed mid-turn: queued, own turn 0.1 s after `turn.complete`.
-  Remote Control: the owner saw the mod's prompt and the reply on the phone;
-  the owner's phone prompts arrived with origin `composer`. A 30 s fetch poll
-  loop ran unattended through the idle gaps (IDLE_PENDING).
+  Remote Control: twice the owner saw the mod's prompt and the reply on the
+  phone; phone prompts arrived with origin `bridge`, typed ones with
+  `composer`. A 30 s fetch poll loop ran unattended through a 23-minute idle
+  gap (40 cycles, none missed)IDLE_PENDING.
