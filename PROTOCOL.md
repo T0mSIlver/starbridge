@@ -65,20 +65,24 @@ errors use the codes in `packages/protocol/src/sodium.ts`.
 - **Machines** send `Authorization: Bearer <machine token>`, issued when their pairing is
   approved. The server stores a hash of it and drops it when the directory revokes the machine.
 - Pairing requests are unauthenticated and rate-limited per IP.
+- A session gets its device when that session writes the directory's first entry, or a
+  recovery-signed `add`, or fetches its own pairing result (a new device signs in first).
+  Revoking a device ends its sessions; revoking a machine drops its token.
 
 | Route | Who | What |
 |---|---|---|
 | `GET /auth/github` | anyone | start GitHub sign-in |
-| `GET /auth/github/callback` | anyone | finish it, set the session |
+| `GET /auth/github/callback` | anyone | finish it, set the session; with `?app=1` on the start, redirect to `starbridge://auth#session=<token>` instead |
+| `POST /auth/owner` | anyone | self-hosted: `{token}` against `OWNER_TOKEN`; sets the session and returns `{session}` |
 | `POST /auth/logout` | device | end the session |
-| `GET /me` | device, machine | account id, member id, role |
+| `GET /me` | device, machine | `{account, member, role}`; `member` is null until a device pairs |
 
 ### Directory
 
 | Route | Who | What |
 |---|---|---|
 | `GET /directory?from=<seq>` | device, machine | `{entries}` from `seq` on |
-| `POST /directory` | device | append `{entry}`; 409 unless its `seq` is the next one |
+| `POST /directory` | device | append `{entry}`; 409 unless its `seq` is the next one; 403 `machine-cap` past the account's machine limit (5 on the hosted server) |
 
 The server runs `verifyDirectory` before it accepts an entry, to refuse garbage early. Clients
 never rely on that check.
@@ -89,7 +93,7 @@ never rely on that check.
 |---|---|---|
 | `POST /pairings` | new member | `{request, claimHash}`: the request message and BLAKE2b-256 of a random claim secret's text (`claimHash`); 409 if the rendezvous id is taken |
 | `GET /pairings/:rendezvous` | device | `{request}` |
-| `POST /pairings/:rendezvous/approve` | device | `{approval}`; the directory must already hold the new member's entry |
+| `POST /pairings/:rendezvous/approve` | device | `{approval}`; the directory must already hold the new member's entry; 409 `already-paired` when that member already holds a session or token |
 | `GET /pairings/:rendezvous/result?wait=<s>` | new member, with `X-Claim: <secret>` | long-poll: `{approval, token?}` once approved, `token` for machines only; 204 when `wait` passes |
 
 ### Items
@@ -105,6 +109,14 @@ Item ids are random, chosen by the sender. Cursors are opaque strings; without `
 starts at the first item. An answer's `re` marks its decision answered, so every
 device moves it out of the open inbox.
 
+Lists return `{items: [{item, cursor, receivedAt, answeredAt?}], cursor}`, 100 at a time, where
+`item` holds only the caller's box and `answeredAt` is set on answered decisions. An answer moves
+its decision past every cursor, so devices listing after their cursor see it again, answered.
+The server keeps only the latest quota item from each machine. Refusals: 403 when the caller's
+role may not post this kind or `from` is not the caller; 400 `unknown-recipient` when a box goes
+to anyone but active devices (decision, quota) or the asking machine (answer); 409
+`already-answered`.
+
 ### Answers for machines (long-poll)
 
 `GET /answers?after=<cursor>&wait=<seconds>` (machine). The server replies at once with
@@ -118,9 +130,17 @@ decision's options.
 
 | Route | Who | What |
 |---|---|---|
-| `POST /push/subscriptions` | device | `{type: "fcm" \| "webpush" \| "unifiedpush", endpoint, keys?}` |
+| `POST /push/subscriptions` | device | `{type: "fcm" \| "webpush" \| "unifiedpush", endpoint, keys?}` → `{id}`; URL endpoints must be public HTTPS |
 | `DELETE /push/subscriptions/:id` | device | stop pushing there |
+| `GET /push/vapid` | anyone | `{publicKey}`: the VAPID key a browser subscribes with (the relay's when this server forwards Web Push) |
+| `POST /relay` | another server | relay mode only: `{type: "fcm" \| "webpush", endpoint, keys?, payload}` → `{result: "ok" \| "gone" \| "failed" \| "no-route"}`; rate-limited per IP |
 
-A push carries the device's own box when the item fits FCM's 4 KB, else the item id. In relay
-mode the server only forwards pushes to FCM for other self-hosted servers; issue #5 defines that
-route.
+A push payload is JSON text: `{v, kind, id, from, re?, box?}` for a new item, with the device's
+own box when the payload stays within 3 KB, else without it and the device fetches
+`GET /items/:id`; `{v, kind: "answered", id}` to every device a decision was sealed to once it
+is answered. FCM gets it as data field `p`; Web Push and UnifiedPush encrypt it per RFC 8291.
+
+A server with FCM credentials or VAPID keys pushes directly. One without them posts to the relay
+set in `RELAY_URL` (the owner's hosted server runs with `RELAY_MODE=1`), which pushes with its
+own credentials; the payload is already ciphertext or an id. UnifiedPush always goes direct.
+`gone` from a push service drops the subscription.

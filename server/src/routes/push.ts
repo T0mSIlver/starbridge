@@ -1,0 +1,70 @@
+import { Hono } from "hono";
+import { z } from "zod";
+import { fail, memberOf, randomToken, recheck, requireCaller } from "../auth";
+import type { Env } from "../env";
+import { clientIp, json } from "../http";
+import { checkTarget, PushTarget } from "../push";
+
+export const pushRoutes = new Hono<Env>();
+
+pushRoutes.post("/push/subscriptions", requireCaller("paired-device"), async (c) => {
+  const target = await json(c, PushTarget);
+  recheck(c);
+  const why = checkTarget(target, c.var.config.allowPrivatePushEndpoints);
+  if (why) fail(400, "bad-endpoint", why);
+  const caller = c.var.caller;
+  const member = memberOf(caller);
+  const db = c.var.db;
+  // Subscribing the same endpoint again keeps its id and takes the new keys.
+  const row = db
+    .query(
+      `INSERT INTO push_subscriptions (id, account_id, member_id, type, endpoint, keys, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT (account_id, member_id, endpoint) DO UPDATE SET type = excluded.type, keys = excluded.keys
+       RETURNING id`,
+    )
+    .get(
+      randomToken("ps_").slice(0, 24),
+      caller.account,
+      member,
+      target.type,
+      target.endpoint,
+      target.keys ? JSON.stringify(target.keys) : null,
+      new Date().toISOString(),
+    ) as { id: string };
+  return c.json({ id: row.id }, 201);
+});
+
+pushRoutes.delete("/push/subscriptions/:id", requireCaller("paired-device"), (c) => {
+  const caller = c.var.caller;
+  const r = c.var.db
+    .query("DELETE FROM push_subscriptions WHERE id = ? AND account_id = ? AND member_id = ?")
+    .run(c.req.param("id"), caller.account, memberOf(caller));
+  if (r.changes === 0) fail(404, "not-found");
+  return c.body(null, 204);
+});
+
+/** The key a browser passes as `applicationServerKey` when it subscribes. */
+pushRoutes.get("/push/vapid", async (c) => {
+  const publicKey = await c.var.push.vapidPublicKey();
+  if (!publicKey) fail(404, "not-configured", "no Web Push key and no relay");
+  return c.json({ publicKey });
+});
+
+/**
+ * Relay mode: forwards another server's push with this server's FCM and VAPID credentials.
+ * The payload is already the device's ciphertext or an item id.
+ */
+pushRoutes.post("/relay", async (c) => {
+  const { config, limiter, push } = c.var;
+  if (!config.relayMode) fail(404, "not-found");
+  if (!limiter.allow(`relay:${clientIp(c)}`, 120, 60_000)) fail(429, "rate-limited");
+  const body = await json(c, PushTarget.extend({ payload: z.string().max(4000) }));
+  if (body.type === "unifiedpush")
+    fail(400, "bad-request", "UnifiedPush goes direct, not through the relay");
+  const why = checkTarget(body, config.allowPrivatePushEndpoints);
+  if (why) fail(400, "bad-endpoint", why);
+  const { payload, ...target } = body;
+  const result = await push.send(target, payload, false);
+  return c.json({ result }, result === "failed" ? 502 : 200);
+});

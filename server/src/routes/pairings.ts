@@ -1,0 +1,181 @@
+import type { Database } from "bun:sqlite";
+import {
+  B64,
+  claimHash,
+  PairingApprovalBody,
+  PairingMessage,
+  PairingRequestBody,
+} from "@starbridge/protocol";
+import { Hono } from "hono";
+import { z } from "zod";
+import { fail, hashToken, identify, randomToken, recheck, requireCaller, safeEqual } from "../auth";
+import type { Env } from "../env";
+import { clientIp, holdOpen, json, waitSeconds } from "../http";
+import { activeMember } from "./directory";
+
+const LIFETIME_MS = 10 * 60_000;
+const RENDEZVOUS = /^[0-9A-HJKMNP-TV-Z]{8}$/;
+
+interface Pairing {
+  rendezvous: string;
+  request: string;
+  role: "device" | "machine";
+  member_id: string;
+  box_pk: string;
+  sign_pk: string;
+  claim_hash: string;
+  created_at: number;
+  account_id: string | null;
+  approval: string | null;
+  token: string | null;
+}
+
+function parseBody<T extends z.ZodType>(schema: T, text: string): z.infer<T> {
+  let value: unknown;
+  try {
+    value = JSON.parse(text);
+  } catch {
+    fail(400, "bad-schema", "body is not JSON");
+  }
+  const r = schema.safeParse(value);
+  if (!r.success) fail(400, "bad-schema", r.error.issues[0]?.message);
+  return r.data;
+}
+
+export const pairingRoutes = new Hono<Env>();
+
+/**
+ * Deletes expired pairings, and with them any machine token still held for a retried result,
+ * so no plaintext token outlives the pairing's 10 minutes.
+ */
+export function sweepPairings(db: Database): void {
+  db.query("DELETE FROM pairings WHERE created_at < ?").run(Date.now() - LIFETIME_MS);
+}
+
+function load(c: { var: Env["Variables"] }, rendezvous: string): Pairing {
+  if (!RENDEZVOUS.test(rendezvous)) fail(404, "not-found");
+  sweepPairings(c.var.db);
+  const p = c.var.db
+    .query("SELECT * FROM pairings WHERE rendezvous = ?")
+    .get(rendezvous) as Pairing | null;
+  if (!p || Date.now() - p.created_at > LIFETIME_MS)
+    fail(404, "not-found", "no such pairing, or it expired");
+  return p;
+}
+
+pairingRoutes.post("/pairings", async (c) => {
+  if (!c.var.limiter.allow(`pair:${clientIp(c)}`, 10, 60_000)) fail(429, "rate-limited");
+  const { request, claimHash: claim } = await json(
+    c,
+    z.object({ request: PairingMessage, claimHash: B64.length(43) }),
+  );
+  // The MAC needs the secret, which only the new member and the owner hold; the server reads the
+  // body to route the pairing and checks it against the directory on approval.
+  const body = parseBody(PairingRequestBody, request.body);
+  if (!RENDEZVOUS.test(body.rendezvous)) fail(400, "bad-schema", "rendezvous");
+  const db = c.var.db;
+  const created = db.transaction(() => {
+    sweepPairings(db);
+    const taken = db.query("SELECT 1 FROM pairings WHERE rendezvous = ?").get(body.rendezvous);
+    if (taken) return false;
+    db.query(
+      `INSERT INTO pairings (rendezvous, request, role, member_id, box_pk, sign_pk, claim_hash, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      body.rendezvous,
+      JSON.stringify(request),
+      body.role,
+      body.id,
+      body.boxPk,
+      body.signPk,
+      claim,
+      Date.now(),
+    );
+    return true;
+  })();
+  if (!created) fail(409, "taken", "rendezvous id in use; make a new code");
+  return c.json({ expiresInSeconds: LIFETIME_MS / 1000 }, 201);
+});
+
+pairingRoutes.get("/pairings/:rendezvous", requireCaller("paired-device"), (c) => {
+  if (!c.var.limiter.allow(`pair-read:${c.var.caller.account}`, 30, 60_000))
+    fail(429, "rate-limited");
+  const p = load(c, c.req.param("rendezvous"));
+  if (p.account_id && p.account_id !== c.var.caller.account) fail(404, "not-found");
+  return c.json({ request: JSON.parse(p.request) });
+});
+
+pairingRoutes.post("/pairings/:rendezvous/approve", requireCaller("paired-device"), async (c) => {
+  const { approval } = await json(c, z.object({ approval: PairingMessage }));
+  const caller = c.var.caller;
+  const { db } = c.var;
+  const rendezvous = c.req.param("rendezvous");
+  const body = parseBody(PairingApprovalBody, approval.body);
+  if (
+    body.rendezvous !== rendezvous ||
+    body.account !== caller.account ||
+    body.approver !== caller.member
+  )
+    fail(400, "bad-schema", "approval names another rendezvous, account or approver");
+
+  db.transaction(() => {
+    recheck(c);
+    const p = load(c, rendezvous);
+    if (p.approval) fail(409, "already-approved");
+    const m = activeMember(db, caller.account, p.member_id, p.role);
+    if (!m || m.box_pk !== p.box_pk || m.sign_pk !== p.sign_pk)
+      fail(409, "not-in-directory", "append the new member's entry to the directory first");
+    if (m.claimed) fail(409, "already-paired", "this member already holds credentials");
+    db.query("UPDATE members SET claimed = 1 WHERE account_id = ? AND id = ?").run(
+      caller.account,
+      p.member_id,
+    );
+    let token: string | null = null;
+    if (p.role === "machine") {
+      token = randomToken("sbm_");
+      db.query(
+        "INSERT INTO machine_tokens (token_hash, account_id, member_id, created_at) VALUES (?, ?, ?, ?)",
+      ).run(hashToken(token), caller.account, p.member_id, new Date().toISOString());
+    }
+    db.query(
+      "UPDATE pairings SET account_id = ?, approval = ?, token = ? WHERE rendezvous = ?",
+    ).run(caller.account, JSON.stringify(approval), token, rendezvous);
+  })();
+  c.var.pairings.wake(rendezvous);
+  return c.json({ approved: true });
+});
+
+pairingRoutes.get("/pairings/:rendezvous/result", async (c) => {
+  if (!c.var.limiter.allow(`pair-result:${clientIp(c)}`, 60, 60_000)) fail(429, "rate-limited");
+  const rendezvous = c.req.param("rendezvous");
+  const claim = c.req.header("x-claim") ?? "";
+  let p = load(c, rendezvous);
+  if (!safeEqual(claimHash(claim), p.claim_hash)) fail(403, "forbidden", "wrong claim");
+  if (!p.approval) {
+    const seconds = waitSeconds(c);
+    if (seconds > 0) {
+      holdOpen(c);
+      await c.var.pairings.wait(rendezvous, seconds, c.req.raw.signal);
+      const again = load(c, rendezvous);
+      // The pairing may have expired and its rendezvous id been reused while this request waited.
+      if (again.created_at !== p.created_at || !safeEqual(claimHash(claim), again.claim_hash))
+        fail(404, "not-found", "no such pairing, or it expired");
+      p = again;
+    }
+    if (!p.approval) return c.body(null, 204);
+  }
+  if (p.role === "device") {
+    // A new device fetches its result signed in; its session becomes the new device's.
+    const caller = identify(c);
+    if (caller?.role !== "device" || caller.account !== p.account_id)
+      fail(403, "forbidden", "sign in to the approving account first");
+    if (!activeMember(c.var.db, p.account_id, p.member_id, "device"))
+      fail(404, "not-found", "revoked");
+    if (caller.member !== null && caller.member !== p.member_id)
+      fail(409, "already-paired", "this session belongs to another device");
+    c.var.db
+      .query("UPDATE sessions SET member_id = ? WHERE token_hash = ?")
+      .run(p.member_id, caller.session);
+  }
+  return c.json({ approval: JSON.parse(p.approval), ...(p.token ? { token: p.token } : {}) });
+});
