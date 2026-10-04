@@ -112,7 +112,7 @@ export class Claude {
           await $`tmux send-keys -t ${this.tmux} Enter`.quiet();
           return undefined;
         }
-        return /for shortcuts/.test(p) ? true : undefined;
+        return /^❯/m.test(p) && /^\s*─{20}/m.test(p) ? true : undefined;
       },
       60_000,
       500,

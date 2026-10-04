@@ -6,6 +6,8 @@
  *   bun e2e/run.ts --local                     the real server app on a random port
  *   bun e2e/run.ts --device <file>             the device's server (see device.ts); this
  *                                              machine's CLI config must be paired with it
+ *   bun e2e/run.ts --by-hand --only owner      this machine's server; the owner answers on
+ *                                              a phone, in a session under Remote Control
  * Options: --only <case,...>, --model <alias> (default haiku), --out <file.md>, --bin <dir>
  * (put its `starbridge` first on PATH), --keep (leave the scratch folder).
  *
@@ -37,6 +39,7 @@ const { values: opt } = parseArgs({
   options: {
     local: { type: "boolean" },
     device: { type: "string" },
+    "by-hand": { type: "boolean" },
     only: { type: "string" },
     model: { type: "string", default: "haiku" },
     out: { type: "string" },
@@ -85,8 +88,16 @@ if (opt.local) {
   const server = local;
   owner = { answer: (id, choice) => server.answer(id, { choice }) };
 } else {
-  if (!opt.device) throw new Error("pass --local or --device <file>");
-  owner = TestDevice.load(opt.device);
+  if (opt["by-hand"]) {
+    owner = {
+      answer: async () => {
+        throw new Error("--by-hand runs only the `owner` case");
+      },
+    };
+  } else {
+    if (!opt.device) throw new Error("pass --local, --device <file> or --by-hand");
+    owner = TestDevice.load(opt.device);
+  }
   relay = new Relay().start();
   configDir = cliConfigDir(process.env);
   env.HTTPS_PROXY = relay.url;
@@ -109,8 +120,8 @@ for (const part of [".claude-plugin", "hooks"])
   cpSync(join(import.meta.dir, "..", part), join(modDir, part), { recursive: true });
 
 const sessions: Claude[] = [];
-function claude(name: string): Claude {
-  const c = new Claude(name, proj, env, [
+function sessionArgs(name: string): string[] {
+  return [
     "--plugin-dir",
     modDir,
     "--setting-sources",
@@ -121,7 +132,11 @@ function claude(name: string): Claude {
     opt.model as string,
     "--debug-file",
     join(work, `${name}.debug.log`),
-  ]);
+  ];
+}
+
+function claude(name: string): Claude {
+  const c = new Claude(name, proj, env, sessionArgs(name));
   sessions.push(c);
   return c;
 }
@@ -209,6 +224,48 @@ const cases: Record<string, () => Promise<Row>> = {
         waited ?? "never waited",
         acted ? "acted on the answer" : "did not act",
       ].join("; "),
+    };
+  },
+
+  /**
+   * The owner answers by hand, on a phone or the web page, in a session under Remote Control.
+   * Timed from the answer's signed `answeredAt` (whole seconds, the device's clock).
+   */
+  async owner() {
+    const a = new Claude("owner", proj, env, [
+      ...sessionArgs("owner"),
+      "--remote-control",
+      "Starbridge #48 live check",
+    ]);
+    sessions.push(a);
+    await a.start();
+    const q = `Live check (#48): did this reach your phone? (${new Date().toISOString().slice(11, 16)} UTC)`;
+    await a.send(
+      "Use the starbridge skill to ask the owner this question, with options `Yes` and `No`, " +
+        `default \`Yes\` in 1h, context: a live end-to-end test of Starbridge answers. Question: "${q}". ` +
+        "After posting, create `progress-owner.txt` containing the word started, then end your turn. " +
+        "When the answer arrives, create `owner-answer.txt` with the chosen option.",
+    );
+    const id = await until("the decision", () => askedBy(a.sessionId, "Live check (#48)"), 180_000);
+    say(`owner: ${a.sessionId} asked ${id}: "${q}". Waiting for the owner to tap Yes.`);
+    await a.idle();
+    const waited = noWaiting(a);
+    const got = await answered(a, id, 3_600_000);
+    const answeredAt = Date.parse(
+      (
+        JSON.parse(readFileSync(join(configDir, "state.json"), "utf8")) as {
+          answers: Record<string, { answer: { answeredAt: string } }>;
+        }
+      ).answers[id]?.answer.answeredAt ?? "",
+    );
+    await a.idle();
+    const acted = existsSync(join(proj, "owner-answer.txt"));
+    await a.stop();
+    return {
+      name: "owner by hand (Remote Control)",
+      result: !waited && acted ? "pass" : "FAIL",
+      timing: `answeredAt → prompt ${secs(got.at - answeredAt)} (answeredAt has 1 s resolution)`,
+      note: `${got.text.split("\n").find((l) => l.startsWith("Answer to")) ?? ""}; ${waited ?? "never waited"}; ${acted ? "acted on it" : "did not act"}`,
     };
   },
 
@@ -398,7 +455,8 @@ const cases: Record<string, () => Promise<Row>> = {
 const only = opt.only?.split(",");
 try {
   for (const [name, run] of Object.entries(cases)) {
-    if (only && !only.includes(name)) continue;
+    // `owner` waits for a person; it runs only when named.
+    if (only ? !only.includes(name) : name === "owner") continue;
     say(`${name}: start`);
     try {
       const row = await run();
