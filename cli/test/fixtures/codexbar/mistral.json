@@ -1,0 +1,140 @@
+[
+  {
+    "usage": {
+      "mistralUsage": {
+        "totalCachedTokens": 103500928,
+        "modelCount": 4,
+        "daily": [
+          {
+            "cost": 0.7169550116999999,
+            "outputTokens": 7107,
+            "day": "2026-10-01",
+            "inputTokens": 78935,
+            "models": [
+              {
+                "cachedTokens": 418624,
+                "name": "zai-glm-5-3",
+                "cost": 0.3073260518,
+                "inputTokens": 76352,
+                "outputTokens": 6801
+              },
+              {
+                "cachedTokens": 14848,
+                "name": "mistral-vibe-cli-latest",
+                "cost": 0.4096289598999999,
+                "inputTokens": 2583,
+                "outputTokens": 306
+              }
+            ],
+            "cachedTokens": 433472
+          },
+          {
+            "cost": 6.505941985500001,
+            "outputTokens": 287326,
+            "day": "2026-10-02",
+            "inputTokens": 1163237,
+            "models": [
+              {
+                "cost": 6.505941985500001,
+                "inputTokens": 1163237,
+                "name": "zai-glm-5-3",
+                "cachedTokens": 8887680,
+                "outputTokens": 287326
+              }
+            ],
+            "cachedTokens": 8887680
+          },
+          {
+            "cost": 51.8874282788,
+            "outputTokens": 2151044,
+            "day": "2026-10-03",
+            "inputTokens": 13629559,
+            "models": [
+              {
+                "name": "zai-glm-5-3",
+                "inputTokens": 13629504,
+                "cachedTokens": 31784896,
+                "cost": 51.88741215820001,
+                "outputTokens": 2151037
+              },
+              {
+                "name": "mistral-embed",
+                "inputTokens": 44,
+                "cachedTokens": 0,
+                "cost": 6.921200000000001e-6,
+                "outputTokens": 0
+              },
+              {
+                "name": "mistral-small-2603",
+                "inputTokens": 11,
+                "cachedTokens": 0,
+                "cost": 9.1994e-6,
+                "outputTokens": 7
+              }
+            ],
+            "cachedTokens": 31784896
+          },
+          {
+            "cost": 40.258447343,
+            "outputTokens": 1559865,
+            "day": "2026-10-04",
+            "inputTokens": 7143488,
+            "models": [
+              {
+                "cachedTokens": 62394880,
+                "name": "zai-glm-5-3",
+                "cost": 40.258447343,
+                "inputTokens": 7143488,
+                "outputTokens": 1559865
+              }
+            ],
+            "cachedTokens": 62394880
+          }
+        ],
+        "startDate": "2026-09-30T22:00:00Z",
+        "currency": "EUR",
+        "endDate": "2026-10-31T22:59:59Z",
+        "currencySymbol": "\u20ac",
+        "totalInputTokens": 22015219,
+        "credits": {
+          "creditNotesAmount": 0,
+          "currency": "EUR",
+          "ongoingUsageBalance": 0,
+          "walletAmount": 0
+        },
+        "updatedAt": "2026-10-04T19:08:54Z",
+        "totalOutputTokens": 4005342,
+        "totalCost": 99.368772619
+      },
+      "secondary": null,
+      "tertiary": null,
+      "extraRateWindows": [
+        {
+          "title": "Monthly Plan",
+          "window": {
+            "usedPercent": 20.99984825,
+            "resetsAt": "2026-11-01T00:00:00Z",
+            "resetDescription": "\u20ac53.55 / \u20ac255.00 \u00b7 \u20ac201.45 left"
+          },
+          "id": "mistral-monthly-plan"
+        }
+      ],
+      "identity": {
+        "loginMethod": "API spend: \u20ac99.3688 this month",
+        "providerID": "mistral"
+      },
+      "primary": {
+        "usedPercent": 1.4666666666666666e-5,
+        "resetDescription": "\u20ac0.00 / \u20ac25.50 \u00b7 \u20ac25.50 left",
+        "resetsAt": "2026-11-01T00:00:00Z"
+      },
+      "updatedAt": "2026-10-04T19:08:54Z",
+      "loginMethod": "API spend: \u20ac99.3688 this month"
+    },
+    "source": "web",
+    "rateWindowLabels": {
+      "primary": "Included API"
+    },
+    "provider": "mistral"
+  }
+]

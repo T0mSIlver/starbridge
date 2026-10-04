@@ -1,0 +1,59 @@
+[
+  {
+    "provider": "claude",
+    "usage": {
+      "tertiary": null,
+      "extraRateWindows": [
+        {
+          "title": "Fable only",
+          "id": "claude-weekly-scoped-fable",
+          "window": {
+            "windowMinutes": 10080,
+            "usedPercent": 0,
+            "resetDescription": "resets Oct 7, 10pm (Europe/Paris)",
+            "resetsAt": "2026-10-07T20:00:00Z"
+          }
+        }
+      ],
+      "identity": {
+        "providerID": "claude"
+      },
+      "secondary": {
+        "resetDescription": "resets Oct 7, 10pm (Europe/Paris)",
+        "resetsAt": "2026-10-07T20:00:00Z",
+        "windowMinutes": 10080,
+        "usedPercent": 65
+      },
+      "primary": {
+        "resetsAt": "2026-10-04T20:00:00Z",
+        "resetDescription": "resets Oct 4, 10pm (Europe/Paris)",
+        "usedPercent": 18,
+        "windowMinutes": 300
+      },
+      "updatedAt": "2026-10-04T19:08:53Z",
+      "dataConfidence": "percentOnly"
+    },
+    "source": "claude",
+    "rateWindowLabels": {
+      "primary": "Session",
+      "secondary": "Weekly"
+    },
+    "pace": {
+      "primary": {
+        "willLastToReset": true,
+        "deltaPercent": -65,
+        "stage": "farBehind",
+        "expectedUsedPercent": 83,
+        "summary": "65% in reserve | Expected 83% used | Lasts until reset"
+      },
+      "secondary": {
+        "willLastToReset": false,
+        "etaSeconds": 184441,
+        "deltaPercent": 8,
+        "stage": "ahead",
+        "expectedUsedPercent": 57,
+        "summary": "8% in deficit | Expected 57% used | Runs out in 2d 3h"
+      }
+    }
+  }
+]

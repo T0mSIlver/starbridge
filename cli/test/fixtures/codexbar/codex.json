@@ -1,0 +1,93 @@
+[
+  {
+    "pace": {
+      "secondary": {
+        "deltaPercent": 61,
+        "expectedUsedPercent": 14,
+        "willLastToReset": false,
+        "etaSeconds": 28306,
+        "stage": "farAhead",
+        "summary": "61% in deficit | Expected 14% used | Runs out in 7h 52m"
+      },
+      "primary": {
+        "deltaPercent": 13,
+        "expectedUsedPercent": 70,
+        "willLastToReset": false,
+        "etaSeconds": 2589,
+        "stage": "farAhead",
+        "summary": "13% in deficit | Expected 70% used | Projected empty in 44m"
+      }
+    },
+    "source": "oauth",
+    "credits": {
+      "updatedAt": "2026-10-04T19:08:46Z",
+      "balanceReadSucceeded": true,
+      "balanceIsWorkspace": false,
+      "remaining": 0,
+      "events": [],
+      "creditsAvailable": false
+    },
+    "provider": "codex",
+    "usage": {
+      "dataConfidence": "exact",
+      "primary": {
+        "usedPercent": 83,
+        "resetsAt": "2026-10-04T20:38:05Z",
+        "windowMinutes": 300,
+        "resetDescription": "10:38\u202fPM"
+      },
+      "codexResetCredits": {
+        "availableCount": 2,
+        "credits": [
+          {
+            "status": "available",
+            "title": "Full reset (Weekly + 5 hr)",
+            "id": "codex-reset-credit-v1-redacted",
+            "reset_type": "codex_rate_limits",
+            "expires_at": "2026-10-22T20:04:20Z",
+            "granted_at": "2026-09-22T20:04:20Z",
+            "description": "Thanks for using Codex! You've been granted one free rate limit reset."
+          },
+          {
+            "status": "available",
+            "title": "Full reset (Weekly + 5 hr)",
+            "id": "codex-reset-credit-v1-redacted",
+            "reset_type": "codex_rate_limits",
+            "expires_at": "2026-10-29T17:09:19Z",
+            "granted_at": "2026-09-29T17:09:19Z",
+            "description": "Thanks for using Codex! You've been granted one free rate limit reset."
+          }
+        ],
+        "updatedAt": "2026-10-04T19:08:46Z"
+      },
+      "identity": {
+        "accountEmail": "owner@example.com",
+        "loginMethod": "plus",
+        "providerID": "codex"
+      },
+      "accountEmail": "owner@example.com",
+      "tertiary": null,
+      "loginMethod": "plus",
+      "providerCost": {
+        "balanceUpdatedAt": "2026-10-04T19:08:46Z",
+        "limit": 0,
+        "used": 0,
+        "updatedAt": "2026-10-04T19:08:46Z",
+        "currencyCode": "Credits",
+        "period": "Extra usage"
+      },
+      "updatedAt": "2026-10-04T19:08:46Z",
+      "secondary": {
+        "usedPercent": 75,
+        "windowMinutes": 10080,
+        "resetsAt": "2026-10-10T19:33:29Z",
+        "resetDescription": "Oct 10 at 9:33\u202fPM"
+      }
+    },
+    "version": "0.160.0",
+    "rateWindowLabels": {
+      "secondary": "Weekly",
+      "primary": "Session"
+    }
+  }
+]
