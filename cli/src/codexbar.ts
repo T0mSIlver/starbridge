@@ -16,7 +16,11 @@ export interface RunResult {
   stderr: string;
 }
 
-export function runCodexbar(bin: string, provider: string | undefined): Promise<RunResult> {
+export function runCodexbar(
+  bin: string,
+  provider: string | undefined,
+  timeoutMs = RUN_TIMEOUT_MS,
+): Promise<RunResult> {
   const args = ["usage", "--format", "json", ...(provider ? ["--provider", provider] : [])];
   return new Promise((resolve) => {
     const child = spawn(bin, args, { stdio: ["ignore", "pipe", "pipe"] });
@@ -28,7 +32,7 @@ export function runCodexbar(bin: string, provider: string | undefined): Promise<
     child.stderr.on("data", (d) => {
       stderr += d;
     });
-    const timer = setTimeout(() => child.kill("SIGKILL"), RUN_TIMEOUT_MS);
+    const timer = setTimeout(() => child.kill("SIGKILL"), timeoutMs);
     child.on("error", (e) => {
       clearTimeout(timer);
       resolve({ code: null, stdout, stderr: e.message });
@@ -114,6 +118,14 @@ export function parseUsage(stdout: string, provider: string | undefined, now: Da
   return provider ? rows.filter((r) => r.provider === provider) : rows;
 }
 
+function tryParse(stdout: string, provider: string | undefined, now: Date): ProviderQuota[] {
+  try {
+    return parseUsage(stdout, provider, now);
+  } catch {
+    return [];
+  }
+}
+
 /** Every provider asked for, with an `error` entry for each that failed or was missing. */
 export async function collect(
   bin: string,
@@ -131,6 +143,13 @@ export async function collect(
       if (p) out.push({ provider: p, windows: [], error: clip(error, 1000) });
     };
     if (r.code !== 0) {
+      // A provider that cannot fetch exits 1 with its reason in the JSON row.
+      const rows = r.code === null ? [] : tryParse(r.stdout, p, now());
+      if (rows.length > 0 && rows.every((x) => x.error)) {
+        for (const x of rows) log(`codexbar ${x.provider}: ${x.error}`);
+        out.push(...rows);
+        continue;
+      }
       const last = r.stderr.trim().split("\n").pop() ?? "";
       failure(`exited ${r.code ?? "on a signal"}${last ? `: ${last}` : ""}`);
       continue;

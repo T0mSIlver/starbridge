@@ -488,6 +488,22 @@ How it generalizes is open.
   names (`agent.json`, written by setup, or flags), never a path a client sends. No uid check
   on the socket's peer: neither Bun nor Node exposes `SO_PEERCRED`; the 0700 directory and 0600
   socket keep other users out.
+- 2026-10-05. Setup (#68, part 3): `setup`, `status` and `uninstall` live in `cli/src/setup/`.
+  Setup pins CodexBar 0.72.0 and the SHA-256 of each CLI tarball. On Linux it takes the static
+  musl build where the glibc one would not start: on musl, and where `libcurl.so.4` is missing,
+  since the glibc build links it and a minimal Debian lacks it. A provider counts as working
+  when `usage --provider X` returns windows. CodexBar exits 1 with the reason in the JSON row
+  ("No available fetch strategy for codex."), so setup and the uploader read that row, not
+  the exit code. The unit's `ExecStart` is the `starbridge` on the PATH when it is the running
+  binary, since that path survives brew upgrades, and the unit gets setup's `PATH` for the
+  `claude` and `codex` CodexBar calls. A rerun restarts the agent only when the unit or
+  `agent.json` changed or it is not running. Setup turns on plugin auto-update through the
+  marketplace's `extraKnownMarketplaces` entry in `~/.claude/settings.json`, which `claude
+  plugin marketplace add` writes and no CLI flag sets. It stops a hand-written `starbridge
+  quota push` unit before it starts the agent and keeps that unit's providers and interval. It
+  also removes a copied mod (`~/.claude/mods/starbridge` and its `CLAUDE_CODE_PLUGIN_DIRS`
+  entry), a copied skill and the CLAUDE.md rule. `uninstall` posts the revoke reminder first,
+  while the keys work, and keeps the config directory unless asked.
 
 - 2026-10-05. Permission prompts' protocol (#57): `ITEM_KINDS` in `packages/protocol` lists each
   sealed kind's signing role and the item it refers to, and the server and both clients derive

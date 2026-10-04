@@ -1,0 +1,100 @@
+/**
+ * `starbridge uninstall`: removes the service and the plugins, asks the owner's devices to
+ * revoke the machine, and asks before it deletes the keys. CodexBar stays.
+ */
+import { existsSync, realpathSync, rmSync } from "node:fs";
+import { join } from "node:path";
+import { withAgent } from "../agent/client";
+import { askVia } from "../agent/commands";
+import { type AskInput, ask } from "../decisions";
+import type { InstallKind } from "../release";
+import { removeBinary } from "../update";
+import { findCodexbar } from "./codexbar";
+import { hasClaude, legacyInstalls, pluginState, removePlugins } from "./plugins";
+import { legacyUnits, removeLegacy, removeService } from "./service";
+import type { Sys } from "./sys";
+
+export interface UninstallOpts {
+  /** Also delete the config directory (keys and state) without asking. */
+  purge?: boolean;
+  /** How this binary was installed; removed last. Undefined keeps it. */
+  install?: InstallKind;
+}
+
+export async function uninstall(sys: Sys, opts: UninstallOpts): Promise<number> {
+  const { ctx, prompt } = sys;
+  const machine = ctx.store.machine();
+
+  // First, while the keys and the agent still work: a machine signs no directory entries, so
+  // only a device can revoke it.
+  if (machine) {
+    const input: AskInput = {
+      question: `Revoke ${machine.name}? It was uninstalled.`,
+      context: `\`starbridge uninstall\` ran on ${machine.name}. A machine cannot revoke itself: revoke it under Devices so its keys no longer receive your decisions and quotas.`,
+      options: ["I revoked it", "Keep it"],
+      default: "Keep it",
+      project: "starbridge",
+      session: "",
+    };
+    try {
+      await withAgent(
+        ctx,
+        (agent) => askVia(ctx, agent, input, {}),
+        () => ask(ctx, input, {}),
+      );
+      ctx.out(`Asked your devices to revoke "${machine.name}" (the id above).`);
+    } catch (e) {
+      ctx.out(`Could not post the revoke reminder: ${(e as Error).message}`);
+    }
+  }
+
+  ctx.out(
+    (await removeService(sys))
+      ? "Stopped and removed the agent service."
+      : "No agent service installed.",
+  );
+  for (const unit of legacyUnits(sys))
+    if (await prompt.confirm(`Also stop and remove ${unit.name} (starbridge quota push)?`, true)) {
+      await removeLegacy(sys, unit);
+      ctx.out(`Removed ${unit.path}.`);
+    }
+
+  if (hasClaude(sys)) {
+    const state = await pluginState(sys);
+    if (state) for (const line of await removePlugins(sys, state)) ctx.out(line);
+    else
+      ctx.out(
+        "`claude plugin list` failed: remove the Starbridge plugins with `claude plugin uninstall`.",
+      );
+    for (const old of legacyInstalls(sys))
+      if (await prompt.confirm(`Also remove ${old.what}?`, true)) {
+        old.remove();
+        ctx.out(`Removed ${old.what}.`);
+      }
+  }
+
+  const dir = ctx.store.dir;
+  if (existsSync(dir)) {
+    if (
+      opts.purge ||
+      (await prompt.confirm(`Delete ${dir} (this machine's keys and state)?`, false))
+    ) {
+      rmSync(dir, { recursive: true, force: true });
+      ctx.out(`Deleted ${dir}.`);
+    } else ctx.out(`Kept ${dir}: \`starbridge setup\` reuses it.`);
+  }
+
+  if (machine) ctx.out(`Revoke "${machine.name}" under Devices in the Starbridge app or web page.`);
+  const cb = findCodexbar(sys);
+  if (cb) {
+    const opt = join(sys.home, ".local/opt/codexbar");
+    const how = cb.inApp
+      ? "brew uninstall --cask codexbar (or drag CodexBar.app to the Bin)"
+      : realpathSync(cb.path).startsWith(opt)
+        ? `rm -rf ${opt} ${join(sys.home, ".local/bin/codexbar")}`
+        : "your package manager";
+    ctx.out(`CodexBar stays installed (${cb.path}); remove it with ${how}.`);
+  }
+  if (opts.install) removeBinary(ctx, opts.install);
+  return 0;
+}

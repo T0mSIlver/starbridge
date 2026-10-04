@@ -96,6 +96,6 @@ export function removeBinary(ctx: Ctx, install: InstallKind): number {
     return 0;
   }
   rmSync(install.path, { force: true });
-  ctx.out(`Removed ${install.path}. Keys and state stay in ${ctx.store.dir}.`);
+  ctx.out(`Removed ${install.path}.`);
   return 0;
 }

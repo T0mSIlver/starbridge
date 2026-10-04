@@ -1,0 +1,8 @@
+#!/bin/sh
+# Stands in for `systemctl --user`: logs each call; the unit is always active.
+echo "systemctl $*" >>"$FAKE_LOG"
+case "$2" in
+  is-active) echo active ;;
+  is-enabled) echo enabled ;;
+esac
+exit 0
