@@ -181,6 +181,29 @@ decision's context.
 - Cards use `radius.md`, buttons `radius.pill`, matching Material 3 Expressive
   on Android.
 
+## Icon
+
+The mark is a space elevator on a 108-unit canvas (the Android adaptive
+icon grid; the visible area is the central 72): a planet's edge (a circle at
+54,148, radius 80) and a tether (x 51.75 to 56.25, from the top edge down
+into the planet) in `fg` dark, and one amber climber, a capsule 11 wide and
+20 tall at 48.5,34, in `accent` dark. The ground is `bg` dark in both
+schemes, and the climber is the only amber. Single-colour uses (themed icon,
+notification icon) draw all three shapes in one colour.
+
+| Where | File |
+|---|---|
+| Android launcher | `res/mipmap-anydpi/ic_launcher*.xml`, layers in `res/drawable/ic_launcher_*.xml` |
+| Android notification | `res/drawable/ic_notification.xml` (white, 24 dp) |
+| Web favicon | `web/src/app/icon.svg`, `favicon.ico` (16, 32, 48 px) |
+| Web install icons | `web/src/app/apple-icon.png` (180 px), `web/public/icon-*.png`, `manifest.ts` |
+
+The PNG and ICO files are rendered from the SVG; redraw them when the mark
+changes.
+
+The product name has no wordmark: it is "Starbridge" in the sans, `title`
+weight.
+
 ## Roles
 
 | Token | Use |

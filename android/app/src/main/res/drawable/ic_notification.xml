@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Notification small icon: the launcher mark as a white silhouette. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="64" android:viewportHeight="64">
+    <path android:fillColor="#FFFFFF"
+        android:pathData="M0,52.7 A80,80 0,0 1,64,52.7 V64 H0 Z" />
+    <path android:fillColor="#FFFFFF"
+        android:pathData="M29.75,0 H34.25 V50 H29.75 Z" />
+    <path android:fillColor="#FFFFFF"
+        android:pathData="M26.5,17.5 A5.5,5.5 0,0 1,37.5,17.5 V26.5 A5.5,5.5 0,0 1,26.5,26.5 Z" />
+</vector>
