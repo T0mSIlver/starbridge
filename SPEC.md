@@ -183,9 +183,32 @@ How it generalizes is open.
 - 2026-10-04. The owner wants this to become a real app with real users, and
   is fine paying a little for that, for example to host push for every user.
 
+- 2026-10-04. Push: the plan below, approved.
+- 2026-10-04. The owner wants a fully hosted version: it would be his first
+  hosted project. Build order: both features in parallel, fully, with agents.
+  No implementation starts until the ideation is done.
+
+## Fully hosted
+
+A first sketch, to discuss:
+
+- One server that runs both ways: hosted by the owner, or self-hosted from the
+  same image (ntfy and Plausible work this way).
+- Decisions need nothing local. Agents post to the hosted API over HTTPS with a
+  token, and the Claude Code mod long-polls the hosted API, since mods can
+  fetch any HTTPS URL.
+- Quotas need a small local uploader, because `codexbar` reads cookies and
+  credentials on the user's machine. It runs `codexbar ... --format json` on a
+  timer and posts the snapshot. Credentials never leave the machine.
+- Machine panels (the owner's Mac) come through the same uploader.
+- The server stores other people's agent questions, which carry code context.
+  Option: end-to-end encryption, where the server stores ciphertext and only
+  paired devices (phone, browser) hold keys. It costs server-side search and
+  makes the web page decrypt in the browser.
+
 ## Push to phones
 
-Proposed, waiting for the owner:
+Approved 2026-10-04:
 
 - Each user runs their own service. The owner hosts one small push relay for
   every user. The relay forwards to Firebase Cloud Messaging (FCM), which
@@ -200,11 +223,10 @@ Proposed, waiting for the owner:
 
 ## Open questions
 
-1. Push: a hosted relay to FCM with encrypted payloads, plus UnifiedPush for
-   self-hosters (proposed above).
-2. Whether a fully hosted version (no self-hosted service, accounts on the
-   owner's server) is worth offering later.
-3. The name.
+1. Sign-in for the hosted version.
+2. End-to-end encryption on the hosted version, or the server reads decisions.
+3. Licence and business model.
+4. The name.
 
 ## Research log
 
