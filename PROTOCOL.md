@@ -61,7 +61,9 @@ errors use the codes in `packages/protocol/src/sodium.ts`.
 - **Devices** sign in with GitHub (hosted) or the owner token from the server's environment
   (self-hosted). The web page holds an HTTP-only session cookie; Android sends
   `Authorization: Bearer <session>`. A session belongs to an account and, once paired, to one
-  device member id.
+  device member id. A device that signs in again binds the new session by signing a nonce with
+  its signing key: `bindMessage` in `packages/protocol`, `"starbridge/v1/bind"` NUL account
+  NUL member NUL nonce.
 - **App sign-in** follows PKCE (RFC 7636, S256), because any app can claim the `starbridge://`
   scheme. The app keeps a random verifier and sends only its challenge,
   base64url(SHA-256(verifier)). The redirect carries a single-use code, never the session, and
@@ -80,6 +82,8 @@ errors use the codes in `packages/protocol/src/sodium.ts`.
 | `POST /auth/app/session` | the app | `{code, verifier}` → `{session}`; 400 `bad-code` when the code is unknown, used, older than 60 s or the verifier does not match; rate-limited per IP |
 | `POST /auth/owner` | anyone | self-hosted: `{token}` against `OWNER_TOKEN`; sets the session and returns `{session}` |
 | `POST /auth/logout` | device | end the session |
+| `GET /auth/challenge` | device | `{nonce, expiresInSeconds}`: one nonce per session, single use, 5 minutes; asking again returns the outstanding one |
+| `POST /auth/bind` | device | `{member, sig}`: binds the session to that active device when `sig` checks against its signing key; 400 `no-challenge`, 401 `bad-signature`, 404 for no such active device, 409 `already-paired` when the session holds another device |
 | `GET /me` | device, machine | `{account, member, role}`; `member` is null until a device pairs |
 
 ### Directory
@@ -135,7 +139,7 @@ decision's options.
 
 | Route | Who | What |
 |---|---|---|
-| `POST /push/subscriptions` | device | `{type: "fcm" \| "webpush" \| "unifiedpush", endpoint, keys?}` → `{id}`; URL endpoints must be public HTTPS |
+| `POST /push/subscriptions` | device | `{type: "fcm" \| "webpush" \| "unifiedpush", endpoint, keys?}` → `{id}`; URL endpoints must be public HTTPS; 409 `too-many-subscriptions` past 10 per device or 30 per account (re-subscribing a known endpoint always works) |
 | `DELETE /push/subscriptions/:id` | device | stop pushing there |
 | `GET /push/vapid` | anyone | `{publicKey}`: the VAPID key a browser subscribes with (the relay's when this server forwards Web Push) |
 | `POST /relay` | another server | relay mode only: `{type: "fcm" \| "webpush", endpoint, keys?, payload}` → `{result: "ok" \| "gone" \| "failed" \| "no-route"}`; rate-limited per IP |
@@ -144,6 +148,15 @@ A push payload is JSON text: `{v, kind, id, from, re?, box?}` for a new item, wi
 own box when the payload stays within 3 KB, else without it and the device fetches
 `GET /items/:id`; `{v, kind: "answered", id}` to every device a decision was sealed to once it
 is answered. FCM gets it as data field `p`; Web Push and UnifiedPush encrypt it per RFC 8291.
+
+Quota snapshots go to FCM and UnifiedPush only. Browsers expect every Web Push to show a
+notification and drop a subscription that keeps showing none (Firefox after 16), so the web page
+fetches `GET /quota` when it opens instead. Decisions and `answered` still go to Web Push.
+
+The server checks that a push URL's host resolves only to public addresses, then connects to the
+address it checked, with SNI and the certificate check still on the host name, so a DNS answer
+that changes in between cannot point the push inward. Each account has at most 4 pushes in
+flight and 200 waiting; each request gives up after 10 s.
 
 A server with FCM credentials or VAPID keys pushes directly. One without them posts to the relay
 set in `RELAY_URL` (the owner's hosted server runs with `RELAY_MODE=1`), which pushes with its

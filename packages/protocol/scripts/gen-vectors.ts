@@ -6,6 +6,7 @@
 import {
   addEntry,
   alertsFor,
+  bindMessage,
   claimHash,
   computePace,
   type Directory,
@@ -640,6 +641,24 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
       { input: "0123-4567-89AB-CDEF-GHJK-MNPU", expect: "bad-encoding" },
       { input: "0123-4567", expect: "bad-encoding" },
     ],
+    bind: (() => {
+      const nonce = toB64(seed(11));
+      const sig = toB64(
+        sodium.crypto_sign_detached(
+          bindMessage(ACCOUNT, "phone", nonce),
+          phone.keys.sign.privateKey,
+        ),
+      );
+      return {
+        note: "verifyBind({account, member, nonce, sig}, signPk); message is bindMessage's bytes.",
+        account: ACCOUNT,
+        member: "phone",
+        nonce,
+        message: toB64(bindMessage(ACCOUNT, "phone", nonce)),
+        sig,
+        signPk: phone.member.signPk,
+      };
+    })(),
     request: { message: request, body: requestBody },
     approval: { message: approval, body: JSON.parse(approval.body) },
     bad: [

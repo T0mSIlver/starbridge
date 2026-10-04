@@ -1,8 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Placeholder mark, a four-point star, until DESIGN.md sets a logo. -->
+<!-- The mark: a space elevator. A planet's edge, a tether running off into
+     space, and the amber climber on its way up. Shapes as in DESIGN.md, "Icon". -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp" android:height="108dp"
     android:viewportWidth="108" android:viewportHeight="108">
-    <path android:fillColor="@color/mark"
-        android:pathData="M54,30 Q57,51 78,54 Q57,57 54,78 Q51,57 30,54 Q51,51 54,30Z" />
+    <path android:fillColor="#E8EBF2"
+        android:pathData="M0,88.97 A80,80 0,0 1,108,88.97 V108 H0 Z" />
+    <path android:fillColor="#E8EBF2"
+        android:pathData="M51.75,0 H56.25 V72 H51.75 Z" />
+    <path android:fillColor="#F5A83B"
+        android:pathData="M48.5,39.5 A5.5,5.5 0,0 1,59.5,39.5 V48.5 A5.5,5.5 0,0 1,48.5,48.5 Z" />
 </vector>

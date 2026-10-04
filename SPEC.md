@@ -136,6 +136,26 @@ one session per machine poll. The other sessions watch the CLI's state file and
 claim their answers from it locally. `starbridge ask` records the asking
 session, and the CLI hands an answer only to that session, once.
 
+Changed (#35, 2026-10-04): the CLI hands an answer over again until the mod
+confirms it with `starbridge answers --session <id> --ack <decision id>`, and
+the mod rereads the session id before submitting. An answer that arrives during
+a `/clear` waits for the session that asked, instead of going to the new one.
+The CLI and the mod must be updated together: an older mod never confirms, so
+it would get the same answer every cycle.
+
+Changed (#48, 2026-10-04): agents never wait. The skill no longer offers
+`ask --wait` or a background `starbridge wait`: an agent posts, keeps working,
+ends its turn, and acts on the answer when the mod submits it. When a
+decision's default time passes with no answer, the CLI hands the mod one line
+for it (`No answer to <id> (<question>) by its default time <time>: apply your
+default: <default>`), confirmed apart from the answer (`--ack <id>:default`),
+so an answer that comes later still arrives. Before that line, the CLI fetches
+any answer waiting on the server. Sessions that do not poll reread their
+answers every 30 s, since a default time passing changes no file. After a
+`/resume` the mod keeps polling under the resumed id (before, `session.end`
+with reason `resume` stopped it for good, and no `session.start` follows).
+The mod's longest wait after errors drops from 5 minutes to 1.
+
 What the probe showed (2026-10-04, in the Desktop Code tab):
 
 - Idle session: the submitted prompt starts a turn within 0.2 s, and the model
@@ -239,11 +259,39 @@ How it generalizes is open.
   decisions. Version 1 is quotas and decisions; owner panels wait for
   version 2. Web Push is in version 1.
 
+- 2026-10-04 (late). Android is a flagship-standard Material 3 Expressive app,
+  used fully and by the guidelines, nothing generic or improvised. Fonts are what a
+  flagship Android app uses: Google Sans Flex (OFL on Google Fonts, the face of
+  Google's own apps) on the Material type scale, not Archivo; monospace only
+  for code. This replaces "Expressive parts only where they do a
+  job" below. The web pairs with it without imitating Android.
+- 2026-10-04 (late). Look (#49): the owner picked direction C, "Beacon", of
+  three drafted on the options page (https://claude.ai/artifact/BNDBtkU1kP6MtXimyCrRTP),
+  which also links the reference apps. Soft black (`#0c0c0c`) and neutral
+  greys with no hue; amber is the only accent and means "needs you": open
+  decisions, the recommended option, quota headroom left unused. Red only for
+  "will run out"; "on pace" has no colour. Large M3 Expressive shapes (cards at
+  28 dp, button groups with round ends), the expressive motion scheme, airy
+  density. Light and dark both stay and follow the system. Android has a
+  "Colours" setting: "Starbridge" (default, the fixed black palette) or
+  "Match wallpaper" (Material You dynamic colour); under both, the amber
+  accent and the quota state colours stay fixed. The themed
+  monochrome launcher icon stays, since the owner turns it on in Wallpaper &
+  style. The web uses the same faces (Google Sans Flex, Google Sans Code) with
+  web components: list and detail panes, hover, keyboard keys. Tokens:
+  `DESIGN.md`.
+- 2026-10-04 (late). Before the owner starts using Starbridge: (1) the mod's push
+  path must work end to end without any agent waiting on an answer: an agent
+  posts a decision and keeps working; the answer arrives later as a prompt;
+  (2) a design overhaul. The current look reads generic. The base becomes black
+  and white (neutral greys), not blue-black, with few accents. A research session
+  drafts directions from similar apps and the owner picks.
 - 2026-10-04. Look: function over form. Monospace only for code (Markdown
   code blocks in a decision's context); numbers, ids and machine names use the
-  sans face with tabular figures. Colours stay generic: on Android, Material
-  You dynamic colour from the wallpaper, with `DESIGN.md`'s neutral palette as
-  the fallback; on the web, that neutral palette. Fixed colours only where
+  sans face with tabular figures. Colours: `DESIGN.md`'s palette on both
+  clients by default; Material You dynamic colour is an Android setting
+  (changed by #49, below). Fixed
+  colours only where
   they carry meaning: the "needs you" accent and the quota states (on pace,
   will run out, unused). Material 3 Expressive parts are used where they do a
   job: connected button groups for a decision's options, the large
@@ -285,6 +333,34 @@ How it generalizes is open.
   a follow-up. Nightly `sqlite3 .backup` kept 14 days in `/var/backups/starbridge`. Login is
   `deploy` with the dev box key and sudo; root login and passwords are off. The web page is not
   served yet (#8); Caddy will route it on the same origin.
+- 2026-10-04. The CLI takes a lock file (`.lock` in its config directory)
+  around every read-modify-write of its files (#33). A directory refresh fetches
+  outside the lock, then under it keeps the longer of its chain and the saved
+  one, each required to extend the other's pin, so two CLI processes refreshing
+  at once cannot roll the pin back.
+
+- 2026-10-04. Push hardening (#27, #36, #37): quota snapshots skip Web Push, because browsers
+  drop subscriptions whose pushes show no notification (Firefox after 16); the page fetches
+  `GET /quota` on open. A device holds at most 10 push subscriptions and an account 30; an
+  account has at most 4 pushes in flight and 200 waiting, each with a 10 s timeout. Pushes to
+  subscription URLs connect to the exact address that passed the private-range check.
+
+- 2026-10-04. Web page (#8): device private keys are non-extractable WebCrypto X25519 and
+  Ed25519 keys in IndexedDB where the browser has them, raw libsodium keys otherwise. A sealed
+  box opens with WebCrypto's X25519, HSalsa20 from `@noble/ciphers` (audited; libsodium.js's
+  standard build lacks it) and libsodium for the rest; `packages/protocol` gained async sign,
+  seal and open for keys it cannot hold. The page shares the server's origin: Next proxies
+  `/v1` in development, the reverse proxy in production. The service worker shows a
+  notification for every decision, and closes it once the decision is answered. A
+  browser that signs in again binds the new session to its existing device by signing a
+  server nonce with the device key (#28, `POST /v1/auth/bind`).
+
+- 2026-10-04. Icon and brand (#32): the mark is a space elevator, flat: a
+  planet's edge, a tether running off the top into space, and one amber
+  climber on it, on DESIGN.md's dark bg in both schemes. Stars were ruled out
+  as a cliché of AI tools; an ankh-like first draft (a ring station on top)
+  was dropped. Amber stays fixed under Material You dynamic colour. No
+  wordmark: the name is set in Archivo. Shapes and files: DESIGN.md, "Icon".
 
 - 2026-10-04. App sign-in (#34): the GitHub redirect to `starbridge://auth` carries a
   single-use code bound to a PKCE S256 challenge, and the app trades code and verifier for the
@@ -535,3 +611,21 @@ goes in git.
   which only a compromised server would send. Web fixtures are decrypted
   bodies checked by the protocol schemas; the web `Device` adds `kind`,
   `addedAt`, `lastSeen` and `status`, which no route returns yet.
+- 2026-10-04/05: answers e2e (#48), Claude Code 2.1.289. `mod/e2e/run.ts`
+  drove real interactive sessions (Sonnet, in tmux, with the mod through
+  `--plugin-dir` and the skill in the project) against the server app on the
+  dev box (test-support, owner-token sign-in), and a local relay that cut the
+  connection for the outage. From the device's post to the prompt: idle
+  0.03 s; mid-turn, queued 0.05 s after the turn ended; a new session after
+  `/clear` 0.07 s, while the old session's answer stayed held and arrived 20 s
+  after `/resume` (one poll cycle); after a hot reload 0.03 s; 2.3 s after a
+  60 s outage ended; two sessions asking at once each got only their own
+  answer in 3.5 to 4.7 s; a default-time notice 0.07 s after its time. Agents
+  posted with the skill, kept working, ended their turn and never waited.
+  Haiku 4.5 once claimed it had posted without running `starbridge ask`, so
+  the agent cases run on Sonnet. Live on starbridge.run as devbox, under Remote
+  Control: the owner tapped Yes on his phone; the prompt reached the session
+  0.15 s after the answer's signed time (whole seconds, so at most 1.2 s), and
+  showed in the Remote Control session on his phone. The run found that
+  `/resume` fires `session.end` (reason `resume`) and no `session.start`, which
+  had stopped the mod's polling for good.

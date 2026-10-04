@@ -41,4 +41,5 @@ docker run -p 8080:8080 -v starbridge:/data -e OWNER_TOKEN=change-me starbridge-
 | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | unset | Web Push keys (`bunx web-push generate-vapid-keys`); without them Web Push goes through the relay |
 | `RELAY_URL` | unset | the relay's origin |
 | `RELAY_MODE` | off | serve `POST /v1/relay` for other servers |
+| `PUSH_TIMEOUT_MS` | 10000 | give up on one request to a push service after this long |
 | `ALLOW_PRIVATE_PUSH_ENDPOINTS` | off | allow push endpoints on private addresses and plain HTTP, for a self-hosted ntfy |

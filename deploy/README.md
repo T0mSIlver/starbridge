@@ -2,8 +2,9 @@
 
 The hosted instance at https://starbridge.run: `starbridge-1`, a Hetzner CX23 on Ubuntu 26.04
 (accounts in `SPEC.md`, "Accounts"). Docker Compose runs the server, with `RELAY_MODE` on so the
-same process is the push relay, behind Caddy, which gets the TLS certificate. The web page is
-not served yet: it ships behind the same Caddy site once #8 is wired to the server.
+same process is the push relay, and the web page, both behind Caddy, which gets the TLS
+certificate. Caddy sends `/v1/*` and `/healthz` to the server and everything else to the page,
+so both share one origin.
 
 Log in as `deploy` with `~/.ssh/starbridge_ed25519` and use `sudo`; root login and passwords
 are off.
@@ -16,7 +17,7 @@ From the dev box, any ref that is on GitHub:
 deploy/deploy.sh                 # origin/main
 ```
 
-It unpacks the ref into `/opt/starbridge`, builds the image on the box and restarts the stack
+It unpacks the ref into `/opt/starbridge`, builds the server and web images on the box and restarts the stack
 (`deploy/host/apply.sh`). The previous release stays in `/opt/starbridge.old`.
 
 ## First setup

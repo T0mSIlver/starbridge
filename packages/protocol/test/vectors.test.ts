@@ -4,6 +4,7 @@ import { buildVectors, render } from "../scripts/gen-vectors";
 import {
   Answer,
   alertsFor,
+  bindMessage,
   claimHash,
   computePace,
   Decision,
@@ -21,6 +22,7 @@ import {
   type SealedItem,
   toB64,
   verify,
+  verifyBind,
   verifyDirectory,
 } from "../src/index";
 
@@ -126,6 +128,15 @@ describe("pairing.json", () => {
       expect(errorCode(() => fn(c.message, parsePairingCode(c.code)))).toBe(c.expect);
     });
   }
+});
+
+test("pairing.json: bind", () => {
+  const b = V.pairing.bind;
+  expect(toB64(bindMessage(b.account, b.member, b.nonce))).toBe(b.message);
+  expect(verifyBind(b, b.signPk)).toBe(true);
+  expect(verifyBind({ ...b, member: "browser" }, b.signPk)).toBe(false);
+  expect(verifyBind({ ...b, nonce: `${b.nonce}x` }, b.signPk)).toBe(false);
+  expect(verifyBind({ ...b, sig: "AAAA" }, b.signPk)).toBe(false);
 });
 
 describe("pace.json", () => {

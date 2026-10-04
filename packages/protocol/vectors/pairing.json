@@ -31,6 +31,15 @@
       "expect": "bad-encoding"
     }
   ],
+  "bind": {
+    "note": "verifyBind({account, member, nonce, sig}, signPk); message is bindMessage's bytes.",
+    "account": "acct_tom",
+    "member": "phone",
+    "nonce": "CwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCwsLCws",
+    "message": "c3RhcmJyaWRnZS92MS9iaW5kAGFjY3RfdG9tAHBob25lAEN3c0xDd3NMQ3dzTEN3c0xDd3NMQ3dzTEN3c0xDd3NMQ3dzTEN3c0xDd3M",
+    "sig": "QmsfWRnWKpHegeBiaO2o2Zo6NEzB62PyOWeD6HxF373Fgf-BbA____rMtRyUetX8l5r-aPgIbEidi_YuzhosDQ",
+    "signPk": "1i8Bah79Hk_feT60LNhEceG6nwzwTRKHtcxx9hYofLg"
+  },
   "request": {
     "message": {
       "body": "{\"v\":1,\"rendezvous\":\"008J4CT4\",\"role\":\"machine\",\"id\":\"devbox\",\"name\":\"dev box\",\"boxPk\":\"deJw3ylSxXuoNnuoYYwXj5_lDbJ5nTBOdOkY2YVoYUY\",\"signPk\":\"EqQVksi3wX1AWeeym2Ho_5bHQV8vgDNI8vAX4Fueodo\",\"at\":\"2026-10-04T09:09:00Z\"}",

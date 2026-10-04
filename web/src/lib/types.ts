@@ -1,33 +1,47 @@
-// The web's view of protocol data (packages/protocol). Client components
-// import these as types only, so libsodium stays out of the browser bundle
-// until #8 needs it.
-import type { Answer, Decision, Member, QuotaAlert, QuotaWindow } from "@starbridge/protocol";
+// The web's view of protocol data (packages/protocol). Components import these as types only;
+// the protocol code and libsodium load lazily (lib/device.ts).
+import type { Decision, Member, QuotaAlert, QuotaWindow } from "@starbridge/protocol";
 
-export type { Answer, Decision, QuotaAlert, QuotaWindow };
+export type { Decision, QuotaAlert, QuotaWindow };
 
-/** A decrypted decision, with its answer once given. */
+/** A tap on an option, or typed text when the decision has none. */
+export type Reply = { choice: string } | { text: string };
+
+/** An opened and verified decision. */
 export type InboxItem = {
   decision: Decision;
-  answer?: Answer;
-  /** Name of the device that answered. */
-  answeredBy?: string;
+  /** The machine that signed it, which the answer is sealed to. */
+  machine: Member;
+  /** Set once any device answered. */
+  answeredAt?: string;
+  /** The answer, when this browser sent it; other devices' answers are sealed to the machine. */
+  reply?: Reply;
 };
 
 /** One quota card: a window, its provider, and the alert raised for it. */
 export type QuotaCardData = {
   provider: string;
+  /** The machine whose uploader sent it, shown when more than one machine reports. */
+  machine?: string;
   window: QuotaWindow;
   alert?: QuotaAlert;
 };
 
-/** A directory member, with what this device knows about it. */
+/** A directory member, as the Devices screen lists it. */
 export type Device = Member & {
-  kind: "phone" | "browser" | "machine";
   addedAt: string;
-  lastSeen: string;
-  status: "active" | "pending" | "revoked";
+  status: "active" | "revoked";
   /** The device this page runs on. */
   self?: boolean;
-  /** Code the CLI printed, shown while a machine waits for approval. */
-  pairingCode?: string;
+};
+
+/** A pairing request whose MAC checked out against the typed code. */
+export type PairingRequest = {
+  code: string;
+  role: Member["role"];
+  id: string;
+  name: string;
+  boxPk: string;
+  signPk: string;
+  at: string;
 };

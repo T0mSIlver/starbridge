@@ -168,8 +168,13 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
     const payload = JSON.stringify({ v: 1, kind: "answered", id: item.re });
     c.var.push.notify(caller.account, decisionDevices, () => payload);
   } else {
-    c.var.push.notify(caller.account, to, (device) =>
-      pushPayload(item, device, config.pushInlineLimit),
+    // Browsers expect each Web Push to show a notification and drop subscriptions that keep
+    // showing none, so quota snapshots, which show none, skip Web Push; pages fetch GET /quota.
+    c.var.push.notify(
+      caller.account,
+      to,
+      (device) => pushPayload(item, device, config.pushInlineLimit),
+      item.kind === "quota" ? ["fcm", "unifiedpush"] : undefined,
     );
   }
   return c.json({ cursor: String(seq) }, 201);

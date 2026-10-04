@@ -1,4 +1,14 @@
-import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { randomBytes } from "node:crypto";
+import {
+  chmodSync,
+  existsSync,
+  linkSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { type Answer, fromB64, type MemberKeys, type Pin, toB64 } from "@starbridge/protocol";
@@ -32,17 +42,105 @@ export interface State {
       options: string[];
       askedAt: string;
       defaultAt?: string;
+      /** What the agent does if nobody answers. */
+      default?: string;
+      /** Set once the mod confirmed it told the session the default time passed. */
+      defaulted?: boolean;
       cursor?: string;
       /** The Claude Code session that asked; the mod delivers the answer there only. */
       session?: string;
     }
   >;
-  /** Verified answers by decision id; `seen` once a `wait` has printed it. */
+  /**
+   * Verified answers by decision id; `seen` once a `wait` has printed it or the mod confirmed it
+   * submitted it (`answers --ack`).
+   */
   answers: Record<string, { answer: Answer; seen: boolean }>;
+}
+
+/** Every holder lets go within milliseconds; this long means a lock nobody can break. */
+const LOCK_TIMEOUT_MS = 15_000;
+const tick = new Int32Array(new SharedArrayBuffer(4));
+
+function readLock(path: string): string | undefined {
+  try {
+    return readFileSync(path, "utf8");
+  } catch {
+    return undefined;
+  }
+}
+
+/** Whether the process that wrote lock text `held` ("<pid> <nonce>") still runs. */
+function alive(held: string): boolean {
+  const pid = Number(held.split(" ")[0]);
+  if (!Number.isInteger(pid) || pid <= 0) return true;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (e) {
+    return (e as NodeJS.ErrnoException).code === "EPERM";
+  }
 }
 
 export class Store {
   constructor(readonly dir: string) {}
+
+  /**
+   * Runs `fn` while holding `.lock`, which one process at a time can create, so read-modify-write
+   * cycles from several CLI processes (the mod's poll, an agent's `ask`) do not undo each other.
+   * `fn` must not await, nor take the lock again: the lock is released when it returns.
+   */
+  locked<T>(fn: () => T): T {
+    mkdirSync(this.dir, { recursive: true, mode: 0o700 });
+    const lock = this.path(".lock");
+    const mine = `${process.pid} ${randomBytes(8).toString("hex")}`;
+    const end = Date.now() + LOCK_TIMEOUT_MS;
+    while (true) {
+      try {
+        writeFileSync(lock, mine, { flag: "wx", mode: 0o600 });
+        break;
+      } catch (e) {
+        if ((e as NodeJS.ErrnoException).code !== "EEXIST") throw e;
+      }
+      this.breakDeadLock(lock);
+      if (Date.now() > end)
+        throw new Error(`${lock} stays locked: remove it if no starbridge runs`);
+      Atomics.wait(tick, 0, 0, 5);
+    }
+    try {
+      return fn();
+    } finally {
+      // Another process may have broken it as dead; never remove a lock that is not ours.
+      if (readLock(lock) === mine) unlinkSync(lock);
+    }
+  }
+
+  /**
+   * Removes a lock whose process is gone. It moves the lock aside first and removes it only if
+   * it is still the dead one, so two processes breaking it at once do not remove a lock a third
+   * just took; a live one moved aside by mistake goes back.
+   */
+  private breakDeadLock(lock: string) {
+    const held = readLock(lock);
+    if (held === undefined || alive(held)) return;
+    const aside = `${lock}.${process.pid}`;
+    try {
+      renameSync(lock, aside);
+    } catch {
+      return;
+    }
+    if (readLock(aside) === held) {
+      unlinkSync(aside);
+      return;
+    }
+    try {
+      linkSync(aside, lock);
+    } catch {
+      // A third process took the lock in the instant the live one was aside: both now run,
+      // which needs a crashed holder and three contenders within microseconds.
+    }
+    unlinkSync(aside);
+  }
 
   private path(name: string) {
     return join(this.dir, name);
@@ -84,12 +182,14 @@ export class Store {
     return this.read<State>("state.json") ?? { asked: {}, answers: {} };
   }
 
-  /** Re-reads the state, applies `fn` and writes it back, to narrow races between processes. */
+  /** Re-reads the state, applies `fn` and writes it back, under the lock. */
   updateState(fn: (s: State) => void): State {
-    const s = this.state();
-    fn(s);
-    this.write("state.json", s);
-    return s;
+    return this.locked(() => {
+      const s = this.state();
+      fn(s);
+      this.write("state.json", s);
+      return s;
+    });
   }
 }
 

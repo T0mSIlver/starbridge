@@ -1,9 +1,11 @@
 # skill
 
 `starbridge/` is the Claude Code skill that tells agents when to ask the owner
-a decision and how to write one that stands alone on a lock screen.
+a decision, how to write one that stands alone on a lock screen, and to keep
+working until the answer comes back. The mod (`mod/README.md`) brings the
+answer back.
 
-Install it, with the CLI paired:
+Install it, with the CLI paired and the mod loaded:
 
 ```bash
 cp -r skill/starbridge ~/.claude/skills/

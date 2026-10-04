@@ -1,7 +1,7 @@
 ---
 name: starbridge
 description: "Ask the owner a decision through Starbridge: a notification on their phone and web page with the options as buttons, answered with one tap and sent back into this session. Use whenever you need the owner to decide something you should not decide alone, instead of asking in chat, where questions get buried. Covers when to ask, how to write a decision that stands alone on a lock screen, and how the answer comes back."
-compatibility: The `starbridge` CLI on PATH, paired with `starbridge pair`.
+compatibility: The `starbridge` CLI on PATH, paired with `starbridge pair`, and the Starbridge mod loaded in this Claude Code session.
 ---
 
 # Ask the owner through Starbridge
@@ -23,9 +23,6 @@ Ask only what is the owner's to decide:
 Decide the rest yourself, act, and report what you did. A question you could
 have answered costs the owner an interruption.
 
-Never block on the answer. Post the decision, keep doing the work that does
-not depend on it, and apply your default when its time comes.
-
 ## Write a decision that stands alone
 
 | Field | Flag | Rule |
@@ -35,7 +32,7 @@ not depend on it, and apply your default when its time comes.
 | options | `--option`, 2 to 4 times | Short labels, at most 100 characters each, that differ at a glance. With no options, the owner types a free-text answer. |
 | recommended | `--recommended` | The option you would pick. It shows first. Defaults to the first option, so list your pick first. |
 | default | `--default` | What you will do if nobody answers. Required. |
-| default time | `--default-at` | When you apply the default: `30m`, `2h`, or an ISO time. |
+| default time | `--default-at` | When you apply the default: `30m`, `2h`, or an ISO time. Always set it. |
 
 Checks before posting:
 
@@ -59,27 +56,32 @@ It prints the decision id, such as `d_Xk3…`. Long context goes in a file:
 `--context-file notes.md`, or `--json decision.json` with the fields
 `question`, `context`, `options`, `recommended`, `default` and `defaultAt`.
 
-## How the answer comes back
+## After you post: keep working
 
-The answer is one line:
+Never wait for the answer. Do not pass `--wait` to `ask`, and do not run
+`starbridge wait`, not even in the background. The owner may answer in a
+minute or in three hours.
 
-```
-Answer to d_Xk3… (Merge #12 (CLI uploader) into main now?): Merge
-```
+1. Go on with the work that does not depend on the answer.
+2. When only that work is left, end your turn. Report what you did, what
+   waits on the decision, and what you will do at the default time.
+3. The Starbridge mod submits the answer into this session as a new prompt:
 
-- With the Starbridge mod in this Claude Code session, the mod submits that
-  line to you as a new prompt. Post the decision and go on working.
-- Without the mod, run `starbridge wait <id>` in the background (the Bash
-  tool's `run_in_background`); you are notified when it exits. Or post with
-  `starbridge ask … --wait`.
+   ```
+   Answer to d_Xk3… (Merge #12 (CLI uploader) into main now?): Merge
+   ```
 
-If you do not know whether the mod runs here, start the background wait
-anyway. Act on the first answer and ignore a second copy.
+   It may arrive while you are busy with something else. Finish the step you
+   are on, then act on the answer.
+4. If nobody answers by the default time, the mod submits:
 
-`starbridge wait` exits 0 with the answer, and exits 2 when the default time
-(or `--timeout`) passes with no answer. Then apply your default and say so in
-your report. An answer that arrives later still counts: if the owner overrode
-your default, undo what you can and tell them.
+   ```
+   No answer to d_Xk3… (Merge #12 (CLI uploader) into main now?) by its default time 2026-10-04T18:00:00Z: apply your default: Merge
+   ```
 
-`starbridge wait` with no id prints the next answer to any decision from this
-machine, which helps after a restart.
+   Apply the default then, and say so in your report. If you are still
+   working when the default time passes, apply it without waiting for that
+   prompt.
+
+An answer can still come after you applied the default. If the owner chose
+something else, undo what you can and tell them.

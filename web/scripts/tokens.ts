@@ -71,6 +71,7 @@ const GENERATED = [
 const CSS_HEADER = `/* ${GENERATED[0]}\n   ${GENERATED[1]} */\n`;
 const KT_HEADER = `// ${GENERATED[0]}\n// ${GENERATED[1]}\n`;
 
+// Dark is the default; light applies only when the browser asks for it (DESIGN.md).
 function tokensCss(d: Design): string {
   const colors = (scheme: Record<string, string>, indent: string) =>
     Object.entries(scheme).map(([k, v]) => `${indent}--${k}: ${v};`);
@@ -79,8 +80,8 @@ function tokensCss(d: Design): string {
   return [
     CSS_HEADER,
     ":root {",
-    "  color-scheme: light dark;",
-    ...colors(d.colors.light, "  "),
+    "  color-scheme: dark light;",
+    ...colors(d.colors.dark, "  "),
     "",
     ...px("", d.spacing),
     ...px("radius-", d.radius),
@@ -88,9 +89,9 @@ function tokensCss(d: Design): string {
     ...Object.entries(d.motion).map(([k, v]) => `  --t-${k}: ${v}ms;`),
     "}",
     "",
-    "@media (prefers-color-scheme: dark) {",
+    "@media (prefers-color-scheme: light) {",
     "  :root {",
-    ...colors(d.colors.dark, "    "),
+    ...colors(d.colors.light, "    "),
     "  }",
     "}",
     "",

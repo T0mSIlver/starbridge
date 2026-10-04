@@ -6,11 +6,11 @@ import ui from "./ui.module.css";
 type State = "ok" | "unused" | "out" | "unknown";
 
 // A tone always comes with a word (DESIGN.md).
-const STATE: Record<State, { word: string; tone: string }> = {
-  ok: { word: "On pace", tone: ui.ok },
-  out: { word: "Will run out", tone: ui.bad },
-  unused: { word: "Headroom unused", tone: ui.warn },
-  unknown: { word: "Too early to tell", tone: ui.muted },
+const WORD: Record<State, string> = {
+  ok: "On pace",
+  out: "Will run out",
+  unused: "Headroom unused",
+  unknown: "Too early to tell",
 };
 
 function stateOf(w: QuotaWindow, alert?: QuotaAlert): State {
@@ -29,21 +29,20 @@ function alertText(a: QuotaAlert): string {
 export function QuotaCard({ q }: { q: QuotaCardData }) {
   const { provider, window: w, alert } = q;
   const state = stateOf(w, alert);
-  const word = STATE[state];
   const used = Math.round(w.usedPercent);
   const expected = w.pace ? Math.round(w.pace.expectedUsedPercent) : null;
+  const fill = Math.min(Math.max(used, 0), 100);
   return (
     <article className={`${ui.card} ${s.card}`}>
       <div className={s.top}>
-        <div>
-          <h2 className="t-heading">{provider}</h2>
-          <p className={`t-label ${s.window}`}>{w.label}</p>
-        </div>
-        <span className={`t-label ${ui.pill} ${word.tone}`}>{word.word}</span>
-      </div>
-      <div className={s.figure}>
-        <span className="t-figure">{used}%</span>
-        <span className={s.used}>used</span>
+        <h2 className={`t-action ${s.name}`}>
+          {provider} <span className={`t-small ${s.window}`}>{w.label}</span>
+          {q.machine && <span className={`t-machine ${s.machine}`}>{q.machine}</span>}
+        </h2>
+        <span className="t-figure">
+          {used}
+          <span className={s.percent}>%</span>
+        </span>
       </div>
       {/* biome-ignore lint/a11y/useSemanticElements: <meter> cannot draw the steady-pace mark */}
       <div
@@ -53,8 +52,11 @@ export function QuotaCard({ q }: { q: QuotaCardData }) {
         aria-valuemin={0}
         aria-valuemax={100}
         aria-valuenow={used}
+        aria-valuetext={`${used}% used${expected !== null ? `, steady pace ${expected}%` : ""}`}
       >
-        <span className={`${s.fill} ${s[state]}`} style={{ width: `${Math.min(used, 100)}%` }} />
+        {/* A filled part, a gap, the rest of the track with a stop mark at its end. */}
+        {used > 0 && <span className={`${s.fill} ${s[state]}`} style={{ flexBasis: `${fill}%` }} />}
+        {fill < 100 && <span className={s.rest} />}
         {expected !== null && (
           <span
             className={s.expected}
@@ -64,14 +66,11 @@ export function QuotaCard({ q }: { q: QuotaCardData }) {
         )}
       </div>
       <p className={`t-small ${s.facts}`}>
+        <span className={`t-label ${s.word} ${s[state]}`}>{WORD[state]}</span>
         <span>{w.resetsAt ? `Resets ${relative(w.resetsAt)}` : "Reset time unknown"}</span>
-        {expected !== null && <span>Steady pace: {expected}%</span>}
       </p>
       {alert && (
-        <p
-          className={`${s.alert} ${alert.kind === "runs-out" ? s.alertBad : s.alertWarn}`}
-          role="status"
-        >
+        <p className={`t-small ${s.alert}`} role="status">
           {alertText(alert)}
         </p>
       )}

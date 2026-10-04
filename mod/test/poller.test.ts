@@ -8,6 +8,7 @@ import { type Host, Poller, type Timing } from "../hooks/poller.ts";
 const FAST: Timing = {
   waitSeconds: 1,
   checkMs: 10,
+  recheckMs: 60_000,
   leaseMs: 2_000,
   minCycleMs: 20,
   backoffMs: 20,
@@ -26,14 +27,21 @@ afterEach(async () => {
   server.stop();
 });
 
-/** A session with the mod: the engine's `$` reduced to what the poller uses, the CLI in-process. */
-function session(id: string) {
+/**
+ * A session with the mod: the engine's `$` reduced to what the poller uses, the CLI in-process.
+ * A `gated` session waits before each look at the state file until `settle` lets it through.
+ */
+function session(id: string, opts: { gated?: boolean; timing?: Timing } = {}) {
   const s = {
     id,
     submitted: [] as string[],
     runs: [] as string[][],
     status: undefined as string | undefined,
     logs: [] as string[],
+    /** Called when a CLI run returns, before the poller sees its output. */
+    afterRun: undefined as ((stdout: string) => void) | undefined,
+    /** Set while a gated session waits at the gate. */
+    parked: undefined as (() => void) | undefined,
   };
   const host: Host = {
     sessionId: async () => s.id,
@@ -46,11 +54,17 @@ function session(id: string) {
         out: (l) => out.push(l),
         err: (l) => err.push(l),
       });
-      return { exitCode, stdout: out.map((l) => `${l}\n`).join(""), stderr: err.join("\n") };
+      const stdout = out.map((l) => `${l}\n`).join("");
+      s.afterRun?.(stdout);
+      return { exitCode, stdout, stderr: err.join("\n") };
     },
     read: async (path) => readFileSync(path, "utf8"),
     write: async (path, text) => writeFileSync(path, text),
     mtime: async (path) => {
+      if (opts.gated)
+        await new Promise<void>((resolve) => {
+          s.parked = resolve;
+        });
       try {
         return statSync(path).mtimeMs;
       } catch {
@@ -65,12 +79,12 @@ function session(id: string) {
     },
     log: (text) => s.logs.push(text),
   };
-  const poller = new Poller(host, cli.store.dir, "starbridge", FAST);
+  const poller = new Poller(host, cli.store.dir, "starbridge", opts.timing ?? FAST);
   pollers.push(poller);
   return { get: () => s, poller };
 }
 
-async function ask(question: string, sessionId?: string): Promise<string> {
+async function ask(question: string, sessionId?: string, defaultAt?: string): Promise<string> {
   const args = [
     "ask",
     "--question",
@@ -82,36 +96,62 @@ async function ask(question: string, sessionId?: string): Promise<string> {
     "--default",
     "Yes",
   ];
-  expect(await run([...args, ...(sessionId ? ["--session", sessionId] : [])], cli)).toBe(0);
+  if (sessionId) args.push("--session", sessionId);
+  if (defaultAt) args.push("--default-at", defaultAt);
+  expect(await run(args, cli)).toBe(0);
   return cli.lines.at(-1) as string;
 }
 
-const polling = (s: ReturnType<typeof session>) =>
-  s.get().runs.filter((a) => a.includes("--wait")).length;
+type Session = ReturnType<typeof session>;
+
+const polling = (s: Session) => s.get().runs.filter((a) => a.includes("--wait")).length;
+
+/** Lets a gated session look at the state file until a look runs nothing. */
+async function settle(s: Session) {
+  let before: number;
+  do {
+    before = s.get().runs.length;
+    await until(() => s.get().parked !== undefined);
+    const go = s.get().parked as () => void;
+    s.get().parked = undefined;
+    go();
+    await until(() => s.get().parked !== undefined);
+  } while (s.get().runs.length > before);
+}
 
 test("each answer reaches the session that asked, once, through one poller", async () => {
-  const a = session("s-a");
-  const b = session("s-b");
-  const c = session("s-c");
+  const all = ["s-a", "s-b", "s-c"].map((id) => session(id, { gated: true }));
+  const [a, b, c] = all as [Session, Session, Session];
   const da = await ask("Merge #12 now?", "s-a");
   const db = await ask("Deploy tonight?", "s-b");
   const nobody = await ask("Asked outside Claude Code?");
   await until(() => polling(a) + polling(b) + polling(c) > 0);
+  const poller = all.find((s) => polling(s) > 0) as Session;
 
   await server.answer(db, { choice: "No" });
   await server.answer(da, { choice: "Yes" });
   await server.answer(nobody, { choice: "Yes" });
-  await until(() => a.get().submitted.length + b.get().submitted.length === 2);
-  await Bun.sleep(100);
+  // The poller has stored every answer and confirmed its own; the others have not looked yet.
+  await until(() => {
+    const st = cli.store.state();
+    const stored = Object.entries(st.answers);
+    return (
+      stored.length === 3 &&
+      stored.every(([id, x]) => x.seen || st.asked[id]?.session !== poller.get().id)
+    );
+  });
+  // One at a time, so how many state changes each sees does not depend on scheduling.
+  for (const s of all) if (s !== poller) await settle(s);
 
   expect(a.get().submitted).toEqual([`Answer to ${da} (Merge #12 now?): Yes`]);
   expect(b.get().submitted).toEqual([`Answer to ${db} (Deploy tonight?): No`]);
   expect(c.get().submitted).toEqual([]);
   // One session holds the lease and polls; the others only read the state file.
   expect([polling(a), polling(b), polling(c)].filter((n) => n > 0)).toHaveLength(1);
-  // The others ran the CLI only when the state file changed: the asks, the stored answers.
+  // The others ran the CLI only when the state file changed: one look at the stored answers,
+  // the confirm of their own, one look at the state their confirm wrote.
   const local = [a, b, c].map((s) => s.get().runs.length - polling(s));
-  expect(Math.max(...local)).toBeLessThanOrEqual(6);
+  expect(Math.max(...local)).toBeLessThanOrEqual(3);
 });
 
 test("a forged answer is never submitted", async () => {
@@ -180,4 +220,64 @@ test("the poller keeps its lease across a /clear, under the new session id", asy
   await until(() => leader.get().submitted.length === 1, 1500);
   const lease = JSON.parse(readFileSync(`${cli.store.dir}/mod-poller.json`, "utf8"));
   expect(lease.session).toBe("s-cleared");
+});
+
+test("an answer in flight during a /clear waits for its own session", async () => {
+  const a = session("s-a");
+  const da = await ask("Merge #12 now?", "s-a");
+  await until(() => polling(a) > 0);
+  // The /clear lands while the poll that carries the answer is running.
+  a.get().afterRun = (stdout) => {
+    if (stdout.includes(da)) a.get().id = "s-new";
+  };
+  await server.answer(da, { choice: "Yes" });
+  await until(() => a.get().id === "s-new");
+  await Bun.sleep(200);
+  expect(a.get().submitted).toEqual([]);
+  expect(a.get().logs.some((l) => l.includes(da))).toBe(true);
+
+  // Resuming the old session hands it over there, once.
+  a.get().afterRun = undefined;
+  a.get().id = "s-a";
+  await until(() => a.get().submitted.length === 1);
+  await Bun.sleep(200);
+  expect(a.get().submitted).toEqual([`Answer to ${da} (Merge #12 now?): Yes`]);
+});
+
+test("a session that does not poll also keeps an answer through a /clear", async () => {
+  const lead = session("s-lead");
+  await until(() => polling(lead) > 0);
+  const a = session("s-a");
+  const da = await ask("Merge #12 now?", "s-a");
+  a.get().afterRun = (stdout) => {
+    if (stdout.includes(da)) a.get().id = "s-new";
+  };
+  await server.answer(da, { choice: "Yes" });
+  await until(() => a.get().id === "s-new");
+  await Bun.sleep(200);
+  expect(a.get().submitted).toEqual([]);
+
+  a.get().afterRun = undefined;
+  a.get().id = "s-a";
+  await until(() => a.get().submitted.length === 1);
+  expect(polling(a)).toBe(0);
+});
+
+test("a session that does not poll hears when a default time passes, once", async () => {
+  const lead = session("s-lead");
+  await until(() => polling(lead) > 0);
+  const a = session("s-a", { timing: { ...FAST, recheckMs: 100 } });
+  const da = await ask("Merge #12 now?", "s-a", new Date(Date.now() + 300).toISOString());
+  // The state file does not change when the time passes; the recheck finds it.
+  await until(() => a.get().submitted.length === 1, 3000);
+  expect(a.get().submitted[0]).toMatch(
+    new RegExp(
+      `^No answer to ${da} \\(Merge #12 now\\?\\) by its default time .+: apply your default: Yes$`,
+    ),
+  );
+  await server.answer(da, { choice: "No" });
+  await until(() => a.get().submitted.length === 2);
+  await Bun.sleep(300);
+  expect(a.get().submitted[1]).toBe(`Answer to ${da} (Merge #12 now?): No`);
+  expect(lead.get().submitted).toEqual([]);
 });

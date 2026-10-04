@@ -74,15 +74,18 @@ export async function pair(
   const dir = verifyDirectory(entries, { account: approval.account, pin });
   checkJoined(dir, { id, role: "machine", ...publicKeys(keys) });
 
-  ctx.store.saveDirectory(entries);
-  ctx.store.saveMachine({
-    server,
-    account: approval.account,
-    id,
-    name,
-    token: result.token,
-    keys: encodeKeys(keys),
-    pin: { length: dir.length, head: dir.head },
+  const token = result.token;
+  ctx.store.locked(() => {
+    ctx.store.saveDirectory(entries);
+    ctx.store.saveMachine({
+      server,
+      account: approval.account,
+      id,
+      name,
+      token,
+      keys: encodeKeys(keys),
+      pin: { length: dir.length, head: dir.head },
+    });
   });
   ctx.store.updateState((s) => {
     s.cursor = undefined;

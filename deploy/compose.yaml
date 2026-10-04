@@ -18,6 +18,17 @@ services:
       driver: json-file
       options: { max-size: 10m, max-file: "5" }
 
+  web:
+    build:
+      context: ..
+      dockerfile: web/Dockerfile
+    image: starbridge-web:latest
+    restart: unless-stopped
+    # Only Caddy reaches the page; it holds no secrets and needs no environment.
+    ports:
+      - "127.0.0.1:3000:3000"
+    logging: *logging
+
   caddy:
     image: caddy:2
     restart: unless-stopped

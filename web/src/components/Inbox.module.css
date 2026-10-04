@@ -1,0 +1,115 @@
+/* Phones: answered decisions as a log of one-line rows. */
+.log {
+  list-style: none;
+}
+
+.log li {
+  padding: var(--s3) var(--s1);
+}
+
+.log li + li {
+  border-top: 1px solid var(--line);
+}
+
+/* Wide screens: the list beside the selected decision. */
+.panes {
+  display: grid;
+  grid-template-columns: calc(var(--size-content) / 2) minmax(0, var(--size-content));
+  gap: var(--s6);
+  align-items: start;
+}
+
+.list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+  position: sticky;
+  top: var(--s6);
+  max-height: calc(100dvh - 2 * var(--s6));
+  overflow-y: auto;
+}
+
+.row {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--s3) var(--s4);
+  border: 0;
+  border-radius: var(--radius-lg);
+  background: transparent;
+  text-align: left;
+  transition: background var(--t-fast);
+}
+
+.row:hover {
+  background: var(--surface);
+}
+
+/* Selected: the fill of the rail's active pill. */
+.row[aria-current="true"] {
+  background: var(--surface2);
+}
+
+/* Inside the row, where the list's scroll box cannot clip it. */
+.row:focus-visible {
+  outline-offset: -2px;
+}
+
+.rowQ {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s3);
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.rowDot,
+.spacer {
+  flex: none;
+  width: 8px;
+  transform: translateY(-1px);
+}
+
+.rowSub {
+  padding-left: calc(8px + var(--s3));
+  color: var(--fg2);
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.done .rowQ {
+  color: var(--fg2);
+  font-weight: 400;
+}
+
+.detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+  min-width: 0;
+}
+
+.keys {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s4);
+  color: var(--fg3);
+  padding: 0 var(--s2);
+}
+
+.keys kbd {
+  display: inline-block;
+  min-width: 20px;
+  margin-right: 2px;
+  padding: 0 var(--s1);
+  border: 1px solid var(--line-strong);
+  border-bottom-width: 2px;
+  border-radius: var(--radius-xs);
+  color: var(--fg2);
+  font: inherit;
+  text-align: center;
+}

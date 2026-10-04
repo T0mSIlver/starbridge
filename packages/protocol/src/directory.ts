@@ -1,4 +1,12 @@
-import { parseBody, parseWith, sign, signatureMessage, verify } from "./envelope";
+import {
+  parseBody,
+  parseWith,
+  type SignFn,
+  sign,
+  signAsync,
+  signatureMessage,
+  verify,
+} from "./envelope";
 import { type DirectoryEntry, type Member, RECOVERY, SignedEnvelope } from "./schemas";
 import { ProtocolError, sodium, toB64, utf8 } from "./sodium";
 
@@ -143,15 +151,16 @@ export function activeMembers(dir: Directory, role: Member["role"]): Member[] {
 
 // --- Writing entries ---------------------------------------------------------
 
-export function genesisEntry(args: {
+interface GenesisArgs {
   account: string;
   device: Member;
-  signKey: Uint8Array;
   /** The recovery key pair, used here once and then shown as words and dropped. */
   recovery: { publicKey: Uint8Array; privateKey: Uint8Array };
   at: string;
-}): SignedEnvelope {
-  const body: DirectoryEntry = {
+}
+
+function genesisBody(args: GenesisArgs): DirectoryEntry {
+  return {
     v: 1,
     account: args.account,
     seq: 0,
@@ -161,12 +170,35 @@ export function genesisEntry(args: {
     member: args.device,
     recoveryPk: toB64(args.recovery.publicKey),
   };
-  const env = sign("directory", body, args.device.id, args.signKey);
+}
+
+function withRecoverySig(env: SignedEnvelope, recoveryKey: Uint8Array): SignedEnvelope {
   const recoverySig = sodium.crypto_sign_detached(
     signatureMessage("directory", RECOVERY, env.body),
-    args.recovery.privateKey,
+    recoveryKey,
   );
   return { ...env, recoverySig: toB64(recoverySig) };
+}
+
+export function genesisEntry(args: GenesisArgs & { signKey: Uint8Array }): SignedEnvelope {
+  const env = sign("directory", genesisBody(args), args.device.id, args.signKey);
+  return withRecoverySig(env, args.recovery.privateKey);
+}
+
+/** `genesisEntry` with the device's `SignFn`. */
+export async function genesisEntryAsync(
+  args: GenesisArgs & { sign: SignFn },
+): Promise<SignedEnvelope> {
+  const env = await signAsync("directory", genesisBody(args), args.device.id, args.sign);
+  return withRecoverySig(env, args.recovery.privateKey);
+}
+
+function nextBody(
+  dir: Directory,
+  at: string,
+  change: { op: "add"; member: Member } | { op: "revoke"; id: string },
+): DirectoryEntry {
+  return { v: 1, account: dir.account, seq: dir.length, prev: dir.head, at, ...change };
 }
 
 /** `signer.id` is an active device's id, or RECOVERY with the recovery private key. */
@@ -176,16 +208,7 @@ export function addEntry(
   member: Member,
   at: string,
 ): SignedEnvelope {
-  const body: DirectoryEntry = {
-    v: 1,
-    account: dir.account,
-    seq: dir.length,
-    prev: dir.head,
-    at,
-    op: "add",
-    member,
-  };
-  return sign("directory", body, signer.id, signer.signKey);
+  return sign("directory", nextBody(dir, at, { op: "add", member }), signer.id, signer.signKey);
 }
 
 export function revokeEntry(
@@ -194,14 +217,25 @@ export function revokeEntry(
   id: string,
   at: string,
 ): SignedEnvelope {
-  const body: DirectoryEntry = {
-    v: 1,
-    account: dir.account,
-    seq: dir.length,
-    prev: dir.head,
-    at,
-    op: "revoke",
-    id,
-  };
-  return sign("directory", body, signer.id, signer.signKey);
+  return sign("directory", nextBody(dir, at, { op: "revoke", id }), signer.id, signer.signKey);
+}
+
+/** `addEntry` with an active device's `SignFn`. */
+export function addEntryAsync(
+  dir: Directory,
+  signer: { id: string; sign: SignFn },
+  member: Member,
+  at: string,
+): Promise<SignedEnvelope> {
+  return signAsync("directory", nextBody(dir, at, { op: "add", member }), signer.id, signer.sign);
+}
+
+/** `revokeEntry` with an active device's `SignFn`. */
+export function revokeEntryAsync(
+  dir: Directory,
+  signer: { id: string; sign: SignFn },
+  id: string,
+  at: string,
+): Promise<SignedEnvelope> {
+  return signAsync("directory", nextBody(dir, at, { op: "revoke", id }), signer.id, signer.sign);
 }

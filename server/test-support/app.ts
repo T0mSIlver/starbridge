@@ -36,6 +36,7 @@ export function testConfig(over: Partial<Config> = {}): Config {
     maxWaitSeconds: 300,
     pushInlineLimit: 3072,
     allowPrivatePushEndpoints: true,
+    pushTimeoutMs: 2000,
     relayMode: false,
     ...over,
   };

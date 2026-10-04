@@ -35,9 +35,10 @@ export const register: Register = (on) => {
     return started;
   });
 
-  // After a /clear the process goes on under a new session id, and the loop reads it each step.
+  // After a /clear or a /resume the process goes on under another session id, with no
+  // `session.start`, and the loop reads the id each step. Only the end of the process stops it.
   on("session.end", async (_$, e, next) => {
-    if (e.reason !== "clear") {
+    if (e.reason !== "clear" && e.reason !== "resume") {
       await poller?.stop();
       poller = undefined;
     }
