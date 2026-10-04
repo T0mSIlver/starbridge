@@ -380,3 +380,8 @@ two vendors at high effort. The orchestrator merges on green, squash.
   frequencies"; hailing.dev, .app and .sh show no nameservers; no Play app;
   "ride-hailing" is the common sense of the word). No nameservers is not proof a
   domain is free; confirm at a registrar.
+- 2026-10-04: Android crypto. `lazysodium-android` 5.2.0 needs JNA's AAR
+  (`jna@aar`) for its per-ABI native library; JVM unit tests use
+  `lazysodium-java`, which bundles libsodium for desktop, so the same
+  `LazySodium` API runs in both. The release build keeps JNA and Lazysodium
+  from R8.
