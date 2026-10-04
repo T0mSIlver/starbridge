@@ -194,6 +194,11 @@ How it generalizes is open.
   hold keys.
 - 2026-10-04. MIT licence, free hosting paid by the owner (CodexBar's model).
 
+- 2026-10-04. Free hosting caps each account at about 5 machines. Budget
+  €5 to €10 a month. A VPS, not the home network (keeps the service away from
+  the owner's machines). Check Hetzner Cloud first (CX23 or CAX11, about
+  €5.50 to €6 after the June 2026 increase), then netcup.
+
 ## Fully hosted
 
 A first sketch, to discuss:
@@ -229,13 +234,29 @@ Approved 2026-10-04:
 
 ## Open questions
 
-1. Key handling for end-to-end encryption: how an agent on a new machine gets
-   the key, and how a lost phone is revoked.
-2. Hosting costs and limits with free hosting: quotas per user, abuse.
-3. The name.
+1. Encryption keys. Proposed (default unless the owner objects): a key pair
+   per device. Agents encrypt each decision to the public keys of the owner's
+   phone and browsers; answers come back encrypted to the asking machine's key.
+   A new device is approved from one the owner already has; revoking deletes its
+   public key. A recovery key, printed once, restores access after losing every
+   device. Alternatives considered: the server reads decisions; one passphrase
+   per account; one shared key handed out by the phone.
+2. The name. Shortlist and checks in the research log.
 
 ## Research log
 
 - 2026-10-04: CodexBar facts from the owner's checkout and upstream docs. Mod
   API facts from `~/.claude/mods/orchestrator-cache/.claude-plugin/types`.
   Phone apps, channels and ntfy from web research the same day.
+- 2026-10-04: names. Peers frame themselves as a command centre (Omnara,
+  Conductor, Vibe Kanban), a remote for the pocket (Happy, Paseo) or an approval
+  layer (HumanLayer, gotohuman). None pairs quota windows with decisions.
+  Taken or too close: AgentBar (scari/AgentBar, a macOS menu bar usage tracker),
+  Wheelhouse (kunchenguid/wheelhouse, cross-repo decision cards), Hark (a
+  webhook push app), Gaffer, Tiller, Foreman, Bellwether, Cairn. Still
+  candidates: Askbar, Aye, Holler (bitpshr/holler, a 295-star CLI notifier),
+  Tapline.
+- 2026-10-04: VPS prices. Hetzner CX23 about €5.49 (up from €3.99 on
+  2026-06-15), netcup moved to G12.5 on 2026-09-22 (+40%), OVH VPS-1 €6.49
+  since 2026-04-01, Scaleway DEV1-S €6.55, DigitalOcean $12, Fly.io about $13,
+  Oracle's free Arm tier cut and unreliable.
