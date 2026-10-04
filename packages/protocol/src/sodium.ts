@@ -40,6 +40,8 @@ export type ErrorCode =
   | "bad-schema"
   | "bad-signature"
   | "bad-mac"
+  | "bad-commitment"
+  | "bad-key"
   | "cannot-open"
   | "wrong-kind"
   | "wrong-recipient"

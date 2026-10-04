@@ -6,19 +6,26 @@
 import {
   addEntry,
   alertsFor,
+  approverKeys,
   bindMessage,
   claimHash,
+  codeFromLink,
   computePace,
   type Directory,
   encodeCrockford,
   entryHash,
   formatPairingCode,
   genesisEntry,
+  joinApproval,
+  joinCommitment,
+  joinerKeys,
+  joinRequest,
   type Member,
   type MemberKeys,
   memberKeysFromSeeds,
   pairingApproval,
   pairingKey,
+  pairingLink,
   pairingRequest,
   parsePairingCode,
   publicKeys,
@@ -641,6 +648,19 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
       { input: "0123-4567-89AB-CDEF-GHJK-MNPU", expect: "bad-encoding" },
       { input: "0123-4567", expect: "bad-encoding" },
     ],
+    links: [
+      {
+        note: "pairingLink(server, code); codeFromLink takes what follows #, or the whole text",
+        server: "https://starbridge.run/",
+        link: pairingLink("https://starbridge.run/", code),
+        expect: formatPairingCode(codeFromLink(pairingLink("https://starbridge.run/", code))),
+      },
+      {
+        input: `https://example.org/pair#${formatPairingCode(code).toLowerCase()}`,
+        expect: formatPairingCode(code),
+      },
+      { input: "https://starbridge.run/pair#0123-4567", expect: "bad-encoding" },
+    ],
     bind: (() => {
       const nonce = toB64(seed(11));
       const sig = toB64(
@@ -685,6 +705,137 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
         message: { ...approval, body: approval.body.replace(at3.head, fakeDir.head) },
         code: formatPairingCode(code),
         expect: "bad-mac",
+      },
+    ],
+  };
+
+  // --- join.json ---
+  const ephemeral = (n: number) => sodium.crypto_box_seed_keypair(seed(n));
+  const joiner = ephemeral(21);
+  const approver = ephemeral(22);
+  const server = ephemeral(23);
+  const joinId = encodeCrockford(new Uint8Array([1, 2, 3, 4, 5]));
+  const joinBody = {
+    v: 1 as const,
+    join: joinId,
+    account: ACCOUNT,
+    id: "phone2",
+    name: "New Pixel",
+    ...publicKeys(phone2.keys),
+    at: T(9, 19),
+  };
+  const joinText = joinRequest(joinBody);
+  const commitment = joinCommitment(joiner.publicKey, joinText);
+  const joinerSide = joinerKeys({
+    mine: joiner,
+    approverKey: toB64(approver.publicKey),
+    request: joinText,
+  });
+  const approverSide = approverKeys({
+    mine: approver,
+    joinerKey: toB64(joiner.publicKey),
+    request: joinText,
+    commitment,
+  });
+  if (joinerSide.digits !== approverSide.digits) throw new Error("join digits differ");
+  const joinApprovalBody = {
+    v: 1 as const,
+    join: joinId,
+    account: ACCOUNT,
+    length: full.length,
+    head: full.head,
+    approver: "phone",
+  };
+  const joinApprovalMsg = joinApproval(joinApprovalBody, approverSide);
+  // The server in the middle: its own key to each side.
+  const mitm = approverKeys({
+    mine: approver,
+    joinerKey: toB64(server.publicKey),
+    request: joinText,
+    commitment: joinCommitment(server.publicKey, joinText),
+  });
+  const lowOrder = new Uint8Array(32);
+  lowOrder[0] = 1;
+  const join = {
+    note: "Ephemeral X25519 keys are crypto_box_seed_keypair of a seed filled with n. Digits: first 4 bytes of the SAS hash, big-endian, mod 1000000, 6 digits.",
+    joiner: {
+      seed: toB64(seed(21)),
+      publicKey: toB64(joiner.publicKey),
+      privateKey: toB64(joiner.privateKey),
+    },
+    approver: {
+      seed: toB64(seed(22)),
+      publicKey: toB64(approver.publicKey),
+      privateKey: toB64(approver.privateKey),
+    },
+    server: {
+      seed: toB64(seed(23)),
+      publicKey: toB64(server.publicKey),
+      privateKey: toB64(server.privateKey),
+    },
+    request: { body: joinBody, text: joinText },
+    commitment,
+    mac: toB64(approverSide.mac),
+    digits: approverSide.digits,
+    approval: { message: joinApprovalMsg, body: joinApprovalBody },
+    bad: [
+      {
+        name: "revealed key that does not open the commitment",
+        side: "approver",
+        joinerKey: toB64(server.publicKey),
+        request: joinText,
+        commitment,
+        expect: "bad-commitment",
+      },
+      {
+        name: "request changed after the commitment",
+        side: "approver",
+        joinerKey: toB64(joiner.publicKey),
+        request: joinRequest({ ...joinBody, ...publicKeys(evil.keys) }),
+        commitment,
+        expect: "bad-commitment",
+      },
+      {
+        name: "low-order approver key",
+        side: "joiner",
+        approverKey: toB64(lowOrder),
+        request: joinText,
+        expect: "bad-key",
+      },
+      {
+        name: "all-zero approver key",
+        side: "joiner",
+        approverKey: toB64(new Uint8Array(32)),
+        request: joinText,
+        expect: "bad-key",
+      },
+      {
+        name: "short approver key",
+        side: "joiner",
+        approverKey: toB64(new Uint8Array(31)),
+        request: joinText,
+        expect: "bad-encoding",
+      },
+      {
+        name: "approval made under the server's key",
+        side: "approval",
+        message: joinApproval(joinApprovalBody, mitm),
+        expect: "bad-mac",
+      },
+      {
+        name: "approval for the server's own directory",
+        side: "approval",
+        message: {
+          ...joinApprovalMsg,
+          body: joinApprovalMsg.body.replace(full.head, fakeDir.head),
+        },
+        expect: "bad-mac",
+      },
+      {
+        name: "approval for another join",
+        side: "approval",
+        message: joinApproval({ ...joinApprovalBody, join: "ZZZZZZZZ" }, approverSide),
+        expect: "id-mismatch",
       },
     ],
   };
@@ -839,6 +990,7 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
     "directory.json": directory,
     "envelopes.json": envelopes,
     "pairing.json": pairing,
+    "join.json": join,
     "pace.json": paceFile,
     "schemas.json": schemas,
   };

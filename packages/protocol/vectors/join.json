@@ -1,0 +1,114 @@
+{
+  "note": "Ephemeral X25519 keys are crypto_box_seed_keypair of a seed filled with n. Digits: first 4 bytes of the SAS hash, big-endian, mod 1000000, 6 digits.",
+  "joiner": {
+    "seed": "FRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRU",
+    "publicKey": "fm5nJVDylIZX8chH2omostlXERXKf9DowvZYfJtsBRE",
+    "privateKey": "LnDHU1vy9KGFWRJk1_b1jTAXdX9lpd91eZ6wI0OqbIE"
+  },
+  "approver": {
+    "seed": "FhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhY",
+    "publicKey": "qNAUmnHrMYLGcPQykhpPaxIGJYcINVpCPw2q3VyfXAE",
+    "privateKey": "cIzupLWbhZIGrmRMqm1PTcgdAlvz5W0wss-aLUwf5uA"
+  },
+  "server": {
+    "seed": "FxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxc",
+    "publicKey": "3aaWLnENnzPzz27Ej6FyEbkZcfNOChKOzMMO8LrvWgc",
+    "privateKey": "lvtLZaIbT-mkZ9ATNTmwhVSI12ig1ZCfHc0gIzEJSsc"
+  },
+  "request": {
+    "body": {
+      "v": 1,
+      "join": "04106105",
+      "account": "acct_tom",
+      "id": "phone2",
+      "name": "New Pixel",
+      "boxPk": "7dA8regNKd5uoxOnSrNp9HMuyzZkkGa3i1st1mTLBBc",
+      "signPk": "VLDYHQ-n0A5KfWAN-rpvKyIDWyL-M14X7fX5qluwUHQ",
+      "at": "2026-10-04T09:19:00Z"
+    },
+    "text": "{\"v\":1,\"join\":\"04106105\",\"account\":\"acct_tom\",\"id\":\"phone2\",\"name\":\"New Pixel\",\"boxPk\":\"7dA8regNKd5uoxOnSrNp9HMuyzZkkGa3i1st1mTLBBc\",\"signPk\":\"VLDYHQ-n0A5KfWAN-rpvKyIDWyL-M14X7fX5qluwUHQ\",\"at\":\"2026-10-04T09:19:00Z\"}"
+  },
+  "commitment": "RQQbWoNSw4qj7u1jaqJk7HIdICNCI6O11oiroCKEIPI",
+  "mac": "_mOjqDcC-iJMp4WPpcNSS0uKdUGxncXERsU3Umu_Bj0",
+  "digits": "867375",
+  "approval": {
+    "message": {
+      "body": "{\"v\":1,\"join\":\"04106105\",\"account\":\"acct_tom\",\"length\":5,\"head\":\"mJX3hMUjQ_4Fhn7arYF7dnD9qfjt43mE6WD9UwxYTSU\",\"approver\":\"phone\"}",
+      "mac": "2vW6LyLmnQCx3TCSsaE9zDN0I-int33ts3NQD91QDlg"
+    },
+    "body": {
+      "v": 1,
+      "join": "04106105",
+      "account": "acct_tom",
+      "length": 5,
+      "head": "mJX3hMUjQ_4Fhn7arYF7dnD9qfjt43mE6WD9UwxYTSU",
+      "approver": "phone"
+    }
+  },
+  "bad": [
+    {
+      "name": "revealed key that does not open the commitment",
+      "side": "approver",
+      "joinerKey": "3aaWLnENnzPzz27Ej6FyEbkZcfNOChKOzMMO8LrvWgc",
+      "request": "{\"v\":1,\"join\":\"04106105\",\"account\":\"acct_tom\",\"id\":\"phone2\",\"name\":\"New Pixel\",\"boxPk\":\"7dA8regNKd5uoxOnSrNp9HMuyzZkkGa3i1st1mTLBBc\",\"signPk\":\"VLDYHQ-n0A5KfWAN-rpvKyIDWyL-M14X7fX5qluwUHQ\",\"at\":\"2026-10-04T09:19:00Z\"}",
+      "commitment": "RQQbWoNSw4qj7u1jaqJk7HIdICNCI6O11oiroCKEIPI",
+      "expect": "bad-commitment"
+    },
+    {
+      "name": "request changed after the commitment",
+      "side": "approver",
+      "joinerKey": "fm5nJVDylIZX8chH2omostlXERXKf9DowvZYfJtsBRE",
+      "request": "{\"v\":1,\"join\":\"04106105\",\"account\":\"acct_tom\",\"id\":\"phone2\",\"name\":\"New Pixel\",\"boxPk\":\"xE5CklF3Hsdhl8eh-OoomhjKPden4QK6fMhN9rVcvho\",\"signPk\":\"4006AbYRLhQp6tYWaEBfTvS-T4hTq-5QedKKxsE__dA\",\"at\":\"2026-10-04T09:19:00Z\"}",
+      "commitment": "RQQbWoNSw4qj7u1jaqJk7HIdICNCI6O11oiroCKEIPI",
+      "expect": "bad-commitment"
+    },
+    {
+      "name": "low-order approver key",
+      "side": "joiner",
+      "approverKey": "AQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "request": "{\"v\":1,\"join\":\"04106105\",\"account\":\"acct_tom\",\"id\":\"phone2\",\"name\":\"New Pixel\",\"boxPk\":\"7dA8regNKd5uoxOnSrNp9HMuyzZkkGa3i1st1mTLBBc\",\"signPk\":\"VLDYHQ-n0A5KfWAN-rpvKyIDWyL-M14X7fX5qluwUHQ\",\"at\":\"2026-10-04T09:19:00Z\"}",
+      "expect": "bad-key"
+    },
+    {
+      "name": "all-zero approver key",
+      "side": "joiner",
+      "approverKey": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "request": "{\"v\":1,\"join\":\"04106105\",\"account\":\"acct_tom\",\"id\":\"phone2\",\"name\":\"New Pixel\",\"boxPk\":\"7dA8regNKd5uoxOnSrNp9HMuyzZkkGa3i1st1mTLBBc\",\"signPk\":\"VLDYHQ-n0A5KfWAN-rpvKyIDWyL-M14X7fX5qluwUHQ\",\"at\":\"2026-10-04T09:19:00Z\"}",
+      "expect": "bad-key"
+    },
+    {
+      "name": "short approver key",
+      "side": "joiner",
+      "approverKey": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "request": "{\"v\":1,\"join\":\"04106105\",\"account\":\"acct_tom\",\"id\":\"phone2\",\"name\":\"New Pixel\",\"boxPk\":\"7dA8regNKd5uoxOnSrNp9HMuyzZkkGa3i1st1mTLBBc\",\"signPk\":\"VLDYHQ-n0A5KfWAN-rpvKyIDWyL-M14X7fX5qluwUHQ\",\"at\":\"2026-10-04T09:19:00Z\"}",
+      "expect": "bad-encoding"
+    },
+    {
+      "name": "approval made under the server's key",
+      "side": "approval",
+      "message": {
+        "body": "{\"v\":1,\"join\":\"04106105\",\"account\":\"acct_tom\",\"length\":5,\"head\":\"mJX3hMUjQ_4Fhn7arYF7dnD9qfjt43mE6WD9UwxYTSU\",\"approver\":\"phone\"}",
+        "mac": "jzqwXdarYaipQcnvEEsQAnGq50YPnWzfPUoIb6P-j6s"
+      },
+      "expect": "bad-mac"
+    },
+    {
+      "name": "approval for the server's own directory",
+      "side": "approval",
+      "message": {
+        "body": "{\"v\":1,\"join\":\"04106105\",\"account\":\"acct_tom\",\"length\":5,\"head\":\"fKkaTH-zl4d6_AUxOqN6W03-hmwI0oZZsFxgmyy7hvQ\",\"approver\":\"phone\"}",
+        "mac": "2vW6LyLmnQCx3TCSsaE9zDN0I-int33ts3NQD91QDlg"
+      },
+      "expect": "bad-mac"
+    },
+    {
+      "name": "approval for another join",
+      "side": "approval",
+      "message": {
+        "body": "{\"v\":1,\"join\":\"ZZZZZZZZ\",\"account\":\"acct_tom\",\"length\":5,\"head\":\"mJX3hMUjQ_4Fhn7arYF7dnD9qfjt43mE6WD9UwxYTSU\",\"approver\":\"phone\"}",
+        "mac": "AaJLSBTxxv3VltveNFuscv08xOX0mngOkezyoRw9z0E"
+      },
+      "expect": "id-mismatch"
+    }
+  ]
+}

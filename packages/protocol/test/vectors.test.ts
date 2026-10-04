@@ -4,13 +4,19 @@ import { buildVectors, render } from "../scripts/gen-vectors";
 import {
   Answer,
   alertsFor,
+  approverKeys,
   bindMessage,
   claimHash,
+  codeFromLink,
   computePace,
   Decision,
   formatPairingCode,
   fromB64,
+  joinCommitment,
+  joinerKeys,
+  joinRequest,
   open,
+  openJoinApproval,
   openPairingApproval,
   openPairingRequest,
   ProtocolError,
@@ -46,6 +52,7 @@ const V = {
   envelopes: await load("envelopes.json"),
   keys: await load("keys.json"),
   pairing: await load("pairing.json"),
+  join: await load("join.json"),
   pace: await load("pace.json"),
   schemas: await load("schemas.json"),
 };
@@ -126,6 +133,78 @@ describe("pairing.json", () => {
     test(c.name, () => {
       const fn = c.kind === "request" ? openPairingRequest : openPairingApproval;
       expect(errorCode(() => fn(c.message, parsePairingCode(c.code)))).toBe(c.expect);
+    });
+  }
+});
+
+describe("pairing.json: links", () => {
+  const [made, ...rest] = V.pairing.links;
+  test("pairingLink", () => {
+    expect(made.link).toBe(`https://starbridge.run/pair#${V.pairing.code}`);
+    expect(formatPairingCode(codeFromLink(made.link))).toBe(made.expect);
+  });
+  for (const c of rest) {
+    test(`codeFromLink ${c.input}`, () => {
+      let got: string;
+      try {
+        got = formatPairingCode(codeFromLink(c.input));
+      } catch (e) {
+        got = (e as ProtocolError).code;
+      }
+      expect(got).toBe(c.expect);
+    });
+  }
+});
+
+describe("join.json", () => {
+  const v = V.join;
+  const pair = (k: { publicKey: string; privateKey: string }) => ({
+    publicKey: fromB64(k.publicKey),
+    privateKey: fromB64(k.privateKey),
+    keyType: "x25519" as const,
+  });
+  test("request, commitment, digits and approval", () => {
+    expect(joinRequest(v.request.body)).toBe(v.request.text);
+    expect(joinCommitment(fromB64(v.joiner.publicKey), v.request.text)).toBe(v.commitment);
+    const a = approverKeys({
+      mine: pair(v.approver),
+      joinerKey: v.joiner.publicKey,
+      request: v.request.text,
+      commitment: v.commitment,
+    });
+    const j = joinerKeys({
+      mine: pair(v.joiner),
+      approverKey: v.approver.publicKey,
+      request: v.request.text,
+    });
+    expect(a.digits).toBe(v.digits);
+    expect(j.digits).toBe(v.digits);
+    expect(toB64(a.mac)).toBe(v.mac);
+    expect(toB64(j.mac)).toBe(v.mac);
+    expect(openJoinApproval(v.approval.message, j, v.request.body.join)).toEqual(v.approval.body);
+  });
+  for (const c of v.bad) {
+    test(c.name, () => {
+      const run = () => {
+        if (c.side === "approver")
+          approverKeys({
+            mine: pair(v.approver),
+            joinerKey: c.joinerKey,
+            request: c.request,
+            commitment: c.commitment,
+          });
+        else if (c.side === "joiner")
+          joinerKeys({ mine: pair(v.joiner), approverKey: c.approverKey, request: c.request });
+        else {
+          const keys = joinerKeys({
+            mine: pair(v.joiner),
+            approverKey: v.approver.publicKey,
+            request: v.request.text,
+          });
+          openJoinApproval(c.message, keys, v.request.body.join);
+        }
+      };
+      expect(errorCode(run)).toBe(c.expect);
     });
   }
 });
