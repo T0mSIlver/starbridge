@@ -6,7 +6,7 @@ import { type Ctx, UsageError } from "./context";
 import { type AskInput, answers, ask, wait } from "./decisions";
 import { pair } from "./pair";
 import { quotaPush } from "./quota";
-import { installKind } from "./release";
+import { installKind, ReleaseError } from "./release";
 import { removeBinary, update } from "./update";
 import { VERSION } from "./version";
 
@@ -179,7 +179,12 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
         throw new UsageError(`unknown command: ${command} (try starbridge --help)`);
     }
   } catch (e) {
-    if (e instanceof UsageError || e instanceof ApiError || e instanceof ProtocolError) {
+    if (
+      e instanceof UsageError ||
+      e instanceof ApiError ||
+      e instanceof ProtocolError ||
+      e instanceof ReleaseError
+    ) {
       ctx.err(`starbridge: ${e.message}`);
       return 1;
     }

@@ -1,10 +1,12 @@
 import { createHash, createPublicKey, verify } from "node:crypto";
 import { realpathSync } from "node:fs";
-import { UsageError } from "./context";
 
 /** The release key. Also in cli/minisign.pub, cli/install.sh and the README. */
 export const RELEASE_KEY = "RWRT+qMmByDpj/1KhL5yCxdzIkVgZ3NqTrlVIIvhrezr/38FgzBIen0F";
 export const RELEASES_URL = "https://github.com/T0mSIlver/starbridge/releases";
+
+/** A release that cannot be found or does not check out: printed without a stack, exit code 1. */
+export class ReleaseError extends Error {}
 
 // Ed25519 SubjectPublicKeyInfo header; the 32-byte key follows.
 const SPKI_ED25519 = Buffer.from("302a300506032b6570032100", "hex");
@@ -15,7 +17,7 @@ const SPKI_ED25519 = Buffer.from("302a300506032b6570032100", "hex");
  * prehashed "ED" kind), then the one over the signature and the trusted comment.
  */
 export function verifyMinisign(file: Uint8Array, minisig: string, pubkey = RELEASE_KEY): string {
-  const bad = (why: string) => new UsageError(`release signature check failed: ${why}`);
+  const bad = (why: string) => new ReleaseError(`release signature check failed: ${why}`);
   const pub = Buffer.from(pubkey, "base64");
   const lines = minisig.split("\n");
   const sig = Buffer.from(lines[1] ?? "", "base64");
@@ -54,7 +56,7 @@ export function parseSums(text: string): Map<string, string> {
 export function platformAsset(platform: string = process.platform, arch: string = process.arch) {
   const os = { linux: "linux", darwin: "darwin" }[platform];
   const cpu = { x64: "x64", arm64: "arm64" }[arch];
-  if (!os || !cpu) throw new UsageError(`no starbridge build for ${platform}-${arch}`);
+  if (!os || !cpu) throw new ReleaseError(`no starbridge build for ${platform}-${arch}`);
   return `starbridge-${os}-${cpu}`;
 }
 
@@ -62,7 +64,7 @@ export function platformAsset(platform: string = process.platform, arch: string 
 export function compareVersions(a: string, b: string): number {
   const parse = (v: string) => {
     const m = /^v?(\d+)\.(\d+)\.(\d+)(?:-rc\.(\d+))?$/.exec(v);
-    if (!m) throw new UsageError(`not a version: ${v}`);
+    if (!m) throw new ReleaseError(`not a version: ${v}`);
     return [Number(m[1]), Number(m[2]), Number(m[3]), m[4] === undefined ? Infinity : Number(m[4])];
   };
   const x = parse(a);
@@ -75,7 +77,7 @@ export function compareVersions(a: string, b: string): number {
 async function get(url: string, init?: RequestInit): Promise<Response> {
   const res = await fetch(url, init);
   if (!res.ok && !(res.status >= 300 && res.status < 400))
-    throw new UsageError(`download failed: ${res.status} ${url}`);
+    throw new ReleaseError(`download failed: ${res.status} ${url}`);
   return res;
 }
 
@@ -83,7 +85,7 @@ async function get(url: string, init?: RequestInit): Promise<Response> {
 export async function latestVersion(releases = RELEASES_URL): Promise<string> {
   const res = await get(`${releases}/latest`, { redirect: "manual" });
   const m = /\/tag\/v([^/]+)$/.exec(res.headers.get("location") ?? "");
-  if (!m) throw new UsageError(`no latest release at ${releases}`);
+  if (!m) throw new ReleaseError(`no latest release at ${releases}`);
   return m[1] as string;
 }
 
@@ -98,10 +100,10 @@ export async function downloadVerified(
   const minisig = await (await get(`${base}/SHA256SUMS.minisig`)).text();
   verifyMinisign(sums, minisig, opts.pubkey);
   const want = parseSums(new TextDecoder().decode(sums)).get(asset);
-  if (!want) throw new UsageError(`SHA256SUMS lists no ${asset}`);
+  if (!want) throw new ReleaseError(`SHA256SUMS lists no ${asset}`);
   const bytes = new Uint8Array(await (await get(`${base}/${asset}`)).arrayBuffer());
   if (createHash("sha256").update(bytes).digest("hex") !== want)
-    throw new UsageError(`${asset} does not match its hash in SHA256SUMS`);
+    throw new ReleaseError(`${asset} does not match its hash in SHA256SUMS`);
   return bytes;
 }
 
