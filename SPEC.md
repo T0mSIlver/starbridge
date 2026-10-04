@@ -292,6 +292,16 @@ How it generalizes is open.
   account has at most 4 pushes in flight and 200 waiting, each with a 10 s timeout. Pushes to
   subscription URLs connect to the exact address that passed the private-range check.
 
+- 2026-10-04. Web page (#8): device private keys are non-extractable WebCrypto X25519 and
+  Ed25519 keys in IndexedDB where the browser has them, raw libsodium keys otherwise. A sealed
+  box opens with WebCrypto's X25519, HSalsa20 from `@noble/ciphers` (audited; libsodium.js's
+  standard build lacks it) and libsodium for the rest; `packages/protocol` gained async sign,
+  seal and open for keys it cannot hold. The page shares the server's origin: Next proxies
+  `/v1` in development, the reverse proxy in production. The service worker shows a
+  notification for every decision, and closes it once the decision is answered. A
+  browser that signs in again cannot bind its session to its existing device and pairs anew
+  (#28).
+
 ## Encryption, with existing libraries
 
 - libsodium sealed boxes (`crypto_box_seal`, X25519 + XSalsa20-Poly1305): an
