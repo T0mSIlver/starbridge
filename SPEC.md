@@ -171,18 +171,40 @@ How it generalizes is open.
 - Phone: Pixel 11 Pro, Android. The owner built an Android app before
   (vidtheque) with Jetpack Compose and Material 3 Expressive.
 
+## Decided
+
+- 2026-10-04. The service runs in an LXC container on the owner's Proxmox host,
+  the same machine as the dev box. CodexBar is installed in that container.
+  Agents reach the service over the local network.
+- 2026-10-04. A separate project that reads `codexbar` JSON. Ask upstream to
+  link it from the README once it works.
+- 2026-10-04. Any agent can post a decision, through HTTP and a small CLI.
+  Claude Code also gets answers pushed back through the mod.
+- 2026-10-04. The owner wants this to become a real app with real users, and
+  is fine paying a little for that, for example to host push for every user.
+
+## Push to phones
+
+Proposed, waiting for the owner:
+
+- Each user runs their own service. The owner hosts one small push relay for
+  every user. The relay forwards to Firebase Cloud Messaging (FCM), which
+  delivers to the phone. FCM charges nothing per message, so the relay is the
+  only cost: a small VPS.
+- The service encrypts each payload with a key the phone and service share at
+  pairing, so the relay and Google see only ciphertext. ntfy.sh (its Play
+  build) and the Home Assistant app follow the same pattern.
+- Self-hosters who want no Google in the loop pick UnifiedPush (ntfy or another
+  distributor) instead.
+- iOS later would need Apple's push service and a $99/year developer account.
+
 ## Open questions
 
-1. Where the service runs: dev box, mini PC or Mac.
-2. Relationship to CodexBar: a separate project consuming `codexbar serve`, a
-   contribution to CodexBar, or both.
-3. Phone notifications: Firebase Cloud Messaging, a self-hosted push server
-   (ntfy, UnifiedPush), or the app polling. ntfy works without Google on a
-   self-hosted server, and its `http` action buttons POST back on tap, with at
-   most 3 buttons per notification.
-4. Which agents can post decisions in version 1: Claude Code only, or any agent
-   through an HTTP call or a CLI.
-5. The name.
+1. Push: a hosted relay to FCM with encrypted payloads, plus UnifiedPush for
+   self-hosters (proposed above).
+2. Whether a fully hosted version (no self-hosted service, accounts on the
+   owner's server) is worth offering later.
+3. The name.
 
 ## Research log
 
