@@ -26,7 +26,7 @@ code cannot show: the HTTP API and the flows.
   | `quota` | machine | |
   | `permission` | machine | |
   | `permission-answer` | device | `permissionId`, a permission |
-  | `settled` | machine | `permissionId`, a permission |
+  | `settled` | machine | `itemId`, a permission or a decision the same machine posted |
 
 ## Directory
 
@@ -127,8 +127,8 @@ never rely on that check.
 
 Item ids are random, chosen by the sender. Cursors are opaque strings; without `after`, a list
 starts at the first item. An item with `re` marks the item it names answered, so every device
-moves it out of the open inbox: an answer its decision, a permission answer or a settled notice
-its permission.
+moves it out of the open inbox: an answer its decision, a permission answer its permission, a
+settled notice the permission or decision it closes.
 
 Lists return `{items: [{item, cursor, receivedAt, answeredAt?}], cursor}`, 100 at a time, where
 `item` holds only the caller's box and `answeredAt` is set on answered decisions and permissions.
@@ -266,9 +266,12 @@ first answer wins.
 - `permission-answer` `{v, id, permissionId, to, answeredAt, behavior: "allow" | "deny", scope:
   "once" | "session" | "project", inputHash, message?}`: a deny is for this call only and may
   carry a message to the agent; an allow carries none.
-- `settled` `{v, id, permissionId, to, outcome: "keyboard" | "timeout" | "device", device?, at}`:
-  `keyboard` covers any answer outside Starbridge (terminal, Desktop, the Claude app);
-  `device` names the device whose answer the machine applied.
+- `settled` `{v, id, itemId, to, at, outcome?: "keyboard" | "timeout" | "device" | "elsewhere" |
+  "withdrawn", device?}` closes any item its machine posted, a permission or a decision. For a
+  permission, `keyboard` covers any answer outside Starbridge (terminal, Desktop, the Claude
+  app) and `device` names the device whose answer the machine applied. For a decision,
+  `elsewhere` means it was answered outside Starbridge and `withdrawn` that the agent no longer
+  needs it.
 
 ### Security model
 

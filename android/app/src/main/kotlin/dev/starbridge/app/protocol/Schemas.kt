@@ -360,22 +360,22 @@ data class PermissionAnswer(
 data class Settled(
     val v: Int,
     override val id: String,
-    val permissionId: String,
+    val itemId: String,
     val to: List<String>,
-    val outcome: String,
-    val device: String? = null,
     val at: String,
+    val outcome: String? = null,
+    val device: String? = null,
 ) : ItemBody {
-    override val re get() = permissionId
+    override val re get() = itemId
     override val recipients get() = to
 
     fun check() {
         schema(v == 1, "v")
         id(id, "id")
-        id(permissionId, "permissionId")
+        id(itemId, "itemId")
         schema(to.isNotEmpty(), "to")
         to.forEach { id(it, "to") }
-        schema(outcome in setOf("keyboard", "timeout", "device"), "outcome")
+        outcome?.let { schema(it in setOf("keyboard", "timeout", "device", "elsewhere", "withdrawn"), "outcome") }
         device?.let { id(it, "device") }
         time(at, "at")
         schema((outcome == "device") == (device != null), "device is set exactly when outcome is device")

@@ -54,18 +54,18 @@ export type DirectoryEntry = z.infer<typeof DirectoryEntry>;
  * Kinds of sealed item, and for each: the role that signs it (it is sealed to members of the
  * other role: a machine's items to every active device, a device's to the one machine it
  * answers), and for a kind that refers to an earlier item, the body field naming it and that
- * item's kind. The item's `re` hint repeats that field.
+ * item's possible kinds. The item's `re` hint repeats that field.
  */
 export const ITEM_KINDS = {
   decision: { signer: "machine" },
-  answer: { signer: "device", re: { field: "decisionId", kind: "decision" } },
+  answer: { signer: "device", re: { field: "decisionId", kinds: ["decision"] } },
   quota: { signer: "machine" },
   permission: { signer: "machine" },
-  "permission-answer": { signer: "device", re: { field: "permissionId", kind: "permission" } },
-  settled: { signer: "machine", re: { field: "permissionId", kind: "permission" } },
+  "permission-answer": { signer: "device", re: { field: "permissionId", kinds: ["permission"] } },
+  settled: { signer: "machine", re: { field: "itemId", kinds: ["permission", "decision"] } },
 } as const satisfies Record<
   string,
-  { signer: "device" | "machine"; re?: { field: string; kind: string } }
+  { signer: "device" | "machine"; re?: { field: string; kinds: readonly string[] } }
 >;
 
 export type ItemKind = keyof typeof ITEM_KINDS;
@@ -288,19 +288,22 @@ export const PermissionAnswer = z
 export type PermissionAnswer = z.infer<typeof PermissionAnswer>;
 
 /**
- * The machine's notice that a prompt is over: answered at the keyboard or in the Claude app,
- * timed out, or resolved by a device's answer (`device` names it).
+ * The machine's notice that one of its items no longer waits for an answer: a permission
+ * answered at the keyboard or in the Claude app, timed out, or resolved by a device's answer
+ * (`device` names it); or a decision answered outside Starbridge (`elsewhere`, such as the
+ * page its `answerIn` names) or withdrawn by the agent.
  */
 export const Settled = z
   .object({
     v: z.literal(1),
     id: Id,
-    permissionId: Id,
+    /** The permission or decision it closes, posted by the same machine. */
+    itemId: Id,
     to: z.array(Id).min(1),
-    outcome: z.enum(["keyboard", "timeout", "device"]),
+    at: Time,
+    outcome: z.enum(["keyboard", "timeout", "device", "elsewhere", "withdrawn"]).optional(),
     /** With outcome "device": the device whose answer the machine applied. */
     device: Id.optional(),
-    at: Time,
   })
   .refine((s) => (s.outcome === "device") === (s.device !== undefined), {
     message: "device is set exactly when outcome is device",
