@@ -34,9 +34,6 @@ importers:
       '@biomejs/biome':
         specifier: ^2.5.15
         version: 2.5.15
-      '@starbridge/protocol':
-        specifier: workspace:*
-        version: link:../packages/protocol
       '@starbridge/server':
         specifier: workspace:*
         version: link:../server
