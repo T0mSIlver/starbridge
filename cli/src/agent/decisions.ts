@@ -117,6 +117,8 @@ export class Decisions implements Feature {
    */
   async run(signal: AbortSignal): Promise<void> {
     let failures = 0;
+    // The first poll returns at once, so `status` knows soon whether the server is reachable.
+    let first = true;
     let directory: { dir: Directory; at: number } | undefined;
     while (!signal.aborted) {
       if (!this.ctx.store.machine()) {
@@ -126,10 +128,9 @@ export class Decisions implements Feature {
       }
       const st = this.ctx.store.state();
       const due = nextDefaultMs(st, this.ctx.now().getTime());
-      const seconds = Math.min(
-        POLL_SECONDS,
-        due === undefined ? POLL_SECONDS : Math.ceil(due / 1000),
-      );
+      const seconds = first
+        ? 0
+        : Math.min(POLL_SECONDS, due === undefined ? POLL_SECONDS : Math.ceil(due / 1000));
       const abort = new AbortController();
       const onStop = () => abort.abort();
       signal.addEventListener("abort", onStop);
@@ -149,6 +150,7 @@ export class Decisions implements Feature {
         if (this.lastError !== undefined) this.hub.log("server reachable again");
         this.lastError = undefined;
         failures = 0;
+        first = false;
         this.hub.notify();
       } catch (e) {
         if (signal.aborted) break;
