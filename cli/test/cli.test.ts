@@ -3,8 +3,9 @@ import { existsSync, mkdirSync, mkdtempSync, statSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { LiveServer } from "@starbridge/server/test-support";
+import jsQR from "jsqr";
 import { run } from "../src/cli";
-import { FAKE_CODEXBAR, paired, until } from "./helpers";
+import { FAKE_CODEXBAR, paired, testCtx, until } from "./helpers";
 
 let server: LiveServer;
 beforeEach(async () => {
@@ -36,6 +37,38 @@ test("pair joins the directory and keeps the keys private", async () => {
     expect(statSync(join(ctx.store.dir, f)).mode & 0o777).toBe(0o600);
   expect(await run(["pair", "--server", server.url], ctx)).toBe(1);
   expect(ctx.errors.at(-1)).toContain("already paired");
+});
+
+/** Reads a terminal QR back: each character is two modules, upper and lower, 4 px square. */
+function scan(lines: string[]): string | undefined {
+  const rows = lines.map((l) => [...l.replace(/\x1b\[[0-9;]*m/g, "")]);
+  const width = (rows[0]?.length ?? 0) * 4;
+  const height = rows.length * 8;
+  const px = new Uint8ClampedArray(width * height * 4).fill(255);
+  rows.forEach((row, y) =>
+    row.forEach((ch, x) => {
+      const dark = [ch === "█" || ch === "▀", ch === "█" || ch === "▄"];
+      for (let dy = 0; dy < 8; dy++)
+        for (let dx = 0; dx < 4; dx++) {
+          if (!dark[dy < 4 ? 0 : 1]) continue;
+          const i = ((y * 8 + dy) * width + x * 4 + dx) * 4;
+          px[i] = px[i + 1] = px[i + 2] = 0;
+        }
+    }),
+  );
+  return jsQR(px, width, height)?.data;
+}
+
+test("pair prints a link and a QR code that carry the code", async () => {
+  const ctx = testCtx();
+  const done = run(["pair", "--server", `${server.url}/`, "--name", "devbox"], ctx);
+  await until(() => ctx.lines.some((l) => l.startsWith("Or type the code")));
+  const code = ctx.lines[0]?.replace("Pairing code: ", "") as string;
+  const link = `${server.url}/pair#${code}`;
+  expect(ctx.lines[1]).toEndWith(link);
+  expect(scan(ctx.lines.slice(2, -1))).toBe(link);
+  await server.approve(code);
+  expect(await done).toBe(0);
 });
 
 test("ask seals a decision the phone can open, recommended first", async () => {
