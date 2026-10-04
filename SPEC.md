@@ -415,6 +415,13 @@ How it generalizes is open.
   only deploy a commit that is on GitHub's main: the box fetches that commit itself with a
   read-only GitHub deploy key. `deploy/deploy.sh` stays for rollbacks and other refs. The
   `cli-v*` workflow folded into the release one.
+- 2026-10-05. Per-account bounds before hosted signups (#65): every route that stores
+  something has a cap or a retention rule, and the writes that grow it a rate limit, sized for an
+  orchestrator with 10 sessions asking a few hundred decisions a day. Answered decisions and
+  their answers are kept 7 days, unanswered decisions and quota snapshots 30; 10000 stored
+  decisions and 128 MB per account; directories end at 200 entries, which is about 100 add and
+  revoke pairs; an account that reaches it needs the operator to reset it. The numbers live in
+  `server/src/limits.ts` and PROTOCOL.md, "Limits".
 - 2026-10-05. Setup (#68, spec on the issue): one `starbridge agent` per
   machine, a user service (systemd or launchd), owns the keys and the server
   connection, uploads quotas, and routes answers, permission prompts,
@@ -437,6 +444,15 @@ How it generalizes is open.
   names (`agent.json`, written by setup, or flags), never a path a client sends. No uid check
   on the socket's peer: neither Bun nor Node exposes `SO_PEERCRED`; the 0700 directory and 0600
   socket keep other users out.
+
+- 2026-10-05. Permission prompts' protocol (#57): `ITEM_KINDS` in `packages/protocol` lists each
+  sealed kind's signing role and the item it refers to, and the server and both clients derive
+  their checks from it, so #58, #60 and #62 add kinds as table rows. Beyond the issue's spec:
+  `settled` carries `to` (every sealed body names its recipients) and, for `outcome: "device"`,
+  the device whose answer the machine applied, for the clients' log; a second `settled` gets 409
+  `already-settled`. The server, which cannot read `expiresAt`, refuses answers 10 minutes after
+  the permission arrived. `GET /items` takes a comma-separated `kind` list and `open=1`; the
+  machine's `checkPermissionAnswer` lives in the protocol package.
 
 ## Encryption, with existing libraries
 

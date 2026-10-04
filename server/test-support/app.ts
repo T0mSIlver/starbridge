@@ -20,6 +20,7 @@ import {
 } from "@starbridge/protocol";
 import { createApp } from "../src/app";
 import type { Config } from "../src/config";
+import { DEFAULT_LIMITS } from "../src/limits";
 
 export const at = "2026-10-04T12:00:00Z";
 
@@ -38,6 +39,7 @@ export function testConfig(over: Partial<Config> = {}): Config {
     allowPrivatePushEndpoints: true,
     pushTimeoutMs: 2000,
     relayMode: false,
+    limits: DEFAULT_LIMITS,
     ...over,
   };
 }
