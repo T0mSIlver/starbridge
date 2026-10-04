@@ -18,6 +18,7 @@ import dev.starbridge.app.data.Alerts
 import dev.starbridge.app.data.Colours
 import dev.starbridge.app.data.Decision
 import dev.starbridge.app.data.Prefs
+import dev.starbridge.app.data.bitmap
 
 /**
  * One notification per open decision. Its buttons are the options, the recommended one first,
@@ -63,7 +64,7 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
             .setContentTitle(d.question)
             .setContentText(d.context)
             .setSubText(d.source.machine)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(d.context + "\n\nIf nobody answers: " + d.default))
+            .setStyle(style(d))
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
@@ -77,6 +78,16 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
             )
             .setContentIntent(open)
             .setOnlyAlertOnce(true)
+    }
+
+    /**
+     * The first image as the big picture, with the context beneath it, when the decision has
+     * one; else the context in full and the default.
+     */
+    private fun style(d: Decision): NotificationCompat.Style {
+        val picture = d.images.firstOrNull()?.bitmap(PICTURE_EDGE)
+            ?: return NotificationCompat.BigTextStyle().bigText(d.context + "\n\nIf nobody answers: " + d.default)
+        return NotificationCompat.BigPictureStyle().bigPicture(picture).setSummaryText(d.context)
     }
 
     /**
@@ -140,5 +151,8 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
 
     companion object {
         const val CHANNEL = "decisions"
+
+        /** Wide enough for an expanded notification on any phone, small enough for its bitmap limit. */
+        private const val PICTURE_EDGE = 1024
     }
 }

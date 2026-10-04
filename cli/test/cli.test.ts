@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, statSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { LiveServer } from "@starbridge/server/test-support";
+import { PNG } from "pngjs";
 import { run } from "../src/cli";
 import { FAKE_CODEXBAR, paired, until } from "./helpers";
 
@@ -76,7 +77,12 @@ test("ask names the session and links to it from Claude Code's record, unless fl
 
   expect(await run(ASK, ctx)).toBe(0);
   expect(await run([...ASK, "--session", "s2"], ctx)).toBe(0);
-  const flags = ["--session-title", "Mine", "--link", "web=https://claude.ai/code/session_9"];
+  const flags = [
+    "--session-title",
+    "Mine",
+    "--session-link",
+    "web=https://claude.ai/code/session_9",
+  ];
   expect(await run([...ASK, ...flags], ctx)).toBe(0);
   const sources = (await server.opened("decision")).map((d) => d.source);
   expect(sources[0]).toMatchObject({
@@ -97,9 +103,44 @@ test("ask names the session and links to it from Claude Code's record, unless fl
     links: [{ kind: "web", url: "https://claude.ai/code/session_9" }],
   });
 
-  expect(await run([...ASK, "--link", "desktop=https://evil.example"], ctx)).toBe(1);
-  expect(await run([...ASK, "--link", "nokind"], ctx)).toBe(1);
+  expect(await run([...ASK, "--session-link", "desktop=https://evil.example"], ctx)).toBe(1);
+  expect(await run([...ASK, "--session-link", "nokind"], ctx)).toBe(1);
   expect(await server.opened("decision")).toHaveLength(3);
+});
+
+/** A PNG of noise, the worst case for compression, so only scaling it down makes it fit. */
+function noisyPng(width: number, height: number): string {
+  const png = new PNG({ width, height });
+  for (let i = 0; i < png.data.length; i++) png.data[i] = i % 4 === 3 ? 255 : (i * 7919) % 251;
+  const path = join(mkdtempSync(join(tmpdir(), "starbridge-img-")), "shot.png");
+  writeFileSync(path, PNG.sync.write(png));
+  return path;
+}
+
+test("ask attaches images scaled to fit the server's cap, and links", async () => {
+  const ctx = await paired(server);
+  const big = noisyPng(2400, 1500);
+  const small = join(tmpdir(), `starbridge-small-${process.pid}.png`);
+  writeFileSync(small, PNG.sync.write(new PNG({ width: 4, height: 2 })));
+  const artifact = "https://claude.ai/public/artifacts/0b3f0e7c";
+  const flags = ["--image", big, "--image", small, "--link", artifact];
+  expect(await run([...ASK, ...flags], ctx)).toBe(0);
+
+  const [d] = await server.opened("decision");
+  expect(d?.links).toEqual([{ url: artifact }]);
+  const [scaled, kept] = d?.images ?? [];
+  // The large one became a JPEG no larger than a screen, with its aspect ratio.
+  expect(scaled?.type).toBe("image/jpeg");
+  expect(scaled?.width).toBeLessThanOrEqual(1600);
+  expect(Math.abs((scaled?.width ?? 0) / (scaled?.height ?? 1) - 1.6)).toBeLessThan(0.02);
+  // The small one already fit, so it went as is.
+  expect(kept).toMatchObject({ type: "image/png", width: 4, height: 2 });
+
+  expect(await run([...ASK, "--image", join(tmpdir(), "missing.png")], ctx)).toBe(1);
+  expect(await run([...ASK, "--image", FAKE_CODEXBAR], ctx)).toBe(1);
+  expect(ctx.errors.at(-1)).toContain("PNG or JPEG");
+  expect(await run([...ASK, "--link", "http://example.com"], ctx)).toBe(1);
+  expect(await server.opened("decision")).toHaveLength(1);
 });
 
 test("ask refuses a decision that would not stand alone", async () => {

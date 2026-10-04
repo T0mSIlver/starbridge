@@ -65,6 +65,11 @@
   line-height: 1.4;
 }
 
+.rowText {
+  flex: 1;
+  min-width: 0;
+}
+
 .rowDot,
 .spacer {
   flex: none;

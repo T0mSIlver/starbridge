@@ -3,6 +3,7 @@ import { basename } from "node:path";
 import {
   type Answer,
   Decision,
+  type DecisionLink,
   type Directory,
   open,
   ProtocolError,
@@ -23,6 +24,7 @@ import {
   session,
   UsageError,
 } from "./context";
+import { fitPicture, loadPicture, type Picture } from "./images";
 
 export interface AskInput {
   question?: string;
@@ -35,8 +37,15 @@ export interface AskInput {
   project?: string;
   session?: string;
   sessionTitle?: string;
-  links?: SessionLink[];
+  sessionLinks?: SessionLink[];
+  /** Image files, PNG or JPEG, with what each shows when known. */
+  images?: (string | { path: string; alt?: string })[];
+  /** Pages to open, such as a claude.ai artifact. */
+  links?: (string | DecisionLink)[];
 }
+
+/** What the server stores at most for one decision, all boxes together (PROTOCOL.md, Limits). */
+export const ITEM_BYTES = 256 * 1024;
 
 /** Exit code when nobody answered before the deadline: the agent applies its default. */
 export const EXIT_TIMEOUT = 2;
@@ -63,11 +72,11 @@ function timeFrom(text: string, now: Date): string {
 function sourceFor(input: AskInput, ctx: Ctx, machine: string): Decision["source"] {
   const session = input.session ?? ctx.env.CLAUDE_CODE_SESSION_ID ?? "";
   const claude =
-    session && (input.sessionTitle === undefined || input.links === undefined)
+    session && (input.sessionTitle === undefined || input.sessionLinks === undefined)
       ? claudeSession(ctx.env, session)
       : undefined;
   const title = input.sessionTitle ?? claude?.title;
-  const links = input.links ?? claude?.links ?? [];
+  const links = input.sessionLinks ?? claude?.links ?? [];
   return {
     machine,
     project: input.project ?? basename(process.cwd()),
@@ -81,6 +90,7 @@ export function buildDecision(input: AskInput, ctx: Ctx, machine: string, to: st
   if (!input.question) throw new UsageError("ask needs --question");
   if (!input.default) throw new UsageError("ask needs --default: what you do if nobody answers");
   const options = input.options ?? [];
+  const links = (input.links ?? []).map((l) => (typeof l === "string" ? { url: l } : l));
   const decision = {
     v: 1 as const,
     id: `d_${randomBytes(12).toString("base64url")}`,
@@ -95,12 +105,48 @@ export function buildDecision(input: AskInput, ctx: Ctx, machine: string, to: st
       ...(input.defaultAt ? { at: timeFrom(input.defaultAt, ctx.now()) } : {}),
     },
     source: sourceFor(input, ctx, machine),
+    ...(links.length > 0 ? { links } : {}),
   };
+  return checked(decision);
+}
+
+function checked(decision: unknown): Decision {
   try {
     return parseWith(Decision, decision);
   } catch (e) {
     throw e instanceof ProtocolError ? new UsageError(`bad decision: ${e.message}`) : e;
   }
+}
+
+const boxBytes = (item: SealedItem) => item.boxes.reduce((n, b) => n + b.box.length, 0);
+
+/**
+ * Signs and seals the decision with its pictures, scaled down until every box together fits
+ * ITEM_BYTES. Each box carries every image as base64url inside the sealed base64url envelope, so
+ * a byte of image costs about (4/3)² bytes per device.
+ */
+function sealWithPictures(
+  base: Decision,
+  pictures: Picture[],
+  signer: { id: string; signKey: Uint8Array },
+  to: ReturnType<typeof devices>,
+): { decision: Decision; item: SealedItem } {
+  const sealed = (d: Decision) => seal("decision", d, signer, to);
+  if (pictures.length === 0) return { decision: base, item: sealed(base) };
+  if (pictures.length > 4) throw new UsageError("--image: at most 4 images");
+  const perBox = boxBytes(sealed(base)) / to.length;
+  let share = Math.floor(((ITEM_BYTES / to.length - perBox) * 9) / 16 / pictures.length);
+  for (let tries = 0; tries < 5; tries++) {
+    if (share < 1024) break;
+    const decision = checked({ ...base, images: pictures.map((p) => fitPicture(p, share)) });
+    const item = sealed(decision);
+    const size = boxBytes(item);
+    if (size <= ITEM_BYTES) return { decision, item };
+    share = Math.floor(share * (ITEM_BYTES / size) * 0.95);
+  }
+  throw new UsageError(
+    `the images do not fit in one decision for ${to.length} devices: attach fewer images`,
+  );
 }
 
 /** Seals the decision to every active device and posts it. Prints the decision id. */
@@ -111,16 +157,19 @@ export async function ask(
 ): Promise<number> {
   const s = session(ctx);
   const dir = await refreshDirectory(ctx, s);
+  const pictures = (input.images ?? []).map((i) =>
+    typeof i === "string" ? loadPicture(i) : loadPicture(i.path, i.alt),
+  );
   const to = devices(dir);
-  const decision = buildDecision(
+  const base = buildDecision(
     input,
     ctx,
     s.machine.name,
     to.map((d) => d.id),
   );
-  const item = seal(
-    "decision",
-    decision,
+  const { decision, item } = sealWithPictures(
+    base,
+    pictures,
     { id: s.machine.id, signKey: s.keys.sign.privateKey },
     to,
   );

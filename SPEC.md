@@ -458,6 +458,14 @@ How it generalizes is open.
   provider dots stay fixed. Measured on warm, cool and low-chroma seeds:
   the fixed colours keep 4.5:1 as text and 3:1 as dots; the wallpaper's
   `fg3` reaches 3.8:1 on light cards, above the default palette's 3.3:1.
+- 2026-10-05. Images and links on a decision (#62): optional `images` (at
+  most 4, PNG or JPEG, never SVG) and `links` (at most 4, HTTPS) in the
+  signed body, so the server needs no change. `starbridge ask --image` scales
+  each image down until the sealed decision fits the 256 KB per-decision cap;
+  `--link` takes a URL, and the session's own links moved to
+  `--session-link`. Android opens a claude.ai link in the Claude app
+  (`com.anthropic.claude`) when that app takes it, else in the browser, and
+  uses the first image as the notification's big picture.
 
 - 2026-10-05. Permission prompts' protocol (#57): `ITEM_KINDS` in `packages/protocol` lists each
   sealed kind's signing role and the item it refers to, and the server and both clients derive
@@ -795,3 +803,12 @@ goes in git.
   `process.spawn` streams only the mod's own children. So #60 times agent
   commands from the mod with no wrapper, and reads progress from output only
   under `starbridge run`.
+- 2026-10-05: image budget (#62). Each box carries the whole body, so an
+  image byte costs about (4/3)² bytes per device: base64url in the body, then
+  base64url of the sealed envelope. With the 256 KB cap, the images of one
+  decision get about 140 KB raw with one device, 70 KB with two and 47 KB
+  with three. The CLI's pure-JS JPEG encoder fits a 1233x2673 phone screenshot
+  in 72 KB at 515x1117 and in 20 KB at 272x589, in under 0.1 s. A shared
+  ciphertext encrypted once with a key in each box would free the per-device
+  cost, at the price of a new item field and storage on the server; not
+  needed while the owner pairs two or three devices.

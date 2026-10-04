@@ -43,6 +43,13 @@ export const DevicesIcon = (p: Props) => (
   </Icon>
 );
 
+export const LinkIcon = (p: Props) => (
+  <Icon {...p}>
+    <path d="M10 14a4.5 4.5 0 0 0 6.4 0l3-3a4.5 4.5 0 0 0-6.4-6.4l-1.2 1.2" />
+    <path d="M14 10a4.5 4.5 0 0 0-6.4 0l-3 3a4.5 4.5 0 0 0 6.4 6.4l1.2-1.2" />
+  </Icon>
+);
+
 /** The space elevator (DESIGN.md, "Icon") without its ground: planet and tether in the text colour,
     the climber in amber. */
 export const Mark = ({ size = 28 }: Props) => (

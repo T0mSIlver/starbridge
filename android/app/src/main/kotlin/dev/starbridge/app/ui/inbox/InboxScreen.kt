@@ -1,7 +1,5 @@
 package dev.starbridge.app.ui.inbox
 
-import android.content.Intent
-import android.net.Uri
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.scaleIn
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -87,6 +85,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.starbridge.app.data.Decision
 import dev.starbridge.app.data.Source
 import dev.starbridge.app.data.Store
+import dev.starbridge.app.data.openLink
 import dev.starbridge.app.ui.Beacon
 import dev.starbridge.app.ui.Label
 import dev.starbridge.app.ui.Panel
@@ -206,14 +205,14 @@ private fun Source(decision: Decision, now: Instant, revealable: Boolean = false
 
 /**
  * Opens the session that asked: claude.ai/code links go to the Claude app when it is installed,
- * else the browser. Desktop links are for a computer and stay hidden here.
+ * else the browser (openLink). Desktop links are for a computer and stay hidden here.
  */
 @Composable
 private fun SessionLinks(source: Source) {
     val context = LocalContext.current
     source.links.filter { it.kind != "desktop" }.forEach { link ->
         TextButton(
-            onClick = { runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(link.url))) } },
+            onClick = { openLink(context, link.url) },
             modifier = Modifier.heightIn(min = Sizes.tap),
         ) {
             Icon(Icons.AutoMirrored.Rounded.OpenInNew, contentDescription = null, modifier = Modifier.size(Spacing.s5))
@@ -250,7 +249,9 @@ private fun OpenDecision(decision: Decision, now: Instant, actions: DecisionActi
             if (decision.context.isNotBlank()) {
                 Text(plain(decision.context), style = StarbridgeTheme.type.body, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 3, overflow = TextOverflow.Ellipsis)
             }
+            Images(decision.images, maxHeight = Sizes.media / 2, modifier = Modifier.padding(top = Spacing.s2))
         }
+        Links(decision.links, Modifier.padding(top = Spacing.s2))
         Spacer(Modifier.padding(top = Spacing.s4))
         Answer(decision, actions.answer)
         Spacer(Modifier.padding(top = Spacing.s3))
@@ -533,6 +534,8 @@ fun DecisionScreen(decision: Decision?, now: Instant, onAnswer: (String, String?
                 Source(decision, now, revealable = true)
                 Text(decision.question, style = StarbridgeTheme.type.heading, color = MaterialTheme.colorScheme.onSurface)
                 Context(decision.context)
+                Images(decision.images, maxHeight = Sizes.media)
+                Links(decision.links)
                 Spacer(Modifier.padding(top = Spacing.s1))
                 if (decision.open) Answer(decision, onAnswer) else Outcome(decision, now)
                 Fallback(decision)

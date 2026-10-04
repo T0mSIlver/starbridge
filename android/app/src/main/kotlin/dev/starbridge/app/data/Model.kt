@@ -15,6 +15,12 @@ data class Source(
 
 data class SessionLink(val kind: String, val url: String)
 
+/** An image the agent attached: a PNG or JPEG, base64url in [data], [width] by [height] pixels. */
+data class Image(val data: String, val width: Int, val height: Int, val alt: String? = null)
+
+/** A page the agent attached, such as a Claude artifact. */
+data class Link(val url: String, val title: String? = null)
+
 /**
  * A question an agent needs the owner to answer. [options] is empty for a free-text answer;
  * [default] says what the agent does if nobody answers, by [defaultAt] when set.
@@ -29,6 +35,8 @@ data class Decision(
     val defaultAt: Instant?,
     val source: Source,
     val createdAt: Instant,
+    val images: List<Image> = emptyList(),
+    val links: List<Link> = emptyList(),
     /** This device's answer; null when it was answered elsewhere or is still open. */
     val answer: String? = null,
     val answeredAt: Instant? = null,

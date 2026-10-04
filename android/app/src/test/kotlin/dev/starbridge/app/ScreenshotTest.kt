@@ -67,6 +67,8 @@ class ScreenshotTest(private val dark: Boolean) {
 
     @Test fun decision() = capture("decision") { DecisionScreen(fake.decisions[1], now, onAnswer = { _, _, _ -> }) }
 
+    @Test fun decisionImages() = capture("decision-images") { DecisionScreen(fake.decisions.first { it.images.isNotEmpty() }, now, onAnswer = { _, _, _ -> }) }
+
     @Test fun quotas() = capture("quotas") { QuotasScreen(fake.windows, now) }
 
     @Test fun quotasEmpty() = capture("quotas-empty") { QuotasScreen(emptyList(), now) }

@@ -652,6 +652,8 @@ class ServerStore(
                 b.source.links.orEmpty().map { SessionLink(it.kind, it.url) },
             ),
             createdAt = instant(b.createdAt) ?: Instant.EPOCH,
+            images = b.images.orEmpty().map { Image(it.data, it.width, it.height, it.alt) },
+            links = b.links.orEmpty().map { Link(it.url, it.title) },
             answer = d.answer,
             answeredAt = instant(d.answeredAt) ?: d.answer?.let { Instant.now() },
         )

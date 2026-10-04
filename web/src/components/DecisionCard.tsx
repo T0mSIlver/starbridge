@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { relative, sessionName } from "@/lib/format";
 import type { Decision, InboxItem, Reply } from "@/lib/types";
+import { Images, Links } from "./Attachments";
 import { Context } from "./Context";
 import s from "./DecisionCard.module.css";
 import ui from "./ui.module.css";
@@ -123,6 +124,8 @@ export function OpenDecision({
       </div>
       <h2 className={`t-question ${s.question}`}>{d.question}</h2>
       <Context text={d.context} className={`t-body ${s.context}`} />
+      <Images d={d} />
+      <Links d={d} />
       {options.length > 0 ? (
         <fieldset className={`${s.group} ${fitsRow(options) ? s.row : s.stack}`}>
           <legend className="sr-only">Answer</legend>
@@ -201,6 +204,8 @@ export function AnsweredDecision({ item }: { item: InboxItem }) {
       </div>
       <h2 className={`t-question ${s.question}`}>{d.question}</h2>
       <Context text={d.context} className={`t-body ${s.context}`} />
+      <Images d={d} />
+      <Links d={d} />
       <p className={s.answer}>
         <b>{answerText(item)}</b>
         <span className="t-small">{answeredBy(item)}</span>

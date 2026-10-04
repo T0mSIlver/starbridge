@@ -5,6 +5,7 @@ import { relative, sessionName } from "@/lib/format";
 import { afterAnswer, selectedId, step } from "@/lib/selection";
 import type { InboxItem, Reply } from "@/lib/types";
 import { useApp } from "./AppProvider";
+import { Thumb } from "./Attachments";
 import { AnsweredDecision, AnsweredLine, OpenDecision, ordered } from "./DecisionCard";
 import s from "./Inbox.module.css";
 import { PushBanner } from "./PushBanner";
@@ -165,7 +166,8 @@ function Panes({
                   ) : (
                     <span className={`${ui.dot} ${s.rowDot}`} aria-hidden="true" />
                   )}
-                  {d.question}
+                  <span className={s.rowText}>{d.question}</span>
+                  <Thumb d={d} />
                 </span>
                 <span
                   className={`t-small ${s.rowSub}`}
