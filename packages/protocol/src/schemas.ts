@@ -95,6 +95,33 @@ export type SealedItem = z.infer<typeof SealedItem>;
 
 // --- Decisions and answers ---------------------------------------------------
 
+/**
+ * Where the owner can open the session that asked: Remote Control or a cloud session on
+ * claude.ai/code (the Claude app opens these on a phone), or Claude Desktop.
+ */
+export const SessionLinkKind = z.enum(["remote-control", "desktop", "web"]);
+export type SessionLinkKind = z.infer<typeof SessionLinkKind>;
+
+/** The only URLs each kind may carry, so a client never opens a script or another site. */
+export const SESSION_LINK_PREFIX: Record<SessionLinkKind, string> = {
+  "remote-control": "https://claude.ai/code/",
+  web: "https://claude.ai/code/",
+  desktop: "claude://claude.ai/",
+};
+
+export const SessionLink = z
+  .object({
+    kind: SessionLinkKind,
+    url: z
+      .string()
+      .max(2048)
+      .regex(/^[\x21-\x7e]+$/, "printable ASCII"),
+  })
+  .refine((l) => l.url.startsWith(SESSION_LINK_PREFIX[l.kind]), {
+    message: "url does not match its kind",
+  });
+export type SessionLink = z.infer<typeof SessionLink>;
+
 export const Decision = z
   .object({
     v: z.literal(1),
@@ -116,6 +143,9 @@ export const Decision = z
       machine: z.string().min(1).max(100),
       project: z.string().max(200),
       session: z.string().max(200),
+      /** The session's name, as Claude Code shows it. Optional: older machines omit it. */
+      sessionTitle: z.string().max(200).optional(),
+      links: z.array(SessionLink).max(3).optional(),
     }),
   })
   .superRefine((d, ctx) => {
