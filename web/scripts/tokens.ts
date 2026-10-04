@@ -26,7 +26,7 @@ type Role = {
   weight: number;
   lineHeight: number;
   letterSpacing: number;
-  uppercase?: boolean;
+  tabular?: boolean;
 };
 type Design = {
   colors: { light: Record<string, string>; dark: Record<string, string> };
@@ -41,10 +41,13 @@ type Design = {
 function load(): Design {
   const match = /^---\n([\s\S]*?)\n---\n/.exec(readFileSync(DESIGN_MD, "utf8"));
   if (!match) throw new Error("DESIGN.md: no YAML frontmatter");
-  const design = Bun.YAML.parse(match[1]!) as Design;
+  const design = Bun.YAML.parse(match[1] ?? "") as Design;
   const { light, dark } = design.colors;
   for (const name of new Set([...Object.keys(light), ...Object.keys(dark)])) {
-    for (const [scheme, colors] of [["light", light], ["dark", dark]] as const) {
+    for (const [scheme, colors] of [
+      ["light", light],
+      ["dark", dark],
+    ] as const) {
       const value = colors[name];
       if (value === undefined) throw new Error(`colors.${scheme}.${name} is missing`);
       if (!/^#([0-9a-f]{6}|[0-9a-f]{8})$/i.test(value)) {
@@ -53,7 +56,8 @@ function load(): Design {
     }
   }
   for (const [name, role] of Object.entries(design.typography)) {
-    if (!(role.font in design.fonts)) throw new Error(`typography.${name}: unknown font ${role.font}`);
+    if (!(role.font in design.fonts))
+      throw new Error(`typography.${name}: unknown font ${role.font}`);
   }
   return design;
 }
@@ -103,8 +107,7 @@ function typeCss(d: Design): string {
     lines.push(`  font-weight: ${r.weight};`);
     lines.push(`  line-height: ${num(r.lineHeight)};`);
     lines.push(`  letter-spacing: ${num(r.letterSpacing)}em;`);
-    if (r.uppercase) lines.push("  text-transform: uppercase;");
-    if (r.font === "mono") lines.push("  font-variant-numeric: tabular-nums;");
+    if (r.tabular) lines.push("  font-variant-numeric: tabular-nums;");
     lines.push("}", "");
   }
   return lines.join("\n");
@@ -123,7 +126,7 @@ function tokensKt(d: Design): string {
   const names = Object.keys(d.colors.light);
   const scheme = (name: string, colors: Record<string, string>) => [
     `val ${name} = StarbridgeColors(`,
-    ...names.map((k) => `    ${camel(k)} = ${kColor(colors[k]!)},`),
+    ...names.map((k) => `    ${camel(k)} = ${kColor(colors[k] ?? "")},`),
     ")",
     "",
   ];
@@ -142,6 +145,7 @@ function tokensKt(d: Design): string {
       `fontWeight = FontWeight(${r.weight}),`,
       `lineHeight = ${num(r.size * r.lineHeight)}.sp,`,
       `letterSpacing = ${num(r.letterSpacing)}.em,`,
+      ...(r.tabular ? ['fontFeatureSettings = "tnum",'] : []),
     ];
     return [`    val ${camel(name)} = TextStyle(`, ...fields.map((f) => `        ${f}`), "    )"];
   };
@@ -169,11 +173,7 @@ function tokensKt(d: Design): string {
     ...dims("Radius", d.radius, "dp"),
     ...dims("Sizes", d.size, "dp"),
     ...dims("Motion", d.motion, "Long"),
-    "// The theme passes the bundled faces; uppercase roles set it at the call site:",
-    `// ${Object.entries(d.typography)
-      .filter(([, r]) => r.uppercase)
-      .map(([n]) => camel(n))
-      .join(", ")}.`,
+    "// The theme passes the bundled faces.",
     "class StarbridgeType(sans: FontFamily, mono: FontFamily) {",
     ...Object.entries(d.typography).flatMap(style),
     "}",

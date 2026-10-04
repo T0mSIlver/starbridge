@@ -1,0 +1,86 @@
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+}
+
+.top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--s3);
+}
+
+.window {
+  color: var(--fg3);
+  margin-top: 2px;
+}
+
+.figure {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s2);
+}
+
+.used {
+  color: var(--fg2);
+}
+
+.bar {
+  position: relative;
+  height: 8px;
+  border-radius: var(--radius-pill);
+  background: var(--surface2);
+}
+
+.fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+}
+
+.on-pace {
+  background: var(--ok);
+}
+
+.runs-out {
+  background: var(--bad);
+}
+
+.unused {
+  background: var(--warn);
+}
+
+/* Where a steady pace would be now. */
+.expected {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  width: 2px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background: var(--fg);
+}
+
+.facts {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--s3);
+  color: var(--fg2);
+}
+
+.alert {
+  padding: var(--s2) var(--s3);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+}
+
+.alertWarn {
+  background: var(--warn-soft);
+  color: var(--fg);
+}
+
+.alertBad {
+  background: var(--bad-soft);
+  color: var(--fg);
+}
