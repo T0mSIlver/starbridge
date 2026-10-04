@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { relative } from "@/lib/format";
+import { relative, shortSession } from "@/lib/format";
+import { afterAnswer, selectedId, step } from "@/lib/selection";
 import type { InboxItem, Reply } from "@/lib/types";
 import { useApp } from "./AppProvider";
 import { AnsweredDecision, AnsweredLine, OpenDecision, ordered } from "./DecisionCard";
@@ -98,36 +99,43 @@ function Panes({
   answer: Answer;
 }) {
   const all = [...open, ...answered];
+  const ids = all.map((item) => item.decision.id);
   const [picked, setPicked] = useState<string>();
-  const selected = all.find((item) => item.decision.id === picked) ?? all[0];
-  // Once answered, a decision leaves the open list; the selection moves to the next open one.
+  const selectedAt = ids.indexOf(selectedId(ids, picked) ?? "");
+  const selected = all[selectedAt];
+  // Pin what is shown, so a decision arriving on top does not replace it.
+  useEffect(() => {
+    if (selected && picked !== selected.decision.id) setPicked(selected.decision.id);
+  }, [selected, picked]);
   const answerSelected = async (item: InboxItem, reply: Reply) => {
-    const at = open.indexOf(item);
-    const next = open[at + 1] ?? open[at - 1];
+    const next = afterAnswer(
+      open.map((o) => o.decision.id),
+      item.decision.id,
+    );
     await answer(item, reply);
     // Only when it is still selected: the owner may have moved on while it was sent.
-    setPicked((cur) => (cur === undefined || cur === item.decision.id ? next?.decision.id : cur));
+    setPicked((cur) => (cur === item.decision.id ? next : cur));
   };
 
-  const index = selected ? all.indexOf(selected) : -1;
-  const latest = useRef({ all, index });
-  latest.current = { all, index };
+  const latest = useRef({ ids, id: selected?.decision.id });
+  latest.current = { ids, id: selected?.decision.id };
   const listRef = useRef<HTMLUListElement>(null);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       if ((e.target as HTMLElement).closest("input, textarea, [contenteditable]")) return;
-      const step = e.key === "j" || e.key === "J" ? 1 : e.key === "k" || e.key === "K" ? -1 : 0;
-      if (!step) return;
-      const { all, index } = latest.current;
-      const next = all[Math.min(Math.max(index + step, 0), all.length - 1)];
-      if (!next) return;
+      const by = e.key === "j" || e.key === "J" ? 1 : e.key === "k" || e.key === "K" ? -1 : 0;
+      if (!by) return;
+      const next = step(latest.current.ids, latest.current.id, by);
+      if (next === undefined) return;
       e.preventDefault();
-      setPicked(next.decision.id);
-      listRef.current
-        ?.querySelector(`[data-id="${CSS.escape(next.decision.id)}"]`)
-        ?.scrollIntoView({ block: "nearest" });
+      setPicked(next);
+      const list = listRef.current;
+      const row = list?.querySelector<HTMLElement>(`[data-id="${CSS.escape(next)}"]`);
+      // Focus follows the selection when it is in the list, so its ring never marks another row.
+      if (list?.contains(document.activeElement)) row?.focus();
+      row?.scrollIntoView({ block: "nearest" });
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -148,6 +156,7 @@ function Panes({
                 data-id={d.id}
                 className={`${s.row} ${item.answeredAt ? s.done : ""}`}
                 aria-current={on ? "true" : undefined}
+                tabIndex={on ? 0 : -1}
                 onClick={() => setPicked(d.id)}
               >
                 <span className={s.rowQ}>
@@ -161,7 +170,7 @@ function Panes({
                 <span className={`t-small ${s.rowSub}`}>
                   {item.answeredAt
                     ? `${item.reply ? ("choice" in item.reply ? item.reply.choice : item.reply.text) : "Answered"} · ${relative(item.answeredAt)}`
-                    : `${d.source.session} · ${relative(d.createdAt)}`}
+                    : `${shortSession(d.source.session)} · ${relative(d.createdAt)}`}
                 </span>
               </button>
             </li>

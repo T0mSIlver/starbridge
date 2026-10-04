@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { relative } from "@/lib/format";
+import { relative, shortSession } from "@/lib/format";
 import type { Decision, InboxItem, Reply } from "@/lib/types";
 import { Context } from "./Context";
 import s from "./DecisionCard.module.css";
@@ -22,7 +22,13 @@ const fitsRow = (options: string[]) =>
 function Source({ d }: { d: Decision }) {
   return (
     <p className={`t-machine ${s.source}`}>
-      {d.source.machine} · {d.source.project} · {d.source.session}
+      {d.source.machine} · {d.source.project}
+      {d.source.session && (
+        <>
+          {" · "}
+          <span title={d.source.session}>{shortSession(d.source.session)}</span>
+        </>
+      )}
     </p>
   );
 }
