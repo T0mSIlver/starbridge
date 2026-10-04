@@ -128,7 +128,7 @@ errors use the codes in `packages/protocol/src/sodium.ts`.
 | Route | Who | What |
 |---|---|---|
 | `GET /directory?from=<seq>` | device, machine | `{entries}` from `seq` on |
-| `POST /directory` | device | append `{entry}`; 409 unless its `seq` is the next one; 403 `machine-cap` past the account's machine limit (5 on the hosted server) |
+| `POST /directory` | device | append `{entry}`; 409 unless its `seq` is the next one; 403 `machine-cap` past the account's machine limit (5 on the hosted server); 409 `directory-full` past 200 entries |
 
 The server runs `verifyDirectory` before it accepts an entry, to refuse garbage early. Clients
 never rely on that check.
@@ -137,7 +137,7 @@ never rely on that check.
 
 | Route | Who | What |
 |---|---|---|
-| `POST /pairings` | new member | `{request, claimHash}`: the request message and BLAKE2b-256 of a random claim secret's text (`claimHash`); 409 if the rendezvous id is taken |
+| `POST /pairings` | new member | `{request, claimHash}`: the request message and BLAKE2b-256 of a random claim secret's text (`claimHash`); 409 if the rendezvous id is taken; 429 `busy` when the server holds 5000 waiting pairings |
 | `GET /pairings/:rendezvous?wait=<s>` | device | `{request}`; with `wait`, holds until the new member posts and answers 204 if `wait` passes first |
 | `POST /pairings/:rendezvous/approve` | device | `{approval}`; the directory must already hold the new member's entry; 409 `already-paired` when that member already holds a session or token |
 | `GET /pairings/:rendezvous/result?wait=<s>` | new member, with `X-Claim: <secret>` | long-poll: `{approval, token?}` once approved, `token` for machines only; 204 when `wait` passes |
@@ -162,7 +162,7 @@ createdAt, expiresAt, version}`; `state` is `open`, `comparing`, `approved` or `
 
 | Route | Who | What |
 |---|---|---|
-| `POST /items` | machine (decision, quota), device (answer) | store a sealed item and push it to each recipient; 409 on a reused id |
+| `POST /items` | machine (decision, quota), device (answer) | store a sealed item and push it to each recipient; 409 on a reused id; 409 `too-many-items` and 413 `too-large` past the caps in Limits |
 | `GET /items?kind=<kind>&after=<cursor>` | device | items with only the caller's box, and `cursor` |
 | `GET /items/:id` | device, machine | one item, the caller's box only; push points here when the item exceeds 4 KB |
 | `GET /quota` | device | the latest quota item from each machine |
@@ -174,7 +174,7 @@ device moves it out of the open inbox.
 Lists return `{items: [{item, cursor, receivedAt, answeredAt?}], cursor}`, 100 at a time, where
 `item` holds only the caller's box and `answeredAt` is set on answered decisions. An answer moves
 its decision past every cursor, so devices listing after their cursor see it again, answered.
-The server keeps only the latest quota item from each machine. Refusals: 403 when the caller's
+The server keeps only the latest quota item from each machine, and drops old items as Limits says. Refusals: 403 when the caller's
 role may not post this kind or `from` is not the caller; 400 `unknown-recipient` when a box goes
 to anyone but active devices (decision, quota) or the asking machine (answer); 409
 `already-answered`.
@@ -215,3 +215,30 @@ A server with FCM credentials or VAPID keys pushes directly. One without them po
 set in `RELAY_URL` (the owner's hosted server runs with `RELAY_MODE=1`), which pushes with its
 own credentials; the payload is already ciphertext or an id. UnifiedPush always goes direct.
 `gone` from a push service drops the subscription.
+
+### Limits
+
+These bound what one account, or one address, can make the server store or do. A rate limit
+answers 429 `rate-limited` with `Retry-After` in seconds; a cap answers 409 or 413 with the
+code below. Per-address limits count an IPv6 client as its /64.
+
+| What | Limit |
+|---|---|
+| `POST /items` | 120 a minute per account |
+| Stored decisions, open or answered | 10000 per account: 409 `too-many-items` |
+| Stored boxes | 128 MB per account, of which decisions and quotas may fill all but the last 8 MB: 409 `too-many-items`; 256 KB per decision or quota and 32 KB per answer: 413 `too-large` |
+| `POST /directory` | 30 an hour per account |
+| Directory entries, revocations included | 200 per account: 409 `directory-full`; 8 KB per entry: 413 `too-large` |
+| Sessions | 50 per account; signing in past that ends the oldest, unpaired ones first |
+| `GET /auth/github/callback` | 20 a minute per address |
+| Pairing messages | 4 KB each: 400 `bad-schema` |
+| `GET /pairings/:rendezvous/result` and `GET /pairings/:rendezvous?wait=` waiting | 4 per pairing: 429 `too-many-waits` |
+| `POST /joins` | 10 a minute per account; request text 4 KB: 400 `bad-schema` |
+| `GET /joins` waiting | 16 per account; `GET /joins/:id` waiting: 4 per join: 429 `too-many-waits` |
+| `GET /answers` waiting | 32 per machine: 429 `too-many-waits` |
+| `POST /push/subscriptions` | 30 a minute per account, on top of the subscription caps |
+
+Answers skip the decision count and may use the last 8 MB, so a full account can still answer. An hourly sweep drops answered
+decisions and their answers 7 days after the answer, unanswered decisions and quota snapshots 30
+days after they arrived, quota snapshots of revoked machines, and expired sessions. Clients that
+want a longer history keep their own copy.

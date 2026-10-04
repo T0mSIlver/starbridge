@@ -374,6 +374,15 @@ How it generalizes is open.
   (#34, server #39). When a session ends the phone keeps its keys, and the next
   sign-in binds the new session with the device key (#44); only a verified
   chain that revokes the phone wipes it.
+- 2026-10-05. Android Beacon (#63): Material's `primary` role is `fg`, so stock
+  filled buttons are black or white and only the recommended option and an
+  approval are amber; under "Match wallpaper" `primary` comes from the
+  wallpaper. A decision's options form one row of connected buttons when every
+  label fits on one line, each as wide as its label needs, and a stacked group
+  otherwise. Google Sans Flex ships instanced to its weight and optical-size
+  axes (410 KB instead of 4.1 MB), and each type role sets `opsz` to its size.
+  The notification's `setColor` amber shows on Android 12 to 15; Android 16
+  draws the app icon and tints the actions itself.
 - 2026-10-04. App sign-in (#34): the GitHub redirect to `starbridge://auth` carries a
   single-use code bound to a PKCE S256 challenge, and the app trades code and verifier for the
   session at `POST /v1/auth/app/session`. Chosen over Android App Links on
@@ -395,6 +404,36 @@ How it generalizes is open.
   visuals are MCP Apps only, plus an optional preview image for
   notifications; the CLI wraps plain images and diffs into MCP Apps. Visuals
   get no network access in v1.
+- 2026-10-05. Releases and deploys (#64, #26): a `v1.2.3` or `v1.2.3-rc.4` tag runs
+  `.github/workflows/release.yml`, which publishes a GitHub Release with the APK signed by the
+  release key, the four CLI binaries, `SHA256SUMS` and notes generated from merged PRs; `-rc`
+  tags are prereleases. The APK's versionCode is `MAJOR*1000000 + MINOR*10000 + PATCH*100`, plus
+  the rc number or 99, so release candidates sort before their release. The release key is an
+  RSA 4096 PKCS12 keystore, alias `starbridge`, kept in `~/.config/starbridge/secrets/` and in
+  Actions secrets; losing it means a new app id, so it needs a copy off the dev box. A merge to
+  main deploys from Actions once CI passes, over SSH with its own key, whose forced command can
+  only deploy a commit that is on GitHub's main: the box fetches that commit itself with a
+  read-only GitHub deploy key. `deploy/deploy.sh` stays for rollbacks and other refs. The
+  `cli-v*` workflow folded into the release one.
+- 2026-10-05. Per-account bounds before hosted signups (#65): every route that stores
+  something has a cap or a retention rule, and the writes that grow it a rate limit, sized for an
+  orchestrator with 10 sessions asking a few hundred decisions a day. Answered decisions and
+  their answers are kept 7 days, unanswered decisions and quota snapshots 30; 10000 stored
+  decisions and 128 MB per account; directories end at 200 entries, which is about 100 add and
+  revoke pairs; an account that reaches it needs the operator to reset it. The numbers live in
+  `server/src/limits.ts` and PROTOCOL.md, "Limits".
+- 2026-10-05. Setup (#68, spec on the issue): one `starbridge agent` per
+  machine, a user service (systemd or launchd), owns the keys and the server
+  connection, uploads quotas, and routes answers, permission prompts,
+  control sets and runs to sessions over a unix socket. The mod becomes a
+  thin client of it; CLI commands fall back to talking to the server
+  themselves when no agent runs (owner's choice). Entry points: `curl
+  -fsSL https://starbridge.run/install.sh | sh`, a Homebrew tap and npm
+  (owner's choice). The repo is a Claude Code marketplace with two plugins,
+  `starbridge` (skill, hooks, setup command) and `starbridge-mod`, split
+  so that builds refusing mods keep the rest. The plugin's `SessionStart`
+  hook injects the skill rule instead of editing CLAUDE.md (owner's choice).
+  No public release date: the owner ships when satisfied.
 
 ## Encryption, with existing libraries
 
@@ -697,3 +736,33 @@ goes in git.
   Apps (SEP-1865) has been a stable MCP extension since 2026-01-26:
   `ui://` resources of type `text/html;profile=mcp-app`, JSON-RPC over
   `postMessage`, and a sandboxed iframe with a CSP the host builds.
+- 2026-10-05: setup research (#68). Claude Code 2.1.289 plugins can ship
+  skills, command hooks, `bin/`, `userConfig` and mods (a plugin whose
+  `hooks/hooks.json` lists `modules`); the owner's localvoxtral marketplace
+  already installs a mod at user scope. A plugin-root `CLAUDE.md` is not
+  loaded. `claude plugin marketplace add` and `claude plugin install
+  --scope user` run unprompted from a script for git sources. CodexBar:
+  macOS `brew install --cask codexbar` with the CLI inside the app; release
+  tarballs for macOS and Linux (glibc and musl); a brew tap and AUR on
+  Linux; browser cookie import is macOS-only; `codexbar config providers
+  --format json` lists providers but not whether they are signed in, which
+  only `usage --provider X` shows; `codexbar --version` printed `unknown` on
+  the dev box.
+- 2026-10-05: permission hook probes (#57), Claude Code 2.1.289 in a
+  terminal (tmux, Haiku), a throwaway `PermissionRequest` command hook that
+  waits, then allows. The dialog shows while the hook waits, and the hook's
+  answer resolves it. Under `--dangerously-skip-permissions` an `ask` rule's
+  prompt still reaches the hook (`permission_mode: "bypassPermissions"`),
+  although the docs say the hook does not fire in that mode. When the
+  keyboard picks Yes first, the hook gets no signal and its answer is
+  dropped; Esc or No interrupts the turn and sends the hook SIGTERM within
+  0.1 s. `permission_suggestions` holds SDK `PermissionUpdate` objects (here
+  `addDirectories`). Codex 0.160.0 asks the user to trust any new or changed
+  hook at launch; its race test waits for the Codex limit to reset.
+- 2026-10-05: specs for #58, #60 and #62 revised to answer the owner's
+  questions (cards on the Needs You page). Mod API, 2.1.289: a `tool.call`
+  hook sees each Bash call start and end in-process (`await next(e)` costs
+  no hook budget), but no event carries a tool's output while it runs;
+  `process.spawn` streams only the mod's own children. So #60 times agent
+  commands from the mod with no wrapper, and reads progress from output only
+  under `starbridge run`.

@@ -11,7 +11,8 @@ import {
   safeEqual,
 } from "../auth";
 import type { Env } from "../env";
-import { clientIp, json } from "../http";
+import { json } from "../http";
+import { ipKey, rateLimit } from "../limits";
 
 const STATE_COOKIE = "sb_oauth";
 /** How long the app has to trade its sign-in code for a session. */
@@ -64,6 +65,7 @@ authRoutes.get("/auth/github", (c) => {
 authRoutes.get("/auth/github/callback", async (c) => {
   const { github, publicUrl, secureCookies, appRedirectUri } = c.var.config;
   if (!github) fail(404, "not-configured", "GitHub sign-in is off on this server");
+  rateLimit(c, `github:${ipKey(c)}`, c.var.config.limits.githubCallbacks);
   const [state, app, challenge] = (getCookie(c, STATE_COOKIE) ?? "").split(".");
   deleteCookie(c, STATE_COOKIE, { path: "/v1/auth/github" });
   const code = c.req.query("code");
@@ -112,7 +114,7 @@ authRoutes.get("/auth/github/callback", async (c) => {
     ).run(hashToken(code), account, challenge, now + APP_CODE_SECONDS * 1000);
     return c.redirect(`${appRedirectUri}?code=${code}`);
   }
-  const token = createSession(db, account);
+  const token = createSession(db, account, c.var.config.limits.sessions);
   setSessionCookie(c, token, secureCookies);
   return c.redirect("/");
 });
@@ -122,7 +124,7 @@ authRoutes.get("/auth/github/callback", async (c) => {
  * session. Any attempt burns the code, so one caught by another app cannot be guessed at.
  */
 authRoutes.post("/auth/app/session", async (c) => {
-  if (!c.var.limiter.allow(`app-code:${clientIp(c)}`, 30, 60_000)) fail(429, "rate-limited");
+  rateLimit(c, `app-code:${ipKey(c)}`, [30, 60_000]);
   const { code, verifier } = await json(
     c,
     z.object({ code: z.string().max(100), verifier: z.string().regex(VERIFIER) }),
@@ -134,14 +136,14 @@ authRoutes.post("/auth/app/session", async (c) => {
   const challenge = new Bun.CryptoHasher("sha256").update(verifier).digest("base64url");
   if (!row || row.expires_at < Date.now() || !safeEqual(challenge, row.challenge))
     fail(400, "bad-code", "sign-in code unknown, used, expired or not yours; sign in again");
-  return c.json({ session: createSession(db, row.account_id) });
+  return c.json({ session: createSession(db, row.account_id, c.var.config.limits.sessions) });
 });
 
 /** Self-hosted sign-in with OWNER_TOKEN; the session also comes back for the Android app. */
 authRoutes.post("/auth/owner", async (c) => {
   const { ownerToken, secureCookies } = c.var.config;
   if (!ownerToken) fail(404, "not-configured", "owner sign-in is off on this server");
-  if (!c.var.limiter.allow(`owner:${clientIp(c)}`, 10, 60_000)) fail(429, "rate-limited");
+  rateLimit(c, `owner:${ipKey(c)}`, [10, 60_000]);
   const { token } = await json(c, z.object({ token: z.string().max(1000) }));
   if (!safeEqual(token, ownerToken)) fail(401, "unauthenticated", "wrong owner token");
   const db = c.var.db;
@@ -154,7 +156,7 @@ authRoutes.post("/auth/owner", async (c) => {
       account,
       new Date().toISOString(),
     );
-  const session = createSession(db, account);
+  const session = createSession(db, account, c.var.config.limits.sessions);
   setSessionCookie(c, session, secureCookies);
   return c.json({ session });
 });

@@ -103,6 +103,8 @@ CREATE TABLE IF NOT EXISTS items (
   re TEXT,
   received_at TEXT NOT NULL,
   answered_at TEXT,
+  -- Bytes of the item's boxes, counted against the account's storage.
+  size INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (account_id, id)
 );
 
@@ -138,6 +140,10 @@ export function openDb(path: string): Database {
   db.run("PRAGMA foreign_keys = ON");
   db.run("PRAGMA busy_timeout = 5000");
   db.run(SCHEMA);
+  // Databases made before items had a size; their old items count as empty until swept.
+  const columns = db.query("PRAGMA table_info(items)").all() as { name: string }[];
+  if (!columns.some((col) => col.name === "size"))
+    db.run("ALTER TABLE items ADD COLUMN size INTEGER NOT NULL DEFAULT 0");
   return db;
 }
 

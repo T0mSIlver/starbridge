@@ -11,7 +11,14 @@ are off.
 
 ## Deploy
 
-From the dev box, any ref that is on GitHub:
+Every push to main deploys once CI passes (`.github/workflows/deploy.yml`). Actions logs in as
+`deploy` with its own key (secret `DEPLOY_SSH_KEY`), whose forced command runs
+`/usr/local/sbin/starbridge-deploy <commit>` (`host/deploy-rev.sh`) and nothing else. That script
+fetches main from GitHub with a read-only deploy key and refuses commits that are not on it, then
+unpacks the commit and runs `host/apply.sh`. `deploy/setup-actions-deploy.sh` installs both keys
+on the box; the private halves stay in `~/.config/starbridge/secrets`.
+
+To roll back, or to deploy a branch, from the dev box with any ref that is on GitHub:
 
 ```bash
 deploy/deploy.sh                 # origin/main
@@ -22,7 +29,7 @@ It unpacks the ref into `/opt/starbridge`, builds the server and web images on t
 
 ## First setup
 
-1. As root: `ssh root@starbridge.run sh -s < deploy/host/setup.sh`. It installs Docker,
+1. As root: `ssh root@starbridge.run sh -s < deploy/host/setup.sh`. It installs Docker, git,
    sqlite3 and unattended-upgrades (with reboots at 04:00), adds `deploy`, and turns password
    login off.
 2. From a second terminal, check that `ssh deploy@starbridge.run sudo true` works, then
@@ -31,6 +38,7 @@ It unpacks the ref into `/opt/starbridge`, builds the server and web images on t
    `/etc/starbridge/secrets` (root, 0700). `deploy/host/server-env.sh` turns them into
    `/etc/starbridge/server.env` on every deploy.
 4. `deploy/deploy.sh`.
+5. `deploy/setup-actions-deploy.sh` for deploys from Actions.
 
 ## On the box
 

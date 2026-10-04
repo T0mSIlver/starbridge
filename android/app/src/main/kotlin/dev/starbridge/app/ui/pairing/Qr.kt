@@ -4,11 +4,22 @@ import android.content.Context
 import android.util.Log
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
@@ -19,6 +30,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import dev.starbridge.app.data.Approval
+import dev.starbridge.app.ui.theme.Sizes
+import dev.starbridge.app.ui.theme.Spacing
+import dev.starbridge.app.ui.theme.StarbridgeTheme
 import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
 import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
@@ -70,4 +85,29 @@ private fun scan(context: Context, onResult: (String) -> Unit, onError: (String)
             Log.w("Starbridge", "scan failed", e)
             onError("This phone cannot scan here. Type the code instead.")
         }
+}
+
+/** Under the code field: scan a code another device or `starbridge pair` shows, or show one. */
+@Composable
+fun ColumnScope.QrWays(onScan: (String) -> Unit, onShow: () -> Unit) {
+    var error by rememberSaveable { mutableStateOf<String?>(null) }
+    val scan = rememberScanner(onResult = { error = null; onScan(it) }, onError = { error = it })
+    Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+        OutlinedButton(onClick = scan, modifier = Modifier.weight(1f).heightIn(min = Sizes.tap)) { Text("Scan QR", style = StarbridgeTheme.type.action) }
+        OutlinedButton(onClick = onShow, modifier = Modifier.weight(1f).heightIn(min = Sizes.tap)) { Text("Show QR", style = StarbridgeTheme.type.action) }
+    }
+    error?.let { Text(it, style = StarbridgeTheme.type.small, color = StarbridgeTheme.colors.bad) }
+}
+
+/** This phone shows a pairing link as a QR code and waits for a new phone to scan it. */
+@Composable
+fun ShowingQr(state: Approval.Showing, onCancel: () -> Unit) {
+    val colors = StarbridgeTheme.colors
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.s3)) {
+        Text("Scan with the new phone", style = StarbridgeTheme.type.heading, color = colors.fg)
+        Text("On the new phone, sign in to Starbridge and tap Scan a QR code. It expires in 10 minutes.", style = StarbridgeTheme.type.small, color = colors.fg2)
+        QrImage(state.link, "QR code for pairing code ${state.code}")
+        Text(state.code, style = StarbridgeTheme.type.machine, color = colors.fg2)
+        OutlinedButton(onClick = onCancel, modifier = Modifier.heightIn(min = Sizes.tap)) { Text("Cancel", style = StarbridgeTheme.type.action) }
+    }
 }

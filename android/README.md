@@ -23,6 +23,11 @@ JDK 21 and an Android SDK with platform 37, then:
 ./gradlew assembleRelease
 ```
 
+Release builds sign with the release key when `STARBRIDGE_KEYSTORE`, `STARBRIDGE_KEYSTORE_PASSWORD`
+and `STARBRIDGE_KEY_ALIAS` are set, or when `~/.config/starbridge/secrets/release.jks` exists,
+and with the debug key otherwise. `-PversionName=1.2.3` sets the version; the release workflow
+passes the tag's.
+
 Screenshots render on the JVM through Roborazzi: `./gradlew
 recordRoborazziDebug` writes `app/screenshots/`, light and dark, and
 `verifyRoborazziDebug` fails when a screen drifts from them.
@@ -41,5 +46,12 @@ from an emulator run against one: GitHub sign-in through a stand-in OAuth
 server, first-device setup, pairing `starbridge pair`, and answering
 `starbridge ask --wait` from the locked screen through UnifiedPush (ntfy).
 
-Fonts: Archivo and JetBrains Mono, under the SIL Open Font License
-(`licenses/`).
+Fonts: Google Sans Flex and Google Sans Code, under the SIL Open Font License
+(`licenses/`). `res/font/google_sans_flex.ttf` is the google/fonts file
+instanced to its weight (300 to 800) and optical size (12 to 36) axes, with
+grade, roundness, slant and width pinned to their defaults, which cuts it from
+4.1 MB to 410 KB:
+
+```bash
+fonttools varLib.instancer "GoogleSansFlex[GRAD,ROND,opsz,slnt,wdth,wght].ttf" GRAD=0 ROND=0 slnt=0 wdth=100 wght=300:800 opsz=12:36 -o google_sans_flex.ttf
+```

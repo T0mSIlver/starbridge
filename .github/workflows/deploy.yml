@@ -1,0 +1,38 @@
+name: deploy
+
+# Deploys main to starbridge.run once CI passes on it. deploy/deploy.sh stays for manual rollbacks.
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  deploy:
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
+    runs-on: ubuntu-latest
+    environment:
+      name: starbridge.run
+      url: https://starbridge.run
+    steps:
+      # The key's forced command on the box runs starbridge-deploy with this commit id and nothing
+      # else (deploy/setup-actions-deploy.sh).
+      - name: Deploy
+        env:
+          DEPLOY_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          REV: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          umask 077
+          printf '%s\n' "$DEPLOY_KEY" > "$RUNNER_TEMP/key"
+          printf '%s\n' "$KNOWN_HOSTS" > "$RUNNER_TEMP/known_hosts"
+          ssh -i "$RUNNER_TEMP/key" -o IdentitiesOnly=yes -o UserKnownHostsFile="$RUNNER_TEMP/known_hosts" \
+            -o StrictHostKeyChecking=yes deploy@starbridge.run "$REV"
+      - name: Check healthz
+        run: curl -fsS --retry 10 --retry-delay 3 --retry-all-errors https://starbridge.run/healthz

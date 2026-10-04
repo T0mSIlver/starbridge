@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- DESIGN.md bg, for the window and the splash before Compose draws. -->
-    <color name="ground">#F4F5F8</color>
+    <color name="ground">#F4F4F4</color>
+    <!-- DESIGN.md accent, for the notification: the system draws it on its own surface. -->
+    <color name="accent">#965700</color>
+    <!-- The icon's ground: DESIGN.md bg dark, in both schemes. -->
+    <color name="icon_ground">#0C0C0C</color>
 </resources>

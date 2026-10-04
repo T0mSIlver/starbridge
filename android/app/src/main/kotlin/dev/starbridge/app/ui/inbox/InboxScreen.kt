@@ -4,12 +4,12 @@ import android.content.Intent
 import android.net.Uri
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.scaleIn
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -20,54 +20,88 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.automirrored.rounded.Send
 import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.ButtonGroup
+import androidx.compose.material3.ButtonGroupDefaults
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedToggleButton
+import androidx.compose.material3.OutlinedToggleButtonDefaults
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material3.ToggleButton
+import androidx.compose.material3.ToggleButtonDefaults
+import androidx.compose.material3.ToggleButtonShapes
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.starbridge.app.data.Decision
 import dev.starbridge.app.data.Source
 import dev.starbridge.app.data.Store
+import dev.starbridge.app.ui.Beacon
 import dev.starbridge.app.ui.Label
 import dev.starbridge.app.ui.Panel
-import dev.starbridge.app.ui.Title
+import dev.starbridge.app.ui.Refresh
+import dev.starbridge.app.ui.Refreshable
+import dev.starbridge.app.ui.Screen
 import dev.starbridge.app.ui.ago
 import dev.starbridge.app.ui.clock
+import dev.starbridge.app.ui.listPadding
 import dev.starbridge.app.ui.theme.Radius
 import dev.starbridge.app.ui.theme.Sizes
 import dev.starbridge.app.ui.theme.Spacing
 import dev.starbridge.app.ui.theme.StarbridgeTheme
+import kotlinx.coroutines.delay
 import java.time.Instant
 import javax.inject.Inject
 
@@ -81,29 +115,51 @@ class InboxViewModel @Inject constructor(private val store: Store) : ViewModel()
 /** What a decision card can do: answer with an option or text, or open the full decision. */
 class DecisionActions(val answer: (id: String, choice: String?, text: String?) -> Unit, val open: (String) -> Unit)
 
-/** Open decisions first, newest on top; answered ones below. */
+/** Open decisions first, newest on top; answered ones below, one line each. */
 @Composable
-fun InboxScreen(decisions: List<Decision>, now: Instant, actions: DecisionActions, modifier: Modifier = Modifier, selected: String? = null) {
+fun InboxScreen(
+    decisions: List<Decision>,
+    now: Instant,
+    actions: DecisionActions,
+    modifier: Modifier = Modifier,
+    selected: String? = null,
+    refresh: Refresh? = null,
+) {
     val open = decisions.filter { it.open }.sortedByDescending { it.createdAt }
     val answered = decisions.filterNot { it.open }.sortedByDescending { it.answeredAt }
-    LazyColumn(
-        modifier = modifier,
-        contentPadding = PaddingValues(horizontal = Spacing.s4, vertical = Spacing.s4),
-        verticalArrangement = Arrangement.spacedBy(Spacing.s3),
-    ) {
-        item { Title("Inbox") }
-        item {
-            Label(if (open.isEmpty()) "Nothing needs you" else "${open.size} need you", color = if (open.isEmpty()) StarbridgeTheme.colors.fg3 else StarbridgeTheme.colors.accent)
-        }
-        items(open, key = { it.id }) {
-            OpenDecision(it, now, actions, selected = it.id == selected, modifier = Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null))
-        }
-        if (answered.isNotEmpty()) {
-            item(key = "answered") { Label("Answered", Modifier.padding(top = Spacing.s4)) }
-            items(answered, key = { it.id }) {
-                AnsweredDecision(it, now, onOpen = { actions.open(it.id) }, modifier = Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null))
+    Screen("Inbox", modifier, subtitle = { NeedsYou(open.size) }) { padding ->
+        Refreshable(refresh) {
+            LazyColumn(
+                contentPadding = listPadding(padding),
+                verticalArrangement = Arrangement.spacedBy(Spacing.s3),
+            ) {
+                itemsIndexed(open, key = { _, it -> it.id }) { _, it ->
+                    OpenDecision(it, now, actions, selected = it.id == selected, modifier = Modifier.animateItem())
+                }
+                if (answered.isNotEmpty()) {
+                    item(key = "answered") { Label("Answered", Modifier.padding(top = Spacing.s4, start = Spacing.s1).animateItem()) }
+                    itemsIndexed(answered, key = { _, it -> it.id }) { i, it ->
+                        Column(Modifier.animateItem()) {
+                            if (i > 0) HorizontalDivider(color = StarbridgeTheme.colors.line)
+                            AnsweredLine(it, now, onOpen = { actions.open(it.id) })
+                        }
+                    }
+                }
             }
         }
+    }
+}
+
+/** The top app bar's subtitle: how many decisions wait, with the beacon when any do. */
+@Composable
+private fun NeedsYou(count: Int) {
+    val colors = StarbridgeTheme.colors
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        if (count > 0) {
+            Beacon()
+            Spacer(Modifier.width(Spacing.s2))
+        }
+        Text(if (count == 0) "Nothing needs you" else "$count need you", style = StarbridgeTheme.type.small, color = colors.fg2)
     }
 }
 
@@ -117,22 +173,36 @@ private fun sessionName(s: Source, full: Boolean) = when {
     else -> s.session
 }
 
-/** Long-pressing it shows the session's full id, when [revealable]. */
+/**
+ * Where a decision comes from and when: machine, project, session. Long-pressing it shows the
+ * session's full id, when [revealable].
+ */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun Source(decision: Decision, now: Instant, revealable: Boolean = false) {
     val s = decision.source
     var full by rememberSaveable { mutableStateOf(false) }
-    Text(
-        listOf(s.machine, s.project, sessionName(s, full), ago(now, decision.createdAt)).filter { it.isNotBlank() }.joinToString(" · "),
-        style = StarbridgeTheme.type.machine,
-        color = StarbridgeTheme.colors.fg3,
-        modifier = if (revealable && s.session.isNotBlank()) {
-            Modifier.combinedClickable(onClickLabel = null, onLongClickLabel = "Show the session id", onLongClick = { full = !full }, onClick = {})
-        } else {
-            Modifier
-        },
-    )
+    val reveal = if (revealable && s.session.isNotBlank()) {
+        Modifier.combinedClickable(onLongClickLabel = "Show the session id", onLongClick = { full = !full }, onClick = {})
+    } else {
+        Modifier
+    }
+    Row(reveal, verticalAlignment = Alignment.CenterVertically) {
+        if (decision.open) {
+            Beacon()
+            Spacer(Modifier.width(Spacing.s2))
+        }
+        // The session's names give way before the time does.
+        Text(
+            listOf(s.machine, s.project, sessionName(s, full)).filter { it.isNotBlank() }.joinToString(" · "),
+            style = StarbridgeTheme.type.machine,
+            color = StarbridgeTheme.colors.fg2,
+            maxLines = if (full) Int.MAX_VALUE else 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f, fill = false),
+        )
+        Text(" · ${ago(now, decision.createdAt)}", style = StarbridgeTheme.type.machine, color = StarbridgeTheme.colors.fg2, maxLines = 1)
+    }
 }
 
 /**
@@ -142,97 +212,237 @@ private fun Source(decision: Decision, now: Instant, revealable: Boolean = false
 @Composable
 private fun SessionLinks(source: Source) {
     val context = LocalContext.current
-    val links = source.links.filter { it.kind != "desktop" }
-    links.forEach { link ->
-        OutlinedButton(
-            onClick = {
-                runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(link.url))) }
-            },
+    source.links.filter { it.kind != "desktop" }.forEach { link ->
+        TextButton(
+            onClick = { runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(link.url))) } },
             modifier = Modifier.heightIn(min = Sizes.tap),
         ) {
+            Icon(Icons.AutoMirrored.Rounded.OpenInNew, contentDescription = null, modifier = Modifier.size(Spacing.s5))
+            Spacer(Modifier.width(Spacing.s2))
             Text("Open session", style = StarbridgeTheme.type.action)
         }
     }
 }
 
-private fun fallback(d: Decision) = "If nobody answers: ${d.default}" + (d.defaultAt?.let { ", at ${clock(it)}" } ?: "")
+/** "If nobody answers: Waits until tonight, at 22:00", the default in the text colour. */
+@Composable
+private fun Fallback(decision: Decision) {
+    val colors = StarbridgeTheme.colors
+    Text(
+        buildAnnotatedString {
+            append("If nobody answers: ")
+            withStyle(SpanStyle(color = colors.fg)) { append(decision.default) }
+            decision.defaultAt?.let { append(", at ${clock(it)}") }
+        },
+        style = StarbridgeTheme.type.small,
+        color = colors.fg2,
+    )
+}
 
 @Composable
 private fun OpenDecision(decision: Decision, now: Instant, actions: DecisionActions, selected: Boolean, modifier: Modifier = Modifier) {
     val colors = StarbridgeTheme.colors
-    Panel(modifier.fillMaxWidth(), border = if (selected) colors.accent else colors.lineStrong) {
-        Column(Modifier.fillMaxWidth().clickable(onClickLabel = "Read the whole decision") { actions.open(decision.id) }) {
+    // On wide screens the card shown in the detail pane steps up a surface.
+    Panel(modifier.fillMaxWidth(), color = if (selected) colors.surface2 else colors.surface) {
+        Column(
+            Modifier.fillMaxWidth().clickable(onClickLabel = "Read the whole decision") { actions.open(decision.id) },
+            verticalArrangement = Arrangement.spacedBy(Spacing.s2),
+        ) {
             Source(decision, now)
-            Spacer(Modifier.padding(top = Spacing.s2))
             Text(decision.question, style = StarbridgeTheme.type.question, color = colors.fg)
-            Spacer(Modifier.padding(top = Spacing.s1))
-            Text(plain(decision.context), style = StarbridgeTheme.type.body, color = colors.fg2, maxLines = 3, overflow = TextOverflow.Ellipsis)
+            if (decision.context.isNotBlank()) {
+                Text(plain(decision.context), style = StarbridgeTheme.type.body, color = colors.fg2, maxLines = 3, overflow = TextOverflow.Ellipsis)
+            }
         }
         Spacer(Modifier.padding(top = Spacing.s4))
         Answer(decision, actions.answer)
         Spacer(Modifier.padding(top = Spacing.s3))
-        Text(fallback(decision), style = StarbridgeTheme.type.small, color = colors.fg3)
+        Fallback(decision)
     }
 }
 
 /** The options as a connected button group, or a reply field when there are none. */
 @Composable
 private fun Answer(decision: Decision, answer: (String, String?, String?) -> Unit) {
-    if (decision.options.isEmpty()) FreeText { answer(decision.id, null, it) }
-    else Options(decision) { answer(decision.id, it, null) }
+    val haptics = LocalHapticFeedback.current
+    if (decision.options.isEmpty()) {
+        FreeText {
+            haptics.performHapticFeedback(HapticFeedbackType.Confirm)
+            answer(decision.id, null, it)
+        }
+    } else {
+        Options(decision) {
+            haptics.performHapticFeedback(HapticFeedbackType.Confirm)
+            answer(decision.id, it, null)
+        }
+    }
 }
 
 /**
- * A vertical connected button group (Material 3 Expressive): the options touch, outer corners
- * round, inner ones tight. The recommended option leads, filled in the beacon's colour, since
- * it is what needs the owner.
+ * A connected button group (Material 3 Expressive). The recommended option leads, filled in
+ * amber, the only filled button; the others are outlined. Side by side when every label fits on
+ * one line, each as wide as its label needs; else stacked, since options run up to 100
+ * characters. The tapped option takes its checked shape while the answer goes out.
  */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun Options(decision: Decision, onAnswer: (String) -> Unit) {
-    val colors = StarbridgeTheme.colors
     val ordered = decision.options.sortedByDescending { it == decision.recommended }
-    val outer = Sizes.tap / 2
-    val inner = 4.dp
-    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        ordered.forEachIndexed { i, option ->
-            val shape = RoundedCornerShape(
-                topStart = if (i == 0) outer else inner,
-                topEnd = if (i == 0) outer else inner,
-                bottomStart = if (i == ordered.lastIndex) outer else inner,
-                bottomEnd = if (i == ordered.lastIndex) outer else inner,
-            )
-            val recommended = option == decision.recommended
-            Button(
-                onClick = { onAnswer(option) },
-                modifier = Modifier.fillMaxWidth().heightIn(min = Sizes.tap),
-                shape = shape,
-                colors = if (recommended) {
-                    ButtonDefaults.buttonColors(containerColor = colors.accent, contentColor = colors.onAccent)
-                } else {
-                    ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondaryContainer, contentColor = MaterialTheme.colorScheme.onSecondaryContainer)
-                },
-                contentPadding = PaddingValues(horizontal = Spacing.s5, vertical = Spacing.s3),
+    var chosen by remember(decision.id) { mutableStateOf<String?>(null) }
+    // A second tap while the answer goes out is dropped. If it fails, the decision stays open
+    // and the options take taps again.
+    LaunchedEffect(chosen) {
+        if (chosen != null) {
+            delay(RETRY_AFTER_MS)
+            chosen = null
+        }
+    }
+    val pick = { option: String ->
+        if (chosen == null) {
+            chosen = option
+            onAnswer(option)
+        }
+    }
+    val measurer = rememberTextMeasurer()
+    val style = StarbridgeTheme.type.action
+    val density = LocalDensity.current
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val needs = ordered.map { option ->
+            with(density) { measurer.measure(option, style, maxLines = 1).size.width.toDp() } + optionPadding * 2
+        }
+        val gaps = ButtonGroupDefaults.ConnectedSpaceBetween * (ordered.size - 1)
+        val fits = needs.fold(gaps) { sum, it -> sum + it } <= maxWidth
+        if (fits) {
+            ButtonGroup(
+                overflowIndicator = {},
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween),
             ) {
-                Text(option, style = StarbridgeTheme.type.action, modifier = Modifier.weight(1f))
-                if (recommended) Text("Recommended", style = StarbridgeTheme.type.label)
+                ordered.forEachIndexed { i, option ->
+                    customItem(
+                        buttonGroupContent = {
+                            val shapes = when (i) {
+                                0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
+                                ordered.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
+                                else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
+                            }
+                            OptionButton(
+                                option,
+                                recommended = option == decision.recommended,
+                                checked = option == chosen,
+                                shapes = if (ordered.size == 1) single() else shapes,
+                                onClick = { pick(option) },
+                                modifier = Modifier.weight(needs[i].value).heightIn(min = Sizes.tap),
+                            )
+                        },
+                        menuContent = { state -> DropdownMenuItem(text = { Text(option) }, onClick = { state.dismiss(); pick(option) }) },
+                    )
+                }
+            }
+        } else {
+            Column(verticalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)) {
+                ordered.forEachIndexed { i, option ->
+                    OptionButton(
+                        option,
+                        recommended = option == decision.recommended,
+                        checked = option == chosen,
+                        shapes = stacked(i, ordered.size),
+                        onClick = { pick(option) },
+                        modifier = Modifier.fillMaxWidth().heightIn(min = Sizes.tap),
+                    )
+                }
             }
         }
     }
 }
 
+private const val RETRY_AFTER_MS = 3_000L
+
+/** An option's padding on each side of its label. */
+private val optionPadding = Spacing.s4
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun OptionButton(option: String, recommended: Boolean, checked: Boolean, shapes: ToggleButtonShapes, onClick: () -> Unit, modifier: Modifier) {
+    val colors = StarbridgeTheme.colors
+    val content = PaddingValues(horizontal = optionPadding, vertical = Spacing.s3)
+    val semantics = Modifier.semantics {
+        role = Role.Button
+        if (recommended) stateDescription = "Recommended"
+    }
+    val label: @Composable () -> Unit = { Text(option, style = StarbridgeTheme.type.action, textAlign = TextAlign.Center) }
+    if (recommended) {
+        ToggleButton(
+            checked = checked,
+            onCheckedChange = { onClick() },
+            modifier = modifier.then(semantics),
+            shapes = shapes,
+            colors = ToggleButtonDefaults.colors(
+                containerColor = colors.accent,
+                contentColor = colors.onAccent,
+                checkedContainerColor = colors.accentHi,
+                checkedContentColor = colors.onAccent,
+            ),
+            contentPadding = content,
+        ) { label() }
+    } else {
+        OutlinedToggleButton(
+            checked = checked,
+            onCheckedChange = { onClick() },
+            modifier = modifier.then(semantics),
+            shapes = shapes,
+            colors = OutlinedToggleButtonDefaults.colors(
+                contentColor = colors.fg,
+                checkedContainerColor = colors.fg,
+                checkedContentColor = colors.bg,
+            ),
+            contentPadding = content,
+        ) { label() }
+    }
+}
+
+/** A lone option: round ends, as a standalone button. */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun single() = ToggleButtonDefaults.shapesFor(Sizes.tap)
+
+/**
+ * Stacked options keep the connected group's shapes turned on their side: round ends on the
+ * group's outside, `radius.sm` inside, fully round while pressed or checked.
+ */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+private fun stacked(index: Int, count: Int): ToggleButtonShapes {
+    val round = RoundedCornerShape(Radius.pill)
+    val end = Sizes.tap / 2
+    val shape: Shape = RoundedCornerShape(
+        topStart = if (index == 0) end else Radius.sm,
+        topEnd = if (index == 0) end else Radius.sm,
+        bottomStart = if (index == count - 1) end else Radius.sm,
+        bottomEnd = if (index == count - 1) end else Radius.sm,
+    )
+    return ToggleButtonShapes(shape = shape, pressedShape = round, checkedShape = round)
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun FreeText(onAnswer: (String) -> Unit) {
     var text by rememberSaveable { mutableStateOf("") }
     val send = { if (text.isNotBlank()) onAnswer(text.trim()) }
+    val colors = StarbridgeTheme.colors
     Row(verticalAlignment = Alignment.CenterVertically) {
-        OutlinedTextField(
+        TextField(
             value = text,
             onValueChange = { text = it.take(4000) },
             placeholder = { Text("Your answer") },
             textStyle = StarbridgeTheme.type.body,
-            shape = RoundedCornerShape(Radius.md),
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
             keyboardActions = KeyboardActions(onSend = { send() }),
+            colors = TextFieldDefaults.colors(
+                focusedContainerColor = colors.surface2,
+                unfocusedContainerColor = colors.surface2,
+                focusedIndicatorColor = colors.fg,
+                unfocusedIndicatorColor = colors.lineStrong,
+            ),
             modifier = Modifier.weight(1f),
         )
         Spacer(Modifier.width(Spacing.s2))
@@ -242,35 +452,63 @@ private fun FreeText(onAnswer: (String) -> Unit) {
     }
 }
 
+/** Who answered: this phone with its answer, or another device. */
+private fun answeredBy(decision: Decision) = if (decision.answer != null) "This phone" else "Another device"
+
+/** An answered decision in one line: the answer, the question, which device answered and when. */
+@Composable
+private fun AnsweredLine(decision: Decision, now: Instant, onOpen: () -> Unit) {
+    val colors = StarbridgeTheme.colors
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = Sizes.tap).clickable(onClickLabel = "Read the whole decision", onClick = onOpen).padding(horizontal = Spacing.s1, vertical = Spacing.s3),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            buildAnnotatedString {
+                withStyle(SpanStyle(color = colors.fg, fontWeight = StarbridgeTheme.type.label.fontWeight)) { append(decision.answer ?: "Answered") }
+                append("  ")
+                append(decision.question)
+            },
+            style = StarbridgeTheme.type.small,
+            color = colors.fg2,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        Spacer(Modifier.width(Spacing.s3))
+        val at = decision.answeredAt?.let { " · ${ago(now, it)}" }.orEmpty()
+        Text(answeredBy(decision) + at, style = StarbridgeTheme.type.machine, color = colors.fg3, maxLines = 1)
+    }
+}
+
 @Composable
 private fun Outcome(decision: Decision, now: Instant) {
     val colors = StarbridgeTheme.colors
     Row(verticalAlignment = Alignment.CenterVertically) {
         // The check springs in when the answer lands (the theme's expressive motion scheme).
         AnimatedVisibility(visible = true, enter = scaleIn(MaterialTheme.motionScheme.fastSpatialSpec())) {
-            Icon(Icons.Rounded.Check, contentDescription = null, tint = colors.ok, modifier = Modifier.size(Spacing.s4))
+            Icon(Icons.Rounded.Check, contentDescription = null, tint = colors.ok, modifier = Modifier.size(Spacing.s5))
         }
-        Spacer(Modifier.width(Spacing.s1))
+        Spacer(Modifier.width(Spacing.s2))
         val at = decision.answeredAt?.let { " · ${ago(now, it)}" }.orEmpty()
-        Text((decision.answer ?: "Answered on another device") + at, style = StarbridgeTheme.type.small, color = colors.fg)
+        Text(
+            buildAnnotatedString {
+                withStyle(SpanStyle(color = colors.fg)) { append(decision.answer ?: "Answered") }
+                append(" · ${answeredBy(decision)}$at")
+            },
+            style = StarbridgeTheme.type.body,
+            color = colors.fg2,
+        )
     }
 }
 
+/**
+ * The whole decision: its context in full, code in mono, and the answer. [onBack] is set when
+ * the decision covers the inbox (one pane); beside it, there is nothing to go back to.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun AnsweredDecision(decision: Decision, now: Instant, onOpen: () -> Unit, modifier: Modifier = Modifier) {
-    val colors = StarbridgeTheme.colors
-    Panel(modifier.fillMaxWidth().clickable(onClick = onOpen)) {
-        Source(decision, now)
-        Spacer(Modifier.padding(top = Spacing.s1))
-        Text(decision.question, style = StarbridgeTheme.type.body, color = colors.fg2)
-        Spacer(Modifier.padding(top = Spacing.s2))
-        Outcome(decision, now)
-    }
-}
-
-/** The whole decision: its context in full, code in mono, and the answer. */
-@Composable
-fun DecisionScreen(decision: Decision?, now: Instant, onAnswer: (String, String?, String?) -> Unit, modifier: Modifier = Modifier) {
+fun DecisionScreen(decision: Decision?, now: Instant, onAnswer: (String, String?, String?) -> Unit, modifier: Modifier = Modifier, onBack: (() -> Unit)? = null) {
     val colors = StarbridgeTheme.colors
     if (decision == null) {
         Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -278,15 +516,37 @@ fun DecisionScreen(decision: Decision?, now: Instant, onAnswer: (String, String?
         }
         return
     }
-    Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(Spacing.s4), verticalArrangement = Arrangement.spacedBy(Spacing.s3)) {
-        Spacer(Modifier.padding(top = Spacing.s2))
-        Source(decision, now, revealable = true)
-        SessionLinks(decision.source)
-        Text(decision.question, style = StarbridgeTheme.type.heading, color = colors.fg)
-        Context(decision.context)
-        Spacer(Modifier.padding(top = Spacing.s2))
-        if (decision.open) Answer(decision, onAnswer) else Outcome(decision, now)
-        Text(fallback(decision), style = StarbridgeTheme.type.small, color = colors.fg3)
+    Scaffold(
+        modifier = modifier,
+        contentWindowInsets = WindowInsets(0),
+        containerColor = colors.bg,
+        topBar = {
+            TopAppBar(
+                title = {},
+                navigationIcon = {
+                    if (onBack != null) {
+                        IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back to the inbox") }
+                    }
+                },
+                actions = { SessionLinks(decision.source) },
+                windowInsets = WindowInsets(0),
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = colors.bg),
+            )
+        },
+    ) { padding ->
+        Column(
+            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(padding).padding(horizontal = Spacing.s5, vertical = Spacing.s2),
+            verticalArrangement = Arrangement.spacedBy(Spacing.s4),
+        ) {
+            Column(Modifier.widthIn(max = Sizes.content), verticalArrangement = Arrangement.spacedBy(Spacing.s4)) {
+                Source(decision, now, revealable = true)
+                Text(decision.question, style = StarbridgeTheme.type.heading, color = colors.fg)
+                Context(decision.context)
+                Spacer(Modifier.padding(top = Spacing.s1))
+                if (decision.open) Answer(decision, onAnswer) else Outcome(decision, now)
+                Fallback(decision)
+            }
+        }
     }
 }
 
@@ -297,8 +557,8 @@ private fun Context(text: String) {
     text.split("```").forEachIndexed { i, part ->
         if (i % 2 == 1) {
             val code = part.substringAfter('\n', part).trimEnd()
-            Surface(shape = RoundedCornerShape(Radius.sm), color = colors.surface2, modifier = Modifier.fillMaxWidth()) {
-                Text(code, style = StarbridgeTheme.type.code, color = colors.fg, modifier = Modifier.padding(Spacing.s3))
+            Surface(shape = RoundedCornerShape(Radius.lg), color = colors.surface2, modifier = Modifier.fillMaxWidth()) {
+                Text(code, style = StarbridgeTheme.type.code, color = colors.fg, modifier = Modifier.padding(Spacing.s4))
             }
         } else if (part.isNotBlank()) {
             Text(inline(part.trim(), colors.surface2), style = StarbridgeTheme.type.body, color = colors.fg2)

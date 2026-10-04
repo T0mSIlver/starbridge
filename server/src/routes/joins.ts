@@ -14,6 +14,7 @@ import { z } from "zod";
 import { fail, identify, recheck, requireCaller } from "../auth";
 import type { Env } from "../env";
 import { holdOpen, json, waitSeconds } from "../http";
+import { rateLimit } from "../limits";
 import { activeMember } from "./directory";
 
 // Joining by digits (PROTOCOL.md, "Joining by digits"). The server relays the request, both
@@ -108,7 +109,7 @@ export const joinRoutes = new Hono<Env>();
 joinRoutes.post("/joins", requireCaller("device"), async (c) => {
   const caller = c.var.caller as Extract<Env["Variables"]["caller"], { role: "device" }>;
   if (caller.member !== null) fail(409, "already-paired", "this session is already a device");
-  if (!c.var.limiter.allow(`join:${caller.account}`, 10, 60_000)) fail(429, "rate-limited");
+  rateLimit(c, `join:${caller.account}`, c.var.config.limits.joins);
   const { request, commitment } = await json(
     c,
     z.object({ request: z.string().max(4096), commitment: Key }),
@@ -173,6 +174,8 @@ joinRoutes.get("/joins", requireCaller("paired-device"), async (c) => {
   let out = read();
   const seconds = waitSeconds(c);
   if (out.cursor <= after && seconds > 0) {
+    if (c.var.joins.count(`account:${account}`) >= c.var.config.limits.joinListWaits)
+      fail(429, "too-many-waits", "this account already has its join long-polls open");
     holdOpen(c);
     await c.var.joins.wait(`account:${account}`, seconds, c.req.raw.signal);
     out = read();
@@ -189,6 +192,8 @@ joinRoutes.get("/joins/:id", async (c) => {
   const after = Number(c.req.query("after") ?? 0) || 0;
   const seconds = waitSeconds(c);
   if (r.version <= after && seconds > 0) {
+    if (c.var.joins.count(`join:${id}`) >= c.var.config.limits.joinWaits)
+      fail(429, "too-many-waits", "this join request already has its long-polls open");
     holdOpen(c);
     await c.var.joins.wait(`join:${id}`, seconds, c.req.raw.signal);
     r = load(db, id);

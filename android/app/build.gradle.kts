@@ -17,11 +17,23 @@ android {
         applicationId = "dev.starbridge.app"
         minSdk = 31
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
+        // Release builds pass -PversionName from the tag (v1.2.3 or v1.2.3-rc.4).
+        val release = providers.gradleProperty("versionName").orNull ?: "0.1.0"
+        versionName = release
+        versionCode = versionCodeOf(release)
         // The hosted server; self-hosters change it on the sign-in screen.
         buildConfigField("String", "DEFAULT_SERVER", "\"https://starbridge.run\"")
         firebaseResources()
+    }
+
+    signingConfigs {
+        create("release") {
+            val keystore = releaseKeystore() ?: return@create
+            storeFile = keystore.file
+            storePassword = keystore.password
+            keyAlias = keystore.alias
+            keyPassword = keystore.password
+        }
     }
 
     buildTypes {
@@ -29,8 +41,8 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            // No release key yet: release installs on the debug key.
-            signingConfig = signingConfigs.getByName("debug")
+            // Without the release key (forks, CI on pull requests) release builds sign with the debug key.
+            signingConfig = signingConfigs.getByName(if (releaseKeystore() != null) "release" else "debug")
         }
     }
 
@@ -98,6 +110,30 @@ dependencies {
     testImplementation(libs.jna)
     testImplementation(libs.okhttp.mockwebserver)
     testImplementation(libs.coroutines.test)
+}
+
+/** 1.2.3 → 1_02_03_99 and 1.2.3-rc.4 → 1_02_03_04, so release candidates sort before the release. */
+fun versionCodeOf(name: String): Int {
+    val m = Regex("""(\d+)\.(\d+)\.(\d+)(?:-rc\.(\d+))?""").matchEntire(name)
+        ?: error("versionName must be MAJOR.MINOR.PATCH or MAJOR.MINOR.PATCH-rc.N, got $name")
+    val (major, minor, patch, rc) = m.destructured
+    require(minor.toInt() < 100 && patch.toInt() < 100 && (rc.isEmpty() || rc.toInt() in 1..98)) { "versionName out of range: $name" }
+    return major.toInt() * 1_000_000 + minor.toInt() * 10_000 + patch.toInt() * 100 + (if (rc.isEmpty()) 99 else rc.toInt())
+}
+
+class Keystore(val file: File, val password: String, val alias: String)
+
+/**
+ * The release key: from STARBRIDGE_KEYSTORE* in CI, else from ~/.config/starbridge/secrets/ on the
+ * owner's machine. It never goes in git.
+ */
+fun releaseKeystore(): Keystore? {
+    System.getenv("STARBRIDGE_KEYSTORE")?.takeIf { it.isNotEmpty() }?.let {
+        return Keystore(File(it), System.getenv("STARBRIDGE_KEYSTORE_PASSWORD")!!, System.getenv("STARBRIDGE_KEY_ALIAS")!!)
+    }
+    val dir = File(System.getProperty("user.home"), ".config/starbridge/secrets")
+    val file = File(dir, "release.jks").takeIf { it.isFile } ?: return null
+    return Keystore(file, File(dir, "release-keystore-password").readText().trim(), "starbridge")
 }
 
 /**

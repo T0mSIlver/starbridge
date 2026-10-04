@@ -15,6 +15,9 @@ if [ -z "$(git branch -r --contains "$rev")" ]; then
 fi
 
 git archive --format=tar "$rev" | ssh -i "$key" "$host" "sudo sh -euc '
+  # Shares the lock with starbridge-deploy, the deploy from Actions.
+  exec 9>/run/starbridge-deploy.lock
+  flock 9
   rm -rf /opt/starbridge.new /opt/starbridge.old
   mkdir /opt/starbridge.new
   tar -x -C /opt/starbridge.new

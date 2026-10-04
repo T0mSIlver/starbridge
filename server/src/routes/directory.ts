@@ -12,6 +12,7 @@ import { z } from "zod";
 import { fail, recheck, requireCaller } from "../auth";
 import type { Env } from "../env";
 import { json } from "../http";
+import { rateLimit } from "../limits";
 
 export function loadEntries(db: Database, account: string, from = 0): SignedEnvelope[] {
   const rows = db
@@ -86,9 +87,12 @@ directoryRoutes.get("/directory", requireCaller("any"), (c) => {
 });
 
 directoryRoutes.post("/directory", requireCaller("device"), async (c) => {
-  const { entry } = await json(c, z.object({ entry: SignedEnvelope }));
   const caller = c.var.caller;
   if (caller.role !== "device") fail(403, "forbidden");
+  rateLimit(c, `directory:${caller.account}`, c.var.config.limits.directoryAppends);
+  const { entry } = await json(c, z.object({ entry: SignedEnvelope }));
+  if (Buffer.byteLength(JSON.stringify(entry)) > c.var.config.limits.entryBytes)
+    fail(413, "too-large", `a directory entry is at most ${c.var.config.limits.entryBytes} bytes`);
   const { db, config } = c.var;
 
   const result = db.transaction(() => {
@@ -96,6 +100,13 @@ directoryRoutes.post("/directory", requireCaller("device"), async (c) => {
     const entries = loadEntries(db, caller.account);
     if (seqOf(entry) !== entries.length)
       fail(409, "not-next", `the next entry has seq ${entries.length}`);
+    // Every append and every client replays the whole chain, so its length is capped.
+    if (entries.length >= c.var.config.limits.directoryEntries)
+      fail(
+        409,
+        "directory-full",
+        `a directory holds at most ${c.var.config.limits.directoryEntries} entries`,
+      );
     // Only to refuse garbage early: clients verify the chain themselves and trust nothing here.
     let dir: Directory;
     try {

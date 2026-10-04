@@ -11,12 +11,12 @@ import androidx.compose.ui.test.onRoot
 import com.github.takahirom.roborazzi.captureRoboImage
 import dev.starbridge.app.data.Approval
 import dev.starbridge.app.data.Phase
-import dev.starbridge.app.ui.devices.DeviceActions
 import dev.starbridge.app.data.Comparison
 import dev.starbridge.app.data.JoinAsk
-import dev.starbridge.app.ui.devices.DevicesScreen
+import dev.starbridge.app.ui.devices.DeviceActions
 import dev.starbridge.app.ui.pairing.JoinActions
 import dev.starbridge.app.ui.pairing.JoinPrompt
+import dev.starbridge.app.ui.devices.DevicesScreen
 import dev.starbridge.app.ui.inbox.DecisionActions
 import dev.starbridge.app.ui.inbox.DecisionScreen
 import dev.starbridge.app.ui.inbox.InboxScreen
@@ -32,8 +32,8 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import java.time.Instant
 
-// Each screen on fake data, light and dark, rendered on the JVM in DESIGN.md's palette (dynamic
-// colour off). `recordRoborazziDebug` writes app/screenshots/; `verifyRoborazziDebug` fails
+// Each screen on fake data, light and dark, rendered on the JVM in DESIGN.md's palette (the
+// "Starbridge" colours). `recordRoborazziDebug` writes app/screenshots/; `verifyRoborazziDebug` fails
 // when a screen drifts.
 @RunWith(ParameterizedRobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -55,12 +55,12 @@ class ScreenshotTest(private val dark: Boolean) {
     private val now = Instant.parse("2026-10-04T14:00:00Z")
     private val fake = Fake(now)
     private val decisionActions = DecisionActions({ _, _, _ -> }, {})
-    private val deviceActions = DeviceActions({}, {}, {}, {}, {}, {}, {})
+    private val deviceActions = DeviceActions({}, {}, {}, {}, {}, {}, {}, {})
     private val setupActions = SetupActions({ "" }, { _, _ -> }, {}, {}, {}, {}, {}, {}, {}, {})
 
     private fun capture(name: String, content: @Composable () -> Unit) {
         compose.setContent {
-            StarbridgeTheme(darkTheme = dark, dynamicColor = false) {
+            StarbridgeTheme(darkTheme = dark) {
                 Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) { content() }
             }
         }
@@ -73,6 +73,10 @@ class ScreenshotTest(private val dark: Boolean) {
 
     @Test fun quotas() = capture("quotas") { QuotasScreen(fake.windows, now) }
 
+    @Test fun quotasEmpty() = capture("quotas-empty") { QuotasScreen(emptyList(), now) }
+
+    // Tall enough to show "This phone": notifications, colours and the server.
+    @Config(qualifiers = "w411dp-h1500dp-xxhdpi")
     @Test fun devices() = capture("devices") { DevicesScreen(fake.members, Approval.Idle, fake.push, "https://starbridge.run", now, deviceActions) }
 
     @Test fun devicesPairing() = capture("devices-pairing") { DevicesScreen(fake.members, fake.approval, fake.push, "https://starbridge.run", now, deviceActions) }

@@ -9,6 +9,7 @@ import { openDb } from "./db";
 import type { Deps, Env } from "./env";
 import { Push } from "./push";
 import { RateLimiter } from "./ratelimit";
+import { sweepStorage } from "./retention";
 import { authRoutes } from "./routes/auth";
 import { bindRoutes } from "./routes/bind";
 import { directoryRoutes } from "./routes/directory";
@@ -35,6 +36,8 @@ export async function createApp(config: Config, fetchFn: typeof fetch = fetch) {
     sweepPairings(db);
     sweepJoins(db);
   }, 60_000).unref();
+  sweepStorage(db, config.limits);
+  setInterval(() => sweepStorage(db, config.limits), 3_600_000).unref();
 
   const v1 = new Hono<Env>()
     .route("/", authRoutes)

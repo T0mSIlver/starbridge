@@ -10,10 +10,13 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { fail, hashToken, identify, randomToken, recheck, requireCaller, safeEqual } from "../auth";
 import type { Env } from "../env";
-import { clientIp, holdOpen, json, waitSeconds } from "../http";
+import { holdOpen, json, waitSeconds } from "../http";
+import { ipKey, rateLimit } from "../limits";
 import { activeMember } from "./directory";
 
 const LIFETIME_MS = 10 * 60_000;
+/** A pairing message's JSON, in bytes, so waiting pairings cannot fill the disk. */
+const MESSAGE_BYTES = 4 * 1024;
 const RENDEZVOUS = /^[0-9A-HJKMNP-TV-Z]{8}$/;
 
 interface Pairing {
@@ -42,6 +45,11 @@ function parseBody<T extends z.ZodType>(schema: T, text: string): z.infer<T> {
   return r.data;
 }
 
+const Bounded = PairingMessage.refine(
+  (m) => Buffer.byteLength(JSON.stringify(m)) <= MESSAGE_BYTES,
+  `a pairing message is at most ${MESSAGE_BYTES} bytes`,
+);
+
 export const pairingRoutes = new Hono<Env>();
 
 /**
@@ -64,10 +72,10 @@ function load(c: { var: Env["Variables"] }, rendezvous: string): Pairing {
 }
 
 pairingRoutes.post("/pairings", async (c) => {
-  if (!c.var.limiter.allow(`pair:${clientIp(c)}`, 10, 60_000)) fail(429, "rate-limited");
+  rateLimit(c, `pair:${ipKey(c)}`, [10, 60_000]);
   const { request, claimHash: claim } = await json(
     c,
-    z.object({ request: PairingMessage, claimHash: B64.length(43) }),
+    z.object({ request: Bounded, claimHash: B64.length(43) }),
   );
   // The MAC needs the secret, which only the new member and the owner hold; the server reads the
   // body to route the pairing and checks it against the directory on approval.
@@ -78,6 +86,9 @@ pairingRoutes.post("/pairings", async (c) => {
     sweepPairings(db);
     const taken = db.query("SELECT 1 FROM pairings WHERE rendezvous = ?").get(body.rendezvous);
     if (taken) return false;
+    const { n } = db.query("SELECT COUNT(*) AS n FROM pairings").get() as { n: number };
+    if (n >= c.var.config.limits.pendingPairings)
+      fail(429, "busy", "too many pairings waiting; retry later");
     db.query(
       `INSERT INTO pairings (rendezvous, request, role, member_id, box_pk, sign_pk, claim_hash, created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -103,8 +114,7 @@ pairingRoutes.post("/pairings", async (c) => {
  * request open until the new member posts, and gets 204 if `wait` passes first.
  */
 pairingRoutes.get("/pairings/:rendezvous", requireCaller("paired-device"), async (c) => {
-  if (!c.var.limiter.allow(`pair-read:${c.var.caller.account}`, 30, 60_000))
-    fail(429, "rate-limited");
+  rateLimit(c, `pair-read:${c.var.caller.account}`, [30, 60_000]);
   const rendezvous = c.req.param("rendezvous");
   if (!RENDEZVOUS.test(rendezvous)) fail(404, "not-found");
   const find = () => {
@@ -117,6 +127,8 @@ pairingRoutes.get("/pairings/:rendezvous", requireCaller("paired-device"), async
   let p = find();
   const seconds = waitSeconds(c);
   if (!p && seconds > 0) {
+    if (c.var.pairings.count(`request:${rendezvous}`) >= c.var.config.limits.pairingWaits)
+      fail(429, "too-many-waits", "this rendezvous id already has its long-polls open");
     holdOpen(c);
     await c.var.pairings.wait(`request:${rendezvous}`, seconds, c.req.raw.signal);
     p = find();
@@ -128,7 +140,7 @@ pairingRoutes.get("/pairings/:rendezvous", requireCaller("paired-device"), async
 });
 
 pairingRoutes.post("/pairings/:rendezvous/approve", requireCaller("paired-device"), async (c) => {
-  const { approval } = await json(c, z.object({ approval: PairingMessage }));
+  const { approval } = await json(c, z.object({ approval: Bounded }));
   const caller = c.var.caller;
   const { db } = c.var;
   const rendezvous = c.req.param("rendezvous");
@@ -168,7 +180,7 @@ pairingRoutes.post("/pairings/:rendezvous/approve", requireCaller("paired-device
 });
 
 pairingRoutes.get("/pairings/:rendezvous/result", async (c) => {
-  if (!c.var.limiter.allow(`pair-result:${clientIp(c)}`, 60, 60_000)) fail(429, "rate-limited");
+  rateLimit(c, `pair-result:${ipKey(c)}`, [60, 60_000]);
   const rendezvous = c.req.param("rendezvous");
   const claim = c.req.header("x-claim") ?? "";
   let p = load(c, rendezvous);
@@ -176,6 +188,8 @@ pairingRoutes.get("/pairings/:rendezvous/result", async (c) => {
   if (!p.approval) {
     const seconds = waitSeconds(c);
     if (seconds > 0) {
+      if (c.var.pairings.count(rendezvous) >= c.var.config.limits.pairingWaits)
+        fail(429, "too-many-waits", "this pairing already has its long-polls open");
       holdOpen(c);
       await c.var.pairings.wait(rendezvous, seconds, c.req.raw.signal);
       const again = load(c, rendezvous);

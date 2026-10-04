@@ -5,7 +5,7 @@ set -eu
 
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -q
-apt-get install -yq docker.io docker-compose-v2 sqlite3 jq unattended-upgrades
+apt-get install -yq docker.io docker-compose-v2 git sqlite3 jq unattended-upgrades
 systemctl enable --now docker
 
 # Security updates every day; reboot at 04:00 when a kernel update needs it.

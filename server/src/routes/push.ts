@@ -2,7 +2,8 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { fail, memberOf, randomToken, recheck, requireCaller } from "../auth";
 import type { Env } from "../env";
-import { clientIp, json } from "../http";
+import { json } from "../http";
+import { ipKey, rateLimit } from "../limits";
 import { checkTarget, PushTarget } from "../push";
 
 /** Most subscriptions one device, and one account, may hold. */
@@ -12,6 +13,7 @@ const ACCOUNT_SUBSCRIPTIONS = 30;
 export const pushRoutes = new Hono<Env>();
 
 pushRoutes.post("/push/subscriptions", requireCaller("paired-device"), async (c) => {
+  rateLimit(c, `push-sub:${c.var.caller.account}`, c.var.config.limits.pushSubscribes);
   const target = await json(c, PushTarget);
   recheck(c);
   const why = checkTarget(target, c.var.config.allowPrivatePushEndpoints);
@@ -75,9 +77,9 @@ pushRoutes.get("/push/vapid", async (c) => {
  * The payload is already the device's ciphertext or an item id.
  */
 pushRoutes.post("/relay", async (c) => {
-  const { config, limiter, push } = c.var;
+  const { config, push } = c.var;
   if (!config.relayMode) fail(404, "not-found");
-  if (!limiter.allow(`relay:${clientIp(c)}`, 120, 60_000)) fail(429, "rate-limited");
+  rateLimit(c, `relay:${ipKey(c)}`, [120, 60_000]);
   const body = await json(c, PushTarget.extend({ payload: z.string().max(4000) }));
   if (body.type === "unifiedpush")
     fail(400, "bad-request", "UnifiedPush goes direct, not through the relay");
