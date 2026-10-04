@@ -76,7 +76,8 @@
   border-radius: var(--radius-pill);
   background: var(--accent);
   color: var(--on-accent);
-  font: 600 11px / 18px var(--mono);
+  font: 600 11px / 18px var(--sans);
+  font-variant-numeric: tabular-nums;
   text-align: center;
 }
 

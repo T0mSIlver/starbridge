@@ -1,0 +1,26 @@
+.context {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  min-width: 0;
+}
+
+.context a {
+  color: var(--info);
+  overflow-wrap: anywhere;
+}
+
+.inline {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--surface2);
+  overflow-wrap: anywhere;
+}
+
+.block {
+  padding: var(--s3);
+  border-radius: var(--radius-sm);
+  background: var(--surface2);
+  color: var(--fg);
+  overflow-x: auto;
+}

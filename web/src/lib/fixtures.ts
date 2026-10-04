@@ -35,7 +35,7 @@ export const decisions: Decision[] = [
     id: "d-102",
     question: "What should the release notes call the new dictation mode?",
     context:
-      "The PR calls it 'continuous'. The settings screen says 'hands-free'. Pick one or write another.",
+      "The PR calls it `continuous`; the settings screen says 'hands-free'. Pick one or write another. The string lives here:\n```swift\nstatic let modeName = String(localized: \"continuous\")\n```",
     options: [],
     default: { action: "Keeps 'continuous'", at: ahead(240) },
     source: { machine: "mac", project: "localvoxtral", session: "7be01d" },

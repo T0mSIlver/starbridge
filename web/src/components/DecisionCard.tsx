@@ -3,8 +3,8 @@
 import { useState } from "react";
 import { relative } from "@/lib/format";
 import type { Decision } from "@/lib/types";
+import { Context } from "./Context";
 import s from "./DecisionCard.module.css";
-import { Linkify } from "./Linkify";
 import ui from "./ui.module.css";
 
 function Source({ d }: { d: Decision }) {
@@ -28,9 +28,7 @@ export function OpenDecision({ d, onAnswer }: { d: Decision; onAnswer: (value: s
         <span className="t-small">{relative(d.askedAt)}</span>
       </div>
       <h2 className={`t-question ${s.question}`}>{d.question}</h2>
-      <p className={s.context}>
-        <Linkify text={d.context} />
-      </p>
+      <Context text={d.context} className={s.context} />
       {options.length > 0 ? (
         <div className={s.options}>
           {options.map((o) => (

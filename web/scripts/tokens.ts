@@ -26,7 +26,7 @@ type Role = {
   weight: number;
   lineHeight: number;
   letterSpacing: number;
-  uppercase?: boolean;
+  tabular?: boolean;
 };
 type Design = {
   colors: { light: Record<string, string>; dark: Record<string, string> };
@@ -107,8 +107,7 @@ function typeCss(d: Design): string {
     lines.push(`  font-weight: ${r.weight};`);
     lines.push(`  line-height: ${num(r.lineHeight)};`);
     lines.push(`  letter-spacing: ${num(r.letterSpacing)}em;`);
-    if (r.uppercase) lines.push("  text-transform: uppercase;");
-    if (r.font === "mono") lines.push("  font-variant-numeric: tabular-nums;");
+    if (r.tabular) lines.push("  font-variant-numeric: tabular-nums;");
     lines.push("}", "");
   }
   return lines.join("\n");
@@ -146,6 +145,7 @@ function tokensKt(d: Design): string {
       `fontWeight = FontWeight(${r.weight}),`,
       `lineHeight = ${num(r.size * r.lineHeight)}.sp,`,
       `letterSpacing = ${num(r.letterSpacing)}.em,`,
+      ...(r.tabular ? ['fontFeatureSettings = "tnum",'] : []),
     ];
     return [`    val ${camel(name)} = TextStyle(`, ...fields.map((f) => `        ${f}`), "    )"];
   };
@@ -173,11 +173,7 @@ function tokensKt(d: Design): string {
     ...dims("Radius", d.radius, "dp"),
     ...dims("Sizes", d.size, "dp"),
     ...dims("Motion", d.motion, "Long"),
-    "// The theme passes the bundled faces; uppercase roles set it at the call site:",
-    `// ${Object.entries(d.typography)
-      .filter(([, r]) => r.uppercase)
-      .map(([n]) => camel(n))
-      .join(", ")}.`,
+    "// The theme passes the bundled faces.",
     "class StarbridgeType(sans: FontFamily, mono: FontFamily) {",
     ...Object.entries(d.typography).flatMap(style),
     "}",

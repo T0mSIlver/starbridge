@@ -115,8 +115,7 @@ object Motion {
     const val stateMs = 250L
 }
 
-// The theme passes the bundled faces; uppercase roles set it at the call site:
-// label.
+// The theme passes the bundled faces.
 class StarbridgeType(sans: FontFamily, mono: FontFamily) {
     val title = TextStyle(
         fontFamily = sans,
@@ -161,24 +160,33 @@ class StarbridgeType(sans: FontFamily, mono: FontFamily) {
         letterSpacing = 0.em,
     )
     val figure = TextStyle(
-        fontFamily = mono,
+        fontFamily = sans,
         fontSize = 28.sp,
-        fontWeight = FontWeight(500),
+        fontWeight = FontWeight(600),
         lineHeight = 28.sp,
-        letterSpacing = -0.03.em,
+        letterSpacing = -0.02.em,
+        fontFeatureSettings = "tnum",
     )
     val machine = TextStyle(
-        fontFamily = mono,
-        fontSize = 12.5.sp,
+        fontFamily = sans,
+        fontSize = 13.sp,
         fontWeight = FontWeight(400),
-        lineHeight = 17.5.sp,
+        lineHeight = 18.2.sp,
         letterSpacing = 0.em,
+        fontFeatureSettings = "tnum",
     )
     val label = TextStyle(
-        fontFamily = mono,
-        fontSize = 11.sp,
+        fontFamily = sans,
+        fontSize = 13.sp,
         fontWeight = FontWeight(600),
-        lineHeight = 14.3.sp,
-        letterSpacing = 0.08.em,
+        lineHeight = 16.9.sp,
+        letterSpacing = 0.em,
+    )
+    val code = TextStyle(
+        fontFamily = mono,
+        fontSize = 13.sp,
+        fontWeight = FontWeight(400),
+        lineHeight = 19.5.sp,
+        letterSpacing = 0.em,
     )
 }
