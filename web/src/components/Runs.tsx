@@ -23,7 +23,8 @@ function useNow(live: boolean): number {
 export function Runs() {
   const { runs } = useApp();
   const items = runs?.items ?? [];
-  const live = items.some((i) => !i.run.exit);
+  // Lost runs stay a day on the server; only running ones need the clock.
+  const live = items.some((i) => runState(i.run, Date.now()) === "running");
   const now = useNow(live);
   const shown = shownRuns(items, now);
   if (shown.length === 0) return null;

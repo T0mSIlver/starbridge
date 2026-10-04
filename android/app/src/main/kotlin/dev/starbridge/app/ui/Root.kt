@@ -56,6 +56,7 @@ import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.scene.Scene
 import androidx.navigation3.ui.NavDisplay
 import dev.starbridge.app.data.Phase
+import dev.starbridge.app.data.Run
 import dev.starbridge.app.ui.devices.DevicesScreen
 import dev.starbridge.app.ui.devices.DevicesViewModel
 import dev.starbridge.app.ui.inbox.DecisionActions
@@ -221,7 +222,7 @@ fun Main(openDecisions: Int, notice: StateFlow<String?>, dismiss: () -> Unit, op
                         val selected = (backStack.lastOrNull() as? DecisionKey)?.id
                         InboxScreen(
                             decisions,
-                            seconds(runs.any { it.exitCode == null }, now),
+                            seconds(runs.any { it.state(Instant.now()) == Run.State.Running }, now),
                             DecisionActions(answer = vm::answer, open = { id ->
                                 if (backStack.lastOrNull() is DecisionKey) backStack.removeAt(backStack.lastIndex)
                                 backStack.add(DecisionKey(id))
