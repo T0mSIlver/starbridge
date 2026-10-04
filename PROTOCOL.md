@@ -44,6 +44,43 @@ Both pairing messages carry an HMAC (`crypto_auth`) keyed from the secret.
 A code expires after 10 minutes. The server could brute-force the secret offline from a MAC, but
 80 bits take far longer than that.
 
+Either side may make the code. A machine prints its own, as text, as a QR code and as a link
+`<server>/pair#<code>` that opens the web page with the code filled in (`pairingLink`,
+`codeFromLink`); the fragment never reaches the server. An existing device can instead show a
+code as a QR code: the new phone scans it and posts its request under it, and the device, which
+waits on `GET /pairings/:rendezvous?wait=`, checks the MAC and asks the owner to approve. Anyone
+who sees the code can post first, so the device shows the requester's name before approving, as
+with a typed code.
+
+## Joining by digits
+
+A browser or phone signed in to the account can join without a code: the owner compares 6 digits
+on both screens, a short authentication string (SAS) with a commitment, as in ZRTP and Matrix's
+SAS verification. Code: `packages/protocol/src/join.ts`; vectors: `vectors/join.json`.
+
+1. The joining device makes an ephemeral X25519 key pair `j` and posts its request text `R`
+   (JSON of `{v, join, account, id, name, boxPk, signPk, at}`) with
+   `commitment = BLAKE2b-256("starbridge/v1/join-commit" NUL j.pk R)`.
+2. The server relays the request to the account's devices: a long-poll for open pages and apps,
+   and a push `{v, kind: "join", id}`. The owner taps Compare digits on one device, which makes
+   its own ephemeral key pair `a` and posts `a.pk`. The server accepts one approver key per join.
+3. The joining device reveals `j.pk`, only after it has `a.pk`, and answers no later approver
+   key. The approver checks `j.pk` and `R` against the commitment it read before posting `a.pk`.
+4. Both compute `s = X25519(own secret, peer public)`, refused when all zero, and
+   `T = j.pk a.pk R`. The MAC key is `BLAKE2b-256(key = s, "starbridge/v1/join-mac" NUL T)`; the
+   digits are the first 4 bytes of `BLAKE2b-256(key = s, "starbridge/v1/join-sas" NUL T)`,
+   big-endian, mod 10^6, as 6 digits.
+5. The owner checks that both screens show the same digits and taps Approve. The approver appends
+   the `add` entry for the keys in `R` and posts the approval `{v, join, account, length, head,
+   approver}` with `crypto_auth` under the MAC key, over `"starbridge/v1/join-approval" NUL body`.
+   The joining device checks the MAC, verifies the directory with `{length, head}` as its pin,
+   and checks that it holds its own keys, as after a code.
+
+A server in the middle must give the approver a commitment of its own before it sees `a.pk`, and
+must send the joining device an approver key before it learns `j.pk`, so it cannot pick keys that
+make the two screens agree: each attempt matches with probability 10^-6, and each needs the owner
+to tap Compare digits. Without the approval's MAC the joining device trusts no directory.
+
 ## Recovery
 
 The first device shows a 32-byte recovery seed once, as 24 BIP-39 words. When every device is
@@ -101,9 +138,25 @@ never rely on that check.
 | Route | Who | What |
 |---|---|---|
 | `POST /pairings` | new member | `{request, claimHash}`: the request message and BLAKE2b-256 of a random claim secret's text (`claimHash`); 409 if the rendezvous id is taken |
-| `GET /pairings/:rendezvous` | device | `{request}` |
+| `GET /pairings/:rendezvous?wait=<s>` | device | `{request}`; with `wait`, holds until the new member posts and answers 204 if `wait` passes first |
 | `POST /pairings/:rendezvous/approve` | device | `{approval}`; the directory must already hold the new member's entry; 409 `already-paired` when that member already holds a session or token |
 | `GET /pairings/:rendezvous/result?wait=<s>` | new member, with `X-Claim: <secret>` | long-poll: `{approval, token?}` once approved, `token` for machines only; 204 when `wait` passes |
+
+### Joins
+
+A join is `{id, request, commitment, state, approver?, approverKey?, joinerKey?, approval?,
+createdAt, expiresAt, version}`; `state` is `open`, `comparing`, `approved` or `cancelled`, and
+`version` grows with each change. A join expires after 10 minutes.
+
+| Route | Who | What |
+|---|---|---|
+| `POST /joins` | unpaired device session | `{request, commitment}` → `{join}`; the request must name the caller's account; a new join cancels the session's open one; pushes `{v, kind: "join", id}` to the account's devices; 409 `already-paired`, 409 `taken` |
+| `GET /joins?after=<cursor>&wait=<s>` | device | `{joins, cursor}`: the open joins; holds until one changes past `after` |
+| `GET /joins/:id?after=<version>&wait=<s>` | the joining session, device | `{join}`; holds until its `version` passes `after` |
+| `POST /joins/:id/approver` | device | `{key, approver}`: `approver` is the caller; 409 `taken` once another key is in |
+| `POST /joins/:id/reveal` | the joining session | `{key}`; 409 `not-ready` before an approver key, 400 `bad-commitment` when the key does not open the commitment |
+| `POST /joins/:id/approve` | the approver | `{approval}`; the directory must hold the new device's entry; binds the joining session to it; 409 `not-ready`, `not-in-directory`, `already-paired` |
+| `DELETE /joins/:id` | the joining session, device | cancel |
 
 ### Items
 
@@ -147,7 +200,7 @@ decision's options.
 A push payload is JSON text: `{v, kind, id, from, re?, box?}` for a new item, with the device's
 own box when the payload stays within 3 KB, else without it and the device fetches
 `GET /items/:id`; `{v, kind: "answered", id}` to every device a decision was sealed to once it
-is answered. FCM gets it as data field `p`; Web Push and UnifiedPush encrypt it per RFC 8291.
+is answered; `{v, kind: "join", id}` to every device when a join is posted. FCM gets it as data field `p`; Web Push and UnifiedPush encrypt it per RFC 8291.
 
 Quota snapshots go to FCM and UnifiedPush only. Browsers expect every Web Push to show a
 notification and drop a subscription that keeps showing none (Firefox after 16), so the web page
