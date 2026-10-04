@@ -15,14 +15,16 @@ import androidx.core.app.RemoteInput
 import dev.starbridge.app.MainActivity
 import dev.starbridge.app.R
 import dev.starbridge.app.data.Alerts
+import dev.starbridge.app.data.Colours
 import dev.starbridge.app.data.Decision
+import dev.starbridge.app.data.Prefs
 
 /**
  * One notification per open decision. Its buttons are the options, the recommended one first,
  * and answer through [AnswerReceiver] without opening the app, from the lock screen too. A
  * decision without options gets a reply field instead.
  */
-class Notifier(private val context: Context) : Alerts {
+class Notifier(private val context: Context, private val prefs: Prefs) : Alerts {
     private val manager = NotificationManagerCompat.from(context)
 
     init {
@@ -42,6 +44,12 @@ class Notifier(private val context: Context) : Alerts {
 
     private fun tag(id: String) = id.hashCode()
 
+    /**
+     * The icon's circle and the action labels: amber, or the wallpaper's primary under "Match
+     * wallpaper". Android 12 to 15 show it; 16 tints them itself.
+     */
+    private fun accent() = context.getColor(if (prefs.colours.value == Colours.Wallpaper) R.color.accent_wallpaper else R.color.accent)
+
     private fun base(d: Decision): NotificationCompat.Builder {
         val open = PendingIntent.getActivity(
             context,
@@ -51,8 +59,7 @@ class Notifier(private val context: Context) : Alerts {
         )
         return NotificationCompat.Builder(context, CHANNEL)
             .setSmallIcon(R.drawable.ic_notification)
-            // The beacon: the icon's circle and the action labels in amber (DESIGN.md).
-            .setColor(context.getColor(R.color.accent))
+            .setColor(accent())
             .setContentTitle(d.question)
             .setContentText(d.context)
             .setSubText(d.source.machine)
@@ -63,7 +70,7 @@ class Notifier(private val context: Context) : Alerts {
             .setPublicVersion(
                 NotificationCompat.Builder(context, CHANNEL)
                     .setSmallIcon(R.drawable.ic_notification)
-                    .setColor(context.getColor(R.color.accent))
+                    .setColor(accent())
                     .setContentTitle("A decision needs you")
                     .setSubText(d.source.machine)
                     .build(),

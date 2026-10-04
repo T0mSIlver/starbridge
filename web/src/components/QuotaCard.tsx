@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import { relative } from "@/lib/format";
 import type { QuotaAlert, QuotaCardData, QuotaWindow } from "@/lib/types";
 import s from "./QuotaCard.module.css";
@@ -26,6 +27,12 @@ function alertText(a: QuotaAlert): string {
     : `Resets ${relative(a.resetsAt)} with ${Math.round(a.unusedPercent)}% unused.`;
 }
 
+// The provider's colour from DESIGN.md, keyed by CodexBar's id; grey for a provider it lacks.
+function dotStyle(provider: string): CSSProperties {
+  const id = provider.toLowerCase().replace(/[^a-z0-9]/g, "");
+  return { "--dot": `var(--provider-${id}, var(--fg3))` } as CSSProperties;
+}
+
 export function QuotaCard({ q }: { q: QuotaCardData }) {
   const { provider, window: w, alert } = q;
   const state = stateOf(w, alert);
@@ -36,7 +43,11 @@ export function QuotaCard({ q }: { q: QuotaCardData }) {
     <article className={`${ui.card} ${s.card}`}>
       <div className={s.top}>
         <h2 className={`t-action ${s.name}`}>
-          {provider} <span className={`t-small ${s.window}`}>{w.label}</span>
+          <span className={s.provider}>
+            <span className={s.dot} style={dotStyle(provider)} aria-hidden="true" />
+            {provider}
+          </span>{" "}
+          <span className={`t-small ${s.window}`}>{w.label}</span>
           {q.machine && <span className={`t-machine ${s.machine}`}>{q.machine}</span>}
         </h2>
         <span className="t-figure">

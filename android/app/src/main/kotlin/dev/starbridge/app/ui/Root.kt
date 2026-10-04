@@ -9,6 +9,7 @@ import androidx.compose.material.icons.outlined.Speed
 import androidx.compose.material.icons.rounded.Devices
 import androidx.compose.material.icons.rounded.Inbox
 import androidx.compose.material.icons.rounded.Speed
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Icon
@@ -147,10 +148,10 @@ fun Main(openDecisions: Int, notice: StateFlow<String?>, dismiss: () -> Unit, op
     NavigationSuiteScaffold(
         navigationSuiteType = suite,
         navigationSuiteColors = NavigationSuiteDefaults.colors(
-            shortNavigationBarContainerColor = colors.surface,
-            wideNavigationRailColors = WideNavigationRailDefaults.colors(containerColor = colors.bg),
+            shortNavigationBarContainerColor = MaterialTheme.colorScheme.surfaceContainer,
+            wideNavigationRailColors = WideNavigationRailDefaults.colors(containerColor = MaterialTheme.colorScheme.surface),
         ),
-        containerColor = colors.bg,
+        containerColor = MaterialTheme.colorScheme.surface,
         navigationItems = {
             for (tab in tabs) {
                 val selected = current == tab.key || (tab.key == InboxKey && current is DecisionKey)
@@ -175,7 +176,7 @@ fun Main(openDecisions: Int, notice: StateFlow<String?>, dismiss: () -> Unit, op
             }
         },
     ) {
-        Scaffold(snackbarHost = { SnackbarHost(host) }, containerColor = colors.bg) { padding ->
+        Scaffold(snackbarHost = { SnackbarHost(host) }, containerColor = MaterialTheme.colorScheme.surface) { padding ->
             NavDisplay(
                 backStack = backStack,
                 modifier = Modifier.fillMaxSize().padding(padding),
