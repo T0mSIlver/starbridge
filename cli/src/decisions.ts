@@ -267,32 +267,40 @@ const MAX_CYCLE_SECONDS = 25;
 
 /**
  * For the Claude Code mod: hands over the answers to decisions that session `session` asked and
- * no `wait` has printed yet, one JSON line `{decisionId, line}` each, and marks them seen. With
+ * that neither a `wait` printed nor the mod confirmed, one JSON line `{decisionId, line}` each.
+ * The mod confirms each answer it submitted with `--ack <id>`; until then the next call hands it
+ * over again, so an answer the mod held back (its session ended meanwhile) is not lost. With
  * `wait`, and nothing to hand over, first long-polls once for at most that many seconds from the
  * shared cursor. One cycle per call: an error exits 1, and the mod decides when to retry.
  */
 export async function answers(
   ctx: Ctx,
-  opts: { session?: string; wait?: string },
+  opts: { session?: string; wait?: string; ack?: string[] },
 ): Promise<number> {
   const target = opts.session;
   if (!target) throw new UsageError("answers needs --session");
   const due = (st: State, id: string) => !st.answers[id]?.seen && st.asked[id]?.session === target;
-  const claim = () => {
-    const handed: { decisionId: string; line: string }[] = [];
-    // Writes only when there is something to hand over: the mod watches the file's time.
-    const now = ctx.store.state();
-    if (!Object.keys(now.answers).some((id) => due(now, id))) return 0;
+  if (opts.ack) {
+    if (opts.wait !== undefined) throw new UsageError("--ack takes no --wait");
+    const acked = opts.ack;
     ctx.store.updateState((st) => {
-      for (const [id, a] of Object.entries(st.answers)) {
-        const asked = st.asked[id];
-        if (!asked || !due(st, id)) continue;
-        a.seen = true;
-        handed.push({ decisionId: id, line: answerLine(a.answer, asked.question) });
+      for (const id of acked) {
+        const a = st.answers[id];
+        if (a && due(st, id)) a.seen = true;
       }
     });
-    for (const h of handed) ctx.out(JSON.stringify(h));
-    return handed.length;
+    return 0;
+  }
+  const claim = () => {
+    const st = ctx.store.state();
+    let handed = 0;
+    for (const [id, a] of Object.entries(st.answers)) {
+      const asked = st.asked[id];
+      if (!asked || !due(st, id)) continue;
+      ctx.out(JSON.stringify({ decisionId: id, line: answerLine(a.answer, asked.question) }));
+      handed++;
+    }
+    return handed;
   };
   if (claim() > 0 || opts.wait === undefined) return 0;
   const seconds = Number(opts.wait);

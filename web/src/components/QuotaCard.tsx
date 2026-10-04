@@ -37,7 +37,10 @@ export function QuotaCard({ q }: { q: QuotaCardData }) {
       <div className={s.top}>
         <div>
           <h2 className="t-heading">{provider}</h2>
-          <p className={`t-label ${s.window}`}>{w.label}</p>
+          <p className={`t-label ${s.window}`}>
+            {w.label}
+            {q.machine ? ` · ${q.machine}` : ""}
+          </p>
         </div>
         <span className={`t-label ${ui.pill} ${word.tone}`}>{word.word}</span>
       </div>

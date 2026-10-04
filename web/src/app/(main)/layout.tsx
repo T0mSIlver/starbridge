@@ -1,11 +1,13 @@
-import { DecisionsProvider } from "@/components/DecisionsProvider";
+import { AppProvider } from "@/components/AppProvider";
+import { Gate } from "@/components/Gate";
 import { Shell } from "@/components/Shell";
-import { inbox } from "@/lib/fixtures/decisions";
 
 export default function MainLayout({ children }: { children: React.ReactNode }) {
   return (
-    <DecisionsProvider initial={inbox}>
-      <Shell>{children}</Shell>
-    </DecisionsProvider>
+    <AppProvider>
+      <Gate>
+        <Shell>{children}</Shell>
+      </Gate>
+    </AppProvider>
   );
 }

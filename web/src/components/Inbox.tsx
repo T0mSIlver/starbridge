@@ -1,15 +1,18 @@
 "use client";
 
+import { useApp } from "./AppProvider";
 import { AnsweredDecision, OpenDecision } from "./DecisionCard";
-import { useDecisions } from "./DecisionsProvider";
+import { PushBanner } from "./PushBanner";
 import ui from "./ui.module.css";
 
 export function Inbox() {
-  const { items, answer } = useDecisions();
-  const open = items.filter((item) => !item.answer);
-  const answered = items
-    .filter((item) => item.answer)
-    .sort((a, b) => (b.answer?.answeredAt ?? "").localeCompare(a.answer?.answeredAt ?? ""));
+  const { inbox, answer } = useApp();
+  const open = inbox.items
+    .filter((item) => !item.answeredAt)
+    .sort((a, b) => b.decision.createdAt.localeCompare(a.decision.createdAt));
+  const answered = inbox.items
+    .filter((item) => item.answeredAt)
+    .sort((a, b) => (b.answeredAt ?? "").localeCompare(a.answeredAt ?? ""));
 
   return (
     <>
@@ -19,11 +22,18 @@ export function Inbox() {
           <span className={`t-label ${ui.pill} ${ui.beacon}`}>{open.length} open</span>
         )}
       </header>
+      <PushBanner />
+      {inbox.rejected.length > 0 && (
+        <p className={ui.error} role="status">
+          {inbox.rejected.length === 1 ? "One decision" : `${inbox.rejected.length} decisions`}{" "}
+          failed verification and are hidden: {inbox.rejected[0]?.error}
+        </p>
+      )}
       {open.length ? (
         <ul className={ui.list}>
-          {open.map(({ decision: d }) => (
-            <li key={d.id}>
-              <OpenDecision d={d} onAnswer={(reply) => answer(d.id, reply)} />
+          {open.map((item) => (
+            <li key={item.decision.id}>
+              <OpenDecision d={item.decision} onAnswer={(reply) => answer(item, reply)} />
             </li>
           ))}
         </ul>

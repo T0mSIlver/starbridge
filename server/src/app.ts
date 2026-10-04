@@ -10,6 +10,7 @@ import type { Deps, Env } from "./env";
 import { Push } from "./push";
 import { RateLimiter } from "./ratelimit";
 import { authRoutes } from "./routes/auth";
+import { bindRoutes } from "./routes/bind";
 import { directoryRoutes } from "./routes/directory";
 import { itemRoutes } from "./routes/items";
 import { pairingRoutes, sweepPairings } from "./routes/pairings";
@@ -32,6 +33,7 @@ export async function createApp(config: Config, fetchFn: typeof fetch = fetch) {
 
   const v1 = new Hono<Env>()
     .route("/", authRoutes)
+    .route("/", bindRoutes)
     .route("/", directoryRoutes)
     .route("/", pairingRoutes)
     .route("/", itemRoutes)

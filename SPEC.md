@@ -136,6 +136,13 @@ one session per machine poll. The other sessions watch the CLI's state file and
 claim their answers from it locally. `starbridge ask` records the asking
 session, and the CLI hands an answer only to that session, once.
 
+Changed (#35, 2026-10-04): the CLI hands an answer over again until the mod
+confirms it with `starbridge answers --session <id> --ack <decision id>`, and
+the mod rereads the session id before submitting. An answer that arrives during
+a `/clear` waits for the session that asked, instead of going to the new one.
+The CLI and the mod must be updated together: an older mod never confirms, so
+it would get the same answer every cycle.
+
 What the probe showed (2026-10-04, in the Desktop Code tab):
 
 - Idle session: the submitted prompt starts a turn within 0.2 s, and the model
@@ -239,6 +246,17 @@ How it generalizes is open.
   decisions. Version 1 is quotas and decisions; owner panels wait for
   version 2. Web Push is in version 1.
 
+- 2026-10-04 (late). Android is a flagship-standard Material 3 Expressive app,
+  used fully and by the guidelines, nothing generic or improvised. Fonts are what a
+  flagship Android app uses (the platform's Material type scale, not Archivo);
+  monospace only for code. This replaces "Expressive parts only where they do a
+  job" below. The web pairs with it without imitating Android.
+- 2026-10-04 (late). Before the owner starts using Starbridge: (1) the mod's push
+  path must work end to end without any agent waiting on an answer: an agent
+  posts a decision and keeps working; the answer arrives later as a prompt;
+  (2) a design overhaul. The current look reads generic. The base becomes black
+  and white (neutral greys), not blue-black, with few accents. A research session
+  drafts directions from similar apps and the owner picks.
 - 2026-10-04. Look: function over form. Monospace only for code (Markdown
   code blocks in a decision's context); numbers, ids and machine names use the
   sans face with tabular figures. Colours stay generic: on Android, Material
@@ -285,12 +303,27 @@ How it generalizes is open.
   a follow-up. Nightly `sqlite3 .backup` kept 14 days in `/var/backups/starbridge`. Login is
   `deploy` with the dev box key and sudo; root login and passwords are off. The web page is not
   served yet (#8); Caddy will route it on the same origin.
+- 2026-10-04. The CLI takes a lock file (`.lock` in its config directory)
+  around every read-modify-write of its files (#33). A directory refresh fetches
+  outside the lock, then under it keeps the longer of its chain and the saved
+  one, each required to extend the other's pin, so two CLI processes refreshing
+  at once cannot roll the pin back.
 
 - 2026-10-04. Push hardening (#27, #36, #37): quota snapshots skip Web Push, because browsers
   drop subscriptions whose pushes show no notification (Firefox after 16); the page fetches
   `GET /quota` on open. A device holds at most 10 push subscriptions and an account 30; an
   account has at most 4 pushes in flight and 200 waiting, each with a 10 s timeout. Pushes to
   subscription URLs connect to the exact address that passed the private-range check.
+
+- 2026-10-04. Web page (#8): device private keys are non-extractable WebCrypto X25519 and
+  Ed25519 keys in IndexedDB where the browser has them, raw libsodium keys otherwise. A sealed
+  box opens with WebCrypto's X25519, HSalsa20 from `@noble/ciphers` (audited; libsodium.js's
+  standard build lacks it) and libsodium for the rest; `packages/protocol` gained async sign,
+  seal and open for keys it cannot hold. The page shares the server's origin: Next proxies
+  `/v1` in development, the reverse proxy in production. The service worker shows a
+  notification for every decision, and closes it once the decision is answered. A
+  browser that signs in again binds the new session to its existing device by signing a
+  server nonce with the device key (#28, `POST /v1/auth/bind`).
 
 - 2026-10-04. Icon and brand (#32): the mark is a space elevator, flat: a
   planet's edge, a tether running off the top into space, and one amber

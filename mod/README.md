@@ -40,7 +40,11 @@ decision (`$CLAUDE_CODE_SESSION_ID` at `starbridge ask`).
 - The other sessions watch `state.json`. When it changes, they run `starbridge
   answers --session <id>`, which reads local state only.
 - `answers` returns only answers to decisions that session asked and that no
-  `wait` has printed. It marks each one as printed, so it is handed over once.
+  `wait` has printed. The mod submits each one, then confirms it with
+  `starbridge answers --session <id> --ack <decision id>`; the CLI hands an
+  unconfirmed answer over again. Update the CLI and the mod together.
+- If a `/clear` lands while `answers` runs, the mod submits nothing and leaves
+  the answer unconfirmed, so the old session gets it if it is resumed.
 - After an error, the mod waits 2 s, then twice as long after each further
   error, up to 5 minutes. The error shows in the status line until a call
   succeeds.

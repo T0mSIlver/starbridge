@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useState } from "react";
 import { StarIcon } from "./icons";
 import s from "./Setup.module.css";
@@ -9,13 +8,13 @@ import ui from "./ui.module.css";
 // First-device setup: the recovery key is shown here once and never again
 // (SPEC.md, "Keys and trust").
 export function Setup({
-  account,
   device,
   words,
+  onContinue,
 }: {
-  account: string;
   device: string;
   words: string[];
+  onContinue: () => void;
 }) {
   const [saved, setSaved] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -37,9 +36,7 @@ export function Setup({
         </span>
         <span className="t-heading">Starbridge</span>
       </div>
-      <p className={`t-label ${s.step}`}>
-        Signed in as {account} · first device: {device}
-      </p>
+      <p className={`t-label ${s.step}`}>First device: {device}</p>
       <h1 className="t-title">Save your recovery key</h1>
       <p className={s.lede}>
         These 24 words can approve a new device if you lose every device you have. This is the only
@@ -61,15 +58,14 @@ export function Setup({
         <input type="checkbox" checked={saved} onChange={(e) => setSaved(e.target.checked)} />
         <span>I wrote these words down somewhere safe, away from this device.</span>
       </label>
-      {saved ? (
-        <Link href="/" className={`${ui.button} ${ui.primary} ${s.go}`}>
-          Continue
-        </Link>
-      ) : (
-        <button type="button" className={`${ui.button} ${ui.primary} ${s.go}`} disabled>
-          Continue
-        </button>
-      )}
+      <button
+        type="button"
+        className={`${ui.button} ${ui.primary} ${s.go}`}
+        disabled={!saved}
+        onClick={onContinue}
+      >
+        Continue
+      </button>
     </main>
   );
 }

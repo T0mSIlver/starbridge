@@ -61,7 +61,9 @@ errors use the codes in `packages/protocol/src/sodium.ts`.
 - **Devices** sign in with GitHub (hosted) or the owner token from the server's environment
   (self-hosted). The web page holds an HTTP-only session cookie; Android sends
   `Authorization: Bearer <session>`. A session belongs to an account and, once paired, to one
-  device member id.
+  device member id. A device that signs in again binds the new session by signing a nonce with
+  its signing key: `bindMessage` in `packages/protocol`, `"starbridge/v1/bind"` NUL account
+  NUL member NUL nonce.
 - **Machines** send `Authorization: Bearer <machine token>`, issued when their pairing is
   approved. The server stores a hash of it and drops it when the directory revokes the machine.
 - Pairing requests are unauthenticated and rate-limited per IP.
@@ -75,6 +77,8 @@ errors use the codes in `packages/protocol/src/sodium.ts`.
 | `GET /auth/github/callback` | anyone | finish it, set the session; with `?app=1` on the start, redirect to `starbridge://auth#session=<token>` instead |
 | `POST /auth/owner` | anyone | self-hosted: `{token}` against `OWNER_TOKEN`; sets the session and returns `{session}` |
 | `POST /auth/logout` | device | end the session |
+| `GET /auth/challenge` | device | `{nonce, expiresInSeconds}`: one nonce per session, single use, 5 minutes; asking again returns the outstanding one |
+| `POST /auth/bind` | device | `{member, sig}`: binds the session to that active device when `sig` checks against its signing key; 400 `no-challenge`, 401 `bad-signature`, 404 for no such active device, 409 `already-paired` when the session holds another device |
 | `GET /me` | device, machine | `{account, member, role}`; `member` is null until a device pairs |
 
 ### Directory
