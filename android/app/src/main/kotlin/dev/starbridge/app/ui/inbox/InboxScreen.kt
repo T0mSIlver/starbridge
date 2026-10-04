@@ -281,12 +281,12 @@ fun DecisionScreen(decision: Decision?, now: Instant, onAnswer: (String, String?
     Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(Spacing.s4), verticalArrangement = Arrangement.spacedBy(Spacing.s3)) {
         Spacer(Modifier.padding(top = Spacing.s2))
         Source(decision, now, revealable = true)
+        SessionLinks(decision.source)
         Text(decision.question, style = StarbridgeTheme.type.heading, color = colors.fg)
         Context(decision.context)
         Spacer(Modifier.padding(top = Spacing.s2))
         if (decision.open) Answer(decision, onAnswer) else Outcome(decision, now)
         Text(fallback(decision), style = StarbridgeTheme.type.small, color = colors.fg3)
-        SessionLinks(decision.source)
     }
 }
 
