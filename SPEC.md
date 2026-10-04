@@ -252,6 +252,21 @@ How it generalizes is open.
   Google's own apps) on the Material type scale, not Archivo; monospace only
   for code. This replaces "Expressive parts only where they do a
   job" below. The web pairs with it without imitating Android.
+- 2026-10-04 (late). Look (#49): the owner picked direction C, "Beacon", of
+  three drafted on the options page (https://claude.ai/artifact/BNDBtkU1kP6MtXimyCrRTP),
+  which also links the reference apps. Soft black (`#0c0c0c`) and neutral
+  greys with no hue; amber is the only accent and means "needs you": open
+  decisions, the recommended option, quota headroom left unused. Red only for
+  "will run out"; "on pace" has no colour. Large M3 Expressive shapes (cards at
+  28 dp, button groups with round ends), the expressive motion scheme, airy
+  density. Light and dark both stay and follow the system. Android has a
+  "Colours" setting: "Starbridge" (default, the fixed black palette) or
+  "Match wallpaper" (Material You dynamic colour); under both, the amber
+  accent and the quota state colours stay fixed. The themed
+  monochrome launcher icon stays, since the owner turns it on in Wallpaper &
+  style. The web uses the same faces (Google Sans Flex, Google Sans Code) with
+  web components: list and detail panes, hover, keyboard keys. Tokens:
+  `DESIGN.md`.
 - 2026-10-04 (late). Before the owner starts using Starbridge: (1) the mod's push
   path must work end to end without any agent waiting on an answer: an agent
   posts a decision and keeps working; the answer arrives later as a prompt;
@@ -260,9 +275,10 @@ How it generalizes is open.
   drafts directions from similar apps and the owner picks.
 - 2026-10-04. Look: function over form. Monospace only for code (Markdown
   code blocks in a decision's context); numbers, ids and machine names use the
-  sans face with tabular figures. Colours stay generic: on Android, Material
-  You dynamic colour from the wallpaper, with `DESIGN.md`'s neutral palette as
-  the fallback; on the web, that neutral palette. Fixed colours only where
+  sans face with tabular figures. Colours: `DESIGN.md`'s palette on both
+  clients by default; Material You dynamic colour is an Android setting
+  (changed by #49, below). Fixed
+  colours only where
   they carry meaning: the "needs you" accent and the quota states (on pace,
   will run out, unused). Material 3 Expressive parts are used where they do a
   job: connected button groups for a decision's options, the large
