@@ -333,7 +333,11 @@ class ServerStore(
         } catch (e: ProtocolException) {
             throw IllegalArgumentException("That QR code is not a Starbridge pairing code.")
         }
-        join(code, scanned = true)
+        try {
+            join(code, scanned = true)
+        } catch (e: ApiException) {
+            throw if (e.error == "taken") IllegalStateException("Another phone already used this code. Show a new one.") else e
+        }
     }
 
     /** Posts this phone's request under [code], which it made or scanned, and waits for approval. */
