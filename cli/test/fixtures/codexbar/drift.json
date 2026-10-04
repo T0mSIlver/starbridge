@@ -1,0 +1,62 @@
+[
+  {
+    "provider": "claude",
+    "newTopLevel": {
+      "x": 1
+    },
+    "rateWindowLabels": {
+      "primary": "Session"
+    },
+    "usage": {
+      "primary": {
+        "usedPercent": 40,
+        "windowMinutes": 300,
+        "resetsAt": "2026-10-04T20:00:00Z",
+        "burnRate": 3
+      },
+      "secondary": {
+        "usedPercent": "65",
+        "windowMinutes": 10080
+      },
+      "tertiary": {
+        "windowMinutes": "weekly",
+        "usedPercent": 10,
+        "resetsAt": "soon"
+      },
+      "extraRateWindows": [
+        {
+          "id": "x",
+          "window": {
+            "usedPercent": -1
+          }
+        },
+        {
+          "title": "no id"
+        },
+        "junk",
+        {
+          "id": "opus",
+          "title": "Opus",
+          "window": {
+            "usedPercent": 5,
+            "windowMinutes": 10080.0,
+            "resetsAt": "2026-10-07T20:00:00+02:00"
+          }
+        }
+      ],
+      "identity": "not an object"
+    }
+  },
+  "a string row",
+  {
+    "provider": "zai",
+    "usage": null
+  },
+  {
+    "provider": "cursor",
+    "error": {
+      "message": "cookie expired",
+      "code": 7
+    }
+  }
+]
