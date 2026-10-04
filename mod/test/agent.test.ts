@@ -263,6 +263,9 @@ test("with no agent the CLI path delivers, and the switch follows the agent comi
           unconfirmed,
         ),
       sleep: (ms) => Bun.sleep(ms),
+      clearStatus: () => {
+        a.s.status = undefined;
+      },
       log: () => {},
     },
     50,

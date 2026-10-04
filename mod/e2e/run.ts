@@ -125,12 +125,14 @@ for (const part of [".claude-plugin", "hooks"])
 // `--agent`: the machine's agent, between the sessions and the server for the whole run.
 let agent: ReturnType<typeof Bun.spawn> | undefined;
 if (opt.agent) {
+  // Named outright: sessions run without XDG_RUNTIME_DIR, which the agent's default path reads.
+  const socket = join(configDir, "agent.sock");
+  env.STARBRIDGE_AGENT_SOCKET = socket;
   agent = Bun.spawn(["starbridge", "agent", "--no-quota"], {
     env: { ...process.env, ...env },
     stdout: "inherit",
     stderr: "inherit",
   });
-  const socket = join(configDir, "agent.sock");
   await until("the agent's socket", () => existsSync(socket) || undefined, 10_000);
 }
 

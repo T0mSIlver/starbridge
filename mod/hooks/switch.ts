@@ -14,6 +14,8 @@ export interface Paths {
   agent(unconfirmed: Set<string>): AgentLoop;
   poller(unconfirmed: Set<string>): Poller;
   sleep(ms: number): Promise<void>;
+  /** Clears the status line: each loop clears only the errors it showed itself. */
+  clearStatus(): void;
   log(text: string): void;
 }
 
@@ -57,6 +59,7 @@ export class Switch {
     while (!this.stopped) {
       if (await this.up()) {
         this.paths.log("starbridge: answers through the agent");
+        this.paths.clearStatus();
         const agent = this.paths.agent(this.unconfirmed);
         this.agent = agent;
         this.lastAgent = agent;
@@ -68,6 +71,7 @@ export class Switch {
       }
       if (this.stopped) return;
       this.paths.log("starbridge: no agent; answers through the CLI");
+      this.paths.clearStatus();
       const poller = this.paths.poller(this.unconfirmed);
       this.poller = poller;
       while (!this.stopped) {

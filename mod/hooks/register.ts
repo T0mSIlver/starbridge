@@ -69,6 +69,7 @@ export const register: Register = (on) => {
           unconfirmed,
         ),
       sleep,
+      clearStatus: () => status(undefined),
       log,
     });
     return started;
