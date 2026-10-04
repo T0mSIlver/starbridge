@@ -23,6 +23,11 @@ JDK 21 and an Android SDK with platform 37, then:
 ./gradlew assembleRelease
 ```
 
+Release builds sign with the release key when `STARBRIDGE_KEYSTORE`, `STARBRIDGE_KEYSTORE_PASSWORD`
+and `STARBRIDGE_KEY_ALIAS` are set, or when `~/.config/starbridge/secrets/release.jks` exists,
+and with the debug key otherwise. `-PversionName=1.2.3` sets the version; the release workflow
+passes the tag's.
+
 Screenshots render on the JVM through Roborazzi: `./gradlew
 recordRoborazziDebug` writes `app/screenshots/`, light and dark, and
 `verifyRoborazziDebug` fails when a screen drifts from them.

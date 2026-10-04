@@ -7,6 +7,7 @@ compose="docker compose -p starbridge -f compose.yaml"
 install -m 644 host/starbridge-backup.service host/starbridge-backup.timer /etc/systemd/system/
 systemctl daemon-reload
 systemctl enable --now starbridge-backup.timer
+install -m 755 host/deploy-rev.sh /usr/local/sbin/starbridge-deploy
 
 host/server-env.sh
 $compose build --pull server web
