@@ -19,6 +19,21 @@
   min-width: 0;
 }
 
+.provider {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+}
+
+/* The provider's colour, as an identity mark only: pace keeps the state colours. */
+.dot {
+  flex: none;
+  width: var(--s2);
+  height: var(--s2);
+  border-radius: 50%;
+  background: var(--dot);
+}
+
 .window,
 .machine {
   color: var(--fg2);

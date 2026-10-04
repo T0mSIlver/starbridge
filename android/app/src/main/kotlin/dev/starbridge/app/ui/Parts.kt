@@ -71,13 +71,13 @@ fun Screen(
                 actions = actions,
                 windowInsets = WindowInsets(0),
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = StarbridgeTheme.colors.bg,
-                    scrolledContainerColor = StarbridgeTheme.colors.bg,
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    scrolledContainerColor = MaterialTheme.colorScheme.surface,
                 ),
                 scrollBehavior = scroll,
             )
         },
-        containerColor = StarbridgeTheme.colors.bg,
+        containerColor = MaterialTheme.colorScheme.surface,
     ) { padding ->
         // Wide windows cap the content at `size.content` (DESIGN.md).
         Box(Modifier.widthIn(max = Sizes.content)) { content(padding) }
@@ -111,7 +111,7 @@ fun listPadding(scaffold: PaddingValues) = PaddingValues(
 
 /** A section name, as DESIGN.md's label role. */
 @Composable
-fun Label(text: String, modifier: Modifier = Modifier, color: Color = StarbridgeTheme.colors.fg2) {
+fun Label(text: String, modifier: Modifier = Modifier, color: Color = MaterialTheme.colorScheme.onSurfaceVariant) {
     Text(text, style = StarbridgeTheme.type.label, color = color, modifier = modifier)
 }
 
@@ -131,9 +131,9 @@ fun StatusWord(word: String, color: Color, modifier: Modifier = Modifier) {
     }
 }
 
-/** A card: filled `surface` on the ground, `radius.xl`, no border and no shadow. */
+/** A card: filled `surfaceContainer` (DESIGN.md's `surface`) on the ground, `radius.xl`, no border and no shadow. */
 @Composable
-fun Panel(modifier: Modifier = Modifier, color: Color = StarbridgeTheme.colors.surface, shape: Shape = RoundedCornerShape(Radius.xl), content: @Composable ColumnScope.() -> Unit) {
+fun Panel(modifier: Modifier = Modifier, color: Color = MaterialTheme.colorScheme.surfaceContainer, shape: Shape = RoundedCornerShape(Radius.xl), content: @Composable ColumnScope.() -> Unit) {
     Surface(modifier = modifier, shape = shape, color = color) {
         Column(Modifier.padding(Spacing.s5), content = content)
     }
@@ -188,16 +188,14 @@ fun <T> Choice(choices: List<Pair<T, String>>, selected: T, onSelect: (T) -> Uni
     }
 }
 
-/** A filled text field on a card: `surface2`, the indicator line in the text colours. */
+/** A filled text field on a card: the highest container, so it stands out from the card. */
 @Composable
-fun fieldColors() = StarbridgeTheme.colors.let {
+fun fieldColors() = MaterialTheme.colorScheme.surfaceContainerHighest.let {
     TextFieldDefaults.colors(
-        focusedContainerColor = it.surface2,
-        unfocusedContainerColor = it.surface2,
-        disabledContainerColor = it.surface2,
-        errorContainerColor = it.surface2,
-        focusedIndicatorColor = it.fg,
-        unfocusedIndicatorColor = it.lineStrong,
-        focusedLabelColor = it.fg,
+        focusedContainerColor = it,
+        unfocusedContainerColor = it,
+        disabledContainerColor = it,
+        errorContainerColor = it,
+        unfocusedIndicatorColor = MaterialTheme.colorScheme.outline,
     )
 }
