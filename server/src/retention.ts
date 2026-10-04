@@ -1,0 +1,26 @@
+import type { Database } from "bun:sqlite";
+import type { Limits } from "./limits";
+
+/**
+ * Drops what no client needs any more: answered decisions and their answers a week after the
+ * answer, unanswered decisions and unreplaced quota snapshots after 30 days, quota snapshots of
+ * revoked machines, expired sessions and expired app sign-in codes. Boxes go with their items.
+ */
+export function sweepStorage(db: Database, limits: Limits, now = Date.now()): void {
+  const iso = (ms: number) => new Date(now - ms).toISOString();
+  const answered = iso(limits.answeredRetention);
+  const stale = iso(limits.staleRetention);
+  db.transaction(() => {
+    db.query(
+      `DELETE FROM items WHERE (kind = 'decision' AND answered_at < ?)
+         OR (kind = 'answer' AND received_at < ?)
+         OR (kind IN ('decision', 'quota') AND answered_at IS NULL AND received_at < ?)`,
+    ).run(answered, answered, stale);
+    db.query(
+      `DELETE FROM items WHERE kind = 'quota' AND NOT EXISTS (SELECT 1 FROM members m
+         WHERE m.account_id = items.account_id AND m.id = items.from_id AND m.active = 1)`,
+    ).run();
+    db.query("DELETE FROM sessions WHERE expires_at < ?").run(new Date(now).toISOString());
+    db.query("DELETE FROM app_codes WHERE expires_at < ?").run(now);
+  })();
+}

@@ -1,3 +1,5 @@
+import { DEFAULT_LIMITS, type Limits } from "./limits";
+
 /** Everything the server reads from its environment. Tests build this object directly. */
 export interface Config {
   port: number;
@@ -46,6 +48,8 @@ export interface Config {
   relayUrl?: string;
   /** Serve `POST /v1/relay` for other servers. */
   relayMode: boolean;
+  /** Rate limits, caps and retention; tests lower them. */
+  limits: Limits;
 }
 
 type Env = Record<string, string | undefined>;
@@ -106,5 +110,6 @@ export function configFromEnv(env: Env = process.env): Config {
         : undefined,
     relayUrl: env.RELAY_URL?.replace(/\/$/, "") || undefined,
     relayMode: flag(env.RELAY_MODE),
+    limits: DEFAULT_LIMITS,
   };
 }

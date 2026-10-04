@@ -4,6 +4,7 @@ import { z } from "zod";
 import { fail, randomToken, recheck, requireCaller } from "../auth";
 import type { Env } from "../env";
 import { json } from "../http";
+import { rateLimit } from "../limits";
 import { activeMember } from "./directory";
 
 const NONCE_MS = 5 * 60_000;
@@ -27,7 +28,7 @@ export const bindRoutes = new Hono<Env>();
 bindRoutes.get("/auth/challenge", requireCaller("device"), (c) => {
   const caller = c.var.caller;
   if (caller.role !== "device") fail(403, "forbidden");
-  if (!c.var.limiter.allow(`bind:${caller.account}`, 20, 60_000)) fail(429, "rate-limited");
+  rateLimit(c, `bind:${caller.account}`, [20, 60_000]);
   const now = Date.now();
   for (const [k, v] of nonces) if (v.expires <= now) nonces.delete(k);
   // Two tabs of one browser share the session: both get the outstanding nonce, so the first

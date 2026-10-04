@@ -38,13 +38,22 @@ export function fail(
   });
 }
 
-export function createSession(db: Database, account: string): string {
+/** Starts a session; past `max` sessions on the account, the oldest end. */
+export function createSession(db: Database, account: string, max: number): string {
   const token = randomToken("sbs_");
   const now = new Date();
   const expires = new Date(now.getTime() + SESSION_DAYS * 86_400_000);
   db.query(
     "INSERT INTO sessions (token_hash, account_id, created_at, expires_at) VALUES (?, ?, ?, ?)",
   ).run(hashToken(token), account, now.toISOString(), expires.toISOString());
+  // Signing in again and again would pile up sessions: end the oldest past the cap, unpaired
+  // ones first, since a paired one may be a device still in use.
+  db.query(
+    `DELETE FROM sessions WHERE token_hash IN (
+       SELECT token_hash FROM sessions WHERE account_id = ? AND token_hash != ?
+       ORDER BY member_id IS NULL DESC, created_at ASC
+       LIMIT max(0, (SELECT COUNT(*) FROM sessions WHERE account_id = ?) - ?))`,
+  ).run(account, hashToken(token), account, max);
   return token;
 }
 

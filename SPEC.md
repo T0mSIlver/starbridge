@@ -406,6 +406,13 @@ How it generalizes is open.
   only deploy a commit that is on GitHub's main: the box fetches that commit itself with a
   read-only GitHub deploy key. `deploy/deploy.sh` stays for rollbacks and other refs. The
   `cli-v*` workflow folded into the release one.
+- 2026-10-05. Per-account bounds before hosted signups (#65): every route that stores
+  something has a cap or a retention rule, and the writes that grow it a rate limit, sized for an
+  orchestrator with 10 sessions asking a few hundred decisions a day. Answered decisions and
+  their answers are kept 7 days, unanswered decisions and quota snapshots 30; 5000 stored
+  decisions and 64 MB per account; directories end at 200 entries, which is about 100 add and
+  revoke pairs; an account that reaches it needs the operator to reset it. The numbers live in
+  `server/src/limits.ts` and PROTOCOL.md, "Limits".
 
 ## Encryption, with existing libraries
 

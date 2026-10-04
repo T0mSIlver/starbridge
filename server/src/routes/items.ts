@@ -5,6 +5,7 @@ import { fail, memberOf, recheck, requireCaller } from "../auth";
 import { nextSeq } from "../db";
 import type { Env } from "../env";
 import { holdOpen, json, waitSeconds } from "../http";
+import { rateLimit } from "../limits";
 import { activeMember } from "./directory";
 
 const PAGE = 100;
@@ -92,6 +93,8 @@ function pushPayload(item: SealedItem, to: string, limit: number): string {
 export const itemRoutes = new Hono<Env>();
 
 itemRoutes.post("/items", requireCaller("paired"), async (c) => {
+  const limits = c.var.config.limits;
+  rateLimit(c, `items:${c.var.caller.account}`, limits.items);
   const item = await json(c, SealedItem);
   const caller = c.var.caller;
   const me = memberOf(caller);
@@ -101,6 +104,9 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
   if (item.from !== me) fail(403, "forbidden", "from must be the caller");
   const to = item.boxes.map((b) => b.to);
   if (new Set(to).size !== to.length) fail(400, "bad-schema", "one box per recipient");
+  const size = item.boxes.reduce((n, b) => n + b.box.length, 0);
+  if (size > limits.itemBytes)
+    fail(413, "too-large", `an item's boxes hold at most ${limits.itemBytes} bytes`);
 
   let decisionDevices: string[] = [];
   const seq = db.transaction(() => {
@@ -147,10 +153,23 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
         me,
       );
     }
+    // Answers skip the caps: each answers a stored decision, and answering lets it expire.
+    if (item.kind !== "answer") {
+      const held = db
+        .query(
+          `SELECT COUNT(*) FILTER (WHERE kind = 'decision') AS decisions, COALESCE(SUM(size), 0) AS bytes
+           FROM items WHERE account_id = ?`,
+        )
+        .get(caller.account) as { decisions: number; bytes: number };
+      if (item.kind === "decision" && held.decisions >= limits.decisions)
+        fail(409, "too-many-items", `an account holds at most ${limits.decisions} decisions`);
+      if (held.bytes + size > limits.storedBytes)
+        fail(409, "too-many-items", `an account stores at most ${limits.storedBytes} bytes`);
+    }
     const seq = nextSeq(db);
     db.query(
-      "INSERT INTO items (seq, account_id, id, kind, from_id, re, received_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-    ).run(seq, caller.account, item.id, item.kind, me, item.re ?? null, now);
+      "INSERT INTO items (seq, account_id, id, kind, from_id, re, received_at, size) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+    ).run(seq, caller.account, item.id, item.kind, me, item.re ?? null, now, size);
     const box = db.query("INSERT INTO boxes (account_id, item_id, to_id, box) VALUES (?, ?, ?, ?)");
     for (const b of item.boxes) box.run(caller.account, item.id, b.to, b.box);
     if (item.kind === "answer")
@@ -225,6 +244,12 @@ itemRoutes.get("/answers", requireCaller("machine"), async (c) => {
   let items = fetch();
   const seconds = waitSeconds(c);
   if (items.length === 0 && seconds > 0) {
+    if (c.var.answers.count(`${caller.account}/${me}`) >= c.var.config.limits.answerWaits)
+      fail(
+        429,
+        "too-many-waits",
+        `a machine holds at most ${c.var.config.limits.answerWaits} open waits`,
+      );
     holdOpen(c);
     // Nothing yields between the query above and this registration, so no answer slips by.
     if (await c.var.answers.wait(`${caller.account}/${me}`, seconds, c.req.raw.signal))

@@ -1,23 +1,29 @@
 /** A fixed-window counter per key, in memory. */
 export class RateLimiter {
-  private readonly windows = new Map<string, { start: number; count: number }>();
+  private readonly windows = new Map<string, { start: number; count: number; ms: number }>();
 
   constructor(private readonly now: () => number = Date.now) {}
 
   /** True while `key` has made at most `limit` calls in the current `windowMs`. */
   allow(key: string, limit: number, windowMs: number): boolean {
+    return this.retryAfter(key, limit, windowMs) === 0;
+  }
+
+  /** Counts a call; 0 when it is allowed, else the seconds until `key`'s window ends. */
+  retryAfter(key: string, limit: number, windowMs: number): number {
     const t = this.now();
     const w = this.windows.get(key);
     if (!w || t - w.start >= windowMs) {
-      if (this.windows.size > 10_000) this.sweep(t, windowMs);
-      this.windows.set(key, { start: t, count: 1 });
-      return true;
+      if (this.windows.size > 10_000) this.sweep(t);
+      this.windows.set(key, { start: t, count: 1, ms: windowMs });
+      return 0;
     }
     w.count += 1;
-    return w.count <= limit;
+    return w.count <= limit ? 0 : Math.max(1, Math.ceil((w.start + windowMs - t) / 1000));
   }
 
-  private sweep(t: number, windowMs: number): void {
-    for (const [k, w] of this.windows) if (t - w.start >= windowMs) this.windows.delete(k);
+  /** Each window ends by its own length, so a short window's sweep never resets a long one. */
+  private sweep(t: number): void {
+    for (const [k, w] of this.windows) if (t - w.start >= w.ms) this.windows.delete(k);
   }
 }
