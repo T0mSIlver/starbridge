@@ -1,68 +1,42 @@
 package dev.starbridge.app.data
 
-import dagger.Binds
-import dagger.Module
-import dagger.hilt.InstallIn
-import dagger.hilt.components.SingletonComponent
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.update
-import java.time.Instant
-import javax.inject.Inject
-import javax.inject.Singleton
 
-/** What the screens read and do. Fake data until the server (#5) and the wiring (#9). */
+/** What the screens read and do. [ServerStore] implements it against the server. */
 interface Store {
-    val setUp: StateFlow<Boolean>
+    val phase: StateFlow<Phase>
     val decisions: StateFlow<List<Decision>>
     val windows: StateFlow<List<QuotaWindow>>
     val members: StateFlow<List<Member>>
-    val pairings: StateFlow<List<Pairing>>
-    val recoveryWords: List<String>
+    val approval: StateFlow<Approval>
+    val push: StateFlow<PushSetting>
+    val server: StateFlow<String>
+    /** A setup step or a sync is running. */
+    val busy: StateFlow<Boolean>
+    /** The last thing that went wrong, in words for the owner. */
+    val notice: StateFlow<String?>
 
-    fun finishSetup()
-    fun answer(id: String, answer: String)
-    fun approve(pairingId: String)
-    fun deny(pairingId: String)
+    /** The URL that starts GitHub sign-in; it ends at starbridge://auth?code=… */
+    fun gitHubSignInUrl(server: String): String
+    /** The starbridge://auth redirect that ends GitHub sign-in. */
+    fun receiveSignIn(redirect: String)
+    fun signInWithOwnerToken(server: String, token: String)
+
+    fun setUpFirstDevice()
+    fun confirmRecoveryKey()
+    fun joinAccount()
+    fun cancelJoin()
+    fun recover(words: String)
+
+    fun refresh()
+    fun answer(id: String, choice: String?, text: String?)
+
+    fun lookUpPairing(code: String)
+    fun approvePairing()
+    fun closePairing()
     fun revoke(memberId: String)
-}
 
-@Singleton
-class FakeStore @Inject constructor() : Store {
-    private val fake = Fake(Instant.now())
-
-    override val setUp = MutableStateFlow(false)
-    override val decisions = MutableStateFlow(fake.decisions)
-    override val windows = MutableStateFlow(fake.windows)
-    override val members = MutableStateFlow(fake.members)
-    override val pairings = MutableStateFlow(fake.pairings)
-    override val recoveryWords = fake.recoveryWords
-
-    override fun finishSetup() {
-        setUp.value = true
-    }
-
-    override fun answer(id: String, answer: String) {
-        decisions.update { all -> all.map { if (it.id == id) it.copy(answer = answer, answeredAt = Instant.now()) else it } }
-    }
-
-    override fun approve(pairingId: String) {
-        val pairing = pairings.value.find { it.id == pairingId } ?: return
-        pairings.update { all -> all.filterNot { it.id == pairingId } }
-        members.update { it + Member(pairing.id, pairing.machine, Kind.Machine, Instant.now()) }
-    }
-
-    override fun deny(pairingId: String) {
-        pairings.update { all -> all.filterNot { it.id == pairingId } }
-    }
-
-    override fun revoke(memberId: String) {
-        members.update { all -> all.filterNot { it.id == memberId && !it.current } }
-    }
-}
-
-@Module
-@InstallIn(SingletonComponent::class)
-abstract class StoreModule {
-    @Binds abstract fun store(fake: FakeStore): Store
+    fun setPushType(type: String)
+    fun signOut()
+    fun dismissNotice()
 }

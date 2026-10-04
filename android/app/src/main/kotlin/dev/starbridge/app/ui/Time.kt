@@ -18,3 +18,7 @@ fun span(from: Instant, to: Instant): String {
 
 fun ago(now: Instant, then: Instant): String =
     if (Duration.between(then, now).toMinutes() < 1) "just now" else "${span(then, now)} ago"
+
+/** "22:00" in the phone's zone. */
+fun clock(at: Instant, zone: java.time.ZoneId = java.time.ZoneId.systemDefault()): String =
+    java.time.format.DateTimeFormatter.ofPattern("HH:mm").withZone(zone).format(at)
