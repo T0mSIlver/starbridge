@@ -434,6 +434,19 @@ How it generalizes is open.
   so that builds refusing mods keep the rest. The plugin's `SessionStart`
   hook injects the skill rule instead of editing CLAUDE.md (owner's choice).
   No public release date: the owner ships when satisfied.
+- 2026-10-05. Starbridge builds on Claude Code and Codex and does not replace
+  what they already do well (owner). Session controls (#58) are dropped from v1:
+  a list of 20 or more live sessions costs a write per change, all for one
+  setting that only an orchestrator needs, and the owner's orchestrator-cache
+  mod covers it. Runs (#60): nothing is timed automatically. The owner writes
+  rules in plain words, which the plugin's SessionStart hook loads. The agent
+  wraps a matching command, chained or not, in `starbridge run --title` and
+  says why it reports the run, e.g. "Mac e2e (uses your session and
+  keyboard)". The phone shows the title, the reason, the time elapsed and any
+  progress the output prints, then pass or fail. Visuals (#62) are images
+  attached to a decision, encrypted like its text, plus links. For anything
+  interactive the agent links a Claude artifact, which the Claude app opens.
+  MCP Apps are dropped from v1, which supersedes the visuals choice above.
 
 ## Encryption, with existing libraries
 
