@@ -3,27 +3,32 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "bun --bun next dev",
-    "build": "bun --bun next build",
+    "dev": "bun run sw && bun --bun next dev",
+    "build": "bun run sw && bun --bun next build",
     "start": "bun --bun next start",
     "test": "bun scripts/tokens.ts --check && bun test",
-    "typecheck": "next typegen && tsc --noEmit",
+    "typecheck": "next typegen && tsc --noEmit && tsc --noEmit -p src/sw",
     "lint": "biome check .",
-    "tokens": "bun scripts/tokens.ts"
+    "tokens": "bun scripts/tokens.ts",
+    "sw": "bun build src/sw/sw.ts --outfile public/sw.js --target browser --format iife --minify --define import.meta.url=self.location.href"
   },
   "dependencies": {
+    "@noble/ciphers": "^2.4.0",
     "@starbridge/protocol": "workspace:*",
+    "libsodium-wrappers": "^0.8.4",
     "next": "16.3.4",
     "react": "19.2.8",
     "react-dom": "19.2.8"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.5.15",
     "@types/bun": "^1.4.2",
+    "@types/libsodium-wrappers": "^0.8.2",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "typescript": "^5",
-    "@biomejs/biome": "^2.5.15"
+    "playwright": "1.63.0",
+    "typescript": "^5"
   },
   "license": "MIT"
 }

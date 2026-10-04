@@ -127,3 +127,43 @@
   text-align: center;
   padding: var(--s8) var(--s4);
 }
+
+.input {
+  width: 100%;
+  min-height: var(--size-tap);
+  padding: var(--s3);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line-strong);
+  background: var(--bg);
+  resize: vertical;
+}
+
+.input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+
+.field > label {
+  color: var(--fg2);
+}
+
+.error {
+  color: var(--bad);
+  background: var(--bad-soft);
+  border-radius: var(--radius-sm);
+  padding: var(--s2) var(--s3);
+  overflow-wrap: anywhere;
+}
+
+.notice {
+  color: var(--fg2);
+  background: var(--surface2);
+  border-radius: var(--radius-sm);
+  padding: var(--s2) var(--s3);
+}

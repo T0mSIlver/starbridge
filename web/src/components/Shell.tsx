@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useDecisions } from "./DecisionsProvider";
+import { useApp } from "./AppProvider";
 import { DevicesIcon, GaugeIcon, InboxIcon, StarIcon } from "./icons";
 import s from "./Shell.module.css";
 
@@ -14,7 +14,7 @@ const TABS = [
 
 export function Shell({ children }: { children: React.ReactNode }) {
   const path = usePathname();
-  const open = useDecisions().items.filter((item) => !item.answer).length;
+  const open = useApp().inbox.items.filter((item) => !item.answeredAt).length;
   return (
     <div className={s.frame}>
       <nav className={s.nav} aria-label="Main">

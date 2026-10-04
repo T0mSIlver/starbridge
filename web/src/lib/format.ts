@@ -1,7 +1,5 @@
-import { NOW } from "./now";
-
 /** "4 min ago", "in 2 h 30 min", "in 3 days". */
-export function relative(iso: string, now: Date = NOW): string {
+export function relative(iso: string, now: Date = new Date()): string {
   const minutes = Math.round((new Date(iso).getTime() - now.getTime()) / 60_000);
   const span = Math.abs(minutes);
   let text: string;
