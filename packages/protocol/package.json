@@ -1,0 +1,26 @@
+{
+  "name": "@starbridge/protocol",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check .",
+    "vectors": "bun run scripts/gen-vectors.ts"
+  },
+  "dependencies": {
+    "libsodium-wrappers": "^0.8.4",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.15",
+    "@types/bun": "^1.4.2",
+    "@types/libsodium-wrappers": "^0.8.2",
+    "typescript": "^7.0.2"
+  }
+}
