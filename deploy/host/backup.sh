@@ -11,4 +11,4 @@ sqlite3 "$db" ".backup '$out.tmp'"
 chown --reference="$db" "$db"-wal "$db"-shm 2>/dev/null || true
 sqlite3 "$out.tmp" 'PRAGMA integrity_check' | grep -qx ok
 mv "$out.tmp" "$out"
-find "$dir" -maxdepth 1 -name 'starbridge-*.db' -mtime +13 -delete
+find "$dir" -maxdepth 1 \( -name 'starbridge-*.db' -mtime +13 -o -name '*.tmp' -mtime +0 \) -delete
