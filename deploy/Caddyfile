@@ -1,0 +1,8 @@
+# The server serves the API, the OAuth callback and /healthz. When the web page (#8) ships,
+# route everything outside /v1/* and /healthz to it here, keeping one origin for the
+# SameSite=Lax session cookie.
+starbridge.run {
+	encode zstd gzip
+	reverse_proxy 127.0.0.1:8080
+}
+

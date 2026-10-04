@@ -1,0 +1,27 @@
+#!/bin/sh
+# Deploys a pushed git ref (default: origin/main) to starbridge-1: unpacks it in
+# /opt/starbridge, rebuilds the server image there and restarts the stack.
+set -eu
+ref=${1:-origin/main}
+host=${STARBRIDGE_HOST:-deploy@starbridge.run}
+key=$HOME/.ssh/starbridge_ed25519
+cd "$(git rev-parse --show-toplevel)"
+
+git fetch -q origin
+rev=$(git rev-parse --verify "$ref^{commit}")
+if [ -z "$(git branch -r --contains "$rev")" ]; then
+  echo "$ref ($rev) is not on origin; push it first" >&2
+  exit 1
+fi
+
+git archive --format=tar "$rev" | ssh -i "$key" "$host" "sudo sh -euc '
+  rm -rf /opt/starbridge.new /opt/starbridge.old
+  mkdir /opt/starbridge.new
+  tar -x -C /opt/starbridge.new
+  echo $rev > /opt/starbridge.new/REVISION
+  if [ -d /opt/starbridge ]; then mv /opt/starbridge /opt/starbridge.old; fi
+  mv /opt/starbridge.new /opt/starbridge
+  /opt/starbridge/deploy/host/apply.sh
+'"
+curl -fsS https://starbridge.run/healthz >/dev/null
+echo "deployed $rev"

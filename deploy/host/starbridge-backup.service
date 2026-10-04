@@ -1,0 +1,8 @@
+[Unit]
+Description=Back up the Starbridge SQLite file
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/starbridge/deploy/host/backup.sh

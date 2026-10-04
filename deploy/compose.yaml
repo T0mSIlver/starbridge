@@ -1,0 +1,36 @@
+# Runs on starbridge-1 as `sudo docker compose -p starbridge -f /opt/starbridge/deploy/compose.yaml`.
+# deploy/deploy.sh copies the repository to /opt/starbridge and builds the image there.
+services:
+  server:
+    build:
+      context: ..
+      dockerfile: server/Dockerfile
+    image: starbridge-server:latest
+    restart: unless-stopped
+    # Built by deploy/host/server-env.sh from the secrets in /etc/starbridge/secrets.
+    env_file: /etc/starbridge/server.env
+    volumes:
+      - data:/data
+    # Only Caddy reaches the server.
+    ports:
+      - "127.0.0.1:8080:8080"
+    logging: &logging
+      driver: json-file
+      options: { max-size: 10m, max-file: "5" }
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    # Host networking: Caddy sees real client IPv4 and IPv6 addresses, which the server's
+    # per-IP rate limits read from X-Forwarded-For.
+    network_mode: host
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    logging: *logging
+
+volumes:
+  data:
+  caddy-data:
+  caddy-config:
