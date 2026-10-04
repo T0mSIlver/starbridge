@@ -1,3 +1,4 @@
+import type { Database } from "bun:sqlite";
 import {
   B64,
   claimHash,
@@ -43,8 +44,17 @@ function parseBody<T extends z.ZodType>(schema: T, text: string): z.infer<T> {
 
 export const pairingRoutes = new Hono<Env>();
 
+/**
+ * Deletes expired pairings, and with them any machine token still held for a retried result,
+ * so no plaintext token outlives the pairing's 10 minutes.
+ */
+export function sweepPairings(db: Database): void {
+  db.query("DELETE FROM pairings WHERE created_at < ?").run(Date.now() - LIFETIME_MS);
+}
+
 function load(c: { var: Env["Variables"] }, rendezvous: string): Pairing {
   if (!RENDEZVOUS.test(rendezvous)) fail(404, "not-found");
+  sweepPairings(c.var.db);
   const p = c.var.db
     .query("SELECT * FROM pairings WHERE rendezvous = ?")
     .get(rendezvous) as Pairing | null;
@@ -65,7 +75,7 @@ pairingRoutes.post("/pairings", async (c) => {
   if (!RENDEZVOUS.test(body.rendezvous)) fail(400, "bad-schema", "rendezvous");
   const db = c.var.db;
   const created = db.transaction(() => {
-    db.query("DELETE FROM pairings WHERE created_at < ?").run(Date.now() - LIFETIME_MS);
+    sweepPairings(db);
     const taken = db.query("SELECT 1 FROM pairings WHERE rendezvous = ?").get(body.rendezvous);
     if (taken) return false;
     db.query(

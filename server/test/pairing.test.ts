@@ -262,3 +262,16 @@ test("a device's result needs a session of the approving account", async () => {
   const acct = await setupAccount(s);
   await expect(pair(s, acct, "laptop", "device")).rejects.toThrow("result: 403");
 });
+
+test("an expired pairing is gone with the machine token it held", async () => {
+  const s = await makeServer();
+  const acct = await setupAccount(s);
+  const p = await request(s);
+  await approve(s, acct, p);
+  s.deps.db.query("UPDATE pairings SET created_at = created_at - 11 * 60000").run();
+  const r = await s.call("GET", `/v1/pairings/${p.code.rendezvous}/result`, {
+    headers: { "x-claim": p.claim },
+  });
+  expect(r.status).toBe(404);
+  expect(s.deps.db.query("SELECT token FROM pairings").all()).toEqual([]);
+});

@@ -12,7 +12,7 @@ import { RateLimiter } from "./ratelimit";
 import { authRoutes } from "./routes/auth";
 import { directoryRoutes } from "./routes/directory";
 import { itemRoutes } from "./routes/items";
-import { pairingRoutes } from "./routes/pairings";
+import { pairingRoutes, sweepPairings } from "./routes/pairings";
 import { pushRoutes } from "./routes/push";
 import { Waiters } from "./waiters";
 
@@ -27,6 +27,8 @@ export async function createApp(config: Config, fetchFn: typeof fetch = fetch) {
     pairings: new Waiters(),
     limiter: new RateLimiter(),
   };
+
+  setInterval(() => sweepPairings(db), 60_000).unref();
 
   const v1 = new Hono<Env>()
     .route("/", authRoutes)

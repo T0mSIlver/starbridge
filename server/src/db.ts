@@ -56,7 +56,8 @@ CREATE TABLE IF NOT EXISTS pairings (
   created_at INTEGER NOT NULL,
   account_id TEXT,
   approval TEXT,
-  -- A machine's bearer token, kept until the pairing expires so a lost reply can be retried.
+  -- A machine's bearer token, kept until the pairing expires and is swept, so a lost reply can
+  -- be retried.
   token TEXT
 );
 
