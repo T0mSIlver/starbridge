@@ -5,7 +5,7 @@
 //
 // Needs `npx playwright install firefox` once. Writes screenshots to web/screenshots.
 import { type ChildProcess, spawn, spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { type BrowserContext, firefox, type Page } from "playwright";
@@ -170,9 +170,12 @@ async function main() {
     }).status
   )
     throw new Error("web build failed");
-  const web = start("web", "bun", ["--bun", "next", "start", "-p", String(PORTS.web)], {
-    cwd: WEB,
-    env,
+  // The standalone server, laid out as web/Dockerfile copies it.
+  const standalone = join(WEB, ".next/standalone/web");
+  cpSync(join(WEB, ".next/static"), join(standalone, ".next/static"), { recursive: true });
+  cpSync(join(WEB, "public"), join(standalone, "public"), { recursive: true });
+  const web = start("web", "node", [join(standalone, "server.js")], {
+    env: { ...env, PORT: String(PORTS.web), HOSTNAME: "127.0.0.1" },
   });
   await web.waitFor(/Ready|started server/i);
 
