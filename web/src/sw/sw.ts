@@ -23,7 +23,10 @@ type Payload =
 
 const tag = (decisionId: string) => `d:${decisionId}`;
 
-/** Decisions answered since this worker started: a push still opening must not show them. */
+/**
+ * Decisions answered since this worker started, as "account/decision" (ids are unique per
+ * account only): a push still opening must not show them.
+ */
 const answered = new Set<string>();
 
 self.addEventListener("install", () => self.skipWaiting());
@@ -57,15 +60,15 @@ async function onPush(text: string): Promise<void> {
     return;
   }
   await tellPages(payload.kind);
+  const account = await store.get("current");
   if (payload.kind === "answered") {
     // Answered elsewhere: the question is settled, so its notification goes.
-    answered.add(payload.id);
+    answered.add(`${account}/${payload.id}`);
     for (const n of await self.registration.getNotifications({ tag: tag(payload.id) })) n.close();
     return;
   }
   if (payload.kind === "answer") return;
 
-  const account = await store.get("current");
   const ctx = account ? await deviceContext(account) : undefined;
   if (!ctx) return;
   let answeredAt: string | undefined;
@@ -86,7 +89,7 @@ async function onPush(text: string): Promise<void> {
 
   if (payload.kind === "decision") {
     const opened = await openPushedDecision(ctx, item);
-    if (!answeredAt && !opened.reply) await showDecision(opened);
+    if (!answeredAt && !opened.reply) await showDecision(account as string, opened);
   } else await showAlerts(account as string, await openPushedQuota(ctx, item));
 }
 
@@ -106,7 +109,8 @@ function summary(context: string): string {
   return text.length > 180 ? `${text.slice(0, 179)}…` : text;
 }
 
-async function showDecision(item: InboxItem): Promise<void> {
+async function showDecision(account: string, item: InboxItem): Promise<void> {
+  const done = () => answered.has(`${account}/${item.decision.id}`);
   const d = item.decision;
   const options = d.recommended
     ? [d.recommended, ...d.options.filter((o) => o !== d.recommended)]
@@ -123,10 +127,10 @@ async function showDecision(item: InboxItem): Promise<void> {
     data: { item, options },
     actions,
   };
-  if (answered.has(d.id)) return;
+  if (done()) return;
   await self.registration.showNotification(d.question, options_);
   // An answered push may have closed nothing while this one was still opening.
-  if (answered.has(d.id))
+  if (done())
     for (const n of await self.registration.getNotifications({ tag: tag(d.id) })) n.close();
 }
 
@@ -146,7 +150,9 @@ async function showAlerts(account: string, snapshot: QuotaSnapshot): Promise<voi
     await self.registration.showNotification(title, { tag: `q:${a.provider}/${a.window}` });
   }
   if (fresh.length)
-    await store.update("alerts", account, (old) => [...(old ?? []), ...fresh].slice(-200));
+    await store.update("alerts", account, (old) =>
+      [...new Set([...(old ?? []), ...fresh])].slice(-200),
+    );
 }
 
 async function onClick(n: Notification, action: string): Promise<void> {

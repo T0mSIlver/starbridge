@@ -235,6 +235,9 @@ export async function recover(account: string, name: string, words: string): Pro
   const seed = recoverySeedFromWords(words);
   const recovery = recoveryKeyPair(seed);
   try {
+    // Keys first: the pin is read after the last await before signing, so a pin another tab
+    // or the service worker moved meanwhile still counts.
+    const { record, member } = await newDevice(account, name);
     const entries = await api.directory();
     // A browser that pinned this account before must not sign onto an older prefix.
     const pin = await store.get("pin", account);
@@ -243,7 +246,6 @@ export async function recover(account: string, name: string, words: string): Pro
       recoveryPk: toB64(recovery.publicKey),
       ...(pin ? { pin } : {}),
     });
-    const { record, member } = await newDevice(account, name);
     const entry = addEntry(dir, { id: RECOVERY, signKey: recovery.privateKey }, member, now());
     const next = verifyDirectory([...entries, entry], { account });
     await store.put("device", record, account);
@@ -332,7 +334,14 @@ async function append(ctx: Ctx, make: (dir: Directory) => Promise<SignedEnvelope
       throw e;
     }
     const entries = [...fresh.entries, entry];
-    await pinTo(ctx.account, entries, dir);
+    try {
+      await pinTo(ctx.account, entries, dir);
+    } catch (e) {
+      // The entry is on the server and a longer chain was pinned meanwhile: carry on from it,
+      // so the caller (an approval) still finishes.
+      if (e instanceof store.StalePin) return refresh(fresh);
+      throw e;
+    }
     return { ...fresh, dir, entries };
   }
 }
