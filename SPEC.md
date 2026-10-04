@@ -384,6 +384,18 @@ How it generalizes is open.
   session. App Links on the hosted domain, added on top later, would close that for
   `starbridge.run`.
 
+- 2026-10-05. Specs for #57, #58, #60 and #62 are on the issues. Owner choices:
+  a permission prompt can be denied from the Android lock screen, but allowing
+  it asks for the unlock first. The phone may allow once, for the session, or
+  always for the project (Claude Code's local project settings); "always"
+  needs the app. Permission prompts get their own short-lived "Prompts" lane
+  and notification channel, apart from the curated decisions in the inbox,
+  because the Claude app already answers them for Remote Control sessions;
+  Starbridge's gain is every session, machine and agent in one place. Custom
+  visuals are MCP Apps only, plus an optional preview image for
+  notifications; the CLI wraps plain images and diffs into MCP Apps. Visuals
+  get no network access in v1.
+
 ## Encryption, with existing libraries
 
 - libsodium sealed boxes (`crypto_box_seal`, X25519 + XSalsa20-Poly1305): an
@@ -664,3 +676,18 @@ goes in git.
   The Desktop link `claude://claude.ai/epitaxy/<hostSessionId>` comes from the
   owner and was not opened from a test. Cloud sessions were not inspected, so
   the CLI never fills the `web` kind; `--link web=<url>` sets it.
+- 2026-10-05: permission, progress and visuals research (specs on #57, #58,
+  #60, #62). Claude Code 2.1.289: the `PermissionRequest` command hook waits up
+  to 600 s, races the dialog (the person's answer wins), and does not fire in
+  `bypassPermissions` mode or under `-p`; whether it fires for the prompts
+  bypass mode still shows is unprobed. The mod API can hook
+  `classic.PermissionRequest` and `tool.check`, and waits on `$` calls do not
+  count against a hook's 10 s budget. The channels permission relay allows
+  per call only and needs launch flags. Codex 0.160.0 has stable hooks with a
+  `PermissionRequest` event (600 s) and `codex queue` to message an existing
+  session. Gemini CLI, opencode and Cursor cannot answer a prompt from a hook.
+  Android 16 Live Updates need `POST_PROMOTED_NOTIFICATIONS`,
+  `setRequestPromotedOngoing` and `ProgressStyle` (androidx.core 1.17). MCP
+  Apps (SEP-1865) has been a stable MCP extension since 2026-01-26:
+  `ui://` resources of type `text/html;profile=mcp-app`, JSON-RPC over
+  `postMessage`, and a sandboxed iframe with a CSP the host builds.
