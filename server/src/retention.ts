@@ -4,8 +4,8 @@ import type { Limits } from "./limits";
 /**
  * Drops what no client needs any more: answered decisions and their answers a week after the
  * answer, permission prompts with their answers and settled notices a week after they arrive
- * (the clients' log shows that week), unanswered decisions and unreplaced quota snapshots after 30 days, quota snapshots of
- * revoked machines, expired sessions and expired app sign-in codes. Boxes go with their items.
+ * (the clients' log shows that week), unanswered decisions and unreplaced quota snapshots after
+ * 30 days, quota snapshots of revoked machines, expired sessions and expired app sign-in codes. Boxes go with their items.
  */
 export function sweepStorage(db: Database, limits: Limits, now = Date.now()): void {
   const iso = (ms: number) => new Date(now - ms).toISOString();
