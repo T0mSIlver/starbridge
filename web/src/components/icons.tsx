@@ -43,8 +43,15 @@ export const DevicesIcon = (p: Props) => (
   </Icon>
 );
 
-export const StarIcon = (p: Props) => (
-  <Icon {...p}>
-    <path d="M12 3l1.8 6.2L20 11l-6.2 1.8L12 19l-1.8-6.2L4 11l6.2-1.8z" />
-  </Icon>
+/** The space elevator (DESIGN.md, "Icon") without its ground: planet and tether in the text colour,
+    the climber in amber. */
+export const Mark = ({ size = 28 }: Props) => (
+  <svg width={size} height={size} viewBox="22 22 64 64" aria-hidden="true">
+    <path fill="var(--fg)" d="M0,88.97 A80,80 0 0 1 108,88.97 V108 H0 Z" />
+    <path fill="var(--fg)" d="M51.75,0 H56.25 V72 H51.75 Z" />
+    <path
+      fill="var(--accent)"
+      d="M48.5,39.5 A5.5,5.5 0 0 1 59.5,39.5 V48.5 A5.5,5.5 0 0 1 48.5,48.5 Z"
+    />
+  </svg>
 );

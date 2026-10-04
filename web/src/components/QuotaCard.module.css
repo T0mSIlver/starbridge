@@ -7,84 +7,139 @@
 .top {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: baseline;
   gap: var(--s3);
 }
 
-.window {
-  color: var(--fg3);
-  margin-top: 2px;
-}
-
-.figure {
+.name {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
-  gap: var(--s2);
+  column-gap: var(--s2);
+  min-width: 0;
 }
 
-.used {
+.window,
+.machine {
   color: var(--fg2);
 }
 
+.machine::before {
+  content: "· ";
+}
+
+.percent {
+  font-size: 0.5em;
+  font-weight: 500;
+  color: var(--fg2);
+}
+
+/* Material 3's linear progress: an active part, a gap, the track, and a stop
+   mark at the end of the track. */
 .bar {
   position: relative;
-  height: 8px;
+  display: flex;
+  align-items: center;
+  gap: var(--s1);
+  height: var(--size-track);
+  margin: var(--s1) 0;
+}
+
+.fill,
+.rest {
+  height: 100%;
   border-radius: var(--radius-pill);
-  background: var(--surface2);
 }
 
 .fill {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
+  flex: 0 1 auto;
+  min-width: var(--size-track);
 }
 
-.ok {
-  background: var(--ok);
+.rest {
+  position: relative;
+  flex: 1;
+  background: var(--surface2);
 }
 
-.out {
-  background: var(--bad);
-}
-
-.unknown {
+.rest::after {
+  content: "";
+  position: absolute;
+  top: calc(50% - 2px);
+  right: 3px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
   background: var(--fg3);
 }
 
-.unused {
+.fill.ok {
+  background: var(--ok);
+}
+
+.fill.out {
+  background: var(--bad);
+}
+
+.fill.unused {
   background: var(--warn);
+}
+
+.fill.unknown {
+  background: var(--fg3);
 }
 
 /* Where a steady pace would be now. */
 .expected {
   position: absolute;
-  top: -4px;
-  bottom: -4px;
-  width: 2px;
-  margin-left: -1px;
-  border-radius: 1px;
+  top: calc(-1 * var(--s1));
+  bottom: calc(-1 * var(--s1));
+  width: 3px;
+  margin-left: -1.5px;
+  border-radius: var(--radius-pill);
   background: var(--fg);
+  box-shadow: 0 0 0 2px var(--surface);
 }
 
 .facts {
   display: flex;
   justify-content: space-between;
+  align-items: baseline;
   gap: var(--s3);
   color: var(--fg2);
+  font-variant-numeric: tabular-nums;
+}
+
+.word {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+}
+
+.word::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.word.ok {
+  color: var(--ok);
+}
+
+.word.out {
+  color: var(--bad);
+}
+
+.word.unused {
+  color: var(--warn);
+}
+
+.word.unknown {
+  color: var(--fg3);
 }
 
 .alert {
-  padding: var(--s2) var(--s3);
-  border-radius: var(--radius-sm);
-  font-size: 14px;
-}
-
-.alertWarn {
-  background: var(--warn-soft);
-  color: var(--fg);
-}
-
-.alertBad {
-  background: var(--bad-soft);
-  color: var(--fg);
+  color: var(--fg2);
 }

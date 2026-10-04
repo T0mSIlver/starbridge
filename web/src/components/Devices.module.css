@@ -9,7 +9,7 @@ ul.rows {
   align-items: center;
   justify-content: space-between;
   gap: var(--s3);
-  padding: var(--s3) var(--s4);
+  padding: var(--s4) var(--s5);
 }
 
 .row + .row {
@@ -42,8 +42,7 @@ ul.rows {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: var(--s3);
-  border-left: 3px solid var(--accent);
+  gap: var(--s4);
   margin-bottom: var(--s2);
 }
 
@@ -54,7 +53,7 @@ ul.rows {
 .code {
   letter-spacing: 0.08em;
   padding: var(--s2) var(--s4);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-lg);
   background: var(--surface2);
 }
 
