@@ -110,14 +110,36 @@ can do this. Checked against the mod API types in the owner's
 
 - A mod cannot listen on a port. It can make outbound requests with
   `$.http.fetch(url, { method, headers, body, socketPath })`, which resolves
-  when the body is read, so it can hold a long-poll request open.
+  when the body is read. Probed 2026-10-04 (Claude Code 2.1.286): the host
+  aborts every `$.http.fetch` that has no complete answer after 30 s, with
+  "no complete answer within 30000ms". No option changes it.
+- `$.process.run` (timeout up to 10 minutes) and `$.process.spawn` (no
+  timeout; the child lives until the loop ends or the mod unloads) can run
+  `curl` and hold a request open longer.
 - `$.prompt.submit({ text })` submits a prompt into the session.
   `orchestrator-cache` already uses it to send a keepalive into an idle session.
 - `$.clock.after` and `$.clock.every` give timers.
 
-So the mod keeps one long-poll request open against the service. When the owner
-answers, the service completes that request, and the mod submits the answer as
-a prompt. The mod is also the showcase for mods that the owner wants.
+So the mod long-polls the service in cycles shorter than 30 s: the service
+holds each request about 25 s, then answers "nothing yet", and the mod asks
+again at once. When the owner answers, the service completes the open request,
+and the mod submits the answer as a prompt. A cycle costs one small request, so
+polling needs no `curl`. If the service later streams events, `$.process.spawn`
+running `curl -N` can hold the stream open. The mod is also the showcase for
+mods that the owner wants.
+
+What the probe showed (2026-10-04, in the Desktop Code tab):
+
+- Idle session: the submitted prompt starts a turn within 0.2 s, and the model
+  reads it as "The <mod> plugin sent a message: ...".
+- Mid-turn: the prompt waits and starts its own turn about 0.1 s after the
+  running turn ends; it is never folded into the running turn. `submit`
+  resolves only when that turn starts, so the poll loop must not await it.
+- Remote Control: a prompt the mod submitted showed on the owner's phone with
+  the answer. Prompts the owner sent from the phone reached the mod with origin
+  `composer`, the same as typed ones, so a mod cannot tell them apart.
+- Idle: polling and held requests kept running while the session idled.
+- A hot reload of the mod aborts its in-flight requests at once.
 
 The other path is Claude Code channels (code.claude.com/docs/en/channels,
 research preview). A channel is an MCP server that pushes events into an open
@@ -126,10 +148,6 @@ tool permission prompts. But the session must start with `--channels`, a custom
 channel needs `--dangerously-load-development-channels` and a confirmation at
 each launch, and only allowlisted plugins register. The mod needs none of that,
 so the mod is the first path.
-
-To check by probe: whether a long-poll `$.http.fetch` has a timeout, and
-whether `prompt.submit` from a mod reaches a session open in the Desktop Code
-tab and in Remote Control.
 
 ## Owner extensions
 
@@ -266,8 +284,8 @@ A first sketch, to discuss:
 - One server that runs both ways: hosted by the owner, or self-hosted from the
   same image (ntfy and Plausible work this way).
 - Decisions need nothing local. Agents post to the hosted API over HTTPS with a
-  token, and the Claude Code mod long-polls the hosted API, since mods can
-  fetch any HTTPS URL.
+  token, and the Claude Code mod long-polls the hosted API in cycles under 30 s, since
+  mods can fetch any HTTPS URL.
 - Quotas need a small local uploader, because `codexbar` reads cookies and
   credentials on the user's machine. It runs `codexbar ... --format json` on a
   timer and posts the snapshot. Credentials never leave the machine.
@@ -420,3 +438,14 @@ two vendors at high effort. The orchestrator merges on green, squash.
   <unknown>` exits 0 and prints every enabled provider, so the uploader keeps
   only rows whose `provider` matches. Mistral's windows carry no
   `windowMinutes`, so they get no pace and no alerts until CodexBar adds it.
+- 2026-10-04: mod probe (#2), Claude Code 2.1.286, Desktop Code tab, a
+  throwaway mod against a local Bun server. `$.http.fetch` held 1, 5, 15, 60
+  and 117 minutes: every request aborted at 30.0 s ("no complete answer within
+  30000ms"), the server saw the client close. `$.process.run` running `curl`:
+  60, 300 and 590 s holds answered, a `timeoutMs` above 600000 is refused.
+  `$.process.spawn` running `curl -N`: 60 and 300 s holds answered;
+  HOLDS_PENDING. `$.prompt.submit` from an idle session: turn started after
+  0.17 s. Pushed mid-turn: queued, own turn 0.1 s after `turn.complete`.
+  Remote Control: the owner saw the mod's prompt and the reply on the phone;
+  the owner's phone prompts arrived with origin `composer`. A 30 s fetch poll
+  loop ran unattended through the idle gaps (IDLE_PENDING).
