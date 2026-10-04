@@ -311,6 +311,12 @@ async function main() {
       "starbridge",
       "--session",
       "3f2a9c1e-5b7d-4e8a-9c0f-1d2e3f4a5b6c",
+      "--session-title",
+      "Merge the server PR (#19)",
+      "--link",
+      "remote-control=https://claude.ai/code/session_01UZCLSHk7GjaUdtNBsLAvvt",
+      "--link",
+      "desktop=claude://claude.ai/epitaxy/local_dbf54d69-f2ac-4a14-b298-d7bb6ecf0e3f",
     ],
     machineHome,
   );
@@ -321,6 +327,15 @@ async function main() {
     .first()
     .waitFor({ timeout: 30_000 });
   await shoot(page, "inbox");
+  const opener = page
+    .locator('section[aria-label="Selected decision"]')
+    .getByRole("link", { name: "Open session" });
+  if (
+    (await opener.getAttribute("href")) !==
+    "https://claude.ai/code/session_01UZCLSHk7GjaUdtNBsLAvvt"
+  )
+    throw new Error("the open decision has no Open session link to its Remote Control session");
+  await page.getByText("Merge the server PR (#19)").first().waitFor();
 
   // Desktop: one selection, whether picked by click or by J and K; focus follows it in the list.
   const row = page.locator('button[aria-current="true"]');

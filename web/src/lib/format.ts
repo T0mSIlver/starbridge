@@ -16,7 +16,12 @@ export function relative(iso: string, now: Date = new Date()): string {
   return minutes < 0 ? `${text} ago` : `in ${text}`;
 }
 
-/** A session id short enough to read: the first 8 characters of a UUID. */
+/** A session id short enough to read: the first 8 characters of a UUID, other ids whole. */
 export function shortSession(id: string): string {
-  return id.length > 8 ? id.slice(0, 8) : id;
+  return /^[0-9a-f]{8}-[0-9a-f-]+$/i.test(id) ? id.slice(0, 8) : id;
+}
+
+/** The session's title, else its short id. */
+export function sessionName(source: { session: string; sessionTitle?: string }): string {
+  return source.sessionTitle || shortSession(source.session);
 }

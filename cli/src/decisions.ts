@@ -8,8 +8,10 @@ import {
   ProtocolError,
   parseWith,
   SealedItem,
+  type SessionLink,
   seal,
 } from "@starbridge/protocol";
+import { claudeSession } from "./claude";
 import type { State } from "./config";
 import {
   type Ctx,
@@ -32,6 +34,8 @@ export interface AskInput {
   defaultAt?: string;
   project?: string;
   session?: string;
+  sessionTitle?: string;
+  links?: SessionLink[];
 }
 
 /** Exit code when nobody answered before the deadline: the agent applies its default. */
@@ -52,6 +56,27 @@ function timeFrom(text: string, now: Date): string {
   return iso(new Date(now.getTime() + parseDuration(text)));
 }
 
+/**
+ * Which session asks. Unless the flags give them, the title and links come from Claude Code's
+ * record of that session, so an agent never has to look them up.
+ */
+function sourceFor(input: AskInput, ctx: Ctx, machine: string): Decision["source"] {
+  const session = input.session ?? ctx.env.CLAUDE_CODE_SESSION_ID ?? "";
+  const claude =
+    session && (input.sessionTitle === undefined || input.links === undefined)
+      ? claudeSession(ctx.env, session)
+      : undefined;
+  const title = input.sessionTitle ?? claude?.title;
+  const links = input.links ?? claude?.links ?? [];
+  return {
+    machine,
+    project: input.project ?? basename(process.cwd()),
+    session,
+    ...(title ? { sessionTitle: title } : {}),
+    ...(links.length > 0 ? { links } : {}),
+  };
+}
+
 export function buildDecision(input: AskInput, ctx: Ctx, machine: string, to: string[]): Decision {
   if (!input.question) throw new UsageError("ask needs --question");
   if (!input.default) throw new UsageError("ask needs --default: what you do if nobody answers");
@@ -69,11 +94,7 @@ export function buildDecision(input: AskInput, ctx: Ctx, machine: string, to: st
       action: input.default,
       ...(input.defaultAt ? { at: timeFrom(input.defaultAt, ctx.now()) } : {}),
     },
-    source: {
-      machine,
-      project: input.project ?? basename(process.cwd()),
-      session: input.session ?? ctx.env.CLAUDE_CODE_SESSION_ID ?? "",
-    },
+    source: sourceFor(input, ctx, machine),
   };
   try {
     return parseWith(Decision, decision);

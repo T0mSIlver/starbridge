@@ -87,7 +87,7 @@ decide:
 | `options` | 2 to 4 choices, or none for a free-text answer |
 | `recommended` | one of the options |
 | `default` | what the agent does if nobody answers, and when |
-| `source` | which session asked: machine, project, session id |
+| `source` | which session asked: machine, project, session id, and optionally its title and links to open it (Remote Control or claude.ai/code, Claude Desktop) |
 
 This is the schema the owner's `needs-you` skill already uses on its claude.ai
 artifact page (`question`, `context`, `options`, `recommended`, `default`). The
@@ -653,6 +653,29 @@ goes in git.
   showed in the Remote Control session on his phone. The run found that
   `/resume` fires `session.end` (reason `resume`) and no `session.start`, which
   had stopped the mod's polling for good.
+- 2026-10-05: session title and links (#56, #61), Claude Code 2.1.286 on the
+  dev box. The mod API has no session title or Remote Control URL:
+  `$.session` gives the id, cwd, repo, surfaces and usage; a hook can set a
+  title (`sessionTitle` on `SessionStart` and `UserPromptSubmit`) but not read
+  one. The Bash tool's environment has `CLAUDE_CODE_SESSION_ID`, `CLAUDE_PID`
+  and, in the Desktop Code tab, `CLAUDE_CODE_HOST_SESSION_ID` (`local_<uuid>`).
+  Claude Code keeps one record per running process in
+  `~/.claude/sessions/<pid>.json` (`$CLAUDE_CONFIG_DIR/sessions` when set),
+  with `sessionId`, `name` (the title the app shows; `nameSource` is `user` or
+  `derived`), `hostSessionId` under Desktop, and `bridgeSessionId`
+  (`session_<id>`) while Remote Control is on, `null` once it is off. The
+  Remote Control URL is `https://claude.ai/code/<bridgeSessionId>`: in 6 of 6
+  transcripts that printed one, it matched the transcript's `bridge-session`
+  record (`cse_<id>`, same suffix). Every record in the 47 seen had `name`;
+  `bridgeSessionId` was missing only in one Desktop record. Claude Code
+  rewrites a record in place without truncating, so a shorter one can carry
+  the tail of the longer one it replaced; the reader parses the first JSON
+  object. So `starbridge ask` fills `sessionTitle` and the links from the
+  record whose `sessionId` matches, newest `updatedAt` first (a resumed
+  session can leave an older record), and the mod needs nothing new.
+  The Desktop link `claude://claude.ai/epitaxy/<hostSessionId>` comes from the
+  owner and was not opened from a test. Cloud sessions were not inspected, so
+  the CLI never fills the `web` kind; `--link web=<url>` sets it.
 - 2026-10-05: permission, progress and visuals research (specs on #57, #58,
   #60, #62). Claude Code 2.1.289: the `PermissionRequest` command hook waits up
   to 600 s, races the dialog (the person's answer wins), and does not fire in

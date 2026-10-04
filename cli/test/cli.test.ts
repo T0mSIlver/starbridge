@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { existsSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, statSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { LiveServer } from "@starbridge/server/test-support";
 import { run } from "../src/cli";
@@ -48,6 +49,57 @@ test("ask seals a decision the phone can open, recommended first", async () => {
   const at = Date.parse(d?.default.at as string) - Date.now();
   expect(at).toBeGreaterThan(29 * 60_000);
   expect(at).toBeLessThanOrEqual(30 * 60_000);
+});
+
+test("ask names the session and links to it from Claude Code's record, unless flags say otherwise", async () => {
+  const ctx = await paired(server);
+  const dir = mkdtempSync(join(tmpdir(), "starbridge-claude-"));
+  mkdirSync(join(dir, "sessions"));
+  const record = (pid: number, fields: object) =>
+    writeFileSync(join(dir, "sessions", `${pid}.json`), JSON.stringify({ pid, ...fields }));
+  // An older process that ran the same session, before a resume.
+  record(1, { sessionId: "s1", name: "Old name", updatedAt: 1, bridgeSessionId: null });
+  record(2, {
+    sessionId: "s1",
+    name: "Merge the uploader",
+    updatedAt: 2,
+    hostSessionId: "local_dbf54d69-f2ac-4a14-b298-d7bb6ecf0e3f",
+    bridgeSessionId: "session_01UZCLSHk7GjaUdtNBsLAvvt",
+  });
+  // Rewritten in place without truncating: the tail of a longer record follows.
+  writeFileSync(
+    join(dir, "sessions", "3.json"),
+    `${JSON.stringify({ sessionId: "s2", name: "Short" })}ion_01DRfkYrUXFy"}`,
+  );
+  ctx.env.CLAUDE_CONFIG_DIR = dir;
+  ctx.env.CLAUDE_CODE_SESSION_ID = "s1";
+
+  expect(await run(ASK, ctx)).toBe(0);
+  expect(await run([...ASK, "--session", "s2"], ctx)).toBe(0);
+  const flags = ["--session-title", "Mine", "--link", "web=https://claude.ai/code/session_9"];
+  expect(await run([...ASK, ...flags], ctx)).toBe(0);
+  const sources = (await server.opened("decision")).map((d) => d.source);
+  expect(sources[0]).toMatchObject({
+    session: "s1",
+    sessionTitle: "Merge the uploader",
+    links: [
+      { kind: "remote-control", url: "https://claude.ai/code/session_01UZCLSHk7GjaUdtNBsLAvvt" },
+      {
+        kind: "desktop",
+        url: "claude://claude.ai/epitaxy/local_dbf54d69-f2ac-4a14-b298-d7bb6ecf0e3f",
+      },
+    ],
+  });
+  expect(sources[1]).toMatchObject({ session: "s2", sessionTitle: "Short" });
+  expect(sources[1]?.links).toBeUndefined();
+  expect(sources[2]).toMatchObject({
+    sessionTitle: "Mine",
+    links: [{ kind: "web", url: "https://claude.ai/code/session_9" }],
+  });
+
+  expect(await run([...ASK, "--link", "desktop=https://evil.example"], ctx)).toBe(1);
+  expect(await run([...ASK, "--link", "nokind"], ctx)).toBe(1);
+  expect(await server.opened("decision")).toHaveLength(3);
 });
 
 test("ask refuses a decision that would not stand alone", async () => {

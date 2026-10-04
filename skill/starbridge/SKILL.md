@@ -52,7 +52,10 @@ starbridge ask \
   --default "Merge" --default-at 2h
 ```
 
-It prints the decision id, such as `d_Xk3…`. Long context goes in a file:
+It prints the decision id, such as `d_Xk3…`. The CLI adds this session's
+title and its Remote Control and Desktop links on its own, so the owner can
+open the session from the decision; `--session-title` and `--link` override
+them. Long context goes in a file:
 `--context-file notes.md`, or `--json decision.json` with the fields
 `question`, `context`, `options`, `recommended`, `default` and `defaultAt`.
 
