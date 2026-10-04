@@ -14,7 +14,7 @@ const TABS = [
 
 export function Shell({ children }: { children: React.ReactNode }) {
   const path = usePathname();
-  const open = useDecisions().items.filter((d) => !d.answer).length;
+  const open = useDecisions().items.filter((item) => !item.answer).length;
   return (
     <div className={s.frame}>
       <nav className={s.nav} aria-label="Main">

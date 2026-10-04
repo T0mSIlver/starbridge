@@ -1,56 +1,30 @@
-// Local stand-ins for the packages/protocol schemas (#1). Replace with imports
-// from the protocol package once it lands; field names follow SPEC.md.
+// The web's view of protocol data (packages/protocol). Client components
+// import these as types only, so libsodium stays out of the browser bundle
+// until #8 needs it.
+import type { Answer, Decision, Member, QuotaAlert, QuotaWindow } from "@starbridge/protocol";
 
-export type Source = {
-  machine: string;
-  project: string;
-  session: string;
-};
+export type { Answer, Decision, QuotaAlert, QuotaWindow };
 
-export type Answer = {
-  value: string;
-  at: string;
-  device: string;
-};
-
-export type Decision = {
-  id: string;
-  question: string;
-  context: string;
-  /** 2 to 4 choices, or empty for a free-text answer. */
-  options: string[];
-  recommended?: string;
-  default: { action: string; at: string };
-  source: Source;
-  askedAt: string;
+/** A decrypted decision, with its answer once given. */
+export type InboxItem = {
+  decision: Decision;
   answer?: Answer;
+  /** Name of the device that answered. */
+  answeredBy?: string;
 };
 
-export type Pace = "on-pace" | "runs-out" | "unused";
-
-export type QuotaWindow = {
-  id: string;
+/** One quota card: a window, its provider, and the alert raised for it. */
+export type QuotaCardData = {
   provider: string;
-  window: string;
-  usedPercent: number;
-  /** What a steady pace would have used by now. */
-  expectedPercent: number;
-  resetsAt: string;
-  pace: Pace;
-  /** Set when the window resets soon with headroom left, or will run out first. */
-  alert?: string;
+  window: QuotaWindow;
+  alert?: QuotaAlert;
 };
 
-export type DeviceKind = "phone" | "browser" | "machine";
-
-export type Device = {
-  id: string;
-  name: string;
-  kind: DeviceKind;
+/** A directory member, with what this device knows about it. */
+export type Device = Member & {
+  kind: "phone" | "browser" | "machine";
   addedAt: string;
   lastSeen: string;
-  /** Short fingerprint of the device's public key. */
-  fingerprint: string;
   status: "active" | "pending" | "revoked";
   /** The device this page runs on. */
   self?: boolean;

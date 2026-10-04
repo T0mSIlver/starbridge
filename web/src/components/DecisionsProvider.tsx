@@ -1,29 +1,44 @@
 "use client";
 
 import { createContext, useContext, useState } from "react";
-import { NOW } from "@/lib/fixtures";
-import type { Decision } from "@/lib/types";
+import { NOW } from "@/lib/now";
+import type { InboxItem } from "@/lib/types";
 
-type Store = { items: Decision[]; answer: (id: string, value: string) => void };
+/** A tap on an option, or typed text when the decision has none. */
+export type Reply = { choice: string } | { text: string };
+
+type Store = { items: InboxItem[]; answer: (decisionId: string, reply: Reply) => void };
 
 const Ctx = createContext<Store | null>(null);
 
-// Holds the decisions for the nav badge and the Inbox. Answers stay in memory
+// Holds the inbox for the nav badge and the Inbox. Answers stay in memory
 // until the web talks to the server (#8).
 export function DecisionsProvider({
   initial,
   children,
 }: {
-  initial: Decision[];
+  initial: InboxItem[];
   children: React.ReactNode;
 }) {
   const [items, setItems] = useState(initial);
-  const answer = (id: string, value: string) =>
+  const answer = (decisionId: string, reply: Reply) =>
     setItems((all) =>
-      all.map((d) =>
-        d.id === id
-          ? { ...d, answer: { value, at: NOW.toISOString(), device: "This browser" } }
-          : d,
+      all.map((item) =>
+        item.decision.id === decisionId
+          ? {
+              ...item,
+              answer: {
+                v: 1,
+                id: `a-${decisionId}`,
+                decisionId,
+                // The asking machine's id comes with the sealed decision in #8.
+                to: item.decision.source.machine,
+                answeredAt: NOW.toISOString(),
+                ...reply,
+              },
+              answeredBy: "This browser",
+            }
+          : item,
       ),
     );
   return <Ctx.Provider value={{ items, answer }}>{children}</Ctx.Provider>;

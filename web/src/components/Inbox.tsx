@@ -6,10 +6,10 @@ import ui from "./ui.module.css";
 
 export function Inbox() {
   const { items, answer } = useDecisions();
-  const open = items.filter((d) => !d.answer);
+  const open = items.filter((item) => !item.answer);
   const answered = items
-    .filter((d) => d.answer)
-    .sort((a, b) => (b.answer?.at ?? "").localeCompare(a.answer?.at ?? ""));
+    .filter((item) => item.answer)
+    .sort((a, b) => (b.answer?.answeredAt ?? "").localeCompare(a.answer?.answeredAt ?? ""));
 
   return (
     <>
@@ -21,9 +21,9 @@ export function Inbox() {
       </header>
       {open.length ? (
         <ul className={ui.list}>
-          {open.map((d) => (
+          {open.map(({ decision: d }) => (
             <li key={d.id}>
-              <OpenDecision d={d} onAnswer={(v) => answer(d.id, v)} />
+              <OpenDecision d={d} onAnswer={(reply) => answer(d.id, reply)} />
             </li>
           ))}
         </ul>
@@ -34,9 +34,9 @@ export function Inbox() {
         <>
           <h2 className={`t-label ${ui.section}`}>Answered</h2>
           <ul className={ui.list}>
-            {answered.map((d) => (
-              <li key={d.id}>
-                <AnsweredDecision d={d} />
+            {answered.map((item) => (
+              <li key={item.decision.id}>
+                <AnsweredDecision item={item} />
               </li>
             ))}
           </ul>

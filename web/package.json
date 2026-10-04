@@ -6,12 +6,13 @@
     "dev": "bun --bun next dev",
     "build": "bun --bun next build",
     "start": "bun --bun next start",
-    "test": "bun scripts/tokens.ts --check",
+    "test": "bun scripts/tokens.ts --check && bun test",
     "typecheck": "next typegen && tsc --noEmit",
     "lint": "biome check .",
     "tokens": "bun scripts/tokens.ts"
   },
   "dependencies": {
+    "@starbridge/protocol": "workspace:*",
     "next": "16.3.4",
     "react": "19.2.8",
     "react-dom": "19.2.8"

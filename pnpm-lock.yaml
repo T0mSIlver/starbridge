@@ -35,6 +35,9 @@ importers:
 
   web:
     dependencies:
+      '@starbridge/protocol':
+        specifier: workspace:*
+        version: link:../packages/protocol
       next:
         specifier: 16.3.4
         version: 16.3.4(@types/node@20.19.43)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)

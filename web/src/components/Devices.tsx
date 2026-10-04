@@ -6,6 +6,9 @@ import type { Device } from "@/lib/types";
 import s from "./Devices.module.css";
 import ui from "./ui.module.css";
 
+/** The first 8 characters of the signing key, for comparing devices by eye. */
+const fingerprint = (d: Device) => `${d.signPk.slice(0, 4)} ${d.signPk.slice(4, 8)}`;
+
 const KIND = { phone: "Phone", browser: "Browser", machine: "Machine" } as const;
 
 function Row({ d, onRevoke }: { d: Device; onRevoke: () => void }) {
@@ -20,7 +23,7 @@ function Row({ d, onRevoke }: { d: Device; onRevoke: () => void }) {
           {revoked && <span className={`t-label ${ui.pill} ${ui.muted}`}>Revoked</span>}
         </p>
         <p className={`t-machine ${s.detail}`}>
-          {KIND[d.kind]} · key {d.fingerprint} · seen {relative(d.lastSeen)}
+          {KIND[d.kind]} · key {fingerprint(d)} · seen {relative(d.lastSeen)}
         </p>
       </div>
       {!revoked && !d.self && (
@@ -69,7 +72,7 @@ function Pairing({
       </p>
       <p className={`t-figure ${s.code}`}>{d.pairingCode}</p>
       <p className={`t-machine ${s.detail}`}>
-        key {d.fingerprint} · asked {relative(d.addedAt)}
+        key {fingerprint(d)} · asked {relative(d.addedAt)}
       </p>
       <div className={s.pairActions}>
         <button type="button" className={`${ui.button} ${ui.primary}`} onClick={onApprove}>

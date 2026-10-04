@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { QuotaCard } from "@/components/QuotaCard";
 import ui from "@/components/ui.module.css";
-import { quotas, quotasUpdatedAt } from "@/lib/fixtures";
+import { quotas, takenAt } from "@/lib/fixtures/quotas";
 import { relative } from "@/lib/format";
 import s from "./quotas.module.css";
 
@@ -14,11 +14,11 @@ export default function QuotasPage() {
     <>
       <header className={ui.head}>
         <h1 className="t-title">Quotas</h1>
-        <span className="t-small">Updated {relative(quotasUpdatedAt)}</span>
+        <span className="t-small">Updated {relative(takenAt)}</span>
       </header>
       <ul className={`${ui.list} ${s.grid}`}>
         {sorted.map((q) => (
-          <li key={q.id}>
+          <li key={`${q.provider}/${q.window.id}`}>
             <QuotaCard q={q} />
           </li>
         ))}

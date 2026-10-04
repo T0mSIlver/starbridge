@@ -1,10 +1,10 @@
 import { DecisionsProvider } from "@/components/DecisionsProvider";
 import { Shell } from "@/components/Shell";
-import { decisions } from "@/lib/fixtures";
+import { inbox } from "@/lib/fixtures/decisions";
 
 export default function MainLayout({ children }: { children: React.ReactNode }) {
   return (
-    <DecisionsProvider initial={decisions}>
+    <DecisionsProvider initial={inbox}>
       <Shell>{children}</Shell>
     </DecisionsProvider>
   );
