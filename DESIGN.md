@@ -175,8 +175,14 @@ app bars, the expressive motion scheme (springs with overshoot), progress
 indicators with a gap and a stop mark for quota windows, the loading
 indicator, predictive back, haptics on answer, and list and detail side by
 side on wide screens. Stock components take their colours from these tokens
-through the theme. No Material You dynamic colour: the wallpaper would tint
-the black base.
+through the theme.
+
+Colours on Android are a setting, "Colours": "Starbridge" (the default) uses
+these tokens; "Match wallpaper" uses Material You dynamic colour for the
+neutrals and Material's roles. Under either, `accent`, `on-accent`,
+`accent-soft`, `ok`, `warn` and `bad` (and their `-soft` tints) stay fixed
+from these tokens, so amber still means "needs you" and quota states keep
+their meaning. The web has no such setting.
 
 The web page uses the same faces and tokens with web components: list and
 detail panes, hover states, keys for the options (1 to 4) and for moving

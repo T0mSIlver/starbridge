@@ -259,8 +259,10 @@ How it generalizes is open.
   decisions, the recommended option, quota headroom left unused. Red only for
   "will run out"; "on pace" has no colour. Large M3 Expressive shapes (cards at
   28 dp, button groups with round ends), the expressive motion scheme, airy
-  density. Light and dark both stay and follow the system. No Material You
-  dynamic colour: the wallpaper would tint the black base. The themed
+  density. Light and dark both stay and follow the system. Android has a
+  "Colours" setting: "Starbridge" (default, the fixed black palette) or
+  "Match wallpaper" (Material You dynamic colour); under both, the amber
+  accent and the quota state colours stay fixed. The themed
   monochrome launcher icon stays, since the owner turns it on in Wallpaper &
   style. The web uses the same faces (Google Sans Flex, Google Sans Code) with
   web components: list and detail panes, hover, keyboard keys. Tokens:
@@ -274,7 +276,8 @@ How it generalizes is open.
 - 2026-10-04. Look: function over form. Monospace only for code (Markdown
   code blocks in a decision's context); numbers, ids and machine names use the
   sans face with tabular figures. Colours: `DESIGN.md`'s palette on both
-  clients, with no Material You dynamic colour (changed by #49, below). Fixed
+  clients by default; Material You dynamic colour is an Android setting
+  (changed by #49, below). Fixed
   colours only where
   they carry meaning: the "needs you" accent and the quota states (on pace,
   will run out, unused). Material 3 Expressive parts are used where they do a
