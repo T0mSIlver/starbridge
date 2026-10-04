@@ -51,6 +51,7 @@ import androidx.compose.material3.ToggleButtonShapes
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -92,6 +93,7 @@ import dev.starbridge.app.ui.theme.Radius
 import dev.starbridge.app.ui.theme.Sizes
 import dev.starbridge.app.ui.theme.Spacing
 import dev.starbridge.app.ui.theme.StarbridgeTheme
+import kotlinx.coroutines.delay
 import java.time.Instant
 import javax.inject.Inject
 
@@ -240,6 +242,14 @@ private fun Answer(decision: Decision, answer: (String, String?, String?) -> Uni
 fun Options(decision: Decision, onAnswer: (String) -> Unit) {
     val ordered = decision.options.sortedByDescending { it == decision.recommended }
     var chosen by remember(decision.id) { mutableStateOf<String?>(null) }
+    // A second tap while the answer goes out is dropped. If it fails, the decision stays open
+    // and the options take taps again.
+    LaunchedEffect(chosen) {
+        if (chosen != null) {
+            delay(RETRY_AFTER_MS)
+            chosen = null
+        }
+    }
     val pick = { option: String ->
         if (chosen == null) {
             chosen = option
@@ -298,6 +308,8 @@ fun Options(decision: Decision, onAnswer: (String) -> Unit) {
         }
     }
 }
+
+private const val RETRY_AFTER_MS = 3_000L
 
 /** An option's padding on each side of its label. */
 private val optionPadding = Spacing.s4
