@@ -188,6 +188,12 @@ How it generalizes is open.
   hosted project. Build order: both features in parallel, fully, with agents.
   No implementation starts until the ideation is done.
 
+- 2026-10-04. Hosted sign-in: GitHub.
+- 2026-10-04. Hosted decisions are end-to-end encrypted: the server stores
+  ciphertext, and only paired devices (phone, browser) and the posting agents
+  hold keys.
+- 2026-10-04. MIT licence, free hosting paid by the owner (CodexBar's model).
+
 ## Fully hosted
 
 A first sketch, to discuss:
@@ -223,10 +229,10 @@ Approved 2026-10-04:
 
 ## Open questions
 
-1. Sign-in for the hosted version.
-2. End-to-end encryption on the hosted version, or the server reads decisions.
-3. Licence and business model.
-4. The name.
+1. Key handling for end-to-end encryption: how an agent on a new machine gets
+   the key, and how a lost phone is revoked.
+2. Hosting costs and limits with free hosting: quotas per user, abuse.
+3. The name.
 
 ## Research log
 
