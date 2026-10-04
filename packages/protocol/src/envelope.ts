@@ -108,8 +108,11 @@ export async function sealAsync<K extends ItemKind>(
   signer: { id: string; sign: SignFn },
   recipients: Pick<Member, "id" | "boxPk">[],
 ): Promise<SealedItem & { kind: K }> {
-  checkRecipients(kind, body, recipients);
-  return sealEnvelope(kind, body, await signAsync(kind, body, signer.id, signer.sign), recipients);
+  // The caller's objects could change while signing awaits; seal what was checked and signed.
+  const fixed = JSON.parse(JSON.stringify(body)) as BodyOf<K>;
+  const to = recipients.map((r) => ({ id: r.id, boxPk: r.boxPk }));
+  checkRecipients(kind, fixed, to);
+  return sealEnvelope(kind, fixed, await signAsync(kind, fixed, signer.id, signer.sign), to);
 }
 
 function checkRecipients<K extends ItemKind>(
@@ -213,7 +216,8 @@ export async function openAsync<K extends ItemKind>(
   } catch {
     throw new ProtocolError("cannot-open");
   }
-  return check(item, envelopeOf(parsed, plain), me.id, directory);
+  // Checked against the parsed copy: the caller's item could change while openSeal awaits.
+  return check(parsed as SealedItem & { kind: K }, envelopeOf(parsed, plain), me.id, directory);
 }
 
 function check<K extends ItemKind>(

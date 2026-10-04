@@ -118,6 +118,27 @@ describe("signing", () => {
     expect({ ...item, boxes: [] }).toEqual({ ...sync, boxes: [] });
   });
 
+  test("sealAsync seals the body and recipients as they were when it was called", async () => {
+    const machine = member("devbox");
+    const body = {
+      v: 1 as const,
+      id: "a1",
+      decisionId: "d1",
+      to: "devbox",
+      answeredAt: at,
+      choice: "Merge",
+    };
+    const recipients = [{ id: machine.id, boxPk: machine.boxPk }];
+    const sign: SignFn = async (message) => {
+      body.id = "a2";
+      recipients[0] = { id: "evil", boxPk: member("evil").boxPk };
+      return signFn(phone)(message);
+    };
+    const item = await sealAsync("answer", body, { id: "phone", sign }, recipients);
+    expect(item.id).toBe("a1");
+    expect(item.boxes.map((b) => b.to)).toEqual(["devbox"]);
+  });
+
   test("sealAsync refuses recipients the body does not name", async () => {
     const body = {
       v: 1 as const,
@@ -131,6 +152,22 @@ describe("signing", () => {
       sealAsync("answer", body, { id: "phone", sign: signFn(phone) }, [member("browser")]),
     ).rejects.toThrow("body.to must list exactly the recipients");
   });
+});
+
+test("openAsync checks the item as it was when it was called", async () => {
+  const c = V.envelopes.sealed.find((x: { name: string }) => x.name === "decision for phone");
+  const m = member("phone");
+  const item = structuredClone(c.item) as SealedItem;
+  const openSeal = async (box: Uint8Array) => {
+    item.kind = "quota";
+    return openSealFn(m)(box);
+  };
+  const opened = await openAsync(
+    item as SealedItem & { kind: "decision" },
+    { id: m.id, openSeal },
+    verifyDirectory(V.directory.cases[0].entries),
+  );
+  expect(opened.body).toEqual(c.expect.body);
 });
 
 describe("openAsync on envelopes.json", () => {
