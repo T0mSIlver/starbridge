@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { parseArgs } from "node:util";
-import { ProtocolError, ready } from "@starbridge/protocol";
+import { ProtocolError, ready, type SessionLink } from "@starbridge/protocol";
 import { ApiError } from "./api";
 import { type Ctx, UsageError } from "./context";
 import { type AskInput, answers, ask, wait } from "./decisions";
@@ -22,6 +22,10 @@ const HELP = `starbridge: post decisions to your devices, upload quota windows
       --default-at <when>     when: an ISO time or a duration such as 30m
       --project <name>        default: the current directory's name
       --session <id>          default: $CLAUDE_CODE_SESSION_ID
+      --session-title <text>  default: the Claude Code session's name
+      --link <kind>=<url>     where to open the session, up to 3 times; kind is
+                              remote-control, desktop or web (default: what Claude
+                              Code records for the session: Remote Control, Desktop)
       --json <path>           read these fields from a JSON file ("-" for stdin)
       --wait                  then wait for the answer, as \`wait\` does
 
@@ -45,6 +49,13 @@ const HELP = `starbridge: post decisions to your devices, upload quota windows
 
 Keys and state live in $STARBRIDGE_CONFIG_DIR, else $XDG_CONFIG_HOME/starbridge, else
 ~/.config/starbridge.`;
+
+/** `--link remote-control=https://claude.ai/code/session_…`; the schema checks kind and URL. */
+function parseLink(text: string): SessionLink {
+  const at = text.indexOf("=");
+  if (at <= 0) throw new UsageError(`--link takes <kind>=<url>: ${text}`);
+  return { kind: text.slice(0, at), url: text.slice(at + 1) } as SessionLink;
+}
 
 function readText(path: string): string {
   return readFileSync(path === "-" ? 0 : path, "utf8");
@@ -79,6 +90,8 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
             "default-at": { type: "string" },
             project: { type: "string" },
             session: { type: "string" },
+            "session-title": { type: "string" },
+            link: { type: "string", multiple: true },
             json: { type: "string" },
             wait: { type: "boolean" },
             timeout: { type: "string" },
@@ -96,6 +109,8 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
           ...(v["default-at"] !== undefined ? { defaultAt: v["default-at"] } : {}),
           ...(v.project !== undefined ? { project: v.project } : {}),
           ...(v.session !== undefined ? { session: v.session } : {}),
+          ...(v["session-title"] !== undefined ? { sessionTitle: v["session-title"] } : {}),
+          ...(v.link !== undefined ? { links: v.link.map(parseLink) } : {}),
         };
         return await ask(ctx, input, { wait: v.wait, timeout: v.timeout });
       }

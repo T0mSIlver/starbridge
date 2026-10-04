@@ -755,6 +755,20 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
   };
 
   // --- schemas.json ---
+  const sessionExtras = {
+    sessionTitle: "Merge the CLI uploader (#12)",
+    links: [
+      { kind: "remote-control", url: "https://claude.ai/code/session_01UZCLSHk7GjaUdtNBsLAvvt" },
+      {
+        kind: "desktop",
+        url: "claude://claude.ai/epitaxy/local_dbf54d69-f2ac-4a14-b298-d7bb6ecf0e3f",
+      },
+    ],
+  };
+  const withSource = (extra: object) => ({
+    ...decisionBody,
+    source: { ...decisionBody.source, ...extra },
+  });
   const schemas = {
     note: "Bodies that must pass or fail schema validation.",
     decision: [
@@ -781,6 +795,32 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
         valid: false,
       },
       { name: "no recipients", body: { ...decisionBody, to: [] }, valid: false },
+      { name: "session title and links", body: withSource(sessionExtras), valid: true },
+      {
+        name: "session title too long",
+        body: withSource({ sessionTitle: "t".repeat(201) }),
+        valid: false,
+      },
+      {
+        name: "unknown link kind",
+        body: withSource({ links: [{ kind: "vscode", url: "https://claude.ai/code/session_1" }] }),
+        valid: false,
+      },
+      {
+        name: "link outside its kind's prefix",
+        body: withSource({ links: [{ kind: "remote-control", url: "javascript:alert(1)" }] }),
+        valid: false,
+      },
+      {
+        name: "desktop link on https",
+        body: withSource({ links: [{ kind: "desktop", url: "https://claude.ai/code/session_1" }] }),
+        valid: false,
+      },
+      {
+        name: "link with a space",
+        body: withSource({ links: [{ kind: "web", url: "https://claude.ai/code/a b" }] }),
+        valid: false,
+      },
     ],
     answer: [
       { name: "choice", body: answerBody, valid: true },

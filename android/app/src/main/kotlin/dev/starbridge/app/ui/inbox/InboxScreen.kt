@@ -1,9 +1,13 @@
 package dev.starbridge.app.ui.inbox
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.scaleIn
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -31,6 +35,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -41,6 +46,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -51,6 +57,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.starbridge.app.data.Decision
+import dev.starbridge.app.data.Source
 import dev.starbridge.app.data.Store
 import dev.starbridge.app.ui.Label
 import dev.starbridge.app.ui.Panel
@@ -100,14 +107,52 @@ fun InboxScreen(decisions: List<Decision>, now: Instant, actions: DecisionAction
     }
 }
 
+private val UUID_RE = Regex("^[0-9a-fA-F]{8}-[0-9a-fA-F-]+$")
+
+/** The session's title, else its id (a UUID's first 8 characters); [full] shows the whole id. */
+private fun sessionName(s: Source, full: Boolean) = when {
+    full -> s.session
+    !s.title.isNullOrBlank() -> s.title
+    UUID_RE.matches(s.session) -> s.session.take(8)
+    else -> s.session
+}
+
+/** Long-pressing it shows the session's full id, when [revealable]. */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun Source(decision: Decision, now: Instant) {
+private fun Source(decision: Decision, now: Instant, revealable: Boolean = false) {
     val s = decision.source
+    var full by rememberSaveable { mutableStateOf(false) }
     Text(
-        listOf(s.machine, s.project, s.session, ago(now, decision.createdAt)).filter { it.isNotBlank() }.joinToString(" · "),
+        listOf(s.machine, s.project, sessionName(s, full), ago(now, decision.createdAt)).filter { it.isNotBlank() }.joinToString(" · "),
         style = StarbridgeTheme.type.machine,
         color = StarbridgeTheme.colors.fg3,
+        modifier = if (revealable && s.session.isNotBlank()) {
+            Modifier.combinedClickable(onClickLabel = null, onLongClickLabel = "Show the session id", onLongClick = { full = !full }, onClick = {})
+        } else {
+            Modifier
+        },
     )
+}
+
+/**
+ * Opens the session that asked: claude.ai/code links go to the Claude app when it is installed,
+ * else the browser. Desktop links are for a computer and stay hidden here.
+ */
+@Composable
+private fun SessionLinks(source: Source) {
+    val context = LocalContext.current
+    val links = source.links.filter { it.kind != "desktop" }
+    links.forEach { link ->
+        OutlinedButton(
+            onClick = {
+                runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(link.url))) }
+            },
+            modifier = Modifier.heightIn(min = Sizes.tap),
+        ) {
+            Text("Open session", style = StarbridgeTheme.type.action)
+        }
+    }
 }
 
 private fun fallback(d: Decision) = "If nobody answers: ${d.default}" + (d.defaultAt?.let { ", at ${clock(it)}" } ?: "")
@@ -235,12 +280,13 @@ fun DecisionScreen(decision: Decision?, now: Instant, onAnswer: (String, String?
     }
     Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(Spacing.s4), verticalArrangement = Arrangement.spacedBy(Spacing.s3)) {
         Spacer(Modifier.padding(top = Spacing.s2))
-        Source(decision, now)
+        Source(decision, now, revealable = true)
         Text(decision.question, style = StarbridgeTheme.type.heading, color = colors.fg)
         Context(decision.context)
         Spacer(Modifier.padding(top = Spacing.s2))
         if (decision.open) Answer(decision, onAnswer) else Outcome(decision, now)
         Text(fallback(decision), style = StarbridgeTheme.type.small, color = colors.fg3)
+        SessionLinks(decision.source)
     }
 }
 

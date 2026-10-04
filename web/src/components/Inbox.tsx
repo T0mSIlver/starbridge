@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { relative, shortSession } from "@/lib/format";
+import { relative, sessionName } from "@/lib/format";
 import { afterAnswer, selectedId, step } from "@/lib/selection";
 import type { InboxItem, Reply } from "@/lib/types";
 import { useApp } from "./AppProvider";
@@ -167,10 +167,13 @@ function Panes({
                   )}
                   {d.question}
                 </span>
-                <span className={`t-small ${s.rowSub}`}>
+                <span
+                  className={`t-small ${s.rowSub}`}
+                  title={item.answeredAt ? undefined : d.source.session || undefined}
+                >
                   {item.answeredAt
                     ? `${item.reply ? ("choice" in item.reply ? item.reply.choice : item.reply.text) : "Answered"} · ${relative(item.answeredAt)}`
-                    : `${shortSession(d.source.session)} · ${relative(d.createdAt)}`}
+                    : `${sessionName(d.source)} · ${relative(d.createdAt)}`}
                 </span>
               </button>
             </li>
