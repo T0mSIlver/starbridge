@@ -6,20 +6,22 @@
 }
 
 .context a {
-  color: var(--info);
+  color: var(--fg);
+  text-decoration-color: var(--fg3);
+  text-underline-offset: 2px;
   overflow-wrap: anywhere;
 }
 
 .inline {
   padding: 1px 5px;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   background: var(--surface2);
   overflow-wrap: anywhere;
 }
 
 .block {
-  padding: var(--s3);
-  border-radius: var(--radius-sm);
+  padding: var(--s3) var(--s4);
+  border-radius: var(--radius-lg);
   background: var(--surface2);
   color: var(--fg);
   overflow-x: auto;

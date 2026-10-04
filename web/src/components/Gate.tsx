@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { FirstDevice as PreparedDevice } from "@/lib/device";
 import { useApp } from "./AppProvider";
-import { StarIcon } from "./icons";
+import { Mark } from "./icons";
 import { Setup } from "./Setup";
 import s from "./Setup.module.css";
 import ui from "./ui.module.css";
@@ -16,7 +16,7 @@ function Page({ children }: { children: React.ReactNode }) {
     <main className={s.page}>
       <div className={s.brand}>
         <span className={s.mark}>
-          <StarIcon size={18} />
+          <Mark />
         </span>
         <span className="t-heading">Starbridge</span>
       </div>

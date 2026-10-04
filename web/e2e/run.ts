@@ -315,8 +315,10 @@ async function main() {
     machineHome,
   );
   await open.exited;
+  // At desktop width the question shows in the list and in the detail pane.
   await page
     .getByText("Merge #19 (server) before the web PR rebases?")
+    .first()
     .waitFor({ timeout: 30_000 });
   await shoot(page, "inbox");
   await page.getByRole("link", { name: "Quotas" }).click();
@@ -373,7 +375,7 @@ async function main() {
   await page.goto(ORIGIN);
   await page.getByRole("link", { name: "Sign in with GitHub" }).click();
   await page.getByRole("heading", { name: "Inbox" }).waitFor({ timeout: 30_000 });
-  await page.getByText("Merge #19 (server) before the web PR rebases?").waitFor();
+  await page.getByText("Merge #19 (server) before the web PR rebases?").first().waitFor();
 
   await ff.close();
   console.log("\nE2E PASSED");

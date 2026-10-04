@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useApp } from "./AppProvider";
-import { DevicesIcon, GaugeIcon, InboxIcon, StarIcon } from "./icons";
+import { DevicesIcon, GaugeIcon, InboxIcon, Mark } from "./icons";
 import s from "./Shell.module.css";
 
 const TABS = [
@@ -20,9 +20,9 @@ export function Shell({ children }: { children: React.ReactNode }) {
       <nav className={s.nav} aria-label="Main">
         <div className={s.brand}>
           <span className={s.mark}>
-            <StarIcon size={18} />
+            <Mark />
           </span>
-          <span className="t-heading">Starbridge</span>
+          <span className={`t-heading ${s.name}`}>Starbridge</span>
         </div>
         <ul className={s.tabs}>
           {TABS.map(({ href, label, Icon }) => {
@@ -48,7 +48,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
           })}
         </ul>
       </nav>
-      <main className={s.main}>{children}</main>
+      <main className={`${s.main} ${path === "/" ? s.wide : ""}`}>{children}</main>
     </div>
   );
 }

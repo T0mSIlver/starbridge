@@ -1,17 +1,17 @@
-// The faces DESIGN.md names, copied from vidtheque (OFL, licences beside them).
+// The faces DESIGN.md names: the Latin weight-axis cuts from Fontsource (OFL, licences beside them).
 import localFont from "next/font/local";
 
 export const sans = localFont({
-  src: "../fonts/archivo-latin-wght-normal.woff2",
-  weight: "100 900",
+  src: "../fonts/google-sans-flex-latin-wght-normal.woff2",
+  weight: "1 1000",
   display: "swap",
-  fallback: ["system-ui", "-apple-system", "sans-serif"],
+  fallback: ["Roboto Flex", "system-ui", "-apple-system", "sans-serif"],
   variable: "--font-sans",
 });
 
 export const mono = localFont({
-  src: "../fonts/jetbrains-mono-latin-wght-normal.woff2",
-  weight: "100 800",
+  src: "../fonts/google-sans-code-latin-wght-normal.woff2",
+  weight: "300 800",
   display: "swap",
   fallback: ["ui-monospace", "SFMono-Regular", "monospace"],
   variable: "--font-mono",
