@@ -149,8 +149,25 @@ data class SealedItem(
 @Serializable
 data class DecisionDefault(val action: String, val at: String? = null)
 
+/** Each link kind's URL prefix (SESSION_LINK_PREFIX in schemas.ts). */
+val SESSION_LINK_PREFIX = mapOf(
+    "remote-control" to "https://claude.ai/code/",
+    "web" to "https://claude.ai/code/",
+    "desktop" to "claude://claude.ai/",
+)
+private val LINK_URL_RE = Regex("^[\\x21-\\x7e]+$")
+
 @Serializable
-data class DecisionSource(val machine: String, val project: String, val session: String)
+data class SessionLink(val kind: String, val url: String)
+
+@Serializable
+data class DecisionSource(
+    val machine: String,
+    val project: String,
+    val session: String,
+    val sessionTitle: String? = null,
+    val links: List<SessionLink>? = null,
+)
 
 @Serializable
 data class Decision(
@@ -180,6 +197,16 @@ data class Decision(
         len(source.machine, 1, 100, "source.machine")
         len(source.project, 0, 200, "source.project")
         len(source.session, 0, 200, "source.session")
+        source.sessionTitle?.let { len(it, 0, 200, "source.sessionTitle") }
+        source.links?.let { links ->
+            schema(links.size <= 3, "source.links")
+            for (l in links) {
+                val prefix = SESSION_LINK_PREFIX[l.kind]
+                schema(prefix != null, "source.links.kind")
+                schema(l.url.length <= 2048 && LINK_URL_RE.matches(l.url), "source.links.url")
+                schema(l.url.startsWith(prefix!!), "url does not match its kind")
+            }
+        }
         schema(options.size != 1, "options: 0 or 2 to 4")
         schema(options.toSet().size == options.size, "options must be distinct")
         if (options.isNotEmpty()) schema(recommended != null && recommended in options, "recommended must be one of the options")
