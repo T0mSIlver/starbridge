@@ -374,6 +374,15 @@ How it generalizes is open.
   (#34, server #39). When a session ends the phone keeps its keys, and the next
   sign-in binds the new session with the device key (#44); only a verified
   chain that revokes the phone wipes it.
+- 2026-10-05. Android Beacon (#63): Material's `primary` role is `fg`, so stock
+  filled buttons are black or white and only the recommended option and an
+  approval are amber; under "Match wallpaper" `primary` comes from the
+  wallpaper. A decision's options form one row of connected buttons when every
+  label fits on one line, each as wide as its label needs, and a stacked group
+  otherwise. Google Sans Flex ships instanced to its weight and optical-size
+  axes (410 KB instead of 4.1 MB), and each type role sets `opsz` to its size.
+  The notification's `setColor` amber shows on Android 12 to 15; Android 16
+  draws the app icon and tints the actions itself.
 - 2026-10-04. App sign-in (#34): the GitHub redirect to `starbridge://auth` carries a
   single-use code bound to a PKCE S256 challenge, and the app trades code and verifier for the
   session at `POST /v1/auth/app/session`. Chosen over Android App Links on

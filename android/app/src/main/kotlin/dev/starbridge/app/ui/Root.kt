@@ -143,8 +143,9 @@ fun Main(openDecisions: Int, notice: StateFlow<String?>, dismiss: () -> Unit, op
         }
     }
     val current = backStack.lastOrNull()
+    val suite = suiteType()
     NavigationSuiteScaffold(
-        navigationSuiteType = suiteType(),
+        navigationSuiteType = suite,
         navigationSuiteColors = NavigationSuiteDefaults.colors(
             shortNavigationBarContainerColor = colors.surface,
             wideNavigationRailColors = WideNavigationRailDefaults.colors(containerColor = colors.bg),
@@ -154,6 +155,7 @@ fun Main(openDecisions: Int, notice: StateFlow<String?>, dismiss: () -> Unit, op
             for (tab in tabs) {
                 val selected = current == tab.key || (tab.key == InboxKey && current is DecisionKey)
                 NavigationSuiteItem(
+                    navigationSuiteType = suite,
                     selected = selected,
                     onClick = {
                         backStack.clear()

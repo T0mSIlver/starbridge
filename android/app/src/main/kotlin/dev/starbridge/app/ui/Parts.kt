@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ButtonGroupDefaults
@@ -77,8 +78,10 @@ fun Screen(
             )
         },
         containerColor = StarbridgeTheme.colors.bg,
-        content = content,
-    )
+    ) { padding ->
+        // Wide windows cap the content at `size.content` (DESIGN.md).
+        Box(Modifier.widthIn(max = Sizes.content)) { content(padding) }
+    }
 }
 
 /** Pull to refresh: whether a sync runs, and how to start one. */
