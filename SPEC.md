@@ -246,6 +246,11 @@ How it generalizes is open.
   decisions. Version 1 is quotas and decisions; owner panels wait for
   version 2. Web Push is in version 1.
 
+- 2026-10-04 (late). Android is a flagship-standard Material 3 Expressive app,
+  used fully and by the guidelines, nothing generic or improvised. Fonts are what a
+  flagship Android app uses (the platform's Material type scale, not Archivo);
+  monospace only for code. This replaces "Expressive parts only where they do a
+  job" below. The web pairs with it without imitating Android.
 - 2026-10-04 (late). Before the owner starts using Starbridge: (1) the mod's push
   path must work end to end without any agent waiting on an answer: an agent
   posts a decision and keeps working; the answer arrives later as a prompt;
