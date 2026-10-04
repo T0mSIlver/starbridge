@@ -437,6 +437,17 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
     scope: "session" as const,
     inputHash: permissionBody.inputHash,
   };
+  const runBody = {
+    v: 1 as const,
+    id: "run_1",
+    to: ["phone", "phone2"],
+    title: "Mac e2e",
+    reason: "uses your session and keyboard",
+    source: { machine: "dev box", project: "localvoxtral", session: "s_42" },
+    startedAt: T(10),
+    at: T(10, 2),
+    progress: { done: 3, total: 7, unit: "step" as const },
+  };
   const settledBody = {
     v: 1 as const,
     id: "set_1",
@@ -571,6 +582,23 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
       item: seal("settled", settledBody, signer(devbox), devices),
       recipient: "phone2",
       expect: { body: settledBody, signer: "devbox" },
+    },
+    {
+      name: "run",
+      item: seal("run", runBody, signer(devbox), devices),
+      recipient: "phone",
+      expect: { body: runBody, signer: "devbox" },
+    },
+    {
+      name: "run signed by a device",
+      item: rawSeal(
+        "run",
+        "run_1",
+        sign("run", runBody, "phone2", phone2.keys.sign.privateKey),
+        devices,
+      ),
+      recipient: "phone",
+      expect: { error: "signer-not-allowed" },
     },
     {
       name: "permission answer signed by a machine",
@@ -1292,6 +1320,47 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
         body: { ...settledBody, device: undefined },
         valid: false,
       },
+    ],
+    run: [
+      { name: "running with steps", body: runBody, valid: true },
+      {
+        name: "running, no progress",
+        body: { ...runBody, progress: undefined },
+        valid: true,
+      },
+      {
+        name: "percent",
+        body: { ...runBody, progress: { done: 42, total: 100, unit: "percent" } },
+        valid: true,
+      },
+      {
+        name: "failed",
+        body: { ...runBody, at: T(10, 5), exit: { code: 1, at: T(10, 5) } },
+        valid: true,
+      },
+      {
+        name: "with session title and links",
+        body: { ...runBody, source: { ...runBody.source, ...sessionExtras } },
+        valid: true,
+      },
+      { name: "no reason", body: { ...runBody, reason: "" }, valid: false },
+      { name: "title too long", body: { ...runBody, title: "t".repeat(101) }, valid: false },
+      {
+        name: "more done than total",
+        body: { ...runBody, progress: { done: 8, total: 7, unit: "step" } },
+        valid: false,
+      },
+      {
+        name: "a percent out of 50",
+        body: { ...runBody, progress: { done: 10, total: 50, unit: "percent" } },
+        valid: false,
+      },
+      {
+        name: "exit code 256",
+        body: { ...runBody, exit: { code: 256, at: T(10, 5) } },
+        valid: false,
+      },
+      { name: "updated before it started", body: { ...runBody, at: T(9) }, valid: false },
     ],
   };
 

@@ -13,6 +13,7 @@ const PAGE = 100;
 type KindRule = {
   signer: "device" | "machine";
   re?: { field: string; kinds: readonly ItemKind[] };
+  updates?: true;
 };
 
 /** How long after it arrives an item can still be answered; unlisted kinds have no limit. */
@@ -142,7 +143,11 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
   const to = item.boxes.map((b) => b.to);
   if (new Set(to).size !== to.length) fail(400, "bad-schema", "one box per recipient");
   const size = item.boxes.reduce((n, b) => n + b.box.length, 0);
-  const most = fromDevice ? limits.answerBytes : limits.itemBytes;
+  const most = fromDevice
+    ? limits.answerBytes
+    : item.kind === "run"
+      ? limits.runBytes
+      : limits.itemBytes;
   if (size > most) fail(413, "too-large", `a ${item.kind}'s boxes hold at most ${most} bytes`);
 
   // Devices the referred item was sealed to, told once a device answers it.
@@ -202,10 +207,15 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
           fail(409, "already-settled");
       }
     }
-    if (
-      db.query("SELECT 1 FROM items WHERE account_id = ? AND id = ?").get(caller.account, item.id)
-    )
-      fail(409, "duplicate-id");
+    const earlier = db
+      .query("SELECT kind, from_id FROM items WHERE account_id = ? AND id = ?")
+      .get(caller.account, item.id) as { kind: string; from_id: string } | null;
+    if (earlier) {
+      // A kind with updates is re-posted under its id as it changes: the latest replaces it.
+      if (!rule.updates || earlier.kind !== item.kind || earlier.from_id !== me)
+        fail(409, "duplicate-id");
+      db.query("DELETE FROM items WHERE account_id = ? AND id = ?").run(caller.account, item.id);
+    }
 
     if (item.kind === "quota") {
       // Only the latest snapshot from each machine matters.
@@ -218,12 +228,15 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
     // can still answer, and answering lets its decisions expire.
     const held = db
       .query(
-        `SELECT COUNT(*) FILTER (WHERE kind = 'decision') AS decisions, COALESCE(SUM(size), 0) AS bytes
+        `SELECT COUNT(*) FILTER (WHERE kind = 'decision') AS decisions,
+         COUNT(*) FILTER (WHERE kind = 'run') AS runs, COALESCE(SUM(size), 0) AS bytes
          FROM items WHERE account_id = ?`,
       )
-      .get(caller.account) as { decisions: number; bytes: number };
+      .get(caller.account) as { decisions: number; runs: number; bytes: number };
     if (item.kind === "decision" && held.decisions >= limits.decisions)
       fail(409, "too-many-items", `an account holds at most ${limits.decisions} decisions`);
+    if (item.kind === "run" && held.runs >= limits.runs)
+      fail(409, "too-many-items", `an account holds at most ${limits.runs} runs`);
     const room = limits.storedBytes - (fromDevice ? 0 : limits.answerReserve);
     if (held.bytes + size > room)
       fail(409, "too-many-items", `an account stores at most ${limits.storedBytes} bytes`);
@@ -250,12 +263,13 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
     c.var.push.notify(caller.account, answeredDevices, () => payload);
   } else {
     // Browsers expect each Web Push to show a notification and drop subscriptions that keep
-    // showing none, so quota snapshots, which show none, skip Web Push; pages fetch GET /quota.
+    // showing none, so quota snapshots and runs, which show none there, skip Web Push; pages
+    // fetch them instead.
     c.var.push.notify(
       caller.account,
       to,
       (device) => pushPayload(item, device, config.pushInlineLimit),
-      item.kind === "quota" ? ["fcm", "unifiedpush"] : undefined,
+      item.kind === "quota" || item.kind === "run" ? ["fcm", "unifiedpush"] : undefined,
     );
   }
   return c.json({ cursor: String(seq) }, 201);

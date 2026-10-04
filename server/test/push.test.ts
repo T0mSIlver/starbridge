@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { createECDH, randomBytes } from "node:crypto";
-import { type Decision, type QuotaSnapshot, seal } from "@starbridge/protocol";
+import { type Decision, type QuotaSnapshot, type Run, seal } from "@starbridge/protocol";
 import * as ece from "http_ece";
 import webpush from "web-push";
 import { createApp } from "../src/app";
@@ -471,7 +471,7 @@ test("an account has at most 4 pushes in flight, and a stuck push service times 
   expect(Date.now() - started).toBeLessThan(1200);
 });
 
-test("quota snapshots skip Web Push, which browsers drop when it shows nothing", async () => {
+test("quota snapshots and runs skip Web Push, which browsers drop when it shows nothing", async () => {
   const { s, acct, devbox } = await setup({ ...fcmConfig(), ...vapidConfig() });
   const browser = browserSubscription("quota");
   for (const body of [browser.target, { type: "fcm", endpoint: "tok-ok" }])
@@ -489,8 +489,22 @@ test("quota snapshots skip Web Push, which browsers drop when it shows nothing",
     acct.device.member,
   ]);
   expect((await s.call("POST", "/v1/items", { token: devbox.token, body: q })).status).toBe(201);
+  const runBody: Run = {
+    v: 1,
+    id: "r1",
+    to: [acct.device.id],
+    title: "Mac e2e",
+    reason: "uses your session and keyboard",
+    source: { machine: devbox.id, project: "starbridge", session: "s1" },
+    startedAt: at,
+    at,
+  };
+  const r = seal("run", runBody, { id: devbox.id, signKey: devbox.keys.sign.privateKey }, [
+    acct.device.member,
+  ]);
+  expect((await s.call("POST", "/v1/items", { token: devbox.token, body: r })).status).toBe(201);
   await s.deps.push.idle();
-  expect(fcmSends().map((m) => JSON.parse(m.data.p).id)).toEqual(["q1"]);
+  expect(fcmSends().map((m) => JSON.parse(m.data.p).id)).toEqual(["q1", "r1"]);
   expect(seen.filter((x) => x.path === "/wp/quota")).toEqual([]);
   // Decisions still reach the browser.
   await postDecision(s, acct, devbox, "d1");
