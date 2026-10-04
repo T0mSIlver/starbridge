@@ -1,3 +1,5 @@
+import groovy.json.JsonSlurper
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
@@ -17,6 +19,9 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "0.1.0"
+        // The hosted server; self-hosters change it on the sign-in screen.
+        buildConfigField("String", "DEFAULT_SERVER", "\"https://starbridge.run\"")
+        firebaseResources()
     }
 
     buildTypes {
@@ -31,6 +36,8 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
+        resValues = true
     }
 
     testOptions {
@@ -60,6 +67,13 @@ dependencies {
     implementation(libs.serialization.json)
     implementation(libs.navigation3.runtime)
     implementation(libs.navigation3.ui)
+    implementation(libs.adaptive.layout)
+    implementation(libs.adaptive.navigation3)
+    implementation(libs.navigation.suite)
+    implementation(libs.okhttp)
+    implementation(libs.browser)
+    implementation(libs.firebase.messaging)
+    implementation(libs.unifiedpush)
     implementation(libs.lifecycle.viewmodel.navigation3)
     // Lazysodium loads libsodium through JNA; Android needs JNA's AAR, which carries
     // its native dispatch library per ABI.
@@ -79,4 +93,33 @@ dependencies {
     // platforms, and the JNA jar its dispatch library.
     testImplementation(libs.lazysodium.java)
     testImplementation(libs.jna)
+    testImplementation(libs.okhttp.mockwebserver)
+    testImplementation(libs.coroutines.test)
+}
+
+/**
+ * Firebase's values as string resources, which FirebaseInitProvider reads; what the
+ * google-services plugin would generate. google-services.json stays out of git: it is read from
+ * ~/.config/starbridge/secrets/, else from app/ (a placeholder there until the real one lands). Without it the app builds with FCM off and
+ * offers UnifiedPush only.
+ */
+fun com.android.build.api.dsl.ApplicationDefaultConfig.firebaseResources() {
+    val file = listOf(
+        File(System.getProperty("user.home"), ".config/starbridge/secrets/google-services.json"),
+        file("google-services.json"),
+    ).firstOrNull { it.isFile } ?: return
+    @Suppress("UNCHECKED_CAST")
+    val json = JsonSlurper().parse(file) as Map<String, Any?>
+    val project = json["project_info"] as Map<String, Any?>
+    @Suppress("UNCHECKED_CAST")
+    val client = (json["client"] as List<Map<String, Any?>>).first {
+        ((it["client_info"] as Map<String, Any?>)["android_client_info"] as Map<String, Any?>)["package_name"] == "dev.starbridge.app"
+    }
+    @Suppress("UNCHECKED_CAST")
+    val apiKey = (client["api_key"] as List<Map<String, Any?>>).first()["current_key"] as String
+    resValue("string", "google_app_id", (client["client_info"] as Map<String, Any?>)["mobilesdk_app_id"] as String)
+    resValue("string", "gcm_defaultSenderId", project["project_number"] as String)
+    resValue("string", "project_id", project["project_id"] as String)
+    resValue("string", "google_api_key", apiKey)
+    (project["storage_bucket"] as String?)?.let { resValue("string", "google_storage_bucket", it) }
 }

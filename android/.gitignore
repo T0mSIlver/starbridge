@@ -5,3 +5,5 @@ local.properties
 *.keystore
 *.jks
 google-services.json
+# The repo root ignores data/ (the server's SQLite folder); the app's data package is source.
+!app/src/main/kotlin/dev/starbridge/app/data/

@@ -1,0 +1,692 @@
+package dev.starbridge.app.data
+
+import android.util.Log
+import dev.starbridge.app.protocol.Bip39
+import dev.starbridge.app.protocol.Directories
+import dev.starbridge.app.protocol.Directory
+import dev.starbridge.app.protocol.DirectoryEntry
+import dev.starbridge.app.protocol.Envelopes
+import dev.starbridge.app.protocol.KeyPair
+import dev.starbridge.app.protocol.PairingApprovalBody
+import dev.starbridge.app.protocol.PairingCode
+import dev.starbridge.app.protocol.PairingRequestBody
+import dev.starbridge.app.protocol.Pairings
+import dev.starbridge.app.protocol.Pin
+import dev.starbridge.app.protocol.ProtocolException
+import dev.starbridge.app.protocol.ProtocolJson
+import dev.starbridge.app.protocol.QuotaSnapshot
+import dev.starbridge.app.protocol.RECOVERY
+import dev.starbridge.app.protocol.SealedBox
+import dev.starbridge.app.protocol.SealedItem
+import dev.starbridge.app.protocol.SignedEnvelope
+import dev.starbridge.app.protocol.Sodium
+import dev.starbridge.app.protocol.bindMessage
+import dev.starbridge.app.protocol.checkJoined
+import dev.starbridge.app.protocol.fromB64
+import dev.starbridge.app.protocol.parsePairingCode
+import dev.starbridge.app.protocol.toB64
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.encodeToJsonElement
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
+import okhttp3.OkHttpClient
+import java.io.IOException
+import java.time.Instant
+import java.time.OffsetDateTime
+import java.time.temporal.ChronoUnit
+import kotlin.math.roundToInt
+import dev.starbridge.app.protocol.Decision as DecisionBody
+import dev.starbridge.app.protocol.Member as DirectoryMember
+
+/** Shows and clears decision notifications; the app's is [dev.starbridge.app.push.Notifier]. */
+interface Alerts {
+    fun decision(decision: Decision)
+    fun cancel(id: String)
+}
+
+/**
+ * The app's state against the server. Everything it shows was verified here first: the
+ * directory chain against the pin, and each item against the directory (PROTOCOL.md).
+ */
+class ServerStore(
+    private val disk: Disk,
+    private val http: OkHttpClient,
+    private val sodium: Sodium,
+    private val envelopes: Envelopes,
+    private val directories: Directories,
+    private val pairings: Pairings,
+    private val alerts: Alerts,
+    private val deviceName: String,
+    private val defaultServer: String,
+    private val fcmAvailable: Boolean,
+    private val scope: CoroutineScope,
+) : Store {
+    private val lock = Mutex()
+    private var saved = disk.saved() ?: Saved(defaultServer)
+    private var secrets = disk.secrets()
+    private var directory: Directory? = null
+    private var pending: Pair<PairingCode, PairingRequestBody>? = null
+    private var joinJob: Job? = null
+
+    override val phase = MutableStateFlow<Phase>(Phase.SignedOut)
+    override val decisions = MutableStateFlow<List<Decision>>(emptyList())
+    override val windows = MutableStateFlow<List<QuotaWindow>>(emptyList())
+    override val members = MutableStateFlow<List<Member>>(emptyList())
+    override val approval = MutableStateFlow<Approval>(Approval.Idle)
+    override val push = MutableStateFlow(PushSetting(saved.pushType, fcmAvailable, emptyList(), false))
+    override val server = MutableStateFlow(saved.server)
+    override val busy = MutableStateFlow(false)
+    override val notice = MutableStateFlow<String?>(null)
+
+    init {
+        directory = runCatching { verified(saved.entries) }.getOrNull()
+        publish()
+        if (saved.joining != null) waitForApproval()
+    }
+
+    // --- State ------------------------------------------------------------------
+
+    private fun api() = Api(http, saved.server, secrets.session)
+
+    private fun now(): String = Instant.now().truncatedTo(ChronoUnit.SECONDS).toString()
+
+    private fun newId(prefix: String) = prefix + toB64(sodium.random(9))
+
+    private fun verified(entries: List<JsonElement>): Directory? =
+        if (entries.isEmpty()) null else directories.verify(entries, saved.account, saved.pin)
+
+    private val me get() = saved.me ?: throw IllegalStateException("no device yet")
+    private val box get() = KeyPair(fromB64(secrets.boxPk!!), fromB64(secrets.boxSk!!))
+    private val signKey get() = fromB64(secrets.signSk!!)
+
+    private fun persist(newSaved: Saved = saved, newSecrets: Secrets = secrets) {
+        if (newSecrets != secrets) disk.save(newSecrets)
+        if (newSaved != saved) disk.save(newSaved)
+        saved = newSaved
+        secrets = newSecrets
+        publish()
+    }
+
+    private fun publish() {
+        phase.value = when {
+            secrets.session == null -> Phase.SignedOut
+            saved.joining != null -> Phase.Joining(saved.joining!!)
+            saved.me == null || saved.pin == null -> Phase.NoDevice(saved.accountExists)
+            secrets.recoverySeed != null -> Phase.RecoveryKey(Bip39.entropyToMnemonic(fromB64(secrets.recoverySeed!!)).split(" "))
+            else -> Phase.Ready
+        }
+        server.value = saved.server
+        push.value = push.value.copy(type = saved.pushType, registered = saved.push?.type == saved.pushType)
+        decisions.value = saved.decisions.map(::toUi)
+        windows.value = saved.quotas.flatMap(::toUi)
+        members.value = directory?.let(::toUi).orEmpty()
+    }
+
+    fun setDistributors(list: List<String>) {
+        push.value = push.value.copy(distributors = list)
+    }
+
+    /** Runs [block] off the caller, one at a time, and turns failures into a notice. */
+    private fun run(showBusy: Boolean = true, block: suspend () -> Unit) {
+        scope.launch {
+            lock.withLock {
+                if (showBusy) busy.value = true
+                try {
+                    block()
+                } catch (e: Exception) {
+                    report(e)
+                } finally {
+                    busy.value = false
+                }
+            }
+        }
+    }
+
+    private fun report(e: Exception) {
+        Log.w("Starbridge", "failed", e)
+        if (e is ApiException && e.status == 401 && secrets.session != null) {
+            // The keys stay: signing in again binds a new session to this phone.
+            persist(newSecrets = secrets.copy(session = null))
+            notice.value = "Your session ended. Sign in again; this phone keeps its keys."
+            return
+        }
+        notice.value = describe(e)
+    }
+
+    private fun describe(e: Exception): String = when (e) {
+        is ApiException -> when (e.error) {
+            "machine-cap" -> "This account already has its maximum number of machines. Revoke one first."
+            "already-answered" -> "Already answered on another device."
+            "rate-limited" -> "Too many tries. Wait a minute."
+            else -> e.message ?: e.error
+        }
+        is ProtocolException -> "Refused: the server sent something that does not check out (${e.code})."
+        is IOException -> "Can't reach ${saved.server}: ${e.message}"
+        else -> e.message ?: e.toString()
+    }
+
+    private fun wipe(message: String?) {
+        joinJob?.cancel()
+        disk.wipe()
+        saved = Saved(saved.server, pushType = saved.pushType)
+        secrets = Secrets()
+        directory = null
+        pending = null
+        approval.value = Approval.Idle
+        publish()
+        notice.value = message
+    }
+
+    // --- Signing in and setting up ------------------------------------------------
+
+    private fun normalize(server: String) = server.trim().trimEnd('/').ifEmpty { defaultServer }
+
+    override fun gitHubSignInUrl(server: String): String {
+        val verifier = SignIn.newVerifier()
+        persist(saved.copy(server = normalize(server)), secrets.copy(signInVerifier = verifier))
+        return SignIn.url(saved.server, verifier)
+    }
+
+    /**
+     * Only for the sign-in this phone started: without its verifier the code is worthless, and a
+     * redirect with no sign-in pending is ignored. The code works once, whatever the outcome.
+     */
+    override fun receiveSignIn(redirect: String) = run {
+        if (phase.value != Phase.SignedOut) return@run
+        val code = SignIn.code(redirect) ?: return@run
+        val verifier = secrets.signInVerifier ?: return@run
+        persist(newSecrets = secrets.copy(signInVerifier = null))
+        val session = try {
+            Api(http, saved.server, null).appSession(code, verifier)
+        } catch (e: ApiException) {
+            throw IllegalStateException(if (e.error == "bad-code") "Sign-in expired. Sign in again." else describe(e))
+        }
+        afterSignIn(session)
+    }
+
+    override fun signInWithOwnerToken(server: String, token: String) = run {
+        persist(saved.copy(server = normalize(server)))
+        afterSignIn(Api(http, saved.server, null).ownerSignIn(token.trim()))
+    }
+
+    /** Checks the session with the server before keeping it. */
+    private suspend fun afterSignIn(session: String) {
+        val fresh = Api(http, saved.server, session)
+        val me = try {
+            fresh.me()
+        } catch (e: ApiException) {
+            throw IllegalStateException(if (e.status == 401) "Sign-in failed: the server did not accept the session." else describe(e))
+        }
+        val mine = saved.me
+        if (mine != null && saved.pin != null && saved.joining == null && secrets.signSk != null && me.account == saved.account) {
+            // This phone is still a device: bind the new session with its signing key (PROTOCOL.md, "Auth").
+            try {
+                if (me.member == null) fresh.bind(mine.id, toB64(sodium.sign(bindMessage(me.account, mine.id, fresh.challenge()), signKey)))
+                else if (me.member != mine.id) throw IllegalStateException("This session already belongs to another device.")
+                persist(newSecrets = secrets.copy(session = session))
+                sync()
+                return
+            } catch (e: ApiException) {
+                if (e.status != 404) throw e
+                // 404 means no such active device, or a server without binding: the chain decides.
+                val dir = directories.verify(saved.entries + fresh.directory(saved.entries.size), saved.account, saved.pin)
+                if (dir.members[mine.id]?.active == true) throw IllegalStateException("This server cannot bind a new session to this phone. Update the server.")
+                wipe("This phone was removed from your devices. Set it up again.")
+            }
+        } else if (saved.pendingGenesis != null && me.account == saved.account) {
+            // A first-device setup the server may already hold: keep its keys and seed to retry.
+            persist(newSecrets = secrets.copy(session = session))
+            return
+        } else if (mine != null || secrets.signSk != null) {
+            // Another account, or a setup that never finished: start over.
+            wipe(null)
+        }
+        if (me.member != null) throw IllegalStateException("This session already belongs to another device.")
+        val exists = fresh.directory(0).isNotEmpty()
+        persist(newSecrets = Secrets(session = session))
+        persist(saved.copy(account = me.account, accountExists = exists, me = null, pin = null, entries = emptyList()))
+    }
+
+    private fun newMember(): DirectoryMember {
+        val boxKeys = sodium.boxKeyPair()
+        val signKeys = sodium.signKeyPair()
+        val member = DirectoryMember(newId("d_"), "device", deviceName.take(100).ifBlank { "Android" }, toB64(boxKeys.public), toB64(signKeys.public))
+        // The keys reach the disk before the server hears of them, so a crash cannot strand them.
+        persist(newSecrets = secrets.copy(boxPk = member.boxPk, boxSk = toB64(boxKeys.secret), signPk = member.signPk, signSk = toB64(signKeys.secret)))
+        return member
+    }
+
+    /**
+     * The keys, the seed and the signed genesis reach the disk before the server sees the entry,
+     * so a lost response is retried with the same entry, and a chain that already starts with it
+     * is adopted instead of refused.
+     */
+    override fun setUpFirstDevice() = run {
+        if (saved.pendingGenesis == null) {
+            if (api().directory(0).isNotEmpty()) throw IllegalStateException("This account already has devices. Join it instead.")
+            val member = newMember()
+            val seed = sodium.random(32)
+            val entry = ProtocolJson.encodeToJsonElement(directories.genesisEntry(saved.account!!, member, signKey, sodium.signSeedKeyPair(seed), now()))
+            persist(saved.copy(me = member, pin = null, pendingGenesis = entry), secrets.copy(recoverySeed = toB64(seed)))
+        }
+        val genesis: JsonElement = saved.pendingGenesis!!
+        val existing = api().directory(0)
+        if (existing.isEmpty()) api().append(ProtocolJson.decodeFromJsonElement(SignedEnvelope.serializer(), genesis))
+        else if (existing.first() != genesis) throw IllegalStateException("This account already has devices. Join it instead.")
+        else if (api().me().member == null) {
+            // The server took the entry but the session that posted it is gone: bind this one.
+            api().bind(me.id, toB64(sodium.sign(bindMessage(saved.account!!, me.id, api().challenge()), signKey)))
+        }
+        val entries = listOf(genesis)
+        val dir = directories.verify(entries, saved.account)
+        directory = dir
+        persist(saved.copy(entries = entries, pin = Pin(dir.length, dir.head), pendingGenesis = null))
+    }
+
+    override fun confirmRecoveryKey() = run {
+        persist(newSecrets = secrets.copy(recoverySeed = null))
+        sync()
+    }
+
+    override fun joinAccount() = run {
+        val member = newMember()
+        val code = pairings.newCode()
+        val claim = pairings.newClaimSecret()
+        val request = pairings.request(PairingRequestBody(1, code.rendezvous, "device", member.id, member.name, member.boxPk, member.signPk, now()), code)
+        api().postPairing(request, pairings.claimHash(claim))
+        persist(saved.copy(me = member, joining = code.formatted()), secrets.copy(claim = claim))
+        waitForApproval()
+    }
+
+    private fun waitForApproval() {
+        joinJob?.cancel()
+        joinJob = scope.launch {
+            val code = parsePairingCode(saved.joining ?: return@launch)
+            try {
+                while (true) {
+                    val result = try {
+                        api().pairingResult(code.rendezvous, secrets.claim!!, 60)
+                    } catch (e: IOException) {
+                        if (e is ApiException) throw e
+                        // Offline for a moment: keep waiting, the code stays valid for 10 minutes.
+                        delay(5_000)
+                        null
+                    } ?: continue
+                    lock.withLock { finishJoin(code, result.approval) }
+                    // Joined: a failing first sync must not undo that, so it runs on its own.
+                    refresh()
+                    return@launch
+                }
+            } catch (e: ApiException) {
+                lock.withLock {
+                    persist(saved.copy(me = null, joining = null), secrets.copy(claim = null))
+                    notice.value = if (e.status == 404) "The code expired. Make a new one." else describe(e)
+                }
+            } catch (e: IOException) {
+                // Fetching the chain after the approval failed; the next start resumes the wait.
+                notice.value = describe(e)
+            } catch (e: ProtocolException) {
+                lock.withLock {
+                    persist(saved.copy(me = null, joining = null), secrets.copy(claim = null))
+                    report(e)
+                }
+            }
+        }
+    }
+
+    /** The approval's MAC proves the owner typed this code; the chain must hold this device. */
+    private suspend fun finishJoin(code: PairingCode, approvalMessage: JsonElement) {
+        val approved = pairings.openApproval(approvalMessage, code)
+        if (approved.account != saved.account) throw ProtocolException("wrong-account", approved.account)
+        val entries = api().directory(0)
+        val dir = directories.verify(entries, saved.account, Pin(approved.length, approved.head))
+        checkJoined(dir, me)
+        directory = dir
+        persist(saved.copy(joining = null, entries = entries, pin = Pin(dir.length, dir.head)), secrets.copy(claim = null))
+    }
+
+    override fun cancelJoin() = run(showBusy = false) {
+        joinJob?.cancel()
+        persist(saved.copy(me = null, joining = null), secrets.copy(claim = null))
+    }
+
+    override fun recover(words: String) = run {
+        val seed = try {
+            Bip39.mnemonicToEntropy(words)
+        } catch (e: IllegalArgumentException) {
+            throw IllegalArgumentException("Those words are not a recovery key. Check each word and the order.")
+        }
+        val recovery = sodium.signSeedKeyPair(seed)
+        val entries = api().directory(0)
+        // The chain's first entry must carry this key's own signature, which a server cannot fake.
+        val dir = directories.verify(entries, saved.account, recoveryPk = toB64(recovery.public))
+        val member = newMember()
+        val entry = directories.addEntry(dir, RECOVERY, recovery.secret, member, now())
+        api().append(entry)
+        val all = entries + ProtocolJson.encodeToJsonElement(entry)
+        val after = directories.verify(all, saved.account, Pin(dir.length, dir.head))
+        directory = after
+        persist(saved.copy(me = member, entries = all, pin = Pin(after.length, after.head)))
+        sync()
+    }
+
+    // --- Syncing -----------------------------------------------------------------
+
+    override fun refresh() = run { sync() }
+
+    private suspend fun sync() {
+        if (phase.value != Phase.Ready) return
+        syncDirectory()
+        if (phase.value != Phase.Ready) return
+        syncDecisions()
+        syncQuotas()
+    }
+
+    /** Fetches what is new and replays the whole chain; it must extend the pin. */
+    private suspend fun syncDirectory() {
+        val fresh = api().directory(saved.entries.size)
+        val all = saved.entries + fresh
+        val dir = directories.verify(all, saved.account, saved.pin)
+        directory = dir
+        if (dir.members[me.id]?.active != true) {
+            wipe("This phone was removed from your devices.")
+            return
+        }
+        persist(saved.copy(entries = all, pin = Pin(dir.length, dir.head)))
+    }
+
+    private fun open(item: SealedItem): Pair<String, Any>? = try {
+        val opened = envelopes.open(item, me.id, box, directory!!)
+        item.from to opened.body
+    } catch (e: ProtocolException) {
+        // Not shown: an item that fails its checks is the server's or a stranger's.
+        Log.w("Starbridge", "dropped ${item.kind} ${item.id}: ${e.message}")
+        null
+    }
+
+    private suspend fun syncDecisions() {
+        var cursor = saved.cursor
+        val byId = saved.decisions.associateBy { it.body.id }.toMutableMap()
+        while (true) {
+            val page = api().items("decision", cursor)
+            for (listed in page.items) {
+                val known = byId[listed.item.id]
+                if (known != null) {
+                    if (listed.answeredAt != null && known.answeredAt == null) {
+                        byId[known.body.id] = known.copy(answeredAt = listed.answeredAt)
+                        alerts.cancel(known.body.id)
+                    }
+                    continue
+                }
+                val (from, body) = open(listed.item) ?: continue
+                byId[listed.item.id] = SavedDecision(from, body as DecisionBody, listed.answeredAt)
+            }
+            cursor = page.cursor
+            if (page.items.size < 100) break
+        }
+        persist(saved.copy(cursor = cursor, decisions = byId.values.sortedBy { it.body.createdAt }.takeLast(500)))
+    }
+
+    private suspend fun syncQuotas() {
+        val quotas = api().quota().mapNotNull { listed -> open(listed.item)?.let { (from, body) -> SavedQuota(from, body as QuotaSnapshot) } }
+        persist(saved.copy(quotas = quotas))
+    }
+
+    // --- Answering ---------------------------------------------------------------
+
+    override fun answer(id: String, choice: String?, text: String?) = run(showBusy = false) { send(id, choice, text) }
+
+    /**
+     * Signs the answer and seals it to the machine that asked, the only recipient the server
+     * accepts. The notification's buttons call this too.
+     */
+    suspend fun send(id: String, choice: String?, text: String?) {
+        val d = saved.decisions.find { it.body.id == id } ?: throw IllegalStateException("No such decision.")
+        if (d.answeredAt != null || d.answer != null) throw IllegalStateException("Already answered.")
+        if (choice != null && choice !in d.body.options) throw IllegalArgumentException("Not one of the options.")
+        val machine = directory?.members?.get(d.from)?.takeIf { it.active }?.member
+            ?: throw IllegalStateException("The machine that asked is no longer in your directory.")
+        val answerId = newId("a_")
+        val body = buildJsonObject {
+            put("v", 1)
+            put("id", answerId)
+            put("decisionId", id)
+            put("to", machine.id)
+            put("answeredAt", now())
+            choice?.let { put("choice", it) }
+            text?.let { put("text", it) }
+        }
+        val item = envelopes.seal("answer", body, me.id, signKey, listOf(machine))
+        try {
+            api().postItem(item)
+        } catch (e: ApiException) {
+            if (e.error == "already-answered") markAnswered(id, null)
+            throw e
+        }
+        markAnswered(id, choice ?: text)
+    }
+
+    private fun markAnswered(id: String, answer: String?) {
+        persist(saved.copy(decisions = saved.decisions.map { if (it.body.id == id) it.copy(answeredAt = now(), answer = answer) else it }))
+    }
+
+    /** For the notification's buttons: holds the lock like any other change. */
+    suspend fun sendFromNotification(id: String, choice: String?, text: String?) = lock.withLock { send(id, choice, text) }
+
+    // --- Push --------------------------------------------------------------------
+
+    /**
+     * A push payload (PROTOCOL.md, "Push"): a new item with this device's box when it fits, else
+     * its id to fetch; or `answered` once a decision is answered anywhere.
+     */
+    suspend fun onPush(payload: String) = lock.withLock {
+        if (phase.value != Phase.Ready) return@withLock
+        val p = ProtocolJson.parseToJsonElement(payload).jsonObject
+        val kind = p["kind"]?.jsonPrimitive?.content
+        val id = p["id"]?.jsonPrimitive?.content ?: return@withLock
+        when (kind) {
+            "answered" -> {
+                alerts.cancel(id)
+                val d = saved.decisions.find { it.body.id == id }
+                if (d != null && d.answeredAt == null) persist(saved.copy(decisions = saved.decisions.map { if (it === d) it.copy(answeredAt = now()) else it }))
+            }
+            "decision" -> {
+                if (saved.decisions.any { it.body.id == id }) return@withLock
+                val box = p["box"]?.jsonPrimitive?.content
+                var answeredAt: String? = null
+                val item = if (box != null) {
+                    SealedItem(1, "decision", id, p.getValue("from").jsonPrimitive.content, p["re"]?.jsonPrimitive?.content, listOf(SealedBox(me.id, box)))
+                } else {
+                    // Fetched later than the push: another device may have answered meanwhile.
+                    api().item(id).also { answeredAt = it.answeredAt }.item
+                }
+                // A machine paired since the last sync is not in the cached chain yet.
+                if (directory?.members?.containsKey(item.from) != true) syncDirectory()
+                val (from, body) = open(item) ?: return@withLock
+                val saved1 = SavedDecision(from, body as DecisionBody, answeredAt)
+                persist(saved.copy(decisions = saved.decisions + saved1))
+                if (answeredAt == null) alerts.decision(toUi(saved1))
+            }
+            "quota" -> syncQuotas()
+        }
+    }
+
+    /** Registers where pushes go; a new endpoint replaces the old subscription. */
+    suspend fun subscribe(type: String, endpoint: String, keys: Pair<String, String>?) = lock.withLock {
+        if (phase.value != Phase.Ready || type != saved.pushType) return@withLock
+        val old = saved.push
+        if (old != null && old.type == type && old.endpoint == endpoint) return@withLock
+        if (old != null) {
+            runCatching { api().unsubscribe(old.id) }
+            // Forgotten first, so a failed replacement is not mistaken for a working route.
+            persist(saved.copy(push = null))
+        }
+        val id = api().subscribe(type, endpoint, keys)
+        persist(saved.copy(push = SavedPush(type, id, endpoint)))
+    }
+
+    override fun setPushType(type: String) = run(showBusy = false) {
+        persist(saved.copy(pushType = type))
+    }
+
+    // --- Pairing and revoking ----------------------------------------------------
+
+    override fun lookUpPairing(code: String) = run(showBusy = false) {
+        approval.value = Approval.Checking
+        val parsed = try {
+            parsePairingCode(code)
+        } catch (e: ProtocolException) {
+            approval.value = Approval.Failed("A pairing code has 24 letters and digits.")
+            return@run
+        }
+        val request = try {
+            api().pairing(parsed.rendezvous)
+        } catch (e: IOException) {
+            approval.value = Approval.Failed(if (e is ApiException && e.status == 404) "No pairing with this code, or it expired." else describe(e))
+            return@run
+        }
+        val body = try {
+            pairings.openRequest(request, parsed)
+        } catch (e: ProtocolException) {
+            approval.value = Approval.Failed("This request does not match the code. Don't approve it; make a new code.")
+            return@run
+        }
+        pending = parsed to body
+        approval.value = Approval.Found(body.name, if (body.role == "machine") Kind.Machine else Kind.Device, parsed.formatted())
+    }
+
+    /** Appends the new member's entry, then sends the approval that lets it check the chain. */
+    override fun approvePairing() = run(showBusy = false) {
+        val (code, body) = pending ?: return@run
+        approval.value = Approval.Approving(approval.value as? Approval.Found ?: return@run)
+        try {
+            syncDirectory()
+            val joining = body.member()
+            // A retry after the approval failed to send finds the entry already in the chain.
+            val present = directory!!.members[joining.id]
+            if (present == null) {
+                val entry = directories.addEntry(directory!!, me.id, signKey, joining, now())
+                api().append(entry)
+                val all = saved.entries + ProtocolJson.encodeToJsonElement(entry)
+                val after = directories.verify(all, saved.account, saved.pin)
+                directory = after
+                persist(saved.copy(entries = all, pin = Pin(after.length, after.head)))
+            } else if (!present.active || present.member != joining) {
+                throw IllegalStateException("Another member already uses this id. Make a new code.")
+            }
+            val after = directory!!
+            api().approve(code.rendezvous, pairings.approval(PairingApprovalBody(1, code.rendezvous, saved.account!!, after.length, after.head, me.id), code))
+            pending = null
+            approval.value = Approval.Done(body.name)
+        } catch (e: Exception) {
+            approval.value = Approval.Failed(describe(e))
+        }
+    }
+
+    override fun closePairing() {
+        pending = null
+        approval.value = Approval.Idle
+    }
+
+    override fun revoke(memberId: String) = run {
+        if (memberId == me.id) throw IllegalArgumentException("Sign out to remove this phone.")
+        syncDirectory()
+        val entry = directories.revokeEntry(directory!!, me.id, signKey, memberId, now())
+        api().append(entry)
+        val all = saved.entries + ProtocolJson.encodeToJsonElement(entry)
+        val after = directories.verify(all, saved.account, saved.pin)
+        directory = after
+        persist(saved.copy(entries = all, pin = Pin(after.length, after.head)))
+    }
+
+    /** Removes this phone from the directory, ends the session and forgets every key. */
+    override fun signOut() = run {
+        if (phase.value == Phase.Ready) {
+            runCatching {
+                syncDirectory()
+                val dir = directory!!
+                // The last device stays: removing it would leave only the recovery words.
+                if (dir.active("device").size > 1) api().append(directories.revokeEntry(dir, me.id, signKey, me.id, now()))
+            }
+        }
+        if (secrets.session != null) runCatching { api().logout() }
+        wipe(null)
+    }
+
+    fun say(message: String) {
+        notice.value = message
+    }
+
+    override fun dismissNotice() {
+        notice.value = null
+    }
+
+    // --- To the screens' shapes --------------------------------------------------
+
+    private fun instant(text: String?): Instant? = text?.let { runCatching { OffsetDateTime.parse(it).toInstant() }.getOrNull() }
+
+    private fun toUi(d: SavedDecision): Decision {
+        val b = d.body
+        return Decision(
+            id = b.id,
+            question = b.question,
+            context = b.context,
+            options = b.options,
+            recommended = b.recommended,
+            default = b.fallback.action,
+            defaultAt = instant(b.fallback.at),
+            source = Source(b.source.machine, b.source.project, b.source.session),
+            createdAt = instant(b.createdAt) ?: Instant.EPOCH,
+            answer = d.answer,
+            answeredAt = instant(d.answeredAt) ?: d.answer?.let { Instant.now() },
+        )
+    }
+
+    private fun toUi(q: SavedQuota): List<QuotaWindow> = q.body.providers.flatMap { p ->
+        p.windows.map { w ->
+            val alerts = q.body.alerts.filter { it.provider == p.provider && it.window == w.id }
+            val pace = w.pace
+            val unused = alerts.firstOrNull { it.kind == "unused-headroom" }?.unusedPercent
+            QuotaWindow(
+                id = "${q.from}/${p.provider}/${w.id}",
+                provider = p.provider,
+                window = w.label.ifBlank { w.id },
+                usedPercent = w.usedPercent.roundToInt(),
+                resetsAt = instant(w.resetsAt),
+                pace = when {
+                    pace == null -> Pace.Unknown
+                    !pace.willLastToReset -> instant(pace.runsOutAt)?.let { Pace.RunsOut(it) } ?: Pace.Unknown
+                    unused != null -> Pace.Unused(unused.roundToInt())
+                    pace.stage == "unknown" -> Pace.Unknown
+                    pace.stage == "behind" -> Pace.Unused((100 - (pace.projectedUsedPercent ?: w.usedPercent)).roundToInt().coerceIn(0, 100))
+                    else -> Pace.Even
+                },
+                alert = alerts.isNotEmpty(),
+            )
+        }
+    }
+
+    private fun toUi(dir: Directory): List<Member> {
+        val added = saved.entries.mapNotNull { raw ->
+            runCatching {
+                val env = ProtocolJson.decodeFromJsonElement(SignedEnvelope.serializer(), raw)
+                val body = ProtocolJson.decodeFromString(DirectoryEntry.serializer(), env.body)
+                body.member?.id?.let { it to body.at }
+            }.getOrNull()
+        }.toMap()
+        return dir.members.values.filter { it.active }.map { (m) ->
+            Member(m.id, m.name, if (m.role == "machine") Kind.Machine else Kind.Device, instant(added[m.id]) ?: Instant.EPOCH, current = m.id == saved.me?.id)
+        }
+    }
+}
+
+private operator fun dev.starbridge.app.protocol.DirectoryMember.component1() = member

@@ -349,6 +349,19 @@ How it generalizes is open.
   was dropped. Amber stays fixed under Material You dynamic colour. No
   wordmark: the name is set in Archivo. Shapes and files: DESIGN.md, "Icon".
 
+- 2026-10-04. Android (#9): the app ports `packages/protocol` to Kotlin and
+  passes its vectors. A decision's options are a vertical connected button
+  group, since options run up to 100 characters. The notification shows at
+  most three options, recommended first; a fourth needs the app. Keys, session
+  and decrypted state sit in files wrapped by a Keystore AES key that works
+  while the screen is locked, so lock-screen buttons can sign. Signing out
+  revokes the phone unless it is the last device. The build turns
+  `google-services.json` into resources itself instead of applying the
+  google-services plugin, so CI builds without it. GitHub sign-in uses PKCE
+  (#34, server #39). When a session ends the phone keeps its keys, and the next
+  sign-in binds the new session with the device key (#44); only a verified
+  chain that revokes the phone wipes it.
+
 ## Encryption, with existing libraries
 
 - libsodium sealed boxes (`crypto_box_seal`, X25519 + XSalsa20-Poly1305): an

@@ -9,13 +9,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onRoot
 import com.github.takahirom.roborazzi.captureRoboImage
-import dev.starbridge.app.data.Fake
+import dev.starbridge.app.data.Approval
+import dev.starbridge.app.data.Phase
 import dev.starbridge.app.ui.devices.DeviceActions
 import dev.starbridge.app.ui.devices.DevicesScreen
+import dev.starbridge.app.ui.inbox.DecisionActions
+import dev.starbridge.app.ui.inbox.DecisionScreen
 import dev.starbridge.app.ui.inbox.InboxScreen
 import dev.starbridge.app.ui.quotas.QuotasScreen
+import dev.starbridge.app.ui.setup.SetupActions
 import dev.starbridge.app.ui.setup.SetupScreen
-import dev.starbridge.app.ui.setup.SetupStep
 import dev.starbridge.app.ui.theme.StarbridgeTheme
 import org.junit.Rule
 import org.junit.Test
@@ -25,8 +28,9 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import java.time.Instant
 
-// Each screen on fake data, light and dark, rendered on the JVM. `recordRoborazziDebug`
-// writes app/screenshots/; `verifyRoborazziDebug` fails when a screen drifts.
+// Each screen on fake data, light and dark, rendered on the JVM in DESIGN.md's palette (dynamic
+// colour off). `recordRoborazziDebug` writes app/screenshots/; `verifyRoborazziDebug` fails
+// when a screen drifts.
 @RunWith(ParameterizedRobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [36], qualifiers = "w411dp-h891dp-xxhdpi")
@@ -35,29 +39,45 @@ class ScreenshotTest(private val dark: Boolean) {
         @JvmStatic
         @ParameterizedRobolectricTestRunner.Parameters(name = "dark={0}")
         fun schemes() = listOf(arrayOf<Any>(false), arrayOf<Any>(true))
+
+        // Clock times render in the phone's zone; one zone keeps CI and laptops alike.
+        init {
+            java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone("UTC"))
+        }
     }
 
     @get:Rule val compose = createComposeRule()
 
     private val now = Instant.parse("2026-10-04T14:00:00Z")
     private val fake = Fake(now)
+    private val decisionActions = DecisionActions({ _, _, _ -> }, {})
+    private val deviceActions = DeviceActions({}, {}, {}, {}, {}, {})
+    private val setupActions = SetupActions({ "" }, { _, _ -> }, {}, {}, {}, {}, {}, {})
 
     private fun capture(name: String, content: @Composable () -> Unit) {
         compose.setContent {
-            StarbridgeTheme(darkTheme = dark) {
+            StarbridgeTheme(darkTheme = dark, dynamicColor = false) {
                 Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) { content() }
             }
         }
         compose.onRoot().captureRoboImage("screenshots/$name-${if (dark) "dark" else "light"}.png")
     }
 
-    @Test fun inbox() = capture("inbox") { InboxScreen(fake.decisions, now, onAnswer = { _, _ -> }) }
+    @Test fun inbox() = capture("inbox") { InboxScreen(fake.decisions, now, decisionActions) }
+
+    @Test fun decision() = capture("decision") { DecisionScreen(fake.decisions[1], now, onAnswer = { _, _, _ -> }) }
 
     @Test fun quotas() = capture("quotas") { QuotasScreen(fake.windows, now) }
 
-    @Test fun devices() = capture("devices") { DevicesScreen(fake.members, fake.pairings, now, DeviceActions({}, {}, {})) }
+    @Test fun devices() = capture("devices") { DevicesScreen(fake.members, Approval.Idle, fake.push, "https://starbridge.run", now, deviceActions) }
 
-    @Test fun setupSignIn() = capture("setup-sign-in") { SetupScreen(SetupStep.SignIn, fake.recoveryWords, {}, {}) }
+    @Test fun devicesPairing() = capture("devices-pairing") { DevicesScreen(fake.members, fake.approval, fake.push, "https://starbridge.run", now, deviceActions) }
 
-    @Test fun setupRecoveryKey() = capture("setup-recovery-key") { SetupScreen(SetupStep.RecoveryKey, fake.recoveryWords, {}, {}) }
+    @Test fun setupSignIn() = capture("setup-sign-in") { SetupScreen(Phase.SignedOut, "https://starbridge.run", false, setupActions, {}) }
+
+    @Test fun setupFirstDevice() = capture("setup-first-device") { SetupScreen(Phase.NoDevice(accountExists = false), "https://starbridge.run", false, setupActions, {}) }
+
+    @Test fun setupJoin() = capture("setup-join") { SetupScreen(Phase.Joining("7KQ2-M9XD-4TPV-HB3N-R8CE-WY6F"), "https://starbridge.run", false, setupActions, {}) }
+
+    @Test fun setupRecoveryKey() = capture("setup-recovery-key") { SetupScreen(Phase.RecoveryKey(fake.recoveryWords), "https://starbridge.run", false, setupActions, {}) }
 }

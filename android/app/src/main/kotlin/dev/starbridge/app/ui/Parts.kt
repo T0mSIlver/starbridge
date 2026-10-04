@@ -21,10 +21,10 @@ fun Title(text: String, modifier: Modifier = Modifier) {
     Text(text, style = StarbridgeTheme.type.title, color = StarbridgeTheme.colors.fg, modifier = modifier.padding(top = Spacing.s6, bottom = Spacing.s2))
 }
 
-/** A section label: mono, uppercase, as DESIGN.md's label role. */
+/** A section label or status pill text, as DESIGN.md's label role. */
 @Composable
 fun Label(text: String, modifier: Modifier = Modifier, color: Color = StarbridgeTheme.colors.fg3) {
-    Text(text.uppercase(), style = StarbridgeTheme.type.label, color = color, modifier = modifier)
+    Text(text, style = StarbridgeTheme.type.label, color = color, modifier = modifier)
 }
 
 /** A card: surface on the ground, a line around it. */

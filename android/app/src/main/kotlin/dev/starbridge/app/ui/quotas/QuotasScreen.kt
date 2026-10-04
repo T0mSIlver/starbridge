@@ -34,8 +34,9 @@ import java.time.Instant
 import javax.inject.Inject
 
 @HiltViewModel
-class QuotasViewModel @Inject constructor(store: Store) : ViewModel() {
+class QuotasViewModel @Inject constructor(private val store: Store) : ViewModel() {
     val windows = store.windows
+    fun refresh() = store.refresh()
 }
 
 /** One card per window; windows about to reset with headroom unused come first. */
@@ -47,6 +48,15 @@ fun QuotasScreen(windows: List<QuotaWindow>, now: Instant, modifier: Modifier = 
         verticalArrangement = Arrangement.spacedBy(Spacing.s3),
     ) {
         item { Title("Quotas") }
+        if (windows.isEmpty()) {
+            item {
+                Text(
+                    "No quota snapshots yet. A paired machine sends them with starbridge quota push.",
+                    style = StarbridgeTheme.type.body,
+                    color = StarbridgeTheme.colors.fg2,
+                )
+            }
+        }
         items(windows.sortedByDescending { it.alert }, key = { it.id }) { WindowCard(it, now) }
     }
 }
@@ -60,6 +70,7 @@ private fun tone(pace: Pace): Tone {
         Pace.Even -> Tone(c.ok, c.okSoft, "on pace")
         is Pace.RunsOut -> Tone(c.bad, c.badSoft, "will run out")
         is Pace.Unused -> Tone(c.warn, c.warnSoft, "unused")
+        Pace.Unknown -> Tone(c.fg3, c.surface2, "too early")
     }
 }
 
@@ -77,7 +88,7 @@ private fun WindowCard(window: QuotaWindow, now: Instant) {
         }
         Spacer(Modifier.padding(top = Spacing.s3))
         LinearProgressIndicator(
-            progress = { window.usedPercent / 100f },
+            progress = { (window.usedPercent / 100f).coerceIn(0f, 1f) },
             modifier = Modifier.fillMaxWidth(),
             color = tone.color,
             trackColor = colors.surface2,
@@ -92,10 +103,13 @@ private fun WindowCard(window: QuotaWindow, now: Instant) {
             Spacer(Modifier.padding(start = Spacing.s2))
             Text(detail(window, now), style = StarbridgeTheme.type.small, color = colors.fg2, modifier = Modifier.weight(1f))
         }
-        Text("Resets in ${span(now, window.resetsAt)}", style = StarbridgeTheme.type.machine, color = colors.fg3, modifier = Modifier.padding(top = Spacing.s2))
+        window.resetsAt?.let {
+            Text("Resets in ${span(now, it)}", style = StarbridgeTheme.type.machine, color = colors.fg3, modifier = Modifier.padding(top = Spacing.s2))
+        }
         if (window.alert) {
             Box(Modifier.padding(top = Spacing.s3)) {
-                Text("Resets soon with headroom left: spend it before it's gone.", style = StarbridgeTheme.type.small, color = tone.color)
+                val why = if (window.pace is Pace.RunsOut) "Runs out before the reset: slow down or switch plans." else "Resets soon with headroom left: spend it before it's gone."
+                Text(why, style = StarbridgeTheme.type.small, color = tone.color)
             }
         }
     }
@@ -103,6 +117,7 @@ private fun WindowCard(window: QuotaWindow, now: Instant) {
 
 private fun detail(window: QuotaWindow, now: Instant): String = when (val pace = window.pace) {
     Pace.Even -> "Lasts until the reset"
-    is Pace.RunsOut -> "Runs out in ${span(now, pace.at)}, ${span(pace.at, window.resetsAt)} before the reset"
+    is Pace.RunsOut -> "Runs out in ${span(now, pace.at)}" + (window.resetsAt?.let { ", ${span(pace.at, it)} before the reset" } ?: "")
     is Pace.Unused -> "${pace.percent}% left unused at the reset"
+    Pace.Unknown -> "Too early in the window to tell the pace"
 }
