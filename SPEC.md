@@ -172,9 +172,9 @@ How it generalizes is open.
 
 ## Decided
 
-- 2026-10-04. The service runs in an LXC container on the owner's Proxmox host,
-  the same machine as the dev box. CodexBar is installed in that container.
-  Agents reach the service over the local network.
+- 2026-10-04. The owner's own instance is the hosted one on the VPS; no LXC
+  on the Proxmox host (replaces the first LXC decision). Agents reach it over
+  HTTPS; `codexbar` runs on the dev box through the uploader.
 - 2026-10-04. A separate project that reads `codexbar` JSON. Ask upstream to
   link it from the README once it works.
 - 2026-10-04. Any agent can post a decision, through HTTP and a small CLI.
