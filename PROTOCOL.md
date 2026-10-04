@@ -172,8 +172,8 @@ code below. Per-address limits count an IPv6 client as its /64.
 | What | Limit |
 |---|---|
 | `POST /items` | 120 a minute per account |
-| Stored decisions, open or answered | 5000 per account: 409 `too-many-items` |
-| Stored boxes | 64 MB per account: 409 `too-many-items`; 256 KB per item: 413 `too-large` |
+| Stored decisions, open or answered | 10000 per account: 409 `too-many-items` |
+| Stored boxes | 128 MB per account, of which decisions and quotas may fill all but the last 8 MB: 409 `too-many-items`; 256 KB per decision or quota and 32 KB per answer: 413 `too-large` |
 | `POST /directory` | 30 an hour per account |
 | Directory entries, revocations included | 200 per account: 409 `directory-full`; 8 KB per entry: 413 `too-large` |
 | Sessions | 50 per account; signing in past that ends the oldest, unpaired ones first |
@@ -183,7 +183,7 @@ code below. Per-address limits count an IPv6 client as its /64.
 | `GET /answers` waiting | 32 per machine: 429 `too-many-waits` |
 | `POST /push/subscriptions` | 30 a minute per account, on top of the subscription caps |
 
-Answers skip the item caps, since each answers a stored decision. An hourly sweep drops answered
+Answers skip the decision count and may use the last 8 MB, so a full account can still answer. An hourly sweep drops answered
 decisions and their answers 7 days after the answer, unanswered decisions and quota snapshots 30
 days after they arrived, quota snapshots of revoked machines, and expired sessions. Clients that
 want a longer history keep their own copy.

@@ -105,8 +105,8 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
   const to = item.boxes.map((b) => b.to);
   if (new Set(to).size !== to.length) fail(400, "bad-schema", "one box per recipient");
   const size = item.boxes.reduce((n, b) => n + b.box.length, 0);
-  if (size > limits.itemBytes)
-    fail(413, "too-large", `an item's boxes hold at most ${limits.itemBytes} bytes`);
+  const most = item.kind === "answer" ? limits.answerBytes : limits.itemBytes;
+  if (size > most) fail(413, "too-large", `a ${item.kind}'s boxes hold at most ${most} bytes`);
 
   let decisionDevices: string[] = [];
   const seq = db.transaction(() => {
@@ -153,19 +153,19 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
         me,
       );
     }
-    // Answers skip the caps: each answers a stored decision, and answering lets it expire.
-    if (item.kind !== "answer") {
-      const held = db
-        .query(
-          `SELECT COUNT(*) FILTER (WHERE kind = 'decision') AS decisions, COALESCE(SUM(size), 0) AS bytes
-           FROM items WHERE account_id = ?`,
-        )
-        .get(caller.account) as { decisions: number; bytes: number };
-      if (item.kind === "decision" && held.decisions >= limits.decisions)
-        fail(409, "too-many-items", `an account holds at most ${limits.decisions} decisions`);
-      if (held.bytes + size > limits.storedBytes)
-        fail(409, "too-many-items", `an account stores at most ${limits.storedBytes} bytes`);
-    }
+    // Decisions and quotas leave the last answerReserve bytes to answers, so a full account
+    // can still answer, and answering lets its decisions expire.
+    const held = db
+      .query(
+        `SELECT COUNT(*) FILTER (WHERE kind = 'decision') AS decisions, COALESCE(SUM(size), 0) AS bytes
+         FROM items WHERE account_id = ?`,
+      )
+      .get(caller.account) as { decisions: number; bytes: number };
+    if (item.kind === "decision" && held.decisions >= limits.decisions)
+      fail(409, "too-many-items", `an account holds at most ${limits.decisions} decisions`);
+    const room = limits.storedBytes - (item.kind === "answer" ? 0 : limits.answerReserve);
+    if (held.bytes + size > room)
+      fail(409, "too-many-items", `an account stores at most ${limits.storedBytes} bytes`);
     const seq = nextSeq(db);
     db.query(
       "INSERT INTO items (seq, account_id, id, kind, from_id, re, received_at, size) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",

@@ -108,22 +108,34 @@ test("a full account refuses new decisions but still takes answers and replaced 
   expect((await post(s, devbox, quota(devbox, phone))).status).toBe(201);
 });
 
-test("stored bytes are capped per account, and one item's boxes per item", async () => {
+test("stored bytes are capped per account, keeping room for answers, and per item", async () => {
   const { s, phone, devbox } = await setup();
+  const bytes = (item: SealedItem) => item.boxes.reduce((n, b) => n + b.box.length, 0);
+  const d = decision(devbox, phone);
+  const later = decision(devbox, phone);
+  expect((await post(s, devbox, d)).status).toBe(201);
+  expect((await post(s, devbox, later)).status).toBe(201);
   const q = quota(devbox, phone);
-  const size = q.boxes[0]?.box.length ?? 0;
-  s.deps.config.limits = { ...DEFAULT_LIMITS, storedBytes: size + 50 };
+  const a = answer(d, phone, devbox);
+  const held = 2 * bytes(d) + bytes(q);
+  s.deps.config.limits = {
+    ...DEFAULT_LIMITS,
+    storedBytes: held + bytes(a) + 50,
+    answerReserve: bytes(a) + 40,
+  };
   expect((await post(s, devbox, q)).status).toBe(201);
   // A new snapshot replaces the old one, so it fits where a decision beside it does not.
   expect((await post(s, devbox, quota(devbox, phone))).status).toBe(201);
   const r = await post(s, devbox, decision(devbox, phone));
   expect(r.status).toBe(409);
   expect(r.json.error).toBe("too-many-items");
+  expect((await post(s, phone, a)).status).toBe(201);
 
-  s.deps.config.limits = { ...DEFAULT_LIMITS, itemBytes: size - 1 };
+  s.deps.config.limits = { ...DEFAULT_LIMITS, itemBytes: bytes(q) - 1, answerBytes: bytes(a) - 1 };
   const big = await post(s, devbox, quota(devbox, phone));
   expect(big.status).toBe(413);
   expect(big.json.error).toBe("too-large");
+  expect((await post(s, phone, answer(later, phone, devbox))).status).toBe(413);
 });
 
 test("the sweep drops answered decisions after a week and the rest after 30 days", async () => {

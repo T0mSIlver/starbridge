@@ -19,11 +19,15 @@ export const DEFAULT_LIMITS = {
   /** Item posts per account: an orchestrator asks a few hundred decisions a day. */
   items: [120, MINUTE] as RateWindow,
   /** Stored decisions per account, open or answered. */
-  decisions: 5_000,
+  decisions: 10_000,
   /** Sealed boxes stored per account, in bytes. */
-  storedBytes: 64 * 1024 * 1024,
-  /** Sealed boxes of one item, in bytes. */
+  storedBytes: 128 * 1024 * 1024,
+  /** Stored bytes only answers may use, so a full account can still answer. */
+  answerReserve: 8 * 1024 * 1024,
+  /** Sealed boxes of one decision or quota snapshot, in bytes. */
   itemBytes: 256 * 1024,
+  /** Sealed box of one answer, in bytes: an answer's text is at most 4000 characters. */
+  answerBytes: 32 * 1024,
   /** Answered decisions and their answers are dropped this long after the answer. */
   answeredRetention: 7 * DAY,
   /** Unanswered decisions, and quota snapshots no machine has replaced, are dropped after this. */
