@@ -753,3 +753,10 @@ goes in git.
   0.1 s. `permission_suggestions` holds SDK `PermissionUpdate` objects (here
   `addDirectories`). Codex 0.160.0 asks the user to trust any new or changed
   hook at launch; its race test waits for the Codex limit to reset.
+- 2026-10-05: specs for #58, #60 and #62 revised to answer the owner's
+  questions (cards on the Needs You page). Mod API, 2.1.289: a `tool.call`
+  hook sees each Bash call start and end in-process (`await next(e)` costs
+  no hook budget), but no event carries a tool's output while it runs;
+  `process.spawn` streams only the mod's own children. So #60 times agent
+  commands from the mod with no wrapper, and reads progress from output only
+  under `starbridge run`.
