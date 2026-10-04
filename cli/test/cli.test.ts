@@ -41,12 +41,14 @@ test("pair joins the directory and keeps the keys private", async () => {
 
 /** Reads a terminal QR back: each character is two modules, upper and lower, 4 px square. */
 function scan(lines: string[]): string | undefined {
-  const rows = lines.map((l) => [...l.replace(/\x1b\[[0-9;]*m/g, "")]);
+  const rows = lines.map((l) => [
+    ...l.replaceAll("\u001b[30;107m", "").replaceAll("\u001b[0m", ""),
+  ]);
   const width = (rows[0]?.length ?? 0) * 4;
   const height = rows.length * 8;
   const px = new Uint8ClampedArray(width * height * 4).fill(255);
-  rows.forEach((row, y) =>
-    row.forEach((ch, x) => {
+  for (const [y, row] of rows.entries())
+    for (const [x, ch] of row.entries()) {
       const dark = [ch === "█" || ch === "▀", ch === "█" || ch === "▄"];
       for (let dy = 0; dy < 8; dy++)
         for (let dx = 0; dx < 4; dx++) {
@@ -54,8 +56,7 @@ function scan(lines: string[]): string | undefined {
           const i = ((y * 8 + dy) * width + x * 4 + dx) * 4;
           px[i] = px[i + 1] = px[i + 2] = 0;
         }
-    }),
-  );
+    }
   return jsQR(px, width, height)?.data;
 }
 
