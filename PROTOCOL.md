@@ -77,7 +77,7 @@ errors use the codes in `packages/protocol/src/sodium.ts`.
 | `GET /auth/github/callback` | anyone | finish it, set the session; with `?app=1` on the start, redirect to `starbridge://auth#session=<token>` instead |
 | `POST /auth/owner` | anyone | self-hosted: `{token}` against `OWNER_TOKEN`; sets the session and returns `{session}` |
 | `POST /auth/logout` | device | end the session |
-| `GET /auth/challenge` | device | `{nonce, expiresInSeconds}`: one nonce per session, single use, 5 minutes |
+| `GET /auth/challenge` | device | `{nonce, expiresInSeconds}`: one nonce per session, single use, 5 minutes; asking again returns the outstanding one |
 | `POST /auth/bind` | device | `{member, sig}`: binds the session to that active device when `sig` checks against its signing key; 400 `no-challenge`, 401 `bad-signature`, 404 for no such active device, 409 `already-paired` when the session holds another device |
 | `GET /me` | device, machine | `{account, member, role}`; `member` is null until a device pairs |
 

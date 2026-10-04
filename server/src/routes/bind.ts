@@ -30,6 +30,10 @@ bindRoutes.get("/auth/challenge", requireCaller("device"), (c) => {
   if (!c.var.limiter.allow(`bind:${caller.account}`, 20, 60_000)) fail(429, "rate-limited");
   const now = Date.now();
   for (const [k, v] of nonces) if (v.expires <= now) nonces.delete(k);
+  // Two tabs of one browser share the session: both get the outstanding nonce, so the first
+  // bind succeeds instead of each replacing the other's.
+  const held = nonces.get(caller.session);
+  if (held) return c.json({ nonce: held.nonce, expiresInSeconds: (held.expires - now) / 1000 });
   const nonce = randomToken("");
   nonces.set(caller.session, { nonce, expires: now + NONCE_MS });
   return c.json({ nonce, expiresInSeconds: NONCE_MS / 1000 });

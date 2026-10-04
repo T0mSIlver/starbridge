@@ -97,6 +97,19 @@ test("binding refuses another key, another device, a revoked device and a used n
   expect((await s.call("GET", "/v1/me", { token: session })).json.member).toBeNull();
 });
 
+test("two tabs on one session get the same nonce, and the first bind wins", async () => {
+  const s = await makeServer();
+  const acct = await setupAccount(s);
+  const session = await signIn(s);
+  const [a, b] = [await challenge(s, session), await challenge(s, session)];
+  expect(b).toBe(a);
+  const body = { member: "phone", sig: await sign(acct.id, "phone", a, acct.device) };
+  expect((await s.call("POST", "/v1/auth/bind", { token: session, body })).status).toBe(200);
+  const second = await s.call("POST", "/v1/auth/bind", { token: session, body });
+  expect(second.json.error).toBe("no-challenge");
+  expect((await s.call("GET", "/v1/me", { token: session })).json.member).toBe("phone");
+});
+
 test("machines cannot ask for a challenge", async () => {
   const s = await makeServer();
   const acct = await setupAccount(s);

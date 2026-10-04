@@ -155,17 +155,30 @@ export async function boot(): Promise<Boot> {
     return { state: "join", account, stale: false };
   }
   if (!entry.active) return { state: "revoked", account, name: device.name };
-  if (me.member === null) {
-    // Signed in again: prove this browser holds the device's key, and the session is its own.
+  if (me.member === null && !(await bind(account, device))) {
+    return { state: "join", account, stale: true };
+  } else if (me.member !== null && me.member !== device.id) {
+    return { state: "join", account, stale: true };
+  }
+  return { state: "ready", ctx: { account, device, ...verified } };
+}
+
+/**
+ * Signed in again: proves this browser holds the device's key, so the session becomes its own.
+ * Another tab may bind the same session meanwhile, so a failure checks /me before retrying.
+ */
+async function bind(account: string, device: store.DeviceRecord): Promise<boolean> {
+  for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const nonce = await api.challenge();
       const sig = await signer(device.keys)(bindMessage(account, device.id, nonce));
       await api.bind(device.id, toB64(sig));
+      return true;
     } catch {
-      return { state: "join", account, stale: true };
+      if ((await api.me()).member === device.id) return true;
     }
-  } else if (me.member !== device.id) return { state: "join", account, stale: true };
-  return { state: "ready", ctx: { account, device, ...verified } };
+  }
+  return false;
 }
 
 async function newDevice(account: string, name: string) {
