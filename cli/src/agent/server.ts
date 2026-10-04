@@ -2,7 +2,7 @@
  * `starbridge agent`: one per machine, as a user service. It holds the machine keys and the one
  * connection to the server, and serves the CLI and the Claude Code sessions on this machine over
  * a unix socket (PROTOCOL.md, "Local agent API"). Each feature (decisions, quota uploads; later
- * permission prompts #57, controls #58 and runs #60) plugs in as a `Feature`: its routes, the
+ * permission prompts #57 and runs #60) plugs in as a `Feature`: its routes, the
  * events it hands sessions, the acks it takes and its background loop.
  */
 import { chmodSync, lstatSync, mkdirSync, unlinkSync } from "node:fs";
@@ -58,7 +58,7 @@ export interface Feature {
   events?(session: string): SessionEvent[];
   /** Confirms events; tokens this feature did not hand out must be ignored. */
   ack?(session: string, tokens: string[]): void;
-  /** The session said `bye` (#58 drops its session controls here). */
+  /** The session said `bye`: drop what belongs to that session. */
   bye?(session: string): void;
   /** A background loop; resolves once `signal` aborts. */
   run?(signal: AbortSignal): Promise<void>;

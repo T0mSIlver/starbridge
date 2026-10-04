@@ -35,7 +35,7 @@ export function socketPath(env: Record<string, string | undefined>, storeDir: st
 /**
  * Something the agent hands one session, oldest first, until the session confirms it with
  * `POST /v1/sessions/:id/ack` and the event's `ack`. Answers and default-time notices today;
- * #57 adds permission answers and #58 control sets as new `type`s. A client skips types it does
+ * #57 adds permission answers as a new `type`. A client skips types it does
  * not know and confirms nothing for them.
  */
 export interface SessionEvent {
