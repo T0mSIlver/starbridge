@@ -22,6 +22,7 @@ import {
   openPairingApproval,
   openPairingRequest,
   type PairingCode,
+  type Permission,
   ProtocolError,
   pairingApproval,
   pairingRequest,
@@ -33,6 +34,7 @@ import {
   recoveryWords,
   revokeEntryAsync,
   type SealedItem,
+  type Settled,
   type SignedEnvelope,
   sealAsync,
   toB64,
@@ -41,7 +43,15 @@ import {
 import { ApiError, api, type Stored } from "./api";
 import { generateDeviceKeys, sealOpener, signer } from "./crypto/keys";
 import * as store from "./store";
-import type { Device, InboxItem, PairingRequest, QuotaCardData, Reply } from "./types";
+import type {
+  Device,
+  InboxItem,
+  PairingRequest,
+  PromptItem,
+  PromptReply,
+  QuotaCardData,
+  Reply,
+} from "./types";
 
 export { ApiError };
 
@@ -550,6 +560,138 @@ export async function answer(ctx: Ctx, item: InboxItem, reply: Reply): Promise<s
   await store.update("answers", ctx.account, (sent) => ({
     ...sent,
     [item.decision.id]: { ...reply, answeredAt },
+  }));
+  return answeredAt;
+}
+
+// --- Permission prompts -------------------------------------------------------------------
+
+async function openPermission(
+  ctx: Ctx,
+  s: Stored,
+  sent: Record<string, PromptReply & { answeredAt: string }>,
+): Promise<PromptItem> {
+  const { signer: machine, body } = await openAsync(
+    expectKind(s.item, "permission"),
+    me(ctx),
+    ctx.dir,
+  );
+  const reply = sent[body.id];
+  return {
+    permission: body as Permission,
+    machine,
+    receivedAt: s.receivedAt,
+    ...(s.answeredAt ? { answeredAt: s.answeredAt } : {}),
+    ...(reply ? { reply: stripTime(reply) } : {}),
+  };
+}
+
+const stripTime = ({ answeredAt: _, ...reply }: PromptReply & { answeredAt: string }) =>
+  reply as PromptReply;
+
+/** Opens a permission prompt a push carried (or named). */
+export async function openPushedPermission(ctx: Ctx, item: SealedItem): Promise<PromptItem> {
+  const sent = (await store.get("promptAnswers", ctx.account)) ?? {};
+  return openPermission(ctx, { item, cursor: "", receivedAt: "" }, sent);
+}
+
+/** Opens a settled notice, with the machine that signed it. */
+export async function openSettled(ctx: Ctx, item: SealedItem) {
+  const { signer, body } = await openAsync(expectKind(item, "settled"), me(ctx), ctx.dir);
+  return { machine: signer.id, settled: body as Settled };
+}
+
+/** Settled notices after `cursor`, keyed by "machine/permission id". */
+export async function loadSettled(ctx: Ctx, cursor?: string) {
+  const out = new Map<string, Settled>();
+  let at = cursor;
+  for (;;) {
+    const page = await api.items("settled", at);
+    for (const s of page.items) {
+      try {
+        const { machine, settled } = await openSettled(ctx, s.item);
+        out.set(`${machine}/${settled.permissionId}`, settled);
+      } catch {}
+    }
+    at = page.cursor;
+    if (page.items.length < 100) return { settled: out, cursor: at };
+  }
+}
+
+/** Reads every page of `kinds` from the start, opening what verifies. */
+async function readAll<T>(
+  kinds: string,
+  opts: { open?: boolean },
+  take: (s: Stored) => Promise<T>,
+): Promise<T[]> {
+  const out: T[] = [];
+  let cursor: string | undefined;
+  for (;;) {
+    const page = await api.items(kinds, cursor, opts);
+    for (const s of page.items) {
+      try {
+        out.push(await take(s));
+      } catch {
+        // A prompt that fails to verify is never shown: it could ask to allow anything.
+      }
+    }
+    cursor = page.cursor;
+    if (page.items.length < 100) return out;
+  }
+}
+
+/** The prompts waiting now, whose answer window is still open. */
+export async function loadPrompts(ctx: Ctx): Promise<PromptItem[]> {
+  const sent = (await store.get("promptAnswers", ctx.account)) ?? {};
+  return readAll("permission", { open: true }, (s) => openPermission(ctx, s, sent));
+}
+
+/** The last 7 days of prompts, with how each ended (the server keeps a week). */
+export async function loadPromptLog(ctx: Ctx): Promise<PromptItem[]> {
+  const sent = (await store.get("promptAnswers", ctx.account)) ?? {};
+  const permissions = await readAll("permission", {}, (s) => openPermission(ctx, s, sent));
+  const settled = await readAll("settled", {}, (s) =>
+    openAsync(expectKind(s.item, "settled"), me(ctx), ctx.dir),
+  );
+  // A notice counts only from the machine that asked.
+  const byId = new Map(settled.map((x) => [`${x.signer.id}/${x.body.permissionId}`, x.body]));
+  return permissions.map((p) => {
+    const st = byId.get(`${p.machine.id}/${p.permission.id}`);
+    return st ? { ...p, settled: st as Settled } : p;
+  });
+}
+
+/**
+ * Signs the answer, bound to the prompt's id and input hash, and seals it to the machine that
+ * asked, which must still be active.
+ */
+export async function answerPermission(
+  ctx: Ctx,
+  item: PromptItem,
+  reply: PromptReply,
+): Promise<string> {
+  const fresh = await refresh(ctx);
+  const machine = fresh.dir.members.get(item.machine.id);
+  if (!machine?.active) throw new Error(`${item.machine.name} was revoked`);
+  const answeredAt = now();
+  const sealed = await sealAsync(
+    "permission-answer",
+    {
+      v: 1,
+      id: randomId("pa_"),
+      permissionId: item.permission.id,
+      to: machine.member.id,
+      answeredAt,
+      inputHash: item.permission.inputHash,
+      ...reply,
+    },
+    me(fresh),
+    [machine.member],
+  );
+  await api.post(sealed);
+  await store.update("promptAnswers", ctx.account, (sent) => ({
+    ...sent,
+    [item.permission.id]: { ...reply, answeredAt },
   }));
   return answeredAt;
 }

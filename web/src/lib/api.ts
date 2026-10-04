@@ -83,10 +83,10 @@ export const api = {
       { headers: { "x-claim": claim }, signal },
     ),
 
-  items: (kind: "decision" | "quota", after?: string) =>
+  items: (kind: string, after?: string, opts: { open?: boolean } = {}) =>
     call<{ items: Stored[]; cursor: string }>(
       "GET",
-      `/items?kind=${kind}${after ? `&after=${encodeURIComponent(after)}` : ""}`,
+      `/items?kind=${kind}${after ? `&after=${encodeURIComponent(after)}` : ""}${opts.open ? "&open=1" : ""}`,
     ),
   item: (id: string) => call<Stored>("GET", `/items/${encodeURIComponent(id)}`),
   quota: async () => (await call<{ items: Stored[] }>("GET", "/quota")).items,

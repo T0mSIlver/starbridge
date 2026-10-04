@@ -86,6 +86,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.lifecycle.ViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.starbridge.app.data.Decision
+import dev.starbridge.app.data.Prompt
 import dev.starbridge.app.data.Source
 import dev.starbridge.app.data.Store
 import dev.starbridge.app.ui.Beacon
@@ -108,6 +109,9 @@ import javax.inject.Inject
 @HiltViewModel
 class InboxViewModel @Inject constructor(private val store: Store) : ViewModel() {
     val decisions = store.decisions
+    val prompts = store.prompts
+    fun answerPrompt(id: String, allow: Boolean, scope: String, message: String?) = store.answerPrompt(id, allow, scope, message)
+    fun refreshPrompts() = store.refreshPrompts()
     fun answer(id: String, choice: String?, text: String?) = store.answer(id, choice, text)
     fun refresh() = store.refresh()
 }
@@ -124,7 +128,23 @@ fun InboxScreen(
     modifier: Modifier = Modifier,
     selected: String? = null,
     refresh: Refresh? = null,
+    prompts: List<Prompt> = emptyList(),
+    promptActions: PromptActions? = null,
+    pollPrompts: () -> Unit = {},
 ) {
+    // While a prompt is on screen, read prompts every 1.5 s, so one settled elsewhere leaves
+    // at once; the clock ticks with it for the 3 s a closed prompt stays.
+    var tick by remember { mutableStateOf(now) }
+    val at = if (tick.isAfter(now)) tick else now
+    val shown = if (promptActions == null) emptyList() else shownPrompts(prompts, at)
+    val polling = shown.isNotEmpty()
+    LaunchedEffect(polling) {
+        while (polling) {
+            delay(PROMPT_POLL_MS)
+            tick = Instant.now()
+            pollPrompts()
+        }
+    }
     val open = decisions.filter { it.open }.sortedByDescending { it.createdAt }
     val answered = decisions.filterNot { it.open }.sortedByDescending { it.answeredAt }
     Screen("Inbox", modifier, subtitle = { NeedsYou(open.size) }) { padding ->
@@ -133,6 +153,17 @@ fun InboxScreen(
                 contentPadding = listPadding(padding),
                 verticalArrangement = Arrangement.spacedBy(Spacing.s3),
             ) {
+                if (shown.isNotEmpty() && promptActions != null) {
+                    item(key = "prompts") { PromptsHeader(promptActions.openLog, Modifier.animateItem()) }
+                    itemsIndexed(shown, key = { _, it -> "p:${it.id}" }) { _, p ->
+                        if (p.waiting(at)) {
+                            PromptCard(p, at, promptActions, Modifier.animateItem())
+                        } else {
+                            ClosedPrompt(p, Modifier.animateItem())
+                        }
+                    }
+                    if (open.isNotEmpty()) item(key = "decisions") { Label("Decisions", Modifier.padding(top = Spacing.s4, start = Spacing.s1).animateItem()) }
+                }
                 itemsIndexed(open, key = { _, it -> it.id }) { _, it ->
                     OpenDecision(it, now, actions, selected = it.id == selected, modifier = Modifier.animateItem())
                 }
@@ -149,6 +180,8 @@ fun InboxScreen(
         }
     }
 }
+
+private const val PROMPT_POLL_MS = 1_500L
 
 /** The top app bar's subtitle: how many decisions wait, with the beacon when any do. */
 @Composable
