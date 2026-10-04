@@ -245,3 +245,22 @@ test("the CodexBar tarball installs only with the pinned hash", async () => {
     files.stop();
   }
 });
+
+test("uninstall keeps the keys when systemd cannot stop the agent", async () => {
+  const m = await machine();
+  await startAgent(m.ctx);
+  await setup(m.sys, { yes: true, readyTimeoutMs: 2_000 });
+  m.ctx.env.PATH = `${join(m.home, "bin")}:${m.ctx.env.PATH}`;
+  mkdirSync(join(m.home, "bin"));
+  writeFileSync(
+    join(m.home, "bin/systemctl"),
+    "#!/bin/sh\necho 'Failed to connect to bus' >&2\nexit 1\n",
+    {
+      mode: 0o755,
+    },
+  );
+  expect(await uninstall(m.sys, { purge: true })).toBe(1);
+  expect(m.ctx.lines.join("\n")).toContain("Could not stop the agent service, so it stays");
+  expect(existsSync(join(m.units, "starbridge-agent.service"))).toBe(true);
+  expect(existsSync(join(m.ctx.store.dir, "machine.json"))).toBe(true);
+});

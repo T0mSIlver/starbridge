@@ -244,8 +244,12 @@ async function serviceStep(sys: Sys, opts: SetupOpts, configChanged: boolean) {
   for (const unit of legacyUnits(sys)) {
     const q = `${unit.name} runs \`starbridge quota push\`, which the agent now does. Stop and remove it?`;
     if (await prompt.confirm(q, true)) {
-      await removeLegacy(sys, unit);
-      ctx.out(`Removed ${unit.path}.`);
+      try {
+        await removeLegacy(sys, unit);
+        ctx.out(`Removed ${unit.path}.`);
+      } catch (e) {
+        ctx.out(`Could not stop ${unit.name}: ${(e as Error).message}`);
+      }
     } else ctx.out(`Kept ${unit.name}: it and the agent both upload quotas.`);
   }
   let installed: { path: string; restarted: boolean };

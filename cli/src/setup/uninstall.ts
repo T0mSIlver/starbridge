@@ -48,15 +48,26 @@ export async function uninstall(sys: Sys, opts: UninstallOpts): Promise<number> 
     }
   }
 
-  ctx.out(
-    (await removeService(sys))
-      ? "Stopped and removed the agent service."
-      : "No agent service installed.",
-  );
+  let stopped = true;
+  try {
+    ctx.out(
+      (await removeService(sys))
+        ? "Stopped and removed the agent service."
+        : "No agent service installed.",
+    );
+  } catch (e) {
+    stopped = false;
+    ctx.out(`Could not stop the agent service, so it stays: ${(e as Error).message}`);
+  }
   for (const unit of legacyUnits(sys))
     if (await prompt.confirm(`Also stop and remove ${unit.name} (starbridge quota push)?`, true)) {
-      await removeLegacy(sys, unit);
-      ctx.out(`Removed ${unit.path}.`);
+      try {
+        await removeLegacy(sys, unit);
+        ctx.out(`Removed ${unit.path}.`);
+      } catch (e) {
+        stopped = false;
+        ctx.out(`Could not stop ${unit.name}: ${(e as Error).message}`);
+      }
     }
 
   if (hasClaude(sys)) {
@@ -74,7 +85,9 @@ export async function uninstall(sys: Sys, opts: UninstallOpts): Promise<number> 
   }
 
   const dir = ctx.store.dir;
-  if (existsSync(dir)) {
+  if (!stopped && existsSync(dir)) {
+    ctx.out(`Kept ${dir}: a service still uses it. Stop it, then rerun \`starbridge uninstall\`.`);
+  } else if (existsSync(dir)) {
     if (
       opts.purge ||
       (await prompt.confirm(`Delete ${dir} (this machine's keys and state)?`, false))
@@ -95,6 +108,7 @@ export async function uninstall(sys: Sys, opts: UninstallOpts): Promise<number> 
         : "your package manager";
     ctx.out(`CodexBar stays installed (${cb.path}); remove it with ${how}.`);
   }
-  if (opts.install) removeBinary(ctx, opts.install);
-  return 0;
+  // The binary goes last, and only once nothing runs it any more.
+  if (opts.install && stopped) removeBinary(ctx, opts.install);
+  return stopped ? 0 : 1;
 }

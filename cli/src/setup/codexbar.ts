@@ -126,7 +126,9 @@ export async function installTarball(
   if (!want) throw new Error(`no CodexBar build for ${key}`);
   const base = sys.ctx.env.STARBRIDGE_CODEXBAR_RELEASES ?? RELEASES;
   const name = `CodexBarCLI-v${release.version}-${key}.tar.gz`;
-  const res = await fetch(`${base}/v${release.version}/${name}`);
+  const res = await fetch(`${base}/v${release.version}/${name}`, {
+    signal: AbortSignal.timeout(10 * 60_000),
+  });
   if (!res.ok) throw new Error(`downloading ${name}: ${res.status}`);
   const bytes = new Uint8Array(await res.arrayBuffer());
   const got = createHash("sha256").update(bytes).digest("hex");

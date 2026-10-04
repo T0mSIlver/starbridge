@@ -15,8 +15,12 @@ export function kind(sys: Sys): Kind | undefined {
   return sys.platform === "linux" ? "systemd" : sys.platform === "darwin" ? "launchd" : undefined;
 }
 
+/**
+ * Where the systemd user manager looks. Not `$XDG_CONFIG_HOME`: a shell often exports it
+ * where the manager, started before any shell, does not have it.
+ */
 function unitDir(sys: Sys) {
-  return join(sys.ctx.env.XDG_CONFIG_HOME || join(sys.home, ".config"), "systemd/user");
+  return join(sys.home, ".config/systemd/user");
 }
 
 export function servicePath(sys: Sys): string | undefined {
@@ -47,7 +51,7 @@ export function servicePathVar(sys: Sys): string {
 /** Environment the agent needs to find the same config directory and socket as the CLI. */
 function serviceEnv(sys: Sys): Record<string, string> {
   const env: Record<string, string> = { PATH: servicePathVar(sys) };
-  for (const k of ["STARBRIDGE_CONFIG_DIR", "STARBRIDGE_AGENT_SOCKET"]) {
+  for (const k of ["STARBRIDGE_CONFIG_DIR", "XDG_CONFIG_HOME", "STARBRIDGE_AGENT_SOCKET"]) {
     const v = sys.ctx.env[k];
     if (v) env[k] = v;
   }
@@ -176,19 +180,30 @@ export async function installService(
   return { path, restarted: go };
 }
 
-/** Stops and removes the service. False when none was installed. */
+/**
+ * Stops and removes the service. False when none was installed. Throws, and leaves the file,
+ * when the manager could not stop it: the agent may still run.
+ */
 export async function removeService(sys: Sys): Promise<boolean> {
   const path = servicePath(sys);
   if (!path || !existsSync(path)) return false;
   if (kind(sys) === "systemd") {
-    await systemctl(sys, "disable", "--now", UNIT);
+    await stopUnit(sys, UNIT);
     rmSync(path, { force: true });
     await systemctl(sys, "daemon-reload");
   } else {
-    await launchctl(sys, "bootout", `gui/${sys.uid}/${LABEL}`);
+    const r = await launchctl(sys, "bootout", `gui/${sys.uid}/${LABEL}`);
+    // 3 and 113: not loaded, so nothing runs.
+    if (r?.code !== 0 && r?.code !== 3 && r?.code !== 113)
+      throw new Error(`launchctl bootout: ${lastLine(r)}`);
     rmSync(path, { force: true });
   }
   return true;
+}
+
+async function stopUnit(sys: Sys, unit: string) {
+  const r = await systemctl(sys, "disable", "--now", unit);
+  if (r?.code !== 0) throw new Error(`systemctl --user disable --now ${unit}: ${lastLine(r)}`);
 }
 
 export interface ServiceState {
@@ -284,7 +299,7 @@ export function legacyUnits(sys: Sys): LegacyUnit[] {
 
 /** Stops, disables and removes a legacy unit. */
 export async function removeLegacy(sys: Sys, unit: LegacyUnit): Promise<void> {
-  await systemctl(sys, "disable", "--now", unit.name);
+  await stopUnit(sys, unit.name);
   rmSync(unit.path, { force: true });
   await systemctl(sys, "daemon-reload");
 }
