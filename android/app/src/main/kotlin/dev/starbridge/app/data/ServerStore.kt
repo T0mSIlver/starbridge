@@ -435,7 +435,15 @@ class ServerStore(
                     }
                     after = view.version
                     if (view.state == "cancelled") throw IllegalStateException("The request was refused or cancelled. Ask again.")
-                    val done = lock.withLock { stepDigitJoin(view) }
+                    val done = try {
+                        lock.withLock { stepDigitJoin(view) }
+                    } catch (e: IOException) {
+                        if (e is ApiException) throw e
+                        // Offline while revealing or fetching the chain: the next step retries.
+                        delay(5_000)
+                        after = 0
+                        continue
+                    }
                     if (done) {
                         refresh()
                         return@launch
