@@ -518,3 +518,10 @@ goes in git.
   bare items, but the server wraps them as `{item, cursor, receivedAt}` (as
   PROTOCOL.md says). The CLI rejected every answer as malformed and moved its
   cursor past it. #7 fixes the CLI and its fake server.
+- 2026-10-04: client tests (#24). The CLI and mod tests now run against the
+  real server app on a random port (`@starbridge/server/test-support`),
+  because the CLI's hand-written fake had drifted from the `/answers` shape.
+  Two seams stay: injected 503s, and answers stored past the server's checks,
+  which only a compromised server would send. Web fixtures are decrypted
+  bodies checked by the protocol schemas; the web `Device` adds `kind`,
+  `addedAt`, `lastSeen` and `status`, which no route returns yet.

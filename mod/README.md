@@ -53,7 +53,8 @@ decision (`$CLAUDE_CODE_SESSION_ID` at `starbridge ask`).
 pnpm --filter @starbridge/mod test
 ```
 
-The tests run the poller against the CLI and its fake server. `hooks/poller.ts`
+The tests run the poller against the CLI and the real server, which
+`@starbridge/server/test-support` starts on a random port. `hooks/poller.ts`
 holds the logic and `hooks/register.ts` connects it to the engine. CI type-checks
 only `poller.ts`. To type-check `register.ts`, load the mod once so the engine
 writes its types to `.claude-plugin/types/`, then run `tsc -p

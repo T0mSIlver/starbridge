@@ -16,6 +16,9 @@ importers:
       '@starbridge/protocol':
         specifier: workspace:*
         version: link:../packages/protocol
+      '@starbridge/server':
+        specifier: workspace:*
+        version: link:../server
       '@types/bun':
         specifier: ^1.4.2
         version: 1.4.2
@@ -31,6 +34,9 @@ importers:
       '@biomejs/biome':
         specifier: ^2.5.15
         version: 2.5.15
+      '@starbridge/server':
+        specifier: workspace:*
+        version: link:../server
       '@types/bun':
         specifier: ^1.4.2
         version: 1.4.2

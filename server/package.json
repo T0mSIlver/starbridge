@@ -4,6 +4,9 @@
   "private": true,
   "license": "MIT",
   "type": "module",
+  "exports": {
+    "./test-support": "./test-support/index.ts"
+  },
   "scripts": {
     "start": "bun run src/main.ts",
     "test": "bun test",

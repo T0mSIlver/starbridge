@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { seal } from "@starbridge/protocol";
-import { at, makeServer, pair, setupAccount } from "./helpers";
+import { at, makeServer, pair, setupAccount } from "../test-support/app";
 
 test("over real HTTP, an answer long-poll outlives the idle timeout and completes on answer", async () => {
   const s = await makeServer();
