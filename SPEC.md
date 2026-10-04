@@ -232,6 +232,14 @@ How it generalizes is open.
   pairing messages. The recovery seed shows as 24 BIP-39 words
   (`@scure/bip39`, audited, MIT).
 
+- 2026-10-04. Server (#5): self-hosters sign in with `OWNER_TOKEN` (`POST /v1/auth/owner`); the
+  Android app gets its GitHub session through a `starbridge://auth#session=` redirect. A session
+  gets its device by writing the first or a recovery directory entry, or by fetching its own
+  pairing result. FCM needs the relay because its credentials belong to the app's Firebase
+  project; Web Push goes through the relay only when a server has no VAPID keys, and UnifiedPush
+  always goes direct. The relay is open, rate-limited per IP, and only pushes ciphertext or ids.
+  The answer long-poll's cap is `MAX_WAIT_SECONDS` (300) until #2 reports the mod's fetch timeout.
+
 ## Encryption, with existing libraries
 
 - libsodium sealed boxes (`crypto_box_seal`, X25519 + XSalsa20-Poly1305): an
