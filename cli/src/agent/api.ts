@@ -68,6 +68,8 @@ export interface Status {
     lastError?: string;
   };
   sessions: SessionInfo[];
+  /** Permission prompts (#57): whether they go to Starbridge, and how many wait now. */
+  permissions?: { enabled: boolean; waiting: number };
 }
 
 /** A session the agent knows of, from `hello` or its event polls. */

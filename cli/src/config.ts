@@ -11,7 +11,15 @@ import {
 } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { type Answer, fromB64, type MemberKeys, type Pin, toB64 } from "@starbridge/protocol";
+import {
+  type Answer,
+  fromB64,
+  type MemberKeys,
+  type Permission,
+  type PermissionAnswer,
+  type Pin,
+  toB64,
+} from "@starbridge/protocol";
 
 /** `$STARBRIDGE_CONFIG_DIR`, else `$XDG_CONFIG_HOME/starbridge`, else `~/.config/starbridge`. */
 export function configDir(env: Record<string, string | undefined>): string {
@@ -56,6 +64,36 @@ export interface State {
    * submitted it (`answers --ack`).
    */
   answers: Record<string, { answer: Answer; seen: boolean }>;
+  /** Permission prompts this machine posted (#57), by id, until a day after they expire. */
+  permissions?: Record<string, PendingPermission>;
+}
+
+/**
+ * An `addRules` or `addDirectories` update Claude Code offered with a prompt (the SDK's
+ * `PermissionUpdate`); the hook returns it with the destination of the chosen scope.
+ */
+export interface PermissionUpdate {
+  type: "addRules" | "addDirectories";
+  rules?: { toolName: string; ruleContent?: string }[];
+  behavior?: string;
+  directories?: string[];
+  destination?: string;
+}
+
+/** A permission prompt as the machine keeps it while a hook waits on it. */
+export interface PendingPermission {
+  /** The body as signed and posted. */
+  permission: Permission;
+  /** The Claude Code session that asked. */
+  session: string;
+  /** The updates behind the offered scopes; an allow for a wider scope writes these. */
+  updates: PermissionUpdate[];
+  /** The answers cursor when it was posted: a wait from there cannot miss its answer. */
+  cursor?: string;
+  /** The device's answer, once accepted. */
+  answer?: PermissionAnswer & { device: string };
+  /** Set once the prompt ended; nothing is accepted after. */
+  settled?: "keyboard" | "timeout" | "device";
 }
 
 /**
@@ -63,6 +101,8 @@ export interface State {
  * flags override it.
  */
 export interface AgentConfig {
+  /** Permission prompts go to Starbridge (#57); off unless `starbridge permissions enable`. */
+  permissions?: { enabled?: boolean };
   quota?: {
     /** The CodexBar providers to upload; none means no timer. */
     providers?: string[];

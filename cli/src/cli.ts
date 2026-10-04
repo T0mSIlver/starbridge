@@ -8,6 +8,7 @@ import { runAgent } from "./agent/main";
 import { ApiError } from "./api";
 import { type Ctx, UsageError } from "./context";
 import { type AskInput, answers, ask, wait } from "./decisions";
+import { hookPermission, hookSettle, permissionsCommand } from "./hook";
 import { pair } from "./pair";
 import { pushOnce, quotaPush } from "./quota";
 
@@ -57,6 +58,17 @@ const HELP = `starbridge: post decisions to your devices, upload quota windows
       its answers over a unix socket. Flags override agent.json in the config directory.
       The commands above go through it when it runs, and to the server directly when not
       (or with STARBRIDGE_NO_AGENT=1).
+
+  starbridge permissions enable|disable|status
+      Send this machine's Claude Code permission prompts to your devices, where they can be
+      allowed or denied; the prompt stays open at the keyboard and the first answer wins.
+      Off by default. The starbridge plugin's hooks do nothing while it is off.
+
+  starbridge hook permission --agent claude-code [--wait 570s]
+  starbridge hook settle --agent claude-code
+      For Claude Code's PermissionRequest hook, and for its PostToolUse, PermissionDenied,
+      Stop and SessionEnd hooks: hook JSON on stdin; prints the hook's decision, or nothing
+      to leave the prompt to the keyboard.
 
   starbridge --version
 
@@ -202,6 +214,18 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
           ...(values.codexbar ? { codexbar: values.codexbar } : {}),
           ...(values["no-quota"] ? { noQuota: true } : {}),
         });
+      }
+      case "permissions":
+        return permissionsCommand(ctx, rest[0]);
+      case "hook": {
+        const [sub, ...args] = rest;
+        const { values } = parseArgs({
+          args,
+          options: { agent: { type: "string" }, wait: { type: "string" } },
+        });
+        if (sub === "permission") return await hookPermission(ctx, readText("-"), values);
+        if (sub === "settle") return await hookSettle(ctx, readText("-"), values);
+        throw new UsageError("usage: starbridge hook permission|settle --agent claude-code");
       }
       case "--version":
       case "version": {

@@ -454,6 +454,16 @@ How it generalizes is open.
   the permission arrived. `GET /items` takes a comma-separated `kind` list and `open=1`; the
   machine's `checkPermissionAnswer` lives in the protocol package.
 
+- 2026-10-05. Permission prompts on the machine (#57): Claude Code 2.1.289's `PermissionRequest`
+  input carries no `tool_use_id` (probe log), so `hook settle` matches the call by the hash of
+  its `tool_input` on `PostToolUse` and `PermissionDenied`, and settles all of the session's
+  waiting prompts on `Stop` and `SessionEnd`. Only `addRules` allow rules and `addDirectories`
+  suggestions are offered for "this session" and "always"; a `setMode` suggestion (seen in the
+  probe as `acceptEdits`) changes more than the call, so it stays at the keyboard. Without an
+  agent the hook polls the server every 5 s, so a keyboard answer releases it within 5 s
+  instead of at once. The plugin's hook entries land once the plugin (#79) is on main; until
+  then a test settings file carries them.
+
 ## Encryption, with existing libraries
 
 - libsodium sealed boxes (`crypto_box_seal`, X25519 + XSalsa20-Poly1305): an

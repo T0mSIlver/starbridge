@@ -30,6 +30,12 @@ hands each Claude Code session its answers over a unix socket
 (PROTOCOL.md, "Local agent API"). Every command goes through it when it runs
 and to the server directly when it does not, or with `STARBRIDGE_NO_AGENT=1`.
 
+`starbridge permissions enable` sends this machine's Claude Code permission
+prompts to your devices too, where they can be allowed or denied; the prompt
+stays open at the keyboard and the first answer wins. The `starbridge`
+plugin's hooks run `starbridge hook permission` and `starbridge hook settle`,
+which do nothing while it is off (PROTOCOL.md, "Permission prompts").
+
 `quota push` runs `codexbar usage --format json` for each provider, or once
 for every enabled provider when none is named. A provider that fails or is
 missing from the output is logged and sent as an error; it never stops the
