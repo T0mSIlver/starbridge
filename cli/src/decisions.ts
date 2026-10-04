@@ -211,6 +211,9 @@ export async function wait(
       directory ??= await refreshDirectory(ctx, s);
       const seconds = Math.max(1, Math.min(MAX_POLL_SECONDS, Math.ceil(left / 1000)));
       page = await s.api.answers(cursor, seconds, ctx.signal);
+      // A new device may have answered since the directory was read. On failure the cursor
+      // stays put, so the retry fetches the same answers again.
+      if (page.items.length > 0) directory = await refreshDirectory(ctx, s);
     } catch (e) {
       if (e instanceof UsageError || e instanceof ProtocolError) throw e;
       if (ctx.signal?.aborted) continue;
@@ -219,13 +222,11 @@ export async function wait(
       continue;
     }
     if (page.items.length > 0) {
-      // A new device may have answered since the directory was read.
-      directory = await refreshDirectory(ctx, s);
       const asked = ctx.store.state().asked;
       const good: Answer[] = [];
       for (const raw of page.items) {
         try {
-          good.push(checkAnswer(raw, s, directory, asked));
+          good.push(checkAnswer(raw, s, directory as Directory, asked));
         } catch (e) {
           ctx.err(`starbridge: ignored an answer: ${(e as Error).message}`);
         }

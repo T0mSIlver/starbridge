@@ -73,15 +73,17 @@ test("wait ignores forged or foreign answers and keeps the good one", async () =
   await run(ASK, ctx);
   const id = ctx.lines[0] as string;
   const done = run(["wait", id, "--json"], ctx);
+  await until(() => server.log.includes("GET /answers"));
+  // The open poll returns these answers, then the directory refresh and the next poll fail once.
+  server.failures.push("/directory", "/answers");
   server.answer(id, { choice: "Ship it" });
   server.answer(id, { text: "free text to a decision with options" });
   server.answer(id, { choice: "Merge" }, { decisionId: "d_other" });
-  server.failures.push("/answers");
   server.answer(id, { choice: "Merge" });
   expect(await done).toBe(0);
   expect(JSON.parse(ctx.lines[1] as string)).toMatchObject({ decisionId: id, choice: "Merge" });
   expect(ctx.errors.filter((e) => e.includes("ignored an answer"))).toHaveLength(3);
-  expect(ctx.errors.some((e) => e.includes("retrying"))).toBe(true);
+  expect(ctx.errors.filter((e) => e.includes("retrying"))).toHaveLength(2);
 });
 
 test("wait with no id returns each answer once, then times out with exit 2", async () => {
