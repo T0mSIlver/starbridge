@@ -199,6 +199,27 @@ How it generalizes is open.
   the owner's machines). Check Hetzner Cloud first (CX23 or CAX11, about
   €5.50 to €6 after the June 2026 increase), then netcup.
 
+- 2026-10-04. Encryption: a key pair per device, plus a recovery key printed
+  once. Use existing, audited libraries; invent no cryptography (below).
+- 2026-10-04. Not a "bar". Version 1 is a web page and an Android app; a menu
+  bar app may come later. Names ending in "bar" are out.
+
+## Encryption, with existing libraries
+
+- libsodium sealed boxes (`crypto_box_seal`, X25519 + XSalsa20-Poly1305): an
+  agent encrypts each decision once per recipient device public key. Bindings
+  exist for every client: libsodium.js (web, ISC licence), Lazysodium (Android),
+  libsodium itself or a binding for the CLI and the server. The server never
+  decrypts, so it needs no cryptography beyond TLS.
+- The app's own code is the device directory: listing public keys, approving a
+  new device from an existing one, revoking, and the recovery key.
+- Not libsignal: AGPL-3.0, which conflicts with the MIT licence, and its
+  ratchets solve chat problems this app does not have.
+- Alternatives seen: HPKE (RFC 9180) through Google Tink and hpke-js; Matrix
+  (encrypted rooms, device verification, its own push gateway), which brings a
+  whole homeserver; Jazz, an end-to-end encrypted sync framework, TypeScript
+  only.
+
 ## Fully hosted
 
 A first sketch, to discuss:
@@ -234,14 +255,25 @@ Approved 2026-10-04:
 
 ## Open questions
 
-1. Encryption keys. Proposed (default unless the owner objects): a key pair
-   per device. Agents encrypt each decision to the public keys of the owner's
-   phone and browsers; answers come back encrypted to the asking machine's key.
-   A new device is approved from one the owner already has; revoking deletes its
-   public key. A recovery key, printed once, restores access after losing every
-   device. Alternatives considered: the server reads decisions; one passphrase
-   per account; one shared key handed out by the phone.
-2. The name. Shortlist and checks in the research log.
+1. The name. Shortlist and checks in the research log. The owner likes Sayso
+   but, as a non-native speaker, asks whether it sounds cheesy.
+2. Technology. Proposed below.
+
+## Technology (proposed, not decided)
+
+The owner's vidtheque already uses: Kotlin, Jetpack Compose with Material 3
+Expressive, Hilt, Navigation 3, OkHttp and Firebase on Android; Next.js 16 and
+React 19 on the web; design tokens generated from `DESIGN.md` frontmatter
+(`web/scripts/tokens.mjs`); Caddy, Docker Compose and cloudflared to deploy.
+
+- Android: the vidtheque stack.
+- Web: Next.js, as vidtheque, with the same design-token pipeline, so the two
+  clients share colours and type.
+- Server, CLI and Claude Code mod in TypeScript, sharing one schema (zod):
+  Claude Code mods are TypeScript already, and agents install the CLI with npm.
+  SQLite at first; it stores ciphertext and device keys only.
+- Deploy: Docker Compose and Caddy on the VPS; the same image is the self-hosted
+  build.
 
 ## Research log
 
