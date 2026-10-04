@@ -1,7 +1,6 @@
-# Agent supervisor (working name)
+# Starbridge
 
-Status: draft, 2026-10-04. No name and no GitHub repository yet. This folder is
-the working copy until the owner picks a name.
+Status: draft, 2026-10-04.
 
 ## What it is
 
@@ -220,6 +219,9 @@ How it generalizes is open.
   whole homeserver; Jazz, an end-to-end encrypted sync framework, TypeScript
   only.
 
+- 2026-10-04. Name: Starbridge (a starship's bridge, where the captain
+  commands, and the bridge between all your agents). Domains not registered yet.
+
 ## Fully hosted
 
 A first sketch, to discuss:
@@ -255,9 +257,7 @@ Approved 2026-10-04:
 
 ## Open questions
 
-1. The name. Shortlist and checks in the research log. The owner likes Sayso
-   but, as a non-native speaker, asks whether it sounds cheesy.
-2. Technology. Proposed below.
+1. Technology. Proposed below.
 
 ## Technology (proposed, not decided)
 
