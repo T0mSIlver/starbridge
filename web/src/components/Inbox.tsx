@@ -105,7 +105,8 @@ function Panes({
     const at = open.indexOf(item);
     const next = open[at + 1] ?? open[at - 1];
     await answer(item, reply);
-    setPicked(next?.decision.id);
+    // Only when it is still selected: the owner may have moved on while it was sent.
+    setPicked((cur) => (cur === undefined || cur === item.decision.id ? next?.decision.id : cur));
   };
 
   const index = selected ? all.indexOf(selected) : -1;

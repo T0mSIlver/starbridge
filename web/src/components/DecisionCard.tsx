@@ -14,9 +14,10 @@ export function ordered(d: Decision): string[] {
     : d.options;
 }
 
-// A row of up to 3 short options fits a phone; anything longer stacks.
+// A row of up to 3 short options fits a 320px card; anything longer stacks.
+// Each button's padding costs about 4 characters.
 const fitsRow = (options: string[]) =>
-  options.length <= 3 && options.reduce((n, o) => n + o.length, 0) <= 36;
+  options.length <= 3 && options.reduce((n, o) => n + o.length + 4, 0) <= 30;
 
 function Source({ d }: { d: Decision }) {
   return (
