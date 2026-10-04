@@ -410,6 +410,33 @@ Wave 1 starts now; each later session starts when what it builds on merges.
 Every PR gets a cross-vendor review; PRs touching keys or the directory get
 two vendors at high effort. The orchestrator merges on green, squash.
 
+## Accounts
+
+Created 2026-10-04 by the owner, for #10. Secrets live only on the dev box, in
+`~/.config/starbridge/secrets/` (directory 0700, files 0600); nothing secret
+goes in git.
+
+- Domain: `starbridge.run` at Porkbun, renews 2027-10-04 ($22.14 a year). DNS
+  at Porkbun: `A 2.29.61.225`, `AAAA 2a01:4f9:c015:ac83::1`.
+- Server: Hetzner Cloud project `starbridge`, `starbridge-1`, a CX23 in
+  Helsinki, Ubuntu 26.04 LTS, backups on. Firewall `web` lets in only TCP 22,
+  80 and 443. Root logs in with the dev box key `~/.ssh/starbridge_ed25519`.
+  sshd still accepts passwords for other users; the deploy adds a non-root
+  user and turns password login off.
+- GitHub OAuth app `Starbridge` under T0mSIlver: client id
+  `Ov23liEVyfnca8hO548x`, redirect URI
+  `https://starbridge.run/v1/auth/github/callback`, user tokens expire. Secret:
+  `github-oauth-client-secret`.
+- Firebase project `starbridge-476f2`, Android app `dev.starbridge.app`
+  (app id `1:342630184902:android:a77b6cd3da382eed23e4c7`, config
+  `google-services.json`).
+  Service account
+  `firebase-adminsdk-fbsvc@starbridge-476f2.iam.gserviceaccount.com`, key:
+  `fcm-service-account.json`.
+- Web Push VAPID public key
+  `BIt5Tdn6pZWUo5LqP_v3qQjpFQ0lWtWQWRYvymNPELFL5t8aN7vqlMLw1Wz3mT_HvPKdybR98QGi__88s-nnMvk`;
+  private key: `vapid-private-key`.
+
 ## Research log
 
 - 2026-10-04: CodexBar facts from the owner's checkout and upstream docs. Mod
@@ -438,6 +465,12 @@ two vendors at high effort. The orchestrator merges on green, squash.
   frequencies"; hailing.dev, .app and .sh show no nameservers; no Play app;
   "ride-hailing" is the common sense of the word). No nameservers is not proof a
   domain is free; confirm at a registrar.
+- 2026-10-04: domains confirmed through registry RDAP and Porkbun prices.
+  getstarbridge.app, starbridge.app, starbridge.dev and starbridge.io are
+  registered (so the "no nameservers" check above missed some), and one
+  Cloudflare account holds getstarbridge.dev, usestarbridge.dev and
+  starbridgehq.dev. Free: starbridge.run ($4.12, then $22.14), starbridge.sh
+  ($31.20, then $46.65), starbridge.tools. The owner bought starbridge.run.
 - 2026-10-04: Android crypto. `lazysodium-android` 5.2.0 needs JNA's AAR
   (`jna@aar`) for its per-ABI native library; JVM unit tests use
   `lazysodium-java`, which bundles libsodium for desktop, so the same
