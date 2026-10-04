@@ -99,7 +99,7 @@ for (const viaAgent of [true, false]) {
     });
     await until(async () => (await server.opened("settled")).length === 1);
     expect((await server.opened("settled"))[0]).toMatchObject({
-      permissionId: permission.id,
+      itemId: permission.id,
       outcome: "device",
       device: "phone",
     });
@@ -149,7 +149,7 @@ test("with no answer the hook prints nothing at the deadline and reports the tim
   expect(ctx.lines).toEqual([]);
   await until(async () => (await server.opened("settled")).length === 1);
   expect((await server.opened("settled"))[0]).toMatchObject({
-    permissionId: permission.id,
+    itemId: permission.id,
     outcome: "timeout",
   });
 });
@@ -202,7 +202,7 @@ test("a keyboard answer settles the prompt: PostToolUse for the same call releas
   expect(ctx.lines).toEqual([]);
   await until(async () => (await server.opened("settled")).length === 1);
   expect((await server.opened("settled"))[0]).toMatchObject({
-    permissionId: permission.id,
+    itemId: permission.id,
     outcome: "keyboard",
   });
   // A late answer is refused by the server: the prompt is settled.
@@ -221,7 +221,7 @@ test("SIGTERM (Esc or No at the keyboard) reports the prompt settled and prints 
   expect(ctx.lines).toEqual([]);
   await until(async () => (await server.opened("settled")).length === 1);
   expect((await server.opened("settled"))[0]).toMatchObject({
-    permissionId: permission.id,
+    itemId: permission.id,
     outcome: "keyboard",
   });
 });

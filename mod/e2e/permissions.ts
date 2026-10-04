@@ -92,7 +92,7 @@ interface Row {
 }
 
 const settledFor = async (permissionId: string) =>
-  (await server.opened("settled")).find((s) => s.permissionId === permissionId);
+  (await server.opened("settled")).find((s) => s.itemId === permissionId);
 
 /**
  * Starts a session in a new folder, asks it to run `command`, and waits until its prompt

@@ -407,7 +407,7 @@ export async function postSettled(
   const body: Settled = {
     v: 1,
     id: `st_${randomBytes(12).toString("base64url")}`,
-    permissionId: id,
+    itemId: id,
     to: to.map((d) => d.id),
     outcome: how.outcome,
     ...(how.device ? { device: how.device } : {}),
