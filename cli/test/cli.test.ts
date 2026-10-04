@@ -62,7 +62,8 @@ test("ask refuses a decision that would not stand alone", async () => {
 test("ask --wait prints the answer the phone sends", async () => {
   const ctx = await paired(server);
   const done = run([...ASK, "--wait"], ctx);
-  await until(() => server.items.length === 1);
+  // The fake server holds the item before the CLI has its reply and prints the id; wait for the id.
+  await until(() => ctx.lines.length === 1);
   server.answer(ctx.lines[0] as string, { choice: "Wait" });
   expect(await done).toBe(0);
   expect(ctx.lines[1]).toBe(`Answer to ${ctx.lines[0]} (Merge #12 now?): Wait`);
