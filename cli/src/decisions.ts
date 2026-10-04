@@ -112,6 +112,7 @@ export async function ask(
       options: decision.options,
       askedAt: decision.createdAt,
       ...(decision.default.at ? { defaultAt: decision.default.at } : {}),
+      default: decision.default.action,
       ...(cursor !== undefined ? { cursor } : {}),
       ...(decision.source.session ? { session: decision.source.session } : {}),
     };
@@ -265,13 +266,24 @@ export async function wait(
 /** Keeps a `--wait` cycle under the 30 s the mod's host allows a call to run. */
 const MAX_CYCLE_SECONDS = 25;
 
+/** The line the mod submits when a decision's default time passed with no answer. */
+function defaultLine(id: string, asked: State["asked"][string]): string {
+  const what = asked.default ? `apply your default: ${asked.default}` : "apply your default";
+  return `No answer to ${id} (${asked.question}) by its default time ${asked.defaultAt}: ${what}`;
+}
+
+/** The `--ack` token for a default-time line; a plain decision id confirms an answer. */
+const DEFAULT_ACK = ":default";
+
 /**
  * For the Claude Code mod: hands over the answers to decisions that session `session` asked and
- * that neither a `wait` printed nor the mod confirmed, one JSON line `{decisionId, line}` each.
- * The mod confirms each answer it submitted with `--ack <id>`; until then the next call hands it
- * over again, so an answer the mod held back (its session ended meanwhile) is not lost. With
- * `wait`, and nothing to hand over, first long-polls once for at most that many seconds from the
- * shared cursor. One cycle per call: an error exits 1, and the mod decides when to retry.
+ * that neither a `wait` printed nor the mod confirmed, one JSON line `{decisionId, ack, line}`
+ * each. A decision whose default time passed with no answer gets one line too, telling the agent
+ * to apply its default. The mod confirms each line it submitted with `--ack <ack>`; until then
+ * the next call hands it over again, so a line the mod held back (its session ended meanwhile) is
+ * not lost. With `wait`, and nothing to hand over, first long-polls once for at most that many
+ * seconds from the shared cursor. One cycle per call: an error exits 1, and the mod decides when
+ * to retry.
  */
 export async function answers(
   ctx: Ctx,
@@ -280,40 +292,91 @@ export async function answers(
   const target = opts.session;
   if (!target) throw new UsageError("answers needs --session");
   const due = (st: State, id: string) => !st.answers[id]?.seen && st.asked[id]?.session === target;
+  const overdue = (st: State, id: string) => {
+    const asked = st.asked[id];
+    return (
+      asked?.session === target &&
+      !asked.defaulted &&
+      !st.answers[id] &&
+      asked.defaultAt !== undefined &&
+      Date.parse(asked.defaultAt) <= ctx.now().getTime()
+    );
+  };
   if (opts.ack) {
     if (opts.wait !== undefined) throw new UsageError("--ack takes no --wait");
     const acked = opts.ack;
     ctx.store.updateState((st) => {
-      for (const id of acked) {
-        const a = st.answers[id];
-        if (a && due(st, id)) a.seen = true;
+      for (const token of acked) {
+        if (token.endsWith(DEFAULT_ACK)) {
+          const id = token.slice(0, -DEFAULT_ACK.length);
+          const asked = st.asked[id];
+          if (asked?.session === target) asked.defaulted = true;
+          continue;
+        }
+        const a = st.answers[token];
+        if (a && due(st, token)) a.seen = true;
       }
     });
     return 0;
   }
-  const claim = () => {
+  const claim = (notices: boolean) => {
     const st = ctx.store.state();
     let handed = 0;
     for (const [id, a] of Object.entries(st.answers)) {
       const asked = st.asked[id];
       if (!asked || !due(st, id)) continue;
-      ctx.out(JSON.stringify({ decisionId: id, line: answerLine(a.answer, asked.question) }));
+      ctx.out(
+        JSON.stringify({ decisionId: id, ack: id, line: answerLine(a.answer, asked.question) }),
+      );
+      handed++;
+    }
+    for (const [id, asked] of Object.entries(st.asked)) {
+      if (!notices || !overdue(st, id)) continue;
+      ctx.out(
+        JSON.stringify({
+          decisionId: id,
+          ack: `${id}${DEFAULT_ACK}`,
+          line: defaultLine(id, asked),
+        }),
+      );
       handed++;
     }
     return handed;
   };
-  if (claim() > 0 || opts.wait === undefined) return 0;
+  // The owner may have answered while no poller ran: fetch what is waiting before saying nobody
+  // answered. When the server cannot be reached, the notice waits for a later call.
+  let notices = true;
+  const st = ctx.store.state();
+  if (Object.keys(st.asked).some((id) => overdue(st, id))) {
+    try {
+      await poll(ctx, session(ctx), { cursor: st.cursor, seconds: 0, shared: true });
+    } catch (e) {
+      if (e instanceof UsageError || e instanceof ProtocolError) throw e;
+      ctx.err(`starbridge: ${(e as Error).message}; the default-time notice waits`);
+      notices = false;
+    }
+  }
+  if (claim(notices) > 0 || opts.wait === undefined) return 0;
   const seconds = Number(opts.wait);
   if (!Number.isInteger(seconds) || seconds < 0 || seconds > MAX_CYCLE_SECONDS)
     throw new UsageError(`--wait takes whole seconds from 0 to ${MAX_CYCLE_SECONDS}`);
+  // Wake for this session's next default time, so its notice is not a whole cycle late.
+  const now = ctx.now().getTime();
+  const st2 = ctx.store.state();
+  const pending = Object.entries(st2.asked)
+    .filter(([id, a]) => a.session === target && !a.defaulted && !st2.answers[id] && a.defaultAt)
+    .map(([, a]) => Date.parse(a.defaultAt as string) - now)
+    .filter((ms) => ms > 0);
+  const hold = Math.min(seconds, ...pending.map((ms) => Math.ceil(ms / 1000)));
   const s = session(ctx);
   try {
-    await poll(ctx, s, { cursor: ctx.store.state().cursor, seconds, shared: true });
+    await poll(ctx, s, { cursor: ctx.store.state().cursor, seconds: hold, shared: true });
   } catch (e) {
     if (e instanceof UsageError || e instanceof ProtocolError) throw e;
     ctx.err(`starbridge: ${(e as Error).message}`);
     return 1;
   }
-  claim();
+  // That poll fetched every waiting answer, so a due notice can go now.
+  claim(true);
   return 0;
 }

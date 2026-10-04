@@ -7,10 +7,12 @@
   "scripts": {
     "test": "bun test",
     "typecheck": "tsc --noEmit",
-    "lint": "biome check ."
+    "lint": "biome check .",
+    "e2e": "bun e2e/run.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.15",
+    "@starbridge/protocol": "workspace:*",
     "@starbridge/server": "workspace:*",
     "@types/bun": "^1.4.2",
     "typescript": "^7.0.2"

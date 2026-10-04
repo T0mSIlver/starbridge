@@ -143,6 +143,19 @@ a `/clear` waits for the session that asked, instead of going to the new one.
 The CLI and the mod must be updated together: an older mod never confirms, so
 it would get the same answer every cycle.
 
+Changed (#48, 2026-10-04): agents never wait. The skill no longer offers
+`ask --wait` or a background `starbridge wait`: an agent posts, keeps working,
+ends its turn, and acts on the answer when the mod submits it. When a
+decision's default time passes with no answer, the CLI hands the mod one line
+for it (`No answer to <id> (<question>) by its default time <time>: apply your
+default: <default>`), confirmed apart from the answer (`--ack <id>:default`),
+so an answer that comes later still arrives. Before that line, the CLI fetches
+any answer waiting on the server. Sessions that do not poll reread their
+answers every 30 s, since a default time passing changes no file. After a
+`/resume` the mod keeps polling under the resumed id (before, `session.end`
+with reason `resume` stopped it for good, and no `session.start` follows).
+The mod's longest wait after errors drops from 5 minutes to 1.
+
 What the probe showed (2026-10-04, in the Desktop Code tab):
 
 - Idle session: the submitted prompt starts a turn within 0.2 s, and the model
@@ -588,3 +601,21 @@ goes in git.
   which only a compromised server would send. Web fixtures are decrypted
   bodies checked by the protocol schemas; the web `Device` adds `kind`,
   `addedAt`, `lastSeen` and `status`, which no route returns yet.
+- 2026-10-04/05: answers e2e (#48), Claude Code 2.1.289. `mod/e2e/run.ts`
+  drove real interactive sessions (Sonnet, in tmux, with the mod through
+  `--plugin-dir` and the skill in the project) against the server app on the
+  dev box (test-support, owner-token sign-in), and a local relay that cut the
+  connection for the outage. From the device's post to the prompt: idle
+  0.03 s; mid-turn, queued 0.05 s after the turn ended; a new session after
+  `/clear` 0.07 s, while the old session's answer stayed held and arrived 20 s
+  after `/resume` (one poll cycle); after a hot reload 0.03 s; 2.3 s after a
+  60 s outage ended; two sessions asking at once each got only their own
+  answer in 3.5 to 4.7 s; a default-time notice 0.07 s after its time. Agents
+  posted with the skill, kept working, ended their turn and never waited.
+  Haiku 4.5 once claimed it had posted without running `starbridge ask`, so
+  the agent cases run on Sonnet. Live on starbridge.run as devbox, under Remote
+  Control: the owner tapped Yes on his phone; the prompt reached the session
+  0.15 s after the answer's signed time (whole seconds, so at most 1.2 s), and
+  showed in the Remote Control session on his phone. The run found that
+  `/resume` fires `session.end` (reason `resume`) and no `session.start`, which
+  had stopped the mod's polling for good.
