@@ -10,6 +10,7 @@ import {
   SealedItem,
   seal,
 } from "@starbridge/protocol";
+import type { State } from "./config";
 import {
   type Ctx,
   devices,
@@ -112,6 +113,7 @@ export async function ask(
       askedAt: decision.createdAt,
       ...(decision.default.at ? { defaultAt: decision.default.at } : {}),
       ...(cursor !== undefined ? { cursor } : {}),
+      ...(decision.source.session ? { session: decision.source.session } : {}),
     };
   });
   ctx.out(decision.id);
@@ -147,13 +149,47 @@ export function checkAnswer(
   return body;
 }
 
-function printAnswer(ctx: Ctx, a: Answer, question: string | undefined, json?: boolean) {
-  if (json) {
-    ctx.out(JSON.stringify(a));
-    return;
-  }
+/** The line `wait` prints and the mod submits; the decision skill tells agents to expect it. */
+function answerLine(a: Answer, question: string | undefined): string {
   const what = a.choice !== undefined ? a.choice : a.text;
-  ctx.out(`Answer to ${a.decisionId}${question ? ` (${question})` : ""}: ${what}`);
+  return `Answer to ${a.decisionId}${question ? ` (${question})` : ""}: ${what}`;
+}
+
+function printAnswer(ctx: Ctx, a: Answer, question: string | undefined, json?: boolean) {
+  ctx.out(json ? JSON.stringify(a) : answerLine(a, question));
+}
+
+/**
+ * One long-poll for answers from `cursor`: keeps the verified ones in the state, and with
+ * `shared` moves the shared cursor unless another process moved it meanwhile. Throws on a
+ * network or server error, leaving the cursor where it was so a retry fetches the same answers.
+ */
+async function poll(
+  ctx: Ctx,
+  s: Session,
+  opts: { cursor?: string; seconds: number; shared: boolean; directory?: Directory },
+): Promise<{ cursor?: string; directory: Directory }> {
+  let directory = opts.directory ?? (await refreshDirectory(ctx, s));
+  const page = await s.api.answers(opts.cursor, opts.seconds, ctx.signal);
+  if (page.items.length > 0) {
+    // A new device may have answered since the directory was read.
+    directory = await refreshDirectory(ctx, s);
+    const asked = ctx.store.state().asked;
+    const good: Answer[] = [];
+    for (const raw of page.items) {
+      try {
+        good.push(checkAnswer(raw, s, directory, asked));
+      } catch (e) {
+        ctx.err(`starbridge: ignored an answer: ${(e as Error).message}`);
+      }
+    }
+    ctx.store.updateState((st) => {
+      for (const a of good) st.answers[a.decisionId] ??= { answer: a, seen: false };
+      if (opts.shared && st.cursor === opts.cursor && page.cursor !== undefined)
+        st.cursor = page.cursor;
+    });
+  }
+  return { cursor: page.cursor ?? opts.cursor, directory };
 }
 
 /**
@@ -206,14 +242,14 @@ export async function wait(
       ctx.err(`No answer to ${what} yet: apply the default.`);
       return EXIT_TIMEOUT;
     }
-    let page: { items: unknown[]; cursor?: string };
     try {
-      directory ??= await refreshDirectory(ctx, s);
       const seconds = Math.max(1, Math.min(MAX_POLL_SECONDS, Math.ceil(left / 1000)));
-      page = await s.api.answers(cursor, seconds, ctx.signal);
-      // A new device may have answered since the directory was read. On failure the cursor
-      // stays put, so the retry fetches the same answers again.
-      if (page.items.length > 0) directory = await refreshDirectory(ctx, s);
+      ({ cursor, directory } = await poll(ctx, s, {
+        cursor,
+        seconds,
+        shared: !target,
+        directory,
+      }));
     } catch (e) {
       if (e instanceof UsageError || e instanceof ProtocolError) throw e;
       if (ctx.signal?.aborted) continue;
@@ -221,25 +257,55 @@ export async function wait(
       await ctx.sleep(Math.min(RETRY_MS, Math.max(0, left)));
       continue;
     }
-    if (page.items.length > 0) {
-      const asked = ctx.store.state().asked;
-      const good: Answer[] = [];
-      for (const raw of page.items) {
-        try {
-          good.push(checkAnswer(raw, s, directory as Directory, asked));
-        } catch (e) {
-          ctx.err(`starbridge: ignored an answer: ${(e as Error).message}`);
-        }
-      }
-      const startedFrom = cursor;
-      ctx.store.updateState((st) => {
-        for (const a of good) st.answers[a.decisionId] ??= { answer: a, seen: false };
-        if (!target && st.cursor === startedFrom && page.cursor !== undefined)
-          st.cursor = page.cursor;
-      });
-    }
-    if (page.cursor !== undefined) cursor = page.cursor;
     const found = pick();
     if (found) return report(found);
   }
+}
+
+/** Keeps a `--wait` cycle under the 30 s the mod's host allows a call to run. */
+const MAX_CYCLE_SECONDS = 25;
+
+/**
+ * For the Claude Code mod: hands over the answers to decisions that session `session` asked and
+ * no `wait` has printed yet, one JSON line `{decisionId, line}` each, and marks them seen. With
+ * `wait`, and nothing to hand over, first long-polls once for at most that many seconds from the
+ * shared cursor. One cycle per call: an error exits 1, and the mod decides when to retry.
+ */
+export async function answers(
+  ctx: Ctx,
+  opts: { session?: string; wait?: string },
+): Promise<number> {
+  const target = opts.session;
+  if (!target) throw new UsageError("answers needs --session");
+  const due = (st: State, id: string) => !st.answers[id]?.seen && st.asked[id]?.session === target;
+  const claim = () => {
+    const handed: { decisionId: string; line: string }[] = [];
+    // Writes only when there is something to hand over: the mod watches the file's time.
+    const now = ctx.store.state();
+    if (!Object.keys(now.answers).some((id) => due(now, id))) return 0;
+    ctx.store.updateState((st) => {
+      for (const [id, a] of Object.entries(st.answers)) {
+        const asked = st.asked[id];
+        if (!asked || !due(st, id)) continue;
+        a.seen = true;
+        handed.push({ decisionId: id, line: answerLine(a.answer, asked.question) });
+      }
+    });
+    for (const h of handed) ctx.out(JSON.stringify(h));
+    return handed.length;
+  };
+  if (claim() > 0 || opts.wait === undefined) return 0;
+  const seconds = Number(opts.wait);
+  if (!Number.isInteger(seconds) || seconds < 0 || seconds > MAX_CYCLE_SECONDS)
+    throw new UsageError(`--wait takes whole seconds from 0 to ${MAX_CYCLE_SECONDS}`);
+  const s = session(ctx);
+  try {
+    await poll(ctx, s, { cursor: ctx.store.state().cursor, seconds, shared: true });
+  } catch (e) {
+    if (e instanceof UsageError || e instanceof ProtocolError) throw e;
+    ctx.err(`starbridge: ${(e as Error).message}`);
+    return 1;
+  }
+  claim();
+  return 0;
 }

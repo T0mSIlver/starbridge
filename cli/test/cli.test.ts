@@ -142,3 +142,45 @@ test("quota push keeps going after a failed round", async () => {
   expect(ctx.errors[0]).toContain("503");
   expect(ctx.errors[1]).toMatch(/posted q_.*1 providers, 3 windows/);
 });
+
+test("answers hands each session only the answers to its own decisions, once", async () => {
+  const ctx = await paired(server);
+  await run([...ASK, "--session", "s1"], ctx);
+  ctx.env.CLAUDE_CODE_SESSION_ID = "s2";
+  await run(["ask", "--question", "Name the branch?", "--default", "Use t/6"], ctx);
+  const [mine, theirs] = ctx.lines as [string, string];
+  expect(ctx.store.state().asked[theirs]?.session).toBe("s2");
+  ctx.lines.length = 0;
+
+  // Nothing yet: one short poll, nothing printed.
+  expect(await run(["answers", "--session", "s1", "--wait", "1"], ctx)).toBe(0);
+  expect(ctx.lines).toEqual([]);
+
+  server.answer(theirs, { text: "multi\nline" });
+  server.answer(mine, { choice: "Wait" });
+  expect(await run(["answers", "--session", "s1", "--wait", "5"], ctx)).toBe(0);
+  expect(ctx.lines.map((l) => JSON.parse(l))).toEqual([
+    { decisionId: mine, line: `Answer to ${mine} (Merge #12 now?): Wait` },
+  ]);
+  // s2's answer was stored by s1's poll; s2 takes it without touching the server.
+  const polls = server.log.length;
+  expect(await run(["answers", "--session", "s2"], ctx)).toBe(0);
+  expect(JSON.parse(ctx.lines[1] as string).line).toBe(
+    `Answer to ${theirs} (Name the branch?): multi\nline`,
+  );
+  expect(server.log.length).toBe(polls);
+  expect(await run(["answers", "--session", "s2"], ctx)).toBe(0);
+  expect(await run(["answers", "--session", "s3"], ctx)).toBe(0);
+  expect(ctx.lines).toHaveLength(2);
+});
+
+test("answers exits 1 on a server error and keeps the cursor", async () => {
+  const ctx = await paired(server);
+  await run([...ASK, "--session", "s1"], ctx);
+  server.failures.push("/answers");
+  expect(await run(["answers", "--session", "s1", "--wait", "1"], ctx)).toBe(1);
+  expect(ctx.errors.at(-1)).toContain("503");
+  expect(ctx.store.state().cursor).toBeUndefined();
+  expect(await run(["answers", "--session", "s1", "--wait", "30"], ctx)).toBe(1);
+  expect(await run(["answers", "--wait", "1"], ctx)).toBe(1);
+});

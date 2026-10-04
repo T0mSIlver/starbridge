@@ -226,9 +226,10 @@ export class FakeServer {
           );
       await this.until(() => mine().length > 0, wait);
       return Response.json({
-        items: mine().map(({ item }) => ({
-          ...item,
-          boxes: item.boxes.filter((b) => b.to === caller),
+        items: mine().map(({ item, i }) => ({
+          item: { ...item, boxes: item.boxes.filter((b) => b.to === caller) },
+          cursor: String(i + 1),
+          receivedAt: now(),
         })),
         cursor: String(this.items.length),
       });

@@ -79,6 +79,8 @@ export class Api {
     const q = new URLSearchParams({ wait: String(wait) });
     if (after !== undefined) q.set("after", after);
     const r = await this.call("GET", `/answers?${q}`, { signal });
-    return r.json as { items: unknown[]; cursor?: string };
+    // Each entry is `{item, cursor, receivedAt}` (PROTOCOL.md, Items); the CLI checks the item.
+    const page = r.json as { items: { item?: unknown }[]; cursor?: string };
+    return { items: page.items.map((e) => e.item), cursor: page.cursor };
   }
 }

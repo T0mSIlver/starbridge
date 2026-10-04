@@ -3,7 +3,7 @@ import { parseArgs } from "node:util";
 import { ProtocolError, ready } from "@starbridge/protocol";
 import { ApiError } from "./api";
 import { type Ctx, UsageError } from "./context";
-import { type AskInput, ask, wait } from "./decisions";
+import { type AskInput, answers, ask, wait } from "./decisions";
 import { pair } from "./pair";
 import { quotaPush } from "./quota";
 
@@ -29,6 +29,10 @@ const HELP = `starbridge: post decisions to your devices, upload quota windows
       Print the answer, or with no id the next answer to any decision from this machine.
       Waits until --timeout, else the decision's default time, else forever.
       Exits 2 when nobody answered in time: apply the default.
+
+  starbridge answers --session <id> [--wait <seconds>]
+      For the Claude Code mod: print, as JSON lines, the unprinted answers to decisions that
+      session asked. With --wait (at most 25), poll the server once first when there are none.
 
   starbridge quota push [--provider <name>]... [--interval 5m] [--once] [--codexbar <path>]
       Run \`codexbar usage --format json\` for each provider (or for every enabled one),
@@ -97,6 +101,13 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
           options: { timeout: { type: "string" }, json: { type: "boolean" } },
         });
         return await wait(ctx, { id: positionals[0], ...values });
+      }
+      case "answers": {
+        const { values } = parseArgs({
+          args: rest,
+          options: { session: { type: "string" }, wait: { type: "string" } },
+        });
+        return await answers(ctx, values);
       }
       case "quota": {
         const [sub, ...args] = rest;
