@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { StarIcon } from "./icons";
+import { Mark } from "./icons";
 import s from "./Setup.module.css";
 import ui from "./ui.module.css";
 
@@ -32,7 +32,7 @@ export function Setup({
     <main className={s.page}>
       <div className={s.brand}>
         <span className={s.mark}>
-          <StarIcon size={18} />
+          <Mark />
         </span>
         <span className="t-heading">Starbridge</span>
       </div>

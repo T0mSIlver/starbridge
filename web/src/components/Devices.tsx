@@ -117,7 +117,7 @@ function Pair() {
         <div className={s.pairActions}>
           <button
             type="button"
-            className={`${ui.button} ${ui.primary}`}
+            className={`${ui.button} ${ui.beaconFill}`}
             disabled={busy}
             onClick={() =>
               run(async () => {

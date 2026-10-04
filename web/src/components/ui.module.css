@@ -5,7 +5,7 @@
   align-items: baseline;
   justify-content: space-between;
   gap: var(--s3);
-  margin-bottom: var(--s5);
+  margin-bottom: var(--s6);
 }
 
 .section {
@@ -20,11 +20,11 @@
   gap: var(--s3);
 }
 
+/* Filled, no border and no shadow (DESIGN.md, "Rules"). */
 .card {
   background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-md);
-  padding: var(--s4);
+  border-radius: var(--radius-xl);
+  padding: var(--s5);
 }
 
 .button {
@@ -33,13 +33,14 @@
   justify-content: center;
   gap: var(--s2);
   min-height: var(--size-tap);
-  padding: 0 var(--s5);
+  padding: 0 var(--s6);
   border-radius: var(--radius-pill);
   border: 1px solid var(--line-strong);
   background: transparent;
   color: var(--fg);
-  font-size: 15px;
-  font-weight: 600;
+  font-size: 16px;
+  font-weight: 500;
+  letter-spacing: 0.009em;
   text-decoration: none;
   transition:
     background var(--t-fast),
@@ -55,13 +56,26 @@
   cursor: not-allowed;
 }
 
+/* The main action of a screen at rest: filled, never amber. */
 .primary {
+  background: var(--fg);
+  border-color: var(--fg);
+  color: var(--bg);
+}
+
+.primary:hover {
+  background: var(--fg2);
+  border-color: var(--fg2);
+}
+
+/* What needs the owner: the recommended option, a pairing to approve. */
+.beaconFill {
   background: var(--accent);
   border-color: var(--accent);
   color: var(--on-accent);
 }
 
-.primary:hover {
+.beaconFill:hover {
   background: var(--accent-hi);
   border-color: var(--accent-hi);
 }
@@ -122,6 +136,22 @@
   background: var(--surface2);
 }
 
+/* The amber dot beside what is open. */
+.dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.count {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  color: var(--fg2);
+}
+
 .empty {
   color: var(--fg2);
   text-align: center;
@@ -132,15 +162,16 @@
   width: 100%;
   min-height: var(--size-tap);
   padding: var(--s3);
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--line-strong);
-  background: var(--bg);
+  border-radius: var(--radius-xs) var(--radius-xs) 0 0;
+  border: 0;
+  border-bottom: 1px solid var(--line-strong);
+  background: var(--surface2);
   resize: vertical;
 }
 
 .input:focus {
-  outline: 2px solid var(--accent);
-  outline-offset: -1px;
+  outline: 0;
+  border-bottom: 2px solid var(--fg);
 }
 
 .field {
@@ -156,7 +187,7 @@
 .error {
   color: var(--bad);
   background: var(--bad-soft);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   padding: var(--s2) var(--s3);
   overflow-wrap: anywhere;
 }
@@ -164,6 +195,6 @@
 .notice {
   color: var(--fg2);
   background: var(--surface2);
-  border-radius: var(--radius-sm);
-  padding: var(--s2) var(--s3);
+  border-radius: var(--radius-md);
+  padding: var(--s3) var(--s4);
 }
