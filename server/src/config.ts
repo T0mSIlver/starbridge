@@ -30,6 +30,8 @@ export interface Config {
   pushInlineLimit: number;
   /** Let push subscriptions point at private addresses (a self-hoster's own ntfy). */
   allowPrivatePushEndpoints: boolean;
+  /** Gives up on one request to a push service after this many milliseconds. */
+  pushTimeoutMs: number;
 
   fcm?: {
     projectId: string;
@@ -83,6 +85,7 @@ export function configFromEnv(env: Env = process.env): Config {
     maxWaitSeconds: int(env.MAX_WAIT_SECONDS, 300),
     pushInlineLimit: int(env.PUSH_INLINE_LIMIT, 3072),
     allowPrivatePushEndpoints: flag(env.ALLOW_PRIVATE_PUSH_ENDPOINTS),
+    pushTimeoutMs: int(env.PUSH_TIMEOUT_MS, 10_000),
     fcm:
       env.FCM_PROJECT_ID && env.FCM_CLIENT_EMAIL && env.FCM_PRIVATE_KEY
         ? {

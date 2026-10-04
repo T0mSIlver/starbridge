@@ -1,5 +1,6 @@
 import type { Database } from "bun:sqlite";
 import { lookup } from "node:dns/promises";
+import { request } from "node:https";
 import { isIP } from "node:net";
 import webpush from "web-push";
 import { z } from "zod";
@@ -85,9 +86,63 @@ function privateV4(ip: string): boolean {
   );
 }
 
+/** Most pushes one account has in flight at once; the rest wait their turn. */
+const ACCOUNT_CONCURRENCY = 4;
+/** Most pushes one account may have waiting; later ones are dropped. */
+const ACCOUNT_QUEUE = 200;
+
+/** A request to a push service, as `web-push` builds it. */
+export interface PushRequest {
+  method: string;
+  headers: Record<string, string>;
+  body: Uint8Array<ArrayBuffer> | null;
+}
+
+/**
+ * Sends `req` to `url` over HTTPS, connecting to `address` while SNI and the certificate check
+ * still use the URL's host. Returns the HTTP status.
+ */
+export type PinnedSend = (
+  url: URL,
+  address: string,
+  req: PushRequest,
+  timeoutMs: number,
+) => Promise<number>;
+
+export const pinnedHttps: PinnedSend = (url, address, req, timeoutMs) =>
+  new Promise((resolve, reject) => {
+    const r = request(
+      {
+        host: url.hostname,
+        port: url.port || 443,
+        path: url.pathname + url.search,
+        method: req.method,
+        headers: req.headers,
+        servername: isIP(url.hostname) ? undefined : url.hostname,
+        // No pooled connection may skip the lookup below.
+        agent: false,
+        lookup: (_host, opts, cb) => {
+          const family = isIP(address);
+          if ((opts as { all?: boolean }).all) cb(null, [{ address, family }]);
+          else (cb as (e: null, a: string, f: number) => void)(null, address, family);
+        },
+        timeout: timeoutMs,
+      },
+      (res) => {
+        res.resume();
+        res.on("end", () => resolve(res.statusCode ?? 0));
+        res.on("error", reject);
+      },
+    );
+    r.on("timeout", () => r.destroy(new Error("push timed out")));
+    r.on("error", reject);
+    r.end(req.body ?? undefined);
+  });
+
 /** Sends pushes with the server's own credentials, or through the relay. */
 export class Push {
   private readonly pending = new Set<Promise<unknown>>();
+  private readonly queues = new Map<string, { running: number; waiting: (() => void)[] }>();
   private fcmToken?: { value: string; expires: number };
 
   constructor(
@@ -96,30 +151,41 @@ export class Push {
     private readonly fetchFn: typeof fetch = fetch,
     private readonly resolve: (host: string) => Promise<string[]> = async (host) =>
       (await lookup(host, { all: true })).map((a) => a.address),
+    private readonly pinned: PinnedSend = pinnedHttps,
   ) {}
 
   /**
-   * True when every address `url`'s host resolves to is public. The connection resolves the
-   * name again, so a DNS answer that changes in between is not caught.
+   * The address to connect to for `url`, once every address its host resolves to is public;
+   * undefined when one is private. The push then connects to that exact address, so a DNS
+   * answer that changes in between cannot point it inward.
    */
-  private async publicDestination(url: string): Promise<boolean> {
-    if (this.config.allowPrivatePushEndpoints) return true;
-    const host = new URL(url).hostname.replace(/^\[|\]$/g, "");
-    if (isPrivateHost(host)) return false;
-    if (isIP(host)) return true;
+  private async publicAddress(url: URL): Promise<string | undefined> {
+    const host = url.hostname.replace(/^\[|\]$/g, "");
+    if (isPrivateHost(host)) return undefined;
+    if (isIP(host)) return host;
     const addresses = await this.resolve(host);
-    return addresses.length > 0 && !addresses.some(isPrivateHost);
+    if (addresses.length === 0 || addresses.some(isPrivateHost)) return undefined;
+    return addresses[0];
   }
 
-  /** Pushes `payload(member)` to every subscription of each member, without waiting. */
-  notify(account: string, members: string[], payload: (member: string) => string): void {
+  /**
+   * Pushes `payload(member)` to every subscription of each member of `types`, without waiting.
+   * Each account has at most `ACCOUNT_CONCURRENCY` pushes in flight.
+   */
+  notify(
+    account: string,
+    members: string[],
+    payload: (member: string) => string,
+    types: PushType[] = PushType.options,
+  ): void {
     if (members.length === 0) return;
     const subs = this.db
       .query(
         `SELECT id, member_id, type, endpoint, keys FROM push_subscriptions
-         WHERE account_id = ? AND member_id IN (SELECT value FROM json_each(?))`,
+         WHERE account_id = ? AND member_id IN (SELECT value FROM json_each(?))
+           AND type IN (SELECT value FROM json_each(?))`,
       )
-      .all(account, JSON.stringify(members)) as {
+      .all(account, JSON.stringify(members), JSON.stringify(types)) as {
       id: string;
       member_id: string;
       type: PushType;
@@ -132,12 +198,49 @@ export class Push {
         endpoint: s.endpoint,
         keys: s.keys ? JSON.parse(s.keys) : undefined,
       };
-      this.track(
-        this.send(target, payload(s.member_id)).then((r) => {
-          if (r === "gone") this.db.query("DELETE FROM push_subscriptions WHERE id = ?").run(s.id);
-        }),
-      );
+      const body = payload(s.member_id);
+      this.queue(account, async () => {
+        const r = await this.send(target, body);
+        if (r === "gone") this.db.query("DELETE FROM push_subscriptions WHERE id = ?").run(s.id);
+      });
     }
+  }
+
+  private queue(account: string, job: () => Promise<void>): void {
+    let q = this.queues.get(account);
+    if (!q) {
+      q = { running: 0, waiting: [] };
+      this.queues.set(account, q);
+    }
+    if (q.waiting.length >= ACCOUNT_QUEUE) {
+      console.error(`push queue full for account ${account}; dropping a push`);
+      return;
+    }
+    const queue = q;
+    this.track(
+      new Promise<void>((done) => {
+        queue.waiting.push(() => {
+          queue.running += 1;
+          job()
+            .finally(() => {
+              queue.running -= 1;
+              this.next(account);
+            })
+            .then(done, (e) => {
+              console.error("push failed:", e);
+              done();
+            });
+        });
+        this.next(account);
+      }),
+    );
+  }
+
+  private next(account: string): void {
+    const q = this.queues.get(account);
+    if (!q) return;
+    while (q.running < ACCOUNT_CONCURRENCY && q.waiting.length > 0) q.waiting.shift()?.();
+    if (q.running === 0 && q.waiting.length === 0) this.queues.delete(account);
   }
 
   /** Resolves once every push started so far has settled. */
@@ -178,7 +281,9 @@ export class Push {
   async vapidPublicKey(): Promise<string | undefined> {
     if (this.config.vapid) return this.config.vapid.publicKey;
     if (!this.config.relayUrl) return undefined;
-    const res = await this.fetchFn(`${this.config.relayUrl}/v1/push/vapid`);
+    const res = await this.fetchFn(`${this.config.relayUrl}/v1/push/vapid`, {
+      signal: this.timeout(),
+    });
     if (!res.ok) return undefined;
     return ((await res.json()) as { publicKey?: string }).publicKey;
   }
@@ -189,6 +294,7 @@ export class Push {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ ...target, payload }),
+      signal: this.timeout(),
     });
     if (!res.ok) return "failed";
     const { result } = (await res.json()) as { result?: PushResult };
@@ -200,12 +306,6 @@ export class Push {
     payload: string,
     vapid: boolean,
   ): Promise<PushResult> {
-    if (!(await this.publicDestination(target.endpoint))) {
-      console.error(
-        `push endpoint resolves to a private address: ${new URL(target.endpoint).host}`,
-      );
-      return "failed";
-    }
     let req: {
       method: string;
       headers: Record<string, string | number>;
@@ -231,14 +331,34 @@ export class Push {
         endpoint: target.endpoint,
       };
     }
-    const res = await this.fetchFn(req.endpoint, {
+    const out: PushRequest = {
       method: req.method,
       headers: Object.fromEntries(Object.entries(req.headers).map(([k, v]) => [k, String(v)])),
       body: req.body ? new Uint8Array(req.body) : null,
-      redirect: "manual",
-    });
-    if (res.status === 404 || res.status === 410) return "gone";
-    return res.ok ? "ok" : "failed";
+    };
+    let status: number;
+    if (this.config.allowPrivatePushEndpoints) {
+      const res = await this.fetchFn(req.endpoint, {
+        ...out,
+        redirect: "manual",
+        signal: this.timeout(),
+      });
+      status = res.status;
+    } else {
+      const url = new URL(req.endpoint);
+      const address = await this.publicAddress(url);
+      if (!address) {
+        console.error(`push endpoint resolves to a private address: ${url.host}`);
+        return "failed";
+      }
+      status = await this.pinned(url, address, out, this.config.pushTimeoutMs);
+    }
+    if (status === 404 || status === 410) return "gone";
+    return status >= 200 && status < 300 ? "ok" : "failed";
+  }
+
+  private timeout(): AbortSignal {
+    return AbortSignal.timeout(this.config.pushTimeoutMs);
   }
 
   private async sendFcm(token: string, payload: string): Promise<PushResult> {
@@ -253,6 +373,7 @@ export class Push {
       body: JSON.stringify({
         message: { token, data: { p: payload }, android: { priority: "HIGH", ttl: "86400s" } },
       }),
+      signal: this.timeout(),
     });
     if (res.ok) return "ok";
     const text = await res.text();
@@ -291,6 +412,7 @@ export class Push {
         grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
         assertion: `${unsigned}.${Buffer.from(sig).toString("base64url")}`,
       }),
+      signal: this.timeout(),
     });
     if (!res.ok) throw new Error(`FCM token request: ${res.status}`);
     const body = (await res.json()) as { access_token: string; expires_in: number };

@@ -286,6 +286,12 @@ How it generalizes is open.
   `deploy` with the dev box key and sudo; root login and passwords are off. The web page is not
   served yet (#8); Caddy will route it on the same origin.
 
+- 2026-10-04. Push hardening (#27, #36, #37): quota snapshots skip Web Push, because browsers
+  drop subscriptions whose pushes show no notification (Firefox after 16); the page fetches
+  `GET /quota` on open. A device holds at most 10 push subscriptions and an account 30; an
+  account has at most 4 pushes in flight and 200 waiting, each with a 10 s timeout. Pushes to
+  subscription URLs connect to the exact address that passed the private-range check.
+
 ## Encryption, with existing libraries
 
 - libsodium sealed boxes (`crypto_box_seal`, X25519 + XSalsa20-Poly1305): an
