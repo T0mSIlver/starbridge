@@ -13,6 +13,7 @@ import { authRoutes } from "./routes/auth";
 import { bindRoutes } from "./routes/bind";
 import { directoryRoutes } from "./routes/directory";
 import { itemRoutes } from "./routes/items";
+import { joinRoutes, sweepJoins } from "./routes/joins";
 import { pairingRoutes, sweepPairings } from "./routes/pairings";
 import { pushRoutes } from "./routes/push";
 import { Waiters } from "./waiters";
@@ -26,16 +27,21 @@ export async function createApp(config: Config, fetchFn: typeof fetch = fetch) {
     push: new Push(config, db, fetchFn),
     answers: new Waiters(),
     pairings: new Waiters(),
+    joins: new Waiters(),
     limiter: new RateLimiter(),
   };
 
-  setInterval(() => sweepPairings(db), 60_000).unref();
+  setInterval(() => {
+    sweepPairings(db);
+    sweepJoins(db);
+  }, 60_000).unref();
 
   const v1 = new Hono<Env>()
     .route("/", authRoutes)
     .route("/", bindRoutes)
     .route("/", directoryRoutes)
     .route("/", pairingRoutes)
+    .route("/", joinRoutes)
     .route("/", itemRoutes)
     .route("/", pushRoutes);
 
