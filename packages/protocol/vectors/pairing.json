@@ -5,6 +5,10 @@
   "rendezvous": "008J4CT4",
   "secret": "ANK7F24SNAXWSQFE",
   "key": "7Y5ptlWjTBPR3wpFcjuFU98P5P_2UgOQGZMb3J0Bcy4",
+  "claim": {
+    "secret": "BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc",
+    "hash": "_FOHytyfs0IIaAU11_f8nopChGBd35FRarxSpPpvU2w"
+  },
   "parse": [
     {
       "input": "008j-4ct4-ank7-f24s-naxw-sqfe",

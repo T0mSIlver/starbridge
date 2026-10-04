@@ -58,6 +58,19 @@ export function parsePairingCode(text: string): PairingCode {
   return splitCode(chars);
 }
 
+/**
+ * The new member's claim secret, sent as `X-Claim` to fetch its approval and machine token:
+ * 32 random bytes, base64url. The server keeps only `claimHash` of it.
+ */
+export function newClaimSecret(): string {
+  return toB64(sodium.randombytes_buf(32));
+}
+
+/** BLAKE2b-256 of the claim secret's text, base64url: `claimHash` in `POST /pairings`. */
+export function claimHash(secret: string): string {
+  return toB64(sodium.crypto_generichash(32, utf8(secret), null));
+}
+
 /** BLAKE2b-256 of "starbridge/v1/pairing-key", NUL, the 16 secret characters. */
 export function pairingKey(code: PairingCode): Uint8Array {
   return sodium.crypto_generichash(
