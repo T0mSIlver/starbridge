@@ -1,0 +1,253 @@
+{
+  "note": "Bodies that must pass or fail schema validation.",
+  "decision": [
+    {
+      "name": "valid",
+      "body": {
+        "v": 1,
+        "id": "dec_1",
+        "to": [
+          "phone",
+          "phone2"
+        ],
+        "createdAt": "2026-10-04T10:00:00Z",
+        "question": "Run inference on the Mac while you are away?",
+        "context": "The bench needs the GPU for about 40 minutes. No: it waits for tonight.",
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "recommended": "Yes",
+        "default": {
+          "action": "Wait for tonight",
+          "at": "2026-10-04T11:00:00Z"
+        },
+        "source": {
+          "machine": "dev box",
+          "project": "localvoxtral",
+          "session": "s_42"
+        }
+      },
+      "valid": true
+    },
+    {
+      "name": "free text",
+      "body": {
+        "v": 1,
+        "id": "dec_1",
+        "to": [
+          "phone",
+          "phone2"
+        ],
+        "createdAt": "2026-10-04T10:00:00Z",
+        "question": "Run inference on the Mac while you are away?",
+        "context": "The bench needs the GPU for about 40 minutes. No: it waits for tonight.",
+        "options": [],
+        "default": {
+          "action": "Wait for tonight",
+          "at": "2026-10-04T11:00:00Z"
+        },
+        "source": {
+          "machine": "dev box",
+          "project": "localvoxtral",
+          "session": "s_42"
+        }
+      },
+      "valid": true
+    },
+    {
+      "name": "one option",
+      "body": {
+        "v": 1,
+        "id": "dec_1",
+        "to": [
+          "phone",
+          "phone2"
+        ],
+        "createdAt": "2026-10-04T10:00:00Z",
+        "question": "Run inference on the Mac while you are away?",
+        "context": "The bench needs the GPU for about 40 minutes. No: it waits for tonight.",
+        "options": [
+          "Yes"
+        ],
+        "recommended": "Yes",
+        "default": {
+          "action": "Wait for tonight",
+          "at": "2026-10-04T11:00:00Z"
+        },
+        "source": {
+          "machine": "dev box",
+          "project": "localvoxtral",
+          "session": "s_42"
+        }
+      },
+      "valid": false
+    },
+    {
+      "name": "five options",
+      "body": {
+        "v": 1,
+        "id": "dec_1",
+        "to": [
+          "phone",
+          "phone2"
+        ],
+        "createdAt": "2026-10-04T10:00:00Z",
+        "question": "Run inference on the Mac while you are away?",
+        "context": "The bench needs the GPU for about 40 minutes. No: it waits for tonight.",
+        "options": [
+          "a",
+          "b",
+          "c",
+          "d",
+          "e"
+        ],
+        "recommended": "a",
+        "default": {
+          "action": "Wait for tonight",
+          "at": "2026-10-04T11:00:00Z"
+        },
+        "source": {
+          "machine": "dev box",
+          "project": "localvoxtral",
+          "session": "s_42"
+        }
+      },
+      "valid": false
+    },
+    {
+      "name": "recommended not an option",
+      "body": {
+        "v": 1,
+        "id": "dec_1",
+        "to": [
+          "phone",
+          "phone2"
+        ],
+        "createdAt": "2026-10-04T10:00:00Z",
+        "question": "Run inference on the Mac while you are away?",
+        "context": "The bench needs the GPU for about 40 minutes. No: it waits for tonight.",
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "recommended": "Maybe",
+        "default": {
+          "action": "Wait for tonight",
+          "at": "2026-10-04T11:00:00Z"
+        },
+        "source": {
+          "machine": "dev box",
+          "project": "localvoxtral",
+          "session": "s_42"
+        }
+      },
+      "valid": false
+    },
+    {
+      "name": "duplicate options",
+      "body": {
+        "v": 1,
+        "id": "dec_1",
+        "to": [
+          "phone",
+          "phone2"
+        ],
+        "createdAt": "2026-10-04T10:00:00Z",
+        "question": "Run inference on the Mac while you are away?",
+        "context": "The bench needs the GPU for about 40 minutes. No: it waits for tonight.",
+        "options": [
+          "Yes",
+          "Yes"
+        ],
+        "recommended": "Yes",
+        "default": {
+          "action": "Wait for tonight",
+          "at": "2026-10-04T11:00:00Z"
+        },
+        "source": {
+          "machine": "dev box",
+          "project": "localvoxtral",
+          "session": "s_42"
+        }
+      },
+      "valid": false
+    },
+    {
+      "name": "no recipients",
+      "body": {
+        "v": 1,
+        "id": "dec_1",
+        "to": [],
+        "createdAt": "2026-10-04T10:00:00Z",
+        "question": "Run inference on the Mac while you are away?",
+        "context": "The bench needs the GPU for about 40 minutes. No: it waits for tonight.",
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "recommended": "Yes",
+        "default": {
+          "action": "Wait for tonight",
+          "at": "2026-10-04T11:00:00Z"
+        },
+        "source": {
+          "machine": "dev box",
+          "project": "localvoxtral",
+          "session": "s_42"
+        }
+      },
+      "valid": false
+    }
+  ],
+  "answer": [
+    {
+      "name": "choice",
+      "body": {
+        "v": 1,
+        "id": "ans_1",
+        "decisionId": "dec_1",
+        "to": "devbox",
+        "answeredAt": "2026-10-04T10:03:00Z",
+        "choice": "Yes"
+      },
+      "valid": true
+    },
+    {
+      "name": "text",
+      "body": {
+        "v": 1,
+        "id": "ans_1",
+        "decisionId": "dec_1",
+        "to": "devbox",
+        "answeredAt": "2026-10-04T10:03:00Z",
+        "text": "Only after 6pm"
+      },
+      "valid": true
+    },
+    {
+      "name": "both",
+      "body": {
+        "v": 1,
+        "id": "ans_1",
+        "decisionId": "dec_1",
+        "to": "devbox",
+        "answeredAt": "2026-10-04T10:03:00Z",
+        "choice": "Yes",
+        "text": "and text"
+      },
+      "valid": false
+    },
+    {
+      "name": "neither",
+      "body": {
+        "v": 1,
+        "id": "ans_1",
+        "decisionId": "dec_1",
+        "to": "devbox",
+        "answeredAt": "2026-10-04T10:03:00Z"
+      },
+      "valid": false
+    }
+  ]
+}

@@ -1,0 +1,92 @@
+{
+  "note": "Code = Crockford base32 of 15 bytes: 8 characters of rendezvous, 16 of secret.",
+  "codeBytes": "ABEiM0RVZneImaq7zN3u",
+  "code": "008J-4CT4-ANK7-F24S-NAXW-SQFE",
+  "rendezvous": "008J4CT4",
+  "secret": "ANK7F24SNAXWSQFE",
+  "key": "7Y5ptlWjTBPR3wpFcjuFU98P5P_2UgOQGZMb3J0Bcy4",
+  "parse": [
+    {
+      "input": "008j-4ct4-ank7-f24s-naxw-sqfe",
+      "expect": "008J-4CT4-ANK7-F24S-NAXW-SQFE"
+    },
+    {
+      "input": "0123 4567 89ab cdef ghjk mnpq",
+      "expect": "0123-4567-89AB-CDEF-GHJK-MNPQ"
+    },
+    {
+      "input": "o1l1-I111-1111-1111-1111-1111",
+      "expect": "0111-1111-1111-1111-1111-1111"
+    },
+    {
+      "input": "0123-4567-89AB-CDEF-GHJK-MNPU",
+      "expect": "bad-encoding"
+    },
+    {
+      "input": "0123-4567",
+      "expect": "bad-encoding"
+    }
+  ],
+  "request": {
+    "message": {
+      "body": "{\"v\":1,\"rendezvous\":\"008J4CT4\",\"role\":\"machine\",\"id\":\"devbox\",\"name\":\"dev box\",\"boxPk\":\"deJw3ylSxXuoNnuoYYwXj5_lDbJ5nTBOdOkY2YVoYUY\",\"signPk\":\"EqQVksi3wX1AWeeym2Ho_5bHQV8vgDNI8vAX4Fueodo\",\"at\":\"2026-10-04T09:09:00Z\"}",
+      "mac": "QsORlHtHD4iDX7SPgAsN3i4dwOgxaT7raxjCdnhwSLI"
+    },
+    "body": {
+      "v": 1,
+      "rendezvous": "008J4CT4",
+      "role": "machine",
+      "id": "devbox",
+      "name": "dev box",
+      "boxPk": "deJw3ylSxXuoNnuoYYwXj5_lDbJ5nTBOdOkY2YVoYUY",
+      "signPk": "EqQVksi3wX1AWeeym2Ho_5bHQV8vgDNI8vAX4Fueodo",
+      "at": "2026-10-04T09:09:00Z"
+    }
+  },
+  "approval": {
+    "message": {
+      "body": "{\"v\":1,\"rendezvous\":\"008J4CT4\",\"account\":\"acct_tom\",\"length\":3,\"head\":\"MzdNtWB_p8ApTKowCNVtDIJ-bgpLzG-SG3ZIbl6O02o\",\"approver\":\"phone\"}",
+      "mac": "zNkfc5uxWY2t5h6cgHaJjH0MmzqBil37gCc1L_6j1do"
+    },
+    "body": {
+      "v": 1,
+      "rendezvous": "008J4CT4",
+      "account": "acct_tom",
+      "length": 3,
+      "head": "MzdNtWB_p8ApTKowCNVtDIJ-bgpLzG-SG3ZIbl6O02o",
+      "approver": "phone"
+    }
+  },
+  "bad": [
+    {
+      "name": "request with the machine's keys swapped",
+      "kind": "request",
+      "message": {
+        "body": "{\"v\":1,\"rendezvous\":\"008J4CT4\",\"role\":\"machine\",\"id\":\"devbox\",\"name\":\"dev box\",\"boxPk\":\"kOaL6HjHyuJgI08k-XRXlNFgXVoTwO7JcWleRFV7WAA\",\"signPk\":\"EqQVksi3wX1AWeeym2Ho_5bHQV8vgDNI8vAX4Fueodo\",\"at\":\"2026-10-04T09:09:00Z\"}",
+        "mac": "QsORlHtHD4iDX7SPgAsN3i4dwOgxaT7raxjCdnhwSLI"
+      },
+      "code": "008J-4CT4-ANK7-F24S-NAXW-SQFE",
+      "expect": "bad-mac"
+    },
+    {
+      "name": "request made by someone without the code",
+      "kind": "request",
+      "message": {
+        "body": "{\"v\":1,\"rendezvous\":\"144GJ289\",\"role\":\"machine\",\"id\":\"devbox\",\"name\":\"dev box\",\"boxPk\":\"deJw3ylSxXuoNnuoYYwXj5_lDbJ5nTBOdOkY2YVoYUY\",\"signPk\":\"EqQVksi3wX1AWeeym2Ho_5bHQV8vgDNI8vAX4Fueodo\",\"at\":\"2026-10-04T09:09:00Z\"}",
+        "mac": "HqziMhB497-XDS76kCHjOmMQEWKM8c4OM69DsPBg1qw"
+      },
+      "code": "008J-4CT4-ANK7-F24S-NAXW-SQFE",
+      "expect": "bad-mac"
+    },
+    {
+      "name": "approval for the server's own directory",
+      "kind": "approval",
+      "message": {
+        "body": "{\"v\":1,\"rendezvous\":\"008J4CT4\",\"account\":\"acct_tom\",\"length\":3,\"head\":\"fKkaTH-zl4d6_AUxOqN6W03-hmwI0oZZsFxgmyy7hvQ\",\"approver\":\"phone\"}",
+        "mac": "zNkfc5uxWY2t5h6cgHaJjH0MmzqBil37gCc1L_6j1do"
+      },
+      "code": "008J-4CT4-ANK7-F24S-NAXW-SQFE",
+      "expect": "bad-mac"
+    }
+  ]
+}

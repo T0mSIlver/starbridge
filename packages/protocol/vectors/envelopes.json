@@ -1,0 +1,482 @@
+{
+  "note": "Signatures: verify(envelope, signPk). Sealed: open(item, recipient, directory) where the directory is directory.json's valid chain; boxes differ on every run.",
+  "signatures": [
+    {
+      "name": "valid",
+      "envelope": {
+        "v": 1,
+        "kind": "decision",
+        "signer": "devbox",
+        "body": "{\"v\":1,\"id\":\"dec_1\",\"to\":[\"phone\",\"phone2\"],\"createdAt\":\"2026-10-04T10:00:00Z\",\"question\":\"Run inference on the Mac while you are away?\",\"context\":\"The bench needs the GPU for about 40 minutes. No: it waits for tonight.\",\"options\":[\"Yes\",\"No\"],\"recommended\":\"Yes\",\"default\":{\"action\":\"Wait for tonight\",\"at\":\"2026-10-04T11:00:00Z\"},\"source\":{\"machine\":\"dev box\",\"project\":\"localvoxtral\",\"session\":\"s_42\"}}",
+        "sig": "T3DOTubX872FvMedLJBtnFUfZeLOZvhtUg7LolzqzcKqqZ9gu8oTFjjqJ6z7gAv0lCnI1ggGWKWRu9NTdBD_Aw"
+      },
+      "signPk": "EqQVksi3wX1AWeeym2Ho_5bHQV8vgDNI8vAX4Fueodo",
+      "expect": "ok"
+    },
+    {
+      "name": "tampered body",
+      "envelope": {
+        "v": 1,
+        "kind": "decision",
+        "signer": "devbox",
+        "body": "{\"v\":1,\"id\":\"dec_1\",\"to\":[\"phone\",\"phone2\"],\"createdAt\":\"2026-10-04T10:00:00Z\",\"question\":\"Run inference on the Mac while you are away?\",\"context\":\"The bench needs the GPU for about 40 minutes. No: it waits for tonight.\",\"options\":[\"No!\",\"No\"],\"recommended\":\"Yes\",\"default\":{\"action\":\"Wait for tonight\",\"at\":\"2026-10-04T11:00:00Z\"},\"source\":{\"machine\":\"dev box\",\"project\":\"localvoxtral\",\"session\":\"s_42\"}}",
+        "sig": "T3DOTubX872FvMedLJBtnFUfZeLOZvhtUg7LolzqzcKqqZ9gu8oTFjjqJ6z7gAv0lCnI1ggGWKWRu9NTdBD_Aw"
+      },
+      "signPk": "EqQVksi3wX1AWeeym2Ho_5bHQV8vgDNI8vAX4Fueodo",
+      "expect": "bad-signature"
+    },
+    {
+      "name": "tampered signature",
+      "envelope": {
+        "v": 1,
+        "kind": "decision",
+        "signer": "devbox",
+        "body": "{\"v\":1,\"id\":\"dec_1\",\"to\":[\"phone\",\"phone2\"],\"createdAt\":\"2026-10-04T10:00:00Z\",\"question\":\"Run inference on the Mac while you are away?\",\"context\":\"The bench needs the GPU for about 40 minutes. No: it waits for tonight.\",\"options\":[\"Yes\",\"No\"],\"recommended\":\"Yes\",\"default\":{\"action\":\"Wait for tonight\",\"at\":\"2026-10-04T11:00:00Z\"},\"source\":{\"machine\":\"dev box\",\"project\":\"localvoxtral\",\"session\":\"s_42\"}}",
+        "sig": "TnDOTubX872FvMedLJBtnFUfZeLOZvhtUg7LolzqzcKqqZ9gu8oTFjjqJ6z7gAv0lCnI1ggGWKWRu9NTdBD_Aw"
+      },
+      "signPk": "EqQVksi3wX1AWeeym2Ho_5bHQV8vgDNI8vAX4Fueodo",
+      "expect": "bad-signature"
+    },
+    {
+      "name": "kind changed",
+      "envelope": {
+        "v": 1,
+        "kind": "quota",
+        "signer": "devbox",
+        "body": "{\"v\":1,\"id\":\"dec_1\",\"to\":[\"phone\",\"phone2\"],\"createdAt\":\"2026-10-04T10:00:00Z\",\"question\":\"Run inference on the Mac while you are away?\",\"context\":\"The bench needs the GPU for about 40 minutes. No: it waits for tonight.\",\"options\":[\"Yes\",\"No\"],\"recommended\":\"Yes\",\"default\":{\"action\":\"Wait for tonight\",\"at\":\"2026-10-04T11:00:00Z\"},\"source\":{\"machine\":\"dev box\",\"project\":\"localvoxtral\",\"session\":\"s_42\"}}",
+        "sig": "T3DOTubX872FvMedLJBtnFUfZeLOZvhtUg7LolzqzcKqqZ9gu8oTFjjqJ6z7gAv0lCnI1ggGWKWRu9NTdBD_Aw"
+      },
+      "signPk": "EqQVksi3wX1AWeeym2Ho_5bHQV8vgDNI8vAX4Fueodo",
+      "expect": "bad-signature"
+    },
+    {
+      "name": "signer changed",
+      "envelope": {
+        "v": 1,
+        "kind": "decision",
+        "signer": "evilbox",
+        "body": "{\"v\":1,\"id\":\"dec_1\",\"to\":[\"phone\",\"phone2\"],\"createdAt\":\"2026-10-04T10:00:00Z\",\"question\":\"Run inference on the Mac while you are away?\",\"context\":\"The bench needs the GPU for about 40 minutes. No: it waits for tonight.\",\"options\":[\"Yes\",\"No\"],\"recommended\":\"Yes\",\"default\":{\"action\":\"Wait for tonight\",\"at\":\"2026-10-04T11:00:00Z\"},\"source\":{\"machine\":\"dev box\",\"project\":\"localvoxtral\",\"session\":\"s_42\"}}",
+        "sig": "T3DOTubX872FvMedLJBtnFUfZeLOZvhtUg7LolzqzcKqqZ9gu8oTFjjqJ6z7gAv0lCnI1ggGWKWRu9NTdBD_Aw"
+      },
+      "signPk": "EqQVksi3wX1AWeeym2Ho_5bHQV8vgDNI8vAX4Fueodo",
+      "expect": "bad-signature"
+    },
+    {
+      "name": "another key",
+      "envelope": {
+        "v": 1,
+        "kind": "decision",
+        "signer": "devbox",
+        "body": "{\"v\":1,\"id\":\"dec_1\",\"to\":[\"phone\",\"phone2\"],\"createdAt\":\"2026-10-04T10:00:00Z\",\"question\":\"Run inference on the Mac while you are away?\",\"context\":\"The bench needs the GPU for about 40 minutes. No: it waits for tonight.\",\"options\":[\"Yes\",\"No\"],\"recommended\":\"Yes\",\"default\":{\"action\":\"Wait for tonight\",\"at\":\"2026-10-04T11:00:00Z\"},\"source\":{\"machine\":\"dev box\",\"project\":\"localvoxtral\",\"session\":\"s_42\"}}",
+        "sig": "T3DOTubX872FvMedLJBtnFUfZeLOZvhtUg7LolzqzcKqqZ9gu8oTFjjqJ6z7gAv0lCnI1ggGWKWRu9NTdBD_Aw"
+      },
+      "signPk": "dQgmwoGk9pGkH_sD7xtCh1aOv8UuxcyonZU-WgCTq9U",
+      "expect": "bad-signature"
+    }
+  ],
+  "sealed": [
+    {
+      "name": "decision for phone",
+      "item": {
+        "v": 1,
+        "kind": "decision",
+        "id": "dec_1",
+        "from": "devbox",
+        "boxes": [
+          {
+            "to": "phone",
+            "box": "gFDxF-jeu531_E6isu2EItl5T2QFKkSpTsfl3Q3wTX6an-ZKbd1wH4-5UjmJT9bbG5bukHX62OEZ9BZKGvp2ZJBvUgvhRc80Jnb0a6-BCzGrpYczd9nuEpO90vwybWkjFS-Rpv9FpH6qWi43HMghQQa63QXDGVUzbXodr_pkW-Onuq_qXIu7wWCWLz_DDepaUvNO4CRhAfwGogjBqffxS3UDwMVAiq7eZHbAO93t5DDvi8Mqn317JPH7ELpPfOqrBqhOAAhOdJLIZ7nLZ9WtgwehSYwl_fOmZ14MaTCFrHUHH5_ZpmuBjEmDFZPkm-Z7tQ0frcwVGxSy_jk1YtnimEkyGHC7NUldLutvrVGkWHWUyRcTR4GFWDLMeNwAytzXMx0arJdmzyzxtjqDa6JNtotDDmvZUCIar2sXZJrKDiaoDWWILo2Dt6FyRGLQao2HwmMG2IzhSv60VkNaJSd_xE22OXGiaWJ5_-41c0m3Mb_gyJxjfoE0V-dL0TCC4HQ8JkDxLodog4GDMkvYSgH8fC0mAIt8cJOCfF9DOsgBsj-N4sJ18PRGkv1Kc0O9GbZybNDG6Kbsg3U9CSlbmldCdkCydHmA6er7ge_r-xbKW3K-Tom5qfu5TRiY2hO6lXV24F4hLE_wiPnwDHU6E7D2T6IRoQw_MbaweokCNquT_nNx47zBZwdSQ_FATS4dSvR24ugs0opX6MgqVDTiFK-dp3wxFS36HFNnCsrLKUMCsCrVvDA9R20RpNaoAs5JvoIKJ7BPgDPwV9Fes5XUbYQ6-a1OJCHSsz16kUtlIKwFUZd7C3hZfy_1F0KFVD3VxAhemSDRAaRsGWgfAYfr_iTovsefiv3Qm7rOCmZ9eQESBAwK8nM"
+          },
+          {
+            "to": "phone2",
+            "box": "4Ruxxccq4y-8K40xKQhruT4oFtIcEVXFBqDzXTIe432H93PmeRCKPDFttNE4d_0-kMIva-i63jpDIBiLohbjcFnX2imdsGWm0cj0OVxkb7i1OVGvREDOFGCAe8sNlndAG2KrEmza9KXpiumW1XXZA955HNDUqwuVRP62qaP1QIDgC5nLZg9w5icTjlIVPtKUm7bgQjMYejXl0aJCcpgv0piUrCAh5sApXr0XztMo7lfoanfNWaK3ciRlOZkeZHaIha3jGp7w2XblmTBlS8Hl_D9JR-JhuG-ltgkuZR2N1GDioNK2Rgxs-ijhIM4gL71xWALkM1U1LCRWOnY0DKgHmlujForrmETSzeKLJaVi7JCHI8TfmsPomsd61NCraidpptykjcCHk3EtCyRoFs7khuBd3I1awjGlCOo9qYOMkaRU69JHMri_wM1ycG5_we_qEdVWx_R3fmyhqD2Ab3HJlxe3VpxuWntVIN5ecTDey7t7QgubmTj5X2eZDntnvXs9ldQYuNL4LSTL-OVme2P-9GhSFJpaumX_ZRi0yxWCcog1xn2iLrYapA5huBKbZlS1jmi1iufISB3GUN8JE0a0JUhDAx1Eh-1OQiYEZsH7dc3QhTongvmT27SxyBId9n52VXHgLBHg6HPaV9KiJk28KD8TbkBEAke0nqshKPLpAf50uajK66zCqcfN9UgcgUwsT1jW3CfuFAQpXyVAp5eDrKYSaIxK-zuOHVbnP5YrSo-S6lR9QuOdMP8xBCmxLTdJ0PJCX2DCDbpAD_Sy4kzmdA36DEDGBNd842ofWZ7jaVxHTQFLDVqike5cstCZarh8XiaSn_4CkL0FCncFACPNuldmOe4d4HpRByatZqaKO8VuTJM"
+          }
+        ]
+      },
+      "recipient": "phone",
+      "expect": {
+        "body": {
+          "v": 1,
+          "id": "dec_1",
+          "to": [
+            "phone",
+            "phone2"
+          ],
+          "createdAt": "2026-10-04T10:00:00Z",
+          "question": "Run inference on the Mac while you are away?",
+          "context": "The bench needs the GPU for about 40 minutes. No: it waits for tonight.",
+          "options": [
+            "Yes",
+            "No"
+          ],
+          "recommended": "Yes",
+          "default": {
+            "action": "Wait for tonight",
+            "at": "2026-10-04T11:00:00Z"
+          },
+          "source": {
+            "machine": "dev box",
+            "project": "localvoxtral",
+            "session": "s_42"
+          }
+        },
+        "signer": "devbox"
+      }
+    },
+    {
+      "name": "decision for the new phone",
+      "item": {
+        "v": 1,
+        "kind": "decision",
+        "id": "dec_1",
+        "from": "devbox",
+        "boxes": [
+          {
+            "to": "phone",
+            "box": "gFDxF-jeu531_E6isu2EItl5T2QFKkSpTsfl3Q3wTX6an-ZKbd1wH4-5UjmJT9bbG5bukHX62OEZ9BZKGvp2ZJBvUgvhRc80Jnb0a6-BCzGrpYczd9nuEpO90vwybWkjFS-Rpv9FpH6qWi43HMghQQa63QXDGVUzbXodr_pkW-Onuq_qXIu7wWCWLz_DDepaUvNO4CRhAfwGogjBqffxS3UDwMVAiq7eZHbAO93t5DDvi8Mqn317JPH7ELpPfOqrBqhOAAhOdJLIZ7nLZ9WtgwehSYwl_fOmZ14MaTCFrHUHH5_ZpmuBjEmDFZPkm-Z7tQ0frcwVGxSy_jk1YtnimEkyGHC7NUldLutvrVGkWHWUyRcTR4GFWDLMeNwAytzXMx0arJdmzyzxtjqDa6JNtotDDmvZUCIar2sXZJrKDiaoDWWILo2Dt6FyRGLQao2HwmMG2IzhSv60VkNaJSd_xE22OXGiaWJ5_-41c0m3Mb_gyJxjfoE0V-dL0TCC4HQ8JkDxLodog4GDMkvYSgH8fC0mAIt8cJOCfF9DOsgBsj-N4sJ18PRGkv1Kc0O9GbZybNDG6Kbsg3U9CSlbmldCdkCydHmA6er7ge_r-xbKW3K-Tom5qfu5TRiY2hO6lXV24F4hLE_wiPnwDHU6E7D2T6IRoQw_MbaweokCNquT_nNx47zBZwdSQ_FATS4dSvR24ugs0opX6MgqVDTiFK-dp3wxFS36HFNnCsrLKUMCsCrVvDA9R20RpNaoAs5JvoIKJ7BPgDPwV9Fes5XUbYQ6-a1OJCHSsz16kUtlIKwFUZd7C3hZfy_1F0KFVD3VxAhemSDRAaRsGWgfAYfr_iTovsefiv3Qm7rOCmZ9eQESBAwK8nM"
+          },
+          {
+            "to": "phone2",
+            "box": "4Ruxxccq4y-8K40xKQhruT4oFtIcEVXFBqDzXTIe432H93PmeRCKPDFttNE4d_0-kMIva-i63jpDIBiLohbjcFnX2imdsGWm0cj0OVxkb7i1OVGvREDOFGCAe8sNlndAG2KrEmza9KXpiumW1XXZA955HNDUqwuVRP62qaP1QIDgC5nLZg9w5icTjlIVPtKUm7bgQjMYejXl0aJCcpgv0piUrCAh5sApXr0XztMo7lfoanfNWaK3ciRlOZkeZHaIha3jGp7w2XblmTBlS8Hl_D9JR-JhuG-ltgkuZR2N1GDioNK2Rgxs-ijhIM4gL71xWALkM1U1LCRWOnY0DKgHmlujForrmETSzeKLJaVi7JCHI8TfmsPomsd61NCraidpptykjcCHk3EtCyRoFs7khuBd3I1awjGlCOo9qYOMkaRU69JHMri_wM1ycG5_we_qEdVWx_R3fmyhqD2Ab3HJlxe3VpxuWntVIN5ecTDey7t7QgubmTj5X2eZDntnvXs9ldQYuNL4LSTL-OVme2P-9GhSFJpaumX_ZRi0yxWCcog1xn2iLrYapA5huBKbZlS1jmi1iufISB3GUN8JE0a0JUhDAx1Eh-1OQiYEZsH7dc3QhTongvmT27SxyBId9n52VXHgLBHg6HPaV9KiJk28KD8TbkBEAke0nqshKPLpAf50uajK66zCqcfN9UgcgUwsT1jW3CfuFAQpXyVAp5eDrKYSaIxK-zuOHVbnP5YrSo-S6lR9QuOdMP8xBCmxLTdJ0PJCX2DCDbpAD_Sy4kzmdA36DEDGBNd842ofWZ7jaVxHTQFLDVqike5cstCZarh8XiaSn_4CkL0FCncFACPNuldmOe4d4HpRByatZqaKO8VuTJM"
+          }
+        ]
+      },
+      "recipient": "phone2",
+      "expect": {
+        "body": {
+          "v": 1,
+          "id": "dec_1",
+          "to": [
+            "phone",
+            "phone2"
+          ],
+          "createdAt": "2026-10-04T10:00:00Z",
+          "question": "Run inference on the Mac while you are away?",
+          "context": "The bench needs the GPU for about 40 minutes. No: it waits for tonight.",
+          "options": [
+            "Yes",
+            "No"
+          ],
+          "recommended": "Yes",
+          "default": {
+            "action": "Wait for tonight",
+            "at": "2026-10-04T11:00:00Z"
+          },
+          "source": {
+            "machine": "dev box",
+            "project": "localvoxtral",
+            "session": "s_42"
+          }
+        },
+        "signer": "devbox"
+      }
+    },
+    {
+      "name": "answer for the machine",
+      "item": {
+        "v": 1,
+        "kind": "answer",
+        "id": "ans_1",
+        "from": "phone",
+        "re": "dec_1",
+        "boxes": [
+          {
+            "to": "devbox",
+            "box": "twE4iSF7h-N4zxh6I_xdUov13N4uX0Nty05ECN7NlQ9BbeSQxuqZxwur3xYw1QKRfmWlY8PltKpkPmAwn6YL9h1MLOqnPAf5ZY4N2kX0KNRLzcSR8YTct_OV5vj-a1dLZMtQ9MnS09vu4nBdq2Lg-GZYH3SRUqF7IxCMZMYYQ-wMMnXpJdkSwXcwx81Ud0lhXRXbt2sHWpYj4tnyGYz0XGSijiRVQb-hn-h8omNoICLHUTZpHj0uNLfwQ8NR2A333TpUB1BmOAyHztQsD6WS1J6oux7wSyG9V5DhNPU0_1yNIC235Yunvhs1xx3UPJ8GEjnJrDCGCfliFdfpuRHN4T_pRagS7lBHaqpBWiI3le_25XvLZczAQRYkcY3jzey9iP2VAaHCr2B_esDJflMkKc0RE7cCQWbTNbh6EpvIwbvL"
+          }
+        ]
+      },
+      "recipient": "devbox",
+      "expect": {
+        "body": {
+          "v": 1,
+          "id": "ans_1",
+          "decisionId": "dec_1",
+          "to": "devbox",
+          "answeredAt": "2026-10-04T10:03:00Z",
+          "choice": "Yes"
+        },
+        "signer": "phone"
+      }
+    },
+    {
+      "name": "quota snapshot",
+      "item": {
+        "v": 1,
+        "kind": "quota",
+        "id": "q_1",
+        "from": "devbox",
+        "boxes": [
+          {
+            "to": "phone",
+            "box": "PBTeqmGb0qAEndCpudC46TgPt5CEw32Zp-3YUrv3rR347tWX3ZETSyscYKPy6H4PnT998YEwWOWsE-TOxtYFWme0bykfyjY77pk1zCnxAprVzaxdpFJce_KVVpS4ziYaDbvJyU_HBvj9Nw1Y4S1NmzCNYgWkIZX0xiolPwzUN6PoyPrVBYd_2yu4LphI-0v28bKB7zg7BKXa0u6RFe2_ODePnpHEk4MiDuxJrQPXn8iSxAzxi7q8yW1jzkMBv1OU53om5sbqw6IUqGZeE2ZM5ykfix9z2Y8qTaLUHf6IECTcNeG7P4y3KyMWkuqMuW6QCC4roUx54eOjak5PF8sYUx63xCgx2mDMZOROTi63iUDQBvjFnou7f63GPIPkPeRGliVDQgcr3Q7HY9Zu_w03FzbHnj9SbwLFrN4_njnWZSnptNFZm_q517MlfqQA3hjyj_MQ08M4OyJIPvuW20zbrfxUoEVJN7Qk7cW27b31gW3CWh7zl0fyXNGilDFyhjV9kqvoDIHX_hXt_vynz2qlyW6KJjnqik9kLT0cGOWz2PLUTjM6dkydsEECRIDRzbVZY3WYmCr63HB5mgphFiCVp0GK42zDiC-pjSmawEJ86PxddVPjrJnwNX4ZVV_9WDMIJ41p0XZLVPbAq6Rh1rE9FVeY5ETkR4syPBI6ASuCq4pRp8vBc89Y67KkFn9ryxpAmZHFvq9mI-aAX_hsiNXwUjqsKSq9zIXi6uofO6OEAM23qC0kahQPnGcam4-lq9N42VjzOY11gPxluuwKV_D340r-h7Qjz8tIJW0BaUNgk1imPMa31ag1jLwD2LBe3VOHcZz83XWIqvNLQozZwmg6RmxZLFyB4F6ID4S8gT3nOIVAwREwinSj65HGrnMIyqErg-oMshfBAj2rGnJWs34Zi64Im2VFi28XaPd4nt0zlDqQQ0UxQXhZlYpVmMEzzgb0NyEXsVmpui6HOdsuvWqF8kK7khFDH11_KtYCcFMP3wJKtiFB6A"
+          },
+          {
+            "to": "phone2",
+            "box": "DbNM6HDItMtsx7RgCuDq1UBRtdhISFhCdx43OywJsHqI_86hMVv3DxH8hkGE3ufCwE0grJgNDAsazPQcg5yR8FEeAUTaM-iQyCaxklOpUBh7-qH3fb4hKZkYuFCtbEhGFnV_8FGV-BrTOJs4AcX3CQKtxswujJRAvUL08Oq9yeQunw1Dkoq8dfwCD158L4nYwvDxCVj89BEp2oqFEPk--uG9LdpWsdISV1UDsp7klhAuTqZI4iSZpOif2m5VSR_Qi3ZAW1nCSeUSit6jNiP5b_HjLpkRtKBaB1Xj9vybVnu9vNu-o4ODhtizoMKzFcjZe06EaAY6Kxjwthz2-ZrMeZ-6vIBF8jn-_kcAztu-wrW3apj4drpccT9EhZTSDhTJDnYIxKoYqodN1tX_xQGyh5O55y-rasLb7xhqIgPHqvpyXrzTcwGr6EgWkGpiLgsY6R7FtQ8GAg2-GW7EBKm2KjIuQFi5x5wuERRCsRhSe_9TjyBB_l5eesiWrOtsHqCJUOBJsn5iqkQ5WSC7ozK9oluRw03HftQNglpkT3hiH_asIO7iNzQ4mN_OkGy6rh4NxQGx3mJE-rhckLTb8oxgr96u3dwO1ysWvx0d_aot6bKDqpCNtbdaSvjp7v_s77WabT6GZ4zNVpt7_SKwgubxxtDLEWrwvMirr_Fvpzq2T5MtHqNpB1mkrmATFUe6fJ_mIE7hTLkiLTGwGjxYzhbKr-ciAyA4QrAP0f56Ercxlc7FVkukfab25FEbPzuHdPQCfkCIFbyZ7ef-NOLUI6OoUgdcxAXPD637dSWTeXm9p5f5N9F6IsHQq78jIlPZClspAI_4t2esHJzloYUt749DTNuey-GLdIi1JdnsoMSUqSI54vy1fdn2NVXOfyXDPiz3aj2FCtiiPZ2XUtRzVs3y0ptfsj-x4W5sLEYKpFG1v_rUjNEJbmpjQiE7GO8oMX89AAty8y6PGMLxF1D7zvQ88VFeS8D3Vvpx1FuKLAiGM-BG5soyYg"
+          }
+        ]
+      },
+      "recipient": "phone",
+      "expect": {
+        "body": {
+          "v": 1,
+          "id": "q_1",
+          "to": [
+            "phone",
+            "phone2"
+          ],
+          "takenAt": "2026-10-04T12:00:00Z",
+          "providers": [
+            {
+              "provider": "zai",
+              "windows": [
+                {
+                  "id": "primary",
+                  "label": "5h",
+                  "usedPercent": 20,
+                  "windowMinutes": 300,
+                  "resetsAt": "2026-10-04T12:30:00Z",
+                  "pace": {
+                    "stage": "behind",
+                    "expectedUsedPercent": 90,
+                    "deltaPercent": -70,
+                    "projectedUsedPercent": 22.2,
+                    "willLastToReset": true,
+                    "runsOutAt": null
+                  }
+                }
+              ]
+            }
+          ],
+          "alerts": [
+            {
+              "kind": "unused-headroom",
+              "provider": "zai",
+              "window": "primary",
+              "resetsAt": "2026-10-04T12:30:00Z",
+              "unusedPercent": 77.8
+            }
+          ]
+        },
+        "signer": "devbox"
+      }
+    },
+    {
+      "name": "no box for this member",
+      "item": {
+        "v": 1,
+        "kind": "decision",
+        "id": "dec_1",
+        "from": "devbox",
+        "boxes": [
+          {
+            "to": "phone",
+            "box": "gFDxF-jeu531_E6isu2EItl5T2QFKkSpTsfl3Q3wTX6an-ZKbd1wH4-5UjmJT9bbG5bukHX62OEZ9BZKGvp2ZJBvUgvhRc80Jnb0a6-BCzGrpYczd9nuEpO90vwybWkjFS-Rpv9FpH6qWi43HMghQQa63QXDGVUzbXodr_pkW-Onuq_qXIu7wWCWLz_DDepaUvNO4CRhAfwGogjBqffxS3UDwMVAiq7eZHbAO93t5DDvi8Mqn317JPH7ELpPfOqrBqhOAAhOdJLIZ7nLZ9WtgwehSYwl_fOmZ14MaTCFrHUHH5_ZpmuBjEmDFZPkm-Z7tQ0frcwVGxSy_jk1YtnimEkyGHC7NUldLutvrVGkWHWUyRcTR4GFWDLMeNwAytzXMx0arJdmzyzxtjqDa6JNtotDDmvZUCIar2sXZJrKDiaoDWWILo2Dt6FyRGLQao2HwmMG2IzhSv60VkNaJSd_xE22OXGiaWJ5_-41c0m3Mb_gyJxjfoE0V-dL0TCC4HQ8JkDxLodog4GDMkvYSgH8fC0mAIt8cJOCfF9DOsgBsj-N4sJ18PRGkv1Kc0O9GbZybNDG6Kbsg3U9CSlbmldCdkCydHmA6er7ge_r-xbKW3K-Tom5qfu5TRiY2hO6lXV24F4hLE_wiPnwDHU6E7D2T6IRoQw_MbaweokCNquT_nNx47zBZwdSQ_FATS4dSvR24ugs0opX6MgqVDTiFK-dp3wxFS36HFNnCsrLKUMCsCrVvDA9R20RpNaoAs5JvoIKJ7BPgDPwV9Fes5XUbYQ6-a1OJCHSsz16kUtlIKwFUZd7C3hZfy_1F0KFVD3VxAhemSDRAaRsGWgfAYfr_iTovsefiv3Qm7rOCmZ9eQESBAwK8nM"
+          },
+          {
+            "to": "phone2",
+            "box": "4Ruxxccq4y-8K40xKQhruT4oFtIcEVXFBqDzXTIe432H93PmeRCKPDFttNE4d_0-kMIva-i63jpDIBiLohbjcFnX2imdsGWm0cj0OVxkb7i1OVGvREDOFGCAe8sNlndAG2KrEmza9KXpiumW1XXZA955HNDUqwuVRP62qaP1QIDgC5nLZg9w5icTjlIVPtKUm7bgQjMYejXl0aJCcpgv0piUrCAh5sApXr0XztMo7lfoanfNWaK3ciRlOZkeZHaIha3jGp7w2XblmTBlS8Hl_D9JR-JhuG-ltgkuZR2N1GDioNK2Rgxs-ijhIM4gL71xWALkM1U1LCRWOnY0DKgHmlujForrmETSzeKLJaVi7JCHI8TfmsPomsd61NCraidpptykjcCHk3EtCyRoFs7khuBd3I1awjGlCOo9qYOMkaRU69JHMri_wM1ycG5_we_qEdVWx_R3fmyhqD2Ab3HJlxe3VpxuWntVIN5ecTDey7t7QgubmTj5X2eZDntnvXs9ldQYuNL4LSTL-OVme2P-9GhSFJpaumX_ZRi0yxWCcog1xn2iLrYapA5huBKbZlS1jmi1iufISB3GUN8JE0a0JUhDAx1Eh-1OQiYEZsH7dc3QhTongvmT27SxyBId9n52VXHgLBHg6HPaV9KiJk28KD8TbkBEAke0nqshKPLpAf50uajK66zCqcfN9UgcgUwsT1jW3CfuFAQpXyVAp5eDrKYSaIxK-zuOHVbnP5YrSo-S6lR9QuOdMP8xBCmxLTdJ0PJCX2DCDbpAD_Sy4kzmdA36DEDGBNd842ofWZ7jaVxHTQFLDVqike5cstCZarh8XiaSn_4CkL0FCncFACPNuldmOe4d4HpRByatZqaKO8VuTJM"
+          }
+        ]
+      },
+      "recipient": "browser",
+      "expect": {
+        "error": "wrong-recipient"
+      }
+    },
+    {
+      "name": "corrupted box",
+      "item": {
+        "v": 1,
+        "kind": "decision",
+        "id": "dec_1",
+        "from": "devbox",
+        "boxes": [
+          {
+            "to": "phone",
+            "box": "gFDxF-jeu531_E6isu2EItl5T2QFKkSpTsfl3Q3wTX6an-ZKbd1wH4-5UjmJT9bbG5bukHX62OEZ9BZKGvp2ZJBvUgvhRc80Jnb0a6-BCzGrpYczd9nuEpO90vwybWkjFS-Rpv9FpH6qWi43HMghQQa63QXDGVUzbXodr_pkW-Onuq_qXIu7wWCWLz_DDepaUvNO4CRhAfwGogjBqffxS3UDwMVAiq7eZHbAO93t5DDvi8Mqn317JPH7ELpPfOqrBqhOAAhOdJLIZ7nLZ9WtgwehSYwl_fOmZ14MaTCFrHUHH5_ZpmuBjEmDFZPkm-Z7tQ0frcwVGxSy_jk1YtnimEkyGHC7NUldLutvrVGkWHWUyRcTR4GFWDLMeNwAytzXMx0arJdmzyzxtjqDa6JNtotDDmvZUCIar2sXZJrKDiaoDWWILo2Dt6FyRGLQao2HwmMG2IzhSv60VkNaJSd_xE22OXGiaWJ5_-41c0m3Mb_gyJxjfoE0V-dL0TCC4HQ8JkDxLodog4GDMkvYSgH8fC0mAIt8cJOCfF9DOsgBsj-N4sJ18PRGkv1Kc0O9GbZybNDG6Kbsg3U9CSlbmldCdkCydHmA6er7ge_r-xbKW3K-Tom5qfu5TRiY2hO6lXV24F4hLE_wiPnwDHU6E7D2T6IRoQw_MbaweokCNquT_nNx47zBZwdSQ_FATS4dSvR24ugs0opX6MgqVDTiFK-dp3wxFS36HFNnCsrLKUMCsCrVvDA9R20RpNaoAs5JvoIKJ7BPgDPwV9Fes5XUbYQ6-a1OJCHSsz16kUtlIKwFUZd7C3hZfy_1F0KFVD3VxAhemSDRAaRsGWgfAYfr_iTovsefiv3Qm7rOCmZ9eQESBAwAAAA"
+          },
+          {
+            "to": "phone2",
+            "box": "4Ruxxccq4y-8K40xKQhruT4oFtIcEVXFBqDzXTIe432H93PmeRCKPDFttNE4d_0-kMIva-i63jpDIBiLohbjcFnX2imdsGWm0cj0OVxkb7i1OVGvREDOFGCAe8sNlndAG2KrEmza9KXpiumW1XXZA955HNDUqwuVRP62qaP1QIDgC5nLZg9w5icTjlIVPtKUm7bgQjMYejXl0aJCcpgv0piUrCAh5sApXr0XztMo7lfoanfNWaK3ciRlOZkeZHaIha3jGp7w2XblmTBlS8Hl_D9JR-JhuG-ltgkuZR2N1GDioNK2Rgxs-ijhIM4gL71xWALkM1U1LCRWOnY0DKgHmlujForrmETSzeKLJaVi7JCHI8TfmsPomsd61NCraidpptykjcCHk3EtCyRoFs7khuBd3I1awjGlCOo9qYOMkaRU69JHMri_wM1ycG5_we_qEdVWx_R3fmyhqD2Ab3HJlxe3VpxuWntVIN5ecTDey7t7QgubmTj5X2eZDntnvXs9ldQYuNL4LSTL-OVme2P-9GhSFJpaumX_ZRi0yxWCcog1xn2iLrYapA5huBKbZlS1jmi1iufISB3GUN8JE0a0JUhDAx1Eh-1OQiYEZsH7dc3QhTongvmT27SxyBId9n52VXHgLBHg6HPaV9KiJk28KD8TbkBEAke0nqshKPLpAf50uajK66zCqcfN9UgcgUwsT1jW3CfuFAQpXyVAp5eDrKYSaIxK-zuOHVbnP5YrSo-S6lR9QuOdMP8xBCmxLTdJ0PJCX2DCDbpAD_Sy4kzmdA36DEDGBNd842ofWZ7jaVxHTQFLDVqike5cstCZarh8XiaSn_4CkL0FCncFACPNuldmOe4d4HpRByatZqaKO8VAAAA"
+          }
+        ]
+      },
+      "recipient": "phone",
+      "expect": {
+        "error": "cannot-open"
+      }
+    },
+    {
+      "name": "decision signed by a device",
+      "item": {
+        "v": 1,
+        "kind": "decision",
+        "id": "dec_1",
+        "from": "phone2",
+        "boxes": [
+          {
+            "to": "phone",
+            "box": "-0ccOvsas4UY_BAWqxWi806Kje7TQ9TJV-kydgt9a1NiLCzfir7_uukX5ErSksMq4PZe8tBaW-_6Fh6cV6wGNNg3eeXdTfzI7yh1mG0KepLT2rUpkRZAcN1hxv2Rg5ftOMBlsgH5x9nvj9eMcrqvogxcqXtb-te2zlGR2-2huVw2NL-jUCfU0eMAgym1lnwXeMX_menJAQ5GN-6txHpZLTKBdpqgGb6JsI_t9CpAloVtdBhFCn5YV4lMxEP1s52X_OT7dcEK4pJjBz2dA0h5NFy0jqjc1p57q5rtZp1biDJAxdwx_CiUM7GpVVHTwRwmyTZWXIp-zeLgUy-QSIY-8E1bMwx4Fw8nRtt-npErKa1O2ioZC5571xyTE1whSPoD1I2kDrM58Vfr3GYzZhhS8I0PAWdwXSAlf6IbKbif_-4QGRWzb8Rw2F17Y32YL6fHHhNv6jRuXJsum72NRhKRPPWnFu94EPhH2O6wjUoQtZu9smt69sXzMFZI8rzhwBFtVA6mZhyBNN_F-RaXGrxgvySJxZrNGcHJJSE4Gu_GkgbB2C_Ko5TBu3eQHe11ov12iKJDN5xyuJVmIgCNHl9XoaYnjNVMTq4Uaz_oOjSqat9ToffyKlGo8OcwxWshwNU7JkD32YL8BItlS4aHlfCQoZGhTVH73fXEbYrQX0vxf28wcBwQbTXBcIr8bWuVww-8yarbtCGUlZ4yU7t5SeCTBMz97ro8tVwmBrxISgRLVlkWqpPgBRtadb6AutFybXZBlzJOkvZqB4TsubbTXrvfcKWqjuXFgbBIuXU-7qkY5jtBTNh4wLIdx6I7Qv_LSsA_ThWe50MDo0XDHWyFx5jGc74CQKgAoT4sfFjcxow1B8e2Sf8"
+          },
+          {
+            "to": "phone2",
+            "box": "r6O_IwKGm4-d7fOGhDkq4TjhrfjqFkII6tQ7IR2vxSmzLBrxUdPdOwv43UqrKybbRsnxSYWDrAthzlxKQF2zBvCCFBtZxB6diFAfm-kkQ0lQLYUwJM_NYkTGGpo6i1B1YanAQXHW70oWTDIBvnt-R2EqrOexCY9O6o8vhvcqgIplmOOAyT_QYVubz8ykco601oDMTTxNk0PQT97Up5Al7q5YKx7gMmDemMcyZ6Zd0pXQLiLMMbbi7eTztgINwGQ79Os3SUz3QDMty5uNzoN0lkFXw493D5tM3qOyftB-b56WkVteV1ddL-fB9IP2nrM4yfSwZJJyke4jjXNEb2znhmWpxlzutPW66VJojdG5hofyogZH_qIAKCKZJNBODy9ppbwZfgzzTETWPsaopIaiIw59PNefUmlhhpZvRACiopev5TcNFqVvgOvvNgOG6TnDV39B9Mra-9asNAHAhMf9iew8zbR6ztyaHfy4MrqCzGxmW2hENheYfHnC1xt3mDq-VMU34tLF_qHres_dv2luz_I0madIgBTeu_ryfSM6KtQfTrSn0rm-SIIs1p2wPP-rJem_Z-27R6VCQQwPVYqLy6jLOpChSmxx-cYTOQNTshR3UQC2zfSFvTflI0F3xIyNsUDj8KxAuzJzZ4_uqwH72j4EY_mIQAKC0MtxmL3LVXnnH-HAdqUllLVoW36tmFaitIaX9VVn5UfFerc72bY8N7sIxX02_gRIEswz4Vg6QoGQN_WIrakjbPZ-jFNcPU5Piwd_M2pRzo-_sBd3oBaznJz74QDvD2r0ZhxKtLWlZxNyzS9uRAkAKSgwD0NkfCndu-VXg7YwmID6SLDHHMm-EmmGHfchH8WpdEjOVZtSPWKkCt8"
+          }
+        ]
+      },
+      "recipient": "phone",
+      "expect": {
+        "error": "signer-not-allowed"
+      }
+    },
+    {
+      "name": "decision from a machine not in the directory",
+      "item": {
+        "v": 1,
+        "kind": "decision",
+        "id": "dec_1",
+        "from": "evilbox",
+        "boxes": [
+          {
+            "to": "phone",
+            "box": "7nHoZOiF_kPdgJenv1A9avpGpI8Yo-bwC1-tL26xBm-umxpLhXBtpUVAYHDmVVQ3LWsIC9hDegkYNUsTcnQ2U6XHAxVkpL1f-8JdR65yz9nJQ-mj4qTAVWgYEtFztguGLupBUEvPXzGlBaGC7B598Cs9IAJrNgbg8to-4iTl2oaVq6mWEt1TukreM-K7vEMm9LDLeTzb1iEjT7WiRTtYPTV2L2rPf60uiRrhkFnx5tXD9aeUsLYe02QHoDhLRQPEdGOZKQfsyhyHrWdrUerSq47oCcNl0uyJy91vbHwVpzcp5-sMLtQHje3yJN60c2gzpb6P5jAPDHKmnKN3Oh3oePZD4ZkylSpxzm0nYlEQGcPe6MJYQBFlEhHq_BZTN65qVCXXDIS6EiKsCobz6DwraguTEcEhXvOAxi-HYTyXyKzAFWs7I75zNQR-Zne0NQeXTQkAtYUieiLs4jOcUMUAwhnnjKGP0XjWX_KzC_LuZPZsM0KqSyfAllcCugTOhGcNEoU6IxVxH8PeT2sVpdw185MLdr4aO06z_ZjfYUNj46Rir21yRJjuMN-ZyHx57N8LnM7mCMoSXAzj8oEJoLYfiAUP-nYqZxCheEJ7YGXzyZ9kpEni_0uxbynPtEivEPDuIB_cwktHl3Z0S92WnqoGKmWdBjJUQ2LBNN86dCRQmSJSahe4T_n5qqcMumK2Pp1tvFWXgUyHSahsLU3gM-TCp5bRtevhLRLUz_2zSuO3rxW5W3bSA0-OMneYBJ_-Lq-frDlSUeRtefZmRa-iYcUDYx0ZwCYAZVGtJDfpItq_kD7UnvLkyHWuqhD094ynQptv2S4I2AYGUiCVzHoNHeQ1K0-wbp-NXg785fBhjqGRGvcGaWvq"
+          },
+          {
+            "to": "phone2",
+            "box": "-VcL3aNN9Q_ck0kc9CHCkb8lC4FvHjGCw0h58uim4gKP_HZiZHEbKCqPwwOkoGB77WdinV64_Gv0MwFuqaCI18pSpa-esz2y1S7V3ftlFRkr0LYM96GBoasKklbJJBhnscz5PPFvpzBge_-CsgLYnx4g0QBxdCWyvKX7vlkeZFWS0XYjWot_NazjLLhhHnBq7HaqdYQB57GD5vcMnsq6fb1wN8QuE0_ggstGY38f1lVcLk7WhcolvGMtTptTjMqfDE5tEhw7eBgNmHelkITpiUtzmHQeWH5rZzwFskFUtBKmRzddSk6YUz0N-AB5hyc3veOo-AeI_BVnKZO31_AfZkUmhoe5ZHfRu-n1Xwpd2ekBDNNELyEatrxshMpl6xgJ2o9nI410FGzm-Zabl5LAei7BwWwHlI9N1oWHahRjzraZ6V4RkgOPkJoffvupO0OZUdeC9CStbi6VCS_8DckAg2EgyjgWh70NFVCZu94PNdtPO3ZwpwIjBHcGjy7B4h7o1eo90w1SiT0ypDnNfa9nB_yTxXXGy8YvoseFjL6YzMGersxBCNvDv6O5OZxmuYR71kYWwWhoQODn8aBeanBVV0uZ9MuYX_DAYMggZ93pHINrLJEe5wO4Bt_OALAPhq3jqvhaAmAQtMq7wdKOAbZ9bMJFAqlhofGLYEfVXaVgGfuUuRRZFIwj8TMiqrseOjR9O6mxcF9uAbfm8U4ESjVlsGVHm5uJSujputUqfczyXRoD8JF4yYUnQZGKUK_BrNKww_CLdfIRF0tG7NQ1MaTw6xwAA_0cPspFvea6nHGeSkvdD9hfM0uTpX-nZm4_VbSA1HMDfO55LJLgJ9kiTvkN_ivW1-w9AN_0q0ITpprM8Kq-1aBl"
+          }
+        ]
+      },
+      "recipient": "phone",
+      "expect": {
+        "error": "unknown-signer"
+      }
+    },
+    {
+      "name": "decision signed by another key claiming to be devbox",
+      "item": {
+        "v": 1,
+        "kind": "decision",
+        "id": "dec_1",
+        "from": "devbox",
+        "boxes": [
+          {
+            "to": "phone",
+            "box": "W4_ZOyNAVw_OC5lE34QT9ECzGx36OgZUjAYgusiMjXGusDjdm4snp0DqnV321xUR8G5MBRCPkDzZ38e5xo6UWGHlEY3O6ECMSINWN2tA0fvmDXN1w9WQAkTqjQN7sJqjdyPjPuWsBe3KIqGyoovdhEGDREWaS6KqD8pn1NF_iEkJb15i1gHlTHWl2D3NOBRTlnCTsr3FtpQ-1DczMqBCT2Wouj-1Hdr-NgeRfZxsfmE4t5zfzPC6rJQapstFAWFwQDxG3AEabPJGIUqfvVscAZyvOEcv0nHVVp7B5irfTyobVuN_UKtw7XWB4xJ6EJFvrvX92RNhtXy5tb6J_g-jF_-tnKA4nPyvF8ruarEHy_w2Gs44U1jW0m8o5Bi7_ImQjqieybdBSnSH3wNKYns4SWytOspVclrseW3IkjMKlkF9_ifZcp_usguJM2Hd3Jp-GWkHxcVkb5nvuPctrp_Rw0XZlgbPbSnKTqyrKAYm7A5dmVQQ_HD6O-hi_-i3VLISPiMwCcPoGCKFpkAMWQ9czCB_SUZH9A9iC-3_kb3HRIOR9Ip4tKBLF1vgrhYo6Gmqa9Uh1hkljtHI-fpLutakJr6ziddbXhrI0UL-MhBh00c_eRUIXcf-HiXWyneBKb2xCzGPi-VNvRNp_hT-186bwy7pl3ZfDQvk4EU_sJeJODPVE_eay0OGcAzpWpCkPBCAK7n2OpBvvwWfpANz9m232w6D1d2NoacypUr7stCm66NUytj6upGfgWPN_xI3VxhPUc0r_2bN0tZ0v7SZ86aHiEN1oVwKcaWIH2mD0X2SEN3MMDom_0ne_xJXu1u5317MM2kIufrh0X4Vgt3IM20BoAAj528SB2IcX2xe_M_IWfwznVA"
+          },
+          {
+            "to": "phone2",
+            "box": "rPaW5qV_ysKD9RnIJlRVb66KiWSLIgyTCEJBheCuGW___u6zv9YP8QClD2AYfuYfIjHCLcN-4I_h3txIRMqE8LbxIBL-cl9vHVVW5KMRfNKKXE3x708_Ysn2-beVv3BhNt-8Gv1yhKdrPNp1I-oI5-xAYYZipfS1M3Ysll78PvESViQaY8UZbUs_UIS30P24C3mTenYD2IG5QWb7Iwi-HisUmO0I97b5IXEapzzcAuxS2G1bmIA9lwFxYM6kfNqseY0c6Kf4ET8T-2bmVdVccKeBjdPCVznb3Ya23ieeiRXiUHNevYif32zIagzJDU4a66xUdDkS8XVhgIFiEh52f4UboCfh94EQXP-fPxGrN33TKnFlRJ8rQFFTN2GEKpJLUs29vru7h0BgPv2IxEIFIe3vvMKlZiHwJ5N8fNMriIgtljYB8jZiJ5ybcxwQyjXxfhcZuMMWp5MWCFO9JYCalCMoCiVxX7s2C-6nKGbvBLgLfXrjja9iNkyteoVW92BpBtNe2Dz5YgJv0eGrqRtxpDTNJnSvZJxZv-92sfA1iPSlc6JaxFk8fvxmphUVZnjid2Phk132DbErkjwX24AohRbEsf4d8RNWN4z3Q4Aa40vt8v-ou-vP_d43_MfrSzpMsTAf8UKu2HAlqKtjO-yDT17c2t3iSjMMjAoZFWJVMCC9OMDWTEN18WH3m6kirAyJYNtIwhzMEnn2fo_yFR2kewTIPxHvHCuwfg5xD1t-tad1wN65cLhyfPBZ9sFWAcyolNh4nPHQhTI_6C054ujMhPvJTkWe3sREuZ3JHQFAsdQsWnowsMC2Fi8sLOhuu3ZkBTJcTzEyCJ23j90cPcOLJPRb1-px9TAs3kYKhzm_kciXiRM"
+          }
+        ]
+      },
+      "recipient": "phone",
+      "expect": {
+        "error": "bad-signature"
+      }
+    },
+    {
+      "name": "answer from a revoked device",
+      "item": {
+        "v": 1,
+        "kind": "answer",
+        "id": "ans_1",
+        "from": "browser",
+        "re": "dec_1",
+        "boxes": [
+          {
+            "to": "devbox",
+            "box": "SOUzfFju90R7PHB6ssRHSLqBR_Bz_w0n403NUDFipyCyEexzVLUt_vU9AOxf1cMVVUxOgW7Sy3I-E6vl5-IDqQCHOvB2Jyd3EOkX1n1pM5E4WJGPGMaFTHA-l_Eh7ffAcQ4zyiL0V0Q0sbTR0haPtxv8dQgCn-JGbqnrqkQLEueUF7yyIw7QrVNLCFHxJxZUB8OWC1pxIXS0-WH8N3PXLdqY8vd2y8DNVnGKBZ04ebk5_Kz6XzXuHJH1r7PZD32NvBmXeO6Bw4ksxGZP-o5dfkXHuc06qBy1riNbkjRLYw5ShATKx5_QJ5zFvOGdyENqseFOAtwRr6ICinD2jNnfN4gpQN20Zoe27BQ59DmeADZBN-60vTUcgsVhitilcWV1lICqI8oRQc4zc5uGsX8i_Q39sP1fb1_HP3QABHXnqvylyf8"
+          }
+        ]
+      },
+      "recipient": "devbox",
+      "expect": {
+        "error": "revoked-signer"
+      }
+    },
+    {
+      "name": "decision re-sealed to a member it does not name",
+      "item": {
+        "v": 1,
+        "kind": "decision",
+        "id": "dec_1",
+        "from": "devbox",
+        "boxes": [
+          {
+            "to": "phone",
+            "box": "ZuUnlQM_UVNI9lMHWOPsfD1Rteu6kYZTswF0NJi1VxED4Rj3mCgGMTU7zn9vezr0Bfyp-BDULhdpunJJ4x_aLJu4JKDAzKSi3VuEo5JTbO_tZE47BMsB_MzWzX30ppwaFdFWHBfL0oO0p6O85EkHzvi6eFcU_FShOWRNwpLNVvt6_KaPbIp1MW05lmCYhZIF69vVpVr88mMZYEsCXL8JwvkOZ4RaSa5pixbgzliD4awiCysAanYU1-gfZgqSTQW2JMuQ1kI6xkuyN7Acr65pkbcrB11VCnkTXxi7ckLtm8UNLY39f8-GdYJA1h5fo8iEUGISmXgjotchuOaCEok617UwEqDijzx0CaBISWscKAE1viyyKfPbKd0BjiOeMo7lCCgLytQygbrbBpnoNP-HPh5EFSAU-5sz5g4a6G1G18sbB4XgJOl9qahg6VjTJ_m0kQ-jPHfxqhaRGNPWTd7mNFJfI3H6dRb1vBoS8hnsJBp6Wyn-1O8DU7PQqF5F_GMfJP8jjgPzH59vB7-eqHTlbGv8UW0_ueRMJmphgQwPS05aBQ1JQTgGQapnIo8EGi9rPv9J8az9NZVOCtpqk5M5Nq-SRnoNA1bWKoBIWG5DU_SbBjssF_MWU1_wk8QdhItj3DG3EuaOqGRJpXaY7vT6CnmiJ7-1HLdlJNm_G4YFd56k9YwZtzbBIZtvKW6WS4_me2W9CMOecL6689Cx9zZie8UzUTZNkB_ug8qrc7lLgB4OpH3h1hdnFaeX3gc2LJmouEH-qfBSokkA13vlAnFr8DU3rDe1tpndXtIN3uxRSGWiY9SCy4dNksVD_5okH1QwaKvLqrplFgSMVSWwxyvzdZKpeM6vj5mJ6g"
+          }
+        ]
+      },
+      "recipient": "phone",
+      "expect": {
+        "error": "wrong-recipient"
+      }
+    },
+    {
+      "name": "item id differs from the signed id",
+      "item": {
+        "v": 1,
+        "kind": "decision",
+        "id": "dec_2",
+        "from": "devbox",
+        "boxes": [
+          {
+            "to": "phone",
+            "box": "gFDxF-jeu531_E6isu2EItl5T2QFKkSpTsfl3Q3wTX6an-ZKbd1wH4-5UjmJT9bbG5bukHX62OEZ9BZKGvp2ZJBvUgvhRc80Jnb0a6-BCzGrpYczd9nuEpO90vwybWkjFS-Rpv9FpH6qWi43HMghQQa63QXDGVUzbXodr_pkW-Onuq_qXIu7wWCWLz_DDepaUvNO4CRhAfwGogjBqffxS3UDwMVAiq7eZHbAO93t5DDvi8Mqn317JPH7ELpPfOqrBqhOAAhOdJLIZ7nLZ9WtgwehSYwl_fOmZ14MaTCFrHUHH5_ZpmuBjEmDFZPkm-Z7tQ0frcwVGxSy_jk1YtnimEkyGHC7NUldLutvrVGkWHWUyRcTR4GFWDLMeNwAytzXMx0arJdmzyzxtjqDa6JNtotDDmvZUCIar2sXZJrKDiaoDWWILo2Dt6FyRGLQao2HwmMG2IzhSv60VkNaJSd_xE22OXGiaWJ5_-41c0m3Mb_gyJxjfoE0V-dL0TCC4HQ8JkDxLodog4GDMkvYSgH8fC0mAIt8cJOCfF9DOsgBsj-N4sJ18PRGkv1Kc0O9GbZybNDG6Kbsg3U9CSlbmldCdkCydHmA6er7ge_r-xbKW3K-Tom5qfu5TRiY2hO6lXV24F4hLE_wiPnwDHU6E7D2T6IRoQw_MbaweokCNquT_nNx47zBZwdSQ_FATS4dSvR24ugs0opX6MgqVDTiFK-dp3wxFS36HFNnCsrLKUMCsCrVvDA9R20RpNaoAs5JvoIKJ7BPgDPwV9Fes5XUbYQ6-a1OJCHSsz16kUtlIKwFUZd7C3hZfy_1F0KFVD3VxAhemSDRAaRsGWgfAYfr_iTovsefiv3Qm7rOCmZ9eQESBAwK8nM"
+          },
+          {
+            "to": "phone2",
+            "box": "4Ruxxccq4y-8K40xKQhruT4oFtIcEVXFBqDzXTIe432H93PmeRCKPDFttNE4d_0-kMIva-i63jpDIBiLohbjcFnX2imdsGWm0cj0OVxkb7i1OVGvREDOFGCAe8sNlndAG2KrEmza9KXpiumW1XXZA955HNDUqwuVRP62qaP1QIDgC5nLZg9w5icTjlIVPtKUm7bgQjMYejXl0aJCcpgv0piUrCAh5sApXr0XztMo7lfoanfNWaK3ciRlOZkeZHaIha3jGp7w2XblmTBlS8Hl_D9JR-JhuG-ltgkuZR2N1GDioNK2Rgxs-ijhIM4gL71xWALkM1U1LCRWOnY0DKgHmlujForrmETSzeKLJaVi7JCHI8TfmsPomsd61NCraidpptykjcCHk3EtCyRoFs7khuBd3I1awjGlCOo9qYOMkaRU69JHMri_wM1ycG5_we_qEdVWx_R3fmyhqD2Ab3HJlxe3VpxuWntVIN5ecTDey7t7QgubmTj5X2eZDntnvXs9ldQYuNL4LSTL-OVme2P-9GhSFJpaumX_ZRi0yxWCcog1xn2iLrYapA5huBKbZlS1jmi1iufISB3GUN8JE0a0JUhDAx1Eh-1OQiYEZsH7dc3QhTongvmT27SxyBId9n52VXHgLBHg6HPaV9KiJk28KD8TbkBEAke0nqshKPLpAf50uajK66zCqcfN9UgcgUwsT1jW3CfuFAQpXyVAp5eDrKYSaIxK-zuOHVbnP5YrSo-S6lR9QuOdMP8xBCmxLTdJ0PJCX2DCDbpAD_Sy4kzmdA36DEDGBNd842ofWZ7jaVxHTQFLDVqike5cstCZarh8XiaSn_4CkL0FCncFACPNuldmOe4d4HpRByatZqaKO8VuTJM"
+          }
+        ]
+      },
+      "recipient": "phone",
+      "expect": {
+        "error": "id-mismatch"
+      }
+    },
+    {
+      "name": "answer whose re names another decision",
+      "item": {
+        "v": 1,
+        "kind": "answer",
+        "id": "ans_1",
+        "from": "phone",
+        "re": "dec_9",
+        "boxes": [
+          {
+            "to": "devbox",
+            "box": "N_nB8OLuUHlMWmsNIzm7srhjM-5aLuwR9_LnrJ9c7VxeTiAbPqzKYlFhjvF-TR1QpEOrd-JDblgf2c5dvGL_dQXt7JLdRHQGXOK6dvFaagOBLy8dIBkCMHk3sV9NfsKBecQmaZrHHS55ReSrxWFS-bF0EyLYqqstsHyqhxFh3H5si9mR0uWDkbAujbm80qJaM1Ro5Ztf_SGUePeDD3QKKXVJpjGxCgGlQ86b5OcVXDe0dWIqyxmeTrB128I9dJFZSejiVs-WRyJpT9eyMqqPUiMJ0v0kCDwtK_wqHyfdRjIavGNW0_Ti_Nt8R3xWJiQxjkh6tDWE3SDQE2ub8f8cjQ91Y11O8L82dqiUIUyIwJFbZd5lKh885U25idnyELfcnOTa77yN-fJqAM6KYujKSRODjNEjZcxh0gjkn8VtSzjU"
+          }
+        ]
+      },
+      "recipient": "devbox",
+      "expect": {
+        "error": "id-mismatch"
+      }
+    },
+    {
+      "name": "signed answer inside a decision item",
+      "item": {
+        "v": 1,
+        "kind": "decision",
+        "id": "ans_1",
+        "from": "phone",
+        "boxes": [
+          {
+            "to": "devbox",
+            "box": "ySZ0YkRFlJ-IVgLyWT72WlfjMljvROrgLMN6JJmxeVx-hTskRA70-c2rQFHgaKSbEPV206-PDPpGNwXkySNI7TThD5opYYJK9qJzdIuo6TjtPtw-GrOg1_g8dlpu6vOo1oicVglJIg7wLkCTmL-wGN6j-KF-crA4vXiJ1qeEgEzE_u33PL1rIpxnyNY2MrW44u0F04SCA2Xz_FQfNIVdhBY_ag4qGR9gWE8WMXAiVQyngUkjZNwx0NrGbsfkadpZ_rZERblDn5GR9KhJniGeAwO8wlk7Ols8suqDRLxiTnKncfglZBu_ND5tEBf2PHCG35Si3v2d1v0ObcCrlYnXMghAZowzsplT7cklL49R2iJPLgneKBMTknS2lCki2SUt-VpvZJj13Lb9U4EKdonGpPtW8uMRWsnXyBJxMiHxK8Tn"
+          }
+        ]
+      },
+      "recipient": "devbox",
+      "expect": {
+        "error": "wrong-kind"
+      }
+    }
+  ]
+}
