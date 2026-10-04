@@ -50,6 +50,100 @@ colors:
     info: "#a3a3a3"
     info-soft: "#a3a3a31f"
     scrim: "#000000b3"
+# Each AI lab's colour, keyed by CodexBar's provider id: the `color` of its
+# ProviderBranding in CodexBar's Sources/CodexBarCore/Providers (4685c35).
+# It marks the provider as a dot before its name and nothing else. The
+# generator keeps each colour's hue and shifts its OKLCH lightness, only as
+# far as needed, until the dot reaches 3:1 against bg, surface and surface2
+# of each scheme.
+providers:
+  abacus: "#38bdf8" # Abacus AI
+  aiand: "#e25c2b" # ai&
+  aixy: "#123650" # Aixy
+  alibaba: "#ff6a00" # Alibaba Coding Plan
+  alibabatokenplan: "#ff6a00" # Alibaba Token Plan
+  amp: "#dc2626" # Amp
+  antigravity: "#60ba7e" # Antigravity
+  atlascloud: "#5975f5" # Atlas Cloud
+  augment: "#6366f1" # Augment
+  azureopenai: "#0078d4" # Azure OpenAI
+  bedrock: "#ff9900" # AWS Bedrock
+  bifrost: "#33c09e" # Bifrost
+  chutes: "#3184ff" # Chutes
+  claude: "#cc7c5e" # Claude
+  clawrouter: "#596ef6" # ClawRouter
+  clinepass: "#61a3fa" # ClinePass
+  coderabbit: "#ff5c35" # CodeRabbit
+  codebuff: "#44ff00" # Codebuff
+  codex: "#49a3b0" # Codex
+  commandcode: "#a04dfd" # Command Code
+  copilot: "#a855f7" # Copilot
+  cursor: "#00bfa5" # Cursor
+  deepinfra: "#2a3275" # DeepInfra
+  deepseek: "#527df0" # DeepSeek
+  deepgram: "#6467f2" # Deepgram
+  devpass: "#2563eb" # DevPass
+  devin: "#46b482" # Devin
+  doubao: "#3370ff" # Doubao
+  elevenlabs: "#ebebe6" # ElevenLabs
+  factory: "#ff6b35" # Droid
+  fireworks: "#f25b1c" # Fireworks
+  gemini: "#ab87ea" # Gemini
+  gitkraken: "#179287" # GitKraken AI
+  grok: "#10a37f" # Grok
+  groq: "#f56844" # Groq
+  helmcode: "#4934e1" # Helmcode
+  huggingface: "#ffd21e" # Hugging Face
+  hyper: "#ff60ff" # Charm Hyper
+  ibmbob: "#0e61fa" # IBM Bob
+  jetbrains: "#ff3399" # JetBrains AI
+  kilo: "#f27027" # Kilo
+  kimi: "#fe603c" # Kimi
+  kiro: "#ff9900" # Kiro
+  llmman: "#6cc5b0" # llmman
+  llmproxy: "#24b47e" # LLM Proxy
+  litellm: "#4c89f0" # LiteLLM
+  longcat: "#ffd100" # LongCat
+  manus: "#34322d" # Manus
+  mimo: "#ff6900" # Xiaomi MiMo
+  minimax: "#fe603c" # MiniMax
+  mistral: "#ff500f" # Mistral
+  moonshot: "#205deb" # Moonshot
+  muse: "#0668e1" # Muse Code
+  neuralwatt: "#38d98c" # Neuralwatt
+  notion: "#337ea9" # Notion AI
+  nous: "#d6a55c" # Nous Portal
+  ollama: "#888888" # Ollama
+  openai: "#0f826e" # OpenAI
+  opencode: "#3b82f6" # OpenCode
+  opencodego: "#3b82f6" # OpenCode Go
+  openrouter: "#6467f2" # OpenRouter
+  perplexity: "#20b2aa" # Perplexity
+  pi: "#7c3aed" # Pi
+  poe: "#5d5cde" # Poe
+  qoder: "#10b981" # Qoder
+  qwencloud: "#615ced" # Qwen Cloud
+  raycast: "#ff6363" # Raycast
+  replicate: "#000000" # Replicate
+  sakana: "#2975db" # Sakana AI
+  stepfun: "#2196f2" # StepFun
+  sub2api: "#2dc6d8" # sub2api
+  synthetic: "#141414" # Synthetic
+  t3chat: "#f56647" # T3 Chat
+  typesafe: "#111111" # TypeSafe
+  v0: "#111111" # v0
+  venice: "#3399ff" # Venice
+  vercel: "#ffffff" # Vercel AI Gateway
+  vertexai: "#4285f4" # Vertex AI
+  warp: "#938bb4" # Warp
+  wayfinder: "#10a37f" # Wayfinder
+  windsurf: "#34e8bb" # Windsurf
+  xai: "#8e8e93" # xAI
+  xkiro: "#52c99b" # xKiro
+  zai: "#e85a6a" # z.ai
+  zed: "#084eff" # Zed
+  zenmux: "#6c5ce7" # ZenMux
+  zoommate: "#0b5cff" # ZoomMate
 # Two faces. `sans` sets everything; `mono` sets code only (the `code` role).
 # Each platform binds its own files.
 fonts:
@@ -178,11 +272,30 @@ side on wide screens. Stock components take their colours from these tokens
 through the theme.
 
 Colours on Android are a setting, "Colours": "Starbridge" (the default) uses
-these tokens; "Match wallpaper" uses Material You dynamic colour for the
-neutrals and Material's roles. Under either, `accent`, `on-accent`,
-`accent-soft`, `ok`, `warn` and `bad` (and their `-soft` tints) stay fixed
-from these tokens, so amber still means "needs you" and quota states keep
-their meaning. The web has no such setting.
+these tokens; "Match wallpaper" uses Material You dynamic colour. The
+web has no such setting. Screens draw neutrals and components from
+Material's roles, not from the tokens, and the "Starbridge" scheme maps the
+tokens onto those roles (`bg` is `surface`, `surface` is `surfaceContainer`,
+`surface2` is `surfaceContainerHighest` and `secondaryContainer`, `fg` is
+`onSurface` and `primary`, `fg2` is `onSurfaceVariant` and `secondary`, `line`
+and `line-strong` are `outlineVariant` and `outline`). So under "Match
+wallpaper" every role follows the wallpaper: grounds, cards, the navigation
+bar and rail, top app bars, buttons and button groups, text fields, the
+selected decision, progress tracks and loading indicators, dialogs,
+snackbars, the window behind them, the splash from the next cold start
+(Android 13 and later) and the notification's accent (Android 12 to 15; 16
+tints notifications itself). `info` follows as `onSurfaceVariant`, and `fg3`,
+which has no Material role, is `onSurfaceVariant` at 72% over the ground.
+
+Only these stay fixed under both settings: the amber (`accent`, `accent-hi`,
+`on-accent`, `accent-soft`), the quota states (`ok`, `warn`, `bad` and their
+`-soft` tints; `bad` also stands in for Material's `error`) and the provider
+dots. So amber still means "needs you", quota states keep their meaning, and
+a provider keeps its colour. The launcher icon keeps its own colours; its
+monochrome layer lets Android draw the themed icon. A unit test checks the
+fixed colours against warm, cool and low-chroma wallpapers in light and dark:
+4.5:1 for text, 3:1 for dots and marks, and 3:1 for `fg3`, as the tokens' own
+`fg3` reaches about 3.3:1.
 
 The web page uses the same faces and tokens with web components: list and
 detail panes, hover states, keys for the options (1 to 4) and for moving
@@ -218,6 +331,17 @@ a decision's context.
   ground are filled (`surface`), with no border and no shadow.
 - Quota progress tracks are `size.track` thick.
 
+## Provider colours
+
+Each quota card puts a dot in its provider's lab colour before the name:
+an identity mark, never a meaning. Meters and status words keep the quota
+states, so pace never depends on a brand colour. The colours are CodexBar's,
+keyed by its provider id, with no logos. The generator emits each one twice,
+for light and dark: unchanged when it already reaches 3:1 against `bg`,
+`surface` and `surface2`, otherwise moved in OKLCH lightness, with hue kept,
+just far enough to reach it. Web: `--provider-<id>`; Android: `LightProviders`
+and `DarkProviders`. A provider without a colour gets a `fg3` dot.
+
 ## Icon
 
 The mark is a space elevator on a 108-unit canvas (the Android adaptive
@@ -252,6 +376,7 @@ weight.
 | `accent`, `on-accent`, `accent-soft` | the beacon; text on it; its tint behind a recommended option |
 | `ok`, `warn`, `bad` (+ `-soft`) | quota pace: on pace (grey), headroom unused (amber), will run out (red), always with a word |
 | `info` (+ `-soft`) | neutral device states, with a word |
+| `providers` | a dot before a provider's name on quota cards, its lab's colour |
 | `scrim` | behind a dialog |
 
 | Type role | Material role | Use |

@@ -444,6 +444,30 @@ How it generalizes is open.
   names (`agent.json`, written by setup, or flags), never a path a client sends. No uid check
   on the socket's peer: neither Bun nor Node exposes `SO_PEERCRED`; the 0700 directory and 0600
   socket keep other users out.
+- 2026-10-05. Starbridge builds on Claude Code and Codex and does not replace
+  what they already do well (owner). Session controls (#58) are dropped from v1:
+  a list of 20 or more live sessions costs a write per change, all for one
+  setting that only an orchestrator needs, and the owner's orchestrator-cache
+  mod covers it. Runs (#60): nothing is timed automatically. The owner writes
+  rules in plain words, which the plugin's SessionStart hook loads. The agent
+  wraps a matching command, chained or not, in `starbridge run --title` and
+  says why it reports the run, e.g. "Mac e2e (uses your session and
+  keyboard)". The phone shows the title, the reason, the time elapsed and any
+  progress the output prints, then pass or fail. Visuals (#62) are images
+  attached to a decision, encrypted like its text, plus links. For anything
+  interactive the agent links a Claude artifact, which the Claude app opens.
+  MCP Apps are dropped from v1, which supersedes the visuals choice above.
+- 2026-10-05. Provider colours and "Match wallpaper" (#72): a quota card shows
+  a dot in the provider's lab colour before its name (owner's choice: no
+  logos). The colours are CodexBar's `ProviderBranding.color` for all 87
+  providers, made lighter or darker per scheme, only as far as 3:1 against
+  the grounds needs. Under "Match wallpaper", Android screens take every
+  neutral and component colour from Material's roles, so all of them follow
+  the wallpaper, the splash (Android 13+) and the notification accent
+  (Android 12 to 15) included. Only amber, the quota states and the
+  provider dots stay fixed. Measured on warm, cool and low-chroma seeds:
+  the fixed colours keep 4.5:1 as text and 3:1 as dots; the wallpaper's
+  `fg3` reaches 3.8:1 on light cards, above the default palette's 3.3:1.
 
 - 2026-10-05. Permission prompts' protocol (#57): `ITEM_KINDS` in `packages/protocol` lists each
   sealed kind's signing role and the item it refers to, and the server and both clients derive
@@ -784,3 +808,10 @@ goes in git.
   0.1 s. `permission_suggestions` holds SDK `PermissionUpdate` objects (here
   `addDirectories`). Codex 0.160.0 asks the user to trust any new or changed
   hook at launch; its race test waits for the Codex limit to reset.
+- 2026-10-05: specs for #58, #60 and #62 revised to answer the owner's
+  questions (cards on the Needs You page). Mod API, 2.1.289: a `tool.call`
+  hook sees each Bash call start and end in-process (`await next(e)` costs
+  no hook budget), but no event carries a tool's output while it runs;
+  `process.spawn` streams only the mod's own children. So #60 times agent
+  commands from the mod with no wrapper, and reads progress from output only
+  under `starbridge run`.

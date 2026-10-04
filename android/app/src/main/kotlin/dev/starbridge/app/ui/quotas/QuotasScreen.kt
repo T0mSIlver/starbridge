@@ -19,7 +19,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.InlineTextContent
+import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Speed
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -39,6 +42,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.Placeholder
+import androidx.compose.ui.text.PlaceholderVerticalAlign
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.buildAnnotatedString
@@ -92,25 +98,24 @@ private const val QUOTA_DOCS = "https://github.com/T0mSIlver/starbridge/tree/mai
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun NoQuotas() {
-    val colors = StarbridgeTheme.colors
     val context = LocalContext.current
     Column(
         Modifier.fillMaxWidth().padding(horizontal = Spacing.s4, vertical = Spacing.s10),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(Spacing.s4),
     ) {
-        Box(Modifier.size(Spacing.s10 * 2).background(colors.surface2, MaterialShapes.Cookie9Sided.toShape()), contentAlignment = Alignment.Center) {
-            Icon(Icons.Outlined.Speed, contentDescription = null, tint = colors.fg2, modifier = Modifier.size(Spacing.s10))
+        Box(Modifier.size(Spacing.s10 * 2).background(MaterialTheme.colorScheme.secondaryContainer, MaterialShapes.Cookie9Sided.toShape()), contentAlignment = Alignment.Center) {
+            Icon(Icons.Outlined.Speed, contentDescription = null, tint = MaterialTheme.colorScheme.secondary, modifier = Modifier.size(Spacing.s10))
         }
-        Text("No machine sends quotas yet", style = StarbridgeTheme.type.heading, color = colors.fg, textAlign = TextAlign.Center)
+        Text("No machine sends quotas yet", style = StarbridgeTheme.type.heading, color = MaterialTheme.colorScheme.onSurface, textAlign = TextAlign.Center)
         Text(
             "On a paired machine with CodexBar, run this. It sends your plans' windows every 5 minutes.",
             style = StarbridgeTheme.type.body,
-            color = colors.fg2,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
         )
-        Surface(shape = RoundedCornerShape(Radius.lg), color = colors.surface2, modifier = Modifier.fillMaxWidth()) {
-            Text("starbridge quota push", style = StarbridgeTheme.type.code, color = colors.fg, modifier = Modifier.padding(Spacing.s4))
+        Surface(shape = RoundedCornerShape(Radius.lg), color = MaterialTheme.colorScheme.surfaceContainerHighest, modifier = Modifier.fillMaxWidth()) {
+            Text("starbridge quota push", style = StarbridgeTheme.type.code, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(Spacing.s4))
         }
         OutlinedButton(
             onClick = { runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(QUOTA_DOCS))) } },
@@ -133,28 +138,43 @@ private fun tone(pace: Pace): Tone {
     }
 }
 
+private const val DOT = "provider"
+
+/** The provider's dot, in its lab's colour, set in the line of text so it stays on the first line. */
+@Composable
+private fun providerDot(provider: String): Map<String, InlineTextContent> {
+    val color = StarbridgeTheme.provider(provider)
+    val (width, height) = with(LocalDensity.current) { (Spacing.s2 * 2).toSp() to Spacing.s2.toSp() }
+    return mapOf(
+        DOT to InlineTextContent(Placeholder(width, height, PlaceholderVerticalAlign.TextCenter)) {
+            Box(Modifier.size(Spacing.s2).background(color, CircleShape))
+        },
+    )
+}
+
 @Composable
 private fun WindowCard(window: QuotaWindow, now: Instant, modifier: Modifier = Modifier) {
-    val colors = StarbridgeTheme.colors
     val tone = tone(window.pace)
     Panel(modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.Bottom) {
             Text(
                 buildAnnotatedString {
+                    appendInlineContent(DOT)
                     append(window.provider)
-                    withStyle(SpanStyle(color = colors.fg2, fontWeight = StarbridgeTheme.type.small.fontWeight)) { append("  ${window.window}") }
+                    withStyle(SpanStyle(color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = StarbridgeTheme.type.small.fontWeight)) { append("  ${window.window}") }
                 },
                 style = StarbridgeTheme.type.action,
-                color = colors.fg,
+                color = MaterialTheme.colorScheme.onSurface,
+                inlineContent = providerDot(window.provider),
                 modifier = Modifier.weight(1f).padding(bottom = Spacing.s1),
             )
             Text(
                 buildAnnotatedString {
                     append("${window.usedPercent}")
-                    withStyle(SpanStyle(color = colors.fg2, fontSize = StarbridgeTheme.type.action.fontSize)) { append("%") }
+                    withStyle(SpanStyle(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = StarbridgeTheme.type.action.fontSize)) { append("%") }
                 },
                 style = StarbridgeTheme.type.figure,
-                color = colors.fg,
+                color = MaterialTheme.colorScheme.onSurface,
             )
         }
         Spacer(Modifier.padding(top = Spacing.s3))
@@ -166,12 +186,12 @@ private fun WindowCard(window: QuotaWindow, now: Instant, modifier: Modifier = M
             Text(
                 window.resetsAt?.let { "Resets in ${span(now, it)}" } ?: "Reset time unknown",
                 style = StarbridgeTheme.type.machine,
-                color = colors.fg2,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.weight(1f),
                 textAlign = TextAlign.End,
             )
         }
-        Text(detail(window, now), style = StarbridgeTheme.type.small, color = if (window.alert) tone.color else colors.fg2, modifier = Modifier.padding(top = Spacing.s2))
+        Text(detail(window, now), style = StarbridgeTheme.type.small, color = if (window.alert) tone.color else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = Spacing.s2))
     }
 }
 
@@ -189,7 +209,7 @@ private fun Meter(window: QuotaWindow, color: Color) {
             progress = { used },
             modifier = Modifier.fillMaxWidth().height(Sizes.track).align(Alignment.Center),
             color = color,
-            trackColor = colors.surface2,
+            trackColor = MaterialTheme.colorScheme.secondaryContainer,
             strokeCap = StrokeCap.Round,
             gapSize = ProgressIndicatorDefaults.LinearIndicatorTrackGapSize,
             drawStopIndicator = {
@@ -204,7 +224,7 @@ private fun Meter(window: QuotaWindow, color: Color) {
                     .width(tick)
                     .height(Sizes.track + Spacing.s2)
                     .align(Alignment.CenterStart)
-                    .background(colors.fg2, RoundedCornerShape(Radius.xs)),
+                    .background(MaterialTheme.colorScheme.onSurfaceVariant, RoundedCornerShape(Radius.xs)),
             )
         }
     }

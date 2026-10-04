@@ -107,6 +107,7 @@ dependencies {
     testImplementation(libs.jna)
     testImplementation(libs.okhttp.mockwebserver)
     testImplementation(libs.coroutines.test)
+    testImplementation(libs.material.components) { isTransitive = false }
 }
 
 /** 1.2.3 → 1_02_03_99 and 1.2.3-rc.4 → 1_02_03_04, so release candidates sort before the release. */

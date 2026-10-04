@@ -116,7 +116,15 @@ export function fitJson(value: unknown, max = INPUT_MAX): string {
     v = setAt(v, longest.path, (s: string) => `${s.slice(0, keep)}… [${s.length - keep} cut]`);
     text = JSON.stringify(v);
   }
-  return text.length <= max ? text : JSON.stringify({ cut: text.slice(0, max - 40) }).slice(0, max);
+  if (text.length <= max) return text;
+  // Many short strings, or none: keep the start as one string, cut until it fits as JSON.
+  let keep = max;
+  let out = JSON.stringify({ cut: text.slice(0, keep) });
+  while (out.length > max) {
+    keep -= out.length - max + 1;
+    out = JSON.stringify({ cut: text.slice(0, keep) });
+  }
+  return out;
 }
 
 function setAt(v: unknown, path: (string | number)[], f: (s: string) => string): unknown {
@@ -350,6 +358,8 @@ export interface PermissionOutcome {
 
 export function outcomeOf(p: PendingPermission | undefined): PermissionOutcome {
   if (!p) return { settled: "timeout" };
+  // Settled wins: an answer that arrived after the keyboard settled it is never applied.
+  if (p.settled) return { settled: p.settled };
   if (p.answer)
     return {
       answer: {
@@ -358,7 +368,7 @@ export function outcomeOf(p: PendingPermission | undefined): PermissionOutcome {
         ...(p.answer.message !== undefined ? { message: p.answer.message } : {}),
       },
     };
-  return p.settled ? { settled: p.settled } : {};
+  return {};
 }
 
 /** What Claude Code's `PermissionRequest` hook prints for an accepted answer. */

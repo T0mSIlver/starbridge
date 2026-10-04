@@ -22,6 +22,7 @@ browser = "1.10.0"
 firebase-messaging = "25.1.3"
 unifiedpush = "3.3.5"
 coroutines = "1.11.0"
+material-components = "1.14.0"
 
 [libraries]
 compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "compose-bom" }
@@ -59,6 +60,8 @@ okhttp-mockwebserver = { group = "com.squareup.okhttp3", name = "mockwebserver3"
 browser = { group = "androidx.browser", name = "browser", version.ref = "browser" }
 firebase-messaging = { group = "com.google.firebase", name = "firebase-messaging", version.ref = "firebase-messaging" }
 unifiedpush = { group = "org.unifiedpush.android", name = "connector", version.ref = "unifiedpush" }
+# Only its colour utilities, to build Material You schemes from a seed in tests.
+material-components = { group = "com.google.android.material", name = "material", version.ref = "material-components" }
 coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "coroutines" }
 
 [plugins]

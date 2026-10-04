@@ -6,4 +6,7 @@
     <color name="accent">#965700</color>
     <!-- The icon's ground: DESIGN.md bg dark, in both schemes. -->
     <color name="icon_ground">#0C0C0C</color>
+    <!-- Overridden from Android 12, which has Material You. -->
+    <color name="ground_wallpaper">@color/ground</color>
+    <color name="accent_wallpaper">@color/accent</color>
 </resources>

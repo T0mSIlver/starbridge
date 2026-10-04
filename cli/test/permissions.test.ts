@@ -269,6 +269,9 @@ test("secrets are redacted before sealing; the hash covers the input as received
   const big = fitJson({ content: "x".repeat(20_000), file_path: "/a" });
   expect(big.length).toBeLessThanOrEqual(8000);
   expect(JSON.parse(big).file_path).toBe("/a");
+  const many = fitJson({ args: Array.from({ length: 4000 }, (_, i) => `a"${i}`) });
+  expect(many.length).toBeLessThanOrEqual(8000);
+  expect(typeof JSON.parse(many).cut).toBe("string");
 });
 
 test("an unreachable server, bad input or another agent never blocks the hook", async () => {
