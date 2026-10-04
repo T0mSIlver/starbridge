@@ -128,6 +128,14 @@ polling needs no `curl`. If the service later streams events, `$.process.spawn`
 running `curl -N` can hold the stream open. The mod is also the showcase for
 mods that the owner wants.
 
+As built (#7, 2026-10-04): the mod polls through the CLI rather than with
+`$.http.fetch`. It runs `starbridge answers --session <id> --wait 25` with
+`$.process.run`. The keys stay in the CLI's key store and never enter the mod,
+and the protocol code and its checks exist in one place. A lease file lets
+one session per machine poll. The other sessions watch the CLI's state file and
+claim their answers from it locally. `starbridge ask` records the asking
+session, and the CLI hands an answer only to that session, once.
+
 What the probe showed (2026-10-04, in the Desktop Code tab):
 
 - Idle session: the submitted prompt starts a turn within 0.2 s, and the model
@@ -493,3 +501,12 @@ goes in git.
   `composer`. A 30 s fetch poll loop ran unattended through a 23-minute idle
   gap (40 cycles, none missed), and the 60-minute spawn hold spanned several
   idle gaps; no longer gap was measured.
+- 2026-10-04: mod live run (#7), Claude Code 2.1.287, a terminal session
+  started with `--plugin-dir mod`, against a local server from `main` and a
+  test device driven by a script. The session ran `starbridge ask`, and the
+  device's answer arrived in the session as a plugin prompt 0.25 s after the
+  device posted it. A decision asked from another session was stored but not
+  submitted. The run found that the CLI from #18 read `/answers` entries as
+  bare items, but the server wraps them as `{item, cursor, receivedAt}` (as
+  PROTOCOL.md says). The CLI rejected every answer as malformed and moved its
+  cursor past it. #7 fixes the CLI and its fake server.

@@ -20,6 +20,9 @@ starbridge wait d_Xk3…             # exit 2: nobody answered in time
 starbridge quota push --provider claude --provider codex   # every 5 minutes
 ```
 
+`starbridge answers` is for the Claude Code mod (`mod/README.md`): it hands a
+session the answers to the decisions it asked.
+
 `quota push` runs `codexbar usage --format json` for each provider, or once
 for every enabled provider when none is named. A provider that fails or is
 missing from the output is logged and sent as an error; it never stops the

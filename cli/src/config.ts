@@ -27,7 +27,15 @@ export interface State {
   cursor?: string;
   asked: Record<
     string,
-    { question: string; options: string[]; askedAt: string; defaultAt?: string; cursor?: string }
+    {
+      question: string;
+      options: string[];
+      askedAt: string;
+      defaultAt?: string;
+      cursor?: string;
+      /** The Claude Code session that asked; the mod delivers the answer there only. */
+      session?: string;
+    }
   >;
   /** Verified answers by decision id; `seen` once a `wait` has printed it. */
   answers: Record<string, { answer: Answer; seen: boolean }>;

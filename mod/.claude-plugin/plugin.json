@@ -1,0 +1,8 @@
+{
+  "name": "starbridge",
+  "version": "0.1.0",
+  "description": "Submits the owner's Starbridge answers into the Claude Code session that asked",
+  "author": {
+    "name": "Tom Vaucourt"
+  }
+}
