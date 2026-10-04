@@ -47,21 +47,6 @@
   color: var(--fg2);
 }
 
-.input {
-  width: 100%;
-  min-height: var(--size-tap);
-  padding: var(--s3);
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--line-strong);
-  background: var(--bg);
-  resize: vertical;
-}
-
-.input:focus {
-  outline: 2px solid var(--accent);
-  outline-offset: -1px;
-}
-
 .default {
   color: var(--fg3);
 }
