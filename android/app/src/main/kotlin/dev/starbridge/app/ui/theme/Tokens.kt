@@ -38,51 +38,51 @@ data class StarbridgeColors(
 )
 
 val LightColors = StarbridgeColors(
-    bg = Color(0xFFF4F5F8),
+    bg = Color(0xFFF4F4F4),
     surface = Color(0xFFFFFFFF),
-    surface2 = Color(0xFFECEEF3),
-    line = Color(0xFFDCDFE7),
-    lineStrong = Color(0xFFC3C8D4),
-    fg = Color(0xFF141821),
-    fg2 = Color(0xFF525A6B),
-    fg3 = Color(0xFF818999),
-    accent = Color(0xFFB45F06),
-    accentHi = Color(0xFF9A4F00),
+    surface2 = Color(0xFFEBEBEB),
+    line = Color(0xFFE0E0E0),
+    lineStrong = Color(0xFFC6C6C6),
+    fg = Color(0xFF121212),
+    fg2 = Color(0xFF595959),
+    fg3 = Color(0xFF8C8C8C),
+    accent = Color(0xFFA35F00),
+    accentHi = Color(0xFF8A5000),
     onAccent = Color(0xFFFFFFFF),
-    accentSoft = Color(0x1AB45F06),
-    ok = Color(0xFF1F7A45),
-    okSoft = Color(0x1A1F7A45),
-    warn = Color(0xFF7D6400),
-    warnSoft = Color(0x1F7D6400),
-    bad = Color(0xFFC0352B),
-    badSoft = Color(0x1AC0352B),
-    info = Color(0xFF2A62C9),
-    infoSoft = Color(0x1A2A62C9),
-    scrim = Color(0x990B0E14),
+    accentSoft = Color(0x1AA35F00),
+    ok = Color(0xFF595959),
+    okSoft = Color(0x1A595959),
+    warn = Color(0xFFA35F00),
+    warnSoft = Color(0x1AA35F00),
+    bad = Color(0xFFC93A2E),
+    badSoft = Color(0x1AC93A2E),
+    info = Color(0xFF595959),
+    infoSoft = Color(0x1A595959),
+    scrim = Color(0x66000000),
 )
 
 val DarkColors = StarbridgeColors(
-    bg = Color(0xFF0B0E14),
-    surface = Color(0xFF131823),
-    surface2 = Color(0xFF1B2130),
-    line = Color(0xFF252C3C),
-    lineStrong = Color(0xFF343D52),
-    fg = Color(0xFFE8EBF2),
-    fg2 = Color(0xFF9AA3B5),
-    fg3 = Color(0xFF687186),
+    bg = Color(0xFF0C0C0C),
+    surface = Color(0xFF171717),
+    surface2 = Color(0xFF232323),
+    line = Color(0xFF2A2A2A),
+    lineStrong = Color(0xFF3B3B3B),
+    fg = Color(0xFFF1F1F1),
+    fg2 = Color(0xFFA3A3A3),
+    fg3 = Color(0xFF6A6A6A),
     accent = Color(0xFFF5A83B),
     accentHi = Color(0xFFFFC067),
-    onAccent = Color(0xFF1A0F00),
+    onAccent = Color(0xFF1C1100),
     accentSoft = Color(0x1FF5A83B),
-    ok = Color(0xFF5CCF8A),
-    okSoft = Color(0x1F5CCF8A),
-    warn = Color(0xFFE5C454),
-    warnSoft = Color(0x1FE5C454),
-    bad = Color(0xFFFF7B72),
-    badSoft = Color(0x1FFF7B72),
-    info = Color(0xFF7AA7FF),
-    infoSoft = Color(0x1F7AA7FF),
-    scrim = Color(0xA6000000),
+    ok = Color(0xFFA3A3A3),
+    okSoft = Color(0x1FA3A3A3),
+    warn = Color(0xFFF5A83B),
+    warnSoft = Color(0x1FF5A83B),
+    bad = Color(0xFFFF6B5F),
+    badSoft = Color(0x1FFF6B5F),
+    info = Color(0xFFA3A3A3),
+    infoSoft = Color(0x1FA3A3A3),
+    scrim = Color(0xB3000000),
 )
 
 object Spacing {
@@ -97,96 +97,100 @@ object Spacing {
 }
 
 object Radius {
+    val xs = 4.dp
     val sm = 8.dp
-    val md = 14.dp
-    val lg = 20.dp
+    val md = 12.dp
+    val lg = 16.dp
+    val xl = 28.dp
     val pill = 999.dp
 }
 
 object Sizes {
     val tap = 48.dp
-    val bar = 64.dp
+    val bar = 80.dp
     val rail = 240.dp
     val content = 720.dp
+    val track = 10.dp
 }
 
 object Motion {
     const val fastMs = 150L
     const val stateMs = 250L
+    const val springMs = 350L
 }
 
 // The theme passes the bundled faces.
 class StarbridgeType(sans: FontFamily, mono: FontFamily) {
     val title = TextStyle(
         fontFamily = sans,
-        fontSize = 26.sp,
-        fontWeight = FontWeight(600),
-        lineHeight = 29.9.sp,
-        letterSpacing = -0.025.em,
+        fontSize = 32.sp,
+        fontWeight = FontWeight(500),
+        lineHeight = 40.sp,
+        letterSpacing = 0.em,
     )
     val heading = TextStyle(
         fontFamily = sans,
-        fontSize = 18.sp,
-        fontWeight = FontWeight(600),
-        lineHeight = 22.5.sp,
-        letterSpacing = -0.015.em,
+        fontSize = 24.sp,
+        fontWeight = FontWeight(500),
+        lineHeight = 31.992.sp,
+        letterSpacing = 0.em,
     )
     val question = TextStyle(
         fontFamily = sans,
-        fontSize = 17.sp,
-        fontWeight = FontWeight(520),
-        lineHeight = 22.95.sp,
-        letterSpacing = -0.01.em,
+        fontSize = 22.sp,
+        fontWeight = FontWeight(500),
+        lineHeight = 28.006.sp,
+        letterSpacing = 0.em,
     )
     val body = TextStyle(
         fontFamily = sans,
-        fontSize = 15.sp,
+        fontSize = 16.sp,
         fontWeight = FontWeight(400),
-        lineHeight = 22.5.sp,
-        letterSpacing = 0.em,
+        lineHeight = 24.sp,
+        letterSpacing = 0.031.em,
     )
     val action = TextStyle(
         fontFamily = sans,
-        fontSize = 15.sp,
-        fontWeight = FontWeight(600),
-        lineHeight = 18.sp,
-        letterSpacing = -0.005.em,
+        fontSize = 16.sp,
+        fontWeight = FontWeight(500),
+        lineHeight = 24.sp,
+        letterSpacing = 0.009.em,
     )
     val small = TextStyle(
         fontFamily = sans,
-        fontSize = 13.sp,
+        fontSize = 14.sp,
         fontWeight = FontWeight(400),
-        lineHeight = 18.2.sp,
-        letterSpacing = 0.em,
+        lineHeight = 20.006.sp,
+        letterSpacing = 0.018.em,
     )
     val figure = TextStyle(
         fontFamily = sans,
         fontSize = 28.sp,
         fontWeight = FontWeight(600),
-        lineHeight = 28.sp,
-        letterSpacing = -0.02.em,
+        lineHeight = 36.008.sp,
+        letterSpacing = 0.em,
         fontFeatureSettings = "tnum",
     )
     val machine = TextStyle(
         fontFamily = sans,
-        fontSize = 13.sp,
+        fontSize = 14.sp,
         fontWeight = FontWeight(400),
-        lineHeight = 18.2.sp,
-        letterSpacing = 0.em,
+        lineHeight = 20.006.sp,
+        letterSpacing = 0.018.em,
         fontFeatureSettings = "tnum",
     )
     val label = TextStyle(
         fontFamily = sans,
-        fontSize = 13.sp,
-        fontWeight = FontWeight(600),
-        lineHeight = 16.9.sp,
-        letterSpacing = 0.em,
+        fontSize = 14.sp,
+        fontWeight = FontWeight(500),
+        lineHeight = 20.006.sp,
+        letterSpacing = 0.007.em,
     )
     val code = TextStyle(
         fontFamily = mono,
-        fontSize = 13.sp,
+        fontSize = 14.sp,
         fontWeight = FontWeight(400),
-        lineHeight = 19.5.sp,
+        lineHeight = 20.006.sp,
         letterSpacing = 0.em,
     )
 }

@@ -3,27 +3,27 @@
 
 :root {
   color-scheme: light dark;
-  --bg: #f4f5f8;
+  --bg: #f4f4f4;
   --surface: #ffffff;
-  --surface2: #eceef3;
-  --line: #dcdfe7;
-  --line-strong: #c3c8d4;
-  --fg: #141821;
-  --fg2: #525a6b;
-  --fg3: #818999;
-  --accent: #b45f06;
-  --accent-hi: #9a4f00;
+  --surface2: #ebebeb;
+  --line: #e0e0e0;
+  --line-strong: #c6c6c6;
+  --fg: #121212;
+  --fg2: #595959;
+  --fg3: #8c8c8c;
+  --accent: #a35f00;
+  --accent-hi: #8a5000;
   --on-accent: #ffffff;
-  --accent-soft: #b45f061a;
-  --ok: #1f7a45;
-  --ok-soft: #1f7a451a;
-  --warn: #7d6400;
-  --warn-soft: #7d64001f;
-  --bad: #c0352b;
-  --bad-soft: #c0352b1a;
-  --info: #2a62c9;
-  --info-soft: #2a62c91a;
-  --scrim: #0b0e1499;
+  --accent-soft: #a35f001a;
+  --ok: #595959;
+  --ok-soft: #5959591a;
+  --warn: #a35f00;
+  --warn-soft: #a35f001a;
+  --bad: #c93a2e;
+  --bad-soft: #c93a2e1a;
+  --info: #595959;
+  --info-soft: #5959591a;
+  --scrim: #00000066;
 
   --s1: 4px;
   --s2: 8px;
@@ -33,40 +33,44 @@
   --s6: 24px;
   --s8: 32px;
   --s10: 40px;
+  --radius-xs: 4px;
   --radius-sm: 8px;
-  --radius-md: 14px;
-  --radius-lg: 20px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 28px;
   --radius-pill: 999px;
   --size-tap: 48px;
-  --size-bar: 64px;
+  --size-bar: 80px;
   --size-rail: 240px;
   --size-content: 720px;
+  --size-track: 10px;
   --t-fast: 150ms;
   --t-state: 250ms;
+  --t-spring: 350ms;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #0b0e14;
-    --surface: #131823;
-    --surface2: #1b2130;
-    --line: #252c3c;
-    --line-strong: #343d52;
-    --fg: #e8ebf2;
-    --fg2: #9aa3b5;
-    --fg3: #687186;
+    --bg: #0c0c0c;
+    --surface: #171717;
+    --surface2: #232323;
+    --line: #2a2a2a;
+    --line-strong: #3b3b3b;
+    --fg: #f1f1f1;
+    --fg2: #a3a3a3;
+    --fg3: #6a6a6a;
     --accent: #f5a83b;
     --accent-hi: #ffc067;
-    --on-accent: #1a0f00;
+    --on-accent: #1c1100;
     --accent-soft: #f5a83b1f;
-    --ok: #5ccf8a;
-    --ok-soft: #5ccf8a1f;
-    --warn: #e5c454;
-    --warn-soft: #e5c4541f;
-    --bad: #ff7b72;
-    --bad-soft: #ff7b721f;
-    --info: #7aa7ff;
-    --info-soft: #7aa7ff1f;
-    --scrim: #000000a6;
+    --ok: #a3a3a3;
+    --ok-soft: #a3a3a31f;
+    --warn: #f5a83b;
+    --warn-soft: #f5a83b1f;
+    --bad: #ff6b5f;
+    --bad-soft: #ff6b5f1f;
+    --info: #a3a3a3;
+    --info-soft: #a3a3a31f;
+    --scrim: #000000b3;
   }
 }
