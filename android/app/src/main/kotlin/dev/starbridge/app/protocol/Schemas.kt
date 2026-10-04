@@ -272,7 +272,11 @@ private fun instantOf(s: String): java.time.Instant {
         ?: throw ProtocolException("bad-schema", "time")
     val (head, secs, _, zone, zoneMin) = m.destructured
     val offset = if (zone == "Z") "Z" else "$zone:$zoneMin"
-    return java.time.OffsetDateTime.parse(head + secs.ifEmpty { ":00" } + offset).toInstant()
+    return try {
+        java.time.OffsetDateTime.parse(head + secs.ifEmpty { ":00" } + offset).toInstant()
+    } catch (e: java.time.format.DateTimeParseException) {
+        throw ProtocolException("bad-schema", "time")
+    }
 }
 
 @Serializable

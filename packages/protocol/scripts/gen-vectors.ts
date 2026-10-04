@@ -989,6 +989,11 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
         valid: false,
       },
       { name: "unknown agent", body: { ...permissionBody, agent: "gemini" }, valid: false },
+      {
+        name: "created at hour 25",
+        body: { ...permissionBody, createdAt: "2026-10-04T25:00:00Z" },
+        valid: false,
+      },
     ],
     "permission-answer": [
       { name: "allow for the session", body: permissionAnswerBody, valid: true },

@@ -824,6 +824,43 @@
         }
       },
       "valid": false
+    },
+    {
+      "name": "created at hour 25",
+      "body": {
+        "v": 1,
+        "id": "perm_1",
+        "to": [
+          "phone",
+          "phone2"
+        ],
+        "createdAt": "2026-10-04T25:00:00Z",
+        "agent": "claude-code",
+        "tool": "Bash",
+        "summary": "git push origin main",
+        "description": "Push the fix",
+        "input": "{\"command\":\"git push origin main\",\"description\":\"Push the fix\"}",
+        "inputHash": "vn1Rs4EDE--zdLaXkXyePSRJAmUegmDW02WYLSW_EIE",
+        "suggestions": [
+          {
+            "label": "Allow git push for this session",
+            "rule": "Bash(git push:*)",
+            "scope": "session"
+          },
+          {
+            "label": "Always allow git push in localvoxtral",
+            "rule": "Bash(git push:*)",
+            "scope": "project"
+          }
+        ],
+        "expiresAt": "2026-10-04T10:09:00Z",
+        "source": {
+          "machine": "dev box",
+          "project": "localvoxtral",
+          "session": "s_42"
+        }
+      },
+      "valid": false
     }
   ],
   "permission-answer": [
