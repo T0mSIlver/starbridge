@@ -9,17 +9,20 @@
  *   bun e2e/run.ts --by-hand --only owner      this machine's server; the owner answers on
  *                                              a phone, in a session under Remote Control
  * Options: --only <case,...>, --model <alias> (default sonnet), --out <file.md>, --bin <dir>
- * (put its `starbridge` first on PATH), --keep (leave the scratch folder).
+ * (put its `starbridge` first on PATH), --keep (leave the scratch folder), --agent (run
+ * `starbridge agent` for the run, so the mod answers through it; a last row checks it did).
  *
  * Needs `claude`, `tmux` and `starbridge` on PATH. Sessions run in tmux windows `sb-e2e-*`, in a
- * scratch folder that holds the skill, with Bash allowed, `--plugin-dir` set to a copy of this mod,
- * only project settings and a clean environment, so the owner's own sessions and mods stay out.
+ * scratch folder, with Bash allowed, `--plugin-dir` set to copies of the starbridge plugin (the
+ * skill and its rule) and of this mod, only project settings and a clean environment, so the
+ * owner's own sessions and mods stay out.
  */
 import {
   cpSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
   writeFileSync,
@@ -45,6 +48,7 @@ const { values: opt } = parseArgs({
     out: { type: "string" },
     keep: { type: "boolean" },
     bin: { type: "string" },
+    agent: { type: "boolean" },
   },
 });
 
@@ -104,24 +108,37 @@ if (opt.local) {
 }
 env.STARBRIDGE_CONFIG_DIR = configDir;
 
-// The test folder: the skill, and nothing inherited from a repo above it.
+// The test folder: nothing inherited from a repo above it.
 const proj = join(work, "proj");
-mkdirSync(join(proj, ".claude", "skills"), { recursive: true });
-cpSync(join(repo, "skill", "starbridge"), join(proj, ".claude", "skills", "starbridge"), {
-  recursive: true,
-});
+mkdirSync(join(proj, ".claude"), { recursive: true });
 // Remote Control off, so test sessions stay off the owner's phone; the Remote Control case asks.
 writeFileSync(
   join(proj, ".claude", "settings.json"),
   JSON.stringify({ remoteControlAtStartup: false }),
 );
+const pluginDir = join(work, "plugin");
+cpSync(join(repo, "plugin"), pluginDir, { recursive: true });
 const modDir = join(work, "mod");
 for (const part of [".claude-plugin", "hooks"])
   cpSync(join(import.meta.dir, "..", part), join(modDir, part), { recursive: true });
 
+// `--agent`: the machine's agent, between the sessions and the server for the whole run.
+let agent: ReturnType<typeof Bun.spawn> | undefined;
+if (opt.agent) {
+  agent = Bun.spawn(["starbridge", "agent", "--no-quota"], {
+    env: { ...process.env, ...env },
+    stdout: "inherit",
+    stderr: "inherit",
+  });
+  const socket = join(configDir, "agent.sock");
+  await until("the agent's socket", () => existsSync(socket) || undefined, 10_000);
+}
+
 const sessions: Claude[] = [];
 function sessionArgs(name: string): string[] {
   return [
+    "--plugin-dir",
+    pluginDir,
     "--plugin-dir",
     modDir,
     "--setting-sources",
@@ -356,7 +373,7 @@ const cases: Record<string, () => Promise<Row>> = {
     const reg = join(modDir, "hooks", "register.ts");
     const debug = join(work, "reload.debug.log");
     const reloads = () =>
-      (readFileSync(debug, "utf8").match(/starbridge@inline reloaded/g) ?? []).length;
+      (readFileSync(debug, "utf8").match(/starbridge-mod@inline reloaded/g) ?? []).length;
     const before = reloads();
     const touched = Date.now();
     writeFileSync(reg, `${readFileSync(reg, "utf8")}\n`);
@@ -468,8 +485,23 @@ try {
     }
     for (const s of sessions.splice(0)) await s.stop();
   }
+  if (opt.agent) {
+    // Every session the mod ran in went through the agent and never fell back to the CLI.
+    const logs = readdirSync(work).filter((f) => f.endsWith(".debug.log"));
+    const read = (f: string) => readFileSync(join(work, f), "utf8");
+    const fell = logs.filter((f) => read(f).includes("answers through the CLI"));
+    const used = logs.filter((f) => read(f).includes("answers through the agent"));
+    rows.push({
+      name: "through the agent",
+      result: fell.length === 0 && used.length === logs.length ? "pass" : "FAIL",
+      timing: "",
+      note: `${used.length} of ${logs.length} sessions answered through the agent; ${fell.length} fell back to the CLI`,
+    });
+  }
 } finally {
   for (const s of sessions) await s.stop();
+  agent?.kill();
+  await agent?.exited;
   relay.stop();
   local?.stop();
   if (!opt.keep) rmSync(work, { recursive: true, force: true });

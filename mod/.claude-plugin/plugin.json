@@ -1,8 +1,10 @@
 {
-  "name": "starbridge",
-  "version": "0.1.0",
-  "description": "Submits the owner's Starbridge answers into the Claude Code session that asked",
+  "name": "starbridge-mod",
+  "version": "0.2.0",
+  "description": "Submits the owner's Starbridge answers into the Claude Code session that asked. A Claude Code mod: a build that cannot load mods skips it, and the starbridge plugin keeps working.",
   "author": {
     "name": "Tom Vaucourt"
-  }
+  },
+  "homepage": "https://github.com/T0mSIlver/starbridge",
+  "license": "MIT"
 }
