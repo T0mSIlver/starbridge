@@ -42,8 +42,9 @@ ${asset("linux", "x64")}
     end
   end
 
+  # A bare binary download is staged alone, under a name brew picks.
   def install
-    bin.install Dir["starbridge-*"].first => "starbridge"
+    bin.install Dir["*"].first => "starbridge"
   end
 
   def caveats
