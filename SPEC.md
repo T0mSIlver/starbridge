@@ -384,6 +384,18 @@ How it generalizes is open.
   session. App Links on the hosted domain, added on top later, would close that for
   `starbridge.run`.
 
+- 2026-10-05. Releases and deploys (#64, #26): a `v1.2.3` or `v1.2.3-rc.4` tag runs
+  `.github/workflows/release.yml`, which publishes a GitHub Release with the APK signed by the
+  release key, the four CLI binaries, `SHA256SUMS` and notes generated from merged PRs; `-rc`
+  tags are prereleases. The APK's versionCode is `MAJOR*1000000 + MINOR*10000 + PATCH*100`, plus
+  the rc number or 99, so release candidates sort before their release. The release key is an
+  RSA 4096 PKCS12 keystore, alias `starbridge`, kept in `~/.config/starbridge/secrets/` and in
+  Actions secrets; losing it means a new app id, so it needs a copy off the dev box. A merge to
+  main deploys from Actions once CI passes, over SSH with its own key, whose forced command can
+  only deploy a commit that is on GitHub's main: the box fetches that commit itself with a
+  read-only GitHub deploy key. `deploy/deploy.sh` stays for rollbacks and other refs. The
+  `cli-v*` workflow folded into the release one.
+
 ## Encryption, with existing libraries
 
 - libsodium sealed boxes (`crypto_box_seal`, X25519 + XSalsa20-Poly1305): an
