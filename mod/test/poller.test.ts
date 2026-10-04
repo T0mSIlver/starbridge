@@ -164,3 +164,17 @@ test("backs off when the CLI is missing or unpaired", async () => {
   expect(a.get().logs[0]).toContain("retrying");
   expect(JSON.parse(readFileSync(`${cli.store.dir}/mod-poller.json`, "utf8")).session).toBe("s-a");
 });
+
+test("the poller keeps its lease across a /clear, under the new session id", async () => {
+  const a = session("s-a");
+  const b = session("s-b");
+  await until(() => polling(a) + polling(b) > 0);
+  const leader = polling(a) > 0 ? a : b;
+  leader.get().id = "s-cleared";
+  const d = await ask("Asked after the clear?", "s-cleared");
+  server.answer(d, { choice: "Yes" });
+  // Well within the lease, which still names the old id.
+  await until(() => leader.get().submitted.length === 1, 1500);
+  const lease = JSON.parse(readFileSync(`${cli.store.dir}/mod-poller.json`, "utf8"));
+  expect(lease.session).toBe("s-cleared");
+});

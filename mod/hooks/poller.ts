@@ -71,6 +71,8 @@ export class Poller {
   private stopped = false;
   private failures = 0;
   private seenMtime: number | undefined;
+  /** The session id this poller last held the lease under; a `/clear` changes the id. */
+  private leasedAs: string | undefined;
   private readonly leasePath: string;
   private readonly statePath: string;
   /** Resolves when the loop has ended. */
@@ -92,7 +94,7 @@ export class Poller {
     this.stopped = true;
     const me = await this.host.sessionId();
     const lease = await this.readLease();
-    if (lease?.session === me)
+    if (lease && (lease.session === me || lease.session === this.leasedAs))
       await this.host.write(this.leasePath, JSON.stringify({ ...lease, until: 0 }));
   }
 
@@ -170,7 +172,8 @@ export class Poller {
     // A poller that backs off keeps its lease, so the other sessions do not all start failing.
     try {
       const me = await this.host.sessionId();
-      if (me && (await this.readLease())?.session === me)
+      const held = (await this.readLease())?.session;
+      if (me && held !== undefined && (held === me || held === this.leasedAs))
         await this.lease(me, delay + this.t.leaseMs);
     } catch {
       // The lease is an optimisation; losing it costs one more poller.
@@ -195,13 +198,19 @@ export class Poller {
    * still be harmless, since the CLI keeps each answer once and hands it over once.
    */
   private async lease(me: string, forMs: number): Promise<boolean> {
+    // A step still running when `stop` gave the lease up must not take it back.
+    if (this.stopped) return false;
     const now = await this.host.now();
     const held = await this.readLease();
-    if (held && held.session !== me && held.until > now) return false;
-    const mine = held?.session === me && held.until > now;
+    const ours = held?.session === me || (held !== undefined && held.session === this.leasedAs);
+    if (held && !ours && held.until > now) return false;
+    const mine = ours && (held?.until ?? 0) > now;
     await this.host.write(this.leasePath, JSON.stringify({ session: me, until: now + forMs }));
-    if (mine) return true;
-    await this.host.sleep(100);
-    return (await this.readLease())?.session === me;
+    if (!mine) {
+      await this.host.sleep(100);
+      if ((await this.readLease())?.session !== me) return false;
+    }
+    this.leasedAs = me;
+    return true;
   }
 }
