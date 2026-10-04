@@ -162,3 +162,43 @@ A server with FCM credentials or VAPID keys pushes directly. One without them po
 set in `RELAY_URL` (the owner's hosted server runs with `RELAY_MODE=1`), which pushes with its
 own credentials; the payload is already ciphertext or an id. UnifiedPush always goes direct.
 `gone` from a push service drops the subscription.
+
+## Local agent API
+
+`starbridge agent` runs once per machine as a user service. It holds the machine's keys and its
+one connection to the server, and serves the CLI and the Claude Code sessions on that machine
+over HTTP on a unix socket: `$XDG_RUNTIME_DIR/starbridge/agent.sock` on Linux when that is set,
+else `agent.sock` in the config directory (`$STARBRIDGE_AGENT_SOCKET` overrides). The directory
+is 0700, the socket 0600, and there is no TCP listener. Types: `cli/src/agent/api.ts`.
+
+Every request sends `starbridge-api: <n>` and a `user-agent` such as `starbridge-mod/0.2.0`. The
+agent serves revisions `min` to `max` (1 to 1 today) and answers anything else with 426
+`{error: "agent-too-old" | "client-too-old", detail, agent: {version, api}}`, `detail` saying
+what to update. Adding a route or a field keeps the revision. The CLI falls back to the server on
+a 426, and whenever no agent listens (no socket, or a socket nobody listens on); it never falls
+back once the agent has answered one of its calls, so nothing is posted twice.
+
+Errors are `{error, detail?}`: 400 for a bad request (`detail` is the CLI's own message), 404
+for an unknown route or decision, 502 when the server refused or failed (`detail` says how).
+`wait` holds a request at most 25 s, under the 30 s the mod's host allows a call.
+
+| Route | What |
+|---|---|
+| `GET /status` | `{version, api, pid, startedAt, socket, machine?, server: {reachable, lastOkAt?, lastError?}, quota: {providers, intervalSeconds, lastPostAt?, lastError?}, sessions}` |
+| `POST /decisions` | `{input}` with `ask`'s fields (`question`, `default`, `options`, `project`, `session`, …); the client fills `project`, `session`, title and links from its own process → `{id}` |
+| `POST /answers/next` | `{id?, wait?}`: the answer to decision `id`, or the first answer no `wait` printed, marked printed → `{answer?, question?, defaultAt?}`; 404 `unknown-decision`. `starbridge wait` |
+| `POST /quota` | `{providers?}`: run CodexBar and post a snapshot now → `{snapshot}` |
+| `POST /sessions/:id/hello` | `{pid?, cwd?, title?}`: a session starts → `{version}` |
+| `POST /sessions/:id/bye` | the session ended; its session-scoped state goes |
+| `GET /sessions/:id/events?wait=<s>` | `{events: [{type, ack, line, decisionId?}]}`: what the session has not confirmed, held up to `wait` while there is nothing |
+| `POST /sessions/:id/ack` | `{acks}`: confirm events by their `ack`; others' tokens do nothing |
+
+Paths are under `/v1`. Event types today are `answer` and `default` (a decision's default time
+passed with no answer, sent only once the server confirmed no answer was waiting at that
+time). A client skips types it does not know. The agent keeps answers in the CLI's state file,
+so a restart loses nothing unconfirmed.
+
+Features plug in as `Feature`s (`cli/src/agent/server.ts`): routes, the events they hand
+sessions, the acks they take, `bye`, a background loop and their part of `status`. #57 adds
+`POST /permissions` and a `permission` event, #58 `PUT /controls/:id` and a `control` event,
+#60 `POST /runs`.

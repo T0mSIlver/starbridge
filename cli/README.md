@@ -23,6 +23,13 @@ starbridge quota push --provider claude --provider codex   # every 5 minutes
 `starbridge answers` is for the Claude Code mod (`mod/README.md`): it hands a
 session the answers to the decisions it asked.
 
+`starbridge agent` runs once per machine, as a user service. It holds the
+keys and the server connection, uploads quota snapshots every interval
+(`--provider`, `--interval`, or `agent.json` in the config directory), and
+hands each Claude Code session its answers over a unix socket
+(PROTOCOL.md, "Local agent API"). Every command goes through it when it runs
+and to the server directly when it does not, or with `STARBRIDGE_NO_AGENT=1`.
+
 `quota push` runs `codexbar usage --format json` for each provider, or once
 for every enabled provider when none is named. A provider that fails or is
 missing from the output is logged and sent as an error; it never stops the

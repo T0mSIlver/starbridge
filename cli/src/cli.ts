@@ -1,11 +1,15 @@
 import { readFileSync } from "node:fs";
 import { parseArgs } from "node:util";
 import { ProtocolError, ready, type SessionLink } from "@starbridge/protocol";
+import { VERSION } from "./agent/api";
+import { AgentError, withAgent } from "./agent/client";
+import { answersVia, askVia, quotaVia, waitVia } from "./agent/commands";
+import { runAgent } from "./agent/main";
 import { ApiError } from "./api";
 import { type Ctx, UsageError } from "./context";
 import { type AskInput, answers, ask, wait } from "./decisions";
 import { pair } from "./pair";
-import { quotaPush } from "./quota";
+import { pushOnce, quotaPush } from "./quota";
 
 const HELP = `starbridge: post decisions to your devices, upload quota windows
 
@@ -46,6 +50,15 @@ const HELP = `starbridge: post decisions to your devices, upload quota windows
   starbridge quota push [--provider <name>]... [--interval 5m] [--once] [--codexbar <path>]
       Run \`codexbar usage --format json\` for each provider (or for every enabled one),
       compute pace and alerts, and post a sealed snapshot every interval.
+
+  starbridge agent [--provider <name>]... [--interval 5m] [--codexbar <path>] [--no-quota]
+      Run the machine's agent (as a user service): it holds the keys and the server
+      connection, uploads quota snapshots every interval, and hands each Claude Code session
+      its answers over a unix socket. Flags override agent.json in the config directory.
+      The commands above go through it when it runs, and to the server directly when not
+      (or with STARBRIDGE_NO_AGENT=1).
+
+  starbridge --version
 
 Keys and state live in $STARBRIDGE_CONFIG_DIR, else $XDG_CONFIG_HOME/starbridge, else
 ~/.config/starbridge.`;
@@ -112,7 +125,12 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
           ...(v["session-title"] !== undefined ? { sessionTitle: v["session-title"] } : {}),
           ...(v.link !== undefined ? { links: v.link.map(parseLink) } : {}),
         };
-        return await ask(ctx, input, { wait: v.wait, timeout: v.timeout });
+        const opts = { wait: v.wait, timeout: v.timeout };
+        return await withAgent(
+          ctx,
+          (agent) => askVia(ctx, agent, input, opts),
+          () => ask(ctx, input, opts),
+        );
       }
       case "wait": {
         const { values, positionals } = parseArgs({
@@ -120,7 +138,12 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
           allowPositionals: true,
           options: { timeout: { type: "string" }, json: { type: "boolean" } },
         });
-        return await wait(ctx, { id: positionals[0], ...values });
+        const opts = { id: positionals[0], ...values };
+        return await withAgent(
+          ctx,
+          (agent) => waitVia(ctx, agent, opts),
+          () => wait(ctx, opts),
+        );
       }
       case "answers": {
         const { values } = parseArgs({
@@ -131,7 +154,14 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
             ack: { type: "string", multiple: true },
           },
         });
-        return await answers(ctx, values);
+        const target = values.session;
+        if (!target) throw new UsageError("answers needs --session");
+        if (values.ack && values.wait !== undefined) throw new UsageError("--ack takes no --wait");
+        return await withAgent(
+          ctx,
+          (agent) => answersVia(ctx, agent, target, values),
+          () => answers(ctx, values),
+        );
       }
       case "quota": {
         const [sub, ...args] = rest;
@@ -145,7 +175,38 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
             codexbar: { type: "string" },
           },
         });
-        return await quotaPush(ctx, { ...values, providers: values.provider ?? [] });
+        const opts = { ...values, providers: values.provider ?? [] };
+        // A CodexBar path of the caller's choosing runs here, never in the agent.
+        if (opts.codexbar !== undefined) return await quotaPush(ctx, opts);
+        return await quotaPush(ctx, opts, () =>
+          withAgent(
+            ctx,
+            (agent) => quotaVia(agent, opts.providers),
+            () => pushOnce(ctx, opts),
+          ),
+        );
+      }
+      case "agent": {
+        const { values } = parseArgs({
+          args: rest,
+          options: {
+            provider: { type: "string", multiple: true },
+            interval: { type: "string" },
+            codexbar: { type: "string" },
+            "no-quota": { type: "boolean" },
+          },
+        });
+        return await runAgent(ctx, {
+          ...(values.provider ? { providers: values.provider } : {}),
+          ...(values.interval ? { interval: values.interval } : {}),
+          ...(values.codexbar ? { codexbar: values.codexbar } : {}),
+          ...(values["no-quota"] ? { noQuota: true } : {}),
+        });
+      }
+      case "--version":
+      case "version": {
+        ctx.out(`starbridge ${VERSION}`);
+        return 0;
       }
       case undefined:
       case "help":
@@ -157,7 +218,12 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
         throw new UsageError(`unknown command: ${command} (try starbridge --help)`);
     }
   } catch (e) {
-    if (e instanceof UsageError || e instanceof ApiError || e instanceof ProtocolError) {
+    if (
+      e instanceof UsageError ||
+      e instanceof ApiError ||
+      e instanceof ProtocolError ||
+      e instanceof AgentError
+    ) {
       ctx.err(`starbridge: ${e.message}`);
       return 1;
     }
