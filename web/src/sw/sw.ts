@@ -23,6 +23,9 @@ type Payload =
 
 const tag = (decisionId: string) => `d:${decisionId}`;
 
+/** Decisions answered since this worker started: a push still opening must not show them. */
+const answered = new Set<string>();
+
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (e) => e.waitUntil(self.clients.claim()));
 
@@ -56,6 +59,7 @@ async function onPush(text: string): Promise<void> {
   await tellPages(payload.kind);
   if (payload.kind === "answered") {
     // Answered elsewhere: the question is settled, so its notification goes.
+    answered.add(payload.id);
     for (const n of await self.registration.getNotifications({ tag: tag(payload.id) })) n.close();
     return;
   }
@@ -64,6 +68,7 @@ async function onPush(text: string): Promise<void> {
   const account = await store.get("current");
   const ctx = account ? await deviceContext(account) : undefined;
   if (!ctx) return;
+  let answeredAt: string | undefined;
   const item: SealedItem = payload.box
     ? {
         v: 1,
@@ -73,10 +78,16 @@ async function onPush(text: string): Promise<void> {
         ...(payload.re ? { re: payload.re } : {}),
         boxes: [{ to: ctx.device.id, box: payload.box }],
       }
-    : (await (await fetch(`/v1/items/${encodeURIComponent(payload.id)}`)).json()).item;
+    : await (async () => {
+        const stored = await (await fetch(`/v1/items/${encodeURIComponent(payload.id)}`)).json();
+        answeredAt = stored.answeredAt;
+        return stored.item;
+      })();
 
-  if (payload.kind === "decision") await showDecision(await openPushedDecision(ctx, item));
-  else await showAlerts(account as string, await openPushedQuota(ctx, item));
+  if (payload.kind === "decision") {
+    const opened = await openPushedDecision(ctx, item);
+    if (!answeredAt && !opened.reply) await showDecision(opened);
+  } else await showAlerts(account as string, await openPushedQuota(ctx, item));
 }
 
 function maxActions(): number {
@@ -112,23 +123,30 @@ async function showDecision(item: InboxItem): Promise<void> {
     data: { item, options },
     actions,
   };
+  if (answered.has(d.id)) return;
   await self.registration.showNotification(d.question, options_);
+  // An answered push may have closed nothing while this one was still opening.
+  if (answered.has(d.id))
+    for (const n of await self.registration.getNotifications({ tag: tag(d.id) })) n.close();
 }
 
 async function showAlerts(account: string, snapshot: QuotaSnapshot): Promise<void> {
   // Snapshots arrive every few minutes; notify each alert once per reset.
   const seen = new Set((await store.get("alerts", account)) ?? []);
+  const fresh: string[] = [];
   for (const a of snapshot.alerts) {
     const key = `${a.kind}/${a.provider}/${a.window}/${a.resetsAt}`;
     if (seen.has(key)) continue;
     seen.add(key);
+    fresh.push(key);
     const title =
       a.kind === "runs-out"
         ? `${a.provider} will run out before it resets`
         : `${a.provider} resets with ${Math.round(a.unusedPercent)}% unused`;
     await self.registration.showNotification(title, { tag: `q:${a.provider}/${a.window}` });
   }
-  await store.put("alerts", [...seen].slice(-200), account);
+  if (fresh.length)
+    await store.update("alerts", account, (old) => [...(old ?? []), ...fresh].slice(-200));
 }
 
 async function onClick(n: Notification, action: string): Promise<void> {

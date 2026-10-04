@@ -77,18 +77,59 @@ export async function del(kind: keyof Records, account = ""): Promise<void> {
   await run("readwrite", (s) => s.delete(key(kind, account)));
 }
 
-/** Keeps the longer pin: the page and the service worker both extend it. */
-export async function extendPin(account: string, pin: Pin): Promise<void> {
+/** Thrown when another context pinned a longer chain meanwhile: read the directory again. */
+export class StalePin extends Error {
+  constructor() {
+    super("the pin moved on while this chain was verified");
+  }
+}
+
+/**
+ * Moves the pin to a verified chain, inside one transaction so the page and the service worker
+ * cannot pass each other: the chain must extend the stored pin (`headAt(length)` gives its hash
+ * after `length` entries), and a chain shorter than the stored pin is refused as stale, since
+ * the longer one may hold a revocation.
+ */
+export async function extendPin(
+  account: string,
+  pin: Pin,
+  headAt: (length: number) => string | undefined,
+): Promise<void> {
   const d = await db();
   try {
     await new Promise<void>((resolve, reject) => {
       const tx = d.transaction(STORE, "readwrite");
       const s = tx.objectStore(STORE);
       const req = s.get(key("pin", account));
+      let failure: Error | undefined;
       req.onsuccess = () => {
         const old = req.result as Pin | undefined;
-        if (!old || pin.length > old.length) s.put(pin, key("pin", account));
+        if (old && pin.length < old.length) failure = new StalePin();
+        else if (old && headAt(old.length) !== old.head)
+          failure = new Error("rollback: the chain does not extend the pinned one");
+        else if (!old || pin.length > old.length) s.put(pin, key("pin", account));
       };
+      tx.oncomplete = () => (failure ? reject(failure) : resolve());
+      tx.onerror = () => reject(tx.error);
+    });
+  } finally {
+    d.close();
+  }
+}
+
+/** Read-modify-write of one record in a single transaction. */
+export async function update<K extends keyof Records>(
+  kind: K,
+  account: string,
+  change: (old: Records[K] | undefined) => Records[K],
+): Promise<void> {
+  const d = await db();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const tx = d.transaction(STORE, "readwrite");
+      const s = tx.objectStore(STORE);
+      const req = s.get(key(kind, account));
+      req.onsuccess = () => s.put(change(req.result as Records[K] | undefined), key(kind, account));
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
     });

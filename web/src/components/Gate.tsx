@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import type { FirstDevice as PreparedDevice } from "@/lib/device";
 import { useApp } from "./AppProvider";
 import { StarIcon } from "./icons";
 import { Setup } from "./Setup";
@@ -116,6 +117,8 @@ function FirstDevice({ account }: { account: string }) {
   const { reload } = useApp();
   const [name, setName] = useDefaultName();
   const [words, setWords] = useState<string[]>();
+  // Kept across a failed attempt, so a retry posts the same keys and entry.
+  const pending = useRef<PreparedDevice>(undefined);
   const { busy, error, run } = useAction();
   if (words) return <Setup device={name} words={words} onContinue={reload} />;
   return (
@@ -131,10 +134,14 @@ function FirstDevice({ account }: { account: string }) {
         className={`${ui.button} ${ui.primary} ${s.go}`}
         disabled={busy || !name.trim()}
         onClick={() =>
-          run(async () => setWords(await (await load()).setUpFirstDevice(account, name.trim())))
+          run(async () => {
+            pending.current ??= await (await load()).prepareFirstDevice(account, name.trim());
+            await pending.current.commit();
+            setWords(pending.current.words);
+          })
         }
       >
-        {busy ? "Making keys…" : "Make keys"}
+        {busy ? "Making keys…" : error ? "Try again" : "Make keys"}
       </button>
       {error && <p className={ui.error}>{error}</p>}
     </Page>

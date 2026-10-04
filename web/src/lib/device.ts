@@ -9,6 +9,7 @@ import {
   type Decision,
   type Directory,
   DirectoryEntry,
+  entryHash,
   formatPairingCode,
   fromB64,
   genesisEntryAsync,
@@ -93,13 +94,29 @@ export function defaultName(): string {
   return os ? `${browser} on ${os}` : browser;
 }
 
+/** Moves the pin to a verified chain; refuses one that does not extend the stored pin. */
+function pinTo(account: string, entries: SignedEnvelope[], dir: Directory): Promise<void> {
+  return store.extendPin(account, { length: dir.length, head: dir.head }, (n) => {
+    const e = entries[n - 1];
+    return e ? entryHash(e.body) : undefined;
+  });
+}
+
 /** Fetches the chain, replays it against the pin, and moves the pin forward. */
 async function trusted(account: string): Promise<{ dir: Directory; entries: SignedEnvelope[] }> {
-  const entries = await api.directory();
-  const pin = await store.get("pin", account);
-  const dir = verifyDirectory(entries, { account, ...(pin ? { pin } : {}) });
-  await store.extendPin(account, { length: dir.length, head: dir.head });
-  return { dir, entries };
+  for (let attempt = 0; ; attempt++) {
+    const entries = await api.directory();
+    const pin = await store.get("pin", account);
+    const dir = verifyDirectory(entries, { account, ...(pin ? { pin } : {}) });
+    try {
+      await pinTo(account, entries, dir);
+      return { dir, entries };
+    } catch (e) {
+      // The service worker or another tab pinned a longer chain meanwhile: read it again.
+      if (e instanceof store.StalePin && attempt < 2) continue;
+      throw e;
+    }
+  }
 }
 
 export async function boot(): Promise<Boot> {
@@ -161,32 +178,51 @@ async function newDevice(account: string, name: string) {
   return { record, member };
 }
 
+/** A first device whose keys, genesis entry and recovery words exist, not yet on the server. */
+export interface FirstDevice {
+  words: string[];
+  /** Posts the genesis; safe to call again after a failure, with the same keys and entry. */
+  commit: () => Promise<void>;
+}
+
 /**
- * Makes this browser the account's first device and returns the recovery words, which exist
- * nowhere else once the caller drops them.
+ * Makes this browser's keys and the account's genesis entry. The recovery seed is dropped once
+ * the words exist, so the caller keeps this object until `commit` succeeds and the words are
+ * shown; a retry reuses it rather than making new keys.
  */
-export async function setUpFirstDevice(account: string, name: string): Promise<string[]> {
+export async function prepareFirstDevice(account: string, name: string): Promise<FirstDevice> {
   await ready;
   const { record, member } = await newDevice(account, name);
   const seed = crypto.getRandomValues(new Uint8Array(32));
   const recovery = recoveryKeyPair(seed);
+  let entry: SignedEnvelope;
+  let words: string[];
   try {
-    const entry = await genesisEntryAsync({
+    entry = await genesisEntryAsync({
       account,
       device: member,
       sign: signer(record.keys),
       recovery,
       at: now(),
     });
-    const dir = verifyDirectory([entry], { account });
-    await store.put("device", record, account);
-    await api.append(entry);
-    await store.extendPin(account, { length: dir.length, head: dir.head });
-    return recoveryWords(seed).split(" ");
+    words = recoveryWords(seed).split(" ");
   } finally {
     seed.fill(0);
     recovery.privateKey.fill(0);
   }
+  const dir = verifyDirectory([entry], { account });
+  await store.put("device", record, account);
+  const commit = async () => {
+    try {
+      await api.append(entry);
+    } catch (e) {
+      // The genesis may have landed with its response lost: it is ours if entry 0 is this one.
+      const entries = await api.directory();
+      if (entries[0]?.sig !== entry.sig) throw e;
+    }
+    await pinTo(account, [entry], dir);
+  };
+  return { words, commit };
 }
 
 /**
@@ -200,13 +236,19 @@ export async function recover(account: string, name: string, words: string): Pro
   const recovery = recoveryKeyPair(seed);
   try {
     const entries = await api.directory();
-    const dir = verifyDirectory(entries, { account, recoveryPk: toB64(recovery.publicKey) });
+    // A browser that pinned this account before must not sign onto an older prefix.
+    const pin = await store.get("pin", account);
+    const dir = verifyDirectory(entries, {
+      account,
+      recoveryPk: toB64(recovery.publicKey),
+      ...(pin ? { pin } : {}),
+    });
     const { record, member } = await newDevice(account, name);
     const entry = addEntry(dir, { id: RECOVERY, signKey: recovery.privateKey }, member, now());
     const next = verifyDirectory([...entries, entry], { account });
     await store.put("device", record, account);
     await api.append(entry);
-    await store.extendPin(account, { length: next.length, head: next.head });
+    await pinTo(account, [...entries, entry], next);
   } finally {
     seed.fill(0);
     recovery.privateKey.fill(0);
@@ -247,7 +289,7 @@ async function finishJoin(account: string, code: PairingCode, approval: unknown,
   // The approval's length and head, under the code's MAC, pin a directory the server cannot fake.
   const dir = verifyDirectory(entries, { account, pin: { length: body.length, head: body.head } });
   checkJoined(dir, me);
-  await store.extendPin(account, { length: dir.length, head: dir.head });
+  await pinTo(account, entries, dir);
 }
 
 // --- As a device ----------------------------------------------------------------------------
@@ -289,8 +331,9 @@ async function append(ctx: Ctx, make: (dir: Directory) => Promise<SignedEnvelope
       }
       throw e;
     }
-    await store.extendPin(ctx.account, { length: dir.length, head: dir.head });
-    return { ...fresh, dir, entries: [...fresh.entries, entry] };
+    const entries = [...fresh.entries, entry];
+    await pinTo(ctx.account, entries, dir);
+    return { ...fresh, dir, entries };
   }
 }
 
@@ -368,7 +411,15 @@ export interface Inbox {
   retry?: Stored[];
 }
 
+/** The server picks what it lists: an item of another kind is refused before it is opened. */
+function expectKind<K extends SealedItem["kind"]>(item: SealedItem, kind: K) {
+  if (item.kind !== kind)
+    throw new ProtocolError("wrong-kind", `${item.kind} where ${kind} was due`);
+  return item as SealedItem & { kind: K };
+}
+
 async function openDecision(ctx: Ctx, s: Stored, sent: store.SentAnswers): Promise<InboxItem> {
+  expectKind(s.item, "decision");
   const { signer: machine, body } = await openAsync(
     s.item as SealedItem & { kind: "decision" },
     me(ctx),
@@ -393,7 +444,7 @@ export async function openPushedDecision(ctx: Ctx, item: SealedItem): Promise<In
 
 /** Opens a quota snapshot a push carried. */
 export async function openPushedQuota(ctx: Ctx, item: SealedItem) {
-  return (await openAsync(item as SealedItem & { kind: "quota" }, me(ctx), ctx.dir)).body;
+  return (await openAsync(expectKind(item, "quota"), me(ctx), ctx.dir)).body;
 }
 
 /**
@@ -409,7 +460,12 @@ export async function reverify(ctx: Ctx): Promise<Ctx | undefined> {
 /** Reads decisions after `inbox.cursor` and merges them in: answered ones come back answered. */
 export async function loadInbox(ctx: Ctx, inbox: Inbox = { items: [], rejected: [] }) {
   const sent = (await store.get("answers", ctx.account)) ?? {};
-  const byId = new Map(inbox.items.map((i) => [i.decision.id, i]));
+  // Decisions opened before a machine was revoked no longer verify: drop them.
+  const byId = new Map(
+    inbox.items
+      .filter((i) => ctx.dir.members.get(i.machine.id)?.active)
+      .map((i) => [i.decision.id, i]),
+  );
   const rejected = [...inbox.rejected];
   const retry: Stored[] = [];
   const take = async (s: Stored, again: boolean) => {
@@ -457,10 +513,12 @@ export async function answer(ctx: Ctx, item: InboxItem, reply: Reply): Promise<s
     me(fresh),
     [machine.member],
   );
-  const sent = (await store.get("answers", ctx.account)) ?? {};
   await api.post(sealed);
-  sent[item.decision.id] = { ...reply, answeredAt };
-  await store.put("answers", sent, ctx.account);
+  // The page and the service worker may both answer: merge into the record, never overwrite it.
+  await store.update("answers", ctx.account, (sent) => ({
+    ...sent,
+    [item.decision.id]: { ...reply, answeredAt },
+  }));
   return answeredAt;
 }
 
@@ -480,7 +538,7 @@ export async function loadQuotas(ctx: Ctx): Promise<Quotas> {
   for (const s of stored) {
     let opened: Awaited<ReturnType<typeof openAsync<"quota">>>;
     try {
-      opened = await openAsync(s.item as SealedItem & { kind: "quota" }, me(ctx), ctx.dir);
+      opened = await openAsync(expectKind(s.item, "quota"), me(ctx), ctx.dir);
     } catch (e) {
       out.rejected.push({ id: s.item.id, error: e instanceof Error ? e.message : String(e) });
       continue;
