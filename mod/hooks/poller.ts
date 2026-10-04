@@ -6,7 +6,8 @@
  * --session <its id> --wait 25` back to back (the host aborts a call after 30 s); the others
  * watch the CLI's state file and run `starbridge answers --session <id>` without `--wait` when
  * it changes, which never touches the network. The CLI holds the keys, opens and verifies each
- * answer, and hands a session only the answers to decisions it asked, once.
+ * answer, and hands a session only the answers to decisions it asked, until the poller confirms
+ * it submitted them with `starbridge answers --ack`.
  */
 
 export interface Host {
@@ -73,6 +74,8 @@ export class Poller {
   private seenMtime: number | undefined;
   /** The session id this poller last held the lease under; a `/clear` changes the id. */
   private leasedAs: string | undefined;
+  /** Answers submitted but not yet confirmed to the CLI, so a retried confirm submits nothing twice. */
+  private readonly unconfirmed = new Set<string>();
   private readonly leasePath: string;
   private readonly statePath: string;
   /** Resolves when the loop has ended. */
@@ -131,12 +134,13 @@ export class Poller {
   }
 
   /**
-   * Runs one `starbridge answers` and submits each line it hands over. Returns how many, or
-   * undefined after an error, which it has already waited out.
+   * Runs one `starbridge answers`, submits each answer it hands over and confirms them. Returns
+   * how many, or undefined after an error, which it has already waited out.
    */
   private async answers(me: string, extra: string[]): Promise<number | undefined> {
     const timeoutMs = (this.t.waitSeconds + 30) * 1000;
-    const r = await this.host.run([this.command, "answers", "--session", me, ...extra], timeoutMs);
+    const base = [this.command, "answers", "--session", me];
+    const r = await this.host.run([...base, ...extra], timeoutMs);
     if (r.exitCode !== 0) {
       await this.fail(r.stderr.trim().split("\n")[0] || `exit ${r.exitCode}`);
       return undefined;
@@ -146,18 +150,38 @@ export class Poller {
     if (this.failures > 0) this.host.status(undefined);
     this.failures = 0;
     let handed = 0;
+    const done: string[] = [];
     for (const text of r.stdout.split("\n")) {
       if (!text.trim()) continue;
-      let parsed: { line?: unknown };
+      let parsed: { decisionId?: unknown; line?: unknown };
       try {
         parsed = JSON.parse(text);
       } catch {
         this.host.log(`starbridge: unreadable line from the CLI: ${text.slice(0, 200)}`);
         continue;
       }
-      if (typeof parsed.line !== "string") continue;
-      this.host.submit(parsed.line);
-      handed++;
+      const { decisionId: id, line } = parsed;
+      if (typeof id !== "string" || typeof line !== "string") continue;
+      // A /clear during the call made another session current: the answer waits, unconfirmed,
+      // until session `me` is resumed.
+      if ((await this.host.sessionId()) !== me) {
+        this.host.log(`starbridge: held back the answer to ${id}: its session ${me} ended`);
+        continue;
+      }
+      if (!this.unconfirmed.has(id)) {
+        this.host.submit(line);
+        this.unconfirmed.add(id);
+        handed++;
+      }
+      done.push(id);
+    }
+    if (done.length > 0) {
+      const ack = await this.host.run([...base, ...done.flatMap((id) => ["--ack", id])], timeoutMs);
+      if (ack.exitCode !== 0) {
+        await this.fail(ack.stderr.trim().split("\n")[0] || `exit ${ack.exitCode}`);
+        return undefined;
+      }
+      for (const id of done) this.unconfirmed.delete(id);
     }
     return handed;
   }

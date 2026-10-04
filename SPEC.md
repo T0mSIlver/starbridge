@@ -136,6 +136,13 @@ one session per machine poll. The other sessions watch the CLI's state file and
 claim their answers from it locally. `starbridge ask` records the asking
 session, and the CLI hands an answer only to that session, once.
 
+Changed (#35, 2026-10-04): the CLI hands an answer over again until the mod
+confirms it with `starbridge answers --session <id> --ack <decision id>`, and
+the mod rereads the session id before submitting. An answer that arrives during
+a `/clear` waits for the session that asked, instead of going to the new one.
+The CLI and the mod must be updated together: an older mod never confirms, so
+it would get the same answer every cycle.
+
 What the probe showed (2026-10-04, in the Desktop Code tab):
 
 - Idle session: the submitted prompt starts a turn within 0.2 s, and the model
@@ -285,6 +292,11 @@ How it generalizes is open.
   a follow-up. Nightly `sqlite3 .backup` kept 14 days in `/var/backups/starbridge`. Login is
   `deploy` with the dev box key and sudo; root login and passwords are off. The web page is not
   served yet (#8); Caddy will route it on the same origin.
+- 2026-10-04. The CLI takes a lock file (`.lock` in its config directory)
+  around every read-modify-write of its files (#33). A directory refresh fetches
+  outside the lock, then under it keeps the longer of its chain and the saved
+  one, each required to extend the other's pin, so two CLI processes refreshing
+  at once cannot roll the pin back.
 
 ## Encryption, with existing libraries
 

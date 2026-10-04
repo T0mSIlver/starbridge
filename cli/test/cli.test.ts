@@ -145,7 +145,7 @@ test("quota push keeps going after a failed round", async () => {
   expect(ctx.errors[1]).toMatch(/posted q_.*1 providers, 3 windows/);
 });
 
-test("answers hands each session only the answers to its own decisions, once", async () => {
+test("answers hands each session only its own answers, until it confirms them", async () => {
   const ctx = await paired(server);
   await run([...ASK, "--session", "s1"], ctx);
   ctx.env.CLAUDE_CODE_SESSION_ID = "s2";
@@ -161,19 +161,25 @@ test("answers hands each session only the answers to its own decisions, once", a
   await server.answer(theirs, { text: "multi\nline" });
   await server.answer(mine, { choice: "Wait" });
   expect(await run(["answers", "--session", "s1", "--wait", "5"], ctx)).toBe(0);
-  expect(ctx.lines.map((l) => JSON.parse(l))).toEqual([
-    { decisionId: mine, line: `Answer to ${mine} (Merge #12 now?): Wait` },
-  ]);
+  const handed = { decisionId: mine, line: `Answer to ${mine} (Merge #12 now?): Wait` };
+  expect(ctx.lines.map((l) => JSON.parse(l))).toEqual([handed]);
+  // Unconfirmed, it is handed over again; another session cannot confirm it.
+  expect(await run(["answers", "--session", "s2", "--ack", mine], ctx)).toBe(0);
+  expect(await run(["answers", "--session", "s1"], ctx)).toBe(0);
+  expect(JSON.parse(ctx.lines[1] as string)).toEqual(handed);
+  expect(await run(["answers", "--session", "s1", "--ack", mine], ctx)).toBe(0);
+  expect(await run(["answers", "--session", "s1"], ctx)).toBe(0);
+  expect(ctx.lines).toHaveLength(2);
+
   // s2's answer was stored by s1's poll; s2 takes it without touching the server.
   const polls = server.log.length;
   expect(await run(["answers", "--session", "s2"], ctx)).toBe(0);
-  expect(JSON.parse(ctx.lines[1] as string).line).toBe(
+  expect(JSON.parse(ctx.lines[2] as string).line).toBe(
     `Answer to ${theirs} (Name the branch?): multi\nline`,
   );
   expect(server.log.length).toBe(polls);
-  expect(await run(["answers", "--session", "s2"], ctx)).toBe(0);
   expect(await run(["answers", "--session", "s3"], ctx)).toBe(0);
-  expect(ctx.lines).toHaveLength(2);
+  expect(ctx.lines).toHaveLength(3);
 });
 
 test("answers exits 1 on a server error and keeps the cursor", async () => {

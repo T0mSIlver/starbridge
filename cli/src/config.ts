@@ -1,4 +1,15 @@
-import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  closeSync,
+  existsSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  renameSync,
+  statSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { type Answer, fromB64, type MemberKeys, type Pin, toB64 } from "@starbridge/protocol";
@@ -37,12 +48,53 @@ export interface State {
       session?: string;
     }
   >;
-  /** Verified answers by decision id; `seen` once a `wait` has printed it. */
+  /**
+   * Verified answers by decision id; `seen` once a `wait` has printed it or the mod confirmed it
+   * submitted it (`answers --ack`).
+   */
   answers: Record<string, { answer: Answer; seen: boolean }>;
 }
 
+/** A lock older than this was left by a crashed process: every holder lets go within milliseconds. */
+const STALE_LOCK_MS = 10_000;
+const LOCK_TIMEOUT_MS = 15_000;
+const tick = new Int32Array(new SharedArrayBuffer(4));
+
 export class Store {
   constructor(readonly dir: string) {}
+
+  /**
+   * Runs `fn` while holding `.lock`, which one process at a time can create, so read-modify-write
+   * cycles from several CLI processes (the mod's poll, an agent's `ask`) do not undo each other.
+   * `fn` must not await, nor take the lock again: the lock is released when it returns.
+   */
+  locked<T>(fn: () => T): T {
+    mkdirSync(this.dir, { recursive: true, mode: 0o700 });
+    const lock = this.path(".lock");
+    const end = Date.now() + LOCK_TIMEOUT_MS;
+    let fd: number | undefined;
+    while (fd === undefined) {
+      try {
+        fd = openSync(lock, "wx", 0o600);
+      } catch (e) {
+        if ((e as NodeJS.ErrnoException).code !== "EEXIST") throw e;
+        try {
+          if (Date.now() - statSync(lock).mtimeMs > STALE_LOCK_MS) unlinkSync(lock);
+        } catch {
+          // Released meanwhile.
+        }
+        if (Date.now() > end)
+          throw new Error(`${lock} stays locked: remove it if no starbridge runs`);
+        Atomics.wait(tick, 0, 0, 5);
+      }
+    }
+    try {
+      return fn();
+    } finally {
+      closeSync(fd);
+      unlinkSync(lock);
+    }
+  }
 
   private path(name: string) {
     return join(this.dir, name);
@@ -84,12 +136,14 @@ export class Store {
     return this.read<State>("state.json") ?? { asked: {}, answers: {} };
   }
 
-  /** Re-reads the state, applies `fn` and writes it back, to narrow races between processes. */
+  /** Re-reads the state, applies `fn` and writes it back, under the lock. */
   updateState(fn: (s: State) => void): State {
-    const s = this.state();
-    fn(s);
-    this.write("state.json", s);
-    return s;
+    return this.locked(() => {
+      const s = this.state();
+      fn(s);
+      this.write("state.json", s);
+      return s;
+    });
   }
 }
 
