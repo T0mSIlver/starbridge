@@ -40,7 +40,8 @@ its options as notification actions when the browser can show all of them.
 `e2e/run.ts` starts the server, this app (built), stand-ins for GitHub and for a Web Push service
 (`e2e/services.ts`), and drives Firefox through GitHub sign-in, first-device setup, Web Push, a
 `starbridge pair` approval and a refusal, `starbridge quota push`, answering `starbridge ask
---wait`, a second browser by pairing code, a third by the recovery words, and a revoke. It writes
+--wait`, a second browser by pairing code, a third by the recovery words, a revoke, and a
+sign-in again that binds the new session to the existing device. It writes
 the screenshots in `screenshots/`. Ports 3870 to 3873 on localhost.
 
 ```bash

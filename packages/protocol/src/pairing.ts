@@ -173,3 +173,39 @@ export function checkJoined(
   )
     throw new ProtocolError("unknown-member", "the directory does not hold my keys");
 }
+
+// --- Binding a new session ---------------------------------------------------
+
+/**
+ * What a device signs to bind a fresh session to its member, after signing in again:
+ * "starbridge/v1/bind", NUL, account, NUL, member id, NUL, the server's nonce. The account and
+ * member keep a signature for one binding from serving another; the nonce is single-use.
+ */
+export function bindMessage(account: string, member: string, nonce: string): Uint8Array {
+  const nul = new Uint8Array([0]);
+  return concat(
+    utf8("starbridge/v1/bind"),
+    nul,
+    utf8(account),
+    nul,
+    utf8(member),
+    nul,
+    utf8(nonce),
+  );
+}
+
+/** True when `signPk` signed this binding. */
+export function verifyBind(
+  args: { account: string; member: string; nonce: string; sig: string },
+  signPk: string,
+): boolean {
+  try {
+    return sodium.crypto_sign_verify_detached(
+      fromB64(args.sig),
+      bindMessage(args.account, args.member, args.nonce),
+      fromB64(signPk),
+    );
+  } catch {
+    return false;
+  }
+}
