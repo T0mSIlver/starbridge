@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { makeServer, signIn } from "./helpers";
+import { makeServer, signIn } from "../test-support/app";
 
 // A stand-in for GitHub's OAuth endpoints and user API.
 let github: ReturnType<typeof Bun.serve>;

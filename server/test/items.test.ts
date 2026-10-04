@@ -18,7 +18,7 @@ import {
   type Server,
   setupAccount,
   signIn,
-} from "./helpers";
+} from "../test-support/app";
 
 let s: Server;
 let acct: Account;

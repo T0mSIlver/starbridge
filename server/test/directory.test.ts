@@ -9,7 +9,16 @@ import {
   recoveryKeyPair,
   verifyDirectory,
 } from "@starbridge/protocol";
-import { append, at, directory, makeServer, pair, revoke, setupAccount, signIn } from "./helpers";
+import {
+  append,
+  at,
+  directory,
+  makeServer,
+  pair,
+  revoke,
+  setupAccount,
+  signIn,
+} from "../test-support/app";
 
 const memberOf = (id: string, role: "device" | "machine" = "device") => {
   const keys = generateMemberKeys();

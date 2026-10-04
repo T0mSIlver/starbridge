@@ -15,7 +15,7 @@ import {
   type Server,
   setupAccount,
   testConfig,
-} from "./helpers";
+} from "../test-support/app";
 
 interface Seen {
   path: string;

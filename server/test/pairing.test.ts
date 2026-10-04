@@ -23,7 +23,7 @@ import {
   type Server,
   setupAccount,
   signIn,
-} from "./helpers";
+} from "../test-support/app";
 
 /** Posts a pairing request for a new machine and returns what the flow needs. */
 async function request(

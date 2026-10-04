@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { readFileSync, statSync, writeFileSync } from "node:fs";
+import { LiveServer } from "@starbridge/server/test-support";
 import { run } from "../../cli/src/cli";
-import { FakeServer } from "../../cli/test/fake-server";
 import { paired, type TestCtx, until } from "../../cli/test/helpers";
 import { type Host, Poller, type Timing } from "../hooks/poller.ts";
 
@@ -14,11 +14,11 @@ const FAST: Timing = {
   maxBackoffMs: 160,
 };
 
-let server: FakeServer;
+let server: LiveServer;
 let cli: TestCtx;
 const pollers: Poller[] = [];
 beforeEach(async () => {
-  server = new FakeServer();
+  server = await LiveServer.start();
   cli = await paired(server);
 });
 afterEach(async () => {
@@ -98,9 +98,9 @@ test("each answer reaches the session that asked, once, through one poller", asy
   const nobody = await ask("Asked outside Claude Code?");
   await until(() => polling(a) + polling(b) + polling(c) > 0);
 
-  server.answer(db, { choice: "No" });
-  server.answer(da, { choice: "Yes" });
-  server.answer(nobody, { choice: "Yes" });
+  await server.answer(db, { choice: "No" });
+  await server.answer(da, { choice: "Yes" });
+  await server.answer(nobody, { choice: "Yes" });
   await until(() => a.get().submitted.length + b.get().submitted.length === 2);
   await Bun.sleep(100);
 
@@ -118,8 +118,11 @@ test("a forged answer is never submitted", async () => {
   const a = session("s-a");
   const da = await ask("Merge #12 now?", "s-a");
   await until(() => polling(a) > 0);
-  server.answer(da, { choice: "Ship it" });
-  server.answer(da, { choice: "Yes" }, { decisionId: "d_forged" });
+  // The real server takes one answer per decision; these two need a compromised one.
+  await server.forge(
+    { decisionId: da, reply: { choice: "Ship it" } },
+    { decisionId: da, reply: { choice: "Yes" }, tamper: { decisionId: "d_forged" } },
+  );
   await until(() => server.log.filter((l) => l === "GET /answers").length >= 3);
   expect(a.get().submitted).toEqual([]);
   expect(a.get().logs.filter((l) => l.includes("ignored an answer"))).toHaveLength(2);
@@ -134,7 +137,7 @@ test("another session takes over polling when the poller stops", async () => {
   await a.poller.stop();
   const db = await ask("Deploy tonight?", "s-b");
   await until(() => polling(b) > 0);
-  server.answer(db, { choice: "Yes" });
+  await server.answer(db, { choice: "Yes" });
   await until(() => b.get().submitted.length === 1);
 });
 
@@ -150,7 +153,7 @@ test("backs off while the server fails, then recovers", async () => {
   // 20, 40, 80, 160, 160 ms: a handful of tries, not a spin.
   expect(polling(a) - before).toBeLessThanOrEqual(6);
   server.failures.length = 0;
-  server.answer(da, { choice: "No" });
+  await server.answer(da, { choice: "No" });
   await until(() => a.get().submitted.length === 1, 3000);
   expect(a.get().status).toBeUndefined();
 });
@@ -172,7 +175,7 @@ test("the poller keeps its lease across a /clear, under the new session id", asy
   const leader = polling(a) > 0 ? a : b;
   leader.get().id = "s-cleared";
   const d = await ask("Asked after the clear?", "s-cleared");
-  server.answer(d, { choice: "Yes" });
+  await server.answer(d, { choice: "Yes" });
   // Well within the lease, which still names the old id.
   await until(() => leader.get().submitted.length === 1, 1500);
   const lease = JSON.parse(readFileSync(`${cli.store.dir}/mod-poller.json`, "utf8"));
