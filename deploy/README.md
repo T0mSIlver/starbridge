@@ -29,7 +29,7 @@ It unpacks the ref into `/opt/starbridge`, builds the server and web images on t
 
 ## First setup
 
-1. As root: `ssh root@starbridge.run sh -s < deploy/host/setup.sh`. It installs Docker,
+1. As root: `ssh root@starbridge.run sh -s < deploy/host/setup.sh`. It installs Docker, git,
    sqlite3 and unattended-upgrades (with reboots at 04:00), adds `deploy`, and turns password
    login off.
 2. From a second terminal, check that `ssh deploy@starbridge.run sudo true` works, then
