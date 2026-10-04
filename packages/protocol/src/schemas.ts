@@ -66,6 +66,12 @@ export const SignedEnvelope = z.object({
   signer: Id,
   body: z.string(),
   sig: B64,
+  /**
+   * Directory entry 0 only: the recovery key's signature over the same body, as signer
+   * "recovery". It ties the genesis to the recovery key, so a server that copies the public
+   * recovery key into a genesis of its own cannot pass it off during recovery.
+   */
+  recoverySig: B64.optional(),
 });
 export type SignedEnvelope = z.infer<typeof SignedEnvelope>;
 

@@ -56,7 +56,7 @@ beforeAll(async () => {
       account: "acct",
       device: phone,
       signKey: phoneKeys.sign.privateKey,
-      recoveryPk: toB64(recoveryKeyPair(seed).publicKey),
+      recovery: recoveryKeyPair(seed),
       at,
     }),
   ];

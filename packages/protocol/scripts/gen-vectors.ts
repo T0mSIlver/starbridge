@@ -29,6 +29,7 @@ import {
   type SignedEnvelope,
   seal,
   sign,
+  signatureMessage,
   toB64,
   verifyDirectory,
 } from "../src/index";
@@ -85,7 +86,7 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
       account: ACCOUNT,
       device: phone.member,
       signKey: phone.keys.sign.privateKey,
-      recoveryPk,
+      recovery,
       at: T(9),
     }),
   ];
@@ -108,10 +109,24 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
     account: ACCOUNT,
     device: evil.member,
     signKey: evil.keys.sign.privateKey,
-    recoveryPk: toB64(recoveryKeyPair(seed(8)).publicKey),
+    recovery: recoveryKeyPair(seed(8)),
     at: T(9),
   });
   const fakeChain = [otherGenesis];
+  // The server's own device in a genesis naming the owner's public recovery key, with a
+  // recovery signature it can only make with some other key.
+  const forgedBody = JSON.parse(otherGenesis.body);
+  forgedBody.recoveryPk = recoveryPk;
+  const forgedEnv = sign("directory", forgedBody, "evil", evil.keys.sign.privateKey);
+  const forgedGenesis: SignedEnvelope = {
+    ...forgedEnv,
+    recoverySig: toB64(
+      sodium.crypto_sign_detached(
+        signatureMessage("directory", RECOVERY, forgedEnv.body),
+        evil.keys.sign.privateKey,
+      ),
+    ),
+  };
   const fakeDir = verifyDirectory(fakeChain);
   fakeChain.push(addEntry(fakeDir, signer(evil), devbox.member, T(9, 1)));
 
@@ -316,11 +331,30 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
           account: ACCOUNT,
           device: devbox.member,
           signKey: devbox.keys.sign.privateKey,
-          recoveryPk,
+          recovery,
           at: T(9),
         }),
       ],
       expect: { error: "bad-genesis" },
+    },
+    {
+      name: "server's genesis copying the real recovery key, no recovery signature",
+      entries: [{ ...forgedGenesis, recoverySig: undefined }],
+      options: { recoveryPk },
+      expect: { error: "bad-genesis" },
+    },
+    {
+      name: "server's genesis copying the real recovery key, signed by another key",
+      entries: [forgedGenesis],
+      options: { recoveryPk },
+      expect: { error: "bad-signature" },
+    },
+    {
+      name: "recovery signature on a later entry",
+      entries: chain.map((e, i) =>
+        i === 1 ? { ...e, recoverySig: (chain[0] as SignedEnvelope).recoverySig } : e,
+      ),
+      expect: { error: "bad-chain" },
     },
     {
       name: "wrong account option",

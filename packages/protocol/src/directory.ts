@@ -1,4 +1,4 @@
-import { parseBody, parseWith, sign, verify } from "./envelope";
+import { parseBody, parseWith, sign, signatureMessage, verify } from "./envelope";
 import { type DirectoryEntry, type Member, RECOVERY, SignedEnvelope } from "./schemas";
 import { ProtocolError, sodium, toB64, utf8 } from "./sodium";
 
@@ -35,7 +35,7 @@ export interface VerifyOptions {
 
 /**
  * Replays the directory chain and checks every rule:
- * - entry 0 adds a device, is signed by that device's own key and names the recovery key;
+ * - entry 0 adds a device, is signed by that device's own key and by the recovery key it names;
  * - each later entry is signed by an active device or by the recovery key, has the next `seq`
  *   and the previous entry's hash as `prev`;
  * - machines sign no entries, the recovery key adds only devices;
@@ -74,6 +74,8 @@ function genesis(env: SignedEnvelope, opts: VerifyOptions): Directory {
   if (body.member.id === RECOVERY) throw new ProtocolError("duplicate-member", RECOVERY);
   if (!body.recoveryPk) throw new ProtocolError("bad-genesis", "missing recoveryPk");
   verify(env, body.member.signPk);
+  if (!env.recoverySig) throw new ProtocolError("bad-genesis", "missing recoverySig");
+  verify({ ...env, signer: RECOVERY, sig: env.recoverySig }, body.recoveryPk);
   if (opts.account !== undefined && body.account !== opts.account)
     throw new ProtocolError("wrong-account", body.account);
   if (opts.recoveryPk !== undefined && body.recoveryPk !== opts.recoveryPk)
@@ -88,6 +90,8 @@ function genesis(env: SignedEnvelope, opts: VerifyOptions): Directory {
 }
 
 function applyEntry(dir: Directory, env: SignedEnvelope, i: number): Directory {
+  if (env.recoverySig !== undefined)
+    throw new ProtocolError("bad-chain", `entry ${i}: only entry 0 has recoverySig`);
   let signPk: string;
   if (env.signer === RECOVERY) {
     signPk = dir.recoveryPk;
@@ -143,7 +147,8 @@ export function genesisEntry(args: {
   account: string;
   device: Member;
   signKey: Uint8Array;
-  recoveryPk: string;
+  /** The recovery key pair, used here once and then shown as words and dropped. */
+  recovery: { publicKey: Uint8Array; privateKey: Uint8Array };
   at: string;
 }): SignedEnvelope {
   const body: DirectoryEntry = {
@@ -154,9 +159,14 @@ export function genesisEntry(args: {
     at: args.at,
     op: "add",
     member: args.device,
-    recoveryPk: args.recoveryPk,
+    recoveryPk: toB64(args.recovery.publicKey),
   };
-  return sign("directory", body, args.device.id, args.signKey);
+  const env = sign("directory", body, args.device.id, args.signKey);
+  const recoverySig = sodium.crypto_sign_detached(
+    signatureMessage("directory", RECOVERY, env.body),
+    args.recovery.privateKey,
+  );
+  return { ...env, recoverySig: toB64(recoverySig) };
 }
 
 /** `signer.id` is an active device's id, or RECOVERY with the recovery private key. */

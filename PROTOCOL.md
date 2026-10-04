@@ -20,8 +20,8 @@ code cannot show: the HTTP API and the flows.
 ## Directory
 
 The account's directory is a hash chain of signed entries listing each member's X25519 and
-Ed25519 public keys. Entry 0 adds the first device, is signed by that device and names the
-recovery public key. Each later entry carries `seq` and `prev` (BLAKE2b-256 of the previous
+Ed25519 public keys. Entry 0 adds the first device, names the recovery public key, and is signed
+both by that device and by the recovery key (`recoverySig`). Each later entry carries `seq` and `prev` (BLAKE2b-256 of the previous
 entry's body), and is signed by an active device or by the recovery key. Machines sign no
 entries; the recovery key adds only devices. Revoking is an entry too.
 
@@ -47,8 +47,9 @@ A code expires after 10 minutes. The server could brute-force the secret offline
 ## Recovery
 
 The first device shows a 32-byte recovery seed once, as 24 BIP-39 words. When every device is
-lost, a new device turns the words into the recovery key pair, checks that entry 0 names its
-public key, and signs its own `add` entry with it.
+lost, a new device turns the words into the recovery key pair, verifies the chain with that
+public key (entry 0's `recoverySig` must check against it, which a copied public key cannot
+fake), and signs its own `add` entry with it.
 
 ## HTTP API
 
