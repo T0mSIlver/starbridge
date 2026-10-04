@@ -41,10 +41,13 @@ type Design = {
 function load(): Design {
   const match = /^---\n([\s\S]*?)\n---\n/.exec(readFileSync(DESIGN_MD, "utf8"));
   if (!match) throw new Error("DESIGN.md: no YAML frontmatter");
-  const design = Bun.YAML.parse(match[1]!) as Design;
+  const design = Bun.YAML.parse(match[1] ?? "") as Design;
   const { light, dark } = design.colors;
   for (const name of new Set([...Object.keys(light), ...Object.keys(dark)])) {
-    for (const [scheme, colors] of [["light", light], ["dark", dark]] as const) {
+    for (const [scheme, colors] of [
+      ["light", light],
+      ["dark", dark],
+    ] as const) {
       const value = colors[name];
       if (value === undefined) throw new Error(`colors.${scheme}.${name} is missing`);
       if (!/^#([0-9a-f]{6}|[0-9a-f]{8})$/i.test(value)) {
@@ -53,7 +56,8 @@ function load(): Design {
     }
   }
   for (const [name, role] of Object.entries(design.typography)) {
-    if (!(role.font in design.fonts)) throw new Error(`typography.${name}: unknown font ${role.font}`);
+    if (!(role.font in design.fonts))
+      throw new Error(`typography.${name}: unknown font ${role.font}`);
   }
   return design;
 }
@@ -123,7 +127,7 @@ function tokensKt(d: Design): string {
   const names = Object.keys(d.colors.light);
   const scheme = (name: string, colors: Record<string, string>) => [
     `val ${name} = StarbridgeColors(`,
-    ...names.map((k) => `    ${camel(k)} = ${kColor(colors[k]!)},`),
+    ...names.map((k) => `    ${camel(k)} = ${kColor(colors[k] ?? "")},`),
     ")",
     "",
   ];

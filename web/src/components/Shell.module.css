@@ -76,7 +76,7 @@
   border-radius: var(--radius-pill);
   background: var(--accent);
   color: var(--on-accent);
-  font: 600 11px/18px var(--mono);
+  font: 600 11px / 18px var(--mono);
   text-align: center;
 }
 
@@ -121,6 +121,12 @@
     padding: 0 var(--s2);
     border-radius: var(--radius-pill);
     font-size: 15px;
+    position: relative;
+  }
+
+  .icon {
+    position: static;
+    width: 32px;
   }
 
   .tab:hover {
@@ -135,15 +141,6 @@
     background: none;
   }
 
-  .tab {
-    position: relative;
-  }
-
-  .icon {
-    position: static;
-    width: 32px;
-  }
-
   .badge {
     top: 50%;
     right: var(--s3);
@@ -151,7 +148,10 @@
   }
 
   .main {
-    margin-left: calc(var(--size-rail) + max(0px, (100vw - var(--size-rail) - var(--size-content)) / 2));
+    margin-left: calc(
+      var(--size-rail) +
+      max(0px, (100vw - var(--size-rail) - var(--size-content)) / 2)
+    );
     padding: var(--s10) var(--s6) var(--s10);
   }
 }

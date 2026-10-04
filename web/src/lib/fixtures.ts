@@ -34,7 +34,8 @@ export const decisions: Decision[] = [
   {
     id: "d-102",
     question: "What should the release notes call the new dictation mode?",
-    context: "The PR calls it 'continuous'. The settings screen says 'hands-free'. Pick one or write another.",
+    context:
+      "The PR calls it 'continuous'. The settings screen says 'hands-free'. Pick one or write another.",
     options: [],
     default: { action: "Keeps 'continuous'", at: ahead(240) },
     source: { machine: "mac", project: "localvoxtral", session: "7be01d" },
@@ -59,7 +60,11 @@ export const decisions: Decision[] = [
     default: { action: "Keeps 'needs-you'", at: ago(60) },
     source: { machine: "devbox", project: "starbridge", session: "orchestrator" },
     askedAt: ago(320),
-    answer: { value: "Keep needs-you, alias starbridge-ask", at: ago(300), device: "Firefox on Mac" },
+    answer: {
+      value: "Keep needs-you, alias starbridge-ask",
+      at: ago(300),
+      device: "Firefox on Mac",
+    },
   },
 ];
 
@@ -179,8 +184,28 @@ export const machines: Device[] = [
 
 /** An Ed25519 seed printed as words; shown once at first-device setup. */
 export const recoveryWords = [
-  "orbit", "lantern", "harbor", "velvet", "cobalt", "meadow",
-  "signal", "anchor", "ember", "quartz", "willow", "beacon",
-  "tundra", "falcon", "prism", "saddle", "glacier", "copper",
-  "nectar", "rocket", "summit", "ripple", "canyon", "zephyr",
+  "orbit",
+  "lantern",
+  "harbor",
+  "velvet",
+  "cobalt",
+  "meadow",
+  "signal",
+  "anchor",
+  "ember",
+  "quartz",
+  "willow",
+  "beacon",
+  "tundra",
+  "falcon",
+  "prism",
+  "saddle",
+  "glacier",
+  "copper",
+  "nectar",
+  "rocket",
+  "summit",
+  "ripple",
+  "canyon",
+  "zephyr",
 ];

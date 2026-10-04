@@ -25,6 +25,7 @@ export function QuotaCard({ q }: { q: QuotaWindow }) {
         <span className="t-figure">{q.usedPercent}%</span>
         <span className={s.used}>used</span>
       </div>
+      {/* biome-ignore lint/a11y/useSemanticElements: <meter> cannot draw the steady-pace mark */}
       <div
         className={s.bar}
         role="meter"

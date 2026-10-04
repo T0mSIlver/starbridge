@@ -35,7 +35,11 @@ function Row({ d, onRevoke }: { d: Device; onRevoke: () => void }) {
               </button>
             </>
           ) : (
-            <button type="button" className={`${ui.button} ${ui.danger}`} onClick={() => setConfirming(true)}>
+            <button
+              type="button"
+              className={`${ui.button} ${ui.danger}`}
+              onClick={() => setConfirming(true)}
+            >
               Revoke
             </button>
           )}
@@ -45,14 +49,24 @@ function Row({ d, onRevoke }: { d: Device; onRevoke: () => void }) {
   );
 }
 
-function Pairing({ d, onApprove, onReject }: { d: Device; onApprove: () => void; onReject: () => void }) {
+function Pairing({
+  d,
+  onApprove,
+  onReject,
+}: {
+  d: Device;
+  onApprove: () => void;
+  onReject: () => void;
+}) {
   return (
     <article className={`${ui.card} ${s.pairing}`}>
       <span className={`t-label ${ui.pill} ${ui.beacon}`}>Pairing request</span>
       <h2 className="t-question">
         Let <strong>{d.name}</strong> post decisions and quotas?
       </h2>
-      <p className={s.compare}>Approve only if this code matches the one the CLI printed on {d.name}.</p>
+      <p className={s.compare}>
+        Approve only if this code matches the one the CLI printed on {d.name}.
+      </p>
       <p className={`t-figure ${s.code}`}>{d.pairingCode}</p>
       <p className={`t-machine ${s.detail}`}>
         key {d.fingerprint} · asked {relative(d.addedAt)}
@@ -73,10 +87,13 @@ export function Devices({ devices, machines }: { devices: Device[]; machines: De
   const [all, setAll] = useState([...devices, ...machines]);
   const set = (id: string, status: Device["status"] | null) =>
     setAll((list) =>
-      status === null ? list.filter((d) => d.id !== id) : list.map((d) => (d.id === id ? { ...d, status } : d)),
+      status === null
+        ? list.filter((d) => d.id !== id)
+        : list.map((d) => (d.id === id ? { ...d, status } : d)),
     );
   const pending = all.filter((d) => d.status === "pending");
-  const listed = (kind: (d: Device) => boolean) => all.filter((d) => d.status !== "pending" && kind(d));
+  const listed = (kind: (d: Device) => boolean) =>
+    all.filter((d) => d.status !== "pending" && kind(d));
 
   const section = (title: string, list: Device[]) => (
     <>
@@ -95,13 +112,24 @@ export function Devices({ devices, machines }: { devices: Device[]; machines: De
         <h1 className="t-title">Devices</h1>
       </header>
       {pending.map((d) => (
-        <Pairing key={d.id} d={d} onApprove={() => set(d.id, "active")} onReject={() => set(d.id, null)} />
+        <Pairing
+          key={d.id}
+          d={d}
+          onApprove={() => set(d.id, "active")}
+          onReject={() => set(d.id, null)}
+        />
       ))}
-      {section("Phones and browsers", listed((d) => d.kind !== "machine"))}
-      {section("Machines", listed((d) => d.kind === "machine"))}
+      {section(
+        "Phones and browsers",
+        listed((d) => d.kind !== "machine"),
+      )}
+      {section(
+        "Machines",
+        listed((d) => d.kind === "machine"),
+      )}
       <p className={`t-small ${s.recovery}`}>
-        The recovery key was shown once, when this account&apos;s first device was set up. It signs a new
-        device if every device is lost; Starbridge cannot show it again.
+        The recovery key was shown once, when this account&apos;s first device was set up. It signs
+        a new device if every device is lost; Starbridge cannot show it again.
       </p>
     </>
   );

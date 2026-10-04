@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import { QuotaCard } from "@/components/QuotaCard";
+import ui from "@/components/ui.module.css";
 import { quotas, quotasUpdatedAt } from "@/lib/fixtures";
 import { relative } from "@/lib/format";
-import ui from "@/components/ui.module.css";
 import s from "./quotas.module.css";
 
 export const metadata: Metadata = { title: "Quotas" };

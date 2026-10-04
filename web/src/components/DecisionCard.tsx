@@ -3,8 +3,8 @@
 import { useState } from "react";
 import { relative } from "@/lib/format";
 import type { Decision } from "@/lib/types";
-import { Linkify } from "./Linkify";
 import s from "./DecisionCard.module.css";
+import { Linkify } from "./Linkify";
 import ui from "./ui.module.css";
 
 function Source({ d }: { d: Decision }) {
@@ -76,7 +76,8 @@ export function OpenDecision({ d, onAnswer }: { d: Decision; onAnswer: (value: s
 }
 
 export function AnsweredDecision({ d }: { d: Decision }) {
-  const a = d.answer!;
+  const a = d.answer;
+  if (!a) return null;
   return (
     <article className={`${ui.card} ${s.answered}`}>
       <Source d={d} />

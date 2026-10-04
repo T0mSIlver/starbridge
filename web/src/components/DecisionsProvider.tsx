@@ -10,12 +10,20 @@ const Ctx = createContext<Store | null>(null);
 
 // Holds the decisions for the nav badge and the Inbox. Answers stay in memory
 // until the web talks to the server (#8).
-export function DecisionsProvider({ initial, children }: { initial: Decision[]; children: React.ReactNode }) {
+export function DecisionsProvider({
+  initial,
+  children,
+}: {
+  initial: Decision[];
+  children: React.ReactNode;
+}) {
   const [items, setItems] = useState(initial);
   const answer = (id: string, value: string) =>
     setItems((all) =>
       all.map((d) =>
-        d.id === id ? { ...d, answer: { value, at: NOW.toISOString(), device: "This browser" } } : d,
+        d.id === id
+          ? { ...d, answer: { value, at: NOW.toISOString(), device: "This browser" } }
+          : d,
       ),
     );
   return <Ctx.Provider value={{ items, answer }}>{children}</Ctx.Provider>;

@@ -8,7 +8,15 @@ import ui from "./ui.module.css";
 
 // First-device setup: the recovery key is shown here once and never again
 // (SPEC.md, "Keys and trust").
-export function Setup({ account, device, words }: { account: string; device: string; words: string[] }) {
+export function Setup({
+  account,
+  device,
+  words,
+}: {
+  account: string;
+  device: string;
+  words: string[];
+}) {
   const [saved, setSaved] = useState(false);
   const [copied, setCopied] = useState(false);
 
@@ -34,11 +42,12 @@ export function Setup({ account, device, words }: { account: string; device: str
       </p>
       <h1 className="t-title">Save your recovery key</h1>
       <p className={s.lede}>
-        These 24 words can approve a new device if you lose every device you have. This is the only time
-        Starbridge shows them; the server never sees them.
+        These 24 words can approve a new device if you lose every device you have. This is the only
+        time Starbridge shows them; the server never sees them.
       </p>
       <ol className={s.words}>
         {words.map((w, i) => (
+          // biome-ignore lint/suspicious/noArrayIndexKey: a word list may repeat a word; its position is its identity
           <li key={i}>
             <span className={`t-machine ${s.n}`}>{i + 1}</span>
             <span className={s.word}>{w}</span>

@@ -33,12 +33,15 @@ export function Shell({ children }: { children: React.ReactNode }) {
                   <span className={s.icon}>
                     <Icon />
                     {href === "/" && open > 0 && (
-                      <span className={s.badge} aria-label={`${open} open`}>
+                      <span className={s.badge} aria-hidden="true">
                         {open}
                       </span>
                     )}
                   </span>
-                  <span className={s.tabLabel}>{label}</span>
+                  <span>
+                    {label}
+                    {href === "/" && open > 0 && <span className="sr-only">, {open} open</span>}
+                  </span>
                 </Link>
               </li>
             );
