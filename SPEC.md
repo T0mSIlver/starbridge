@@ -292,3 +292,14 @@ React 19 on the web; design tokens generated from `DESIGN.md` frontmatter
   2026-06-15), netcup moved to G12.5 on 2026-09-22 (+40%), OVH VPS-1 €6.49
   since 2026-04-01, Scaleway DEV1-S €6.55, DigitalOcean $12, Fly.io about $13,
   Oracle's free Arm tier cut and unreliable.
+- 2026-10-04: name checks (GitHub search, `dig NS` for domains, Play search).
+  Sayso: sayso.dev and getsayso.com taken, sayso.app shows no nameservers, at
+  least five Play apps named SaySo. Futuristic real words (Conn, Uplink, Pylon,
+  Tether, Overmind, Orrery, Subspace, Comlink, Flagship, Mothership) all collide
+  on GitHub, Play or every domain. Least crowded: Starbridge (a starship's
+  bridge, and bridging agents; Starbridge.ai is a funded AI startup selling to
+  the public sector; starbridge.sh, .run and getstarbridge.app show no
+  nameservers; no Play app) and Hailing (agents hail you, as in "hailing
+  frequencies"; hailing.dev, .app and .sh show no nameservers; no Play app;
+  "ride-hailing" is the common sense of the word). No nameservers is not proof a
+  domain is free; confirm at a registrar.
