@@ -116,6 +116,9 @@ export async function boot(): Promise<Boot> {
   const device = await store.get("device", account);
   const entries = await api.directory();
   if (entries.length === 0) {
+    // A browser that pinned a chain never accepts an empty one: that would be a rollback.
+    if (await store.get("pin", account))
+      return { state: "broken", account, error: "rollback: the server sent an empty directory" };
     // Keys saved before a genesis that never reached the server.
     if (device) await store.del("device", account);
     return { state: "first-device", account };
