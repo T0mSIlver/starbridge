@@ -1,7 +1,7 @@
 // The async variants, for clients whose private keys live outside libsodium (the web page's
 // non-extractable WebCrypto keys), must match the sync ones byte for byte and reject the same
 // vectors with the same codes.
-import { beforeAll, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import {
   addEntry,
   addEntryAsync,
@@ -27,7 +27,8 @@ import { sodium } from "../src/sodium";
 const load = async (name: string) =>
   JSON.parse(await Bun.file(new URL(`../vectors/${name}`, import.meta.url)).text());
 
-beforeAll(() => ready);
+// The describe bodies below call libsodium while the tests are collected.
+await ready;
 
 const V = {
   directory: await load("directory.json"),
