@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { statSync } from "node:fs";
+import { existsSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { LiveServer } from "@starbridge/server/test-support";
 import { run } from "../src/cli";
@@ -191,4 +191,12 @@ test("answers exits 1 on a server error and keeps the cursor", async () => {
   expect(ctx.store.state().cursor).toBeUndefined();
   expect(await run(["answers", "--session", "s1", "--wait", "30"], ctx)).toBe(1);
   expect(await run(["answers", "--wait", "1"], ctx)).toBe(1);
+});
+
+test("a lock left by a dead process is broken, and the command goes on", async () => {
+  const ctx = await paired(server);
+  const dead = Bun.spawnSync(["true"]).pid;
+  writeFileSync(join(ctx.store.dir, ".lock"), `${dead} left-by-a-crash`);
+  expect(await run(ASK, ctx)).toBe(0);
+  expect(existsSync(join(ctx.store.dir, ".lock"))).toBe(false);
 });

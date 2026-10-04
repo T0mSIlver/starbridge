@@ -207,3 +207,22 @@ test("an answer in flight during a /clear waits for its own session", async () =
   await Bun.sleep(200);
   expect(a.get().submitted).toEqual([`Answer to ${da} (Merge #12 now?): Yes`]);
 });
+
+test("a session that does not poll also keeps an answer through a /clear", async () => {
+  const lead = session("s-lead");
+  await until(() => polling(lead) > 0);
+  const a = session("s-a");
+  const da = await ask("Merge #12 now?", "s-a");
+  a.get().afterRun = (stdout) => {
+    if (stdout.includes(da)) a.get().id = "s-new";
+  };
+  await server.answer(da, { choice: "Yes" });
+  await until(() => a.get().id === "s-new");
+  await Bun.sleep(200);
+  expect(a.get().submitted).toEqual([]);
+
+  a.get().afterRun = undefined;
+  a.get().id = "s-a";
+  await until(() => a.get().submitted.length === 1);
+  expect(polling(a)).toBe(0);
+});

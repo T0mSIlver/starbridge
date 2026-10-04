@@ -1,12 +1,11 @@
+import { randomBytes } from "node:crypto";
 import {
   chmodSync,
-  closeSync,
   existsSync,
+  linkSync,
   mkdirSync,
-  openSync,
   readFileSync,
   renameSync,
-  statSync,
   unlinkSync,
   writeFileSync,
 } from "node:fs";
@@ -55,10 +54,29 @@ export interface State {
   answers: Record<string, { answer: Answer; seen: boolean }>;
 }
 
-/** A lock older than this was left by a crashed process: every holder lets go within milliseconds. */
-const STALE_LOCK_MS = 10_000;
+/** Every holder lets go within milliseconds; this long means a lock nobody can break. */
 const LOCK_TIMEOUT_MS = 15_000;
 const tick = new Int32Array(new SharedArrayBuffer(4));
+
+function readLock(path: string): string | undefined {
+  try {
+    return readFileSync(path, "utf8");
+  } catch {
+    return undefined;
+  }
+}
+
+/** Whether the process that wrote lock text `held` ("<pid> <nonce>") still runs. */
+function alive(held: string): boolean {
+  const pid = Number(held.split(" ")[0]);
+  if (!Number.isInteger(pid) || pid <= 0) return true;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (e) {
+    return (e as NodeJS.ErrnoException).code === "EPERM";
+  }
+}
 
 export class Store {
   constructor(readonly dir: string) {}
@@ -71,29 +89,53 @@ export class Store {
   locked<T>(fn: () => T): T {
     mkdirSync(this.dir, { recursive: true, mode: 0o700 });
     const lock = this.path(".lock");
+    const mine = `${process.pid} ${randomBytes(8).toString("hex")}`;
     const end = Date.now() + LOCK_TIMEOUT_MS;
-    let fd: number | undefined;
-    while (fd === undefined) {
+    while (true) {
       try {
-        fd = openSync(lock, "wx", 0o600);
+        writeFileSync(lock, mine, { flag: "wx", mode: 0o600 });
+        break;
       } catch (e) {
         if ((e as NodeJS.ErrnoException).code !== "EEXIST") throw e;
-        try {
-          if (Date.now() - statSync(lock).mtimeMs > STALE_LOCK_MS) unlinkSync(lock);
-        } catch {
-          // Released meanwhile.
-        }
-        if (Date.now() > end)
-          throw new Error(`${lock} stays locked: remove it if no starbridge runs`);
-        Atomics.wait(tick, 0, 0, 5);
       }
+      this.breakDeadLock(lock);
+      if (Date.now() > end)
+        throw new Error(`${lock} stays locked: remove it if no starbridge runs`);
+      Atomics.wait(tick, 0, 0, 5);
     }
     try {
       return fn();
     } finally {
-      closeSync(fd);
-      unlinkSync(lock);
+      // Another process may have broken it as dead; never remove a lock that is not ours.
+      if (readLock(lock) === mine) unlinkSync(lock);
     }
+  }
+
+  /**
+   * Removes a lock whose process is gone. It moves the lock aside first and removes it only if
+   * it is still the dead one, so two processes breaking it at once do not remove a lock a third
+   * just took; a live one moved aside by mistake goes back.
+   */
+  private breakDeadLock(lock: string) {
+    const held = readLock(lock);
+    if (held === undefined || alive(held)) return;
+    const aside = `${lock}.${process.pid}`;
+    try {
+      renameSync(lock, aside);
+    } catch {
+      return;
+    }
+    if (readLock(aside) === held) {
+      unlinkSync(aside);
+      return;
+    }
+    try {
+      linkSync(aside, lock);
+    } catch {
+      // A third process took the lock in the instant the live one was aside: both now run,
+      // which needs a crashed holder and three contenders within microseconds.
+    }
+    unlinkSync(aside);
   }
 
   private path(name: string) {

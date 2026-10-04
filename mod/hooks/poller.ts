@@ -71,7 +71,8 @@ export function configDir(env: {
 export class Poller {
   private stopped = false;
   private failures = 0;
-  private seenMtime: number | undefined;
+  /** The state file's time when this session last read it; a /clear makes it unread again. */
+  private seen: { session: string; mtime: number } | undefined;
   /** The session id this poller last held the lease under; a `/clear` changes the id. */
   private leasedAs: string | undefined;
   /** Answers submitted but not yet confirmed to the CLI, so a retried confirm submits nothing twice. */
@@ -126,11 +127,11 @@ export class Poller {
       return;
     }
     const mtime = await this.host.mtime(this.statePath);
-    if (mtime === undefined || mtime === this.seenMtime) {
+    if (mtime === undefined || (this.seen?.session === me && this.seen.mtime === mtime)) {
       await this.host.sleep(this.t.checkMs);
       return;
     }
-    if ((await this.answers(me, [])) !== undefined) this.seenMtime = mtime;
+    if ((await this.answers(me, [])) !== undefined) this.seen = { session: me, mtime };
   }
 
   /**
