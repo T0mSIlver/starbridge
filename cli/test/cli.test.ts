@@ -213,6 +213,25 @@ test("answers says once when a default time passed, and still hands over a late 
   expect(JSON.parse(ctx.lines[2] as string).line).toBe(`Answer to ${id} (Merge #12 now?): Wait`);
 });
 
+test("answers fetches an answer the owner gave while nothing polled before saying nobody answered", async () => {
+  const ctx = await paired(server);
+  await run([...ASK, "--session", "s1", "--default-at", "1m"], ctx);
+  const id = ctx.lines[0] as string;
+  ctx.lines.length = 0;
+  await server.answer(id, { choice: "Wait" });
+  const later = new Date(Date.now() + 61_000);
+  ctx.now = () => later;
+
+  // The server cannot be reached: no notice yet, since an answer may be waiting there.
+  server.failures.push("/answers");
+  expect(await run(["answers", "--session", "s1"], ctx)).toBe(0);
+  expect(ctx.lines).toEqual([]);
+  expect(await run(["answers", "--session", "s1"], ctx)).toBe(0);
+  expect(ctx.lines.map((l) => JSON.parse(l).line)).toEqual([
+    `Answer to ${id} (Merge #12 now?): Wait`,
+  ]);
+});
+
 test("answers exits 1 on a server error and keeps the cursor", async () => {
   const ctx = await paired(server);
   await run([...ASK, "--session", "s1"], ctx);

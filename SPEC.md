@@ -143,6 +143,19 @@ a `/clear` waits for the session that asked, instead of going to the new one.
 The CLI and the mod must be updated together: an older mod never confirms, so
 it would get the same answer every cycle.
 
+Changed (#48, 2026-10-04): agents never wait. The skill no longer offers
+`ask --wait` or a background `starbridge wait`: an agent posts, keeps working,
+ends its turn, and acts on the answer when the mod submits it. When a
+decision's default time passes with no answer, the CLI hands the mod one line
+for it (`No answer to <id> (<question>) by its default time <time>: apply your
+default: <default>`), confirmed apart from the answer (`--ack <id>:default`),
+so an answer that comes later still arrives. Before that line, the CLI fetches
+any answer waiting on the server. Sessions that do not poll reread their
+answers every 30 s, since a default time passing changes no file. After a
+`/resume` the mod keeps polling under the resumed id (before, `session.end`
+with reason `resume` stopped it for good, and no `session.start` follows).
+The mod's longest wait after errors drops from 5 minutes to 1.
+
 What the probe showed (2026-10-04, in the Desktop Code tab):
 
 - Idle session: the submitted prompt starts a turn within 0.2 s, and the model

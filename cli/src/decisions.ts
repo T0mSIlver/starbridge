@@ -319,7 +319,7 @@ export async function answers(
     });
     return 0;
   }
-  const claim = () => {
+  const claim = (notices: boolean) => {
     const st = ctx.store.state();
     let handed = 0;
     for (const [id, a] of Object.entries(st.answers)) {
@@ -331,7 +331,7 @@ export async function answers(
       handed++;
     }
     for (const [id, asked] of Object.entries(st.asked)) {
-      if (!overdue(st, id)) continue;
+      if (!notices || !overdue(st, id)) continue;
       ctx.out(
         JSON.stringify({
           decisionId: id,
@@ -343,7 +343,20 @@ export async function answers(
     }
     return handed;
   };
-  if (claim() > 0 || opts.wait === undefined) return 0;
+  // The owner may have answered while no poller ran: fetch what is waiting before saying nobody
+  // answered. When the server cannot be reached, the notice waits for a later call.
+  let notices = true;
+  const st = ctx.store.state();
+  if (Object.keys(st.asked).some((id) => overdue(st, id))) {
+    try {
+      await poll(ctx, session(ctx), { cursor: st.cursor, seconds: 0, shared: true });
+    } catch (e) {
+      if (e instanceof UsageError || e instanceof ProtocolError) throw e;
+      ctx.err(`starbridge: ${(e as Error).message}; the default-time notice waits`);
+      notices = false;
+    }
+  }
+  if (claim(notices) > 0 || opts.wait === undefined) return 0;
   const seconds = Number(opts.wait);
   if (!Number.isInteger(seconds) || seconds < 0 || seconds > MAX_CYCLE_SECONDS)
     throw new UsageError(`--wait takes whole seconds from 0 to ${MAX_CYCLE_SECONDS}`);
@@ -355,6 +368,6 @@ export async function answers(
     ctx.err(`starbridge: ${(e as Error).message}`);
     return 1;
   }
-  claim();
+  claim(notices);
   return 0;
 }

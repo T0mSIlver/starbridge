@@ -27,6 +27,7 @@ import { join } from "node:path";
 import { parseArgs } from "node:util";
 import { LiveServer } from "@starbridge/server/test-support";
 import { $ } from "bun";
+import { configDir as cliConfigDir } from "../../cli/src/config";
 import { bashCommands, Claude, until } from "./claude.ts";
 import { TestDevice } from "./device.ts";
 import { Relay } from "./proxy.ts";
@@ -74,8 +75,11 @@ if (opt.local) {
   });
   const reader = pairing.stdout.getReader();
   let out = "";
-  while (!/Pairing code: (\S+)/.test(out))
-    out += new TextDecoder().decode((await reader.read()).value);
+  while (!/Pairing code: (\S+)/.test(out)) {
+    const { done, value } = await reader.read();
+    if (done) throw new Error(`starbridge pair exited without a code: ${out}`);
+    out += new TextDecoder().decode(value);
+  }
   await local.approve((/Pairing code: (\S+)/.exec(out) as RegExpExecArray)[1] as string);
   if ((await pairing.exited) !== 0) throw new Error("pairing failed");
   const server = local;
@@ -84,8 +88,7 @@ if (opt.local) {
   if (!opt.device) throw new Error("pass --local or --device <file>");
   owner = TestDevice.load(opt.device);
   relay = new Relay().start();
-  configDir =
-    process.env.STARBRIDGE_CONFIG_DIR ?? join(process.env.HOME as string, ".config", "starbridge");
+  configDir = cliConfigDir(process.env);
   env.HTTPS_PROXY = relay.url;
 }
 env.STARBRIDGE_CONFIG_DIR = configDir;
