@@ -19,6 +19,14 @@ CREATE TABLE IF NOT EXISTS sessions (
   expires_at TEXT NOT NULL
 );
 
+-- App sign-in codes waiting to be traded for a session; challenge is the S256 PKCE challenge.
+CREATE TABLE IF NOT EXISTS app_codes (
+  code_hash TEXT PRIMARY KEY,
+  account_id TEXT NOT NULL REFERENCES accounts(id),
+  challenge TEXT NOT NULL,
+  expires_at INTEGER NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS machine_tokens (
   token_hash TEXT PRIMARY KEY,
   account_id TEXT NOT NULL REFERENCES accounts(id),

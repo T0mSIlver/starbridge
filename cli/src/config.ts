@@ -42,6 +42,10 @@ export interface State {
       options: string[];
       askedAt: string;
       defaultAt?: string;
+      /** What the agent does if nobody answers. */
+      default?: string;
+      /** Set once the mod confirmed it told the session the default time passed. */
+      defaulted?: boolean;
       cursor?: string;
       /** The Claude Code session that asked; the mod delivers the answer there only. */
       session?: string;

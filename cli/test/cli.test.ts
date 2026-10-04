@@ -161,7 +161,7 @@ test("answers hands each session only its own answers, until it confirms them", 
   await server.answer(theirs, { text: "multi\nline" });
   await server.answer(mine, { choice: "Wait" });
   expect(await run(["answers", "--session", "s1", "--wait", "5"], ctx)).toBe(0);
-  const handed = { decisionId: mine, line: `Answer to ${mine} (Merge #12 now?): Wait` };
+  const handed = { decisionId: mine, ack: mine, line: `Answer to ${mine} (Merge #12 now?): Wait` };
   expect(ctx.lines.map((l) => JSON.parse(l))).toEqual([handed]);
   // Unconfirmed, it is handed over again; another session cannot confirm it.
   expect(await run(["answers", "--session", "s2", "--ack", mine], ctx)).toBe(0);
@@ -180,6 +180,68 @@ test("answers hands each session only its own answers, until it confirms them", 
   expect(server.log.length).toBe(polls);
   expect(await run(["answers", "--session", "s3"], ctx)).toBe(0);
   expect(ctx.lines).toHaveLength(3);
+});
+
+test("answers says once when a default time passed, and still hands over a late answer", async () => {
+  const ctx = await paired(server);
+  await run([...ASK, "--session", "s1", "--default-at", "1m"], ctx);
+  const id = ctx.lines[0] as string;
+  ctx.lines.length = 0;
+  expect(await run(["answers", "--session", "s1"], ctx)).toBe(0);
+  expect(ctx.lines).toEqual([]);
+
+  const later = new Date(Date.now() + 61_000);
+  ctx.now = () => later;
+  expect(await run(["answers", "--session", "s1"], ctx)).toBe(0);
+  const notice = JSON.parse(ctx.lines[0] as string);
+  expect(notice.ack).toBe(`${id}:default`);
+  expect(notice.line).toMatch(
+    new RegExp(
+      `^No answer to ${id} \\(Merge #12 now\\?\\) by its default time .+: apply your default: Merge at 18:00$`,
+    ),
+  );
+  // Another session cannot confirm it, and confirming it leaves the answer to come.
+  expect(await run(["answers", "--session", "s2", "--ack", notice.ack], ctx)).toBe(0);
+  expect(await run(["answers", "--session", "s1"], ctx)).toBe(0);
+  expect(ctx.lines).toHaveLength(2);
+  expect(await run(["answers", "--session", "s1", "--ack", notice.ack], ctx)).toBe(0);
+  expect(await run(["answers", "--session", "s1"], ctx)).toBe(0);
+  expect(ctx.lines).toHaveLength(2);
+
+  await server.answer(id, { choice: "Wait" });
+  expect(await run(["answers", "--session", "s1", "--wait", "5"], ctx)).toBe(0);
+  expect(JSON.parse(ctx.lines[2] as string).line).toBe(`Answer to ${id} (Merge #12 now?): Wait`);
+});
+
+test("answers fetches an answer the owner gave while nothing polled before saying nobody answered", async () => {
+  const ctx = await paired(server);
+  await run([...ASK, "--session", "s1", "--default-at", "1m"], ctx);
+  const id = ctx.lines[0] as string;
+  ctx.lines.length = 0;
+  await server.answer(id, { choice: "Wait" });
+  const later = new Date(Date.now() + 61_000);
+  ctx.now = () => later;
+
+  // The server cannot be reached: no notice yet, since an answer may be waiting there.
+  server.failures.push("/answers");
+  expect(await run(["answers", "--session", "s1"], ctx)).toBe(0);
+  expect(ctx.lines).toEqual([]);
+  expect(await run(["answers", "--session", "s1"], ctx)).toBe(0);
+  expect(ctx.lines.map((l) => JSON.parse(l).line)).toEqual([
+    `Answer to ${id} (Merge #12 now?): Wait`,
+  ]);
+});
+
+test("answers --wait wakes at the session's next default time", async () => {
+  const ctx = await paired(server);
+  const at = new Date(Date.now() + 1_500).toISOString();
+  await run([...ASK, "--session", "s1", "--default-at", at], ctx);
+  const id = ctx.lines[0] as string;
+  ctx.lines.length = 0;
+  const started = Date.now();
+  expect(await run(["answers", "--session", "s1", "--wait", "20"], ctx)).toBe(0);
+  expect(Date.now() - started).toBeLessThan(5_000);
+  expect(JSON.parse(ctx.lines[0] as string).ack).toBe(`${id}:default`);
 });
 
 test("answers exits 1 on a server error and keeps the cursor", async () => {

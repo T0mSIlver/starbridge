@@ -44,11 +44,17 @@
 }
 
 .row:hover {
+  background: var(--surface);
+}
+
+/* Selected: the fill of the rail's active pill. */
+.row[aria-current="true"] {
   background: var(--surface2);
 }
 
-.row[aria-current="true"] {
-  background: var(--surface);
+/* Inside the row, where the list's scroll box cannot clip it. */
+.row:focus-visible {
+  outline-offset: -2px;
 }
 
 .rowQ {

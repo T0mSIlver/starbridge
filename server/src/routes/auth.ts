@@ -4,6 +4,7 @@ import { z } from "zod";
 import {
   createSession,
   fail,
+  hashToken,
   randomToken,
   requireCaller,
   SESSION_COOKIE,
@@ -13,6 +14,11 @@ import type { Env } from "../env";
 import { clientIp, json } from "../http";
 
 const STATE_COOKIE = "sb_oauth";
+/** How long the app has to trade its sign-in code for a session. */
+const APP_CODE_SECONDS = 60;
+/** RFC 7636: a verifier is 43 to 128 unreserved characters; an S256 challenge is 43. */
+const VERIFIER = /^[A-Za-z0-9._~-]{43,128}$/;
+const CHALLENGE = /^[A-Za-z0-9_-]{43}$/;
 
 function newAccountId(): string {
   return randomToken("a").slice(0, 23);
@@ -34,8 +40,13 @@ authRoutes.get("/auth/github", (c) => {
   const { github, publicUrl, secureCookies } = c.var.config;
   if (!github) fail(404, "not-configured", "GitHub sign-in is off on this server");
   const state = randomToken("");
+  // The app sends the S256 challenge of a verifier it keeps, so only it can redeem the code that
+  // the redirect carries (RFC 7636); any app can claim the redirect's custom scheme.
   const app = c.req.query("app") === "1";
-  setCookie(c, STATE_COOKIE, `${state}.${app ? 1 : 0}`, {
+  const challenge = c.req.query("challenge") ?? "";
+  if (app && !CHALLENGE.test(challenge))
+    fail(400, "bad-request", "app sign-in needs challenge, the S256 PKCE challenge");
+  setCookie(c, STATE_COOKIE, `${state}.${app ? 1 : 0}.${app ? challenge : ""}`, {
     httpOnly: true,
     secure: secureCookies,
     sameSite: "Lax",
@@ -53,7 +64,7 @@ authRoutes.get("/auth/github", (c) => {
 authRoutes.get("/auth/github/callback", async (c) => {
   const { github, publicUrl, secureCookies, appRedirectUri } = c.var.config;
   if (!github) fail(404, "not-configured", "GitHub sign-in is off on this server");
-  const [state, app] = (getCookie(c, STATE_COOKIE) ?? "").split(".");
+  const [state, app, challenge] = (getCookie(c, STATE_COOKIE) ?? "").split(".");
   deleteCookie(c, STATE_COOKIE, { path: "/v1/auth/github" });
   const code = c.req.query("code");
   if (!state || !code || !safeEqual(state, c.req.query("state") ?? ""))
@@ -92,10 +103,38 @@ authRoutes.get("/auth/github/callback", async (c) => {
       user.id,
       new Date().toISOString(),
     );
+  if (app === "1" && challenge) {
+    const code = randomToken("sbc_");
+    const now = Date.now();
+    db.query("DELETE FROM app_codes WHERE expires_at < ?").run(now);
+    db.query(
+      "INSERT INTO app_codes (code_hash, account_id, challenge, expires_at) VALUES (?, ?, ?, ?)",
+    ).run(hashToken(code), account, challenge, now + APP_CODE_SECONDS * 1000);
+    return c.redirect(`${appRedirectUri}?code=${code}`);
+  }
   const token = createSession(db, account);
-  if (app === "1") return c.redirect(`${appRedirectUri}#session=${token}`);
   setSessionCookie(c, token, secureCookies);
   return c.redirect("/");
+});
+
+/**
+ * The app trades the code from its sign-in redirect and the verifier behind the challenge for a
+ * session. Any attempt burns the code, so one caught by another app cannot be guessed at.
+ */
+authRoutes.post("/auth/app/session", async (c) => {
+  if (!c.var.limiter.allow(`app-code:${clientIp(c)}`, 30, 60_000)) fail(429, "rate-limited");
+  const { code, verifier } = await json(
+    c,
+    z.object({ code: z.string().max(100), verifier: z.string().regex(VERIFIER) }),
+  );
+  const db = c.var.db;
+  const row = db
+    .query("DELETE FROM app_codes WHERE code_hash = ? RETURNING account_id, challenge, expires_at")
+    .get(hashToken(code)) as { account_id: string; challenge: string; expires_at: number } | null;
+  const challenge = new Bun.CryptoHasher("sha256").update(verifier).digest("base64url");
+  if (!row || row.expires_at < Date.now() || !safeEqual(challenge, row.challenge))
+    fail(400, "bad-code", "sign-in code unknown, used, expired or not yours; sign in again");
+  return c.json({ session: createSession(db, row.account_id) });
 });
 
 /** Self-hosted sign-in with OWNER_TOKEN; the session also comes back for the Android app. */
