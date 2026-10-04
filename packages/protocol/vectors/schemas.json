@@ -459,5 +459,509 @@
       },
       "valid": false
     }
+  ],
+  "permission": [
+    {
+      "name": "valid",
+      "body": {
+        "v": 1,
+        "id": "perm_1",
+        "to": [
+          "phone",
+          "phone2"
+        ],
+        "createdAt": "2026-10-04T10:00:00Z",
+        "agent": "claude-code",
+        "tool": "Bash",
+        "summary": "git push origin main",
+        "description": "Push the fix",
+        "input": "{\"command\":\"git push origin main\",\"description\":\"Push the fix\"}",
+        "inputHash": "vn1Rs4EDE--zdLaXkXyePSRJAmUegmDW02WYLSW_EIE",
+        "suggestions": [
+          {
+            "label": "Allow git push for this session",
+            "rule": "Bash(git push:*)",
+            "scope": "session"
+          },
+          {
+            "label": "Always allow git push in localvoxtral",
+            "rule": "Bash(git push:*)",
+            "scope": "project"
+          }
+        ],
+        "expiresAt": "2026-10-04T10:09:00Z",
+        "source": {
+          "machine": "dev box",
+          "project": "localvoxtral",
+          "session": "s_42"
+        }
+      },
+      "valid": true
+    },
+    {
+      "name": "no suggestions, no description",
+      "body": {
+        "v": 1,
+        "id": "perm_1",
+        "to": [
+          "phone",
+          "phone2"
+        ],
+        "createdAt": "2026-10-04T10:00:00Z",
+        "agent": "claude-code",
+        "tool": "Bash",
+        "summary": "git push origin main",
+        "input": "{\"command\":\"git push origin main\",\"description\":\"Push the fix\"}",
+        "inputHash": "vn1Rs4EDE--zdLaXkXyePSRJAmUegmDW02WYLSW_EIE",
+        "suggestions": [],
+        "expiresAt": "2026-10-04T10:09:00Z",
+        "source": {
+          "machine": "dev box",
+          "project": "localvoxtral",
+          "session": "s_42"
+        }
+      },
+      "valid": true
+    },
+    {
+      "name": "with session title and links",
+      "body": {
+        "v": 1,
+        "id": "perm_1",
+        "to": [
+          "phone",
+          "phone2"
+        ],
+        "createdAt": "2026-10-04T10:00:00Z",
+        "agent": "claude-code",
+        "tool": "Bash",
+        "summary": "git push origin main",
+        "description": "Push the fix",
+        "input": "{\"command\":\"git push origin main\",\"description\":\"Push the fix\"}",
+        "inputHash": "vn1Rs4EDE--zdLaXkXyePSRJAmUegmDW02WYLSW_EIE",
+        "suggestions": [
+          {
+            "label": "Allow git push for this session",
+            "rule": "Bash(git push:*)",
+            "scope": "session"
+          },
+          {
+            "label": "Always allow git push in localvoxtral",
+            "rule": "Bash(git push:*)",
+            "scope": "project"
+          }
+        ],
+        "expiresAt": "2026-10-04T10:09:00Z",
+        "source": {
+          "machine": "dev box",
+          "project": "localvoxtral",
+          "session": "s_42",
+          "sessionTitle": "Merge the CLI uploader (#12)",
+          "links": [
+            {
+              "kind": "remote-control",
+              "url": "https://claude.ai/code/session_01UZCLSHk7GjaUdtNBsLAvvt"
+            },
+            {
+              "kind": "desktop",
+              "url": "claude://claude.ai/epitaxy/local_dbf54d69-f2ac-4a14-b298-d7bb6ecf0e3f"
+            }
+          ]
+        }
+      },
+      "valid": true
+    },
+    {
+      "name": "expires after 10 minutes",
+      "body": {
+        "v": 1,
+        "id": "perm_1",
+        "to": [
+          "phone",
+          "phone2"
+        ],
+        "createdAt": "2026-10-04T10:00:00Z",
+        "agent": "claude-code",
+        "tool": "Bash",
+        "summary": "git push origin main",
+        "description": "Push the fix",
+        "input": "{\"command\":\"git push origin main\",\"description\":\"Push the fix\"}",
+        "inputHash": "vn1Rs4EDE--zdLaXkXyePSRJAmUegmDW02WYLSW_EIE",
+        "suggestions": [
+          {
+            "label": "Allow git push for this session",
+            "rule": "Bash(git push:*)",
+            "scope": "session"
+          },
+          {
+            "label": "Always allow git push in localvoxtral",
+            "rule": "Bash(git push:*)",
+            "scope": "project"
+          }
+        ],
+        "expiresAt": "2026-10-04T10:11:00Z",
+        "source": {
+          "machine": "dev box",
+          "project": "localvoxtral",
+          "session": "s_42"
+        }
+      },
+      "valid": false
+    },
+    {
+      "name": "expires before it is made",
+      "body": {
+        "v": 1,
+        "id": "perm_1",
+        "to": [
+          "phone",
+          "phone2"
+        ],
+        "createdAt": "2026-10-04T10:00:00Z",
+        "agent": "claude-code",
+        "tool": "Bash",
+        "summary": "git push origin main",
+        "description": "Push the fix",
+        "input": "{\"command\":\"git push origin main\",\"description\":\"Push the fix\"}",
+        "inputHash": "vn1Rs4EDE--zdLaXkXyePSRJAmUegmDW02WYLSW_EIE",
+        "suggestions": [
+          {
+            "label": "Allow git push for this session",
+            "rule": "Bash(git push:*)",
+            "scope": "session"
+          },
+          {
+            "label": "Always allow git push in localvoxtral",
+            "rule": "Bash(git push:*)",
+            "scope": "project"
+          }
+        ],
+        "expiresAt": "2026-10-04T09:00:00Z",
+        "source": {
+          "machine": "dev box",
+          "project": "localvoxtral",
+          "session": "s_42"
+        }
+      },
+      "valid": false
+    },
+    {
+      "name": "two suggestions for one scope",
+      "body": {
+        "v": 1,
+        "id": "perm_1",
+        "to": [
+          "phone",
+          "phone2"
+        ],
+        "createdAt": "2026-10-04T10:00:00Z",
+        "agent": "claude-code",
+        "tool": "Bash",
+        "summary": "git push origin main",
+        "description": "Push the fix",
+        "input": "{\"command\":\"git push origin main\",\"description\":\"Push the fix\"}",
+        "inputHash": "vn1Rs4EDE--zdLaXkXyePSRJAmUegmDW02WYLSW_EIE",
+        "suggestions": [
+          {
+            "label": "Allow git push for this session",
+            "rule": "Bash(git push:*)",
+            "scope": "session"
+          },
+          {
+            "label": "Allow git push for this session",
+            "rule": "Bash(git push:*)",
+            "scope": "session"
+          }
+        ],
+        "expiresAt": "2026-10-04T10:09:00Z",
+        "source": {
+          "machine": "dev box",
+          "project": "localvoxtral",
+          "session": "s_42"
+        }
+      },
+      "valid": false
+    },
+    {
+      "name": "a suggestion for this call only",
+      "body": {
+        "v": 1,
+        "id": "perm_1",
+        "to": [
+          "phone",
+          "phone2"
+        ],
+        "createdAt": "2026-10-04T10:00:00Z",
+        "agent": "claude-code",
+        "tool": "Bash",
+        "summary": "git push origin main",
+        "description": "Push the fix",
+        "input": "{\"command\":\"git push origin main\",\"description\":\"Push the fix\"}",
+        "inputHash": "vn1Rs4EDE--zdLaXkXyePSRJAmUegmDW02WYLSW_EIE",
+        "suggestions": [
+          {
+            "label": "Once",
+            "rule": "Bash(ls)",
+            "scope": "once"
+          }
+        ],
+        "expiresAt": "2026-10-04T10:09:00Z",
+        "source": {
+          "machine": "dev box",
+          "project": "localvoxtral",
+          "session": "s_42"
+        }
+      },
+      "valid": false
+    },
+    {
+      "name": "summary too long",
+      "body": {
+        "v": 1,
+        "id": "perm_1",
+        "to": [
+          "phone",
+          "phone2"
+        ],
+        "createdAt": "2026-10-04T10:00:00Z",
+        "agent": "claude-code",
+        "tool": "Bash",
+        "summary": "sssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss",
+        "description": "Push the fix",
+        "input": "{\"command\":\"git push origin main\",\"description\":\"Push the fix\"}",
+        "inputHash": "vn1Rs4EDE--zdLaXkXyePSRJAmUegmDW02WYLSW_EIE",
+        "suggestions": [
+          {
+            "label": "Allow git push for this session",
+            "rule": "Bash(git push:*)",
+            "scope": "session"
+          },
+          {
+            "label": "Always allow git push in localvoxtral",
+            "rule": "Bash(git push:*)",
+            "scope": "project"
+          }
+        ],
+        "expiresAt": "2026-10-04T10:09:00Z",
+        "source": {
+          "machine": "dev box",
+          "project": "localvoxtral",
+          "session": "s_42"
+        }
+      },
+      "valid": false
+    },
+    {
+      "name": "input too long",
+      "body": {
+        "v": 1,
+        "id": "perm_1",
+        "to": [
+          "phone",
+          "phone2"
+        ],
+        "createdAt": "2026-10-04T10:00:00Z",
+        "agent": "claude-code",
+        "tool": "Bash",
+        "summary": "git push origin main",
+        "description": "Push the fix",
+        "input": "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii",
+        "inputHash": "vn1Rs4EDE--zdLaXkXyePSRJAmUegmDW02WYLSW_EIE",
+        "suggestions": [
+          {
+            "label": "Allow git push for this session",
+            "rule": "Bash(git push:*)",
+            "scope": "session"
+          },
+          {
+            "label": "Always allow git push in localvoxtral",
+            "rule": "Bash(git push:*)",
+            "scope": "project"
+          }
+        ],
+        "expiresAt": "2026-10-04T10:09:00Z",
+        "source": {
+          "machine": "dev box",
+          "project": "localvoxtral",
+          "session": "s_42"
+        }
+      },
+      "valid": false
+    },
+    {
+      "name": "unknown agent",
+      "body": {
+        "v": 1,
+        "id": "perm_1",
+        "to": [
+          "phone",
+          "phone2"
+        ],
+        "createdAt": "2026-10-04T10:00:00Z",
+        "agent": "gemini",
+        "tool": "Bash",
+        "summary": "git push origin main",
+        "description": "Push the fix",
+        "input": "{\"command\":\"git push origin main\",\"description\":\"Push the fix\"}",
+        "inputHash": "vn1Rs4EDE--zdLaXkXyePSRJAmUegmDW02WYLSW_EIE",
+        "suggestions": [
+          {
+            "label": "Allow git push for this session",
+            "rule": "Bash(git push:*)",
+            "scope": "session"
+          },
+          {
+            "label": "Always allow git push in localvoxtral",
+            "rule": "Bash(git push:*)",
+            "scope": "project"
+          }
+        ],
+        "expiresAt": "2026-10-04T10:09:00Z",
+        "source": {
+          "machine": "dev box",
+          "project": "localvoxtral",
+          "session": "s_42"
+        }
+      },
+      "valid": false
+    }
+  ],
+  "permission-answer": [
+    {
+      "name": "allow for the session",
+      "body": {
+        "v": 1,
+        "id": "pans_1",
+        "permissionId": "perm_1",
+        "to": "devbox",
+        "answeredAt": "2026-10-04T10:01:00Z",
+        "behavior": "allow",
+        "scope": "session",
+        "inputHash": "vn1Rs4EDE--zdLaXkXyePSRJAmUegmDW02WYLSW_EIE"
+      },
+      "valid": true
+    },
+    {
+      "name": "deny with a message",
+      "body": {
+        "v": 1,
+        "id": "pans_1",
+        "permissionId": "perm_1",
+        "to": "devbox",
+        "answeredAt": "2026-10-04T10:01:00Z",
+        "behavior": "deny",
+        "scope": "once",
+        "inputHash": "vn1Rs4EDE--zdLaXkXyePSRJAmUegmDW02WYLSW_EIE",
+        "message": "Push to a branch instead"
+      },
+      "valid": true
+    },
+    {
+      "name": "deny for the session",
+      "body": {
+        "v": 1,
+        "id": "pans_1",
+        "permissionId": "perm_1",
+        "to": "devbox",
+        "answeredAt": "2026-10-04T10:01:00Z",
+        "behavior": "deny",
+        "scope": "session",
+        "inputHash": "vn1Rs4EDE--zdLaXkXyePSRJAmUegmDW02WYLSW_EIE"
+      },
+      "valid": false
+    },
+    {
+      "name": "allow with a message",
+      "body": {
+        "v": 1,
+        "id": "pans_1",
+        "permissionId": "perm_1",
+        "to": "devbox",
+        "answeredAt": "2026-10-04T10:01:00Z",
+        "behavior": "allow",
+        "scope": "session",
+        "inputHash": "vn1Rs4EDE--zdLaXkXyePSRJAmUegmDW02WYLSW_EIE",
+        "message": "ok"
+      },
+      "valid": false
+    },
+    {
+      "name": "unknown scope",
+      "body": {
+        "v": 1,
+        "id": "pans_1",
+        "permissionId": "perm_1",
+        "to": "devbox",
+        "answeredAt": "2026-10-04T10:01:00Z",
+        "behavior": "allow",
+        "scope": "user",
+        "inputHash": "vn1Rs4EDE--zdLaXkXyePSRJAmUegmDW02WYLSW_EIE"
+      },
+      "valid": false
+    }
+  ],
+  "settled": [
+    {
+      "name": "by a device",
+      "body": {
+        "v": 1,
+        "id": "set_1",
+        "permissionId": "perm_1",
+        "to": [
+          "phone",
+          "phone2"
+        ],
+        "outcome": "device",
+        "device": "phone",
+        "at": "2026-10-04T10:01:00Z"
+      },
+      "valid": true
+    },
+    {
+      "name": "at the keyboard",
+      "body": {
+        "v": 1,
+        "id": "set_1",
+        "permissionId": "perm_1",
+        "to": [
+          "phone",
+          "phone2"
+        ],
+        "outcome": "keyboard",
+        "at": "2026-10-04T10:01:00Z"
+      },
+      "valid": true
+    },
+    {
+      "name": "device without its outcome",
+      "body": {
+        "v": 1,
+        "id": "set_1",
+        "permissionId": "perm_1",
+        "to": [
+          "phone",
+          "phone2"
+        ],
+        "outcome": "timeout",
+        "device": "phone",
+        "at": "2026-10-04T10:01:00Z"
+      },
+      "valid": false
+    },
+    {
+      "name": "device outcome without the device",
+      "body": {
+        "v": 1,
+        "id": "set_1",
+        "permissionId": "perm_1",
+        "to": [
+          "phone",
+          "phone2"
+        ],
+        "outcome": "device",
+        "at": "2026-10-04T10:01:00Z"
+      },
+      "valid": false
+    }
   ]
 }

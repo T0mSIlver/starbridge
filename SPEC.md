@@ -435,6 +435,15 @@ How it generalizes is open.
   hook injects the skill rule instead of editing CLAUDE.md (owner's choice).
   No public release date: the owner ships when satisfied.
 
+- 2026-10-05. Permission prompts' protocol (#57): `ITEM_KINDS` in `packages/protocol` lists each
+  sealed kind's signing role and the item it refers to, and the server and both clients derive
+  their checks from it, so #58, #60 and #62 add kinds as table rows. Beyond the issue's spec:
+  `settled` carries `to` (every sealed body names its recipients) and, for `outcome: "device"`,
+  the device whose answer the machine applied, for the clients' log; a second `settled` gets 409
+  `already-settled`. The server, which cannot read `expiresAt`, refuses answers 10 minutes after
+  the permission arrived. `GET /items` takes a comma-separated `kind` list and `open=1`; the
+  machine's `checkPermissionAnswer` lives in the protocol package.
+
 ## Encryption, with existing libraries
 
 - libsodium sealed boxes (`crypto_box_seal`, X25519 + XSalsa20-Poly1305): an

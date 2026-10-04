@@ -3,7 +3,8 @@ import type { Limits } from "./limits";
 
 /**
  * Drops what no client needs any more: answered decisions and their answers a week after the
- * answer, unanswered decisions and unreplaced quota snapshots after 30 days, quota snapshots of
+ * answer, permission prompts with their answers and settled notices a week after they arrive
+ * (the clients' log shows that week), unanswered decisions and unreplaced quota snapshots after 30 days, quota snapshots of
  * revoked machines, expired sessions and expired app sign-in codes. Boxes go with their items.
  */
 export function sweepStorage(db: Database, limits: Limits, now = Date.now()): void {
@@ -13,7 +14,7 @@ export function sweepStorage(db: Database, limits: Limits, now = Date.now()): vo
   db.transaction(() => {
     db.query(
       `DELETE FROM items WHERE (kind = 'decision' AND answered_at < ?)
-         OR (kind = 'answer' AND received_at < ?)
+         OR (kind IN ('answer', 'permission', 'permission-answer', 'settled') AND received_at < ?)
          OR (kind IN ('decision', 'quota') AND answered_at IS NULL AND received_at < ?)`,
     ).run(answered, answered, stale);
     db.query(
