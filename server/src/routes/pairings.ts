@@ -1,6 +1,11 @@
-import { B64, PairingApprovalBody, PairingMessage, PairingRequestBody } from "@starbridge/protocol";
+import {
+  B64,
+  claimHash,
+  PairingApprovalBody,
+  PairingMessage,
+  PairingRequestBody,
+} from "@starbridge/protocol";
 import { Hono } from "hono";
-import sodium from "libsodium-wrappers";
 import { z } from "zod";
 import { fail, hashToken, identify, randomToken, requireCaller, safeEqual } from "../auth";
 import type { Env } from "../env";
@@ -9,14 +14,6 @@ import { activeMember } from "./directory";
 
 const LIFETIME_MS = 10 * 60_000;
 const RENDEZVOUS = /^[0-9A-HJKMNP-TV-Z]{8}$/;
-
-/** BLAKE2b-256 of the claim secret's UTF-8 text, base64url, as `claimHash` in the protocol. */
-function claimHash(secret: string): string {
-  return sodium.to_base64(
-    sodium.crypto_generichash(32, sodium.from_string(secret), null),
-    sodium.base64_variants.URLSAFE_NO_PADDING,
-  );
-}
 
 interface Pairing {
   rendezvous: string;

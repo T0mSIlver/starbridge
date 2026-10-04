@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import {
   addEntry,
   checkJoined,
+  claimHash,
   generateMemberKeys,
   newPairingCode,
   openPairingApproval,
@@ -12,12 +13,10 @@ import {
   toB64,
   verifyDirectory,
 } from "@starbridge/protocol";
-import sodium from "libsodium-wrappers";
 import {
   type Account,
   append,
   at,
-  claimHash,
   directory,
   makeServer,
   pair,
@@ -30,7 +29,7 @@ import {
 async function request(s: Server, id = "devbox") {
   const keys = generateMemberKeys();
   const code = newPairingCode();
-  const claim = toB64(sodium.randombytes_buf(32));
+  const claim = toB64(crypto.getRandomValues(new Uint8Array(32)));
   const body = {
     v: 1 as const,
     rendezvous: code.rendezvous,

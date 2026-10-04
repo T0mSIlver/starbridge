@@ -1,5 +1,6 @@
 import {
   addEntry,
+  claimHash,
   type Directory,
   generateMemberKeys,
   generateRecoverySeed,
@@ -17,7 +18,6 @@ import {
   toB64,
   verifyDirectory,
 } from "@starbridge/protocol";
-import sodium from "libsodium-wrappers";
 import { createApp } from "../src/app";
 import type { Config } from "../src/config";
 
@@ -115,10 +115,6 @@ export async function append(s: Server, token: string, entry: SignedEnvelope) {
   return s.call("POST", "/v1/directory", { token, body: { entry } });
 }
 
-export function claimHash(secret: string): string {
-  return toB64(sodium.crypto_generichash(32, sodium.from_string(secret), null));
-}
-
 /**
  * Runs the pairing flow for a new member. For a device, `newSession` is the session it signed
  * in with; it fetches its result with that session.
@@ -132,7 +128,7 @@ export async function pair(
 ): Promise<Actor> {
   const { keys, member } = newMember(id, role);
   const code = newPairingCode();
-  const claim = toB64(sodium.randombytes_buf(32));
+  const claim = toB64(crypto.getRandomValues(new Uint8Array(32)));
   const request = pairingRequest(
     { v: 1, rendezvous: code.rendezvous, role, id, name: id, ...publicKeys(keys), at },
     code,

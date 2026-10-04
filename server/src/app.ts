@@ -3,7 +3,6 @@ import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { getCookie } from "hono/cookie";
 import { HTTPException } from "hono/http-exception";
-import sodium from "libsodium-wrappers";
 import { SESSION_COOKIE } from "./auth";
 import type { Config } from "./config";
 import { openDb } from "./db";
@@ -18,7 +17,7 @@ import { pushRoutes } from "./routes/push";
 import { Waiters } from "./waiters";
 
 export async function createApp(config: Config, fetchFn: typeof fetch = fetch) {
-  await Promise.all([ready, sodium.ready]);
+  await ready;
   const db = openDb(config.dbPath);
   const deps: Deps = {
     config,

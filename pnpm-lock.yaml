@@ -41,9 +41,6 @@ importers:
       hono:
         specifier: ^4.13.12
         version: 4.13.12
-      libsodium-wrappers:
-        specifier: ^0.8.4
-        version: 0.8.4
       web-push:
         specifier: ^3.6.7
         version: 3.6.7
@@ -57,9 +54,6 @@ importers:
       '@types/bun':
         specifier: ^1.4.2
         version: 1.4.2
-      '@types/libsodium-wrappers':
-        specifier: ^0.8.2
-        version: 0.8.2
       '@types/web-push':
         specifier: ^3.6.4
         version: 3.6.4
