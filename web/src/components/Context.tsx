@@ -2,7 +2,6 @@
 // blocks. Code is the only text set in mono (DESIGN.md).
 import s from "./Context.module.css";
 
-const FENCE = /```[^\n]*\n?([\s\S]*?)```/;
 const INLINE = /(`[^`\n]+`|https?:\/\/\S+)/;
 
 function Inline({ text }: { text: string }) {
@@ -25,19 +24,45 @@ function Inline({ text }: { text: string }) {
   });
 }
 
+type Part = { code: boolean; text: string; line: number };
+
+// Fences open and close only on a line that starts with ```; an unclosed
+// fence runs to the end, as in CommonMark.
+function split(text: string): Part[] {
+  const parts: Part[] = [];
+  let code = false;
+  let lines: string[] = [];
+  let start = 0;
+  const flush = (next: number) => {
+    const body = lines.join("\n");
+    if (code || body.trim()) parts.push({ code, text: code ? body : body.trim(), line: start });
+    lines = [];
+    start = next;
+  };
+  text.split("\n").forEach((line, n) => {
+    if (line.trimStart().startsWith("```")) {
+      flush(n + 1);
+      code = !code;
+    } else lines.push(line);
+  });
+  flush(0);
+  return parts;
+}
+
 export function Context({ text, className }: { text: string; className?: string }) {
-  const blocks: React.ReactNode[] = [];
-  let rest = text;
-  for (let match = FENCE.exec(rest); match; match = FENCE.exec(rest)) {
-    const before = rest.slice(0, match.index).trim();
-    if (before) blocks.push(<p key={blocks.length}>{<Inline text={before} />}</p>);
-    blocks.push(
-      <pre key={blocks.length} className={`t-code ${s.block}`}>
-        <code>{(match[1] ?? "").replace(/\n$/, "")}</code>
-      </pre>,
-    );
-    rest = rest.slice(match.index + match[0].length);
-  }
-  if (rest.trim()) blocks.push(<p key={blocks.length}>{<Inline text={rest.trim()} />}</p>);
-  return <div className={`${s.context} ${className ?? ""}`}>{blocks}</div>;
+  return (
+    <div className={`${s.context} ${className ?? ""}`}>
+      {split(text).map((part) =>
+        part.code ? (
+          <pre key={part.line} className={`t-code ${s.block}`}>
+            <code>{part.text}</code>
+          </pre>
+        ) : (
+          <p key={part.line}>
+            <Inline text={part.text} />
+          </p>
+        ),
+      )}
+    </div>
+  );
 }
