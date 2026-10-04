@@ -470,6 +470,16 @@ How it generalizes is open.
   `starbridge update` replaces script installs only and points brew and npm installs at their
   manager; `starbridge uninstall` removes the binary, and part 3 adds the service, plugins and
   config to it. Release downloads need the repo public.
+- 2026-10-05. Local agent (#68, part 1): `starbridge agent` is the same binary, one per machine.
+  It keeps the one answer long-poll and the quota timer, and serves the CLI and sessions over
+  HTTP on a unix socket (PROTOCOL.md, "Local agent API"). Answers stay in the CLI's state file,
+  under its lock, so the agent and the CLI's own path share one store and the decision code.
+  Every CLI command asks the agent first and talks to the server itself when none listens, or
+  when the agent speaks another API revision (426). It never falls back once the agent has
+  answered, so nothing posts twice. The agent runs only the CodexBar binary its own config
+  names (`agent.json`, written by setup, or flags), never a path a client sends. No uid check
+  on the socket's peer: neither Bun nor Node exposes `SO_PEERCRED`; the 0700 directory and 0600
+  socket keep other users out.
 
 ## Encryption, with existing libraries
 
