@@ -138,7 +138,8 @@ What the probe showed (2026-10-04, in the Desktop Code tab):
 - Remote Control: a prompt the mod submitted, idle or queued behind a turn the
   owner started from the phone, showed on the phone with the answer. Prompts
   from the phone reach hooks with origin `bridge`; typed ones with `composer`.
-- Idle: polling and held requests kept running while the session idled.
+- Idle: polling and held requests kept running while the session idled
+  (longest gap measured: 23 minutes).
 - A hot reload of the mod aborts its in-flight requests at once.
 
 The other path is Claude Code channels (code.claude.com/docs/en/channels,
@@ -443,10 +444,11 @@ two vendors at high effort. The orchestrator merges on green, squash.
   and 117 minutes: every request aborted at 30.0 s ("no complete answer within
   30000ms"), the server saw the client close. `$.process.run` running `curl`:
   60, 300 and 590 s holds answered, a `timeoutMs` above 600000 is refused.
-  `$.process.spawn` running `curl -N`: 60 and 300 s holds answered;
-  HOLDS_PENDING. `$.prompt.submit` from an idle session: turn started after
+  `$.process.spawn` running `curl -N`: 60, 300, 900 and 3600 s holds
+  answered on time. `$.prompt.submit` from an idle session: turn started after
   0.17 s. Pushed mid-turn: queued, own turn 0.1 s after `turn.complete`.
   Remote Control: twice the owner saw the mod's prompt and the reply on the
   phone; phone prompts arrived with origin `bridge`, typed ones with
   `composer`. A 30 s fetch poll loop ran unattended through a 23-minute idle
-  gap (40 cycles, none missed)IDLE_PENDING.
+  gap (40 cycles, none missed), and the 60-minute spawn hold spanned several
+  idle gaps; no longer gap was measured.
