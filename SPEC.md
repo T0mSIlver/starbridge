@@ -326,6 +326,13 @@ How it generalizes is open.
   browser that signs in again binds the new session to its existing device by signing a
   server nonce with the device key (#28, `POST /v1/auth/bind`).
 
+- 2026-10-04. Icon and brand (#32): the mark is a space elevator, flat: a
+  planet's edge, a tether running off the top into space, and one amber
+  climber on it, on DESIGN.md's dark bg in both schemes. Stars were ruled out
+  as a cliché of AI tools; an ankh-like first draft (a ring station on top)
+  was dropped. Amber stays fixed under Material You dynamic colour. No
+  wordmark: the name is set in Archivo. Shapes and files: DESIGN.md, "Icon".
+
 ## Encryption, with existing libraries
 
 - libsodium sealed boxes (`crypto_box_seal`, X25519 + XSalsa20-Poly1305): an
