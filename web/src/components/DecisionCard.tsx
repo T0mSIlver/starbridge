@@ -2,9 +2,10 @@
 
 import { useState } from "react";
 import { relative } from "@/lib/format";
-import type { Decision } from "@/lib/types";
+import type { Decision, InboxItem } from "@/lib/types";
 import { Context } from "./Context";
 import s from "./DecisionCard.module.css";
+import type { Reply } from "./DecisionsProvider";
 import ui from "./ui.module.css";
 
 function Source({ d }: { d: Decision }) {
@@ -15,7 +16,7 @@ function Source({ d }: { d: Decision }) {
   );
 }
 
-export function OpenDecision({ d, onAnswer }: { d: Decision; onAnswer: (value: string) => void }) {
+export function OpenDecision({ d, onAnswer }: { d: Decision; onAnswer: (reply: Reply) => void }) {
   const [text, setText] = useState("");
   // Recommended first (SPEC.md, "Decisions as notifications").
   const options = d.recommended
@@ -25,7 +26,7 @@ export function OpenDecision({ d, onAnswer }: { d: Decision; onAnswer: (value: s
     <article className={`${ui.card} ${s.open}`}>
       <div className={s.meta}>
         <Source d={d} />
-        <span className="t-small">{relative(d.askedAt)}</span>
+        <span className="t-small">{relative(d.createdAt)}</span>
       </div>
       <h2 className={`t-question ${s.question}`}>{d.question}</h2>
       <Context text={d.context} className={s.context} />
@@ -36,7 +37,7 @@ export function OpenDecision({ d, onAnswer }: { d: Decision; onAnswer: (value: s
               key={o}
               type="button"
               className={`${ui.button} ${o === d.recommended ? ui.primary : ""}`}
-              onClick={() => onAnswer(o)}
+              onClick={() => onAnswer({ choice: o })}
             >
               {o}
               {o === d.recommended && <span className={`t-label ${s.rec}`}>Recommended</span>}
@@ -48,7 +49,7 @@ export function OpenDecision({ d, onAnswer }: { d: Decision; onAnswer: (value: s
           className={s.free}
           onSubmit={(e) => {
             e.preventDefault();
-            if (text.trim()) onAnswer(text.trim());
+            if (text.trim()) onAnswer({ text: text.trim() });
           }}
         >
           <label className="t-label" htmlFor={`answer-${d.id}`}>
@@ -67,14 +68,15 @@ export function OpenDecision({ d, onAnswer }: { d: Decision; onAnswer: (value: s
         </form>
       )}
       <p className={`t-small ${s.default}`}>
-        If nobody answers: {d.default.action} {relative(d.default.at)}.
+        If nobody answers: {d.default.action}
+        {d.default.at ? ` ${relative(d.default.at)}` : ""}.
       </p>
     </article>
   );
 }
 
-export function AnsweredDecision({ d }: { d: Decision }) {
-  const a = d.answer;
+export function AnsweredDecision({ item }: { item: InboxItem }) {
+  const { decision: d, answer: a } = item;
   if (!a) return null;
   return (
     <article className={`${ui.card} ${s.answered}`}>
@@ -84,10 +86,11 @@ export function AnsweredDecision({ d }: { d: Decision }) {
         <span className={s.check} aria-hidden="true">
           ✓
         </span>
-        {a.value}
+        {a.choice ?? a.text}
       </p>
       <p className="t-small">
-        {a.device} · {relative(a.at)}
+        {item.answeredBy ? `${item.answeredBy} · ` : ""}
+        {relative(a.answeredAt)}
       </p>
     </article>
   );

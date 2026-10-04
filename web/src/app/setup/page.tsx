@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Setup } from "@/components/Setup";
-import { recoveryWords } from "@/lib/fixtures";
+import { recoveryWords } from "@/lib/fixtures/devices";
 
 export const metadata: Metadata = { title: "Set up" };
 

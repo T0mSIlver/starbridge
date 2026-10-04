@@ -1,4 +1,4 @@
-import { NOW } from "./fixtures";
+import { NOW } from "./now";
 
 /** "4 min ago", "in 2 h 30 min", "in 3 days". */
 export function relative(iso: string, now: Date = NOW): string {

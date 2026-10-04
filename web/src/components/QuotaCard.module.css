@@ -39,12 +39,16 @@
   border-radius: inherit;
 }
 
-.on-pace {
+.ok {
   background: var(--ok);
 }
 
-.runs-out {
+.out {
   background: var(--bad);
+}
+
+.unknown {
+  background: var(--fg3);
 }
 
 .unused {
