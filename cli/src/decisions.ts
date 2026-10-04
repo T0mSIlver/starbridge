@@ -35,6 +35,8 @@ export interface AskInput {
 
 /** Exit code when nobody answered before the deadline: the agent applies its default. */
 export const EXIT_TIMEOUT = 2;
+/** Exit code on Ctrl-C, as a shell reports SIGINT. */
+const EXIT_INTERRUPTED = 130;
 /** The server holds a long-poll at most this long (PROTOCOL.md). */
 const MAX_POLL_SECONDS = 300;
 /** Pause before retrying after a network or server error. */
@@ -198,7 +200,8 @@ export async function wait(
   let directory = dir;
   while (true) {
     const left = deadline - ctx.now().getTime();
-    if (left <= 0 || ctx.signal?.aborted) {
+    if (ctx.signal?.aborted) return EXIT_INTERRUPTED;
+    if (left <= 0) {
       const what = target ?? "any decision";
       ctx.err(`No answer to ${what} yet: apply the default.`);
       return EXIT_TIMEOUT;
