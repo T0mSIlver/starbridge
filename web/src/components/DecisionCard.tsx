@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { relative, shortSession } from "@/lib/format";
+import { relative, sessionName } from "@/lib/format";
 import type { Decision, InboxItem, Reply } from "@/lib/types";
 import { Context } from "./Context";
 import s from "./DecisionCard.module.css";
@@ -23,13 +23,39 @@ function Source({ d }: { d: Decision }) {
   return (
     <p className={`t-machine ${s.source}`}>
       {d.source.machine} · {d.source.project}
-      {d.source.session && (
+      {(d.source.session || d.source.sessionTitle) && (
         <>
           {" · "}
-          <span title={d.source.session}>{shortSession(d.source.session)}</span>
+          <span title={d.source.session || undefined}>{sessionName(d.source)}</span>
         </>
       )}
     </p>
+  );
+}
+
+const LINK_LABEL = {
+  "remote-control": "Open session",
+  web: "Open session",
+  desktop: "Open in Desktop",
+} as const;
+
+/** Where the session that asked can be opened: claude.ai/code, or Claude Desktop. */
+function SessionLinks({ d }: { d: Decision }) {
+  const links = d.source.links ?? [];
+  if (links.length === 0) return null;
+  return (
+    <nav className={s.links} aria-label="Session">
+      {links.map((l) => (
+        <a
+          key={l.url}
+          className={`${ui.button} ${l.kind === "desktop" ? s.desktopOnly : ""}`}
+          href={l.url}
+          {...(l.kind === "desktop" ? {} : { target: "_blank", rel: "noopener noreferrer" })}
+        >
+          {LINK_LABEL[l.kind]}
+        </a>
+      ))}
+    </nav>
   );
 }
 
@@ -146,6 +172,7 @@ export function OpenDecision({
         If nobody answers: <b>{d.default.action}</b>
         {d.default.at ? ` ${relative(d.default.at)}` : ""}.
       </p>
+      <SessionLinks d={d} />
     </article>
   );
 }
@@ -178,6 +205,7 @@ export function AnsweredDecision({ item }: { item: InboxItem }) {
         <b>{answerText(item)}</b>
         <span className="t-small">{answeredBy(item)}</span>
       </p>
+      <SessionLinks d={d} />
     </article>
   );
 }

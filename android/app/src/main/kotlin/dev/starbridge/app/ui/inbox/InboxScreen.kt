@@ -1,8 +1,12 @@
 package dev.starbridge.app.ui.inbox
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.scaleIn
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -26,6 +30,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.automirrored.rounded.Send
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material3.ButtonGroup
@@ -43,6 +48,7 @@ import androidx.compose.material3.OutlinedToggleButtonDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.ToggleButton
@@ -62,6 +68,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.Role
@@ -79,6 +86,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.lifecycle.ViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.starbridge.app.data.Decision
+import dev.starbridge.app.data.Source
 import dev.starbridge.app.data.Store
 import dev.starbridge.app.ui.Beacon
 import dev.starbridge.app.ui.Label
@@ -155,25 +163,64 @@ private fun NeedsYou(count: Int) {
     }
 }
 
-/** Where a decision comes from and when: machine, project, session. */
+private val UUID_RE = Regex("^[0-9a-fA-F]{8}-[0-9a-fA-F-]+$")
+
+/** The session's title, else its id (a UUID's first 8 characters); [full] shows the whole id. */
+private fun sessionName(s: Source, full: Boolean) = when {
+    full -> s.session
+    !s.title.isNullOrBlank() -> s.title
+    UUID_RE.matches(s.session) -> s.session.take(8)
+    else -> s.session
+}
+
+/**
+ * Where a decision comes from and when: machine, project, session. Long-pressing it shows the
+ * session's full id, when [revealable].
+ */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun Source(decision: Decision, now: Instant) {
+private fun Source(decision: Decision, now: Instant, revealable: Boolean = false) {
     val s = decision.source
-    Row(verticalAlignment = Alignment.CenterVertically) {
+    var full by rememberSaveable { mutableStateOf(false) }
+    val reveal = if (revealable && s.session.isNotBlank()) {
+        Modifier.combinedClickable(onLongClickLabel = "Show the session id", onLongClick = { full = !full }, onClick = {})
+    } else {
+        Modifier
+    }
+    Row(reveal, verticalAlignment = Alignment.CenterVertically) {
         if (decision.open) {
             Beacon()
             Spacer(Modifier.width(Spacing.s2))
         }
         // The session's names give way before the time does.
         Text(
-            listOf(s.machine, s.project, s.session).filter { it.isNotBlank() }.joinToString(" · "),
+            listOf(s.machine, s.project, sessionName(s, full)).filter { it.isNotBlank() }.joinToString(" · "),
             style = StarbridgeTheme.type.machine,
             color = StarbridgeTheme.colors.fg2,
-            maxLines = 1,
+            maxLines = if (full) Int.MAX_VALUE else 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f, fill = false),
         )
         Text(" · ${ago(now, decision.createdAt)}", style = StarbridgeTheme.type.machine, color = StarbridgeTheme.colors.fg2, maxLines = 1)
+    }
+}
+
+/**
+ * Opens the session that asked: claude.ai/code links go to the Claude app when it is installed,
+ * else the browser. Desktop links are for a computer and stay hidden here.
+ */
+@Composable
+private fun SessionLinks(source: Source) {
+    val context = LocalContext.current
+    source.links.filter { it.kind != "desktop" }.forEach { link ->
+        TextButton(
+            onClick = { runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(link.url))) } },
+            modifier = Modifier.heightIn(min = Sizes.tap),
+        ) {
+            Icon(Icons.AutoMirrored.Rounded.OpenInNew, contentDescription = null, modifier = Modifier.size(Spacing.s5))
+            Spacer(Modifier.width(Spacing.s2))
+            Text("Open session", style = StarbridgeTheme.type.action)
+        }
     }
 }
 
@@ -481,6 +528,7 @@ fun DecisionScreen(decision: Decision?, now: Instant, onAnswer: (String, String?
                         IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back to the inbox") }
                     }
                 },
+                actions = { SessionLinks(decision.source) },
                 windowInsets = WindowInsets(0),
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = colors.bg),
             )
@@ -491,7 +539,7 @@ fun DecisionScreen(decision: Decision?, now: Instant, onAnswer: (String, String?
             verticalArrangement = Arrangement.spacedBy(Spacing.s4),
         ) {
             Column(Modifier.widthIn(max = Sizes.content), verticalArrangement = Arrangement.spacedBy(Spacing.s4)) {
-                Source(decision, now)
+                Source(decision, now, revealable = true)
                 Text(decision.question, style = StarbridgeTheme.type.heading, color = colors.fg)
                 Context(decision.context)
                 Spacer(Modifier.padding(top = Spacing.s1))

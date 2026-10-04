@@ -143,6 +143,19 @@
   font-weight: 500;
 }
 
+.links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+}
+
+/* A phone cannot open Claude Desktop. */
+@media (hover: none) and (pointer: coarse) {
+  .desktopOnly {
+    display: none;
+  }
+}
+
 .answer {
   display: flex;
   flex-wrap: wrap;

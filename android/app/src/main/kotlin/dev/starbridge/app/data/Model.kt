@@ -4,8 +4,16 @@ import java.time.Instant
 
 // The shapes the screens render, made from verified protocol bodies (protocol/Schemas.kt).
 
-/** Which session asked. */
-data class Source(val machine: String, val project: String, val session: String)
+/** Which session asked; [links] open it in the Claude app or a browser (kinds as in the protocol). */
+data class Source(
+    val machine: String,
+    val project: String,
+    val session: String,
+    val title: String? = null,
+    val links: List<SessionLink> = emptyList(),
+)
+
+data class SessionLink(val kind: String, val url: String)
 
 /**
  * A question an agent needs the owner to answer. [options] is empty for a free-text answer;

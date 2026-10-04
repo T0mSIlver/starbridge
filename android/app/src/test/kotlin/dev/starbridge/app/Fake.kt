@@ -7,6 +7,7 @@ import dev.starbridge.app.data.Member
 import dev.starbridge.app.data.Pace
 import dev.starbridge.app.data.PushSetting
 import dev.starbridge.app.data.QuotaWindow
+import dev.starbridge.app.data.SessionLink
 import dev.starbridge.app.data.Source
 import java.time.Duration
 import java.time.Instant
@@ -36,7 +37,13 @@ class Fake(private val now: Instant) {
             recommended = "Server first",
             default = "Merges the server first",
             defaultAt = later(30),
-            source = Source("dev box", "starbridge", "orchestrator"),
+            source = Source(
+                "dev box",
+                "starbridge",
+                "8f3c2a1e-5b7d-4c9a-a1f2-3e4d5c6b7a89",
+                title = "Starbridge orchestrator",
+                links = listOf(SessionLink("web", "https://claude.ai/code/session_01")),
+            ),
             createdAt = ago(12),
         ),
         Decision(
