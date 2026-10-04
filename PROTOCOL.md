@@ -91,7 +91,7 @@ never rely on that check.
 
 | Route | Who | What |
 |---|---|---|
-| `POST /pairings` | new member | `{request, claimHash}`: the request message and BLAKE2b-256 of a random claim secret; 409 if the rendezvous id is taken |
+| `POST /pairings` | new member | `{request, claimHash}`: the request message and BLAKE2b-256 of a random claim secret's text (`claimHash`); 409 if the rendezvous id is taken |
 | `GET /pairings/:rendezvous` | device | `{request}` |
 | `POST /pairings/:rendezvous/approve` | device | `{approval}`; the directory must already hold the new member's entry |
 | `GET /pairings/:rendezvous/result?wait=<s>` | new member, with `X-Claim: <secret>` | long-poll: `{approval, token?}` once approved, `token` for machines only; 204 when `wait` passes |
@@ -105,7 +105,8 @@ never rely on that check.
 | `GET /items/:id` | device, machine | one item, the caller's box only; push points here when the item exceeds 4 KB |
 | `GET /quota` | device | the latest quota item from each machine |
 
-Item ids are random, chosen by the sender. An answer's `re` marks its decision answered, so every
+Item ids are random, chosen by the sender. Cursors are opaque strings; without `after`, a list
+starts at the first item. An answer's `re` marks its decision answered, so every
 device moves it out of the open inbox.
 
 Lists return `{items: [{item, cursor, receivedAt, answeredAt?}], cursor}`, 100 at a time, where
