@@ -7,8 +7,8 @@ out=$dir/starbridge-$(date -u +%Y%m%d).db
 uid=$(stat -c %u "$db")
 gid=$(stat -c %g "$db")
 # sqlite3 runs as the file's owner: a WAL file or index it creates must stay writable by the
-# server. It writes into a staging directory that owner can reach.
-stage=$dir/stage
+# server. It writes into a staging directory that owner can reach, beside the root-only one.
+stage=$dir.stage
 install -d -m 700 -o "$uid" -g "$gid" "$stage"
 rm -f "$stage/copy.db"
 setpriv --reuid="$uid" --regid="$gid" --clear-groups \

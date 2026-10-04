@@ -23,5 +23,6 @@ git archive --format=tar "$rev" | ssh -i "$key" "$host" "sudo sh -euc '
   mv /opt/starbridge.new /opt/starbridge
   /opt/starbridge/deploy/host/apply.sh
 '"
-curl -fsS https://starbridge.run/healthz >/dev/null
+# The first deploy waits for Caddy's certificate.
+curl -fsS --retry 20 --retry-delay 3 --retry-all-errors https://starbridge.run/healthz >/dev/null
 echo "deployed $rev"
