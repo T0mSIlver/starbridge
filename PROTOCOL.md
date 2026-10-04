@@ -130,7 +130,7 @@ decision's options.
 
 | Route | Who | What |
 |---|---|---|
-| `POST /push/subscriptions` | device | `{type: "fcm" \| "webpush" \| "unifiedpush", endpoint, keys?}` → `{id}`; URL endpoints must be public HTTPS |
+| `POST /push/subscriptions` | device | `{type: "fcm" \| "webpush" \| "unifiedpush", endpoint, keys?}` → `{id}`; URL endpoints must be public HTTPS; 409 `too-many-subscriptions` past 10 per device or 30 per account (re-subscribing a known endpoint always works) |
 | `DELETE /push/subscriptions/:id` | device | stop pushing there |
 | `GET /push/vapid` | anyone | `{publicKey}`: the VAPID key a browser subscribes with (the relay's when this server forwards Web Push) |
 | `POST /relay` | another server | relay mode only: `{type: "fcm" \| "webpush", endpoint, keys?, payload}` → `{result: "ok" \| "gone" \| "failed" \| "no-route"}`; rate-limited per IP |
@@ -139,6 +139,15 @@ A push payload is JSON text: `{v, kind, id, from, re?, box?}` for a new item, wi
 own box when the payload stays within 3 KB, else without it and the device fetches
 `GET /items/:id`; `{v, kind: "answered", id}` to every device a decision was sealed to once it
 is answered. FCM gets it as data field `p`; Web Push and UnifiedPush encrypt it per RFC 8291.
+
+Quota snapshots go to FCM and UnifiedPush only. Browsers expect every Web Push to show a
+notification and drop a subscription that keeps showing none (Firefox after 16), so the web page
+fetches `GET /quota` when it opens instead. Decisions and `answered` still go to Web Push.
+
+The server checks that a push URL's host resolves only to public addresses, then connects to the
+address it checked, with SNI and the certificate check still on the host name, so a DNS answer
+that changes in between cannot point the push inward. Each account has at most 4 pushes in
+flight and 200 waiting; each request gives up after 10 s.
 
 A server with FCM credentials or VAPID keys pushes directly. One without them posts to the relay
 set in `RELAY_URL` (the owner's hosted server runs with `RELAY_MODE=1`), which pushes with its

@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { createECDH, randomBytes } from "node:crypto";
-import { type Decision, seal } from "@starbridge/protocol";
+import { type Decision, type QuotaSnapshot, seal } from "@starbridge/protocol";
 import * as ece from "http_ece";
 import webpush from "web-push";
 import { createApp } from "../src/app";
@@ -30,6 +30,7 @@ let rsa: CryptoKeyPair;
 let pem: string;
 const vapid = webpush.generateVAPIDKeys();
 const base = () => `http://localhost:${fake.port}`;
+const slow = { now: 0, max: 0 };
 
 beforeAll(async () => {
   rsa = (await crypto.subtle.generateKey(
@@ -77,6 +78,17 @@ beforeAll(async () => {
         return Response.json({ name: "projects/p/messages/1" });
       }
       if (url.pathname === "/wp/gone") return new Response("", { status: 410 });
+      if (url.pathname.startsWith("/slow/")) {
+        slow.now += 1;
+        slow.max = Math.max(slow.max, slow.now);
+        // Holds the request for 400 ms, or until the server gives up on it.
+        await new Promise((r) => {
+          setTimeout(r, 400);
+          req.signal.addEventListener("abort", r);
+        });
+        slow.now -= 1;
+        return new Response("", { status: 201 });
+      }
       if (url.pathname.startsWith("/wp/")) return new Response("", { status: 201 });
       return new Response("", { status: 404 });
     },
@@ -365,31 +377,122 @@ test("a relay without credentials of its own does not forward onward", async () 
   expect(r.json).toEqual({ result: "no-route" });
 });
 
-test("a push host that resolves to a private address is not called", async () => {
+async function pinnedPush(dns: (host: string) => string[]) {
   const { openDb } = await import("../src/db");
   const { Push } = await import("../src/push");
-  const calls: string[] = [];
-  const fetchFn = (async (url: string) => {
-    calls.push(url);
-    return new Response("", { status: 201 });
-  }) as unknown as typeof fetch;
+  const connects: string[] = [];
+  const lookups: string[] = [];
+  const push = new Push(
+    testConfig({ allowPrivatePushEndpoints: false }),
+    openDb(":memory:"),
+    (() => {
+      throw new Error("pushes to subscription URLs must go through the pinned connection");
+    }) as unknown as typeof fetch,
+    async (host) => {
+      lookups.push(host);
+      return dns(host);
+    },
+    async (url, address) => {
+      connects.push(`${url.host} via ${address}`);
+      return 201;
+    },
+  );
+  return { push, connects, lookups };
+}
+
+const up = (host: string) => ({ type: "unifiedpush" as const, endpoint: `https://${host}/up` });
+
+test("a push host that resolves to a private address is not called", async () => {
   const dns: Record<string, string[]> = {
     "push.example": ["93.184.216.34"],
     "rebound.example": ["93.184.216.34", "10.0.0.7"],
   };
-  const push = new Push(
-    testConfig({ allowPrivatePushEndpoints: false }),
-    openDb(":memory:"),
-    fetchFn,
-    async (host) => dns[host] ?? [],
+  const { push, connects } = await pinnedPush((host) => dns[host] ?? []);
+  expect(await push.send(up("rebound.example"), "{}")).toBe("failed");
+  expect(await push.send(up("localhost."), "{}")).toBe("failed");
+  expect(connects).toEqual([]);
+  expect(await push.send(up("push.example"), "{}")).toBe("ok");
+  expect(connects).toEqual(["push.example via 93.184.216.34"]);
+});
+
+test("a push connects to the address it checked, so a rebinding DNS answer cannot redirect it", async () => {
+  let answers = 0;
+  const { push, connects, lookups } = await pinnedPush(() =>
+    answers++ === 0 ? ["93.184.216.34"] : ["127.0.0.1"],
   );
-  const target = (host: string) => ({
-    type: "unifiedpush" as const,
-    endpoint: `https://${host}/up`,
+  expect(await push.send(up("rebind.example"), "{}")).toBe("ok");
+  expect(lookups).toEqual(["rebind.example"]);
+  expect(connects).toEqual(["rebind.example via 93.184.216.34"]);
+});
+
+test("a device holds at most 10 push subscriptions, an account 30", async () => {
+  const { s, acct } = await setup({});
+  const sub = (i: number) => ({ type: "fcm", endpoint: `tok-${i}` });
+  for (let i = 0; i < 10; i++)
+    expect(
+      (await s.call("POST", "/v1/push/subscriptions", { token: acct.device.token, body: sub(i) }))
+        .status,
+    ).toBe(201);
+  const over = await s.call("POST", "/v1/push/subscriptions", {
+    token: acct.device.token,
+    body: sub(10),
   });
-  expect(await push.send(target("rebound.example"), "{}")).toBe("failed");
-  expect(await push.send(target("localhost."), "{}")).toBe("failed");
-  expect(calls).toEqual([]);
-  expect(await push.send(target("push.example"), "{}")).toBe("ok");
-  expect(calls).toEqual(["https://push.example/up"]);
+  expect(over.status).toBe(409);
+  expect(over.json.error).toBe("too-many-subscriptions");
+  // Re-subscribing a known endpoint only refreshes it.
+  expect(
+    (await s.call("POST", "/v1/push/subscriptions", { token: acct.device.token, body: sub(3) }))
+      .status,
+  ).toBe(201);
+
+  s.deps.db.query("DELETE FROM push_subscriptions").run();
+  const add = s.deps.db.query(
+    "INSERT INTO push_subscriptions (id, account_id, member_id, type, endpoint, created_at) VALUES (?, ?, ?, 'fcm', ?, ?)",
+  );
+  for (let i = 0; i < 30; i++) add.run(`ps${i}`, acct.id, `other-${i % 5}`, `t${i}`, at);
+  expect(
+    (await s.call("POST", "/v1/push/subscriptions", { token: acct.device.token, body: sub(0) }))
+      .status,
+  ).toBe(409);
+});
+
+test("an account has at most 4 pushes in flight, and a stuck push service times out", async () => {
+  const { s, acct, devbox } = await setup({ pushTimeoutMs: 200 });
+  for (let i = 0; i < 10; i++)
+    await s.call("POST", "/v1/push/subscriptions", {
+      token: acct.device.token,
+      body: { type: "unifiedpush", endpoint: `${base()}/slow/${i}` },
+    });
+  slow.max = 0;
+  const started = Date.now();
+  await postDecision(s, acct, devbox, "d1");
+  expect(slow.max).toBe(4);
+  // Each request gives up at 200 ms rather than waiting the service's 400 ms.
+  expect(Date.now() - started).toBeLessThan(1200);
+});
+
+test("quota snapshots skip Web Push, which browsers drop when it shows nothing", async () => {
+  const { s, acct, devbox } = await setup({ ...fcmConfig(), ...vapidConfig() });
+  const browser = browserSubscription("quota");
+  for (const body of [browser.target, { type: "fcm", endpoint: "tok-ok" }])
+    await s.call("POST", "/v1/push/subscriptions", { token: acct.device.token, body });
+  seen.length = 0;
+  const snapshot: QuotaSnapshot = {
+    v: 1,
+    id: "q1",
+    to: [acct.device.id],
+    takenAt: at,
+    providers: [],
+    alerts: [],
+  };
+  const q = seal("quota", snapshot, { id: devbox.id, signKey: devbox.keys.sign.privateKey }, [
+    acct.device.member,
+  ]);
+  expect((await s.call("POST", "/v1/items", { token: devbox.token, body: q })).status).toBe(201);
+  await s.deps.push.idle();
+  expect(fcmSends().map((m) => JSON.parse(m.data.p).id)).toEqual(["q1"]);
+  expect(seen.filter((x) => x.path === "/wp/quota")).toEqual([]);
+  // Decisions still reach the browser.
+  await postDecision(s, acct, devbox, "d1");
+  expect(seen.filter((x) => x.path === "/wp/quota")).toHaveLength(1);
 });

@@ -5,6 +5,10 @@ import type { Env } from "../env";
 import { clientIp, json } from "../http";
 import { checkTarget, PushTarget } from "../push";
 
+/** Most subscriptions one device, and one account, may hold. */
+const DEVICE_SUBSCRIPTIONS = 10;
+const ACCOUNT_SUBSCRIPTIONS = 30;
+
 export const pushRoutes = new Hono<Env>();
 
 pushRoutes.post("/push/subscriptions", requireCaller("paired-device"), async (c) => {
@@ -15,6 +19,21 @@ pushRoutes.post("/push/subscriptions", requireCaller("paired-device"), async (c)
   const caller = c.var.caller;
   const member = memberOf(caller);
   const db = c.var.db;
+  const known = db
+    .query(
+      "SELECT 1 FROM push_subscriptions WHERE account_id = ? AND member_id = ? AND endpoint = ?",
+    )
+    .get(caller.account, member, target.endpoint);
+  if (!known) {
+    const { mine, total } = db
+      .query(
+        `SELECT COUNT(*) FILTER (WHERE member_id = ?) AS mine, COUNT(*) AS total
+         FROM push_subscriptions WHERE account_id = ?`,
+      )
+      .get(member, caller.account) as { mine: number; total: number };
+    if (mine >= DEVICE_SUBSCRIPTIONS || total >= ACCOUNT_SUBSCRIPTIONS)
+      fail(409, "too-many-subscriptions", "delete an old subscription first");
+  }
   // Subscribing the same endpoint again keeps its id and takes the new keys.
   const row = db
     .query(
