@@ -368,6 +368,13 @@ async function main() {
   await page.emulateMedia({ colorScheme: "light" });
   await shoot(page, "devices");
 
+  step("sign in again: the session binds to the existing device without pairing");
+  await a.clearCookies();
+  await page.goto(ORIGIN);
+  await page.getByRole("link", { name: "Sign in with GitHub" }).click();
+  await page.getByRole("heading", { name: "Inbox" }).waitFor({ timeout: 30_000 });
+  await page.getByText("Merge #19 (server) before the web PR rebases?").waitFor();
+
   await ff.close();
   console.log("\nE2E PASSED");
 }

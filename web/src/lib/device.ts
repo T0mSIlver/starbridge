@@ -5,6 +5,7 @@ import {
   activeMembers,
   addEntry,
   addEntryAsync,
+  bindMessage,
   checkJoined,
   type Decision,
   type Directory,
@@ -154,7 +155,16 @@ export async function boot(): Promise<Boot> {
     return { state: "join", account, stale: false };
   }
   if (!entry.active) return { state: "revoked", account, name: device.name };
-  if (me.member !== device.id) return { state: "join", account, stale: true };
+  if (me.member === null) {
+    // Signed in again: prove this browser holds the device's key, and the session is its own.
+    try {
+      const nonce = await api.challenge();
+      const sig = await signer(device.keys)(bindMessage(account, device.id, nonce));
+      await api.bind(device.id, toB64(sig));
+    } catch {
+      return { state: "join", account, stale: true };
+    }
+  } else if (me.member !== device.id) return { state: "join", account, stale: true };
   return { state: "ready", ctx: { account, device, ...verified } };
 }
 

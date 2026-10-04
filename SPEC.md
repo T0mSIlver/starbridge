@@ -311,8 +311,8 @@ How it generalizes is open.
   seal and open for keys it cannot hold. The page shares the server's origin: Next proxies
   `/v1` in development, the reverse proxy in production. The service worker shows a
   notification for every decision, and closes it once the decision is answered. A
-  browser that signs in again cannot bind its session to its existing device and pairs anew
-  (#28).
+  browser that signs in again binds the new session to its existing device by signing a
+  server nonce with the device key (#28, `POST /v1/auth/bind`).
 
 ## Encryption, with existing libraries
 
