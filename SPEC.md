@@ -212,6 +212,18 @@ How it generalizes is open.
   decisions. Version 1 is quotas and decisions; owner panels wait for
   version 2. Web Push is in version 1.
 
+- 2026-10-04. Look: function over form. Monospace only for code (Markdown
+  code blocks in a decision's context); numbers, ids and machine names use the
+  sans face with tabular figures. Colours stay generic: on Android, Material
+  You dynamic colour from the wallpaper, with `DESIGN.md`'s neutral palette as
+  the fallback; on the web, that neutral palette. Fixed colours only where
+  they carry meaning: the "needs you" accent and the quota states (on pace,
+  will run out, unused). Material 3 Expressive parts are used where they do a
+  job: connected button groups for a decision's options, the large
+  notification action buttons, spring motion on state changes (answered,
+  approved), progress indicators for quota windows, predictive back and
+  adaptive layouts (list and detail side by side on wide screens).
+
 ## Encryption, with existing libraries
 
 - libsodium sealed boxes (`crypto_box_seal`, X25519 + XSalsa20-Poly1305): an
