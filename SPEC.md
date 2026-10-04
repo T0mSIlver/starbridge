@@ -224,6 +224,14 @@ How it generalizes is open.
   approved), progress indicators for quota windows, predictive back and
   adaptive layouts (list and detail side by side on wide screens).
 
+- 2026-10-04. Protocol (`PROTOCOL.md`, `packages/protocol`): sign, then seal;
+  signatures cover the JSON body text as sent, so nothing re-serializes JSON.
+  The directory is a hash chain (BLAKE2b) that clients pin; the recovery key
+  co-signs its first entry. A pairing code
+  carries an 80-bit secret the server never sees, which keys an HMAC on both
+  pairing messages. The recovery seed shows as 24 BIP-39 words
+  (`@scure/bip39`, audited, MIT).
+
 ## Encryption, with existing libraries
 
 - libsodium sealed boxes (`crypto_box_seal`, X25519 + XSalsa20-Poly1305): an

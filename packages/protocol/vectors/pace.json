@@ -1,0 +1,204 @@
+{
+  "note": "computePace(window, now) and alertsFor(provider, window+pace, now) with the default rule.",
+  "rule": {
+    "leadFraction": 0.2,
+    "minUnusedPercent": 25,
+    "unusedHeadroom": true,
+    "runsOut": true
+  },
+  "cases": [
+    {
+      "name": "behind, resets soon: unused headroom",
+      "window": {
+        "id": "primary",
+        "label": "5h",
+        "usedPercent": 20,
+        "windowMinutes": 300,
+        "resetsAt": "2026-10-04T12:30:00Z"
+      },
+      "now": "2026-10-04T12:00:00Z",
+      "provider": "zai",
+      "expectPace": {
+        "stage": "behind",
+        "expectedUsedPercent": 90,
+        "deltaPercent": -70,
+        "projectedUsedPercent": 22.2,
+        "willLastToReset": true,
+        "runsOutAt": null
+      },
+      "expectAlerts": [
+        {
+          "kind": "unused-headroom",
+          "provider": "zai",
+          "window": "primary",
+          "resetsAt": "2026-10-04T12:30:00Z",
+          "unusedPercent": 77.8
+        }
+      ]
+    },
+    {
+      "name": "ahead: runs out before reset",
+      "window": {
+        "id": "primary",
+        "label": "5h",
+        "usedPercent": 80,
+        "windowMinutes": 300,
+        "resetsAt": "2026-10-04T14:00:00Z"
+      },
+      "now": "2026-10-04T12:00:00Z",
+      "provider": "zai",
+      "expectPace": {
+        "stage": "ahead",
+        "expectedUsedPercent": 60,
+        "deltaPercent": 20,
+        "projectedUsedPercent": 133.3,
+        "willLastToReset": false,
+        "runsOutAt": "2026-10-04T12:45:00Z"
+      },
+      "expectAlerts": [
+        {
+          "kind": "runs-out",
+          "provider": "zai",
+          "window": "primary",
+          "resetsAt": "2026-10-04T14:00:00Z",
+          "runsOutAt": "2026-10-04T12:45:00Z"
+        }
+      ]
+    },
+    {
+      "name": "on track",
+      "window": {
+        "id": "primary",
+        "label": "5h",
+        "usedPercent": 50,
+        "windowMinutes": 300,
+        "resetsAt": "2026-10-04T14:30:00Z"
+      },
+      "now": "2026-10-04T12:00:00Z",
+      "provider": "zai",
+      "expectPace": {
+        "stage": "on-track",
+        "expectedUsedPercent": 50,
+        "deltaPercent": 0,
+        "projectedUsedPercent": 100,
+        "willLastToReset": true,
+        "runsOutAt": null
+      },
+      "expectAlerts": []
+    },
+    {
+      "name": "too early to tell",
+      "window": {
+        "id": "primary",
+        "label": "5h",
+        "usedPercent": 3,
+        "windowMinutes": 300,
+        "resetsAt": "2026-10-04T16:50:00Z"
+      },
+      "now": "2026-10-04T12:00:00Z",
+      "provider": "zai",
+      "expectPace": {
+        "stage": "unknown",
+        "expectedUsedPercent": 3.3,
+        "deltaPercent": -0.3,
+        "projectedUsedPercent": null,
+        "willLastToReset": true,
+        "runsOutAt": null
+      },
+      "expectAlerts": []
+    },
+    {
+      "name": "exhausted",
+      "window": {
+        "id": "primary",
+        "label": "5h",
+        "usedPercent": 100,
+        "windowMinutes": 300,
+        "resetsAt": "2026-10-04T14:00:00Z"
+      },
+      "now": "2026-10-04T12:00:00Z",
+      "provider": "zai",
+      "expectPace": {
+        "stage": "ahead",
+        "expectedUsedPercent": 60,
+        "deltaPercent": 40,
+        "projectedUsedPercent": 100,
+        "willLastToReset": false,
+        "runsOutAt": "2026-10-04T12:00:00Z"
+      },
+      "expectAlerts": [
+        {
+          "kind": "runs-out",
+          "provider": "zai",
+          "window": "primary",
+          "resetsAt": "2026-10-04T14:00:00Z",
+          "runsOutAt": "2026-10-04T12:00:00Z"
+        }
+      ]
+    },
+    {
+      "name": "weekly, 80% used, a day left: no alert",
+      "window": {
+        "id": "secondary",
+        "label": "week",
+        "usedPercent": 80,
+        "windowMinutes": 10080,
+        "resetsAt": "2026-10-05T12:00:00Z"
+      },
+      "now": "2026-10-04T12:00:00Z",
+      "provider": "zai",
+      "expectPace": {
+        "stage": "behind",
+        "expectedUsedPercent": 85.7,
+        "deltaPercent": -5.7,
+        "projectedUsedPercent": 93.3,
+        "willLastToReset": true,
+        "runsOutAt": null
+      },
+      "expectAlerts": []
+    },
+    {
+      "name": "monthly credits, 3 days left, 40% used",
+      "window": {
+        "id": "mistral-monthly-plan",
+        "label": "vibe",
+        "usedPercent": 40,
+        "windowMinutes": 43200,
+        "resetsAt": "2026-10-07T12:00:00Z"
+      },
+      "now": "2026-10-04T12:00:00Z",
+      "provider": "zai",
+      "expectPace": {
+        "stage": "behind",
+        "expectedUsedPercent": 90,
+        "deltaPercent": -50,
+        "projectedUsedPercent": 44.4,
+        "willLastToReset": true,
+        "runsOutAt": null
+      },
+      "expectAlerts": [
+        {
+          "kind": "unused-headroom",
+          "provider": "zai",
+          "window": "mistral-monthly-plan",
+          "resetsAt": "2026-10-07T12:00:00Z",
+          "unusedPercent": 55.6
+        }
+      ]
+    },
+    {
+      "name": "unknown length",
+      "window": {
+        "id": "primary",
+        "label": "5h",
+        "usedPercent": 20,
+        "windowMinutes": null,
+        "resetsAt": "2026-10-04T12:30:00Z"
+      },
+      "now": "2026-10-04T12:00:00Z",
+      "provider": "zai",
+      "expectPace": null,
+      "expectAlerts": []
+    }
+  ]
+}
