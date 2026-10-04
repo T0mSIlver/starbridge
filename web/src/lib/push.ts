@@ -43,14 +43,25 @@ export async function enablePush(): Promise<PushState> {
   if ((await Notification.requestPermission()) !== "granted") return pushState();
   await navigator.serviceWorker.ready;
   const existing = await reg.pushManager.getSubscription();
-  const sub =
-    existing ??
-    (await reg.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: keyBytes(await api.vapid()),
-    }));
+  const key = existing ? undefined : keyBytes(await api.vapid());
+  let sub: PushSubscription;
+  try {
+    sub =
+      existing ??
+      (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key }));
+  } catch (e) {
+    throw new Error(subscribeFailure(e));
+  }
   await send(sub);
   return "on";
+}
+
+/** What to tell the owner when the browser's push service refuses to subscribe. */
+export function subscribeFailure(e: unknown, brave = "brave" in navigator): string {
+  if (brave)
+    return 'Brave blocks web push by default. Turn on "Use Google services for push messaging" in brave://settings/privacy, restart Brave, then try again.';
+  const why = e instanceof Error ? e.message : String(e);
+  return `The browser could not subscribe to push: ${why}. Check that notifications and push messaging are allowed for this site, then try again.`;
 }
 
 /** Sends the current subscription again, so a server that dropped it pushes here once more. */
