@@ -1191,14 +1191,7 @@ class ServerStore(
                 window = w.label.ifBlank { w.id },
                 usedPercent = w.usedPercent.roundToInt(),
                 resetsAt = instant(w.resetsAt),
-                pace = when {
-                    pace == null -> Pace.Unknown
-                    !pace.willLastToReset -> instant(pace.runsOutAt)?.let { Pace.RunsOut(it) } ?: Pace.Unknown
-                    unused != null -> Pace.Unused(unused.roundToInt())
-                    pace.stage == "unknown" -> Pace.Unknown
-                    pace.stage == "behind" -> Pace.Unused((100 - (pace.projectedUsedPercent ?: w.usedPercent)).roundToInt().coerceIn(0, 100))
-                    else -> Pace.Even
-                },
+                pace = paceOf(pace, unused),
                 alert = alerts.isNotEmpty(),
                 steadyPercent = pace?.expectedUsedPercent?.roundToInt()?.coerceIn(0, 100),
             )
@@ -1235,3 +1228,15 @@ class ServerStore(
 }
 
 private operator fun dev.starbridge.app.protocol.DirectoryMember.component1() = member
+
+/**
+ * A window's state, by the web's rule: "Headroom unused" only when the uploader raised an
+ * unused-headroom alert for it, not whenever usage runs behind the steady pace.
+ */
+internal fun paceOf(pace: dev.starbridge.app.protocol.Pace?, unusedAlert: Double?): Pace = when {
+    pace == null || pace.stage == "unknown" -> Pace.Unknown
+    !pace.willLastToReset ->
+        pace.runsOutAt?.let { runCatching { OffsetDateTime.parse(it).toInstant() }.getOrNull() }?.let { Pace.RunsOut(it) } ?: Pace.Unknown
+    unusedAlert != null -> Pace.Unused(unusedAlert.roundToInt())
+    else -> Pace.Even
+}
