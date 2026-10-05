@@ -166,7 +166,7 @@ export async function boot(): Promise<Boot> {
   await ready;
   const { account } = me;
   await store.put("current", account);
-  const device = await store.get("device", account);
+  let device = await store.get("device", account);
   const entries = await api.directory();
   if (entries.length === 0) {
     // A browser that pinned a chain never accepts an empty one: that would be a rollback.
@@ -182,7 +182,21 @@ export async function boot(): Promise<Boot> {
   } catch (e) {
     return { state: "broken", account, error: e instanceof Error ? e.message : String(e) };
   }
-  if (!device) return { state: "join", account, stale: false };
+  if (!device) {
+    // A join a device approved, cut off before its keys became the device: the directory
+    // already lists them, so they are, as they would have been had it finished (#274).
+    const pending = await store.get("pending", account);
+    const held = pending && verified.dir.members.get(pending.id);
+    if (
+      !pending ||
+      !held?.active ||
+      held.member.boxPk !== pending.boxPk ||
+      held.member.signPk !== pending.signPk
+    )
+      return { state: "join", account, stale: false };
+    await adopt(account, pending);
+    device = pending;
+  }
   const entry = verified.dir.members.get(device.id);
   if (!entry || entry.member.boxPk !== device.boxPk || entry.member.signPk !== device.signPk) {
     // Saved before a pairing or recovery that never completed.

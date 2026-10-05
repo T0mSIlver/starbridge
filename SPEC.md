@@ -1159,7 +1159,9 @@ so the mod is the first path.
   rate limit) now retries after 0.5, 2 and 5 s and then shows the boot error with its retry,
   instead of sending a browser with valid keys to pair again. A join keeps its new keys under
   `pending` and makes them the device only once a device approves it, so a join started for any
-  reason never overwrites an active device's keys. A decision's notification stores the account
+  reason never overwrites an active device's keys; a
+  join approved but cut off before that step resumes at the next boot, once the directory lists
+  its keys. A decision's notification stores the account
   it was shown for, and its actions answer for that account only; one from before carries none
   and opens the page instead of answering.
 

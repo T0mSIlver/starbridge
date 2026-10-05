@@ -221,8 +221,9 @@ async function onClick(n: Notification, action: string): Promise<void> {
   // A notification from before it carried its account opens the page instead of answering.
   if (data?.item && data.account && choice !== undefined) {
     const reply: Reply = { choice };
-    const ctx = await deviceContext(data.account);
     try {
+      // Throws when the browser is signed in to another account now: then nothing is answered.
+      const ctx = await deviceContext(data.account);
       if (!ctx) throw new Error("this browser is no longer a device of the account");
       await answer(ctx, data.item, reply);
       await tellPages("answered");

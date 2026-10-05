@@ -147,3 +147,14 @@ test("a join leaves the device's keys alone until a device approves it (#274)", 
   expect(await store.get("device", ctx.account)).toEqual(before as store.DeviceRecord);
   expect((await store.get("pending", ctx.account))?.name).toBe("Pairing again");
 });
+
+test("a join approved but cut off before its keys were saved resumes on the next boot (#274)", async () => {
+  // This browser's device, as a join would hold it before adopting: approved, not yet saved.
+  const record = (await store.get("device", ctx.account)) as store.DeviceRecord;
+  await store.put("pending", record, ctx.account);
+  await store.del("device", ctx.account);
+  const b = await device.boot();
+  expect(b.state).toBe("ready");
+  expect(await store.get("device", ctx.account)).toEqual(record);
+  expect(await store.get("pending", ctx.account)).toBeUndefined();
+});
