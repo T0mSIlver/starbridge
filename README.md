@@ -46,7 +46,7 @@ After Homebrew or npm, run `starbridge setup` yourself.
 | Permission prompts | Opt-in | No | Coming |
 | `AskUserQuestion` hook | ✓ | n/a | Coming |
 
-¹ In interactive sessions while `starbridge agent` runs. In `codex exec`, the agent waits for the
+¹ In interactive sessions (Codex CLI 0.160 or later) while `starbridge agent` runs. In `codex exec`, the agent waits for the
 answer before it ends its turn.
 
 ## Docs
