@@ -48,6 +48,11 @@
   background: currentColor;
 }
 
+/* Running shows its time alone; the dot marks an outcome. */
+.word.running::before {
+  content: none;
+}
+
 .word.passed {
   color: var(--ok);
 }
