@@ -160,16 +160,30 @@ function Join({ account, stale }: { account: string; stale: boolean }) {
   const [digits, setDigits] = useState<string>();
   const [words, setWords] = useState("");
   const cancel = useRef<() => void>(undefined);
+  // Each join started counts up; one that resolves after the owner moved on cancels itself.
+  const started = useRef(0);
   const { busy, error, run } = useAction();
   useEffect(() => () => cancel.current?.(), []);
+
+  /** Starts a join unless the owner moved on meanwhile; undefined when stale. */
+  const begin = async <J extends { cancel: () => void }>(start: () => Promise<J>) => {
+    const mine = ++started.current;
+    const join = await start();
+    if (mine !== started.current) {
+      join.cancel();
+      return undefined;
+    }
+    cancel.current = join.cancel;
+    return join;
+  };
 
   // The code carries the name it asks under, so it waits for the default name.
   // biome-ignore lint/correctness/useExhaustiveDependencies: starts once the name is known
   useEffect(() => {
     if (mode !== "code" || !name || code) return;
     run(async () => {
-      const join = await (await load()).startJoin(account, name.trim());
-      cancel.current = join.cancel;
+      const join = await begin(async () => (await load()).startJoin(account, name.trim()));
+      if (!join) return;
       setCode(join.code);
       await join.done;
       await reload();
@@ -177,14 +191,15 @@ function Join({ account, stale }: { account: string; stale: boolean }) {
   }, [mode, name === ""]);
 
   const switchTo = (next: "digits" | "words") => {
+    started.current++;
     cancel.current?.();
     setCode(undefined);
     setDigits(undefined);
     setMode(next);
     if (next === "digits")
       run(async () => {
-        const join = await (await load()).startDigitJoin(account, name.trim());
-        cancel.current = join.cancel;
+        const join = await begin(async () => (await load()).startDigitJoin(account, name.trim()));
+        if (!join) return;
         join.digits.then(setDigits, () => {});
         await join.done;
         await reload();
@@ -219,7 +234,12 @@ function Join({ account, stale }: { account: string; stale: boolean }) {
               </p>
             </>
           )}
-          <button type="button" className={`t-meta ${s.link}`} onClick={() => switchTo("digits")}>
+          <button
+            type="button"
+            className={`t-meta ${s.link}`}
+            disabled={!name.trim()}
+            onClick={() => switchTo("digits")}
+          >
             Can&apos;t scan? Compare digits
           </button>
         </>
@@ -245,6 +265,7 @@ function Join({ account, stale }: { account: string; stale: boolean }) {
             type="button"
             className={`t-label ${ui.btn}`}
             onClick={() => {
+              started.current++;
               cancel.current?.();
               setMode("code");
             }}

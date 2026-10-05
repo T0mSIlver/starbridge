@@ -532,7 +532,8 @@ async function main() {
   const revokes = devices.getByRole("button", { name: "Revoke" });
   for (let i = 0; i < 50 && (await revokes.count()) !== before - 1; i++)
     await page.waitForTimeout(200);
-  if ((await revokes.count()) !== before - 1) throw new Error("the revoked browser is still listed");
+  if ((await revokes.count()) !== before - 1)
+    throw new Error("the revoked browser is still listed");
   await pageB.reload();
   await pageB.getByRole("link", { name: SIGN_IN }).waitFor();
   await page.emulateMedia({ colorScheme: "light" });
