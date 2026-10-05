@@ -159,7 +159,9 @@ class ServerStore(
         push.value = push.value.copy(type = saved.pushType, registered = saved.push?.type == saved.pushType)
         decisions.value = saved.decisions.map(::toUi)
         prompts.value = saved.prompts.map(::toUi)
-        windows.value = saved.quotas.flatMap(::toUi)
+        // As the web: named once the account has more than one active machine.
+        val named = (directory?.members?.values?.count { it.active && it.member.role == "machine" } ?: 0) > 1
+        windows.value = saved.quotas.flatMap { toUi(it, named) }
         runs.value = saved.runs.map(::toUi)
         members.value = directory?.let(::toUi).orEmpty()
     }
@@ -1211,7 +1213,7 @@ class ServerStore(
         )
     }
 
-    private fun toUi(q: SavedQuota): List<QuotaWindow> = q.body.providers.flatMap { p ->
+    private fun toUi(q: SavedQuota, named: Boolean): List<QuotaWindow> = q.body.providers.flatMap { p ->
         p.windows.map { w ->
             val alerts = q.body.alerts.filter { it.provider == p.provider && it.window == w.id }
             val pace = w.pace
@@ -1222,16 +1224,10 @@ class ServerStore(
                 window = w.label.ifBlank { w.id },
                 usedPercent = w.usedPercent.roundToInt(),
                 resetsAt = instant(w.resetsAt),
-                pace = when {
-                    pace == null -> Pace.Unknown
-                    !pace.willLastToReset -> instant(pace.runsOutAt)?.let { Pace.RunsOut(it) } ?: Pace.Unknown
-                    unused != null -> Pace.Unused(unused.roundToInt())
-                    pace.stage == "unknown" -> Pace.Unknown
-                    pace.stage == "behind" -> Pace.Unused((100 - (pace.projectedUsedPercent ?: w.usedPercent)).roundToInt().coerceIn(0, 100))
-                    else -> Pace.Even
-                },
+                pace = paceOf(pace, unused),
                 alert = alerts.isNotEmpty(),
                 steadyPercent = pace?.expectedUsedPercent?.roundToInt()?.coerceIn(0, 100),
+                machine = if (named) directory?.members?.get(q.from)?.member?.name ?: q.from else null,
             )
         }
     }
@@ -1266,3 +1262,15 @@ class ServerStore(
 }
 
 private operator fun dev.starbridge.app.protocol.DirectoryMember.component1() = member
+
+/**
+ * A window's state, by the web's rule: "Headroom unused" only when the uploader raised an
+ * unused-headroom alert for it, not whenever usage runs behind the steady pace.
+ */
+internal fun paceOf(pace: dev.starbridge.app.protocol.Pace?, unusedAlert: Double?): Pace = when {
+    pace == null || pace.stage == "unknown" -> Pace.Unknown
+    !pace.willLastToReset ->
+        pace.runsOutAt?.let { runCatching { OffsetDateTime.parse(it).toInstant() }.getOrNull() }?.let { Pace.RunsOut(it) } ?: Pace.Unknown
+    unusedAlert != null -> Pace.Unused(unusedAlert.roundToInt())
+    else -> Pace.Even
+}
