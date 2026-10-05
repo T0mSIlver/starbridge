@@ -434,16 +434,6 @@ How it generalizes is open.
   so that builds refusing mods keep the rest. The plugin's `SessionStart`
   hook injects the skill rule instead of editing CLAUDE.md (owner's choice).
   No public release date: the owner ships when satisfied.
-- 2026-10-05. Local agent (#68, part 1): `starbridge agent` is the same binary, one per machine.
-  It keeps the one answer long-poll and the quota timer, and serves the CLI and sessions over
-  HTTP on a unix socket (PROTOCOL.md, "Local agent API"). Answers stay in the CLI's state file,
-  under its lock, so the agent and the CLI's own path share one store and the decision code.
-  Every CLI command asks the agent first and talks to the server itself when none listens, or
-  when the agent speaks another API revision (426). It never falls back once the agent has
-  answered, so nothing posts twice. The agent runs only the CodexBar binary its own config
-  names (`agent.json`, written by setup, or flags), never a path a client sends. No uid check
-  on the socket's peer: neither Bun nor Node exposes `SO_PEERCRED`; the 0700 directory and 0600
-  socket keep other users out.
 - 2026-10-05. Starbridge builds on Claude Code and Codex and does not replace
   what they already do well (owner). Session controls (#58) are dropped from v1:
   a list of 20 or more live sessions costs a write per change, all for one
@@ -506,7 +496,8 @@ How it generalizes is open.
   input carries no `tool_use_id` (probe log), so `hook settle` matches the call by the hash of
   its `tool_input` on `PostToolUse` and `PermissionDenied`, and settles all of the session's
   waiting prompts on `Stop` and `SessionEnd`. Only `addRules` allow rules and `addDirectories`
-  suggestions are offered for "this session" and "always"; a `setMode` suggestion (seen in the
+  suggestions are offered for "this session" and "always", and only when their rules fit the
+  500-character rule text in full, since the scope applies every rule; a `setMode` suggestion (seen in the
   probe as `acceptEdits`) changes more than the call, so it stays at the keyboard. Without an
   agent the hook polls the server every 5 s, so a keyboard answer releases it within 5 s
   instead of at once. The plugin's hook entries land once the plugin (#79) is on main; until
