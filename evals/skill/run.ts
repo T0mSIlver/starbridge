@@ -419,15 +419,49 @@ async function one(s: Scenario, arm: string, rep: number): Promise<RunRecord> {
     for (const b of s.name === "design-pick" ? ["settings-roomy", "settings-compact"] : [])
       sh("git", ["branch", b], proj, env);
 
+    type Card = { id: string; question: string; recommended?: string; options: string[] };
+    const choiceFor = (c: Card) => c.recommended ?? c.options[0] ?? "Go ahead";
+    // Codex has no plugin to bring an answer back as a prompt: it waits within its turn
+    // (`starbridge wait`), so the owner answers the first card while the turn runs.
+    let answeredFirst: Record<string, unknown>[] | undefined;
+    const answering =
+      agent === "codex" && s.followUp && !s.unpaired
+        ? (async () => {
+            while (!answeredFirst) {
+              await Bun.sleep(2_000);
+              const now = (await live.opened("decision")) as Record<string, unknown>[];
+              const c = now[0] as Card | undefined;
+              if (!c) continue;
+              await Bun.sleep(15_000);
+              if (answeredFirst) break;
+              await live.answer(c.id, { choice: choiceFor(c) });
+              rec.answered = `Answer to ${c.id} (${c.question}): ${choiceFor(c)}`;
+              answeredFirst = now;
+            }
+          })()
+        : undefined;
     const first = s.interactive
       ? await interactiveTurn(proj, env, s.prompt, plugin, cfg)
       : await turn(proj, env, s.prompt, plugin);
+    if (answering && !answeredFirst) answeredFirst = [];
     rec.turns.push(first);
     const opened = s.unpaired ? [] : ((await live.opened("decision")) as Record<string, unknown>[]);
-    rec.decisions = strip(opened);
-    const card = opened[0] as { id: string; question: string; recommended?: string; options: string[] } | undefined;
+    if (answering) {
+      // Split the turn where the agent got the answer: what it ran after its last wait is what
+      // a second turn would hold.
+      const before = rec.answered ? (answeredFirst ?? []) : opened;
+      rec.decisions = strip(before);
+      rec.laterDecisions = strip(opened.filter((d) => !before.some((o) => o.id === d.id)));
+      const i = first.commands.findLastIndex((c) => /starbridge wait/.test(c));
+      if (rec.answered && i >= 0)
+        rec.turns = [
+          { ...first, commands: first.commands.slice(0, i + 1) },
+          { ...first, commands: first.commands.slice(i + 1) },
+        ];
+    } else rec.decisions = strip(opened);
+    const card = answering ? undefined : (opened[0] as Card | undefined);
     if (s.followUp && card && first.session) {
-      const choice = card.recommended ?? card.options[0] ?? "Go ahead";
+      const choice = choiceFor(card);
       rec.answered = `Answer to ${card.id} (${card.question}): ${choice}`;
       rec.turns.push(await turn(proj, env, rec.answered, plugin, first.session));
       const all = (await live.opened("decision")) as Record<string, unknown>[];

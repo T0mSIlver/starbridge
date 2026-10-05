@@ -950,6 +950,22 @@ How it generalizes is open.
   you". Now the decision goes quietly and the `waiting` item pushes; Android fetches a decision
   it has not seen when its waiting state arrives, as the web page's service worker already did.
   An app older than this change shows no notification for such a question until it syncs.
+- 2026-10-05. How an answer reaches each agent (#203). Only the Claude Code mod brought an answer
+  back after a turn ended, and the skill told every agent never to block on `starbridge wait`, so
+  Codex never got its answers. Research on Codex CLI 0.160 (issue comment): its TUI runs sessions
+  in a shared app-server daemon by default, and `codex queue --thread <id> --message <text>` adds
+  a user message to one; checked live, an idle session starts a turn with it at once and a busy
+  one runs it next as its own turn, as with the mod. Hooks (`Stop` blocking with the answer), an
+  MCP tool that waits, and `notify` either block the turn as `wait` does or bring nothing back.
+  So `ask` records a Codex session (`CODEX_THREAD_ID`, its `CODEX_HOME` and `codex`), and the
+  machine's agent queues each answer into it, confirming the answer only when `codex queue`
+  succeeds; on failure it tries again a minute later, 30 times at most. `ask` prints how
+  the answer comes back: as a prompt (Claude Code; Codex when the agent runs and the session's
+  daemon socket accepts a connection) or not, and then the skill has the agent wait with
+  `starbridge wait <id> --timeout 5m` before it ends its turn (`codex exec`, pi, no agent). The
+  skill follows that line instead of naming agents. `evals/skill` runs `codex exec`, so it
+  checks the wait path: it answers a Codex card on the server during the turn, as the owner
+  would.
 - 2026-10-05. A blocked question shows by its look, not a state line (#191, owner's pick of
   proposal B, "Filled and hollow", from https://claude.ai/artifact/EMcUnTsGhyTsiCNujo4JT6). This
   replaces the "Waiting for you 1:12" tag of the #166 entry above. A question whose agent waits

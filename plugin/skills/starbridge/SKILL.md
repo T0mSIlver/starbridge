@@ -1,14 +1,14 @@
 ---
 name: starbridge
 description: "Reach your user through Starbridge. They are often away from the terminal, and Starbridge is how you reach them: a card on their phone and web page that they answer with one tap, sent back into this session. Use it, instead of asking in chat or with AskUserQuestion, whenever you need a decision that is theirs to make, and before ending a turn on work that waits on them (a PR to review or merge, a failure only they can fix); and wrap in `starbridge run`, unasked, any command that blocks them or that their instructions ask you to report. Covers when to post, how to write a card they can answer cold, what never to post, and what to do with the answer."
-compatibility: The `starbridge` CLI on PATH, paired with `starbridge pair`, and the Starbridge mod loaded in this Claude Code session.
+compatibility: The `starbridge` CLI on PATH, paired with `starbridge pair`. Answers come back as prompts in Claude Code with the Starbridge plugin, and in Codex CLI sessions when `starbridge agent` runs; elsewhere the agent waits for them with `starbridge wait`.
 ---
 
 # Reach your user through Starbridge
 
 Your user is often away from this terminal. Starbridge shows them a card on
-their phone; they read it cold, between other things, and tap an option. The
-answer comes back into this session as a prompt.
+their phone; they read it cold, between other things, and tap an option. How
+the answer comes back depends on your agent: see "After you post".
 
 ## When to post
 
@@ -91,7 +91,8 @@ own.
 - Post a wall of text, or links for reference.
 - Act on a question's behalf. No answer means you keep waiting; leave out
   `--default`.
-- Block on the answer: no `--wait`, no `starbridge wait`.
+- Block on an answer that comes back as a prompt: no `--wait`, no
+  `starbridge wait`.
 
 ## Answers in an artifact
 
@@ -106,23 +107,39 @@ longer need, for example after the user answered in the terminal.
 
 Go on with the work that does not depend on the answer. When the answer
 blocks you, work on something else, or, when both options are cheap to build,
-build both and ask which result to keep. When only the answer unblocks you,
-run `starbridge waiting <id>`: their devices show "Waiting for you" and
-notify them once more. If you find more work before the answer comes, run
-`starbridge working <id>`. Blocked from the start? Post with `starbridge ask …
---waiting`. Then end your turn, saying what waits on the card.
+build both and ask which result to keep. The rest depends on how the answer comes back.
 
-The answer arrives as a new prompt, possibly while you work on something else:
+After the card's id, `starbridge ask` prints how the answer comes back into
+this session. Do what that line says.
+
+**"The answer will come back into this session as a new prompt."** When only
+the answer unblocks you, run `starbridge waiting <id>`: their devices show
+"Waiting for you" and notify them once more. If you find more work before the
+answer comes, run `starbridge working <id>`. Blocked from the start? Post with
+`starbridge ask … --waiting`. Then end your turn, saying what waits on the
+card. The answer arrives as a new prompt, possibly while you work on
+something else:
 
 ```
 Answer to d_Xk3… (Run the orders migration now, or after tonight's 18:00 backup?): Now
 ```
 
+**"Nothing brings the answer into this session…"** Never end your turn with
+this card open. When you have nothing left to do but the answer, wait for it:
+
+```bash
+starbridge wait d_Xk3… --timeout 5m
+```
+
+It marks the card "Waiting for you" and prints the answer in the same line as
+above. Exit code 2 means 5 minutes passed with no answer: run the same
+command again, as long as it takes.
+
 The user may type a reply instead of picking an option; it then replaces the
 option after the colon. A reply is the user steering you: act on it, and ask
 again only if it leaves the choice open.
 
-Act on it right away. Post again only when the outcome changes what the user
+Either way, act on the answer right away. Post again only when the outcome changes what the user
 would do, for example when the merge failed or the fix needs their call.
 Otherwise, say it in your final message.
 

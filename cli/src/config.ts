@@ -23,6 +23,7 @@ import {
   type Waiting,
 } from "@starbridge/protocol";
 
+import type { CodexSession } from "./codex";
 /** `$STARBRIDGE_CONFIG_DIR`, else `$XDG_CONFIG_HOME/starbridge`, else `~/.config/starbridge`. */
 export function configDir(env: Record<string, string | undefined>): string {
   if (env.STARBRIDGE_CONFIG_DIR) return env.STARBRIDGE_CONFIG_DIR;
@@ -60,6 +61,8 @@ export interface State {
       cursor?: string;
       /** The Claude Code session that asked; the mod delivers the answer there only. */
       session?: string;
+      /** The Codex session that asked, which the agent queues the answer into. */
+      codex?: CodexSession;
     }
   >;
   /**
