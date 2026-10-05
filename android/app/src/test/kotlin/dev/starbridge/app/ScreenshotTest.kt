@@ -16,6 +16,7 @@ import dev.starbridge.app.data.Approval
 import dev.starbridge.app.data.Phase
 import dev.starbridge.app.data.Comparison
 import dev.starbridge.app.data.JoinAsk
+import dev.starbridge.app.ui.LocalClock24
 import dev.starbridge.app.ui.devices.DeviceActions
 import dev.starbridge.app.ui.pairing.JoinActions
 import dev.starbridge.app.ui.pairing.JoinPrompt
@@ -154,6 +155,9 @@ class ScreenshotTest(private val dark: Boolean) {
     private val tuned = QuotaSettings(showUsed = false, absoluteResets = true, workDays = 5, ticks = QuotaSettings.Ticks.HighContrast, order = listOf("codex"), hidden = listOf("gemini"))
 
     @Test fun quotasTuned() = capture("quotas-tuned") { QuotasScreen(fake.windows, now, settings = tuned) }
+
+    // The same, with the Clock setting on 12-hour.
+    @Test fun quotasTuned12h() = capture("quotas-tuned-12h") { CompositionLocalProvider(LocalClock24 provides false) { QuotasScreen(fake.windows, now, settings = tuned) } }
 
     // The mockup's settings, scrolled: the whole page.
     @Config(qualifiers = "w412dp-h2400dp-xxhdpi")

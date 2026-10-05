@@ -7,6 +7,7 @@ import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
 import android.os.Build
 import android.os.Bundle
+import android.text.format.DateFormat
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
@@ -15,6 +16,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.browser.customtabs.CustomTabsIntent
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
@@ -23,10 +25,12 @@ import androidx.core.net.toUri
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dagger.hilt.android.AndroidEntryPoint
+import dev.starbridge.app.data.Clock
 import dev.starbridge.app.data.Colours
 import dev.starbridge.app.data.Phase
 import dev.starbridge.app.data.Prefs
 import dev.starbridge.app.data.Store
+import dev.starbridge.app.ui.LocalClock24
 import dev.starbridge.app.ui.Main
 import dev.starbridge.app.ui.Setup
 import dev.starbridge.app.ui.pairing.JoinActions
@@ -55,7 +59,13 @@ class MainActivity : ComponentActivity() {
         setContent {
             val colours by prefs.colours.collectAsStateWithLifecycle()
             LaunchedEffect(colours) { splashFor(colours) }
-            StarbridgeTheme(colours = colours) {
+            val clock by prefs.clock.collectAsStateWithLifecycle()
+            val h24 = when (clock) {
+                Clock.System -> DateFormat.is24HourFormat(this)
+                Clock.H12 -> false
+                Clock.H24 -> true
+            }
+            StarbridgeTheme(colours = colours) { CompositionLocalProvider(LocalClock24 provides h24) {
                 // The window shows behind the keyboard and between screens: the theme's ground.
                 val ground = MaterialTheme.colorScheme.surface
                 SideEffect { window.setBackgroundDrawable(ColorDrawable(ground.toArgb())) }
@@ -78,7 +88,7 @@ class MainActivity : ComponentActivity() {
                 } else {
                     Setup(phase, store.notice, store::dismissNotice, ::openInBrowser)
                 }
-            }
+            } }
         }
     }
 

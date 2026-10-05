@@ -20,6 +20,9 @@ data class InboxView(val byMachine: Boolean = false, val historyOpen: Boolean = 
 /** When a question's card carries its answer buttons; tapping the card opens the question either way. */
 enum class CardButtons { Always, WhenWaiting, Never }
 
+/** The "Clock" setting: the phone's 12- or 24-hour choice, or one of them. */
+enum class Clock { System, H12, H24 }
+
 /** Display settings: nothing secret, so plain preferences rather than the [Vault]. */
 @Singleton
 class Prefs @Inject constructor(@ApplicationContext context: Context) {
@@ -33,6 +36,14 @@ class Prefs @Inject constructor(@ApplicationContext context: Context) {
     fun setColours(value: Colours) {
         prefs.edit().putString(COLOURS, value.name).apply()
         _colours.value = value
+    }
+
+    private val _clock = MutableStateFlow(Clock.entries.find { it.name == prefs.getString(CLOCK, null) } ?: Clock.System)
+    val clock: StateFlow<Clock> = _clock
+
+    fun setClock(value: Clock) {
+        prefs.edit().putString(CLOCK, value.name).apply()
+        _clock.value = value
     }
 
     private val _quota = MutableStateFlow(
@@ -70,6 +81,7 @@ class Prefs @Inject constructor(@ApplicationContext context: Context) {
 
     private companion object {
         const val COLOURS = "colours"
+        const val CLOCK = "clock"
         const val QUOTA = "quota"
         const val QUOTA_SHOWN = "quota-shown"
         const val BY_MACHINE = "inbox-by-machine"
