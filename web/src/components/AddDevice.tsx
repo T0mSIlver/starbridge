@@ -59,6 +59,8 @@ export function AddDevice() {
       next.request.then(
         (r) => {
           setShown(undefined);
+          // A request from the QR code replaces the result of a typed code approved meanwhile.
+          setDone(undefined);
           setReq(r);
         },
         (e) => {
