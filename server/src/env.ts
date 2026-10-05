@@ -4,6 +4,7 @@ import type { Caller } from "./auth";
 import type { Config } from "./config";
 import type { Push } from "./push";
 import type { RateLimiter } from "./ratelimit";
+import type { Usage } from "./usage";
 import type { Waiters } from "./waiters";
 
 export interface Deps {
@@ -17,6 +18,7 @@ export interface Deps {
   /** Wakes join long-polls; keyed by "join:<id>" and "account:<account>". */
   joins: Waiters;
   limiter: RateLimiter;
+  usage: Usage;
 }
 
 export interface Env {

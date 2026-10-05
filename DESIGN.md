@@ -299,6 +299,14 @@ spacing:
   s6: 24
   s8: 32
   s10: 40
+  s16: 64 # the web's page margins beside the rail
+  # The landing page's larger rhythm.
+  s12: 48
+  s18: 72
+  s20: 80
+  s24: 96
+  s30: 120
+  s40: 160
 # The Material 3 shape scale.
 radius:
   xs: 4
@@ -307,6 +315,7 @@ radius:
   md: 12
   lg: 16
   xl: 28
+  phone: 44 # a phone's screen corners on the landing page
   pill: 999
 size:
   tap: 48
@@ -327,8 +336,11 @@ size:
   cap: 4 # the red cap where a projected overrun meets the limit
   hatch: 6
   media: 360 # the tallest an attached image shows in a decision
-  page: 1040 # the landing page's width, three screenshots side by side
-  shot: 320 # the widest a screenshot shows on the landing page
+  page: 1200 # the landing page's width
+  showcase: 1240 # the landing hero's product shot: a browser window and a phone
+  browser: 1080 # the browser window in it
+  shot: 316 # a phone on the landing page, its bezel included
+  lead: 600 # the landing page's sentence under the headline
 # The web's stand-ins for Material's motion scheme; Android uses
 # MotionScheme.expressive() and these only where Compose takes a duration.
 motion:

@@ -10,10 +10,11 @@ const noop = async () => {};
 /** The app's store filled with the mockups' data, for product shots: answers go nowhere. */
 export function SampleProvider({ children }: { children: React.ReactNode }) {
   const store = useMemo<Store>(() => {
-    const s = sample();
+    const { devices, ...s } = sample();
     return {
       boot: { state: "loading" },
       ...s,
+      sampleDevices: devices,
       reload: noop,
       answer: noop,
       update: () => {},

@@ -11,6 +11,13 @@ pnpm --filter @starbridge/server test
 OWNER_TOKEN=change-me PORT=8080 bun run server/src/main.ts
 ```
 
+`usage [days]` prints the daily usage counts (default 7 days) from `DB_PATH` and exits; the image
+runs it as `bun server.js usage`. What it counts: `src/usage.ts` and `/privacy`.
+
+```bash
+DB_PATH=./data/starbridge.db bun run server/src/main.ts usage 14
+```
+
 ## Docker
 
 One image serves the hosted server, self-hosters and the push relay.

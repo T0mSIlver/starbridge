@@ -21,15 +21,22 @@ import dev.starbridge.app.ui.pairing.JoinActions
 import dev.starbridge.app.ui.pairing.JoinPrompt
 import dev.starbridge.app.ui.devices.DevicesScreen
 import dev.starbridge.app.ui.inbox.DecisionActions
-import dev.starbridge.app.ui.inbox.DecisionScreen
 import dev.starbridge.app.ui.inbox.InboxScreen
 import dev.starbridge.app.ui.inbox.PromptActions
-import dev.starbridge.app.ui.inbox.PromptLogScreen
 import dev.starbridge.app.data.QuotaSettings
 import dev.starbridge.app.ui.settings.SettingsActions
 import dev.starbridge.app.ui.settings.SettingsScreen
 import dev.starbridge.app.ui.devices.AddDeviceScreen
 import dev.starbridge.app.ui.Tab
+import dev.starbridge.app.data.Decision
+import dev.starbridge.app.data.InboxView
+import dev.starbridge.app.data.CardButtons
+import dev.starbridge.app.ui.since
+import dev.starbridge.app.ui.SheetBody
+import dev.starbridge.app.ui.inbox.rememberDrafts
+import dev.starbridge.app.ui.inbox.Replies
+import dev.starbridge.app.ui.inbox.PromptSheet
+import dev.starbridge.app.ui.inbox.DecisionSheet
 import dev.starbridge.app.data.Colours
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.performClick
@@ -86,30 +93,55 @@ class ScreenshotTest(private val dark: Boolean) {
         compose.onRoot().captureRoboImage("screenshots/$name-${if (dark) "dark" else "light"}.png")
     }
 
-    @Test fun inbox() = capture("inbox") { InboxScreen(fake.decisions, now, decisionActions) }
+    private val promptActions = PromptActions({ _, _, _, _ -> })
+    @Composable
+    private fun Inbox(view: InboxView = InboxView()) {
+        InboxScreen(fake.decisions, now, decisionActions, prompts = fake.prompts, promptActions = promptActions, runs = fake.runs, view = view)
+    }
 
-    // Text at 200% on the answered lines: who and when wrap below them.
+    // The mockup's inbox: the run, the prompt, the question an agent waits on, then the others.
+    @Test fun inbox() = capture("inbox") { Phone(Tab.Inbox, 4) { Inbox() } }
+
+    @Config(qualifiers = "w412dp-h1400dp-xxhdpi")
+    @Test fun inboxByMachine() = capture("inbox-by-machine") { Phone(Tab.Inbox, 4) { Inbox(InboxView(byMachine = true)) } }
+
+    @Config(qualifiers = "w412dp-h1600dp-xxhdpi")
+    @Test fun inboxHistory() = capture("inbox-history") { Phone(Tab.Inbox, 4) { Inbox(InboxView(historyOpen = true)) } }
+
+    // Answer buttons only on the question the agent waits on (#138).
+    @Test fun inboxButtonsWhenWaiting() = capture("inbox-buttons-when-waiting") { Phone(Tab.Inbox, 4) { Inbox(InboxView(buttons = CardButtons.WhenWaiting)) } }
+
+    @Test fun inboxEmpty() = capture("inbox-empty") { Phone(Tab.Inbox, 0) { InboxScreen(fake.decisions.filterNot { it.isOpen(now) }, now, decisionActions, promptActions = promptActions) } }
+
+    // Runs as they end, and text at 200%.
+    @Test fun inboxEnded() = capture("inbox-ended") { Phone(Tab.Inbox, 0) { InboxScreen(emptyList(), now, decisionActions, runs = fake.endedRuns) } }
+
     @Test fun inboxLargeText() = capture("inbox-large-text") {
-        CompositionLocalProvider(LocalDensity provides Density(LocalDensity.current.density, fontScale = 2f)) {
-            InboxScreen(fake.decisions.filterNot { it.isOpen(now) }, now, decisionActions)
-        }
+        CompositionLocalProvider(LocalDensity provides Density(LocalDensity.current.density, fontScale = 2f)) { Phone(Tab.Inbox, 4) { Inbox() } }
     }
 
-    @Test fun inboxPrompts() = capture("inbox-prompts") {
-        InboxScreen(fake.decisions, now, decisionActions, prompts = fake.prompts, promptActions = PromptActions({ _, _, _, _ -> }, {}))
+    // Sheets open over whatever page is up; the mockups show them over Quotas.
+    @Composable
+    private fun QuestionSheet(d: Decision) {
+        Sheet({ QuotasScreen(fake.windows, now) }) { SheetBody(d.source, since(d.createdAt, now), d.agent) { DecisionSheet(d, now, { _, _, _ -> }, Replies(rememberDrafts(), emptyMap())) } }
     }
 
-    @Test fun promptLog() = capture("prompt-log") { PromptLogScreen(fake.prompts, now) }
+    @Test fun sheetQuestion() = capture("sheet-question") { QuestionSheet(fake.decisions.first { it.id == "d1" }) }
 
-    // Taller: runs on top of the open decisions.
-    @Config(qualifiers = "w411dp-h1500dp-xxhdpi")
-    @Test fun inboxRuns() = capture("inbox-runs") { InboxScreen(fake.decisions, now, decisionActions, runs = fake.runs) }
+    @Test fun sheetWaiting() = capture("sheet-waiting") { QuestionSheet(fake.decisions.first { it.id == "d2" }) }
 
-    @Test fun decision() = capture("decision") { DecisionScreen(fake.decisions[1], now, onAnswer = { _, _, _ -> }) }
+    @Test fun sheetPick() = capture("sheet-pick") { QuestionSheet(fake.decisions.first { it.id == "d3" }) }
 
-    @Test fun decisionImages() = capture("decision-images") { DecisionScreen(fake.decisions.first { it.images.isNotEmpty() }, now, onAnswer = { _, _, _ -> }) }
+    @Test fun sheetAnswerIn() = capture("sheet-answer-in") { QuestionSheet(fake.answerIn) }
 
-    @Test fun decisionAnswerIn() = capture("decision-answer-in") { DecisionScreen(fake.decisions.first { it.answerIn != null }, now, onAnswer = { _, _, _ -> }) }
+    @Test fun sheetFreeText() = capture("sheet-free-text") { QuestionSheet(fake.freeText) }
+
+    @Test fun sheetAnswered() = capture("sheet-answered") { QuestionSheet(fake.decisions.first { it.id == "d4" }) }
+
+    @Test fun sheetPrompt() = capture("sheet-prompt") {
+        val p = fake.prompts.first()
+        Sheet({ QuotasScreen(fake.windows, now) }) { SheetBody(p.source, since(p.createdAt, now), p.agent) { PromptSheet(p, now, promptActions) } }
+    }
 
     @Config(qualifiers = "w412dp-h1060dp-xxhdpi")
     @Test fun quotas() = capture("quotas") { Phone(Tab.Quotas, 4) { QuotasScreen(fake.windows, now) } }
@@ -123,7 +155,7 @@ class ScreenshotTest(private val dark: Boolean) {
     @Test fun quotasTuned() = capture("quotas-tuned") { QuotasScreen(fake.windows, now, settings = tuned) }
 
     // The mockup's settings, scrolled: the whole page.
-    @Config(qualifiers = "w412dp-h1640dp-xxhdpi")
+    @Config(qualifiers = "w412dp-h2400dp-xxhdpi")
     @Test fun settings() = capture("settings") {
         Phone(Tab.Settings, 4) {
             SettingsScreen(fake.windows, QuotaSettings(hidden = listOf("gemini")), fake.members.size, Colours.Starbridge, fake.push, "https://starbridge.run", settingsActions)
@@ -144,15 +176,19 @@ class ScreenshotTest(private val dark: Boolean) {
 
     @Test fun addDeviceFound() = capture("add-device-found") { Phone(null, 0) { AddDeviceScreen(fake.approval, deviceActions) } }
 
-    @Test fun setupSignIn() = capture("setup-sign-in") { SetupScreen(Phase.SignedOut, "https://starbridge.run", false, setupActions, {}) }
+    @Test fun setupSignIn() = capture("setup-sign-in") { Phone(null, 0) { SetupScreen(Phase.SignedOut, "https://starbridge.run", false, setupActions, {}) } }
 
-    @Test fun setupFirstDevice() = capture("setup-first-device") { SetupScreen(Phase.NoDevice(accountExists = false), "https://starbridge.run", false, setupActions, {}) }
+    @Test fun setupFirstDevice() = capture("setup-first-device") { Phone(null, 0) { SetupScreen(Phase.NoDevice(accountExists = false), "https://starbridge.run", false, setupActions, {}) } }
 
-    @Test fun setupJoin() = capture("setup-join") { SetupScreen(Phase.Joining("7KQ2-M9XD-4TPV-HB3N-R8CE-WY6F"), "https://starbridge.run", false, setupActions, {}) }
+    @Test fun setupJoin() = capture("setup-join") { Phone(null, 0) { SetupScreen(Phase.Joining("7KQ2-M9XD-4TPV-HB3N-R8CE-WY6F"), "https://starbridge.run", false, setupActions, {}) } }
 
-    @Test fun setupJoinChoose() = capture("setup-join-choose") { SetupScreen(Phase.NoDevice(accountExists = true), "https://starbridge.run", false, setupActions, {}) }
+    @Test fun setupJoinChoose() = capture("setup-join-choose") { Phone(null, 0) { SetupScreen(Phase.NoDevice(accountExists = true), "https://starbridge.run", false, setupActions, {}) } }
 
-    @Test fun setupJoinDigits() = capture("setup-join-digits") { SetupScreen(Phase.JoiningByDigits("042917"), "https://starbridge.run", false, setupActions, {}) }
+    @Test fun setupJoinAsking() = capture("setup-join-asking") { Phone(null, 0) { SetupScreen(Phase.JoiningByDigits(null), "https://starbridge.run", false, setupActions, {}) } }
+
+    @Test fun setupSelfHosted() = capture("setup-self-hosted") { Phone(null, 0) { SetupScreen(Phase.SignedOut, "https://starbridge.example.com", false, setupActions, {}) } }
+
+    @Test fun setupJoinDigits() = capture("setup-join-digits") { Phone(null, 0) { SetupScreen(Phase.JoiningByDigits("042917"), "https://starbridge.run", false, setupActions, {}) } }
 
     @Test fun addDeviceQr() = capture("add-device-qr") {
         Phone(null, 0) { AddDeviceScreen(Approval.Showing("7KQ2-M9XD-4TPV-HB3N-R8CE-WY6F", "https://starbridge.run/pair#7KQ2-M9XD-4TPV-HB3N-R8CE-WY6F"), deviceActions) }
@@ -169,5 +205,5 @@ class ScreenshotTest(private val dark: Boolean) {
         JoinPrompt(listOf(ask), Comparison.Digits(ask, "042917", error = error), JoinActions({}, {}, {}, {}))
     }
 
-    @Test fun setupRecoveryKey() = capture("setup-recovery-key") { SetupScreen(Phase.RecoveryKey(fake.recoveryWords), "https://starbridge.run", false, setupActions, {}) }
+    @Test fun setupRecoveryKey() = capture("setup-recovery-key") { Phone(null, 0) { SetupScreen(Phase.RecoveryKey(fake.recoveryWords), "https://starbridge.run", false, setupActions, {}) } }
 }

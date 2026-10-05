@@ -54,7 +54,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.ViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dev.starbridge.app.data.CardButtons
 import dev.starbridge.app.data.Colours
+import dev.starbridge.app.data.InboxView
 import dev.starbridge.app.data.openLink
 import dev.starbridge.app.data.Prefs
 import dev.starbridge.app.data.PushSetting
@@ -79,6 +81,8 @@ class SettingsViewModel @Inject constructor(private val store: Store, private va
     val push = store.push
     val server = store.server
     val colours = prefs.colours
+    val inbox = prefs.inbox
+    fun setInbox(value: InboxView) = prefs.setInbox(value)
     fun setQuota(value: QuotaSettings) = prefs.setQuota(value)
     fun setColours(value: Colours) = prefs.setColours(value)
     fun setPush(type: String) = store.setPushType(type)
@@ -93,6 +97,7 @@ class SettingsActions(
     val signOut: () -> Unit,
     val devices: () -> Unit,
     val addDevice: () -> Unit,
+    val inbox: (InboxView) -> Unit = {},
 )
 
 /** Everything this phone keeps for itself, and the account's devices. The settings stay on the phone. */
@@ -106,6 +111,7 @@ fun SettingsScreen(
     server: String,
     actions: SettingsActions,
     modifier: Modifier = Modifier,
+    inbox: InboxView = InboxView(),
 ) {
     val context = LocalContext.current
     var signingOut by rememberSaveable { mutableStateOf(false) }
@@ -148,6 +154,11 @@ fun SettingsScreen(
                     placement = { dragging -> Modifier.animateItem(placementSpec = if (dragging) null else spring(stiffness = Spring.StiffnessMediumLow, visibilityThreshold = IntOffset.VisibilityThreshold)) },
                 )
             }
+        }
+
+        item { Section("Answer buttons on cards") }
+        listOf(CardButtons.Always to "Always", CardButtons.WhenWaiting to "When the agent waits", CardButtons.Never to "Never").forEachIndexed { i, (value, label) ->
+            item { RadioRow(i, 3, label, inbox.buttons == value) { actions.inbox(inbox.copy(buttons = value)) } }
         }
 
         item { Section("Devices") }

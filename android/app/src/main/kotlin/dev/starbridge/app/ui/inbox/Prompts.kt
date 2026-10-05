@@ -4,61 +4,62 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import dev.starbridge.app.data.Prompt
-import dev.starbridge.app.ui.Beacon
-import dev.starbridge.app.ui.Label
-import dev.starbridge.app.ui.Panel
-import dev.starbridge.app.ui.Screen
-import dev.starbridge.app.ui.ago
+import dev.starbridge.app.ui.Sym
+import dev.starbridge.app.ui.Symbol
 import dev.starbridge.app.ui.fieldColors
-import dev.starbridge.app.ui.listPadding
-import dev.starbridge.app.ui.theme.Radius
-import dev.starbridge.app.ui.theme.Sizes
+import dev.starbridge.app.ui.since
 import dev.starbridge.app.ui.theme.Spacing
 import dev.starbridge.app.ui.theme.StarbridgeTheme
 import kotlinx.coroutines.delay
 import kotlinx.serialization.json.Json
-import kotlinx.coroutines.delay
 import kotlinx.serialization.json.JsonElement
 import java.time.Instant
 
-/** What a prompt card can do: allow for a scope, deny with a note, open the week's log. */
+/** What a prompt can do: allow for a scope, deny with an optional note, open its sheet. */
 class PromptActions(
     val answer: (id: String, allow: Boolean, scope: String, message: String?) -> Unit,
-    val openLog: () -> Unit,
+    val open: (id: String) -> Unit = {},
 )
 
 /** How long the buttons wait after a tap before taking taps again, should the send have failed. */
@@ -67,7 +68,7 @@ private const val RETRY_AFTER_MS = 8_000L
 /** How long a prompt settled elsewhere stays, saying where, before it leaves. */
 const val CLOSING_MS = 3_000L
 
-/** The prompts to show above the inbox: waiting ones, and ones that ended a moment ago. */
+/** The prompts to show in the feed: waiting ones, and ones that ended a moment ago. */
 fun shownPrompts(prompts: List<Prompt>, now: Instant): List<Prompt> = prompts
     .filter { it.waiting(now) || (it.endedAt != null && now.toEpochMilli() - it.endedAt.toEpochMilli() < CLOSING_MS) }
     .sortedByDescending { it.createdAt }
@@ -76,178 +77,180 @@ private val pretty = Json { prettyPrint = true }
 
 private fun prettyInput(input: String) = runCatching { pretty.encodeToString(JsonElement.serializer(), Json.parseToJsonElement(input)) }.getOrDefault(input)
 
-/** The command or path in an inset, in the code face. */
+/** A prompt's ground: amber, faint, over the page, since it holds an agent up. */
 @Composable
-private fun Code(text: String, modifier: Modifier = Modifier, maxLines: Int = Int.MAX_VALUE) {
+fun promptGround(): Color = StarbridgeTheme.colors.accentSoft.compositeOver(MaterialTheme.colorScheme.surface)
+
+/** The exact command, in mono, on [color]. */
+@Composable
+private fun Command(text: String, style: TextStyle, color: Color, shape: Shape, padding: PaddingValues, maxLines: Int = Int.MAX_VALUE) {
     Text(
         text,
-        style = StarbridgeTheme.type.code,
+        style = style,
         color = MaterialTheme.colorScheme.onSurface,
         maxLines = maxLines,
         overflow = TextOverflow.Ellipsis,
-        modifier = modifier
-            .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surfaceContainerHighest, RoundedCornerShape(Radius.lg))
-            .padding(horizontal = Spacing.s4, vertical = Spacing.s3),
+        modifier = Modifier.fillMaxWidth().background(color, shape).padding(padding),
     )
 }
 
+/** Sends once, with a confirm tick; a send that failed leaves the prompt waiting, so taps come back. */
 @Composable
-fun PromptsHeader(onLog: () -> Unit, modifier: Modifier = Modifier) {
-    Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Beacon()
-        Spacer(Modifier.width(Spacing.s2))
-        Label("Prompts", Modifier.weight(1f))
-        TextButton(onClick = onLog, modifier = Modifier.heightIn(min = Sizes.tap)) {
-            Text("Last 7 days", style = StarbridgeTheme.type.small, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-    }
-}
-
-/** A prompt that ended elsewhere, for a moment: its command and where it was settled. */
-@Composable
-fun ClosedPrompt(prompt: Prompt, modifier: Modifier = Modifier) {
-    Panel(modifier.fillMaxWidth()) {
-        Text(prompt.summary, style = StarbridgeTheme.type.code, color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Text(prompt.ended.orEmpty(), style = StarbridgeTheme.type.small, color = MaterialTheme.colorScheme.onSurfaceVariant)
-    }
-}
-
-/**
- * A waiting prompt: who asks, the command, and the answers. Allow once is the one filled amber
- * button; a wider allow shows the exact rule it adds; Deny opens a note to the agent.
- */
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-fun PromptCard(prompt: Prompt, now: Instant, actions: PromptActions, modifier: Modifier = Modifier) {
-    val colors = StarbridgeTheme.colors
+private fun rememberSend(prompt: Prompt, actions: PromptActions): Pair<Boolean, (Boolean, String, String?) -> Unit> {
     val haptics = LocalHapticFeedback.current
-    var showInput by rememberSaveable(prompt.id) { mutableStateOf(false) }
-    var denying by rememberSaveable(prompt.id) { mutableStateOf(false) }
-    var note by rememberSaveable(prompt.id) { mutableStateOf("") }
     var sent by remember(prompt.id) { mutableStateOf(false) }
-    // A send that failed leaves the prompt waiting: its buttons take taps again.
     LaunchedEffect(sent) {
         if (sent) {
             delay(RETRY_AFTER_MS)
             sent = false
         }
     }
-    val send = { allow: Boolean, scope: String, message: String? ->
+    return sent to { allow, scope, message ->
         if (!sent) {
             sent = true
             haptics.performHapticFeedback(HapticFeedbackType.Confirm)
             actions.answer(prompt.id, allow, scope, message)
         }
     }
-    val s = prompt.source
-    Panel(modifier.fillMaxWidth()) {
-        Column(verticalArrangement = Arrangement.spacedBy(Spacing.s3)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(prompt.tool, style = StarbridgeTheme.type.label, color = MaterialTheme.colorScheme.onSurface)
-                Spacer(Modifier.width(Spacing.s2))
-                Text(
-                    listOf(s.machine, s.project, s.title ?: s.session.take(8)).filter { it.isNotBlank() }.joinToString(" · "),
-                    style = StarbridgeTheme.type.machine,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f, fill = false),
-                )
-                Text(" · ${ago(now, prompt.createdAt)}", style = StarbridgeTheme.type.machine, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
-            }
-            Code(prompt.summary)
-            prompt.description?.let { Text(it, style = StarbridgeTheme.type.body, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-            Text(
-                if (showInput) "Hide the full input" else "Show the full input",
-                style = StarbridgeTheme.type.small,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.heightIn(min = Sizes.tap).clickable { showInput = !showInput }.padding(vertical = Spacing.s3),
-            )
-            if (showInput) {
-                Text(
-                    prettyInput(prompt.input),
-                    style = StarbridgeTheme.type.code,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(MaterialTheme.colorScheme.surfaceContainerHighest, RoundedCornerShape(Radius.lg))
-                        .horizontalScroll(rememberScrollState())
-                        .padding(horizontal = Spacing.s4, vertical = Spacing.s3),
-                )
-            }
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.s2), verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
-                Button(
-                    onClick = { send(true, "once", null) },
-                    enabled = !sent,
-                    colors = ButtonDefaults.buttonColors(containerColor = colors.accent, contentColor = colors.onAccent),
-                    modifier = Modifier.heightIn(min = Sizes.tap),
-                ) { Text("Allow once", style = StarbridgeTheme.type.action) }
-                prompt.scopes.forEach { scope ->
-                    OutlinedButton(onClick = { send(true, scope.scope, null) }, enabled = !sent, modifier = Modifier.heightIn(min = Sizes.tap)) {
-                        Text(scope.label, style = StarbridgeTheme.type.action, color = MaterialTheme.colorScheme.onSurface)
+}
+
+/** The connected Allow and Deny, Allow the one amber button; [trailing] closes the group. */
+@Composable
+private fun AllowDeny(height: Dp, enabled: Boolean, ground: Color, onAllow: () -> Unit, onDeny: () -> Unit, trailing: (@Composable () -> Unit)? = null) {
+    val colors = StarbridgeTheme.colors
+    val end = height / 2
+    Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+        Button(
+            onClick = onAllow,
+            enabled = enabled,
+            shape = RoundedCornerShape(topStart = end, bottomStart = end, topEnd = 8.dp, bottomEnd = 8.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = colors.accent, contentColor = colors.onAccent, disabledContainerColor = colors.accent, disabledContentColor = colors.onAccent),
+            modifier = Modifier.weight(1f).height(height),
+        ) { Text("Allow", style = if (height > 48.dp) StarbridgeTheme.type.action else StarbridgeTheme.type.label) }
+        val last = trailing == null
+        Button(
+            onClick = onDeny,
+            enabled = enabled,
+            shape = RoundedCornerShape(topStart = 8.dp, bottomStart = 8.dp, topEnd = if (last) end else 8.dp, bottomEnd = if (last) end else 8.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = ground, contentColor = MaterialTheme.colorScheme.onSurface),
+            modifier = Modifier.weight(1f).height(height),
+        ) { Text("Deny", style = if (height > 48.dp) StarbridgeTheme.type.action else StarbridgeTheme.type.label) }
+        trailing?.invoke()
+    }
+}
+
+/**
+ * A waiting permission prompt in the feed: amber ground, the terminal tile, the tool and how long
+ * it has waited, the exact command, then Allow, Deny and the wider grants behind ⋮.
+ */
+@Composable
+fun PromptCard(prompt: Prompt, now: Instant, actions: PromptActions, shape: Shape, modifier: Modifier = Modifier) {
+    val scheme = MaterialTheme.colorScheme
+    val (sent, send) = rememberSend(prompt, actions)
+    var menu by remember { mutableStateOf(false) }
+    Surface(modifier.fillMaxWidth().clickable(onClickLabel = "Open the prompt") { actions.open(prompt.id) }, shape = shape, color = promptGround()) {
+        Column(Modifier.padding(Spacing.s4), verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+            MetaRow(prompt.source, since(prompt.createdAt, now))
+            ToolLine(prompt, now, StarbridgeTheme.type.action.copy(lineHeight = 22.sp), 20.dp)
+            Command(prompt.summary, StarbridgeTheme.type.code.copy(fontSize = 15.sp, lineHeight = 22.sp), scheme.surfaceContainer, RoundedCornerShape(12.dp), PaddingValues(horizontal = 14.dp, vertical = Spacing.s3), maxLines = 3)
+            Box(Modifier.padding(top = Spacing.s1)) {
+                AllowDeny(40.dp, !sent, scheme.surfaceContainer, onAllow = { send(true, "once", null) }, onDeny = { send(false, "once", null) }) {
+                    Button(
+                        onClick = { menu = true },
+                        shape = RoundedCornerShape(topStart = 8.dp, bottomStart = 8.dp, topEnd = 20.dp, bottomEnd = 20.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = scheme.surfaceContainer, contentColor = scheme.onSurface),
+                        contentPadding = PaddingValues(0.dp),
+                        modifier = Modifier.width(48.dp).height(40.dp),
+                    ) { Symbol(Sym.More, size = 20.dp, contentDescription = "More answers") }
+                }
+                Box(Modifier.align(Alignment.TopEnd)) {
+                    DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                        prompt.scopes.forEach { scope ->
+                            DropdownMenuItem(text = { Text(scope.label) }, onClick = { menu = false; send(true, scope.scope, null) })
+                        }
+                        DropdownMenuItem(text = { Text("Deny with a note") }, onClick = { menu = false; actions.open(prompt.id) })
                     }
-                }
-                OutlinedButton(onClick = { denying = !denying }, enabled = !sent, modifier = Modifier.heightIn(min = Sizes.tap)) {
-                    Text("Deny", style = StarbridgeTheme.type.action, color = colors.bad)
-                }
-            }
-            prompt.scopes.find { it.scope == "project" }?.let {
-                Text(
-                    "Always adds ${it.rule} to this project's .claude/settings.local.json.",
-                    style = StarbridgeTheme.type.small,
-                    color = colors.fg3,
-                )
-            }
-            if (denying) {
-                TextField(
-                    value = note,
-                    onValueChange = { note = it.take(500) },
-                    label = { Text("Tell the agent what to do instead (optional)") },
-                    colors = fieldColors(),
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                OutlinedButton(onClick = { send(false, "once", note) }, enabled = !sent, modifier = Modifier.heightIn(min = Sizes.tap)) {
-                    Text("Send deny", style = StarbridgeTheme.type.action, color = colors.bad)
                 }
             }
         }
     }
 }
 
-/** The last 7 days of prompts and who settled them where. */
+/** The terminal symbol and the tool, with how long the prompt has waited at the end. */
 @Composable
-fun PromptLogScreen(prompts: List<Prompt>, now: Instant, modifier: Modifier = Modifier) {
-    val rows = prompts.sortedByDescending { it.createdAt }
-    Screen("Prompts", modifier) { padding ->
-        if (rows.isEmpty()) {
-            Text(
-                "No permission prompts in the last 7 days.",
-                style = StarbridgeTheme.type.body,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(padding).padding(Spacing.s6),
-            )
-            return@Screen
+private fun ToolLine(prompt: Prompt, now: Instant, style: TextStyle, icon: Dp) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Symbol(Sym.Terminal, size = icon, tint = StarbridgeTheme.colors.accent)
+        Spacer(Modifier.width(Spacing.s2))
+        Text(prompt.tool, style = style, color = MaterialTheme.colorScheme.onSurface, maxLines = 1, modifier = Modifier.weight(1f))
+        if (prompt.waiting(now)) WaitTag(prompt.createdAt, now) else Text(prompt.ended.orEmpty(), style = StarbridgeTheme.type.small, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+/** A prompt that ended elsewhere, for a moment: its command and where it was settled. */
+@Composable
+fun ClosedPrompt(prompt: Prompt, shape: Shape, modifier: Modifier = Modifier) {
+    Surface(modifier.fillMaxWidth(), shape = shape, color = MaterialTheme.colorScheme.surfaceContainer) {
+        Column(Modifier.padding(Spacing.s4), verticalArrangement = Arrangement.spacedBy(Spacing.s1)) {
+            Text(prompt.summary, style = StarbridgeTheme.type.code, color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(prompt.ended.orEmpty(), style = StarbridgeTheme.type.small, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        LazyColumn(contentPadding = listPadding(padding)) {
-            itemsIndexed(rows, key = { _, it -> it.id }) { i, p ->
-                Column(Modifier.padding(vertical = Spacing.s1)) {
-                    if (i > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                    Column(Modifier.padding(vertical = Spacing.s3, horizontal = Spacing.s1), verticalArrangement = Arrangement.spacedBy(Spacing.s1)) {
-                        Text(p.summary, style = StarbridgeTheme.type.code, color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text(
-                            "${p.tool} · ${p.source.machine} · ${p.source.project} · ${ago(now, p.createdAt)}",
-                            style = StarbridgeTheme.type.small,
-                            color = StarbridgeTheme.colors.fg3,
-                        )
-                        Text(
-                            p.ended ?: if (p.waiting(now)) "Waiting" else "Expired",
-                            style = StarbridgeTheme.type.small,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+    }
+}
+
+/**
+ * A prompt's sheet: the command in full, what the agent says it does, Allow and Deny, and the
+ * wider grants with the exact rule each adds. Deny takes an optional note to the agent.
+ */
+@Composable
+fun PromptSheet(prompt: Prompt, now: Instant, actions: PromptActions, modifier: Modifier = Modifier) {
+    val scheme = MaterialTheme.colorScheme
+    val (sent, send) = rememberSend(prompt, actions)
+    var denying by rememberSaveable(prompt.id) { mutableStateOf(false) }
+    var note by rememberSaveable(prompt.id) { mutableStateOf("") }
+    var input by rememberSaveable(prompt.id) { mutableStateOf(false) }
+    val waiting = prompt.waiting(now)
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        ToolLine(prompt, now, StarbridgeTheme.type.question, 20.dp)
+        Command(prompt.summary, StarbridgeTheme.type.code.copy(fontSize = 17.sp, lineHeight = 26.sp), scheme.surfaceContainerHighest, RoundedCornerShape(Spacing.s4), PaddingValues(horizontal = 18.dp, vertical = Spacing.s4))
+        prompt.description?.let { Text(it, style = StarbridgeTheme.type.reading.copy(lineHeight = 22.sp), color = scheme.onSurfaceVariant) }
+        if (input) {
+            Text(
+                prettyInput(prompt.input),
+                style = StarbridgeTheme.type.code,
+                color = scheme.onSurface,
+                modifier = Modifier.fillMaxWidth().background(scheme.surfaceContainerHighest, RoundedCornerShape(Spacing.s4)).horizontalScroll(rememberScrollState()).padding(Spacing.s4),
+            )
+        }
+        if (waiting) {
+            AllowDeny(56.dp, !sent, scheme.surfaceContainerHighest, onAllow = { send(true, "once", null) }, onDeny = { if (denying) send(false, "once", note.ifBlank { null }) else denying = true })
+            if (denying) {
+                TextField(
+                    value = note,
+                    onValueChange = { note = it.take(500) },
+                    placeholder = { Text("A note to the agent") },
+                    colors = fieldColors(),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            } else if (prompt.scopes.isNotEmpty()) {
+                Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+                    prompt.scopes.forEach { scope ->
+                        OutlinedButton(
+                            onClick = { send(true, scope.scope, null) },
+                            enabled = !sent,
+                            border = ButtonDefaults.outlinedButtonBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(scheme.outlineVariant)),
+                            contentPadding = PaddingValues(horizontal = Spacing.s3),
+                            modifier = Modifier.weight(1f).heightIn(min = 40.dp),
+                        ) { Text(scope.label, style = StarbridgeTheme.type.label, color = scheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis) }
                     }
                 }
             }
         }
+        Text(
+            if (input) "Hide the full input" else "Show the full input",
+            style = StarbridgeTheme.type.small,
+            color = scheme.onSurfaceVariant,
+            modifier = Modifier.clickable { input = !input }.padding(vertical = Spacing.s1),
+        )
     }
 }

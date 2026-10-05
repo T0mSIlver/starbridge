@@ -277,6 +277,13 @@ object Spacing {
     val s6 = 24.dp
     val s8 = 32.dp
     val s10 = 40.dp
+    val s16 = 64.dp
+    val s12 = 48.dp
+    val s18 = 72.dp
+    val s20 = 80.dp
+    val s24 = 96.dp
+    val s30 = 120.dp
+    val s40 = 160.dp
 }
 
 object Radius {
@@ -286,6 +293,7 @@ object Radius {
     val md = 12.dp
     val lg = 16.dp
     val xl = 28.dp
+    val phone = 44.dp
     val pill = 999.dp
 }
 
@@ -305,8 +313,11 @@ object Sizes {
     val cap = 4.dp
     val hatch = 6.dp
     val media = 360.dp
-    val page = 1040.dp
-    val shot = 320.dp
+    val page = 1200.dp
+    val showcase = 1240.dp
+    val browser = 1080.dp
+    val shot = 316.dp
+    val lead = 600.dp
 }
 
 object Motion {

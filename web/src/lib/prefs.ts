@@ -6,10 +6,19 @@ export type Prefs = {
   groupByMachine: boolean;
   historyOpen: boolean;
   theme: "system" | "light" | "dark";
+  /** When a question's row carries its answer buttons on a phone (#138). */
+  rowAnswers: "always" | "waiting" | "never";
 };
 
-const DEFAULTS: Prefs = { groupByMachine: false, historyOpen: false, theme: "system" };
-const KEY = "starbridge:prefs";
+const DEFAULTS: Prefs = {
+  groupByMachine: false,
+  historyOpen: false,
+  theme: "system",
+  rowAnswers: "always",
+};
+
+import { PREFS_KEY as KEY } from "./themeScript";
+
 const listeners = new Set<() => void>();
 let cache: { raw: string | null; value: Prefs } | undefined;
 
@@ -63,6 +72,3 @@ export function applyTheme(theme: Prefs["theme"]): void {
   if (theme === "system") html.removeAttribute("data-theme");
   else html.dataset.theme = theme;
 }
-
-/** Runs before the first paint (layout.tsx), so a forced theme never flashes the other one. */
-export const THEME_SCRIPT = `try{var t=JSON.parse(localStorage.getItem("${KEY}")||"{}").theme;if(t==="light"||t==="dark")document.documentElement.dataset.theme=t}catch(e){}`;

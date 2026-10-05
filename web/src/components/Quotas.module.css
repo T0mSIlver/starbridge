@@ -28,7 +28,7 @@
 
 @media (min-width: 600px) {
   .page {
-    padding: var(--s10) var(--s10);
+    padding: var(--s10) var(--s16);
   }
 
   .head {
