@@ -219,6 +219,8 @@ function ProviderSection() {
               aria-keyshortcuts="ArrowUp ArrowDown"
               onDragStart={(e) => {
                 e.dataTransfer.effectAllowed = "move";
+                // Firefox starts a drag only with data set.
+                e.dataTransfer.setData("text/plain", p);
                 setDragging(p);
               }}
               onDragEnd={() => setDragging(undefined)}
