@@ -818,6 +818,8 @@ How it generalizes is open.
   its windows follow as rows that name only the window. Groups come in the order of their first
   window under "Quota order", so a provider with a window running out leads, and its running-out
   window leads inside it. The provider shows once, so skimming the list reads provider names only.
+- 2026-10-05. `starbridge pair` pairs with https://starbridge.run unless `--server` or
+  `STARBRIDGE_SERVER` names a self-hosted server (#154), as `setup` already did.
 
 ## Encryption, with existing libraries
 
