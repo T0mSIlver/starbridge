@@ -14,7 +14,7 @@ instruction files, in your words. Starbridge never writes to them.
 | Answers into the live session | ✓ | ✓¹ | ✓³ |
 | "Waiting for you" | ✓ | ✓ | ✓ |
 | Runs | ✓ | ✓ | ✓ |
-| Permission prompts | Opt-in | No | No |
+| Permission prompts | Opt-in | No | Opt-in⁴ |
 | `AskUserQuestion` hook | ✓ | n/a² | n/a² |
 
 ¹ In interactive sessions, when `starbridge agent` runs (Codex CLI 0.160 or
@@ -27,6 +27,11 @@ questions in the terminal into Starbridge questions.
 ³ In the interactive TUI and RPC mode, through `starbridge agent` or the CLI.
 In `pi -p`, the agent waits for the answer with `starbridge wait` before it
 ends its turn.
+
+⁴ With [pi-permission-system](https://github.com/gotgenes/pi-packages/tree/main/packages/pi-permission-system):
+`starbridge config permissions on` offers to add `starbridge` to its
+`authorizerChain` (in `~/.pi/agent/extensions/pi-permission-system/config.json`). Your devices can allow a call once or deny
+it; "Answer here" in Pi brings back its own prompt.
 
 `starbridge setup` offers to install Starbridge in each agent it finds, and
 asks before each one:

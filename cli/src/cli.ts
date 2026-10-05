@@ -123,11 +123,12 @@ const HELP = `starbridge: post decisions to your devices, report runs, upload qu
       starbridge plugin's permission hook exits at once. machine-kind: the icon devices
       show, detected by setup.
 
-  starbridge hook permission --agent claude-code [--wait 570s]
+  starbridge hook permission --agent claude-code|pi [--wait 570s]
   starbridge hook settle --agent claude-code
       For Claude Code's PermissionRequest hook, and for its PostToolUse, PermissionDenied,
       Stop and SessionEnd hooks: hook JSON on stdin; prints the hook's decision, or nothing
-      to leave the prompt to the keyboard.
+      to leave the prompt to the keyboard. The Starbridge Pi extension runs it with --agent pi
+      for pi-permission-system's prompts.
 
   starbridge hook ask-user
       For Claude Code's PreToolUse hook on AskUserQuestion: hook JSON on stdin; answers each
@@ -254,7 +255,7 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
         );
       }
       case "config":
-        return configCommand(ctx, rest);
+        return await configCommand(ctx, rest, process.stdin.isTTY ? terminalPrompt() : undefined);
       case "wait": {
         const { values, positionals } = parseArgs({
           args: rest,
