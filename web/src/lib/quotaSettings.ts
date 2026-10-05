@@ -17,6 +17,8 @@ export type QuotaSettings = {
   ticks: Ticks;
   /** Providers in the order to show them; the ones not listed follow in the uploader's order. */
   order: string[];
+  /** Windows that will run out or ran out lead, else `order` holds for every window. */
+  runningOutFirst: boolean;
   hidden: string[];
   /** Providers whose alerts notify; none by default. */
   notify: string[];
@@ -32,6 +34,7 @@ export const DEFAULT_SETTINGS: QuotaSettings = {
   workDays: null,
   ticks: "subtle",
   order: [],
+  runningOutFirst: true,
   hidden: [],
   notify: [],
   notifyLow: true,
@@ -66,15 +69,34 @@ export function providerOrder(cards: QuotaCardData[], s: QuotaSettings): string[
   return [...known, ...seen.filter((p) => !known.includes(p))];
 }
 
+/** The window will run out or ran out, and has not reset: what `status` words in red. */
+function runningOut(w: QuotaWindow, now: Date): boolean {
+  if (w.resetsAt && Date.parse(w.resetsAt) <= now.getTime()) return false;
+  return !!w.pace && w.pace.stage !== "unknown" && !w.pace.willLastToReset;
+}
+
 /**
- * The cards to show: hidden providers out, then the owner's order. With no order set, windows
- * with an alert come first, as before the setting existed.
+ * The cards to show (SPEC.md, "Quota order"): hidden providers out, the rest by provider in the
+ * settings' order, each provider's windows in the uploader's order. With `runningOutFirst`,
+ * windows that will run out or ran out, and have not reset, lead in that same order.
  */
-export function arrange(cards: QuotaCardData[], s: QuotaSettings): QuotaCardData[] {
-  const shown = cards.filter((c) => !s.hidden.includes(c.provider));
-  if (s.order.length === 0) return [...shown].sort((a, b) => Number(!!b.alert) - Number(!!a.alert));
+export function arrange(
+  cards: QuotaCardData[],
+  s: QuotaSettings,
+  now = new Date(),
+): QuotaCardData[] {
   const rank = new Map(providerOrder(cards, s).map((p, i) => [p, i]));
-  return [...shown].sort((a, b) => (rank.get(a.provider) ?? 0) - (rank.get(b.provider) ?? 0));
+  const lead = (c: QuotaCardData) => (s.runningOutFirst && runningOut(c.window, now) ? 0 : 1);
+  return cards
+    .filter((c) => !s.hidden.includes(c.provider))
+    .map((c, i) => ({ c, i }))
+    .sort(
+      (a, b) =>
+        lead(a.c) - lead(b.c) ||
+        (rank.get(a.c.provider) ?? 0) - (rank.get(b.c.provider) ?? 0) ||
+        a.i - b.i,
+    )
+    .map(({ c }) => c);
 }
 
 /** The alerts this browser shows a notification for: newly raised, of providers it opted in. */

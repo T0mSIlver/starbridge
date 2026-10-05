@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useEffect } from "react";
 import { relative } from "@/lib/format";
-import { runningOutFirst } from "@/lib/quota";
 import { arrange } from "@/lib/quotaSettings";
 import { useApp } from "./AppProvider";
 import { useNow } from "./Feed";
@@ -17,7 +16,7 @@ export function Quotas() {
     refreshQuotas().catch(() => {});
   }, [refreshQuotas]);
   const now = new Date(useNow(true, 60_000));
-  const cards = runningOutFirst(arrange(quotas?.cards ?? [], settings), settings, now);
+  const cards = arrange(quotas?.cards ?? [], settings, now);
   return (
     <>
       <PhoneBar title="Quotas" find={false} />

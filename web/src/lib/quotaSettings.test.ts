@@ -54,26 +54,82 @@ test("bar: used or remaining, with ticks and the marker on the same scale", () =
   expect(bar(week(30), settings({ workDays: 5, ticks: "hidden" }), now).ticks).toEqual([]);
 });
 
-const card = (provider: string, alerts: QuotaAlert[] = []): QuotaCardData => ({
-  provider,
-  window: week(30),
-  alerts,
-  ...(alerts[0] ? { alert: alerts[0] } : {}),
-  snapshot: "q_1",
-});
-
-test("arrange: hidden providers out, the owner's order, else alerts first", () => {
+// The same cases as Android's QuotaSettingsTest.arrange* (SPEC.md, "Quota order"). Wednesday noon.
+const now = new Date(2026, 9, 7, 12);
+const win = (
+  provider: string,
+  label: string,
+  pace: "even" | "unused" | "runs-out" | "ran-out",
+  resetsAt = local(12),
+): QuotaCardData => {
+  const runsOutAt = pace === "runs-out" ? local(8) : pace === "ran-out" ? local(7, 9) : null;
   const unused: QuotaAlert = {
     kind: "unused-headroom",
-    provider: "zai",
-    window: "secondary",
-    resetsAt: local(12),
+    provider,
+    window: label,
+    resetsAt,
     unusedPercent: 40,
   };
-  const cards = [card("claude"), card("zai", [unused]), card("codex")];
-  const names = (s: QuotaSettings) => arrange(cards, s).map((c) => c.provider);
-  expect(names(DEFAULT_SETTINGS)).toEqual(["zai", "claude", "codex"]);
-  expect(names(settings({ order: ["codex"], hidden: ["claude"] }))).toEqual(["codex", "zai"]);
+  return {
+    provider,
+    window: {
+      ...week(30),
+      label,
+      resetsAt,
+      pace: {
+        ...(week(30).pace as NonNullable<QuotaWindow["pace"]>),
+        willLastToReset: runsOutAt === null,
+        runsOutAt,
+      },
+    },
+    alerts: pace === "unused" ? [unused] : [],
+    ...(pace === "unused" ? { alert: unused } : {}),
+    snapshot: "q_1",
+  };
+};
+// In the uploader's order: claude's two windows apart, a headroom alert, one that will run out,
+// one that ran out, one that ran out and has since reset.
+const windows = [
+  win("claude", "5-hour", "even"),
+  win("zai", "5-hour", "unused"),
+  win("codex", "Weekly", "runs-out"),
+  win("claude", "Weekly", "ran-out"),
+  win("gemini", "Daily", "ran-out", local(7, 10)),
+  win("mistral", "Monthly", "even"),
+];
+const arranged = (s: Partial<QuotaSettings>) =>
+  arrange(windows, settings({ hidden: ["mistral"], ...s }), now).map(
+    (c) => `${c.provider} ${c.window.label}`,
+  );
+
+test("arrange: running out first, then by provider in the uploader's order", () => {
+  expect(arranged({})).toEqual([
+    "claude Weekly",
+    "codex Weekly",
+    "claude 5-hour",
+    "zai 5-hour",
+    "gemini Daily",
+  ]);
+});
+
+test("arrange: running out first, then the order set", () => {
+  expect(arranged({ order: ["zai", "gemini"] })).toEqual([
+    "claude Weekly",
+    "codex Weekly",
+    "zai 5-hour",
+    "gemini Daily",
+    "claude 5-hour",
+  ]);
+});
+
+test("arrange: the order set holds for every window when running out first is off", () => {
+  expect(arranged({ order: ["zai", "gemini"], runningOutFirst: false })).toEqual([
+    "zai 5-hour",
+    "gemini Daily",
+    "claude 5-hour",
+    "claude Weekly",
+    "codex Weekly",
+  ]);
 });
 
 test("notifications: only new alerts, of providers this device opted in to, of chosen kinds", () => {

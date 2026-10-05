@@ -795,6 +795,17 @@ How it generalizes is open.
   and pi's `AGENTS.override.md` replaces the repo's `AGENTS.md`, so it only suits repos without
   one.
 
+- 2026-10-05. Quota order, one rule on both clients (#159, #162, owner). Hidden providers drop out;
+  the rest go by provider in the order set in Quota settings (providers not in it follow in the
+  uploader's order), each provider's windows in the uploader's order. A "Running out first"
+  setting, on by default as Design v2 chose, then moves windows that will run out or ran out,
+  and have not reset, above the others, in that same order. Off, the order set holds for every
+  window. Alert windows no longer lead when no order is set: the old fallback is why the phone
+  and the browser sorted differently. Order stays per device. Notify moves off Android's cards
+  to Settings, Providers, as on the web (#163): a bell beside each provider's Show switch,
+  so every quota card has the same height and the control sits where the other per-provider
+  settings are.
+
 ## Encryption, with existing libraries
 
 - libsodium sealed boxes (`crypto_box_seal`, X25519 + XSalsa20-Poly1305): an

@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
-import { runningOutFirst, status } from "./quota";
-import type { QuotaCardData, QuotaWindow } from "./types";
+import { status } from "./quota";
+import type { QuotaWindow } from "./types";
 
 const now = new Date("2026-10-05T10:00:00Z");
 const rel = { absoluteResets: false };
@@ -44,15 +44,4 @@ test("a window whose reset passed is over until the next upload", () => {
     word: "Window reset",
     reset: "",
   });
-});
-
-test("windows that run out lead, the others keep their order", () => {
-  const card = (p: string, w: QuotaWindow) => ({ provider: p, window: w }) as QuotaCardData;
-  const calm = window({ willLastToReset: true, stage: "on-track" });
-  const cards = [
-    card("a", calm),
-    card("b", window({ runsOutAt: "2026-10-05T10:50:00Z" })),
-    card("c", calm),
-  ];
-  expect(runningOutFirst(cards, rel, now).map((c) => c.provider)).toEqual(["b", "a", "c"]);
 });
