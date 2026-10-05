@@ -5,8 +5,9 @@ export class ApiError extends Error {
     readonly status: number,
     readonly code: string,
     detail?: string,
+    message = `server: ${status} ${code}${detail ? ` (${detail})` : ""}`,
   ) {
-    super(`server: ${status} ${code}${detail ? ` (${detail})` : ""}`);
+    super(message);
   }
 }
 
@@ -40,6 +41,14 @@ export class Api {
     }
     if (res.status >= 400) {
       const e = (json ?? {}) as { error?: string; detail?: string };
+      // The server drops a machine's token when the directory revokes the machine.
+      if (res.status === 401 && this.token)
+        throw new ApiError(
+          401,
+          e.error ?? res.statusText,
+          e.detail,
+          "this machine was removed from your Starbridge account: run `starbridge pair --force` to add it again",
+        );
       throw new ApiError(res.status, e.error ?? res.statusText, e.detail);
     }
     return { status: res.status, json };
