@@ -63,11 +63,9 @@ machine is not paired or the server is down, `run` warns once and goes on.
 The command's output is a pipe, not a terminal; tools that print progress
 only to a terminal print none here.
 
-The owner's rules go in `rules.md` in the config directory, in plain words,
-for example "Tell me when you run the e2e tests that take over my Mac, or
-local inference." They add to the default above, never replace it. The
-`starbridge` Claude Code plugin loads them into every session
-(`plugin/README.md`).
+To have agents report other commands too, such as local inference, tell them
+in their own instruction files (`docs/tell-your-agents.md`). That adds to the
+default above, never replaces it.
 
 `starbridge answers` is for the Claude Code mod (`mod/README.md`): it hands a
 session the answers to the decisions it asked.

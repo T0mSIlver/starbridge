@@ -1,6 +1,6 @@
 ---
 name: starbridge
-description: "Reach your user through Starbridge. They are often away from the terminal, and Starbridge is how you reach them: a card on their phone and web page that they answer with one tap, sent back into this session. Use it, instead of asking in chat or with AskUserQuestion, whenever you need a decision that is theirs to make, and before ending a turn on work that waits on them (a PR to review or merge, a failure only they can fix); and wrap in `starbridge run`, unasked, any command that blocks them or matches their rules for runs. Covers when to post, how to write a card they can answer cold, what never to post, and what to do with the answer."
+description: "Reach your user through Starbridge. They are often away from the terminal, and Starbridge is how you reach them: a card on their phone and web page that they answer with one tap, sent back into this session. Use it, instead of asking in chat or with AskUserQuestion, whenever you need a decision that is theirs to make, and before ending a turn on work that waits on them (a PR to review or merge, a failure only they can fix); and wrap in `starbridge run`, unasked, any command that blocks them or that their instructions ask you to report. Covers when to post, how to write a card they can answer cold, what never to post, and what to do with the answer."
 compatibility: The `starbridge` CLI on PATH, paired with `starbridge pair`, and the Starbridge mod loaded in this Claude Code session.
 ---
 
@@ -21,8 +21,9 @@ answer comes back into this session as a prompt.
   anything you leave waits on the user; if it does, post a card whose options
   are the next step: "#52 adds CSV export and is green. Merge it?" Your final
   message alone may sit unread for hours.
-- **A command that blocks them** or matches their rules for runs. Wrap it in
-  `starbridge run` (below). Their phone shows it running, then pass or fail.
+- **A command that blocks them**, or that their instructions ask you to
+  report. Wrap it in `starbridge run` (below). Their phone shows it running,
+  then pass or fail.
 
 Decide everything else yourself, act, and say what you did in your final
 message. A question you could have answered costs them an interruption.
@@ -124,8 +125,8 @@ Otherwise, say it in your final message.
 
 Wrap a command in `starbridge run`, unasked, when it blocks the user or needs
 them at the machine (e2e tests that take over the screen, keyboard or
-session; anything holding a device they use), or when it matches one of their
-rules under "My rules for runs" in your context.
+session; anything holding a device they use), or when their instructions ask
+you to report it, such as "tell me when you run local inference".
 
 ```bash
 starbridge run --title "Mac e2e" --reason "takes over your screen and keyboard" \

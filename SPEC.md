@@ -779,6 +779,15 @@ How it generalizes is open.
   sessions; under the owner's home, Claude Code loads `~/.claude/CLAUDE.md` as an ancestor
   folder's even with `CLAUDE_CONFIG_DIR` set, so eval sessions run under `/tmp`.
 
+- 2026-10-05. No Starbridge rules file (#126, owner). The SessionStart hook adds only its two fixed
+  rules; `rules.md` is gone. Users tell agents what else to ask or report in the agents' own
+  instruction files, and `docs/tell-your-agents.md` says where, with lines to copy. Personal
+  files over a repo's shared ones, checked by real runs (Claude Code 2.1.289, Codex CLI 0.160.0,
+  pi 0.87.1): globally `~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md`, `~/.pi/agent/AGENTS.md`;
+  per repo, Claude Code's `CLAUDE.local.md` loads beside the shared `CLAUDE.md`, while Codex's
+  and pi's `AGENTS.override.md` replaces the repo's `AGENTS.md`, so it only suits repos without
+  one.
+
 ## Encryption, with existing libraries
 
 - libsodium sealed boxes (`crypto_box_seal`, X25519 + XSalsa20-Poly1305): an
