@@ -128,6 +128,13 @@ const NOTIFICATIONS = () =>
       .then((ns) => ns.map((n) => ({ title: n.title, body: n.body, tag: n.tag }))),
   );
 
+/** #199: phishing filters flag a new site that asks for seed words. */
+async function noWordsAsked(page: Page) {
+  const text = await page.locator("body").innerText();
+  const found = text.match(/\b(seed|phrase|words?)\b/i);
+  if (found) throw new Error(`the page says "${found[0]}"`);
+}
+
 async function shoot(page: Page, name: string) {
   for (const [size, viewport] of [
     ["phone", { width: 390, height: 844 }],
@@ -205,12 +212,13 @@ async function main() {
   failPage = page;
   await page.getByRole("button", { name: "Create the keys" }).click();
   await page.getByRole("heading", { name: "Save your recovery key" }).waitFor();
-  const words = (await page.locator("ol li span:last-child").allTextContents()).join(" ");
-  if (words.split(" ").length !== 12) throw new Error(`expected 12 words, got: ${words}`);
+  const key = ((await page.getByTestId("recovery-key").textContent()) ?? "").trim();
+  if (!/^([0-9A-Z]{4}){7}$/.test(key)) throw new Error(`expected a recovery key, got: ${key}`);
+  await noWordsAsked(page);
   await shoot(page, "setup");
   await page.setViewportSize({ width: 1280, height: 860 });
   await page.emulateMedia({ colorScheme: "light" });
-  await page.getByLabel(/I wrote these words down/).check();
+  await page.getByLabel(/I wrote this key down/).check();
   await page.getByRole("button", { name: "Continue" }).click();
   await page.getByRole("heading", { name: "Inbox" }).waitFor();
 
@@ -563,24 +571,18 @@ async function main() {
   await shoot(pageB, "inbox-banner");
   // The new device sees decisions sealed after it joined; the open one predates it.
 
-  step("recover a third browser with the words");
+  step("recover a third browser with the recovery key");
   const c = await ff.newContext();
   const pageC = await signIn(c);
   await pageC.getByRole("button", { name: "Use the recovery key" }).click();
-  const entry = pageC.getByLabel("Your recovery words, separated by spaces");
-  const typo = words.split(" ");
-  typo[2] = "mountian";
-  await entry.fill(`${typo.join(" ")} `);
-  await pageC.getByText('Word 3, "mountian", is not a recovery word.').waitFor();
+  const entry = pageC.getByLabel("Your recovery key");
+  await noWordsAsked(pageC);
+  await entry.fill(`${key.slice(0, 9)}U`);
+  await pageC.getByText('Character 10, "U", is not in a recovery key.').waitFor();
   await shoot(pageC, "recovery-typo");
-  // Numbering and dashes separate words as well as spaces do.
-  await entry.fill(
-    words
-      .split(" ")
-      .map((w, i) => `${i + 1}-${w}`)
-      .join("\n"),
-  );
-  await pageC.getByText("12 of 12 words").waitFor();
+  // Lower case, in groups split by spaces: the key reads all the same.
+  await entry.fill(key.toLowerCase().match(/.{4}/g)?.join(" ") ?? "");
+  await pageC.getByText("28 of 28 characters").waitFor();
   await pageC.getByRole("button", { name: "Recover" }).click();
   await pageC.getByRole("heading", { name: "Inbox" }).waitFor({ timeout: 30_000 });
 

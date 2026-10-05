@@ -2,7 +2,7 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import type { FirstDevice as PreparedDevice } from "@/lib/device";
+import type { FirstDevice as PreparedDevice, RecoveryEntry } from "@/lib/device";
 import { hasPairCode, holdPairCode } from "@/lib/pairLink";
 import { useApp } from "./AppProvider";
 import { Icon } from "./icons";
@@ -122,11 +122,11 @@ export function SignIn({ ownServer = false }: { ownServer?: boolean }) {
 function FirstDevice({ account }: { account: string }) {
   const { reload } = useApp();
   const [name, setName] = useDefaultName();
-  const [words, setWords] = useState<string[]>();
+  const [recoveryKey, setRecoveryKey] = useState<string>();
   // Kept across a failed attempt, so a retry posts the same keys and entry.
   const pending = useRef<PreparedDevice>(undefined);
   const { busy, error, run } = useAction();
-  if (words) return <Setup device={name} words={words} onContinue={reload} />;
+  if (recoveryKey) return <Setup device={name} recoveryKey={recoveryKey} onContinue={reload} />;
   return (
     <FirstRunPage>
       <h1 className="t-heading">Set up your account</h1>
@@ -140,7 +140,7 @@ function FirstDevice({ account }: { account: string }) {
           run(async () => {
             pending.current ??= await (await load()).prepareFirstDevice(account, name.trim());
             await pending.current.commit();
-            setWords(pending.current.words);
+            setRecoveryKey(pending.current.recoveryKey);
           })
         }
       >
@@ -158,11 +158,11 @@ function FirstDevice({ account }: { account: string }) {
 function Join({ account, stale }: { account: string; stale: boolean }) {
   const { reload } = useApp();
   const [name, setName] = useDefaultName();
-  const [mode, setMode] = useState<"code" | "digits" | "words">("code");
+  const [mode, setMode] = useState<"code" | "digits" | "key">("code");
   const [code, setCode] = useState<string>();
   const [digits, setDigits] = useState<string>();
-  const [words, setWords] = useState("");
-  const [typed, setTyped] = useState<{ count: number; unknown?: string }>({ count: 0 });
+  const [typedKey, setTypedKey] = useState("");
+  const [typed, setTyped] = useState<RecoveryEntry>({ complete: false, status: "" });
   const cancel = useRef<() => void>(undefined);
   // Each join started counts up; one that resolves after the owner moved on cancels itself.
   const started = useRef(0);
@@ -170,12 +170,11 @@ function Join({ account, stale }: { account: string; stale: boolean }) {
   useEffect(() => () => cancel.current?.(), []);
   useEffect(() => {
     let live = true;
-    load().then((d) => live && setTyped(d.readRecoveryWords(words)));
+    load().then((d) => live && setTyped(d.readRecoveryEntry(typedKey)));
     return () => {
       live = false;
     };
-  }, [words]);
-  const complete = (typed.count === 12 || typed.count === 24) && !typed.unknown;
+  }, [typedKey]);
 
   /** Starts a join unless the owner moved on meanwhile; undefined when stale. */
   const begin = async <J extends { cancel: () => void; done: Promise<void> }>(
@@ -205,7 +204,7 @@ function Join({ account, stale }: { account: string; stale: boolean }) {
     });
   }, [mode, name === ""]);
 
-  const switchTo = (next: "digits" | "words") => {
+  const switchTo = (next: "digits" | "key") => {
     started.current++;
     cancel.current?.();
     setCode(undefined);
@@ -289,49 +288,50 @@ function Join({ account, stale }: { account: string; stale: boolean }) {
           </button>
         </>
       )}
-      {mode === "words" ? (
+      {mode === "key" ? (
         <form
           className={s.field}
           onSubmit={(e) => {
             e.preventDefault();
             run(async () => {
-              await (await load()).recover(account, name.trim(), words);
+              await (await load()).recover(account, name.trim(), typedKey);
               await reload();
             });
           }}
         >
           <NameField value={name} onChange={setName} />
-          <label className={`t-meta ${s.dim}`} htmlFor="recovery-words">
-            Your recovery words, separated by spaces
+          <label className={`t-meta ${s.dim}`} htmlFor="recovery-key">
+            Your recovery key
           </label>
           <textarea
-            id="recovery-words"
-            className={`t-body ${s.input}`}
-            rows={4}
+            id="recovery-key"
+            className={`t-snippet ${s.input}`}
+            rows={2}
+            placeholder="XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX"
             autoComplete="off"
             autoCapitalize="none"
             spellCheck={false}
-            aria-describedby="recovery-words-check"
-            value={words}
-            onChange={(e) => setWords(e.target.value)}
+            aria-describedby="recovery-key-check"
+            value={typedKey}
+            onChange={(e) => setTypedKey(e.target.value)}
           />
           <p
-            id="recovery-words-check"
-            className={`t-meta ${typed.unknown ? s.error : s.dim}`}
+            id="recovery-key-check"
+            className={`t-meta ${typed.problem ? s.error : s.dim}`}
             aria-live="polite"
           >
-            {typed.unknown ?? `${typed.count} of ${typed.count > 12 ? 24 : 12} words`}
+            {typed.problem ?? typed.status}
           </p>
           <button
             type="submit"
             className={`t-label ${ui.btn} ${ui.fill}`}
-            disabled={busy || !name.trim() || !complete}
+            disabled={busy || !name.trim() || !typed.complete}
           >
             Recover
           </button>
         </form>
       ) : (
-        <button type="button" className={`t-meta ${s.link}`} onClick={() => switchTo("words")}>
+        <button type="button" className={`t-meta ${s.link}`} onClick={() => switchTo("key")}>
           Use the recovery key
         </button>
       )}

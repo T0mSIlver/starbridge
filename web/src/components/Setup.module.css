@@ -134,27 +134,19 @@ textarea.input {
   margin-left: var(--s2h);
 }
 
-.words {
-  list-style: none;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--s1) var(--s4);
+/* The recovery key: seven groups of four, wrapping between groups only. */
+.key {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--s2) var(--s3);
   padding: var(--s4);
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
   background: var(--surface);
-}
-
-.words li {
-  display: flex;
-  align-items: baseline;
-  gap: var(--s2);
-}
-
-.n {
-  min-width: 2ch;
-  color: var(--fg3);
-  text-align: right;
+  font-size: 20px;
+  letter-spacing: 0.08em;
+  user-select: all;
 }
 
 .confirm {
