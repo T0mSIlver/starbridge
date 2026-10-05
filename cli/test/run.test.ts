@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, expect, setDefaultTimeout, test } from "bun:test";
+import { createServer } from "node:http";
 import { join } from "node:path";
 import { PassThrough } from "node:stream";
 import type { Run } from "@starbridge/protocol";
@@ -208,4 +209,23 @@ test("the plugin's SessionStart hook adds the owner's rules file, escaped, next 
   expect(text).toContain("or matches one of my rules below");
   expect(text).toContain("`starbridge run`");
   expect(text.endsWith(rules.trimEnd())).toBe(true);
+});
+
+test("an agent from before runs (404 on the route) is skipped: the run goes to the server", async () => {
+  const machine = await paired(server);
+  const socket = join(machine.store.dir, "old-agent.sock");
+  const old = createServer((_req, res) => {
+    res.writeHead(404, { "content-type": "application/json" });
+    res.end(JSON.stringify({ error: "not-found", detail: "/v1/runs" }));
+  });
+  await new Promise<void>((r) => old.listen(socket, r));
+  try {
+    machine.env.STARBRIDGE_AGENT_SOCKET = socket;
+    const r = await wrapped(machine, "exit 0");
+    expect(r.code).toBe(0);
+    expect(machine.errors).toEqual([]);
+    expect(((await server.opened("run")) as Run[])[0]?.exit?.code).toBe(0);
+  } finally {
+    await new Promise<void>((r) => old.close(() => r()));
+  }
 });

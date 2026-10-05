@@ -160,7 +160,13 @@ export function makePoster(ctx: Ctx): Poster {
         await agent.call("POST", "/v1/runs", { run: input });
         return;
       } catch (e) {
-        if (!(e instanceof NoAgent) && !(e instanceof AgentError && e.status === 426)) throw e;
+        // No agent, another API revision, or an agent from before runs (404 on the route): it
+        // did nothing, so the server directly.
+        const skipped =
+          e instanceof NoAgent ||
+          (e instanceof AgentError &&
+            (e.status === 426 || (e.status === 404 && e.body.error === "not-found")));
+        if (!skipped) throw e;
       }
     }
     direct ??= session(ctx);
