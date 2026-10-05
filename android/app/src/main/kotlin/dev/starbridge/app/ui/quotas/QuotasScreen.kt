@@ -65,7 +65,7 @@ import javax.inject.Inject
 class QuotasViewModel @Inject constructor(private val store: Store, private val prefs: Prefs) : ViewModel() {
     val windows = store.windows
     val settings = prefs.quota
-    fun refresh() = store.refresh()
+    fun refresh() = store.refreshQuotas()
     fun setSettings(value: QuotaSettings) = prefs.setQuota(value)
 }
 

@@ -42,6 +42,8 @@ interface Store {
     fun recover(words: String)
 
     fun refresh()
+    /** Asks the machines for fresh quota snapshots, waits for them, then refreshes. */
+    fun refreshQuotas()
     fun answer(id: String, choice: String?, text: String?)
     /** Allows prompt [id] for [scope] ("once", "session", "project"), or denies it with [message]. */
     fun answerPrompt(id: String, allow: Boolean, scope: String, message: String?)

@@ -387,10 +387,28 @@ function printAnswer(ctx: Ctx, a: Answer, question: string | undefined, json?: b
 export async function poll(
   ctx: Ctx,
   s: Session,
-  opts: { cursor?: string; seconds: number; shared: boolean; directory?: Directory },
-): Promise<{ cursor?: string; directory: Directory }> {
+  opts: {
+    cursor?: string;
+    seconds: number;
+    shared: boolean;
+    directory?: Directory;
+    /**
+     * The agent's poll also returns when a device joins or asks for quotas (PROTOCOL.md,
+     * "Answers for machines"); `quotaAsked` is the last ask the server reported.
+     */
+    watch?: { quotaAsked?: string };
+  },
+): Promise<{ cursor?: string; directory: Directory; quotaAsked?: string }> {
   let directory = opts.directory ?? (await refreshDirectory(ctx, s));
-  const page = await s.api.answers(opts.cursor, opts.seconds, ctx.signal);
+  const page = await s.api.answers(
+    opts.cursor,
+    opts.seconds,
+    ctx.signal,
+    opts.watch && { directory: directory.length, ...opts.watch },
+  );
+  const quotaAsked = page.quotaAsked !== undefined ? { quotaAsked: page.quotaAsked } : {};
+  if (page.items.length === 0 && (page.directory ?? 0) > directory.length)
+    directory = await refreshDirectory(ctx, s);
   if (page.items.length > 0) {
     // A new device may have answered since the directory was read.
     directory = await refreshDirectory(ctx, s);
@@ -415,7 +433,7 @@ export async function poll(
         st.cursor = page.cursor;
     });
   }
-  return { cursor: page.cursor ?? opts.cursor, directory };
+  return { cursor: page.cursor ?? opts.cursor, directory, ...quotaAsked };
 }
 
 /**
