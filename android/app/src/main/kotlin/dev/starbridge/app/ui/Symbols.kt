@@ -32,7 +32,7 @@ enum class Sym(val code: Char) {
     Desktop(''), Server(''), Cloud(''), Bell(''), Drag(''),
     Chevron(''), ExpandMore(''), ExpandLess(''), Play(''), Qr(''),
     Lock(''), Filter(''), History(''), Key(''), Devices(''),
-    Open(''), Waiting(''), Working(''), Send(''), Link(''),
+    Open(''), Waiting(''), Send(''), Link(''),
     Up(''), Down(''), CheckCircle(''), Computer(''), Close(''),
     Error(''), Copy(''), Visibility(''), Logout(''), Add(''), Pin(''),
 }

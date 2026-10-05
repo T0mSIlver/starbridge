@@ -580,7 +580,9 @@ class ServerStore(
     }
 
     private suspend fun syncDecisions() {
-        var cursor = saved.cursor
+        // Saved by an app that dropped fields it did not know: read every open one again.
+        val reread = saved.decisionFields < DECISION_FIELDS
+        var cursor = if (reread) "" else saved.cursor
         val byId = saved.decisions.associateBy { it.body.id }.toMutableMap()
         // How each item a settled notice closed was closed, with the time: the notice lists before
         // the decision it closed, which moved past it.
@@ -604,6 +606,11 @@ class ServerStore(
                 // a later one, after a device's answer, closed nothing.
                 val settled = closings[listed.item.id]?.takeIf { it.second == listed.answeredAt }?.first
                 val known = byId[listed.item.id]
+                if (known != null && reread && known.answeredAt == null && listed.answeredAt == null) {
+                    val (from, body) = open(listed.item) ?: continue
+                    if (from == known.from) byId[known.body.id] = known.copy(body = body as DecisionBody)
+                    continue
+                }
                 if (known != null) {
                     // A settled push marked it answered already, without saying how.
                     if (listed.answeredAt != null && (known.answeredAt == null || settled != null)) {
@@ -620,7 +627,7 @@ class ServerStore(
         }
         // An update may list before the decision it is about, so they apply once all are read.
         for ((from, w) in waits) byId[w.decisionId]?.let { d -> wait(d, from, w)?.let { byId[w.decisionId] = it } }
-        persist(saved.copy(cursor = cursor, decisions = byId.values.sortedBy { it.body.createdAt }.takeLast(500)))
+        persist(saved.copy(cursor = cursor, decisions = byId.values.sortedBy { it.body.createdAt }.takeLast(500), decisionFields = DECISION_FIELDS))
     }
 
     /**
