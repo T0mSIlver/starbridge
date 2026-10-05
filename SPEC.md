@@ -692,6 +692,11 @@ How it generalizes is open.
   their kinds by name and skip unknown pushes, so they never see it. Two optional fields for the
   design (orchestrator): `source.machineKind` (`server`, `desktop`, `laptop`, `cloud`) and a
   decision's `agent` (`claude-code`, `codex`), as permissions have.
+- 2026-10-05. Release keys backed up off the dev box (owner): `release.jks`, its password file
+  and `minisign.key` are in an AES-256 encrypted disk image, `starbridge-release-keys.dmg`, in the
+  owner's iCloud Drive and Google Drive; its passphrase is in his Google Password Manager under
+  `starbridge.run`, user `release-keys-dmg`. Google Play: a personal developer account, developer
+  name `T0mSIlver`, identity check pending; production needs a 14-day closed test with 12 testers.
 
 - 2026-10-05. Usage counts (#140, owner ruling: learn how Starbridge is used without client
   telemetry or anything new collected). The server counts requests it handles anyway
