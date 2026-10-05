@@ -644,6 +644,17 @@ How it generalizes is open.
   only on an empty account; self-hosting sits behind "Use your own server". Copy inside the UI is
   labels and states only. Icons: a custom set drawn to the mark on the web; Material Symbols
   Rounded tuned to Google Sans Flex on Android; a native iOS app, if any, would use SF Symbols.
+- 2026-10-05. Design v2 on the web, inbox as built. One feed orders what holds an agent up
+  first: permission prompts, then questions whose agent waits, then questions it works around,
+  each oldest first; "Group by machine" keeps that order inside each machine and orders the
+  machines by their most pressing item. History lists answered questions and the last 7 days of
+  prompts, replacing the separate Prompts page. On phones every question shows its options on
+  its row, as does every prompt with Allow and Deny. Deny sends no note to the agent, and a
+  question with options has no free-text reply, both as in the mockups. A question's waiting
+  state comes from #127's `waiting` items signed by the asking machine; the service worker
+  shows a flip to waiting as the question's notification again, with "Waiting for you". The
+  rail's Find filters the inbox by its words; the rail counts paired machines, since the page
+  cannot tell which are connected.
 - 2026-10-05. Quota settings and notifications, as built (#115). Settings live on each device
   (web `localStorage`, Android preferences) and sit on a Quota settings page opened from the
   Quotas screen: bars show used or remaining, reset times relative or as a clock time
