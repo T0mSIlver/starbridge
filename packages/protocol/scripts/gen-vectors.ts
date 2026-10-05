@@ -877,6 +877,15 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
     ...decisionBody,
     source: { ...decisionBody.source, ...extra },
   });
+  // A 1x1 PNG.
+  const pixel = {
+    type: "image/png",
+    width: 1,
+    height: 1,
+    data: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg",
+    alt: "The settings screen, cropped",
+  };
+  const artifact = { url: "https://claude.ai/public/artifacts/0b3f0e7c", title: "Both mockups" };
   const schemas = {
     note: "Bodies that must pass or fail schema validation.",
     decision: [
@@ -927,6 +936,82 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
       {
         name: "link with a space",
         body: withSource({ links: [{ kind: "web", url: "https://claude.ai/code/a b" }] }),
+        valid: false,
+      },
+      {
+        name: "images and links",
+        body: { ...decisionBody, images: [pixel, { ...pixel, alt: undefined }], links: [artifact] },
+        valid: true,
+      },
+      {
+        name: "link without a title",
+        body: { ...decisionBody, links: [{ url: artifact.url }] },
+        valid: true,
+      },
+      {
+        name: "svg image",
+        body: { ...decisionBody, images: [{ ...pixel, type: "image/svg+xml" }] },
+        valid: false,
+      },
+      {
+        name: "five images",
+        body: { ...decisionBody, images: Array(5).fill(pixel) },
+        valid: false,
+      },
+      {
+        name: "image of width 0",
+        body: { ...decisionBody, images: [{ ...pixel, width: 0 }] },
+        valid: false,
+      },
+      {
+        name: "image data not base64url",
+        body: { ...decisionBody, images: [{ ...pixel, data: "iVBO+w==" }] },
+        valid: false,
+      },
+      {
+        name: "plain http link",
+        body: { ...decisionBody, links: [{ url: "http://claude.ai/public/artifacts/0b3f0e7c" }] },
+        valid: false,
+      },
+      {
+        name: "script link",
+        body: { ...decisionBody, links: [{ url: "javascript:alert(1)" }] },
+        valid: false,
+      },
+      {
+        name: "five links",
+        body: { ...decisionBody, links: Array(5).fill(artifact) },
+        valid: false,
+      },
+      {
+        name: "empty link title",
+        body: { ...decisionBody, links: [{ ...artifact, title: "" }] },
+        valid: false,
+      },
+      {
+        name: "answered in an artifact",
+        body: {
+          ...decisionBody,
+          options: [],
+          recommended: undefined,
+          answerIn: artifact,
+          links: [{ url: "https://github.com/T0mSIlver/starbridge/pull/86" }],
+        },
+        valid: true,
+      },
+      {
+        name: "answered in an artifact and with options",
+        body: { ...decisionBody, answerIn: artifact },
+        valid: false,
+      },
+      {
+        name: "answered on a plain http page",
+        body: {
+          ...decisionBody,
+          options: [],
+          recommended: undefined,
+          answerIn: { url: "http://example.com" },
+        },
         valid: false,
       },
     ],
