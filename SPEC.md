@@ -313,7 +313,7 @@ How it generalizes is open.
   co-signs its first entry. A pairing code
   carries an 80-bit secret the server never sees, which keys an HMAC on both
   pairing messages. The recovery seed shows as 24 BIP-39 words
-  (`@scure/bip39`, audited, MIT).
+  (`@scure/bip39`, audited, MIT); 12 for accounts made since 2026-10-05 (below).
 
 - 2026-10-04. Server (#5): self-hosters sign in with `OWNER_TOKEN` (`POST /v1/auth/owner`); the
   Android app gets its GitHub session through a `starbridge://auth#session=` redirect. A session
@@ -787,6 +787,21 @@ How it generalizes is open.
   per repo, Claude Code's `CLAUDE.local.md` loads beside the shared `CLAUDE.md`, while Codex's
   and pi's `AGENTS.override.md` replaces the repo's `AGENTS.md`, so it only suits repos without
   one.
+
+- 2026-10-05. 12 recovery words for new accounts (owner ruling on #157). The recovery seed is now
+  16 bytes, shown as 12 BIP-39 words, instead of 32 bytes as 24. 128 bits of entropy is what
+  Ed25519 itself offers (about 2^126 work to break a key), so 24 words added length without
+  adding security. Someone holding the recovery public key, the server included, would have to
+  try 2^128 seeds offline, or 2^108 per account across a million accounts. The seed is random,
+  not chosen by a person, so it needs no slow key derivation such as Argon2; BLAKE2b-256 of
+  "starbridge/v1/recovery-seed", NUL, the seed, stretches it to the 32 bytes Ed25519 takes, as
+  `pairingKey` does for the pairing secret. Accounts made earlier keep their 24 words, whose
+  32-byte seed stays the Ed25519 seed; the word count tells the two apart, and nothing on the
+  server changes. Fewer words was rejected: one word carries 11 bits, and 9 words (99 bits) is
+  no BIP-39 length. The entry says to separate words with spaces, and accepts anything that is
+  not a letter as a separator (dashes, commas, line breaks, numbering); it names the first word
+  that is not on the list, and a failed checksum (a wrong list word, or two swapped) says to
+  check each word and the order.
 
 ## Encryption, with existing libraries
 
