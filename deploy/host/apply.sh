@@ -34,13 +34,12 @@ fi
 $compose up -d --no-deps --force-recreate $next
 healthy http://127.0.0.1:$port/ $next
 
-# Caddy takes a changed Caddyfile through its admin API: a reload keeps open connections, where
-# recreating the container would drop them.
+# Caddy takes the Caddyfile through its admin API on every deploy: a reload keeps open
+# connections, where recreating the container would drop them, and an unchanged one is a no-op.
+# Loading each time, rather than when the file changed, also heals a load that failed before.
 $compose up -d caddy
-if ! cmp -s /opt/starbridge.old/deploy/Caddyfile Caddyfile; then
-  curl -fsS --retry 10 --retry-connrefused --retry-delay 1 -X POST \
-    -H 'Content-Type: text/caddyfile' --data-binary @Caddyfile http://127.0.0.1:2019/load
-fi
+curl -fsS --retry 10 --retry-connrefused --retry-delay 1 -X POST \
+  -H 'Content-Type: text/caddyfile' --data-binary @Caddyfile http://127.0.0.1:2019/load
 # Caddy checks health every second: let it see the new copy before the old one goes. Requests
 # in flight at the stop are GETs, which Caddy retries on the new copy.
 sleep 2

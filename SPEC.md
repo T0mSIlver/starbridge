@@ -1047,8 +1047,8 @@ How it generalizes is open.
   switch may still ask for a script chunk of the old build, which the new copy lacks; Next.js
   then reloads the page, as it did before #150. The server stays one instance,
   since it holds the long-polls and SQLite: on SIGTERM it ends every long-poll as if its wait
-  passed and exits, and the client's next request waits in Caddy for the new server. A changed
-  Caddyfile reaches the running Caddy through its admin API (`/load`), since recreating the
+  passed and exits, and the client's next request waits in Caddy for the new server. Each deploy
+  loads the Caddyfile into the running Caddy through its admin API (`/load`), since recreating the
   container drops every connection. The idle copy's failed health checks stay out of Caddy's
   log. Checked on a local copy of the stack (the compose file, Caddyfile and `apply.sh` as
   committed, in Docker-in-Docker): during the first deploy from the old layout, a deploy that
