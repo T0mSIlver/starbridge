@@ -76,7 +76,13 @@ export function Shell({ children }: { children: React.ReactNode }) {
             value={q}
             onChange={(e) => {
               setFind(e.target.value);
-              if (path !== "/") router.push("/");
+              // Find filters the inbox: go there, staying inside /sample.
+              if (at !== "/") router.push(path.startsWith("/sample") ? "/sample" : "/");
+            }}
+            onKeyDown={(e) => {
+              if (e.key !== "Escape") return;
+              setFind("");
+              e.currentTarget.blur();
             }}
           />
           <kbd className={`t-key ${ui.kbd}`}>/</kbd>

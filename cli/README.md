@@ -43,10 +43,13 @@ Setup asks before each step, and a rerun repairs only what is missing:
 3. It asks which providers' quotas to upload.
 4. It installs the background service, `starbridge agent`, as a systemd user unit or a launchd
    agent.
-5. It installs the Claude Code plugin at user scope.
+5. It installs Starbridge in each agent it finds: the Claude Code plugin at user scope, the
+   skill in Codex's skills folder (updated when the CLI carries a newer one), and the Starbridge
+   Pi package.
 6. It uploads a first quota snapshot.
 
-`--yes` takes every default. `--no-quota`, `--no-service` and `--no-plugin` skip a step.
+`--yes` takes every default. `--no-quota`, `--no-service` and `--no-plugin` skip a step;
+`--no-plugin` skips every agent.
 `starbridge status` prints the same checks.
 
 ### Update and uninstall
@@ -153,6 +156,10 @@ starbridge config permissions on
 
 Then each prompt also goes to your devices, where you allow or deny it. The prompt stays open at
 the keyboard, and the first answer wins.
+
+Pi's prompts come from pi-permission-system. With the Starbridge Pi package installed, the same
+command offers to add `starbridge` to its `authorizerChain`, which it needs as well. Your devices then allow a call
+once or deny it, and "Answer here" in Pi brings back pi-permission-system's own prompt.
 
 If you use the Claude app, turn off its "Code updates" notifications, which fire at the end of
 every turn. Keep "Code permission requests" on, unless you turned on Starbridge's permission

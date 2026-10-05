@@ -1,0 +1,11 @@
+#!/bin/sh
+# Stands in for `pi install|remove <source>`: keeps the packages list in settings.json, as Pi.
+echo "pi $*" >>"$FAKE_LOG"
+settings="$HOME/.pi/agent/settings.json"
+mkdir -p "$HOME/.pi/agent"
+[ -f "$settings" ] || echo '{}' >"$settings"
+case "$1" in
+  install|remove)
+    bun -e 'const [f,op,src]=process.argv.slice(-3);const fs=require("fs");const s=JSON.parse(fs.readFileSync(f,"utf8"));const p=(s.packages??[]).filter(x=>x!==src);if(op==="install")p.push(src);s.packages=p;fs.writeFileSync(f,JSON.stringify(s,null,2))' "$settings" "$1" "$2" ;;
+  *) exit 1 ;;
+esac

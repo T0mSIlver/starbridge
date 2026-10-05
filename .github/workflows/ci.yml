@@ -5,41 +5,17 @@ on:
     branches: [main]
   pull_request:
 
+# A new push to a pull request cancels its older run; main runs every commit, for deploys.
+concurrency:
+  group: ci-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  cancel-in-progress: true
+
 # Jobs run on the dev box's self-hosted runners while the repository variable RUNNER is set
 # (deploy/setup-runners.sh); delete the variable to go back to GitHub's runners.
 jobs:
-  test:
-    name: test
-    runs-on: ${{ vars.RUNNER || 'ubuntu-latest' }}
-    steps:
-      - uses: actions/checkout@v5
-      - uses: pnpm/action-setup@v4
-        with:
-          # Per job: runners on one machine would share ~/setup-pnpm and clobber each other.
-          dest: ${{ runner.temp }}/setup-pnpm
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: 1.4.2
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm test
-
-  typecheck:
-    name: typecheck
-    runs-on: ${{ vars.RUNNER || 'ubuntu-latest' }}
-    steps:
-      - uses: actions/checkout@v5
-      - uses: pnpm/action-setup@v4
-        with:
-          # Per job: runners on one machine would share ~/setup-pnpm and clobber each other.
-          dest: ${{ runner.temp }}/setup-pnpm
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: 1.4.2
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm typecheck
-
-  lint:
-    name: lint
+  # One job, so the workspace installs once instead of three times.
+  checks:
+    name: test, typecheck, lint
     runs-on: ${{ vars.RUNNER || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v5
@@ -52,3 +28,5 @@ jobs:
           bun-version: 1.4.2
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test

@@ -7,6 +7,8 @@ import { existsSync, readdirSync } from "node:fs";
 import { MachineKind } from "@starbridge/protocol";
 import { type Ctx, UsageError } from "./context";
 import { permissionsEnabled } from "./permissions";
+import { chainPiLink, PI_LINK, piChain } from "./pi";
+import type { Prompt } from "./setup/sys";
 
 /**
  * A guess at what this machine is: `cloud` in a cloud session or codespace, `laptop` with a
@@ -51,16 +53,44 @@ export function setPermissions(ctx: Ctx, enabled: boolean) {
   ctx.store.saveAgentConfig({ ...config, permissions: { enabled } });
 }
 
+/**
+ * With permission prompts on, offers to name the Starbridge link in pi-permission-system's
+ * `authorizerChain`, which only its owner may do: the link decides nothing until named there.
+ * Without a terminal to ask on, it says which line to add instead.
+ */
+export async function offerPiChain(ctx: Ctx, prompt: Prompt | undefined) {
+  const { state, file } = piChain(ctx.env);
+  if (state === "absent" || state === "chained") return;
+  const how = `add "${PI_LINK}" to "authorizerChain" in ${file}`;
+  if (state === "unreadable" || !prompt) {
+    ctx.out(`Pi: to send pi-permission-system's prompts too, ${how}.`);
+    return;
+  }
+  if (
+    await prompt.confirm(
+      `Also send Pi's permission prompts (pi-permission-system)? This adds "${PI_LINK}" to "authorizerChain" in ${file}.`,
+      true,
+    )
+  ) {
+    chainPiLink(file);
+    ctx.out(`Pi: pi-permission-system now asks Starbridge first (${file}).`);
+  } else ctx.out(`Pi: its prompts stay in Pi; to send them later, ${how}.`);
+}
+
 const USAGE =
   "usage: starbridge config [permissions on|off] [machine-kind server|desktop|laptop|cloud]";
 
-/** `starbridge config [<key> <value>]`: sets one setting, then prints them all. */
-export function configCommand(ctx: Ctx, args: string[]): number {
+/**
+ * `starbridge config [<key> <value>]`: sets one setting, then prints them all. Turning permission
+ * prompts on also offers to send Pi's, asking on `prompt` when there is a terminal.
+ */
+export async function configCommand(ctx: Ctx, args: string[], prompt?: Prompt): Promise<number> {
   const [key, value, ...extra] = args;
   if (extra.length > 0 || (key !== undefined && value === undefined)) throw new UsageError(USAGE);
   if (key === "permissions") {
     if (value !== "on" && value !== "off") throw new UsageError(USAGE);
     setPermissions(ctx, value === "on");
+    if (value === "on") await offerPiChain(ctx, prompt);
   } else if (key === "machine-kind") {
     const kind = MachineKind.safeParse(value);
     if (!kind.success) throw new UsageError(USAGE);

@@ -134,6 +134,13 @@ test("setup --yes replaces the dev box's manual installs and uploads a first sna
   expect(existsSync(m.mod)).toBe(false);
   expect(readFileSync(m.md, "utf8")).toBe("# Me\nBe blunt.\n");
 
+  // Codex gets the skill this CLI carries; Pi gets the Starbridge package.
+  const skill = readFileSync(join(m.home, ".codex/skills/starbridge/SKILL.md"), "utf8");
+  expect(skill).toBe(
+    readFileSync(join(import.meta.dir, "../../plugin/skills/starbridge/SKILL.md"), "utf8"),
+  );
+  expect(m.calls()).toContain("pi install git:github.com/T0mSIlver/starbridge");
+
   const [snap] = await server.opened("quota");
   expect(snap?.providers.map((p) => p.provider)).toEqual(["codex", "zai"]);
   expect(out).toContain("Uploaded a first quota snapshot: 2 providers");
@@ -156,6 +163,31 @@ test("a second setup changes nothing", async () => {
   expect(readFileSync(join(m.units, "starbridge-agent.service"), "utf8")).toBe(unit);
   expect(m.ctx.store.agentConfig().quota?.providers).toEqual(["codex", "zai"]);
   expect(m.ctx.lines.join("\n")).toContain("plugins are installed");
+
+  // A Codex skill from an older CLI is offered as an update.
+  writeFileSync(
+    join(m.home, ".codex/skills/starbridge/SKILL.md"),
+    "---\nname: starbridge\n---\nold\n",
+  );
+  const asked: string[] = [];
+  await setup(
+    {
+      ...m.sys,
+      prompt: {
+        ...m.sys.prompt,
+        confirm: async (q) => {
+          asked.push(q);
+          return false;
+        },
+      },
+    },
+    { readyTimeoutMs: 2_000 },
+  );
+  expect(asked).toContain(
+    `Update the Starbridge skill for Codex in ${join(m.home, ".codex/skills/starbridge")}?`,
+  );
+  // Declined: nothing written.
+  expect(readFileSync(join(m.home, ".codex/skills/starbridge/SKILL.md"), "utf8")).toContain("old");
 });
 
 test("status reports the agent, the service and the plugins", async () => {
@@ -170,6 +202,8 @@ test("status reports the agent, the service and the plugins", async () => {
   expect(out).toContain("Server: reachable");
   expect(out).toContain("Service: active, enabled");
   expect(out).toContain("starbridge-mod@starbridge: 0.2.0");
+  expect(out).toContain("Codex skill: installed");
+  expect(out).toContain("Pi package: installed");
   expect(out).not.toContain("Manual install left");
 });
 
@@ -183,6 +217,8 @@ test("uninstall removes the service and plugins, asks the devices to revoke, kee
   expect(m.calls()).toContain("systemctl --user disable --now starbridge-agent.service");
   expect(m.calls()).toContain("claude plugin uninstall starbridge-mod@starbridge --scope user");
   expect(m.calls()).toContain("claude plugin marketplace remove starbridge");
+  expect(existsSync(join(m.home, ".codex/skills/starbridge"))).toBe(false);
+  expect(m.calls()).toContain("pi remove git:github.com/T0mSIlver/starbridge");
   const [d] = await server.opened("decision");
   expect(d?.question).toBe("Revoke devbox? It was uninstalled.");
   expect(existsSync(join(m.ctx.store.dir, "machine.json"))).toBe(true);
