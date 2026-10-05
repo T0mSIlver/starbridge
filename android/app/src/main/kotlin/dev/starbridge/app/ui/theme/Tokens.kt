@@ -293,6 +293,8 @@ object Sizes {
     val content = 720.dp
     val track = 10.dp
     val media = 360.dp
+    val page = 1040.dp
+    val shot = 320.dp
 }
 
 object Motion {
@@ -303,6 +305,13 @@ object Motion {
 
 // The theme passes the bundled faces.
 class StarbridgeType(sans: FontFamily, mono: FontFamily) {
+    val display = TextStyle(
+        fontFamily = sans,
+        fontSize = 45.sp,
+        fontWeight = FontWeight(500),
+        lineHeight = 52.002.sp,
+        letterSpacing = 0.em,
+    )
     val title = TextStyle(
         fontFamily = sans,
         fontSize = 32.sp,

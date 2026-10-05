@@ -1,0 +1,134 @@
+.page {
+  max-width: var(--size-page);
+  margin: 0 auto;
+  padding: var(--s4) var(--s4) var(--s10);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s10);
+}
+
+.top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: var(--size-tap);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+}
+
+.link {
+  color: var(--fg2);
+  text-underline-offset: 3px;
+}
+
+.link:hover {
+  color: var(--fg);
+}
+
+.hero {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+  max-width: var(--size-content);
+}
+
+.lede {
+  color: var(--fg2);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s3);
+  margin-top: var(--s2);
+}
+
+.features {
+  display: grid;
+  gap: var(--s10);
+}
+
+.feature {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+}
+
+.shot {
+  display: block;
+  width: 100%;
+  max-width: var(--size-shot);
+  height: auto;
+  margin-bottom: var(--s2);
+  border-radius: var(--radius-xl);
+  background: var(--bg);
+  outline: 1px solid var(--line);
+}
+
+.block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+  max-width: var(--size-content);
+}
+
+.install {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+}
+
+.install dt {
+  color: var(--fg2);
+  margin-bottom: var(--s1);
+}
+
+.cmd {
+  display: block;
+  padding: var(--s3) var(--s4);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  overflow-x: auto;
+  white-space: pre;
+  user-select: all;
+}
+
+.foot {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--s3);
+  padding-top: var(--s6);
+  border-top: 1px solid var(--line);
+}
+
+.textButton {
+  border: none;
+  background: none;
+  color: var(--fg2);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.textButton:hover {
+  color: var(--fg);
+}
+
+@media (min-width: 840px) {
+  .page {
+    padding-top: var(--s6);
+  }
+
+  .hero {
+    padding: var(--s10) 0;
+  }
+
+  .features {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--s8);
+  }
+}
