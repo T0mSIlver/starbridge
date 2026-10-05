@@ -386,7 +386,8 @@ function useRowMoves(list: React.RefObject<HTMLElement | null>) {
     const next = new Map<string, number>();
     for (const row of rows) {
       const id = row.dataset.row as string;
-      const top = row.getBoundingClientRect().top + (list.current?.scrollTop ?? 0);
+      // Layout position: unmoved by page or list scroll, and by a move still running.
+      const top = row.offsetTop;
       next.set(id, top);
       const was = tops.current.get(id);
       if (still || was === undefined || Math.abs(was - top) < 1) continue;
@@ -467,11 +468,11 @@ function RowActions({
   if (options.length === 0) return null;
   return (
     <>
-      {options.map((o) => (
+      {options.map((o, i) => (
         <button
           key={o}
           type="button"
-          className={`t-label ${ui.btn} ${o === d.recommended ? ui.rec : ""}`}
+          className={`t-label ${ui.btn} ${i === 0 ? ui.rec : ""}`}
           disabled={busy}
           onClick={run(() => onQuestion(entry.item, { choice: o }))}
         >
