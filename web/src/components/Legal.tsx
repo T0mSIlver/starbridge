@@ -1,9 +1,11 @@
+import { Analytics } from "./Analytics";
 import s from "./Legal.module.css";
 
 /** A plain text page: /privacy and /terms. */
 export function LegalPage({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <main className={`${s.page} t-body`}>
+      <Analytics />
       <a href="/" className="t-heading">
         Starbridge
       </a>

@@ -13,6 +13,13 @@ starbridge.run {
 	handle @server {
 		reverse_proxy 127.0.0.1:8080
 	}
+	# Umami: only the tracker script and its collect endpoint are public. The rest of /stats
+	# falls through to the page's 404; the dashboard is reached through an SSH tunnel.
+	@stats path /stats/script.js /stats/api/send
+	handle @stats {
+		uri strip_prefix /stats
+		reverse_proxy 127.0.0.1:3001
+	}
 	handle {
 		reverse_proxy 127.0.0.1:3000
 	}

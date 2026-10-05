@@ -687,6 +687,22 @@ How it generalizes is open.
   their kinds by name and skip unknown pushes, so they never see it. Two optional fields for the
   design (orchestrator): `source.machineKind` (`server`, `desktop`, `laptop`, `cloud`) and a
   decision's `agent` (`claude-code`, `codex`), as permissions have.
+- 2026-10-05. Page analytics (owner ruling on #141, as built). Umami 3.4.0 with Postgres 18 runs
+  in the deploy's Compose project, on a network of its own. Only the landing page, `/privacy`
+  and `/terms` load its tracker, from `/stats/script.js` on starbridge.run; Caddy passes that
+  file and `/stats/api/send` to Umami and nothing else, so no DNS record is needed. Auto-tracking
+  is off and each public page records its own view, because the tracker would otherwise follow
+  the app's client-side navigation after an owner-token sign-in from the landing page. Copying
+  an install command records `copy-install` with the method (Script, Homebrew, npm). No cookie,
+  no browser storage, no stored IP address: the visitor hash's salt changes daily
+  (`SALT_ROTATION=day`), Do Not Track is honoured, and `/privacy` lists what Umami records, so
+  there is no consent banner. The dashboard listens on the VPS's `127.0.0.1:3001` only; the owner
+  reaches it through an SSH tunnel. The first deploy makes the database password and Umami's
+  secret on the box (`deploy/host/umami-env.sh`); `deploy/umami-setup.sh` then replaces the
+  default admin password and creates the website under the id the pages send, which is fixed in
+  `web/src/lib/analytics.ts`. The nightly backup also dumps Umami's database (`pg_dump -Fc`, 14
+  days). Umami drops headless browsers' hits as bots, so a Playwright check needs a desktop user
+  agent.
 
 ## Encryption, with existing libraries
 

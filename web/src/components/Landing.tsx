@@ -1,3 +1,5 @@
+import { track } from "@/lib/analytics";
+import { Analytics } from "./Analytics";
 import { Mark } from "./icons";
 import s from "./Landing.module.css";
 import ui from "./ui.module.css";
@@ -60,6 +62,7 @@ function Shot({ name, alt, height }: { name: string; alt: string; height: number
 export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
   return (
     <main className={s.page}>
+      <Analytics />
       <header className={s.top}>
         <span className={s.brand}>
           <Mark />
@@ -114,7 +117,7 @@ export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
           {INSTALL.map((i) => (
             <div key={i.label}>
               <dt className="t-label">{i.label}</dt>
-              <dd>
+              <dd onCopy={() => track("copy-install", { method: i.label })}>
                 <code className={`t-code ${s.cmd}`}>{i.cmd}</code>
               </dd>
             </div>
