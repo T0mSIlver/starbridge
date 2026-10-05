@@ -31,6 +31,10 @@ export const DEFAULT_LIMITS = {
   itemBytes: 2 * 1024 * 1024,
   /** Sealed box of one answer, in bytes: an answer's text is at most 4000 characters. */
   answerBytes: 32 * 1024,
+  /** Stored permission prompts per account, open or settled; each lives answeredRetention. */
+  permissions: 10_000,
+  /** Bytes charged per stored row (an item, and each of its boxes) on top of its boxes. */
+  rowBytes: 512,
   /** Stored runs per account; each lives runRetention after its last update. */
   runs: 500,
   /** Sealed boxes of one run update, in bytes. */

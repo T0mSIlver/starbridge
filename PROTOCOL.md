@@ -292,8 +292,9 @@ code below. Per-address limits count an IPv6 client as its /64.
 |---|---|
 | `POST /items` | 120 a minute per account |
 | Stored decisions, open or answered | 10000 per account: 409 `too-many-items` |
+| Stored permission prompts, open or settled | 10000 per account: 409 `too-many-items` |
 | Stored runs | 500 per account: 409 `too-many-items` for a new run; updates still pass |
-| Stored boxes | 128 MB per account, of which machine-signed items may fill all but the last 8 MB: 409 `too-many-items`; 2 MB per machine-signed item (all its boxes), 32 KB per run update and 32 KB per answer or permission answer: 413 `too-large` |
+| Stored items | 128 MB per account, counting each item's boxes plus 512 bytes for the item and for each box, of which machine-signed items may fill all but the last 8 MB: 409 `too-many-items`; 2 MB per machine-signed item (all its boxes), 32 KB per run update and 32 KB per answer or permission answer: 413 `too-large` |
 | `POST /directory` | 30 an hour per account |
 | Directory entries | from entry 200 on, a device's `add`: 409 `directory-full`; revocations always pass, and the recovery key may add 20 more devices; 8 KB per entry: 413 `too-large` |
 | Sessions | 50 per account; signing in past that ends the oldest, unpaired ones first |
