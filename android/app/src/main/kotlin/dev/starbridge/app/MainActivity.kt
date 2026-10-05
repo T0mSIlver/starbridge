@@ -32,7 +32,6 @@ import dev.starbridge.app.ui.Setup
 import dev.starbridge.app.ui.theme.StarbridgeTheme
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.receiveAsFlow
-import java.time.Instant
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -70,7 +69,7 @@ class MainActivity : ComponentActivity() {
                     }
                 }
                 if (phase == Phase.Ready) {
-                    Main(decisions.count { it.isOpen(Instant.now()) }, store.notice, store::dismissNotice, openDecision.receiveAsFlow())
+                    Main(decisions, store.notice, store::dismissNotice, openDecision.receiveAsFlow())
                 } else {
                     Setup(phase, store.notice, store::dismissNotice, ::openInBrowser)
                 }

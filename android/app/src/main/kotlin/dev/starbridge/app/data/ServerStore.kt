@@ -515,6 +515,11 @@ class ServerStore(
                 alerts.cancel(id)
                 val d = saved.decisions.find { it.body.id == id }
                 if (d != null && d.answeredAt == null) persist(saved.copy(decisions = saved.decisions.map { if (it === d) it.copy(answeredAt = now()) else it }))
+                // Only the settled notice says how it closed, withdrawn or answered elsewhere.
+                if (kind == "settled") {
+                    if (directory == null) syncDirectory()
+                    if (phase.value == Phase.Ready) syncDecisions()
+                }
             }
             "decision" -> {
                 if (saved.decisions.any { it.body.id == id }) return@withLock

@@ -26,6 +26,8 @@ test("a link reads as its title, a Claude artifact, or its host and path", () =>
   expect(linkLabel({ url: "https://claude.ai/public/artifacts/0b3f" })).toBe("Claude artifact");
   expect(linkLabel({ url: "https://claude.ai/code/artifact/7c1d" })).toBe("Claude artifact");
   expect(linkLabel({ url: "https://www.example.com/" })).toBe("example.com");
+  // Passes the schema but not URL: shown as written rather than crashing the inbox.
+  expect(linkLabel({ url: "https://%" })).toBe("https://%");
   expect(linkLabel({ url: `https://example.com/${"a".repeat(60)}` })).toHaveLength(40);
 });
 

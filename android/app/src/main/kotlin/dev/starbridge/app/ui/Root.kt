@@ -46,6 +46,7 @@ import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
+import dev.starbridge.app.data.Decision
 import dev.starbridge.app.data.Phase
 import dev.starbridge.app.ui.devices.DevicesScreen
 import dev.starbridge.app.ui.devices.DevicesViewModel
@@ -129,9 +130,11 @@ private fun suiteType(): NavigationSuiteType {
  */
 @OptIn(ExperimentalMaterial3AdaptiveApi::class)
 @Composable
-fun Main(openDecisions: Int, notice: StateFlow<String?>, dismiss: () -> Unit, openDecision: Flow<String>) {
+fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> Unit, openDecision: Flow<String>) {
     val backStack = rememberNavBackStack(InboxKey)
     val now = now()
+    // An answer-in decision stops waiting at its default time, so count against the ticking clock.
+    val openDecisions = decisions.count { it.isOpen(now) }
     val host = Notices(notice, dismiss)
     val listDetail = rememberListDetailSceneStrategy<NavKey>()
     val twoPane = calculatePaneScaffoldDirective(currentWindowAdaptiveInfo()).maxHorizontalPartitions > 1

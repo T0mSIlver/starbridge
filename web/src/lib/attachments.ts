@@ -17,8 +17,15 @@ export function imageBlob(img: DecisionImage): Blob {
 /** A link's chip text: its title, else "Claude artifact" for one, else its host and path. */
 export function linkLabel(link: DecisionLink): string {
   if (link.title) return link.title;
-  const url = new URL(link.url);
+  let url: URL;
+  try {
+    url = new URL(link.url);
+  } catch {
+    // The schema accepts some https:// strings that URL refuses; show those as written.
+    return clip(link.url);
+  }
   if (url.hostname === "claude.ai" && /\/artifacts?\//.test(url.pathname)) return "Claude artifact";
-  const text = `${url.hostname.replace(/^www\./, "")}${url.pathname === "/" ? "" : url.pathname}`;
-  return text.length > 40 ? `${text.slice(0, 39)}…` : text;
+  return clip(`${url.hostname.replace(/^www\./, "")}${url.pathname === "/" ? "" : url.pathname}`);
 }
+
+const clip = (text: string) => (text.length > 40 ? `${text.slice(0, 39)}…` : text);
