@@ -150,8 +150,10 @@ async function judge(r: Rec, s: Scenario): Promise<Verdict | undefined> {
 function score(r: Rec, s: Scenario): Record<string, boolean | null> {
   const cards = r.decisions as unknown as Card[];
   const first = r.turns[0];
-  const cmds = first?.commands ?? [];
-  const all = r.turns.flatMap((t) => t.commands);
+  // Flags often sit on backslash-continued lines; join them so each check sees the whole command.
+  const unwrap = (c: string) => c.replace(/\\\n\s*/g, " ");
+  const cmds = (first?.commands ?? []).map(unwrap);
+  const all = r.turns.flatMap((t) => t.commands).map(unwrap);
   const asks = s.expect === "ask" || s.expect === "answer-in";
   const hasCard = cards.length > 0;
   const each = (f: (c: Card) => boolean) => (hasCard ? cards.every(f) : null);
