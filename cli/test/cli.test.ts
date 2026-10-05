@@ -5,9 +5,10 @@ import { join } from "node:path";
 import { fromB64 } from "@starbridge/protocol";
 import { LiveServer } from "@starbridge/server/test-support";
 import jpeg from "jpeg-js";
+import jsQR from "jsqr";
 import { PNG } from "pngjs";
 import { run } from "../src/cli";
-import { FAKE_CODEXBAR, paired, until } from "./helpers";
+import { FAKE_CODEXBAR, paired, testCtx, until } from "./helpers";
 
 let server: LiveServer;
 beforeEach(async () => {
@@ -39,6 +40,39 @@ test("pair joins the directory and keeps the keys private", async () => {
     expect(statSync(join(ctx.store.dir, f)).mode & 0o777).toBe(0o600);
   expect(await run(["pair", "--server", server.url], ctx)).toBe(1);
   expect(ctx.errors.at(-1)).toContain("already paired");
+});
+
+/** Reads a terminal QR back: each character is two modules, upper and lower, 4 px square. */
+function scan(lines: string[]): string | undefined {
+  const rows = lines.map((l) => [
+    ...l.replaceAll("\u001b[30;107m", "").replaceAll("\u001b[0m", ""),
+  ]);
+  const width = (rows[0]?.length ?? 0) * 4;
+  const height = rows.length * 8;
+  const px = new Uint8ClampedArray(width * height * 4).fill(255);
+  for (const [y, row] of rows.entries())
+    for (const [x, ch] of row.entries()) {
+      const dark = [ch === "█" || ch === "▀", ch === "█" || ch === "▄"];
+      for (let dy = 0; dy < 8; dy++)
+        for (let dx = 0; dx < 4; dx++) {
+          if (!dark[dy < 4 ? 0 : 1]) continue;
+          const i = ((y * 8 + dy) * width + x * 4 + dx) * 4;
+          px[i] = px[i + 1] = px[i + 2] = 0;
+        }
+    }
+  return jsQR(px, width, height)?.data;
+}
+
+test("pair prints a link and a QR code that carry the code", async () => {
+  const ctx = testCtx();
+  const done = run(["pair", "--server", `${server.url}/`, "--name", "devbox"], ctx);
+  await until(() => ctx.lines.some((l) => l.startsWith("Or type the code")));
+  const code = ctx.lines[0]?.replace("Pairing code: ", "") as string;
+  const link = `${server.url}/pair#${code}`;
+  expect(ctx.lines[1]).toEndWith(link);
+  expect(scan(ctx.lines.slice(2, -1))).toBe(link);
+  await server.approve(code);
+  expect(await done).toBe(0);
 });
 
 test("ask seals a decision the phone can open, recommended first", async () => {
@@ -271,7 +305,16 @@ test("wait with no id returns each answer once, then times out with exit 2", asy
 test("quota push --once posts a sealed snapshot and survives bad providers", async () => {
   const ctx = await paired(server);
   ctx.env.STARBRIDGE_CODEXBAR = FAKE_CODEXBAR;
-  const providers = ["codex", "zai", "claude", "mistral", "broken", "garbage", "nosuch"];
+  const providers = [
+    "codex",
+    "zai",
+    "claude",
+    "mistral",
+    "signedout",
+    "broken",
+    "garbage",
+    "nosuch",
+  ];
   const args = providers.flatMap((p) => ["--provider", p]);
   expect(await run(["quota", "push", "--once", ...args], ctx)).toBe(0);
   const [snap] = await server.opened("quota");
@@ -283,6 +326,7 @@ test("quota push --once posts a sealed snapshot and survives bad providers", asy
     "claude-weekly-scoped-fable",
   ]);
   expect(by.get("mistral")?.windows.map((w) => w.label)).toEqual(["Included API", "Monthly Plan"]);
+  expect(by.get("signedout")?.error).toBe("No available fetch strategy for signedout.");
   expect(by.get("broken")?.error).toContain("provider not configured");
   expect(by.get("garbage")?.error).toContain("unreadable output");
   expect(by.get("nosuch")?.error).toBe("missing from codexbar's output");

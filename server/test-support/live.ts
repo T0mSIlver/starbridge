@@ -11,13 +11,26 @@ import {
   openPairingRequest,
   pairingApproval,
   parsePairingCode,
+  type Permission,
+  type PermissionAnswer,
   type SealedItem,
   seal,
 } from "@starbridge/protocol";
 import type { Server as BunServer } from "bun";
 import { nextSeq } from "../src/db";
 import type { Stored } from "../src/routes/items";
-import { type Account, append, directory, makeServer, type Server, setupAccount } from "./app";
+import {
+  type Account,
+  type Actor,
+  append,
+  directory,
+  makeServer,
+  pair,
+  revoke,
+  type Server,
+  setupAccount,
+  signIn,
+} from "./app";
 
 export class LiveServer {
   /** HTTP requests received, as "METHOD /path" without the `/v1` prefix. */
@@ -27,6 +40,8 @@ export class LiveServer {
    * outage on demand.
    */
   readonly failures: string[] = [];
+  /** The next HTTP requests to these paths never get a response, once each. */
+  readonly stalls: string[] = [];
 
   private constructor(
     private readonly s: Server,
@@ -61,6 +76,11 @@ export class LiveServer {
     if (fail >= 0) {
       this.failures.splice(fail, 1);
       return Response.json({ error: "unavailable" }, { status: 503 });
+    }
+    const stall = this.stalls.indexOf(path);
+    if (stall >= 0) {
+      this.stalls.splice(stall, 1);
+      return new Promise<Response>(() => {});
     }
     return this.s.app.fetch(req, { server });
   }
@@ -110,9 +130,11 @@ export class LiveServer {
     return ((await this.phone("GET", `/items?kind=${kind}`)) as { items: Stored[] }).items;
   }
 
-  /** Items of `kind` as the phone lists them, opened and verified. */
-  async opened<K extends "decision" | "quota">(kind: K) {
-    const { items } = (await this.phone("GET", `/items?kind=${kind}`)) as { items: Stored[] };
+  /** Items of `kind` as the phone lists them, opened and verified; `open=1` for open ones. */
+  async opened<K extends "decision" | "quota" | "permission" | "settled">(kind: K, query = "") {
+    const { items } = (await this.phone("GET", `/items?kind=${kind}${query}`)) as {
+      items: Stored[];
+    };
     const dir = await this.directory();
     const me = { id: "phone", box: this.owner.device.keys.box };
     return items.map((s) => open(s.item as SealedItem & { kind: K }, me, dir).body);
@@ -174,5 +196,81 @@ export class LiveServer {
     })();
     for (const to of new Set(items.flatMap((i) => i.boxes.map((b) => b.to))))
       waiters.wake(`${account}/${to}`);
+  }
+
+  /** Pairs a second device, such as a laptop, for answers from someone other than the phone. */
+  async addDevice(id: string): Promise<Actor> {
+    return pair(this.s, this.owner, id, "device", await signIn(this.s));
+  }
+
+  /** The phone revokes a member. */
+  async revoke(id: string) {
+    const r = await revoke(this.s, this.owner, id);
+    if (r.status !== 201) throw new Error(`revoke: ${r.status} ${JSON.stringify(r.json)}`);
+  }
+
+  /**
+   * A device's answer to permission `permissionId`, sealed to the machine that asked and
+   * repeating its input hash; `tamper` changes the signed body.
+   */
+  async sealPermissionAnswer(
+    permissionId: string,
+    reply: Pick<PermissionAnswer, "behavior" | "scope" | "message">,
+    opts: { by?: Actor; tamper?: Partial<PermissionAnswer> } = {},
+  ): Promise<SealedItem> {
+    const { item } = (await this.phone("GET", `/items/${permissionId}`)) as Stored;
+    const dir = await this.directory();
+    const asked = open(
+      item as SealedItem & { kind: "permission" },
+      { id: "phone", box: this.owner.device.keys.box },
+      dir,
+    ).body as Permission;
+    const machine = dir.members.get(item.from);
+    if (!machine) throw new Error(`no member ${item.from}`);
+    const by = opts.by ?? this.owner.device;
+    const body = {
+      v: 1 as const,
+      id: `pa_${crypto.randomUUID()}`,
+      permissionId,
+      to: machine.member.id,
+      answeredAt: `${new Date().toISOString().slice(0, 19)}Z`,
+      inputHash: asked.inputHash,
+      ...reply,
+      ...opts.tamper,
+    } as PermissionAnswer;
+    return seal("permission-answer", body, { id: by.id, signKey: by.keys.sign.privateKey }, [
+      machine.member,
+    ]);
+  }
+
+  /** A device answers a permission prompt through `POST /items`. */
+  async answerPermission(
+    permissionId: string,
+    reply: Pick<PermissionAnswer, "behavior" | "scope" | "message">,
+    opts: { by?: Actor; tamper?: Partial<PermissionAnswer> } = {},
+  ) {
+    const item = await this.sealPermissionAnswer(permissionId, reply, opts);
+    const by = opts.by ?? this.owner.device;
+    const r = await this.s.call("POST", "/v1/items", { token: by.token, body: item });
+    if (r.status >= 300) throw new Error(`answer: ${r.status} ${JSON.stringify(r.json)}`);
+  }
+
+  /** Stores an item past every check `POST /items` makes, as a compromised server would. */
+  inject(item: SealedItem) {
+    const { db, answers: waiters } = this.s.deps;
+    const account = this.owner.id;
+    db.transaction(() => {
+      db.query(
+        "INSERT INTO items (seq, account_id, id, kind, from_id, re, received_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      ).run(nextSeq(db), account, item.id, item.kind, item.from, item.re ?? null, new Date().toISOString());
+      for (const b of item.boxes)
+        db.query("INSERT INTO boxes (account_id, item_id, to_id, box) VALUES (?, ?, ?, ?)").run(
+          account,
+          item.id,
+          b.to,
+          b.box,
+        );
+    })();
+    for (const b of item.boxes) waiters.wake(`${account}/${b.to}`);
   }
 }

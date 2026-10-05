@@ -55,6 +55,25 @@ hands each Claude Code session its answers over a unix socket
 (PROTOCOL.md, "Local agent API"). Every command goes through it when it runs
 and to the server directly when it does not, or with `STARBRIDGE_NO_AGENT=1`.
 
+`starbridge setup` does the rest in one run, and a rerun repairs only what is
+missing. It pairs the machine and finds CodexBar. When CodexBar is missing,
+setup installs it: Homebrew if present, else the release tarball, checked
+against pinned hashes and unpacked to `~/.local/opt/codexbar`. It then probes
+each provider and lets you pick which to upload, and writes `agent.json`. The
+agent goes in as a systemd user unit or a launchd agent. The Claude Code
+plugins install at user scope. Setup also replaces a hand-written `starbridge
+quota push` unit and a copied mod or skill, then uploads a first snapshot.
+`--yes` takes every default; `--no-quota`, `--no-service` and `--no-plugin`
+skip a step. `starbridge status` prints the same checks. `starbridge
+uninstall` removes the service, the plugins and then the binary, asks your devices to revoke
+the machine, and deletes the keys only when you say so (`--purge`).
+
+`starbridge permissions enable` sends this machine's Claude Code permission
+prompts to your devices too, where they can be allowed or denied; the prompt
+stays open at the keyboard and the first answer wins. The `starbridge`
+plugin's hooks run `starbridge hook permission` and `starbridge hook settle`,
+which do nothing while it is off (PROTOCOL.md, "Permission prompts").
+
 `quota push` runs `codexbar usage --format json` for each provider, or once
 for every enabled provider when none is named. A provider that fails or is
 missing from the output is logged and sent as an error; it never stops the

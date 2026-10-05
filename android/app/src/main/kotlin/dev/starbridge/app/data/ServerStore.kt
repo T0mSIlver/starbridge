@@ -6,8 +6,13 @@ import dev.starbridge.app.protocol.Directories
 import dev.starbridge.app.protocol.Directory
 import dev.starbridge.app.protocol.DirectoryEntry
 import dev.starbridge.app.protocol.Envelopes
+import dev.starbridge.app.protocol.JoinApprovalBody
+import dev.starbridge.app.protocol.JoinKeys
+import dev.starbridge.app.protocol.JoinRequestBody
+import dev.starbridge.app.protocol.Joins
 import dev.starbridge.app.protocol.KeyPair
 import dev.starbridge.app.protocol.PairingApprovalBody
+import dev.starbridge.app.protocol.Permission
 import dev.starbridge.app.protocol.PairingCode
 import dev.starbridge.app.protocol.PairingRequestBody
 import dev.starbridge.app.protocol.Pairings
@@ -23,7 +28,9 @@ import dev.starbridge.app.protocol.SignedEnvelope
 import dev.starbridge.app.protocol.Sodium
 import dev.starbridge.app.protocol.bindMessage
 import dev.starbridge.app.protocol.checkJoined
+import dev.starbridge.app.protocol.codeFromLink
 import dev.starbridge.app.protocol.fromB64
+import dev.starbridge.app.protocol.pairingLink
 import dev.starbridge.app.protocol.parsePairingCode
 import dev.starbridge.app.protocol.toB64
 import kotlinx.coroutines.CoroutineScope
@@ -49,10 +56,14 @@ import kotlin.math.roundToInt
 import dev.starbridge.app.protocol.Decision as DecisionBody
 import dev.starbridge.app.protocol.Member as DirectoryMember
 
-/** Shows and clears decision notifications; the app's is [dev.starbridge.app.push.Notifier]. */
+/** Shows and clears notifications; the app's is [dev.starbridge.app.push.Notifier]. */
 interface Alerts {
     fun decision(decision: Decision)
     fun cancel(id: String)
+    fun prompt(prompt: Prompt)
+    fun cancelPrompt(prompt: Prompt)
+    /** A browser or phone signed in to the account asks to join. */
+    fun join(id: String, name: String)
 }
 
 /**
@@ -66,6 +77,7 @@ class ServerStore(
     private val envelopes: Envelopes,
     private val directories: Directories,
     private val pairings: Pairings,
+    private val joins: Joins,
     private val alerts: Alerts,
     private val deviceName: String,
     private val defaultServer: String,
@@ -78,12 +90,22 @@ class ServerStore(
     private var directory: Directory? = null
     private var pending: Pair<PairingCode, PairingRequestBody>? = null
     private var joinJob: Job? = null
+    private var showJob: Job? = null
+    private var watchJob: Job? = null
+    private var compareJob: Job? = null
+    /** The join requests as last listed, by id, so comparing uses what was listed. */
+    private var joinViews = mapOf<String, JoinView>()
+    /** What comparing digits derived: the request, its body and the keys. */
+    private var compared: Triple<JoinView, JoinRequestBody, JoinKeys>? = null
 
     override val phase = MutableStateFlow<Phase>(Phase.SignedOut)
     override val decisions = MutableStateFlow<List<Decision>>(emptyList())
+    override val prompts = MutableStateFlow<List<Prompt>>(emptyList())
     override val windows = MutableStateFlow<List<QuotaWindow>>(emptyList())
     override val members = MutableStateFlow<List<Member>>(emptyList())
     override val approval = MutableStateFlow<Approval>(Approval.Idle)
+    override val joinAsks = MutableStateFlow<List<JoinAsk>>(emptyList())
+    override val comparison = MutableStateFlow<Comparison>(Comparison.Idle)
     override val push = MutableStateFlow(PushSetting(saved.pushType, fcmAvailable, emptyList(), false))
     override val server = MutableStateFlow(saved.server)
     override val busy = MutableStateFlow(false)
@@ -94,6 +116,7 @@ class ServerStore(
         directory = runCatching { verified(saved.entries) }.getOrNull()
         publish()
         if (saved.joining != null) waitForApproval()
+        if (saved.digitJoin != null) waitForDigitJoin()
     }
 
     // --- State ------------------------------------------------------------------
@@ -122,7 +145,8 @@ class ServerStore(
     private fun publish() {
         phase.value = when {
             secrets.session == null -> Phase.SignedOut
-            saved.joining != null -> Phase.Joining(saved.joining!!)
+            saved.joining != null -> Phase.Joining(saved.joining!!, saved.joiningScanned)
+            saved.digitJoin != null -> Phase.JoiningByDigits(saved.digitJoin!!.digits)
             saved.me == null || saved.pin == null -> Phase.NoDevice(saved.accountExists)
             secrets.recoverySeed != null -> Phase.RecoveryKey(Bip39.entropyToMnemonic(fromB64(secrets.recoverySeed!!)).split(" "))
             else -> Phase.Ready
@@ -130,6 +154,7 @@ class ServerStore(
         server.value = saved.server
         push.value = push.value.copy(type = saved.pushType, registered = saved.push?.type == saved.pushType)
         decisions.value = saved.decisions.map(::toUi)
+        prompts.value = saved.prompts.map(::toUi)
         windows.value = saved.quotas.flatMap(::toUi)
         members.value = directory?.let(::toUi).orEmpty()
     }
@@ -170,6 +195,8 @@ class ServerStore(
             "machine-cap" -> "This account already has its maximum number of machines. Revoke one first."
             "already-answered" -> "Already answered on another device."
             "rate-limited" -> "Too many tries. Wait a minute."
+            "taken" -> "Another of your devices is already comparing digits for it."
+            "closed" -> "That request was already answered or cancelled."
             else -> e.message ?: e.error
         }
         is ProtocolException -> "Refused: the server sent something that does not check out (${e.code})."
@@ -179,6 +206,12 @@ class ServerStore(
 
     private fun wipe(message: String?) {
         joinJob?.cancel()
+        showJob?.cancel()
+        watchJob?.cancel()
+        compareJob?.cancel()
+        compared = null
+        joinAsks.value = emptyList()
+        comparison.value = Comparison.Idle
         disk.wipe()
         saved = Saved(saved.server, pushType = saved.pushType)
         secrets = Secrets()
@@ -230,7 +263,7 @@ class ServerStore(
             throw IllegalStateException(if (e.status == 401) "Sign-in failed: the server did not accept the session." else describe(e))
         }
         val mine = saved.me
-        if (mine != null && saved.pin != null && saved.joining == null && secrets.signSk != null && me.account == saved.account) {
+        if (mine != null && saved.pin != null && saved.joining == null && saved.digitJoin == null && secrets.signSk != null && me.account == saved.account) {
             // This phone is still a device: bind the new session with its signing key (PROTOCOL.md, "Auth").
             try {
                 if (me.member == null) fresh.bind(mine.id, toB64(sodium.sign(bindMessage(me.account, mine.id, fresh.challenge()), signKey)))
@@ -300,13 +333,28 @@ class ServerStore(
         sync()
     }
 
-    override fun joinAccount() = run {
+    override fun joinAccount() = run { join(pairings.newCode(), scanned = false) }
+
+    override fun joinWithCode(text: String) = run {
+        val code = try {
+            codeFromLink(text)
+        } catch (e: ProtocolException) {
+            throw IllegalArgumentException("That QR code is not a Starbridge pairing code.")
+        }
+        try {
+            join(code, scanned = true)
+        } catch (e: ApiException) {
+            throw if (e.error == "taken") IllegalStateException("Another phone already used this code. Show a new one.") else e
+        }
+    }
+
+    /** Posts this phone's request under [code], which it made or scanned, and waits for approval. */
+    private suspend fun join(code: PairingCode, scanned: Boolean) {
         val member = newMember()
-        val code = pairings.newCode()
         val claim = pairings.newClaimSecret()
         val request = pairings.request(PairingRequestBody(1, code.rendezvous, "device", member.id, member.name, member.boxPk, member.signPk, now()), code)
         api().postPairing(request, pairings.claimHash(claim))
-        persist(saved.copy(me = member, joining = code.formatted()), secrets.copy(claim = claim))
+        persist(saved.copy(me = member, joining = code.formatted(), joiningScanned = scanned), secrets.copy(claim = claim))
         waitForApproval()
     }
 
@@ -331,8 +379,8 @@ class ServerStore(
                 }
             } catch (e: ApiException) {
                 lock.withLock {
-                    persist(saved.copy(me = null, joining = null), secrets.copy(claim = null))
-                    notice.value = if (e.status == 404) "The code expired. Make a new one." else describe(e)
+                    persist(saved.copy(me = null, joining = null, joiningScanned = false), secrets.copy(claim = null))
+                    notice.value = if (e.status == 404) "The code expired. Make a new one." else if (e.error == "taken") "Another phone already used this code. Show a new one." else describe(e)
                 }
             } catch (e: IOException) {
                 // Fetching the chain after the approval failed; the next start resumes the wait.
@@ -359,7 +407,109 @@ class ServerStore(
 
     override fun cancelJoin() = run(showBusy = false) {
         joinJob?.cancel()
-        persist(saved.copy(me = null, joining = null), secrets.copy(claim = null))
+        saved.digitJoin?.let { runCatching { api().cancelJoin(it.id) } }
+        persist(saved.copy(me = null, joining = null, joiningScanned = false, digitJoin = null), secrets.copy(claim = null, joinPk = null, joinSk = null))
+    }
+
+    // --- Joining by digits (PROTOCOL.md) ------------------------------------------
+
+    override fun askDevices() = run {
+        val member = newMember()
+        val eph = joins.newKeyPair()
+        val id = joins.newId()
+        val request = joins.request(JoinRequestBody(1, id, saved.account!!, member.id, member.name, member.boxPk, member.signPk, now()))
+        // The key pair reaches the disk first, so a restart resumes the same join.
+        persist(saved.copy(me = member, digitJoin = SavedDigitJoin(id, request)), secrets.copy(joinPk = toB64(eph.public), joinSk = toB64(eph.secret)))
+        try {
+            api().postJoin(request, joins.commitment(eph.public, request))
+        } catch (e: Exception) {
+            persist(saved.copy(me = null, digitJoin = null), secrets.copy(joinPk = null, joinSk = null))
+            throw e
+        }
+        waitForDigitJoin()
+    }
+
+    private fun clearDigitJoin() = persist(saved.copy(me = null, digitJoin = null), secrets.copy(joinPk = null, joinSk = null))
+
+    private fun waitForDigitJoin() {
+        joinJob?.cancel()
+        joinJob = scope.launch {
+            val id = saved.digitJoin?.id ?: return@launch
+            var after = 0L
+            try {
+                while (true) {
+                    val view = try {
+                        api().join(id, after, 60)
+                    } catch (e: IOException) {
+                        if (e is ApiException) throw e
+                        delay(5_000)
+                        continue
+                    }
+                    after = view.version
+                    if (view.state == "cancelled") throw IllegalStateException("The request was refused or cancelled. Ask again.")
+                    val done = try {
+                        lock.withLock { stepDigitJoin(view) }
+                    } catch (e: IOException) {
+                        if (e is ApiException) throw e
+                        // Offline while revealing or fetching the chain: the next step retries.
+                        delay(5_000)
+                        after = 0
+                        continue
+                    }
+                    if (done) {
+                        refresh()
+                        return@launch
+                    }
+                }
+            } catch (e: ApiException) {
+                lock.withLock {
+                    clearDigitJoin()
+                    notice.value = if (e.status == 404) "The request expired. Ask again." else describe(e)
+                }
+            } catch (e: ProtocolException) {
+                lock.withLock {
+                    clearDigitJoin()
+                    report(e)
+                }
+            } catch (e: IllegalStateException) {
+                lock.withLock {
+                    clearDigitJoin()
+                    notice.value = e.message
+                }
+            }
+        }
+    }
+
+    /**
+     * One step of a join by digits, for the state [view] shows: takes the first approver key and
+     * reveals this phone's key, then checks the approval. True once this phone is in the chain.
+     */
+    private suspend fun stepDigitJoin(view: JoinView): Boolean {
+        var dj = saved.digitJoin ?: return true
+        val eph = KeyPair(fromB64(secrets.joinPk!!), fromB64(secrets.joinSk!!))
+        if (dj.approverKey == null && view.approverKey != null) {
+            val keys = joins.joinerKeys(eph, view.approverKey, dj.request)
+            dj = dj.copy(approverKey = view.approverKey, digits = keys.digits)
+            persist(saved.copy(digitJoin = dj))
+        }
+        val approverKey = dj.approverKey ?: return false
+        if (view.joinerKey == null && view.approverKey == approverKey) {
+            try {
+                api().revealJoin(dj.id, toB64(eph.public))
+            } catch (e: ApiException) {
+                if (e.error != "already-revealed") throw e
+            }
+        }
+        val approval = view.approval ?: return false
+        val keys = joins.joinerKeys(eph, approverKey, dj.request)
+        val body = joins.openApproval(approval, keys, dj.id)
+        if (body.account != saved.account) throw ProtocolException("wrong-account", body.account)
+        val entries = api().directory(0)
+        val dir = directories.verify(entries, saved.account, Pin(body.length, body.head))
+        checkJoined(dir, me)
+        directory = dir
+        persist(saved.copy(digitJoin = null, entries = entries, pin = Pin(dir.length, dir.head)), secrets.copy(joinPk = null, joinSk = null))
+        return true
     }
 
     override fun recover(words: String) = run {
@@ -391,6 +541,7 @@ class ServerStore(
         syncDirectory()
         if (phase.value != Phase.Ready) return
         syncDecisions()
+        syncPrompts()
         syncQuotas()
     }
 
@@ -451,6 +602,116 @@ class ServerStore(
         }
         persist(saved.copy(cursor = cursor, decisions = byId.values.sortedBy { it.body.createdAt }.takeLast(500)))
     }
+
+    /**
+     * Reads permission prompts and settled notices past the cursor. A prompt comes again once it
+     * is answered or settled, with its time; a notice counts only from the machine that asked.
+     */
+    private suspend fun syncPrompts() {
+        var cursor = saved.promptCursor
+        val byId = saved.prompts.associateBy { it.body.id }.toMutableMap()
+        val read = mutableListOf<Listed>()
+        while (true) {
+            val page = api().items("permission,settled", cursor)
+            read += page.items
+            cursor = page.cursor
+            if (page.items.size < 100) break
+        }
+        // A settled prompt comes back after its notice, so prompts go first: a notice whose
+        // prompt is new to this phone would otherwise find nothing to close.
+        for (listed in read.sortedBy { if (it.item.kind == "permission") 0 else 1 }) takePrompt(listed.item, listed.answeredAt, byId)
+        keepPrompts(byId, cursor)
+    }
+
+    /** Merges one verified prompt or notice into [byId]; clears the notification of one that ended. */
+    private fun takePrompt(item: SealedItem, answeredAt: String?, byId: MutableMap<String, SavedPrompt>): SavedPrompt? {
+        when (item.kind) {
+            "permission" -> {
+                val known = byId[item.id]
+                if (known != null) {
+                    if (answeredAt != null && known.answeredAt == null) {
+                        byId[item.id] = known.copy(answeredAt = answeredAt)
+                        alerts.cancelPrompt(toUi(known))
+                    }
+                    return null
+                }
+                val (from, body) = open(item) ?: return null
+                return SavedPrompt(from, body as Permission, answeredAt).also { byId[item.id] = it }
+            }
+            "settled" -> {
+                val (from, body) = open(item) ?: return null
+                val notice = body as Settled
+                val p = byId[notice.itemId]
+                if (p == null) {
+                    settleDecision(notice.itemId, from, notice.outcome)
+                    return null
+                }
+                if (p.from != from) return null
+                byId[p.body.id] = p.copy(settled = notice, answeredAt = p.answeredAt ?: notice.at)
+                alerts.cancelPrompt(toUi(p))
+            }
+        }
+        return null
+    }
+
+    /** A settled notice may close one of the machine's decisions: it counts as answered. */
+    /** A notice after a device's answer closed nothing, so only an open decision takes its [outcome]. */
+    private fun settleDecision(id: String, from: String, outcome: String?) {
+        val d = saved.decisions.find { it.body.id == id && it.from == from } ?: return
+        alerts.cancel(id)
+        if (d.answeredAt == null && d.answer == null) persist(saved.copy(decisions = saved.decisions.map { if (it === d) it.copy(answeredAt = now(), settled = outcome) else it }))
+    }
+
+    /** Keeps a week of prompts, the log's span, as the server does. */
+    private fun keepPrompts(byId: Map<String, SavedPrompt>, cursor: String = saved.promptCursor) {
+        val weekAgo = Instant.now().minus(7, ChronoUnit.DAYS)
+        val kept = byId.values.filter { instant(it.body.createdAt)?.isAfter(weekAgo) != false }.sortedBy { it.body.createdAt }
+        persist(saved.copy(promptCursor = cursor, prompts = kept))
+    }
+
+    override fun refreshPrompts() = run(showBusy = false) {
+        if (phase.value == Phase.Ready) syncPrompts()
+    }
+
+    override fun answerPrompt(id: String, allow: Boolean, scope: String, message: String?) =
+        run(showBusy = false) { sendPrompt(id, allow, scope, message) }
+
+    /**
+     * Signs the answer, bound to the prompt's id and input hash, and seals it to the machine that
+     * asked. A deny is for this call only; a wider allow only for a scope the prompt offered.
+     */
+    suspend fun sendPrompt(id: String, allow: Boolean, scope: String, message: String?) {
+        val p = saved.prompts.find { it.body.id == id } ?: throw IllegalStateException("No such prompt.")
+        if (p.answeredAt != null || p.answer != null) throw IllegalStateException("Already answered.")
+        val chosen = if (allow) scope else "once"
+        if (chosen != "once" && p.body.suggestions.none { it.scope == chosen }) throw IllegalArgumentException("Not offered.")
+        val machine = directory?.members?.get(p.from)?.takeIf { it.active }?.member
+            ?: throw IllegalStateException("The machine that asked is no longer in your directory.")
+        val body = buildJsonObject {
+            put("v", 1)
+            put("id", newId("pa_"))
+            put("permissionId", id)
+            put("to", machine.id)
+            put("answeredAt", now())
+            put("behavior", if (allow) "allow" else "deny")
+            put("scope", chosen)
+            put("inputHash", p.body.inputHash)
+            if (!allow) message?.trim()?.takeIf { it.isNotEmpty() }?.let { put("message", it.take(500)) }
+        }
+        val item = envelopes.seal("permission-answer", body, me.id, signKey, listOf(machine))
+        try {
+            api().postItem(item)
+        } catch (e: ApiException) {
+            if (e.error == "already-answered" || e.error == "expired") syncPrompts()
+            throw e
+        }
+        val answer = if (allow) "allow:$chosen" else "deny"
+        persist(saved.copy(prompts = saved.prompts.map { if (it.body.id == id) it.copy(answeredAt = now(), answer = answer) else it }))
+    }
+
+    /** For the notification's buttons: holds the lock like any other change. */
+    suspend fun sendPromptFromNotification(id: String, allow: Boolean, scope: String) =
+        lock.withLock { sendPrompt(id, allow, scope, null) }
 
     private suspend fun syncQuotas() {
         val quotas = api().quota().mapNotNull { listed -> open(listed.item)?.let { (from, body) -> SavedQuota(from, body as QuotaSnapshot) } }
@@ -513,8 +774,7 @@ class ServerStore(
 
     /**
      * A push payload (PROTOCOL.md, "Push"): a new item with this device's box when it fits, else
-     * its id to fetch; or `answered` once a decision is answered anywhere. A `settled` notice
-     * closes the decision its `re` names.
+     * its id to fetch; or `answered` once a decision is answered anywhere.
      */
     suspend fun onPush(payload: String) = lock.withLock {
         if (phase.value != Phase.Ready) return@withLock
@@ -522,17 +782,15 @@ class ServerStore(
         val kind = p["kind"]?.jsonPrimitive?.content
         val id = p["id"]?.jsonPrimitive?.content ?: return@withLock
         when (kind) {
-            // Answered by a device, or settled by the machine that asked: `re` names the decision.
-            "answered", "settled" -> {
-                val id = if (kind == "settled") p["re"]?.jsonPrimitive?.content ?: return@withLock else id
+            "answered" -> {
+                saved.prompts.find { it.body.id == id }?.let { p ->
+                    alerts.cancelPrompt(toUi(p))
+                    if (p.answeredAt == null) persist(saved.copy(prompts = saved.prompts.map { if (it === p) it.copy(answeredAt = now()) else it }))
+                    return@withLock
+                }
                 alerts.cancel(id)
                 val d = saved.decisions.find { it.body.id == id }
                 if (d != null && d.answeredAt == null) persist(saved.copy(decisions = saved.decisions.map { if (it === d) it.copy(answeredAt = now()) else it }))
-                // Only the settled notice says how it closed, withdrawn or answered elsewhere.
-                if (kind == "settled") {
-                    if (directory == null) syncDirectory()
-                    if (phase.value == Phase.Ready) syncDecisions()
-                }
             }
             "decision" -> {
                 if (saved.decisions.any { it.body.id == id }) return@withLock
@@ -551,7 +809,27 @@ class ServerStore(
                 persist(saved.copy(decisions = saved.decisions + saved1))
                 if (answeredAt == null) alerts.decision(toUi(saved1))
             }
+            "permission", "settled" -> {
+                if (kind == "permission" && saved.prompts.any { it.body.id == id }) return@withLock
+                val box = p["box"]?.jsonPrimitive?.content
+                var answeredAt: String? = null
+                val item = if (box != null) {
+                    SealedItem(1, kind, id, p.getValue("from").jsonPrimitive.content, p["re"]?.jsonPrimitive?.content, listOf(SealedBox(me.id, box)))
+                } else {
+                    api().item(id).also { answeredAt = it.answeredAt }.item
+                }
+                if (directory?.members?.containsKey(item.from) != true) syncDirectory()
+                val byId = saved.prompts.associateBy { it.body.id }.toMutableMap()
+                val added = takePrompt(item, answeredAt, byId)
+                keepPrompts(byId)
+                if (added != null && added.answeredAt == null) alerts.prompt(toUi(added))
+            }
             "quota" -> syncQuotas()
+            "join" -> {
+                val list = api().joins("0", 0)
+                listJoins(list)
+                list.joins.find { it.id == id }?.let(::toAsk)?.let { alerts.join("join:${it.id}", it.name) }
+            }
         }
     }
 
@@ -578,7 +856,7 @@ class ServerStore(
     override fun lookUpPairing(code: String) = run(showBusy = false) {
         approval.value = Approval.Checking
         val parsed = try {
-            parsePairingCode(code)
+            codeFromLink(code)
         } catch (e: ProtocolException) {
             approval.value = Approval.Failed("A pairing code has 24 letters and digits.")
             return@run
@@ -628,8 +906,164 @@ class ServerStore(
     }
 
     override fun closePairing() {
+        showJob?.cancel()
         pending = null
         approval.value = Approval.Idle
+    }
+
+    /** The new phone scans the link and posts under the code; its MAC proves it holds the code. */
+    override fun showCode() {
+        showJob?.cancel()
+        val code = pairings.newCode()
+        approval.value = Approval.Showing(code.formatted(), pairingLink(saved.server, code))
+        showJob = scope.launch {
+            val until = System.currentTimeMillis() + 10 * 60_000
+            try {
+                while (System.currentTimeMillis() < until) {
+                    val request = try {
+                        api().awaitPairing(code.rendezvous, 60)
+                    } catch (e: IOException) {
+                        if (e is ApiException) throw e
+                        delay(5_000)
+                        null
+                    } ?: continue
+                    val body = try {
+                        pairings.openRequest(request, code)
+                    } catch (e: ProtocolException) {
+                        approval.value = Approval.Failed("The request does not match the code. Don't approve it; show a new code.")
+                        return@launch
+                    }
+                    pending = code to body
+                    approval.value = Approval.Found(body.name, if (body.role == "machine") Kind.Machine else Kind.Device, code.formatted())
+                    return@launch
+                }
+                approval.value = Approval.Failed("The code expired. Show a new one.")
+            } catch (e: ApiException) {
+                approval.value = Approval.Failed(describe(e))
+            }
+        }
+    }
+
+    // --- Approving joins by digits ---------------------------------------------------
+
+    private fun toAsk(view: JoinView): JoinAsk? = runCatching {
+        val body = joins.openRequest(view.request)
+        JoinAsk(view.id, body.name, instant(body.at) ?: Instant.now(), elsewhere = view.approver != null && view.approver != saved.me?.id)
+    }.getOrNull()
+
+    private fun listJoins(list: JoinList) {
+        joinViews = list.joins.associateBy { it.id }
+        joinAsks.value = list.joins.mapNotNull(::toAsk)
+    }
+
+    override fun watchJoins(on: Boolean) {
+        watchJob?.cancel()
+        if (!on) return
+        watchJob = scope.launch {
+            var cursor = "0"
+            while (true) {
+                if (phase.value != Phase.Ready) {
+                    delay(5_000)
+                    continue
+                }
+                try {
+                    val list = api().joins(cursor, 50)
+                    cursor = list.cursor
+                    listJoins(list)
+                } catch (e: IOException) {
+                    delay(5_000)
+                }
+            }
+        }
+    }
+
+    /** Takes the request as listed and posts this phone's key; the digits come once the joiner reveals. */
+    override fun compareJoin(id: String) {
+        val view = joinViews[id] ?: return
+        val ask = toAsk(view) ?: return
+        compareJob?.cancel()
+        comparison.value = Comparison.Waiting(ask)
+        compareJob = scope.launch {
+            try {
+                val body = joins.openRequest(view.request)
+                if (body.account != saved.account) throw ProtocolException("wrong-account", body.account)
+                if (body.join != view.id) throw ProtocolException("id-mismatch", "join")
+                val eph = joins.newKeyPair()
+                var after = api().claimJoin(id, toB64(eph.public), me.id).version - 1
+                while (true) {
+                    val now = try {
+                        api().join(id, after, 60)
+                    } catch (e: IOException) {
+                        // Giving up would lose this phone's key, and the server takes one.
+                        if (!transient(e)) throw e
+                        if (instant(view.expiresAt)?.isBefore(Instant.now()) != false) throw IllegalStateException("The request expired.")
+                        delay(5_000)
+                        continue
+                    }
+                    after = now.version
+                    if (now.state == "cancelled") throw IllegalStateException("${ask.name} cancelled the request.")
+                    val joinerKey = now.joinerKey ?: continue
+                    val keys = joins.approverKeys(eph, joinerKey, view.request, view.commitment)
+                    eph.secret.fill(0)
+                    compared = Triple(view, body, keys)
+                    comparison.value = Comparison.Digits(ask, keys.digits)
+                    return@launch
+                }
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                comparison.value = Comparison.Failed(if (e is IllegalStateException) e.message ?: "" else describe(e))
+            }
+        }
+    }
+
+    /** Appends the new device's entry, then sends the approval under the compared key. */
+    override fun approveJoin() = run(showBusy = false) {
+        val (view, body, keys) = compared ?: return@run
+        val shown = comparison.value as? Comparison.Digits ?: return@run
+        comparison.value = shown.copy(approving = true, error = null)
+        try {
+            syncDirectory()
+            val joining = body.member()
+            val present = directory!!.members[joining.id]
+            if (present == null) {
+                val entry = directories.addEntry(directory!!, me.id, signKey, joining, now())
+                api().append(entry)
+                val all = saved.entries + ProtocolJson.encodeToJsonElement(entry)
+                val after = directories.verify(all, saved.account, saved.pin)
+                directory = after
+                persist(saved.copy(entries = all, pin = Pin(after.length, after.head)))
+            } else if (!present.active || present.member != joining) {
+                throw IllegalStateException("Another member already uses this id. Ask again from the new device.")
+            }
+            val after = directory!!
+            api().approveJoin(view.id, joins.approval(JoinApprovalBody(1, view.id, saved.account!!, after.length, after.head, me.id), keys))
+            compared = null
+            alerts.cancel("join:${view.id}")
+            comparison.value = Comparison.Done("${body.name} joined.")
+        } catch (e: Exception) {
+            // The server holds this phone's key for the join, so a blip keeps the digits and
+            // their keys for another try; the entry appended already is reused.
+            comparison.value = if (e is IOException && transient(e)) shown.copy(error = describe(e)) else Comparison.Failed(describe(e))
+        }
+    }
+
+    private fun transient(e: IOException) = e !is ApiException || e.status >= 500 || e.status == 429
+
+    override fun refuseJoin(id: String) = run(showBusy = false) {
+        compareJob?.cancel()
+        val name = joinAsks.value.find { it.id == id }?.name ?: "the device"
+        val differed = compared?.first?.id == id
+        compared = null
+        alerts.cancel("join:$id")
+        runCatching { api().cancelJoin(id) }
+        joinAsks.value = joinAsks.value.filter { it.id != id }
+        comparison.value = Comparison.Done(if (differed) "Refused $name: the digits differed." else "Refused $name.")
+    }
+
+    override fun closeComparison() {
+        compareJob?.cancel()
+        compared = null
+        comparison.value = Comparison.Idle
     }
 
     override fun revoke(memberId: String) = run {
@@ -693,6 +1127,37 @@ class ServerStore(
             answer = d.answer,
             answeredAt = instant(d.answeredAt) ?: d.answer?.let { Instant.now() },
             settled = d.settled,
+        )
+    }
+
+    /** How a prompt ended, in words, from this device's answer or the machine's notice. */
+    private fun ended(p: SavedPrompt): String? {
+        p.answer?.let { return if (it.startsWith("allow")) "Allowed here" else "Denied here" }
+        val s = p.settled
+        return when {
+            s?.outcome == "keyboard" -> "Answered on ${p.body.source.machine}"
+            s?.outcome == "timeout" -> "Timed out: left to the keyboard"
+            s?.outcome == "device" && s.device == me.id -> "Answered here"
+            s?.outcome == "device" -> "Answered from ${directory?.members?.get(s.device)?.member?.name ?: "another device"}"
+            p.answeredAt != null -> "Answered on another device"
+            else -> null
+        }
+    }
+
+    private fun toUi(p: SavedPrompt): Prompt {
+        val b = p.body
+        return Prompt(
+            id = b.id,
+            tool = b.tool,
+            summary = b.summary,
+            description = b.description,
+            input = b.input,
+            scopes = b.suggestions.map { PromptScope(it.scope, it.label, it.rule) },
+            source = Source(b.source.machine, b.source.project, b.source.session, b.source.sessionTitle, b.source.links.orEmpty().map { SessionLink(it.kind, it.url) }),
+            createdAt = instant(b.createdAt) ?: Instant.EPOCH,
+            expiresAt = instant(b.expiresAt) ?: Instant.EPOCH,
+            ended = ended(p),
+            endedAt = instant(p.answeredAt),
         )
     }
 

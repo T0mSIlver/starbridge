@@ -69,6 +69,6 @@ class WallpaperScreenshotTest(private val wallpaper: Wallpaper, private val dark
 
     @Config(qualifiers = "w411dp-h1500dp-xxhdpi")
     @Test fun devices() = capture("devices") {
-        DevicesScreen(fake.members, Approval.Idle, fake.push, "https://starbridge.run", now, DeviceActions({}, {}, {}, {}, {}, {}, {}), colours = Colours.Wallpaper)
+        DevicesScreen(fake.members, Approval.Idle, fake.push, "https://starbridge.run", now, DeviceActions({}, {}, {}, {}, {}, {}, {}, {}), colours = Colours.Wallpaper)
     }
 }

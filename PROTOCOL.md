@@ -61,6 +61,43 @@ Both pairing messages carry an HMAC (`crypto_auth`) keyed from the secret.
 A code expires after 10 minutes. The server could brute-force the secret offline from a MAC, but
 80 bits take far longer than that.
 
+Either side may make the code. A machine prints its own, as text, as a QR code and as a link
+`<server>/pair#<code>` that opens the web page with the code filled in (`pairingLink`,
+`codeFromLink`); the fragment never reaches the server. An existing device can instead show a
+code as a QR code: the new phone scans it and posts its request under it, and the device, which
+waits on `GET /pairings/:rendezvous?wait=`, checks the MAC and asks the owner to approve. Anyone
+who sees the code can post first, so the device shows the requester's name before approving, as
+with a typed code.
+
+## Joining by digits
+
+A browser or phone signed in to the account can join without a code: the owner compares 6 digits
+on both screens, a short authentication string (SAS) with a commitment, as in ZRTP and Matrix's
+SAS verification. Code: `packages/protocol/src/join.ts`; vectors: `vectors/join.json`.
+
+1. The joining device makes an ephemeral X25519 key pair `j` and posts its request text `R`
+   (JSON of `{v, join, account, id, name, boxPk, signPk, at}`) with
+   `commitment = BLAKE2b-256("starbridge/v1/join-commit" NUL j.pk R)`.
+2. The server relays the request to the account's devices: a long-poll for open pages and apps,
+   and a push `{v, kind: "join", id}`. The owner taps Compare digits on one device, which makes
+   its own ephemeral key pair `a` and posts `a.pk`. The server accepts one approver key per join.
+3. The joining device reveals `j.pk`, only after it has `a.pk`, and answers no later approver
+   key. The approver checks `j.pk` and `R` against the commitment it read before posting `a.pk`.
+4. Both compute `s = X25519(own secret, peer public)`, refused when all zero, and
+   `T = j.pk a.pk R`. The MAC key is `BLAKE2b-256(key = s, "starbridge/v1/join-mac" NUL T)`; the
+   digits are the first 4 bytes of `BLAKE2b-256(key = s, "starbridge/v1/join-sas" NUL T)`,
+   big-endian, mod 10^6, as 6 digits.
+5. The owner checks that both screens show the same digits and taps Approve. The approver appends
+   the `add` entry for the keys in `R` and posts the approval `{v, join, account, length, head,
+   approver}` with `crypto_auth` under the MAC key, over `"starbridge/v1/join-approval" NUL body`.
+   The joining device checks the MAC, verifies the directory with `{length, head}` as its pin,
+   and checks that it holds its own keys, as after a code.
+
+A server in the middle must give the approver a commitment of its own before it sees `a.pk`, and
+must send the joining device an approver key before it learns `j.pk`, so it cannot pick keys that
+make the two screens agree: each attempt matches with probability 10^-6, and each needs the owner
+to tap Compare digits. Without the approval's MAC the joining device trusts no directory.
+
 ## Recovery
 
 The first device shows a 32-byte recovery seed once, as 24 BIP-39 words. When every device is
@@ -118,9 +155,25 @@ never rely on that check.
 | Route | Who | What |
 |---|---|---|
 | `POST /pairings` | new member | `{request, claimHash}`: the request message and BLAKE2b-256 of a random claim secret's text (`claimHash`); 409 if the rendezvous id is taken; 429 `busy` when the server holds 5000 waiting pairings |
-| `GET /pairings/:rendezvous` | device | `{request}` |
+| `GET /pairings/:rendezvous?wait=<s>` | device | `{request}`; with `wait`, holds until the new member posts and answers 204 if `wait` passes first |
 | `POST /pairings/:rendezvous/approve` | device | `{approval}`; the directory must already hold the new member's entry; 409 `already-paired` when that member already holds a session or token |
 | `GET /pairings/:rendezvous/result?wait=<s>` | new member, with `X-Claim: <secret>` | long-poll: `{approval, token?}` once approved, `token` for machines only; 204 when `wait` passes |
+
+### Joins
+
+A join is `{id, request, commitment, state, approver?, approverKey?, joinerKey?, approval?,
+createdAt, expiresAt, version}`; `state` is `open`, `comparing`, `approved` or `cancelled`, and
+`version` grows with each change. A join expires after 10 minutes.
+
+| Route | Who | What |
+|---|---|---|
+| `POST /joins` | unpaired device session | `{request, commitment}` → `{join}`; the request must name the caller's account; a new join cancels the session's open one; pushes `{v, kind: "join", id}` to the account's devices; 409 `already-paired`, 409 `taken` |
+| `GET /joins?after=<cursor>&wait=<s>` | device | `{joins, cursor}`: the open joins; holds until one changes past `after` |
+| `GET /joins/:id?after=<version>&wait=<s>` | the joining session, device | `{join}`; holds until its `version` passes `after` |
+| `POST /joins/:id/approver` | device | `{key, approver}`: `approver` is the caller; 409 `taken` once another key is in |
+| `POST /joins/:id/reveal` | the joining session | `{key}`; 409 `not-ready` before an approver key, 400 `bad-commitment` when the key does not open the commitment |
+| `POST /joins/:id/approve` | the approver | `{approval}`; the directory must hold the new device's entry; binds the joining session to it; 409 `not-ready`, `not-in-directory`, `already-paired` |
+| `DELETE /joins/:id` | the joining session, device | cancel |
 
 ### Items
 
@@ -170,7 +223,9 @@ decision's options; for permission answers, see below.
 A push payload is JSON text: `{v, kind, id, from, re?, box?}` for a new item, with the device's
 own box when the payload stays within 3 KB, else without it and the device fetches
 `GET /items/:id`; `{v, kind: "answered", id}` to every device a decision or permission was
-sealed to once a device answers it. A settled notice is pushed as a new item. FCM gets it as data field `p`; Web Push and UnifiedPush encrypt it per RFC 8291.
+sealed to once a device answers it; `{v, kind: "join", id}` to every device when a join is posted.
+A settled notice is pushed as a new item. FCM gets it as data field `p`; Web Push and UnifiedPush
+encrypt it per RFC 8291.
 
 Quota snapshots go to FCM and UnifiedPush only. Browsers expect every Web Push to show a
 notification and drop a subscription that keeps showing none (Firefox after 16), so the web page
@@ -203,7 +258,9 @@ code below. Per-address limits count an IPv6 client as its /64.
 | Sessions | 50 per account; signing in past that ends the oldest, unpaired ones first |
 | `GET /auth/github/callback` | 20 a minute per address |
 | Pairing messages | 4 KB each: 400 `bad-schema` |
-| `GET /pairings/:rendezvous/result` waiting | 4 per pairing: 429 `too-many-waits` |
+| `GET /pairings/:rendezvous/result` and `GET /pairings/:rendezvous?wait=` waiting | 4 per pairing: 429 `too-many-waits` |
+| `POST /joins` | 10 a minute per account; request text 4 KB: 400 `bad-schema` |
+| `GET /joins` waiting | 16 per account; `GET /joins/:id` waiting: 4 per join: 429 `too-many-waits` |
 | `GET /answers` waiting | 32 per machine: 429 `too-many-waits` |
 | `POST /push/subscriptions` | 30 a minute per account, on top of the subscription caps |
 
@@ -262,6 +319,26 @@ Answering a permission from a phone is a trust decision, so:
   it answers nothing and the agent's own dialog decides.
 - **Opt-in per machine.** Nothing is routed until `starbridge permissions enable`.
 
+### On the machine
+
+`starbridge hook permission --agent claude-code` runs as Claude Code's `PermissionRequest` hook.
+It posts the prompt through the agent (or to the server itself when no agent runs) and waits
+at most `--wait`, 570 s by default, under the 600 s Claude Code gives a hook. An accepted
+answer prints the hook's decision: `allow`, with `updatedPermissions` built from Claude Code's
+own suggestions for a wider scope (destination `session`, or `localSettings` for the project),
+or `deny` with the message. Only `addRules` allow rules and `addDirectories` are offered, and
+only when their rules fit the 500-character `rule` in full; `setMode` and other suggestions stay
+at the keyboard. Before printing, the machine marks the prompt settled, then posts `settled:
+device`; without an agent it gives that post 5 s, and SIGTERM or the deadline during it still end
+the hook with no answer.
+
+The keyboard can answer first. Esc or No sends the hook SIGTERM; it posts `settled: keyboard`
+and exits. A keyboard Yes sends no signal, so `starbridge hook settle` runs on `PostToolUse` and
+`PermissionDenied`, settling the session's waiting prompt whose `inputHash` matches the call's
+input (Claude Code's `PermissionRequest` input carries no `tool_use_id`), and on `Stop` and
+`SessionEnd`, settling every waiting prompt of the session. The waiting hook then exits at
+once through the agent, or within 5 s on its own path. At the deadline the hook prints nothing,
+so the dialog decides, and posts `settled: timeout`.
 ## Local agent API
 
 `starbridge agent` runs once per machine as a user service. It holds the machine's keys and its
@@ -291,6 +368,10 @@ for an unknown route or decision, 502 when the server refused or failed (`detail
 | `POST /sessions/:id/bye` | the session ended; its session-scoped state goes |
 | `GET /sessions/:id/events?wait=<s>` | `{events: [{type, ack, line, decisionId?}]}`: what the session has not confirmed, held up to `wait` while there is nothing |
 | `POST /sessions/:id/ack` | `{acks}`: confirm events by their `ack`; others' tokens do nothing |
+| `POST /permissions` | `{hook, agent, source: {project, session, sessionTitle?, links?}, waitMs}`: post a permission prompt from the hook's input → `{id}`; 403 `disabled` until `starbridge permissions enable` |
+| `POST /permissions/:id/wait` | `{wait}`: `{output}` once an accepted answer is in, the hook's stdout, handed out once; `{settled}` when the prompt ended another way; `{}` when `wait` passed |
+| `POST /permissions/:id/settle` | `{outcome: "keyboard" \| "timeout"}` → `{settled}`: the hook's wait ended without an answer |
+| `POST /sessions/:id/permissions/settle` | `{inputHash?}` → `{settled: [ids]}`: the keyboard answered the session's waiting prompt for that input, or all of them without `inputHash` |
 
 Paths are under `/v1`. Event types today are `answer` and `default` (a decision's default time
 passed with no answer, sent only once the server confirmed no answer was waiting at that
@@ -298,5 +379,6 @@ time). A client skips types it does not know. The agent keeps answers in the CLI
 so a restart loses nothing unconfirmed.
 
 Features plug in as `Feature`s (`cli/src/agent/server.ts`): routes, the events they hand
-sessions, the acks they take, `bye`, a background loop and their part of `status`. #57 adds
-`POST /permissions` and a `permission` event, #60 `POST /runs`.
+sessions, the acks they take, `bye`, a background loop and their part of `status`. #60 adds
+`POST /runs`.
+

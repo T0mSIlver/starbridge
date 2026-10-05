@@ -53,6 +53,41 @@ class AnswerReceiver : BroadcastReceiver() {
     }
 }
 
+/**
+ * A prompt notification's button. Allow buttons require the unlock (the system asks before it
+ * delivers them); Deny does not.
+ */
+class PromptReceiver : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+        val id = intent.getStringExtra(EXTRA_ID) ?: return
+        val allow = intent.getBooleanExtra(EXTRA_ALLOW, false)
+        val scope = intent.getStringExtra(EXTRA_SCOPE) ?: "once"
+        val app = context.app()
+        val pending = goAsync()
+        app.scope().launch {
+            val prompt = app.store().prompts.value.find { it.id == id }
+            try {
+                withTimeout(9_000) { app.store().sendPromptFromNotification(id, allow, scope) }
+                prompt?.let { app.notifier().promptAnswered(it, if (allow) "Allowed" else "Denied") }
+            } catch (e: Exception) {
+                Log.w("Starbridge", "prompt answer from notification failed", e)
+                val gone = e is ApiException && (e.error == "already-answered" || e.error == "expired")
+                if (gone) prompt?.let { app.notifier().cancelPrompt(it) }
+                else prompt?.let { app.notifier().promptFailed(it, e.message ?: "no connection") }
+            } finally {
+                pending.finish()
+            }
+        }
+    }
+
+    companion object {
+        const val ACTION = "dev.starbridge.app.PROMPT"
+        const val EXTRA_ID = "id"
+        const val EXTRA_ALLOW = "allow"
+        const val EXTRA_SCOPE = "scope"
+    }
+}
+
 /** FCM: the payload is data field `p` (PROTOCOL.md, "Push"). */
 class FcmService : FirebaseMessagingService() {
     override fun onMessageReceived(message: RemoteMessage) {

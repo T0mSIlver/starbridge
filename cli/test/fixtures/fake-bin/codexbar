@@ -1,0 +1,7 @@
+#!/bin/sh
+# Stands in for codexbar: `config providers` lists a few; `usage` replays fixtures.
+if [ "$1" = "config" ] && [ "$2" = "providers" ]; then
+  echo '[{"provider":"codex","displayName":"Codex","enabled":true,"defaultEnabled":true},{"provider":"zai","displayName":"z.ai","enabled":false,"defaultEnabled":false},{"provider":"cursor","displayName":"Cursor","enabled":false,"defaultEnabled":false}]'
+  exit 0
+fi
+exec "$(dirname "$0")/../fake-codexbar.sh" "$@"

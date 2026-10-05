@@ -83,8 +83,6 @@ export class Poller {
   private seen: { session: string; mtime: number; at: number } | undefined;
   /** The session id this poller last held the lease under; a `/clear` changes the id. */
   private leasedAs: string | undefined;
-  /** Lines submitted but not yet confirmed to the CLI, so a retried confirm submits nothing twice. */
-  private readonly unconfirmed = new Set<string>();
   private readonly leasePath: string;
   private readonly statePath: string;
   /** Resolves when the loop has ended. */
@@ -95,6 +93,11 @@ export class Poller {
     dir: string,
     private readonly command = "starbridge",
     private readonly t: Timing = TIMING,
+    /**
+     * Lines submitted but not yet confirmed, so a retried confirm submits nothing twice; shared
+     * with `AgentLoop` (agent.ts) across a switch.
+     */
+    private readonly unconfirmed = new Set<string>(),
   ) {
     this.leasePath = `${dir}/mod-poller.json`;
     this.statePath = `${dir}/state.json`;

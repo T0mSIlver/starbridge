@@ -130,3 +130,10 @@ minute or in three hours.
 
 An answer can still come after you applied the default. If the owner chose
 something else, undo what you can and tell them.
+
+## Permission prompts may be answered from a phone
+
+When the owner turned on `starbridge permissions`, your permission prompts
+also go to their phone, which shows the tool and a one-line summary. Give
+every risky Bash command a `description` that says what it does and why: it
+is what the owner reads before allowing it.

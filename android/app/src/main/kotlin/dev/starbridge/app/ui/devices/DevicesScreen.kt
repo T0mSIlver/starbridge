@@ -60,6 +60,8 @@ import dev.starbridge.app.ui.ago
 import dev.starbridge.app.ui.fieldColors
 import dev.starbridge.app.ui.groupGap
 import dev.starbridge.app.ui.groupShape
+import dev.starbridge.app.ui.pairing.QrWays
+import dev.starbridge.app.ui.pairing.ShowingQr
 import dev.starbridge.app.ui.listPadding
 import dev.starbridge.app.ui.theme.Sizes
 import dev.starbridge.app.ui.theme.Spacing
@@ -74,7 +76,7 @@ class DevicesViewModel @Inject constructor(private val store: Store, prefs: Pref
     val push = store.push
     val server = store.server
     val colours = prefs.colours
-    val actions = DeviceActions(store::lookUpPairing, store::approvePairing, store::closePairing, store::revoke, store::setPushType, store::signOut, prefs::setColours)
+    val actions = DeviceActions(store::lookUpPairing, store::approvePairing, store::closePairing, store::revoke, store::setPushType, store::signOut, prefs::setColours, store::showCode)
 }
 
 class DeviceActions(
@@ -85,6 +87,8 @@ class DeviceActions(
     val setPush: (String) -> Unit,
     val signOut: () -> Unit,
     val setColours: (Colours) -> Unit,
+    /** Shows a QR code for a new phone to scan. */
+    val showCode: () -> Unit,
 )
 
 /** Pairing first, then the devices that read decisions, the machines that post them, and this phone. */
@@ -98,7 +102,7 @@ fun DevicesScreen(
     actions: DeviceActions,
     modifier: Modifier = Modifier,
     colours: Colours = Colours.Starbridge,
-    otherWaysToPair: @Composable ColumnScope.() -> Unit = {},
+    otherWaysToPair: @Composable ColumnScope.() -> Unit = { QrWays(onScan = actions.lookUp, onShow = actions.showCode) },
 ) {
     val devices = members.filter { it.kind == Kind.Device }
     val machines = members.filter { it.kind == Kind.Machine }
@@ -218,6 +222,7 @@ fun PairCard(approval: Approval, actions: DeviceActions, otherWays: @Composable 
                             OutlinedButton(onClick = { actions.close(); code = "" }, modifier = Modifier.heightIn(min = Sizes.tap)) { Text("Cancel", style = StarbridgeTheme.type.action) }
                         }
                     }
+                    is Approval.Showing -> ShowingQr(state) { actions.close(); code = "" }
                     is Approval.Done -> {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Rounded.CheckCircle, contentDescription = null, tint = colors.ok)

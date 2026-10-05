@@ -5,8 +5,10 @@ import {
   activeMembers,
   addEntry,
   addEntryAsync,
+  approverKeys,
   bindMessage,
   checkJoined,
+  codeFromLink,
   type Decision,
   type Directory,
   DirectoryEntry,
@@ -15,15 +17,26 @@ import {
   fromB64,
   genesisEntryAsync,
   claimHash as hashClaim,
+  type JoinKeys,
+  joinApproval,
+  joinCommitment,
+  joinerKeys,
+  joinRequest,
   type Member,
   newClaimSecret,
+  newJoinId,
+  newJoinKeyPair,
   newPairingCode,
   openAsync,
+  openJoinApproval,
+  openJoinRequest,
   openPairingApproval,
   openPairingRequest,
   type PairingCode,
+  type Permission,
   ProtocolError,
   pairingApproval,
+  pairingLink,
   pairingRequest,
   parsePairingCode,
   RECOVERY,
@@ -42,7 +55,17 @@ import {
 import { ApiError, api, type Stored } from "./api";
 import { generateDeviceKeys, sealOpener, signer } from "./crypto/keys";
 import * as store from "./store";
-import type { Device, InboxItem, PairingRequest, QuotaCardData, Reply } from "./types";
+import type {
+  Device,
+  InboxItem,
+  JoinAsk,
+  JoinView,
+  PairingRequest,
+  PromptItem,
+  PromptReply,
+  QuotaCardData,
+  Reply,
+} from "./types";
 
 export { ApiError };
 
@@ -318,6 +341,237 @@ async function finishJoin(account: string, code: PairingCode, approval: unknown,
   await pinTo(account, entries, dir);
 }
 
+/** Joining by digits: no code to type; the owner compares 6 digits on both devices. */
+export interface DigitJoin {
+  /** Resolves once a device took the request: the digits it shows too. */
+  digits: Promise<string>;
+  /** Resolves once that device approved and the directory holds this browser's keys. */
+  done: Promise<void>;
+  cancel: () => void;
+}
+
+export async function startDigitJoin(account: string, name: string): Promise<DigitJoin> {
+  await ready;
+  const { record, member } = await newDevice(account, name);
+  const eph = newJoinKeyPair();
+  const id = newJoinId();
+  const { role: _, ...keys } = member;
+  const request = joinRequest({ v: 1, join: id, account, ...keys, at: now() });
+  await store.put("device", record, account);
+  const { expiresAt } = (await api.postJoin(request, joinCommitment(eph.publicKey, request))).join;
+  const abort = new AbortController();
+  let shown: (digits: string) => void = () => {};
+  const digits = new Promise<string>((resolve) => {
+    shown = resolve;
+  });
+  const done = (async () => {
+    let derived: JoinKeys | undefined;
+    let after = 0;
+    try {
+      for (;;) {
+        if (abort.signal.aborted) throw new Error("cancelled");
+        const { join } = await retrying(expiresAt, abort.signal, () =>
+          api.join(id, after, 25, abort.signal),
+        );
+        after = join.version;
+        if (join.state === "cancelled") throw new Error("The request was refused. Ask again.");
+        // The first approver key is the only one: the digits commit to it, so a second one the
+        // server offers later is never answered.
+        if (!derived && join.approverKey)
+          derived = joinerKeys({ mine: eph, approverKey: join.approverKey, request });
+        if (derived && !join.joinerKey) {
+          // A reveal whose answer was lost landed all the same.
+          await retrying(expiresAt, abort.signal, () =>
+            api.revealJoin(id, toB64(eph.publicKey)).catch((e) => {
+              if (!(e instanceof ApiError && e.code === "already-revealed")) throw e;
+            }),
+          );
+          shown(derived.digits);
+        }
+        if (derived && join.approval !== undefined) {
+          const body = openJoinApproval(join.approval, derived, id);
+          if (body.account !== account) throw new ProtocolError("wrong-account", body.account);
+          const entries = await api.directory();
+          const dir = verifyDirectory(entries, {
+            account,
+            pin: { length: body.length, head: body.head },
+          });
+          checkJoined(dir, member);
+          await pinTo(account, entries, dir);
+          return;
+        }
+      }
+    } finally {
+      eph.privateKey.fill(0);
+    }
+  })();
+  return {
+    digits,
+    done,
+    cancel: () => {
+      abort.abort();
+      api.cancelJoin(id).catch(() => {});
+    },
+  };
+}
+
+/**
+ * Runs a join call again after a network or server failure, until the join expires or `signal`
+ * aborts. Giving up would drop the ephemeral key, and the server takes one key per side.
+ */
+async function retrying<T>(
+  expiresAt: string,
+  signal: AbortSignal,
+  call: () => Promise<T>,
+): Promise<T> {
+  for (;;) {
+    try {
+      return await call();
+    } catch (e) {
+      const transient = !(e instanceof ApiError) || e.status >= 500 || e.status === 429;
+      if (signal.aborted || !transient) throw e;
+      if (Date.parse(expiresAt) < Date.now()) throw new Error("The request expired.");
+      await new Promise((r) => setTimeout(r, retryDelay.ms));
+    }
+  }
+}
+
+/** How long a failed join call waits before its next try; tests shorten it. */
+export const retryDelay = { ms: 3_000 };
+
+function toAsk(view: JoinView): JoinAsk | undefined {
+  try {
+    const body = openJoinRequest(view.request);
+    return {
+      id: view.id,
+      name: body.name,
+      at: body.at,
+      ...(view.approver ? { approver: view.approver } : {}),
+      view,
+    };
+  } catch {
+    return undefined;
+  }
+}
+
+/** Calls `onChange` with the account's open join requests until `signal` aborts. */
+export async function watchJoins(signal: AbortSignal, onChange: (asks: JoinAsk[]) => void) {
+  await ready;
+  let cursor = "0";
+  while (!signal.aborted) {
+    try {
+      const page = await api.joins(cursor, 25, signal);
+      cursor = page.cursor;
+      onChange(page.joins.flatMap((v) => toAsk(v) ?? []));
+    } catch {
+      if (signal.aborted) return;
+      await new Promise((r) => setTimeout(r, 5_000));
+    }
+  }
+}
+
+/** Digits this device derived for a join request, and what approving it does. */
+export interface Comparison {
+  digits: string;
+  approve: (ctx: Ctx) => Promise<Ctx>;
+}
+
+/**
+ * Takes the request as listed: posts this device's key, waits for the joining device to reveal
+ * its key, and checks the reveal against the commitment listed before this key went out.
+ */
+export async function compareJoin(
+  ctx: Ctx,
+  ask: JoinAsk,
+  signal: AbortSignal,
+): Promise<Comparison> {
+  await ready;
+  const { request, commitment } = ask.view;
+  const body = openJoinRequest(request);
+  if (body.account !== ctx.account) throw new ProtocolError("wrong-account", body.account);
+  if (body.join !== ask.id) throw new ProtocolError("id-mismatch", "join");
+  const eph = newJoinKeyPair();
+  const claimed = (await api.claimJoin(ask.id, toB64(eph.publicKey), ctx.device.id)).join;
+  let after = claimed.version - 1;
+  let keys: JoinKeys;
+  try {
+    for (;;) {
+      const { join } = await retrying(claimed.expiresAt, signal, () =>
+        api.join(ask.id, after, 25, signal),
+      );
+      after = join.version;
+      if (join.state === "cancelled") throw new Error(`${body.name} cancelled the request.`);
+      if (join.joinerKey) {
+        keys = approverKeys({ mine: eph, joinerKey: join.joinerKey, request, commitment });
+        break;
+      }
+      if (Date.parse(join.expiresAt) < Date.now()) throw new Error("The request expired.");
+    }
+  } finally {
+    eph.privateKey.fill(0);
+  }
+  const member: Member = {
+    id: body.id,
+    role: "device",
+    name: body.name,
+    boxPk: body.boxPk,
+    signPk: body.signPk,
+  };
+  return {
+    digits: keys.digits,
+    approve: async (current) => {
+      const next = await appendMember(current, member);
+      const approval = joinApproval(
+        {
+          v: 1,
+          join: ask.id,
+          account: current.account,
+          length: next.dir.length,
+          head: next.dir.head,
+          approver: current.device.id,
+        },
+        keys,
+      );
+      await api.approveJoin(ask.id, approval);
+      return next;
+    },
+  };
+}
+
+export function refuseJoin(id: string): Promise<void> {
+  return api.cancelJoin(id);
+}
+
+/** A code this device shows as a QR, for a new phone to scan; the phone posts under it. */
+export interface ShownCode {
+  code: string;
+  link: string;
+  /** Resolves with the request once the phone posted it and its MAC checked out. */
+  request: Promise<PairingRequest>;
+  cancel: () => void;
+}
+
+export async function showPairingCode(): Promise<ShownCode> {
+  await ready;
+  const code = newPairingCode();
+  const abort = new AbortController();
+  const until = Date.now() + 10 * 60_000;
+  const request = (async () => {
+    for (;;) {
+      if (abort.signal.aborted) throw new Error("cancelled");
+      if (Date.now() > until) throw new Error("The code expired. Show a new one.");
+      const res = await api.awaitPairing(code.rendezvous, 25, abort.signal);
+      if (res) return readRequest(code, res.request);
+    }
+  })();
+  return {
+    code: formatPairingCode(code),
+    link: pairingLink(location.origin, code),
+    request,
+    cancel: () => abort.abort(),
+  };
+}
+
 // --- As a device ----------------------------------------------------------------------------
 
 /** This browser's device for the account, with a verified directory, if it is still active. */
@@ -370,6 +624,23 @@ async function append(ctx: Ctx, make: (dir: Directory) => Promise<SignedEnvelope
   }
 }
 
+/**
+ * Adds a member to approve, unless the directory already holds it with these keys: an approval
+ * retried after its post failed reuses the entry the first try appended.
+ */
+async function appendMember(ctx: Ctx, member: Member): Promise<Ctx> {
+  const fresh = await refresh(ctx);
+  const held = fresh.dir.members.get(member.id);
+  if (
+    held?.active &&
+    held.member.role === member.role &&
+    held.member.boxPk === member.boxPk &&
+    held.member.signPk === member.signPk
+  )
+    return fresh;
+  return append(fresh, (dir) => addEntryAsync(dir, me(fresh), member, now()));
+}
+
 export function devices(ctx: Ctx): Device[] {
   const addedAt = new Map<string, string>();
   for (const env of ctx.entries) {
@@ -387,8 +658,12 @@ export function devices(ctx: Ctx): Device[] {
 /** Fetches the request under the typed code and checks its MAC: the server cannot swap keys. */
 export async function readPairing(codeText: string): Promise<PairingRequest> {
   await ready;
-  const code = parsePairingCode(codeText);
+  const code = codeFromLink(codeText);
   const { request } = await api.pairing(code.rendezvous);
+  return readRequest(code, request);
+}
+
+function readRequest(code: PairingCode, request: unknown): PairingRequest {
   const body = openPairingRequest(request, code);
   return {
     code: formatPairingCode(code),
@@ -410,7 +685,7 @@ export async function approvePairing(ctx: Ctx, req: PairingRequest): Promise<Ctx
     boxPk: req.boxPk,
     signPk: req.signPk,
   };
-  const next = await append(ctx, (dir) => addEntryAsync(dir, me(ctx), member, now()));
+  const next = await appendMember(ctx, member);
   const approval = pairingApproval(
     {
       v: 1,
@@ -542,7 +817,7 @@ export async function loadInbox(ctx: Ctx, inbox: Inbox = { items: [], rejected: 
   for (const s of inbox.retry ?? []) await take(s, true);
   let cursor = inbox.cursor;
   for (;;) {
-    const page = await api.items(["decision", "settled"], cursor);
+    const page = await api.items("decision,settled", cursor);
     for (const s of page.items) await take(s, false);
     cursor = page.cursor;
     if (page.items.length < 100) break;
@@ -574,6 +849,138 @@ export async function answer(ctx: Ctx, item: InboxItem, reply: Reply): Promise<s
   await store.update("answers", ctx.account, (sent) => ({
     ...sent,
     [item.decision.id]: { ...reply, answeredAt },
+  }));
+  return answeredAt;
+}
+
+// --- Permission prompts -------------------------------------------------------------------
+
+async function openPermission(
+  ctx: Ctx,
+  s: Stored,
+  sent: Record<string, PromptReply & { answeredAt: string }>,
+): Promise<PromptItem> {
+  const { signer: machine, body } = await openAsync(
+    expectKind(s.item, "permission"),
+    me(ctx),
+    ctx.dir,
+  );
+  const reply = sent[body.id];
+  return {
+    permission: body as Permission,
+    machine,
+    receivedAt: s.receivedAt,
+    ...(s.answeredAt ? { answeredAt: s.answeredAt } : {}),
+    ...(reply ? { reply: stripTime(reply) } : {}),
+  };
+}
+
+const stripTime = ({ answeredAt: _, ...reply }: PromptReply & { answeredAt: string }) =>
+  reply as PromptReply;
+
+/** Opens a permission prompt a push carried (or named). */
+export async function openPushedPermission(ctx: Ctx, item: SealedItem): Promise<PromptItem> {
+  const sent = (await store.get("promptAnswers", ctx.account)) ?? {};
+  return openPermission(ctx, { item, cursor: "", receivedAt: "" }, sent);
+}
+
+/** Opens a settled notice, with the machine that signed it. */
+export async function openSettled(ctx: Ctx, item: SealedItem) {
+  const { signer, body } = await openAsync(expectKind(item, "settled"), me(ctx), ctx.dir);
+  return { machine: signer.id, settled: body as Settled };
+}
+
+/** Settled notices after `cursor`, keyed by "machine/permission id". */
+export async function loadSettled(ctx: Ctx, cursor?: string) {
+  const out = new Map<string, Settled>();
+  let at = cursor;
+  for (;;) {
+    const page = await api.items("settled", at);
+    for (const s of page.items) {
+      try {
+        const { machine, settled } = await openSettled(ctx, s.item);
+        out.set(`${machine}/${settled.itemId}`, settled);
+      } catch {}
+    }
+    at = page.cursor;
+    if (page.items.length < 100) return { settled: out, cursor: at };
+  }
+}
+
+/** Reads every page of `kinds` from the start, opening what verifies. */
+async function readAll<T>(
+  kinds: string,
+  opts: { open?: boolean },
+  take: (s: Stored) => Promise<T>,
+): Promise<T[]> {
+  const out: T[] = [];
+  let cursor: string | undefined;
+  for (;;) {
+    const page = await api.items(kinds, cursor, opts);
+    for (const s of page.items) {
+      try {
+        out.push(await take(s));
+      } catch {
+        // A prompt that fails to verify is never shown: it could ask to allow anything.
+      }
+    }
+    cursor = page.cursor;
+    if (page.items.length < 100) return out;
+  }
+}
+
+/** The prompts waiting now, whose answer window is still open. */
+export async function loadPrompts(ctx: Ctx): Promise<PromptItem[]> {
+  const sent = (await store.get("promptAnswers", ctx.account)) ?? {};
+  return readAll("permission", { open: true }, (s) => openPermission(ctx, s, sent));
+}
+
+/** The last 7 days of prompts, with how each ended (the server keeps a week). */
+export async function loadPromptLog(ctx: Ctx): Promise<PromptItem[]> {
+  const sent = (await store.get("promptAnswers", ctx.account)) ?? {};
+  const permissions = await readAll("permission", {}, (s) => openPermission(ctx, s, sent));
+  const settled = await readAll("settled", {}, (s) =>
+    openAsync(expectKind(s.item, "settled"), me(ctx), ctx.dir),
+  );
+  // A notice counts only from the machine that asked.
+  const byId = new Map(settled.map((x) => [`${x.signer.id}/${x.body.itemId}`, x.body]));
+  return permissions.map((p) => {
+    const st = byId.get(`${p.machine.id}/${p.permission.id}`);
+    return st ? { ...p, settled: st as Settled } : p;
+  });
+}
+
+/**
+ * Signs the answer, bound to the prompt's id and input hash, and seals it to the machine that
+ * asked, which must still be active.
+ */
+export async function answerPermission(
+  ctx: Ctx,
+  item: PromptItem,
+  reply: PromptReply,
+): Promise<string> {
+  const fresh = await refresh(ctx);
+  const machine = fresh.dir.members.get(item.machine.id);
+  if (!machine?.active) throw new Error(`${item.machine.name} was revoked`);
+  const answeredAt = now();
+  const sealed = await sealAsync(
+    "permission-answer",
+    {
+      v: 1,
+      id: randomId("pa_"),
+      permissionId: item.permission.id,
+      to: machine.member.id,
+      answeredAt,
+      inputHash: item.permission.inputHash,
+      ...reply,
+    },
+    me(fresh),
+    [machine.member],
+  );
+  await api.post(sealed);
+  await store.update("promptAnswers", ctx.account, (sent) => ({
+    ...sent,
+    [item.permission.id]: { ...reply, answeredAt },
   }));
   return answeredAt;
 }

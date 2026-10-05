@@ -30,7 +30,9 @@
     "@types/node": "^26.6.4",
     "@types/pngjs": "^6.0.5",
     "jpeg-js": "^0.4.4",
+    "jsqr": "^1.4.0",
     "pngjs": "^7.0.0",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "uqr": "^0.1.3"
   }
 }

@@ -72,6 +72,26 @@ CREATE TABLE IF NOT EXISTS pairings (
   token TEXT
 );
 
+-- Joining by digits: a signed-in session asks to join; a device compares digits and approves.
+-- version orders changes, for long-polls.
+CREATE TABLE IF NOT EXISTS joins (
+  id TEXT PRIMARY KEY,
+  account_id TEXT NOT NULL REFERENCES accounts(id),
+  session_hash TEXT NOT NULL,
+  request TEXT NOT NULL,
+  member_id TEXT NOT NULL,
+  box_pk TEXT NOT NULL,
+  sign_pk TEXT NOT NULL,
+  commitment TEXT NOT NULL,
+  approver TEXT,
+  approver_key TEXT,
+  joiner_key TEXT,
+  approval TEXT,
+  cancelled INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL,
+  version INTEGER NOT NULL
+);
+
 -- seq orders changes: it is reassigned when an answer marks a decision answered, so a device
 -- listing after its cursor sees the decision again.
 CREATE TABLE IF NOT EXISTS items (

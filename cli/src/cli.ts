@@ -7,13 +7,34 @@ import { runAgent } from "./agent/main";
 import { ApiError } from "./api";
 import { type Ctx, UsageError } from "./context";
 import { type AskInput, answers, ask, settle, wait } from "./decisions";
+import { hookPermission, hookSettle, permissionsCommand } from "./hook";
 import { pair } from "./pair";
 import { pushOnce, quotaPush } from "./quota";
 import { installKind, ReleaseError } from "./release";
-import { removeBinary, update } from "./update";
+import { setup } from "./setup/setup";
+import { status } from "./setup/status";
+import { defaults, makeSys, type Prompt, terminalPrompt } from "./setup/sys";
+import { uninstall } from "./setup/uninstall";
+import { update } from "./update";
 import { VERSION } from "./version";
 
 const HELP = `starbridge: post decisions to your devices, upload quota windows
+
+  starbridge setup [--yes] [--server <url>] [--name <name>] [--providers <a,b>]
+                   [--no-quota] [--no-service] [--no-plugin]
+      Set this machine up, or check and repair it: pair it, find or install CodexBar and pick
+      the providers to upload, install the agent as a user service (systemd or launchd), install
+      the Claude Code plugins, and upload a first quota snapshot. Each step asks first; --yes
+      takes every default, which installs CodexBar when it is missing, the plugins, and replaces
+      a hand-written \`starbridge quota push\` unit and manual mod or skill installs.
+
+  starbridge status
+      Print the versions, the pairing, the agent and its service, the server, each provider, the
+      Claude Code plugins and the sessions the agent sees.
+
+  starbridge uninstall [--yes] [--purge]
+      Remove the agent service, the Claude Code plugins and this binary, and ask your devices to revoke this
+      machine. Asks before it deletes the keys and state (--purge: without asking). CodexBar stays.
 
   starbridge pair --server <url> [--name <name>] [--force]
       Make this machine's keys and print a pairing code to type on a device.
@@ -73,17 +94,32 @@ const HELP = `starbridge: post decisions to your devices, upload quota windows
       The commands above go through it when it runs, and to the server directly when not
       (or with STARBRIDGE_NO_AGENT=1).
 
+  starbridge permissions enable|disable|status
+      Send this machine's Claude Code permission prompts to your devices, where they can be
+      allowed or denied; the prompt stays open at the keyboard and the first answer wins.
+      Off by default. The starbridge plugin's hooks do nothing while it is off.
+
+  starbridge hook permission --agent claude-code [--wait 570s]
+  starbridge hook settle --agent claude-code
+      For Claude Code's PermissionRequest hook, and for its PostToolUse, PermissionDenied,
+      Stop and SessionEnd hooks: hook JSON on stdin; prints the hook's decision, or nothing
+      to leave the prompt to the keyboard.
+
   starbridge update
       Install the latest release once its signature checks out (brew and npm installs: use
       their manager).
-
-  starbridge uninstall
-      Remove this binary. Keys and state stay.
 
   starbridge --version
 
 Keys and state live in $STARBRIDGE_CONFIG_DIR, else $XDG_CONFIG_HOME/starbridge, else
 ~/.config/starbridge.`;
+
+/** Questions on the terminal; without one, setup needs --yes. */
+function interactive(): Prompt {
+  if (!process.stdin.isTTY)
+    throw new UsageError("no terminal to ask on: pass --yes to take every default");
+  return terminalPrompt();
+}
 
 /** `--session-link remote-control=https://claude.ai/code/session_…`; the schema checks both. */
 function parseSessionLink(text: string): SessionLink {
@@ -226,6 +262,50 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
           ),
         );
       }
+      case "setup": {
+        const { values: v } = parseArgs({
+          args: rest,
+          options: {
+            yes: { type: "boolean", short: "y" },
+            server: { type: "string" },
+            name: { type: "string" },
+            providers: { type: "string" },
+            "no-quota": { type: "boolean" },
+            "no-service": { type: "boolean" },
+            "no-plugin": { type: "boolean" },
+          },
+        });
+        const sys = makeSys(ctx, v.yes ? defaults : interactive());
+        return await setup(sys, {
+          ...(v.yes ? { yes: true } : {}),
+          ...(v.server ? { server: v.server } : {}),
+          ...(v.name ? { name: v.name } : {}),
+          ...(v.providers !== undefined
+            ? {
+                providers: v.providers
+                  .split(",")
+                  .map((p) => p.trim())
+                  .filter(Boolean),
+              }
+            : {}),
+          ...(v["no-quota"] ? { noQuota: true } : {}),
+          ...(v["no-service"] ? { noService: true } : {}),
+          ...(v["no-plugin"] ? { noPlugin: true } : {}),
+        });
+      }
+      case "status":
+        parseArgs({ args: rest, options: {} });
+        return await status(makeSys(ctx, defaults));
+      case "uninstall": {
+        const { values: v } = parseArgs({
+          args: rest,
+          options: { yes: { type: "boolean", short: "y" }, purge: { type: "boolean" } },
+        });
+        return await uninstall(makeSys(ctx, v.yes ? defaults : interactive()), {
+          purge: v.purge,
+          install: installKind(),
+        });
+      }
       case "agent": {
         const { values } = parseArgs({
           args: rest,
@@ -243,12 +323,21 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
           ...(values["no-quota"] ? { noQuota: true } : {}),
         });
       }
+      case "permissions":
+        return permissionsCommand(ctx, rest[0]);
+      case "hook": {
+        const [sub, ...args] = rest;
+        const { values } = parseArgs({
+          args,
+          options: { agent: { type: "string" }, wait: { type: "string" } },
+        });
+        if (sub === "permission") return await hookPermission(ctx, readText("-"), values);
+        if (sub === "settle") return await hookSettle(ctx, readText("-"), values);
+        throw new UsageError("usage: starbridge hook permission|settle --agent claude-code");
+      }
       case "update":
         parseArgs({ args: rest, options: {} });
         return await update(ctx, installKind());
-      case "uninstall":
-        parseArgs({ args: rest, options: {} });
-        return removeBinary(ctx, installKind());
       case "--version":
       case "-v":
         ctx.out(`starbridge ${VERSION}`);

@@ -1,0 +1,30 @@
+#!/bin/sh
+# Stands in for `claude plugin …`: keeps the marketplace and plugins as files in $FAKE_STATE,
+# and declares the marketplace in settings.json as `claude plugin marketplace add` does.
+echo "claude $*" >>"$FAKE_LOG"
+s=$FAKE_STATE
+mkdir -p "$s"
+[ "$1" = "plugin" ] || exit 1
+shift
+case "$1 $2" in
+  "marketplace list")
+    if [ -f "$s/market" ]; then echo '[{"name":"starbridge","source":"github","repo":"T0mSIlver/starbridge"}]'; else echo '[]'; fi ;;
+  "marketplace add")
+    [ -n "$FAKE_FAIL_ADD" ] && { echo "git clone failed" >&2; exit 1; }
+    touch "$s/market"
+    settings="$HOME/.claude/settings.json"
+    mkdir -p "$HOME/.claude"
+    [ -f "$settings" ] || echo '{}' >"$settings"
+    bun -e 'const f=process.argv.at(-1);const s=JSON.parse(require("fs").readFileSync(f,"utf8"));s.extraKnownMarketplaces={...s.extraKnownMarketplaces,starbridge:{source:{source:"github",repo:"T0mSIlver/starbridge"}}};require("fs").writeFileSync(f,JSON.stringify(s,null,2))' "$settings" ;;
+  "marketplace remove") rm -f "$s/market" ;;
+  "list --json")
+    printf '['; sep=''
+    for f in "$s"/plugin-*; do
+      [ -f "$f" ] || continue
+      printf '%s{"id":"%s","scope":"user","enabled":true,"version":"0.2.0"}' "$sep" "${f##*/plugin-}"; sep=','
+    done
+    echo ']' ;;
+  "install "*) touch "$s/plugin-$2" ;;
+  "uninstall "*) rm -f "$s/plugin-$2" ;;
+  *) exit 1 ;;
+esac

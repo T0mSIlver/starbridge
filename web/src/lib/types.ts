@@ -1,8 +1,16 @@
 // The web's view of protocol data (packages/protocol). Components import these as types only;
 // the protocol code and libsodium load lazily (lib/device.ts).
-import type { Decision, Member, QuotaAlert, QuotaWindow, Settled } from "@starbridge/protocol";
+import type {
+  Decision,
+  Member,
+  Permission,
+  PermissionScope,
+  QuotaAlert,
+  QuotaWindow,
+  Settled,
+} from "@starbridge/protocol";
 
-export type { Decision, QuotaAlert, QuotaWindow };
+export type { Decision, Permission, QuotaAlert, QuotaWindow, Settled };
 
 /** A tap on an option, or typed text when the decision has none. */
 export type Reply = { choice: string } | { text: string };
@@ -18,6 +26,27 @@ export type InboxItem = {
   reply?: Reply;
   /** How the machine closed it, when its settled notice did rather than an answer. */
   settled?: Settled["outcome"];
+};
+
+/** An answer to a permission prompt: allow for a scope, or deny with a note to the agent. */
+export type PromptReply =
+  | { behavior: "allow"; scope: PermissionScope }
+  | { behavior: "deny"; scope: "once"; message?: string };
+
+/** An opened and verified permission prompt. */
+export type PromptItem = {
+  permission: Permission;
+  /** The machine that signed it, which the answer is sealed to. */
+  machine: Member;
+  receivedAt: string;
+  /** Set once a device answered it or its machine settled it. */
+  answeredAt?: string;
+  /** How its machine reports it ended, once that notice arrived. */
+  settled?: Settled;
+  /** This browser's answer. */
+  reply?: PromptReply;
+  /** When this page saw it close, so it can say where for a moment. */
+  closedAt?: number;
 };
 
 /** One quota card: a window, its provider, and the alert raised for it. */
@@ -46,4 +75,30 @@ export type PairingRequest = {
   boxPk: string;
   signPk: string;
   at: string;
+};
+
+/** A join request as the server relays it (PROTOCOL.md, "Joining by digits"). */
+export type JoinView = {
+  id: string;
+  /** The joining device's request text: JSON of its name and public keys. */
+  request: string;
+  commitment: string;
+  state: "open" | "comparing" | "approved" | "cancelled";
+  approver?: string;
+  approverKey?: string;
+  joinerKey?: string;
+  approval?: unknown;
+  createdAt: string;
+  expiresAt: string;
+  version: number;
+};
+
+/** A join request as the Devices banner shows it, its request parsed. */
+export type JoinAsk = {
+  id: string;
+  name: string;
+  at: string;
+  /** Set while a device compares digits for it. */
+  approver?: string;
+  view: JoinView;
 };

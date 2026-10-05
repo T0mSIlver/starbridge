@@ -27,6 +27,7 @@ import {
   UsageError,
 } from "./context";
 import { fitPicture, loadPicture, type Picture } from "./images";
+import { acceptPermissionAnswer } from "./permissions";
 
 export interface AskInput {
   question?: string;
@@ -330,17 +331,23 @@ export async function poll(
   if (page.items.length > 0) {
     // A new device may have answered since the directory was read.
     directory = await refreshDirectory(ctx, s);
-    const asked = ctx.store.state().asked;
-    const good: Answer[] = [];
-    for (const raw of page.items) {
-      try {
-        good.push(checkAnswer(raw, s, directory, asked));
-      } catch (e) {
-        ctx.err(`starbridge: ignored an answer: ${(e as Error).message}`);
-      }
-    }
+    const dir = directory;
     ctx.store.updateState((st) => {
-      for (const a of good) st.answers[a.decisionId] ??= { answer: a, seen: false };
+      for (const raw of page.items) {
+        try {
+          // Machines' inboxes hold answers to decisions and to permission prompts (#57).
+          if ((raw as { kind?: unknown } | null)?.kind === "permission-answer") {
+            const { answer, device } = acceptPermissionAnswer(raw, s, dir, st, Date.now());
+            const p = st.permissions?.[answer.permissionId];
+            if (p) p.answer = { ...answer, device };
+            continue;
+          }
+          const a = checkAnswer(raw, s, dir, st.asked);
+          st.answers[a.decisionId] ??= { answer: a, seen: false };
+        } catch (e) {
+          ctx.err(`starbridge: ignored an answer: ${(e as Error).message}`);
+        }
+      }
       if (opts.shared && st.cursor === opts.cursor && page.cursor !== undefined)
         st.cursor = page.cursor;
     });

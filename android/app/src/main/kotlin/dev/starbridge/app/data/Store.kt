@@ -6,9 +6,14 @@ import kotlinx.coroutines.flow.StateFlow
 interface Store {
     val phase: StateFlow<Phase>
     val decisions: StateFlow<List<Decision>>
+    /** Permission prompts of the last week, waiting ones included (#57). */
+    val prompts: StateFlow<List<Prompt>>
     val windows: StateFlow<List<QuotaWindow>>
     val members: StateFlow<List<Member>>
     val approval: StateFlow<Approval>
+    /** Open join requests from browsers and phones signed in to the account. */
+    val joinAsks: StateFlow<List<JoinAsk>>
+    val comparison: StateFlow<Comparison>
     val push: StateFlow<PushSetting>
     val server: StateFlow<String>
     /** A setup step or a sync is running. */
@@ -27,15 +32,32 @@ interface Store {
     fun setUpFirstDevice()
     fun confirmRecoveryKey()
     fun joinAccount()
+    /** Joins with a code another device shows as a QR code: the scanned link, or the code typed. */
+    fun joinWithCode(text: String)
+    /** Asks the account's devices to approve this phone by comparing digits. */
+    fun askDevices()
     fun cancelJoin()
     fun recover(words: String)
 
     fun refresh()
     fun answer(id: String, choice: String?, text: String?)
+    /** Allows prompt [id] for [scope] ("once", "session", "project"), or denies it with [message]. */
+    fun answerPrompt(id: String, allow: Boolean, scope: String, message: String?)
+    /** Reads prompts again, quickly, while one waits on screen. */
+    fun refreshPrompts()
 
     fun lookUpPairing(code: String)
     fun approvePairing()
     fun closePairing()
+    /** Shows a QR code for a new phone to scan, and waits for its request. */
+    fun showCode()
+
+    /** Keeps [joinAsks] current while the app is in front. */
+    fun watchJoins(on: Boolean)
+    fun compareJoin(id: String)
+    fun approveJoin()
+    fun refuseJoin(id: String)
+    fun closeComparison()
     fun revoke(memberId: String)
 
     fun setPushType(type: String)

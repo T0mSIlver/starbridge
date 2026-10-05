@@ -7,6 +7,8 @@ import dev.starbridge.app.data.Kind
 import dev.starbridge.app.data.Link
 import dev.starbridge.app.data.Member
 import dev.starbridge.app.data.Pace
+import dev.starbridge.app.data.Prompt
+import dev.starbridge.app.data.PromptScope
 import dev.starbridge.app.data.PushSetting
 import dev.starbridge.app.data.QuotaWindow
 import dev.starbridge.app.data.SessionLink
@@ -27,6 +29,49 @@ class Fake(private val now: Instant) {
 
     private fun ago(minutes: Long) = now.minus(Duration.ofMinutes(minutes))
     private fun later(minutes: Long) = now.plus(Duration.ofMinutes(minutes))
+
+    val prompts = listOf(
+        Prompt(
+            id = "p1",
+            tool = "Bash",
+            summary = "git push origin t/57-hook",
+            description = "Push the permission hook branch",
+            input = """{"command":"git push origin t/57-hook","description":"Push the permission hook branch"}""",
+            scopes = listOf(
+                PromptScope("session", "Allow for this session", "Bash(git push:*)"),
+                PromptScope("project", "Always allow in starbridge", "Bash(git push:*)"),
+            ),
+            source = Source("dev box", "starbridge", "s1", title = "Permission prompts (#57)"),
+            createdAt = ago(1),
+            expiresAt = later(8),
+        ),
+        Prompt(
+            id = "p2",
+            tool = "Edit",
+            summary = "/home/dev/work/localvoxtral/Sources/Speech/Recognizer.swift",
+            description = null,
+            input = """{"file_path":"/home/dev/work/localvoxtral/Sources/Speech/Recognizer.swift"}""",
+            scopes = emptyList(),
+            source = Source("Mac", "localvoxtral", "s2"),
+            createdAt = ago(2),
+            expiresAt = later(7),
+            ended = "Answered on Mac",
+            endedAt = now,
+        ),
+        Prompt(
+            id = "p3",
+            tool = "Bash",
+            summary = "rm -rf build/",
+            description = "Clean the build folder",
+            input = """{"command":"rm -rf build/"}""",
+            scopes = emptyList(),
+            source = Source("dev box", "starbridge", "s1"),
+            createdAt = ago(300),
+            expiresAt = ago(291),
+            ended = "Timed out: left to the keyboard",
+            endedAt = ago(291),
+        ),
+    )
 
     val decisions = listOf(
         Decision(

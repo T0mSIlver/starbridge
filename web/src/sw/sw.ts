@@ -3,29 +3,37 @@
 // key, verifies them against the pinned directory, and shows the decision with its options as
 // notification actions where the browser supports them. Built to public/sw.js by `bun run sw`.
 import type { QuotaSnapshot, SealedItem } from "@starbridge/protocol";
-import { answer, deviceContext, openPushedDecision, openPushedQuota } from "../lib/device";
+import {
+  answer,
+  deviceContext,
+  openPushedDecision,
+  openPushedPermission,
+  openPushedQuota,
+  openSettled,
+} from "../lib/device";
 import { answerPlace } from "../lib/outcome";
 import * as store from "../lib/store";
-import type { InboxItem, Reply } from "../lib/types";
+import type { InboxItem, PromptItem, Reply } from "../lib/types";
 
 declare const self: ServiceWorkerGlobalScope;
 
-/**
- * What the server pushes: a new item with this device's box when it fits, or "answered". A
- * settled notice closes the decision its `re` names, as "answered" does.
- */
+/** What the server pushes: a new item with this device's box when it fits, or "answered". */
 type Payload =
   | {
       v: 1;
-      kind: "decision" | "quota" | "answer" | "settled";
+      kind: "decision" | "quota" | "answer" | "permission" | "settled";
       id: string;
       from: string;
       re?: string;
       box?: string;
     }
-  | { v: 1; kind: "answered"; id: string };
+  | { v: 1; kind: "answered"; id: string }
+  /** A browser or phone signed in to the account asks to join (PROTOCOL.md). */
+  | { v: 1; kind: "join"; id: string };
 
 const tag = (decisionId: string) => `d:${decisionId}`;
+/** A permission prompt's notification; "answered" names the prompt, so both tags close. */
+const promptTag = (permissionId: string) => `p:${permissionId}`;
 
 /**
  * Decisions answered since this worker started, as "account/decision" (ids are unique per
@@ -65,16 +73,21 @@ async function onPush(text: string): Promise<void> {
   }
   await tellPages(payload.kind);
   const account = await store.get("current");
-  const closes =
-    payload.kind === "answered" ? payload.id : payload.kind === "settled" ? payload.re : undefined;
-  if (payload.kind === "answered" || payload.kind === "settled") {
+  if (payload.kind === "answered") {
     // Answered elsewhere: the question is settled, so its notification goes.
-    if (!closes) return;
-    answered.add(`${account}/${closes}`);
-    for (const n of await self.registration.getNotifications({ tag: tag(closes) })) n.close();
+    answered.add(`${account}/${payload.id}`);
+    for (const t of [tag(payload.id), promptTag(payload.id)])
+      for (const n of await self.registration.getNotifications({ tag: t })) n.close();
     return;
   }
   if (payload.kind === "answer") return;
+  if (payload.kind === "join") {
+    await self.registration.showNotification("A device wants to join", {
+      body: "Open Starbridge to compare digits with it and approve it.",
+      tag: `j:${payload.id}`,
+    });
+    return;
+  }
 
   const ctx = account ? await deviceContext(account) : undefined;
   if (!ctx) return;
@@ -97,6 +110,16 @@ async function onPush(text: string): Promise<void> {
   if (payload.kind === "decision") {
     const opened = await openPushedDecision(ctx, item);
     if (!answeredAt && !opened.reply) await showDecision(account as string, opened);
+  } else if (payload.kind === "permission") {
+    const opened = await openPushedPermission(ctx, item);
+    if (!answeredAt && !opened.reply) await showPrompt(account as string, opened);
+  } else if (payload.kind === "settled") {
+    // Checked like any item, so a forged notice cannot clear a real prompt.
+    const { settled } = await openSettled(ctx, item);
+    answered.add(`${account}/${settled.itemId}`);
+    // It may close a prompt or a decision.
+    for (const t of [tag(settled.itemId), promptTag(settled.itemId)])
+      for (const n of await self.registration.getNotifications({ tag: t })) n.close();
   } else await showAlerts(account as string, await openPushedQuota(ctx, item));
 }
 
@@ -143,6 +166,23 @@ async function showDecision(account: string, item: InboxItem): Promise<void> {
   // An answered push may have closed nothing while this one was still opening.
   if (done())
     for (const n of await self.registration.getNotifications({ tag: tag(d.id) })) n.close();
+}
+
+/**
+ * A permission prompt: the browser cannot ask for an unlock, so every tap opens the page,
+ * where the owner reads the full input before allowing it.
+ */
+async function showPrompt(account: string, item: PromptItem): Promise<void> {
+  const p = item.permission;
+  const done = () => answered.has(`${account}/${p.id}`);
+  if (done()) return;
+  await self.registration.showNotification(`${p.tool} on ${p.source.machine}`, {
+    body: `${p.source.project}\n${p.summary}`,
+    tag: promptTag(p.id),
+    requireInteraction: true,
+  });
+  if (done())
+    for (const n of await self.registration.getNotifications({ tag: promptTag(p.id) })) n.close();
 }
 
 async function showAlerts(account: string, snapshot: QuotaSnapshot): Promise<void> {

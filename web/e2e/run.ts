@@ -448,6 +448,17 @@ async function main() {
   await page.emulateMedia({ colorScheme: "light" });
   await shoot(page, "devices");
 
+  step("a pairing link opened while signed out keeps its code through GitHub sign-in");
+  const linked = cli("pair-link", ["pair", "--name", "laptop"], join(tmp, "laptop"));
+  const code3 = (await linked.waitFor(/Pairing code: (\S+)/))[1] as string;
+  await a.clearCookies();
+  await page.goto(`${ORIGIN}/pair#${code3}`);
+  await page.getByRole("link", { name: "Sign in with GitHub" }).click();
+  await page.getByText("Let laptop post decisions and quotas?").waitFor({ timeout: 30_000 });
+  await page.getByRole("button", { name: "Approve" }).click();
+  await linked.waitFor(/Paired "laptop"/);
+  if ((await linked.exited) !== 0) throw new Error("pair by link failed");
+
   step("sign in again: the session binds to the existing device without pairing");
   await a.clearCookies();
   await page.goto(ORIGIN);

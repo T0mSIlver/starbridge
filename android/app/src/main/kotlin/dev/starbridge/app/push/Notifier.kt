@@ -20,6 +20,7 @@ import dev.starbridge.app.data.Decision
 import dev.starbridge.app.data.Prefs
 import dev.starbridge.app.data.bitmap
 import dev.starbridge.app.data.place
+import dev.starbridge.app.data.Prompt
 
 /**
  * One notification per open decision. Its buttons are the options, the recommended one first,
@@ -33,6 +34,16 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
         manager.createNotificationChannel(
             NotificationChannel(CHANNEL, "Decisions", NotificationManager.IMPORTANCE_HIGH).apply {
                 description = "Questions your agents need you to answer"
+            },
+        )
+        manager.createNotificationChannel(
+            NotificationChannel(PROMPTS, "Permission prompts", NotificationManager.IMPORTANCE_HIGH).apply {
+                description = "Agents waiting for you to allow a command or an edit"
+            },
+        )
+        manager.createNotificationChannel(
+            NotificationChannel(JOIN_CHANNEL, "Join requests", NotificationManager.IMPORTANCE_HIGH).apply {
+                description = "A browser or phone signed in to your account asks to join"
             },
         )
     }
@@ -161,8 +172,148 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
 
     override fun cancel(id: String) = manager.cancel(tag(id))
 
+    // --- Permission prompts ------------------------------------------------------
+
+    /** One notification per session, updated in place: the prompt it shows now. */
+    private val shown = java.util.Collections.synchronizedMap(mutableMapOf<Int, String>())
+
+    private fun promptTag(p: Prompt) = "p:${p.source.machine}/${p.source.session}".hashCode()
+
+    private fun promptIntent(p: Prompt, allow: Boolean, scope: String, request: Int): PendingIntent = PendingIntent.getBroadcast(
+        context,
+        request,
+        Intent(context, PromptReceiver::class.java)
+            .setAction(PromptReceiver.ACTION)
+            .setData(Uri.Builder().scheme("starbridge-prompt").authority(if (allow) "allow" else "deny").appendPath(p.id).appendPath(scope).build())
+            .putExtra(PromptReceiver.EXTRA_ID, p.id)
+            .putExtra(PromptReceiver.EXTRA_ALLOW, allow)
+            .putExtra(PromptReceiver.EXTRA_SCOPE, scope),
+        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+    )
+
+    private fun promptBase(p: Prompt): NotificationCompat.Builder {
+        val title = "${p.tool} on ${p.source.machine}"
+        val open = PendingIntent.getActivity(
+            context,
+            promptTag(p),
+            Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+        return NotificationCompat.Builder(context, PROMPTS)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setColor(accent())
+            .setContentTitle(title)
+            .setContentText(p.summary)
+            .setSubText(p.source.project)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(listOfNotNull(p.summary, p.description).joinToString("\n\n")))
+            .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            // The lock screen shows only the tool and the machine, never the command.
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+            .setPublicVersion(
+                NotificationCompat.Builder(context, PROMPTS)
+                    .setSmallIcon(R.drawable.ic_notification)
+                    .setColor(accent())
+                    .setContentTitle(title)
+                    .build(),
+            )
+            .setContentIntent(open)
+            .setOnlyAlertOnce(true)
+            .setTimeoutAfter(maxOf(1_000L, p.expiresAt.toEpochMilli() - System.currentTimeMillis()))
+    }
+
+    /**
+     * Deny works from the lock screen; both allows ask for the unlock first (the owner's choice,
+     * SPEC.md). "Always" needs the app, which shows the exact rule.
+     */
+    override fun prompt(prompt: Prompt) = postPrompt(prompt, null)
+
+    private fun postPrompt(prompt: Prompt, note: String?) {
+        if (!allowed()) return
+        val tag = promptTag(prompt)
+        val b = promptBase(prompt)
+        if (note != null) b.setContentText(note).setStyle(NotificationCompat.BigTextStyle().bigText(note)).setSilent(true)
+        b.addAction(
+            NotificationCompat.Action.Builder(0, "Allow once", promptIntent(prompt, true, "once", tag * 31))
+                .setAuthenticationRequired(true)
+                .build(),
+        )
+        if (prompt.scopes.any { it.scope == "session" }) {
+            b.addAction(
+                NotificationCompat.Action.Builder(0, "Allow for session", promptIntent(prompt, true, "session", tag * 31 + 1))
+                    .setAuthenticationRequired(true)
+                    .build(),
+            )
+        }
+        b.addAction(
+            NotificationCompat.Action.Builder(0, "Deny", promptIntent(prompt, false, "once", tag * 31 + 2))
+                .setAuthenticationRequired(false)
+                .build(),
+        )
+        shown[tag] = prompt.id
+        @Suppress("MissingPermission")
+        manager.notify(tag, b.build())
+    }
+
+    /** Says what was sent, then clears itself, unless a newer prompt of the session shows. */
+    fun promptAnswered(prompt: Prompt, what: String) {
+        if (!allowed()) return
+        val tag = promptTag(prompt)
+        synchronized(shown) {
+            if (shown[tag] != null && shown[tag] != prompt.id) return
+            shown[tag] = prompt.id
+            @Suppress("MissingPermission")
+            manager.notify(tag, promptBase(prompt).setContentText(what).setStyle(null).setTimeoutAfter(4_000).setSilent(true).build())
+        }
+    }
+
+    fun promptFailed(prompt: Prompt, why: String) {
+        synchronized(shown) {
+            if (shown[promptTag(prompt)].let { it != null && it != prompt.id }) return
+            postPrompt(prompt, "Not sent: $why")
+        }
+    }
+
+    /** Clears the session's notification if it still shows this prompt. */
+    override fun cancelPrompt(prompt: Prompt) {
+        val tag = promptTag(prompt)
+        // Store runs and notification buttons call in from different threads.
+        synchronized(shown) {
+            if (shown[tag] != null && shown[tag] != prompt.id) return
+            shown.remove(tag)
+            manager.cancel(tag)
+        }
+    }
+
+    /** Tapping it opens the app, which shows the request to compare digits with. */
+    override fun join(id: String, name: String) {
+        if (!allowed()) return
+        val open = PendingIntent.getActivity(
+            context,
+            tag(id),
+            Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+        @Suppress("MissingPermission")
+        manager.notify(
+            tag(id),
+            NotificationCompat.Builder(context, JOIN_CHANNEL)
+                .setSmallIcon(R.drawable.ic_notification)
+                .setContentTitle("$name wants to join")
+                .setContentText("Open Starbridge to compare digits and approve it.")
+                .setCategory(NotificationCompat.CATEGORY_STATUS)
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setContentIntent(open)
+                .setAutoCancel(true)
+                .setTimeoutAfter(10 * 60_000L)
+                .build(),
+        )
+    }
+
     companion object {
         const val CHANNEL = "decisions"
+        const val PROMPTS = "prompts"
+        const val JOIN_CHANNEL = "joins"
 
         /** Wide enough for an expanded notification on any phone, small enough for its bitmap limit. */
         private const val PICTURE_EDGE = 1024

@@ -14,11 +14,17 @@ import androidx.compose.ui.unit.Density
 import com.github.takahirom.roborazzi.captureRoboImage
 import dev.starbridge.app.data.Approval
 import dev.starbridge.app.data.Phase
+import dev.starbridge.app.data.Comparison
+import dev.starbridge.app.data.JoinAsk
 import dev.starbridge.app.ui.devices.DeviceActions
+import dev.starbridge.app.ui.pairing.JoinActions
+import dev.starbridge.app.ui.pairing.JoinPrompt
 import dev.starbridge.app.ui.devices.DevicesScreen
 import dev.starbridge.app.ui.inbox.DecisionActions
 import dev.starbridge.app.ui.inbox.DecisionScreen
 import dev.starbridge.app.ui.inbox.InboxScreen
+import dev.starbridge.app.ui.inbox.PromptActions
+import dev.starbridge.app.ui.inbox.PromptLogScreen
 import dev.starbridge.app.ui.quotas.QuotasScreen
 import dev.starbridge.app.ui.setup.SetupActions
 import dev.starbridge.app.ui.setup.SetupScreen
@@ -54,8 +60,8 @@ class ScreenshotTest(private val dark: Boolean) {
     private val now = Instant.parse("2026-10-04T14:00:00Z")
     private val fake = Fake(now)
     private val decisionActions = DecisionActions({ _, _, _ -> }, {})
-    private val deviceActions = DeviceActions({}, {}, {}, {}, {}, {}, {})
-    private val setupActions = SetupActions({ "" }, { _, _ -> }, {}, {}, {}, {}, {}, {})
+    private val deviceActions = DeviceActions({}, {}, {}, {}, {}, {}, {}, {})
+    private val setupActions = SetupActions({ "" }, { _, _ -> }, {}, {}, {}, {}, {}, {}, {}, {})
 
     private fun capture(name: String, content: @Composable () -> Unit) {
         compose.setContent {
@@ -83,6 +89,12 @@ class ScreenshotTest(private val dark: Boolean) {
         }
     }
 
+    @Test fun inboxPrompts() = capture("inbox-prompts") {
+        InboxScreen(fake.decisions, now, decisionActions, prompts = fake.prompts, promptActions = PromptActions({ _, _, _, _ -> }, {}))
+    }
+
+    @Test fun promptLog() = capture("prompt-log") { PromptLogScreen(fake.prompts, now) }
+
     @Test fun decision() = capture("decision") { DecisionScreen(fake.decisions[1], now, onAnswer = { _, _, _ -> }) }
 
     @Test fun decisionImages() = capture("decision-images") { DecisionScreen(fake.decisions.first { it.images.isNotEmpty() }, now, onAnswer = { _, _, _ -> }) }
@@ -106,6 +118,25 @@ class ScreenshotTest(private val dark: Boolean) {
     @Test fun setupFirstDevice() = capture("setup-first-device") { SetupScreen(Phase.NoDevice(accountExists = false), "https://starbridge.run", false, setupActions, {}) }
 
     @Test fun setupJoin() = capture("setup-join") { SetupScreen(Phase.Joining("7KQ2-M9XD-4TPV-HB3N-R8CE-WY6F"), "https://starbridge.run", false, setupActions, {}) }
+
+    @Test fun setupJoinChoose() = capture("setup-join-choose") { SetupScreen(Phase.NoDevice(accountExists = true), "https://starbridge.run", false, setupActions, {}) }
+
+    @Test fun setupJoinDigits() = capture("setup-join-digits") { SetupScreen(Phase.JoiningByDigits("042917"), "https://starbridge.run", false, setupActions, {}) }
+
+    @Test fun devicesShowingQr() = capture("devices-qr") {
+        DevicesScreen(fake.members, Approval.Showing("7KQ2-M9XD-4TPV-HB3N-R8CE-WY6F", "https://starbridge.run/pair#7KQ2-M9XD-4TPV-HB3N-R8CE-WY6F"), fake.push, "https://starbridge.run", now, deviceActions)
+    }
+
+    @Test fun joinDigits() = capture("join-digits") {
+        val ask = JoinAsk("04106105", "Firefox on Linux", now, elsewhere = false)
+        JoinPrompt(listOf(ask), Comparison.Digits(ask, "042917"), JoinActions({}, {}, {}, {}))
+    }
+
+    @Test fun joinDigitsRetry() = capture("join-digits-retry") {
+        val ask = JoinAsk("04106105", "Firefox on Linux", now, elsewhere = false)
+        val error = "Can't reach https://starbridge.run: timeout"
+        JoinPrompt(listOf(ask), Comparison.Digits(ask, "042917", error = error), JoinActions({}, {}, {}, {}))
+    }
 
     @Test fun setupRecoveryKey() = capture("setup-recovery-key") { SetupScreen(Phase.RecoveryKey(fake.recoveryWords), "https://starbridge.run", false, setupActions, {}) }
 }
