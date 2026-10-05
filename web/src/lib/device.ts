@@ -202,18 +202,32 @@ export async function boot(): Promise<Boot> {
  * Signed in again: proves this browser holds the device's key, so the session becomes its own.
  * Another tab may bind the same session meanwhile, so a failure checks /me before retrying.
  */
+/** How often, and after what waits, signing in retries a binding that failed for want of a reply. */
+export const bindRetry = { waits: [500, 2_000, 5_000] };
+
+/**
+ * Binds this sign-in session to the device: true once bound, false when the server refuses the
+ * device's signature. A failure that is not a refusal (network, 5xx, rate limit) retries, then
+ * throws, so a passing outage never sends a browser with valid keys to pair again (#274).
+ */
 async function bind(account: string, device: store.DeviceRecord): Promise<boolean> {
-  for (let attempt = 0; attempt < 2; attempt++) {
+  for (let attempt = 0; ; attempt++) {
     try {
       const nonce = await api.challenge();
       const sig = await signer(device.keys)(bindMessage(account, device.id, nonce));
       await api.bind(device.id, toB64(sig));
       return true;
-    } catch {
-      if ((await api.me()).member === device.id) return true;
+    } catch (e) {
+      const me = await api.me().catch(() => undefined);
+      if (me?.member === device.id) return true;
+      const refused =
+        e instanceof ApiError && e.status >= 400 && e.status < 500 && e.status !== 429;
+      if (refused) return false;
+      const wait = bindRetry.waits[attempt];
+      if (wait === undefined) throw e;
+      await new Promise((r) => setTimeout(r, wait));
     }
   }
-  return false;
 }
 
 async function newDevice(account: string, name: string) {
@@ -381,26 +395,39 @@ export async function startJoin(account: string, name: string): Promise<Join> {
   const { record, member } = await newDevice(account, name);
   const claim = newClaimSecret();
   const request = pairingRequest({ v: 1, rendezvous: code.rendezvous, ...member, at: now() }, code);
-  await store.put("device", record, account);
+  await store.put("pending", record, account);
   await api.requestPairing(request, hashClaim(claim));
   const abort = new AbortController();
   const done = (async () => {
     for (;;) {
       if (abort.signal.aborted) throw new Error("cancelled");
       const res = await api.pairingResult(code.rendezvous, claim, 25, abort.signal);
-      if (res) return finishJoin(account, code, res.approval, member);
+      if (res) return finishJoin(account, code, res.approval, record, member);
     }
   })();
   return { code: formatPairingCode(code), done, cancel: () => abort.abort() };
 }
 
-async function finishJoin(account: string, code: PairingCode, approval: unknown, me: Member) {
+/** A join approved: its keys become this browser's device for the account. */
+async function adopt(account: string, record: store.DeviceRecord): Promise<void> {
+  await store.put("device", record, account);
+  await store.del("pending", account);
+}
+
+async function finishJoin(
+  account: string,
+  code: PairingCode,
+  approval: unknown,
+  record: store.DeviceRecord,
+  member: Member,
+) {
   const body = openPairingApproval(approval, code);
   if (body.account !== account) throw new ProtocolError("wrong-account", body.account);
   const entries = await api.directory();
   // The approval's length and head, under the code's MAC, pin a directory the server cannot fake.
   const dir = verifyDirectory(entries, { account, pin: { length: body.length, head: body.head } });
-  checkJoined(dir, me);
+  checkJoined(dir, member);
+  await adopt(account, record);
   await pinTo(account, entries, dir);
 }
 
@@ -420,7 +447,7 @@ export async function startDigitJoin(account: string, name: string): Promise<Dig
   const id = newJoinId();
   const { role: _, ...keys } = member;
   const request = joinRequest({ v: 1, join: id, account, ...keys, at: now() });
-  await store.put("device", record, account);
+  await store.put("pending", record, account);
   const { expiresAt } = (await api.postJoin(request, joinCommitment(eph.publicKey, request))).join;
   const abort = new AbortController();
   let shown: (digits: string) => void = () => {};
@@ -460,6 +487,7 @@ export async function startDigitJoin(account: string, name: string): Promise<Dig
             pin: { length: body.length, head: body.head },
           });
           checkJoined(dir, member);
+          await adopt(account, record);
           await pinTo(account, entries, dir);
           return;
         }

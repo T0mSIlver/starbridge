@@ -18,6 +18,7 @@ import {
 import { LiveServer } from "@starbridge/server/test-support";
 import { api } from "./api";
 import * as device from "./device";
+import * as store from "./store";
 import type { JoinView } from "./types";
 
 let live: LiveServer;
@@ -125,4 +126,24 @@ test("comparing digits survives a failed poll, and a failed approval retries ont
   });
   checkJoined(dir, { ...member, role: "device" });
   expect([...dir.members.keys()].filter((m) => m === member.id)).toHaveLength(1);
+});
+
+test("signing in again survives two failed challenges and keeps the device's keys (#274)", async () => {
+  const before = await store.get("device", ctx.account);
+  device.bindRetry.waits = [1, 1, 1];
+  // A new sign-in session: the server knows no device for it until this browser binds.
+  await api.ownerSignIn("owner-secret");
+  live.failures.push("/auth/challenge", "/auth/challenge");
+  const b = await device.boot();
+  expect(b.state).toBe("ready");
+  expect(await store.get("device", ctx.account)).toEqual(before as store.DeviceRecord);
+});
+
+test("a join leaves the device's keys alone until a device approves it (#274)", async () => {
+  const before = await store.get("device", ctx.account);
+  const join = await device.startJoin(ctx.account, "Pairing again");
+  join.cancel();
+  await join.done.catch(() => {});
+  expect(await store.get("device", ctx.account)).toEqual(before as store.DeviceRecord);
+  expect((await store.get("pending", ctx.account))?.name).toBe("Pairing again");
 });

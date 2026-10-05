@@ -1154,6 +1154,14 @@ so the mod is the first path.
   on screen. A phone row keeps Allow only when the whole input fits on one line of 200
   characters, shown whole. Session and project grants show their exact rule beside their
   label instead of in a tooltip, which touch screens never show.
+- 2026-10-06. A browser's keys and its notifications' account (#274, web client 3 and 4). Signing
+  in binds the session to the stored device; a failure that is not a refusal (network, 5xx,
+  rate limit) now retries after 0.5, 2 and 5 s and then shows the boot error with its retry,
+  instead of sending a browser with valid keys to pair again. A join keeps its new keys under
+  `pending` and makes them the device only once a device approves it, so a join started for any
+  reason never overwrites an active device's keys. A decision's notification stores the account
+  it was shown for, and its actions answer for that account only; one from before carries none
+  and opens the page instead of answering.
 
 ## Encryption, with existing libraries
 

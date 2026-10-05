@@ -186,7 +186,9 @@ async function showDecision(
     // A flip back to working replaces the waiting notification quietly.
     silent: flip && !waiting,
     requireInteraction: true,
-    data: { item, options },
+    // The account it belongs to: an action answers for that account only, whichever is current
+    // when it is tapped (#274).
+    data: { account, item, options },
     actions,
   };
   if (done()) return;
@@ -214,12 +216,12 @@ async function showPrompt(account: string, item: PromptItem): Promise<void> {
 }
 
 async function onClick(n: Notification, action: string): Promise<void> {
-  const data = n.data as { item?: InboxItem; options?: string[] } | undefined;
+  const data = n.data as { account?: string; item?: InboxItem; options?: string[] } | undefined;
   const choice = action.startsWith("o") ? data?.options?.[Number(action.slice(1))] : undefined;
-  if (data?.item && choice !== undefined) {
+  // A notification from before it carried its account opens the page instead of answering.
+  if (data?.item && data.account && choice !== undefined) {
     const reply: Reply = { choice };
-    const account = await store.get("current");
-    const ctx = account ? await deviceContext(account) : undefined;
+    const ctx = await deviceContext(data.account);
     try {
       if (!ctx) throw new Error("this browser is no longer a device of the account");
       await answer(ctx, data.item, reply);
