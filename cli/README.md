@@ -55,8 +55,9 @@ Setup asks before each step, and a rerun repairs only what is missing:
 
 ### Update and uninstall
 
-`starbridge update` installs the latest release over a script install. Homebrew and npm installs
-update through their own manager.
+`starbridge update` installs the latest release over a script install, restarts the agent and
+updates the Claude Code plugins; the agent brings the Codex skill up to date when it starts.
+Homebrew and npm installs update through their own manager.
 
 `starbridge uninstall` removes the agent service, the plugin and the binary, and asks your
 devices to revoke the machine. It deletes the keys only when you say so, or with `--purge`.

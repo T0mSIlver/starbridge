@@ -112,7 +112,7 @@ export async function pair(
     s.answers = {};
   });
   ctx.out(`Paired "${name}" (${id}). Keys are in ${ctx.store.dir}.`);
-  if (previous && previous.server === server)
+  if (previous && dir.members.get(previous.id)?.active)
     ctx.out(`The old pairing (${previous.id}) stays under Devices until you revoke it there.`);
   rememberMachineKind(ctx);
   return 0;

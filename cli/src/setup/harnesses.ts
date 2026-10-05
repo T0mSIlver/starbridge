@@ -9,8 +9,11 @@ import { join } from "node:path";
 import skill from "../../../plugin/skills/starbridge/SKILL.md" with { type: "text" };
 import { failure, run, type Sys, which } from "./sys";
 
+/** What the Codex skill steps need: the agent has no prompt. */
+type Home = Pick<Sys, "ctx" | "home">;
+
 /** `$CODEX_HOME/skills/starbridge`, which Codex reads skills from. */
-export function codexSkillDir(sys: Sys): string {
+export function codexSkillDir(sys: Home): string {
   return join(sys.ctx.env.CODEX_HOME || join(sys.home, ".codex"), "skills", "starbridge");
 }
 
@@ -19,7 +22,7 @@ export function hasCodex(sys: Sys): boolean {
 }
 
 /** Whether Codex has the skill, and whether it is this CLI's version of it. */
-export function codexSkill(sys: Sys): "missing" | "current" | "outdated" {
+export function codexSkill(sys: Home): "missing" | "current" | "outdated" {
   try {
     return readFileSync(join(codexSkillDir(sys), "SKILL.md"), "utf8") === skill
       ? "current"
@@ -29,7 +32,7 @@ export function codexSkill(sys: Sys): "missing" | "current" | "outdated" {
   }
 }
 
-export function installCodexSkill(sys: Sys) {
+export function installCodexSkill(sys: Home) {
   const dir = codexSkillDir(sys);
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, "SKILL.md"), skill);

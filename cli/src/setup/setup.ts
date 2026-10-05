@@ -174,7 +174,7 @@ async function codexbarStep(sys: Sys, opts: SetupOpts): Promise<Quota | undefine
     }
     if (!found) {
       ctx.out(
-        "No quotas without CodexBar; decisions work without it. Rerun setup once it is installed.",
+        "No quotas without CodexBar; questions and runs work without it. `starbridge setup` installs it when you rerun it.",
       );
       return undefined;
     }
