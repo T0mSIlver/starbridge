@@ -292,6 +292,10 @@ object Sizes {
     val rail = 240.dp
     val content = 720.dp
     val track = 10.dp
+    val trackDense = 6.dp
+    val tick = 2.dp
+    val cap = 4.dp
+    val hatch = 6.dp
     val media = 360.dp
     val page = 1040.dp
     val shot = 320.dp
@@ -305,32 +309,60 @@ object Motion {
 
 // The theme passes the bundled faces.
 class StarbridgeType(sans: FontFamily, mono: FontFamily) {
+    val hero = TextStyle(
+        fontFamily = sans,
+        fontSize = 72.sp,
+        fontWeight = FontWeight(500),
+        lineHeight = 76.sp,
+        letterSpacing = -0.025.em,
+    )
     val display = TextStyle(
         fontFamily = sans,
         fontSize = 45.sp,
         fontWeight = FontWeight(500),
-        lineHeight = 52.002.sp,
+        lineHeight = 52.sp,
         letterSpacing = 0.em,
     )
     val title = TextStyle(
         fontFamily = sans,
-        fontSize = 32.sp,
+        fontSize = 36.sp,
         fontWeight = FontWeight(500),
-        lineHeight = 40.sp,
+        lineHeight = 44.sp,
         letterSpacing = 0.em,
     )
     val heading = TextStyle(
         fontFamily = sans,
         fontSize = 24.sp,
         fontWeight = FontWeight(500),
-        lineHeight = 31.992.sp,
+        lineHeight = 32.sp,
         letterSpacing = 0.em,
     )
     val question = TextStyle(
         fontFamily = sans,
         fontSize = 22.sp,
         fontWeight = FontWeight(500),
-        lineHeight = 28.006.sp,
+        lineHeight = 28.sp,
+        letterSpacing = 0.em,
+    )
+    val subtitle = TextStyle(
+        fontFamily = sans,
+        fontSize = 18.sp,
+        fontWeight = FontWeight(500),
+        lineHeight = 24.sp,
+        letterSpacing = 0.em,
+    )
+    val lead = TextStyle(
+        fontFamily = sans,
+        fontSize = 19.sp,
+        fontWeight = FontWeight(400),
+        lineHeight = 28.sp,
+        letterSpacing = 0.em,
+    )
+    val prose = TextStyle(
+        fontFamily = sans,
+        fontSize = 17.sp,
+        fontWeight = FontWeight(400),
+        lineHeight = 26.sp,
         letterSpacing = 0.em,
     )
     val body = TextStyle(
@@ -338,50 +370,86 @@ class StarbridgeType(sans: FontFamily, mono: FontFamily) {
         fontSize = 16.sp,
         fontWeight = FontWeight(400),
         lineHeight = 24.sp,
-        letterSpacing = 0.031.em,
+        letterSpacing = 0.em,
     )
     val action = TextStyle(
         fontFamily = sans,
         fontSize = 16.sp,
         fontWeight = FontWeight(500),
         lineHeight = 24.sp,
-        letterSpacing = 0.009.em,
+        letterSpacing = 0.em,
+    )
+    val reading = TextStyle(
+        fontFamily = sans,
+        fontSize = 15.sp,
+        fontWeight = FontWeight(400),
+        lineHeight = 24.sp,
+        letterSpacing = 0.em,
     )
     val small = TextStyle(
         fontFamily = sans,
         fontSize = 14.sp,
         fontWeight = FontWeight(400),
-        lineHeight = 20.006.sp,
-        letterSpacing = 0.018.em,
-    )
-    val figure = TextStyle(
-        fontFamily = sans,
-        fontSize = 28.sp,
-        fontWeight = FontWeight(600),
-        lineHeight = 36.008.sp,
+        lineHeight = 20.sp,
         letterSpacing = 0.em,
-        fontFeatureSettings = "tnum",
-    )
-    val machine = TextStyle(
-        fontFamily = sans,
-        fontSize = 14.sp,
-        fontWeight = FontWeight(400),
-        lineHeight = 20.006.sp,
-        letterSpacing = 0.018.em,
-        fontFeatureSettings = "tnum",
     )
     val label = TextStyle(
         fontFamily = sans,
         fontSize = 14.sp,
         fontWeight = FontWeight(500),
-        lineHeight = 20.006.sp,
-        letterSpacing = 0.007.em,
+        lineHeight = 20.sp,
+        letterSpacing = 0.em,
+    )
+    val machine = TextStyle(
+        fontFamily = sans,
+        fontSize = 14.sp,
+        fontWeight = FontWeight(400),
+        lineHeight = 20.sp,
+        letterSpacing = 0.em,
+        fontFeatureSettings = "tnum",
+    )
+    val meta = TextStyle(
+        fontFamily = sans,
+        fontSize = 13.sp,
+        fontWeight = FontWeight(400),
+        lineHeight = 20.sp,
+        letterSpacing = 0.em,
+        fontFeatureSettings = "tnum",
+    )
+    val caption = TextStyle(
+        fontFamily = sans,
+        fontSize = 12.sp,
+        fontWeight = FontWeight(400),
+        lineHeight = 16.sp,
+        letterSpacing = 0.em,
+    )
+    val key = TextStyle(
+        fontFamily = sans,
+        fontSize = 11.sp,
+        fontWeight = FontWeight(500),
+        lineHeight = 16.sp,
+        letterSpacing = 0.em,
+    )
+    val figure = TextStyle(
+        fontFamily = sans,
+        fontSize = 24.sp,
+        fontWeight = FontWeight(600),
+        lineHeight = 32.sp,
+        letterSpacing = 0.em,
+        fontFeatureSettings = "tnum",
     )
     val code = TextStyle(
         fontFamily = mono,
         fontSize = 14.sp,
         fontWeight = FontWeight(400),
-        lineHeight = 20.006.sp,
+        lineHeight = 20.sp,
+        letterSpacing = 0.em,
+    )
+    val command = TextStyle(
+        fontFamily = mono,
+        fontSize = 18.sp,
+        fontWeight = FontWeight(400),
+        lineHeight = 28.sp,
         letterSpacing = 0.em,
     )
 }
