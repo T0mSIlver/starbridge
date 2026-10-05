@@ -26,6 +26,7 @@ import { ordered } from "./options";
 import { PhoneBar } from "./PhoneBar";
 import { PushBanner } from "./PushBanner";
 import { QuotaAside } from "./QuotaAside";
+import { Resizer } from "./Resizer";
 import ui from "./ui.module.css";
 
 // From here the list and the detail sit side by side (Inbox.module.css).
@@ -264,12 +265,74 @@ export function Inbox() {
       </div>
     );
   return (
-    <div className={s.panes}>
-      <h1 className="sr-only">Inbox</h1>
-      {list}
+    <Panes list={list}>
       <section className={s.detail} aria-label="Selected">
         {detail(selected)}
       </section>
+    </Panes>
+  );
+}
+
+/** Defaults before the owner drags an edge: tokens.css's, also for a render on the server. */
+const SIZES = { "--size-rail": 240, "--size-list": 420, "--size-aside": 320 };
+
+function token(name: keyof typeof SIZES): number {
+  if (typeof document === "undefined") return SIZES[name];
+  const px = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue(name));
+  return Number.isFinite(px) ? px : SIZES[name];
+}
+
+function useWindowWidth(): number {
+  return useSyncExternalStore(
+    (change) => {
+      window.addEventListener("resize", change);
+      return () => window.removeEventListener("resize", change);
+    },
+    () => window.innerWidth,
+    () => 1440,
+  );
+}
+
+// The open question keeps at least this much; Quota windows show from 1400 px (Inbox.module.css).
+const DETAIL_MIN = 400;
+const ASIDE_FROM = 1400;
+
+/** The wide layout: list, open item and Quota windows, with edges the owner drags (#173). */
+function Panes({ list, children }: { list: React.ReactNode; children: React.ReactNode }) {
+  const [listPref, setList] = usePref("listWidth");
+  const [asidePref, setAside] = usePref("asideWidth");
+  const vw = useWindowWidth();
+  const aside = vw >= ASIDE_FROM;
+  const room = vw - token("--size-rail") - DETAIL_MIN;
+  const asideW = aside ? Math.min(asidePref ?? token("--size-aside"), room / 2) : 0;
+  const listW = Math.min(listPref ?? token("--size-list"), room - asideW);
+  const style = {
+    "--pane-list": `${listW}px`,
+    ...(aside ? { "--pane-aside": `${asideW}px` } : {}),
+  } as React.CSSProperties;
+  return (
+    <div className={s.panes} style={style}>
+      <h1 className="sr-only">Inbox</h1>
+      {list}
+      <Resizer
+        label="Inbox width"
+        width={listW}
+        min={300}
+        max={Math.max(300, room - asideW)}
+        side="left"
+        onChange={setList}
+      />
+      {children}
+      {aside && (
+        <Resizer
+          label="Quota windows width"
+          width={asideW}
+          min={260}
+          max={Math.max(260, room - listW)}
+          side="right"
+          onChange={setAside}
+        />
+      )}
       <QuotaAside />
     </div>
   );

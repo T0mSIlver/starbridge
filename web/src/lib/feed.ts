@@ -151,10 +151,3 @@ export function timer(iso: string, now: number): string {
   const m = Math.floor((s % 3600) / 60);
   return h ? `${h}:${pad(m)}:${pad(s % 60)}` : `${m}:${pad(s % 60)}`;
 }
-
-/** "permission-ho…plementation": a long name cut in the middle, keeping both ends. */
-export function middle(text: string, max: number): string {
-  if (text.length <= max) return text;
-  const head = Math.ceil((max - 1) / 2);
-  return `${text.slice(0, head)}…${text.slice(text.length - (max - 1 - head))}`;
-}
