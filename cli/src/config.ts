@@ -58,6 +58,21 @@ export interface State {
   answers: Record<string, { answer: Answer; seen: boolean }>;
 }
 
+/**
+ * `agent.json`: what `starbridge agent` runs with, written by `starbridge setup`; the agent's
+ * flags override it.
+ */
+export interface AgentConfig {
+  quota?: {
+    /** The CodexBar providers to upload; none means no timer. */
+    providers?: string[];
+    /** A duration such as "5m". */
+    interval?: string;
+    /** The `codexbar` binary; default `$STARBRIDGE_CODEXBAR`, else `codexbar` on the PATH. */
+    codexbar?: string;
+  };
+}
+
 /** Every holder lets go within milliseconds; this long means a lock nobody can break. */
 const LOCK_TIMEOUT_MS = 15_000;
 const tick = new Int32Array(new SharedArrayBuffer(4));
@@ -176,6 +191,14 @@ export class Store {
 
   saveDirectory(entries: unknown[]) {
     this.write("directory.json", entries);
+  }
+
+  agentConfig(): AgentConfig {
+    return this.read<AgentConfig>("agent.json") ?? {};
+  }
+
+  saveAgentConfig(c: AgentConfig) {
+    this.write("agent.json", c);
   }
 
   state(): State {
