@@ -32,6 +32,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import kotlinx.coroutines.delay
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -61,6 +63,8 @@ import dev.starbridge.app.ui.fieldColors
 import dev.starbridge.app.ui.groupGap
 import dev.starbridge.app.ui.groupShape
 import dev.starbridge.app.ui.pairing.QrWays
+import dev.starbridge.app.ui.pairing.rememberScanner
+import dev.starbridge.app.ui.day
 import dev.starbridge.app.ui.pairing.ShowingQr
 import dev.starbridge.app.ui.listPadding
 import dev.starbridge.app.ui.theme.Sizes
@@ -79,6 +83,7 @@ import androidx.compose.foundation.layout.height
 class DevicesViewModel @Inject constructor(private val store: Store) : ViewModel() {
     val members = store.members
     val approval = store.approval
+    fun refreshDirectory() = store.refreshDirectory()
     val actions = DeviceActions(store::lookUpPairing, store::approvePairing, store::closePairing, store::revoke, store::showCode)
 }
 
@@ -91,6 +96,8 @@ class DeviceActions(
     val showCode: () -> Unit,
 )
 
+private const val DIRECTORY_POLL_MS = 30_000L
+
 /** The account's devices and machines, each with Revoke; adding one opens its own page. */
 @Composable
 fun DevicesScreen(
@@ -100,7 +107,18 @@ fun DevicesScreen(
     modifier: Modifier = Modifier,
     onBack: () -> Unit = {},
     onAdd: () -> Unit = {},
+    /** A pairing code read by the scanner; a phone that cannot scan opens Add a device instead. */
+    onScan: (String) -> Unit = {},
+    pollDirectory: () -> Unit = {},
 ) {
+    // A device or machine revoked elsewhere leaves the list without a restart: no push says so.
+    LaunchedEffect(Unit) {
+        while (true) {
+            pollDirectory()
+            delay(DIRECTORY_POLL_MS)
+        }
+    }
+    val scan = rememberScanner(onResult = onScan, onError = { onAdd() })
     // Devices first, then machines, each in the order the directory added them.
     val rows = members.sortedBy { it.kind != Kind.Device }
     var revoking by rememberSaveable { mutableStateOf<String?>(null) }
@@ -108,13 +126,22 @@ fun DevicesScreen(
         itemsIndexed(rows, key = { _, it -> it.id }) { i, it -> MemberRow(it, now, groupShape(i, rows.size, outer = Spacing.s5)) { revoking = it.id } }
         item {
             FilledTonalButton(
-                onClick = onAdd,
+                onClick = scan,
                 colors = ButtonDefaults.filledTonalButtonColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHighest, contentColor = MaterialTheme.colorScheme.onSurface),
-                modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.s1, vertical = Spacing.s4 - groupGap).height(Sizes.tap),
+                modifier = Modifier.fillMaxWidth().padding(start = Spacing.s1, end = Spacing.s1, top = Spacing.s4 - groupGap).height(Sizes.tap),
             ) {
                 Symbol(Sym.Qr, size = 20.dp)
                 Spacer(Modifier.width(Spacing.s2))
-                Text("Add a device", style = StarbridgeTheme.type.action)
+                Text("Scan a QR code", style = StarbridgeTheme.type.action)
+            }
+        }
+        item {
+            FilledTonalButton(
+                onClick = onAdd,
+                colors = ButtonDefaults.filledTonalButtonColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHighest, contentColor = MaterialTheme.colorScheme.onSurface),
+                modifier = Modifier.fillMaxWidth().padding(start = Spacing.s1, end = Spacing.s1, top = Spacing.s2, bottom = Spacing.s4 - groupGap).height(Sizes.tap),
+            ) {
+                Text("Other ways to add a device", style = StarbridgeTheme.type.action)
             }
         }
     }
@@ -167,6 +194,8 @@ fun Confirm(title: String, text: String, action: String, onConfirm: () -> Unit, 
 fun PairCard(approval: Approval, actions: DeviceActions, otherWays: @Composable ColumnScope.() -> Unit = {}) {
     val colors = StarbridgeTheme.colors
     var code by rememberSaveable { mutableStateOf("") }
+    // The approved code is spent: the card offers the next pairing with an empty field.
+    LaunchedEffect(approval is Approval.Done) { if (approval is Approval.Done) code = "" }
     Panel(Modifier.fillMaxWidth()) {
         AnimatedContent(approval, contentKey = { it::class }, label = "pairing") { state ->
             Column(verticalArrangement = Arrangement.spacedBy(Spacing.s3)) {
@@ -205,17 +234,18 @@ fun PairCard(approval: Approval, actions: DeviceActions, otherWays: @Composable 
                         }
                     }
                     is Approval.Showing -> ShowingQr(state) { actions.close(); code = "" }
-                    is Approval.Done -> {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Rounded.CheckCircle, contentDescription = null, tint = colors.ok)
-                            Spacer(Modifier.width(Spacing.s2))
-                            Text("${state.name} joined.", style = StarbridgeTheme.type.body, color = MaterialTheme.colorScheme.onSurface)
-                        }
-                        OutlinedButton(onClick = { actions.close(); code = "" }, modifier = Modifier.heightIn(min = Sizes.tap)) { Text("Pair another", style = StarbridgeTheme.type.action) }
-                    }
                     else -> {
+                        // A pairing that just ended says so above the ways to pair the next one.
+                        if (state is Approval.Done) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Rounded.CheckCircle, contentDescription = null, tint = colors.ok)
+                                Spacer(Modifier.width(Spacing.s2))
+                                Text("${state.name} joined.", style = StarbridgeTheme.type.body, color = MaterialTheme.colorScheme.onSurface)
+                            }
+                        }
                         Text("Add a machine or device", style = StarbridgeTheme.type.heading, color = MaterialTheme.colorScheme.onSurface)
-                        Text("Type the code it shows: starbridge pair on a machine, or Join on a new phone or browser.", style = StarbridgeTheme.type.small, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        otherWays()
+                        Text("Or type the code it shows: starbridge pair on a machine, or Join on a new phone or browser.", style = StarbridgeTheme.type.small, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         TextField(
                             value = code,
                             onValueChange = { code = it.take(40) },
@@ -230,7 +260,7 @@ fun PairCard(approval: Approval, actions: DeviceActions, otherWays: @Composable 
                             isError = state is Approval.Failed,
                             supportingText = (state as? Approval.Failed)?.let { { Text(it.message) } },
                         )
-                        Button(
+                        OutlinedButton(
                             onClick = { actions.lookUp(code) },
                             enabled = code.isNotBlank() && state != Approval.Checking,
                             modifier = Modifier.fillMaxWidth().heightIn(min = Sizes.tap),
@@ -238,8 +268,6 @@ fun PairCard(approval: Approval, actions: DeviceActions, otherWays: @Composable 
                             if (state == Approval.Checking) LoadingIndicator(Modifier.size(Spacing.s6), color = MaterialTheme.colorScheme.secondary)
                             else Text("Check code", style = StarbridgeTheme.type.action)
                         }
-                        // Other ways to add a device (a 6-digit check, a QR code: #66) go here.
-                        otherWays()
                     }
                 }
             }
@@ -257,7 +285,7 @@ private fun MemberRow(member: Member, now: Instant, shape: Shape, onRevoke: () -
             Spacer(Modifier.width(Spacing.s4))
             Column(Modifier.weight(1f)) {
                 Text(member.name, style = StarbridgeTheme.type.body, color = scheme.onSurface)
-                val added = "added ${date(member.addedAt)}"
+                val added = "added ${day(member.addedAt)}"
                 Text(
                     when {
                         member.current -> "This phone"
@@ -277,5 +305,4 @@ private fun MemberRow(member: Member, now: Instant, shape: Shape, onRevoke: () -
     }
 }
 
-private fun date(at: Instant) = java.time.format.DateTimeFormatter.ofPattern("d MMM", java.util.Locale.ENGLISH).withZone(java.time.ZoneId.systemDefault()).format(at)
 

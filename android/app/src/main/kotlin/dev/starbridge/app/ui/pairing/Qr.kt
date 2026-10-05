@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.MaterialTheme
@@ -38,6 +39,7 @@ import dev.starbridge.app.ui.theme.StarbridgeTheme
 import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
 import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
+import com.google.mlkit.common.MlKitException
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.EncodeHintType
 import com.google.zxing.qrcode.QRCodeWriter
@@ -83,20 +85,20 @@ private fun scan(context: Context, onResult: (String) -> Unit, onError: (String)
     GmsBarcodeScanning.getClient(context, options).startScan()
         .addOnSuccessListener { barcode -> barcode.rawValue?.let(onResult) }
         .addOnFailureListener { e ->
+            // Closing the scanner is no failure, whichever listener it reaches.
+            if ((e as? MlKitException)?.errorCode == MlKitException.CANCELLED) return@addOnFailureListener
             Log.w("Starbridge", "scan failed", e)
             onError("This phone cannot scan here. Type the code instead.")
         }
 }
 
-/** Under the code field: scan a code another device or `starbridge pair` shows, or show one. */
+/** First on the card: scan a code another device or `starbridge pair` shows, or show one. */
 @Composable
 fun ColumnScope.QrWays(onScan: (String) -> Unit, onShow: () -> Unit) {
     var error by rememberSaveable { mutableStateOf<String?>(null) }
     val scan = rememberScanner(onResult = { error = null; onScan(it) }, onError = { error = it })
-    Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
-        OutlinedButton(onClick = scan, modifier = Modifier.weight(1f).heightIn(min = Sizes.tap)) { Text("Scan QR", style = StarbridgeTheme.type.action) }
-        OutlinedButton(onClick = onShow, modifier = Modifier.weight(1f).heightIn(min = Sizes.tap)) { Text("Show QR", style = StarbridgeTheme.type.action) }
-    }
+    Button(onClick = scan, modifier = Modifier.fillMaxWidth().heightIn(min = Sizes.tap)) { Text("Scan a QR code", style = StarbridgeTheme.type.action) }
+    OutlinedButton(onClick = onShow, modifier = Modifier.fillMaxWidth().heightIn(min = Sizes.tap)) { Text("Show a QR code for a new phone", style = StarbridgeTheme.type.action) }
     error?.let { Text(it, style = StarbridgeTheme.type.small, color = StarbridgeTheme.colors.bad) }
 }
 

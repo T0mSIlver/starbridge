@@ -312,6 +312,8 @@ async function main() {
   console.log("notifications:", JSON.stringify(notifications));
   if (!notifications.some((n) => n.title === "Run the migration on the staging database now?"))
     throw new Error("no Web Push notification for the decision");
+  // With History open the answered question stays listed, which is where it lingered (#214).
+  await page.getByRole("button", { name: /History/ }).click();
   await page.getByRole("button", { name: /Run it/ }).click();
   await ask.waitFor(/Answer to d_\S+ \(Run the migration on the staging database now\?\): Run it/);
   if ((await ask.exited) !== 0) throw new Error("ask --wait failed");
@@ -322,6 +324,13 @@ async function main() {
     i++
   )
     await page.waitForTimeout(200);
+
+  // It was the last open question, so the detail pane empties rather than showing it answered.
+  await page
+    .locator('section[aria-label="Selected"] h2')
+    .waitFor({ state: "detached", timeout: 10_000 });
+  await shoot(page, "inbox-cleared");
+  await page.getByRole("button", { name: /History/ }).click();
 
   step("leave one open decision for the screenshots");
   const open = cli(
@@ -478,6 +487,28 @@ async function main() {
   if (/\b[AP]M\b/.test(await page.locator("main").innerText()))
     throw new Error("the 24-hour setting still shows AM or PM");
   await shoot(page, "quotas-24h");
+
+  step("the inbox's quota aside fits its column with clock times on (#168)");
+  await page
+    .getByRole("navigation", { name: "Main" })
+    .getByRole("link", { name: "Settings" })
+    .click();
+  // 12-hour times are the longest: "Will run out at Oct 12, 12:02 AM".
+  await page.getByLabel("12-hour", { exact: true }).check({ force: true });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.getByRole("link", { name: "Inbox" }).click();
+  const aside = page.getByRole("complementary", { name: "Quota windows" });
+  await aside.locator("article").first().waitFor();
+  const { scroll, client } = await aside.evaluate((el) => ({
+    scroll: el.scrollWidth,
+    client: el.clientWidth,
+  }));
+  if (scroll > client) throw new Error(`the quota aside overflows: ${scroll} > ${client} px`);
+  for (const scheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme: scheme });
+    await page.waitForTimeout(150);
+    await page.screenshot({ path: join(SHOTS, `inbox-aside-wide-${scheme}.png`) });
+  }
 
   step("a newly raised quota alert notifies a browser that opted in to its provider");
   // A 5-hour window at 85%, 3 hours in: "low" at 20% left, and it runs out before the reset.

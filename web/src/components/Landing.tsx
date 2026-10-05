@@ -3,12 +3,12 @@
 import { useState } from "react";
 import { track } from "@/lib/analytics";
 import { AGENTS_GUIDE, REPO, SELF_HOST } from "@/lib/links";
-import { DEFAULT_SETTINGS } from "@/lib/quotaSettings";
+import { DEFAULT_SETTINGS, groups } from "@/lib/quotaSettings";
 import { sample } from "@/lib/sample";
 import { Analytics } from "./Analytics";
 import { Icon, Mark } from "./icons";
 import s from "./Landing.module.css";
-import { QuotaRow } from "./QuotaRow";
+import { QuotaGroup } from "./QuotaRow";
 import ui from "./ui.module.css";
 
 // Product shots in public/landing, at 1.5x for the web inbox and 2x for the phones:
@@ -219,13 +219,8 @@ export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
         short="Each window fills in its provider's colour; the part you'll use before the reset is hatched."
       >
         <div className={s.quotas}>
-          {quotas.map((q) => (
-            <QuotaRow
-              key={`${q.provider}/${q.window.id}`}
-              q={q}
-              settings={DEFAULT_SETTINGS}
-              now={now}
-            />
+          {groups(quotas).map((g) => (
+            <QuotaGroup key={g.provider} g={g} settings={DEFAULT_SETTINGS} now={now} />
           ))}
         </div>
       </Section>

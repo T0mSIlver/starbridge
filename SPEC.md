@@ -758,8 +758,7 @@ How it generalizes is open.
   restore overwrote files a concurrent job was reading (#142). This freed 3.6 GB.
 - 2026-10-05. Waiting state on the machine (#122) and permission prompts off by default (#124).
   `starbridge waiting <id>` and `starbridge working <id>` post a decision's state; `ask
-  --waiting` posts it already waiting, quietly, since the decision's own push just went out,
-  and `wait <id>` marks it waiting before it blocks. The CLI keeps each decision's waiting id
+  --waiting` posts it already waiting, and `wait <id>` marks it waiting before it blocks. The CLI keeps each decision's waiting id
   and last state, posts nothing when the state is unchanged, and refuses once the decision is
   answered. The default-time machinery is gone: no `--default-at` (accepted and ignored, with a
   warning, until the skill drops it), no `default` session event, no notice line, and `wait`
@@ -874,11 +873,39 @@ How it generalizes is open.
   `DateFormat.is24HourFormat`, the browser's language on the web. Android also writes dates in
   the phone's language ("Oct 7" in English, "7 oct." in French) from Android's own patterns, where
   it used fixed English ones; words such as "tomorrow" stay English, as the rest of the UI.
+- 2026-10-05. Links on questions (owner, launch test #171: "there should be a more explicit 'the
+  agent pushed this artifact for you to see'"). A link on a question is something the agent wants
+  the owner to see before answering: a page it built (a Claude artifact), a PR, a doc. It never
+  answers the question; that is `answerIn`'s job. Both clients show links under "Attached by the
+  agent", each as "Open" and its title (else "Claude artifact", else host and path) with an
+  open-outside icon, and the skill gives each link a `title` naming what it shows. A claude.ai
+  link opens in the browser, where the owner is signed in, rather than in the Claude app, which
+  shows artifacts only in its in-app browser.
+- 2026-10-05. Questions on the web after the launch test (#165, #170, #172, #173, #179). Images open
+  in a full-screen viewer in the same tab (wheel or pinch to zoom, drag to pan, double click for
+  real pixels, arrow keys between images), not a new tab. On a wide screen the list and Quota
+  windows panes resize by dragging their edge or with the arrow keys on it, remembered on the
+  device (double click resets); phones have no handles. The open question's content is centred
+  in its pane up to 720 px, so a short question leaves even margins instead of one wide band. The
+  session name is cut in the middle only when its line runs out of room. Settings, Inbox:
+  "Sound for new questions" (off by default) chimes once per new question, prompt or flip to
+  waiting while a Starbridge page is open, once across the browser's tabs. Nothing plays with no
+  page open: a service worker cannot play audio and browsers honour no sound option on Web Push,
+  so sound without a page is the OS's notification setting (macOS: Notifications, the browser,
+  "Play sound for notifications"). Browsers start audio only after a tap or key on the page, so
+  a page opened and never touched stays silent.
 - 2026-10-05. Runs on the web (#188, #190). Runs still skip Web Push, since a push that shows no
   notification costs the browser subscription, so the page polls them every 2 s while one runs and
   the page is visible, and every 10 s otherwise; that keeps it within a few seconds of the phone,
   which gets each update by push. A lost run shows no elapsed time in its corner: its last news
   may predate most of its life, so the time would read as 0.
+
+- 2026-10-05. Quota windows grouped by provider (#160, layout C of
+  https://claude.ai/artifact/XMemEeP3dEBAagDiz4Ys6i). The provider's name heads one card (Android)
+  or one block (web, the landing page included), with the machine beside it when several upload;
+  its windows follow as rows that name only the window. Groups come in the order of their first
+  window under "Quota order", so a provider with a window running out leads, and its running-out
+  window leads inside it. The provider shows once, so skimming the list reads provider names only.
 
 - 2026-10-05. A device sees quotas as soon as it joins, and pulling to refresh gets fresh ones
   (#158). A snapshot is sealed to the devices in the directory when it is posted, so a device that
@@ -904,6 +931,17 @@ How it generalizes is open.
   24 or 12 words keep recovering with them: the entry tells words from a key by their letter runs.
   No page says "seed", "phrase" or asks for words; the clients only show keys. #199 closes once
   this is deployed and Chrome no longer warns.
+- 2026-10-05. The `AskUserQuestion` hook answers instead of denying (#200). Claude Code 2.1.289
+  shows every `PreToolUse` deny as a red "hook error", which reads as Starbridge failing. The
+  hook now allows the call with `updatedInput.answers`, one answer per question saying to ask
+  through `starbridge ask`; Claude Code shows that as an answered question and opens no dialog
+  (checked in a real session). Input it cannot read is still denied.
+- 2026-10-05. A question asked already waiting notifies as waiting (#202). `ask --waiting`
+  used to push the decision, which carries no state, then post its `waiting` item quietly, so
+  the phone's notification said "Working on other things" while the app said "Waiting for
+  you". Now the decision goes quietly and the `waiting` item pushes; Android fetches a decision
+  it has not seen when its waiting state arrives, as the web page's service worker already did.
+  An app older than this change shows no notification for such a question until it syncs.
 
 ## Encryption, with existing libraries
 

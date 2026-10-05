@@ -66,6 +66,14 @@ class QuotaSettingsTest {
         )
     }
 
+    @Test fun groupsByProviderInOrderOfFirstWindow() {
+        val s = QuotaSettings(hidden = listOf("mistral"))
+        assertEquals(
+            listOf("claude: Weekly, 5-hour", "codex: Weekly", "zai: 5-hour", "gemini: Daily"),
+            s.groups(s.arrange(windows, noon)).map { g -> "${g[0].provider}: ${g.joinToString { it.window }}" },
+        )
+    }
+
     @Test fun notifiesOnlyOptedInProvidersAndKinds() {
         fun n(provider: String, kind: String) = QuotaNotice("k", provider, "primary", kind, "", "")
         val off = QuotaSettings()

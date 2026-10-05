@@ -49,6 +49,8 @@ interface Store {
     fun answerPrompt(id: String, allow: Boolean, scope: String, message: String?)
     /** Reads prompts again, quickly, while one waits on screen. */
     fun refreshPrompts()
+    /** Reads the directory again, quietly, while the device list is on screen. */
+    fun refreshDirectory()
 
     fun lookUpPairing(code: String)
     fun approvePairing()

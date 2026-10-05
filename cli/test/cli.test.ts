@@ -302,11 +302,11 @@ test("waiting and working flip a decision's state; only a flip to waiting pushes
   expect(ctx.errors.at(-1)).toContain("already answered");
 });
 
-test("ask --waiting posts it waiting without a second push", async () => {
+test("ask --waiting pushes once, through its waiting state, so the notification says waiting", async () => {
   const ctx = await paired(server);
   await run([...ASK, "--waiting"], ctx);
   expect((await server.opened("waiting")).map((w) => w.state)).toEqual(["waiting"]);
-  expect(server.pushed).toEqual(["decision"]);
+  expect(server.pushed).toEqual(["waiting"]);
 });
 
 test("a decision names its agent and the machine's kind, which config sets", async () => {
@@ -340,6 +340,17 @@ test("ask --wait prints the answer the phone sends", async () => {
   expect(ctx.lines[1]).toBe(`Answer to ${ctx.lines[0]} (Merge #12 now?): Wait`);
 });
 
+test("a typed reply answers a question with options", async () => {
+  const ctx = await paired(server);
+  const done = run([...ASK, "--wait"], ctx);
+  await until(() => ctx.lines.length === 1);
+  const [d] = await server.opened("decision");
+  expect(d?.replies).toBe(true);
+  await server.answer(ctx.lines[0] as string, { text: "Merge after #13" });
+  expect(await done).toBe(0);
+  expect(ctx.lines[1]).toBe(`Answer to ${ctx.lines[0]} (Merge #12 now?): Merge after #13`);
+});
+
 test("wait ignores forged or foreign answers and keeps the good one", async () => {
   const ctx = await paired(server);
   await run(ASK, ctx);
@@ -348,16 +359,15 @@ test("wait ignores forged or foreign answers and keeps the good one", async () =
   await until(() => server.log.includes("GET /answers"));
   // The open poll returns these answers, then the directory refresh and the next poll fail once.
   server.failures.push("/directory", "/answers");
-  // The real server takes one answer per decision; these three need a compromised one.
+  // The real server takes one answer per decision; these two need a compromised one.
   await server.forge(
     { decisionId: id, reply: { choice: "Ship it" } },
-    { decisionId: id, reply: { text: "free text to a decision with options" } },
     { decisionId: id, reply: { choice: "Merge" }, tamper: { decisionId: "d_other" } },
   );
   await server.answer(id, { choice: "Merge" });
   expect(await done).toBe(0);
   expect(JSON.parse(ctx.lines[1] as string)).toMatchObject({ decisionId: id, choice: "Merge" });
-  expect(ctx.errors.filter((e) => e.includes("ignored an answer"))).toHaveLength(3);
+  expect(ctx.errors.filter((e) => e.includes("ignored an answer"))).toHaveLength(2);
   expect(ctx.errors.filter((e) => e.includes("retrying"))).toHaveLength(2);
 });
 

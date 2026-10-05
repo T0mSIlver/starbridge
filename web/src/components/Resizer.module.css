@@ -1,0 +1,25 @@
+/* A zero-width grid column holding a wider, invisible hit area over the pane border. */
+.edge {
+  position: relative;
+  z-index: 3;
+  width: 9px;
+  margin-left: -4px;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.edge::after {
+  content: "";
+  position: absolute;
+  inset: 0 3px;
+  transition: background var(--t-fast);
+}
+
+.edge:hover::after,
+.edge:focus-visible::after {
+  background: var(--line-strong);
+}
+
+.edge:focus-visible {
+  outline: none;
+}

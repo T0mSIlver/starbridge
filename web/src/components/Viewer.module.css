@@ -1,0 +1,73 @@
+/* Full screen in the page, over a near-black scrim in both themes, like a photo viewer. */
+.viewer {
+  width: 100vw;
+  height: 100dvh;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: #000;
+  color: #fff;
+  overflow: hidden;
+}
+
+.viewer::backdrop {
+  background: transparent;
+}
+
+.stage {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  touch-action: none;
+  cursor: grab;
+}
+
+.stage:active {
+  cursor: grabbing;
+}
+
+.img {
+  position: absolute;
+  top: 0;
+  left: 0;
+  max-width: none;
+  transform-origin: 0 0;
+  user-select: none;
+}
+
+.bar {
+  position: absolute;
+  top: calc(var(--s3) + env(safe-area-inset-top));
+  left: var(--s3);
+  right: var(--s3);
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  pointer-events: none;
+}
+
+.btn {
+  display: grid;
+  place-items: center;
+  width: var(--s10);
+  height: var(--s10);
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: rgb(0 0 0 / 55%);
+  color: #fff;
+  pointer-events: auto;
+}
+
+.btn:hover {
+  background: rgb(40 40 40 / 80%);
+}
+
+.count {
+  color: rgb(255 255 255 / 80%);
+}
+
+.close {
+  margin-left: auto;
+}

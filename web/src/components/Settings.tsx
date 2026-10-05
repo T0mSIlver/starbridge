@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { AGENTS_GUIDE } from "@/lib/links";
 import { applyTheme, type Prefs, usePref } from "@/lib/prefs";
 import { providerOrder, type QuotaSettings } from "@/lib/quotaSettings";
+import { chime } from "@/lib/sound";
 import type { Device } from "@/lib/types";
 import { useApp } from "./AppProvider";
 import { Icon } from "./icons";
@@ -105,6 +106,7 @@ const toggle = (list: string[], p: string, on: boolean) =>
 
 function InboxSection() {
   const [rowAnswers, setRowAnswers] = usePref("rowAnswers");
+  const [sound, setSound] = usePref("sound");
   return (
     <Section title="Inbox">
       <Row label="Answer buttons on questions" sub="On a phone">
@@ -117,6 +119,16 @@ function InboxSection() {
             ["never", "Never"],
           ]}
           onChange={setRowAnswers}
+        />
+      </Row>
+      <Row label="Sound for new questions" sub="While a Starbridge page is open">
+        <Switch
+          label="Sound for new questions"
+          checked={sound}
+          onChange={(on) => {
+            setSound(on);
+            if (on) chime();
+          }}
         />
       </Row>
     </Section>
