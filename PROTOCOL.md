@@ -399,7 +399,9 @@ Answering a permission from a phone is a trust decision, so:
 
 ### On the machine
 
-`starbridge hook permission --agent claude-code` runs as Claude Code's `PermissionRequest` hook.
+`starbridge hook permission --agent claude-code` runs as Claude Code's `PermissionRequest` hook;
+the Starbridge Pi extension runs it with `--agent pi` from its link in pi-permission-system's
+authorizer chain, with the same input shape (Pi's tool name, no suggestions, so an allow is once).
 It posts the prompt through the agent (or to the server itself when no agent runs) and waits
 at most `--wait`, 570 s by default, under the 600 s Claude Code gives a hook. An accepted
 answer prints the hook's decision: `allow`, with `updatedPermissions` built from Claude Code's

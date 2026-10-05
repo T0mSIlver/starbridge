@@ -56,7 +56,7 @@ export class Permissions implements Feature {
         const agent = PermissionAgent.safeParse(b.agent);
         const source = obj(b.source);
         if (!agent.success)
-          throw new HttpError(400, "bad-request", "agent is claude-code or codex");
+          throw new HttpError(400, "bad-request", "agent is claude-code, codex or pi");
         if (typeof source.project !== "string" || typeof source.session !== "string")
           throw new HttpError(400, "bad-request", "source needs project and session");
         const waitMs = typeof b.waitMs === "number" ? b.waitMs : 0;

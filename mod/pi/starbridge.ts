@@ -8,6 +8,9 @@
  * While the loop runs, the session's commands get its id in STARBRIDGE_PI_ANSWERS, so `starbridge ask`
  * says the answer comes back as a prompt. In `pi -p` it says to `starbridge wait` instead.
  *
+ * With pi-permission-system installed, it also registers the `starbridge` link in its authorizer
+ * chain, so permission prompts can go to the owner's devices (permissions.ts).
+ *
  * Pi loads it from the repository's Pi package (package.json, `pi`), with jiti; the types below
  * are the part of Pi's `ExtensionAPI` it uses, so the package needs no dependency on Pi.
  */
@@ -20,12 +23,20 @@ import { fileURLToPath } from "node:url";
 import { AgentLoop, HEADERS, socketPath } from "../hooks/agent.ts";
 import { configDir, Poller } from "../hooks/poller.ts";
 import { Switch } from "../hooks/switch.ts";
+import { type AskDetails, authorize, hookInput, LINK, permissionsService } from "./permissions.ts";
 
 interface Ctx {
   hasUI: boolean;
   cwd: string;
-  sessionManager: { getSessionId(): string };
-  ui: { setStatus(key: string, text: string | undefined): void };
+  sessionManager: { getSessionId(): string; getSessionFile(): string | undefined };
+  ui: {
+    setStatus(key: string, text: string | undefined): void;
+    select(
+      title: string,
+      options: string[],
+      opts?: { signal?: AbortSignal },
+    ): Promise<string | undefined>;
+  };
 }
 
 interface PiApi {
@@ -39,10 +50,13 @@ interface PiApi {
     handler: (e: { systemPrompt: string }, ctx: Ctx) => { systemPrompt?: string } | undefined,
   ): void;
   sendUserMessage(text: string, options?: { deliverAs?: "steer" | "followUp" }): void;
+  events: { on(channel: string, handler: (data: unknown) => void): () => void };
 }
 
 /** Set for the session's commands while answers come back into it (cli/src/pi.ts). */
 const ANSWERS_ENV = "STARBRIDGE_PI_ANSWERS";
+/** The longest an ask holds the "Answer here" dialogs after its own closed. */
+const DECIDE_MS = 10 * 60_000;
 /** The mod's host aborts a call after 30 s; the loop is built around that limit. */
 const CALL_MS = 30_000;
 
@@ -110,6 +124,32 @@ function runCommand(argv: string[], timeoutMs: number) {
   });
 }
 
+/**
+ * `starbridge hook permission --agent pi` with `stdin`; resolves to what it printed. An abort
+ * sends SIGTERM, which the CLI takes as the keyboard answering.
+ */
+function permissionHook(stdin: string, signal: AbortSignal, sessionFile: string | undefined) {
+  return new Promise<string>((resolve) => {
+    const child = spawn("starbridge", ["hook", "permission", "--agent", "pi"], {
+      env: { ...process.env, ...(sessionFile ? { PI_SESSION_FILE: sessionFile } : {}) },
+      stdio: ["pipe", "pipe", "ignore"],
+    });
+    let stdout = "";
+    child.stdout.on("data", (d) => {
+      stdout += d;
+    });
+    const stop = () => child.kill("SIGTERM");
+    signal.addEventListener("abort", stop);
+    child.on("error", () => resolve(""));
+    child.on("close", () => {
+      signal.removeEventListener("abort", stop);
+      resolve(stdout);
+    });
+    child.stdin.on("error", () => {});
+    child.stdin.end(stdin);
+  });
+}
+
 /** A sleep that never keeps Pi from exiting. */
 const sleep = (ms: number) =>
   new Promise<void>((r) => {
@@ -119,12 +159,98 @@ const sleep = (ms: number) =>
 export default function starbridge(pi: PiApi) {
   const text = rule();
   let loop: Switch | undefined;
+  /** The session's context, for the permission link, which runs outside any handler. */
+  let current: Ctx | undefined;
+  /** Disposers of the link, by the session it was registered for. */
+  const links = new Map<string, () => void>();
+  /** Aborted when the session ends, so prompts still on the devices are settled. */
+  let ended = new AbortController();
+  /** The "Answer here" dialogs, one at a time. */
+  let dialogs: Promise<void> = Promise.resolve();
+  /** Asks waiting for pi-permission-system's decision, by its request id. */
+  const deciding = new Map<string, () => void>();
+
+  /**
+   * Resolves once pi-permission-system announces its decision on ask `id`, the session ends, or
+   * DECIDE_MS passes, so a missed announcement cannot hold the dialogs forever.
+   */
+  const untilDecided = (id: string | undefined, end: AbortSignal) =>
+    new Promise<void>((resolve) => {
+      if (!id || end.aborted) return resolve();
+      const timer = setTimeout(done, DECIDE_MS);
+      timer.unref();
+      function done() {
+        clearTimeout(timer);
+        end.removeEventListener("abort", done);
+        if (deciding.get(id as string) === done) deciding.delete(id as string);
+        resolve();
+      }
+      deciding.set(id, done);
+      end.addEventListener("abort", done);
+    });
+
+  pi.events.on("permissions:decision", (data) => {
+    const id = (data as { requestId?: unknown } | undefined)?.requestId;
+    if (typeof id === "string") deciding.get(id)?.();
+  });
 
   pi.on("before_agent_start", (e) =>
     text ? { systemPrompt: `${e.systemPrompt}\n\n${text}` } : undefined,
   );
 
+  // pi-permission-system announces its service for each session, possibly more than once.
+  pi.events.on("permissions:ready", (data) => {
+    const id = (data as { sessionId?: unknown } | undefined)?.sessionId;
+    if (typeof id !== "string" || links.has(id)) return;
+    const service = permissionsService(id);
+    if (!service) return;
+    links.set(
+      id,
+      service.registerAuthorizer(LINK, (details: AskDetails) => {
+        const ctx = current;
+        if (!ctx) return Promise.resolve({ kind: "defer" });
+        const file = ctx.sessionManager.getSessionFile();
+        const stdin = JSON.stringify(
+          hookInput(details, ctx.sessionManager.getSessionId(), ctx.cwd),
+        );
+        return authorize(stdin, {
+          hook: (text, signal) => permissionHook(text, signal, file),
+          ...(ctx.hasUI
+            ? {
+                keyboard: (signal: AbortSignal) =>
+                  new Promise<void>((resolve) => {
+                    const what = details.command ?? details.path ?? details.toolName ?? "a tool";
+                    const decided = untilDecided(details.requestId, ended.signal);
+                    // Pi strands a dialog that another opens over it, so asks take turns, and a
+                    // turn lasts until pi-permission-system decided the ask: after "Answer here"
+                    // its own dialog takes the screen.
+                    const turn = async () => {
+                      if (!signal.aborted) {
+                        await ctx.ui.select(
+                          `Permission Required: sent to your devices through Starbridge\n${what}`,
+                          ["Answer here"],
+                          { signal },
+                        );
+                        // Closed because a device answered or the session ended: the keyboard did nothing.
+                        if (!signal.aborted) resolve();
+                      }
+                      await decided;
+                    };
+                    dialogs = dialogs.then(turn, turn);
+                  }),
+              }
+            : {}),
+          sleep,
+          ended: ended.signal,
+        });
+      }),
+    );
+  });
+
   pi.on("session_start", (_e, ctx) => {
+    current = ctx;
+    ended = new AbortController();
+    dialogs = Promise.resolve();
     void loop?.stop();
     loop = undefined;
     // `pi -p` and `--mode json` end after one prompt: nothing would be there to submit into.
@@ -178,6 +304,10 @@ export default function starbridge(pi: PiApi) {
   pi.on("session_shutdown", async (e) => {
     const ending = loop;
     loop = undefined;
+    current = undefined;
+    ended.abort();
+    for (const dispose of links.values()) dispose();
+    links.clear();
     delete process.env[ANSWERS_ENV];
     if (e.reason === "quit") await ending?.end();
     else await ending?.stop();
