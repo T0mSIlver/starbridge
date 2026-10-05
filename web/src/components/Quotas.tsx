@@ -3,11 +3,11 @@
 import Link from "next/link";
 import { useEffect } from "react";
 import { relative } from "@/lib/format";
-import { arrange } from "@/lib/quotaSettings";
+import { arrange, groups } from "@/lib/quotaSettings";
 import { useApp } from "./AppProvider";
 import { useNow } from "./Feed";
 import { PhoneBar } from "./PhoneBar";
-import { QuotaRow } from "./QuotaRow";
+import { QuotaGroup } from "./QuotaRow";
 import s from "./Quotas.module.css";
 
 export function Quotas() {
@@ -48,10 +48,10 @@ export function Quotas() {
           </p>
         ) : (
           <div className={s.rows}>
-            {cards.map((q) => (
-              <QuotaRow
-                key={`${q.machine ?? ""}/${q.provider}/${q.window.id}`}
-                q={q}
+            {groups(cards).map((g) => (
+              <QuotaGroup
+                key={`${g.provider}/${g.machine ?? ""}`}
+                g={g}
                 settings={settings}
                 now={now}
                 comfy

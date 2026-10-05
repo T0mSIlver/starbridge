@@ -2,11 +2,11 @@
 
 import { useEffect } from "react";
 import { relative } from "@/lib/format";
-import { arrange } from "@/lib/quotaSettings";
+import { arrange, groups } from "@/lib/quotaSettings";
 import { useApp } from "./AppProvider";
 import { useNow } from "./Feed";
 import s from "./QuotaAside.module.css";
-import { QuotaRow } from "./QuotaRow";
+import { QuotaGroup } from "./QuotaRow";
 
 /** The quota windows beside the inbox on the widest screens. */
 export function QuotaAside() {
@@ -24,13 +24,8 @@ export function QuotaAside() {
           <span className={`t-caption ${s.updated}`}>updated {relative(quotas.takenAt, now)}</span>
         )}
       </header>
-      {cards.map((q) => (
-        <QuotaRow
-          key={`${q.machine ?? ""}/${q.provider}/${q.window.id}`}
-          q={q}
-          settings={settings}
-          now={now}
-        />
+      {groups(cards).map((g) => (
+        <QuotaGroup key={`${g.provider}/${g.machine ?? ""}`} g={g} settings={settings} now={now} />
       ))}
     </aside>
   );

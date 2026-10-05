@@ -443,6 +443,9 @@ a decision's context, a permission prompt's command and a session's name.
   lab colour, ending in a red cap (`bad`) at the limit; one that ran out is
   full, with the cap and no tick. Windows that will run out or ran out sort
   first on every screen while "Running out first" is on (the default).
+- Quota windows sit under their provider: one heading with the provider's
+  name (and the machine, when several upload), then each window as a row
+  that names only the window.
 - A permission prompt and a question look different. A prompt shows a
   terminal tile in `accent-soft`, the exact command in mono, Allow and Deny,
   and how long it has waited. A question shows its text as the title, its

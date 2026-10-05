@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -65,7 +66,7 @@ class QuotasViewModel @Inject constructor(private val store: Store, private val 
     fun refresh() = store.refresh()
 }
 
-/** One card per window, hidden providers out; windows that will run out first, then the settings' order. */
+/** One card per provider, its windows inside, in the settings' order (SPEC.md, "Quota order"). */
 @Composable
 fun QuotasScreen(
     windows: List<QuotaWindow>,
@@ -75,6 +76,7 @@ fun QuotasScreen(
     refresh: Refresh? = null,
 ) {
     val shown = settings.arrange(windows, now)
+    val groups = settings.groups(shown)
     val updated = windows.mapNotNull { it.takenAt }.maxOrNull()
     Page(
         "Quotas",
@@ -100,8 +102,8 @@ fun QuotasScreen(
                 modifier = Modifier.padding(Spacing.s4),
             )
         }
-        itemsIndexed(shown, key = { _, it -> it.id }) { i, w ->
-            WindowCard(w, now, settings, cardShape(i, shown.size), modifier = Modifier.animateItem())
+        itemsIndexed(groups, key = { _, g -> "${g[0].provider}/${g[0].machine}" }) { i, g ->
+            ProviderCard(g, now, settings, cardShape(i, groups.size), modifier = Modifier.animateItem())
         }
     }
 }
@@ -160,8 +162,27 @@ private fun tone(window: QuotaWindow, now: Instant): Tone {
     }
 }
 
+/** A provider's name, the machine that sent its windows when there are several, and the windows. */
 @Composable
-private fun WindowCard(window: QuotaWindow, now: Instant, settings: QuotaSettings, shape: Shape, modifier: Modifier = Modifier) {
+private fun ProviderCard(windows: List<QuotaWindow>, now: Instant, settings: QuotaSettings, shape: Shape, modifier: Modifier = Modifier) {
+    val scheme = MaterialTheme.colorScheme
+    val first = windows.first()
+    Surface(modifier.fillMaxWidth(), shape = shape, color = scheme.surfaceContainer) {
+        Column(Modifier.padding(Spacing.s4)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(first.provider, style = StarbridgeTheme.type.subtitle, color = scheme.onSurface, maxLines = 1, modifier = Modifier.weight(1f))
+                first.machine?.let { Text(it, style = StarbridgeTheme.type.meta, color = scheme.onSurfaceVariant, maxLines = 1) }
+            }
+            windows.forEachIndexed { i, w ->
+                if (i > 0) HorizontalDivider(color = scheme.outlineVariant, modifier = Modifier.padding(top = Spacing.s4))
+                WindowRow(w, now, settings, Modifier.padding(top = if (i > 0) Spacing.s4 else Spacing.s3))
+            }
+        }
+    }
+}
+
+@Composable
+private fun WindowRow(window: QuotaWindow, now: Instant, settings: QuotaSettings, modifier: Modifier = Modifier) {
     val scheme = MaterialTheme.colorScheme
     val type = StarbridgeTheme.type
     val tone = tone(window, now)
@@ -170,43 +191,35 @@ private fun WindowCard(window: QuotaWindow, now: Instant, settings: QuotaSetting
     val bar = settings.bar(window, now)
     val h24 = LocalClock24.current
     val card = scheme.surfaceContainer
-    Surface(modifier.fillMaxWidth(), shape = shape, color = card) {
-        Column(Modifier.padding(Spacing.s4), verticalArrangement = Arrangement.spacedBy(Spacing.s3)) {
-            // One 24 dp line: the figure's glyphs are taller than the line they sit on.
-            Row(Modifier.height(24.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    buildAnnotatedString {
-                        append(window.provider)
-                        withStyle(SpanStyle(color = scheme.onSurfaceVariant)) {
-                            append(" ${window.window}")
-                            window.machine?.let { append(" · $it") }
-                        }
-                    },
-                    style = type.body,
-                    color = scheme.onSurface,
-                    maxLines = 1,
-                    modifier = Modifier.weight(1f),
-                )
-                Text(
-                    buildAnnotatedString {
-                        append("${if (course == Course.RanOut && settings.showUsed) 100 else bar.percent}")
-                        withStyle(SpanStyle(fontSize = type.label.fontSize, fontWeight = type.label.fontWeight)) { append("%") }
-                    },
-                    style = type.figure.copy(lineHeight = type.figure.fontSize),
-                    color = if (ended) scheme.onSurfaceVariant else scheme.onSurface,
-                )
-            }
-            Meter(bar, course, StarbridgeTheme.provider(window.provider), settings.showUsed, card)
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(tone.word, style = type.metaStrong, color = tone.color, maxLines = 1, modifier = Modifier.weight(1f))
-                Spacer(Modifier.width(Spacing.s2))
-                Text(
-                    window.resetsAt?.let { if (ended) "Reset ${ago(now, it)}" else if (settings.absoluteResets) "Resets ${resetClock(it, now, h24)}" else "Resets in ${span(now, it)}" } ?: "Reset time unknown",
-                    style = type.meta,
-                    color = scheme.onSurfaceVariant,
-                    maxLines = 1,
-                )
-            }
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(Spacing.s3)) {
+        // One 24 dp line: the figure's glyphs are taller than the line they sit on.
+        Row(Modifier.height(24.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                window.window,
+                style = type.body,
+                color = scheme.onSurface,
+                maxLines = 1,
+                modifier = Modifier.weight(1f),
+            )
+            Text(
+                buildAnnotatedString {
+                    append("${if (course == Course.RanOut && settings.showUsed) 100 else bar.percent}")
+                    withStyle(SpanStyle(fontSize = type.label.fontSize, fontWeight = type.label.fontWeight)) { append("%") }
+                },
+                style = type.figure.copy(lineHeight = type.figure.fontSize),
+                color = if (ended) scheme.onSurfaceVariant else scheme.onSurface,
+            )
+        }
+        Meter(bar, course, StarbridgeTheme.provider(window.provider), settings.showUsed, card)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(tone.word, style = type.metaStrong, color = tone.color, maxLines = 1, modifier = Modifier.weight(1f))
+            Spacer(Modifier.width(Spacing.s2))
+            Text(
+                window.resetsAt?.let { if (ended) "Reset ${ago(now, it)}" else if (settings.absoluteResets) "Resets ${resetClock(it, now, h24)}" else "Resets in ${span(now, it)}" } ?: "Reset time unknown",
+                style = type.meta,
+                color = scheme.onSurfaceVariant,
+                maxLines = 1,
+            )
         }
     }
 }

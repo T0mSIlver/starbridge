@@ -99,6 +99,23 @@ export function arrange(
     .map(({ c }) => c);
 }
 
+export type QuotaGroup = { provider: string; machine?: string; cards: QuotaCardData[] };
+
+/**
+ * Arranged cards under one heading per provider and machine (#160): groups in the order their
+ * first window comes, so a provider with a window running out leads, and windows keep their order.
+ */
+export function groups(arranged: QuotaCardData[]): QuotaGroup[] {
+  const byKey = new Map<string, QuotaGroup>();
+  for (const c of arranged) {
+    const key = `${c.provider}\n${c.machine ?? ""}`;
+    const g = byKey.get(key);
+    if (g) g.cards.push(c);
+    else byKey.set(key, { provider: c.provider, machine: c.machine, cards: [c] });
+  }
+  return [...byKey.values()];
+}
+
 /** The alerts this browser shows a notification for: newly raised, of providers it opted in. */
 export function toNotify(alerts: QuotaAlert[], s: QuotaSettings): QuotaAlert[] {
   return alerts.filter(

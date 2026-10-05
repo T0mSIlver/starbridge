@@ -812,6 +812,13 @@ How it generalizes is open.
   the phone's language ("Oct 7" in English, "7 oct." in French) from Android's own patterns, where
   it used fixed English ones; words such as "tomorrow" stay English, as the rest of the UI.
 
+- 2026-10-05. Quota windows grouped by provider (#160, layout C of
+  https://claude.ai/artifact/XMemEeP3dEBAagDiz4Ys6i). The provider's name heads one card (Android)
+  or one block (web, the landing page included), with the machine beside it when several upload;
+  its windows follow as rows that name only the window. Groups come in the order of their first
+  window under "Quota order", so a provider with a window running out leads, and its running-out
+  window leads inside it. The provider shows once, so skimming the list reads provider names only.
+
 ## Encryption, with existing libraries
 
 - libsodium sealed boxes (`crypto_box_seal`, X25519 + XSalsa20-Poly1305): an
