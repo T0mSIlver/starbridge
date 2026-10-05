@@ -105,6 +105,11 @@ export class LiveServer {
     await this.phone("POST", `/pairings/${code.rendezvous}/approve`, { approval });
   }
 
+  /** Items of `kind` as the phone lists them, sealed, with what the server knows of each. */
+  async listed(kind: "decision" | "quota") {
+    return ((await this.phone("GET", `/items?kind=${kind}`)) as { items: Stored[] }).items;
+  }
+
   /** Items of `kind` as the phone lists them, opened and verified. */
   async opened<K extends "decision" | "quota">(kind: K) {
     const { items } = (await this.phone("GET", `/items?kind=${kind}`)) as { items: Stored[] };

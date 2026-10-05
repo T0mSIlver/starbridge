@@ -5,9 +5,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.unit.Density
 import com.github.takahirom.roborazzi.captureRoboImage
 import dev.starbridge.app.data.Approval
 import dev.starbridge.app.data.Phase
@@ -60,12 +63,31 @@ class ScreenshotTest(private val dark: Boolean) {
                 Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) { content() }
             }
         }
+        // Images decode off the main thread: let them land before the capture.
+        compose.waitForIdle()
+        Thread.sleep(300)
+        compose.waitForIdle()
+        // Images decode off the main thread: let them land before the capture.
+        compose.waitForIdle()
+        Thread.sleep(300)
+        compose.waitForIdle()
         compose.onRoot().captureRoboImage("screenshots/$name-${if (dark) "dark" else "light"}.png")
     }
 
     @Test fun inbox() = capture("inbox") { InboxScreen(fake.decisions, now, decisionActions) }
 
+    // Text at 200% on the answered lines: who and when wrap below them.
+    @Test fun inboxLargeText() = capture("inbox-large-text") {
+        CompositionLocalProvider(LocalDensity provides Density(LocalDensity.current.density, fontScale = 2f)) {
+            InboxScreen(fake.decisions.filterNot { it.isOpen(now) }, now, decisionActions)
+        }
+    }
+
     @Test fun decision() = capture("decision") { DecisionScreen(fake.decisions[1], now, onAnswer = { _, _, _ -> }) }
+
+    @Test fun decisionImages() = capture("decision-images") { DecisionScreen(fake.decisions.first { it.images.isNotEmpty() }, now, onAnswer = { _, _, _ -> }) }
+
+    @Test fun decisionAnswerIn() = capture("decision-answer-in") { DecisionScreen(fake.decisions.first { it.answerIn != null }, now, onAnswer = { _, _, _ -> }) }
 
     @Test fun quotas() = capture("quotas") { QuotasScreen(fake.windows, now) }
 

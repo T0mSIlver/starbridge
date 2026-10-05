@@ -1,16 +1,19 @@
 import { randomBytes } from "node:crypto";
-import { basename } from "node:path";
+import { basename, resolve } from "node:path";
 import {
   type Answer,
   Decision,
+  type DecisionLink,
   type Directory,
   open,
   ProtocolError,
   parseWith,
   SealedItem,
   type SessionLink,
+  type Settled,
   seal,
 } from "@starbridge/protocol";
+import { ApiError } from "./api";
 import { claudeSession } from "./claude";
 import type { State } from "./config";
 import {
@@ -23,6 +26,7 @@ import {
   session,
   UsageError,
 } from "./context";
+import { fitPicture, loadPicture, type Picture } from "./images";
 
 export interface AskInput {
   question?: string;
@@ -35,8 +39,17 @@ export interface AskInput {
   project?: string;
   session?: string;
   sessionTitle?: string;
-  links?: SessionLink[];
+  sessionLinks?: SessionLink[];
+  /** Image files, PNG or JPEG, with what each shows when known. */
+  images?: (string | { path: string; alt?: string })[];
+  /** Pages to open, such as a claude.ai artifact. */
+  links?: (string | DecisionLink)[];
+  /** The page the owner answers on instead of Starbridge; the decision then has no options. */
+  answerIn?: string | DecisionLink;
 }
+
+/** What the server stores at most for one decision, all boxes together (PROTOCOL.md, Limits). */
+export const ITEM_BYTES = 256 * 1024;
 
 /** Exit code when nobody answered before the deadline: the agent applies its default. */
 export const EXIT_TIMEOUT = 2;
@@ -66,19 +79,28 @@ export function resolveSource(
   input: AskInput,
   env: Ctx["env"],
   cwd: string,
-): AskInput & { project: string; session: string; links: SessionLink[] } {
+): AskInput & { project: string; session: string; sessionLinks: SessionLink[] } {
   const session = input.session ?? env.CLAUDE_CODE_SESSION_ID ?? "";
   const claude =
-    session && (input.sessionTitle === undefined || input.links === undefined)
+    session && (input.sessionTitle === undefined || input.sessionLinks === undefined)
       ? claudeSession(env, session)
       : undefined;
   const title = input.sessionTitle ?? claude?.title;
+  const at = (path: string) => resolve(cwd, path);
   return {
     ...input,
     project: input.project ?? basename(cwd),
     session,
     ...(title !== undefined ? { sessionTitle: title } : {}),
-    links: input.links ?? claude?.links ?? [],
+    sessionLinks: input.sessionLinks ?? claude?.links ?? [],
+    // Image paths are the asking directory's; the agent reads them from its own.
+    ...(input.images
+      ? {
+          images: input.images.map((i) =>
+            typeof i === "string" ? at(i) : { ...i, path: at(i.path) },
+          ),
+        }
+      : {}),
   };
 }
 
@@ -89,7 +111,7 @@ function sourceFor(input: AskInput, ctx: Ctx, machine: string): Decision["source
     project: r.project,
     session: r.session,
     ...(r.sessionTitle ? { sessionTitle: r.sessionTitle } : {}),
-    ...(r.links.length > 0 ? { links: r.links } : {}),
+    ...(r.sessionLinks.length > 0 ? { links: r.sessionLinks } : {}),
   };
 }
 
@@ -97,6 +119,12 @@ export function buildDecision(input: AskInput, ctx: Ctx, machine: string, to: st
   if (!input.question) throw new UsageError("ask needs --question");
   if (!input.default) throw new UsageError("ask needs --default: what you do if nobody answers");
   const options = input.options ?? [];
+  const link = (l: string | DecisionLink) => (typeof l === "string" ? { url: l } : l);
+  const links = (input.links ?? []).map(link);
+  if (input.answerIn !== undefined && options.length > 0)
+    throw new UsageError(
+      "--answer-in takes no --option: the owner answers on that page, never in two places",
+    );
   const decision = {
     v: 1 as const,
     id: `d_${randomBytes(12).toString("base64url")}`,
@@ -111,12 +139,49 @@ export function buildDecision(input: AskInput, ctx: Ctx, machine: string, to: st
       ...(input.defaultAt ? { at: timeFrom(input.defaultAt, ctx.now()) } : {}),
     },
     source: sourceFor(input, ctx, machine),
+    ...(links.length > 0 ? { links } : {}),
+    ...(input.answerIn !== undefined ? { answerIn: link(input.answerIn) } : {}),
   };
+  return checked(decision);
+}
+
+function checked(decision: unknown): Decision {
   try {
     return parseWith(Decision, decision);
   } catch (e) {
     throw e instanceof ProtocolError ? new UsageError(`bad decision: ${e.message}`) : e;
   }
+}
+
+const boxBytes = (item: SealedItem) => item.boxes.reduce((n, b) => n + b.box.length, 0);
+
+/**
+ * Signs and seals the decision with its pictures, scaled down until every box together fits
+ * ITEM_BYTES. Each box carries every image as base64url inside the sealed base64url envelope, so
+ * a byte of image costs about (4/3)² bytes per device.
+ */
+function sealWithPictures(
+  base: Decision,
+  pictures: Picture[],
+  signer: { id: string; signKey: Uint8Array },
+  to: ReturnType<typeof devices>,
+): { decision: Decision; item: SealedItem } {
+  const sealed = (d: Decision) => seal("decision", d, signer, to);
+  if (pictures.length === 0) return { decision: base, item: sealed(base) };
+  if (pictures.length > 4) throw new UsageError("--image: at most 4 images");
+  const perBox = boxBytes(sealed(base)) / to.length;
+  let share = Math.floor(((ITEM_BYTES / to.length - perBox) * 9) / 16 / pictures.length);
+  for (let tries = 0; tries < 5; tries++) {
+    if (share < 1024) break;
+    const decision = checked({ ...base, images: pictures.map((p) => fitPicture(p, share)) });
+    const item = sealed(decision);
+    const size = boxBytes(item);
+    if (size <= ITEM_BYTES) return { decision, item };
+    share = Math.floor(share * (ITEM_BYTES / size) * 0.95);
+  }
+  throw new UsageError(
+    `the images do not fit in one decision for ${to.length} devices: attach fewer images`,
+  );
 }
 
 /**
@@ -125,16 +190,19 @@ export function buildDecision(input: AskInput, ctx: Ctx, machine: string, to: st
  */
 export async function postDecision(ctx: Ctx, s: Session, input: AskInput): Promise<Decision> {
   const dir = await refreshDirectory(ctx, s);
+  const pictures = (input.images ?? []).map((i) =>
+    typeof i === "string" ? loadPicture(i) : loadPicture(i.path, i.alt),
+  );
   const to = devices(dir);
-  const decision = buildDecision(
+  const base = buildDecision(
     input,
     ctx,
     s.machine.name,
     to.map((d) => d.id),
   );
-  const item = seal(
-    "decision",
-    decision,
+  const { decision, item } = sealWithPictures(
+    base,
+    pictures,
     { id: s.machine.id, signKey: s.keys.sign.privateKey },
     to,
   );
@@ -150,6 +218,7 @@ export async function postDecision(ctx: Ctx, s: Session, input: AskInput): Promi
       default: decision.default.action,
       ...(cursor !== undefined ? { cursor } : {}),
       ...(decision.source.session ? { session: decision.source.session } : {}),
+      ...(decision.answerIn ? { answerIn: true } : {}),
     };
   });
   return decision;
@@ -166,6 +235,46 @@ export async function ask(
   ctx.out(decision.id);
   if (!opts.wait) return 0;
   return wait(ctx, { id: decision.id, timeout: opts.timeout, json: opts.json }, s);
+}
+
+/**
+ * Closes a decision this machine asked without a Starbridge answer: answered on its `answerIn`
+ * page (`elsewhere`), or no longer needed (`withdrawn`). Every device moves it out of the open
+ * inbox, and the mod no longer reports its default time.
+ */
+export async function settle(ctx: Ctx, opts: { id?: string; outcome?: string }): Promise<number> {
+  const id = opts.id;
+  if (!id) throw new UsageError("settle needs a decision id");
+  const asked = ctx.store.state().asked[id];
+  if (!asked) throw new UsageError(`${id} is not a decision this machine asked`);
+  const outcome = opts.outcome ?? (asked.answerIn ? "elsewhere" : "withdrawn");
+  if (outcome !== "elsewhere" && outcome !== "withdrawn")
+    throw new UsageError("--outcome is elsewhere or withdrawn");
+  const s = session(ctx);
+  const to = devices(await refreshDirectory(ctx, s));
+  const body = {
+    v: 1 as const,
+    id: `s_${randomBytes(12).toString("base64url")}`,
+    itemId: id,
+    to: to.map((d) => d.id),
+    at: iso(ctx.now()),
+    outcome,
+  } satisfies Settled;
+  try {
+    await s.api.postItem(
+      seal("settled", body, { id: s.machine.id, signKey: s.keys.sign.privateKey }, to),
+    );
+  } catch (e) {
+    // Answered or settled already: either way it is closed, which is what was asked.
+    const closed =
+      e instanceof ApiError && ["already-answered", "already-settled"].includes(e.code);
+    if (!closed) throw e;
+  }
+  ctx.store.updateState((st) => {
+    const a = st.asked[id];
+    if (a) a.settled = true;
+  });
+  return 0;
 }
 
 /**
@@ -349,6 +458,7 @@ function overdue(st: State, session: string, id: string, now: number): boolean {
   return (
     asked?.session === session &&
     !asked.defaulted &&
+    !asked.settled &&
     !st.answers[id] &&
     asked.defaultAt !== undefined &&
     Date.parse(asked.defaultAt) <= now
@@ -412,7 +522,10 @@ export function nextDefaultMs(st: State, now: number, session?: string): number 
   const left = Object.entries(st.asked)
     .filter(
       ([id, a]) =>
-        (session === undefined || a.session === session) && !a.defaulted && !st.answers[id],
+        (session === undefined || a.session === session) &&
+        !a.defaulted &&
+        !a.settled &&
+        !st.answers[id],
     )
     .flatMap(([, a]) => (a.defaultAt ? [Date.parse(a.defaultAt) - now] : []))
     .filter((ms) => ms > 0);

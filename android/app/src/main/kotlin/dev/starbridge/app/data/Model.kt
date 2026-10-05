@@ -15,6 +15,12 @@ data class Source(
 
 data class SessionLink(val kind: String, val url: String)
 
+/** An image the agent attached: a PNG or JPEG, base64url in [data], [width] by [height] pixels. */
+data class Image(val data: String, val width: Int, val height: Int, val alt: String? = null)
+
+/** A page the agent attached, such as a Claude artifact. */
+data class Link(val url: String, val title: String? = null)
+
 /**
  * A question an agent needs the owner to answer. [options] is empty for a free-text answer;
  * [default] says what the agent does if nobody answers, by [defaultAt] when set.
@@ -29,11 +35,24 @@ data class Decision(
     val defaultAt: Instant?,
     val source: Source,
     val createdAt: Instant,
+    val images: List<Image> = emptyList(),
+    val links: List<Link> = emptyList(),
+    /** The page the owner answers on instead of here, such as a Claude artifact. */
+    val answerIn: Link? = null,
     /** This device's answer; null when it was answered elsewhere or is still open. */
     val answer: String? = null,
     val answeredAt: Instant? = null,
+    /** How the machine closed it, when its settled notice did: "withdrawn" or "elsewhere". */
+    val settled: String? = null,
 ) {
-    val open get() = answeredAt == null && answer == null
+    /**
+     * Waiting for the owner. A decision answered on another page also stops waiting at its default
+     * time: no answer reaches Starbridge, and the agent applies its default then.
+     */
+    fun isOpen(now: Instant) = answeredAt == null && answer == null && !lapsed(now)
+
+    /** Answered elsewhere, and its default time passed before the agent settled it. */
+    fun lapsed(now: Instant) = answerIn != null && answeredAt == null && defaultAt?.let { !it.isAfter(now) } == true
 }
 
 /** Where a window is headed by its reset, as the uploader computed it. */

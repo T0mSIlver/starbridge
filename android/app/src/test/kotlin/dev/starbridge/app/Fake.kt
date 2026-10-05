@@ -2,18 +2,29 @@ package dev.starbridge.app
 
 import dev.starbridge.app.data.Approval
 import dev.starbridge.app.data.Decision
+import dev.starbridge.app.data.Image
 import dev.starbridge.app.data.Kind
+import dev.starbridge.app.data.Link
 import dev.starbridge.app.data.Member
 import dev.starbridge.app.data.Pace
 import dev.starbridge.app.data.PushSetting
 import dev.starbridge.app.data.QuotaWindow
 import dev.starbridge.app.data.SessionLink
 import dev.starbridge.app.data.Source
+import dev.starbridge.app.protocol.toB64
 import java.time.Duration
 import java.time.Instant
 
 /** The owner's day, relative to [now]: screenshots pass a fixed instant. */
 class Fake(private val now: Instant) {
+    /** A 272x589 JPEG from src/test/resources/fake. */
+    private fun mockup(scheme: String) = Image(
+        toB64(javaClass.getResourceAsStream("/fake/mockup-$scheme.jpg")!!.readBytes()),
+        272,
+        589,
+        alt = "The decision sheet, $scheme",
+    )
+
     private fun ago(minutes: Long) = now.minus(Duration.ofMinutes(minutes))
     private fun later(minutes: Long) = now.plus(Duration.ofMinutes(minutes))
 
@@ -47,13 +58,39 @@ class Fake(private val now: Instant) {
             createdAt = ago(12),
         ),
         Decision(
+            id = "d5",
+            question = "Ship the light or the dark decision sheet first?",
+            context = "Both mockups follow DESIGN.md. The interactive version is in the artifact.",
+            options = listOf("Light", "Dark"),
+            recommended = "Dark",
+            default = "Ships dark first",
+            defaultAt = later(60),
+            source = Source("dev box", "starbridge", "design", title = "Decision sheet (#62)"),
+            createdAt = ago(1),
+            images = listOf(mockup("light"), mockup("dark")),
+            links = listOf(Link("https://claude.ai/public/artifacts/0b3f0e7c")),
+        ),
+        Decision(
+            id = "d6",
+            question = "Which of the three settings layouts should ship?",
+            context = "Each layout is live in the artifact, with your real devices. Its buttons send your pick straight to this session.",
+            options = emptyList(),
+            recommended = null,
+            default = "Ships the roomy layout",
+            defaultAt = later(240),
+            source = Source("dev box", "starbridge", "settings", title = "Settings screen (#88)"),
+            createdAt = ago(6),
+            answerIn = Link("https://claude.ai/artifact/2ig2MyNRD484b7oZea5vkZ"),
+        ),
+        Decision(
             id = "d3",
             question = "Which Hetzner location for the VPS?",
             context = "A CX23 costs the same in Falkenstein, Nuremberg and Helsinki; latency from home differs by a few ms.",
             options = emptyList(),
             recommended = null,
             default = "Picks Falkenstein",
-            defaultAt = later(120),
+            // 10:00 tomorrow: the fallback says which day.
+            defaultAt = later(20 * 60),
             source = Source("dev box", "starbridge", "deploy"),
             createdAt = ago(40),
         ),

@@ -69,7 +69,7 @@ class MainActivity : ComponentActivity() {
                     }
                 }
                 if (phase == Phase.Ready) {
-                    Main(decisions.count { it.open }, store.notice, store::dismissNotice, openDecision.receiveAsFlow())
+                    Main(decisions, store.notice, store::dismissNotice, openDecision.receiveAsFlow())
                 } else {
                     Setup(phase, store.notice, store::dismissNotice, ::openInBrowser)
                 }

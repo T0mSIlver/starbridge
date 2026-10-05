@@ -54,6 +54,10 @@ class WallpaperScreenshotTest(private val wallpaper: Wallpaper, private val dark
             }
         }
         val scheme = if (dark) "dark" else "light"
+        // Images decode off the main thread: let them land before the capture.
+        compose.waitForIdle()
+        Thread.sleep(300)
+        compose.waitForIdle()
         compose.onRoot().captureRoboImage("screenshots/wallpaper/$name-${wallpaper.name.lowercase()}-$scheme.png")
     }
 
