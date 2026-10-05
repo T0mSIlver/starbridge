@@ -7,13 +7,14 @@ import type { JoinAsk } from "@/lib/types";
 import { useApp, useDevice } from "./AppProvider";
 import { Icon } from "./icons";
 import p from "./Pairing.module.css";
+import { type PairOutcome, PairResult } from "./PairResult";
 import ui from "./ui.module.css";
 
 const load = () => import("@/lib/device");
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 /** One join request: compare digits, then approve or refuse. */
-function Ask({ ask, onClose }: { ask: JoinAsk; onClose: (done?: string) => void }) {
+function Ask({ ask, onClose }: { ask: JoinAsk; onClose: (done: PairOutcome) => void }) {
   const ctx = useDevice();
   const { update } = useApp();
   const [comparison, setComparison] = useState<Comparison>();
@@ -72,7 +73,12 @@ function Ask({ ask, onClose }: { ask: JoinAsk; onClose: (done?: string) => void 
             onClick={() =>
               run(async () => {
                 update(await comparison.approve(ctx));
-                onClose(`${ask.name} joined.`);
+                onClose({
+                  name: ask.name,
+                  icon: "devices",
+                  title: `${ask.name} joined`,
+                  sub: "It can now read and answer as a device.",
+                });
               })
             }
           >
@@ -101,11 +107,12 @@ function Ask({ ask, onClose }: { ask: JoinAsk; onClose: (done?: string) => void 
             run(async () => {
               abort.current?.abort();
               await (await load()).refuseJoin(ask.id);
-              onClose(
-                comparison
-                  ? `Refused ${ask.name}: the digits differed. Ask again from it.`
-                  : `Refused ${ask.name}.`,
-              );
+              onClose({
+                name: ask.name,
+                icon: "devices",
+                title: `Refused ${ask.name}`,
+                sub: comparison ? "The digits differed. Ask again from it." : "It can ask again.",
+              });
             })
           }
         >
@@ -120,7 +127,7 @@ function Ask({ ask, onClose }: { ask: JoinAsk; onClose: (done?: string) => void 
 export function JoinRequests() {
   const [asks, setAsks] = useState<JoinAsk[]>([]);
   const [closed, setClosed] = useState<string[]>([]);
-  const [done, setDone] = useState<string>();
+  const [done, setDone] = useState<PairOutcome>();
   useEffect(() => {
     const abort = new AbortController();
     load().then((d) => d.watchJoins(abort.signal, setAsks));
@@ -141,9 +148,11 @@ export function JoinRequests() {
         />
       ))}
       {done && (
-        <p className={`t-small ${p.dim}`} role="status">
-          {done}
-        </p>
+        <PairResult outcome={done}>
+          <button type="button" className={`t-label ${ui.btn}`} onClick={() => setDone(undefined)}>
+            OK
+          </button>
+        </PairResult>
       )}
     </section>
   );

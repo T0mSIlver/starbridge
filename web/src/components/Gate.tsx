@@ -14,6 +14,9 @@ import ui from "./ui.module.css";
 
 const load = () => import("@/lib/device");
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
+/** A wait this page cancelled itself, such as the QR code's when switching to digits. */
+const cancelled = (e: unknown) =>
+  (e instanceof DOMException && e.name === "AbortError") || message(e) === "cancelled";
 
 /** Runs `fn`, showing its error; `busy` disables the buttons meanwhile. */
 function useAction() {
@@ -25,7 +28,7 @@ function useAction() {
     try {
       await fn();
     } catch (e) {
-      setError(message(e));
+      if (!cancelled(e)) setError(message(e));
     } finally {
       setBusy(false);
     }
@@ -159,11 +162,20 @@ function Join({ account, stale }: { account: string; stale: boolean }) {
   const [code, setCode] = useState<string>();
   const [digits, setDigits] = useState<string>();
   const [words, setWords] = useState("");
+  const [typed, setTyped] = useState<{ count: number; unknown?: string }>({ count: 0 });
   const cancel = useRef<() => void>(undefined);
   // Each join started counts up; one that resolves after the owner moved on cancels itself.
   const started = useRef(0);
   const { busy, error, run } = useAction();
   useEffect(() => () => cancel.current?.(), []);
+  useEffect(() => {
+    let live = true;
+    load().then((d) => live && setTyped(d.readRecoveryWords(words)));
+    return () => {
+      live = false;
+    };
+  }, [words]);
+  const complete = (typed.count === 12 || typed.count === 24) && !typed.unknown;
 
   /** Starts a join unless the owner moved on meanwhile; undefined when stale. */
   const begin = async <J extends { cancel: () => void; done: Promise<void> }>(
@@ -210,7 +222,7 @@ function Join({ account, stale }: { account: string; stale: boolean }) {
   };
 
   return (
-    <FirstRunPage>
+    <FirstRunPage centered>
       <h1 className="t-heading">Add this browser</h1>
       {stale && (
         <p className={`t-small ${s.lede}`}>
@@ -290,21 +302,30 @@ function Join({ account, stale }: { account: string; stale: boolean }) {
         >
           <NameField value={name} onChange={setName} />
           <label className={`t-meta ${s.dim}`} htmlFor="recovery-words">
-            Your 24 recovery words
+            Your recovery words, separated by spaces
           </label>
           <textarea
             id="recovery-words"
             className={`t-body ${s.input}`}
             rows={4}
             autoComplete="off"
+            autoCapitalize="none"
             spellCheck={false}
+            aria-describedby="recovery-words-check"
             value={words}
             onChange={(e) => setWords(e.target.value)}
           />
+          <p
+            id="recovery-words-check"
+            className={`t-meta ${typed.unknown ? s.error : s.dim}`}
+            aria-live="polite"
+          >
+            {typed.unknown ?? `${typed.count} of ${typed.count > 12 ? 24 : 12} words`}
+          </p>
           <button
             type="submit"
             className={`t-label ${ui.btn} ${ui.fill}`}
-            disabled={busy || !name.trim() || words.trim().split(/\s+/).length !== 24}
+            disabled={busy || !name.trim() || !complete}
           >
             Recover
           </button>

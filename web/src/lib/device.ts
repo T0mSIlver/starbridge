@@ -40,15 +40,19 @@ import {
   pairingRequest,
   parsePairingCode,
   RECOVERY,
+  RecoveryWordsError,
+  type RecoveryWordsProblem,
   ready,
   recoveryKeyPair,
   recoverySeedFromWords,
   recoveryWords,
+  recoveryWordsProblem,
   revokeEntryAsync,
   type SealedItem,
   type Settled,
   type SignedEnvelope,
   sealAsync,
+  splitRecoveryWords,
   toB64,
   verifyDirectory,
   type Waiting,
@@ -246,7 +250,7 @@ export interface FirstDevice {
 export async function prepareFirstDevice(account: string, name: string): Promise<FirstDevice> {
   await ready;
   const { record, member } = await newDevice(account, name);
-  const seed = crypto.getRandomValues(new Uint8Array(32));
+  const seed = crypto.getRandomValues(new Uint8Array(16));
   const recovery = recoveryKeyPair(seed);
   let entry: SignedEnvelope;
   let words: string[];
@@ -285,7 +289,12 @@ export async function prepareFirstDevice(account: string, name: string): Promise
  */
 export async function recover(account: string, name: string, words: string): Promise<void> {
   await ready;
-  const seed = recoverySeedFromWords(words);
+  let seed: Uint8Array;
+  try {
+    seed = recoverySeedFromWords(words);
+  } catch (e) {
+    throw e instanceof RecoveryWordsError ? new Error(recoveryProblemText(e.problem)) : e;
+  }
   const recovery = recoveryKeyPair(seed);
   try {
     // Keys first: the pin is read after the last await before signing, so a pin another tab
@@ -294,11 +303,18 @@ export async function recover(account: string, name: string, words: string): Pro
     const entries = await api.directory();
     // A browser that pinned this account before must not sign onto an older prefix.
     const pin = await store.get("pin", account);
-    const dir = verifyDirectory(entries, {
-      account,
-      recoveryPk: toB64(recovery.publicKey),
-      ...(pin ? { pin } : {}),
-    });
+    let dir: Directory;
+    try {
+      dir = verifyDirectory(entries, {
+        account,
+        recoveryPk: toB64(recovery.publicKey),
+        ...(pin ? { pin } : {}),
+      });
+    } catch (e) {
+      if (e instanceof ProtocolError && e.message === "bad-genesis: recovery key differs")
+        throw new Error("These words are a recovery key, but not this account's.");
+      throw e;
+    }
     const entry = addEntry(dir, { id: RECOVERY, signKey: recovery.privateKey }, member, now());
     const next = verifyDirectory([...entries, entry], { account });
     await store.put("device", record, account);
@@ -307,6 +323,29 @@ export async function recover(account: string, name: string, words: string): Pro
   } finally {
     seed.fill(0);
     recovery.privateKey.fill(0);
+  }
+}
+
+/** What the recovery entry shows while typing: the word count, and the first finished unknown word. */
+export function readRecoveryWords(text: string): { count: number; unknown?: string } {
+  const words = splitRecoveryWords(text);
+  // The last word is still being typed unless a separator follows it.
+  const finished = /[^\p{L}]$/u.test(text) ? words : words.slice(0, -1);
+  const problem = recoveryWordsProblem(finished);
+  return {
+    count: words.length,
+    ...(problem?.kind === "unknown-word" ? { unknown: recoveryProblemText(problem) } : {}),
+  };
+}
+
+function recoveryProblemText(problem: RecoveryWordsProblem): string {
+  switch (problem.kind) {
+    case "unknown-word":
+      return `Word ${problem.index + 1}, "${problem.word}", is not a recovery word.`;
+    case "word-count":
+      return `A recovery key has 12 words, or 24 for an older account; this has ${problem.count}.`;
+    case "checksum":
+      return "One word is wrong, or two are swapped. Check each word and the order.";
   }
 }
 

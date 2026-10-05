@@ -206,7 +206,7 @@ async function main() {
   await page.getByRole("button", { name: "Create the keys" }).click();
   await page.getByRole("heading", { name: "Save your recovery key" }).waitFor();
   const words = (await page.locator("ol li span:last-child").allTextContents()).join(" ");
-  if (words.split(" ").length !== 24) throw new Error(`expected 24 words, got: ${words}`);
+  if (words.split(" ").length !== 12) throw new Error(`expected 12 words, got: ${words}`);
   await shoot(page, "setup");
   await page.setViewportSize({ width: 1280, height: 860 });
   await page.emulateMedia({ colorScheme: "light" });
@@ -233,7 +233,8 @@ async function main() {
   await page.getByRole("button", { name: "Approve" }).click();
   await pair.waitFor(/Paired "devbox"/);
   if ((await pair.exited) !== 0) throw new Error("pair failed");
-  await page.getByText("devbox joined.").waitFor();
+  await page.getByRole("status", { name: "Pairing result" }).getByText("devbox joined").waitFor();
+  await shoot(page, "pair-joined");
 
   step("refuse a second pairing");
   const other = cli("pair-refused", ["pair", "--name", "stranger"], join(tmp, "stranger"));
@@ -497,6 +498,18 @@ async function main() {
   step("add a second browser by pairing code");
   const b = await ff.newContext();
   const pageB = await signIn(b);
+  await pageB.getByTestId("pairing-code").waitFor({ timeout: 10_000 });
+  await shoot(pageB, "join-browser");
+  // Switching to digits cancels the QR code's wait; that cancel shows no error.
+  await pageB.getByRole("button", { name: "Can't scan? Compare digits" }).click();
+  await pageB.getByText(/Open Starbridge on a signed-in device/).waitFor();
+  await pageB.waitForTimeout(1000);
+  // Next.js's route announcer is an empty alert too; the page's errors are paragraphs.
+  const digitsError = pageB.locator('p[role="alert"]');
+  if (await digitsError.count())
+    throw new Error(`digits show an error: ${await digitsError.textContent()}`);
+  await shoot(pageB, "join-digits");
+  await pageB.getByRole("button", { name: "Cancel" }).click();
   const codeB = (
     await pageB
       .getByTestId("pairing-code")
@@ -514,13 +527,28 @@ async function main() {
   await page.getByText(/read and answer as a device/).waitFor();
   await page.getByRole("button", { name: "Approve" }).click();
   await pageB.getByRole("heading", { name: "Inbox" }).waitFor({ timeout: 30_000 });
+  await pageB.getByRole("button", { name: "Turn on notifications" }).waitFor();
+  await shoot(pageB, "inbox-banner");
   // The new device sees decisions sealed after it joined; the open one predates it.
 
   step("recover a third browser with the words");
   const c = await ff.newContext();
   const pageC = await signIn(c);
   await pageC.getByRole("button", { name: "Use the recovery key" }).click();
-  await pageC.getByLabel("Your 24 recovery words").fill(words);
+  const entry = pageC.getByLabel("Your recovery words, separated by spaces");
+  const typo = words.split(" ");
+  typo[2] = "mountian";
+  await entry.fill(`${typo.join(" ")} `);
+  await pageC.getByText('Word 3, "mountian", is not a recovery word.').waitFor();
+  await shoot(pageC, "recovery-typo");
+  // Numbering and dashes separate words as well as spaces do.
+  await entry.fill(
+    words
+      .split(" ")
+      .map((w, i) => `${i + 1}-${w}`)
+      .join("\n"),
+  );
+  await pageC.getByText("12 of 12 words").waitFor();
   await pageC.getByRole("button", { name: "Recover" }).click();
   await pageC.getByRole("heading", { name: "Inbox" }).waitFor({ timeout: 30_000 });
 
