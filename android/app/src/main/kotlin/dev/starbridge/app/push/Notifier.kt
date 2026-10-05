@@ -2,6 +2,7 @@ package dev.starbridge.app.push
 
 import android.Manifest
 import android.app.NotificationChannel
+import android.app.NotificationChannelGroup
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
@@ -24,6 +25,7 @@ import dev.starbridge.app.data.Colours
 import dev.starbridge.app.data.Decision
 import dev.starbridge.app.data.Prefs
 import dev.starbridge.app.data.bitmap
+import dev.starbridge.app.data.browserIntent
 import dev.starbridge.app.data.place
 import dev.starbridge.app.data.Prompt
 import dev.starbridge.app.data.QuotaNotice
@@ -45,28 +47,36 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
     private val manager = NotificationManagerCompat.from(context)
 
     init {
+        // Grouped, so Android's settings list them under these names rather than "Other" (#196).
+        manager.createNotificationChannelGroup(NotificationChannelGroup(NEEDS_YOU, "Needs you"))
+        manager.createNotificationChannelGroup(NotificationChannelGroup(ACTIVITY, "Activity"))
         manager.createNotificationChannel(
             NotificationChannel(CHANNEL, "Decisions", NotificationManager.IMPORTANCE_HIGH).apply {
+                group = NEEDS_YOU
                 description = "Questions your agents need you to answer"
             },
         )
         manager.createNotificationChannel(
             NotificationChannel(PROMPTS, "Permission prompts", NotificationManager.IMPORTANCE_HIGH).apply {
+                group = NEEDS_YOU
                 description = "Agents waiting for you to allow a command or an edit"
             },
         )
         manager.createNotificationChannel(
             NotificationChannel(JOIN_CHANNEL, "Join requests", NotificationManager.IMPORTANCE_HIGH).apply {
+                group = NEEDS_YOU
                 description = "A browser or phone signed in to your account asks to join"
             },
         )
         manager.createNotificationChannel(
             NotificationChannel(RUNS, "Runs", NotificationManager.IMPORTANCE_DEFAULT).apply {
+                group = ACTIVITY
                 description = "Commands your agents run that your rules name, until they pass or fail"
             },
         )
         manager.createNotificationChannel(
             NotificationChannel(QUOTAS, "Quotas", NotificationManager.IMPORTANCE_LOW).apply {
+                group = ACTIVITY
                 description = "Quota windows running low, running out, or resetting with headroom unused, for the providers you pick"
             },
         )
@@ -89,6 +99,7 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
                 "q:${n.provider}/${n.window}/${n.kind}",
                 0,
                 NotificationCompat.Builder(context, QUOTAS)
+                    .setSortKey(ORDER_QUOTA)
                     .setSmallIcon(R.drawable.ic_notification)
                     .setColor(accent())
                     .setContentTitle(n.title)
@@ -155,6 +166,7 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
         return NotificationCompat.Builder(context, CHANNEL)
+            .setSortKey(ORDER_QUESTION)
             .setSmallIcon(R.drawable.ic_notification)
             .setColor(accent())
             .setContentTitle(d.question)
@@ -222,12 +234,11 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
     private fun actions(decision: Decision): List<NotificationCompat.Action> {
         val page = decision.answerIn
         if (page != null) {
-            // Answered on that page, never here: the one button opens it. A claude.ai link goes to
-            // the Claude app when that app claims it, else the browser.
+            // Answered on that page, never here: the one button opens it, an artifact in the browser.
             val view = PendingIntent.getActivity(
                 context,
                 tag(decision.id),
-                Intent(Intent.ACTION_VIEW, Uri.parse(page.url)),
+                browserIntent(page.url),
                 PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
             )
             return listOf(NotificationCompat.Action.Builder(0, "Answer in ${page.place()}", view).build())
@@ -297,6 +308,7 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
         return NotificationCompat.Builder(context, PROMPTS)
+            .setSortKey(ORDER_QUESTION)
             .setSmallIcon(R.drawable.ic_notification)
             .setColor(accent())
             .setContentTitle(title)
@@ -399,6 +411,7 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
         manager.notify(
             tag(id),
             NotificationCompat.Builder(context, JOIN_CHANNEL)
+                .setSortKey(ORDER_JOIN)
                 .setSmallIcon(R.drawable.ic_notification)
                 .setContentTitle("$name wants to join")
                 .setContentText("Open Starbridge to compare digits and approve it.")
@@ -432,6 +445,7 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
         val b = NotificationCompat.Builder(context, RUNS)
+            .setSortKey(ORDER_RUN)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(listOfNotNull(run.title, run.progress?.let { if (it.percent) "${it.done}%" else "${it.done} of ${it.total}" }).joinToString(" · "))
             .setSubText(header(run.source))
@@ -476,6 +490,17 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
         const val JOIN_CHANNEL = "joins"
         const val RUNS = "runs"
         const val QUOTAS = "quotas"
+        private const val NEEDS_YOU = "needs-you"
+        private const val ACTIVITY = "activity"
+
+        /**
+         * Order inside the app's bundle, where Android sorts by these keys before importance: what
+         * needs the owner above runs, whose ongoing or ended notifications ranked first (#196).
+         */
+        const val ORDER_QUESTION = "1"
+        const val ORDER_JOIN = "2"
+        const val ORDER_RUN = "3"
+        const val ORDER_QUOTA = "4"
 
         /** Wide enough for an expanded notification on any phone, small enough for its bitmap limit. */
         private const val PICTURE_EDGE = 1024

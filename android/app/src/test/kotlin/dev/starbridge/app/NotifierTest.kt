@@ -5,11 +5,14 @@ import android.app.Application
 import android.app.Notification
 import android.app.NotificationManager
 import android.content.Context
+import android.content.Intent
+import dev.starbridge.app.data.browserIntent
 import androidx.test.core.app.ApplicationProvider
 import dev.starbridge.app.data.Prefs
 import dev.starbridge.app.push.Notifier
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -38,6 +41,19 @@ class NotifierTest {
         assertFalse(n.allowSystemGeneratedContextualActions)
         assertEquals(listOf("Allow", "Deny"), n.publicVersion.actions.map { it.title.toString() })
         assertEquals(p.id, shadowOf(n.contentIntent).savedIntent.getStringExtra(MainActivity.EXTRA_PROMPT))
+    }
+
+    @Test
+    fun everyChannelSitsInAGroup() {
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        assertEquals(emptyList<String>(), manager.notificationChannels.filter { it.group == null }.map { it.id })
+    }
+
+    // An artifact skips the Claude app, which shows it only in its in-app browser (#171).
+    @Test
+    fun anArtifactOpensInTheBrowserAndASessionDoesNot() {
+        assertEquals(Intent.CATEGORY_BROWSABLE, browserIntent("https://claude.ai/artifact/abc").selector?.categories?.single())
+        assertNull(browserIntent("https://claude.ai/code/session_01").selector)
     }
 
     @Test

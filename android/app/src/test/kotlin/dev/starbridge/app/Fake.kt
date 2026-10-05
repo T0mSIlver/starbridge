@@ -94,6 +94,7 @@ class Fake(private val now: Instant) {
             ),
             createdAt = ago(12),
             agent = "claude-code",
+            links = listOf(Link("https://claude.ai/artifact/4Esy3goyohvLThcPVCKaEf", "merge plan"), Link("https://github.com/T0mSIlver/starbridge/pull/86")),
         ),
         Decision(
             id = "d3",
