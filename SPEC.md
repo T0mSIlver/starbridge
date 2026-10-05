@@ -564,6 +564,16 @@ How it generalizes is open.
   instead of at once. The `starbridge` plugin's `hooks.json` carries the hook entries
   (`PermissionRequest` with the 600 s timeout, the four settle events with 30 s).
 
+- 2026-10-05. Release check (every feature end to end on an emulator, headless Chromium and a
+  real Claude Code session with the plugins). Both clients follow one rule per quota state:
+  "Headroom unused" only when the uploader raised the alert, "Ran out" once the predicted time
+  passes, "Window reset" once the reset passes, and each card names its machine when the
+  account has more than one active machine. A decision's context renders line breaks and code
+  (inline and fenced); other Markdown, such as bold, shows as typed, and the skill says so
+  rather than the clients growing a Markdown renderer. A deny with no typed message tells the
+  agent the owner denied it, since Claude Code's default reads as a broken hook. Setup reports a
+  failed step by the first line of its stderr.
+
 ## Encryption, with existing libraries
 
 - libsodium sealed boxes (`crypto_box_seal`, X25519 + XSalsa20-Poly1305): an
