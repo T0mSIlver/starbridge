@@ -87,5 +87,6 @@ pushRoutes.post("/relay", async (c) => {
   if (why) fail(400, "bad-endpoint", why);
   const { payload, ...target } = body;
   const result = await push.send(target, payload, false);
+  c.var.usage.record(`relay.${target.type}.${result}`);
   return c.json({ result }, result === "failed" ? 502 : 200);
 });

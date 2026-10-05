@@ -86,7 +86,10 @@ export default function Privacy() {
           answers by client (web page or Android app), and how long decisions and permission
           prompts waited for their answer, as the median and the 90th percentile;
         </li>
-        <li>pushes by push service and outcome (sent, failed, gone, no route, dropped);</li>
+        <li>
+          pushes by push service and outcome (sent, failed, gone, no route, dropped), and the same
+          for pushes relayed for self-hosted servers;
+        </li>
         <li>push targets by push service.</li>
       </ul>
 

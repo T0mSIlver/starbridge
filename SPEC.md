@@ -696,7 +696,7 @@ How it generalizes is open.
   hour, and at start, every finished day is folded into `usage_days` (day, metric, value: counts,
   and p50 and p90 of seconds to answer) and its events are deleted, so no per-user row outlives
   its day. Metrics: `active.*`, `items.<kind>` per post, `answered.<kind>.seconds` and
-  `answered.by.<client>` per device answer, `push.<type>.<outcome>` per push, and at the close
+  `answered.by.<client>` per device answer, `push.<type>.<outcome>` per push, `relay.<type>.<outcome>` per push relayed for another server, and at the close
   `total.*`, `new.accounts` and `total.push-targets.<type>`. Read access is a CLI, not an admin
   page: `bun server.js usage [days]` inside the server container on the VPS
   (`deploy/README.md`). It is the simpler of the two, adds no route, and needs no owner flag
