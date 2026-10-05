@@ -3,7 +3,8 @@
 import { useCallback, useSyncExternalStore } from "react";
 
 export type Prefs = {
-  groupByMachine: boolean;
+  /** The inbox in one feed, by machine, or by whether an agent waits (#191). */
+  grouping: "none" | "machine" | "waiting";
   historyOpen: boolean;
   theme: "system" | "light" | "dark";
   /** When a question's row carries its answer buttons on a phone (#138). */
@@ -18,7 +19,7 @@ export type Prefs = {
 };
 
 const DEFAULTS: Prefs = {
-  groupByMachine: false,
+  grouping: "none",
   historyOpen: false,
   theme: "system",
   rowAnswers: "always",
@@ -41,7 +42,13 @@ function read(): Prefs {
   if (cache && cache.raw === raw) return cache.value;
   let value = DEFAULTS;
   try {
-    if (raw) value = { ...DEFAULTS, ...(JSON.parse(raw) as Partial<Prefs>) };
+    if (raw) {
+      const saved = JSON.parse(raw) as Partial<Prefs> & { groupByMachine?: boolean };
+      // Before #191 the grouping was a switch.
+      if (saved.grouping === undefined && saved.groupByMachine) saved.grouping = "machine";
+      delete saved.groupByMachine;
+      value = { ...DEFAULTS, ...saved };
+    }
   } catch {}
   cache = { raw, value };
   return value;

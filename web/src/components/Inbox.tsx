@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import {
   byMachine,
   closedToday,
@@ -14,12 +14,12 @@ import {
 import { matches, useFind } from "@/lib/find";
 import { clockTime } from "@/lib/format";
 import { closedByPhrase, promptOutcome } from "@/lib/outcome";
-import { usePref } from "@/lib/prefs";
+import { type Prefs, usePref } from "@/lib/prefs";
 import { afterAnswer, selectedId, step } from "@/lib/selection";
 import type { InboxItem, PromptItem } from "@/lib/types";
 import { useApp } from "./AppProvider";
 import { PromptDetail, QuestionDetail } from "./Detail";
-import { HistoryHead, machineIcon, NeedRow, PastRow, RunRow, useNow } from "./Feed";
+import { HistoryHead, machineIcon, NeedRow, PastRow, RunRow, useNow, waitingSince } from "./Feed";
 import s from "./Inbox.module.css";
 import { Icon } from "./icons";
 import { ordered } from "./options";
@@ -54,7 +54,7 @@ const text = (e: Entry) =>
 export function Inbox() {
   const { inbox, prompts, runs, promptLog, loadPromptLog, answer, answerPrompt, deviceName } =
     useApp();
-  const [grouped, setGrouped] = usePref("groupByMachine");
+  const [grouping, setGrouping] = usePref("grouping");
   const [historyOpen, setHistoryOpen] = usePref("historyOpen");
   const find = useFind();
   const wide = useWide();
@@ -94,6 +94,7 @@ export function Inbox() {
   const latest = useRef({ ids, selected });
   latest.current = { ids, selected };
   const listRef = useRef<HTMLDivElement>(null);
+  useRowMoves(listRef);
   useEffect(() => {
     if (!wide) return;
     const onKey = (e: KeyboardEvent) => {
@@ -181,6 +182,8 @@ export function Inbox() {
   const sub = (label: React.ReactNode) => <div className={`t-caption ${s.sub}`}>{label}</div>;
 
   const count = needs.length;
+  const waitingOn = needs.filter((e) => waitingSince(e));
+  const whenYouCan = needs.filter((e) => !waitingSince(e));
   const list = (
     <section className={s.list} ref={listRef} aria-label="Inbox">
       <header className={`t-small ${s.head}`}>
@@ -190,7 +193,7 @@ export function Inbox() {
         <span className={`t-key ${s.keys}`}>
           <kbd className={ui.kbd}>J</kbd> <kbd className={ui.kbd}>K</kbd>
         </span>
-        <ViewMenu grouped={grouped} setGrouped={setGrouped} />
+        <ViewMenu grouping={grouping} setGrouping={setGrouping} />
       </header>
       <PushBanner />
       {inbox.rejected.length > 0 && (
@@ -198,7 +201,36 @@ export function Inbox() {
           {inbox.rejected.length} hidden: failed verification ({inbox.rejected[0]?.error})
         </p>
       )}
-      {grouped ? (
+      {grouping === "waiting" ? (
+        <>
+          {runEntries.length > 0 && (
+            <>
+              {sub("Running")}
+              {runEntries.map(row)}
+            </>
+          )}
+          {waitingOn.length > 0 && (
+            <>
+              {sub(
+                <>
+                  Waiting on you <span className={s.count}>{waitingOn.length}</span>
+                </>,
+              )}
+              {waitingOn.map(row)}
+            </>
+          )}
+          {whenYouCan.length > 0 && (
+            <>
+              {sub(
+                <>
+                  When you can <span className={s.countQuiet}>{whenYouCan.length}</span>
+                </>,
+              )}
+              {whenYouCan.map(row)}
+            </>
+          )}
+        </>
+      ) : grouping === "machine" ? (
         byMachine(runEntries, needs).map((g) => (
           <div key={g.machine}>
             {sub(
@@ -263,7 +295,7 @@ export function Inbox() {
       <div className={s.single}>
         <PhoneBar
           title="Inbox"
-          view={<ViewMenu grouped={grouped} setGrouped={setGrouped} icon />}
+          view={<ViewMenu grouping={grouping} setGrouping={setGrouping} icon />}
         />
         {list}
       </div>
@@ -342,6 +374,32 @@ function Panes({ list, children }: { list: React.ReactNode; children: React.Reac
   );
 }
 
+/**
+ * Slides each row from where it was to where it is, over `--t-state`, when the order changes,
+ * such as a question that flips to waiting moving up (#191).
+ */
+function useRowMoves(list: React.RefObject<HTMLElement | null>) {
+  const tops = useRef(new Map<string, number>());
+  useLayoutEffect(() => {
+    const rows = list.current?.querySelectorAll<HTMLElement>("[data-row]") ?? [];
+    const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const next = new Map<string, number>();
+    for (const row of rows) {
+      const id = row.dataset.row as string;
+      // Layout position: unmoved by page or list scroll, and by a move still running.
+      const top = row.offsetTop;
+      next.set(id, top);
+      const was = tops.current.get(id);
+      if (still || was === undefined || Math.abs(was - top) < 1) continue;
+      row.animate([{ transform: `translateY(${was - top}px)` }, { transform: "none" }], {
+        duration: 250,
+        easing: "cubic-bezier(0.2, 0, 0, 1)",
+      });
+    }
+    tops.current = next;
+  });
+}
+
 /** History's second line: "Server first · on this browser · 11:02". */
 function closedLine(p: Past): string {
   const by = p.entry.type === "question" ? ` · ${closedByPhrase(p.entry.item)}` : "";
@@ -410,11 +468,11 @@ function RowActions({
   if (options.length === 0) return null;
   return (
     <>
-      {options.map((o) => (
+      {options.map((o, i) => (
         <button
           key={o}
           type="button"
-          className={`t-label ${ui.btn} ${o === d.recommended ? ui.rec : ""}`}
+          className={`t-label ${ui.btn} ${i === 0 ? ui.rec : ""}`}
           disabled={busy}
           onClick={run(() => onQuestion(entry.item, { choice: o }))}
         >
@@ -425,14 +483,14 @@ function RowActions({
   );
 }
 
-/** One feed or Group by machine, remembered on this device. */
+/** One feed, Group by machine or Group by waiting, remembered on this device. */
 function ViewMenu({
-  grouped,
-  setGrouped,
+  grouping,
+  setGrouping,
   icon = false,
 }: {
-  grouped: boolean;
-  setGrouped: (v: boolean) => void;
+  grouping: Prefs["grouping"];
+  setGrouping: (v: Prefs["grouping"]) => void;
   icon?: boolean;
 }) {
   const [open, setOpen] = useState(false);
@@ -469,23 +527,24 @@ function ViewMenu({
         <div className={`t-small ${s.menu}`} role="menu">
           {(
             [
-              ["One feed", false],
-              ["Group by machine", true],
+              ["One feed", "none"],
+              ["Group by machine", "machine"],
+              ["Group by waiting", "waiting"],
             ] as const
           ).map(([label, value]) => (
             <button
               key={label}
               type="button"
               role="menuitemradio"
-              aria-checked={grouped === value}
+              aria-checked={grouping === value}
               className={s.menuItem}
               onClick={() => {
-                setGrouped(value);
+                setGrouping(value);
                 setOpen(false);
               }}
             >
               <span className={s.check}>
-                {grouped === value && <Icon name="check" size={16} />}
+                {grouping === value && <Icon name="check" size={16} />}
               </span>
               {label}
             </button>
