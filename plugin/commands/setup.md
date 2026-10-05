@@ -8,7 +8,7 @@ Set this machine up for Starbridge with the `starbridge` CLI. Your Bash tool has
 so setup cannot ask its own questions: ask them yourself, then run it with `--yes` and flags.
 
 1. Run `command -v starbridge`. If it prints nothing, tell me to install the CLI with
-   `curl -fsSL https://starbridge.run/install.sh | sh` (or `brew install T0mSIlver/tap/starbridge`,
+   `curl -fsSL https://starbridge.run/install.sh | sh` (or `brew install T0mSIlver/starbridge/starbridge`,
    or `npm i -g starbridge`) and stop.
 2. Run `starbridge status` and tell me in a few lines what is already set up and what is missing.
 3. Before you run setup, tell me what `--yes` will change outside Starbridge and ask me to confirm:
