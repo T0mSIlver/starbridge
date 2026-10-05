@@ -254,7 +254,7 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
         );
       }
       case "config":
-        return configCommand(ctx, rest);
+        return await configCommand(ctx, rest, process.stdin.isTTY ? terminalPrompt() : undefined);
       case "wait": {
         const { values, positionals } = parseArgs({
           args: rest,
