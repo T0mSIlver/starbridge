@@ -234,6 +234,7 @@ function Join({ account, stale }: { account: string; stale: boolean }) {
           <p className={`t-small ${s.lede}`}>
             Scan with a phone or browser signed in to Starbridge.
           </p>
+          {!code && !error && <span className={`skeleton ${s.qrBone}`} aria-hidden />}
           {code && (
             <>
               <div className={s.qr}>
@@ -393,7 +394,8 @@ export function Gate({ children }: { children: React.ReactNode }) {
   }, [boot.state, path, router]);
   switch (boot.state) {
     case "loading":
-      return <FirstRunPage>{null}</FirstRunPage>;
+      // Plain ground until boot knows the screen: the landing page, sign-in or the app.
+      return null;
     case "error":
       return (
         <Problem

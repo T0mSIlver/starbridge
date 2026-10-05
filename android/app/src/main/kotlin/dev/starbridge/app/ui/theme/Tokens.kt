@@ -323,7 +323,6 @@ object Sizes {
 object Motion {
     const val fastMs = 150L
     const val stateMs = 250L
-    const val springMs = 350L
 }
 
 // The theme passes the bundled faces.

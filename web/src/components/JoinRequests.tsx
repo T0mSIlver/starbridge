@@ -39,7 +39,7 @@ function Ask({ ask, onClose }: { ask: JoinAsk; onClose: (done: PairOutcome) => v
   };
 
   return (
-    <article className={p.panel} data-testid="join-request" aria-label="Join request">
+    <article className={`m-appear ${p.panel}`} data-testid="join-request" aria-label="Join request">
       <div className={`t-meta ${p.meta}`}>
         <Icon name="devices" size={16} />
         <span>{ask.name}</span>

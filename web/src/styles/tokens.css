@@ -159,7 +159,7 @@
   --size-lead: 600px;
   --t-fast: 150ms;
   --t-state: 250ms;
-  --t-spring: 350ms;
+  --ease: cubic-bezier(0.05, 0.7, 0.1, 1);
 }
 
 @media (prefers-color-scheme: light) {
