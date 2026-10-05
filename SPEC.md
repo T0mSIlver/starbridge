@@ -597,8 +597,10 @@ How it generalizes is open.
   go-ahead. Only the documented install command assumes a public tap; the workflow pushes over
   SSH with its deploy key either way. Going public flips: (1) the tap, so `brew install
   T0mSIlver/starbridge/starbridge` clones it without credentials; (2) the main repo, since the
-  formula, `install.sh`, `starbridge update` and the landing page's APK link all download from
-  its GitHub Releases, which need no change once they are public.
+  formula, `install.sh`, `starbridge update` and the landing page's APK link (#107) all download
+  from its GitHub Releases, and setup's plugin step (`claude plugin marketplace add
+  T0mSIlver/starbridge`) and `starbridge update`'s plugin refresh clone the repo itself. None of
+  them needs a change once it is public.
 
 ## Encryption, with existing libraries
 
