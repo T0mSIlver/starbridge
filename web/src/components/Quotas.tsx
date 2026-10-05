@@ -1,28 +1,39 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect } from "react";
 import { relative } from "@/lib/format";
+import { arrange, type QuotaSettings } from "@/lib/quotaSettings";
 import { useApp } from "./AppProvider";
 import { QuotaCard } from "./QuotaCard";
 import ui from "./ui.module.css";
 
-const POLL_MS = 60_000;
+/** Turns on one provider's notifications, asking the browser's permission first. */
+export async function notifyProvider(
+  provider: string,
+  s: QuotaSettings,
+  set: (s: QuotaSettings) => void,
+): Promise<void> {
+  if (typeof Notification !== "undefined" && Notification.permission === "default")
+    await Notification.requestPermission();
+  set({ ...s, notify: [...new Set([...s.notify, provider])] });
+}
 
-// Windows with an alert first, then the order the uploader sent.
 export function Quotas({ gridClass }: { gridClass: string }) {
-  const { quotas, refreshQuotas } = useApp();
+  const { quotas, refreshQuotas, quotaSettings: settings, setQuotaSettings } = useApp();
   useEffect(() => {
     refreshQuotas().catch(() => {});
-    const timer = setInterval(() => refreshQuotas().catch(() => {}), POLL_MS);
-    return () => clearInterval(timer);
   }, [refreshQuotas]);
 
-  const sorted = [...(quotas?.cards ?? [])].sort((a, b) => Number(!!b.alert) - Number(!!a.alert));
+  const cards = arrange(quotas?.cards ?? [], settings);
   return (
     <>
       <header className={ui.head}>
         <h1 className="t-title">Quotas</h1>
-        {quotas?.takenAt && <span className="t-small">Updated {relative(quotas.takenAt)}</span>}
+        <span className="t-small">
+          {quotas?.takenAt && <>Updated {relative(quotas.takenAt)} · </>}
+          <Link href="/quotas/settings">Settings</Link>
+        </span>
       </header>
       {quotas?.rejected.length ? (
         <p className={ui.error} role="status">
@@ -36,16 +47,28 @@ export function Quotas({ gridClass }: { gridClass: string }) {
       ))}
       {quotas === undefined ? (
         <p className={ui.empty}>Loading…</p>
-      ) : sorted.length === 0 ? (
+      ) : cards.length === 0 && quotas.cards.length > 0 ? (
+        <p className={ui.empty}>
+          Every provider is hidden. <Link href="/quotas/settings">Show them in Settings</Link>.
+        </p>
+      ) : cards.length === 0 ? (
         <p className={ui.empty}>
           No quota snapshot yet. Run <code className="t-code">starbridge quota push</code> on a
           paired machine.
         </p>
       ) : (
         <ul className={`${ui.list} ${gridClass}`}>
-          {sorted.map((q) => (
+          {cards.map((q) => (
             <li key={`${q.machine ?? ""}/${q.provider}/${q.window.id}`}>
-              <QuotaCard q={q} />
+              <QuotaCard
+                q={q}
+                settings={settings}
+                onNotify={
+                  settings.notify.includes(q.provider)
+                    ? undefined
+                    : () => notifyProvider(q.provider, settings, setQuotaSettings)
+                }
+              />
             </li>
           ))}
         </ul>
