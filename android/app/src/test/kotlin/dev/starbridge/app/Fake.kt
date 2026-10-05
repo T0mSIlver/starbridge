@@ -239,8 +239,5 @@ class Fake(private val now: Instant) {
 
     val push = PushSetting("fcm", fcmAvailable = true, distributors = emptyList(), registered = true)
 
-    val recoveryWords = listOf(
-        "orbit", "lantern", "cobalt", "meadow", "quartz", "harbor",
-        "velvet", "ember", "signal", "tundra", "falcon", "pebble",
-    )
+    val recoveryKey = "7KQ2-M9XD-4TPV-HB3N-R8CE-WY6F-J2QA"
 }

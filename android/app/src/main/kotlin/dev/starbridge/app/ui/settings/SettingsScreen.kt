@@ -209,7 +209,7 @@ fun SettingsScreen(
     if (signingOut) {
         Confirm(
             title = "Sign out?",
-            text = "This phone forgets its keys and leaves your devices. If it is your only device, you need the recovery words to set up another.",
+            text = "This phone forgets its keys and leaves your devices. If it is your only device, you need the recovery key to set up another.",
             action = "Sign out",
             onConfirm = { actions.signOut(); signingOut = false },
             onDismiss = { signingOut = false },
