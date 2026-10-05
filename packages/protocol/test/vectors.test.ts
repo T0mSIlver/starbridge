@@ -2,12 +2,11 @@
 import { beforeAll, describe, expect, test } from "bun:test";
 import { buildVectors, render } from "../scripts/gen-vectors";
 import {
-  Answer,
   alertsFor,
+  BODY_SCHEMAS,
   bindMessage,
   claimHash,
   computePace,
-  Decision,
   formatPairingCode,
   fromB64,
   open,
@@ -153,10 +152,9 @@ describe("pace.json", () => {
 
 describe("schemas.json", () => {
   const v = V.schemas;
-  for (const [kind, schema] of [
-    ["decision", Decision],
-    ["answer", Answer],
-  ] as const) {
+  const kinds = ["decision", "answer", "permission", "permission-answer", "settled"] as const;
+  for (const kind of kinds) {
+    const schema = BODY_SCHEMAS[kind];
     for (const c of v[kind]) {
       test(`${kind}: ${c.name}`, () => {
         expect(schema.safeParse(c.body).success).toBe(c.valid);

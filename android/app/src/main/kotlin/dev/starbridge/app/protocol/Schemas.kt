@@ -95,8 +95,24 @@ data class DirectoryEntry(
 
 // --- Signed and sealed envelopes ---------------------------------------------
 
-val KINDS = setOf("directory", "decision", "answer", "quota")
-val ITEM_KINDS = setOf("decision", "answer", "quota")
+/** ITEM_KINDS in schemas.ts: the role that signs each sealed kind. */
+val SIGNER_ROLE = mapOf(
+    "decision" to "machine",
+    "answer" to "device",
+    "quota" to "machine",
+    "permission" to "machine",
+    "permission-answer" to "device",
+    "settled" to "machine",
+)
+val ITEM_KINDS = SIGNER_ROLE.keys
+val KINDS = setOf("directory") + ITEM_KINDS
+
+/** A sealed item's body: its id, the item its `re` hint names, and the members it is sealed to. */
+interface ItemBody {
+    val id: String
+    val re: String? get() = null
+    val recipients: List<String>
+}
 
 /** `body` is the JSON text exactly as signed; verifiers check the signature before parsing it. */
 @Serializable
@@ -161,18 +177,34 @@ private val LINK_URL_RE = Regex("^[\\x21-\\x7e]+$")
 data class SessionLink(val kind: String, val url: String)
 
 @Serializable
-data class DecisionSource(
+data class Source(
     val machine: String,
     val project: String,
     val session: String,
     val sessionTitle: String? = null,
     val links: List<SessionLink>? = null,
-)
+) {
+    fun check() {
+        len(machine, 1, 100, "source.machine")
+        len(project, 0, 200, "source.project")
+        len(session, 0, 200, "source.session")
+        sessionTitle?.let { len(it, 0, 200, "source.sessionTitle") }
+        links?.let { links ->
+            schema(links.size <= 3, "source.links")
+            for (l in links) {
+                val prefix = SESSION_LINK_PREFIX[l.kind]
+                schema(prefix != null, "source.links.kind")
+                schema(l.url.length <= 2048 && LINK_URL_RE.matches(l.url), "source.links.url")
+                schema(l.url.startsWith(prefix!!), "url does not match its kind")
+            }
+        }
+    }
+}
 
 @Serializable
 data class Decision(
     val v: Int,
-    val id: String,
+    override val id: String,
     val to: List<String>,
     val createdAt: String,
     val question: String,
@@ -180,8 +212,10 @@ data class Decision(
     val options: List<String>,
     val recommended: String? = null,
     @SerialName("default") val fallback: DecisionDefault,
-    val source: DecisionSource,
-) {
+    val source: Source,
+) : ItemBody {
+    override val recipients get() = to
+
     fun check() {
         schema(v == 1, "v")
         id(id, "id")
@@ -194,19 +228,7 @@ data class Decision(
         options.forEach { len(it, 1, 100, "option") }
         len(fallback.action, 1, 300, "default.action")
         fallback.at?.let { time(it, "default.at") }
-        len(source.machine, 1, 100, "source.machine")
-        len(source.project, 0, 200, "source.project")
-        len(source.session, 0, 200, "source.session")
-        source.sessionTitle?.let { len(it, 0, 200, "source.sessionTitle") }
-        source.links?.let { links ->
-            schema(links.size <= 3, "source.links")
-            for (l in links) {
-                val prefix = SESSION_LINK_PREFIX[l.kind]
-                schema(prefix != null, "source.links.kind")
-                schema(l.url.length <= 2048 && LINK_URL_RE.matches(l.url), "source.links.url")
-                schema(l.url.startsWith(prefix!!), "url does not match its kind")
-            }
-        }
+        source.check()
         schema(options.size != 1, "options: 0 or 2 to 4")
         schema(options.toSet().size == options.size, "options must be distinct")
         if (options.isNotEmpty()) schema(recommended != null && recommended in options, "recommended must be one of the options")
@@ -217,13 +239,16 @@ data class Decision(
 @Serializable
 data class Answer(
     val v: Int,
-    val id: String,
+    override val id: String,
     val decisionId: String,
     val to: String,
     val answeredAt: String,
     val choice: String? = null,
     val text: String? = null,
-) {
+) : ItemBody {
+    override val re get() = decisionId
+    override val recipients get() = listOf(to)
+
     fun check() {
         schema(v == 1, "v")
         id(id, "id")
@@ -233,6 +258,127 @@ data class Answer(
         choice?.let { len(it, 0, 100, "choice") }
         text?.let { len(it, 0, 4000, "text") }
         schema((choice == null) != (text == null), "exactly one of choice and text")
+    }
+}
+
+// --- Permission prompts -----------------------------------------------------
+
+/** PERMISSION_TTL_MS in schemas.ts. */
+const val PERMISSION_TTL_MS = 10 * 60 * 1000L
+
+private fun instantOf(s: String): java.time.Instant {
+    // TIME_RE allows a missing seconds field and an offset without a colon; java.time does not.
+    val m = Regex("""^(.{16})(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}):?(\d{2})?$""").matchEntire(s)
+        ?: throw ProtocolException("bad-schema", "time")
+    val (head, secs, _, zone, zoneMin) = m.destructured
+    val offset = if (zone == "Z") "Z" else "$zone:$zoneMin"
+    return try {
+        java.time.OffsetDateTime.parse(head + secs.ifEmpty { ":00" } + offset).toInstant()
+    } catch (e: java.time.format.DateTimeParseException) {
+        throw ProtocolException("bad-schema", "time")
+    }
+}
+
+@Serializable
+data class PermissionSuggestion(val label: String, val rule: String, val scope: String)
+
+@Serializable
+data class Permission(
+    val v: Int,
+    override val id: String,
+    val to: List<String>,
+    val createdAt: String,
+    val agent: String,
+    val tool: String,
+    val summary: String,
+    val description: String? = null,
+    val input: String,
+    val inputHash: String,
+    val suggestions: List<PermissionSuggestion>,
+    val expiresAt: String,
+    val source: Source,
+) : ItemBody {
+    override val recipients get() = to
+
+    fun check() {
+        schema(v == 1, "v")
+        id(id, "id")
+        schema(to.isNotEmpty(), "to")
+        to.forEach { id(it, "to") }
+        time(createdAt, "createdAt")
+        schema(agent in setOf("claude-code", "codex"), "agent")
+        len(tool, 1, 100, "tool")
+        len(summary, 1, 200, "summary")
+        description?.let { len(it, 0, 500, "description") }
+        len(input, 0, 8000, "input")
+        b64(inputHash, "inputHash")
+        schema(suggestions.size <= 2, "suggestions")
+        for (x in suggestions) {
+            len(x.label, 1, 100, "suggestion label")
+            len(x.rule, 1, 500, "suggestion rule")
+            schema(x.scope == "session" || x.scope == "project", "suggestion scope")
+        }
+        time(expiresAt, "expiresAt")
+        source.check()
+        val ttl = instantOf(expiresAt).toEpochMilli() - instantOf(createdAt).toEpochMilli()
+        schema(ttl > 0 && ttl <= PERMISSION_TTL_MS, "expiresAt: after createdAt, at most 10 minutes")
+        schema(suggestions.map { it.scope }.toSet().size == suggestions.size, "one suggestion per scope")
+    }
+}
+
+@Serializable
+data class PermissionAnswer(
+    val v: Int,
+    override val id: String,
+    val permissionId: String,
+    val to: String,
+    val answeredAt: String,
+    val behavior: String,
+    val scope: String,
+    val inputHash: String,
+    val message: String? = null,
+) : ItemBody {
+    override val re get() = permissionId
+    override val recipients get() = listOf(to)
+
+    fun check() {
+        schema(v == 1, "v")
+        id(id, "id")
+        id(permissionId, "permissionId")
+        id(to, "to")
+        time(answeredAt, "answeredAt")
+        schema(behavior == "allow" || behavior == "deny", "behavior")
+        schema(scope in setOf("once", "session", "project"), "scope")
+        b64(inputHash, "inputHash")
+        message?.let { len(it, 0, 500, "message") }
+        if (behavior == "deny") schema(scope == "once", "a deny is for this call only")
+        else schema(message == null, "message is for a deny")
+    }
+}
+
+@Serializable
+data class Settled(
+    val v: Int,
+    override val id: String,
+    val itemId: String,
+    val to: List<String>,
+    val at: String,
+    val outcome: String? = null,
+    val device: String? = null,
+) : ItemBody {
+    override val re get() = itemId
+    override val recipients get() = to
+
+    fun check() {
+        schema(v == 1, "v")
+        id(id, "id")
+        id(itemId, "itemId")
+        schema(to.isNotEmpty(), "to")
+        to.forEach { id(it, "to") }
+        outcome?.let { schema(it in setOf("keyboard", "timeout", "device", "elsewhere", "withdrawn"), "outcome") }
+        device?.let { id(it, "device") }
+        time(at, "at")
+        schema((outcome == "device") == (device != null), "device is set exactly when outcome is device")
     }
 }
 
@@ -279,12 +425,14 @@ data class QuotaProvider(
 @Serializable
 data class QuotaSnapshot(
     val v: Int,
-    val id: String,
+    override val id: String,
     val to: List<String>,
     val takenAt: String,
     val providers: List<QuotaProvider>,
     val alerts: List<QuotaAlert>,
-) {
+) : ItemBody {
+    override val recipients get() = to
+
     fun check() {
         schema(v == 1, "v")
         id(id, "id")

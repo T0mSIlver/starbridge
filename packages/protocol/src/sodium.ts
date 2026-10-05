@@ -52,7 +52,10 @@ export type ErrorCode =
   | "duplicate-member"
   | "unknown-member"
   | "wrong-account"
-  | "rollback";
+  | "rollback"
+  | "wrong-input"
+  | "scope-not-offered"
+  | "expired";
 
 export class ProtocolError extends Error {
   constructor(

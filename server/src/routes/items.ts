@@ -1,5 +1,5 @@
 import type { Database } from "bun:sqlite";
-import { SealedItem } from "@starbridge/protocol";
+import { ITEM_KINDS, ItemKind, PERMISSION_TTL_MS, SealedItem } from "@starbridge/protocol";
 import { Hono } from "hono";
 import { fail, memberOf, recheck, requireCaller } from "../auth";
 import { nextSeq } from "../db";
@@ -9,6 +9,24 @@ import { rateLimit } from "../limits";
 import { activeMember } from "./directory";
 
 const PAGE = 100;
+
+type KindRule = {
+  signer: "device" | "machine";
+  re?: { field: string; kinds: readonly ItemKind[] };
+};
+
+/** How long after it arrives an item can still be answered; unlisted kinds have no limit. */
+const ANSWERABLE_FOR: Partial<Record<ItemKind, number>> = { permission: PERMISSION_TTL_MS };
+
+/** Kinds a device answers: what device-signed kinds refer to. */
+const ANSWERABLE = ItemKind.options.flatMap((k) => {
+  const rule: KindRule = ITEM_KINDS[k];
+  return rule.signer === "device" && rule.re ? [...rule.re.kinds] : [];
+});
+/** Kinds devices list: what machines sign. */
+const DEVICE_KINDS = ItemKind.options.filter((k) => ITEM_KINDS[k].signer === "machine");
+/** Kinds a machine's inbox (`/answers`) holds: what devices sign. */
+const MACHINE_KINDS = ItemKind.options.filter((k) => ITEM_KINDS[k].signer === "device");
 
 interface Row {
   seq: number;
@@ -27,7 +45,7 @@ export interface Stored {
   item: SealedItem;
   cursor: string;
   receivedAt: string;
-  /** Decisions only: when a device answered it. */
+  /** Decisions and permissions: when a device answered it, or the machine settled it. */
   answeredAt?: string;
 }
 
@@ -62,13 +80,30 @@ function list(
   member: string,
   kinds: string[],
   from: number,
+  openOnly = false,
 ): Stored[] {
+  // Open: unanswered items of answerable kinds, before their answer window closes.
+  const open = openOnly
+    ? `AND i.answered_at IS NULL AND i.kind IN (SELECT value FROM json_each(?))
+       AND NOT EXISTS (SELECT 1 FROM json_each(?) t
+                       WHERE t.key = i.kind AND i.received_at < t.value)`
+    : "";
+  const now = Date.now();
+  const cutoffs = Object.fromEntries(
+    Object.entries(ANSWERABLE_FOR).map(([k, ms]) => [k, new Date(now - ms).toISOString()]),
+  );
   const rows = db
     .query(
       `${SELECT} WHERE i.account_id = ? AND b.to_id = ? AND i.seq > ?
-       AND i.kind IN (SELECT value FROM json_each(?)) ORDER BY i.seq LIMIT ${PAGE}`,
+       AND i.kind IN (SELECT value FROM json_each(?)) ${open} ORDER BY i.seq LIMIT ${PAGE}`,
     )
-    .all(account, member, from, JSON.stringify(kinds)) as Row[];
+    .all(
+      account,
+      member,
+      from,
+      JSON.stringify(kinds),
+      ...(openOnly ? [JSON.stringify(ANSWERABLE), JSON.stringify(cutoffs)] : []),
+    ) as Row[];
   return rows.map(stored);
 }
 
@@ -99,53 +134,79 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
   const caller = c.var.caller;
   const me = memberOf(caller);
   const { db, config } = c.var;
-  const signer = item.kind === "answer" ? "device" : "machine";
-  if (caller.role !== signer) fail(403, "forbidden", `only a ${signer} posts ${item.kind} items`);
+  const rule: KindRule = ITEM_KINDS[item.kind];
+  const fromDevice = rule.signer === "device";
+  if (caller.role !== rule.signer)
+    fail(403, "forbidden", `only a ${rule.signer} posts ${item.kind} items`);
   if (item.from !== me) fail(403, "forbidden", "from must be the caller");
   const to = item.boxes.map((b) => b.to);
   if (new Set(to).size !== to.length) fail(400, "bad-schema", "one box per recipient");
   const size = item.boxes.reduce((n, b) => n + b.box.length, 0);
-  const most = item.kind === "answer" ? limits.answerBytes : limits.itemBytes;
+  const most = fromDevice ? limits.answerBytes : limits.itemBytes;
   if (size > most) fail(413, "too-large", `a ${item.kind}'s boxes hold at most ${most} bytes`);
 
-  let decisionDevices: string[] = [];
+  // Devices the referred item was sealed to, told once a device answers it.
+  let answeredDevices: string[] = [];
   const seq = db.transaction(() => {
     recheck(c);
-    if (item.kind === "answer") {
+    const now = new Date();
+    if (fromDevice) {
       const machine = to[0] as string;
       if (to.length !== 1 || !activeMember(db, caller.account, machine, "machine"))
-        fail(400, "unknown-recipient", "an answer goes to the one machine that asked");
-      if (!item.re) fail(400, "bad-schema", "an answer needs re");
-      const d = db
-        .query(
-          "SELECT from_id, answered_at FROM items WHERE account_id = ? AND id = ? AND kind = 'decision'",
-        )
-        .get(caller.account, item.re) as { from_id: string; answered_at: string | null } | null;
-      const mine = db
-        .query("SELECT 1 FROM boxes WHERE account_id = ? AND item_id = ? AND to_id = ?")
-        .get(caller.account, item.re, me);
-      if (!d || d.from_id !== machine || !mine)
-        fail(404, "not-found", "no such decision for this device");
-      if (d.answered_at) fail(409, "already-answered");
-      decisionDevices = (
-        db
-          .query("SELECT to_id FROM boxes WHERE account_id = ? AND item_id = ?")
-          .all(caller.account, item.re) as {
-          to_id: string;
-        }[]
-      ).map((r) => r.to_id);
+        fail(400, "unknown-recipient", `a ${item.kind} goes to the one machine that asked`);
     } else {
-      if (item.re !== undefined) fail(400, "bad-schema", `re is for answers, not ${item.kind}`);
       for (const id of to)
         if (!activeMember(db, caller.account, id, "device"))
           fail(400, "unknown-recipient", `${id} is not an active device`);
+    }
+    if (!rule.re) {
+      if (item.re !== undefined) fail(400, "bad-schema", `${item.kind} items carry no re`);
+    } else {
+      if (!item.re) fail(400, "bad-schema", `a ${item.kind} needs re`);
+      const target = db
+        .query(
+          `SELECT kind, from_id, received_at, answered_at FROM items WHERE account_id = ? AND id = ?
+           AND kind IN (SELECT value FROM json_each(?))`,
+        )
+        .get(caller.account, item.re, JSON.stringify(rule.re.kinds)) as {
+        kind: ItemKind;
+        from_id: string;
+        received_at: string;
+        answered_at: string | null;
+      } | null;
+      if (fromDevice) {
+        const mine = db
+          .query("SELECT 1 FROM boxes WHERE account_id = ? AND item_id = ? AND to_id = ?")
+          .get(caller.account, item.re, me);
+        if (!target || target.from_id !== to[0] || !mine)
+          fail(404, "not-found", `no such ${rule.re.kinds.join(" or ")} for this device`);
+        if (target.answered_at) fail(409, "already-answered");
+        const ttl = ANSWERABLE_FOR[target.kind];
+        if (ttl !== undefined && now.getTime() > Date.parse(target.received_at) + ttl)
+          fail(409, "expired", `a ${target.kind} can be answered for ${ttl / 60_000} minutes`);
+        answeredDevices = (
+          db
+            .query("SELECT to_id FROM boxes WHERE account_id = ? AND item_id = ?")
+            .all(caller.account, item.re) as { to_id: string }[]
+        ).map((r) => r.to_id);
+      } else {
+        // A machine's notice that one of its own items is over (a settled prompt, a withdrawn
+        // decision): one each.
+        if (!target || target.from_id !== me)
+          fail(404, "not-found", `no such ${rule.re.kinds.join(" or ")} from this machine`);
+        if (
+          db
+            .query("SELECT 1 FROM items WHERE account_id = ? AND kind = ? AND re = ?")
+            .get(caller.account, item.kind, item.re)
+        )
+          fail(409, "already-settled");
+      }
     }
     if (
       db.query("SELECT 1 FROM items WHERE account_id = ? AND id = ?").get(caller.account, item.id)
     )
       fail(409, "duplicate-id");
 
-    const now = new Date().toISOString();
     if (item.kind === "quota") {
       // Only the latest snapshot from each machine matters.
       db.query("DELETE FROM items WHERE account_id = ? AND kind = 'quota' AND from_id = ?").run(
@@ -153,7 +214,7 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
         me,
       );
     }
-    // Decisions and quotas leave the last answerReserve bytes to answers, so a full account
+    // Machines' items leave the last answerReserve bytes to devices' answers, so a full account
     // can still answer, and answering lets its decisions expire.
     const held = db
       .query(
@@ -163,29 +224,30 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
       .get(caller.account) as { decisions: number; bytes: number };
     if (item.kind === "decision" && held.decisions >= limits.decisions)
       fail(409, "too-many-items", `an account holds at most ${limits.decisions} decisions`);
-    const room = limits.storedBytes - (item.kind === "answer" ? 0 : limits.answerReserve);
+    const room = limits.storedBytes - (fromDevice ? 0 : limits.answerReserve);
     if (held.bytes + size > room)
       fail(409, "too-many-items", `an account stores at most ${limits.storedBytes} bytes`);
+    const iso = now.toISOString();
     const seq = nextSeq(db);
     db.query(
       "INSERT INTO items (seq, account_id, id, kind, from_id, re, received_at, size) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-    ).run(seq, caller.account, item.id, item.kind, me, item.re ?? null, now, size);
+    ).run(seq, caller.account, item.id, item.kind, me, item.re ?? null, iso, size);
     const box = db.query("INSERT INTO boxes (account_id, item_id, to_id, box) VALUES (?, ?, ?, ?)");
     for (const b of item.boxes) box.run(caller.account, item.id, b.to, b.box);
-    if (item.kind === "answer")
-      db.query("UPDATE items SET answered_at = ?, seq = ? WHERE account_id = ? AND id = ?").run(
-        now,
-        nextSeq(db),
-        caller.account,
-        item.re ?? "",
-      );
+    // Marks the referred item answered and moves it past every cursor, so devices listing after
+    // their cursor see it again, answered. A settled notice after a device's answer changes
+    // nothing: the prompt was already answered.
+    if (item.re !== undefined)
+      db.query(
+        "UPDATE items SET answered_at = ?, seq = ? WHERE account_id = ? AND id = ? AND answered_at IS NULL",
+      ).run(iso, nextSeq(db), caller.account, item.re);
     return seq;
   })();
 
-  if (item.kind === "answer") {
+  if (fromDevice) {
     c.var.answers.wake(`${caller.account}/${to[0]}`);
     const payload = JSON.stringify({ v: 1, kind: "answered", id: item.re });
-    c.var.push.notify(caller.account, decisionDevices, () => payload);
+    c.var.push.notify(caller.account, answeredDevices, () => payload);
   } else {
     // Browsers expect each Web Push to show a notification and drop subscriptions that keep
     // showing none, so quota snapshots, which show none, skip Web Push; pages fetch GET /quota.
@@ -200,17 +262,15 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
 });
 
 itemRoutes.get("/items", requireCaller("paired-device"), (c) => {
-  const kind = c.req.query("kind");
-  if (kind !== undefined && !["decision", "quota"].includes(kind))
-    fail(400, "bad-request", "kind is decision or quota");
+  const raw = c.req.query("kind");
+  const kinds = raw === undefined ? DEVICE_KINDS : raw.split(",");
+  if (kinds.some((k) => !(DEVICE_KINDS as string[]).includes(k)))
+    fail(400, "bad-request", `kind is a comma-separated list of ${DEVICE_KINDS.join(", ")}`);
   const from = after(c.req.query("after"));
   const caller = c.var.caller;
-  return c.json(
-    page(
-      list(c.var.db, caller.account, memberOf(caller), kind ? [kind] : ["decision", "quota"], from),
-      from,
-    ),
-  );
+  const open = c.req.query("open") === "1";
+  const items = list(c.var.db, caller.account, memberOf(caller), kinds, from, open);
+  return c.json(page(items, from));
 });
 
 itemRoutes.get("/items/:id", requireCaller("paired"), (c) => {
@@ -240,7 +300,7 @@ itemRoutes.get("/answers", requireCaller("machine"), async (c) => {
   const caller = c.var.caller;
   const me = memberOf(caller);
   const from = after(c.req.query("after"));
-  const fetch = () => list(c.var.db, caller.account, me, ["answer"], from);
+  const fetch = () => list(c.var.db, caller.account, me, MACHINE_KINDS, from);
   let items = fetch();
   const seconds = waitSeconds(c);
   if (items.length === 0 && seconds > 0) {

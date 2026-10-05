@@ -4,8 +4,11 @@ import type { KeyPair } from "./keys";
 import {
   BODY_SCHEMAS,
   type BodyOf,
+  ITEM_KINDS,
+  type ItemKind,
   type Kind,
   type Member,
+  reOf,
   SealedItem,
   SignedEnvelope,
 } from "./schemas";
@@ -81,11 +84,6 @@ export function parseWith<T extends z.ZodType>(schema: T, value: unknown): z.inf
 
 // --- Sealed items ------------------------------------------------------------
 
-type ItemKind = SealedItem["kind"];
-
-/** Which role may sign each kind: machines ask and report quotas, devices answer. */
-const SIGNER_ROLE = { decision: "machine", quota: "machine", answer: "device" } as const;
-
 /**
  * Signs `body` and seals the signed envelope to each recipient (sign, then seal).
  * The body's `to` must name exactly the recipients, so a recipient cannot re-seal it to
@@ -139,7 +137,7 @@ function sealEnvelope<K extends ItemKind>(
     kind,
     id: body.id,
     from: env.signer,
-    ...("decisionId" in body ? { re: body.decisionId } : {}),
+    ...(reOf(kind, body) !== undefined ? { re: reOf(kind, body) } : {}),
     boxes: recipients.map((r) => ({
       to: r.id,
       box: toB64(sodium.crypto_box_seal(plain, fromB64(r.boxPk))),
@@ -230,13 +228,13 @@ function check<K extends ItemKind>(
   const entry = directory.members.get(env.signer);
   if (!entry) throw new ProtocolError("unknown-signer", env.signer);
   if (!entry.active) throw new ProtocolError("revoked-signer", env.signer);
-  if (entry.member.role !== SIGNER_ROLE[item.kind])
+  if (entry.member.role !== ITEM_KINDS[item.kind].signer)
     throw new ProtocolError("signer-not-allowed", `${entry.member.role} cannot sign ${item.kind}`);
   verify(env, entry.member.signPk);
   const body = parseBody(item.kind, env.body) as BodyOf<K>;
   if (body.id !== item.id) throw new ProtocolError("id-mismatch", "body id is not the item id");
-  const re = "decisionId" in body ? body.decisionId : undefined;
-  if (item.re !== re) throw new ProtocolError("id-mismatch", "re is not the answered decision");
+  if (item.re !== reOf(item.kind, body))
+    throw new ProtocolError("id-mismatch", "re is not the item the body refers to");
   const named = typeof body.to === "string" ? [body.to] : body.to;
   if (!named.includes(me)) throw new ProtocolError("wrong-recipient", "body does not name me");
   return { signer: entry.member, body };

@@ -14,8 +14,19 @@ code cannot show: the HTTP API and the flows.
 - **Sealed item** `{v, kind, id, from, re?, boxes: [{to, box}]}`: a signed envelope sealed with
   `crypto_box_seal` to each recipient. `kind`, `id`, `from`, `re` and `to` are routing hints for
   the server; clients reject an item whose hints disagree with the signed body.
-- Decisions and quota snapshots are signed by a machine and sealed to every active device.
-  Answers are signed by a device and sealed to the asking machine.
+- Each sealed kind has one signing role (`ITEM_KINDS` in `packages/protocol/src/schemas.ts`).
+  A machine's items are sealed to every active device; a device's items are sealed to the one
+  machine they answer. A kind that refers to an earlier item names it in a body field, which
+  `re` repeats:
+
+  | Kind | Signed by | Refers to (`re`) |
+  |---|---|---|
+  | `decision` | machine | |
+  | `answer` | device | `decisionId`, a decision |
+  | `quota` | machine | |
+  | `permission` | machine | |
+  | `permission-answer` | device | `permissionId`, a permission |
+  | `settled` | machine | `itemId`, a permission or a decision the same machine posted |
 
 ## Directory
 
@@ -109,31 +120,37 @@ never rely on that check.
 
 | Route | Who | What |
 |---|---|---|
-| `POST /items` | machine (decision, quota), device (answer) | store a sealed item and push it to each recipient; 409 on a reused id; 409 `too-many-items` and 413 `too-large` past the caps in Limits |
-| `GET /items?kind=<kind>&after=<cursor>` | device | items with only the caller's box, and `cursor` |
+| `POST /items` | the kind's signing role | store a sealed item and push it to each recipient; 409 on a reused id; 409 `too-many-items` and 413 `too-large` past the caps in Limits |
+| `GET /items?kind=<kinds>&after=<cursor>&open=1` | device | items with only the caller's box, and `cursor`; `kinds` is a comma-separated list of machine-signed kinds, all of them when left out; `open=1` keeps only unanswered decisions and permissions still in their answer window |
 | `GET /items/:id` | device, machine | one item, the caller's box only; push points here when the item exceeds 4 KB |
 | `GET /quota` | device | the latest quota item from each machine |
 
 Item ids are random, chosen by the sender. Cursors are opaque strings; without `after`, a list
-starts at the first item. An answer's `re` marks its decision answered, so every
-device moves it out of the open inbox.
+starts at the first item. An item with `re` marks the item it names answered, so every device
+moves it out of the open inbox: an answer its decision, a permission answer its permission, a
+settled notice the permission or decision it closes.
 
 Lists return `{items: [{item, cursor, receivedAt, answeredAt?}], cursor}`, 100 at a time, where
-`item` holds only the caller's box and `answeredAt` is set on answered decisions. An answer moves
-its decision past every cursor, so devices listing after their cursor see it again, answered.
+`item` holds only the caller's box and `answeredAt` is set on answered decisions and permissions.
+Marking an item answered moves it past every cursor, so devices listing after their cursor see it
+again, answered.
 The server keeps only the latest quota item from each machine, and drops old items as Limits says. Refusals: 403 when the caller's
 role may not post this kind or `from` is not the caller; 400 `unknown-recipient` when a box goes
-to anyone but active devices (decision, quota) or the asking machine (answer); 409
-`already-answered`.
+to anyone but active devices (machine-signed kinds) or the asking machine (device-signed kinds);
+404 when `re` names no such item, one sealed to another device, or one another machine posted;
+409 `already-answered` when the item `re` names is answered or settled, 409 `expired` for a
+permission answered more than 10 minutes after it arrived, 409 `already-settled` for a second
+settled notice.
 
 ### Answers for machines (long-poll)
 
 `GET /answers?after=<cursor>&wait=<seconds>` (machine). The server replies at once with
-`{items, cursor}` when answers addressed to the machine came after `cursor`, else holds the request
+`{items, cursor}` when device-signed items (answers and permission answers) addressed to the
+machine came after `cursor`, else holds the request
 until one arrives or `wait` (at most 300) passes and replies `{items: [], cursor}`. The Claude Code
 mod keeps one such request open and re-opens it on every reply; the CLI's `wait` does the same.
 A machine checks that an answer's `decisionId` is one it asked and its `choice` one of the
-decision's options.
+decision's options; for permission answers, see below.
 
 ### Push
 
@@ -146,12 +163,13 @@ decision's options.
 
 A push payload is JSON text: `{v, kind, id, from, re?, box?}` for a new item, with the device's
 own box when the payload stays within 3 KB, else without it and the device fetches
-`GET /items/:id`; `{v, kind: "answered", id}` to every device a decision was sealed to once it
-is answered. FCM gets it as data field `p`; Web Push and UnifiedPush encrypt it per RFC 8291.
+`GET /items/:id`; `{v, kind: "answered", id}` to every device a decision or permission was
+sealed to once a device answers it. A settled notice is pushed as a new item. FCM gets it as data field `p`; Web Push and UnifiedPush encrypt it per RFC 8291.
 
 Quota snapshots go to FCM and UnifiedPush only. Browsers expect every Web Push to show a
 notification and drop a subscription that keeps showing none (Firefox after 16), so the web page
-fetches `GET /quota` when it opens instead. Decisions and `answered` still go to Web Push.
+fetches `GET /quota` when it opens instead. Decisions, permissions, settled notices and
+`answered` still go to Web Push.
 
 The server checks that a push URL's host resolves only to public addresses, then connects to the
 address it checked, with SNI and the certificate check still on the host name, so a DNS answer
@@ -173,7 +191,7 @@ code below. Per-address limits count an IPv6 client as its /64.
 |---|---|
 | `POST /items` | 120 a minute per account |
 | Stored decisions, open or answered | 10000 per account: 409 `too-many-items` |
-| Stored boxes | 128 MB per account, of which decisions and quotas may fill all but the last 8 MB: 409 `too-many-items`; 256 KB per decision or quota and 32 KB per answer: 413 `too-large` |
+| Stored boxes | 128 MB per account, of which machine-signed items may fill all but the last 8 MB: 409 `too-many-items`; 256 KB per machine-signed item and 32 KB per answer or permission answer: 413 `too-large` |
 | `POST /directory` | 30 an hour per account |
 | Directory entries, revocations included | 200 per account: 409 `directory-full`; 8 KB per entry: 413 `too-large` |
 | Sessions | 50 per account; signing in past that ends the oldest, unpaired ones first |
@@ -184,9 +202,59 @@ code below. Per-address limits count an IPv6 client as its /64.
 | `POST /push/subscriptions` | 30 a minute per account, on top of the subscription caps |
 
 Answers skip the decision count and may use the last 8 MB, so a full account can still answer. An hourly sweep drops answered
-decisions and their answers 7 days after the answer, unanswered decisions and quota snapshots 30
+decisions and their answers 7 days after the answer, permissions, permission answers and settled
+notices 7 days after they arrived, unanswered decisions and quota snapshots 30
 days after they arrived, quota snapshots of revoked machines, and expired sessions. Clients that
 want a longer history keep their own copy.
+
+## Permission prompts
+
+When a coding agent stops at a permission prompt, the machine's hook posts a `permission`; a
+device can answer it with a `permission-answer`, and the machine posts `settled` once the prompt
+is over, however it ended. The prompt stays open at the keyboard and in the Claude app, and the
+first answer wins.
+
+- `permission` `{v, id, to, createdAt, agent, tool, summary, description?, input, inputHash,
+  suggestions, expiresAt, source}`: `input` is the tool input as JSON text, redacted on the
+  machine (provider token patterns, PEM blocks, `*_KEY=` and `*_TOKEN=` values) and at most 8000
+  characters; `inputHash` is `hashInput` of the input before redaction (BLAKE2b-256); `expiresAt`
+  is at most 10 minutes after `createdAt`. Each of the at most 2 `suggestions`
+  `{label, rule, scope: "session" | "project"}` shows the exact rule a wider allow would add.
+- `permission-answer` `{v, id, permissionId, to, answeredAt, behavior: "allow" | "deny", scope:
+  "once" | "session" | "project", inputHash, message?}`: a deny is for this call only and may
+  carry a message to the agent; an allow carries none.
+- `settled` `{v, id, itemId, to, at, outcome?: "keyboard" | "timeout" | "device" | "elsewhere" |
+  "withdrawn", device?}` closes any item its machine posted, a permission or a decision. For a
+  permission, `keyboard` covers any answer outside Starbridge (terminal, Desktop, the Claude
+  app) and `device` names the device whose answer the machine applied. For a decision,
+  `elsewhere` means it was answered outside Starbridge and `withdrawn` that the agent no longer
+  needs it.
+
+### Security model
+
+Answering a permission from a phone is a trust decision, so:
+
+- **The answer binds to one call.** It is signed by a device key in the pinned directory and
+  names the permission id and repeats its `inputHash`. The machine accepts it only when
+  `checkPermissionAnswer` passes: the permission is one it asked and is still waiting, the
+  signer is an active device the permission was sealed to, the hash matches, the scope is
+  `once` or one the permission offered, and the prompt has not expired. So an answer cannot
+  approve a different command, and the server, which reads none of it, can neither forge nor
+  replay one. It is single use: the server refuses a second answer, and the machine forgets the
+  permission once it is settled. It dies with the prompt, at most 10 minutes; the server refuses
+  later answers with 409 `expired`.
+- **The machine refreshes the directory before it accepts an allow**, so a revoked device's
+  answers are refused as soon as the revocation is in the chain.
+- **The device chooses only a scope, never a rule.** The machine keeps the rule behind each
+  suggestion; "always" writes only Claude Code's local project settings
+  (`.claude/settings.local.json`), never user settings.
+- **Allow needs the phone's unlock on Android; deny never does**, since denying is always safe.
+  "Always" needs the app open and shows the exact rule.
+- **The input is redacted on the machine before sealing**, because it shows on lock screens and
+  in notification history.
+- **The hook never allows anything by itself.** When it errors, times out or loses the network,
+  it answers nothing and the agent's own dialog decides.
+- **Opt-in per machine.** Nothing is routed until `starbridge permissions enable`.
 
 ## Local agent API
 

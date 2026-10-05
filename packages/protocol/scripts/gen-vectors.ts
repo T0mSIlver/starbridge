@@ -14,6 +14,7 @@ import {
   entryHash,
   formatPairingCode,
   genesisEntry,
+  hashInput,
   type Member,
   type MemberKeys,
   memberKeysFromSeeds,
@@ -392,6 +393,52 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
     answeredAt: T(10, 3),
     choice: "Yes",
   };
+  const permissionInput = '{"command":"git push origin main","description":"Push the fix"}';
+  const permissionBody = {
+    v: 1 as const,
+    id: "perm_1",
+    to: ["phone", "phone2"],
+    createdAt: T(10),
+    agent: "claude-code" as const,
+    tool: "Bash",
+    summary: "git push origin main",
+    description: "Push the fix",
+    input: permissionInput,
+    inputHash: hashInput(permissionInput),
+    suggestions: [
+      {
+        label: "Allow git push for this session",
+        rule: "Bash(git push:*)",
+        scope: "session" as const,
+      },
+      {
+        label: "Always allow git push in localvoxtral",
+        rule: "Bash(git push:*)",
+        scope: "project" as const,
+      },
+    ],
+    expiresAt: T(10, 9),
+    source: { machine: "dev box", project: "localvoxtral", session: "s_42" },
+  };
+  const permissionAnswerBody = {
+    v: 1 as const,
+    id: "pans_1",
+    permissionId: "perm_1",
+    to: "devbox",
+    answeredAt: T(10, 1),
+    behavior: "allow" as const,
+    scope: "session" as const,
+    inputHash: permissionBody.inputHash,
+  };
+  const settledBody = {
+    v: 1 as const,
+    id: "set_1",
+    itemId: "perm_1",
+    to: ["phone", "phone2"],
+    outcome: "device" as const,
+    device: "phone",
+    at: T(10, 1),
+  };
   const now = new Date(T(12));
   const win = {
     id: "primary",
@@ -458,6 +505,7 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
     id,
     from: env.signer,
     ...(kind === "answer" ? { re: "dec_1" } : {}),
+    ...(kind === "permission-answer" || kind === "settled" ? { re: "perm_1" } : {}),
     boxes: to.map((m) => ({
       to: m.id,
       box: toB64(
@@ -498,6 +546,66 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
       item: seal("quota", quotaBody, signer(devbox), devices),
       recipient: "phone",
       expect: { body: quotaBody, signer: "devbox" },
+    },
+    {
+      name: "permission prompt",
+      item: seal("permission", permissionBody, signer(devbox), devices),
+      recipient: "phone",
+      expect: { body: permissionBody, signer: "devbox" },
+    },
+    {
+      name: "permission answer for the machine",
+      item: seal("permission-answer", permissionAnswerBody, signer(phone), [devbox.member]),
+      recipient: "devbox",
+      expect: { body: permissionAnswerBody, signer: "phone" },
+    },
+    {
+      name: "settled notice",
+      item: seal("settled", settledBody, signer(devbox), devices),
+      recipient: "phone2",
+      expect: { body: settledBody, signer: "devbox" },
+    },
+    {
+      name: "permission answer signed by a machine",
+      item: rawSeal(
+        "permission-answer",
+        "pans_1",
+        sign("permission-answer", permissionAnswerBody, "devbox", devbox.keys.sign.privateKey),
+        [devbox.member],
+      ),
+      recipient: "devbox",
+      expect: { error: "signer-not-allowed" },
+    },
+    {
+      name: "permission prompt signed by a device",
+      item: rawSeal(
+        "permission",
+        "perm_1",
+        sign("permission", permissionBody, "phone2", phone2.keys.sign.privateKey),
+        devices,
+      ),
+      recipient: "phone",
+      expect: { error: "signer-not-allowed" },
+    },
+    {
+      name: "permission answer whose re names another permission",
+      item: {
+        ...seal("permission-answer", permissionAnswerBody, signer(phone), [devbox.member]),
+        re: "perm_9",
+      },
+      recipient: "devbox",
+      expect: { error: "id-mismatch" },
+    },
+    {
+      name: "decision answer inside a permission answer item",
+      item: rawSeal(
+        "permission-answer",
+        "ans_1",
+        sign("answer", answerBody, "phone", phone.keys.sign.privateKey),
+        [devbox.member],
+      ),
+      recipient: "devbox",
+      expect: { error: "wrong-kind" },
     },
     {
       name: "no box for this member",
@@ -831,6 +939,123 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
       },
       { name: "both", body: { ...answerBody, text: "and text" }, valid: false },
       { name: "neither", body: { ...answerBody, choice: undefined }, valid: false },
+    ],
+    permission: [
+      { name: "valid", body: permissionBody, valid: true },
+      {
+        name: "no suggestions, no description",
+        body: { ...permissionBody, suggestions: [], description: undefined },
+        valid: true,
+      },
+      {
+        name: "with session title and links",
+        body: { ...permissionBody, source: { ...permissionBody.source, ...sessionExtras } },
+        valid: true,
+      },
+      {
+        name: "expires after 10 minutes",
+        body: { ...permissionBody, expiresAt: T(10, 11) },
+        valid: false,
+      },
+      {
+        name: "expires before it is made",
+        body: { ...permissionBody, expiresAt: T(9) },
+        valid: false,
+      },
+      {
+        name: "two suggestions for one scope",
+        body: {
+          ...permissionBody,
+          suggestions: [permissionBody.suggestions[0], permissionBody.suggestions[0]],
+        },
+        valid: false,
+      },
+      {
+        name: "a suggestion for this call only",
+        body: {
+          ...permissionBody,
+          suggestions: [{ label: "Once", rule: "Bash(ls)", scope: "once" }],
+        },
+        valid: false,
+      },
+      {
+        name: "summary too long",
+        body: { ...permissionBody, summary: "s".repeat(201) },
+        valid: false,
+      },
+      {
+        name: "input too long",
+        body: { ...permissionBody, input: "i".repeat(8001) },
+        valid: false,
+      },
+      { name: "unknown agent", body: { ...permissionBody, agent: "gemini" }, valid: false },
+      {
+        name: "created at hour 25",
+        body: { ...permissionBody, createdAt: "2026-10-04T25:00:00Z" },
+        valid: false,
+      },
+    ],
+    "permission-answer": [
+      { name: "allow for the session", body: permissionAnswerBody, valid: true },
+      {
+        name: "deny with a message",
+        body: {
+          ...permissionAnswerBody,
+          behavior: "deny",
+          scope: "once",
+          message: "Push to a branch instead",
+        },
+        valid: true,
+      },
+      {
+        name: "deny for the session",
+        body: { ...permissionAnswerBody, behavior: "deny" },
+        valid: false,
+      },
+      {
+        name: "allow with a message",
+        body: { ...permissionAnswerBody, message: "ok" },
+        valid: false,
+      },
+      { name: "unknown scope", body: { ...permissionAnswerBody, scope: "user" }, valid: false },
+    ],
+    settled: [
+      { name: "by a device", body: settledBody, valid: true },
+      {
+        name: "at the keyboard",
+        body: { ...settledBody, outcome: "keyboard", device: undefined },
+        valid: true,
+      },
+      {
+        name: "a withdrawn decision",
+        body: { ...settledBody, itemId: "dec_1", outcome: "withdrawn", device: undefined },
+        valid: true,
+      },
+      {
+        name: "a decision answered elsewhere",
+        body: { ...settledBody, itemId: "dec_1", outcome: "elsewhere", device: undefined },
+        valid: true,
+      },
+      {
+        name: "no outcome",
+        body: { ...settledBody, outcome: undefined, device: undefined },
+        valid: true,
+      },
+      {
+        name: "unknown outcome",
+        body: { ...settledBody, outcome: "lost", device: undefined },
+        valid: false,
+      },
+      {
+        name: "device without its outcome",
+        body: { ...settledBody, outcome: "timeout" },
+        valid: false,
+      },
+      {
+        name: "device outcome without the device",
+        body: { ...settledBody, device: undefined },
+        valid: false,
+      },
     ],
   };
 
