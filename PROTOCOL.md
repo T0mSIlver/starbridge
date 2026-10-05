@@ -147,7 +147,8 @@ errors use the codes in `packages/protocol/src/sodium.ts`.
 - Pairing requests are unauthenticated and rate-limited per IP.
 - A session gets its device when that session writes the directory's first entry, or a
   recovery-signed `add`, or fetches its own pairing result (a new device signs in first).
-  Revoking a device ends its sessions; revoking a machine drops its token.
+  Revoking a device ends its sessions, which then get 401 `revoked` instead of
+  `unauthenticated` until they would have expired; revoking a machine drops its token.
 
 | Route | Who | What |
 |---|---|---|
