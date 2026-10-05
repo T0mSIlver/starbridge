@@ -896,6 +896,7 @@ How it generalizes is open.
   hook now allows the call with `updatedInput.answers`, one answer per question saying to ask
   through `starbridge ask`; Claude Code shows that as an answered question and opens no dialog
   (checked in a real session). Input it cannot read is still denied.
+
 - 2026-10-05. A question asked already waiting notifies as waiting (#202). `ask --waiting`
   used to push the decision, which carries no state, then post its `waiting` item quietly, so
   the phone's notification said "Working on other things" while the app said "Waiting for
