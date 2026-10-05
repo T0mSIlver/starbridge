@@ -202,8 +202,9 @@ sealed interface Phase {
     data class Joining(val code: String, val scanned: Boolean = false) : Phase
     /** Asked the account's devices to approve this one; [digits] once one of them took it. */
     data class JoiningByDigits(val digits: String?) : Phase
-    /** The first device shows the recovery words once. */
-    data class RecoveryKey(val words: List<String>) : Phase
+    /** The first device shows the recovery key once. */
+    /** [shown]: a recovery key, or an older account's words. */
+    data class RecoveryKey(val shown: String) : Phase
     data object Ready : Phase
 }
 

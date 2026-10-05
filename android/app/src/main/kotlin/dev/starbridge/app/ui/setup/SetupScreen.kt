@@ -1,7 +1,9 @@
 package dev.starbridge.app.ui.setup
 
-import dev.starbridge.app.protocol.Bip39
+import dev.starbridge.app.protocol.RecoveryKeys
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -97,14 +99,14 @@ class SetupActions(
     val joinWithCode: (String) -> Unit,
     val askDevices: () -> Unit,
     val cancelJoin: () -> Unit,
-    val recover: (words: String) -> Unit,
+    val recover: (key: String) -> Unit,
     val saved: () -> Unit,
     val signOut: () -> Unit,
 )
 
 /**
  * Before the phone is a device: sign in, then join by scanning another device's QR code (digits
- * are the fallback), or, on an empty account, create its keys and show the recovery words once.
+ * are the fallback), or, on an empty account, create its keys and show the recovery key once.
  */
 @Composable
 fun SetupScreen(phase: Phase, server: String, busy: Boolean, actions: SetupActions, openUrl: (String) -> Unit, modifier: Modifier = Modifier) {
@@ -113,7 +115,7 @@ fun SetupScreen(phase: Phase, server: String, busy: Boolean, actions: SetupActio
         is Phase.NoDevice -> if (phase.accountExists) Join(busy, actions, modifier) else FirstDevice(busy, actions, modifier)
         is Phase.Joining -> Waiting("Approve this phone", if (phase.scanned) "Approve it on the device that shows the QR code." else "Type this code on a device you already use: ${phase.code}", null, actions.cancelJoin, modifier)
         is Phase.JoiningByDigits -> Waiting("Compare digits", "Approve on your other device if the digits match.", phase.digits, actions.cancelJoin, modifier)
-        is Phase.RecoveryKey -> Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = Spacing.s4, end = Spacing.s4, bottom = Spacing.s10), verticalArrangement = Arrangement.spacedBy(Spacing.s4)) { RecoveryKey(phase.words, actions.saved) }
+        is Phase.RecoveryKey -> Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = Spacing.s4, end = Spacing.s4, bottom = Spacing.s10), verticalArrangement = Arrangement.spacedBy(Spacing.s4)) { RecoveryKey(phase.shown, actions.saved) }
         Phase.Ready -> Unit
     }
 }
@@ -245,7 +247,7 @@ private fun Join(busy: Boolean, actions: SetupActions, modifier: Modifier) {
             Primary("Scan a QR code", busy, icon = { Symbol(Sym.Qr, size = 20.dp) }, onClick = scan)
             Link("Can't scan? Compare digits", actions.askDevices)
             Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s6)) {
-                Link("Use the recovery words") { recovering = true }
+                Link("Use the recovery key") { recovering = true }
                 Link("Sign out", actions.signOut)
             }
         },
@@ -273,32 +275,30 @@ private fun FirstDevice(busy: Boolean, actions: SetupActions, modifier: Modifier
 
 @Composable
 private fun Recover(busy: Boolean, actions: SetupActions, modifier: Modifier, onBack: () -> Unit) {
-    var words by rememberSaveable { mutableStateOf("") }
-    val typed = Bip39.split(words)
-    // The last word is still being typed unless a separator follows it.
-    val finished = if (words.lastOrNull()?.isLetter() == false) typed else typed.dropLast(1)
-    val unknown = Bip39.problem(finished)?.takeIf { it.startsWith("Word ") }
+    var typedKey by rememberSaveable { mutableStateOf("") }
+    val reading = RecoveryKeys.read(typedKey)
     Step(
         modifier,
         top = {
             Column(Modifier.padding(start = Spacing.s4, end = Spacing.s4, top = 48.dp), verticalArrangement = Arrangement.spacedBy(Spacing.s4)) {
-                Title("Recovery words")
+                Title("Recovery key")
                 TextField(
-                    value = words,
-                    onValueChange = { words = it },
-                    minLines = 4,
-                    label = { Text("Your recovery words, separated by spaces") },
-                    supportingText = { Text(unknown ?: "${typed.size} of ${if (typed.size > 12) 24 else 12} words") },
-                    isError = unknown != null,
+                    value = typedKey,
+                    onValueChange = { typedKey = it },
+                    minLines = 2,
+                    label = { Text("Your recovery key") },
+                    placeholder = { Text("XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX") },
+                    supportingText = { Text(reading.problem ?: reading.status) },
+                    isError = reading.problem != null,
                     textStyle = StarbridgeTheme.type.machine,
                     colors = fieldColors(),
-                    keyboardOptions = KeyboardOptions(autoCorrectEnabled = false, keyboardType = KeyboardType.Password),
+                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters, autoCorrectEnabled = false, keyboardType = KeyboardType.Password),
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
         },
         bottom = {
-            Primary("Recover", busy, enabled = (typed.size == 12 || typed.size == 24) && unknown == null) { actions.recover(words) }
+            Primary("Recover", busy, enabled = reading.complete) { actions.recover(typedKey) }
             Link("Back", onBack)
         },
     )
@@ -345,25 +345,19 @@ private fun Waiting(title: String, text: String, digits: String?, onCancel: () -
 }
 
 @Composable
-private fun RecoveryKey(words: List<String>, onDone: () -> Unit) {
-    val colors = StarbridgeTheme.colors
+private fun RecoveryKey(shown: String, onDone: () -> Unit) {
     var saved by rememberSaveable { mutableStateOf(false) }
     Title("Your recovery key", Modifier.padding(top = 48.dp))
     Text(
-        "Write these ${words.size} words down and keep them offline. If you lose every device, they add a new one. This is the only time they are shown.",
+        "Write this key down and keep it offline. If you lose every device, it adds a new one. This is the only time it is shown.",
         style = StarbridgeTheme.type.body,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
     Panel(Modifier.fillMaxWidth().padding(top = Spacing.s2)) {
-        words.chunked(3).forEachIndexed { row, three ->
-            Row(Modifier.padding(vertical = Spacing.s1)) {
-                three.forEachIndexed { col, word ->
-                    Row(Modifier.weight(1f)) {
-                        Text("${row * 3 + col + 1}".padStart(2), style = StarbridgeTheme.type.machine, color = colors.fg3)
-                        Spacer(Modifier.width(Spacing.s2))
-                        Text(word, style = StarbridgeTheme.type.machine, color = MaterialTheme.colorScheme.onSurface)
-                    }
-                }
+        // Groups of four, two or three to a line, never split.
+        FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.s4, Alignment.CenterHorizontally), verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+            shown.split("-", " ").forEach { group ->
+                Text(group, style = StarbridgeTheme.type.machine.copy(fontSize = 22.sp, letterSpacing = 2.sp), color = MaterialTheme.colorScheme.onSurface)
             }
         }
     }
@@ -373,7 +367,7 @@ private fun RecoveryKey(words: List<String>, onDone: () -> Unit) {
     ) {
         Checkbox(checked = saved, onCheckedChange = null)
         Spacer(Modifier.width(Spacing.s3))
-        Text("I wrote these words down", style = StarbridgeTheme.type.body, color = MaterialTheme.colorScheme.onSurface)
+        Text("I wrote this key down", style = StarbridgeTheme.type.body, color = MaterialTheme.colorScheme.onSurface)
     }
     Primary("Continue", busy = false, enabled = saved, onClick = onDone)
 }

@@ -209,7 +209,7 @@ fun SettingsScreen(
     if (signingOut) {
         Confirm(
             title = "Sign out?",
-            text = "This phone forgets its keys and leaves your devices. If it is your only device, you need the recovery words to set up another.",
+            text = "This phone forgets its keys and leaves your devices. If it is your only device, you need the recovery key to set up another.",
             action = "Sign out",
             onConfirm = { actions.signOut(); signingOut = false },
             onDismiss = { signingOut = false },
@@ -217,7 +217,7 @@ fun SettingsScreen(
     }
 }
 
-private const val GUIDE = "https://github.com/T0mSIlver/starbridge/blob/main/docs/tell-your-agents.md"
+private const val GUIDE = "https://starbridge.run/docs/tell-your-agents"
 
 /** How pushes reach this phone, as a state. */
 private fun push(push: PushSetting) = when {

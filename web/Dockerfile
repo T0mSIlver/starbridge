@@ -13,6 +13,10 @@ COPY packages/protocol packages/protocol
 COPY web web
 # Served at /install.sh (web/src/app/install.sh/route.ts).
 COPY cli/install.sh cli/install.sh
+# Rendered under /docs at build time (web/src/lib/docs.ts).
+COPY docs docs
+COPY cli/README.md cli/README.md
+COPY server/README.md server/README.md
 # Caddy routes /v1 to the server; the rewrite only serves a request that reaches here anyway.
 ENV STARBRIDGE_SERVER=http://127.0.0.1:8080 NEXT_TELEMETRY_DISABLED=1
 RUN cd web && bun run build

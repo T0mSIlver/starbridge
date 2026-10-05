@@ -10,7 +10,7 @@ import kotlinx.serialization.json.put
 // rendezvous id, which the server sees, and 16 characters (80 bits) of secret, which never
 // reaches it and keys an HMAC on both pairing messages.
 
-private const val CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
+internal const val CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
 
 data class PairingCode(val rendezvous: String, val secret: String) {
     /** "ABCD-EFGH-…", six groups of four. */

@@ -5,10 +5,13 @@
  * session has not confirmed, and the CLI's own path (no agent) reads the same state.
  */
 import { activeMembers, type Directory, ProtocolError } from "@starbridge/protocol";
+import { codexQueue, codexReachable } from "../codex";
 import { type Ctx, iso, session, UsageError } from "../context";
 import {
   type AskInput,
   ackLines,
+  answerLine,
+  delivery,
   poll,
   postDecision,
   postWaiting,
@@ -24,6 +27,10 @@ const POLL_SECONDS = 60;
 const DIRECTORY_MS = 10 * 60_000;
 const BACKOFF_MS = 2_000;
 const MAX_BACKOFF_MS = 60_000;
+/** How long the agent waits before queueing an answer into a Codex session again. */
+const CODEX_RETRY_MS = 60_000;
+/** How many times the agent tries to queue one answer into a Codex session. */
+const CODEX_TRIES = 30;
 /** How often an unpaired agent checks whether `starbridge pair` ran. */
 const UNPAIRED_MS = 5_000;
 
@@ -33,6 +40,8 @@ export type QuotaWanted = "a device joined" | "a device asked";
 export class Decisions implements Feature {
   private lastOkAt: Date | undefined;
   private lastError: string | undefined;
+  /** Codex answers whose `codex queue` failed, by decision id: tries so far, and when next. */
+  private retries = new Map<string, { tries: number; at: number }>();
   /** The active devices and the last quota ask, as of the previous poll. */
   private devices: Set<string> | undefined;
   private quotaAsked: string | undefined;
@@ -59,7 +68,8 @@ export class Decisions implements Feature {
         if (typeof ask.project !== "string")
           throw new HttpError(400, "bad-request", "input.project is required");
         const decision = await postDecision(this.ctx, session(this.ctx), ask);
-        return { id: decision.id };
+        const reachable = ask.codex ? await codexReachable(ask.codex) : false;
+        return { id: decision.id, delivery: delivery(ask.agent, reachable) };
       },
     },
     {
@@ -135,6 +145,42 @@ export class Decisions implements Feature {
       this.wantQuota("a device asked");
   }
 
+  /**
+   * Queues each new answer to a Codex session into it with `codex queue`, and marks it seen only
+   * once that succeeded: an agent that dies meanwhile queues it again, rather than never. A
+   * session that is gone gets CODEX_TRIES tries, a minute apart; the answer stays for a `wait`.
+   */
+  private async deliverCodex() {
+    const now = Date.now();
+    for (const [id, a] of Object.entries(this.ctx.store.state().answers)) {
+      const asked = this.ctx.store.state().asked[id];
+      if (a.seen || !asked?.codex || !asked.session) continue;
+      const retry = this.retries.get(id) ?? { tries: 0, at: 0 };
+      if (retry.tries >= CODEX_TRIES || retry.at > now) continue;
+      const error = await codexQueue(
+        asked.codex,
+        asked.session,
+        answerLine(a.answer, asked.question),
+      );
+      if (error === undefined) {
+        this.retries.delete(id);
+        this.ctx.store.updateState((st) => {
+          const x = st.answers[id];
+          if (x) x.seen = true;
+        });
+        this.hub.log(`answer to ${id} queued into Codex session ${asked.session}`);
+        continue;
+      }
+      const tries = retry.tries + 1;
+      this.retries.set(id, { tries, at: now + CODEX_RETRY_MS });
+      this.hub.log(
+        tries < CODEX_TRIES
+          ? `answer to ${id}: codex queue failed (${error}); retrying in 1 min`
+          : `answer to ${id}: codex queue failed ${tries} times (${error}); giving up`,
+      );
+    }
+  }
+
   /** One long-poll after another from the shared cursor, each held until an answer comes. */
   async run(signal: AbortSignal): Promise<void> {
     let failures = 0;
@@ -167,6 +213,7 @@ export class Decisions implements Feature {
         failures = 0;
         first = false;
         this.hub.notify();
+        await this.deliverCodex();
       } catch (e) {
         if (signal.aborted) break;
         const message = (e as Error).message;

@@ -580,6 +580,20 @@ How it generalizes is open.
   worker's scope and Android deep links are unchanged. It reuses the Roborazzi screenshots,
   cropped to WebP in `web/public/landing`, and its sign-in button goes straight to GitHub;
   self-hosters reach the owner-token form from its footer.
+- 2026-10-05. Docs at `/docs` on the web page (#211), not a Zensical site: the pages listed in
+  `web/src/lib/docs.ts` are Markdown files of the repository (`docs/index.md`, `cli/README.md`,
+  `docs/tell-your-agents.md`, `server/README.md`), rendered with `marked` at build time. Links
+  between them become `/docs` links; other relative links go to GitHub. The web page, the landing
+  page and Android link there, since GitHub links 404 while the repository is private. The
+  overview and the landing page say Starbridge works best with Claude Code and supports Codex.
+- 2026-10-05. The landing page leads with questions (#210): its lead, feature list and browser
+  shot put questions, images and runs first and permission prompts last, since they are off by
+  default. The browser shot is `/sample-hero` (development only): the sample inbox without its
+  permission prompt or lost run, the question with images open. The footer says that only the
+  owner's own devices can read questions, answers and quotas.
+- 2026-10-05. A browser whose device was revoked gets the landing page, not sign-in (#209).
+  Revoking a device keeps its sessions' hashes until they would have expired, and the server
+  answers them 401 `revoked`; the browser then forgets the device and is a visitor again.
 
 - 2026-10-05. Uptime alert with no new accounts: `.github/workflows/uptime.yml` checks
   `/healthz` and `/healthz/backup` hourly (every 5 minutes once the repository is public), opens one issue labelled `outage` (GitHub
@@ -942,6 +956,22 @@ How it generalizes is open.
   you". Now the decision goes quietly and the `waiting` item pushes; Android fetches a decision
   it has not seen when its waiting state arrives, as the web page's service worker already did.
   An app older than this change shows no notification for such a question until it syncs.
+- 2026-10-05. How an answer reaches each agent (#203). Only the Claude Code mod brought an answer
+  back after a turn ended, and the skill told every agent never to block on `starbridge wait`, so
+  Codex never got its answers. Research on Codex CLI 0.160 (issue comment): its TUI runs sessions
+  in a shared app-server daemon by default, and `codex queue --thread <id> --message <text>` adds
+  a user message to one; checked live, an idle session starts a turn with it at once and a busy
+  one runs it next as its own turn, as with the mod. Hooks (`Stop` blocking with the answer), an
+  MCP tool that waits, and `notify` either block the turn as `wait` does or bring nothing back.
+  So `ask` records a Codex session (`CODEX_THREAD_ID`, its `CODEX_HOME` and `codex`), and the
+  machine's agent queues each answer into it, confirming the answer only when `codex queue`
+  succeeds; on failure it tries again a minute later, 30 times at most. `ask` prints how
+  the answer comes back: as a prompt (Claude Code; Codex when the agent runs and the session's
+  daemon socket accepts a connection) or not, and then the skill has the agent wait with
+  `starbridge wait <id> --timeout 5m` before it ends its turn (`codex exec`, pi, no agent). The
+  skill follows that line instead of naming agents. `evals/skill` runs `codex exec`, so it
+  checks the wait path: it answers a Codex card on the server during the turn, as the owner
+  would.
 - 2026-10-05. A blocked question shows by its look, not a state line (#191, owner's pick of
   proposal B, "Filled and hollow", from https://claude.ai/artifact/EMcUnTsGhyTsiCNujo4JT6). This
   replaces the "Waiting for you 1:12" tag of the #166 entry above. A question whose agent waits

@@ -202,7 +202,7 @@ test("ask attaches images scaled to fit the server's cap, and links", async () =
   expect(ctx.errors.at(-1)).toContain("PNG or JPEG");
   expect(await run([...ASK, "--link", "http://example.com"], ctx)).toBe(1);
   expect(await server.opened("decision")).toHaveLength(1);
-});
+}, 30_000); // Scales real images: over 6 s on a loaded dev box runner (#222).
 
 /** A landscape JPEG stored the way a phone stores a portrait: EXIF orientation 6. */
 function sidewaysJpeg(): string {

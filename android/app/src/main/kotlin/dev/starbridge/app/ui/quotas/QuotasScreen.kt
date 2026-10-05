@@ -108,7 +108,7 @@ fun QuotasScreen(
     }
 }
 
-private const val QUOTA_DOCS = "https://github.com/T0mSIlver/starbridge/tree/main/cli#readme"
+private const val QUOTA_DOCS = "https://starbridge.run/docs/cli"
 
 /** Nothing uploaded yet: what sends quotas, and how to start it. */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
