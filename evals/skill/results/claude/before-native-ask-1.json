@@ -1,0 +1,37 @@
+{
+  "agent": "claude",
+  "model": "sonnet",
+  "arm": "before",
+  "scenario": "native-ask",
+  "rep": 1,
+  "turns": [
+    {
+      "commands": [],
+      "askUser": [
+        {
+          "denied": false
+        }
+      ],
+      "final": "",
+      "session": "328840d6-8bf9-4df1-972e-d8468722fd1d",
+      "exit": 0,
+      "seconds": 10.038
+    }
+  ],
+  "decisions": [],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [
+    "gh auth token",
+    "gh auth token",
+    "gh issue list -R anthropics/claude-code --author @me --state closed --search closed:>2026-09-05 --json number,title,closedAt,stateReason --limit 30"
+  ],
+  "judge": {
+    "cold": null,
+    "consequences": null,
+    "terminal": false,
+    "links": null,
+    "plain": null,
+    "notes": "The agent posted no card and its terminal message is empty, so the choice of error tracking service never reached the user at all."
+  }
+}

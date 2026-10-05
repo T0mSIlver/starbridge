@@ -763,6 +763,22 @@ How it generalizes is open.
   days). Umami drops headless browsers' hits as bots, so a Playwright check needs a desktop user
   agent.
 
+- 2026-10-05. Agents reach the owner through Starbridge (#121, owner). The skill and the
+  SessionStart rule say Starbridge is how an agent reaches its user: a card for a decision that is
+  theirs, a card before ending a turn on work that waits on them (a PR to review, a failure only
+  they can fix), `starbridge run` around commands that block them; everything else the agent
+  decides, and it asks in the terminal only when `starbridge` fails. A card answers cold: a
+  question its options answer, two to five lines of context saying what each option changes,
+  links and images only when they help decide, one question per card. Agents never answer for
+  the owner: no default to apply when nobody answers; a blocked agent works on something else,
+  builds both options when cheap and asks which to keep, or waits (`ask --default` is optional,
+  and #127 made `default` optional in the protocol). A `PreToolUse` hook on `AskUserQuestion`
+  (`starbridge hook ask-user`) turns the question away towards `starbridge ask`, unless the
+  machine is unpaired or the server does not answer within 3 s. The skill no longer covers
+  permission prompts (#124). `evals/skill` checks all this with real Claude Code and Codex
+  sessions; under the owner's home, Claude Code loads `~/.claude/CLAUDE.md` as an ancestor
+  folder's even with `CLAUDE_CONFIG_DIR` set, so eval sessions run under `/tmp`.
+
 ## Encryption, with existing libraries
 
 - libsodium sealed boxes (`crypto_box_seal`, X25519 + XSalsa20-Poly1305): an

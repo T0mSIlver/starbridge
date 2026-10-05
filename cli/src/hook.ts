@@ -198,3 +198,39 @@ export async function hookSettle(
   }
   return 0;
 }
+
+/** What an agent reads when its `AskUserQuestion` is turned away. */
+export const ASK_USER_REASON =
+  "The user is away from this terminal: ask through Starbridge instead. Run `starbridge ask` with the question, the context they need to answer it cold, the options and what each one changes, your recommendation first, as the `starbridge` skill says. Then keep working on what does not depend on the answer.";
+
+/** How long the server may take to answer before the hook lets `AskUserQuestion` through. */
+const REACH_MS = 3_000;
+
+/**
+ * `starbridge hook ask-user`, on `PreToolUse` for `AskUserQuestion`: denies the call, so the
+ * agent asks through `starbridge ask`, which reaches the owner away from the terminal. When the
+ * machine is not paired or its server does not answer, it prints nothing and Claude Code asks
+ * as usual, so an agent always has a way to ask.
+ */
+export async function hookAskUser(ctx: Ctx): Promise<number> {
+  try {
+    const machine = ctx.store.machine();
+    if (!machine) return 0;
+    const res = await fetch(`${machine.server.replace(/\/+$/, "")}/healthz`, {
+      signal: AbortSignal.timeout(REACH_MS),
+    });
+    if (!res.ok) return 0;
+  } catch {
+    return 0;
+  }
+  ctx.out(
+    JSON.stringify({
+      hookSpecificOutput: {
+        hookEventName: "PreToolUse",
+        permissionDecision: "deny",
+        permissionDecisionReason: ASK_USER_REASON,
+      },
+    }),
+  );
+  return 0;
+}

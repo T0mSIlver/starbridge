@@ -8,6 +8,7 @@ import jpeg from "jpeg-js";
 import jsQR from "jsqr";
 import { PNG } from "pngjs";
 import { run } from "../src/cli";
+import { NO_DEFAULT } from "../src/decisions";
 import { FAKE_CODEXBAR, paired, testCtx, until } from "./helpers";
 
 let server: LiveServer;
@@ -246,6 +247,13 @@ test("ask refuses a decision that would not stand alone", async () => {
   expect(await run(["ask", "--option", "A", "--option", "B"], ctx)).toBe(1);
   expect(ctx.errors.at(-1)).toContain("--question");
   expect(await server.opened("decision")).toEqual([]);
+});
+
+test("ask without --default waits for the owner: no default time", async () => {
+  const ctx = await paired(server);
+  expect(await run(["ask", "--question", "Q?", "--option", "A", "--option", "B"], ctx)).toBe(0);
+  const [d] = await server.opened("decision");
+  expect(d?.default).toEqual({ action: NO_DEFAULT });
 });
 
 test("waiting and working flip a decision's state; only a flip to waiting pushes", async () => {

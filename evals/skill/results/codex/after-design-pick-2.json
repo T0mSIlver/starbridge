@@ -1,0 +1,70 @@
+{
+  "agent": "codex",
+  "model": "gpt-6.1-sol",
+  "arm": "after",
+  "scenario": "design-pick",
+  "rep": 2,
+  "turns": [
+    {
+      "commands": [
+        "/usr/bin/zsh -lc 'cat /tmp/skill-eval-mtrZ0L/after-design-pick-2/cfg/skills/starbridge/SKILL.md'",
+        "/usr/bin/zsh -lc 'git status --short && git branch --list && rg --files shots'",
+        "/usr/bin/zsh -lc 'git log --oneline --all -5 && git diff --stat main...settings-compact && git diff --stat main...settings-roomy'",
+        "/usr/bin/zsh -lc \"starbridge ask --question 'Which settings-screen design should I ship to main?' --context 'Both variants are complete and pass the tests.\nCompact (first image): tighter rows show all nine settings on one screen.\nRoomy (second image): taller rows give settings more space.\nYour choice will be merged into main.' --option 'Compact' --option 'Roomy' --image shots/compact.png --image shots/roomy.png\""
+      ],
+      "final": "Sent both screenshots to Starbridge for your choice: Compact or Roomy. Your project instructions reserve visual choices for you; I’ll merge the selected branch into main when you answer.",
+      "session": "01a10ccf-c3db-7dc2-86d8-088da5a49788",
+      "tokens": 66676,
+      "exit": 0,
+      "seconds": 30.107
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_6hAY-20f7nK8qB2D",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-05T16:05:29Z",
+      "question": "Which settings-screen design should I ship to main?",
+      "context": "Both variants are complete and pass the tests.\nCompact (first image): tighter rows show all nine settings on one screen.\nRoomy (second image): taller rows give settings more space.\nYour choice will be merged into main.",
+      "options": [
+        "Compact",
+        "Roomy"
+      ],
+      "recommended": "Compact",
+      "default": {
+        "action": "I wait for your answer"
+      },
+      "source": {
+        "machine": "devbox",
+        "project": "proj",
+        "session": ""
+      },
+      "images": [
+        {
+          "type": "image/png",
+          "width": 360,
+          "height": 640
+        },
+        {
+          "type": "image/png",
+          "width": 360,
+          "height": 640
+        }
+      ]
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "judge": {
+    "cold": true,
+    "consequences": true,
+    "terminal": false,
+    "links": null,
+    "plain": true,
+    "notes": "Minor only: the Compact recommendation is given without a word of rationale, so the user taps blind on taste vs. trust."
+  }
+}

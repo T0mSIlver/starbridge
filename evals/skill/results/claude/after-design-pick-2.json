@@ -1,0 +1,70 @@
+{
+  "agent": "claude",
+  "model": "sonnet",
+  "arm": "after",
+  "scenario": "design-pick",
+  "rep": 2,
+  "turns": [
+    {
+      "commands": [
+        "git branch -a && ls shots",
+        "git log --oneline main..settings-compact main..settings-roomy; starbridge ask \\\n  --question \"Which settings-screen design should I ship: compact or roomy?\" \\\n  --context \"Both variants pass tests. Shipping = merging the branch into main.\nImage 1: compact (branch settings-compact).\nImage 2: roomy (branch settings-roomy).\" \\\n  --option \"Compact\" --option \"Roomy\" \\\n  --image shots/compact.png --image shots/roomy.png"
+      ],
+      "final": "I haven't shipped either variant. Your project rules say you pick between visual designs, so I posted a Starbridge card (`d_7z_16b-ZbGGDNhK9`). It has both screenshots and asks whether to ship Compact (`settings-compact`) or Roomy (`settings-roomy`).\n\nOnce you answer, I'll run `git merge` on that branch into main.",
+      "session": "d06f1fe4-6f83-4c25-aa5d-7e05fb01766a",
+      "tokens": 65218,
+      "costUsd": 0.062691,
+      "exit": 0,
+      "seconds": 8.118
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_7z_16b-ZbGGDNhK9",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-05T16:04:29Z",
+      "question": "Which settings-screen design should I ship: compact or roomy?",
+      "context": "Both variants pass tests. Shipping = merging the branch into main.\nImage 1: compact (branch settings-compact).\nImage 2: roomy (branch settings-roomy).",
+      "options": [
+        "Compact",
+        "Roomy"
+      ],
+      "recommended": "Compact",
+      "default": {
+        "action": "I wait for your answer"
+      },
+      "source": {
+        "machine": "devbox",
+        "project": "proj",
+        "session": "d06f1fe4-6f83-4c25-aa5d-7e05fb01766a",
+        "sessionTitle": "proj-8c"
+      },
+      "images": [
+        {
+          "type": "image/png",
+          "width": 360,
+          "height": 640
+        },
+        {
+          "type": "image/png",
+          "width": 360,
+          "height": 640
+        }
+      ]
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "judge": {
+    "cold": true,
+    "consequences": true,
+    "terminal": false,
+    "links": null,
+    "plain": true,
+    "notes": ""
+  }
+}

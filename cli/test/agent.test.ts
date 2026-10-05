@@ -258,6 +258,9 @@ test("the agent refuses bad requests with the CLI's own messages", async () => {
   const c = client(socket);
   expect(await run(["ask", "--project", "p"], c)).toBe(1);
   expect(c.errors.at(-1)).toContain("--question");
+  const both = ["--answer-in", "https://claude.ai/artifact/x", "--option", "A", "--option", "B"];
+  expect(await run(["ask", "--question", "Q?", "--project", "p", ...both], c)).toBe(1);
+  expect(c.errors.at(-1)).toContain("--answer-in takes no --option");
   expect(await run(["wait", "d_nosuch"], c)).toBe(1);
   expect(c.errors.at(-1)).toContain("not a decision this machine asked");
   await expect(new AgentClient(socket).call("GET", "/v1/sessions/a%20b/events")).rejects.toThrow(

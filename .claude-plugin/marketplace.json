@@ -11,7 +11,7 @@
     {
       "name": "starbridge",
       "source": "./plugin",
-      "description": "The starbridge skill, and a SessionStart rule that has every session use it whenever it needs the owner to decide something. Needs the starbridge CLI on PATH, paired."
+      "description": "The starbridge skill, and a SessionStart rule that has every session reach the owner through it. Needs the starbridge CLI on PATH, paired."
     },
     {
       "name": "starbridge-mod",

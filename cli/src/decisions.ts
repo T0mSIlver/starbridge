@@ -61,7 +61,7 @@ export const ITEM_BYTES = 256 * 1024;
 /** Exit code when nobody answered before `--timeout`. */
 export const EXIT_TIMEOUT = 2;
 /** Sent as the default for clients from before 2026-10-05, which require one and show it. */
-const NO_DEFAULT = "Waits for your answer";
+export const NO_DEFAULT = "Waits for your answer";
 /** Exit code on Ctrl-C, as a shell reports SIGINT. */
 const EXIT_INTERRUPTED = 130;
 /** The server holds a long-poll at most this long (PROTOCOL.md). */

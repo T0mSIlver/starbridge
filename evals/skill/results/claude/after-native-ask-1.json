@@ -1,0 +1,64 @@
+{
+  "agent": "claude",
+  "model": "sonnet",
+  "arm": "after",
+  "scenario": "native-ask",
+  "rep": 1,
+  "turns": [
+    {
+      "commands": [
+        "starbridge ask \\\n  --question \"Use Sentry or self-hosted GlitchTip for web app error tracking?\" \\\n  --context \"Sentry: free up to 5k errors/month, then \\$26/month; session replay included; hosted, no upkeep.\nGlitchTip: free, runs on our VPS, but we patch and back it up ourselves (about 1 hour/month); no session replay noted.\nI will wire in whichever you pick.\" \\\n  --option \"Sentry\" --option \"GlitchTip\" --recommended \"Sentry\""
+      ],
+      "askUser": [
+        {
+          "denied": true
+        }
+      ],
+      "final": "I haven't wired anything in yet. I read NOTES.md and posted the Sentry vs. GlitchTip question as a Starbridge card (`d_D719AmtspOo92wKJ`).\n\nYou asked for AskUserQuestion, but a hook in this session blocked it and said to use Starbridge instead. I followed the hook. I recommended Sentry on the card, since it includes session replay and needs no upkeep.\n\n- **Sentry:** free up to 5k errors a month, then $26/month. Session replay is included.\n- **GlitchTip:** free and self-hosted on our VPS, but we patch and back it up ourselves, about an hour a month.\n\nWhen your answer arrives I'll integrate the one you pick.",
+      "session": "14cd44d2-3ee3-4f59-b2d4-475804d96b64",
+      "exit": 0,
+      "seconds": 22.085
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_D719AmtspOo92wKJ",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-05T16:05:04Z",
+      "question": "Use Sentry or self-hosted GlitchTip for web app error tracking?",
+      "context": "Sentry: free up to 5k errors/month, then $26/month; session replay included; hosted, no upkeep.\nGlitchTip: free, runs on our VPS, but we patch and back it up ourselves (about 1 hour/month); no session replay noted.\nI will wire in whichever you pick.",
+      "options": [
+        "Sentry",
+        "GlitchTip"
+      ],
+      "recommended": "Sentry",
+      "default": {
+        "action": "I wait for your answer"
+      },
+      "source": {
+        "machine": "devbox",
+        "project": "proj",
+        "session": "14cd44d2-3ee3-4f59-b2d4-475804d96b64",
+        "sessionTitle": "proj-4b"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [
+    "gh auth token",
+    "gh auth token",
+    "gh issue list -R anthropics/claude-code --author @me --state closed --search closed:>2026-09-05 --json number,title,closedAt,stateReason --limit 30"
+  ],
+  "judge": {
+    "cold": true,
+    "consequences": true,
+    "terminal": false,
+    "links": null,
+    "plain": true,
+    "notes": "The card's default is \"I wait for your answer\" — not a fallback action, so the agent stalls if the user never taps."
+  }
+}
