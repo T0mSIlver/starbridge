@@ -687,6 +687,13 @@ How it generalizes is open.
   their kinds by name and skip unknown pushes, so they never see it. Two optional fields for the
   design (orchestrator): `source.machineKind` (`server`, `desktop`, `laptop`, `cloud`) and a
   decision's `agent` (`claude-code`, `codex`), as permissions have.
+- 2026-10-05. Google Play and CI disk (#148): a release also attaches `starbridge-VERSION.aab`,
+  signed with `release.jks` like the APK. Play App Signing keeps that key as the app signing key
+  and accepts it as the upload key too (#59's handoff), so Play builds and GitHub APKs share one
+  signature. The three self-hosted runners share one Gradle home,
+  `~/.local/opt/gh-runners/gradle`, which Gradle locks for concurrent builds; `android.yml`
+  turns setup-gradle's cache off on them (`cache-disabled` when `vars.RUNNER` is set), since its
+  restore overwrote files a concurrent job was reading (#142). That freed 3.6 GB of 1.8 GB homes.
 
 ## Encryption, with existing libraries
 
