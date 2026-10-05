@@ -1038,6 +1038,8 @@ How it generalizes is open.
   update a skill that differs. It offers the Starbridge Pi package when `pi` is on the PATH
   (`pi install git:github.com/T0mSIlver/starbridge`), unless Pi's settings list it already.
   Each asks first, `--yes` takes the defaults (install), and `--no-plugin` skips all three.
+  `status` reports both, and `uninstall` removes the skill folder (only when it holds the
+  Starbridge skill) and the Pi package. The docs drop the curl step for Codex.
 - 2026-10-06. A deploy goes unnoticed in the clients (#250). The web page and the Android app retry
   a 502 or 503, which Caddy sends while the server restarts, and a refused connection, quietly for
   20 s with a backoff from 250 ms to 4 s, before they show an error. A write retries only on those
@@ -1046,8 +1048,6 @@ How it generalizes is open.
   two apart, so its writes retry on 502 and 503 only). Long-polls ride on the same calls, so they
   reconnect without a notice. With #150 Caddy already holds requests during a restart; this
   covers what slips through, and self-hosted servers without that Caddy setup.
-  `status` reports both, and `uninstall` removes the skill folder (only when it holds the
-  Starbridge skill) and the Pi package. The docs drop the curl step for Codex.
 - 2026-10-05. A blocked question shows by its look, not a state line (#191, owner's pick of
   proposal B, "Filled and hollow", from https://claude.ai/artifact/EMcUnTsGhyTsiCNujo4JT6). This
   replaces the "Waiting for you 1:12" tag of the #166 entry above. A question whose agent waits
