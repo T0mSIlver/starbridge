@@ -7,6 +7,7 @@ import { hasPairCode, holdPairCode } from "@/lib/pairLink";
 import { useApp } from "./AppProvider";
 import { Mark } from "./icons";
 import { Landing } from "./Landing";
+import { LegalLinks } from "./Legal";
 import { Setup } from "./Setup";
 import s from "./Setup.module.css";
 import ui from "./ui.module.css";
@@ -112,6 +113,7 @@ function SignIn({ ownerToken = false }: { ownerToken?: boolean }) {
         </form>
       </details>
       {error && <p className={ui.error}>{error}</p>}
+      <LegalLinks />
     </Page>
   );
 }

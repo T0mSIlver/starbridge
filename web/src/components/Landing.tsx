@@ -127,6 +127,12 @@ export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
         <a className={s.link} href={REPO}>
           Source on GitHub, MIT licence
         </a>
+        <a className={s.link} href="/privacy">
+          Privacy
+        </a>
+        <a className={s.link} href="/terms">
+          Terms
+        </a>
         <button type="button" className={s.textButton} onClick={onOwnerToken}>
           Self-hosted: sign in with the owner token
         </button>

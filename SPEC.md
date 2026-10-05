@@ -602,6 +602,12 @@ How it generalizes is open.
   T0mSIlver/starbridge`) and `starbridge update`'s plugin refresh clone the repo itself. None of
   them needs a change once it is public.
 
+- 2026-10-05. Privacy policy and terms: plain pages at `/privacy` and `/terms`, linked from the
+  web and Android sign-in screens; they also serve the Play Store listing. Each claim follows the
+  code (stored columns in `server/src/db.ts`, retention in `server/src/limits.ts`, logs and
+  backups in `deploy/`); the operator's legal entity, jurisdiction, rights statement, liability
+  wording and account-deletion process stay marked TODO until the owner decides them.
+
 ## Encryption, with existing libraries
 
 - libsodium sealed boxes (`crypto_box_seal`, X25519 + XSalsa20-Poly1305): an

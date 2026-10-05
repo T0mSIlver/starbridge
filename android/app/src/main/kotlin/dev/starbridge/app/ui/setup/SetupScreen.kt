@@ -180,6 +180,14 @@ private fun SignIn(server: String, busy: Boolean, actions: SetupActions, openUrl
             Text("Use starbridge.run", style = StarbridgeTheme.type.action)
         }
     }
+    Row {
+        TextButton(onClick = { openUrl("${BuildConfig.DEFAULT_SERVER}/privacy") }, modifier = Modifier.heightIn(min = Sizes.tap)) {
+            Text("Privacy", style = StarbridgeTheme.type.small)
+        }
+        TextButton(onClick = { openUrl("${BuildConfig.DEFAULT_SERVER}/terms") }, modifier = Modifier.heightIn(min = Sizes.tap)) {
+            Text("Terms", style = StarbridgeTheme.type.small)
+        }
+    }
 }
 
 @Composable
