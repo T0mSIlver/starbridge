@@ -302,10 +302,11 @@ private fun SessionLinks(source: Source) {
  */
 @Composable
 private fun Fallback(decision: Decision, now: Instant) {
+    val default = decision.default ?: return
     Text(
         buildAnnotatedString {
             append("If nobody answers: ")
-            withStyle(SpanStyle(color = MaterialTheme.colorScheme.onSurface)) { append(decision.default) }
+            withStyle(SpanStyle(color = MaterialTheme.colorScheme.onSurface)) { append(default) }
             decision.defaultAt?.let { append(", ${moment(it, now)}") }
         },
         style = StarbridgeTheme.type.small,

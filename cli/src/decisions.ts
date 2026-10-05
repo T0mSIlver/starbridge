@@ -135,10 +135,7 @@ export function buildDecision(input: AskInput, ctx: Ctx, machine: string, to: st
     context: input.context ?? "",
     options,
     ...(options.length > 0 ? { recommended: input.recommended ?? options[0] } : {}),
-    default: {
-      action: input.default,
-      ...(input.defaultAt ? { at: timeFrom(input.defaultAt, ctx.now()) } : {}),
-    },
+    default: { action: input.default },
     source: sourceFor(input, ctx, machine),
     ...(links.length > 0 ? { links } : {}),
     ...(input.answerIn !== undefined ? { answerIn: link(input.answerIn) } : {}),
@@ -215,8 +212,11 @@ export async function postDecision(ctx: Ctx, s: Session, input: AskInput): Promi
       question: decision.question,
       options: decision.options,
       askedAt: decision.createdAt,
-      ...(decision.default.at ? { defaultAt: decision.default.at } : {}),
-      default: decision.default.action,
+      // Local until the CLI drops default times (#122): the decision no longer carries one.
+      ...(input.defaultAt
+        ? { defaultAt: timeFrom(input.defaultAt, new Date(decision.createdAt)) }
+        : {}),
+      default: input.default,
       ...(cursor !== undefined ? { cursor } : {}),
       ...(decision.source.session ? { session: decision.source.session } : {}),
       ...(decision.answerIn ? { answerIn: true } : {}),

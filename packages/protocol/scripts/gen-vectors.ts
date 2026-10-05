@@ -390,7 +390,7 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
     context: "The bench needs the GPU for about 40 minutes. No: it waits for tonight.",
     options: ["Yes", "No"],
     recommended: "Yes",
-    default: { action: "Wait for tonight", at: T(11) },
+    default: { action: "Wait for tonight" },
     source: { machine: "dev box", project: "localvoxtral", session: "s_42" },
   };
   const answerBody = {
@@ -457,6 +457,14 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
     outcome: "device" as const,
     device: "phone",
     at: T(10, 1),
+  };
+  const waitingBody = {
+    v: 1 as const,
+    id: "wait_1",
+    decisionId: "dec_1",
+    to: ["phone", "phone2"],
+    at: T(10, 20),
+    state: "waiting" as const,
   };
   const now = new Date(T(12));
   const win = {
@@ -1102,6 +1110,27 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
     decision: [
       { name: "valid", body: decisionBody, valid: true },
       {
+        name: "with agent and machine kind",
+        body: {
+          ...decisionBody,
+          agent: "codex",
+          source: { ...decisionBody.source, machineKind: "laptop" },
+        },
+        valid: true,
+      },
+      { name: "an unknown agent", body: { ...decisionBody, agent: "aider" }, valid: false },
+      {
+        name: "an unknown machine kind",
+        body: { ...decisionBody, source: { ...decisionBody.source, machineKind: "phone" } },
+        valid: false,
+      },
+      { name: "no default", body: { ...decisionBody, default: undefined }, valid: true },
+      {
+        name: "a default time from an older machine, ignored",
+        body: { ...decisionBody, default: { action: "Wait for tonight", at: T(11) } },
+        valid: true,
+      },
+      {
         name: "free text",
         body: { ...decisionBody, options: [], recommended: undefined },
         valid: true,
@@ -1393,6 +1422,13 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
         valid: false,
       },
       { name: "updated before it started", body: { ...runBody, at: T(9) }, valid: false },
+    ],
+    waiting: [
+      { name: "waiting", body: waitingBody, valid: true },
+      { name: "working", body: { ...waitingBody, state: "working" }, valid: true },
+      { name: "an unknown state", body: { ...waitingBody, state: "blocked" }, valid: false },
+      { name: "no decision", body: { ...waitingBody, decisionId: undefined }, valid: false },
+      { name: "no recipients", body: { ...waitingBody, to: [] }, valid: false },
     ],
   };
 

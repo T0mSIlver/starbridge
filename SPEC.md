@@ -664,6 +664,18 @@ How it generalizes is open.
   snapshots still skip Web Push: a browser that opted out would get a push it shows nothing
   for, which Chrome answers with its own notification and Firefox and Safari count against the
   subscription.
+- 2026-10-05. Waiting state, no default times (owner ruling on #122; protocol part). Agents
+  never answer for the owner, so a decision has no default time, and its `default` is optional:
+  machines keep sending its action only because clients from before this change require it, and
+  no client shows it. A decision whose `answerIn` page goes unanswered stays open until the agent
+  settles it. A new machine-signed kind, `waiting` (`decisionId`, `state`: `working` or
+  `waiting`), says whether the agent is blocked on a decision. It is the first kind whose `re`
+  closes nothing (`open` in `ITEM_KINDS`): the server refuses it once the decision is answered,
+  keeps one per decision, re-posted under its id, and drops it with its decision. The machine
+  posts every update `quiet` except a flip to `waiting`, which pushes once. Old clients list
+  their kinds by name and skip unknown pushes, so they never see it. Two optional fields for the
+  design (orchestrator): `source.machineKind` (`server`, `desktop`, `laptop`, `cloud`) and a
+  decision's `agent` (`claude-code`, `codex`), as permissions have.
 
 ## Encryption, with existing libraries
 
