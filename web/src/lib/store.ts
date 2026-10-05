@@ -147,15 +147,17 @@ export async function update<K extends keyof Records>(
  * back as null (Playwright's WebKit 26.6), which would lose the device on the next load.
  */
 export async function keeps(keys: StoredKeys): Promise<boolean> {
+  // A key of its own, so a probe in another tab cannot delete this one midway.
+  const slot = crypto.randomUUID();
   try {
-    await put("probe", keys);
-    const back = await get("probe");
+    await put("probe", keys, slot);
+    const back = await get("probe", slot);
     return (
       back?.kind === "raw" || (back?.box instanceof CryptoKey && back.sign instanceof CryptoKey)
     );
   } catch {
     return false;
   } finally {
-    await del("probe").catch(() => {});
+    await del("probe", slot).catch(() => {});
   }
 }
