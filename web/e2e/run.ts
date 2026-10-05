@@ -532,6 +532,15 @@ async function main() {
   if (await digitsError.count())
     throw new Error(`digits show an error: ${await digitsError.textContent()}`);
   await shoot(pageB, "join-digits");
+  // The signed-in browser gets the join request as a panel over the page; refusing ends it in a
+  // result that clears itself.
+  const joinAsk = page.getByTestId("join-request");
+  await joinAsk.waitFor({ timeout: 30_000 });
+  await shoot(page, "join-request");
+  await joinAsk.getByRole("button", { name: "Refuse" }).click();
+  const result = page.getByRole("status", { name: "Pairing result" });
+  await result.waitFor();
+  await result.waitFor({ state: "detached", timeout: 15_000 });
   await pageB.getByRole("button", { name: "Cancel" }).click();
   const codeB = (
     await pageB

@@ -11,6 +11,8 @@ import { type PairOutcome, PairResult } from "./PairResult";
 import ui from "./ui.module.css";
 
 const load = () => import("@/lib/device");
+/** How long a join's result stays before it clears itself. */
+const DONE_MS = 8000;
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 /** One join request: compare digits, then approve or refuse. */
@@ -133,6 +135,12 @@ export function JoinRequests() {
     load().then((d) => d.watchJoins(abort.signal, setAsks));
     return () => abort.abort();
   }, []);
+  // The result says what happened, then gets out of the way.
+  useEffect(() => {
+    if (!done) return;
+    const t = setTimeout(() => setDone(undefined), DONE_MS);
+    return () => clearTimeout(t);
+  }, [done]);
   const open = asks.filter((a) => !closed.includes(a.id));
   if (!open.length && !done) return null;
   return (
