@@ -23,6 +23,7 @@ import {
   seal,
 } from "@starbridge/protocol";
 import { claudeSession } from "./claude";
+import { piSessionTitle } from "./pi";
 import type { PendingPermission, PermissionUpdate, State } from "./config";
 import {
   type Ctx,
@@ -34,7 +35,10 @@ import {
   UsageError,
 } from "./context";
 
-/** What Claude Code's `PermissionRequest` hook gets on stdin (fields Starbridge reads). */
+/**
+ * What Claude Code's `PermissionRequest` hook gets on stdin (fields Starbridge reads). The Pi
+ * extension sends the same shape, with Pi's tool names (`bash`) and no suggestions.
+ */
 export interface PermissionHookInput {
   session_id?: string;
   cwd?: string;
@@ -200,13 +204,16 @@ const oneLine = (s: string, max: number) => {
   return flat.length <= max ? flat : `${flat.slice(0, max - 1)}…`;
 };
 
+/** Claude Code's shell tool, or Pi's. */
+const isShell = (tool: string) => tool === "Bash" || tool === "bash";
+
 /** One line: the Bash command, the edited path, the URL; else the tool and its input. */
 export function summarize(tool: string, input: unknown): string {
   const o = (input && typeof input === "object" ? input : {}) as Record<string, unknown>;
   const pick = (...keys: string[]) =>
     keys.map((k) => o[k]).find((v): v is string => typeof v === "string" && v.length > 0);
   const main =
-    tool === "Bash"
+    isShell(tool)
       ? pick("command")
       : (pick("file_path", "notebook_path", "path", "url", "query", "pattern") ??
         `${tool} ${JSON.stringify(input) ?? ""}`);
@@ -281,7 +288,7 @@ export function buildPermission(
   if (!tool) throw new UsageError("the hook input has no tool_name");
   const raw = hook.tool_input ?? {};
   // Hiding the key would hide the lines around it from the owner, and showing it leaks it.
-  if (tool === "Bash" && PRIVATE_KEY.test(JSON.stringify(raw)))
+  if (isShell(tool) && PRIVATE_KEY.test(JSON.stringify(raw)))
     throw new UsageError("the command holds a private key: it stays at the keyboard");
   const updates = usableUpdates(hook.permission_suggestions);
   const rule = ruleText(updates);
@@ -328,17 +335,21 @@ export function buildPermission(
   }
 }
 
-/** Where the prompt comes from, from the hook input and Claude Code's record of the session. */
+/**
+ * Where the prompt comes from, from the hook input and Claude Code's record of the session, or
+ * the name in Pi's session file (`PI_SESSION_FILE`, which the Pi extension passes).
+ */
 export function permissionSource(
   hook: PermissionHookInput,
   env: Ctx["env"],
 ): PermissionSourceInput {
   const session = typeof hook.session_id === "string" ? hook.session_id : "";
   const claude = session ? claudeSession(env, session) : undefined;
+  const title = claude?.title ?? piSessionTitle(env);
   return {
     project: basename(typeof hook.cwd === "string" && hook.cwd ? hook.cwd : process.cwd()),
     session,
-    ...(claude?.title ? { sessionTitle: claude.title } : {}),
+    ...(title ? { sessionTitle: title } : {}),
     ...(claude?.links.length ? { links: claude.links } : {}),
   };
 }

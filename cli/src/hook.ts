@@ -39,9 +39,10 @@ function parseHook(text: string): PermissionHookInput & Record<string, unknown> 
 }
 
 function agentName(text: string | undefined): Permission["agent"] {
-  if (text === "claude-code") return text;
+  // Pi asks through the Starbridge Pi extension's link in pi-permission-system (#232).
+  if (text === "claude-code" || text === "pi") return text;
   // Codex's hook races its TUI in ways not probed yet (#57, P3).
-  throw new UsageError(`--agent: only claude-code is supported (got ${text ?? "nothing"})`);
+  throw new UsageError(`--agent: claude-code or pi (got ${text ?? "nothing"})`);
 }
 
 /** `starbridge hook permission --agent claude-code [--wait 570s]`, hook JSON on stdin. */
