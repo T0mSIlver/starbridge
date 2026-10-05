@@ -363,8 +363,9 @@ itemRoutes.get("/answers", requireCaller("machine"), async (c) => {
       );
     holdOpen(c);
     // Nothing yields between the query above and this registration, so no answer slips by.
-    if (await c.var.answers.wait(`${caller.account}/${me}`, seconds, c.req.raw.signal))
-      items = fetch();
+    const woken = await c.var.answers.wait(`${caller.account}/${me}`, seconds, c.req.raw.signal);
+    recheck(c);
+    if (woken) items = fetch();
   }
   return c.json({ ...page(items, from), ...watched(c, caller.account) });
 });
@@ -391,5 +392,6 @@ itemRoutes.post("/quota/ask", requireCaller("paired-device"), async (c) => {
   if (Date.now() < end) holdOpen(c);
   while (behind() > 0 && Date.now() < end && !c.req.raw.signal.aborted)
     await c.var.quotas.wait(caller.account, (end - Date.now()) / 1000, c.req.raw.signal);
+  recheck(c);
   return c.json({ askedAt, behind: behind() });
 });

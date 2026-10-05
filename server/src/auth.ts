@@ -131,12 +131,11 @@ export function requireCaller(...needs: Need[]): MiddlewareHandler<Env> {
 
 /**
  * Identifies the caller again and fails unless it is still the one admitted. Write routes call
- * it inside their transaction, after the body arrived, so a revocation that landed while the
- * body was uploading still counts.
+ * it inside their transaction, after the body arrived, and long-polls after their wait, so a
+ * revocation that landed in between still counts.
  */
-export function recheck(c: Context<Env>): void {
+export function recheck(c: Context<Env>, was: Caller = c.var.caller): void {
   const now = identify(c);
-  const was = c.var.caller;
   if (!now || now.role !== was.role || now.account !== was.account || now.member !== was.member)
     fail(401, "unauthenticated", "credentials changed during the request");
 }

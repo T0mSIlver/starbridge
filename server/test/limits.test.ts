@@ -9,6 +9,7 @@ import {
   pairingRequest,
   publicKeys,
   type QuotaSnapshot,
+  RECOVERY,
   type SealedItem,
   seal,
   toB64,
@@ -182,12 +183,32 @@ test("the sweep drops answered decisions after a week and the rest after 30 days
   expect(await exists(s, phone, kept.id)).toBe(false);
 });
 
-test("the directory caps its length and its append rate", async () => {
-  const full = await setup({ directoryEntries: 2 });
-  const r = await revoke(full.s, full.acct, "devbox");
-  expect(r.status).toBe(409);
-  expect(r.json.error).toBe("directory-full");
+test("a full directory refuses device-signed adds but takes revocations and recovery adds", async () => {
+  const { s, acct } = await setup({ directoryEntries: 2, recoveryAdds: 1 });
+  const add = async (signer: { id: string; signKey: Uint8Array }, id: string) => {
+    const keys = generateMemberKeys();
+    const member = { id, role: "device" as const, name: id, ...publicKeys(keys) };
+    return append(
+      s,
+      acct.device.token,
+      addEntry(await directory(s, acct.device.token), signer, member, at),
+    );
+  };
+  const phoneSigner = { id: acct.device.id, signKey: acct.device.keys.sign.privateKey };
+  const recovery = { id: RECOVERY, signKey: acct.recovery.privateKey };
 
+  const full = await add(phoneSigner, "tablet");
+  expect(full.status).toBe(409);
+  expect(full.json.error).toBe("directory-full");
+  expect((await revoke(s, acct, "devbox")).status).toBe(201);
+  expect((await add(recovery, "new-phone")).status).toBe(201);
+  const more = await add(recovery, "newer-phone");
+  expect(more.status).toBe(409);
+  expect(more.json.error).toBe("directory-full");
+  expect((await revoke(s, acct, "new-phone")).status).toBe(201);
+});
+
+test("the directory caps its append rate", async () => {
   const { s, acct } = await setup({ directoryAppends: [2, 3_600_000] });
   const limited = await revoke(s, acct, "devbox");
   expect(limited.status).toBe(429);

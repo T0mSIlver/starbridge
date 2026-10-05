@@ -44,8 +44,10 @@ export const DEFAULT_LIMITS = {
 
   /** Directory appends per account. */
   directoryAppends: [30, HOUR] as RateWindow,
-  /** Directory entries per account, revoked members included. */
+  /** Directory entries per account past which devices add no members; revocations still pass. */
   directoryEntries: 200,
+  /** Devices the recovery key may still add past directoryEntries. */
+  recoveryAdds: 20,
   /** One directory entry's JSON, in bytes. */
   entryBytes: 8 * 1024,
 

@@ -11,7 +11,7 @@ import {
 } from "@starbridge/protocol";
 import { type Context, Hono } from "hono";
 import { z } from "zod";
-import { fail, identify, recheck, requireCaller } from "../auth";
+import { type Caller, fail, identify, recheck, requireCaller } from "../auth";
 import type { Env } from "../env";
 import { holdOpen, json, waitSeconds } from "../http";
 import { rateLimit } from "../limits";
@@ -83,11 +83,11 @@ function load(db: Database, id: string): Row {
 }
 
 /** The joining device's own session, or a paired device of the same account. */
-function party(c: Context<Env>, r: Row): "joiner" | "device" {
+function party(c: Context<Env>, r: Row): { party: "joiner" | "device"; caller: Caller } {
   const caller = identify(c);
   if (caller?.role === "device" && caller.account === r.account_id) {
-    if (caller.session === r.session_hash) return "joiner";
-    if (caller.member !== null) return "device";
+    if (caller.session === r.session_hash) return { party: "joiner", caller };
+    if (caller.member !== null) return { party: "device", caller };
   }
   fail(404, "not-found");
 }
@@ -178,6 +178,7 @@ joinRoutes.get("/joins", requireCaller("paired-device"), async (c) => {
       fail(429, "too-many-waits", "this account already has its join long-polls open");
     holdOpen(c);
     await c.var.joins.wait(`account:${account}`, seconds, c.req.raw.signal);
+    recheck(c);
     out = read();
   }
   return c.json({ joins: out.joins, cursor: String(out.cursor) });
@@ -188,7 +189,7 @@ joinRoutes.get("/joins/:id", async (c) => {
   const { db } = c.var;
   const id = c.req.param("id");
   let r = load(db, id);
-  party(c, r);
+  const { caller } = party(c, r);
   const after = Number(c.req.query("after") ?? 0) || 0;
   const seconds = waitSeconds(c);
   if (r.version <= after && seconds > 0) {
@@ -196,6 +197,7 @@ joinRoutes.get("/joins/:id", async (c) => {
       fail(429, "too-many-waits", "this join request already has its long-polls open");
     holdOpen(c);
     await c.var.joins.wait(`join:${id}`, seconds, c.req.raw.signal);
+    recheck(c, caller);
     r = load(db, id);
   }
   return c.json({ join: view(r) });
@@ -225,7 +227,7 @@ joinRoutes.post("/joins/:id/reveal", requireCaller("device"), async (c) => {
   const r = db.transaction(() => {
     recheck(c);
     const r = load(db, c.req.param("id"));
-    if (party(c, r) !== "joiner") fail(404, "not-found");
+    if (party(c, r).party !== "joiner") fail(404, "not-found");
     if (!isOpen(r)) fail(409, "closed", "this join request was answered or cancelled");
     if (!r.approver_key) fail(409, "not-ready", "no device is comparing digits yet");
     if (r.joiner_key) fail(409, "already-revealed");

@@ -429,7 +429,8 @@ How it generalizes is open.
   orchestrator with 10 sessions asking a few hundred decisions a day. Answered decisions and
   their answers are kept 7 days, unanswered decisions and quota snapshots 30; 10000 stored
   decisions and 128 MB per account; directories end at 200 entries, which is about 100 add and
-  revoke pairs; an account that reaches it needs the operator to reset it. The numbers live in
+  revoke pairs; an account that reaches it needs the operator to reset it (since 2026-10-06,
+  the cap stops adds only: see the #260 entry). The numbers live in
   `server/src/limits.ts` and PROTOCOL.md, "Limits".
 - 2026-10-05. Setup (#68, spec on the issue): one `starbridge agent` per
   machine, a user service (systemd or launchd), owns the keys and the server
@@ -1017,6 +1018,20 @@ How it generalizes is open.
   whose agent waits), and "When you can" with its count in `fg2`. Runs stay above the groups,
   as in the one feed, and the order inside each group is the feed's. Items look the same in
   every grouping. A saved "Group by machine" carries over.
+- 2026-10-06. The directory cap stops adds, never revocations or recovery (#260, audit finding).
+  A chain of 200 entries refused every append, so a lost machine's token could no longer be
+  revoked, and an owner who lost every device could not recover. From entry 200 on, the server
+  refuses a device-signed `add` with `directory-full`, always takes a revocation (each member is
+  revoked once, so they never outnumber adds), and takes up to 20 recovery-signed adds. The
+  chain stays bounded, at about 440 entries, for clients that replay it whole. No compaction:
+  a checkpoint would need a new trust rule for pins, which 200 entries of churn does not
+  justify; a full account still starts a new chain through the operator.
+- 2026-10-06. Server rechecks after waiting (#260, audit findings). A queued push is sent only
+  if its subscription and device are still active when its turn comes, so revoking a device
+  stops pushes already waiting for it. Every long-poll (`GET /joins`, `GET /joins/:id`,
+  `GET /answers`, `POST /quota/ask`, `GET /pairings/:rendezvous`) identifies its caller again
+  after the wait and answers 401 if the session or token was revoked meanwhile. Usage counts
+  key machines and devices by account and member id, since member ids repeat across accounts.
 - 2026-10-05. A typed reply on every question (#201, owner). A question with options also takes
   a typed reply, as a side option: a neutral text button "Reply" after the options in the web
   detail and the Android sheet opens a text field with Send. Rows, cards and notifications do
