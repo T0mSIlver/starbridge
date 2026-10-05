@@ -106,7 +106,7 @@ export function AddDevice() {
             </Link>
           </PairResult>
         ) : req ? (
-          <article className={p.panel} aria-label="Pairing request">
+          <article className={`m-appear ${p.panel}`} aria-label="Pairing request">
             <div className={`t-meta ${p.meta}`}>
               <Icon name={req.role === "machine" ? "desktop" : "phone"} size={16} />
               <span>{req.name}</span>
@@ -194,6 +194,13 @@ export function AddDevice() {
               </div>
             </div>
           </article>
+        ) : busy && !error ? (
+          <div className={`${p.panel} ${p.qr}`} aria-hidden>
+            <span className={`skeleton ${p.qrBone}`} />
+            <div className={p.qrText}>
+              <span className={`skeleton ${p.textBone}`} />
+            </div>
+          </div>
         ) : (
           <div>
             <button type="button" className={`t-label ${ui.btn}`} disabled={busy} onClick={showQr}>

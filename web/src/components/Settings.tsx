@@ -327,7 +327,10 @@ function DeviceSection() {
   const [all, setAll] = useState<Device[] | undefined>(sampleDevices);
   const [revoking, setRevoking] = useState<Device>();
   useEffect(() => {
-    if (ctx) load().then((d) => setAll(d.devices(ctx)));
+    if (ctx)
+      load()
+        .then((d) => setAll(d.devices(ctx)))
+        .catch(() => setAll([]));
   }, [ctx]);
   const order = (d: Device) => (d.self ? 0 : d.role === "device" ? 1 : 2);
   const shown = (all ?? [])

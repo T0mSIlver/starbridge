@@ -17,7 +17,7 @@ export function PairResult({
   children: React.ReactNode;
 }) {
   return (
-    <article className={p.panel} role="status" aria-label="Pairing result">
+    <article className={`m-appear ${p.panel}`} role="status" aria-label="Pairing result">
       <div className={`t-meta ${p.meta}`}>
         <Icon name={outcome.icon} size={16} />
         <span>{outcome.name}</span>
