@@ -65,7 +65,7 @@ plugins install at user scope. Setup also replaces a hand-written `starbridge
 quota push` unit and a copied mod or skill, then uploads a first snapshot.
 `--yes` takes every default; `--no-quota`, `--no-service` and `--no-plugin`
 skip a step. `starbridge status` prints the same checks. `starbridge
-uninstall` removes the service and the plugins, asks your devices to revoke
+uninstall` removes the service, the plugins and then the binary, asks your devices to revoke
 the machine, and deletes the keys only when you say so (`--purge`).
 
 `starbridge permissions enable` sends this machine's Claude Code permission
