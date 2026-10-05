@@ -302,11 +302,11 @@ test("waiting and working flip a decision's state; only a flip to waiting pushes
   expect(ctx.errors.at(-1)).toContain("already answered");
 });
 
-test("ask --waiting posts it waiting without a second push", async () => {
+test("ask --waiting pushes once, through its waiting state, so the notification says waiting", async () => {
   const ctx = await paired(server);
   await run([...ASK, "--waiting"], ctx);
   expect((await server.opened("waiting")).map((w) => w.state)).toEqual(["waiting"]);
-  expect(server.pushed).toEqual(["decision"]);
+  expect(server.pushed).toEqual(["waiting"]);
 });
 
 test("a decision names its agent and the machine's kind, which config sets", async () => {
