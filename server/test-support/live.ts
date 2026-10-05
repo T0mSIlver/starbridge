@@ -42,6 +42,8 @@ export class LiveServer {
   readonly failures: string[] = [];
   /** The next HTTP requests to these paths never get a response, once each. */
   readonly stalls: string[] = [];
+  /** The kind of each push the server sent, in order: push itself is off. */
+  readonly pushed: string[] = [];
 
   private constructor(
     private readonly s: Server,
@@ -58,6 +60,10 @@ export class LiveServer {
       fetch: (req, server) => (live as LiveServer).handle(req, server),
     });
     live = new LiveServer(s, owner, http);
+    const pushed = live.pushed;
+    s.deps.push.notify = (_account: string, to: string[], payload: (d: string) => string) => {
+      pushed.push(JSON.parse(payload(to[0] as string)).kind);
+    };
     return live;
   }
 
@@ -131,7 +137,7 @@ export class LiveServer {
   }
 
   /** Items of `kind` as the phone lists them, opened and verified; `open=1` for open ones. */
-  async opened<K extends "decision" | "quota" | "permission" | "settled" | "run">(
+  async opened<K extends "decision" | "quota" | "permission" | "settled" | "run" | "waiting">(
     kind: K,
     query = "",
   ) {

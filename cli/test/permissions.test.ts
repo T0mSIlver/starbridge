@@ -55,7 +55,7 @@ const MODE = { type: "setMode", mode: "acceptEdits", destination: "session" };
  */
 async function machine(agent = true): Promise<TestCtx> {
   const ctx = await paired(server);
-  expect(await run(["permissions", "enable"], ctx)).toBe(0);
+  expect(await run(["config", "permissions", "on"], ctx)).toBe(0);
   if (!agent) ctx.env.STARBRIDGE_NO_AGENT = "1";
   else {
     const a = makeAgent(ctx, { socket: join(ctx.store.dir, "agent.sock"), noQuota: true });
@@ -285,9 +285,11 @@ test("SIGTERM (Esc or No at the keyboard) reports the prompt settled and prints 
 
 test("while disabled the hooks post nothing and print nothing", async () => {
   const ctx = await machine();
-  expect(await run(["permissions", "disable"], ctx)).toBe(0);
+  expect(await run(["config", "permissions", "off"], ctx)).toBe(0);
   expect(await hookPermission(ctx, request(), { agent: "claude-code" })).toBe(0);
-  expect(ctx.lines).toEqual(["Permission prompts stay at the keyboard."]);
+  // The config listing only: the hook printed nothing.
+  expect(ctx.lines).toHaveLength(2);
+  expect(ctx.lines[0]).toBe("permissions   off");
   expect(await server.opened("permission")).toEqual([]);
   const status = await new AgentClient(join(ctx.store.dir, "agent.sock")).call<Status>(
     "GET",

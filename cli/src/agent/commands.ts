@@ -3,8 +3,15 @@
  * the server (`withAgent` picks), with the agent holding the keys and the server connection.
  */
 import type { Answer, QuotaSnapshot } from "@starbridge/protocol";
-import { type Ctx, parseDuration } from "../context";
-import { type AskInput, answerLine, EXIT_TIMEOUT, resolveSource, waitSeconds } from "../decisions";
+import { type Ctx, parseDuration, UsageError } from "../context";
+import {
+  type AskInput,
+  answerLine,
+  EXIT_TIMEOUT,
+  markWaiting,
+  resolveSource,
+  waitSeconds,
+} from "../decisions";
 import { MAX_HOLD_SECONDS, type SessionEvent } from "./api";
 import type { AgentClient } from "./client";
 
@@ -19,11 +26,27 @@ export async function askVia(
   input: AskInput,
   opts: { wait?: boolean; timeout?: string; json?: boolean },
 ): Promise<number> {
-  const resolved = resolveSource(input, ctx.env, process.cwd());
+  const resolved = resolveSource(
+    { ...input, waiting: input.waiting || opts.wait },
+    ctx.env,
+    process.cwd(),
+  );
   const { id } = await agent.call<{ id: string }>("POST", "/v1/decisions", { input: resolved });
   ctx.out(id);
   if (!opts.wait) return 0;
   return waitVia(ctx, agent, { id, timeout: opts.timeout, json: opts.json });
+}
+
+/** `waiting` and `working` through the agent. */
+export async function waitingVia(
+  agent: AgentClient,
+  opts: { id?: string; state: "working" | "waiting" },
+): Promise<number> {
+  if (!opts.id) throw new UsageError(`${opts.state} needs a decision id`);
+  await agent.call("POST", `/v1/decisions/${encodeURIComponent(opts.id)}/waiting`, {
+    state: opts.state,
+  });
+  return 0;
 }
 
 /** `wait` through the agent: held requests of at most MAX_HOLD_SECONDS until the deadline. */
@@ -33,7 +56,7 @@ export async function waitVia(
   opts: { id?: string; timeout?: string; json?: boolean },
 ): Promise<number> {
   const next = (wait: number) =>
-    agent.call<{ answer?: Answer; question?: string; defaultAt?: string }>(
+    agent.call<{ answer?: Answer; question?: string }>(
       "POST",
       "/v1/answers/next",
       { ...(opts.id ? { id: opts.id } : {}), wait },
@@ -41,14 +64,15 @@ export async function waitVia(
       ctx.signal,
     );
   let r = await next(0);
+  const id = opts.id;
+  if (!r.answer && id) await markWaiting(ctx, () => waitingVia(agent, { id, state: "waiting" }));
   let deadline = Number.POSITIVE_INFINITY;
   if (opts.timeout) deadline = ctx.now().getTime() + parseDuration(opts.timeout);
-  else if (r.defaultAt) deadline = Date.parse(r.defaultAt);
   while (!r.answer) {
     if (ctx.signal?.aborted) return EXIT_INTERRUPTED;
     const left = deadline - ctx.now().getTime();
     if (left <= 0) {
-      ctx.err(`No answer to ${opts.id ?? "any decision"} yet: apply the default.`);
+      ctx.err(`No answer to ${opts.id ?? "any decision"} yet.`);
       return EXIT_TIMEOUT;
     }
     r = await next(Math.max(1, Math.min(MAX_HOLD_SECONDS, Math.ceil(left / 1000))));

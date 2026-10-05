@@ -35,8 +35,8 @@ answers on its unix socket, each session talks to it with `$.http.fetch`:
 - `POST /v1/sessions/<id>/hello` once per session id, with the session's
   working directory.
 - `GET /v1/sessions/<id>/events?wait=25` back to back, under the 30 s limit on
-  calls from a mod. The agent hands the session only the answers and
-  default-time notices for the decisions it asked.
+  calls from a mod. The agent hands the session only the answers to the
+  decisions it asked.
 - The mod submits each event's line, then confirms it with
   `POST /v1/sessions/<id>/ack`; the agent hands an unconfirmed event over
   again. It skips event types it does not know.
@@ -60,15 +60,11 @@ before the agent existed, and checks for the agent every 30 s.
 - The other sessions watch `state.json`. When it changes, they run `starbridge
   answers --session <id>`, which reads local state only.
 - `answers` returns only answers to decisions that session asked and that no
-  `wait` has printed. When a decision's default time passes with no answer,
-  it returns one line for that too:
-  `No answer to d_Xk3… (Merge #12 now?) by its default time …: apply your default: Merge`.
-  The mod submits each line, then confirms it with
+  `wait` has printed. The mod submits each line, then confirms it with
   `starbridge answers --session <id> --ack <ack>`; the CLI hands an
   unconfirmed line over again.
 - A session that does not poll also runs `answers` every 30 s when
-  `state.json` has not changed, because a default time passing changes no
-  file.
+  `state.json` has not changed, in case a change went unseen.
 - When a session ends, it gives up the lease and another session starts
   polling.
 
@@ -85,8 +81,8 @@ pnpm --filter @starbridge/mod test
 ```
 
 `e2e/run.ts` drives real Claude Code sessions in tmux through each case:
-idle, mid-turn, `/clear` and `/resume`, a hot reload, a server outage, two
-sessions at once and a default time. It runs against the server app on a
+idle, mid-turn, `/clear` and `/resume`, a hot reload, a server outage, and two
+sessions at once. It runs against the server app on a
 random port (`--local`), or against a real server with a test device
 (`e2e/device.ts`) and this machine's CLI config. It needs `claude`, `tmux` and
 `starbridge` on `PATH`, and prints one row of timings per case. With

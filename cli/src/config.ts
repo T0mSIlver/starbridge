@@ -14,11 +14,13 @@ import { join } from "node:path";
 import {
   type Answer,
   fromB64,
+  type MachineKind,
   type MemberKeys,
   type Permission,
   type PermissionAnswer,
   type Pin,
   toB64,
+  type Waiting,
 } from "@starbridge/protocol";
 
 /** `$STARBRIDGE_CONFIG_DIR`, else `$XDG_CONFIG_HOME/starbridge`, else `~/.config/starbridge`. */
@@ -49,15 +51,12 @@ export interface State {
       question: string;
       options: string[];
       askedAt: string;
-      defaultAt?: string;
-      /** What the agent does if nobody answers. */
-      default?: string;
-      /** Set once the mod confirmed it told the session the default time passed. */
-      defaulted?: boolean;
       /** Answered on its `answerIn` page instead of Starbridge. */
       answerIn?: boolean;
-      /** Closed with `settle`: no answer and no default-time notice will follow. */
+      /** Closed with `settle`: no answer will follow. */
       settled?: boolean;
+      /** The decision's waiting state as last posted, under the one id it keeps. */
+      waiting?: { id: string; state: Waiting["state"] };
       cursor?: string;
       /** The Claude Code session that asked; the mod delivers the answer there only. */
       session?: string;
@@ -107,8 +106,10 @@ export interface PendingPermission {
  * flags override it.
  */
 export interface AgentConfig {
-  /** Permission prompts go to Starbridge (#57); off unless `starbridge permissions enable`. */
+  /** Permission prompts go to Starbridge (#57); off unless `starbridge config permissions on`. */
   permissions?: { enabled?: boolean };
+  /** What this machine is, for its icon on devices: detected by pair and setup, or set. */
+  machineKind?: MachineKind;
   quota?: {
     /** The CodexBar providers to upload; none means no timer. */
     providers?: string[];

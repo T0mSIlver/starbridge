@@ -16,7 +16,7 @@ export const VERSION = "0.2.0";
 const CLIENT = `starbridge-mod/${VERSION}`;
 
 /** Event types this mod submits; others are skipped and left unconfirmed, as the API asks. */
-const KNOWN = new Set(["answer", "default"]);
+const KNOWN = new Set(["answer"]);
 
 export interface Reply {
   status: number;

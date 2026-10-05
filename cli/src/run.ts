@@ -9,6 +9,7 @@ import { randomBytes } from "node:crypto";
 import { constants } from "node:os";
 import type { Writable } from "node:stream";
 import {
+  type MachineKind,
   ProtocolError,
   parseWith,
   RUN_HEARTBEAT_MS,
@@ -22,6 +23,7 @@ import {
   type Ctx,
   devices,
   iso,
+  machineKind,
   refreshDirectory,
   type Session,
   session,
@@ -53,7 +55,12 @@ export interface RunInput {
   links?: SessionLink[];
 }
 
-export function buildRun(input: RunInput, machine: string, to: string[]): Run {
+export function buildRun(
+  input: RunInput,
+  machine: string,
+  to: string[],
+  kind: { machineKind?: MachineKind } = {},
+): Run {
   const run = {
     v: 1 as const,
     id: input.id,
@@ -62,6 +69,7 @@ export function buildRun(input: RunInput, machine: string, to: string[]): Run {
     reason: input.reason,
     source: {
       machine,
+      ...kind,
       project: input.project,
       session: input.session,
       ...(input.sessionTitle ? { sessionTitle: input.sessionTitle } : {}),
@@ -86,6 +94,7 @@ export async function postRun(ctx: Ctx, s: Session, input: RunInput): Promise<Ru
     input,
     s.machine.name,
     to.map((d) => d.id),
+    machineKind(ctx),
   );
   const signer = { id: s.machine.id, signKey: s.keys.sign.privateKey };
   await s.api.postItem(seal("run", run, signer, to));

@@ -12,7 +12,9 @@ import type { AgentConfig } from "../config";
 import { type Ctx, UsageError } from "../context";
 import { type AskInput, ask } from "../decisions";
 import { pair } from "../pair";
+import { permissionsEnabled } from "../permissions";
 import { pushOnce } from "../quota";
+import { rememberMachineKind, setPermissions } from "../settings";
 import {
   type Found,
   findCodexbar,
@@ -95,6 +97,10 @@ export async function setup(sys: Sys, opts: SetupOpts): Promise<number> {
     if (code !== 0) return code;
     machine = ctx.store.machine();
   }
+  if (machine)
+    ctx.out(
+      `Shown as a ${rememberMachineKind(ctx)} (\`starbridge config machine-kind\` changes it).`,
+    );
 
   const configBefore = JSON.stringify(ctx.store.agentConfig());
   const quota = opts.noQuota ? await skipQuota(sys) : await codexbarStep(sys, opts);
@@ -108,6 +114,7 @@ export async function setup(sys: Sys, opts: SetupOpts): Promise<number> {
     section(ctx, "Claude Code");
     ctx.out("Skipped (--no-plugin).");
   } else await pluginStep(sys);
+  await permissionStep(sys);
 
   section(ctx, "Check");
   if (machine && quota && quota.providers.length > 0) await firstUpload(ctx, quota);
@@ -343,6 +350,26 @@ async function pluginStep(sys: Sys) {
   }
 }
 
+/** Off unless asked: the Claude app already answers prompts for Remote Control sessions. */
+async function permissionStep(sys: Sys) {
+  const { ctx, prompt } = sys;
+  section(ctx, "Permission prompts");
+  if (permissionsEnabled(ctx)) {
+    ctx.out("Sent to your devices (`starbridge config permissions off` stops it).");
+    return;
+  }
+  const on = await prompt.confirm(
+    "Also send Claude Code permission prompts to your devices? The Claude app already shows them for Remote Control sessions.",
+    false,
+  );
+  if (on) setPermissions(ctx, true);
+  ctx.out(
+    on
+      ? "Sent to your devices (`starbridge config permissions off` stops it)."
+      : "They stay at the keyboard (`starbridge config permissions on` sends them).",
+  );
+}
+
 function summary(snap: QuotaSnapshot): string {
   const windows = snap.providers.reduce((n, p) => n + p.windows.length, 0);
   const failed = snap.providers.filter((p) => p.error).map((p) => p.provider);
@@ -371,8 +398,6 @@ async function testDecision(ctx: Ctx, name: string) {
     context:
       "Sent by `starbridge setup` to check the path from this machine to your devices. The answer prints in the terminal.",
     options: ["Yes", "No"],
-    default: "Nothing: it was a test",
-    defaultAt: "10m",
     project: "starbridge setup",
     session: "",
   };
