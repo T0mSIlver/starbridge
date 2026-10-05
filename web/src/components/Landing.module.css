@@ -20,7 +20,8 @@
 }
 
 .top {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
   gap: var(--s8);
   height: var(--s18);
@@ -35,7 +36,6 @@
 .nav {
   display: flex;
   gap: var(--s8);
-  margin: 0 auto;
 }
 
 .nav a {
@@ -48,6 +48,7 @@
 }
 
 .signIn {
+  justify-self: end;
   height: calc(var(--s8) + var(--s1));
   padding: 0 var(--s4);
 }
@@ -390,6 +391,7 @@
 
 @media (max-width: 599px) {
   .top {
+    grid-template-columns: 1fr auto;
     height: var(--size-top-web);
   }
 
@@ -398,7 +400,6 @@
   }
 
   .signIn {
-    margin-left: auto;
     height: var(--s8);
     padding: 0 var(--s3);
   }

@@ -76,7 +76,7 @@ export function SignIn({ ownServer = false }: { ownServer?: boolean }) {
   const [token, setToken] = useState("");
   const { busy, error, run } = useAction();
   return (
-    <FirstRunPage>
+    <FirstRunPage centered>
       <h1 className="t-heading">Sign in to Starbridge</h1>
       <a href="/v1/auth/github" className={`t-label ${ui.btn} ${ui.lg} ${ui.fill} ${s.go}`}>
         <Icon name="github" size={18} />
