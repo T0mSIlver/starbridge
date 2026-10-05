@@ -334,7 +334,7 @@
 }
 
 /* A Find match: bold on `surface2`, never amber. */
-.hit {
+.match {
   border-radius: 2px;
   background: var(--surface2);
   color: inherit;

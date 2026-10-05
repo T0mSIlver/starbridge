@@ -35,7 +35,7 @@ export function Hit({ text }: { text: string }) {
   return parts.map((part, i) =>
     i % 2 ? (
       // biome-ignore lint/suspicious/noArrayIndexKey: the parts of one string, in order
-      <mark key={i} className={s.hit}>
+      <mark key={i} className={s.match}>
         {part}
       </mark>
     ) : (
