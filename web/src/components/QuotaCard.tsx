@@ -1,31 +1,8 @@
 import type { CSSProperties } from "react";
-import { relative } from "@/lib/format";
-import type { QuotaAlert, QuotaCardData, QuotaWindow } from "@/lib/types";
+import { status } from "@/lib/quota";
+import type { QuotaCardData } from "@/lib/types";
 import s from "./QuotaCard.module.css";
 import ui from "./ui.module.css";
-
-type State = "ok" | "unused" | "out" | "unknown";
-
-// A tone always comes with a word (DESIGN.md).
-const WORD: Record<State, string> = {
-  ok: "On pace",
-  out: "Will run out",
-  unused: "Headroom unused",
-  unknown: "Too early to tell",
-};
-
-function stateOf(w: QuotaWindow, alert?: QuotaAlert): State {
-  if (!w.pace || w.pace.stage === "unknown") return "unknown";
-  if (!w.pace.willLastToReset) return "out";
-  if (alert?.kind === "unused-headroom") return "unused";
-  return "ok";
-}
-
-function alertText(a: QuotaAlert): string {
-  return a.kind === "runs-out"
-    ? `Runs out ${relative(a.runsOutAt)} at this pace; resets ${relative(a.resetsAt)}.`
-    : `Resets ${relative(a.resetsAt)} with ${Math.round(a.unusedPercent)}% unused.`;
-}
 
 // The provider's colour from DESIGN.md, keyed by CodexBar's id; grey for a provider it lacks.
 function dotStyle(provider: string): CSSProperties {
@@ -35,7 +12,7 @@ function dotStyle(provider: string): CSSProperties {
 
 export function QuotaCard({ q }: { q: QuotaCardData }) {
   const { provider, window: w, alert } = q;
-  const state = stateOf(w, alert);
+  const { state, word, detail, resets } = status(w, alert);
   const used = Math.round(w.usedPercent);
   const expected = w.pace ? Math.round(w.pace.expectedUsedPercent) : null;
   const fill = Math.min(Math.max(used, 0), 100);
@@ -77,12 +54,12 @@ export function QuotaCard({ q }: { q: QuotaCardData }) {
         )}
       </div>
       <p className={`t-small ${s.facts}`}>
-        <span className={`t-label ${s.word} ${s[state]}`}>{WORD[state]}</span>
-        <span>{w.resetsAt ? `Resets ${relative(w.resetsAt)}` : "Reset time unknown"}</span>
+        <span className={`t-label ${s.word} ${s[state]}`}>{word}</span>
+        <span>{resets}</span>
       </p>
-      {alert && (
+      {detail && (
         <p className={`t-small ${s.alert}`} role="status">
-          {alertText(alert)}
+          {detail}
         </p>
       )}
     </article>
