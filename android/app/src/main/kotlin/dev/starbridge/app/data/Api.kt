@@ -72,7 +72,8 @@ class Api(private val http: OkHttpClient, private val server: String, private va
         run {
             val request = Request.Builder()
                 .url("$server/v1$path")
-                .method(method, body?.toString()?.toRequestBody(json))
+                // OkHttp refuses a POST without a body; a bodiless ask sends an empty one (#253).
+                .method(method, body?.toString()?.toRequestBody(json) ?: if (method == "GET" || method == "DELETE") null else ByteArray(0).toRequestBody())
                 .apply {
                     session?.let { header("Authorization", "Bearer $it") }
                     headers.forEach { (k, v) -> header(k, v) }
