@@ -50,6 +50,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import okhttp3.OkHttpClient
 import java.io.IOException
+import dev.starbridge.app.ui.span
 import java.time.Instant
 import java.time.OffsetDateTime
 import java.time.temporal.ChronoUnit
@@ -67,6 +68,8 @@ interface Alerts {
     fun join(id: String, name: String)
     /** A run's newest update: shows, updates or ends its notification. */
     fun run(run: Run)
+    /** Quota alerts the uploader newly raised; each shows once, if this phone opted in. */
+    fun quota(notices: List<QuotaNotice>) {}
 }
 
 /**
@@ -724,6 +727,22 @@ class ServerStore(
     private suspend fun syncQuotas() {
         val quotas = api().quota().mapNotNull { listed -> open(listed.item)?.let { (from, body) -> SavedQuota(from, body as QuotaSnapshot) } }
         persist(saved.copy(quotas = quotas))
+        alerts.quota(quotas.flatMap(::notices))
+    }
+
+    private fun notices(q: SavedQuota): List<QuotaNotice> {
+        val now = Instant.now()
+        val labels = q.body.providers.flatMap { p -> p.windows.map { "${p.provider}/${it.id}" to it.label.ifBlank { it.id } } }.toMap()
+        return q.body.alerts.filter { it.notify == true }.map { a ->
+            val name = "${a.provider} ${labels["${a.provider}/${a.window}"] ?: a.window}"
+            val resets = instant(a.resetsAt)?.let { "in ${span(now, it)}" } ?: "soon"
+            val (title, text) = when (a.kind) {
+                "low" -> "$name: ${a.threshold}% left" to "Resets $resets."
+                "runs-out" -> "$name will run out" to (instant(a.runsOutAt)?.let { "Runs out in ${span(now, it)} at this pace; resets $resets." } ?: "Resets $resets.")
+                else -> "$name resets with headroom unused" to "Resets $resets with ${a.unusedPercent?.roundToInt() ?: 0}% unused."
+            }
+            QuotaNotice("${q.body.id}/${a.provider}/${a.window}/${a.kind}", a.provider, a.window, a.kind, title, text)
+        }
     }
 
     /** Every run the server holds, the latest update of each. */
@@ -1228,6 +1247,7 @@ class ServerStore(
                 pace = paceOf(pace, unused),
                 alert = alerts.isNotEmpty(),
                 steadyPercent = pace?.expectedUsedPercent?.roundToInt()?.coerceIn(0, 100),
+                windowMinutes = w.windowMinutes,
                 machine = if (named) directory?.members?.get(q.from)?.member?.name ?: q.from else null,
             )
         }

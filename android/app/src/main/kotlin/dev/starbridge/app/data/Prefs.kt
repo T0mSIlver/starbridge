@@ -4,6 +4,7 @@ import android.content.Context
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.serialization.json.Json
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -25,7 +26,29 @@ class Prefs @Inject constructor(@ApplicationContext context: Context) {
         _colours.value = value
     }
 
+    private val _quota = MutableStateFlow(
+        prefs.getString(QUOTA, null)?.let { runCatching { json.decodeFromString(QuotaSettings.serializer(), it) }.getOrNull() } ?: QuotaSettings(),
+    )
+    val quota: StateFlow<QuotaSettings> = _quota
+
+    fun setQuota(value: QuotaSettings) {
+        prefs.edit().putString(QUOTA, json.encodeToString(QuotaSettings.serializer(), value)).apply()
+        _quota.value = value
+    }
+
+    /** Marks a quota notice shown; false when it already was. Keeps the last 200. */
+    @Synchronized
+    fun firstShow(key: String): Boolean {
+        val shown = prefs.getString(QUOTA_SHOWN, null)?.split('\n')?.filter { it.isNotEmpty() }.orEmpty()
+        if (key in shown) return false
+        prefs.edit().putString(QUOTA_SHOWN, (shown + key).takeLast(200).joinToString("\n")).apply()
+        return true
+    }
+
     private companion object {
         const val COLOURS = "colours"
+        const val QUOTA = "quota"
+        const val QUOTA_SHOWN = "quota-shown"
+        val json = Json { ignoreUnknownKeys = true; encodeDefaults = false }
     }
 }

@@ -622,6 +622,26 @@ How it generalizes is open.
   settings are the quota notifications: off by default, enabled per provider (also from an
   alert card), at most one push per window per reset, on their own low-priority channel. Cost
   tracking, menu-bar-only settings and confetti stay out.
+- 2026-10-05. Quota settings and notifications, as built (#115). Settings live on each device
+  (web `localStorage`, Android preferences) and sit on a Quota settings page opened from the
+  Quotas screen: bars show used or remaining, reset times relative or as a clock time
+  (CodexBar's: "14:30", "tomorrow 14:30", else the date), workdays on weekly bars (off, 4, 5 or
+  7 from Monday; ticks evenly spaced, and the pace marker counts workdays in the device's zone,
+  as CodexBar's `UsagePace.weekly`), workday ticks subtle, high contrast or hidden, and per
+  provider show, notify and order. With no order set, alert cards come first as before. The
+  default stays "used", where CodexBar defaults to remaining. The uploader adds a `low` alert at
+  CodexBar's default thresholds (50% and 20% left) and the proposed pace rule: unused headroom
+  1 hour before the reset for windows of a day or less, 1 day before for longer ones, at 30%
+  unused. It records each alert it raised by window, kind and threshold with its reset in the
+  CLI's state file, marks only a new one `notify`, and posts every other snapshot `quiet`
+  (stored, not pushed), so FCM no longer wakes the phone every 5 minutes. A reset that moves by
+  less than half its window is the same cycle, as in CodexBar. The thresholds are fixed rather
+  than a setting, because the device's settings never reach the uploader. "Notify about" picks
+  low, pace, or both, for the providers set to notify. Android shows them on a low-importance
+  "Quotas" channel. The web page shows them while a Starbridge page is open, because quota
+  snapshots still skip Web Push: a browser that opted out would get a push it shows nothing
+  for, which Chrome answers with its own notification and Firefox and Safari count against the
+  subscription.
 
 ## Encryption, with existing libraries
 

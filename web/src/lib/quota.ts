@@ -8,8 +8,13 @@ export type State = "ok" | "unused" | "out" | "unknown";
 
 export type Status = { state: State; word: string; detail?: string; resets: string };
 
-export function status(w: QuotaWindow, alert: QuotaAlert | undefined, now = new Date()): Status {
-  const at = (iso: string) => relative(iso, now);
+/** `at` writes a time: relative ("in 2 h") by default, or a clock time (quotaSettings.ts). */
+export function status(
+  w: QuotaWindow,
+  alert: QuotaAlert | undefined,
+  now = new Date(),
+  at: (iso: string) => string = (iso) => relative(iso, now),
+): Status {
   if (w.resetsAt && Date.parse(w.resetsAt) <= now.getTime())
     return {
       state: "unknown",

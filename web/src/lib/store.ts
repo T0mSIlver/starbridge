@@ -26,8 +26,6 @@ type Records = {
   promptAnswers: Record<string, PromptReply & { answeredAt: string }>;
   /** The last account signed in here: the service worker's default. */
   current: string;
-  /** Quota alerts already notified, so a snapshot every few minutes does not repeat them. */
-  alerts: string[];
   /** Keys written and read back once by `keeps`. */
   probe: StoredKeys;
 };

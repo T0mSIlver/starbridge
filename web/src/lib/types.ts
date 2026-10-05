@@ -56,7 +56,12 @@ export type QuotaCardData = {
   /** The machine whose uploader sent it, shown when more than one machine reports. */
   machine?: string;
   window: QuotaWindow;
+  /** The pace alert that sets the card's state: will run out, or headroom unused. */
   alert?: QuotaAlert;
+  /** Every alert on the window, "low" ones included. */
+  alerts: QuotaAlert[];
+  /** The snapshot's id. */
+  snapshot: string;
 };
 
 /** An opened and verified run, and the name of the machine that signed it. */

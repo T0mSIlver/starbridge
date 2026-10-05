@@ -44,3 +44,14 @@ fun moment(at: Instant, now: Instant, zone: java.time.ZoneId = java.time.ZoneId.
 /** "22:00" in the phone's zone. */
 fun clock(at: Instant, zone: java.time.ZoneId = java.time.ZoneId.systemDefault()): String =
     java.time.format.DateTimeFormatter.ofPattern("HH:mm").withZone(zone).format(at)
+
+/** CodexBar's absolute reset: "14:30" today, "tomorrow 14:30", else "7 Oct, 22:00". */
+fun resetClock(at: Instant, now: Instant, zone: java.time.ZoneId = java.time.ZoneId.systemDefault()): String {
+    val day = at.atZone(zone).toLocalDate()
+    val today = now.atZone(zone).toLocalDate()
+    return when (day) {
+        today -> clock(at, zone)
+        today.plusDays(1) -> "tomorrow ${clock(at, zone)}"
+        else -> "${java.time.format.DateTimeFormatter.ofPattern("d MMM", java.util.Locale.ENGLISH).format(day)}, ${clock(at, zone)}"
+    }
+}

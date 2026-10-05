@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { alertsFor, type QuotaSnapshot, seal } from "@starbridge/protocol";
+import { alertsFor, type QuotaAlert, type QuotaSnapshot, seal } from "@starbridge/protocol";
 import { collect, type ProviderQuota } from "./codexbar";
 import { type Ctx, devices, iso, parseDuration, refreshDirectory, session } from "./context";
 
@@ -21,6 +21,40 @@ export function snapshot(providers: ProviderQuota[], to: string[], now: Date): Q
   };
 }
 
+/** One alert per window, kind and threshold; its reset tells the cycles apart. */
+export const alertKey = (a: QuotaAlert) =>
+  `${a.provider}/${a.window}/${a.kind}${a.kind === "low" ? `/${a.threshold}` : ""}`;
+
+/**
+ * Marks `notify` on each alert not yet raised in its window's cycle, and returns the raised
+ * alerts to keep: these and the earlier ones whose reset has not passed. A reset that moved
+ * less than half its window (5 minutes at least, or with no known length) is the same cycle,
+ * as CodexBar treats it, since providers correct reset times by a few seconds.
+ */
+export function raise(
+  snap: QuotaSnapshot,
+  raised: Record<string, string>,
+  now: Date,
+): { snap: QuotaSnapshot; raised: Record<string, string> } {
+  const minutes = new Map(
+    snap.providers.flatMap((p) => p.windows.map((w) => [`${p.provider}/${w.id}`, w.windowMinutes])),
+  );
+  const kept = Object.fromEntries(
+    Object.entries(raised).filter(([, at]) => Date.parse(at) > now.getTime()),
+  );
+  const alerts = snap.alerts.map((a) => {
+    const key = alertKey(a);
+    const before = kept[key];
+    const length = minutes.get(`${a.provider}/${a.window}`);
+    const tolerance = Math.max((length ?? 0) * 30_000, 300_000);
+    kept[key] = a.resetsAt;
+    const same =
+      before !== undefined && Math.abs(Date.parse(before) - Date.parse(a.resetsAt)) < tolerance;
+    return same ? a : { ...a, notify: true as const };
+  });
+  return { snap: { ...snap, alerts }, raised: kept };
+}
+
 function describe(p: ProviderQuota): string[] {
   if (p.windows.length === 0) return [`${p.provider}: ${p.error ?? "no windows"}`];
   return p.windows.map((w) => {
@@ -37,13 +71,23 @@ export async function pushOnce(ctx: Ctx, opts: QuotaOpts): Promise<QuotaSnapshot
   const providers = await collect(bin, opts.providers, ctx.now, ctx.err);
   const dir = await refreshDirectory(ctx, s);
   const to = devices(dir);
-  const snap = snapshot(
-    providers,
-    to.map((d) => d.id),
-    ctx.now(),
+  const now = ctx.now();
+  const { snap, raised } = raise(
+    snapshot(
+      providers,
+      to.map((d) => d.id),
+      now,
+    ),
+    ctx.store.state().alerts ?? {},
+    now,
   );
   const item = seal("quota", snap, { id: s.machine.id, signKey: s.keys.sign.privateKey }, to);
-  await s.api.postItem(item);
+  // Only a snapshot that raises an alert asks for a push.
+  await s.api.postItem(snap.alerts.some((a) => a.notify) ? item : { ...item, quiet: true });
+  // Recorded once posted, so a failed post raises its alerts again next round.
+  ctx.store.updateState((st) => {
+    st.alerts = raised;
+  });
   return snap;
 }
 
@@ -65,7 +109,8 @@ export async function quotaPush(
       const line = `posted ${snap.id}: ${snap.providers.length} providers, ${windows} windows, ${snap.alerts.length} alerts`;
       if (opts.once) {
         for (const p of snap.providers) for (const l of describe(p)) ctx.out(l);
-        for (const a of snap.alerts) ctx.out(`alert: ${a.kind} ${a.provider} ${a.window}`);
+        for (const a of snap.alerts)
+          ctx.out(`alert: ${a.kind} ${a.provider} ${a.window}${a.notify ? " (new)" : ""}`);
         ctx.out(line);
         return 0;
       }
