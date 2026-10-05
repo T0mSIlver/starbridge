@@ -168,12 +168,21 @@ test("a signed-in browser joins by digits, and the phone hears of it live", asyn
     },
   );
   const { mine, theirs } = await compare(s, acct, j);
-  expect((await joinerWait).json.join.state).not.toBe("open");
+  const compared = await joinerWait;
+  expect(compared.json.join.state).not.toBe("open");
   expect(mine.digits).toBe(theirs.digits);
   expect(mine.digits).toMatch(/^\d{6}$/);
 
+  // The joiner's long-poll outlives the approval, which binds its session to the new device.
+  const before = (await s.call("GET", `/v1/joins/${j.id}`, { token: j.session })).json.join;
+  const approvalWait = s.call("GET", `/v1/joins/${j.id}?after=${before.version}&wait=30`, {
+    token: j.session,
+  });
   r = await approve(s, acct, j, theirs);
   expect(r.status).toBe(200);
+  const approved = await approvalWait;
+  expect(approved.status).toBe(200);
+  expect(approved.json.join.state).toBe("approved");
   r = await s.call("GET", `/v1/joins/${j.id}`, { token: j.session });
   expect(r.json.join.state).toBe("approved");
   const ok = openJoinApproval(r.json.join.approval, mine, j.id);
