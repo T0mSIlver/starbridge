@@ -20,6 +20,7 @@ for i in $(seq 1 "$N"); do
   # Hosted-runner equivalents the workflows expect.
   cat > "$d/.env" <<EOF
 LANG=C.UTF-8
+GRADLE_USER_HOME=$d/.gradle
 ANDROID_HOME=$HOME/.local/opt/android-sdk
 ANDROID_SDK_ROOT=$HOME/.local/opt/android-sdk
 PATH=$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin
@@ -34,8 +35,8 @@ WorkingDirectory=$d
 ExecStart=$d/run.sh
 Restart=always
 RestartSec=10
-KillMode=process
-KillSignal=SIGINT
+KillMode=control-group
+KillSignal=SIGTERM
 TimeoutStopSec=5min
 Nice=5
 
