@@ -56,7 +56,8 @@ export function Inbox() {
     useApp();
   const [grouping, setGrouping] = usePref("grouping");
   const [historyOpen, setHistoryOpen] = usePref("historyOpen");
-  // History's rows fade in when the owner opens it, not when the page loads with it open.
+  // History's rows fade in when the owner opens it, not when the page loads with it open or the
+  // list comes back.
   const [historyToggled, setHistoryToggled] = useState(false);
   const find = useFind();
   const wide = useWide();
@@ -278,7 +279,10 @@ export function Inbox() {
         }}
       />
       {historyOpen && (
-        <div className={historyToggled ? "m-appear" : undefined}>
+        <div
+          className={historyToggled ? "m-appear" : undefined}
+          onAnimationEnd={() => setHistoryToggled(false)}
+        >
           {past.map((p) => (
             <PastRow
               key={p.entry.id}
@@ -395,7 +399,16 @@ function ms(name: "--t-fast" | "--t-state"): number {
   return Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue(name));
 }
 
-type Placed = { row: HTMLElement; prev: Element | null; next: Element | null };
+/** A node and its neighbours, to put it back where it was. */
+type Spot = { node: Element; prev: Element | null; next: Element | null };
+/** A row, and its group when it sits in one (Group by machine). */
+type Placed = { row: HTMLElement; own: Spot; group?: Spot };
+
+const spot = (node: Element): Spot => ({
+  node,
+  prev: node.previousElementSibling,
+  next: node.nextElementSibling,
+});
 type Snapshot = {
   list: HTMLElement;
   view: string;
@@ -425,10 +438,12 @@ function useRowMotion(list: React.RefObject<HTMLElement | null>, ids: string[], 
         // Layout position: unmoved by page or list scroll, and by a move still running.
         tops: new Map(rows.map((r) => [r.dataset.row as string, r.offsetTop])),
         rows: new Map<string, Placed>(
-          rows.map((r) => [
-            r.dataset.row as string,
-            { row: r, prev: r.previousElementSibling, next: r.nextElementSibling },
-          ]),
+          rows.map((r): [string, Placed] => {
+            let group = r.parentElement;
+            while (group && group.parentElement !== el) group = group.parentElement;
+            const placed = { row: r, own: spot(r), group: group ? spot(group) : undefined };
+            return [r.dataset.row as string, placed];
+          }),
         ),
       };
     };
@@ -459,17 +474,25 @@ function useRowMotion(list: React.RefObject<HTMLElement | null>, ids: string[], 
       if (settled && !was.tops.has(id) && !was.seen.has(id))
         row.animate([{ opacity: 0 }, { opacity: 1 }], { duration: ms("--t-state"), easing });
 
-    // Answered or gone: put the row back where it was, inert, fade it out, then close up.
-    for (const [id, { row, prev, next }] of was.rows) {
+    // Answered or gone: put the row back where it was, with its group if that left too, inert;
+    // fade it out, then close up.
+    const back = new Set<Element>();
+    for (const [id, { row, own, group }] of was.rows) {
       if (now.tops.has(id) || ids.includes(id) || row.isConnected) continue;
-      if (prev?.parentElement && el.contains(prev)) prev.after(row);
-      else if (next?.parentElement && el.contains(next)) next.before(row);
+      const at = row.parentElement && !row.parentElement.isConnected ? group : own;
+      if (!at || back.has(at.node)) continue;
+      const { node, prev, next } = at;
+      if (prev?.parentElement && el.contains(prev)) prev.after(node);
+      else if (next?.parentElement && el.contains(next)) next.before(node);
       else continue;
-      row.removeAttribute("data-row");
-      for (const n of row.querySelectorAll("[data-id]")) n.removeAttribute("data-id");
-      row.setAttribute("aria-hidden", "true");
-      row.inert = true;
-      row
+      back.add(node);
+      for (const a of node.getAnimations({ subtree: true })) a.cancel();
+      for (const n of node.querySelectorAll("[data-row]")) n.removeAttribute("data-row");
+      for (const n of node.querySelectorAll("[data-id]")) n.removeAttribute("data-id");
+      node.removeAttribute("data-row");
+      node.setAttribute("aria-hidden", "true");
+      (node as HTMLElement).inert = true;
+      node
         .animate([{ opacity: 1 }, { opacity: 0 }], {
           duration: ms("--t-fast"),
           easing,
@@ -477,7 +500,7 @@ function useRowMotion(list: React.RefObject<HTMLElement | null>, ids: string[], 
         })
         .finished.catch(() => {})
         .then(() => {
-          row.remove();
+          node.remove();
           if (last.current?.list === el) Object.assign(last.current, measure());
         });
     }
