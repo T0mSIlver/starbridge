@@ -190,6 +190,7 @@ async function showAlerts(account: string, snapshot: QuotaSnapshot): Promise<voi
   const seen = new Set((await store.get("alerts", account)) ?? []);
   const fresh: string[] = [];
   for (const a of snapshot.alerts) {
+    if (a.kind === "low") continue;
     const key = `${a.kind}/${a.provider}/${a.window}/${a.resetsAt}`;
     if (seen.has(key)) continue;
     seen.add(key);

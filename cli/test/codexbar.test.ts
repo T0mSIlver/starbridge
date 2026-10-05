@@ -28,10 +28,14 @@ test("recorded output: every window, with pace and alerts", () => {
 
   const alerts = snapshot(providers, ["phone"], NOW).alerts;
   expect(alerts.map((a) => `${a.kind} ${a.provider} ${a.window}`)).toEqual([
+    "low codex primary",
     "runs-out codex primary",
+    "low codex secondary",
     "runs-out codex secondary",
+    "low zai primary",
     "runs-out zai primary",
     "unused-headroom claude primary",
+    "low claude secondary",
     "runs-out claude secondary",
   ]);
 });

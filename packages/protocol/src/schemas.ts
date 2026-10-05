@@ -120,6 +120,8 @@ export const SealedItem = z.object({
    * permission a permission answer or a settled notice closes. The server marks it answered.
    */
   re: Id.optional(),
+  /** Store without pushing: a quota snapshot that raises no new alert. */
+  quiet: z.literal(true).optional(),
   boxes: z
     .array(z.object({ to: Id, box: B64 }))
     .min(1)
@@ -430,21 +432,34 @@ export const QuotaWindow = z.object({
 });
 export type QuotaWindow = z.infer<typeof QuotaWindow>;
 
+/**
+ * A window the uploader alerts on. It repeats in every snapshot while it holds; `notify` marks
+ * the one snapshot that first raised it in this window's cycle, the one that asked for a push.
+ */
+const AlertBase = {
+  provider: z.string(),
+  window: z.string(),
+  resetsAt: Time,
+  notify: z.literal(true).optional(),
+};
+
 export const QuotaAlert = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("unused-headroom"),
-    provider: z.string(),
-    window: z.string(),
-    resetsAt: Time,
+    ...AlertBase,
     /** Percent left unused at reset at the current rate. */
     unusedPercent: z.number(),
   }),
   z.object({
     kind: z.literal("runs-out"),
-    provider: z.string(),
-    window: z.string(),
-    resetsAt: Time,
+    ...AlertBase,
     runsOutAt: Time,
+  }),
+  z.object({
+    /** At most `threshold` percent left (CodexBar's quota warning thresholds). */
+    kind: z.literal("low"),
+    ...AlertBase,
+    threshold: z.number().int().min(1).max(99),
   }),
 ]);
 export type QuotaAlert = z.infer<typeof QuotaAlert>;

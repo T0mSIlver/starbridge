@@ -261,7 +261,7 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
     c.var.answers.wake(`${caller.account}/${to[0]}`);
     const payload = JSON.stringify({ v: 1, kind: "answered", id: item.re });
     c.var.push.notify(caller.account, answeredDevices, () => payload);
-  } else {
+  } else if (!item.quiet) {
     // Browsers expect each Web Push to show a notification and drop subscriptions that keep
     // showing none, so quota snapshots and runs, which show none there, skip Web Push; pages
     // fetch them instead.

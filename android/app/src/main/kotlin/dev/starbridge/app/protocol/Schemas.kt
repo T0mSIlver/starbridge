@@ -506,6 +506,10 @@ data class QuotaAlert(
     val resetsAt: String,
     val unusedPercent: Double? = null,
     val runsOutAt: String? = null,
+    /** "low": at most this percent left. */
+    val threshold: Int? = null,
+    /** Set in the one snapshot that first raised it: the one that asked for a push. */
+    val notify: Boolean? = null,
 )
 
 @Serializable
@@ -551,6 +555,7 @@ data class QuotaSnapshot(
             when (a.kind) {
                 "unused-headroom" -> schema(a.unusedPercent != null, "unusedPercent")
                 "runs-out" -> schema(a.runsOutAt?.let { time(it, "runsOutAt"); true } == true, "runsOutAt")
+                "low" -> schema(a.threshold in 1..99, "threshold")
                 else -> schema(false, "alert kind")
             }
         }

@@ -11,9 +11,10 @@ code cannot show: the HTTP API and the flows.
 - **Signed envelope** `{v, kind, signer, body, sig}`: `body` is JSON text kept exactly as signed;
   `sig` is Ed25519 over `"starbridge/v1/<kind>" NUL signer NUL body`. Verifiers check the
   signature before they parse `body`.
-- **Sealed item** `{v, kind, id, from, re?, boxes: [{to, box}]}`: a signed envelope sealed with
-  `crypto_box_seal` to each recipient. `kind`, `id`, `from`, `re` and `to` are routing hints for
-  the server; clients reject an item whose hints disagree with the signed body.
+- **Sealed item** `{v, kind, id, from, re?, quiet?, boxes: [{to, box}]}`: a signed envelope sealed
+  with `crypto_box_seal` to each recipient. `kind`, `id`, `from`, `re` and `to` are routing hints
+  for the server; clients reject an item whose hints disagree with the signed body. `quiet: true`
+  asks the server to store the item without pushing it.
 - Each sealed kind has one signing role (`ITEM_KINDS` in `packages/protocol/src/schemas.ts`).
   A machine's items are sealed to every active device; a device's items are sealed to the one
   machine they answer. A kind that refers to an earlier item names it in a body field, which
@@ -229,6 +230,11 @@ own box when the payload stays within 3 KB, else without it and the device fetch
 sealed to once a device answers it; `{v, kind: "join", id}` to every device when a join is posted.
 A settled notice is pushed as a new item. FCM gets it as data field `p`; Web Push and UnifiedPush
 encrypt it per RFC 8291.
+
+A quota snapshot asks for a push only when it raises an alert: the uploader marks that alert
+`notify: true` and posts every other snapshot `quiet`. It raises each alert (a kind, and for
+`low` a threshold) at most once per window per reset. Each device decides from its own
+settings whether to show it.
 
 Quota snapshots and runs go to FCM and UnifiedPush only. Browsers expect every Web Push to show a
 notification and drop a subscription that keeps showing none (Firefox after 16), so the web page
