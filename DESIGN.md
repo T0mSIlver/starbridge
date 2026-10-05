@@ -331,7 +331,8 @@ size:
   pane-head: 48 # the head of each web inbox pane
   content: 720
   settings-label: 220 # the column of section names beside Settings' boxes, from 900 px
-  quota-provider: 200 # the provider's column on the Quotas table, from 900 px
+  quota-provider: 200 # the provider's column on the Quotas table
+  quota-table-from: 840 # the Quotas page's own width from which it is one table
   # Quota meters. The pace tick and the overrun's red cap stand `s1` beyond
   # the track on each side; the overrun is hatched at -45°, `tick`-wide
   # stripes every `hatch`.
@@ -572,12 +573,14 @@ use the first-run frame: the brand top left, one 400 px column, legal links
 at the foot. From 900 px, Settings sets each section's name in a column
 (`size.settings-label`) beside its box, and the rows keep `size.content`.
 
-**Quotas page** (web). Under 900 px, a card per provider, as on Android.
-From 900 px, one table up to `size.page` wide, as dense as the inbox: the
+**Quotas page** (web). Narrower, a card per provider, as on Android.
+Once the page itself is `size.quota-table-from` wide (a window about 1210 px wide,
+with the rail), one table up to `size.page` wide, as dense as the inbox: the
 provider (and its machine) in a column of `size.quota-provider`, then one
 line per window with its name, meter, figure, state and reset in columns. A
 handle before the provider's name reorders providers there; providers that
-lead while "Running out first" is on keep their place. Narrow screens reorder
+lead while "Running out first" is on keep their place, and a provider with a leading
+row is a barrier the others don't cross. Narrow screens reorder
 in Settings.
 
 ## Provider colours

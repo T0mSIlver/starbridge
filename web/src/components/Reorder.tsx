@@ -41,7 +41,7 @@ const reduced = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
  * place at the same `motion.state`, so it lands as the others do, then `onMove` commits the order. A focused handle moves its item with
  * the arrow keys, Home and End, and a live region says where it went. Escape cancels a drag.
  * Items before `first` stay put and take no drop (the quota windows that lead while running
- * out); `locked` items keep their handle off but let others pass. A drag still on when the list
+ * out); `locked` items keep their handle off, and no item crosses them. A drag still on when the list
  * unmounts is torn down. DESIGN.md, "Motion and states".
  */
 export function useReorder({
@@ -86,10 +86,23 @@ export function useReorder({
     [ids.length, name, onMove],
   );
 
+  /** Where the item at `from` may go: past `first`, and never across a locked item. */
+  const range = (from: number): [number, number] => {
+    let lo = Math.max(first, 0);
+    let hi = ids.length - 1;
+    ids.forEach((x, i) => {
+      if (!locked?.(x)) return;
+      if (i < from) lo = Math.max(lo, i + 1);
+      if (i > from) hi = Math.min(hi, i - 1);
+    });
+    return [lo, hi];
+  };
+
   const start = (id: string, e: React.PointerEvent<HTMLElement>) => {
     if (e.button !== 0 || live.current) return;
     const from = ids.indexOf(id);
     if (from < first || locked?.(id)) return;
+    const [lo, hi] = range(from);
     e.preventDefault();
     const handle = e.currentTarget;
     handle.setPointerCapture(e.pointerId);
@@ -122,8 +135,8 @@ export function useReorder({
       const centre = (tops[from] ?? 0) + (heights[from] ?? 0) / 2 + dy;
       const mid = (i: number) => (tops[i] ?? 0) + (heights[i] ?? 0) / 2;
       let to = from;
-      while (to < ids.length - 1 && centre > mid(to + 1)) to++;
-      while (to > first && centre < mid(to - 1)) to--;
+      while (to < hi && centre > mid(to + 1)) to++;
+      while (to > lo && centre < mid(to - 1)) to--;
       setDrag({ ...cur, dy, to });
     };
     const scroll = () => {
@@ -204,7 +217,8 @@ export function useReorder({
     if (to === undefined) return;
     e.preventDefault();
     if (live.current || from < first || locked?.(id)) return;
-    commit(id, Math.max(first, Math.min(last, to)), from);
+    const [lo, hi] = range(from);
+    commit(id, Math.max(lo, Math.min(hi, to)), from);
   };
 
   /** Where an item stands while a drag is on: the dragged one under the pointer, others aside. */

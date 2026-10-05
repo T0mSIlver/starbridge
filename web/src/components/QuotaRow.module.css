@@ -102,9 +102,10 @@
   display: none;
 }
 
-/* The Quotas page from 900 px: the provider in a first column, then one line per window, its
-   name, meter, figure, state and reset in columns. */
-@media (min-width: 900px) {
+/* The Quotas page once it is `size.quota-table-from` wide (a query cannot read a custom
+   property): the provider in a first column, then one line per window, its name, meter,
+   figure, state and reset in columns. The columns' minimums fit that width. */
+@container quotas (min-width: 840px) {
   .groupComfy {
     display: grid;
     grid-template-columns: var(--size-quota-provider) minmax(0, 1fr);
@@ -134,10 +135,10 @@
   .groupComfy .row {
     grid-column: 2;
     grid-template-columns:
-      minmax(110px, 160px) minmax(160px, 1fr) 110px minmax(160px, 260px)
-      90px;
+      minmax(90px, 160px) minmax(120px, 1fr) 96px minmax(150px, 260px)
+      80px;
     align-items: center;
-    column-gap: var(--s5);
+    column-gap: var(--s4);
     padding: var(--s3) var(--s4);
   }
 
