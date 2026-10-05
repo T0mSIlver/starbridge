@@ -7,7 +7,7 @@ import {
   SignedEnvelope,
   verifyDirectory,
 } from "@starbridge/protocol";
-import { Hono } from "hono";
+import { type Context, Hono } from "hono";
 import { z } from "zod";
 import { fail, recheck, requireCaller } from "../auth";
 import type { Env } from "../env";
@@ -78,6 +78,14 @@ function syncMembers(db: Database, account: string, dir: Directory): void {
   }
 }
 
+/** Wakes every active machine's answer long-polls: the account changed in a way they watch. */
+export function wakeMachines(c: Context<Env>, account: string) {
+  const rows = c.var.db
+    .query("SELECT id FROM members WHERE account_id = ? AND role = 'machine' AND active = 1")
+    .all(account) as { id: string }[];
+  for (const r of rows) c.var.answers.wake(`${account}/${r.id}`);
+}
+
 export const directoryRoutes = new Hono<Env>();
 
 directoryRoutes.get("/directory", requireCaller("any"), (c) => {
@@ -141,5 +149,8 @@ directoryRoutes.post("/directory", requireCaller("device"), async (c) => {
     }
     return { length: dir.length, head: dir.head };
   })();
+  // Machines seal to the directory's devices, so each re-reads it: a new device gets their
+  // next items, and their latest quota snapshot again.
+  wakeMachines(c, caller.account);
   return c.json(result, 201);
 });

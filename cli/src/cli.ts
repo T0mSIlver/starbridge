@@ -38,8 +38,10 @@ const HELP = `starbridge: post decisions to your devices, report runs, upload qu
       Remove the agent service, the Claude Code plugins and this binary, and ask your devices to revoke this
       machine. Asks before it deletes the keys and state (--purge: without asking). CodexBar stays.
 
-  starbridge pair --server <url> [--name <name>] [--force]
+  starbridge pair [--server <url>] [--name <name>] [--force]
       Make this machine's keys and print a pairing code to type on a device.
+      --server <url>          a self-hosted server (default: $STARBRIDGE_SERVER, else
+                              https://starbridge.run)
 
   starbridge ask --question <text> [--option <text>]... [options]
       Post a decision to every paired device and print its id. Devices show it as
@@ -126,9 +128,9 @@ const HELP = `starbridge: post decisions to your devices, report runs, upload qu
       to leave the prompt to the keyboard.
 
   starbridge hook ask-user
-      For Claude Code's PreToolUse hook on AskUserQuestion: denies the call and tells the
-      agent to use \`starbridge ask\`; prints nothing, which lets it through, when this
-      machine is not paired or the server does not answer.
+      For Claude Code's PreToolUse hook on AskUserQuestion: hook JSON on stdin; answers each
+      question by telling the agent to use \`starbridge ask\`; prints nothing, which lets it
+      through, when this machine is not paired or the server does not answer.
 
   starbridge update
       Install the latest release once its signature checks out (brew and npm installs: use
@@ -385,7 +387,7 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
         });
         if (sub === "permission") return await hookPermission(ctx, readText("-"), values);
         if (sub === "settle") return await hookSettle(ctx, readText("-"), values);
-        if (sub === "ask-user") return await hookAskUser(ctx);
+        if (sub === "ask-user") return await hookAskUser(ctx, readText("-"));
         throw new UsageError(
           "usage: starbridge hook permission|settle --agent claude-code, or starbridge hook ask-user",
         );

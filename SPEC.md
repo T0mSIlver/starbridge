@@ -313,7 +313,7 @@ How it generalizes is open.
   co-signs its first entry. A pairing code
   carries an 80-bit secret the server never sees, which keys an HMAC on both
   pairing messages. The recovery seed shows as 24 BIP-39 words
-  (`@scure/bip39`, audited, MIT).
+  (`@scure/bip39`, audited, MIT); 12 for accounts made since 2026-10-05 (below).
 
 - 2026-10-04. Server (#5): self-hosters sign in with `OWNER_TOKEN` (`POST /v1/auth/owner`); the
   Android app gets its GitHub session through a `starbridge://auth#session=` redirect. A session
@@ -678,6 +678,44 @@ How it generalizes is open.
   applies to question rows on a phone width; wide screens never carry them, since the open
   question sits beside the list. Permission prompts keep Allow and Deny on their rows, since
   their agent always waits.
+- 2026-10-05. A question's state and its answer buttons, after the launch test (#166, #181;
+  agreed between the web and Android sessions). "Working on other things" read as the agent's
+  words, so a question its agent works around shows no state line at all; one its agent waits on
+  shows "Waiting for you 1:12" in amber, its icon on the text's centre line, on the card or row,
+  in the detail and in the notification, where it sits outside the agent's words (Android: in the
+  header after the machine and repo). Permission prompts keep the same tag. Answer buttons follow
+  only the setting, on both clients: every question with options shows them on its card or phone
+  row under Always, the ones whose agent waits under When the agent waits, none under Never.
+  Images and long labels no longer hide them; more than two options, or a label over 18
+  characters, stack. A question answered on another page (`answerIn`) or in free text has no
+  buttons, and opens its detail.
+- 2026-10-05. Images on Android (#170). A card crops its images to the card's width from the
+  top, at most 160 dp tall, so a phone screenshot no longer shows as a thumbnail in an empty band;
+  the sheet shows each in its own shape. A tap opens a full-screen viewer on black: pinch or
+  double-tap to zoom, drag to pan, swipe between images, decoded up to 4096 px. Decisions saved
+  by an app from before images (#62) kept bodies without them, so the app reads its open
+  decisions again from the server once. The notification puts the agent's Markdown code in mono,
+  without backticks.
+- 2026-10-05. Android notifications after the launch test (#182, #183, #184). A permission
+  prompt's notification shows only its command, in mono; the agent's description stays in the
+  app. Questions and prompts turn off Android's own contextual chips ("Open link"), so the only
+  buttons are the answers. With sensitive content hidden, the lock screen shows the public
+  version, so it carries the same buttons: Deny and a question's options answer from there,
+  Allow asks for the unlock first, as decided for #57; the question and the command stay hidden.
+  Tapping a prompt's notification opens that prompt's sheet, as a question's opens its own.
+- 2026-10-05. Runs with no news (#190). A run that reports no progress shows an indeterminate
+  bar while it runs. A lost run (no update for 3 minutes) shows no time in its meta row: a run
+  killed before its first heartbeat has its last news at its start, so the only duration known
+  would read "0 s". Its line "No news for 3 min 37 s" ticks each second, and it shows no progress.
+- 2026-10-05. Android notification channels and order (#196). The channels sit in two groups,
+  "Needs you" (Decisions, Permission prompts, Join requests) and "Activity" (Runs, Quotas), instead
+  of Android's "Other". Each notification carries a sort key, questions and prompts first, then
+  join requests, runs and quotas, because Android orders an app's bundled notifications by sort
+  key before importance. Not yet checked on a device.
+- 2026-10-05. Links on questions, Android (#171, the web session's rule): under "Attached by the
+  agent", each chip reads "Open" and the link's title, else its label, with an open-outside icon.
+  A Claude artifact, as a link or as `answerIn`, opens in the browser, since the Claude app shows
+  it only in its in-app browser; a session link still opens in the Claude app.
 - 2026-10-05. Quota settings and notifications, as built (#115). Settings live on each device
   (web `localStorage`, Android preferences) and sit on a Quota settings page opened from the
   Quotas screen: bars show used or remaining, reset times relative or as a clock time
@@ -719,8 +757,7 @@ How it generalizes is open.
   restore overwrote files a concurrent job was reading (#142). This freed 3.6 GB.
 - 2026-10-05. Waiting state on the machine (#122) and permission prompts off by default (#124).
   `starbridge waiting <id>` and `starbridge working <id>` post a decision's state; `ask
-  --waiting` posts it already waiting, quietly, since the decision's own push just went out,
-  and `wait <id>` marks it waiting before it blocks. The CLI keeps each decision's waiting id
+  --waiting` posts it already waiting, and `wait <id>` marks it waiting before it blocks. The CLI keeps each decision's waiting id
   and last state, posts nothing when the state is unchanged, and refuses once the decision is
   answered. The default-time machinery is gone: no `--default-at` (accepted and ignored, with a
   warning, until the skill drops it), no `default` session event, no notice line, and `wait`
@@ -795,6 +832,21 @@ How it generalizes is open.
   and pi's `AGENTS.override.md` replaces the repo's `AGENTS.md`, so it only suits repos without
   one.
 
+- 2026-10-05. 12 recovery words for new accounts (owner ruling on #157). The recovery seed is now
+  16 bytes, shown as 12 BIP-39 words, instead of 32 bytes as 24. 128 bits of entropy is what
+  Ed25519 itself offers (about 2^126 work to break a key), so 24 words added length without
+  adding security. Someone holding the recovery public key, the server included, would have to
+  try 2^128 seeds offline, or 2^108 per account across a million accounts. The seed is random,
+  not chosen by a person, so it needs no slow key derivation such as Argon2; BLAKE2b-256 of
+  "starbridge/v1/recovery-seed", NUL, the seed, stretches it to the 32 bytes Ed25519 takes, as
+  `pairingKey` does for the pairing secret. Accounts made earlier keep their 24 words, whose
+  32-byte seed stays the Ed25519 seed; the word count tells the two apart, and nothing on the
+  server changes. Fewer words was rejected: one word carries 11 bits, and 9 words (99 bits) is
+  no BIP-39 length. The entry says to separate words with spaces, and accepts anything that is
+  not a letter as a separator (dashes, commas, line breaks, numbering); it names the first word
+  that is not on the list, and a failed checksum (a wrong list word, or two swapped) says to
+  check each word and the order.
+
 - 2026-10-05. Quota order, one rule on both clients (#159, #162, owner). Hidden providers drop out;
   the rest go by provider in the order set in Quota settings (providers not in it follow in the
   uploader's order), each provider's windows in the uploader's order. A "Running out first"
@@ -805,6 +857,15 @@ How it generalizes is open.
   to Settings, Providers, as on the web (#163): a bell beside each provider's Show switch,
   so every quota card has the same height and the control sits where the other per-provider
   settings are.
+- 2026-10-05. Full-size images on questions (#170). The owner's phone screenshot (1236×2676 PNG,
+  171 KB) arrived as a ~515 px JPEG and looked pixelated: the 256 KB cap held every device's box
+  together, so three devices left about 47 KB per image. A decision's boxes may now hold 2 MB
+  together and an image's base64url 512 KB (both clients' schemas), and the CLI keeps a file as
+  is up to a 3000 px edge, so that screenshot reaches six devices unchanged and the clients'
+  full-screen viewers can zoom into real pixels. The request body limit rises to 3 MB to match.
+  WebP was not the fix: the pure-JS encoders save a third at best, and the cap was the cause. A
+  self-hosted server older than this refuses a new CLI's larger decisions with 413 `too-large`
+  until it updates.
 
 - 2026-10-05. Clock setting (#161, owner). Settings, Clock, "Time format": System (the default),
   12-hour or 24-hour, per device. System follows the device: Android's
@@ -832,6 +893,36 @@ How it generalizes is open.
   so sound without a page is the OS's notification setting (macOS: Notifications, the browser,
   "Play sound for notifications"). Browsers start audio only after a tap or key on the page, so
   a page opened and never touched stays silent.
+- 2026-10-05. Runs on the web (#188, #190). Runs still skip Web Push, since a push that shows no
+  notification costs the browser subscription, so the page polls them every 2 s while one runs and
+  the page is visible, and every 10 s otherwise; that keeps it within a few seconds of the phone,
+  which gets each update by push. A lost run shows no elapsed time in its corner: its last news
+  may predate most of its life, so the time would read as 0.
+
+- 2026-10-05. A device sees quotas as soon as it joins, and pulling to refresh gets fresh ones
+  (#158). A snapshot is sealed to the devices in the directory when it is posted, so a device that
+  joined later read nothing until the next upload, up to 5 minutes. Fixed at the source: every
+  directory append ends the machines' answer long-polls, whose replies now carry the directory's
+  length, and the agent posts a fresh snapshot (CodexBar takes about 4 s) once its re-read
+  directory holds a new device. Pull to refresh on Android's Quotas calls `POST /quota/ask`, which
+  wakes the machines the same way and holds until each has posted, then refetches. Asks are
+  rate-limited to 6 a minute per account, since each runs CodexBar on every machine. The web page
+  has no refresh gesture and gets none; it polls quotas every minute, and every 3 s for its first
+  30 s while it holds none, so a browser that just joined shows the re-upload within seconds.
+- 2026-10-05. `starbridge pair` pairs with https://starbridge.run unless `--server` or
+  `STARBRIDGE_SERVER` names a self-hosted server (#154), as `setup` already did.
+
+- 2026-10-05. The `AskUserQuestion` hook answers instead of denying (#200). Claude Code 2.1.289
+  shows every `PreToolUse` deny as a red "hook error", which reads as Starbridge failing. The
+  hook now allows the call with `updatedInput.answers`, one answer per question saying to ask
+  through `starbridge ask`; Claude Code shows that as an answered question and opens no dialog
+  (checked in a real session). Input it cannot read is still denied.
+- 2026-10-05. A question asked already waiting notifies as waiting (#202). `ask --waiting`
+  used to push the decision, which carries no state, then post its `waiting` item quietly, so
+  the phone's notification said "Working on other things" while the app said "Waiting for
+  you". Now the decision goes quietly and the `waiting` item pushes; Android fetches a decision
+  it has not seen when its waiting state arrives, as the web page's service worker already did.
+  An app older than this change shows no notification for such a question until it syncs.
 
 ## Encryption, with existing libraries
 

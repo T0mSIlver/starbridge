@@ -164,6 +164,33 @@ export function sample(now = Date.now()) {
         progress: { done: 34, total: 120, unit: "step" },
       } as RunItem["run"],
     },
+    {
+      machine: "dev box",
+      run: {
+        v: 1,
+        id: "r2",
+        to: ["d_self"],
+        title: "Build the APK",
+        reason: "The release needs it signed",
+        source: source("dev box", "server", "starbridge", "release-apk"),
+        startedAt: at(40_000),
+        at: at(5_000),
+      } as RunItem["run"],
+    },
+    {
+      machine: "dev box",
+      run: {
+        v: 1,
+        id: "r3",
+        to: ["d_self"],
+        title: "Lost run test",
+        reason: "Killed before its first update",
+        source: source("dev box", "server", "starbridge", "lost-run"),
+        // Killed before its first heartbeat: its only news is its start (#190).
+        startedAt: at(6 * min + 37_000),
+        at: at(6 * min + 37_000),
+      } as RunItem["run"],
+    },
   ];
 
   const window = (

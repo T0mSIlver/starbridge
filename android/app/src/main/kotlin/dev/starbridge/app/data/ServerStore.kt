@@ -2,6 +2,7 @@ package dev.starbridge.app.data
 
 import android.util.Log
 import dev.starbridge.app.protocol.Bip39
+import dev.starbridge.app.protocol.recoverySignSeed
 import dev.starbridge.app.protocol.Directories
 import dev.starbridge.app.protocol.Directory
 import dev.starbridge.app.protocol.DirectoryEntry
@@ -72,6 +73,9 @@ interface Alerts {
     /** Quota alerts the uploader newly raised; each shows once, if this phone opted in. */
     fun quota(notices: List<QuotaNotice>) {}
 }
+
+/** How long pull to refresh on Quotas waits for the machines' fresh snapshots. */
+private const val QUOTA_ASK_SECONDS = 15
 
 /**
  * The app's state against the server. Everything it shows was verified here first: the
@@ -321,8 +325,9 @@ class ServerStore(
         if (saved.pendingGenesis == null) {
             if (api().directory(0).isNotEmpty()) throw IllegalStateException("This account already has devices. Join it instead.")
             val member = newMember()
-            val seed = sodium.random(32)
-            val entry = ProtocolJson.encodeToJsonElement(directories.genesisEntry(saved.account!!, member, signKey, sodium.signSeedKeyPair(seed), now()))
+            val seed = sodium.random(16)
+            val recovery = sodium.signSeedKeyPair(recoverySignSeed(seed, sodium))
+            val entry = ProtocolJson.encodeToJsonElement(directories.genesisEntry(saved.account!!, member, signKey, recovery, now()))
             persist(saved.copy(me = member, pin = null, pendingGenesis = entry), secrets.copy(recoverySeed = toB64(seed)))
         }
         val genesis: JsonElement = saved.pendingGenesis!!
@@ -524,12 +529,9 @@ class ServerStore(
     }
 
     override fun recover(words: String) = run {
-        val seed = try {
-            Bip39.mnemonicToEntropy(words)
-        } catch (e: IllegalArgumentException) {
-            throw IllegalArgumentException("Those words are not a recovery key. Check each word and the order.")
-        }
-        val recovery = sodium.signSeedKeyPair(seed)
+        val list = Bip39.split(words)
+        Bip39.problem(list)?.let { throw IllegalArgumentException(it) }
+        val recovery = sodium.signSeedKeyPair(recoverySignSeed(Bip39.mnemonicToEntropy(list.joinToString(" ")), sodium))
         val entries = api().directory(0)
         // The chain's first entry must carry this key's own signature, which a server cannot fake.
         val dir = directories.verify(entries, saved.account, recoveryPk = toB64(recovery.public))
@@ -546,6 +548,21 @@ class ServerStore(
     // --- Syncing -----------------------------------------------------------------
 
     override fun refresh() = run { sync() }
+
+    // Outside the lock: the machines take seconds to post, and answers must not wait on them.
+    override fun refreshQuotas() {
+        scope.launch {
+            busy.value = true
+            try {
+                if (phase.value == Phase.Ready) api().askQuota(QUOTA_ASK_SECONDS)
+            } catch (e: ApiException) {
+                // Asked too often, or a server without asks: the sync shows what it holds.
+            } catch (e: IOException) {
+                // Offline: the sync reports it.
+            }
+            run { sync() }
+        }
+    }
 
     private suspend fun sync() {
         if (phase.value != Phase.Ready) return
@@ -580,7 +597,9 @@ class ServerStore(
     }
 
     private suspend fun syncDecisions() {
-        var cursor = saved.cursor
+        // Saved by an app that dropped fields it did not know: read every open one again.
+        val reread = saved.decisionFields < DECISION_FIELDS
+        var cursor = if (reread) "" else saved.cursor
         val byId = saved.decisions.associateBy { it.body.id }.toMutableMap()
         // How each item a settled notice closed was closed, with the time: the notice lists before
         // the decision it closed, which moved past it.
@@ -604,6 +623,11 @@ class ServerStore(
                 // a later one, after a device's answer, closed nothing.
                 val settled = closings[listed.item.id]?.takeIf { it.second == listed.answeredAt }?.first
                 val known = byId[listed.item.id]
+                if (known != null && reread && known.answeredAt == null && listed.answeredAt == null) {
+                    val (from, body) = open(listed.item) ?: continue
+                    if (from == known.from) byId[known.body.id] = known.copy(body = body as DecisionBody)
+                    continue
+                }
                 if (known != null) {
                     // A settled push marked it answered already, without saying how.
                     if (listed.answeredAt != null && (known.answeredAt == null || settled != null)) {
@@ -620,13 +644,23 @@ class ServerStore(
         }
         // An update may list before the decision it is about, so they apply once all are read.
         for ((from, w) in waits) byId[w.decisionId]?.let { d -> wait(d, from, w)?.let { byId[w.decisionId] = it } }
-        persist(saved.copy(cursor = cursor, decisions = byId.values.sortedBy { it.body.createdAt }.takeLast(500)))
+        persist(saved.copy(cursor = cursor, decisions = byId.values.sortedBy { it.body.createdAt }.takeLast(500), decisionFields = DECISION_FIELDS))
     }
 
     /**
      * [d] with the agent's waiting state from [w], or null when [w] changes nothing: it must come
      * from the machine that asked, and only a later update replaces an earlier one.
      */
+    /** Fetches decision [id] and keeps it; null when it does not open. */
+    private suspend fun fetchDecision(id: String): SavedDecision? {
+        val listed = api().item(id)
+        if (directory?.members?.containsKey(listed.item.from) != true) syncDirectory()
+        val (from, body) = open(listed.item) ?: return null
+        val d = SavedDecision(from, body as DecisionBody, listed.answeredAt)
+        persist(saved.copy(decisions = saved.decisions + d))
+        return d
+    }
+
     private fun wait(d: SavedDecision, from: String, w: Waiting): SavedDecision? {
         if (d.from != from) return null
         val at = instant(w.at) ?: return null
@@ -702,6 +736,10 @@ class ServerStore(
 
     override fun refreshPrompts() = run(showBusy = false) {
         if (phase.value == Phase.Ready) syncPrompts()
+    }
+
+    override fun refreshDirectory() = run(showBusy = false) {
+        if (phase.value == Phase.Ready) syncDirectory()
     }
 
     override fun answerPrompt(id: String, allow: Boolean, scope: String, message: String?) =
@@ -905,7 +943,8 @@ class ServerStore(
                 if (added != null && added.answeredAt == null) alerts.prompt(toUi(added))
             }
             "waiting" -> {
-                // Pushed only when the agent flips to waiting: re-notify once, if still open.
+                // Pushed only when the agent flips to waiting: re-notify once, if still open. A
+                // question asked already waiting pushes only this, so its decision may be new here.
                 val box = p["box"]?.jsonPrimitive?.content
                 val item = if (box != null) {
                     SealedItem(1, "waiting", id, p.getValue("from").jsonPrimitive.content, p["re"]?.jsonPrimitive?.content, listOf(SealedBox(me.id, box)))
@@ -915,7 +954,7 @@ class ServerStore(
                 if (directory?.members?.containsKey(item.from) != true) syncDirectory()
                 val (from, body) = open(item) ?: return@withLock
                 body as Waiting
-                val d = saved.decisions.find { it.body.id == body.decisionId } ?: return@withLock
+                val d = saved.decisions.find { it.body.id == body.decisionId } ?: fetchDecision(body.decisionId) ?: return@withLock
                 val updated = wait(d, from, body) ?: return@withLock
                 persist(saved.copy(decisions = saved.decisions.map { if (it === d) updated else it }))
                 if (d.waiting != "waiting" && updated.waiting == "waiting" && d.answeredAt == null && d.answer == null) alerts.decision(toUi(updated))
@@ -961,6 +1000,8 @@ class ServerStore(
     // --- Pairing and revoking ----------------------------------------------------
 
     override fun lookUpPairing(code: String) = run(showBusy = false) {
+        // A shown QR code's wait must not overwrite the request looked up now.
+        showJob?.cancel()
         approval.value = Approval.Checking
         val parsed = try {
             codeFromLink(code)

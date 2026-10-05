@@ -15,8 +15,11 @@ export interface Picture {
   file: { type: DecisionImage["type"]; bytes: Uint8Array; upright: boolean };
 }
 
-/** No phone or browser pane shows more than this, so a larger image only costs bytes. */
-const MAX_EDGE = 1600;
+/**
+ * A phone screenshot's long edge, so one keeps every pixel for zooming in; past this a larger
+ * image only costs bytes.
+ */
+const MAX_EDGE = 3000;
 /** Below this an image is no use; the decision is refused instead. */
 const MIN_EDGE = 240;
 const QUALITIES = [80, 60] as const;

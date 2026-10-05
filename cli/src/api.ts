@@ -5,8 +5,9 @@ export class ApiError extends Error {
     readonly status: number,
     readonly code: string,
     detail?: string,
+    message = `server: ${status} ${code}${detail ? ` (${detail})` : ""}`,
   ) {
-    super(`server: ${status} ${code}${detail ? ` (${detail})` : ""}`);
+    super(message);
   }
 }
 
@@ -40,6 +41,14 @@ export class Api {
     }
     if (res.status >= 400) {
       const e = (json ?? {}) as { error?: string; detail?: string };
+      // The server drops a machine's token when the directory revokes the machine.
+      if (res.status === 401 && this.token)
+        throw new ApiError(
+          401,
+          e.error ?? res.statusText,
+          e.detail,
+          "this machine was removed from your Starbridge account: run `starbridge pair --force` to add it again",
+        );
       throw new ApiError(res.status, e.error ?? res.statusText, e.detail);
     }
     return { status: res.status, json };
@@ -71,16 +80,28 @@ export class Api {
     await this.call("POST", "/items", { body: item, ...(signal ? { signal } : {}) });
   }
 
+  /**
+   * The machine's inbox. With `known`, the server also replies at once when its directory is
+   * longer or a device asked for quotas since `known.quotaAsked`.
+   */
   async answers(
     after: string | undefined,
     wait: number,
     signal?: AbortSignal,
-  ): Promise<{ items: unknown[]; cursor?: string }> {
+    known?: { directory: number; quotaAsked?: string },
+  ): Promise<{ items: unknown[]; cursor?: string; directory?: number; quotaAsked?: string }> {
     const q = new URLSearchParams({ wait: String(wait) });
     if (after !== undefined) q.set("after", after);
+    if (known) q.set("directory", String(known.directory));
+    if (known?.quotaAsked !== undefined) q.set("quotaAsked", known.quotaAsked);
     const r = await this.call("GET", `/answers?${q}`, { signal });
     // Each entry is `{item, cursor, receivedAt}` (PROTOCOL.md, Items); the CLI checks the item.
-    const page = r.json as { items: { item?: unknown }[]; cursor?: string };
-    return { items: page.items.map((e) => e.item), cursor: page.cursor };
+    const page = r.json as {
+      items: { item?: unknown }[];
+      cursor?: string;
+      directory?: number;
+      quotaAsked?: string;
+    };
+    return { ...page, items: page.items.map((e) => e.item) };
   }
 }

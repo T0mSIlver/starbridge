@@ -2,6 +2,7 @@ package dev.starbridge.app.ui.pairing
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
@@ -18,6 +19,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import dev.starbridge.app.data.Comparison
 import dev.starbridge.app.data.JoinAsk
@@ -80,7 +82,7 @@ fun JoinPrompt(asks: List<JoinAsk>, comparison: Comparison, actions: JoinActions
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(Spacing.s3)) {
                     Text("Approve only if ${comparison.ask.name} shows these same digits.", style = StarbridgeTheme.type.body)
-                    Text(formatDigits(comparison.digits), style = StarbridgeTheme.type.figure, color = MaterialTheme.colorScheme.onSurface)
+                    Text(formatDigits(comparison.digits), style = StarbridgeTheme.type.figure, color = MaterialTheme.colorScheme.onSurface, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
                     comparison.error?.let { Text(it, style = StarbridgeTheme.type.body, color = colors.bad) }
                 }
             },
@@ -93,9 +95,10 @@ fun JoinPrompt(asks: List<JoinAsk>, comparison: Comparison, actions: JoinActions
                 TextButton(onClick = { actions.refuse(comparison.ask.id) }, enabled = !comparison.approving) { Text("Digits differ", color = colors.bad) }
             },
         )
+        // One line: the title slot, with no empty text slot under it.
         is Comparison.Done -> AlertDialog(
             onDismissRequest = actions.close,
-            text = { Text(comparison.message, style = StarbridgeTheme.type.body) },
+            title = { Text(comparison.message, textAlign = TextAlign.Center) },
             confirmButton = { TextButton(onClick = actions.close) { Text("OK") } },
         )
         is Comparison.Failed -> AlertDialog(

@@ -94,6 +94,7 @@ class Fake(private val now: Instant) {
             ),
             createdAt = ago(12),
             agent = "claude-code",
+            links = listOf(Link("https://claude.ai/artifact/4Esy3goyohvLThcPVCKaEf", "merge plan"), Link("https://github.com/T0mSIlver/starbridge/pull/86")),
         ),
         Decision(
             id = "d3",
@@ -149,6 +150,24 @@ class Fake(private val now: Instant) {
         answerIn = Link("https://claude.ai/artifact/2ig2MyNRD484b7oZea5vkZ"),
     )
 
+    /**
+     * The owner's launch test (#170, #181): a 1236x2676 phone screenshot, as `ask --image` sends
+     * it, and an option too long to sit beside the other.
+     */
+    val screenshot = Decision(
+        id = "d8",
+        question = "Does this inbox screenshot look right?",
+        context = "Rendered by Roborazzi from `ScreenshotTest`.",
+        options = listOf("Looks right", "Something is missing"),
+        recommended = "Looks right",
+        default = null,
+        defaultAt = null,
+        source = Source("dev box", "sb-test", "s8", machineKind = "server"),
+        createdAt = ago(11),
+        agent = "claude-code",
+        images = listOf(Image(toB64(javaClass.getResourceAsStream("/fake/phone-inbox.png")!!.readBytes()), 1236, 2676, alt = "Inbox, dark")),
+    )
+
     /** No options: the sheet takes a reply. */
     val freeText = Decision(
         id = "d7",
@@ -172,6 +191,15 @@ class Fake(private val now: Instant) {
             at = secondsAgo(4),
             progress = Run.Progress(34, 120, percent = false),
         ),
+    )
+
+    /**
+     * Runs with no news to show (#190): one that prints no progress, and one killed before its
+     * first heartbeat, lost for 3 min 37 s.
+     */
+    val quietRuns = listOf(
+        Run("r5", "Lost run test", "uses your session and keyboard", devBox, startedAt = secondsAgo(217 + 180), at = secondsAgo(217 + 180)),
+        Run("r6", "Integration suite", "runs the emulator on the dev box", Source("mac mini", "localvoxtral", "suite", machineKind = "desktop"), startedAt = secondsAgo(95), at = secondsAgo(20)),
     )
 
     /** Runs as they end: passed, failed, lost. */
@@ -214,7 +242,5 @@ class Fake(private val now: Instant) {
     val recoveryWords = listOf(
         "orbit", "lantern", "cobalt", "meadow", "quartz", "harbor",
         "velvet", "ember", "signal", "tundra", "falcon", "pebble",
-        "copper", "nimbus", "saddle", "violet", "ridge", "anchor",
-        "maple", "comet", "thistle", "beacon", "glacier", "summit",
     )
 }

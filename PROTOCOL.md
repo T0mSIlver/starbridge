@@ -35,7 +35,7 @@ code cannot show: the HTTP API and the flows.
   session's title and links, and `machineKind`: `server`, `desktop`, `laptop` or `cloud`, for
   its icon). A decision may name its `agent`, `claude-code` or `codex`, as a permission does.
 - A decision's images (PNG or JPEG) and links (HTTPS) are part of its signed body, so each box
-  carries every image, and the 256 KB cap in Limits covers them once per device.
+  carries every image, and the 2 MB cap in Limits covers them once per device.
   A decision with `answerIn` is answered on that page (a claude.ai artifact whose button wakes
   the agent), never in Starbridge: it has no options, devices show the page and no answer
   field, and it closes when the machine posts `settled` for it.
@@ -106,8 +106,16 @@ to tap Compare digits. Without the approval's MAC the joining device trusts no d
 
 ## Recovery
 
-The first device shows a 32-byte recovery seed once, as 24 BIP-39 words. When every device is
-lost, a new device turns the words into the recovery key pair, verifies the chain with that
+The first device shows a 16-byte recovery seed once, as 12 BIP-39 words. The recovery key pair
+is `crypto_sign_seed_keypair` of BLAKE2b-256 of "starbridge/v1/recovery-seed", NUL, the seed
+(`recoveryKeyPair`). Accounts made before 2026-10-05 hold a 32-byte seed shown as 24 words, which
+is the Ed25519 seed itself; the word count tells the two apart.
+
+Typed words are split on anything that is not a letter, so spaces, dashes, commas, line breaks and
+numbering all work (`splitRecoveryWords`). `recoveryWordsProblem` names the first word missing
+from the BIP-39 list, else a count other than 12 or 24, else a failed checksum.
+
+When every device is lost, a new device turns the words into the recovery key pair, verifies the chain with that
 public key (entry 0's `recoverySig` must check against it, which a copied public key cannot
 fake), and signs its own `add` entry with it.
 
@@ -189,6 +197,7 @@ createdAt, expiresAt, version}`; `state` is `open`, `comparing`, `approved` or `
 | `GET /items?kind=<kinds>&after=<cursor>&open=1` | device | items with only the caller's box, and `cursor`; `kinds` is a comma-separated list of machine-signed kinds, all of them when left out; `open=1` keeps only unanswered decisions and permissions still in their answer window |
 | `GET /items/:id` | device, machine | one item, the caller's box only; push points here when the item exceeds 4 KB |
 | `GET /quota` | device | the latest quota item from each machine |
+| `POST /quota/ask?wait=<s>` | device | ask every machine for a fresh quota snapshot → `{askedAt, behind}`; with `wait`, holds until each active machine that has a snapshot posted a newer one; `behind` counts those that have not |
 
 Item ids are random, chosen by the sender. A machine re-posts a run under its id as it changes;
 the server replaces the earlier post and moves it past every cursor. Any other reused id, or a
@@ -218,6 +227,13 @@ first one.
 machine came after `cursor`, else holds the request
 until one arrives or `wait` (at most 300) passes and replies `{items: [], cursor}`. The Claude Code
 mod keeps one such request open and re-opens it on every reply; the CLI's `wait` does the same.
+
+Each reply also carries `directory`, the number of entries in the account's directory, and
+`quotaAsked`, when a device last asked for fresh quotas (`POST /quota/ask`), if one did since
+the server started. A machine that sends back `directory=<n>&quotaAsked=<time>` with what it
+knows gets a reply at once when the directory is longer or a device asked since, and every
+directory append ends its open waits. So the machine's agent re-reads the directory as soon as a
+device joins and posts a fresh snapshot sealed to it, and posts one when a device asks.
 A machine checks that an answer's `decisionId` is one it asked and its `choice` one of the
 decision's options; for permission answers, see below.
 
@@ -268,7 +284,7 @@ code below. Per-address limits count an IPv6 client as its /64.
 | `POST /items` | 120 a minute per account |
 | Stored decisions, open or answered | 10000 per account: 409 `too-many-items` |
 | Stored runs | 500 per account: 409 `too-many-items` for a new run; updates still pass |
-| Stored boxes | 128 MB per account, of which machine-signed items may fill all but the last 8 MB: 409 `too-many-items`; 256 KB per machine-signed item, 32 KB per run update and 32 KB per answer or permission answer: 413 `too-large` |
+| Stored boxes | 128 MB per account, of which machine-signed items may fill all but the last 8 MB: 409 `too-many-items`; 2 MB per machine-signed item (all its boxes), 32 KB per run update and 32 KB per answer or permission answer: 413 `too-large` |
 | `POST /directory` | 30 an hour per account |
 | Directory entries, revocations included | 200 per account: 409 `directory-full`; 8 KB per entry: 413 `too-large` |
 | Sessions | 50 per account; signing in past that ends the oldest, unpaired ones first |
@@ -278,6 +294,7 @@ code below. Per-address limits count an IPv6 client as its /64.
 | `POST /joins` | 10 a minute per account; request text 4 KB: 400 `bad-schema` |
 | `GET /joins` waiting | 16 per account; `GET /joins/:id` waiting: 4 per join: 429 `too-many-waits` |
 | `GET /answers` waiting | 32 per machine: 429 `too-many-waits` |
+| `POST /quota/ask` | 6 a minute per account |
 | `POST /push/subscriptions` | 30 a minute per account, on top of the subscription caps |
 
 Answers skip the decision count and may use the last 8 MB, so a full account can still answer. An hourly sweep drops answered
@@ -297,6 +314,9 @@ shows whether its agent is blocked on it: working on other things, or waiting fo
   decision without one is `working`.
 - A flip to `waiting` notifies once: the machine posts it without `quiet`, and every other
   update `quiet`, so a repeated `waiting` or a flip back to `working` pushes nothing.
+- A decision asked already waiting is posted `quiet` and its `waiting` item pushes, so the one
+  notification says the agent waits. A device that has not seen the decision fetches it with
+  `GET /items/:id`.
 - A client that does not know the kind never lists it (lists name their kinds) and ignores
   its push.
 
