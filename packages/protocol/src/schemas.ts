@@ -169,9 +169,15 @@ export const SessionLink = z
   });
 export type SessionLink = z.infer<typeof SessionLink>;
 
-/** The coding agent behind a decision or a permission prompt. */
-export const Agent = z.enum(["claude-code", "codex"]);
+/** The coding agent behind a decision or a permission prompt, as machines send it. */
+export const Agent = z.enum(["claude-code", "codex", "pi"]);
 export type Agent = z.infer<typeof Agent>;
+
+/**
+ * An agent as items carry it: one of `Agent`, or a name a newer machine sends that this client
+ * does not know yet. A client shows an unknown agent as none, rather than refusing the item.
+ */
+export const AgentName = z.string().regex(/^[a-z0-9][a-z0-9-]{0,39}$/, "an agent name");
 
 /** What a machine is, for its icon; clients without it show a generic computer. */
 export const MachineKind = z.enum(["server", "desktop", "laptop", "cloud"]);
@@ -232,7 +238,7 @@ export const Decision = z
     options: z.array(z.string().min(1).max(100)).max(4),
     recommended: z.string().optional(),
     /** Optional: older machines omit it. */
-    agent: Agent.optional(),
+    agent: AgentName.optional(),
     /**
      * Optional, and no client shows it: agents never answer for the owner, so a decision has no
      * default. Machines keep sending one for clients from before 2026-10-05, which require it;
@@ -314,7 +320,7 @@ export const Permission = z
     id: Id,
     to: z.array(Id).min(1),
     createdAt: Time,
-    agent: PermissionAgent,
+    agent: AgentName,
     tool: z.string().min(1).max(100),
     /** One line: the Bash command, or the edited path. */
     summary: z.string().min(1).max(200),
