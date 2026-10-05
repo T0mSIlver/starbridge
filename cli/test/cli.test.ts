@@ -283,7 +283,7 @@ test("ask without --default waits for the owner: no default time", async () => {
   expect(d?.default).toEqual({ action: NO_DEFAULT });
 });
 
-test("waiting and working flip a decision's state; only a flip to waiting pushes", async () => {
+test("waiting and working flip a decision's state, and each flip pushes", async () => {
   const ctx = await paired(server);
   await run(ASK, ctx);
   const id = ctx.lines[0] as string;
@@ -294,7 +294,7 @@ test("waiting and working flip a decision's state; only a flip to waiting pushes
   expect(await run(["working", id], ctx)).toBe(0);
   expect(await state()).toEqual(["working"]);
   expect(await run(["waiting", id], ctx)).toBe(0);
-  expect(server.pushed).toEqual(["decision", "waiting", "waiting"]);
+  expect(server.pushed).toEqual(["decision", "waiting", "waiting", "waiting"]);
 
   await server.answer(id, { choice: "Merge" });
   await run(["wait", id], ctx);
