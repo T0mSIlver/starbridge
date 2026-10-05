@@ -61,6 +61,7 @@ import dev.starbridge.app.ui.fieldColors
 import dev.starbridge.app.ui.groupGap
 import dev.starbridge.app.ui.groupShape
 import dev.starbridge.app.ui.pairing.QrWays
+import dev.starbridge.app.ui.pairing.rememberScanner
 import dev.starbridge.app.ui.pairing.ShowingQr
 import dev.starbridge.app.ui.listPadding
 import dev.starbridge.app.ui.theme.Sizes
@@ -100,7 +101,10 @@ fun DevicesScreen(
     modifier: Modifier = Modifier,
     onBack: () -> Unit = {},
     onAdd: () -> Unit = {},
+    /** A pairing code read by the scanner; a phone that cannot scan opens Add a device instead. */
+    onScan: (String) -> Unit = {},
 ) {
+    val scan = rememberScanner(onResult = onScan, onError = { onAdd() })
     // Devices first, then machines, each in the order the directory added them.
     val rows = members.sortedBy { it.kind != Kind.Device }
     var revoking by rememberSaveable { mutableStateOf<String?>(null) }
@@ -108,13 +112,22 @@ fun DevicesScreen(
         itemsIndexed(rows, key = { _, it -> it.id }) { i, it -> MemberRow(it, now, groupShape(i, rows.size, outer = Spacing.s5)) { revoking = it.id } }
         item {
             FilledTonalButton(
-                onClick = onAdd,
+                onClick = scan,
                 colors = ButtonDefaults.filledTonalButtonColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHighest, contentColor = MaterialTheme.colorScheme.onSurface),
-                modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.s1, vertical = Spacing.s4 - groupGap).height(Sizes.tap),
+                modifier = Modifier.fillMaxWidth().padding(start = Spacing.s1, end = Spacing.s1, top = Spacing.s4 - groupGap).height(Sizes.tap),
             ) {
                 Symbol(Sym.Qr, size = 20.dp)
                 Spacer(Modifier.width(Spacing.s2))
-                Text("Add a device", style = StarbridgeTheme.type.action)
+                Text("Scan a QR code", style = StarbridgeTheme.type.action)
+            }
+        }
+        item {
+            FilledTonalButton(
+                onClick = onAdd,
+                colors = ButtonDefaults.filledTonalButtonColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHighest, contentColor = MaterialTheme.colorScheme.onSurface),
+                modifier = Modifier.fillMaxWidth().padding(start = Spacing.s1, end = Spacing.s1, top = Spacing.s2, bottom = Spacing.s4 - groupGap).height(Sizes.tap),
+            ) {
+                Text("Other ways to add a device", style = StarbridgeTheme.type.action)
             }
         }
     }
@@ -205,17 +218,18 @@ fun PairCard(approval: Approval, actions: DeviceActions, otherWays: @Composable 
                         }
                     }
                     is Approval.Showing -> ShowingQr(state) { actions.close(); code = "" }
-                    is Approval.Done -> {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Rounded.CheckCircle, contentDescription = null, tint = colors.ok)
-                            Spacer(Modifier.width(Spacing.s2))
-                            Text("${state.name} joined.", style = StarbridgeTheme.type.body, color = MaterialTheme.colorScheme.onSurface)
-                        }
-                        OutlinedButton(onClick = { actions.close(); code = "" }, modifier = Modifier.heightIn(min = Sizes.tap)) { Text("Pair another", style = StarbridgeTheme.type.action) }
-                    }
                     else -> {
+                        // A pairing that just ended says so above the ways to pair the next one.
+                        if (state is Approval.Done) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Rounded.CheckCircle, contentDescription = null, tint = colors.ok)
+                                Spacer(Modifier.width(Spacing.s2))
+                                Text("${state.name} joined.", style = StarbridgeTheme.type.body, color = MaterialTheme.colorScheme.onSurface)
+                            }
+                        }
                         Text("Add a machine or device", style = StarbridgeTheme.type.heading, color = MaterialTheme.colorScheme.onSurface)
-                        Text("Type the code it shows: starbridge pair on a machine, or Join on a new phone or browser.", style = StarbridgeTheme.type.small, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        otherWays()
+                        Text("Or type the code it shows: starbridge pair on a machine, or Join on a new phone or browser.", style = StarbridgeTheme.type.small, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         TextField(
                             value = code,
                             onValueChange = { code = it.take(40) },
@@ -230,7 +244,7 @@ fun PairCard(approval: Approval, actions: DeviceActions, otherWays: @Composable 
                             isError = state is Approval.Failed,
                             supportingText = (state as? Approval.Failed)?.let { { Text(it.message) } },
                         )
-                        Button(
+                        OutlinedButton(
                             onClick = { actions.lookUp(code) },
                             enabled = code.isNotBlank() && state != Approval.Checking,
                             modifier = Modifier.fillMaxWidth().heightIn(min = Sizes.tap),
@@ -238,8 +252,6 @@ fun PairCard(approval: Approval, actions: DeviceActions, otherWays: @Composable 
                             if (state == Approval.Checking) LoadingIndicator(Modifier.size(Spacing.s6), color = MaterialTheme.colorScheme.secondary)
                             else Text("Check code", style = StarbridgeTheme.type.action)
                         }
-                        // Other ways to add a device (a 6-digit check, a QR code: #66) go here.
-                        otherWays()
                     }
                 }
             }

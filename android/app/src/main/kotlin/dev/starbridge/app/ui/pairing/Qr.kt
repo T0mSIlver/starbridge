@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.MaterialTheme
@@ -88,15 +89,13 @@ private fun scan(context: Context, onResult: (String) -> Unit, onError: (String)
         }
 }
 
-/** Under the code field: scan a code another device or `starbridge pair` shows, or show one. */
+/** First on the card: scan a code another device or `starbridge pair` shows, or show one. */
 @Composable
 fun ColumnScope.QrWays(onScan: (String) -> Unit, onShow: () -> Unit) {
     var error by rememberSaveable { mutableStateOf<String?>(null) }
     val scan = rememberScanner(onResult = { error = null; onScan(it) }, onError = { error = it })
-    Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
-        OutlinedButton(onClick = scan, modifier = Modifier.weight(1f).heightIn(min = Sizes.tap)) { Text("Scan QR", style = StarbridgeTheme.type.action) }
-        OutlinedButton(onClick = onShow, modifier = Modifier.weight(1f).heightIn(min = Sizes.tap)) { Text("Show QR", style = StarbridgeTheme.type.action) }
-    }
+    Button(onClick = scan, modifier = Modifier.fillMaxWidth().heightIn(min = Sizes.tap)) { Text("Scan a QR code", style = StarbridgeTheme.type.action) }
+    OutlinedButton(onClick = onShow, modifier = Modifier.fillMaxWidth().heightIn(min = Sizes.tap)) { Text("Show a QR code for a new phone", style = StarbridgeTheme.type.action) }
     error?.let { Text(it, style = StarbridgeTheme.type.small, color = StarbridgeTheme.colors.bad) }
 }
 

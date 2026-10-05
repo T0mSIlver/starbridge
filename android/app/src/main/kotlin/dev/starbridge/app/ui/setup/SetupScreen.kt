@@ -1,5 +1,6 @@
 package dev.starbridge.app.ui.setup
 
+import dev.starbridge.app.protocol.Bip39
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -273,6 +274,10 @@ private fun FirstDevice(busy: Boolean, actions: SetupActions, modifier: Modifier
 @Composable
 private fun Recover(busy: Boolean, actions: SetupActions, modifier: Modifier, onBack: () -> Unit) {
     var words by rememberSaveable { mutableStateOf("") }
+    val typed = Bip39.split(words)
+    // The last word is still being typed unless a separator follows it.
+    val finished = if (words.lastOrNull()?.isLetter() == false) typed else typed.dropLast(1)
+    val unknown = Bip39.problem(finished)?.takeIf { it.startsWith("Word ") }
     Step(
         modifier,
         top = {
@@ -282,7 +287,9 @@ private fun Recover(busy: Boolean, actions: SetupActions, modifier: Modifier, on
                     value = words,
                     onValueChange = { words = it },
                     minLines = 4,
-                    placeholder = { Text("The 24 words, in order") },
+                    label = { Text("Your recovery words, separated by spaces") },
+                    supportingText = { Text(unknown ?: "${typed.size} of ${if (typed.size > 12) 24 else 12} words") },
+                    isError = unknown != null,
                     textStyle = StarbridgeTheme.type.machine,
                     colors = fieldColors(),
                     keyboardOptions = KeyboardOptions(autoCorrectEnabled = false, keyboardType = KeyboardType.Password),
@@ -291,7 +298,7 @@ private fun Recover(busy: Boolean, actions: SetupActions, modifier: Modifier, on
             }
         },
         bottom = {
-            Primary("Recover", busy, enabled = words.trim().split(Regex("\\s+")).size == 24) { actions.recover(words) }
+            Primary("Recover", busy, enabled = (typed.size == 12 || typed.size == 24) && unknown == null) { actions.recover(words) }
             Link("Back", onBack)
         },
     )
