@@ -57,6 +57,7 @@ test("words separated by digits recover", () => {
 test("while typing, only what more typing cannot fix counts", () => {
   // "run" holds a U, which no key does, but the eighth word may still make it words.
   expect(readRecoveryKey("cup run", { typing: true }).problem).toBeNull();
+  expect(readRecoveryKey("1cup2run", { typing: true }).problem).toBeNull();
   expect(readRecoveryKey("7KQU", { typing: true }).problem).toEqual({
     kind: "bad-character",
     index: 3,
