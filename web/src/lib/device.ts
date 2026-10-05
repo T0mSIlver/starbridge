@@ -1016,7 +1016,10 @@ export async function loadQuotas(ctx: Ctx): Promise<Quotas> {
     for (const p of body.providers) {
       if (p.error) out.errors.push({ provider: p.provider, machine: machine.name, error: p.error });
       for (const w of p.windows) {
-        const alert = body.alerts.find((a) => a.provider === p.provider && a.window === w.id);
+        // The card's state follows a pace alert; "low" only notifies.
+        const alert = body.alerts.find(
+          (a) => a.provider === p.provider && a.window === w.id && a.kind !== "low",
+        );
         out.cards.push({
           provider: p.provider,
           ...(machines > 1 ? { machine: machine.name } : {}),

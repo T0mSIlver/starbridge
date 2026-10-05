@@ -1215,7 +1215,8 @@ class ServerStore(
 
     private fun toUi(q: SavedQuota, named: Boolean): List<QuotaWindow> = q.body.providers.flatMap { p ->
         p.windows.map { w ->
-            val alerts = q.body.alerts.filter { it.provider == p.provider && it.window == w.id }
+            // The card's state follows a pace alert; "low" only notifies.
+            val alerts = q.body.alerts.filter { it.provider == p.provider && it.window == w.id && it.kind != "low" }
             val pace = w.pace
             val unused = alerts.firstOrNull { it.kind == "unused-headroom" }?.unusedPercent
             QuotaWindow(
