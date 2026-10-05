@@ -363,3 +363,29 @@
   color: inherit;
   font-weight: 600;
 }
+
+/* Under a grouping's header, the group's cards join into one segmented group (Material 3
+   Expressive): `radius.xs` inside, the card's own corner outside, 2 px apart (#248). */
+.seg {
+  --outer: var(--radius-md);
+}
+
+.seg.comfy {
+  --outer: var(--radius-lg);
+}
+
+.seg :is(.row, .run, .historyHead) {
+  margin-bottom: 2px;
+  border-radius: var(--radius-xs);
+}
+
+.seg > :first-child {
+  border-top-left-radius: var(--outer);
+  border-top-right-radius: var(--outer);
+}
+
+.seg > :last-child,
+.seg > :last-child > :last-child {
+  border-bottom-left-radius: var(--outer);
+  border-bottom-right-radius: var(--outer);
+}

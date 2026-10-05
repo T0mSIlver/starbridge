@@ -1115,6 +1115,25 @@ How it generalizes is open.
   grouping, then "History · N" with the matching answered items, History open or not. A
   History item also matches by its answer. Matched words show bold on `surface2`, never in
   amber; Escape in the box clears it. Android's search waits for the owner's pick.
+- 2026-10-06. One card system for the inbox (#248, owner's pick from
+  https://claude.ai/artifact/2eJzH4btTJsQ77CByvBQsB). This revises #191's "filled and hollow": a
+  question its agent works around was an outline with no fill, so it read as another component
+  beside the runs and prompts. Now every item (run, prompt, question, History's head and rows) is
+  a filled card on `surface`, Material 3's filled card, with no border and no shadow, and what
+  blocks an agent differs by one thing: its card takes the amber fill (`accent-soft` over
+  `surface`). The title's weight, the clock in the time slot and the screen reader's label stay as
+  #191 set them. How the cards sit depends on the view, as the owner picked: in One feed each item
+  is its own card ("One card each"), `s2` apart, as Material spaces a collection of cards; under
+  "Group by machine" and "Group by waiting", the cards under one header join into a segmented
+  group (Material 3 Expressive's segmented list), 2 px apart with `radius.xs` inside, since a
+  group under its header reads as one set; so does History in those views. Android: corners
+  `radius.xl` (28 dp), 20 dp inside, 16 dp page margins; in One feed History's one-line rows
+  round at 20 dp, since a corner scales with its container. Web: the list pane's rows become the
+  same cards, `radius.md` wide and `radius.lg` on a phone, the selected one on `surface2`. Kind
+  icons sit on the card without a tile on both clients, amber on a blocked card and `fg2`
+  otherwise; secondary buttons and the command box on a card are tonal (`surface2`, or `surface`
+  on amber), so nothing on a card is outlined. The question sheet and the web detail keep their
+  amber head or ground; #254 changes their options and Reply.
 
 ## Encryption, with existing libraries
 

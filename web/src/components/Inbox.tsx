@@ -20,6 +20,7 @@ import type { InboxItem, PromptItem } from "@/lib/types";
 import { useApp } from "./AppProvider";
 import { PromptDetail, QuestionDetail } from "./Detail";
 import { HistoryHead, machineIcon, NeedRow, PastRow, RunRow, useNow, waitingSince } from "./Feed";
+import feed from "./Feed.module.css";
 import s from "./Inbox.module.css";
 import { Icon } from "./icons";
 import { ordered } from "./options";
@@ -197,91 +198,17 @@ export function Inbox() {
       />
     );
   const sub = (label: React.ReactNode) => <div className={`t-caption ${s.sub}`}>{label}</div>;
+  // Under a grouping's header, the group's cards join into one segmented group (#248).
+  const grouped = view !== "none";
+  const seg = (children: React.ReactNode) => (
+    <div className={`${feed.seg} ${comfy ? feed.comfy : ""}`}>{children}</div>
+  );
 
   const count = needs.length;
   const waitingOn = needs.filter((e) => waitingSince(e));
   const whenYouCan = needs.filter((e) => !waitingSince(e));
-  const list = (
-    <section className={s.list} ref={listRef} aria-label="Inbox">
-      <header className={`t-small ${s.head}`}>
-        <span className={s.headTitle}>
-          Needs you {count > 0 && <span className={s.count}>{count}</span>}
-        </span>
-        <span className={`t-key ${s.keys}`}>
-          <kbd className={ui.kbd}>J</kbd> <kbd className={ui.kbd}>K</kbd>
-        </span>
-        <ViewMenu grouping={grouping} setGrouping={setGrouping} />
-      </header>
-      <PushBanner />
-      {inbox.rejected.length > 0 && (
-        <p className={`t-meta ${s.rejected}`} role="status">
-          {inbox.rejected.length} hidden: failed verification ({inbox.rejected[0]?.error})
-        </p>
-      )}
-      {view === "waiting" ? (
-        <>
-          {runEntries.length > 0 && (
-            <>
-              {sub("Running")}
-              {runEntries.map(row)}
-            </>
-          )}
-          {waitingOn.length > 0 && (
-            <>
-              {sub(
-                <>
-                  Waiting on you <span className={s.count}>{waitingOn.length}</span>
-                </>,
-              )}
-              {waitingOn.map(row)}
-            </>
-          )}
-          {whenYouCan.length > 0 && (
-            <>
-              {sub(
-                <>
-                  When you can <span className={s.countQuiet}>{whenYouCan.length}</span>
-                </>,
-              )}
-              {whenYouCan.map(row)}
-            </>
-          )}
-        </>
-      ) : view === "machine" ? (
-        byMachine(runEntries, needs).map((g) => (
-          <div key={g.machine}>
-            {sub(
-              <>
-                <Icon name={machineIcon(g.kind)} size={13} className={s.subIcon} /> {g.machine}
-              </>,
-            )}
-            {g.entries.map(row)}
-          </div>
-        ))
-      ) : (
-        <>
-          {runEntries.length > 0 && (
-            <>
-              {sub("Running")}
-              {runEntries.map(row)}
-            </>
-          )}
-          {needs.length > 0 && (
-            <>
-              {sub(comfy ? `Needs you · ${count}` : "Needs you")}
-              {needs.map(row)}
-            </>
-          )}
-        </>
-      )}
-      {needs.length === 0 &&
-        runEntries.length === 0 &&
-        (!finding ? (
-          <p className={`t-small ${s.empty}`}>Nothing needs you</p>
-        ) : past.length === 0 ? (
-          <p className={`t-small ${s.empty}`}>Nothing matches</p>
-        ) : null)}
-      <div className={s.gap} />
+  const historyPart = (
+    <>
       {finding ? (
         past.length > 0 && sub(`History · ${past.length}`)
       ) : (
@@ -312,6 +239,90 @@ export function Inbox() {
           ))}
         </div>
       )}
+    </>
+  );
+  const list = (
+    <section className={s.list} ref={listRef} aria-label="Inbox">
+      <header className={`t-small ${s.head}`}>
+        <span className={s.headTitle}>
+          Needs you {count > 0 && <span className={s.count}>{count}</span>}
+        </span>
+        <span className={`t-key ${s.keys}`}>
+          <kbd className={ui.kbd}>J</kbd> <kbd className={ui.kbd}>K</kbd>
+        </span>
+        <ViewMenu grouping={grouping} setGrouping={setGrouping} />
+      </header>
+      <PushBanner />
+      {inbox.rejected.length > 0 && (
+        <p className={`t-meta ${s.rejected}`} role="status">
+          {inbox.rejected.length} hidden: failed verification ({inbox.rejected[0]?.error})
+        </p>
+      )}
+      {view === "waiting" ? (
+        <>
+          {runEntries.length > 0 && (
+            <>
+              {sub("Running")}
+              {seg(runEntries.map(row))}
+            </>
+          )}
+          {waitingOn.length > 0 && (
+            <>
+              {sub(
+                <>
+                  Waiting on you <span className={s.count}>{waitingOn.length}</span>
+                </>,
+              )}
+              {seg(waitingOn.map(row))}
+            </>
+          )}
+          {whenYouCan.length > 0 && (
+            <>
+              {sub(
+                <>
+                  When you can <span className={s.countQuiet}>{whenYouCan.length}</span>
+                </>,
+              )}
+              {seg(whenYouCan.map(row))}
+            </>
+          )}
+        </>
+      ) : view === "machine" ? (
+        byMachine(runEntries, needs).map((g) => (
+          <div key={g.machine}>
+            {sub(
+              <>
+                <Icon name={machineIcon(g.kind)} size={13} className={s.subIcon} /> {g.machine}
+              </>,
+            )}
+            {seg(g.entries.map(row))}
+          </div>
+        ))
+      ) : (
+        <>
+          {runEntries.length > 0 && (
+            <>
+              {sub("Running")}
+              {runEntries.map(row)}
+            </>
+          )}
+          {needs.length > 0 && (
+            <>
+              {sub(comfy ? `Needs you · ${count}` : "Needs you")}
+              {needs.map(row)}
+            </>
+          )}
+        </>
+      )}
+      {needs.length === 0 &&
+        runEntries.length === 0 &&
+        (!finding ? (
+          <p className={`t-small ${s.empty}`}>Nothing needs you</p>
+        ) : past.length === 0 ? (
+          <p className={`t-small ${s.empty}`}>Nothing matches</p>
+        ) : null)}
+      <div className={s.gap} />
+      {grouped ? seg(historyPart) : historyPart}
     </section>
   );
 
