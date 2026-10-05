@@ -22,9 +22,11 @@ for i in $(seq 1 "$N"); do
   fi
   # Hosted-runner equivalents the workflows expect. Temp files go to the job's temp folder, which
   # the runner empties after each job, instead of /tmp, a small RAM disk that tests filled.
+  # JAVA_TOOL_OPTIONS moves java.io.tmpdir there too: Robolectric unpacks ~200 MB per test JVM.
   cat > "$d/.env" <<EOF
 LANG=C.UTF-8
 TMPDIR=$d/_work/_temp
+JAVA_TOOL_OPTIONS=-Djava.io.tmpdir=$d/_work/_temp
 GRADLE_USER_HOME=$GRADLE_HOME
 ANDROID_HOME=$HOME/.local/opt/android-sdk
 ANDROID_SDK_ROOT=$HOME/.local/opt/android-sdk
