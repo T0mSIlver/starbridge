@@ -5,6 +5,8 @@ import com.goterl.lazysodium.SodiumJava
 import dev.starbridge.app.protocol.Bip39
 import dev.starbridge.app.protocol.Directories
 import dev.starbridge.app.protocol.Envelopes
+import dev.starbridge.app.protocol.JoinRequestBody
+import dev.starbridge.app.protocol.Joins
 import dev.starbridge.app.protocol.KeyPair
 import dev.starbridge.app.protocol.Member
 import dev.starbridge.app.protocol.Pairings
@@ -17,6 +19,8 @@ import dev.starbridge.app.protocol.Sodium
 import dev.starbridge.app.protocol.fromB64
 import dev.starbridge.app.protocol.parseBody
 import dev.starbridge.app.protocol.parseJsonText
+import dev.starbridge.app.protocol.codeFromLink
+import dev.starbridge.app.protocol.pairingLink
 import dev.starbridge.app.protocol.parsePairingCode
 import dev.starbridge.app.protocol.toB64
 import kotlinx.serialization.json.JsonElement
@@ -38,6 +42,7 @@ class ProtocolVectorsTest {
     private val envelopes = Envelopes(sodium)
     private val directories = Directories(sodium, envelopes)
     private val pairings = Pairings(sodium)
+    private val joins = Joins(sodium)
 
     private fun load(name: String): JsonObject {
         val dir = File(System.getProperty("starbridge.vectors") ?: error("starbridge.vectors not set"))
@@ -155,6 +160,52 @@ class ProtocolVectorsTest {
         // What this client makes, the vectors' opener accepts.
         val made = pairings.request(opened, code)
         assertEquals(opened, pairings.openRequest(ProtocolJson.encodeToJsonElement(made), code))
+
+        val links = v.getValue("links").jsonArray.map { it.jsonObject }
+        assertEquals(links[0].str("link"), pairingLink(links[0].str("server"), code))
+        assertEquals(links[0].str("expect"), codeFromLink(links[0].str("link")).formatted())
+        for (case in links.drop(1)) {
+            val got = try {
+                codeFromLink(case.str("input")).formatted()
+            } catch (e: ProtocolException) {
+                e.code
+            }
+            assertEquals(case.str("input"), case.str("expect"), got)
+        }
+    }
+
+    @Test
+    fun join() {
+        val v = load("join.json")
+        fun pair(name: String) = v.getValue(name).jsonObject.let { KeyPair(fromB64(it.str("publicKey")), fromB64(it.str("privateKey"))) }
+        val seeded = sodium.boxSeedKeyPair(fromB64(v.getValue("joiner").jsonObject.str("seed")))
+        assertEquals(v.getValue("joiner").jsonObject.str("publicKey"), toB64(seeded.public))
+        val request = v.getValue("request").jsonObject
+        val text = request.str("text")
+        val body = ProtocolJson.decodeFromJsonElement(JoinRequestBody.serializer(), request.getValue("body"))
+        assertEquals(text, joins.request(body))
+        assertEquals(body, joins.openRequest(text))
+        assertEquals(v.str("commitment"), joins.commitment(pair("joiner").public, text))
+
+        val approver = joins.approverKeys(pair("approver"), v.getValue("joiner").jsonObject.str("publicKey"), text, v.str("commitment"))
+        val joiner = joins.joinerKeys(pair("joiner"), v.getValue("approver").jsonObject.str("publicKey"), text)
+        assertEquals(v.str("digits"), approver.digits)
+        assertEquals(v.str("digits"), joiner.digits)
+        assertEquals(v.str("mac"), toB64(joiner.mac))
+        val approval = v.getValue("approval").jsonObject
+        assertEquals(approval.getValue("message"), ProtocolJson.encodeToJsonElement(joins.approval(ProtocolJson.decodeFromJsonElement(dev.starbridge.app.protocol.JoinApprovalBody.serializer(), approval.getValue("body")), approver)))
+        assertEquals(approval.getValue("body"), ProtocolJson.encodeToJsonElement(joins.openApproval(approval.getValue("message"), joiner, body.join)))
+
+        for (case in v.getValue("bad").jsonArray.map { it.jsonObject }) {
+            val got = code {
+                when (case.str("side")) {
+                    "approver" -> joins.approverKeys(pair("approver"), case.str("joinerKey"), case.str("request"), case.str("commitment"))
+                    "joiner" -> joins.joinerKeys(pair("joiner"), case.str("approverKey"), case.str("request"))
+                    else -> joins.openApproval(case.getValue("message"), joiner, body.join)
+                }
+            }
+            assertEquals(case.str("name"), case.str("expect"), got)
+        }
     }
 
     @Test

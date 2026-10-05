@@ -1,0 +1,128 @@
+// The browser's join and approval code against the real server, which fails chosen requests with
+// 503 to stand in for a dropped connection.
+import "fake-indexeddb/auto";
+import { afterAll, beforeAll, expect, test } from "bun:test";
+import {
+  checkJoined,
+  generateMemberKeys,
+  joinCommitment,
+  joinerKeys,
+  joinRequest,
+  newJoinId,
+  newJoinKeyPair,
+  openJoinApproval,
+  publicKeys,
+  toB64,
+  verifyDirectory,
+} from "@starbridge/protocol";
+import { LiveServer } from "@starbridge/server/test-support";
+import { api } from "./api";
+import * as device from "./device";
+import type { JoinView } from "./types";
+
+let live: LiveServer;
+let ctx: device.Ctx;
+const realFetch = globalThis.fetch;
+const realGenerateKey = crypto.subtle.generateKey;
+
+beforeAll(async () => {
+  live = await LiveServer.start();
+  // The page's same-origin calls, with the session cookie a browser would keep.
+  let cookie = "";
+  globalThis.fetch = (async (input: string, init?: RequestInit) => {
+    const res = await realFetch(`${live.url}${input}`, {
+      ...init,
+      headers: { ...(init?.headers as Record<string, string>), cookie },
+    });
+    cookie = res.headers.get("set-cookie")?.split(";")[0] ?? cookie;
+    return res;
+  }) as typeof fetch;
+  device.retryDelay.ms = 10;
+  // Bun cannot store a CryptoKey in IndexedDB, so the keys take the raw libsodium fallback.
+  crypto.subtle.generateKey = (() =>
+    Promise.reject(new Error("no WebCrypto keys"))) as typeof crypto.subtle.generateKey;
+  await api.ownerSignIn("owner-secret");
+  const { account } = await api.me();
+  const join = await device.startJoin(account, "This browser");
+  await live.approve(join.code);
+  await join.done;
+  ctx = (await device.deviceContext(account)) as device.Ctx;
+});
+afterAll(() => {
+  globalThis.fetch = realFetch;
+  crypto.subtle.generateKey = realGenerateKey;
+  live.stop();
+});
+
+/** Another browser of the account, signed in, asks to join; it calls the server directly. */
+async function joiner() {
+  const r = await realFetch(`${live.url}/v1/auth/owner`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ token: "owner-secret" }),
+  });
+  const { session } = (await r.json()) as { session: string };
+  const call = async (method: string, path: string, body?: unknown) => {
+    const res = await realFetch(`${live.url}/v1${path}`, {
+      method,
+      headers: { authorization: `Bearer ${session}`, "content-type": "application/json" },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    if (!res.ok) throw new Error(`${method} ${path}: ${res.status}`);
+    return (await res.json()) as { join: JoinView };
+  };
+  const keys = generateMemberKeys();
+  const eph = newJoinKeyPair();
+  const id = newJoinId();
+  const member = { id: `w_${id}`, name: "New browser", ...publicKeys(keys) };
+  const request = joinRequest({
+    v: 1,
+    join: id,
+    account: ctx.account,
+    ...member,
+    at: "2026-10-05T12:00:00Z",
+  });
+  const { join: view } = await call("POST", "/joins", {
+    request,
+    commitment: joinCommitment(eph.publicKey, request),
+  });
+  /** Waits for the approver's key, reveals, and returns the digits it shows. */
+  const reveal = async () => {
+    // Leaves the planted failures to the browser.
+    while (live.failures.length) await Bun.sleep(5);
+    let join = view;
+    while (!join.approverKey)
+      join = (await call("GET", `/joins/${id}?after=${join.version}&wait=5`)).join;
+    await call("POST", `/joins/${id}/reveal`, { key: toB64(eph.publicKey) });
+    return joinerKeys({ mine: eph, approverKey: join.approverKey, request });
+  };
+  const ask = { id, name: member.name, at: view.createdAt, view };
+  return { id, member, ask, reveal, call };
+}
+
+test("comparing digits survives a failed poll, and a failed approval retries onto the same entry", async () => {
+  const j = joiner();
+  const { id, member, ask, reveal, call } = await j;
+  // The first poll after this browser posts its key fails: giving up would strand the join,
+  // since the server takes one approver key.
+  live.failures.push(`/joins/${id}`);
+  const [comparison, keys] = await Promise.all([
+    device.compareJoin(ctx, ask, new AbortController().signal),
+    reveal(),
+  ]);
+  expect(comparison.digits).toBe(keys.digits);
+
+  // The entry lands but the approval's post fails; Approve again reuses the entry.
+  live.failures.push(`/joins/${id}/approve`);
+  await expect(comparison.approve(ctx)).rejects.toThrow("unavailable");
+  await comparison.approve(ctx);
+
+  const { join } = await call("GET", `/joins/${id}`);
+  const body = openJoinApproval(join.approval, keys, id);
+  const dir = verifyDirectory((await api.directory()) as never, {
+    account: ctx.account,
+    pin: { length: body.length, head: body.head },
+  });
+  checkJoined(dir, { ...member, role: "device" });
+  expect([...dir.members.keys()].filter((m) => m === member.id)).toHaveLength(1);
+});

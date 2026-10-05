@@ -46,11 +46,21 @@ data class Saved(
     /** "fcm" or "unifiedpush". */
     val pushType: String = "fcm",
     val push: SavedPush? = null,
-    /** While this device waits for another to approve it: the code it shows. */
+    /** While this device waits for another to approve it: the code it shows, or scanned. */
     val joining: String? = null,
+    val joiningScanned: Boolean = false,
+    /** While this device waits for a join by digits. */
+    val digitJoin: SavedDigitJoin? = null,
     /** The first device's signed genesis entry, kept until the server's chain is known to hold it. */
     val pendingGenesis: JsonElement? = null,
 )
+
+/**
+ * A join by digits in progress: the request text this phone posted, and the first approver key
+ * it saw. The digits commit to that key, so this phone never answers a second one.
+ */
+@Serializable
+data class SavedDigitJoin(val id: String, val request: String, val approverKey: String? = null, val digits: String? = null)
 
 /** Private keys and tokens. */
 @Serializable
@@ -64,6 +74,9 @@ data class Secrets(
     val recoverySeed: String? = null,
     /** While joining: the claim secret that fetches the approval. */
     val claim: String? = null,
+    /** While joining by digits: the ephemeral X25519 key pair. */
+    val joinPk: String? = null,
+    val joinSk: String? = null,
     /** While GitHub sign-in is open in the browser: the PKCE verifier behind its challenge. */
     val signInVerifier: String? = null,
 )

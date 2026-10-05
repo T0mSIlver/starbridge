@@ -594,6 +594,12 @@ One pnpm monorepo:
   an Ed25519 seed printed as words when the first device is set up, can sign
   a new device once all are lost. Clients check the signatures, so the server
   cannot slip its own key in. Revoking is a signed entry too.
+- Pairing without typing (2026-10-05, #66): a device signed in to the same
+  account joins by digits, a 6-digit short authentication string with a
+  commitment (ZRTP, Matrix SAS) that both screens show; or a phone scans a QR
+  code an existing device shows; or the owner opens the link `starbridge pair`
+  prints. The 24-character code stays as the fallback. Design and vectors in
+  PROTOCOL.md, "Joining by digits".
 - A decision is sealed to each device's key and signed by the machine. The
   answer is sealed to the asking machine and signed by the device. Quota
   snapshots and alerts use the same envelope, so the server holds ciphertext
