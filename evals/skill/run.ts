@@ -52,8 +52,10 @@ const model = opt.model ?? (agent === "claude" ? "sonnet" : "gpt-6.1-sol");
 const repo = join(import.meta.dir, "..", "..");
 const out = opt.out ?? join(import.meta.dir, "results", agent);
 mkdirSync(out, { recursive: true });
-// Outside the repo and the scratchpad: a path naming Starbridge would hint the agent.
-const work = mkdtempSync("/tmp/skill-eval-");
+// On disk rather than /tmp (a Codex home grows to 60 MB), and outside the repo and the
+// scratchpad: a path naming Starbridge would hint the agent.
+mkdirSync(join(homedir(), ".cache"), { recursive: true });
+const work = mkdtempSync(join(homedir(), ".cache", "skill-eval-"));
 const bun = process.execPath;
 const which = (cmd: string) => {
   const r = spawnSync("sh", ["-c", `command -v ${cmd}`], { encoding: "utf8" });
@@ -339,6 +341,7 @@ async function one(s: Scenario, arm: string, rep: number): Promise<RunRecord> {
     rec.gh = readFileSync(ghLog, "utf8").split("\n").filter(Boolean);
   }
   writeFileSync(join(out, `${id}.json`), `${JSON.stringify(rec, null, 2)}\n`);
+  if (!opt.keep) rmSync(root, { recursive: true, force: true });
   return rec;
 }
 

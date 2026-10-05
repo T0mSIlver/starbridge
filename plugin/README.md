@@ -1,15 +1,13 @@
 # Starbridge plugin for Claude Code
 
-The `starbridge` skill tells agents when to ask the owner a decision, how to
-write one that stands alone on a lock screen, and to keep working until the
-answer comes back, and to wrap in `starbridge run` any command that blocks
-the owner or needs them at the machine, so their phone shows it running.
-A `SessionStart` hook adds two rules to every session's context:
-"Whenever you need me to decide something, use the `starbridge` skill.",
-and to wrap such commands. When `rules.md` in the Starbridge config
-directory (`~/.config/starbridge`, or `$XDG_CONFIG_HOME/starbridge`,
-`$STARBRIDGE_CONFIG_DIR`) has rules for runs, the hook adds them too, and
-agents wrap the commands they name as well. Write the
+The `starbridge` skill teaches agents that Starbridge is how they reach the
+owner: a card for each decision that is theirs or each piece of work they must
+act on, written so the owner can answer it cold, and `starbridge run` around
+any command that blocks them or needs them at the machine. A `SessionStart`
+hook adds the matching rule to every session's context. When `rules.md` in
+the Starbridge config directory (`~/.config/starbridge`, or
+`$XDG_CONFIG_HOME/starbridge`, `$STARBRIDGE_CONFIG_DIR`) has rules for runs,
+the hook adds them too, and agents wrap the commands they name as well. Write the
 rules in plain words, for example:
 
 ```

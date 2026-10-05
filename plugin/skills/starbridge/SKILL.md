@@ -1,6 +1,6 @@
 ---
 name: starbridge
-description: "Reach your user through Starbridge. They are often away from the terminal, and Starbridge is how you reach them: a card on their phone and web page that they answer with one tap, sent back into this session. Use it instead of asking in chat whenever you need a decision that is theirs to make, or work is done or failed in a way they must act on; and wrap in `starbridge run`, unasked, any command that blocks them or matches their rules for runs. Covers when to post, how to write a card they can answer cold, what never to post, and what to do with the answer."
+description: "Reach your user through Starbridge. They are often away from the terminal, and Starbridge is how you reach them: a card on their phone and web page that they answer with one tap, sent back into this session. Use it instead of asking in chat whenever you need a decision that is theirs to make, and before ending a turn on work that waits on them (a PR to review or merge, a failure only they can fix); and wrap in `starbridge run`, unasked, any command that blocks them or matches their rules for runs. Covers when to post, how to write a card they can answer cold, what never to post, and what to do with the answer."
 compatibility: The `starbridge` CLI on PATH, paired with `starbridge pair`, and the Starbridge mod loaded in this Claude Code session.
 ---
 
@@ -16,9 +16,11 @@ answer comes back into this session as a prompt.
   publishing or sending outside the machine), spending money or a scarce
   quota, scope nobody asked for, or a choice their taste or their rules
   decide. Post it with `starbridge ask`.
-- **Work they must act on.** Done and waiting for their review or merge, or
-  failed in a way only they can fix. Post it as a decision whose options are
-  the next step: "#52 adds CSV export and is green. Merge it?"
+- **Work that waits on them.** Done and waiting for their review or merge, or
+  failed in a way only they can fix. Before you end a turn, check whether
+  anything you leave waits on the user; if it does, post a card whose options
+  are the next step: "#52 adds CSV export and is green. Merge it?" Your final
+  message alone may sit unread for hours.
 - **A command that blocks them** or matches their rules for runs. Wrap it in
   `starbridge run` (below). Their phone shows it running, then pass or fail.
 
