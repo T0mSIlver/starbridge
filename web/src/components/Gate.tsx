@@ -1,7 +1,9 @@
 "use client";
 
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import type { FirstDevice as PreparedDevice } from "@/lib/device";
+import { hasPairCode, holdPairCode } from "@/lib/pairLink";
 import { useApp } from "./AppProvider";
 import { Mark } from "./icons";
 import { Setup } from "./Setup";
@@ -350,6 +352,13 @@ function Problem({ title, text, error }: { title: string; text: string; error: s
 /** Shows the screen for where this browser stands, and the app once it is a ready device. */
 export function Gate({ children }: { children: React.ReactNode }) {
   const { boot } = useApp();
+  const router = useRouter();
+  const path = usePathname();
+  // A pairing link opened before sign-in or setup: keep its code, and go back to it after.
+  useEffect(() => holdPairCode(), []);
+  useEffect(() => {
+    if (boot.state === "ready" && path !== "/pair" && hasPairCode()) router.replace("/pair");
+  }, [boot.state, path, router]);
   switch (boot.state) {
     case "loading":
       return (

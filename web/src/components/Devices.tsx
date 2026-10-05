@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { ShownCode } from "@/lib/device";
 import { relative } from "@/lib/format";
+import { holdPairCode, takePairCode } from "@/lib/pairLink";
 import type { Device, PairingRequest } from "@/lib/types";
 import { useApp, useDevice } from "./AppProvider";
 import s from "./Devices.module.css";
@@ -104,12 +105,13 @@ function Pair() {
     }
   };
 
-  // A `starbridge pair` link: /pair#<code>. The fragment never reached the server.
+  // A `starbridge pair` link: /pair#<code>, possibly held through sign-in. The fragment never
+  // reached the server.
   // biome-ignore lint/correctness/useExhaustiveDependencies: runs once, on the link's code
   useEffect(() => {
-    const fromLink = location.hash.slice(1);
+    holdPairCode();
+    const fromLink = takePairCode();
     if (!fromLink) return;
-    history.replaceState(null, "", location.pathname);
     setCode(fromLink);
     run(async () => setReq(await (await load()).readPairing(fromLink)));
   }, []);
