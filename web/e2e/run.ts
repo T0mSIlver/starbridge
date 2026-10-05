@@ -188,7 +188,7 @@ async function main() {
   step("a browser with no device lands on the landing page");
   const visitor = await a.newPage();
   await visitor.goto(ORIGIN);
-  await visitor.getByRole("heading", { name: /Supervise your coding agents/ }).waitFor();
+  await visitor.getByRole("heading", { name: /Your agents ask/ }).waitFor();
   await shoot(visitor, "landing");
   await visitor.close();
 
