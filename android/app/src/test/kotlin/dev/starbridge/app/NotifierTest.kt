@@ -13,6 +13,8 @@ import dev.starbridge.app.push.Notifier
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import androidx.core.app.NotificationCompat
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -63,5 +65,23 @@ class NotifierTest {
         val n = posted()
         assertEquals(listOf("Server first", "CLI first"), n.publicVersion.actions.map { it.title.toString() })
         assertFalse(n.allowSystemGeneratedContextualActions)
+    }
+
+    // Waiting alerts on its own channel, the header ticking on the lock screen too; a flip back
+    // moves it to "Questions" without a sound (#191).
+    @Test
+    fun aFlipMovesTheQuestionBetweenChannelsAndOnlyWaitingAlerts() {
+        val waiting = fake.decisions.first { it.waiting }
+        notifier.decision(waiting)
+        posted().let {
+            assertEquals(Notifier.WAITING, it.channelId)
+            assertTrue(it.publicVersion.extras.getBoolean(Notification.EXTRA_SHOW_CHRONOMETER))
+        }
+        notifier.decision(waiting.copy(waiting = false, waitingSince = null), silent = true)
+        posted().let {
+            assertEquals(Notifier.QUESTIONS, it.channelId)
+            assertTrue(it.extras.getBoolean(Notification.EXTRA_SHOW_CHRONOMETER).not())
+            assertEquals(NotificationCompat.GROUP_ALERT_SUMMARY, NotificationCompat.getGroupAlertBehavior(it))
+        }
     }
 }

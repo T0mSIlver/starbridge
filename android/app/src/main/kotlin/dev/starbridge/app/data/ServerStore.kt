@@ -63,7 +63,8 @@ import dev.starbridge.app.protocol.Member as DirectoryMember
 
 /** Shows and clears notifications; the app's is [dev.starbridge.app.push.Notifier]. */
 interface Alerts {
-    fun decision(decision: Decision)
+    /** A new question, or one whose agent flipped; a flip back to working is [silent]. */
+    fun decision(decision: Decision, silent: Boolean = false)
     fun cancel(id: String)
     fun prompt(prompt: Prompt)
     fun cancelPrompt(prompt: Prompt)
@@ -942,8 +943,9 @@ class ServerStore(
                 if (added != null && added.answeredAt == null) alerts.prompt(toUi(added))
             }
             "waiting" -> {
-                // Pushed only when the agent flips to waiting: re-notify once, if still open. A
-                // question asked already waiting pushes only this, so its decision may be new here.
+                // Pushed when the agent flips: to waiting re-notifies once, back to working moves
+                // the notification silently (#191). A question asked already waiting pushes only
+                // this, so its decision may be new here.
                 val box = p["box"]?.jsonPrimitive?.content
                 val item = if (box != null) {
                     SealedItem(1, "waiting", id, p.getValue("from").jsonPrimitive.content, p["re"]?.jsonPrimitive?.content, listOf(SealedBox(me.id, box)))
@@ -956,7 +958,9 @@ class ServerStore(
                 val d = saved.decisions.find { it.body.id == body.decisionId } ?: fetchDecision(body.decisionId) ?: return@withLock
                 val updated = wait(d, from, body) ?: return@withLock
                 persist(saved.copy(decisions = saved.decisions.map { if (it === d) updated else it }))
-                if (d.waiting != "waiting" && updated.waiting == "waiting" && d.answeredAt == null && d.answer == null) alerts.decision(toUi(updated))
+                if (d.answeredAt == null && d.answer == null && (d.waiting == "waiting") != (updated.waiting == "waiting")) {
+                    alerts.decision(toUi(updated), silent = updated.waiting != "waiting")
+                }
             }
             "quota" -> syncQuotas()
             "join" -> {

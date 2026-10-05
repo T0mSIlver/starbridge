@@ -61,6 +61,15 @@ data class Decision(
      */
     fun isOpen(now: Instant) = answeredAt == null && answer == null && !lapsed(now)
 
+    /**
+     * The agent's proposal, shown as "Default": the option it named, else its first (#191). Never
+     * applied for the owner; nothing happens until the owner answers.
+     */
+    val proposal: String? get() = recommended ?: options.firstOrNull()
+
+    /** The options, the proposal first. */
+    val ordered: List<String> get() = options.sortedByDescending { it == proposal }
+
     /** Answered elsewhere, and its default time passed before the agent settled it. */
     fun lapsed(now: Instant) = answerIn != null && answeredAt == null && defaultAt?.let { !it.isAfter(now) } == true
 }

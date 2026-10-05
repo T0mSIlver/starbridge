@@ -126,7 +126,7 @@ class WaitingPushTest {
         disk.save(Secrets(session = "s", boxPk = toB64(boxKeys.public), boxSk = toB64(boxKeys.secret), signPk = toB64(signKeys.public), signSk = toB64(signKeys.secret)))
         val notified = mutableListOf<Decision>()
         val alerts = object : Alerts {
-            override fun decision(decision: Decision) { notified += decision }
+            override fun decision(decision: Decision, silent: Boolean) { notified += decision }
             override fun cancel(id: String) {}
             override fun join(id: String, name: String) {}
             override fun prompt(prompt: Prompt) {}

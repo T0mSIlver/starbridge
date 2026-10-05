@@ -50,10 +50,19 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
         // Grouped, so Android's settings list them under these names rather than "Other" (#196).
         manager.createNotificationChannelGroup(NotificationChannelGroup(NEEDS_YOU, "Needs you"))
         manager.createNotificationChannelGroup(NotificationChannelGroup(ACTIVITY, "Activity"))
+        // A question its agent waits on alerts with a heads-up; one it works around makes a sound
+        // only. New ids, since Android never lowers an existing channel's importance (#191).
+        manager.deleteNotificationChannel(OLD_DECISIONS)
         manager.createNotificationChannel(
-            NotificationChannel(CHANNEL, "Decisions", NotificationManager.IMPORTANCE_HIGH).apply {
+            NotificationChannel(WAITING, "Waiting for you", NotificationManager.IMPORTANCE_HIGH).apply {
                 group = NEEDS_YOU
-                description = "Questions your agents need you to answer"
+                description = "Questions an agent stopped to wait for you on"
+            },
+        )
+        manager.createNotificationChannel(
+            NotificationChannel(QUESTIONS, "Questions", NotificationManager.IMPORTANCE_DEFAULT).apply {
+                group = NEEDS_YOU
+                description = "Questions your agents work around until you answer"
             },
         )
         manager.createNotificationChannel(
@@ -125,12 +134,6 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
     /** The meta row in the header, after "Starbridge": the machine and the repo. */
     private fun header(s: Source) = listOf(s.machine, s.project).filter { it.isNotBlank() }.joinToString(" · ")
 
-    /**
-     * The header after "Starbridge": the machine and the repo, then "Waiting for you" once the
-     * agent waits, so the state never reads as the agent's words (#166).
-     */
-    private fun header(d: Decision) = header(d.source) + if (d.waiting) " · Waiting for you" else ""
-
     /** The agent's words, its Markdown code in mono and without the backticks. */
     private fun words(text: String): CharSequence = SpannableStringBuilder().apply {
         text.split("```").forEachIndexed { i, part ->
@@ -156,7 +159,9 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
 
     /**
      * [actions] go on both versions: with sensitive content hidden, the lock screen shows the
-     * public one, and its buttons are the only ones there (#183).
+     * public one, and its buttons are the only ones there (#183). A question its agent waits on
+     * goes on [WAITING], its header ticking from when the agent started to wait, on the lock
+     * screen too; no text says it waits (#191).
      */
     private fun base(d: Decision, actions: List<NotificationCompat.Action> = emptyList()): NotificationCompat.Builder {
         val open = PendingIntent.getActivity(
@@ -165,23 +170,31 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
             Intent(context, MainActivity::class.java).putExtra(MainActivity.EXTRA_DECISION, d.id).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
-        return NotificationCompat.Builder(context, CHANNEL)
+        val channel = if (d.waiting) WAITING else QUESTIONS
+        // Waiting: the header counts up from when the agent started to wait; else it shows the age.
+        val clock: NotificationCompat.Builder.() -> Unit = {
+            val since = d.waitingSince
+            if (since != null) setWhen(since.toEpochMilli()).setShowWhen(true).setUsesChronometer(true)
+            else setWhen(d.createdAt.toEpochMilli()).setShowWhen(true)
+        }
+        return NotificationCompat.Builder(context, channel)
             .setSortKey(ORDER_QUESTION)
             .setSmallIcon(R.drawable.ic_notification)
             .setColor(accent())
             .setContentTitle(d.question)
             .setContentText(words(d.context))
-            .setSubText(header(d))
+            .setSubText(header(d.source))
             .setStyle(style(d))
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setPriority(if (d.waiting) NotificationCompat.PRIORITY_HIGH else NotificationCompat.PRIORITY_DEFAULT)
             .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
             .setPublicVersion(
-                NotificationCompat.Builder(context, CHANNEL)
+                NotificationCompat.Builder(context, channel)
                     .setSmallIcon(R.drawable.ic_notification)
                     .setColor(accent())
                     .setContentTitle("A question needs you")
                     .setSubText(header(d.source))
+                    .apply(clock)
                     .setContentIntent(open)
                     .apply { actions.forEach(::addAction) }
                     .build(),
@@ -191,8 +204,7 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
             .setAllowSystemGeneratedContextualActions(false)
             .apply { actions.forEach(::addAction) }
             .setOnlyAlertOnce(true)
-            // Waiting: the header counts up from when the agent started to wait.
-            .apply { d.waitingSince?.let { setWhen(it.toEpochMilli()).setShowWhen(true).setUsesChronometer(true) } }
+            .apply(clock)
     }
 
     /** The first image as the big picture when the question has one, else the agent's words in full. */
@@ -216,15 +228,19 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
         PendingIntent.FLAG_UPDATE_CURRENT or if (mutable) PendingIntent.FLAG_MUTABLE else PendingIntent.FLAG_IMMUTABLE,
     )
 
-    /** A question, or one its agent now waits on: that one alerts again, once, as a new notification. */
-    override fun decision(decision: Decision) {
-        if (decision.waiting) manager.cancel(tag(decision.id))
-        post(decision, null)
+    /**
+     * A new question, or one whose agent flipped: posted again on the other channel, since a
+     * notification keeps its channel. A flip to waiting alerts once more; a flip back is [silent].
+     */
+    override fun decision(decision: Decision, silent: Boolean) {
+        manager.cancel(tag(decision.id))
+        post(decision, null, silent)
     }
 
-    private fun post(decision: Decision, note: String?) {
+    private fun post(decision: Decision, note: String?, silent: Boolean = false) {
         if (!allowed()) return
         val b = base(decision, actions(decision))
+        if (silent) b.setSilent(true)
         if (note != null) b.setContentText(note).setStyle(NotificationCompat.BigTextStyle().bigText(note)).setSilent(true)
         @Suppress("MissingPermission")
         manager.notify(tag(decision.id), b.build())
@@ -253,8 +269,8 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
                     .build(),
             )
         }
-        // Android shows three buttons; the recommended option leads, the app holds the rest.
-        return decision.options.sortedByDescending { it == decision.recommended }.take(3).mapIndexed { i, option ->
+        // Android shows three buttons; the agent's default leads, the app holds the rest.
+        return decision.ordered.take(3).mapIndexed { i, option ->
             NotificationCompat.Action.Builder(0, option, answerIntent(decision, option, tag(decision.id) * 31 + i, mutable = false))
                 .setAuthenticationRequired(false)
                 .build()
@@ -300,7 +316,8 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
 
     /** [actions] go on the public version too, as a question's do. A tap opens the prompt's sheet. */
     private fun promptBase(p: Prompt, actions: List<NotificationCompat.Action> = emptyList()): NotificationCompat.Builder {
-        val title = "${p.tool} · waiting for you"
+        // A prompt always blocks: its ticking header says so, the title is the tool alone (#191).
+        val title = p.tool
         val open = PendingIntent.getActivity(
             context,
             promptTag(p),
@@ -485,7 +502,9 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
     }
 
     companion object {
-        const val CHANNEL = "decisions"
+        const val WAITING = "waiting"
+        const val QUESTIONS = "questions"
+        private const val OLD_DECISIONS = "decisions"
         const val PROMPTS = "prompts"
         const val JOIN_CHANNEL = "joins"
         const val RUNS = "runs"
