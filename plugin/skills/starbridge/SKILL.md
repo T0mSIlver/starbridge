@@ -28,7 +28,7 @@ have answered costs the owner an interruption.
 | Field | Flag | Rule |
 |---|---|---|
 | question | `--question` | One sentence, at most 300 characters, ending in "?". Name the thing: "Merge #12 into main now?", not "Should I proceed?". |
-| context | `--context` or `--context-file` | Why you ask, and what each option changes. Facts the owner cannot see from the phone: the PR, the error, the cost. Links are fine. Markdown code blocks render in monospace. |
+| context | `--context` or `--context-file` | Why you ask, and what each option changes. Facts the owner cannot see from the phone: the PR, the error, the cost. Plain text: line breaks and code (`inline` or fenced) render; other Markdown, such as **bold**, shows as typed. Pages to open go in `--link`. |
 | options | `--option`, 2 to 4 times | Short labels, at most 100 characters each, that differ at a glance. With no options, the owner types a free-text answer. |
 | recommended | `--recommended` | The option you would pick. It shows first. Defaults to the first option, so list your pick first. |
 | default | `--default` | What you will do if nobody answers. Required. |

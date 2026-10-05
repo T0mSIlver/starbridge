@@ -25,3 +25,12 @@ export function shortSession(id: string): string {
 export function sessionName(source: { session: string; sessionTitle?: string }): string {
   return source.sessionTitle || shortSession(source.session);
 }
+
+/** Where a decision comes from, in a list row: its session, else its project (asked outside a session). */
+export function origin(source: {
+  session: string;
+  sessionTitle?: string;
+  project: string;
+}): string {
+  return sessionName(source) || source.project;
+}
