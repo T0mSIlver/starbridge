@@ -57,11 +57,18 @@
   background: none;
   color: var(--fg2);
   text-decoration: underline;
+  text-decoration-color: var(--line-strong);
   text-underline-offset: 3px;
+  transition:
+    color var(--t-fast) var(--ease),
+    text-decoration-color var(--t-fast) var(--ease);
 }
 
-.link:hover {
-  color: var(--fg);
+@media (hover: hover) {
+  .link:hover {
+    color: var(--fg);
+    text-decoration-color: currentColor;
+  }
 }
 
 .foot {
@@ -75,10 +82,13 @@
 .foot a {
   color: inherit;
   text-decoration: none;
+  transition: color var(--t-fast) var(--ease);
 }
 
-.foot a:hover {
-  color: var(--fg2);
+@media (hover: hover) {
+  .foot a:hover {
+    color: var(--fg2);
+  }
 }
 
 .field {
@@ -92,6 +102,14 @@
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-sm);
   background: var(--surface);
+  transition: border-color var(--t-fast) var(--ease);
+}
+
+/* Focus shows on the field's own border, not a ring (DESIGN.md, "Focus"). */
+.input:focus-visible {
+  outline: 0;
+  border-color: var(--fg);
+  box-shadow: inset 0 0 0 1px var(--fg);
 }
 
 textarea.input {
@@ -106,6 +124,12 @@ textarea.input {
   padding: var(--s3);
   border-radius: var(--radius-sm);
   background: #fff;
+}
+
+.qrBone {
+  width: 224px;
+  aspect-ratio: 1;
+  border-radius: var(--radius-sm);
 }
 
 .qrSvg {
@@ -167,4 +191,11 @@ textarea.input {
 .error {
   color: var(--bad);
   overflow-wrap: anywhere;
+}
+
+/* Phones: the brand lines up with the column's 16 px edge. */
+@media (max-width: 599px) {
+  .brand {
+    padding: 0 var(--s4);
+  }
 }

@@ -32,6 +32,19 @@
   background: #fff;
 }
 
+/* The QR code and its heading while the code is made (DESIGN.md, "Loading"). */
+.qrBone {
+  width: 224px;
+  aspect-ratio: 1;
+  border-radius: var(--radius-sm);
+}
+
+.textBone {
+  width: 60%;
+  height: var(--s4);
+  margin-top: var(--s1);
+}
+
 .qrSvg {
   display: block;
   width: 100%;

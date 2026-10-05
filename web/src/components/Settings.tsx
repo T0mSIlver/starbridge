@@ -101,6 +101,20 @@ export function Switch({
   );
 }
 
+/** Rows still loading: a skeleton in their shape, shown only if the wait passes 200 ms. */
+function Pending({ rows }: { rows: number }) {
+  return (
+    <>
+      {Array.from({ length: rows }, (_, i) => (
+        // biome-ignore lint/suspicious/noArrayIndexKey: placeholders have no identity
+        <div key={i} className={s.row} aria-hidden>
+          <span className={`skeleton ${s.bone}`} />
+        </div>
+      ))}
+    </>
+  );
+}
+
 const toggle = (list: string[], p: string, on: boolean) =>
   on ? [...new Set([...list, p])] : list.filter((x) => x !== p);
 
@@ -218,12 +232,20 @@ function QuotaSection() {
 function ProviderSection() {
   const { quotas, refreshQuotas, quotaSettings: q, setQuotaSettings: set } = useApp();
   const [dragging, setDragging] = useState<string>();
+  const [settled, setSettled] = useState(false);
   useEffect(() => {
-    refreshQuotas().catch(() => {});
+    refreshQuotas()
+      .catch(() => {})
+      .finally(() => setSettled(true));
   }, [refreshQuotas]);
   const cards = quotas?.cards ?? [];
   const providers = providerOrder(cards, q);
-  if (providers.length === 0) return null;
+  if (providers.length === 0)
+    return (
+      <Section title="Providers">
+        {quotas || settled ? <Row label="No quota windows yet" muted /> : <Pending rows={2} />}
+      </Section>
+    );
   const patch = (p: Partial<QuotaSettings>) => set({ ...q, ...p });
   const moveTo = (p: string, at: number) => {
     const order = providers.filter((x) => x !== p);
@@ -302,17 +324,21 @@ const added = (iso: string) =>
 function DeviceSection() {
   const { update, boot, sampleDevices } = useApp();
   const ctx = boot.state === "ready" ? boot.ctx : undefined;
-  const [all, setAll] = useState<Device[]>(sampleDevices ?? []);
+  const [all, setAll] = useState<Device[] | undefined>(sampleDevices);
   const [revoking, setRevoking] = useState<Device>();
   useEffect(() => {
-    if (ctx) load().then((d) => setAll(d.devices(ctx)));
+    if (ctx)
+      load()
+        .then((d) => setAll(d.devices(ctx)))
+        .catch(() => setAll([]));
   }, [ctx]);
   const order = (d: Device) => (d.self ? 0 : d.role === "device" ? 1 : 2);
-  const shown = all
+  const shown = (all ?? [])
     .filter((d) => d.status === "active")
     .sort((a, b) => order(a) - order(b) || a.addedAt.localeCompare(b.addedAt));
   return (
     <Section title="Devices">
+      {!all && <Pending rows={2} />}
       {shown.map((d) => (
         <div key={d.id} className={s.device}>
           <span className={s.deviceIcon}>
@@ -349,7 +375,6 @@ function DeviceSection() {
           onClose={() => setRevoking(undefined)}
           onRevoke={async () => {
             if (!ctx) return;
-            if (!ctx) return;
             update(await (await load()).revoke(ctx, revoking.id));
             setRevoking(undefined);
           }}
@@ -374,7 +399,12 @@ function RevokeDialog({
   const [error, setError] = useState<string>();
   useEffect(() => ref.current?.showModal(), []);
   return (
-    <dialog ref={ref} className={s.dialog} onClose={onClose} aria-labelledby="revoke-title">
+    <dialog
+      ref={ref}
+      className={`m-rise ${s.dialog}`}
+      onClose={onClose}
+      aria-labelledby="revoke-title"
+    >
       <h3 id="revoke-title" className="t-subtitle">
         Revoke {device.name}?
       </h3>

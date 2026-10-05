@@ -38,6 +38,10 @@
   text-decoration: none;
 }
 
+.bottomTab {
+  transition: color var(--t-fast) var(--ease);
+}
+
 .bottomTab[aria-current="page"] {
   color: var(--fg);
 }
@@ -106,6 +110,12 @@
   color: var(--fg3);
 }
 
+.find {
+  transition:
+    border-color var(--t-fast) var(--ease),
+    color var(--t-fast) var(--ease);
+}
+
 .find:focus-within {
   border-color: var(--line-strong);
   color: var(--fg2);
@@ -142,8 +152,17 @@
   text-decoration: none;
 }
 
-.tab:hover {
-  color: var(--fg);
+.tab {
+  transition:
+    background var(--t-fast) var(--ease),
+    color var(--t-fast) var(--ease);
+}
+
+@media (hover: hover) {
+  .tab:hover {
+    background: color-mix(in srgb, var(--surface2) 60%, transparent);
+    color: var(--fg);
+  }
 }
 
 .tab[aria-current="page"] {

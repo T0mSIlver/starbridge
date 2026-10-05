@@ -341,12 +341,14 @@ size:
   browser: 1080 # the browser window in it
   shot: 316 # a phone on the landing page, its bezel included
   lead: 600 # the landing page's sentence under the headline
-# The web's stand-ins for Material's motion scheme; Android uses
+# The web's motion ("Motion and states" below); Android uses
 # MotionScheme.expressive() and these only where Compose takes a duration.
 motion:
-  fast: 150
-  state: 250
-  spring: 350
+  fast: 150 # Material's short3: hover, press, a switch, anything leaving
+  state: 250 # medium1: something appearing or opening
+# The one easing on the web: Material 3's emphasized decelerate, fast out of
+# the gate and settling softly, so a change reads at once. Web only.
+easing: "cubic-bezier(0.05, 0.7, 0.1, 1)"
 ---
 
 # Starbridge design
@@ -483,6 +485,76 @@ a decision's context, a permission prompt's command and a session's name.
   question its agent works around, which is outlined.
 - Quota tracks are `size.track` thick on Android and `size.track-dense` on
   the web.
+
+## Motion and states (web)
+
+Decided 2026-10-05: the web moves only where motion shows what changed,
+and never makes an action wait. It follows the quiet dashboards in the
+design research (https://claude.ai/artifact/43JkSwnLEVmakivuuoZqXw: Linear,
+Vercel, Tailscale), where views and selections switch at once and a read row
+changes in place; durations and the easing come from Material 3, so the web
+and Android move alike.
+
+- Two durations and one easing: `motion.fast` (150 ms) for hover, press, a
+  switch and anything leaving; `motion.state` (250 ms) for something
+  appearing or opening; `easing` for both. As CSS: `--t-fast`, `--t-state`,
+  `--ease`.
+- What moves: a short fade with at most 8 px of travel, and a row sliding
+  to its new place when the inbox reorders it. No scale, no bounce, no
+  parallax, no scroll-triggered reveals, no height animation.
+- `prefers-reduced-motion: reduce` turns every transition and animation off
+  (globals.css); the change still happens, at once.
+
+| What | How |
+|---|---|
+| A dialog opening | fades in and rises 8 px at `state`, its scrim fades; closing is instant |
+| A menu opening (the inbox's view menu) | fades in and drops 4 px at `fast`; closing is instant |
+| An item opening on a phone | the detail fades in and moves 8 px from the right at `state`; Back is instant |
+| History expanding | its chevron turns at `fast`, its rows fade in at `state`; collapsing is instant |
+| An item arriving while the page is open | fades in at `state`; items present at load don't animate |
+| An answered item leaving | fades out at `fast`, then the list closes up without moving |
+| A row changing place (a question starts or stops waiting) | slides to its new place at `state`; its colours change at `state` |
+| A status line ("Pixel joined.", "Refused …") | fades in at `state`, stays until the next action |
+| Pressing a button | its fill steps one tone darker while pressed; no scale, no ripple |
+| A switch | the knob slides at `fast` |
+| The theme changing | at once: transitions are off for that frame, so nothing fades at its own pace |
+
+Never animated: page and tab changes, moving the selection (J, K or a click),
+the wide detail pane's content, quota bars and numbers (they show their
+value, not a count-up), the landing page while scrolling, and anything during
+first paint.
+
+**Hover.** Only where a pointer hovers (`@media (hover: hover)`), so phones
+keep no stuck hover. Rows, ghost and outlined buttons take `surface2`; text
+links and the rail go from `fg2` to `fg`; filled buttons go one tone lighter
+(`fg2`, `accent-hi`). At `fast`.
+
+**Focus.** Keyboard focus only (`:focus-visible`): a 2 px `fg` ring, 2 px
+out, following the element's corners. Not amber, which means "needs you".
+Inputs show focus by their own border instead.
+
+**Loading.** Nothing flashes blank, and nothing shows up only to be
+replaced. While boot decides which screen to show, the page is plain `bg`.
+A part that loads after the page shows a skeleton in its own shape:
+`surface2` blocks the size of the rows they stand for, which fade in after
+200 ms (so a fast load shows none) and pulse gently until the data lands;
+under reduced motion they stay still. Buttons that wait say so in their
+label ("Creating the keys…") and keep their width.
+
+**Scrollbars.** The page and every scrolling pane keep their scrollbar's
+gutter (`scrollbar-gutter: stable`), so content never shifts when a list
+grows past the screen. Scrollbars are thin, a `line-strong` thumb on a
+transparent track, in both themes; overlay scrollbars (phones, macOS) stay
+as the system draws them.
+
+**Secondary pages** (Settings, Add a device, first run, legal, not found,
+error) share one rhythm: the page title in `heading`, sections `s10` apart
+(`s8` on phones), each with its name in `action` and its rows in one box
+(`surface`, `line` border, `radius.sm`, hairline dividers, rows at least
+`size.tap` tall). An empty section says what is missing in one line of
+`fg2`, with its action if it has one. First-run, not found and error pages
+use the first-run frame: the brand top left, one 400 px column, legal links
+at the foot.
 
 ## Provider colours
 

@@ -205,6 +205,14 @@ async function main() {
   await visitor.goto(ORIGIN);
   await visitor.getByRole("heading", { name: /Your agents ask/ }).waitFor();
   await shoot(visitor, "landing");
+  for (const [path, name] of [
+    ["/privacy", "privacy"],
+    ["/terms", "terms"],
+    ["/no-such-page", "not-found"],
+  ]) {
+    await visitor.goto(ORIGIN + path);
+    await shoot(visitor, name);
+  }
   await visitor.close();
 
   step("sign in with GitHub (stub) and set up the first device");
@@ -588,6 +596,7 @@ async function main() {
       .textContent({ timeout: 10_000 })
   )?.trim();
   if (!codeB) throw new Error("no pairing code on the second browser");
+  await shoot(pageB, "join");
   await page
     .getByRole("navigation", { name: "Main" })
     .getByRole("link", { name: "Settings" })
@@ -643,6 +652,7 @@ async function main() {
   await page.goto(`${ORIGIN}/pair#${code3}`);
   await page.getByRole("link", { name: SIGN_IN }).click();
   await page.getByText("Let laptop post decisions and quotas?").waitFor({ timeout: 30_000 });
+  await shoot(page, "pair-request");
   await page.getByRole("button", { name: "Approve" }).click();
   await linked.waitFor(/Paired "laptop"/);
   if ((await linked.exited) !== 0) throw new Error("pair by link failed");
@@ -655,6 +665,10 @@ async function main() {
   await page.getByRole("link", { name: SIGN_IN }).click();
   await page.getByRole("heading", { name: "Inbox" }).waitFor({ timeout: 30_000 });
   await page.getByText("Merge #19 (server) before the web PR rebases?").first().waitFor();
+
+  await page.goto(`${ORIGIN}/settings/devices/add`);
+  await page.getByTestId("shown-code").waitFor();
+  await shoot(page, "add-device");
 
   await ff.close();
   console.log("\nE2E PASSED");
