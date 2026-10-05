@@ -131,6 +131,7 @@ test("setup --yes replaces the dev box's manual installs and uploads a first sna
   expect(settings.env.CLAUDE_CODE_PLUGIN_DIRS).toBe("/x/other-mod");
   expect(settings.model).toBe("opus");
   expect(settings.extraKnownMarketplaces.starbridge.autoUpdate).toBe(true);
+  expect(settings.permissions.allow).toContain("Bash(starbridge ask:*)");
   expect(existsSync(m.mod)).toBe(false);
   expect(readFileSync(m.md, "utf8")).toBe("# Me\nBe blunt.\n");
 
@@ -217,6 +218,9 @@ test("uninstall removes the service and plugins, asks the devices to revoke, kee
   expect(m.calls()).toContain("systemctl --user disable --now starbridge-agent.service");
   expect(m.calls()).toContain("claude plugin uninstall starbridge-mod@starbridge --scope user");
   expect(m.calls()).toContain("claude plugin marketplace remove starbridge");
+  expect(
+    JSON.parse(readFileSync(join(m.home, ".claude/settings.json"), "utf8")).permissions.allow,
+  ).toEqual([]);
   expect(existsSync(join(m.home, ".codex/skills/starbridge"))).toBe(false);
   expect(m.calls()).toContain("pi remove git:github.com/T0mSIlver/starbridge");
   const [d] = await server.opened("decision");

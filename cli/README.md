@@ -45,7 +45,8 @@ Setup asks before each step, and a rerun repairs only what is missing:
    agent.
 5. It installs Starbridge in each agent it finds: the Claude Code plugin at user scope, the
    skill in Codex's skills folder (updated when the CLI carries a newer one), and the Starbridge
-   Pi package.
+   Pi package. Claude Code may then run `starbridge ask`, `waiting`, `wait` and `settle` without
+   a permission prompt; `starbridge run` still asks, since the command it wraps can be anything.
 6. It uploads a first quota snapshot.
 
 `--yes` takes every default. `--no-quota`, `--no-service` and `--no-plugin` skip a step;

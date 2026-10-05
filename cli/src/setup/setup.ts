@@ -36,13 +36,17 @@ import {
   piPackage,
 } from "./harnesses";
 import {
+  ALLOW_RULES,
+  addAllowRules,
   autoUpdate,
   enableAutoUpdate,
   hasClaude,
   installPlugins,
   legacyInstalls,
+  missingAllowRules,
   PLUGINS,
   pluginState,
+  settingsPath,
 } from "./plugins";
 import {
   enableLinger,
@@ -354,6 +358,16 @@ async function pluginStep(sys: Sys) {
     (await prompt.confirm("Let Claude Code update the Starbridge plugins by itself?", true))
   )
     ctx.out(enableAutoUpdate(sys) ? "Auto-update is on." : "Could not turn on auto-update.");
+  if (
+    missingAllowRules(sys).length > 0 &&
+    (await prompt.confirm(
+      "Let Claude Code run `starbridge ask`, `waiting`, `wait` and `settle` without a permission prompt? They post questions to your devices and read your answers.",
+      true,
+    ))
+  ) {
+    addAllowRules(sys);
+    ctx.out(`Allowed ${ALLOW_RULES.join(", ")} in ${settingsPath(sys)}.`);
+  }
   for (const old of legacyInstalls(sys)) {
     if (await prompt.confirm(`Remove ${old.what}? The plugins replace it.`, true)) {
       old.remove();

@@ -11,7 +11,14 @@ import type { InstallKind } from "../release";
 import { removeBinary } from "../update";
 import { findCodexbar } from "./codexbar";
 import { codexSkillDir, hasPi, piPackage, removeCodexSkill, removePiPackage } from "./harnesses";
-import { hasClaude, legacyInstalls, pluginState, removePlugins } from "./plugins";
+import {
+  hasClaude,
+  legacyInstalls,
+  pluginState,
+  removeAllowRules,
+  removePlugins,
+  settingsPath,
+} from "./plugins";
 import { legacyUnits, removeLegacy, removeService } from "./service";
 import type { Sys } from "./sys";
 
@@ -78,6 +85,8 @@ export async function uninstall(sys: Sys, opts: UninstallOpts): Promise<number> 
       ctx.out(
         "`claude plugin list` failed: remove the Starbridge plugins with `claude plugin uninstall`.",
       );
+    if (removeAllowRules(sys))
+      ctx.out(`Removed the starbridge allow rules from ${settingsPath(sys)}.`);
     for (const old of legacyInstalls(sys))
       if (await prompt.confirm(`Also remove ${old.what}?`, true)) {
         old.remove();
