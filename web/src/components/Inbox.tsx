@@ -58,7 +58,8 @@ export function Inbox() {
   const wide = useWide();
   const live =
     prompts.length > 0 || inbox.items.some((i) => i.waitingSince) || !!runs?.items.length;
-  const now = useNow(live);
+  // Every second while a timer shows, else every minute so the times since stay current.
+  const now = useNow(true, live ? 1000 : 60_000);
 
   useEffect(() => {
     if (historyOpen) loadPromptLog().catch(() => {});
@@ -244,7 +245,7 @@ export function Inbox() {
   if (!wide && opened) {
     return (
       <div className={s.single}>
-        <PhoneBar title="Inbox" back={() => setOpened(undefined)} />
+        <PhoneBar title="Inbox" back={() => setOpened(undefined)} always />
         <div className={s.openDetail}>
           {detail(opened) ?? <p className={`t-small ${s.empty}`}>Answered</p>}
         </div>
