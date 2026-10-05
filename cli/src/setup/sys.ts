@@ -152,9 +152,16 @@ export function run(
   });
 }
 
-/** The last line a failed command printed, for one-line reports. */
-export function lastLine(r: RunOut | null): string {
+/**
+ * Why a command failed, in one line: the first line of its stderr, else the last of its stdout.
+ * `claude plugin` prints progress ("Adding marketplace…") on stdout and the reason first on stderr.
+ */
+export function failure(r: RunOut | null): string {
   if (!r) return "not installed";
-  const text = `${r.stderr}\n${r.stdout}`.trim();
-  return text.split("\n").pop()?.trim() || `exited ${r.code ?? "on a signal"}`;
+  const lines = (text: string) =>
+    text
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean);
+  return lines(r.stderr)[0] ?? lines(r.stdout).pop() ?? `exited ${r.code ?? "on a signal"}`;
 }

@@ -16,7 +16,7 @@ import {
 } from "node:fs";
 import { join } from "node:path";
 import { parseUsage, runCodexbar } from "../codexbar";
-import { lastLine, run, type Sys, which } from "./sys";
+import { failure, run, type Sys, which } from "./sys";
 
 /**
  * The CodexBar CLI release setup installs, with the SHA-256 of each tarball, checked when it
@@ -141,7 +141,7 @@ export async function installTarball(
   try {
     writeFileSync(file, bytes);
     const r = await run(sys, "tar", ["-xzf", file, "-C", fresh]);
-    if (r?.code !== 0) throw new Error(`unpacking ${name}: ${lastLine(r)}`);
+    if (r?.code !== 0) throw new Error(`unpacking ${name}: ${failure(r)}`);
     rmSync(dest, { recursive: true, force: true });
     renameSync(fresh, dest);
   } finally {

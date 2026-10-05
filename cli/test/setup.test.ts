@@ -16,7 +16,7 @@ import type { Agent } from "../src/agent/server";
 import { installTarball, linkIntoLocalBin } from "../src/setup/codexbar";
 import { setup } from "../src/setup/setup";
 import { status } from "../src/setup/status";
-import { defaults, type Sys } from "../src/setup/sys";
+import { defaults, failure, type Sys } from "../src/setup/sys";
 import { uninstall } from "../src/setup/uninstall";
 import { paired, type TestCtx, testCtx } from "./helpers";
 
@@ -264,4 +264,18 @@ test("uninstall keeps the keys when systemd cannot stop the agent", async () => 
   expect(m.ctx.lines.join("\n")).toContain("Could not stop the agent service, so it stays");
   expect(existsSync(join(m.units, "starbridge-agent.service"))).toBe(true);
   expect(existsSync(join(m.ctx.store.dir, "machine.json"))).toBe(true);
+});
+
+test("a failed command reports the reason from stderr, not the progress on stdout", () => {
+  // `claude plugin marketplace add` on a machine that cannot clone the repo.
+  const r = {
+    code: 1,
+    stdout: "Adding marketplace…\n",
+    stderr:
+      "✘ Failed to add marketplace: Fetching the marketplace from GitHub failed on both attempts.\nfatal: unable to get password from user\n\nPlease make sure you have the correct access rights\n",
+  };
+  expect(failure(r)).toBe(
+    "✘ Failed to add marketplace: Fetching the marketplace from GitHub failed on both attempts.",
+  );
+  expect(failure({ code: 3, stdout: "a\nlast\n", stderr: "" })).toBe("last");
 });
