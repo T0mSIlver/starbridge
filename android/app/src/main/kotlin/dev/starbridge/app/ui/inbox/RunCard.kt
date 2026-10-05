@@ -51,7 +51,7 @@ fun RunCard(run: Run, now: Instant, shape: Shape, modifier: Modifier = Modifier)
         else -> elapsed(run.startedAt, run.endedAt ?: run.at)
     }
     Surface(modifier.fillMaxWidth().semantics(mergeDescendants = true) {}, shape = shape, color = scheme.surfaceContainer) {
-        Column(Modifier.padding(Spacing.s4), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(Modifier.padding(Spacing.s5), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             MetaRow(run.source, time)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Symbol(Sym.Play, size = 12.dp, filled = true, tint = scheme.onSurface)

@@ -1,7 +1,6 @@
 package dev.starbridge.app.ui.inbox
 
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.text.TextStyle
 import dev.starbridge.app.data.Grouping
@@ -24,7 +23,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyListScope
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -94,10 +93,8 @@ import dev.starbridge.app.ui.Page
 import dev.starbridge.app.ui.Refresh
 import dev.starbridge.app.ui.Sym
 import dev.starbridge.app.ui.Symbol
-import dev.starbridge.app.ui.cardShape
 import dev.starbridge.app.ui.fieldColors
-import dev.starbridge.app.ui.groupGap
-import dev.starbridge.app.ui.rowShape
+import dev.starbridge.app.ui.theme.Radius
 import dev.starbridge.app.ui.theme.Spacing
 import dev.starbridge.app.ui.theme.StarbridgeTheme
 import kotlinx.coroutines.delay
@@ -216,6 +213,8 @@ fun InboxScreen(
             ViewMenu(view, onView)
         },
         header = { Lockup(24.dp, 22.sp) },
+        gap = cardGap,
+        margin = Spacing.s4,
     ) {
         if (feed.isEmpty()) {
             item(key = "empty") { Empty() }
@@ -249,9 +248,16 @@ fun InboxScreen(
 
 private const val PROMPT_POLL_MS = 1_500L
 
+/**
+ * The inbox's cards (#248): each item its own card, Material 3's filled card with extra-large
+ * corners, cards `s2` apart, as Material spaces a collection of cards.
+ */
+private val cardShape = RoundedCornerShape(Radius.xl)
+private val cardGap = Spacing.s2
+
 private fun LazyListScope.cards(items: List<Item>, now: Instant, actions: DecisionActions, replies: Replies, promptActions: PromptActions?, buttons: CardButtons) {
-    itemsIndexed(items, key = { _, it -> it.key }) { i, item ->
-        val shape = cardShape(i, items.size)
+    items(items, key = { it.key }) { item ->
+        val shape = cardShape
         // A question its agent starts or stops waiting on moves with the expressive spring.
         val m = Modifier.animateItem(placementSpec = MaterialTheme.motionScheme.defaultSpatialSpec())
         when (item) {
@@ -303,7 +309,7 @@ private fun ViewMenu(view: InboxView, onView: (InboxView) -> Unit) {
 @Composable
 private fun MachineHeader(source: Source) {
     val color = MaterialTheme.colorScheme.onSurfaceVariant
-    Row(Modifier.padding(start = Spacing.s2, top = Spacing.s4 - groupGap, bottom = Spacing.s2 - groupGap), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.padding(start = Spacing.s2, top = Spacing.s4 - cardGap, bottom = Spacing.s2 - cardGap), verticalAlignment = Alignment.CenterVertically) {
         Symbol(machineSym(source.machineKind), size = 16.dp, tint = color)
         Spacer(Modifier.width(6.dp))
         Text(source.machine, style = StarbridgeTheme.type.label, color = color)
@@ -322,7 +328,7 @@ internal fun GroupHeader(name: String, count: Int, countColor: Color) {
         },
         style = style,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(start = Spacing.s2, top = Spacing.s4 - groupGap, bottom = Spacing.s2 - groupGap).semantics { heading() },
+        modifier = Modifier.padding(start = Spacing.s2, top = Spacing.s4 - cardGap, bottom = Spacing.s2 - cardGap).semantics { heading() },
     )
 }
 
@@ -339,10 +345,10 @@ private fun Empty() {
 }
 
 /**
- * A question in the feed, by the one rule for both clients (#191): one its agent waits on is
- * filled, amber's faint ground and the question at weight 500, with the clock in the time slot;
- * one the agent works around is hollow, an outlined card with no fill and the question at 400.
- * No line of text says which; a screen reader hears it first. Its options show when the Answer
+ * A question in the feed, on the same card as every item (#248): one its agent waits on takes the
+ * amber fill, the question at weight 500 and the clock in the time slot; one the agent works
+ * around keeps the plain fill and the question at 400. No line of text says which; a screen
+ * reader hears it first. Its options show when the Answer
  * buttons setting allows them (#181, as the web's rows).
  */
 @Composable
@@ -350,15 +356,14 @@ private fun DecisionCard(decision: Decision, now: Instant, actions: DecisionActi
     val scheme = MaterialTheme.colorScheme
     val waiting = decision.waiting
     val spec = MaterialTheme.motionScheme.fastEffectsSpec<Color>()
-    val ground by animateColorAsState(if (waiting) promptGround() else scheme.surface.copy(alpha = 0f), spec)
-    val border by animateColorAsState(if (waiting) scheme.outline.copy(alpha = 0f) else scheme.outline, spec)
+    val ground by animateColorAsState(if (waiting) promptGround() else scheme.surfaceContainer, spec)
     val icon by animateColorAsState(if (waiting) StarbridgeTheme.colors.accent else scheme.onSurfaceVariant, spec)
     val label = decision.waitingSince?.let { waitingLabel(it, now) }
-    Surface(modifier.fillMaxWidth(), shape = shape, color = ground, border = BorderStroke(1.dp, border)) {
+    Surface(modifier.fillMaxWidth(), shape = shape, color = ground) {
         Column(
             Modifier.clickable(onClickLabel = "Open the question") { actions.open(decision.id) }
                 .semantics { if (waiting) stateDescription = label ?: "Waiting for you" }
-                .padding(Spacing.s4),
+                .padding(Spacing.s5),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             MetaRow(decision.source, timeSlot(decision.waitingSince, decision.createdAt, now), clock = waiting)
@@ -652,11 +657,11 @@ private fun LazyListScope.history(history: History, open: Boolean, onOpen: (Bool
     item(key = "history") {
         val scheme = MaterialTheme.colorScheme
         Surface(
-            Modifier.fillMaxWidth().padding(top = Spacing.s3 - groupGap).clickable(onClickLabel = if (open) "Hide History" else "Show History") { onOpen(!open) },
-            shape = RoundedCornerShape(Spacing.s6),
+            Modifier.fillMaxWidth().padding(top = Spacing.s3).clickable(onClickLabel = if (open) "Hide History" else "Show History") { onOpen(!open) },
+            shape = cardShape,
             color = scheme.surfaceContainer,
         ) {
-            Row(Modifier.padding(horizontal = Spacing.s4, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.padding(horizontal = Spacing.s5, vertical = Spacing.s4), verticalAlignment = Alignment.CenterVertically) {
                 Symbol(Sym.History, size = 20.dp, tint = scheme.onSurface)
                 Spacer(Modifier.width(10.dp))
                 Text("History", style = StarbridgeTheme.type.label.copy(fontSize = 15.sp), color = scheme.onSurface)
@@ -668,8 +673,9 @@ private fun LazyListScope.history(history: History, open: Boolean, onOpen: (Bool
         }
     }
     if (!open) return
-    itemsIndexed(history.rows, key = { _, (_, it) -> if (it is Decision) "h/d/${it.id}" else "h/p/${(it as Prompt).id}" }) { i, (at, it) ->
-        val shape = rowShape(i, history.rows.size)
+    // One-line cards round less, as Material scales a corner with its container.
+    items(history.rows, key = { (_, it) -> if (it is Decision) "h/d/${it.id}" else "h/p/${(it as Prompt).id}" }) { (at, it) ->
+        val shape = RoundedCornerShape(Spacing.s5)
         when (it) {
             is Decision -> HistoryRow(it.source, it.question, false, closedHow(it, at), shape) { actions.open(it.id) }
             is Prompt -> HistoryRow(it.source, it.summary, true, closedHow(it), shape) { promptActions?.open?.invoke(it.id) }
@@ -702,7 +708,7 @@ internal fun HistoryRow(
     val scheme = MaterialTheme.colorScheme
     val hit = hitStyle()
     Surface(Modifier.fillMaxWidth().clickable(onClick = onClick), shape = shape, color = ground) {
-        Column(Modifier.padding(horizontal = Spacing.s4, vertical = Spacing.s3), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Column(Modifier.padding(horizontal = Spacing.s5, vertical = Spacing.s3), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             MetaRow(source, time, clock = clock, words = words)
             Text(highlight(text, words, hit), style = if (prompt) StarbridgeTheme.type.code.copy(fontSize = 13.sp) else StarbridgeTheme.type.small, color = scheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (how.isNotEmpty()) Text(highlight(how, words, hit), style = StarbridgeTheme.type.meta, color = scheme.onSurfaceVariant, maxLines = 1)

@@ -111,6 +111,8 @@ fun Page(
     onBack: (() -> Unit)? = null,
     refresh: Refresh? = null,
     gap: Dp = groupGap,
+    /** Space beside the content, each side. */
+    margin: Dp = Spacing.s3,
     /** Space under the title; a page that starts with a section name needs less. */
     titleGap: Dp = Spacing.s3,
     /** Above the title: the Inbox's lockup. */
@@ -120,7 +122,7 @@ fun Page(
     Refreshable(refresh) {
         LazyColumn(
             modifier.fillMaxSize().widthIn(max = Sizes.content),
-            contentPadding = PaddingValues(start = Spacing.s3, end = Spacing.s3, bottom = Spacing.s6),
+            contentPadding = PaddingValues(start = margin, end = margin, bottom = Spacing.s6),
             verticalArrangement = Arrangement.spacedBy(gap),
         ) {
             item(key = "page-title") { PageTitle(title, subtitle, trailing, onBack, titleGap - gap, header) }
