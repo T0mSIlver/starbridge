@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, setDefaultTimeout, test } from "bun:test";
-import { mkdtempSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { createServer, type IncomingMessage, request } from "node:http";
+import { createServer as createNetServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { LiveServer } from "@starbridge/server/test-support";
@@ -246,7 +247,7 @@ test("the CLI goes to the server itself when no agent runs, or when the agent ca
   await new Promise<void>((r) => old.listen(stale, r));
   try {
     expect(await run([...ASK, "--default", "x", "--session", "s1"], ctx)).toBe(0);
-    expect(ctx.errors.at(-1)).toBe("starbridge: update the agent; going to the server directly");
+    expect(ctx.errors).toContain("starbridge: update the agent; going to the server directly");
   } finally {
     await new Promise<void>((r) => old.close(() => r()));
   }
@@ -363,5 +364,66 @@ test("a call whose signal already aborted is interrupted without opening a reque
     expect(errors).toEqual([]);
   } finally {
     process.off("uncaughtException", onError);
+  }
+});
+
+/** A Codex home whose daemon socket listens, and a `codex` that logs its arguments. */
+async function codexHome(fail = false) {
+  const home = mkdtempSync(join(tmpdir(), "starbridge-codex-"));
+  mkdirSync(join(home, "app-server-control"));
+  const daemon = createNetServer();
+  await new Promise<void>((r) =>
+    daemon.listen(join(home, "app-server-control", "app-server-control.sock"), r),
+  );
+  const bin = join(home, "bin");
+  mkdirSync(bin);
+  const log = join(home, "queue.log");
+  writeFileSync(
+    join(bin, "codex"),
+    `#!/bin/sh\necho "$CODEX_HOME $*" >> ${log}\n${fail ? "echo 'no active session' >&2; exit 1" : ""}\n`,
+    { mode: 0o755 },
+  );
+  const env = { CODEX_THREAD_ID: "t1", CODEX_HOME: home, PATH: bin };
+  return { env, log, close: () => new Promise<void>((r) => daemon.close(() => r())) };
+}
+
+test("the agent queues a Codex session's answer into it, and ask says it will", async () => {
+  const { socket } = await machine();
+  const codex = await codexHome();
+  const c = testCtx({ STARBRIDGE_AGENT_SOCKET: socket, ...codex.env });
+  try {
+    const id = await ask(c, "--project", "p");
+    expect(c.errors.at(-1)).toBe("The answer will come back into this session as a new prompt.");
+    const [d] = await server.opened("decision");
+    expect([d?.agent, d?.source.session]).toEqual(["codex", "t1"]);
+
+    await server.answer(id, { choice: "Merge" });
+    await until(async () => existsSync(codex.log));
+    expect(readFileSync(codex.log, "utf8")).toBe(
+      `${codex.env.CODEX_HOME} queue --thread t1 --message Answer to ${id} (Merge #12 now?): Merge\n`,
+    );
+  } finally {
+    await codex.close();
+  }
+});
+
+test("a Codex session the agent cannot reach is told to wait, and its wait gets the answer", async () => {
+  const { socket } = await machine();
+  const codex = await codexHome(true);
+  const c = testCtx({ STARBRIDGE_AGENT_SOCKET: socket, ...codex.env });
+  try {
+    const id = await ask(c, "--project", "p");
+    await codex.close();
+    const asked = testCtx({ STARBRIDGE_AGENT_SOCKET: socket, ...codex.env });
+    await ask(asked, "--project", "p");
+    expect(asked.errors.at(-1)).toContain("run `starbridge wait");
+
+    // The queue fails, so the answer stays for the session's wait.
+    await server.answer(id, { choice: "Wait" });
+    await until(async () => existsSync(codex.log));
+    expect(await run(["wait", id, "--timeout", "10s"], c)).toBe(0);
+    expect(c.lines.at(-1)).toBe(`Answer to ${id} (Merge #12 now?): Wait`);
+  } finally {
+    await codex.close().catch(() => {});
   }
 });

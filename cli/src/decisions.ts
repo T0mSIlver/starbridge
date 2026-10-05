@@ -17,6 +17,7 @@ import {
 } from "@starbridge/protocol";
 import { ApiError } from "./api";
 import { claudeSession } from "./claude";
+import { type CodexSession, codexSession } from "./codex";
 import type { State } from "./config";
 import {
   type Ctx,
@@ -41,8 +42,10 @@ export interface AskInput {
   default?: string;
   /** Post it already `waiting`: the agent has nothing else to do. */
   waiting?: boolean;
-  /** The coding agent asking; default: Claude Code when it runs the command. */
+  /** The coding agent asking; default: Claude Code or Codex when it runs the command. */
   agent?: Agent;
+  /** Where a Codex session runs: its `CODEX_HOME` and the `codex` that answers reach it with. */
+  codex?: CodexSession;
   project?: string;
   session?: string;
   sessionTitle?: string;
@@ -83,7 +86,9 @@ export function resolveSource(
   env: Ctx["env"],
   cwd: string,
 ): AskInput & { project: string; session: string; sessionLinks: SessionLink[] } {
-  const session = input.session ?? env.CLAUDE_CODE_SESSION_ID ?? "";
+  const session = input.session ?? env.CLAUDE_CODE_SESSION_ID ?? env.CODEX_THREAD_ID ?? "";
+  const agent = agentOf(input, env).agent;
+  const codex = agent === "codex" ? (input.codex ?? codexSession(env)) : undefined;
   const claude =
     session && (input.sessionTitle === undefined || input.sessionLinks === undefined)
       ? claudeSession(env, session)
@@ -92,6 +97,8 @@ export function resolveSource(
   const at = (path: string) => resolve(cwd, path);
   return {
     ...input,
+    ...(agent ? { agent } : {}),
+    ...(codex ? { codex } : {}),
     project: input.project ?? basename(cwd),
     session,
     ...(title !== undefined ? { sessionTitle: title } : {}),
@@ -146,10 +153,14 @@ export function buildDecision(input: AskInput, ctx: Ctx, machine: string, to: st
   return checked(decision);
 }
 
-/** `--agent`, else Claude Code when it runs this command (it sets CLAUDECODE=1). */
+/**
+ * `--agent`, else Claude Code or Codex when it runs this command: Claude Code sets CLAUDECODE=1,
+ * Codex gives every command its session id in CODEX_THREAD_ID.
+ */
 function agentOf(input: AskInput, env: Ctx["env"]): { agent?: Agent } {
   if (input.agent !== undefined) return { agent: input.agent };
-  return env.CLAUDECODE === "1" ? { agent: "claude-code" } : {};
+  if (env.CLAUDECODE === "1") return { agent: "claude-code" };
+  return env.CODEX_THREAD_ID ? { agent: "codex" } : {};
 }
 
 function checked(decision: unknown): Decision {
@@ -228,6 +239,7 @@ export async function postDecision(ctx: Ctx, s: Session, input: AskInput): Promi
       ...(cursor !== undefined ? { cursor } : {}),
       ...(decision.source.session ? { session: decision.source.session } : {}),
       ...(decision.answerIn ? { answerIn: true } : {}),
+      ...(input.codex && decision.source.session ? { codex: input.codex } : {}),
     };
   });
   if (input.waiting) await markWaiting(ctx, () => postWaiting(ctx, s, decision.id, "waiting"));
@@ -241,8 +253,10 @@ export async function ask(
   opts: { wait?: boolean; timeout?: string; json?: boolean },
 ): Promise<number> {
   const s = session(ctx);
-  const decision = await postDecision(ctx, s, { ...input, waiting: input.waiting || opts.wait });
+  const resolved = resolveSource(input, ctx.env, process.cwd());
+  const decision = await postDecision(ctx, s, { ...resolved, waiting: input.waiting || opts.wait });
   ctx.out(decision.id);
+  if (!opts.wait) ctx.err(deliveryLine(decision.id, delivery(resolved.agent, false)));
   if (!opts.wait) return 0;
   return wait(ctx, { id: decision.id, timeout: opts.timeout, json: opts.json }, s);
 }
@@ -371,6 +385,25 @@ export function checkAnswer(
     throw new ProtocolError("bad-schema", "free-text decision answered with a choice");
   }
   return body;
+}
+
+/**
+ * How an answer comes back into the session that asked: as a prompt, which Claude Code's mod
+ * submits and the agent queues into a Codex session it can reach, or only through `wait`.
+ */
+export type Delivery = "prompt" | "wait";
+
+/** With no agent running, only Claude Code's mod brings an answer back; it polls by itself. */
+export function delivery(agent: Agent | undefined, codexReachable: boolean): Delivery {
+  if (agent === "claude-code") return "prompt";
+  return agent === "codex" && codexReachable ? "prompt" : "wait";
+}
+
+/** What `ask` prints after the id, on stderr, so the asking agent knows what to do next. */
+export function deliveryLine(id: string, d: Delivery): string {
+  return d === "prompt"
+    ? "The answer will come back into this session as a new prompt."
+    : `Nothing brings the answer into this session: when only the answer is left, run \`starbridge wait ${id} --timeout 5m\` (again on exit 2).`;
 }
 
 /** The line `wait` prints and the mod submits; the decision skill tells agents to expect it. */

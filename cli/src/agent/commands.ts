@@ -7,6 +7,9 @@ import { type Ctx, parseDuration, UsageError } from "../context";
 import {
   type AskInput,
   answerLine,
+  type Delivery,
+  delivery,
+  deliveryLine,
   EXIT_TIMEOUT,
   markWaiting,
   resolveSource,
@@ -31,8 +34,13 @@ export async function askVia(
     ctx.env,
     process.cwd(),
   );
-  const { id } = await agent.call<{ id: string }>("POST", "/v1/decisions", { input: resolved });
+  const { id, delivery: d } = await agent.call<{ id: string; delivery?: Delivery }>(
+    "POST",
+    "/v1/decisions",
+    { input: resolved },
+  );
   ctx.out(id);
+  if (!opts.wait) ctx.err(deliveryLine(id, d ?? delivery(resolved.agent, false)));
   if (!opts.wait) return 0;
   return waitVia(ctx, agent, { id, timeout: opts.timeout, json: opts.json });
 }

@@ -1,7 +1,7 @@
 ---
 name: starbridge
 description: "Reach your user through Starbridge. They are often away from the terminal, and Starbridge is how you reach them: a card on their phone and web page that they answer with one tap, sent back into this session. Use it, instead of asking in chat or with AskUserQuestion, whenever you need a decision that is theirs to make, and before ending a turn on work that waits on them (a PR to review or merge, a failure only they can fix); and wrap in `starbridge run`, unasked, any command that blocks them or that their instructions ask you to report. Covers when to post, how to write a card they can answer cold, what never to post, and what to do with the answer."
-compatibility: The `starbridge` CLI on PATH, paired with `starbridge pair`. In Claude Code, the Starbridge plugin brings answers back as prompts; Codex, pi and other agents wait for them with `starbridge wait`.
+compatibility: The `starbridge` CLI on PATH, paired with `starbridge pair`. Answers come back as prompts in Claude Code with the Starbridge plugin, and in Codex CLI sessions when `starbridge agent` runs; elsewhere the agent waits for them with `starbridge wait`.
 ---
 
 # Reach your user through Starbridge
@@ -90,8 +90,8 @@ own.
 - Post a wall of text, or links for reference.
 - Act on a question's behalf. No answer means you keep waiting; leave out
   `--default`.
-- In Claude Code with the Starbridge plugin, block on the answer: no `--wait`,
-  no `starbridge wait`.
+- Block on an answer that comes back as a prompt: no `--wait`, no
+  `starbridge wait`.
 
 ## Answers in an artifact
 
@@ -106,22 +106,25 @@ longer need, for example after the user answered in the terminal.
 
 Go on with the work that does not depend on the answer. When the answer
 blocks you, work on something else, or, when both options are cheap to build,
-build both and ask which result to keep. The rest depends on your agent.
+build both and ask which result to keep. The rest depends on how the answer comes back.
 
-**Claude Code with the Starbridge plugin.** When only the answer unblocks
-you, run `starbridge waiting <id>`: their devices show "Waiting for you" and
-notify them once more. If you find more work before the answer comes, run
-`starbridge working <id>`. Blocked from the start? Post with `starbridge ask …
---waiting`. Then end your turn, saying what waits on the card. The answer
-arrives as a new prompt, possibly while you work on something else:
+After the card's id, `starbridge ask` prints how the answer comes back into
+this session. Do what that line says.
+
+**"The answer will come back into this session as a new prompt."** When only
+the answer unblocks you, run `starbridge waiting <id>`: their devices show
+"Waiting for you" and notify them once more. If you find more work before the
+answer comes, run `starbridge working <id>`. Blocked from the start? Post with
+`starbridge ask … --waiting`. Then end your turn, saying what waits on the
+card. The answer arrives as a new prompt, possibly while you work on
+something else:
 
 ```
 Answer to d_Xk3… (Run the orders migration now, or after tonight's 18:00 backup?): Now
 ```
 
-**Codex, pi and any other agent.** Nothing brings the answer into this
-session once your turn ends, so never end it with a card open. When you have
-nothing left to do but the answer, wait for it:
+**"Nothing brings the answer into this session…"** Never end your turn with
+this card open. When you have nothing left to do but the answer, wait for it:
 
 ```bash
 starbridge wait d_Xk3… --timeout 5m
