@@ -13,7 +13,7 @@ import { concat, fromB64, ProtocolError, sodium, toB64, utf8 } from "./sodium";
  * swap the new member's keys nor hand the new member a directory of its own.
  */
 
-const CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
+export const CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 
 export interface PairingCode {
   rendezvous: string;
@@ -39,6 +39,25 @@ export function encodeCrockford(bytes: Uint8Array): string {
   }
   if (bits > 0) out += CROCKFORD[(value << (5 - bits)) & 31];
   return out;
+}
+
+/** Characters from `CROCKFORD` to bytes, MSB first; bits past the last whole byte drop. */
+export function decodeCrockford(chars: string): Uint8Array {
+  const out: number[] = [];
+  let bits = 0;
+  let value = 0;
+  for (const c of chars) {
+    const v = CROCKFORD.indexOf(c);
+    if (v < 0) throw new ProtocolError("bad-encoding", "not Crockford base32");
+    value = (value << 5) | v;
+    bits += 5;
+    if (bits >= 8) {
+      out.push((value >>> (bits - 8)) & 0xff);
+      bits -= 8;
+    }
+    value &= (1 << bits) - 1;
+  }
+  return new Uint8Array(out);
 }
 
 function splitCode(chars: string): PairingCode {

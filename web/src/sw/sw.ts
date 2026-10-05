@@ -123,8 +123,9 @@ async function onPush(text: string): Promise<void> {
       for (const n of await self.registration.getNotifications({ tag: t })) n.close();
   } else if (payload.kind === "waiting") {
     // The agent ran out of other work: notify once more, in place of the question's notification.
+    // Back to working, the notification loses its waiting line without a sound (#191).
     const { machine, waiting } = await openWaiting(ctx, item);
-    if (waiting.state !== "waiting" || answered.has(`${account}/${waiting.decisionId}`)) return;
+    if (answered.has(`${account}/${waiting.decisionId}`)) return;
     const res = await fetch(`/v1/items/${encodeURIComponent(waiting.decisionId)}`);
     if (!res.ok) return;
     const stored = await res.json();
@@ -132,7 +133,7 @@ async function onPush(text: string): Promise<void> {
     const opened = await openPushedDecision(ctx, stored.item);
     // Only the machine that asked can say its agent waits on the question.
     if (opened.machine.id !== machine || opened.reply) return;
-    await showDecision(account as string, opened, true);
+    await showDecision(account as string, opened, waiting.state === "waiting", true);
   }
 }
 
@@ -147,12 +148,19 @@ function summary(context: string): string {
     .split("\n")
     .filter((l) => !l.trimStart().startsWith("```"))
     .join(" ")
+    // Inline code reads as plain text: a notification shows no formatting (#191).
+    .replace(/`([^`\n]+)`/g, "$1")
     .replace(/\s+/g, " ")
     .trim();
   return text.length > 180 ? `${text.slice(0, 179)}…` : text;
 }
 
-async function showDecision(account: string, item: InboxItem, waiting = false): Promise<void> {
+async function showDecision(
+  account: string,
+  item: InboxItem,
+  waiting = false,
+  flip = false,
+): Promise<void> {
   const done = () => answered.has(`${account}/${item.decision.id}`);
   const d = item.decision;
   const options = d.recommended
@@ -170,12 +178,13 @@ async function showDecision(account: string, item: InboxItem, waiting = false): 
   const options_: NotificationOptions & {
     actions?: { action: string; title: string }[];
     renotify?: boolean;
+    silent?: boolean;
   } = {
-    body: waiting
-      ? `Waiting for you · ${d.source.machine} · ${d.source.project}`
-      : `${d.source.machine} · ${d.source.project}\n${summary(d.context)}`,
+    body: `${waiting ? "Waiting · " : ""}${d.source.machine} · ${d.source.project}\n${summary(d.context)}`,
     tag: tag(d.id),
     renotify: waiting,
+    // A flip back to working replaces the waiting notification quietly.
+    silent: flip && !waiting,
     requireInteraction: true,
     data: { item, options },
     actions,

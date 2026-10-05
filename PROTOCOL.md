@@ -106,17 +106,23 @@ to tap Compare digits. Without the approval's MAC the joining device trusts no d
 
 ## Recovery
 
-The first device shows a 16-byte recovery seed once, as 12 BIP-39 words. The recovery key pair
-is `crypto_sign_seed_keypair` of BLAKE2b-256 of "starbridge/v1/recovery-seed", NUL, the seed
-(`recoveryKeyPair`). Accounts made before 2026-10-05 hold a 32-byte seed shown as 24 words, which
-is the Ed25519 seed itself; the word count tells the two apart.
+The first device shows a 16-byte recovery seed once, as a recovery key: the seed and a 12-bit
+check (the first 12 bits of BLAKE2b-256 of "starbridge/v1/recovery-check", NUL, the seed), 140
+bits written as 28 Crockford base32 characters in seven groups of four (`recoveryKey`). The
+recovery key pair is `crypto_sign_seed_keypair` of BLAKE2b-256 of "starbridge/v1/recovery-seed",
+NUL, the seed (`recoveryKeyPair`).
 
-Typed words are split on anything that is not a letter, so spaces, dashes, commas, line breaks and
-numbering all work (`splitRecoveryWords`). `recoveryWordsProblem` names the first word missing
-from the BIP-39 list, else a count other than 12 or 24, else a failed checksum.
+Older accounts were shown BIP-39 words: 24 for a 32-byte seed, which is the Ed25519 seed itself,
+or 12 for a 16-byte seed. `readRecoveryKey` takes either. A key is read in any case, with or
+without dashes and spaces, O as 0 and I or L as 1; it names the first character no key holds,
+else a length other than 28, else a failed check. Text reads as words when it holds a run of 5
+to 8 letters ended by a separator, 8 runs of 3 letters or more, or 12 or more letter runs all on
+the word list however they are separated; words split on anything that is not a letter. While
+typing, a U in a word from the list, or the start of one, waits, since words only read as
+words from the eighth.
 
-When every device is lost, a new device turns the words into the recovery key pair, verifies the chain with that
-public key (entry 0's `recoverySig` must check against it, which a copied public key cannot
+When every device is lost, a new device turns the key or words into the recovery key pair,
+verifies the chain with that public key (entry 0's `recoverySig` must check against it, which a copied public key cannot
 fake), and signs its own `add` entry with it.
 
 ## HTTP API
@@ -141,7 +147,8 @@ errors use the codes in `packages/protocol/src/sodium.ts`.
 - Pairing requests are unauthenticated and rate-limited per IP.
 - A session gets its device when that session writes the directory's first entry, or a
   recovery-signed `add`, or fetches its own pairing result (a new device signs in first).
-  Revoking a device ends its sessions; revoking a machine drops its token.
+  Revoking a device ends its sessions, which then get 401 `revoked` instead of
+  `unauthenticated` until they would have expired; revoking a machine drops its token.
 
 | Route | Who | What |
 |---|---|---|
@@ -234,8 +241,10 @@ the server started. A machine that sends back `directory=<n>&quotaAsked=<time>` 
 knows gets a reply at once when the directory is longer or a device asked since, and every
 directory append ends its open waits. So the machine's agent re-reads the directory as soon as a
 device joins and posts a fresh snapshot sealed to it, and posts one when a device asks.
-A machine checks that an answer's `decisionId` is one it asked and its `choice` one of the
-decision's options; for permission answers, see below.
+A machine checks that an answer's `decisionId` is one it asked and its `choice`, if any, one of
+the decision's options. An answer carries `choice` or `text`: a decision with options that sets
+`replies: true` also takes a typed `text` reply, which clients offer as "Reply" under the
+options; machines from before it leave `replies` out. For permission answers, see below.
 
 ### Push
 
@@ -312,8 +321,8 @@ shows whether its agent is blocked on it: working on other things, or waiting fo
   under one id per decision and re-posts it under that id whenever the agent flips the state,
   until the decision is answered or settled. Devices keep the update with the latest `at`; a
   decision without one is `working`.
-- A flip to `waiting` notifies once: the machine posts it without `quiet`, and every other
-  update `quiet`, so a repeated `waiting` or a flip back to `working` pushes nothing.
+- Each flip pushes: to `waiting` it notifies once more, and back to `working` it lets a device
+  move or quiet the question's notification without a sound. A repeated state posts nothing.
 - A decision asked already waiting is posted `quiet` and its `waiting` item pushes, so the one
   notification says the agent waits. A device that has not seen the decision fetches it with
   `GET /items/:id`.

@@ -22,7 +22,9 @@ import {
   pairingKey,
   parsePairingCode,
   ready,
+  recoveryKey,
   recoveryKeyPair,
+  recoverySeedFromKey,
   recoverySeedFromWords,
   recoveryWords,
   type SealedItem,
@@ -255,6 +257,12 @@ test.each(["recovery", "recovery12"] as const)("%s words round-trip to the key",
   expect(toB64(recoverySeedFromWords(recovery.words))).toBe(recovery.seed);
   expect(recoveryWords(fromB64(recovery.seed))).toBe(recovery.words);
   expect(toB64(recoveryKeyPair(fromB64(recovery.seed)).publicKey)).toBe(recovery.signPk);
+});
+
+test("the recovery key reads back to its seed", () => {
+  const { recovery12 } = V.keys;
+  expect(recoveryKey(fromB64(recovery12.seed))).toBe(recovery12.key);
+  expect(toB64(recoverySeedFromKey(recovery12.key))).toBe(recovery12.seed);
 });
 
 test("the generator reproduces the committed vectors, sealed boxes aside", async () => {

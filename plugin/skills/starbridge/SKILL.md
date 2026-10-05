@@ -41,8 +41,9 @@ They decide from the card alone, without opening this session.
 - **Context.** Two to five short lines. The fact that forces the choice (the
   error line, the number, the cost), then what each option changes. Line
   breaks and `code` render; other Markdown shows as typed.
-- **Options.** Two to four short labels that differ at a glance. Your pick
-  first, or named with `--recommended`. No options means a typed answer; use
+- **Options.** Two to four short labels that differ at a glance. Your default
+  first: the one you'd pick if you had to. `--recommended` names it when it
+  isn't first. No options means a typed answer; use
   that only when no list fits.
 - **Links.** Only what they need to decide, such as the PR or issue in question, the
   page they must look at.
@@ -133,6 +134,10 @@ starbridge wait d_Xk3… --timeout 5m
 It marks the card "Waiting for you" and prints the answer in the same line as
 above. Exit code 2 means 5 minutes passed with no answer: run the same
 command again, as long as it takes.
+
+The user may type a reply instead of picking an option; it then replaces the
+option after the colon. A reply is the user steering you: act on it, and ask
+again only if it leaves the choice open.
 
 Either way, act on the answer right away. Post again only when the outcome changes what the user
 would do, for example when the merge failed or the fix needs their call.

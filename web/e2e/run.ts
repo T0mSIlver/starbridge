@@ -128,6 +128,13 @@ const NOTIFICATIONS = () =>
       .then((ns) => ns.map((n) => ({ title: n.title, body: n.body, tag: n.tag }))),
   );
 
+/** #199: phishing filters flag a new site that asks for seed words. */
+async function noWordsAsked(page: Page) {
+  const text = await page.locator("body").innerText();
+  const found = text.match(/\b(seed|phrase|words?)\b/i);
+  if (found) throw new Error(`the page says "${found[0]}"`);
+}
+
 async function shoot(page: Page, name: string) {
   for (const [size, viewport] of [
     ["phone", { width: 390, height: 844 }],
@@ -205,12 +212,13 @@ async function main() {
   failPage = page;
   await page.getByRole("button", { name: "Create the keys" }).click();
   await page.getByRole("heading", { name: "Save your recovery key" }).waitFor();
-  const words = (await page.locator("ol li span:last-child").allTextContents()).join(" ");
-  if (words.split(" ").length !== 24) throw new Error(`expected 24 words, got: ${words}`);
+  const key = ((await page.getByTestId("recovery-key").textContent()) ?? "").trim();
+  if (!/^([0-9A-Z]{4}){7}$/.test(key)) throw new Error(`expected a recovery key, got: ${key}`);
+  await noWordsAsked(page);
   await shoot(page, "setup");
   await page.setViewportSize({ width: 1280, height: 860 });
   await page.emulateMedia({ colorScheme: "light" });
-  await page.getByLabel(/I wrote these words down/).check();
+  await page.getByLabel(/I wrote this key down/).check();
   await page.getByRole("button", { name: "Continue" }).click();
   await page.getByRole("heading", { name: "Inbox" }).waitFor();
 
@@ -233,7 +241,8 @@ async function main() {
   await page.getByRole("button", { name: "Approve" }).click();
   await pair.waitFor(/Paired "devbox"/);
   if ((await pair.exited) !== 0) throw new Error("pair failed");
-  await page.getByText("devbox joined.").waitFor();
+  await page.getByRole("status", { name: "Pairing result" }).getByText("devbox joined").waitFor();
+  await shoot(page, "pair-joined");
 
   step("refuse a second pairing");
   const other = cli("pair-refused", ["pair", "--name", "stranger"], join(tmp, "stranger"));
@@ -303,6 +312,8 @@ async function main() {
   console.log("notifications:", JSON.stringify(notifications));
   if (!notifications.some((n) => n.title === "Run the migration on the staging database now?"))
     throw new Error("no Web Push notification for the decision");
+  // With History open the answered question stays listed, which is where it lingered (#214).
+  await page.getByRole("button", { name: /History/ }).click();
   await page.getByRole("button", { name: /Run it/ }).click();
   await ask.waitFor(/Answer to d_\S+ \(Run the migration on the staging database now\?\): Run it/);
   if ((await ask.exited) !== 0) throw new Error("ask --wait failed");
@@ -313,6 +324,13 @@ async function main() {
     i++
   )
     await page.waitForTimeout(200);
+
+  // It was the last open question, so the detail pane empties rather than showing it answered.
+  await page
+    .locator('section[aria-label="Selected"] h2')
+    .waitFor({ state: "detached", timeout: 10_000 });
+  await shoot(page, "inbox-cleared");
+  await page.getByRole("button", { name: /History/ }).click();
 
   step("leave one open decision for the screenshots");
   const open = cli(
@@ -470,6 +488,28 @@ async function main() {
     throw new Error("the 24-hour setting still shows AM or PM");
   await shoot(page, "quotas-24h");
 
+  step("the inbox's quota aside fits its column with clock times on (#168)");
+  await page
+    .getByRole("navigation", { name: "Main" })
+    .getByRole("link", { name: "Settings" })
+    .click();
+  // 12-hour times are the longest: "Will run out at Oct 12, 12:02 AM".
+  await page.getByLabel("12-hour", { exact: true }).check({ force: true });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.getByRole("link", { name: "Inbox" }).click();
+  const aside = page.getByRole("complementary", { name: "Quota windows" });
+  await aside.locator("article").first().waitFor();
+  const { scroll, client } = await aside.evaluate((el) => ({
+    scroll: el.scrollWidth,
+    client: el.clientWidth,
+  }));
+  if (scroll > client) throw new Error(`the quota aside overflows: ${scroll} > ${client} px`);
+  for (const scheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme: scheme });
+    await page.waitForTimeout(150);
+    await page.screenshot({ path: join(SHOTS, `inbox-aside-wide-${scheme}.png`) });
+  }
+
   step("a newly raised quota alert notifies a browser that opted in to its provider");
   // A 5-hour window at 85%, 3 hours in: "low" at 20% left, and it runs out before the reset.
   const at = (ms: number) => new Date(Date.now() + ms).toISOString().replace(/\.\d+Z$/, "Z");
@@ -520,6 +560,27 @@ async function main() {
   step("add a second browser by pairing code");
   const b = await ff.newContext();
   const pageB = await signIn(b);
+  await pageB.getByTestId("pairing-code").waitFor({ timeout: 10_000 });
+  await shoot(pageB, "join-browser");
+  // Switching to digits cancels the QR code's wait; that cancel shows no error.
+  await pageB.getByRole("button", { name: "Can't scan? Compare digits" }).click();
+  await pageB.getByText(/Open Starbridge on a signed-in device/).waitFor();
+  await pageB.waitForTimeout(1000);
+  // Next.js's route announcer is an empty alert too; the page's errors are paragraphs.
+  const digitsError = pageB.locator('p[role="alert"]');
+  if (await digitsError.count())
+    throw new Error(`digits show an error: ${await digitsError.textContent()}`);
+  await shoot(pageB, "join-digits");
+  // The signed-in browser gets the join request as a panel over the page; refusing ends it in a
+  // result that clears itself.
+  const joinAsk = page.getByTestId("join-request");
+  await joinAsk.waitFor({ timeout: 30_000 });
+  await shoot(page, "join-request");
+  await joinAsk.getByRole("button", { name: "Refuse" }).click();
+  const result = page.getByRole("status", { name: "Pairing result" });
+  await result.waitFor();
+  await result.waitFor({ state: "detached", timeout: 15_000 });
+  await pageB.getByRole("button", { name: "Cancel" }).click();
   const codeB = (
     await pageB
       .getByTestId("pairing-code")
@@ -537,13 +598,22 @@ async function main() {
   await page.getByText(/read and answer as a device/).waitFor();
   await page.getByRole("button", { name: "Approve" }).click();
   await pageB.getByRole("heading", { name: "Inbox" }).waitFor({ timeout: 30_000 });
+  await pageB.getByRole("button", { name: "Turn on notifications" }).waitFor();
+  await shoot(pageB, "inbox-banner");
   // The new device sees decisions sealed after it joined; the open one predates it.
 
-  step("recover a third browser with the words");
+  step("recover a third browser with the recovery key");
   const c = await ff.newContext();
   const pageC = await signIn(c);
   await pageC.getByRole("button", { name: "Use the recovery key" }).click();
-  await pageC.getByLabel("Your 24 recovery words").fill(words);
+  const entry = pageC.getByLabel("Your recovery key");
+  await noWordsAsked(pageC);
+  await entry.fill(`${key.slice(0, 9)}U`);
+  await pageC.getByText('Character 10, "U", is not in a recovery key.').waitFor();
+  await shoot(pageC, "recovery-typo");
+  // Lower case, in groups split by spaces: the key reads all the same.
+  await entry.fill(key.toLowerCase().match(/.{4}/g)?.join(" ") ?? "");
+  await pageC.getByText("28 of 28 characters").waitFor();
   await pageC.getByRole("button", { name: "Recover" }).click();
   await pageC.getByRole("heading", { name: "Inbox" }).waitFor({ timeout: 30_000 });
 
@@ -561,7 +631,8 @@ async function main() {
   await page.getByRole("dialog").getByRole("button", { name: "Revoke" }).click();
   await page.getByRole("dialog").waitFor({ state: "detached" });
   await pageB.reload();
-  await pageB.getByRole("link", { name: SIGN_IN }).waitFor();
+  // A browser whose device was revoked is a visitor again: the landing page, not sign-in.
+  await pageB.getByRole("heading", { name: /Your agents ask/ }).waitFor();
   await page.emulateMedia({ colorScheme: "light" });
   await shoot(page, "devices");
 
@@ -579,6 +650,8 @@ async function main() {
   step("sign in again: the session binds to the existing device without pairing");
   await a.clearCookies();
   await page.goto(ORIGIN);
+  await page.getByRole("heading", { name: "Sign in to Starbridge" }).waitFor();
+  await shoot(page, "sign-in");
   await page.getByRole("link", { name: SIGN_IN }).click();
   await page.getByRole("heading", { name: "Inbox" }).waitFor({ timeout: 30_000 });
   await page.getByText("Merge #19 (server) before the web PR rebases?").first().waitFor();

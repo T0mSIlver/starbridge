@@ -19,6 +19,13 @@ CREATE TABLE IF NOT EXISTS sessions (
   expires_at TEXT NOT NULL
 );
 
+-- Sessions of revoked devices, kept until they would have expired so a revoked browser hears
+-- why it is signed out.
+CREATE TABLE IF NOT EXISTS revoked_sessions (
+  token_hash TEXT PRIMARY KEY,
+  expires_at TEXT NOT NULL
+);
+
 -- App sign-in codes waiting to be traded for a session; challenge is the S256 PKCE challenge.
 CREATE TABLE IF NOT EXISTS app_codes (
   code_hash TEXT PRIMARY KEY,

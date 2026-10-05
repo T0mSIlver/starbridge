@@ -9,11 +9,11 @@ import ui from "./ui.module.css";
 // (SPEC.md, "Keys and trust").
 export function Setup({
   device,
-  words,
+  recoveryKey,
   onContinue,
 }: {
   device: string;
-  words: string[];
+  recoveryKey: string;
   onContinue: () => void;
 }) {
   const [saved, setSaved] = useState(false);
@@ -21,10 +21,10 @@ export function Setup({
 
   const copy = async () => {
     try {
-      await navigator.clipboard.writeText(words.join(" "));
+      await navigator.clipboard.writeText(recoveryKey);
       setCopied(true);
     } catch {
-      // The words stay on screen to write down.
+      // The key stays on screen to write down.
     }
   };
 
@@ -33,23 +33,20 @@ export function Setup({
       <p className={`t-meta ${s.dim}`}>First device: {device}</p>
       <h1 className="t-heading">Save your recovery key</h1>
       <p className={`t-small ${s.lede}`}>
-        These 24 words approve a new device if you lose every device. Starbridge shows them once.
+        This key adds a new device if you lose every device. Starbridge shows it once.
       </p>
-      <ol className={s.words}>
-        {words.map((w, i) => (
-          // biome-ignore lint/suspicious/noArrayIndexKey: a word list may repeat a word; its position is its identity
-          <li key={i} className="t-small">
-            <span className={`t-meta ${s.n}`}>{i + 1}</span>
-            <span>{w}</span>
-          </li>
+      <p className={`t-snippet ${s.key}`} data-testid="recovery-key">
+        {recoveryKey.split("-").map((group, i) => (
+          // biome-ignore lint/suspicious/noArrayIndexKey: a group's place is its identity
+          <span key={i}>{group}</span>
         ))}
-      </ol>
+      </p>
       <button type="button" className={`t-label ${ui.btn}`} onClick={copy}>
-        {copied ? "Copied" : "Copy words"}
+        {copied ? "Copied" : "Copy the key"}
       </button>
       <label className={`t-small ${s.confirm}`}>
         <input type="checkbox" checked={saved} onChange={(e) => setSaved(e.target.checked)} />
-        <span>I wrote these words down somewhere safe, away from this device.</span>
+        <span>I wrote this key down somewhere safe, away from this device.</span>
       </label>
       <button
         type="button"
@@ -64,7 +61,13 @@ export function Setup({
 }
 
 /** The frame of every first-run screen. */
-export function FirstRunPage({ children }: { children: React.ReactNode }) {
+export function FirstRunPage({
+  children,
+  centered = false,
+}: {
+  children: React.ReactNode;
+  centered?: boolean;
+}) {
   return (
     <div className={s.frame}>
       <a href="/" className={`t-action ${s.brand}`}>
@@ -72,7 +75,7 @@ export function FirstRunPage({ children }: { children: React.ReactNode }) {
         Starbridge
       </a>
       <main className={s.center}>
-        <div className={s.column}>{children}</div>
+        <div className={centered ? `${s.column} ${s.centered}` : s.column}>{children}</div>
       </main>
       <nav className={`t-meta ${s.foot}`} aria-label="Legal">
         <a href="/privacy">Privacy</a>
