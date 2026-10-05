@@ -78,12 +78,18 @@ export function piPackage(sys: Sys): string | undefined {
 
 const pi = (sys: Sys, ...args: string[]) => run(sys, "pi", args, { timeoutMs: 300_000 });
 
+/** Git's own reason when Pi's clone fails ("fatal: could not read Username…"), else the usual. */
+function piFailure(r: Awaited<ReturnType<typeof pi>>): string {
+  const reason = (r?.stderr ?? "").split("\n").find((l) => /^(fatal|error):/i.test(l.trim()));
+  return reason?.trim() ?? failure(r);
+}
+
 export async function installPiPackage(sys: Sys) {
   const r = await pi(sys, "install", PI_PACKAGE);
-  if (r?.code !== 0) throw new Error(`pi install ${PI_PACKAGE}: ${failure(r)}`);
+  if (r?.code !== 0) throw new Error(`pi install ${PI_PACKAGE}: ${piFailure(r)}`);
 }
 
 export async function removePiPackage(sys: Sys, source: string) {
   const r = await pi(sys, "remove", source);
-  if (r?.code !== 0) throw new Error(`pi remove ${source}: ${failure(r)}`);
+  if (r?.code !== 0) throw new Error(`pi remove ${source}: ${piFailure(r)}`);
 }
