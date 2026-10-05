@@ -218,7 +218,7 @@ export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
 
       <Section
         title="Answer in one tap, from anywhere"
-        text="An agent asks for a decision that is yours and works on something else meanwhile. Your answer lands in its session as the next prompt, so no agent sits idle until you are back at the terminal."
+        text="An agent asks for a decision that is yours and works on something else meanwhile. Your answer lands in its session as the next prompt, so the work goes on while you are away from the terminal."
       >
         <div className={s.crop}>
           <Phone name="android-question" alt="A question with two images in Android's sheet" />
@@ -242,7 +242,7 @@ export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
 
       <Section
         title="Know what each plan has left"
-        text="What your plans have left decides which agent you start next. Starbridge shows every window CodexBar reads, with the pace you are on, and notifies you before one resets with headroom unused, or when it runs low."
+        text="What your plans have left decides which agent you start next. Starbridge shows each plan's limits, such as a 5-hour and a weekly window, read from CodexBar. It notifies you before one resets with headroom unused, or when it runs low."
         short="Every plan's windows, read from CodexBar. You hear before one resets unused, or when it runs low."
       >
         <div className={s.quotas}>
@@ -256,7 +256,7 @@ export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
         <h2 className="t-title">Install on each machine that runs agents</h2>
         <p className={`t-prose ${s.dim} ${s.wideOnly}`}>
           <code>starbridge setup</code> pairs the machine and installs the Claude Code plugin. The
-          script runs it for you.
+          script runs it; after Homebrew or npm, run it yourself.
         </p>
         <Install />
         <p className={`t-meta ${s.faint}`}>
