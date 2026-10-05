@@ -3,7 +3,8 @@
 //
 //   web/src/styles/tokens.css   custom properties, light and dark, with a
 //                               --provider-<id> colour per provider
-//   web/src/styles/type.css     one .t-<role> class per typography role
+//   web/src/styles/type.css     one .t-<role> class per typography role, with
+//                               its compact size under 600 px
 //   android/.../ui/theme/Tokens.kt
 //
 //   bun web/scripts/tokens.ts          rewrite all three
@@ -21,13 +22,12 @@ const OUT = {
   kotlin: resolve(ROOT, "android/app/src/main/kotlin/dev/starbridge/app/ui/theme/Tokens.kt"),
 };
 
-type Role = {
+type Metrics = { size: number; lineHeight: number; letterSpacing: number };
+type Role = Metrics & {
   font: "sans" | "mono";
-  size: number;
   weight: number;
-  lineHeight: number;
-  letterSpacing: number;
   tabular?: boolean;
+  compact?: Partial<Metrics>;
 };
 type Design = {
   colors: { light: Record<string, string>; dark: Record<string, string> };
@@ -60,6 +60,10 @@ function load(): Design {
   for (const [name, role] of Object.entries(design.typography)) {
     if (!(role.font in design.fonts))
       throw new Error(`typography.${name}: unknown font ${role.font}`);
+    for (const key of Object.keys(role.compact ?? {})) {
+      if (!["size", "lineHeight", "letterSpacing"].includes(key))
+        throw new Error(`typography.${name}.compact: ${key} is not a size`);
+    }
   }
   for (const [id, value] of Object.entries(design.providers)) {
     if (!/^[a-z0-9]+$/.test(id))
@@ -174,7 +178,9 @@ const GENERATED = [
 const CSS_HEADER = `/* ${GENERATED[0]}\n   ${GENERATED[1]} */\n`;
 const KT_HEADER = `// ${GENERATED[0]}\n// ${GENERATED[1]}\n`;
 
-// Dark is the default; light applies only when the browser asks for it (DESIGN.md).
+// Dark is the default. Light applies when the browser asks for it, unless the
+// page sets data-theme="dark" on <html>; data-theme="light" forces it (the
+// web's Colours setting).
 function tokensCss(d: Design): string {
   const colors = (scheme: Record<string, string>, indent: string) =>
     Object.entries(scheme).map(([k, v]) => `${indent}--${k}: ${v};`);
@@ -185,7 +191,7 @@ function tokensCss(d: Design): string {
   return [
     CSS_HEADER,
     ":root {",
-    "  color-scheme: dark light;",
+    "  color-scheme: dark;",
     ...colors(d.colors.dark, "  "),
     ...dots("dark", "  "),
     "",
@@ -196,28 +202,45 @@ function tokensCss(d: Design): string {
     "}",
     "",
     "@media (prefers-color-scheme: light) {",
-    "  :root {",
+    '  :root:not([data-theme="dark"]) {',
+    "    color-scheme: light;",
     ...colors(d.colors.light, "    "),
     ...dots("light", "    "),
     "  }",
     "}",
     "",
+    ':root[data-theme="light"] {',
+    "  color-scheme: light;",
+    ...colors(d.colors.light, "  "),
+    ...dots("light", "  "),
+    "}",
+    "",
   ].join("\n");
 }
+
+const metrics = (m: Partial<Metrics>, indent: string) => [
+  ...(m.size === undefined ? [] : [`${indent}font-size: ${num(m.size)}px;`]),
+  ...(m.lineHeight === undefined ? [] : [`${indent}line-height: ${num(m.lineHeight)}px;`]),
+  ...(m.letterSpacing === undefined ? [] : [`${indent}letter-spacing: ${num(m.letterSpacing)}em;`]),
+];
 
 // --sans and --mono are bound to next/font's variables in app/layout.tsx.
 function typeCss(d: Design): string {
   const lines = [CSS_HEADER];
-  for (const [name, r] of Object.entries(d.typography)) {
+  const roles = Object.entries(d.typography);
+  for (const [name, r] of roles) {
     lines.push(`.t-${name} {`);
     lines.push(`  font-family: var(--${r.font});`);
-    lines.push(`  font-size: ${num(r.size)}px;`);
+    lines.push(...metrics(r, "  "));
     lines.push(`  font-weight: ${r.weight};`);
-    lines.push(`  line-height: ${num(r.lineHeight)};`);
-    lines.push(`  letter-spacing: ${num(r.letterSpacing)}em;`);
     if (r.tabular) lines.push("  font-variant-numeric: tabular-nums;");
     lines.push("}", "");
   }
+  lines.push("@media (max-width: 599px) {");
+  for (const [name, r] of roles) {
+    if (r.compact) lines.push(`  .t-${name} {`, ...metrics(r.compact, "    "), "  }");
+  }
+  lines.push("}", "");
   return lines.join("\n");
 }
 
@@ -257,7 +280,7 @@ function tokensKt(d: Design): string {
       `fontFamily = ${r.font},`,
       `fontSize = ${num(r.size)}.sp,`,
       `fontWeight = FontWeight(${r.weight}),`,
-      `lineHeight = ${num(r.size * r.lineHeight)}.sp,`,
+      `lineHeight = ${num(r.lineHeight)}.sp,`,
       `letterSpacing = ${num(r.letterSpacing)}.em,`,
       ...(r.tabular ? ['fontFeatureSettings = "tnum",'] : []),
     ];
