@@ -74,17 +74,17 @@ export default function Privacy() {
       </p>
       <ul>
         <li>
-          accounts, devices and machines that used the server that day, with devices split into
-          the web page and the Android app;
+          accounts, devices and machines that used the server that day, with devices split into the
+          web page and the Android app;
         </li>
         <li>accounts, devices and machines in total, and new accounts;</li>
         <li>
-          items posted, by kind: decisions, answers, permission prompts, their answers, notices
-          that a prompt or decision is over, quota snapshots, run updates and waiting states;
+          items posted, by kind: decisions, answers, permission prompts, their answers, notices that
+          a prompt or decision is over, quota snapshots, run updates and waiting states;
         </li>
         <li>
-          answers by client (web page or Android app), and how long decisions and permission
-          prompts waited for their answer, as the median and the 90th percentile;
+          answers by client (web page or Android app), and how long decisions and permission prompts
+          waited for their answer, as the median and the 90th percentile;
         </li>
         <li>
           pushes by push service and outcome (sent, failed, gone, no route, dropped), and the same
