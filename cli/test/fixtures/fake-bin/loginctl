@@ -1,0 +1,3 @@
+#!/bin/sh
+echo "loginctl $*" >>"$FAKE_LOG"
+echo "Linger=${FAKE_LINGER:-yes}"

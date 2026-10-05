@@ -199,7 +199,16 @@ test("wait with no id returns each answer once, then times out with exit 2", asy
 test("quota push --once posts a sealed snapshot and survives bad providers", async () => {
   const ctx = await paired(server);
   ctx.env.STARBRIDGE_CODEXBAR = FAKE_CODEXBAR;
-  const providers = ["codex", "zai", "claude", "mistral", "broken", "garbage", "nosuch"];
+  const providers = [
+    "codex",
+    "zai",
+    "claude",
+    "mistral",
+    "signedout",
+    "broken",
+    "garbage",
+    "nosuch",
+  ];
   const args = providers.flatMap((p) => ["--provider", p]);
   expect(await run(["quota", "push", "--once", ...args], ctx)).toBe(0);
   const [snap] = await server.opened("quota");
@@ -211,6 +220,7 @@ test("quota push --once posts a sealed snapshot and survives bad providers", asy
     "claude-weekly-scoped-fable",
   ]);
   expect(by.get("mistral")?.windows.map((w) => w.label)).toEqual(["Included API", "Monthly Plan"]);
+  expect(by.get("signedout")?.error).toBe("No available fetch strategy for signedout.");
   expect(by.get("broken")?.error).toContain("provider not configured");
   expect(by.get("garbage")?.error).toContain("unreadable output");
   expect(by.get("nosuch")?.error).toBe("missing from codexbar's output");

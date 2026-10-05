@@ -1,0 +1,267 @@
+import { afterEach, beforeEach, expect, setDefaultTimeout, test } from "bun:test";
+import { createHash } from "node:crypto";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readlinkSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import { LiveServer } from "@starbridge/server/test-support";
+import { makeAgent } from "../src/agent/main";
+import type { Agent } from "../src/agent/server";
+import { installTarball, linkIntoLocalBin } from "../src/setup/codexbar";
+import { setup } from "../src/setup/setup";
+import { status } from "../src/setup/status";
+import { defaults, type Sys } from "../src/setup/sys";
+import { uninstall } from "../src/setup/uninstall";
+import { paired, type TestCtx, testCtx } from "./helpers";
+
+setDefaultTimeout(30_000);
+
+const FAKE_BIN = join(import.meta.dir, "fixtures", "fake-bin");
+const SELF = "/opt/starbridge/bin/starbridge";
+
+let server: LiveServer;
+let agents: Agent[];
+beforeEach(async () => {
+  server = await LiveServer.start();
+  agents = [];
+});
+afterEach(async () => {
+  for (const a of agents) await a.stop();
+  server.stop();
+});
+
+/** The dev box's hand-written uploader, as in its dotfiles. */
+const LEGACY_UNIT = `[Unit]
+Description=Starbridge quota uploader (codexbar -> starbridge.run)
+
+[Service]
+ExecStart=%h/.local/bin/starbridge quota push --provider codex --provider zai --provider broken --provider signedout --interval 5m
+Restart=on-failure
+`;
+
+/**
+ * A paired machine in a throwaway HOME, with fake systemctl, loginctl, claude and codexbar on
+ * the PATH, and the manual installs the owner's dev box has.
+ */
+async function machine() {
+  const ctx = await paired(server);
+  const home = mkdtempSync(join(tmpdir(), "starbridge-home-"));
+  const log = join(home, "calls.log");
+  Object.assign(ctx.env, {
+    HOME: home,
+    // The fake claude runs bun, which CI does not keep in /usr/bin.
+    PATH: `${FAKE_BIN}:${dirname(process.execPath)}:/usr/bin:/bin`,
+    USER: "dev",
+    FAKE_LOG: log,
+    FAKE_STATE: join(home, "fake-state"),
+  });
+  const units = join(home, ".config/systemd/user");
+  mkdirSync(units, { recursive: true });
+  writeFileSync(join(units, "starbridge-quota.service"), LEGACY_UNIT);
+  const mod = join(home, ".claude/mods/starbridge");
+  mkdirSync(join(mod, ".claude-plugin"), { recursive: true });
+  writeFileSync(join(mod, ".claude-plugin/plugin.json"), '{"name":"starbridge"}');
+  const settings = join(home, ".claude/settings.json");
+  writeFileSync(
+    settings,
+    JSON.stringify({ model: "opus", env: { CLAUDE_CODE_PLUGIN_DIRS: `/x/other-mod:${mod}` } }),
+  );
+  const md = join(home, ".claude/CLAUDE.md");
+  writeFileSync(
+    md,
+    "# Me\nWhenever you need me to decide something, use the `starbridge` skill.\nBe blunt.\n",
+  );
+  const sys: Sys = {
+    ctx,
+    home,
+    platform: "linux",
+    arch: "x64",
+    uid: 1000,
+    prompt: defaults,
+    self: [SELF],
+  };
+  const calls = () => (existsSync(log) ? readFileSync(log, "utf8").trim().split("\n") : []);
+  return { ctx, sys, home, units, mod, settings, md, calls };
+}
+
+/** Starts the agent in-process, as the fake systemctl's `restart` would. */
+async function startAgent(ctx: TestCtx) {
+  const agent = makeAgent(ctx);
+  await agent.start();
+  agents.push(agent);
+}
+
+test("setup --yes replaces the dev box's manual installs and uploads a first snapshot", async () => {
+  const m = await machine();
+  await startAgent(m.ctx);
+  expect(await setup(m.sys, { yes: true, readyTimeoutMs: 2_000 })).toBe(0);
+  const out = m.ctx.lines.join("\n");
+
+  // Providers: the old unit's that work now; `broken` needs a sign-in and is left out.
+  expect(out).toContain("needs sign-in: No available fetch strategy for signedout.");
+  expect(out).toContain("needs sign-in: Error: provider not configured");
+  expect(m.ctx.store.agentConfig().quota).toEqual({
+    providers: ["codex", "zai"],
+    codexbar: join(FAKE_BIN, "codexbar"),
+    interval: "5m",
+  });
+
+  // The old uploader is stopped before the agent starts, so nothing uploads twice.
+  expect(existsSync(join(m.units, "starbridge-quota.service"))).toBe(false);
+  const unit = readFileSync(join(m.units, "starbridge-agent.service"), "utf8");
+  expect(unit).toContain(`ExecStart=${SELF} agent`);
+  expect(unit).toContain("Environment=PATH=");
+  const sd = m.calls().filter((c) => c.startsWith("systemctl"));
+  expect(sd.indexOf("systemctl --user disable --now starbridge-quota.service")).toBeLessThan(
+    sd.indexOf("systemctl --user restart starbridge-agent.service"),
+  );
+  expect(sd).toContain("systemctl --user enable starbridge-agent.service");
+
+  // Plugins from the marketplace; the copied mod, its PLUGIN_DIRS entry and the rule go.
+  expect(m.calls()).toContain("claude plugin marketplace add T0mSIlver/starbridge");
+  expect(m.calls()).toContain("claude plugin install starbridge@starbridge --scope user");
+  expect(m.calls()).toContain("claude plugin install starbridge-mod@starbridge --scope user");
+  const settings = JSON.parse(readFileSync(m.settings, "utf8"));
+  expect(settings.env.CLAUDE_CODE_PLUGIN_DIRS).toBe("/x/other-mod");
+  expect(settings.model).toBe("opus");
+  expect(settings.extraKnownMarketplaces.starbridge.autoUpdate).toBe(true);
+  expect(existsSync(m.mod)).toBe(false);
+  expect(readFileSync(m.md, "utf8")).toBe("# Me\nBe blunt.\n");
+
+  const [snap] = await server.opened("quota");
+  expect(snap?.providers.map((p) => p.provider)).toEqual(["codex", "zai"]);
+  expect(out).toContain("Uploaded a first quota snapshot: 2 providers");
+  // --yes sends no test decision: nobody is there to answer it.
+  expect(await server.opened("decision")).toEqual([]);
+});
+
+test("a second setup changes nothing", async () => {
+  const m = await machine();
+  await startAgent(m.ctx);
+  await setup(m.sys, { yes: true, readyTimeoutMs: 2_000 });
+  const unit = readFileSync(join(m.units, "starbridge-agent.service"), "utf8");
+  const before = m.calls().length;
+  m.ctx.lines.length = 0;
+  await setup(m.sys, { yes: true, readyTimeoutMs: 2_000 });
+  const again = m.calls().slice(before);
+  expect(
+    again.filter((c) => /install|marketplace add|disable|restart|daemon-reload/.test(c)),
+  ).toEqual([]);
+  expect(readFileSync(join(m.units, "starbridge-agent.service"), "utf8")).toBe(unit);
+  expect(m.ctx.store.agentConfig().quota?.providers).toEqual(["codex", "zai"]);
+  expect(m.ctx.lines.join("\n")).toContain("plugins are installed");
+});
+
+test("status reports the agent, the service and the plugins", async () => {
+  const m = await machine();
+  await startAgent(m.ctx);
+  await setup(m.sys, { yes: true, readyTimeoutMs: 2_000 });
+  m.ctx.lines.length = 0;
+  expect(await status(m.sys)).toBe(0);
+  const out = m.ctx.lines.join("\n");
+  expect(out).toContain('Paired: "devbox"');
+  expect(out).toMatch(/Agent: \S+, pid \d+/);
+  expect(out).toContain("Server: reachable");
+  expect(out).toContain("Service: active, enabled");
+  expect(out).toContain("starbridge-mod@starbridge: 0.2.0");
+  expect(out).not.toContain("Manual install left");
+});
+
+test("uninstall removes the service and plugins, asks the devices to revoke, keeps the keys", async () => {
+  const m = await machine();
+  await startAgent(m.ctx);
+  await setup(m.sys, { yes: true, readyTimeoutMs: 2_000 });
+  m.ctx.lines.length = 0;
+  expect(await uninstall(m.sys, {})).toBe(0);
+  expect(existsSync(join(m.units, "starbridge-agent.service"))).toBe(false);
+  expect(m.calls()).toContain("systemctl --user disable --now starbridge-agent.service");
+  expect(m.calls()).toContain("claude plugin uninstall starbridge-mod@starbridge --scope user");
+  expect(m.calls()).toContain("claude plugin marketplace remove starbridge");
+  const [d] = await server.opened("decision");
+  expect(d?.question).toBe("Revoke devbox? It was uninstalled.");
+  expect(existsSync(join(m.ctx.store.dir, "machine.json"))).toBe(true);
+
+  expect(await uninstall(m.sys, { purge: true })).toBe(0);
+  expect(existsSync(m.ctx.store.dir)).toBe(false);
+});
+
+test("setup without a user systemd keeps going and says how to run the agent", async () => {
+  const m = await machine();
+  m.ctx.env.PATH = `${join(m.home, "bin")}:${m.ctx.env.PATH}`;
+  mkdirSync(join(m.home, "bin"));
+  writeFileSync(
+    join(m.home, "bin/systemctl"),
+    "#!/bin/sh\necho 'Failed to connect to bus' >&2\nexit 1\n",
+    {
+      mode: 0o755,
+    },
+  );
+  expect(await setup(m.sys, { yes: true, noPlugin: true, readyTimeoutMs: 500 })).toBe(0);
+  const out = m.ctx.lines.join("\n");
+  expect(out).toContain("no systemd user manager (Failed to connect to bus)");
+  expect(existsSync(join(m.units, "starbridge-agent.service"))).toBe(false);
+  // No agent: the first upload goes to the server directly.
+  expect((await server.opened("quota")).length).toBe(1);
+});
+
+test("the CodexBar tarball installs only with the pinned hash", async () => {
+  const home = mkdtempSync(join(tmpdir(), "starbridge-home-"));
+  const src = mkdtempSync(join(tmpdir(), "codexbar-src-"));
+  writeFileSync(join(src, "CodexBarCLI"), "#!/bin/sh\necho 1.0\n", { mode: 0o755 });
+  const tar = Bun.spawnSync(["tar", "-czf", "-", "-C", src, "CodexBarCLI"]).stdout;
+  const tarball = new Uint8Array(tar);
+  const files = Bun.serve({ port: 0, fetch: () => new Response(tarball) });
+  try {
+    const ctx = testCtx({
+      PATH: "/usr/bin:/bin",
+      STARBRIDGE_CODEXBAR_RELEASES: files.url.href.replace(/\/$/, ""),
+    });
+    const sys: Sys = {
+      ctx,
+      home,
+      platform: "linux",
+      arch: "x64",
+      uid: 1000,
+      prompt: defaults,
+      self: [SELF],
+    };
+    const sha = createHash("sha256").update(tarball).digest("hex");
+    const tampered = { version: "9.9.9", sha256: { "linux-x86_64": "0".repeat(64) } };
+    await expect(installTarball(sys, "linux-x86_64", tampered)).rejects.toThrow("not installed");
+    expect(existsSync(join(home, ".local/opt/codexbar"))).toBe(false);
+
+    const good = { version: "9.9.9", sha256: { "linux-x86_64": sha } };
+    const path = await installTarball(sys, "linux-x86_64", good);
+    expect(path).toBe(join(home, ".local/opt/codexbar/codexbar"));
+    expect(existsSync(join(home, ".local/opt/codexbar/CodexBarCLI"))).toBe(true);
+    const link = linkIntoLocalBin(sys, path);
+    expect(link && readlinkSync(link)).toBe(path);
+  } finally {
+    files.stop();
+  }
+});
+
+test("uninstall keeps the keys when systemd cannot stop the agent", async () => {
+  const m = await machine();
+  await startAgent(m.ctx);
+  await setup(m.sys, { yes: true, readyTimeoutMs: 2_000 });
+  m.ctx.env.PATH = `${join(m.home, "bin")}:${m.ctx.env.PATH}`;
+  mkdirSync(join(m.home, "bin"));
+  writeFileSync(
+    join(m.home, "bin/systemctl"),
+    "#!/bin/sh\necho 'Failed to connect to bus' >&2\nexit 1\n",
+    {
+      mode: 0o755,
+    },
+  );
+  expect(await uninstall(m.sys, { purge: true })).toBe(1);
+  expect(m.ctx.lines.join("\n")).toContain("Could not stop the agent service, so it stays");
+  expect(existsSync(join(m.units, "starbridge-agent.service"))).toBe(true);
+  expect(existsSync(join(m.ctx.store.dir, "machine.json"))).toBe(true);
+});
