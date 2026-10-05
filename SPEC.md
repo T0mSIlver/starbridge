@@ -1079,7 +1079,8 @@ How it generalizes is open.
   History item also matches by its answer. Matched words show bold on `surface2`, never in
   amber; Escape in the box clears it. Android's search waits for the owner's pick.
 - 2026-10-06. Quotas and Settings on wide screens (owner, from
-  https://claude.ai/artifact/9ddJ2PwPrBc7KmQdeDVqDN). Once the page is 840 px wide (a window about 1210 px wide, with the rail) the Quotas page is one table up
+  https://claude.ai/artifact/9ddJ2PwPrBc7KmQdeDVqDN). Once the page is 840 px wide (a window
+  about 1210 px wide, with the rail) the Quotas page is one table up
   to 1200 px wide, as dense as the inbox: the provider in a first column, then a line per window
   (name, meter, figure, state, reset); narrower screens keep a card per provider. Settings puts
   each section's name in a 220 px column beside its box, whose rows stay 720 px. Providers
