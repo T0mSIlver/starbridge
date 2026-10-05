@@ -505,7 +505,11 @@ test("quota snapshots and runs skip Web Push, which browsers drop when it shows 
   expect((await s.call("POST", "/v1/items", { token: devbox.token, body: r })).status).toBe(201);
   await s.deps.push.idle();
   // Sends run concurrently, so their order is not the post order.
-  expect(fcmSends().map((m) => JSON.parse(m.data.p).id).sort()).toEqual(["q1", "r1"]);
+  expect(
+    fcmSends()
+      .map((m) => JSON.parse(m.data.p).id)
+      .sort(),
+  ).toEqual(["q1", "r1"]);
   expect(seen.filter((x) => x.path === "/wp/quota")).toEqual([]);
   // Decisions still reach the browser.
   await postDecision(s, acct, devbox, "d1");
