@@ -25,6 +25,8 @@ import dev.starbridge.app.ui.inbox.DecisionScreen
 import dev.starbridge.app.ui.inbox.InboxScreen
 import dev.starbridge.app.ui.inbox.PromptActions
 import dev.starbridge.app.ui.inbox.PromptLogScreen
+import dev.starbridge.app.data.QuotaSettings
+import dev.starbridge.app.ui.quotas.QuotaSettingsScreen
 import dev.starbridge.app.ui.quotas.QuotasScreen
 import dev.starbridge.app.ui.setup.SetupActions
 import dev.starbridge.app.ui.setup.SetupScreen
@@ -106,6 +108,14 @@ class ScreenshotTest(private val dark: Boolean) {
     @Test fun decisionAnswerIn() = capture("decision-answer-in") { DecisionScreen(fake.decisions.first { it.answerIn != null }, now, onAnswer = { _, _, _ -> }) }
 
     @Test fun quotas() = capture("quotas") { QuotasScreen(fake.windows, now) }
+
+    // Remaining, clock times, a 5-day week with strong ticks, Codex first, Gemini hidden, Z.ai notifying.
+    private val tuned = QuotaSettings(showUsed = false, absoluteResets = true, workDays = 5, ticks = QuotaSettings.Ticks.HighContrast, order = listOf("codex"), hidden = listOf("gemini"), notify = listOf("zai"))
+
+    @Test fun quotasTuned() = capture("quotas-tuned") { QuotasScreen(fake.windows, now, settings = tuned) }
+
+    @Config(qualifiers = "w411dp-h2100dp-xxhdpi")
+    @Test fun quotaSettings() = capture("quota-settings") { QuotaSettingsScreen(fake.windows, tuned, {}) }
 
     @Test fun quotasEmpty() = capture("quotas-empty") { QuotasScreen(emptyList(), now) }
 

@@ -155,6 +155,7 @@ data class QuotaWindow(
     val steadyPercent: Int? = null,
     /** The uploading machine's name, set when more than one machine uploads quotas. */
     val machine: String? = null,
+    val windowMinutes: Int? = null,
 )
 
 enum class Kind { Device, Machine }

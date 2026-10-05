@@ -68,6 +68,7 @@ import dev.starbridge.app.ui.inbox.Replies
 import dev.starbridge.app.ui.inbox.rememberDrafts
 import dev.starbridge.app.ui.inbox.PromptActions
 import dev.starbridge.app.ui.inbox.PromptLogScreen
+import dev.starbridge.app.ui.quotas.QuotaSettingsScreen
 import dev.starbridge.app.ui.quotas.QuotasScreen
 import dev.starbridge.app.ui.quotas.QuotasViewModel
 import dev.starbridge.app.ui.setup.SetupScreen
@@ -82,6 +83,7 @@ import java.time.Instant
 @Serializable data object PromptLogKey : NavKey
 @Serializable data class DecisionKey(val id: String) : NavKey
 @Serializable data object QuotasKey : NavKey
+@Serializable data object QuotaSettingsKey : NavKey
 @Serializable data object DevicesKey : NavKey
 
 /** A tab: outlined icon at rest, filled when selected, as Material's navigation bar does. */
@@ -186,7 +188,7 @@ fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> U
         containerColor = MaterialTheme.colorScheme.surface,
         navigationItems = {
             for (tab in tabs) {
-                val selected = current == tab.key || (tab.key == InboxKey && (current is DecisionKey || current == PromptLogKey))
+                val selected = current == tab.key || (tab.key == InboxKey && (current is DecisionKey || current == PromptLogKey)) || (tab.key == QuotasKey && current == QuotaSettingsKey)
                 NavigationSuiteItem(
                     navigationSuiteType = suite,
                     selected = selected,
@@ -264,7 +266,21 @@ fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> U
                     entry<QuotasKey> {
                         val vm: QuotasViewModel = hiltViewModel()
                         val windows by vm.windows.collectAsStateWithLifecycle()
-                        QuotasScreen(windows, now, refresh = refresh(vm::refresh))
+                        val settings by vm.settings.collectAsStateWithLifecycle()
+                        QuotasScreen(
+                            windows,
+                            now,
+                            settings = settings,
+                            refresh = refresh(vm::refresh),
+                            onNotify = { vm.setSettings(settings.copy(notify = (settings.notify + it).distinct())) },
+                            onSettings = { backStack.add(QuotaSettingsKey) },
+                        )
+                    }
+                    entry<QuotaSettingsKey> {
+                        val vm: QuotasViewModel = hiltViewModel()
+                        val windows by vm.windows.collectAsStateWithLifecycle()
+                        val settings by vm.settings.collectAsStateWithLifecycle()
+                        QuotaSettingsScreen(windows, settings, vm::setSettings)
                     }
                     entry<DevicesKey> {
                         val vm: DevicesViewModel = hiltViewModel()

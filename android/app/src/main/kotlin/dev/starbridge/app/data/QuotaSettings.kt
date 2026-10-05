@@ -2,6 +2,7 @@ package dev.starbridge.app.data
 
 import java.time.Instant
 import java.time.ZoneId
+import kotlin.math.roundToInt
 import kotlinx.serialization.Serializable
 
 /**
@@ -63,7 +64,7 @@ data class QuotaSettings(
     /** What a card's bar shows: its percentage, fill and pace marker, all on the same scale. */
     fun bar(window: QuotaWindow, now: Instant, zone: ZoneId = ZoneId.systemDefault()): Bar {
         val used = window.usedPercent.coerceIn(0, 100)
-        val steady = workdayExpected(window, workDays, now, zone)?.let { Math.round(it) } ?: window.steadyPercent
+        val steady = workdayExpected(window, workDays, now, zone)?.roundToInt() ?: window.steadyPercent
         return Bar(
             percent = if (showUsed) used else 100 - used,
             word = if (showUsed) "used" else "left",
