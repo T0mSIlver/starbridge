@@ -110,11 +110,14 @@ fun sessionName(s: Source) = when {
     else -> s.session
 }
 
-/** The agent's app, by the machine's word for it or, before that, by the session's link. */
+/**
+ * The agent's app, by the machine's word for it or, from machines that send none, by the
+ * session's link. An agent this app does not know gets no "Open in".
+ */
 fun agentName(agent: String?, source: Source) = when {
     agent == "codex" -> "Codex"
     agent == "claude-code" -> "Claude"
-    source.links.any { it.url.startsWith("https://claude.ai/") } -> "Claude"
+    agent == null && source.links.any { it.url.startsWith("https://claude.ai/") } -> "Claude"
     else -> null
 }
 

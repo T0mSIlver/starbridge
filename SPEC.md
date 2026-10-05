@@ -973,6 +973,11 @@ How it generalizes is open.
   skill follows that line instead of naming agents. `evals/skill` runs `codex exec`, so it
   checks the wait path: it answers a Codex card on the server during the turn, as the owner
   would.
+- 2026-10-06. Agents clients do not know (orchestrator, for #232). `Agent` gains `pi`, and items
+  carry `agent` as any name of up to 40 lowercase letters, digits and dashes (`AgentName`):
+  clients show an agent they do not know as none, with no "Open in" link, instead of refusing
+  the decision or prompt. So a future harness never makes items unreadable to older clients.
+  Clients released before this change still refuse an agent outside `claude-code | codex`.
 - 2026-10-05. A blocked question shows by its look, not a state line (#191, owner's pick of
   proposal B, "Filled and hollow", from https://claude.ai/artifact/EMcUnTsGhyTsiCNujo4JT6). This
   replaces the "Waiting for you 1:12" tag of the #166 entry above. A question whose agent waits

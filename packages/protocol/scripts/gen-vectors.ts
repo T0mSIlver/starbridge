@@ -1127,7 +1127,17 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
         },
         valid: true,
       },
-      { name: "an unknown agent", body: { ...decisionBody, agent: "aider" }, valid: false },
+      { name: "from Pi", body: { ...decisionBody, agent: "pi" }, valid: true },
+      {
+        name: "an agent this client does not know",
+        body: { ...decisionBody, agent: "aider" },
+        valid: true,
+      },
+      {
+        name: "an agent that is no name",
+        body: { ...decisionBody, agent: "Aider 2!" },
+        valid: false,
+      },
       {
         name: "an unknown machine kind",
         body: { ...decisionBody, source: { ...decisionBody.source, machineKind: "phone" } },
@@ -1322,7 +1332,12 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
         body: { ...permissionBody, input: "i".repeat(8001) },
         valid: false,
       },
-      { name: "unknown agent", body: { ...permissionBody, agent: "gemini" }, valid: false },
+      {
+        name: "an agent this client does not know",
+        body: { ...permissionBody, agent: "gemini" },
+        valid: true,
+      },
+      { name: "an agent that is no name", body: { ...permissionBody, agent: "" }, valid: false },
       {
         name: "created at hour 25",
         body: { ...permissionBody, createdAt: "2026-10-04T25:00:00Z" },
