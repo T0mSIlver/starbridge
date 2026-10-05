@@ -1115,6 +1115,13 @@ How it generalizes is open.
   grouping, then "History · N" with the matching answered items, History open or not. A
   History item also matches by its answer. Matched words show bold on `surface2`, never in
   amber; Escape in the box clears it. Android's search waits for the owner's pick.
+- 2026-10-06. A stalled server never holds a permission prompt (#260, from the Codex audit).
+  The hook's deadline and SIGTERM cut every request it makes, the prompt's post included, on
+  both paths; the agent cuts its post when the hook hangs up or the hook's wait passes. A SIGTERM
+  that lands while the prompt is being posted settles it by its call's input hash, and a post
+  that fails leaves the prompt settled on the machine, so no later answer applies. The Pi link
+  stops the CLI after 600 s and gives a stopped CLI 10 s before it defers and kills it, so "Answer
+  here" always reaches pi-permission-system's dialog.
 
 ## Encryption, with existing libraries
 

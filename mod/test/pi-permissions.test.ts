@@ -108,3 +108,30 @@ test("the session ending stops the CLI, which settles the prompt, and the link d
   expect(h.calls.map((c) => c.aborted)).toEqual([true]);
   expect(k.shown.map((d) => d.closed)).toEqual([true]);
 });
+
+test("a CLI stuck on a stalled server is stopped: the link defers and the keyboard's dialog opens", async () => {
+  const limits = { hookMs: 300, stopMs: 50 };
+  // Ignores SIGTERM, as a CLI blocked on a request would.
+  const stuck = () => {
+    const signals: AbortSignal[] = [];
+    return {
+      signals,
+      run: (_: string, signal: AbortSignal) => {
+        signals.push(signal);
+        return new Promise<string>(() => {});
+      },
+    };
+  };
+  const alone = stuck();
+  expect(await authorize("{}", { hook: alone.run, sleep }, 10, limits)).toEqual({ kind: "defer" });
+  expect(alone.signals[0]?.aborted).toBe(true);
+  // "Answer here": the link stops waiting for it after stopMs, not never.
+  const here = stuck();
+  const started = Date.now();
+  const v = await authorize("{}", { hook: here.run, keyboard: keyboard(30).open, sleep }, 10, {
+    hookMs: 60_000,
+    stopMs: 50,
+  });
+  expect(v).toEqual({ kind: "defer" });
+  expect(Date.now() - started).toBeLessThan(1_000);
+});

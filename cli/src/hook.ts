@@ -78,7 +78,23 @@ async function viaAgent(
   ask: Ask,
   deadline: number,
 ): Promise<unknown> {
-  const { id } = await agent.call<{ id: string }>("POST", "/v1/permissions", ask);
+  let id: string;
+  try {
+    ({ id } = await agent.call<{ id: string }>(
+      "POST",
+      "/v1/permissions",
+      ask,
+      Math.max(1, deadline - ctx.now().getTime()),
+      ctx.signal,
+    ));
+  } catch (e) {
+    if (!(e instanceof Interrupted)) throw e;
+    // The keyboard answered while the prompt was being posted: settle it by its call.
+    const session = encodeURIComponent(ask.source.session);
+    const inputHash = hashInput(JSON.stringify(ask.hook.tool_input ?? {}));
+    await agent.call("POST", `/v1/sessions/${session}/permissions/settle`, { inputHash }, 5_000);
+    return undefined;
+  }
   const path = `/v1/permissions/${encodeURIComponent(id)}`;
   try {
     while (true) {
@@ -95,7 +111,7 @@ async function viaAgent(
       if (r.output !== undefined) return r.output;
       if (r.settled) return undefined;
     }
-    await agent.call("POST", `${path}/settle`, { outcome: "timeout" });
+    await agent.call("POST", `${path}/settle`, { outcome: "timeout" }, 5_000);
   } catch (e) {
     // Claude Code sends SIGTERM when the keyboard answers Esc or No.
     if (!(e instanceof Interrupted)) throw e;
@@ -107,7 +123,12 @@ async function viaAgent(
 /** The hook's own path when no agent runs: post, then poll the server itself. */
 async function direct(ctx: Ctx, ask: Ask, deadline: number): Promise<unknown> {
   const s = session(ctx);
-  const id = await postPermission(ctx, s, ask.hook, ask);
+  /** Cuts a request at SIGTERM or the deadline, so a stalled server never holds the hook. */
+  const cut = () => {
+    const left = AbortSignal.timeout(Math.max(1, deadline - ctx.now().getTime()));
+    return ctx.signal ? AbortSignal.any([ctx.signal, left]) : left;
+  };
+  const id = await postPermission(ctx, s, ask.hook, ask, cut());
   let cursor = ctx.store.state().permissions?.[id]?.cursor;
   let directory: Awaited<ReturnType<typeof poll>>["directory"] | undefined;
   /** Marks the prompt settled and reports it, giving up after `REPORT_MS` or on `signal`. */
@@ -143,7 +164,7 @@ async function direct(ctx: Ctx, ask: Ask, deadline: number): Promise<unknown> {
     }
     try {
       const seconds = Math.max(1, Math.min(DIRECT_POLL_SECONDS, Math.ceil(left / 1000)));
-      ({ cursor, directory } = await poll(ctx, s, {
+      ({ cursor, directory } = await poll({ ...ctx, signal: cut() }, s, {
         cursor,
         seconds,
         shared: false,
