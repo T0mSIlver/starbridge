@@ -23,7 +23,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyListScope
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -94,6 +94,8 @@ import dev.starbridge.app.ui.Refresh
 import dev.starbridge.app.ui.Sym
 import dev.starbridge.app.ui.Symbol
 import dev.starbridge.app.ui.fieldColors
+import dev.starbridge.app.ui.groupGap
+import dev.starbridge.app.ui.groupShape
 import dev.starbridge.app.ui.theme.Radius
 import dev.starbridge.app.ui.theme.Spacing
 import dev.starbridge.app.ui.theme.StarbridgeTheme
@@ -213,7 +215,7 @@ fun InboxScreen(
             ViewMenu(view, onView)
         },
         header = { Lockup(24.dp, 22.sp) },
-        gap = cardGap,
+        gap = groupGap,
         margin = Spacing.s4,
     ) {
         if (feed.isEmpty()) {
@@ -222,44 +224,48 @@ fun InboxScreen(
             when (view.grouping) {
                 Grouping.Machine -> feed.groupBy { it.machine.machine }.forEach { (machine, items) ->
                     item(key = "machine/$machine") { MachineHeader(items.first().machine) }
-                    cards(items, at, actions, replies, promptActions, view.buttons)
+                    cards(items, at, actions, replies, promptActions, view.buttons, segmented = true)
                 }
                 Grouping.Waiting -> {
                     val (running, rest) = feed.partition { it is Item.RunItem }
                     val (blocking, later) = rest.partition { it.blocks }
-                    cards(running, at, actions, replies, promptActions, view.buttons)
+                    cards(running, at, actions, replies, promptActions, view.buttons, segmented = true)
                     if (blocking.isNotEmpty()) {
                         // A prompt settled elsewhere stays a moment in place, but no longer counts.
                         val count = blocking.count { it !is Item.PromptItem || it.prompt.waiting(at) }
                         item(key = "group/waiting") { GroupHeader("Waiting on you", count, StarbridgeTheme.colors.accent) }
-                        cards(blocking, at, actions, replies, promptActions, view.buttons)
+                        cards(blocking, at, actions, replies, promptActions, view.buttons, segmented = true)
                     }
                     if (later.isNotEmpty()) {
                         item(key = "group/later") { GroupHeader("When you can", later.size, MaterialTheme.colorScheme.onSurfaceVariant) }
-                        cards(later, at, actions, replies, promptActions, view.buttons)
+                        cards(later, at, actions, replies, promptActions, view.buttons, segmented = true)
                     }
                 }
                 Grouping.None -> cards(feed, at, actions, replies, promptActions, view.buttons)
             }
         }
-        history(history, view.historyOpen, { onView(view.copy(historyOpen = it)) }, actions, promptActions)
+        history(history, view.historyOpen, { onView(view.copy(historyOpen = it)) }, actions, promptActions, segmented = view.grouping != Grouping.None)
     }
 }
 
 private const val PROMPT_POLL_MS = 1_500L
 
 /**
- * The inbox's cards (#248): each item its own card, Material 3's filled card with extra-large
- * corners, cards `s2` apart, as Material spaces a collection of cards.
+ * The inbox's cards (#248), Material 3's filled card with extra-large corners. In One feed each
+ * item is its own card, `s2` apart, as Material spaces a collection of cards; under a grouping's
+ * header the group's cards join into a segmented group, [groupGap] apart and tight inside.
  */
 private val cardShape = RoundedCornerShape(Radius.xl)
 private val cardGap = Spacing.s2
 
-private fun LazyListScope.cards(items: List<Item>, now: Instant, actions: DecisionActions, replies: Replies, promptActions: PromptActions?, buttons: CardButtons) {
-    items(items, key = { it.key }) { item ->
-        val shape = cardShape
+private fun segment(index: Int, count: Int) = groupShape(index, count, outer = Radius.xl, inner = Radius.xs)
+
+private fun LazyListScope.cards(items: List<Item>, now: Instant, actions: DecisionActions, replies: Replies, promptActions: PromptActions?, buttons: CardButtons, segmented: Boolean = false) {
+    itemsIndexed(items, key = { _, it -> it.key }) { i, item ->
+        val shape = if (segmented) segment(i, items.size) else cardShape
         // A question its agent starts or stops waiting on moves with the expressive spring.
         val m = Modifier.animateItem(placementSpec = MaterialTheme.motionScheme.defaultSpatialSpec())
+            .padding(top = if (segmented || i == 0) 0.dp else cardGap - groupGap)
         when (item) {
             is Item.RunItem -> RunCard(item.run, now, shape, m)
             is Item.PromptItem -> if (item.prompt.waiting(now) && promptActions != null) PromptCard(item.prompt, now, promptActions, shape, m) else ClosedPrompt(item.prompt, shape, m)
@@ -309,7 +315,7 @@ private fun ViewMenu(view: InboxView, onView: (InboxView) -> Unit) {
 @Composable
 private fun MachineHeader(source: Source) {
     val color = MaterialTheme.colorScheme.onSurfaceVariant
-    Row(Modifier.padding(start = Spacing.s2, top = Spacing.s4 - cardGap, bottom = Spacing.s2 - cardGap), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.padding(start = Spacing.s2, top = Spacing.s4 - groupGap, bottom = Spacing.s2 - groupGap), verticalAlignment = Alignment.CenterVertically) {
         Symbol(machineSym(source.machineKind), size = 16.dp, tint = color)
         Spacer(Modifier.width(6.dp))
         Text(source.machine, style = StarbridgeTheme.type.label, color = color)
@@ -328,7 +334,7 @@ internal fun GroupHeader(name: String, count: Int, countColor: Color) {
         },
         style = style,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(start = Spacing.s2, top = Spacing.s4 - cardGap, bottom = Spacing.s2 - cardGap).semantics { heading() },
+        modifier = Modifier.padding(start = Spacing.s2, top = Spacing.s4 - groupGap, bottom = Spacing.s2 - groupGap).semantics { heading() },
     )
 }
 
@@ -652,13 +658,16 @@ internal class History(decisions: List<Decision>, prompts: List<Prompt>, now: In
 }
 
 /** History, collapsed and remembered: one row per answered question or ended prompt. */
-private fun LazyListScope.history(history: History, open: Boolean, onOpen: (Boolean) -> Unit, actions: DecisionActions, promptActions: PromptActions?) {
+private fun LazyListScope.history(history: History, open: Boolean, onOpen: (Boolean) -> Unit, actions: DecisionActions, promptActions: PromptActions?, segmented: Boolean) {
+    // Under a grouping, History's head and rows join as the groups above do.
+    val joined = segmented && open
+    val count = history.rows.size + 1
     if (history.rows.isEmpty()) return
     item(key = "history") {
         val scheme = MaterialTheme.colorScheme
         Surface(
             Modifier.fillMaxWidth().padding(top = Spacing.s3).clickable(onClickLabel = if (open) "Hide History" else "Show History") { onOpen(!open) },
-            shape = cardShape,
+            shape = if (joined) segment(0, count) else cardShape,
             color = scheme.surfaceContainer,
         ) {
             Row(Modifier.padding(horizontal = Spacing.s5, vertical = Spacing.s4), verticalAlignment = Alignment.CenterVertically) {
@@ -673,12 +682,14 @@ private fun LazyListScope.history(history: History, open: Boolean, onOpen: (Bool
         }
     }
     if (!open) return
-    // One-line cards round less, as Material scales a corner with its container.
-    items(history.rows, key = { (_, it) -> if (it is Decision) "h/d/${it.id}" else "h/p/${(it as Prompt).id}" }) { (at, it) ->
-        val shape = RoundedCornerShape(Spacing.s5)
-        when (it) {
-            is Decision -> HistoryRow(it.source, it.question, false, closedHow(it, at), shape) { actions.open(it.id) }
-            is Prompt -> HistoryRow(it.source, it.summary, true, closedHow(it), shape) { promptActions?.open?.invoke(it.id) }
+    itemsIndexed(history.rows, key = { _, (_, it) -> if (it is Decision) "h/d/${it.id}" else "h/p/${(it as Prompt).id}" }) { i, (at, it) ->
+        // Apart, one-line cards round less, as Material scales a corner with its container.
+        val shape = if (joined) segment(i + 1, count) else RoundedCornerShape(Spacing.s5)
+        Box(Modifier.padding(top = if (joined) 0.dp else cardGap - groupGap)) {
+            when (it) {
+                is Decision -> HistoryRow(it.source, it.question, false, closedHow(it, at), shape) { actions.open(it.id) }
+                is Prompt -> HistoryRow(it.source, it.summary, true, closedHow(it), shape) { promptActions?.open?.invoke(it.id) }
+            }
         }
     }
 }
