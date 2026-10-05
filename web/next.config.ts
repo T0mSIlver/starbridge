@@ -13,6 +13,8 @@ const nextConfig: NextConfig = {
   outputFileTracingRoot: join(import.meta.dirname, ".."),
   // The protocol package ships TypeScript source.
   transpilePackages: ["@starbridge/protocol"],
+  // Tests import workspace packages the deploy image leaves out; `pnpm typecheck` covers them.
+  typescript: { tsconfigPath: "tsconfig.build.json" },
   async rewrites() {
     return [{ source: "/v1/:path*", destination: `${server}/v1/:path*` }];
   },
