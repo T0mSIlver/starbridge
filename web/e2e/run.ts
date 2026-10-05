@@ -303,6 +303,8 @@ async function main() {
   console.log("notifications:", JSON.stringify(notifications));
   if (!notifications.some((n) => n.title === "Run the migration on the staging database now?"))
     throw new Error("no Web Push notification for the decision");
+  // With History open the answered question stays listed, which is where it lingered (#214).
+  await page.getByRole("button", { name: /History/ }).click();
   await page.getByRole("button", { name: /Run it/ }).click();
   await ask.waitFor(/Answer to d_\S+ \(Run the migration on the staging database now\?\): Run it/);
   if ((await ask.exited) !== 0) throw new Error("ask --wait failed");
@@ -313,6 +315,13 @@ async function main() {
     i++
   )
     await page.waitForTimeout(200);
+
+  // It was the last open question, so the detail pane empties rather than showing it answered.
+  await page
+    .locator('section[aria-label="Selected"] h2')
+    .waitFor({ state: "detached", timeout: 10_000 });
+  await shoot(page, "inbox-cleared");
+  await page.getByRole("button", { name: /History/ }).click();
 
   step("leave one open decision for the screenshots");
   const open = cli(
