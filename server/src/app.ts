@@ -19,6 +19,7 @@ import { itemRoutes } from "./routes/items";
 import { joinRoutes, sweepJoins } from "./routes/joins";
 import { pairingRoutes, sweepPairings } from "./routes/pairings";
 import { pushRoutes } from "./routes/push";
+import { closeDays, Usage } from "./usage";
 import { Waiters } from "./waiters";
 
 /** /healthz/backup fails past this; deploy/host/backup.sh runs nightly. */
@@ -27,6 +28,7 @@ const BACKUP_MAX_AGE_MS = 26 * 3_600_000;
 export async function createApp(config: Config, fetchFn: typeof fetch = fetch) {
   await ready;
   const db = openDb(config.dbPath);
+  const usage = new Usage(db);
   const deps: Deps = {
     config,
     db,
@@ -35,14 +37,20 @@ export async function createApp(config: Config, fetchFn: typeof fetch = fetch) {
     pairings: new Waiters(),
     joins: new Waiters(),
     limiter: new RateLimiter(),
+    usage,
   };
+  deps.push.onSent = (type, result) => usage.record(`push.${type}.${result}`);
 
   setInterval(() => {
     sweepPairings(db);
     sweepJoins(db);
   }, 60_000).unref();
   sweepStorage(db, config.limits);
-  setInterval(() => sweepStorage(db, config.limits), 3_600_000).unref();
+  closeDays(db);
+  setInterval(() => {
+    sweepStorage(db, config.limits);
+    closeDays(db);
+  }, 3_600_000).unref();
 
   const v1 = new Hono<Env>()
     .route("/", authRoutes)

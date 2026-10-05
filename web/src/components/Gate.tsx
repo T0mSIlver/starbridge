@@ -5,29 +5,15 @@ import { useEffect, useRef, useState } from "react";
 import type { FirstDevice as PreparedDevice } from "@/lib/device";
 import { hasPairCode, holdPairCode } from "@/lib/pairLink";
 import { useApp } from "./AppProvider";
-import { Mark } from "./icons";
+import { Icon } from "./icons";
 import { Landing } from "./Landing";
-import { LegalLinks } from "./Legal";
-import { Setup } from "./Setup";
+import { QrCode } from "./QrCode";
+import { FirstRunPage, Setup } from "./Setup";
 import s from "./Setup.module.css";
 import ui from "./ui.module.css";
 
 const load = () => import("@/lib/device");
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
-
-function Page({ children }: { children: React.ReactNode }) {
-  return (
-    <main className={s.page}>
-      <div className={s.brand}>
-        <span className={s.mark}>
-          <Mark />
-        </span>
-        <span className="t-heading">Starbridge</span>
-      </div>
-      {children}
-    </main>
-  );
-}
 
 /** Runs `fn`, showing its error; `busy` disables the buttons meanwhile. */
 function useAction() {
@@ -47,15 +33,23 @@ function useAction() {
   return { busy, error, run };
 }
 
+function Error_({ error }: { error?: string }) {
+  return error ? (
+    <p className={`t-small ${s.error}`} role="alert">
+      {error}
+    </p>
+  ) : null;
+}
+
 function NameField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   return (
-    <div className={ui.field}>
-      <label className="t-label" htmlFor="device-name">
+    <div className={s.field}>
+      <label className={`t-meta ${s.dim}`} htmlFor="device-name">
         Name this browser
       </label>
       <input
         id="device-name"
-        className={ui.input}
+        className={`t-body ${s.input}`}
         value={value}
         maxLength={100}
         onChange={(e) => onChange(e.target.value)}
@@ -72,22 +66,22 @@ function useDefaultName(): [string, (v: string) => void] {
   return [name, setName];
 }
 
-function SignIn({ ownerToken = false }: { ownerToken?: boolean }) {
+/** GitHub sign-in; self-hosting sits behind "Use your own server" (SPEC.md, design v2). */
+export function SignIn({ ownServer = false }: { ownServer?: boolean }) {
   const { reload } = useApp();
+  const [own, setOwn] = useState(ownServer);
   const [token, setToken] = useState("");
   const { busy, error, run } = useAction();
   return (
-    <Page>
-      <h1 className="t-title">Sign in</h1>
-      <p className={s.lede}>Your AI quota windows and the decisions your agents need from you.</p>
-      <a href="/v1/auth/github" className={`${ui.button} ${ui.primary} ${s.go}`}>
-        Sign in with GitHub
+    <FirstRunPage>
+      <h1 className="t-heading">Sign in to Starbridge</h1>
+      <a href="/v1/auth/github" className={`t-label ${ui.btn} ${ui.lg} ${ui.fill} ${s.go}`}>
+        <Icon name="github" size={18} />
+        Continue with GitHub
       </a>
-      <details open={ownerToken}>
-        <summary className="t-small">Self-hosted: sign in with the owner token</summary>
+      {own ? (
         <form
-          className={ui.field}
-          style={{ marginTop: "var(--s3)" }}
+          className={s.field}
           onSubmit={(e) => {
             e.preventDefault();
             run(async () => {
@@ -97,27 +91,31 @@ function SignIn({ ownerToken = false }: { ownerToken?: boolean }) {
             });
           }}
         >
-          <label className="t-label" htmlFor="owner-token">
+          <label className={`t-meta ${s.dim}`} htmlFor="owner-token">
             Owner token
           </label>
           <input
             id="owner-token"
             type="password"
-            className={ui.input}
+            className={`t-body ${s.input}`}
             value={token}
             onChange={(e) => setToken(e.target.value)}
           />
-          <button type="submit" className={ui.button} disabled={busy || !token}>
+          <button type="submit" className={`t-label ${ui.btn}`} disabled={busy || !token}>
             Sign in
           </button>
         </form>
-      </details>
-      {error && <p className={ui.error}>{error}</p>}
-      <LegalLinks />
-    </Page>
+      ) : (
+        <button type="button" className={`t-meta ${s.link}`} onClick={() => setOwn(true)}>
+          Use your own server
+        </button>
+      )}
+      <Error_ error={error} />
+    </FirstRunPage>
   );
 }
 
+/** Shown only when the account has no device yet: this browser makes its keys. */
 function FirstDevice({ account }: { account: string }) {
   const { reload } = useApp();
   const [name, setName] = useDefaultName();
@@ -127,16 +125,13 @@ function FirstDevice({ account }: { account: string }) {
   const { busy, error, run } = useAction();
   if (words) return <Setup device={name} words={words} onContinue={reload} />;
   return (
-    <Page>
-      <h1 className="t-title">Set up this browser</h1>
-      <p className={s.lede}>
-        This browser becomes your account&apos;s first device. It makes its own keys; the server
-        only ever sees public keys and ciphertext. Next you get a recovery key, shown once.
-      </p>
+    <FirstRunPage>
+      <h1 className="t-heading">Set up your account</h1>
+      <p className={`t-small ${s.lede}`}>This browser creates your account&apos;s keys.</p>
       <NameField value={name} onChange={setName} />
       <button
         type="button"
-        className={`${ui.button} ${ui.primary} ${s.go}`}
+        className={`t-label ${ui.btn} ${ui.lg} ${ui.fill} ${s.go}`}
         disabled={busy || !name.trim()}
         onClick={() =>
           run(async () => {
@@ -146,133 +141,145 @@ function FirstDevice({ account }: { account: string }) {
           })
         }
       >
-        {busy ? "Making keys…" : error ? "Try again" : "Make keys"}
+        {busy ? "Creating the keys…" : error ? "Try again" : "Create the keys"}
       </button>
-      {error && <p className={ui.error}>{error}</p>}
-    </Page>
+      <Error_ error={error} />
+    </FirstRunPage>
   );
 }
 
+/**
+ * The account has devices: one of them scans this browser's QR code (or types its code), which
+ * compares nothing; comparing digits is the fallback, and the recovery key the last resort.
+ */
 function Join({ account, stale }: { account: string; stale: boolean }) {
   const { reload } = useApp();
   const [name, setName] = useDefaultName();
-  const [mode, setMode] = useState<"choose" | "digits" | "code" | "words">("choose");
+  const [mode, setMode] = useState<"code" | "digits" | "words">("code");
   const [code, setCode] = useState<string>();
   const [digits, setDigits] = useState<string>();
   const [words, setWords] = useState("");
   const cancel = useRef<() => void>(undefined);
+  // Each join started counts up; one that resolves after the owner moved on cancels itself.
+  const started = useRef(0);
   const { busy, error, run } = useAction();
   useEffect(() => () => cancel.current?.(), []);
 
-  const ask = () =>
-    run(async () => {
-      setMode("digits");
-      const join = await (await load()).startDigitJoin(account, name.trim());
-      cancel.current = join.cancel;
-      join.digits.then(setDigits, () => {});
-      try {
-        await join.done;
-      } catch (e) {
-        setMode("choose");
-        setDigits(undefined);
-        throw e;
-      }
-      await reload();
-    });
+  /** Starts a join unless the owner moved on meanwhile; undefined when stale. */
+  const begin = async <J extends { cancel: () => void; done: Promise<void> }>(
+    start: () => Promise<J>,
+  ) => {
+    const mine = ++started.current;
+    const join = await start();
+    if (mine !== started.current) {
+      join.done.catch(() => {});
+      join.cancel();
+      return undefined;
+    }
+    cancel.current = join.cancel;
+    return join;
+  };
 
-  const pair = () =>
+  // The code carries the name it asks under, so it waits for the default name.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: starts once the name is known
+  useEffect(() => {
+    if (mode !== "code" || !name || code) return;
     run(async () => {
-      setMode("code");
-      const join = await (await load()).startJoin(account, name.trim());
-      cancel.current = join.cancel;
+      const join = await begin(async () => (await load()).startJoin(account, name.trim()));
+      if (!join) return;
       setCode(join.code);
       await join.done;
       await reload();
     });
+  }, [mode, name === ""]);
+
+  const switchTo = (next: "digits" | "words") => {
+    started.current++;
+    cancel.current?.();
+    setCode(undefined);
+    setDigits(undefined);
+    setMode(next);
+    if (next === "digits")
+      run(async () => {
+        const join = await begin(async () => (await load()).startDigitJoin(account, name.trim()));
+        if (!join) return;
+        join.digits.then(setDigits, () => {});
+        await join.done;
+        await reload();
+      });
+  };
 
   return (
-    <Page>
-      <h1 className="t-title">Add this browser</h1>
-      <p className={s.lede}>
-        Your account already has a device. Approve this browser from it, or use your recovery key if
-        you lost every device.
-      </p>
+    <FirstRunPage>
+      <h1 className="t-heading">Add this browser</h1>
       {stale && (
-        <p className={ui.notice}>
+        <p className={`t-small ${s.lede}`}>
           This browser was a device of this account, but this sign-in is not bound to it. Add it
-          again, then revoke the old entry under Devices.
+          again, then revoke the old one in Settings.
         </p>
       )}
-      {mode === "choose" && (
+      {mode === "code" && (
         <>
-          <NameField value={name} onChange={setName} />
+          <p className={`t-small ${s.lede}`}>
+            Scan with a phone or browser signed in to Starbridge.
+          </p>
+          {code && (
+            <>
+              <div className={s.qr}>
+                <QrCode
+                  className={s.qrSvg}
+                  text={`${location.origin}/pair#${code}`}
+                  label={`QR code for pairing code ${code}`}
+                />
+              </div>
+              <p className={`t-snippet ${s.dim}`} data-testid="pairing-code">
+                {code}
+              </p>
+            </>
+          )}
           <button
             type="button"
-            className={`${ui.button} ${ui.primary} ${s.go}`}
+            className={`t-meta ${s.link}`}
             disabled={!name.trim()}
-            onClick={ask}
+            onClick={() => switchTo("digits")}
           >
-            Ask my other devices
-          </button>
-          <button
-            type="button"
-            className={`${ui.button} ${s.go}`}
-            disabled={!name.trim()}
-            onClick={pair}
-          >
-            Get a pairing code
-          </button>
-          <button type="button" className={`${ui.button} ${s.go}`} onClick={() => setMode("words")}>
-            Use the recovery key
+            Can&apos;t scan? Compare digits
           </button>
         </>
       )}
       {mode === "digits" && (
         <>
-          {digits ? (
-            <>
-              <p className={s.step}>
-                Check that your other device shows these digits, then approve {name.trim()} there.
-              </p>
-              <p className="t-figure" data-testid="join-digits">
-                {`${digits.slice(0, 3)} ${digits.slice(3)}`}
-              </p>
-            </>
-          ) : (
-            <p className={s.step}>
-              Open Starbridge on your phone or another signed-in browser. It asks whether to let{" "}
-              {name.trim()} join; tap Compare digits there.
-            </p>
+          <p className={`t-small ${s.lede}`}>
+            {digits
+              ? `Approve ${name.trim()} on your other device if the digits match.`
+              : `Open Starbridge on a signed-in device: it asks whether to let ${name.trim()} join.`}
+          </p>
+          {digits && (
+            <div className={`t-heading ${s.digits}`} data-testid="join-digits">
+              {[...digits].map((d, i) => (
+                // biome-ignore lint/suspicious/noArrayIndexKey: a digit's place is its identity
+                <span key={i} className={s.digit}>
+                  {d}
+                </span>
+              ))}
+            </div>
           )}
-          {busy && <p className="t-small">Waiting for approval…</p>}
           <button
             type="button"
-            className={`${ui.button} ${s.go}`}
+            className={`t-label ${ui.btn}`}
             onClick={() => {
+              started.current++;
               cancel.current?.();
-              setDigits(undefined);
-              setMode("choose");
+              setMode("code");
             }}
           >
-            {digits ? "Digits differ: cancel" : "Cancel"}
+            Cancel
           </button>
         </>
       )}
-      {mode === "code" && (
-        <>
-          <p className={s.step}>
-            On your phone or another signed-in browser, open Devices and enter this code. It expires
-            in 10 minutes.
-          </p>
-          <p className="t-figure" data-testid="pairing-code">
-            {code ?? "…"}
-          </p>
-          {busy && <p className="t-small">Waiting for approval…</p>}
-        </>
-      )}
-      {mode === "words" && (
+      {mode === "words" ? (
         <form
-          className={ui.field}
+          className={s.field}
           onSubmit={(e) => {
             e.preventDefault();
             run(async () => {
@@ -282,12 +289,12 @@ function Join({ account, stale }: { account: string; stale: boolean }) {
           }}
         >
           <NameField value={name} onChange={setName} />
-          <label className="t-label" htmlFor="recovery-words">
+          <label className={`t-meta ${s.dim}`} htmlFor="recovery-words">
             Your 24 recovery words
           </label>
           <textarea
             id="recovery-words"
-            className={ui.input}
+            className={`t-body ${s.input}`}
             rows={4}
             autoComplete="off"
             spellCheck={false}
@@ -296,16 +303,19 @@ function Join({ account, stale }: { account: string; stale: boolean }) {
           />
           <button
             type="submit"
-            className={`${ui.button} ${ui.primary}`}
+            className={`t-label ${ui.btn} ${ui.fill}`}
             disabled={busy || !name.trim() || words.trim().split(/\s+/).length !== 24}
           >
             Recover
           </button>
-          <p className="t-small">Afterwards, revoke the devices you lost under Devices.</p>
         </form>
+      ) : (
+        <button type="button" className={`t-meta ${s.link}`} onClick={() => switchTo("words")}>
+          Use the recovery key
+        </button>
       )}
-      {error && <p className={ui.error}>{error}</p>}
-    </Page>
+      <Error_ error={error} />
+    </FirstRunPage>
   );
 }
 
@@ -313,15 +323,12 @@ function Revoked({ account, name }: { account: string; name: string }) {
   const { reload } = useApp();
   const { busy, error, run } = useAction();
   return (
-    <Page>
-      <h1 className="t-title">{name} was revoked</h1>
-      <p className={s.lede}>
-        Another device removed this browser from the account. It can no longer read or answer
-        anything. To use it again, add it as a new device.
-      </p>
+    <FirstRunPage>
+      <h1 className="t-heading">{name} was revoked</h1>
+      <p className={`t-small ${s.lede}`}>It can no longer read or answer anything.</p>
       <button
         type="button"
-        className={`${ui.button} ${ui.primary} ${s.go}`}
+        className={`t-label ${ui.btn} ${ui.lg} ${ui.fill} ${s.go}`}
         disabled={busy}
         onClick={() =>
           run(async () => {
@@ -331,31 +338,31 @@ function Revoked({ account, name }: { account: string; name: string }) {
           })
         }
       >
-        Forget its keys and add it again
+        Add it again
       </button>
-      {error && <p className={ui.error}>{error}</p>}
-    </Page>
+      <Error_ error={error} />
+    </FirstRunPage>
   );
 }
 
 function Problem({ title, text, error }: { title: string; text: string; error: string }) {
   const { reload } = useApp();
   return (
-    <Page>
-      <h1 className="t-title">{title}</h1>
-      <p className={s.lede}>{text}</p>
-      <p className={ui.error}>{error}</p>
-      <button type="button" className={`${ui.button} ${s.go}`} onClick={reload}>
+    <FirstRunPage>
+      <h1 className="t-heading">{title}</h1>
+      <p className={`t-small ${s.lede}`}>{text}</p>
+      <Error_ error={error} />
+      <button type="button" className={`t-label ${ui.btn}`} onClick={reload}>
         Try again
       </button>
-    </Page>
+    </FirstRunPage>
   );
 }
 
 /** Shows the screen for where this browser stands, and the app once it is a ready device. */
 export function Gate({ children }: { children: React.ReactNode }) {
   const { boot } = useApp();
-  const [ownerToken, setOwnerToken] = useState(false);
+  const [ownServer, setOwnServer] = useState(false);
   const router = useRouter();
   const path = usePathname();
   // A pairing link opened before sign-in or setup: keep its code, and go back to it after.
@@ -365,11 +372,7 @@ export function Gate({ children }: { children: React.ReactNode }) {
   }, [boot.state, path, router]);
   switch (boot.state) {
     case "loading":
-      return (
-        <Page>
-          <p className="t-small">Checking your devices…</p>
-        </Page>
-      );
+      return <FirstRunPage>{null}</FirstRunPage>;
     case "error":
       return (
         <Problem
@@ -380,9 +383,9 @@ export function Gate({ children }: { children: React.ReactNode }) {
       );
     case "signed-out":
       // Visitors land on the landing page; a browser with a device signs in to its Inbox.
-      if (path === "/" && !boot.known && !ownerToken)
-        return <Landing onOwnerToken={() => setOwnerToken(true)} />;
-      return <SignIn ownerToken={ownerToken} />;
+      if (path === "/" && !boot.known && !ownServer)
+        return <Landing onOwnerToken={() => setOwnServer(true)} />;
+      return <SignIn ownServer={ownServer} />;
     case "first-device":
       return <FirstDevice account={boot.account} />;
     case "join":
@@ -393,7 +396,7 @@ export function Gate({ children }: { children: React.ReactNode }) {
       return (
         <Problem
           title="The device list did not verify"
-          text="The server sent a device list that does not extend the one this browser trusts, so nothing was decrypted. The server, or someone with access to it, changed the list."
+          text="The server sent a device list that does not extend the one this browser trusts, so nothing was decrypted."
           error={boot.error}
         />
       );

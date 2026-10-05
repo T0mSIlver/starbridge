@@ -5,12 +5,12 @@ import type { Comparison } from "@/lib/device";
 import { relative } from "@/lib/format";
 import type { JoinAsk } from "@/lib/types";
 import { useApp, useDevice } from "./AppProvider";
-import s from "./Devices.module.css";
+import { Icon } from "./icons";
+import p from "./Pairing.module.css";
 import ui from "./ui.module.css";
 
 const load = () => import("@/lib/device");
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
-const spaced = (digits: string) => `${digits.slice(0, 3)} ${digits.slice(3)}`;
 
 /** One join request: compare digits, then approve or refuse. */
 function Ask({ ask, onClose }: { ask: JoinAsk; onClose: (done?: string) => void }) {
@@ -36,31 +36,38 @@ function Ask({ ask, onClose }: { ask: JoinAsk; onClose: (done?: string) => void 
   };
 
   return (
-    <article className={`${ui.card} ${s.pairing}`} data-testid="join-request">
-      <span className={`t-label ${ui.pill} ${ui.beacon}`}>Join request</span>
-      <h2 className="t-question">
-        Let <strong>{ask.name}</strong> read and answer as a device?
-      </h2>
-      {comparison ? (
-        <>
-          <p className={s.compare}>Approve only if {ask.name} shows these same digits.</p>
-          <p className={`t-figure ${s.code}`} data-testid="join-digits">
-            {spaced(comparison.digits)}
-          </p>
-        </>
-      ) : (
-        <p className={s.compare}>
-          {elsewhere
-            ? "Another of your devices is comparing digits for it."
-            : `A browser or phone signed in to your account asked to join ${relative(ask.at)}. Compare digits with it before you approve.`}
+    <article className={p.panel} data-testid="join-request" aria-label="Join request">
+      <div className={`t-meta ${p.meta}`}>
+        <Icon name="devices" size={16} />
+        <span>{ask.name}</span>
+        <span className={p.right}>{relative(ask.at)}</span>
+      </div>
+      <div>
+        <h2 className="t-action">Approve {ask.name}?</h2>
+        <p className={`t-small ${p.dim}`}>
+          {comparison
+            ? "Approve only if the digits match."
+            : elsewhere
+              ? "Another of your devices is comparing digits."
+              : "Compare digits with it before you approve."}
         </p>
+      </div>
+      {comparison && (
+        <div className={`t-heading ${p.digits}`} data-testid="join-digits">
+          {[...comparison.digits].map((d, i) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: a digit's place is its identity
+            <span key={i} className={p.digit}>
+              {d}
+            </span>
+          ))}
+        </div>
       )}
-      {error && <p className={ui.error}>{error}</p>}
-      <div className={s.pairActions}>
+      {error && <p className={`t-small ${p.error}`}>{error}</p>}
+      <div className={p.actions}>
         {comparison ? (
           <button
             type="button"
-            className={`${ui.button} ${ui.beaconFill}`}
+            className={`t-label ${ui.btn} ${ui.rec}`}
             disabled={busy}
             onClick={() =>
               run(async () => {
@@ -69,12 +76,12 @@ function Ask({ ask, onClose }: { ask: JoinAsk; onClose: (done?: string) => void 
               })
             }
           >
-            Approve
+            Digits match: approve
           </button>
         ) : (
           <button
             type="button"
-            className={`${ui.button} ${ui.beaconFill}`}
+            className={`t-label ${ui.btn} ${ui.rec}`}
             disabled={busy || elsewhere}
             onClick={() =>
               run(async () => {
@@ -88,7 +95,7 @@ function Ask({ ask, onClose }: { ask: JoinAsk; onClose: (done?: string) => void 
         )}
         <button
           type="button"
-          className={ui.button}
+          className={`t-label ${ui.btn}`}
           disabled={busy && comparison !== undefined}
           onClick={() =>
             run(async () => {
@@ -102,7 +109,7 @@ function Ask({ ask, onClose }: { ask: JoinAsk; onClose: (done?: string) => void 
             })
           }
         >
-          {comparison ? "Digits differ" : "Refuse"}
+          {comparison ? "They differ" : "Refuse"}
         </button>
       </div>
     </article>
@@ -122,7 +129,7 @@ export function JoinRequests() {
   const open = asks.filter((a) => !closed.includes(a.id));
   if (!open.length && !done) return null;
   return (
-    <section aria-label="Join requests" style={{ marginBottom: "var(--s4)" }}>
+    <section aria-label="Join requests" className={p.requests}>
       {open.map((a) => (
         <Ask
           key={a.id}
@@ -134,7 +141,7 @@ export function JoinRequests() {
         />
       ))}
       {done && (
-        <p className={ui.notice} role="status">
+        <p className={`t-small ${p.dim}`} role="status">
           {done}
         </p>
       )}

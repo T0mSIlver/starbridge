@@ -152,6 +152,8 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
 
   // Devices the referred item was sealed to, told once a device answers it.
   let answeredDevices: string[] = [];
+  // What a device answered and when it arrived, for the usage counts.
+  let answered: { kind: ItemKind; receivedAt: string } | undefined;
   const seq = db.transaction(() => {
     recheck(c);
     const now = new Date();
@@ -189,6 +191,7 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
         const ttl = ANSWERABLE_FOR[target.kind];
         if (ttl !== undefined && now.getTime() > Date.parse(target.received_at) + ttl)
           fail(409, "expired", `a ${target.kind} can be answered for ${ttl / 60_000} minutes`);
+        answered = { kind: target.kind, receivedAt: target.received_at };
         answeredDevices = (
           db
             .query("SELECT to_id FROM boxes WHERE account_id = ? AND item_id = ?")
@@ -262,6 +265,12 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
     return seq;
   })();
 
+  c.var.usage.record(`items.${item.kind}`);
+  if (answered && caller.role === "device") {
+    const seconds = (Date.now() - Date.parse(answered.receivedAt)) / 1000;
+    c.var.usage.record(`answered.${answered.kind}.seconds`, null, seconds);
+    c.var.usage.record(`answered.by.${caller.client}`);
+  }
   if (fromDevice) {
     c.var.answers.wake(`${caller.account}/${to[0]}`);
     const payload = JSON.stringify({ v: 1, kind: "answered", id: item.re });

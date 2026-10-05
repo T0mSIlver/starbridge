@@ -13,6 +13,8 @@ data class Source(
     val session: String,
     val title: String? = null,
     val links: List<SessionLink> = emptyList(),
+    /** server, desktop, laptop or cloud; null from machines that predate it. */
+    val machineKind: String? = null,
 )
 
 data class SessionLink(val kind: String, val url: String)
@@ -37,6 +39,12 @@ data class Decision(
     val defaultAt: Instant?,
     val source: Source,
     val createdAt: Instant,
+    /** claude-code or codex, when the machine says. */
+    val agent: String? = null,
+    /** The agent is blocked on it, rather than working on other things. */
+    val waiting: Boolean = false,
+    /** When the agent last flipped to waiting. */
+    val waitingSince: Instant? = null,
     val images: List<Image> = emptyList(),
     val links: List<Link> = emptyList(),
     /** The page the owner answers on instead of here, such as a Claude artifact. */
@@ -74,6 +82,7 @@ data class Prompt(
     val source: Source,
     val createdAt: Instant,
     val expiresAt: Instant,
+    val agent: String? = null,
     val ended: String? = null,
     val endedAt: Instant? = null,
 ) {
@@ -156,6 +165,8 @@ data class QuotaWindow(
     /** The uploading machine's name, set when more than one machine uploads quotas. */
     val machine: String? = null,
     val windowMinutes: Int? = null,
+    /** When the uploader took the snapshot this window comes from. */
+    val takenAt: Instant? = null,
 )
 
 enum class Kind { Device, Machine }

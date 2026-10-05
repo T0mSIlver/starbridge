@@ -5,7 +5,7 @@
 //
 // Needs `npx playwright install firefox` once. Writes screenshots to web/screenshots.
 import { type ChildProcess, spawn, spawnSync } from "node:child_process";
-import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { type BrowserContext, firefox, type Page } from "playwright";
@@ -17,6 +17,14 @@ const ORIGIN = `http://localhost:${PORTS.web}`;
 const SHOTS = join(WEB, "screenshots");
 const tmp = mkdtempSync(join(tmpdir(), "starbridge-e2e-"));
 const children: ChildProcess[] = [];
+
+/** Two PNGs to attach to a decision: the sample data's pair of landing heroes (lib/sample.ts). */
+function image(which: "a" | "b"): string {
+  const shots = JSON.parse(readFileSync(join(WEB, "src/lib/sample-shots.json"), "utf8"));
+  const path = join(tmp, `hero-${which}.png`);
+  writeFileSync(path, Buffer.from(shots[which.toUpperCase()], "base64url"));
+  return path;
+}
 
 function step(text: string) {
   console.log(`\n== ${text}`);
@@ -102,11 +110,14 @@ async function browser() {
   });
 }
 
+/** The landing page's link, or the sign-in screen's. */
+const SIGN_IN = /^(Sign in|Continue) with GitHub$/;
+
 async function signIn(ctx: BrowserContext): Promise<Page> {
   const page = await ctx.newPage();
   page.on("console", (m) => m.type() === "error" && console.log(`[page] ${m.text()}`));
   await page.goto(ORIGIN);
-  await page.getByRole("link", { name: "Sign in with GitHub" }).click();
+  await page.getByRole("link", { name: SIGN_IN }).click();
   return page;
 }
 
@@ -185,14 +196,14 @@ async function main() {
   step("a browser with no device lands on the landing page");
   const visitor = await a.newPage();
   await visitor.goto(ORIGIN);
-  await visitor.getByRole("heading", { name: /Supervise your coding agents/ }).waitFor();
+  await visitor.getByRole("heading", { name: /Your agents ask/ }).waitFor();
   await shoot(visitor, "landing");
   await visitor.close();
 
   step("sign in with GitHub (stub) and set up the first device");
   const page = await signIn(a);
   failPage = page;
-  await page.getByRole("button", { name: "Make keys" }).click();
+  await page.getByRole("button", { name: "Create the keys" }).click();
   await page.getByRole("heading", { name: "Save your recovery key" }).waitFor();
   const words = (await page.locator("ol li span:last-child").allTextContents()).join(" ");
   if (words.split(" ").length !== 24) throw new Error(`expected 24 words, got: ${words}`);
@@ -212,7 +223,11 @@ async function main() {
   const machineHome = join(tmp, "machine");
   const pair = cli("pair", ["pair", "--name", "devbox"], machineHome);
   const code = (await pair.waitFor(/Pairing code: (\S+)/))[1] as string;
-  await page.getByRole("link", { name: "Devices" }).click();
+  await page
+    .getByRole("navigation", { name: "Main" })
+    .getByRole("link", { name: "Settings" })
+    .click();
+  await page.getByRole("link", { name: "Add a device" }).click();
   await page.getByLabel("Pair a machine or device").fill(code);
   await page.getByRole("button", { name: "Check code" }).click();
   await page.getByRole("button", { name: "Approve" }).click();
@@ -325,9 +340,9 @@ async function main() {
       "--session-link",
       "desktop=claude://claude.ai/epitaxy/local_dbf54d69-f2ac-4a14-b298-d7bb6ecf0e3f",
       "--image",
-      join(ROOT, "android/app/screenshots/decision-light.png"),
+      image("a"),
       "--image",
-      join(ROOT, "android/app/screenshots/decision-dark.png"),
+      image("b"),
       "--link",
       "https://claude.ai/public/artifacts/0b3f0e7c",
     ],
@@ -341,15 +356,15 @@ async function main() {
     .waitFor({ timeout: 30_000 });
   await shoot(page, "inbox");
   const opener = page
-    .locator('section[aria-label="Selected decision"]')
-    .getByRole("link", { name: "Open session" });
+    .locator('section[aria-label="Selected"]')
+    .getByRole("link", { name: "Open in Claude" });
   if (
     (await opener.getAttribute("href")) !==
     "https://claude.ai/code/session_01UZCLSHk7GjaUdtNBsLAvvt"
   )
-    throw new Error("the open decision has no Open session link to its Remote Control session");
+    throw new Error("the open decision has no Open in Claude link to its Remote Control session");
   await page.getByText("Merge the server PR (#19)").first().waitFor();
-  const pane = page.locator('section[aria-label="Selected decision"]');
+  const pane = page.locator('section[aria-label="Selected"]');
   const widths = await pane
     .locator("img")
     .evaluateAll((imgs) => imgs.map((i) => (i as HTMLImageElement).naturalWidth));
@@ -362,8 +377,8 @@ async function main() {
     throw new Error("the open decision has no chip for its Claude artifact");
 
   // Desktop: one selection, whether picked by click or by J and K; focus follows it in the list.
-  const row = page.locator('button[aria-current="true"]');
-  const detail = page.locator('section[aria-label="Selected decision"] h2');
+  const row = page.locator('[aria-current="true"]:has(button[data-id])');
+  const detail = page.locator('section[aria-label="Selected"] h2');
   await page.locator("button[data-id]").first().click();
   for (const key of ["j", "j", "k"]) {
     await page.keyboard.press(key);
@@ -372,7 +387,7 @@ async function main() {
       throw new Error(
         `after ${key}, the list selects "${await row.innerText()}" but the detail shows "${question}"`,
       );
-    if (!(await row.evaluate((el) => el === document.activeElement)))
+    if (!(await row.evaluate((el) => el.contains(document.activeElement))))
       throw new Error(`after ${key}, focus is not on the selected row`);
   }
   step("a decision answered in an artifact links it, and `starbridge settle` closes it");
@@ -403,20 +418,30 @@ async function main() {
   await shoot(page, "answer-in");
   const settle = cli("settle", ["settle", pointerId as string], machineHome);
   if ((await settle.exited) !== 0) throw new Error("settle failed");
-  // The settled notice arrives by Web Push, and the page reloads the inbox.
-  await pointerRow.getByText("Answered in the artifact").waitFor({ timeout: 30_000 });
+  // The settled notice arrives by Web Push, the page reloads the inbox, and History lists it.
+  await pointerRow.waitFor({ state: "detached", timeout: 30_000 });
+  await page.getByRole("button", { name: /History/ }).click();
+  await page
+    .locator(`[data-id="${pointerId}"]`)
+    .locator("..")
+    .getByText(/Answered in the artifact/)
+    .waitFor();
 
   await page.getByRole("link", { name: "Quotas" }).click();
   await page.locator("article").first().waitFor();
   await shoot(page, "quotas");
 
   step("quota settings: remaining, clock times, workdays");
-  await page.getByRole("link", { name: "Settings" }).click();
-  await page.getByRole("heading", { name: "Quota settings" }).waitFor();
-  for (const label of ["Remaining", "Clock time", "5 days", "High contrast"])
-    await page.getByLabel(label, { exact: true }).check();
-  await shoot(page, "quota-settings");
-  await page.getByRole("link", { name: "Back to quotas" }).click();
+  await page
+    .getByRole("navigation", { name: "Main" })
+    .getByRole("link", { name: "Settings" })
+    .click();
+  await page.getByRole("heading", { name: "Settings" }).waitFor();
+  // Each radio hides inside its segment, which takes the click.
+  for (const label of ["Left", "Resets 14:20", "5", "High contrast"])
+    await page.getByLabel(label, { exact: true }).check({ force: true });
+  await shoot(page, "settings");
+  await page.getByRole("link", { name: "Quotas" }).click();
   await page.locator("article").first().waitFor();
   if (!(await page.locator("article").first().innerText()).includes("% left"))
     throw new Error("the bars do not show what is left");
@@ -445,9 +470,12 @@ async function main() {
     machineHome,
   );
   if ((await alertPush.exited) !== 0) throw new Error("quota push failed");
-  await page.getByRole("link", { name: "Settings" }).click();
-  await page.locator("li", { hasText: "e2e" }).getByLabel("Notify").check();
-  await page.getByRole("link", { name: "Back to quotas" }).click();
+  await page
+    .getByRole("navigation", { name: "Main" })
+    .getByRole("link", { name: "Settings" })
+    .click();
+  await page.getByLabel("Notify about e2e").check();
+  await page.getByRole("link", { name: "Quotas" }).click();
   await page.waitForFunction(
     () =>
       navigator.serviceWorker.ready
@@ -469,7 +497,6 @@ async function main() {
   step("add a second browser by pairing code");
   const b = await ff.newContext();
   const pageB = await signIn(b);
-  await pageB.getByRole("button", { name: "Get a pairing code" }).click();
   const codeB = (
     await pageB
       .getByTestId("pairing-code")
@@ -477,7 +504,11 @@ async function main() {
       .textContent({ timeout: 10_000 })
   )?.trim();
   if (!codeB) throw new Error("no pairing code on the second browser");
-  await page.getByRole("link", { name: "Devices" }).click();
+  await page
+    .getByRole("navigation", { name: "Main" })
+    .getByRole("link", { name: "Settings" })
+    .click();
+  await page.getByRole("link", { name: "Add a device" }).click();
   await page.getByLabel("Pair a machine or device").fill(codeB);
   await page.getByRole("button", { name: "Check code" }).click();
   await page.getByText(/read and answer as a device/).waitFor();
@@ -494,20 +525,20 @@ async function main() {
   await pageC.getByRole("heading", { name: "Inbox" }).waitFor({ timeout: 30_000 });
 
   step("revoke the second browser");
-  await page.reload();
-  await page.getByRole("heading", { name: "Devices" }).waitFor();
-  const rowB = page.locator("li", { hasText: "This device" }).first();
-  await rowB.waitFor();
-  const firstOther = page
-    .locator("li")
-    .filter({ has: page.getByRole("button", { name: "Revoke" }) })
-    .filter({ hasText: "Device ·" })
-    .first();
-  await firstOther.getByRole("button", { name: "Revoke" }).click();
-  await firstOther.getByRole("button", { name: /^Revoke .+/ }).click();
-  await page.getByText("Revoked").first().waitFor();
+  await page
+    .getByRole("navigation", { name: "Main" })
+    .getByRole("link", { name: "Settings" })
+    .click();
+  const devices = page.getByRole("region", { name: "Devices" });
+  await devices.getByText("Device · this browser").waitFor();
+  // Devices list this browser, then the others by when they joined: the second browser first.
+  // The list may still gain the recovered browser, so the second browser's sign-out below,
+  // not a count, proves the revocation.
+  await devices.getByRole("button", { name: "Revoke" }).first().click();
+  await page.getByRole("dialog").getByRole("button", { name: "Revoke" }).click();
+  await page.getByRole("dialog").waitFor({ state: "detached" });
   await pageB.reload();
-  await pageB.getByRole("link", { name: "Sign in with GitHub" }).waitFor();
+  await pageB.getByRole("link", { name: SIGN_IN }).waitFor();
   await page.emulateMedia({ colorScheme: "light" });
   await shoot(page, "devices");
 
@@ -516,7 +547,7 @@ async function main() {
   const code3 = (await linked.waitFor(/Pairing code: (\S+)/))[1] as string;
   await a.clearCookies();
   await page.goto(`${ORIGIN}/pair#${code3}`);
-  await page.getByRole("link", { name: "Sign in with GitHub" }).click();
+  await page.getByRole("link", { name: SIGN_IN }).click();
   await page.getByText("Let laptop post decisions and quotas?").waitFor({ timeout: 30_000 });
   await page.getByRole("button", { name: "Approve" }).click();
   await linked.waitFor(/Paired "laptop"/);
@@ -525,7 +556,7 @@ async function main() {
   step("sign in again: the session binds to the existing device without pairing");
   await a.clearCookies();
   await page.goto(ORIGIN);
-  await page.getByRole("link", { name: "Sign in with GitHub" }).click();
+  await page.getByRole("link", { name: SIGN_IN }).click();
   await page.getByRole("heading", { name: "Inbox" }).waitFor({ timeout: 30_000 });
   await page.getByText("Merge #19 (server) before the web PR rebases?").first().waitFor();
 

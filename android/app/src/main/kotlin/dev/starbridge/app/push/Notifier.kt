@@ -6,6 +6,11 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import dev.starbridge.app.data.Source
+import android.text.style.ForegroundColorSpan
+import android.text.TextUtils
+import android.text.Spanned
+import android.text.SpannableString
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
@@ -106,6 +111,16 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
 
     private fun tag(id: String) = id.hashCode()
 
+    /** The meta row in the header, after "Starbridge": the machine and the repo. */
+    private fun header(s: Source) = listOf(s.machine, s.project).filter { it.isNotBlank() }.joinToString(" · ")
+
+    /** A question's state, "Waiting for you" in amber, as the inbox shows it. */
+    private fun state(d: Decision): CharSequence = if (d.waiting) {
+        SpannableString("Waiting for you").apply { setSpan(ForegroundColorSpan(accent()), 0, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE) }
+    } else {
+        "Working on other things"
+    }
+
     /**
      * The icon's circle and the action labels: amber, or the wallpaper's primary under "Match
      * wallpaper". Android 12 to 15 show it; 16 tints them itself.
@@ -123,8 +138,8 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
             .setSmallIcon(R.drawable.ic_notification)
             .setColor(accent())
             .setContentTitle(d.question)
-            .setContentText(d.context)
-            .setSubText(d.source.machine)
+            .setContentText(state(d))
+            .setSubText(header(d.source))
             .setStyle(style(d))
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
@@ -133,22 +148,24 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
                 NotificationCompat.Builder(context, CHANNEL)
                     .setSmallIcon(R.drawable.ic_notification)
                     .setColor(accent())
-                    .setContentTitle("A decision needs you")
-                    .setSubText(d.source.machine)
+                    .setContentTitle("A question needs you")
+                    .setSubText(header(d.source))
                     .build(),
             )
             .setContentIntent(open)
             .setOnlyAlertOnce(true)
+            // Waiting: the header counts up from when the agent started to wait.
+            .apply { d.waitingSince?.let { setWhen(it.toEpochMilli()).setShowWhen(true).setUsesChronometer(true) } }
     }
 
     /**
-     * The first image as the big picture, with the context beneath it, when the decision has
-     * one; else the context in full and the default.
+     * The first image as the big picture, with the state beneath it, when the question has one;
+     * else the state, then the agent's words in full.
      */
     private fun style(d: Decision): NotificationCompat.Style {
         val picture = d.images.firstOrNull()?.bitmap(PICTURE_EDGE)
-            ?: return NotificationCompat.BigTextStyle().bigText(d.context + (d.default?.let { "\n\nIf nobody answers: $it" } ?: ""))
-        return NotificationCompat.BigPictureStyle().bigPicture(picture).setSummaryText(d.context)
+            ?: return NotificationCompat.BigTextStyle().bigText(if (d.context.isBlank()) state(d) else TextUtils.concat(state(d), "\n", d.context))
+        return NotificationCompat.BigPictureStyle().bigPicture(picture).setSummaryText(state(d))
     }
 
     /**
@@ -166,7 +183,11 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
         PendingIntent.FLAG_UPDATE_CURRENT or if (mutable) PendingIntent.FLAG_MUTABLE else PendingIntent.FLAG_IMMUTABLE,
     )
 
-    override fun decision(decision: Decision) = post(decision, null)
+    /** A question, or one its agent now waits on: that one alerts again, once, as a new notification. */
+    override fun decision(decision: Decision) {
+        if (decision.waiting) manager.cancel(tag(decision.id))
+        post(decision, null)
+    }
 
     private fun post(decision: Decision, note: String?) {
         if (!allowed()) return
@@ -241,7 +262,7 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
     )
 
     private fun promptBase(p: Prompt): NotificationCompat.Builder {
-        val title = "${p.tool} on ${p.source.machine}"
+        val title = "${p.tool} · waiting for you"
         val open = PendingIntent.getActivity(
             context,
             promptTag(p),
@@ -253,17 +274,25 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
             .setColor(accent())
             .setContentTitle(title)
             .setContentText(p.summary)
-            .setSubText(p.source.project)
+            .setSubText(header(p.source))
+            .setWhen(p.createdAt.toEpochMilli())
+            .setShowWhen(true)
+            .setUsesChronometer(true)
             .setStyle(NotificationCompat.BigTextStyle().bigText(listOfNotNull(p.summary, p.description).joinToString("\n\n")))
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
-            // The lock screen shows only the tool and the machine, never the command.
+            // The lock screen shows the tool, the machine and the repo, never the command.
             .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
             .setPublicVersion(
                 NotificationCompat.Builder(context, PROMPTS)
                     .setSmallIcon(R.drawable.ic_notification)
                     .setColor(accent())
                     .setContentTitle(title)
+                    .setContentText("Unlock to see the command")
+                    .setSubText(header(p.source))
+                    .setWhen(p.createdAt.toEpochMilli())
+                    .setShowWhen(true)
+                    .setUsesChronometer(true)
                     .build(),
             )
             .setContentIntent(open)
@@ -272,8 +301,8 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
     }
 
     /**
-     * Deny works from the lock screen; both allows ask for the unlock first (the owner's choice,
-     * SPEC.md). "Always" needs the app, which shows the exact rule.
+     * Allow and Deny, as in the inbox. Deny works from the lock screen; Allow asks for the unlock
+     * first (the owner's choice, SPEC.md). The wider grants need the app.
      */
     override fun prompt(prompt: Prompt) = postPrompt(prompt, null)
 
@@ -283,17 +312,10 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
         val b = promptBase(prompt)
         if (note != null) b.setContentText(note).setStyle(NotificationCompat.BigTextStyle().bigText(note)).setSilent(true)
         b.addAction(
-            NotificationCompat.Action.Builder(0, "Allow once", promptIntent(prompt, true, "once", tag * 31))
+            NotificationCompat.Action.Builder(0, "Allow", promptIntent(prompt, true, "once", tag * 31))
                 .setAuthenticationRequired(true)
                 .build(),
         )
-        if (prompt.scopes.any { it.scope == "session" }) {
-            b.addAction(
-                NotificationCompat.Action.Builder(0, "Allow for session", promptIntent(prompt, true, "session", tag * 31 + 1))
-                    .setAuthenticationRequired(true)
-                    .build(),
-            )
-        }
         b.addAction(
             NotificationCompat.Action.Builder(0, "Deny", promptIntent(prompt, false, "once", tag * 31 + 2))
                 .setAuthenticationRequired(false)
@@ -381,8 +403,8 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
         )
         val b = NotificationCompat.Builder(context, RUNS)
             .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle(run.title)
-            .setSubText(run.source.machine)
+            .setContentTitle(listOfNotNull(run.title, run.progress?.let { if (it.percent) "${it.done}%" else "${it.done} of ${it.total}" }).joinToString(" · "))
+            .setSubText(header(run.source))
             .setContentIntent(open)
             .setCategory(NotificationCompat.CATEGORY_PROGRESS)
             .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
@@ -394,7 +416,7 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
             )
         if (state == Run.State.Running) {
             val p = run.progress
-            b.setContentText(listOfNotNull(p?.text, run.reason).joinToString(" · "))
+            b.setContentText(run.reason.replaceFirstChar { it.uppercase() })
                 .setOngoing(true)
                 .setRequestPromotedOngoing(true)
                 .setShowWhen(true)
@@ -404,7 +426,7 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
                 .setSilent(true)
                 .setOnlyAlertOnce(true)
                 .setTimeoutAfter((RUN_STALE_MS - Duration.between(run.at, now).toMillis()).coerceAtLeast(1_000))
-            p?.let { b.setShortCriticalText(it.text) }
+            // No short text: the status bar chip then shows the run's time, counting up.
         } else {
             val took = elapsed(run.startedAt, run.endedAt ?: run.at)
             val outcome = if (state == Run.State.Passed) "Passed in $took" else "Failed, exit ${run.exitCode}, after $took"

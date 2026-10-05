@@ -1,0 +1,28 @@
+.aside {
+  border-left: 1px solid var(--line);
+  min-width: 0;
+  overflow-y: auto;
+}
+
+.head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  height: var(--size-pane-head);
+  padding: 0 var(--s4);
+  border-bottom: 1px solid var(--line);
+  background: var(--bg);
+}
+
+.updated {
+  color: var(--fg3);
+}
+
+@media (max-width: 1399px) {
+  .aside {
+    display: none;
+  }
+}

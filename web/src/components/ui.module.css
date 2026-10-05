@@ -198,3 +198,87 @@
   border-radius: var(--radius-md);
   padding: var(--s3) var(--s4);
 }
+
+/* Design v2 buttons: 40 px tall with the `label` type, `.lg` 48 px with `action`, `.sm` 32 px
+   with `meta`; pass the type class with them. `.rec` is the recommended option, the only amber
+   one; `.fill` the main action at rest. */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s2);
+  height: var(--s10);
+  padding: 0 var(--s5);
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--line-strong);
+  background: none;
+  color: var(--fg);
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background var(--t-fast);
+}
+
+.btn:hover {
+  background: var(--surface2);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.lg {
+  height: var(--size-tap);
+  padding: 0 var(--s6);
+}
+
+.sm {
+  height: var(--s8);
+  padding: 0 var(--s3);
+}
+
+.ghost {
+  border-color: transparent;
+}
+
+.rec {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+}
+
+.rec:hover {
+  background: var(--accent-hi);
+  border-color: var(--accent-hi);
+}
+
+.fill {
+  background: var(--fg);
+  border-color: var(--fg);
+  color: var(--bg);
+}
+
+.kbd {
+  padding: 0 5px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-xs);
+  color: var(--fg2);
+}
+
+.rec .kbd {
+  color: inherit;
+  border-color: currentColor;
+  opacity: 0.7;
+}
+
+/* A destructive confirm, only inside its dialog (DESIGN.md, "Rules"). */
+.destroy {
+  background: var(--bad);
+  border-color: var(--bad);
+  color: var(--bg);
+}
+
+.destroy:hover {
+  background: var(--bad);
+  opacity: 0.9;
+}

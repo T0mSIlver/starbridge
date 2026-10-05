@@ -1,6 +1,6 @@
 import type { DecisionLink } from "@starbridge/protocol";
 import { linkLabel } from "./attachments";
-import type { InboxItem } from "./types";
+import type { InboxItem, PromptItem } from "./types";
 
 /** Where the owner answers a decision with `answerIn`: "the artifact" for a Claude one. */
 export function answerPlace(link: DecisionLink): string {
@@ -28,4 +28,21 @@ export function outcomeText(item: InboxItem): string {
 export function closedBy(item: InboxItem): string {
   if (item.reply) return "This browser";
   return item.settled || item.decision.answerIn ? "The agent" : "Another device";
+}
+
+/** How a prompt ended: "Allowed here", "Answered on devbox", "Timed out: left to the keyboard". */
+export function promptOutcome(p: PromptItem, deviceName: (id: string) => string): string {
+  if (p.reply) return p.reply.behavior === "allow" ? "Allowed here" : "Denied here";
+  const out = p.settled?.outcome;
+  if (out === "keyboard") return `Answered on ${p.permission.source.machine}`;
+  if (out === "timeout") return "Timed out: left to the keyboard";
+  if (out === "device" && p.settled?.device) return `Answered from ${deviceName(p.settled.device)}`;
+  if (p.answeredAt) return "Answered on another device";
+  return Date.parse(p.permission.expiresAt) > Date.now() ? "No longer waiting" : "Expired";
+}
+
+/** Who closed a question, after its answer in History: "on this browser", "by the agent". */
+export function closedByPhrase(item: InboxItem): string {
+  if (item.reply) return "on this browser";
+  return item.settled || item.decision.answerIn ? "by the agent" : "on another device";
 }

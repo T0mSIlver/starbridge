@@ -3,76 +3,64 @@
 import Link from "next/link";
 import { useEffect } from "react";
 import { relative } from "@/lib/format";
-import { arrange, type QuotaSettings } from "@/lib/quotaSettings";
+import { runningOutFirst } from "@/lib/quota";
+import { arrange } from "@/lib/quotaSettings";
 import { useApp } from "./AppProvider";
-import { QuotaCard } from "./QuotaCard";
-import ui from "./ui.module.css";
+import { useNow } from "./Feed";
+import { PhoneBar } from "./PhoneBar";
+import { QuotaRow } from "./QuotaRow";
+import s from "./Quotas.module.css";
 
-/** Turns on one provider's notifications, asking the browser's permission first. */
-export async function notifyProvider(
-  provider: string,
-  s: QuotaSettings,
-  set: (s: QuotaSettings) => void,
-): Promise<void> {
-  if (typeof Notification !== "undefined" && Notification.permission === "default")
-    await Notification.requestPermission();
-  set({ ...s, notify: [...new Set([...s.notify, provider])] });
-}
-
-export function Quotas({ gridClass }: { gridClass: string }) {
-  const { quotas, refreshQuotas, quotaSettings: settings, setQuotaSettings } = useApp();
+export function Quotas() {
+  const { quotas, refreshQuotas, quotaSettings: settings } = useApp();
   useEffect(() => {
     refreshQuotas().catch(() => {});
   }, [refreshQuotas]);
-
-  const cards = arrange(quotas?.cards ?? [], settings);
+  const now = new Date(useNow(true, 60_000));
+  const cards = runningOutFirst(arrange(quotas?.cards ?? [], settings), settings, now);
   return (
     <>
-      <header className={ui.head}>
-        <h1 className="t-title">Quotas</h1>
-        <span className="t-small">
-          {quotas?.takenAt && <>Updated {relative(quotas.takenAt)} · </>}
-          <Link href="/quotas/settings">Settings</Link>
-        </span>
-      </header>
-      {quotas?.rejected.length ? (
-        <p className={ui.error} role="status">
-          A snapshot failed verification and is hidden: {quotas.rejected[0]?.error}
-        </p>
-      ) : null}
-      {quotas?.errors.map((e) => (
-        <p key={`${e.machine}/${e.provider}`} className={ui.notice}>
-          {e.provider} on {e.machine}: {e.error}
-        </p>
-      ))}
-      {quotas === undefined ? (
-        <p className={ui.empty}>Loading…</p>
-      ) : cards.length === 0 && quotas.cards.length > 0 ? (
-        <p className={ui.empty}>
-          Every provider is hidden. <Link href="/quotas/settings">Show them in Settings</Link>.
-        </p>
-      ) : cards.length === 0 ? (
-        <p className={ui.empty}>
-          No quota snapshot yet. Run <code className="t-code">starbridge quota push</code> on a
-          paired machine.
-        </p>
-      ) : (
-        <ul className={`${ui.list} ${gridClass}`}>
-          {cards.map((q) => (
-            <li key={`${q.machine ?? ""}/${q.provider}/${q.window.id}`}>
-              <QuotaCard
+      <PhoneBar title="Quotas" find={false} />
+      <div className={s.page}>
+        <header className={s.head}>
+          <h1 className={`t-heading ${s.title}`}>Quotas</h1>
+          {quotas?.takenAt && (
+            <span className={`t-caption ${s.dim}`}>Updated {relative(quotas.takenAt, now)}</span>
+          )}
+        </header>
+        {quotas?.rejected.length ? (
+          <p className={`t-meta ${s.bad}`} role="status">
+            A snapshot failed verification and is hidden: {quotas.rejected[0]?.error}
+          </p>
+        ) : null}
+        {quotas?.errors.map((e) => (
+          <p key={`${e.machine}/${e.provider}`} className={`t-meta ${s.dim}`}>
+            {e.provider} on {e.machine}: {e.error}
+          </p>
+        ))}
+        {quotas === undefined ? null : cards.length === 0 && quotas.cards.length > 0 ? (
+          <p className={`t-small ${s.empty}`}>
+            Every provider is hidden. <Link href="/settings">Settings</Link>
+          </p>
+        ) : cards.length === 0 ? (
+          <p className={`t-small ${s.empty}`}>
+            No quota windows yet: run <code className="t-snippet">starbridge setup</code> on a
+            machine with CodexBar.
+          </p>
+        ) : (
+          <div className={s.rows}>
+            {cards.map((q) => (
+              <QuotaRow
+                key={`${q.machine ?? ""}/${q.provider}/${q.window.id}`}
                 q={q}
                 settings={settings}
-                onNotify={
-                  settings.notify.includes(q.provider)
-                    ? undefined
-                    : () => notifyProvider(q.provider, settings, setQuotaSettings)
-                }
+                now={now}
+                comfy
               />
-            </li>
-          ))}
-        </ul>
-      )}
+            ))}
+          </div>
+        )}
+      </div>
     </>
   );
 }

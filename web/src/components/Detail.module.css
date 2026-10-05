@@ -1,0 +1,76 @@
+/* The selected item, beside the list on wide screens (direction A). */
+
+.detail {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
+  gap: var(--s4);
+  min-width: 0;
+}
+
+.context {
+  gap: var(--s4);
+  color: var(--fg2);
+}
+
+/* Dense on the web: code blocks take the `sm` radius. */
+.context pre {
+  border-radius: var(--radius-sm);
+}
+
+.closed {
+  color: var(--fg2);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  border: 0;
+  margin-top: var(--s1);
+}
+
+.toolHead {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+}
+
+.right {
+  margin-left: auto;
+}
+
+.command {
+  margin: 0;
+  padding: var(--s4) var(--s5);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.grants {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2) var(--s5);
+}
+
+.link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--fg2);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.link:hover {
+  color: var(--fg);
+}
+
+.free {
+  display: grid;
+  gap: var(--s2);
+  justify-items: start;
+}
