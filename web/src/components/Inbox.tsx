@@ -12,6 +12,7 @@ import {
   running,
 } from "@/lib/feed";
 import { matches, useFind } from "@/lib/find";
+import { clockTime } from "@/lib/format";
 import { closedByPhrase, promptOutcome } from "@/lib/outcome";
 import { usePref } from "@/lib/prefs";
 import { afterAnswer, selectedId, step } from "@/lib/selection";
@@ -277,10 +278,7 @@ export function Inbox() {
 /** History's second line: "Server first · on this browser · 11:02". */
 function closedLine(p: Past): string {
   const by = p.entry.type === "question" ? ` · ${closedByPhrase(p.entry.item)}` : "";
-  const at = new Date(p.closed).toLocaleTimeString(undefined, {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  const at = clockTime(new Date(p.closed));
   return `${p.outcome}${by} · ${at}`;
 }
 
