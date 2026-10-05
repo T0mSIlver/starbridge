@@ -198,19 +198,3 @@ export async function hookSettle(
   }
   return 0;
 }
-
-/** `starbridge permissions enable|disable|status`. */
-export function permissionsCommand(ctx: Ctx, sub: string | undefined): number {
-  if (sub === "enable" || sub === "disable") {
-    const config = ctx.store.agentConfig();
-    ctx.store.saveAgentConfig({ ...config, permissions: { enabled: sub === "enable" } });
-  } else if (sub !== "status" && sub !== undefined) {
-    throw new UsageError("usage: starbridge permissions enable|disable|status");
-  }
-  ctx.out(
-    permissionsEnabled(ctx)
-      ? "Permission prompts go to Starbridge."
-      : "Permission prompts stay at the keyboard.",
-  );
-  return 0;
-}

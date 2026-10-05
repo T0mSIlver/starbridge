@@ -20,10 +20,10 @@ Sessions started afterwards follow them. Uninstalling the plugin removes the
 rules from sessions and the skill; `rules.md` stays.
 
 It also sends this machine's permission prompts to your devices, once you turn
-that on with `starbridge permissions enable`: `PermissionRequest` runs
+that on with `starbridge config permissions on` (off by default): `PermissionRequest` runs
 `starbridge hook permission`, and `PostToolUse`, `PermissionDenied`, `Stop`
 and `SessionEnd` run `starbridge hook settle`, which lets the waiting prompt go
-when the keyboard answers first. While it is off, both do nothing.
+when the keyboard answers first. While it is off, both exit at once.
 
 The answers come back through the `starbridge-mod` plugin (`mod/README.md`).
 Both need the `starbridge` CLI on `PATH`, paired (`cli/README.md`).

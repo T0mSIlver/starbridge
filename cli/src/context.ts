@@ -1,6 +1,7 @@
 import {
   activeMembers,
   type Directory,
+  type MachineKind,
   type Member,
   type MemberKeys,
   verifyDirectory,
@@ -18,6 +19,12 @@ export interface Ctx {
   sleep: (ms: number) => Promise<void>;
   /** Aborts long waits on Ctrl-C. */
   signal?: AbortSignal;
+}
+
+/** `{machineKind}` for an item's source, when setup detected it or `config` set it. */
+export function machineKind(ctx: Ctx): { machineKind?: MachineKind } {
+  const kind = ctx.store.agentConfig().machineKind;
+  return kind ? { machineKind: kind } : {};
 }
 
 /** A mistake the user can fix: printed without a stack, exit code 1. */

@@ -2,16 +2,17 @@ import { readFileSync } from "node:fs";
 import { parseArgs } from "node:util";
 import { ProtocolError, ready, type SessionLink } from "@starbridge/protocol";
 import { AgentError, Interrupted, withAgent } from "./agent/client";
-import { answersVia, askVia, quotaVia, waitVia } from "./agent/commands";
+import { answersVia, askVia, quotaVia, waitingVia, waitVia } from "./agent/commands";
 import { runAgent } from "./agent/main";
 import { ApiError } from "./api";
 import { type Ctx, UsageError } from "./context";
-import { type AskInput, answers, ask, settle, wait } from "./decisions";
-import { hookPermission, hookSettle, permissionsCommand } from "./hook";
+import { type AskInput, answers, ask, settle, setWaiting, wait } from "./decisions";
+import { hookPermission, hookSettle } from "./hook";
 import { pair } from "./pair";
 import { pushOnce, quotaPush } from "./quota";
 import { installKind, ReleaseError } from "./release";
 import { runCommand } from "./run";
+import { configCommand } from "./settings";
 import { setup } from "./setup/setup";
 import { status } from "./setup/status";
 import { defaults, makeSys, type Prompt, terminalPrompt } from "./setup/sys";
@@ -40,14 +41,16 @@ const HELP = `starbridge: post decisions to your devices, report runs, upload qu
   starbridge pair --server <url> [--name <name>] [--force]
       Make this machine's keys and print a pairing code to type on a device.
 
-  starbridge ask --question <text> --default <text> [--option <text>]... [options]
-      Post a decision to every paired device and print its id.
+  starbridge ask --question <text> [--option <text>]... [options]
+      Post a decision to every paired device and print its id. Devices show it as
+      "Working on other things" until \`waiting\` marks it.
       --context <text>        why it is asked and what each option changes
       --context-file <path>   the same, from a file ("-" for stdin)
       --option <text>         2 to 4 times; none asks for a free-text answer
       --recommended <text>    one of the options (default: the first)
-      --default <text>        what you do if nobody answers
-      --default-at <when>     when: an ISO time or a duration such as 30m
+      --waiting               you have nothing else to do: post it as waiting for the owner
+      --agent <name>          claude-code or codex (default: claude-code when Claude Code
+                              runs the command)
       --project <name>        default: the current directory's name
       --session <id>          default: $CLAUDE_CODE_SESSION_ID
       --session-title <text>  default: the Claude Code session's name
@@ -65,20 +68,24 @@ const HELP = `starbridge: post decisions to your devices, report runs, upload qu
       --json <path>           read these fields from a JSON file ("-" for stdin)
       --wait                  then wait for the answer, as \`wait\` does
 
+  starbridge waiting <decision id>
+  starbridge working <decision id>
+      Show the owner that you are now blocked on the decision ("Waiting for you", which
+      notifies them once more), or back to working on other things.
+
   starbridge settle <decision id> [--outcome elsewhere|withdrawn]
       Close a decision without a Starbridge answer: answered on its --answer-in page
       (elsewhere, the default for those) or no longer needed (withdrawn). Devices move it
-      out of the inbox, and no default-time notice follows.
+      out of the inbox.
 
   starbridge wait [<decision id>] [--timeout <duration>] [--json]
       Print the answer, or with no id the next answer to any decision from this machine.
-      Waits until --timeout, else the decision's default time, else forever.
-      Exits 2 when nobody answered in time: apply the default.
+      With an id, marks the decision waiting first. Waits until --timeout, else forever;
+      exits 2 when --timeout passed.
 
   starbridge answers --session <id> [--wait <seconds>]
       For the Claude Code mod: print, as JSON lines, the unconfirmed answers to decisions that
-      session asked, and a line for each of them whose default time passed with no answer.
-      With --wait (at most 25), poll the server once first when there are none.
+      session asked. With --wait (at most 25), poll the server once first when there are none.
 
   starbridge answers --session <id> --ack <ack>...
       For the Claude Code mod: confirm it submitted these lines (each line's "ack"), so they
@@ -104,10 +111,12 @@ const HELP = `starbridge: post decisions to your devices, report runs, upload qu
       The commands above go through it when it runs, and to the server directly when not
       (or with STARBRIDGE_NO_AGENT=1).
 
-  starbridge permissions enable|disable|status
-      Send this machine's Claude Code permission prompts to your devices, where they can be
-      allowed or denied; the prompt stays open at the keyboard and the first answer wins.
-      Off by default. The starbridge plugin's hooks do nothing while it is off.
+  starbridge config [permissions on|off] [machine-kind server|desktop|laptop|cloud]
+      Print this machine's settings, or change one. permissions: send its Claude Code
+      permission prompts to your devices, where they can be allowed or denied; the prompt
+      stays open at the keyboard and the first answer wins. Off by default; while off, the
+      starbridge plugin's permission hook exits at once. machine-kind: the icon devices
+      show, detected by setup.
 
   starbridge hook permission --agent claude-code [--wait 570s]
   starbridge hook settle --agent claude-code
@@ -169,6 +178,8 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
             recommended: { type: "string" },
             default: { type: "string" },
             "default-at": { type: "string" },
+            waiting: { type: "boolean" },
+            agent: { type: "string" },
             project: { type: "string" },
             session: { type: "string" },
             "session-title": { type: "string" },
@@ -190,7 +201,8 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
           ...(v.option !== undefined ? { options: v.option } : {}),
           ...(v.recommended !== undefined ? { recommended: v.recommended } : {}),
           ...(v.default !== undefined ? { default: v.default } : {}),
-          ...(v["default-at"] !== undefined ? { defaultAt: v["default-at"] } : {}),
+          ...(v.waiting ? { waiting: true } : {}),
+          ...(v.agent !== undefined ? { agent: v.agent as AskInput["agent"] } : {}),
           ...(v.project !== undefined ? { project: v.project } : {}),
           ...(v.session !== undefined ? { session: v.session } : {}),
           ...(v["session-title"] !== undefined ? { sessionTitle: v["session-title"] } : {}),
@@ -201,6 +213,9 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
           ...(v.link !== undefined ? { links: v.link } : {}),
           ...(v["answer-in"] !== undefined ? { answerIn: v["answer-in"] } : {}),
         };
+        // Accepted until the skill drops it: decisions have no default time any more (#122).
+        if (v["default-at"] !== undefined)
+          ctx.err("starbridge: --default-at is ignored: agents never answer for the owner");
         if (v.wait && input.answerIn !== undefined)
           throw new UsageError("--answer-in takes no --wait: the answer comes from that page");
         const opts = { wait: v.wait, timeout: v.timeout };
@@ -218,6 +233,18 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
         });
         return await settle(ctx, { id: positionals[0], ...values });
       }
+      case "waiting":
+      case "working": {
+        const { positionals } = parseArgs({ args: rest, allowPositionals: true, options: {} });
+        const opts = { id: positionals[0], state: command };
+        return await withAgent(
+          ctx,
+          (agent) => waitingVia(agent, opts),
+          () => setWaiting(ctx, opts),
+        );
+      }
+      case "config":
+        return configCommand(ctx, rest);
       case "wait": {
         const { values, positionals } = parseArgs({
           args: rest,
@@ -344,8 +371,6 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
           ...(values["no-quota"] ? { noQuota: true } : {}),
         });
       }
-      case "permissions":
-        return permissionsCommand(ctx, rest[0]);
       case "hook": {
         const [sub, ...args] = rest;
         const { values } = parseArgs({

@@ -39,9 +39,9 @@ Keys and state live in `~/.config/starbridge` (or `$XDG_CONFIG_HOME`,
 `$STARBRIDGE_CONFIG_DIR`), mode 0600.
 
 ```bash
-starbridge ask --question "Merge #12 now?" --option Merge --option Wait \
-  --default Merge --default-at 2h --wait
-starbridge wait d_Xk3…             # exit 2: nobody answered in time
+starbridge ask --question "Merge #12 now?" --option Merge --option Wait
+starbridge waiting d_Xk3…          # out of other work: "Waiting for you" on every device
+starbridge wait d_Xk3… --timeout 1h   # exit 2: nobody answered in time
 starbridge quota push --provider claude --provider codex   # every 5 minutes
 ```
 
@@ -92,11 +92,13 @@ skip a step. `starbridge status` prints the same checks. `starbridge
 uninstall` removes the service, the plugins and then the binary, asks your devices to revoke
 the machine, and deletes the keys only when you say so (`--purge`).
 
-`starbridge permissions enable` sends this machine's Claude Code permission
-prompts to your devices too, where they can be allowed or denied; the prompt
-stays open at the keyboard and the first answer wins. The `starbridge`
-plugin's hooks run `starbridge hook permission` and `starbridge hook settle`,
-which do nothing while it is off (PROTOCOL.md, "Permission prompts").
+Permission prompts stay at the keyboard unless you say yes in setup or run
+`starbridge config permissions on`; the Claude app already shows them for
+Remote Control sessions. When on, this machine's Claude Code prompts also go to
+your devices, where they can be allowed or denied; the prompt stays open at the
+keyboard and the first answer wins. The `starbridge` plugin's hooks run
+`starbridge hook permission` and `starbridge hook settle`, which exit at once
+while it is off (PROTOCOL.md, "Permission prompts").
 
 `quota push` runs `codexbar usage --format json` for each provider, or once
 for every enabled provider when none is named. A provider that fails or is

@@ -676,6 +676,21 @@ How it generalizes is open.
   their kinds by name and skip unknown pushes, so they never see it. Two optional fields for the
   design (orchestrator): `source.machineKind` (`server`, `desktop`, `laptop`, `cloud`) and a
   decision's `agent` (`claude-code`, `codex`), as permissions have.
+- 2026-10-05. Waiting state on the machine (#122) and permission prompts off by default (#124).
+  `starbridge waiting <id>` and `starbridge working <id>` post a decision's state; `ask
+  --waiting` posts it already waiting, quietly, since the decision's own push just went out,
+  and `wait <id>` marks it waiting before it blocks. The CLI keeps each decision's waiting id
+  and last state, posts nothing when the state is unchanged, and refuses once the decision is
+  answered. The default-time machinery is gone: no `--default-at` (accepted and ignored, with a
+  warning, until the skill drops it), no `default` session event, no notice line, and `wait`
+  ends only at `--timeout`. `--default` is optional; without it the CLI sends "Waits for your
+  answer" for older clients. Decisions carry `agent` (`--agent`, else `claude-code` when Claude
+  Code runs the CLI, which sets `CLAUDECODE=1`), and every source carries `machineKind`:
+  `pair` and `setup` guess it (cloud session or codespace, a battery, Linux with no display,
+  else desktop) and `starbridge config machine-kind` corrects it. `starbridge config
+  permissions on|off` replaces `starbridge permissions enable|disable`, so one command holds the
+  machine's settings; setup asks, default no, and says the Claude app already shows prompts
+  for Remote Control sessions.
 
 ## Encryption, with existing libraries
 
