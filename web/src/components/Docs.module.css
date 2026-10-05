@@ -1,0 +1,261 @@
+/* The docs: a column of about 70 characters, the docs listed beside it on a wide screen and in a
+   menu above it on a phone. Headings and code reuse DESIGN.md's heading, subtitle and code. */
+
+.page {
+  max-width: calc(var(--size-rail) + var(--size-content) + var(--s16) * 2);
+  margin: 0 auto;
+  padding: 0 var(--s4);
+}
+
+.top {
+  display: flex;
+  align-items: center;
+  gap: var(--s6);
+  height: var(--s18);
+}
+
+.brand,
+.section {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  color: inherit;
+  text-decoration: none;
+}
+
+.section {
+  color: var(--fg2);
+}
+
+.body {
+  display: grid;
+  grid-template-columns: var(--size-rail) minmax(0, 1fr);
+  gap: var(--s16);
+}
+
+.side {
+  position: sticky;
+  top: var(--s6);
+  align-self: start;
+  padding-top: var(--s2);
+}
+
+.navList {
+  display: grid;
+  gap: var(--s1);
+  list-style: none;
+}
+
+.navList a {
+  display: block;
+  padding: var(--s1h) var(--s3);
+  border-radius: var(--radius-sm);
+  color: var(--fg2);
+  text-decoration: none;
+}
+
+.navList a:hover {
+  color: var(--fg);
+}
+
+.navList a[aria-current="page"] {
+  background: var(--surface2);
+  color: var(--fg);
+}
+
+.menu {
+  display: none;
+}
+
+.main {
+  max-width: var(--size-content);
+  padding-bottom: var(--s16);
+}
+
+.text {
+  max-width: 70ch;
+  margin-top: var(--s6);
+  font-size: 17px;
+  line-height: 28px;
+}
+
+.text > * + * {
+  margin-top: var(--s4);
+}
+
+.text a {
+  color: var(--fg);
+  text-decoration-color: var(--fg3);
+  text-underline-offset: 3px;
+}
+
+.text a:hover {
+  text-decoration-color: var(--fg);
+}
+
+.text h2,
+.text h3 {
+  font-weight: 500;
+  scroll-margin-top: var(--s6);
+}
+
+.text h2 {
+  margin-top: var(--s12);
+  font-size: 24px;
+  line-height: 32px;
+}
+
+.text h3 {
+  margin-top: var(--s8);
+  font-size: 18px;
+  line-height: 24px;
+}
+
+.text h2 a,
+.text h3 a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.text h2 a:hover::after,
+.text h3 a:hover::after {
+  content: " #";
+  color: var(--fg3);
+}
+
+.text ul,
+.text ol {
+  display: grid;
+  gap: var(--s2);
+  padding-left: var(--s6);
+}
+
+.text code {
+  font-family: var(--mono);
+  font-size: 0.875em;
+}
+
+.text :not(pre) > code {
+  padding: 1px var(--s1h);
+  border-radius: var(--radius-xs);
+  background: var(--surface2);
+}
+
+.text [data-code] {
+  position: relative;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.text pre {
+  overflow-x: auto;
+  padding: var(--s4) var(--s5);
+  padding-right: var(--s20);
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.text pre code {
+  font-size: inherit;
+}
+
+.text [data-copy] {
+  position: absolute;
+  top: var(--s2);
+  right: var(--s2);
+  padding: var(--s1) var(--s2h);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  background: var(--bg);
+  color: var(--fg2);
+  font: 500 13px / 18px var(--sans);
+}
+
+.text [data-copy]::before {
+  content: "Copy";
+}
+
+.text [data-copy][data-copied]::before {
+  content: "Copied";
+}
+
+.text [data-copy]:hover {
+  color: var(--fg);
+}
+
+.text table {
+  display: block;
+  overflow-x: auto;
+  border-collapse: collapse;
+  font-size: 15px;
+  line-height: 22px;
+}
+
+.text th,
+.text td {
+  padding: var(--s2) var(--s3);
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+
+.text th {
+  color: var(--fg2);
+  font-weight: 500;
+}
+
+.text blockquote {
+  padding-left: var(--s4);
+  border-left: 2px solid var(--line-strong);
+  color: var(--fg2);
+}
+
+.foot {
+  margin-top: var(--s16);
+  padding-top: var(--s6);
+  border-top: 1px solid var(--line);
+}
+
+/* A phone: the menu replaces the side nav. */
+@media (max-width: 899px) {
+  .top {
+    height: var(--size-top-web);
+  }
+
+  .body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .side {
+    display: none;
+  }
+
+  .menu {
+    display: block;
+    margin-bottom: var(--s6);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-md);
+    background: var(--surface);
+  }
+
+  .menu summary {
+    padding: var(--s3) var(--s4);
+    cursor: pointer;
+  }
+
+  .menu nav {
+    padding: 0 var(--s2) var(--s2);
+  }
+
+  .main :global(.t-title) {
+    font-size: 28px;
+    line-height: 36px;
+  }
+
+  .text {
+    margin-top: var(--s4);
+    font-size: 16px;
+    line-height: 26px;
+  }
+}

@@ -1,4 +1,4 @@
-// Pages on GitHub that the app and the landing page link to.
+// Pages the app and the landing page link to: the docs under /docs (lib/docs.ts), and GitHub.
 export const REPO = "https://github.com/T0mSIlver/starbridge";
-export const AGENTS_GUIDE = `${REPO}/blob/main/docs/tell-your-agents.md`;
-export const SELF_HOST = `${REPO}/blob/main/deploy/README.md`;
+export const AGENTS_GUIDE = "/docs/tell-your-agents";
+export const SELF_HOST = "/docs/self-host";
