@@ -1,122 +1,182 @@
 # starbridge CLI
 
-Posts decisions to your Starbridge devices and uploads your AI plans' quota
-windows from CodexBar. Everything it sends is signed with this machine's key
-and sealed to each of your devices, so the server sees ciphertext only.
+`starbridge` connects a machine that runs agents to your phone and browsers. Agents use it to ask
+you questions and report runs, and it uploads what each AI plan has left, read from CodexBar. It
+signs everything with this machine's key and encrypts it for your devices, so the server sees
+ciphertext only.
 
 ## Install
 
-Linux or macOS, into `~/.local/bin`:
+Linux or macOS. Pick one of the three.
+
+The install script puts the binary in `~/.local/bin`, then runs `starbridge setup`:
 
 ```bash
 curl -fsSL https://starbridge.run/install.sh | sh
 ```
 
-or `brew install T0mSIlver/starbridge/starbridge`, or `npm install -g starbridge`
-(Node 22 or later). `starbridge update` installs the latest release over a
-script install, and `starbridge uninstall` removes the binary; brew and npm
-installs update and uninstall through their manager.
+Homebrew:
 
-The script and `starbridge update` accept a binary only if its hash is in the
-release's `SHA256SUMS` and `SHA256SUMS.minisig` is signed by the release key
-(also in [`minisign.pub`](minisign.pub)):
+```bash
+brew install T0mSIlver/starbridge/starbridge
+```
+
+npm, with Node 22 or later:
+
+```bash
+npm install -g starbridge
+```
+
+After Homebrew or npm, run setup yourself:
+
+```bash
+starbridge setup
+```
+
+### What setup does
+
+Setup asks before each step, and a rerun repairs only what is missing:
+
+1. It pairs the machine with your account.
+2. It finds CodexBar, or installs it (with Homebrew if you have it, else from the release
+   tarball, checked against pinned hashes, into `~/.local/opt/codexbar`).
+3. It asks which providers' quotas to upload.
+4. It installs the agent as a systemd user unit or a launchd agent.
+5. It installs the Claude Code plugin at user scope.
+6. It uploads a first quota snapshot.
+
+`--yes` takes every default. `--no-quota`, `--no-service` and `--no-plugin` skip a step.
+`starbridge status` prints the same checks.
+
+### Update and uninstall
+
+`starbridge update` installs the latest release over a script install. Homebrew and npm installs
+update through their own manager.
+
+`starbridge uninstall` removes the agent service, the plugin and the binary, and asks your
+devices to revoke the machine. It deletes the keys only when you say so, or with `--purge`.
+
+### Check a download
+
+The script and `starbridge update` install a binary only if its hash is in the release's
+`SHA256SUMS` and the release key signed `SHA256SUMS.minisig`. The key is also in
+[`minisign.pub`](minisign.pub):
 
 ```
 RWRT+qMmByDpj/1KhL5yCxdzIkVgZ3NqTrlVIIvhrezr/38FgzBIen0F
 ```
 
-To check a download by hand: `minisign -Vm SHA256SUMS -P <key>`, then
-`sha256sum -c --ignore-missing SHA256SUMS`.
+To check a download by hand:
+
+```bash
+minisign -Vm SHA256SUMS -P <key>
+sha256sum -c --ignore-missing SHA256SUMS
+```
 
 ## Use
+
+Setup covers pairing and the agent. Agents run the other commands themselves; the Starbridge
+skill tells them when. `starbridge --help` lists every flag.
+
+### Pair
 
 ```bash
 starbridge pair
 ```
 
-`pair` prints a code; type it under Devices on your phone or the web page. It
-pairs with https://starbridge.run; to use a self-hosted server, pass
-`--server https://starbridge.example` or set `STARBRIDGE_SERVER`.
-Keys and state live in `~/.config/starbridge` (or `$XDG_CONFIG_HOME`,
-`$STARBRIDGE_CONFIG_DIR`), mode 0600.
+It prints a code. Type it under Devices on your phone or in the web app. The machine pairs with
+https://starbridge.run unless you pass `--server https://starbridge.example` or set
+`STARBRIDGE_SERVER`.
+
+### Ask
+
+An agent asks a question with two to four options, or none for a free-text answer:
 
 ```bash
-starbridge ask --question "Merge #12 now?" --option Merge --option Wait
-starbridge waiting d_Xk3…          # out of other work: "Waiting for you" on every device
-starbridge wait d_Xk3… --timeout 1h   # exit 2: nobody answered in time
-starbridge quota push --provider claude --provider codex   # every 5 minutes
+starbridge ask --question "Merge #12 now?" \
+  --option Merge --option Wait
 ```
 
-`starbridge run` wraps a command the owner wants to hear about. Agents wrap,
-unasked, any command that blocks the owner or needs them at the machine (e2e
-tests that take over the screen, keyboard or session, anything that holds a
-device they use), and any command the owner's rules (below) name. The owner's devices show its title, its reason, the time
-elapsed and the progress its output prints (an OSC 9;4 sequence, `[3/7]`,
-`42%`), then pass or fail with the exit code and duration:
+`ask` prints the question's id and how the answer will come back:
+
+- In Claude Code, the answer arrives as the session's next prompt.
+- In an interactive Codex session, the agent service queues it into the session.
+- Anywhere else, the agent waits for it with `starbridge wait <id> --timeout 5m`, which exits
+  with code 2 when the time runs out.
+
+When the agent runs out of other work, `starbridge waiting <id>` shows "Waiting for you" on
+every device and notifies you once more. `starbridge working <id>` reverts it.
+
+### Runs
+
+`starbridge run` wraps a command you want to follow: a build, a release, an eval, heavy work on
+your machine, or a test that takes over the screen or keyboard. Your devices show its title, its
+reason, the time elapsed and its progress, then pass or fail:
 
 ```bash
-starbridge run --title "Mac e2e" --reason "uses your session and keyboard" \
-  -- bash -c 'make build && make e2e'
+starbridge run --title "Release 1.4" \
+  --reason "publishes to npm and Homebrew" \
+  -- make release
 ```
 
-The output passes through unchanged, and `run` exits with the command's code,
-or 128 + n when signal n ended it. Nothing stops the command: when the
-machine is not paired or the server is down, `run` warns once and goes on.
-The command's output is a pipe, not a terminal; tools that print progress
-only to a terminal print none here.
+The output passes through unchanged, and `run` exits with the command's code, or 128 + n when
+signal n ended it. Progress comes from what the output prints: an OSC 9;4 sequence, `[3/7]` or
+`42%`. The output goes through a pipe, so tools that print progress only to a terminal show none.
+If the machine is not paired or the server is down, `run` warns once and runs the command anyway.
 
-To have agents report other commands too, such as local inference, tell them
-in their own instruction files (`docs/tell-your-agents.md`). That adds to the
-default above, never replaces it.
+Agents wrap, unasked, any command that blocks you or needs you at the machine. To hear about
+other commands, such as local inference, say so in their instruction files
+([Tell your agents](../docs/tell-your-agents.md)).
 
-`starbridge answers` is for the Claude Code mod (`mod/README.md`): it hands a
-session the answers to the decisions it asked.
+### Quotas
 
-`starbridge agent` runs once per machine, as a user service. It holds the
-keys and the server connection, uploads quota snapshots every interval
-(`--provider`, `--interval`, or `agent.json` in the config directory), and
-hands each Claude Code session its answers over a unix socket
-(PROTOCOL.md, "Local agent API"). Every command goes through it when it runs
-and to the server directly when it does not, or with `STARBRIDGE_NO_AGENT=1`.
+The agent service runs `codexbar usage --format json` for each provider you picked and uploads a
+snapshot every 5 minutes. A provider that fails is sent as an error and never stops the others.
+Your devices notify you before a window resets with headroom unused, or when it runs low.
 
-`starbridge setup` does the rest in one run, and a rerun repairs only what is
-missing. It pairs the machine and finds CodexBar. When CodexBar is missing,
-setup installs it: Homebrew if present, else the release tarball, checked
-against pinned hashes and unpacked to `~/.local/opt/codexbar`. It then probes
-each provider and lets you pick which to upload, and writes `agent.json`. The
-agent goes in as a systemd user unit or a launchd agent. The Claude Code
-plugins install at user scope. Setup also replaces a hand-written `starbridge
-quota push` unit and a copied mod or skill, then uploads a first snapshot.
-`--yes` takes every default; `--no-quota`, `--no-service` and `--no-plugin`
-skip a step. `starbridge status` prints the same checks. `starbridge
-uninstall` removes the service, the plugins and then the binary, asks your devices to revoke
-the machine, and deletes the keys only when you say so (`--purge`).
+To upload without the service:
+
+```bash
+starbridge quota push --provider claude --provider codex
+```
+
+### Permission prompts
+
+Claude Code's permission prompts stay at the keyboard until you turn them on, in setup or with:
+
+```bash
+starbridge config permissions on
+```
+
+Then each prompt also goes to your devices, where you allow or deny it. The prompt stays open at
+the keyboard, and the first answer wins.
 
 If you use the Claude app, turn off its "Code updates" notifications, which fire at the end of
-every turn, and keep "Code permission requests" on. If you turn on Starbridge's own permission
-prompts (below), turn "Code permission requests" off too, so one prompt does not notify twice.
+every turn. Keep "Code permission requests" on, unless you turned on Starbridge's permission
+prompts, so that one prompt doesn't notify you twice.
 
-Permission prompts stay at the keyboard unless you say yes in setup or run
-`starbridge config permissions on`; the Claude app already shows them for
-Remote Control sessions. When on, this machine's Claude Code prompts also go to
-your devices, where they can be allowed or denied; the prompt stays open at the
-keyboard and the first answer wins. The `starbridge` plugin's hooks run
-`starbridge hook permission` and `starbridge hook settle`, which exit at once
-while it is off (PROTOCOL.md, "Permission prompts").
+### The agent service
 
-The plugin's `PreToolUse` hook runs `starbridge hook ask-user` on Claude Code's
-`AskUserQuestion`: it turns the question away and tells the agent to post it with `starbridge
-ask`, so it reaches you away from the terminal. When the machine is not paired or the server
-does not answer, the hook lets the question through.
+`starbridge agent` runs once per machine, as a user service. It holds the keys and the server
+connection, uploads quota snapshots and hands each session its answers. The other commands go
+through it when it runs, and to the server directly when it doesn't or when
+`STARBRIDGE_NO_AGENT=1` is set. Its flags (`--provider`, `--interval`) override `agent.json` in
+the config directory.
 
-`quota push` runs `codexbar usage --format json` for each provider, or once
-for every enabled provider when none is named. A provider that fails or is
-missing from the output is logged and sent as an error; it never stops the
-loop. `starbridge --help` lists every flag.
+### Config
 
-Standalone binaries come from `bun run build:bin` (Linux and macOS, x64 and
-arm64). A `v*` tag runs `.github/workflows/release.yml`, which attaches them,
-`install.sh` and the signed `SHA256SUMS` to a GitHub Release, commits the
-formula to `T0mSIlver/homebrew-starbridge` and publishes to npm. The signing key
-lives in `~/.config/starbridge/secrets/minisign.key` on the dev box and in the
-`MINISIGN_SECRET_KEY` Actions secret.
+Keys and state live in `~/.config/starbridge` (or `$XDG_CONFIG_HOME/starbridge`, or
+`$STARBRIDGE_CONFIG_DIR`), readable only by you. `starbridge config` prints this machine's
+settings.
+
+The Claude Code plugin's hooks call `starbridge hook …`. One of them turns Claude Code's
+`AskUserQuestion` into `starbridge ask`, so the question reaches you away from the terminal; if
+the machine is not paired or the server doesn't answer, it lets the question through.
+
+## Release
+
+`bun run build:bin` builds the standalone binaries (Linux and macOS, x64 and arm64). A `v*` tag
+runs `.github/workflows/release.yml`, which attaches them, `install.sh` and the signed
+`SHA256SUMS` to a GitHub Release, commits the formula to `T0mSIlver/homebrew-starbridge` and
+publishes to npm. The signing key lives in `~/.config/starbridge/secrets/minisign.key` on the
+dev box and in the `MINISIGN_SECRET_KEY` Actions secret.
