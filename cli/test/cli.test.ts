@@ -239,7 +239,7 @@ test("ask turns a sideways phone photo upright", async () => {
 
 test("ask --answer-in posts a pointer decision, and settle closes it", async () => {
   const ctx = await paired(server);
-  const page = "https://claude.ai/artifact/2ig2MyNRD484b7oZea5vkZ";
+  const page = "https://claude.ai/artifact/Xq7pLm2VnR4tBz9KcW1sYd";
   const pointer = [
     ...["ask", "--question", "Pick a layout?", "--default", "Roomy"],
     ...["--default-at", "1s", "--session", "s"],

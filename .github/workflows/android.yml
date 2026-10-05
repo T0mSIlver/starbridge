@@ -23,9 +23,13 @@ defaults:
     working-directory: android
 
 jobs:
+  # One labelled runner takes every Android build: two Gradle builds at once ran the box out of memory.
   build:
     name: build, unit tests, screenshots
-    runs-on: ${{ vars.RUNNER || 'ubuntu-24.04' }}
+    runs-on: ${{ vars.ANDROID_RUNNER || vars.RUNNER || 'ubuntu-24.04' }}
+    # Builds of pull requests never sign with the release key, even on a runner whose environment sets it.
+    env:
+      STARBRIDGE_KEYSTORE: ""
     steps:
       - uses: actions/checkout@v7
 
@@ -43,7 +47,8 @@ jobs:
       # verifyRoborazziDebug runs every unit test and fails when a screen drifts
       # from app/screenshots/.
       - name: Build and test
-        run: ./gradlew --console=plain assembleRelease verifyRoborazziDebug
+        # No daemon and an in-process Kotlin compiler: nothing stays in memory after the build on the shared dev box.
+        run: ./gradlew --no-daemon --console=plain -Pkotlin.compiler.execution.strategy=in-process assembleRelease verifyRoborazziDebug
 
       - name: Screenshot diffs
         if: failure()
