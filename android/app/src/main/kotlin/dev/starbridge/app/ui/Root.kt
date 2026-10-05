@@ -53,6 +53,7 @@ import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
+import androidx.navigation3.scene.Scene
 import androidx.navigation3.ui.NavDisplay
 import dev.starbridge.app.data.Phase
 import dev.starbridge.app.ui.devices.DevicesScreen
@@ -192,8 +193,8 @@ fun Main(openDecisions: Int, notice: StateFlow<String?>, dismiss: () -> Unit, op
                 sceneStrategies = listOf(listDetail),
                 entryDecorators = listOf(rememberSaveableStateHolderNavEntryDecorator(), rememberViewModelStoreNavEntryDecorator()),
                 transitionSpec = { motion.fadeThrough },
-                popTransitionSpec = { motion.fadeThrough },
-                predictivePopTransitionSpec = { motion.fadeThrough },
+                popTransitionSpec = { motion.pop(initialState) },
+                predictivePopTransitionSpec = { motion.pop(initialState) },
                 entryProvider = entryProvider {
                     entry<InboxKey>(
                         metadata = ListDetailSceneStrategy.listPane(detailPlaceholder = { DecisionScreen(null, now, onAnswer = { _, _, _ -> }) }),
@@ -244,9 +245,19 @@ fun Main(openDecisions: Int, notice: StateFlow<String?>, dismiss: () -> Unit, op
 
 /**
  * Navigation on the expressive motion scheme, which Navigation 3 does not read on its own: tabs
- * fade through, and a decision slides in and back out along the shared X axis.
+ * fade through, and a decision slides in and back out along the shared X axis. Navigation 3 reads
+ * an entry's specs only when navigating to it, so going back checks the scene it leaves.
  */
-private class NavMotion(val fadeThrough: ContentTransform, val decision: Map<String, Any>)
+private class NavMotion(
+    val fadeThrough: ContentTransform,
+    private val back: ContentTransform,
+    /** The decision entry's metadata: its forward slide, and the mark [pop] looks for. */
+    val decision: Map<String, Any>,
+) {
+    fun pop(leaving: Scene<*>) = if (leaving.metadata[DECISION] == true) back else fadeThrough
+}
+
+private const val DECISION = "starbridge.decision"
 
 @Composable
 private fun navMotion(): NavMotion {
@@ -263,9 +274,8 @@ private fun navMotion(): NavMotion {
         }
         NavMotion(
             fadeThrough = (fadeIn(effects) + scaleIn(scale, initialScale = 0.92f)) togetherWith fadeOut(fast),
-            decision = NavDisplay.transitionSpec { axis(forward = true) } +
-                NavDisplay.popTransitionSpec { axis(forward = false) } +
-                NavDisplay.predictivePopTransitionSpec { axis(forward = false) },
+            back = axis(forward = false),
+            decision = NavDisplay.transitionSpec { axis(forward = true) } + mapOf(DECISION to true),
         )
     }
 }
