@@ -354,7 +354,7 @@ export async function startDigitJoin(account: string, name: string): Promise<Dig
   const { role: _, ...keys } = member;
   const request = joinRequest({ v: 1, join: id, account, ...keys, at: now() });
   await store.put("device", record, account);
-  await api.postJoin(request, joinCommitment(eph.publicKey, request));
+  const { expiresAt } = (await api.postJoin(request, joinCommitment(eph.publicKey, request))).join;
   const abort = new AbortController();
   let shown: (digits: string) => void = () => {};
   const digits = new Promise<string>((resolve) => {
@@ -366,14 +366,22 @@ export async function startDigitJoin(account: string, name: string): Promise<Dig
     try {
       for (;;) {
         if (abort.signal.aborted) throw new Error("cancelled");
-        const { join } = await api.join(id, after, 25, abort.signal);
+        const { join } = await retrying(expiresAt, abort.signal, () =>
+          api.join(id, after, 25, abort.signal),
+        );
         after = join.version;
         if (join.state === "cancelled") throw new Error("The request was refused. Ask again.");
         // The first approver key is the only one: the digits commit to it, so a second one the
         // server offers later is never answered.
-        if (!derived && join.approverKey) {
+        if (!derived && join.approverKey)
           derived = joinerKeys({ mine: eph, approverKey: join.approverKey, request });
-          await api.revealJoin(id, toB64(eph.publicKey));
+        if (derived && !join.joinerKey) {
+          // A reveal whose answer was lost landed all the same.
+          await retrying(expiresAt, abort.signal, () =>
+            api.revealJoin(id, toB64(eph.publicKey)).catch((e) => {
+              if (!(e instanceof ApiError && e.code === "already-revealed")) throw e;
+            }),
+          );
           shown(derived.digits);
         }
         if (derived && join.approval !== undefined) {
@@ -402,6 +410,30 @@ export async function startDigitJoin(account: string, name: string): Promise<Dig
     },
   };
 }
+
+/**
+ * Runs a join call again after a network or server failure, until the join expires or `signal`
+ * aborts. Giving up would drop the ephemeral key, and the server takes one key per side.
+ */
+async function retrying<T>(
+  expiresAt: string,
+  signal: AbortSignal,
+  call: () => Promise<T>,
+): Promise<T> {
+  for (;;) {
+    try {
+      return await call();
+    } catch (e) {
+      const transient = !(e instanceof ApiError) || e.status >= 500 || e.status === 429;
+      if (signal.aborted || !transient) throw e;
+      if (Date.parse(expiresAt) < Date.now()) throw new Error("The request expired.");
+      await new Promise((r) => setTimeout(r, retryDelay.ms));
+    }
+  }
+}
+
+/** How long a failed join call waits before its next try; tests shorten it. */
+export const retryDelay = { ms: 3_000 };
 
 function toAsk(view: JoinView): JoinAsk | undefined {
   try {
@@ -455,11 +487,14 @@ export async function compareJoin(
   if (body.account !== ctx.account) throw new ProtocolError("wrong-account", body.account);
   if (body.join !== ask.id) throw new ProtocolError("id-mismatch", "join");
   const eph = newJoinKeyPair();
-  let after = (await api.claimJoin(ask.id, toB64(eph.publicKey), ctx.device.id)).join.version - 1;
+  const claimed = (await api.claimJoin(ask.id, toB64(eph.publicKey), ctx.device.id)).join;
+  let after = claimed.version - 1;
   let keys: JoinKeys;
   try {
     for (;;) {
-      const { join } = await api.join(ask.id, after, 25, signal);
+      const { join } = await retrying(claimed.expiresAt, signal, () =>
+        api.join(ask.id, after, 25, signal),
+      );
       after = join.version;
       if (join.state === "cancelled") throw new Error(`${body.name} cancelled the request.`);
       if (join.joinerKey) {
@@ -481,7 +516,7 @@ export async function compareJoin(
   return {
     digits: keys.digits,
     approve: async (current) => {
-      const next = await append(current, (dir) => addEntryAsync(dir, me(current), member, now()));
+      const next = await appendMember(current, member);
       const approval = joinApproval(
         {
           v: 1,
@@ -585,6 +620,23 @@ async function append(ctx: Ctx, make: (dir: Directory) => Promise<SignedEnvelope
   }
 }
 
+/**
+ * Adds a member to approve, unless the directory already holds it with these keys: an approval
+ * retried after its post failed reuses the entry the first try appended.
+ */
+async function appendMember(ctx: Ctx, member: Member): Promise<Ctx> {
+  const fresh = await refresh(ctx);
+  const held = fresh.dir.members.get(member.id);
+  if (
+    held?.active &&
+    held.member.role === member.role &&
+    held.member.boxPk === member.boxPk &&
+    held.member.signPk === member.signPk
+  )
+    return fresh;
+  return append(fresh, (dir) => addEntryAsync(dir, me(fresh), member, now()));
+}
+
 export function devices(ctx: Ctx): Device[] {
   const addedAt = new Map<string, string>();
   for (const env of ctx.entries) {
@@ -629,7 +681,7 @@ export async function approvePairing(ctx: Ctx, req: PairingRequest): Promise<Ctx
     boxPk: req.boxPk,
     signPk: req.signPk,
   };
-  const next = await append(ctx, (dir) => addEntryAsync(dir, me(ctx), member, now()));
+  const next = await appendMember(ctx, member);
   const approval = pairingApproval(
     {
       v: 1,
