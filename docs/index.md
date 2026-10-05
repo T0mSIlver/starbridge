@@ -41,5 +41,5 @@ only ciphertext. Use the free server at starbridge.run, or [host your own](../se
 - **Permission prompts.** Allow or deny, from your phone, the commands Claude Code asks
   permission to run. Off until you turn them on.
 
-Starbridge works with Claude Code and Codex; Pi support is coming.
+Starbridge works with Claude Code, Codex and Pi.
 [Tell your agents](tell-your-agents.md#what-each-agent-supports) lists what each one supports.

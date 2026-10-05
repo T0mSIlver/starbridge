@@ -40,15 +40,19 @@ After Homebrew or npm, run `starbridge setup` yourself.
 
 | | Claude Code | Codex | Pi |
 |---|---|---|---|
-| Questions | ✓ | ✓ | Coming |
-| Answers into the live session | ✓ | ✓¹ | Coming |
-| "Waiting for you" | ✓ | ✓ | Coming |
-| Runs | ✓ | ✓ | Coming |
-| Permission prompts | Opt-in | No | Coming |
-| `AskUserQuestion` hook | ✓ | n/a | Coming |
+| Questions | ✓ | ✓ | ✓ |
+| Answers into the live session | ✓ | ✓¹ | ✓² |
+| "Waiting for you" | ✓ | ✓ | ✓ |
+| Runs | ✓ | ✓ | ✓ |
+| Permission prompts | Opt-in | No | No |
+| `AskUserQuestion` hook | ✓ | n/a | n/a |
 
 ¹ In interactive sessions (Codex CLI 0.160 or later) while `starbridge agent` runs. In `codex exec`, the agent waits for the
 answer before it ends its turn.
+
+² In the interactive TUI and RPC mode, with the Starbridge Pi package (`pi install
+git:github.com/T0mSIlver/starbridge`). In `pi -p`, the agent waits for the answer before it ends
+its turn.
 
 ## Docs
 

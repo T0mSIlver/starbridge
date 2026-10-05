@@ -74,6 +74,21 @@ session. After an error the mod waits 2 s, then twice as long after each
 further error, up to a minute, and shows the error in the status line until a
 call succeeds.
 
+## Pi
+
+`pi/starbridge.ts` is the same answer loop as a Pi extension. It ships in the
+repository's Pi package with the `starbridge` skill:
+
+```bash
+pi install git:github.com/T0mSIlver/starbridge
+```
+
+In an interactive or RPC Pi session it submits each answer as a user message,
+which starts a turn when Pi is idle and runs after the current one when it is
+busy. It also adds the plugin's rule (`plugin/hooks/rule.md`) to Pi's system
+prompt. `pi -p` gets no loop, so `starbridge ask` tells the agent there to
+`starbridge wait`.
+
 ## Develop
 
 ```bash

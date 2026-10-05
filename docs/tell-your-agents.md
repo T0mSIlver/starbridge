@@ -10,19 +10,23 @@ instruction files, in your words. Starbridge never writes to them.
 
 | | Claude Code | Codex | Pi |
 |---|---|---|---|
-| Questions | ✓ | ✓ | Coming |
-| Answers into the live session | ✓ | ✓¹ | Coming |
-| "Waiting for you" | ✓ | ✓ | Coming |
-| Runs | ✓ | ✓ | Coming |
-| Permission prompts | Opt-in | No | Coming |
-| `AskUserQuestion` hook | ✓ | n/a² | Coming |
+| Questions | ✓ | ✓ | ✓ |
+| Answers into the live session | ✓ | ✓¹ | ✓³ |
+| "Waiting for you" | ✓ | ✓ | ✓ |
+| Runs | ✓ | ✓ | ✓ |
+| Permission prompts | Opt-in | No | No |
+| `AskUserQuestion` hook | ✓ | n/a² | n/a² |
 
 ¹ In interactive sessions, when `starbridge agent` runs (Codex CLI 0.160 or
 later). In `codex exec`, the agent waits for the answer with `starbridge wait`
 before it ends its turn.
 
-² Codex has no `AskUserQuestion` tool. The hook turns Claude Code's
+² Codex and Pi have no `AskUserQuestion` tool. The hook turns Claude Code's
 questions in the terminal into Starbridge questions.
+
+³ In the interactive TUI and RPC mode, through `starbridge agent` or the CLI.
+In `pi -p`, the agent waits for the answer with `starbridge wait` before it
+ends its turn.
 
 Claude Code loads the Starbridge plugin, which brings the rules above, the
 skill and the hooks. Codex doesn't load plugins: copy the skill into
@@ -33,6 +37,13 @@ skill and the hooks. Codex doesn't load plugins: copy the skill into
 mkdir -p ~/.codex/skills/starbridge
 curl -fsSL -o ~/.codex/skills/starbridge/SKILL.md \
   https://raw.githubusercontent.com/T0mSIlver/starbridge/main/plugin/skills/starbridge/SKILL.md
+```
+
+Pi installs the Starbridge Pi package, which brings the skill, the rules and
+the extension that puts each answer into the session:
+
+```bash
+pi install git:github.com/T0mSIlver/starbridge
 ```
 
 ## Where the lines go

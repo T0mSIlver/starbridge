@@ -52,11 +52,12 @@ const HELP = `starbridge: post decisions to your devices, report runs, upload qu
       --recommended <text>    one of the options (default: the first)
       --default <text>        what you do if nobody answers (default: wait for the answer)
       --waiting               you have nothing else to do: post it as waiting for the owner
-      --agent <name>          claude-code or codex (default: claude-code when Claude Code
-                              runs the command)
+      --agent <name>          claude-code, codex or pi (default: the one that runs the
+                              command)
       --project <name>        default: the current directory's name
-      --session <id>          default: $CLAUDE_CODE_SESSION_ID
-      --session-title <text>  default: the Claude Code session's name
+      --session <id>          default: the agent's session ($CLAUDE_CODE_SESSION_ID,
+                              $CODEX_THREAD_ID, $PI_SESSION_ID)
+      --session-title <text>  default: the Claude Code or Pi session's name
       --image <path>          a PNG or JPEG to show with the question, up to 4 times;
                               scaled down to fit the server's size cap
       --link <url>            an https page to open, such as a claude.ai artifact,

@@ -978,6 +978,31 @@ How it generalizes is open.
   clients show an agent they do not know as none, with no "Open in" link, instead of refusing
   the decision or prompt. So a future harness never makes items unreadable to older clients.
   Clients released before this change still refuse an agent outside `claude-code | codex`.
+- 2026-10-06. Pi is the third harness (#232; research on the issue, Pi 0.87.1; checked again on
+  Pi 1.0.4, whose changelog since 0.87.1 changes none of the API it uses). A Pi extension
+  can call `pi.sendUserMessage(text, { deliverAs: "followUp" })` at any time: an idle session
+  starts a turn with it, a busy one runs it once the agent finishes, as the mod and `codex
+  queue` do. So the Pi extension (`mod/pi/starbridge.ts`) runs the mod's own answer loop
+  (`agent.ts`, `poller.ts`, `switch.ts`, which never depended on Claude Code), through the
+  machine's agent or the CLI, and submits each answer that way. It runs only where Pi has a UI
+  (TUI and RPC), since `pi -p` ends after one prompt, and while it runs it sets
+  `STARBRIDGE_PI_ANSWERS` to the session's id for its commands. It also appends `plugin/hooks/rule.md`, the
+  rule the `SessionStart` hook adds in Claude Code, to Pi's system prompt. The repository's root
+  `package.json` is a Pi package (that extension and `plugin/skills`): `pi install
+  git:github.com/T0mSIlver/starbridge`. `ask` detects Pi from `PI_SESSION_ID`, which Pi's bash
+  tool gives every command, after Claude Code and Codex. It records that session id and takes
+  the card's session title from the name in `PI_SESSION_FILE`. It says the answer comes back as
+  a prompt only when `STARBRIDGE_PI_ANSWERS` is that session's id (a `pi -p` started from the
+  session's shell inherits it), else it prints the `starbridge wait` line. A
+  decision from Pi carries `agent: "pi"` (the entry above); a client released before it refuses
+  such a decision. Pi has no built-in AskUserQuestion and no permission prompts; both come from third-party extensions, so Starbridge
+  intercepts neither (blocking a tool by name would tie it to one extension), the skill tells
+  every agent to avoid any tool that asks the user, and permission prompts stay Claude Code only.
+  Checked with a real Pi 0.87.1 TUI (GLM 5.3) in a throwaway HOME, the local server, the built
+  web page in Firefox and `starbridge agent`: Pi posted the card, the web page answered "French",
+  and Pi wrote the file. Without the agent, an answer given during a `sleep 40` ran once that
+  turn ended. Both again on Pi 1.0.4 (fullscreen TUI, its new default), and the agent path again
+  on 0.87.1, with the code as merged.
 - 2026-10-05. A blocked question shows by its look, not a state line (#191, owner's pick of
   proposal B, "Filled and hollow", from https://claude.ai/artifact/EMcUnTsGhyTsiCNujo4JT6). This
   replaces the "Waiting for you 1:12" tag of the #166 entry above. A question whose agent waits
