@@ -74,6 +74,7 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
   const evil = who("evil", "device", "Injected", 5);
   const evilMachine = who("evilbox", "machine", "Injected machine", 6);
   const recoverySeed = seed(7);
+  const recovery12Seed = new Uint8Array(16).fill(9);
   const recovery = recoveryKeyPair(recoverySeed);
   const recoveryPk = toB64(recovery.publicKey);
   const rec = { id: RECOVERY, signKey: recovery.privateKey };
@@ -89,6 +90,12 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
       signSk: toB64(w.keys.sign.privateKey),
     })),
     recovery: { seed: toB64(recoverySeed), words: recoveryWords(recoverySeed), signPk: recoveryPk },
+    recovery12: {
+      note: 'A 16-byte seed, 12 words: the signing seed is BLAKE2b-256 of "starbridge/v1/recovery-seed", NUL, the seed.',
+      seed: toB64(recovery12Seed),
+      words: recoveryWords(recovery12Seed),
+      signPk: toB64(recoveryKeyPair(recovery12Seed).publicKey),
+    },
   };
 
   // --- directory.json ---

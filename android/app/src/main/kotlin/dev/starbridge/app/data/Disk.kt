@@ -13,6 +13,9 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 import java.io.File
 
+/** 1: images, links and answerIn (#62). */
+const val DECISION_FIELDS = 1
+
 /** A decision this device opened and verified, and what became of it. */
 @Serializable
 data class SavedDecision(
@@ -67,6 +70,11 @@ data class Saved(
     val entries: List<JsonElement> = emptyList(),
     val cursor: String = "",
     val decisions: List<SavedDecision> = emptyList(),
+    /**
+     * The decision fields this app kept when it saved [decisions]; below [DECISION_FIELDS], the
+     * open ones are read again from the server, since an older app dropped fields it did not know.
+     */
+    val decisionFields: Int = 0,
     /** Where the last read of permission prompts and settled notices stopped. */
     val promptCursor: String = "",
     val prompts: List<SavedPrompt> = emptyList(),

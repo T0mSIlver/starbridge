@@ -450,9 +450,10 @@ a decision's context, a permission prompt's command and a session's name.
   terminal tile in `accent-soft`, the exact command in mono, Allow and Deny,
   and how long it has waited. A question shows its text as the title, its
   state line, then its options.
-- A question's state line: "Working on other things" (`fg2`) while the agent
-  carries on, "Waiting for you" (`accent`) once it marks itself blocked. With
-  a default it adds what the default takes and when.
+- A question's state line shows only once its agent marks itself blocked:
+  "Waiting for you" (`accent`) with how long, the waiting icon on the text's
+  centre line. A question with no state line is one the agent works around;
+  amber's absence says so, and no sentence does.
 - Every item opens with one meta row of facts Starbridge knows: the machine's
   kind icon and name, the repo, and the time right-aligned. The agent's own
   words come below it. Details end with the session name, truncated in the
@@ -495,7 +496,7 @@ round caps and joins, no fills. Android uses Material Symbols Rounded tuned to
 Google Sans Flex; a native iOS app, if one comes, would use SF Symbols. Every
 platform has the same icons by job: laptop, desktop, server and cloud (a
 machine's kind), permission prompt, question, run, quota, history, settings,
-devices, open in the agent, waiting, working, inbox.
+devices, open in the agent, waiting, inbox.
 
 ## The mark
 
