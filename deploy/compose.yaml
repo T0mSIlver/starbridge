@@ -29,6 +29,46 @@ services:
       - "127.0.0.1:3000:3000"
     logging: *logging
 
+  # Umami, the cookieless analytics of the public pages (SPEC.md, #141). Caddy serves its
+  # tracker script and collect endpoint under /stats; the dashboard is on 127.0.0.1:3001 only,
+  # for the owner through an SSH tunnel.
+  umami:
+    image: ghcr.io/umami-software/umami:3.4.0
+    restart: unless-stopped
+    init: true
+    # DATABASE_URL and APP_SECRET, made once by deploy/host/umami-env.sh.
+    env_file: /etc/starbridge/umami.env
+    environment:
+      DISABLE_TELEMETRY: "1"
+      DISABLE_UPDATES: "1"
+      # The visitor hash (IP, user agent, website) gets a new salt every day.
+      SALT_ROTATION: day
+    depends_on:
+      umami-db:
+        condition: service_healthy
+    networks: [umami]
+    ports:
+      - "127.0.0.1:3001:3000"
+    logging: *logging
+
+  umami-db:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: umami
+      POSTGRES_USER: umami
+    # POSTGRES_PASSWORD, from the same script.
+    env_file: /etc/starbridge/umami-db.env
+    volumes:
+      - umami-db:/var/lib/postgresql
+    networks: [umami]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U umami -d umami"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    logging: *logging
+
   caddy:
     image: caddy:2
     restart: unless-stopped
@@ -45,3 +85,8 @@ volumes:
   data:
   caddy-data:
   caddy-config:
+  umami-db:
+
+# Umami and its database only see each other.
+networks:
+  umami:
