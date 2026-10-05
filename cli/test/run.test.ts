@@ -186,6 +186,7 @@ test("a run killed with -9 posts no exit and nothing after, so devices see it lo
     },
   );
   await until(async () => (await server.opened("run")).length === 1, 10_000);
+  const [start] = (await server.opened("run")) as Run[];
   p.kill("SIGKILL");
   await p.exited;
   await Bun.sleep(1_500);
@@ -195,7 +196,7 @@ test("a run killed with -9 posts no exit and nothing after, so devices see it lo
   expect(last?.exit).toBeUndefined();
   // Nothing re-posts it (no heartbeat from the agent), so its last news stays its start: past
   // RUN_STALE_MS, the clients' state rule (web/src/lib/runs.ts, Run.state on Android) says lost.
-  expect(last?.at).toBe(last?.startedAt);
+  expect(last?.at).toBe(start?.at);
 });
 
 test("the reporter posts the start at once, then progress throttled, a heartbeat, and the exit", async () => {
