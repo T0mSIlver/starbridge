@@ -8,8 +8,8 @@ shipped build before posting.
 Starbridge sends the questions your coding agents ask you to your phone and browser. You answer
 with one tap, and the answer goes back into the Claude Code session that is waiting on it. The
 same app shows how much of each AI plan you have left (Claude, Codex, GLM, Mistral, and every
-provider CodexBar reads) and warns you before a window resets unused. Your devices and machines
-encrypt everything they send, so the server stores only ciphertext. Use the free hosted server at
+provider CodexBar reads) and flags a window that is about to reset with headroom unused. Agents encrypt every question
+and answer, so the server stores ciphertext and routing ids. Use the free hosted server at
 starbridge.run or run your own.
 
 ## 60-second demo (shot list)
@@ -21,7 +21,7 @@ starbridge.run or run your own.
 | 15-25 s | Tap the recommended option on the lock screen | The waiting session picks up the answer and carries on |
 | 25-35 s | A permission prompt from another session, answered from the browser | Allow once, the tool call runs |
 | 35-45 s | Quota screen on the phone | Claude weekly limit, Codex and GLM windows, with pace for each |
-| 45-52 s | Alert that a window resets in an hour with headroom left | Notification text |
+| 45-52 s | A window that resets in an hour with headroom left | The amber alert on its quota card |
 | 52-60 s | Install command and URL | `curl -fsSL https://starbridge.run/install.sh \| sh`, starbridge.run |
 
 Record it on real sessions, not a mock-up. Use captions instead of narration or music.
@@ -38,8 +38,8 @@ First comment:
 > option, and the answer goes straight back into the waiting session. The session does not poll,
 > so it spends no tokens while it waits.
 >
-> It also shows what each AI plan has left (it reads CodexBar) and warns me when a 5-hour or
-> weekly window is about to reset with headroom unused.
+> It also shows what each AI plan has left (it reads CodexBar) and flags a 5-hour or weekly
+> window that is about to reset with headroom unused.
 >
 > Phones, browsers and machines each hold their own keys, and agents encrypt every message to the
 > devices, so the server only stores ciphertext and routing ids. The hosted server is free. You
@@ -64,4 +64,4 @@ First comment:
 - The Claude Developers Discord
 - CodexBar: its README or discussions, since Starbridge reads its data (ask its maintainer first)
 - Lobsters, if someone with an account will post it
-- Google Play listing, with the privacy page at starbridge.run/privacy
+- Google Play listing, once the app is published there (its privacy page is starbridge.run/privacy)
