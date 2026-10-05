@@ -5,6 +5,11 @@
   min-width: 0;
 }
 
+/* Keep the agent's line breaks, as Android does: lists and short paragraphs. */
+.context p {
+  white-space: pre-line;
+}
+
 .context a {
   color: var(--fg);
   text-decoration-color: var(--fg3);

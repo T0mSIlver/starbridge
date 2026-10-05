@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { relative, sessionName } from "@/lib/format";
+import { origin, relative } from "@/lib/format";
 import { closedAt, outcomeText } from "@/lib/outcome";
 import { afterAnswer, selectedId, step } from "@/lib/selection";
 import type { InboxItem, Reply } from "@/lib/types";
@@ -181,7 +181,7 @@ function Panes({
                 >
                   {closed
                     ? `${outcomeText(item)} · ${relative(closed)}`
-                    : `${sessionName(d.source)} · ${relative(d.createdAt)}`}
+                    : `${origin(d.source)} · ${relative(d.createdAt)}`}
                 </span>
               </button>
             </li>
