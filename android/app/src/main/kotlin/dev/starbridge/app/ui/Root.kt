@@ -9,17 +9,9 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Devices
-import androidx.compose.material.icons.outlined.Inbox
-import androidx.compose.material.icons.outlined.Speed
-import androidx.compose.material.icons.rounded.Devices
-import androidx.compose.material.icons.rounded.Inbox
-import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -44,7 +36,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.IntOffset
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -59,6 +50,10 @@ import dev.starbridge.app.data.Decision
 import dev.starbridge.app.data.Phase
 import dev.starbridge.app.data.Run
 import dev.starbridge.app.ui.devices.DevicesScreen
+import dev.starbridge.app.ui.settings.SettingsViewModel
+import dev.starbridge.app.ui.settings.SettingsScreen
+import dev.starbridge.app.ui.settings.SettingsActions
+import dev.starbridge.app.ui.devices.AddDeviceScreen
 import dev.starbridge.app.ui.devices.DevicesViewModel
 import dev.starbridge.app.ui.inbox.DecisionActions
 import dev.starbridge.app.ui.inbox.DecisionScreen
@@ -68,7 +63,6 @@ import dev.starbridge.app.ui.inbox.Replies
 import dev.starbridge.app.ui.inbox.rememberDrafts
 import dev.starbridge.app.ui.inbox.PromptActions
 import dev.starbridge.app.ui.inbox.PromptLogScreen
-import dev.starbridge.app.ui.quotas.QuotaSettingsScreen
 import dev.starbridge.app.ui.quotas.QuotasScreen
 import dev.starbridge.app.ui.quotas.QuotasViewModel
 import dev.starbridge.app.ui.setup.SetupScreen
@@ -83,17 +77,22 @@ import java.time.Instant
 @Serializable data object PromptLogKey : NavKey
 @Serializable data class DecisionKey(val id: String) : NavKey
 @Serializable data object QuotasKey : NavKey
-@Serializable data object QuotaSettingsKey : NavKey
+@Serializable data object SettingsKey : NavKey
 @Serializable data object DevicesKey : NavKey
+@Serializable data object AddDeviceKey : NavKey
 
-/** A tab: outlined icon at rest, filled when selected, as Material's navigation bar does. */
-private class Tab(val key: NavKey, val label: String, val icon: ImageVector, val selected: ImageVector)
+private val Tab.key: NavKey get() = when (this) {
+    Tab.Inbox -> InboxKey
+    Tab.Quotas -> QuotasKey
+    Tab.Settings -> SettingsKey
+}
 
-private val tabs = listOf(
-    Tab(InboxKey, "Inbox", Icons.Outlined.Inbox, Icons.Rounded.Inbox),
-    Tab(QuotasKey, "Quotas", Icons.Outlined.Speed, Icons.Rounded.Speed),
-    Tab(DevicesKey, "Devices", Icons.Outlined.Devices, Icons.Rounded.Devices),
-)
+/** The tab a page belongs to. */
+private fun tabOf(key: NavKey?) = when (key) {
+    QuotasKey -> Tab.Quotas
+    SettingsKey, DevicesKey, AddDeviceKey -> Tab.Settings
+    else -> Tab.Inbox
+}
 
 /** The clock relative times read; it ticks each minute. */
 @Composable
@@ -141,14 +140,14 @@ fun Setup(phase: Phase, notice: StateFlow<String?>, dismiss: () -> Unit, openUrl
     }
 }
 
-/** The navigation suite for the window: the short bar on phones, the wide rail beside wider content. */
+/** The navigation suite for the window: none on phones, which get [BottomBar]; the wide rail beside wider content. */
 @Composable
 private fun suiteType(): NavigationSuiteType {
     val width = currentWindowAdaptiveInfo().windowSizeClass
     return when {
         width.isWidthAtLeastBreakpoint(WindowSizeClass.WIDTH_DP_EXPANDED_LOWER_BOUND) -> NavigationSuiteType.WideNavigationRailExpanded
         width.isWidthAtLeastBreakpoint(WindowSizeClass.WIDTH_DP_MEDIUM_LOWER_BOUND) -> NavigationSuiteType.WideNavigationRailCollapsed
-        else -> NavigationSuiteType.ShortNavigationBarCompact
+        else -> NavigationSuiteType.None
     }
 }
 
@@ -179,6 +178,11 @@ fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> U
     }
     val current = backStack.lastOrNull()
     val suite = suiteType()
+    val go = { tab: Tab ->
+        backStack.clear()
+        backStack.add(InboxKey)
+        if (tab != Tab.Inbox) backStack.add(tab.key)
+    }
     NavigationSuiteScaffold(
         navigationSuiteType = suite,
         navigationSuiteColors = NavigationSuiteDefaults.colors(
@@ -187,31 +191,29 @@ fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> U
         ),
         containerColor = MaterialTheme.colorScheme.surface,
         navigationItems = {
-            for (tab in tabs) {
-                val selected = current == tab.key || (tab.key == InboxKey && (current is DecisionKey || current == PromptLogKey)) || (tab.key == QuotasKey && current == QuotaSettingsKey)
+            for (tab in Tab.entries) {
+                val selected = tabOf(current) == tab
                 NavigationSuiteItem(
                     navigationSuiteType = suite,
                     selected = selected,
-                    onClick = {
-                        backStack.clear()
-                        backStack.add(InboxKey)
-                        if (tab.key != InboxKey) backStack.add(tab.key)
-                    },
+                    onClick = { go(tab) },
                     icon = {
-                        // Open decisions need the owner: the beacon, a dot, not a count in error red.
-                        val beacon = tab.key == InboxKey && openDecisions > 0
-                        BadgedBox(badge = { if (beacon) Badge(containerColor = colors.accent) }) {
-                            Icon(if (selected) tab.selected else tab.icon, contentDescription = null)
+                        BadgedBox(badge = { if (tab == Tab.Inbox && openDecisions > 0) Badge(containerColor = colors.accent, contentColor = colors.onAccent) { Text("$openDecisions") } }) {
+                            Symbol(tab.sym, filled = selected)
                         }
                     },
                     label = { Text(tab.label) },
-                    modifier = Modifier.semantics { if (tab.key == InboxKey && openDecisions > 0) stateDescription = "$openDecisions need you" },
+                    modifier = Modifier.semantics { if (tab == Tab.Inbox && openDecisions > 0) stateDescription = "$openDecisions need you" },
                 )
             }
         },
     ) {
         val motion = navMotion()
-        Scaffold(snackbarHost = { SnackbarHost(host) }, containerColor = MaterialTheme.colorScheme.surface) { padding ->
+        Scaffold(
+            snackbarHost = { SnackbarHost(host) },
+            bottomBar = { if (suite == NavigationSuiteType.None) BottomBar(tabOf(current), openDecisions, go) },
+            containerColor = MaterialTheme.colorScheme.surface,
+        ) { padding ->
             NavDisplay(
                 backStack = backStack,
                 modifier = Modifier.fillMaxSize().padding(padding),
@@ -272,24 +274,31 @@ fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> U
                             now,
                             settings = settings,
                             refresh = refresh(vm::refresh),
-                            onNotify = { vm.setSettings(settings.copy(notify = (settings.notify + it).distinct())) },
-                            onSettings = { backStack.add(QuotaSettingsKey) },
+                            onNotify = { p, on -> vm.setSettings(settings.copy(notify = if (on) (settings.notify + p).distinct() else settings.notify - p)) },
                         )
                     }
-                    entry<QuotaSettingsKey> {
-                        val vm: QuotasViewModel = hiltViewModel()
+                    entry<SettingsKey> {
+                        val vm: SettingsViewModel = hiltViewModel()
                         val windows by vm.windows.collectAsStateWithLifecycle()
-                        val settings by vm.settings.collectAsStateWithLifecycle()
-                        QuotaSettingsScreen(windows, settings, vm::setSettings)
+                        val quota by vm.quota.collectAsStateWithLifecycle()
+                        val members by vm.members.collectAsStateWithLifecycle()
+                        val colours by vm.colours.collectAsStateWithLifecycle()
+                        val push by vm.push.collectAsStateWithLifecycle()
+                        val server by vm.server.collectAsStateWithLifecycle()
+                        SettingsScreen(
+                            windows, quota, members.size, colours, push, server,
+                            SettingsActions(vm::setQuota, vm::setColours, vm::setPush, vm::signOut, devices = { backStack.add(DevicesKey) }, addDevice = { backStack.add(AddDeviceKey) }),
+                        )
                     }
                     entry<DevicesKey> {
                         val vm: DevicesViewModel = hiltViewModel()
                         val members by vm.members.collectAsStateWithLifecycle()
+                        DevicesScreen(members, now, vm.actions, onBack = { backStack.removeAt(backStack.lastIndex) }, onAdd = { backStack.add(AddDeviceKey) })
+                    }
+                    entry<AddDeviceKey> {
+                        val vm: DevicesViewModel = hiltViewModel()
                         val approval by vm.approval.collectAsStateWithLifecycle()
-                        val push by vm.push.collectAsStateWithLifecycle()
-                        val server by vm.server.collectAsStateWithLifecycle()
-                        val colours by vm.colours.collectAsStateWithLifecycle()
-                        DevicesScreen(members, approval, push, server, now, vm.actions, colours = colours)
+                        AddDeviceScreen(approval, vm.actions, onBack = { backStack.removeAt(backStack.lastIndex) })
                     }
                 },
             )

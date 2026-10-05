@@ -33,8 +33,21 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalContentColor
+import androidx.compose.material3.LocalTextStyle
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -82,6 +95,76 @@ fun Screen(
         // Wide windows cap the content at `size.content` (DESIGN.md).
         Box(Modifier.widthIn(max = Sizes.content)) { content(padding) }
     }
+}
+
+/**
+ * A top-level page, as the mockups draw it: a large title that scrolls away with the list under
+ * it, cards [gap] apart in a 12 dp gutter. [onBack] adds a back button and sets the title a size
+ * smaller, for a page inside a tab. [trailing] sits at the title's baseline end.
+ */
+@Composable
+fun Page(
+    title: String,
+    modifier: Modifier = Modifier,
+    subtitle: (@Composable () -> Unit)? = null,
+    trailing: (@Composable () -> Unit)? = null,
+    onBack: (() -> Unit)? = null,
+    refresh: Refresh? = null,
+    gap: Dp = groupGap,
+    /** Space under the title; a page that starts with a section name needs less. */
+    titleGap: Dp = Spacing.s3,
+    content: LazyListScope.() -> Unit,
+) {
+    Refreshable(refresh) {
+        LazyColumn(
+            modifier.fillMaxSize().widthIn(max = Sizes.content),
+            contentPadding = PaddingValues(start = Spacing.s3, end = Spacing.s3, bottom = Spacing.s6),
+            verticalArrangement = Arrangement.spacedBy(gap),
+        ) {
+            item(key = "page-title") { PageTitle(title, subtitle, trailing, onBack, titleGap - gap) }
+            content()
+        }
+    }
+}
+
+@Composable
+private fun PageTitle(title: String, subtitle: (@Composable () -> Unit)?, trailing: (@Composable () -> Unit)?, onBack: (() -> Unit)?, bottom: Dp) {
+    val scheme = MaterialTheme.colorScheme
+    Column {
+        if (onBack != null) {
+            IconButton(onClick = onBack, modifier = Modifier.padding(vertical = Spacing.s2).offset(x = -Spacing.s2)) {
+                Symbol(Sym.Back, size = 22.dp, tint = scheme.onSurface, contentDescription = "Back")
+            }
+        }
+        Row(
+            Modifier.padding(start = Spacing.s1, top = if (onBack != null) Spacing.s2 else Spacing.s6, bottom = bottom),
+            verticalAlignment = Alignment.Bottom,
+        ) {
+            Column(Modifier.weight(1f)) {
+                val style = if (onBack != null) StarbridgeTheme.type.title else StarbridgeTheme.type.display
+                // One line, as tall as its line height: the face's own height is more at this size,
+                // and CSS lets the glyphs overflow the line where Compose would grow the box.
+                val line = with(LocalDensity.current) { style.lineHeight.toDp() }
+                Text(title, style = style, color = scheme.onSurface, maxLines = 1, modifier = Modifier.height(line).wrapContentHeight(unbounded = true))
+                if (subtitle != null) {
+                    Spacer(Modifier.height(2.dp))
+                    CompositionLocalProvider(LocalContentColor provides scheme.onSurfaceVariant, LocalTextStyle provides StarbridgeTheme.type.body) { subtitle() }
+                }
+            }
+            trailing?.invoke()
+        }
+    }
+}
+
+/** A section's name over its group of rows. */
+@Composable
+fun Section(text: String) {
+    Text(
+        text,
+        style = StarbridgeTheme.type.label,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(start = Spacing.s2, top = Spacing.s5 - groupGap, bottom = Spacing.s2 - groupGap),
+    )
 }
 
 /** Pull to refresh: whether a sync runs, and how to start one. */
@@ -144,19 +227,25 @@ fun Panel(modifier: Modifier = Modifier, color: Color = MaterialTheme.colorSchem
  * corners round as a card, the inner ones stay tight, and rows sit [groupGap] apart, as the
  * buttons of a connected group do.
  */
-fun groupShape(index: Int, count: Int): Shape {
+fun groupShape(index: Int, count: Int, outer: Dp = Radius.xl, inner: Dp = Radius.xs): Shape {
     val first = index == 0
     val last = index == count - 1
     return RoundedCornerShape(
-        topStart = if (first) Radius.xl else Radius.xs,
-        topEnd = if (first) Radius.xl else Radius.xs,
-        bottomStart = if (last) Radius.xl else Radius.xs,
-        bottomEnd = if (last) Radius.xl else Radius.xs,
+        topStart = if (first) outer else inner,
+        topEnd = if (first) outer else inner,
+        bottomStart = if (last) outer else inner,
+        bottomEnd = if (last) outer else inner,
     )
 }
 
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
-val groupGap = ButtonGroupDefaults.ConnectedSpaceBetween
+/** A card in a feed of cards (inbox, quotas): rounder outside, 6 dp inside. */
+fun cardShape(index: Int, count: Int) = groupShape(index, count, outer = Spacing.s6, inner = 6.dp)
+
+/** A row of a settings group. */
+fun rowShape(index: Int, count: Int) = groupShape(index, count, outer = Spacing.s5, inner = Radius.xs)
+
+/** Cards and rows of one group sit this far apart. */
+val groupGap = 2.dp
 
 /**
  * A single-select connected button group (Material 3 Expressive), which replaces segmented
