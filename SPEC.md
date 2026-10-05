@@ -622,6 +622,28 @@ How it generalizes is open.
   settings are the quota notifications: off by default, enabled per provider (also from an
   alert card), at most one push per window per reset, on their own low-priority channel. Cost
   tracking, menu-bar-only settings and confetti stay out.
+- 2026-10-05. Design v2 (owner, from mockup rounds 1–4,
+  https://claude.ai/artifact/4Esy3goyohvLThcPVCKaEf, the source for every screen). Each surface
+  has a job: the landing page shows the product (direction B, product showcase); the web app is
+  a quiet, dense control surface for any browser (A), with the same structure but comfortable
+  density on phones; Android is full Material 3 Expressive and feels native (C). Navigation: a
+  web left rail (Inbox, Quotas, Settings) that becomes a bottom bar under 600 px; an Android
+  bottom bar with the same three, Devices inside Settings. Inbox: one feed, with a remembered
+  "Group by machine" option; answered items go to a collapsed, remembered History. Permission
+  prompts and questions look different: a prompt shows a terminal tile, the exact command in
+  mono, Allow/Deny and a waiting timer; a question shows its text as the title, then its options.
+  A question shows "Working on other things" (neutral) or "Waiting for you" (amber, #122). One
+  meta row of facts Starbridge knows (machine-kind icon and name, repo, time right-aligned);
+  agent-written text is the content below it; details end with the session name, middle-truncated,
+  and "Open in Claude" or "Open in Codex" (text, no logos). Quota bars fill in the provider's lab
+  colour, replacing #72's dot; there are no status or provider dots, and the coloured status text
+  carries the state. Amber never fills a bar: it only marks what needs the user. "Will run out"
+  draws the projected overrun hatched in the lab colour with a red cap, and sorts first.
+  Destructive actions are neutral on the row; only the confirm button in their dialog is red.
+  Pairing is scan-first, with digit comparison as the "Can't scan?" fallback; account setup shows
+  only on an empty account; self-hosting sits behind "Use your own server". Copy inside the UI is
+  labels and states only. Icons: a custom set drawn to the mark on the web; Material Symbols
+  Rounded tuned to Google Sans Flex on Android; a native iOS app, if any, would use SF Symbols.
 - 2026-10-05. Quota settings and notifications, as built (#115). Settings live on each device
   (web `localStorage`, Android preferences) and sit on a Quota settings page opened from the
   Quotas screen: bars show used or remaining, reset times relative or as a clock time
