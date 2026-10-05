@@ -242,7 +242,5 @@ class Fake(private val now: Instant) {
     val recoveryWords = listOf(
         "orbit", "lantern", "cobalt", "meadow", "quartz", "harbor",
         "velvet", "ember", "signal", "tundra", "falcon", "pebble",
-        "copper", "nimbus", "saddle", "violet", "ridge", "anchor",
-        "maple", "comet", "thistle", "beacon", "glacier", "summit",
     )
 }

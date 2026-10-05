@@ -2,6 +2,7 @@ package dev.starbridge.app.data
 
 import android.util.Log
 import dev.starbridge.app.protocol.Bip39
+import dev.starbridge.app.protocol.recoverySignSeed
 import dev.starbridge.app.protocol.Directories
 import dev.starbridge.app.protocol.Directory
 import dev.starbridge.app.protocol.DirectoryEntry
@@ -324,8 +325,9 @@ class ServerStore(
         if (saved.pendingGenesis == null) {
             if (api().directory(0).isNotEmpty()) throw IllegalStateException("This account already has devices. Join it instead.")
             val member = newMember()
-            val seed = sodium.random(32)
-            val entry = ProtocolJson.encodeToJsonElement(directories.genesisEntry(saved.account!!, member, signKey, sodium.signSeedKeyPair(seed), now()))
+            val seed = sodium.random(16)
+            val recovery = sodium.signSeedKeyPair(recoverySignSeed(seed, sodium))
+            val entry = ProtocolJson.encodeToJsonElement(directories.genesisEntry(saved.account!!, member, signKey, recovery, now()))
             persist(saved.copy(me = member, pin = null, pendingGenesis = entry), secrets.copy(recoverySeed = toB64(seed)))
         }
         val genesis: JsonElement = saved.pendingGenesis!!
@@ -527,12 +529,9 @@ class ServerStore(
     }
 
     override fun recover(words: String) = run {
-        val seed = try {
-            Bip39.mnemonicToEntropy(words)
-        } catch (e: IllegalArgumentException) {
-            throw IllegalArgumentException("Those words are not a recovery key. Check each word and the order.")
-        }
-        val recovery = sodium.signSeedKeyPair(seed)
+        val list = Bip39.split(words)
+        Bip39.problem(list)?.let { throw IllegalArgumentException(it) }
+        val recovery = sodium.signSeedKeyPair(recoverySignSeed(Bip39.mnemonicToEntropy(list.joinToString(" ")), sodium))
         val entries = api().directory(0)
         // The chain's first entry must carry this key's own signature, which a server cannot fake.
         val dir = directories.verify(entries, saved.account, recoveryPk = toB64(recovery.public))
@@ -737,6 +736,10 @@ class ServerStore(
 
     override fun refreshPrompts() = run(showBusy = false) {
         if (phase.value == Phase.Ready) syncPrompts()
+    }
+
+    override fun refreshDirectory() = run(showBusy = false) {
+        if (phase.value == Phase.Ready) syncDirectory()
     }
 
     override fun answerPrompt(id: String, allow: Boolean, scope: String, message: String?) =
@@ -997,6 +1000,8 @@ class ServerStore(
     // --- Pairing and revoking ----------------------------------------------------
 
     override fun lookUpPairing(code: String) = run(showBusy = false) {
+        // A shown QR code's wait must not overwrite the request looked up now.
+        showJob?.cancel()
         approval.value = Approval.Checking
         val parsed = try {
             codeFromLink(code)
