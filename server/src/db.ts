@@ -1,6 +1,7 @@
 import { Database } from "bun:sqlite";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
+import { DEFAULT_LIMITS } from "./limits";
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS accounts (
@@ -193,12 +194,18 @@ export function openDb(path: string): Database {
     const columns = db.query("PRAGMA table_info(items)").all() as { name: string }[];
     if (!columns.some((col) => col.name === "size"))
       db.run("ALTER TABLE items ADD COLUMN size INTEGER NOT NULL DEFAULT 0");
-    // Databases made before item_totals: count what they hold, once.
-    if (!totals)
+    // Databases made before item_totals, whose sizes counted boxes only: charge the rows too,
+    // then count what they hold, once.
+    if (!totals) {
+      db.query(
+        `UPDATE items SET size = size + ? * (1 + (SELECT COUNT(*) FROM boxes b
+           WHERE b.account_id = items.account_id AND b.item_id = items.id))`,
+      ).run(DEFAULT_LIMITS.rowBytes);
       db.run(
         `INSERT INTO item_totals (account_id, kind, n, bytes)
          SELECT account_id, kind, COUNT(*), SUM(size) FROM items GROUP BY account_id, kind`,
       );
+    }
   })();
   return db;
 }

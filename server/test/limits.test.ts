@@ -443,11 +443,12 @@ test("a database from before the item totals counts what it holds once, then kee
   db.run("DROP TABLE item_totals");
   db.close();
   db = openDb(path);
-  add("p3", 300);
+  // The two older items are charged their rows now; they have no boxes.
+  add("p3", 300 + DEFAULT_LIMITS.rowBytes);
   db.run("DELETE FROM items WHERE id = 'p1'");
   db.close();
   db = openDb(path);
   expect(db.query("SELECT kind, n, bytes FROM item_totals").all()).toEqual([
-    { kind: "permission", n: 2, bytes: 500 },
+    { kind: "permission", n: 2, bytes: 500 + 2 * DEFAULT_LIMITS.rowBytes },
   ]);
 });
