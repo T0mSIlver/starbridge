@@ -10,7 +10,14 @@ export const SESSION_COOKIE = "sb_session";
 const SESSION_DAYS = 365;
 
 export type Caller =
-  | { role: "device"; account: string; member: string | null; session: string }
+  | {
+      role: "device";
+      account: string;
+      member: string | null;
+      session: string;
+      /** The web page signs in with the cookie; the Android app sends a bearer token. */
+      client: "web" | "android";
+    }
   | { role: "machine"; account: string; member: string };
 
 export function randomToken(prefix: string): string {
@@ -65,7 +72,8 @@ function bearer(c: Context): string | undefined {
 /** Reads the caller from the bearer token or the session cookie, if any. */
 export function identify(c: Context<Env>): Caller | undefined {
   const db = c.var.db;
-  const token = bearer(c) ?? getCookie(c, SESSION_COOKIE);
+  const sent = bearer(c);
+  const token = sent ?? getCookie(c, SESSION_COOKIE);
   if (!token) return undefined;
   const hash = hashToken(token);
   if (token.startsWith("sbm_")) {
@@ -78,7 +86,13 @@ export function identify(c: Context<Env>): Caller | undefined {
     .query("SELECT account_id, member_id, expires_at FROM sessions WHERE token_hash = ?")
     .get(hash) as { account_id: string; member_id: string | null; expires_at: string } | null;
   if (!s || s.expires_at < new Date().toISOString()) return undefined;
-  return { role: "device", account: s.account_id, member: s.member_id, session: hash };
+  return {
+    role: "device",
+    account: s.account_id,
+    member: s.member_id,
+    session: hash,
+    client: sent ? "android" : "web",
+  };
 }
 
 type Need = "device" | "paired-device" | "machine" | "any" | "paired";
@@ -101,6 +115,7 @@ export function requireCaller(...needs: Need[]): MiddlewareHandler<Env> {
     const ok = needs.some((n) => admits[n]);
     if (!ok) fail(403, "forbidden", `needs ${needs.join(" or ")}`);
     c.set("caller", caller);
+    c.var.usage.seen(caller);
     await next();
   };
 }

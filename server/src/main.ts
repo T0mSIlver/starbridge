@@ -1,7 +1,19 @@
 import { createApp } from "./app";
 import { configFromEnv } from "./config";
+import { openDb } from "./db";
+import { formatReport, report } from "./usage";
 
 const config = configFromEnv();
+
+// `usage [days]` prints the daily usage counts and exits. It runs on the server's host, so only
+// whoever can open the database can read them.
+if (process.argv[2] === "usage") {
+  const days = Number(process.argv[3] ?? 7);
+  if (!Number.isInteger(days) || days < 1)
+    throw new Error("usage [days]: days is a positive integer");
+  console.log(formatReport(report(openDb(config.dbPath), days)));
+  process.exit(0);
+}
 const { app } = await createApp(config);
 
 const server = Bun.serve({
