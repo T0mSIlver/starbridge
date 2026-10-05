@@ -1,10 +1,17 @@
 {
   "note": "computePace(window, now) and alertsFor(provider, window+pace, now) with the default rule.",
   "rule": {
-    "leadFraction": 0.2,
-    "minUnusedPercent": 25,
+    "leadMinutes": {
+      "day": 60,
+      "longer": 1440
+    },
+    "minUnusedPercent": 30,
     "unusedHeadroom": true,
-    "runsOut": true
+    "runsOut": true,
+    "lowThresholds": [
+      50,
+      20
+    ]
   },
   "cases": [
     {
@@ -57,6 +64,13 @@
       },
       "expectAlerts": [
         {
+          "kind": "low",
+          "provider": "zai",
+          "window": "primary",
+          "resetsAt": "2026-10-04T14:00:00Z",
+          "threshold": 20
+        },
+        {
           "kind": "runs-out",
           "provider": "zai",
           "window": "primary",
@@ -84,7 +98,15 @@
         "willLastToReset": true,
         "runsOutAt": null
       },
-      "expectAlerts": []
+      "expectAlerts": [
+        {
+          "kind": "low",
+          "provider": "zai",
+          "window": "primary",
+          "resetsAt": "2026-10-04T14:30:00Z",
+          "threshold": 50
+        }
+      ]
     },
     {
       "name": "too early to tell",
@@ -128,6 +150,13 @@
       },
       "expectAlerts": [
         {
+          "kind": "low",
+          "provider": "zai",
+          "window": "primary",
+          "resetsAt": "2026-10-04T14:00:00Z",
+          "threshold": 20
+        },
+        {
           "kind": "runs-out",
           "provider": "zai",
           "window": "primary",
@@ -137,7 +166,7 @@
       ]
     },
     {
-      "name": "weekly, 80% used, a day left: no alert",
+      "name": "weekly, 80% used, a day left: low at 20, no unused headroom",
       "window": {
         "id": "secondary",
         "label": "week",
@@ -155,7 +184,15 @@
         "willLastToReset": true,
         "runsOutAt": null
       },
-      "expectAlerts": []
+      "expectAlerts": [
+        {
+          "kind": "low",
+          "provider": "zai",
+          "window": "secondary",
+          "resetsAt": "2026-10-05T12:00:00Z",
+          "threshold": 20
+        }
+      ]
     },
     {
       "name": "monthly credits, 3 days left, 40% used",
@@ -176,15 +213,7 @@
         "willLastToReset": true,
         "runsOutAt": null
       },
-      "expectAlerts": [
-        {
-          "kind": "unused-headroom",
-          "provider": "zai",
-          "window": "mistral-monthly-plan",
-          "resetsAt": "2026-10-07T12:00:00Z",
-          "unusedPercent": 55.6
-        }
-      ]
+      "expectAlerts": []
     },
     {
       "name": "unknown length",
@@ -199,6 +228,114 @@
       "provider": "zai",
       "expectPace": null,
       "expectAlerts": []
+    },
+    {
+      "name": "5-hour, 61 minutes left: too early for unused headroom",
+      "window": {
+        "id": "primary",
+        "label": "5h",
+        "usedPercent": 20,
+        "windowMinutes": 300,
+        "resetsAt": "2026-10-04T13:01:00Z"
+      },
+      "now": "2026-10-04T12:00:00Z",
+      "provider": "zai",
+      "expectPace": {
+        "stage": "behind",
+        "expectedUsedPercent": 79.7,
+        "deltaPercent": -59.7,
+        "projectedUsedPercent": 25.1,
+        "willLastToReset": true,
+        "runsOutAt": null
+      },
+      "expectAlerts": []
+    },
+    {
+      "name": "weekly, 8 hours left, half unused",
+      "window": {
+        "id": "secondary",
+        "label": "week",
+        "usedPercent": 45,
+        "windowMinutes": 10080,
+        "resetsAt": "2026-10-04T20:00:00Z"
+      },
+      "now": "2026-10-04T12:00:00Z",
+      "provider": "zai",
+      "expectPace": {
+        "stage": "behind",
+        "expectedUsedPercent": 95.2,
+        "deltaPercent": -50.2,
+        "projectedUsedPercent": 47.3,
+        "willLastToReset": true,
+        "runsOutAt": null
+      },
+      "expectAlerts": [
+        {
+          "kind": "unused-headroom",
+          "provider": "zai",
+          "window": "secondary",
+          "resetsAt": "2026-10-04T20:00:00Z",
+          "unusedPercent": 52.7
+        }
+      ]
+    },
+    {
+      "name": "45% left: low at 50",
+      "window": {
+        "id": "primary",
+        "label": "5h",
+        "usedPercent": 55,
+        "windowMinutes": 300,
+        "resetsAt": "2026-10-04T16:00:00Z"
+      },
+      "now": "2026-10-04T12:00:00Z",
+      "provider": "zai",
+      "expectPace": {
+        "stage": "ahead",
+        "expectedUsedPercent": 20,
+        "deltaPercent": 35,
+        "projectedUsedPercent": 275,
+        "willLastToReset": false,
+        "runsOutAt": "2026-10-04T12:49:05Z"
+      },
+      "expectAlerts": [
+        {
+          "kind": "low",
+          "provider": "zai",
+          "window": "primary",
+          "resetsAt": "2026-10-04T16:00:00Z",
+          "threshold": 50
+        },
+        {
+          "kind": "runs-out",
+          "provider": "zai",
+          "window": "primary",
+          "resetsAt": "2026-10-04T16:00:00Z",
+          "runsOutAt": "2026-10-04T12:49:05Z"
+        }
+      ]
+    },
+    {
+      "name": "no length, 15% left: low at 20 only",
+      "window": {
+        "id": "primary",
+        "label": "5h",
+        "usedPercent": 85,
+        "windowMinutes": null,
+        "resetsAt": "2026-10-04T12:30:00Z"
+      },
+      "now": "2026-10-04T12:00:00Z",
+      "provider": "zai",
+      "expectPace": null,
+      "expectAlerts": [
+        {
+          "kind": "low",
+          "provider": "zai",
+          "window": "primary",
+          "resetsAt": "2026-10-04T12:30:00Z",
+          "threshold": 20
+        }
+      ]
     }
   ]
 }

@@ -6,19 +6,25 @@ export const MIN_ELAPSED_FRACTION = 0.05;
 export const PACE_TOLERANCE = 5;
 
 export interface AlertRule {
-  /** Alert on unused headroom once the reset is this share of the window away. */
-  leadFraction: number;
+  /**
+   * Alert on unused headroom once the reset is this many minutes away: `day` for windows of a
+   * day or less (a 5-hour window), `longer` for weekly and monthly ones.
+   */
+  leadMinutes: { day: number; longer: number };
   /** Least headroom, in percent, worth an alert. */
   minUnusedPercent: number;
   unusedHeadroom: boolean;
   runsOut: boolean;
+  /** Percent left at or under which a "low" alert holds, as CodexBar's quota warning thresholds. */
+  lowThresholds: number[];
 }
 
 export const DEFAULT_ALERT_RULE: AlertRule = {
-  leadFraction: 0.2,
-  minUnusedPercent: 25,
+  leadMinutes: { day: 60, longer: 24 * 60 },
+  minUnusedPercent: 30,
   unusedHeadroom: true,
   runsOut: true,
+  lowThresholds: [50, 20],
 };
 
 const round1 = (x: number) => Math.round(x * 10) / 10;
@@ -76,9 +82,10 @@ export function computePace(
 }
 
 /**
- * Alerts for one window: it will run out before its reset, or it resets soon with headroom left
- * unused. The owner treats unused headroom as waste (GLM's 5-hour window, Mistral's monthly
- * credits, the Codex weekly limit).
+ * Alerts for one window: it will run out before its reset, it resets soon with headroom left
+ * unused, or it has at most a threshold left (only the lowest threshold reached). The owner
+ * treats unused headroom as waste (GLM's 5-hour window, Mistral's monthly credits, the Codex
+ * weekly limit).
  */
 export function alertsFor(
   provider: string,
@@ -87,8 +94,13 @@ export function alertsFor(
   rule: AlertRule = DEFAULT_ALERT_RULE,
 ): QuotaAlert[] {
   const { pace, resetsAt, windowMinutes } = w;
-  if (!pace || resetsAt === null || windowMinutes === null) return [];
+  if (resetsAt === null) return [];
   const alerts: QuotaAlert[] = [];
+  const left = 100 - Math.min(100, w.usedPercent);
+  const threshold = Math.min(...rule.lowThresholds.filter((t) => left <= t));
+  if (Number.isFinite(threshold))
+    alerts.push({ kind: "low", provider, window: w.id, resetsAt, threshold });
+  if (!pace || windowMinutes === null) return alerts;
   if (
     rule.runsOut &&
     pace.runsOutAt !== null &&
@@ -101,7 +113,8 @@ export function alertsFor(
   if (
     rule.unusedHeadroom &&
     remaining > 0 &&
-    remaining <= rule.leadFraction * windowMinutes * 60_000 &&
+    remaining <=
+      (windowMinutes <= 24 * 60 ? rule.leadMinutes.day : rule.leadMinutes.longer) * 60_000 &&
     unused >= rule.minUnusedPercent
   ) {
     alerts.push({

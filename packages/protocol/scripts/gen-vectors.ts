@@ -11,6 +11,7 @@ import {
   claimHash,
   codeFromLink,
   computePace,
+  DEFAULT_ALERT_RULE,
   type Directory,
   encodeCrockford,
   entryHash,
@@ -1000,7 +1001,7 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
       now: T(12),
     },
     {
-      name: "weekly, 80% used, a day left: no alert",
+      name: "weekly, 80% used, a day left: low at 20, no unused headroom",
       window: {
         id: "secondary",
         label: "week",
@@ -1026,6 +1027,32 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
       window: { ...win, windowMinutes: null },
       now: T(12),
     },
+    {
+      name: "5-hour, 61 minutes left: too early for unused headroom",
+      window: { ...win, resetsAt: T(13, 1) },
+      now: T(12),
+    },
+    {
+      name: "weekly, 8 hours left, half unused",
+      window: {
+        id: "secondary",
+        label: "week",
+        usedPercent: 45,
+        windowMinutes: 10080,
+        resetsAt: T(20, 0),
+      },
+      now: T(12),
+    },
+    {
+      name: "45% left: low at 50",
+      window: { ...win, usedPercent: 55, resetsAt: T(16) },
+      now: T(12),
+    },
+    {
+      name: "no length, 15% left: low at 20 only",
+      window: { ...win, usedPercent: 85, windowMinutes: null },
+      now: T(12),
+    },
   ].map((c) => {
     const p = computePace(c.window, new Date(c.now));
     return {
@@ -1037,7 +1064,7 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
   });
   const paceFile = {
     note: "computePace(window, now) and alertsFor(provider, window+pace, now) with the default rule.",
-    rule: { leadFraction: 0.2, minUnusedPercent: 25, unusedHeadroom: true, runsOut: true },
+    rule: DEFAULT_ALERT_RULE,
     cases: paceCases,
   };
 

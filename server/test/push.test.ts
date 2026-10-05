@@ -471,7 +471,7 @@ test("an account has at most 4 pushes in flight, and a stuck push service times 
   expect(Date.now() - started).toBeLessThan(1200);
 });
 
-test("quota snapshots and runs skip Web Push, which browsers drop when it shows nothing", async () => {
+test("quota snapshots and runs skip Web Push, which browsers drop when it shows nothing, and quiet items skip push", async () => {
   const { s, acct, devbox } = await setup({ ...fcmConfig(), ...vapidConfig() });
   const browser = browserSubscription("quota");
   for (const body of [browser.target, { type: "fcm", endpoint: "tok-ok" }])
@@ -503,6 +503,19 @@ test("quota snapshots and runs skip Web Push, which browsers drop when it shows 
     acct.device.member,
   ]);
   expect((await s.call("POST", "/v1/items", { token: devbox.token, body: r })).status).toBe(201);
+  // A snapshot that raises no new alert is stored without a push.
+  const quiet = {
+    ...seal(
+      "quota",
+      { ...snapshot, id: "q2" },
+      { id: devbox.id, signKey: devbox.keys.sign.privateKey },
+      [acct.device.member],
+    ),
+    quiet: true as const,
+  };
+  expect((await s.call("POST", "/v1/items", { token: devbox.token, body: quiet })).status).toBe(
+    201,
+  );
   await s.deps.push.idle();
   // Sends run concurrently, so their order is not the post order.
   expect(
