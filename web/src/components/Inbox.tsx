@@ -273,9 +273,13 @@ export function Inbox() {
   );
 }
 
-/** The token's width in px, the default before the owner drags an edge. */
-function token(name: string): number {
-  return Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue(name));
+/** Defaults before the owner drags an edge: tokens.css's, also for a render on the server. */
+const SIZES = { "--size-rail": 240, "--size-list": 420, "--size-aside": 320 };
+
+function token(name: keyof typeof SIZES): number {
+  if (typeof document === "undefined") return SIZES[name];
+  const px = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue(name));
+  return Number.isFinite(px) ? px : SIZES[name];
 }
 
 function useWindowWidth(): number {

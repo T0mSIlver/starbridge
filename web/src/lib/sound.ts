@@ -18,6 +18,8 @@ export function unlockSound(): void {
 /** Two soft notes, a fifth apart. */
 export function chime(): void {
   ctx ??= new AudioContext();
+  // Before the page's first tap the notes would wait and all play on that tap.
+  if (ctx.state === "suspended") return;
   const t = ctx.currentTime;
   for (const [i, hz] of [880, 1318.5].entries()) {
     const osc = ctx.createOscillator();
