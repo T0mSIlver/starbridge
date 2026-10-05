@@ -130,7 +130,7 @@ importers:
         specifier: ^0.8.4
         version: 0.8.4
       marked:
-        specifier: ~18.0.14
+        specifier: ^18.0.14
         version: 18.0.14
       next:
         specifier: 16.3.4
