@@ -226,7 +226,8 @@ export function RunRow({ item, now, comfy }: { item: RunItem; now: number; comfy
         machine={item.machine}
         kind={(r.source as { machineKind?: MachineKind }).machineKind}
         repo={r.source.project}
-        time={timer(r.startedAt, end)}
+        // A lost run's length is unknown: its last news may predate most of it (#190).
+        time={state === "lost" ? "" : timer(r.startedAt, end)}
         size={comfy ? "comfy" : "dense"}
       />
       <div className={`${comfy ? "t-action" : "t-label"} ${s.runTitle}`}>
