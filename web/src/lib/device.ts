@@ -211,7 +211,7 @@ async function bind(account: string, device: store.DeviceRecord): Promise<boolea
 }
 
 async function newDevice(account: string, name: string) {
-  const keys = await generateDeviceKeys();
+  const keys = await generateDeviceKeys(store.keeps);
   const record: store.DeviceRecord = {
     account,
     id: randomId("w_"),

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import type { PushState } from "@/lib/push";
 import ui from "./ui.module.css";
 
-/** Offers Web Push until it is on; says so when the browser blocks it. */
+/** Offers Web Push until it is on; says so when the browser blocks it or needs the app installed. */
 export function PushBanner() {
   const [state, setState] = useState<PushState>();
   const [error, setError] = useState<string>();
@@ -12,6 +12,13 @@ export function PushBanner() {
     import("@/lib/push").then((p) => p.pushState()).then(setState);
   }, []);
   if (state === undefined || state === "on" || state === "unsupported") return null;
+  if (state === "install")
+    return (
+      <p className={ui.notice} style={{ marginBottom: "var(--s4)" }} data-testid="install-hint">
+        To get notifications here, tap Share, then Add to Home Screen, and open Starbridge from
+        there. The Home Screen app keeps its own keys, so it joins as a new device.
+      </p>
+    );
   if (state === "denied")
     return (
       <p className={ui.notice} style={{ marginBottom: "var(--s4)" }}>

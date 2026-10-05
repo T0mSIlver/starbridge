@@ -1,8 +1,10 @@
 // Web Push on the page side: registers the service worker and subscribes with the server's
 // VAPID key. The service worker (src/sw/sw.ts) opens what arrives.
 import { api } from "./api";
+import { needsHomeScreen, thisBrowser } from "./install";
 
-export type PushState = "unsupported" | "denied" | "off" | "on";
+/** "install": an iOS tab, where push needs the page on the Home Screen first. */
+export type PushState = "unsupported" | "install" | "denied" | "off" | "on";
 
 const supported = () =>
   typeof navigator !== "undefined" &&
@@ -16,6 +18,7 @@ export function registerWorker(): Promise<ServiceWorkerRegistration> | undefined
 }
 
 export async function pushState(): Promise<PushState> {
+  if (needsHomeScreen(thisBrowser())) return "install";
   if (!supported()) return "unsupported";
   if (Notification.permission === "denied") return "denied";
   const reg = await navigator.serviceWorker.getRegistration("/");
