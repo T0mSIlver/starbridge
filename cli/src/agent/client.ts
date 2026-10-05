@@ -1,6 +1,7 @@
 import { request } from "node:http";
 import type { Ctx } from "../context";
-import { API, API_HEADER, type ErrorBody, socketPath, VERSION } from "./api";
+import { VERSION } from "../version";
+import { API, API_HEADER, type ErrorBody, socketPath } from "./api";
 
 /** No agent listens: the CLI talks to the server itself. */
 export class NoAgent extends Error {}

@@ -468,6 +468,28 @@ How it generalizes is open.
   provider dots stay fixed. Measured on warm, cool and low-chroma seeds:
   the fixed colours keep 4.5:1 as text and 3:1 as dots; the wallpaper's
   `fg3` reaches 3.8:1 on light cards, above the default palette's 3.3:1.
+- 2026-10-05. Install, update and signing (#68, part 4): the release workflow signs `SHA256SUMS`
+  with minisign in CI (the owner's call, replacing "not in CI" in #68's spec); the secret key is
+  in `~/.config/starbridge/secrets/minisign.key` and the `MINISIGN_SECRET_KEY` Actions secret, the
+  public key in `cli/minisign.pub`, `install.sh`, the binary and the CLI README. `install.sh` is a
+  release asset and checks the signature with minisign, or with OpenSSL 3 when minisign is
+  missing, so most machines need nothing extra. The tap is `T0mSIlver/homebrew-starbridge`
+  (`brew install T0mSIlver/starbridge/starbridge`, not `T0mSIlver/tap`), private like the main
+  repo until both go public; the workflow commits the formula there with a write deploy key
+  (`HOMEBREW_TAP_DEPLOY_KEY`) on non-rc tags. npm gets rc versions under the `next` dist-tag.
+  `starbridge update` replaces script installs only and points brew and npm installs at their
+  manager; `starbridge uninstall` removes the binary, and part 3 adds the service, plugins and
+  config to it. Release downloads need the repo public.
+- 2026-10-05. Local agent (#68, part 1): `starbridge agent` is the same binary, one per machine.
+  It keeps the one answer long-poll and the quota timer, and serves the CLI and sessions over
+  HTTP on a unix socket (PROTOCOL.md, "Local agent API"). Answers stay in the CLI's state file,
+  under its lock, so the agent and the CLI's own path share one store and the decision code.
+  Every CLI command asks the agent first and talks to the server itself when none listens, or
+  when the agent speaks another API revision (426). It never falls back once the agent has
+  answered, so nothing posts twice. The agent runs only the CodexBar binary its own config
+  names (`agent.json`, written by setup, or flags), never a path a client sends. No uid check
+  on the socket's peer: neither Bun nor Node exposes `SO_PEERCRED`; the 0700 directory and 0600
+  socket keep other users out.
 
 - 2026-10-05. Permission prompts' protocol (#57): `ITEM_KINDS` in `packages/protocol` lists each
   sealed kind's signing role and the item it refers to, and the server and both clients derive

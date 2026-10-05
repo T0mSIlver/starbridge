@@ -1,7 +1,6 @@
 import { readFileSync } from "node:fs";
 import { parseArgs } from "node:util";
 import { ProtocolError, ready, type SessionLink } from "@starbridge/protocol";
-import { VERSION } from "./agent/api";
 import { AgentError, Interrupted, withAgent } from "./agent/client";
 import { answersVia, askVia, quotaVia, waitVia } from "./agent/commands";
 import { runAgent } from "./agent/main";
@@ -11,6 +10,9 @@ import { type AskInput, answers, ask, wait } from "./decisions";
 import { hookPermission, hookSettle, permissionsCommand } from "./hook";
 import { pair } from "./pair";
 import { pushOnce, quotaPush } from "./quota";
+import { installKind, ReleaseError } from "./release";
+import { removeBinary, update } from "./update";
+import { VERSION } from "./version";
 
 const HELP = `starbridge: post decisions to your devices, upload quota windows
 
@@ -69,6 +71,13 @@ const HELP = `starbridge: post decisions to your devices, upload quota windows
       For Claude Code's PermissionRequest hook, and for its PostToolUse, PermissionDenied,
       Stop and SessionEnd hooks: hook JSON on stdin; prints the hook's decision, or nothing
       to leave the prompt to the keyboard.
+
+  starbridge update
+      Install the latest release once its signature checks out (brew and npm installs: use
+      their manager).
+
+  starbridge uninstall
+      Remove this binary. Keys and state stay.
 
   starbridge --version
 
@@ -227,11 +236,16 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
         if (sub === "settle") return await hookSettle(ctx, readText("-"), values);
         throw new UsageError("usage: starbridge hook permission|settle --agent claude-code");
       }
+      case "update":
+        parseArgs({ args: rest, options: {} });
+        return await update(ctx, installKind());
+      case "uninstall":
+        parseArgs({ args: rest, options: {} });
+        return removeBinary(ctx, installKind());
       case "--version":
-      case "version": {
+      case "-v":
         ctx.out(`starbridge ${VERSION}`);
         return 0;
-      }
       case undefined:
       case "help":
       case "--help":
@@ -248,6 +262,7 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
       e instanceof UsageError ||
       e instanceof ApiError ||
       e instanceof ProtocolError ||
+      e instanceof ReleaseError ||
       e instanceof AgentError
     ) {
       ctx.err(`starbridge: ${e.message}`);

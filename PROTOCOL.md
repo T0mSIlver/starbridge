@@ -247,8 +247,8 @@ time). A client skips types it does not know. The agent keeps answers in the CLI
 so a restart loses nothing unconfirmed.
 
 Features plug in as `Feature`s (`cli/src/agent/server.ts`): routes, the events they hand
-sessions, the acks they take, `bye`, a background loop and their part of `status`. #58 adds
-`PUT /controls/:id` and a `control` event, #60 `POST /runs`.
+sessions, the acks they take, `bye`, a background loop and their part of `status`. #60 adds
+`POST /runs`.
 
 ## Permission prompts
 
