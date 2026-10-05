@@ -207,49 +207,6 @@ notices 7 days after they arrived, unanswered decisions and quota snapshots 30
 days after they arrived, quota snapshots of revoked machines, and expired sessions. Clients that
 want a longer history keep their own copy.
 
-## Local agent API
-
-`starbridge agent` runs once per machine as a user service. It holds the machine's keys and its
-one connection to the server, and serves the CLI and the Claude Code sessions on that machine
-over HTTP on a unix socket: `$XDG_RUNTIME_DIR/starbridge/agent.sock` on Linux when that is set,
-else `agent.sock` in the config directory (`$STARBRIDGE_AGENT_SOCKET` overrides). The directory
-is 0700, the socket 0600, and there is no TCP listener. Types: `cli/src/agent/api.ts`.
-
-Every request sends `starbridge-api: <n>` and a `user-agent` such as `starbridge-mod/0.2.0`. The
-agent serves revisions `min` to `max` (1 to 1 today) and answers anything else with 426
-`{error: "agent-too-old" | "client-too-old", detail, agent: {version, api}}`, `detail` saying
-what to update. Adding a route or a field keeps the revision. The CLI falls back to the server on
-a 426, and whenever no agent listens (no socket, or a socket nobody listens on); it never falls
-back once the agent has answered one of its calls, so nothing is posted twice.
-
-Errors are `{error, detail?}`: 400 for a bad request (`detail` is the CLI's own message), 404
-for an unknown route or decision, 502 when the server refused or failed (`detail` says how).
-`wait` holds a request at most 25 s, under the 30 s the mod's host allows a call.
-
-| Route | What |
-|---|---|
-| `GET /status` | `{version, api, pid, startedAt, socket, machine?, server: {reachable, lastOkAt?, lastError?}, quota: {providers, intervalSeconds, lastPostAt?, lastError?}, sessions}` |
-| `POST /decisions` | `{input}` with `ask`'s fields (`question`, `default`, `options`, `project`, `session`, …); the client fills `project`, `session`, title and links from its own process → `{id}` |
-| `POST /answers/next` | `{id?, wait?}`: the answer to decision `id`, or the first answer no `wait` printed, marked printed → `{answer?, question?, defaultAt?}`; 404 `unknown-decision`. `starbridge wait` |
-| `POST /quota` | `{providers?}`: run CodexBar and post a snapshot now → `{snapshot}` |
-| `POST /sessions/:id/hello` | `{pid?, cwd?, title?}`: a session starts → `{version}` |
-| `POST /sessions/:id/bye` | the session ended; its session-scoped state goes |
-| `GET /sessions/:id/events?wait=<s>` | `{events: [{type, ack, line, decisionId?}]}`: what the session has not confirmed, held up to `wait` while there is nothing |
-| `POST /sessions/:id/ack` | `{acks}`: confirm events by their `ack`; others' tokens do nothing |
-| `POST /permissions` | `{hook, agent, source: {project, session, sessionTitle?, links?}, waitMs}`: post a permission prompt from the hook's input → `{id}`; 403 `disabled` until `starbridge permissions enable` |
-| `POST /permissions/:id/wait` | `{wait}`: `{output}` once an accepted answer is in, the hook's stdout, handed out once; `{settled}` when the prompt ended another way; `{}` when `wait` passed |
-| `POST /permissions/:id/settle` | `{outcome: "keyboard" \| "timeout"}` → `{settled}`: the hook's wait ended without an answer |
-| `POST /sessions/:id/permissions/settle` | `{inputHash?}` → `{settled: [ids]}`: the keyboard answered the session's waiting prompt for that input, or all of them without `inputHash` |
-
-Paths are under `/v1`. Event types today are `answer` and `default` (a decision's default time
-passed with no answer, sent only once the server confirmed no answer was waiting at that
-time). A client skips types it does not know. The agent keeps answers in the CLI's state file,
-so a restart loses nothing unconfirmed.
-
-Features plug in as `Feature`s (`cli/src/agent/server.ts`): routes, the events they hand
-sessions, the acks they take, `bye`, a background loop and their part of `status`. #60 adds
-`POST /runs`.
-
 ## Permission prompts
 
 When a coding agent stops at a permission prompt, the machine's hook posts a `permission`; a
@@ -306,9 +263,11 @@ It posts the prompt through the agent (or to the server itself when no agent run
 at most `--wait`, 570 s by default, under the 600 s Claude Code gives a hook. An accepted
 answer prints the hook's decision: `allow`, with `updatedPermissions` built from Claude Code's
 own suggestions for a wider scope (destination `session`, or `localSettings` for the project),
-or `deny` with the message. Only `addRules` allow rules and `addDirectories` are offered;
-`setMode` and other suggestions stay at the keyboard. Before printing, the machine marks the
-prompt settled, then posts `settled: device`.
+or `deny` with the message. Only `addRules` allow rules and `addDirectories` are offered, and
+only when their rules fit the 500-character `rule` in full; `setMode` and other suggestions stay
+at the keyboard. Before printing, the machine marks the prompt settled, then posts `settled:
+device`; without an agent it gives that post 5 s, and SIGTERM or the deadline during it still end
+the hook with no answer.
 
 The keyboard can answer first. Esc or No sends the hook SIGTERM; it posts `settled: keyboard`
 and exits. A keyboard Yes sends no signal, so `starbridge hook settle` runs on `PostToolUse` and
@@ -317,3 +276,46 @@ input (Claude Code's `PermissionRequest` input carries no `tool_use_id`), and on
 `SessionEnd`, settling every waiting prompt of the session. The waiting hook then exits at
 once through the agent, or within 5 s on its own path. At the deadline the hook prints nothing,
 so the dialog decides, and posts `settled: timeout`.
+## Local agent API
+
+`starbridge agent` runs once per machine as a user service. It holds the machine's keys and its
+one connection to the server, and serves the CLI and the Claude Code sessions on that machine
+over HTTP on a unix socket: `$XDG_RUNTIME_DIR/starbridge/agent.sock` on Linux when that is set,
+else `agent.sock` in the config directory (`$STARBRIDGE_AGENT_SOCKET` overrides). The directory
+is 0700, the socket 0600, and there is no TCP listener. Types: `cli/src/agent/api.ts`.
+
+Every request sends `starbridge-api: <n>` and a `user-agent` such as `starbridge-mod/0.2.0`. The
+agent serves revisions `min` to `max` (1 to 1 today) and answers anything else with 426
+`{error: "agent-too-old" | "client-too-old", detail, agent: {version, api}}`, `detail` saying
+what to update. Adding a route or a field keeps the revision. The CLI falls back to the server on
+a 426, and whenever no agent listens (no socket, or a socket nobody listens on); it never falls
+back once the agent has answered one of its calls, so nothing is posted twice.
+
+Errors are `{error, detail?}`: 400 for a bad request (`detail` is the CLI's own message), 404
+for an unknown route or decision, 502 when the server refused or failed (`detail` says how).
+`wait` holds a request at most 25 s, under the 30 s the mod's host allows a call.
+
+| Route | What |
+|---|---|
+| `GET /status` | `{version, api, pid, startedAt, socket, machine?, server: {reachable, lastOkAt?, lastError?}, quota: {providers, intervalSeconds, lastPostAt?, lastError?}, sessions}` |
+| `POST /decisions` | `{input}` with `ask`'s fields (`question`, `default`, `options`, `project`, `session`, …); the client fills `project`, `session`, title and links from its own process → `{id}` |
+| `POST /answers/next` | `{id?, wait?}`: the answer to decision `id`, or the first answer no `wait` printed, marked printed → `{answer?, question?, defaultAt?}`; 404 `unknown-decision`. `starbridge wait` |
+| `POST /quota` | `{providers?}`: run CodexBar and post a snapshot now → `{snapshot}` |
+| `POST /sessions/:id/hello` | `{pid?, cwd?, title?}`: a session starts → `{version}` |
+| `POST /sessions/:id/bye` | the session ended; its session-scoped state goes |
+| `GET /sessions/:id/events?wait=<s>` | `{events: [{type, ack, line, decisionId?}]}`: what the session has not confirmed, held up to `wait` while there is nothing |
+| `POST /sessions/:id/ack` | `{acks}`: confirm events by their `ack`; others' tokens do nothing |
+| `POST /permissions` | `{hook, agent, source: {project, session, sessionTitle?, links?}, waitMs}`: post a permission prompt from the hook's input → `{id}`; 403 `disabled` until `starbridge permissions enable` |
+| `POST /permissions/:id/wait` | `{wait}`: `{output}` once an accepted answer is in, the hook's stdout, handed out once; `{settled}` when the prompt ended another way; `{}` when `wait` passed |
+| `POST /permissions/:id/settle` | `{outcome: "keyboard" \| "timeout"}` → `{settled}`: the hook's wait ended without an answer |
+| `POST /sessions/:id/permissions/settle` | `{inputHash?}` → `{settled: [ids]}`: the keyboard answered the session's waiting prompt for that input, or all of them without `inputHash` |
+
+Paths are under `/v1`. Event types today are `answer` and `default` (a decision's default time
+passed with no answer, sent only once the server confirmed no answer was waiting at that
+time). A client skips types it does not know. The agent keeps answers in the CLI's state file,
+so a restart loses nothing unconfirmed.
+
+Features plug in as `Feature`s (`cli/src/agent/server.ts`): routes, the events they hand
+sessions, the acks they take, `bye`, a background loop and their part of `status`. #60 adds
+`POST /runs`.
+
