@@ -123,10 +123,13 @@ export function readRecoveryKey(text: string, opts: { typing?: boolean } = {}): 
   }
   const chars = keyChars(text);
   const index = [...chars].findIndex((c) => !CROCKFORD.includes(c));
-  // A U in a run of letters may be the start of an older account's words, which only read as
-  // words from the eighth: while typing, it waits.
+  // A U in a word from the list, or the start of one, may be an older account's words, which
+  // only read as words from the eighth: while typing, it waits.
   const maybeWords =
-    opts.typing && splitRecoveryWords(text).some((w) => w.length >= 3 && w.includes("u"));
+    opts.typing &&
+    splitRecoveryWords(text).some(
+      (w) => w.length >= 3 && w.includes("u") && wordlist.some((listed) => listed.startsWith(w)),
+    );
   const problem: RecoveryKeyProblem | null =
     index >= 0 && !(maybeWords && chars[index] === "U")
       ? { kind: "bad-character", index, char: chars[index] as string }
