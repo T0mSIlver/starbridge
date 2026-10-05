@@ -54,10 +54,10 @@ function Phone({ name, alt }: { name: string; alt: string }) {
 }
 
 const FEATURES = [
-  ["Questions", "An agent asks, with code or images. Your tap becomes its next prompt."],
-  ["Runs", "Long commands that need you at the machine, live on your lock screen."],
-  ["Quota windows", "Every plan's limits on one screen, read from CodexBar."],
-  ["Permission prompts", "Off unless you turn them on: the exact command, Allow or Deny."],
+  ["Questions", "Decide from anywhere. Your tap becomes the agent's next prompt."],
+  ["Runs", "Builds, releases and heavy jobs stay on your lock screen until they end."],
+  ["Quotas", "See which plan has room, and hear before a window resets unused."],
+  ["Permission prompts", "Allow or deny a command away from the keyboard. Off by default."],
 ] as const;
 
 const INSTALL = [
@@ -167,9 +167,9 @@ export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
           You answer from anywhere.
         </h1>
         <p className={`t-lead ${s.dim} ${s.lead}`}>
-          Questions from every coding agent, with their code and images, answered with one tap
-          <span className={s.wideOnly}> and pushed back into the session</span>. Runs and quota
-          windows on the same screen.
+          Answer your coding agents with one tap
+          <span className={s.wideOnly}> on your phone or in a browser</span>, and the waiting
+          session carries on. Follow the runs that affect you, and know what each AI plan has left.
         </p>
         <div className={s.actions}>
           <a href="/v1/auth/github" className={`t-action ${ui.btn} ${ui.lg} ${ui.fill}`}>
@@ -217,21 +217,8 @@ export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
       </div>
 
       <Section
-        title="See which window runs out first"
-        text="Each window fills in its provider's colour, with a tick where a steady pace would be now. The part you will use before the reset is hatched, and the status says when it runs out."
-        short="Each window fills in its provider's colour; the part you'll use before the reset is hatched."
-      >
-        <div className={s.quotas}>
-          {groups(quotas).map((g) => (
-            <QuotaGroup key={g.provider} g={g} settings={DEFAULT_SETTINGS} now={now} />
-          ))}
-        </div>
-      </Section>
-
-      <Section
-        flip
-        title="One tap, back in the session"
-        text="The agent asks and keeps working. Your answer reaches its session as the next prompt."
+        title="Answer in one tap, from anywhere"
+        text="An agent asks for a decision that is yours and works on something else meanwhile. Your answer lands in its session as the next prompt, so no agent sits idle until you are back at the terminal."
       >
         <div className={s.crop}>
           <Phone name="android-question" alt="A question with two images in Android's sheet" />
@@ -239,8 +226,9 @@ export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
       </Section>
 
       <Section
-        title="Runs that need you at the machine"
-        text="When an agent starts something that takes over your screen or keyboard, it says why, and the run's progress stays on your lock screen until it passes or fails."
+        flip
+        title="Follow the runs that affect you"
+        text="A release, an eval, heavy work on the machine you are using. When an agent starts something that affects you, it says why, and the progress stays on your lock screen until it passes or fails."
       >
         <div className={s.lock}>
           <Shot
@@ -252,13 +240,28 @@ export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
         </div>
       </Section>
 
+      <Section
+        title="Know what each plan has left"
+        text="What your plans have left decides which agent you start next. Starbridge shows every window CodexBar reads, with the pace you are on, and notifies you before one resets with headroom unused, or when it runs low."
+        short="Every plan's windows, read from CodexBar. You hear before one resets unused, or when it runs low."
+      >
+        <div className={s.quotas}>
+          {groups(quotas).map((g) => (
+            <QuotaGroup key={g.provider} g={g} settings={DEFAULT_SETTINGS} now={now} />
+          ))}
+        </div>
+      </Section>
+
       <section id="install" className={s.installSection}>
-        <h2 className="t-title">Install on each machine</h2>
+        <h2 className="t-title">Install on each machine that runs agents</h2>
         <p className={`t-prose ${s.dim} ${s.wideOnly}`}>
-          The CLI sets up the agent service and the Claude Code plugin.
+          <code>starbridge setup</code> pairs the machine and installs the Claude Code plugin. The
+          script runs it for you.
         </p>
         <Install />
-        <p className={`t-meta ${s.faint}`}>Works best with Claude Code; Codex supported.</p>
+        <p className={`t-meta ${s.faint}`}>
+          Works with Claude Code and Codex. Pi support is coming.
+        </p>
       </section>
 
       <footer className={`t-small ${s.foot}`}>
@@ -274,10 +277,10 @@ export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
         </div>
         <div className={s.footCol}>
           <span>Product</span>
-          <a href="#features">Quota windows</a>
           <a href="#features">Questions</a>
-          <a href="#features">Permission prompts</a>
           <a href="#features">Runs</a>
+          <a href="#features">Quotas</a>
+          <a href="#features">Permission prompts</a>
         </div>
         <div className={s.footCol}>
           <span>Source</span>

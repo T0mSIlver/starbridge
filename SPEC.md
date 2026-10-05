@@ -1035,6 +1035,24 @@ How it generalizes is open.
   listed in the first 1.5 s after the list shows came with the page and don't fade in, since
   the inbox, prompts and runs load one after another. History's rows fade in only when the
   owner opens it, not when the page loads with it open.
+- 2026-10-06. Launch positioning (owner, launch copy pass). Starbridge is the control surface
+  for your coding agents, and it should look as simple as it is. The landing page, the docs, the
+  README and the launch post sell three features, each by why it matters to the reader:
+  - Questions. An agent asks for a decision that is yours, you answer with one tap on your phone
+    or in a browser, and the answer reaches the waiting session as its next prompt. No agent
+    sits idle until you are back at the terminal.
+  - Runs. A run is anything an agent starts that you want to follow closely because it affects
+    you: something time-sensitive, heavy work on your machine, a build, a release, an eval, or a
+    test that takes over the screen or keyboard. Its progress stays on your lock screen until it
+    passes or fails. Taking over the screen is one example, not the definition.
+  - Quotas. Knowing what each plan has left belongs on the control surface, because it decides
+    which agent you start next and on which plan. Starbridge shows the windows CodexBar reads
+    for every plan, and notifies you before a window resets with headroom unused, or when it
+    runs low. Starbridge wraps CodexBar; it does not replace it.
+  Permission prompts stay a secondary, opt-in feature. The copy says "on each machine that runs
+  agents", never "on each machine" alone, and "sign in on the web or in the Android app".
+  Contact on `/privacy` is privacy@starbridge.run; abuse@ appears only in `/terms`, for
+  takedown and abuse reports.
 
 ## Encryption, with existing libraries
 
