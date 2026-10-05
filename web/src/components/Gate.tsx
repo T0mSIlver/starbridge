@@ -166,10 +166,13 @@ function Join({ account, stale }: { account: string; stale: boolean }) {
   useEffect(() => () => cancel.current?.(), []);
 
   /** Starts a join unless the owner moved on meanwhile; undefined when stale. */
-  const begin = async <J extends { cancel: () => void }>(start: () => Promise<J>) => {
+  const begin = async <J extends { cancel: () => void; done: Promise<void> }>(
+    start: () => Promise<J>,
+  ) => {
     const mine = ++started.current;
     const join = await start();
     if (mine !== started.current) {
+      join.done.catch(() => {});
       join.cancel();
       return undefined;
     }
