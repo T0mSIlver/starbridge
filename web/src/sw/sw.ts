@@ -147,6 +147,8 @@ function summary(context: string): string {
     .split("\n")
     .filter((l) => !l.trimStart().startsWith("```"))
     .join(" ")
+    // Inline code reads as plain text: a notification shows no formatting (#191).
+    .replace(/`([^`\n]+)`/g, "$1")
     .replace(/\s+/g, " ")
     .trim();
   return text.length > 180 ? `${text.slice(0, 179)}…` : text;
@@ -171,9 +173,7 @@ async function showDecision(account: string, item: InboxItem, waiting = false): 
     actions?: { action: string; title: string }[];
     renotify?: boolean;
   } = {
-    body: waiting
-      ? `Waiting for you · ${d.source.machine} · ${d.source.project}`
-      : `${d.source.machine} · ${d.source.project}\n${summary(d.context)}`,
+    body: `${waiting ? "Waiting · " : ""}${d.source.machine} · ${d.source.project}\n${summary(d.context)}`,
     tag: tag(d.id),
     renotify: waiting,
     requireInteraction: true,
