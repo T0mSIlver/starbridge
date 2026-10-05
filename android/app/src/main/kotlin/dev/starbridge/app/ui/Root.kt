@@ -275,9 +275,11 @@ fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> U
                         val colours by vm.colours.collectAsStateWithLifecycle()
                         val push by vm.push.collectAsStateWithLifecycle()
                         val server by vm.server.collectAsStateWithLifecycle()
+                        val inbox by vm.inbox.collectAsStateWithLifecycle()
                         SettingsScreen(
                             windows, quota, members.size, colours, push, server,
-                            SettingsActions(vm::setQuota, vm::setColours, vm::setPush, vm::signOut, devices = { backStack.add(DevicesKey) }, addDevice = { backStack.add(AddDeviceKey) }),
+                            SettingsActions(vm::setQuota, vm::setColours, vm::setPush, vm::signOut, devices = { backStack.add(DevicesKey) }, addDevice = { backStack.add(AddDeviceKey) }, inbox = vm::setInbox),
+                            inbox = inbox,
                         )
                     }
                     entry<DevicesKey> {
