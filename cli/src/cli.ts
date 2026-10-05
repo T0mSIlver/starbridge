@@ -33,7 +33,7 @@ const HELP = `starbridge: post decisions to your devices, report runs, upload qu
 
   starbridge status
       Print the versions, the pairing, the agent and its service, the server, each provider, the
-      Claude Code plugins and the sessions the agent sees.
+      Claude Code plugins, the Codex skill, the Pi package and the sessions the agent sees.
 
   starbridge uninstall [--yes] [--purge]
       Remove the agent service, the Claude Code plugins and this binary, and ask your devices to revoke this
