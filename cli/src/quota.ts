@@ -51,12 +51,16 @@ export async function pushOnce(ctx: Ctx, opts: QuotaOpts): Promise<QuotaSnapshot
  * `quota push`: one snapshot every interval (default 5 minutes), or one with `--once`. A failed
  * round is logged and the loop goes on; `--once` exits 1 when the post failed.
  */
-export async function quotaPush(ctx: Ctx, opts: QuotaOpts): Promise<number> {
+export async function quotaPush(
+  ctx: Ctx,
+  opts: QuotaOpts,
+  push: () => Promise<QuotaSnapshot> = () => pushOnce(ctx, opts),
+): Promise<number> {
   const interval = parseDuration(opts.interval ?? "5m");
   while (true) {
     const started = ctx.now().getTime();
     try {
-      const snap = await pushOnce(ctx, opts);
+      const snap = await push();
       const windows = snap.providers.reduce((n, p) => n + p.windows.length, 0);
       const line = `posted ${snap.id}: ${snap.providers.length} providers, ${windows} windows, ${snap.alerts.length} alerts`;
       if (opts.once) {
