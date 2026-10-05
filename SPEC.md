@@ -589,6 +589,16 @@ How it generalizes is open.
   route prerendered at build time, so each deploy serves the script of the revision it built.
   Caddy could not: it is recreated only when the Caddyfile changes, so a bind-mounted file would
   stay the previous release's. Each GitHub Release still carries a copy as an asset.
+- 2026-10-05. Homebrew check, with the tap still private. The formula `release.yml` writes, built
+  from locally built and signed release files, installs from the private tap in the
+  `homebrew/brew` image and passes `brew test` (a token reached the tap for that run only). The
+  tap's write deploy key is the one in `~/.config/starbridge/secrets`, and the workflow's pinned
+  GitHub host key is current. The workflow itself was not dispatched: a run needs the owner's
+  go-ahead. Only the documented install command assumes a public tap; the workflow pushes over
+  SSH with its deploy key either way. Going public flips: (1) the tap, so `brew install
+  T0mSIlver/starbridge/starbridge` clones it without credentials; (2) the main repo, since the
+  formula, `install.sh`, `starbridge update` and the landing page's APK link all download from
+  its GitHub Releases, which need no change once they are public.
 
 ## Encryption, with existing libraries
 
