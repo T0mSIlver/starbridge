@@ -29,6 +29,7 @@ export function sweepStorage(db: Database, limits: Limits, now = Date.now()): vo
          WHERE m.account_id = items.account_id AND m.id = items.from_id AND m.active = 1)`,
     ).run();
     db.query("DELETE FROM sessions WHERE expires_at < ?").run(new Date(now).toISOString());
+    db.query("DELETE FROM revoked_sessions WHERE expires_at < ?").run(new Date(now).toISOString());
     db.query("DELETE FROM app_codes WHERE expires_at < ?").run(now);
   })();
 }

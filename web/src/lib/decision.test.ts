@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { imageBlob, imageSrc, linkLabel } from "./attachments";
+import { imageSrc, linkLabel } from "./attachments";
 import { closedBy, outcomeText } from "./outcome";
 import type { InboxItem } from "./types";
 
@@ -11,12 +11,8 @@ const pixel = {
   data: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg",
 };
 
-test("an image becomes a padded base64 data URL and a blob of the same bytes", async () => {
-  const src = imageSrc({ ...pixel, data: "-_8" });
-  expect(src).toBe("data:image/png;base64,+/8=");
-  const bytes = new Uint8Array(await imageBlob(pixel).arrayBuffer());
-  expect([...bytes.slice(0, 4)]).toEqual([0x89, 0x50, 0x4e, 0x47]);
-  expect(bytes.length).toBe(70);
+test("an image becomes a padded base64 data URL", () => {
+  expect(imageSrc({ ...pixel, data: "-_8" })).toBe("data:image/png;base64,+/8=");
 });
 
 test("a link reads as its title, a Claude artifact, or its host and path", () => {

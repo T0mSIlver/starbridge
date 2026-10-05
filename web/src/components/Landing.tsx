@@ -3,16 +3,17 @@
 import { useState } from "react";
 import { track } from "@/lib/analytics";
 import { AGENTS_GUIDE, REPO, SELF_HOST } from "@/lib/links";
-import { DEFAULT_SETTINGS } from "@/lib/quotaSettings";
+import { DEFAULT_SETTINGS, groups } from "@/lib/quotaSettings";
 import { sample } from "@/lib/sample";
 import { Analytics } from "./Analytics";
 import { Icon, Mark } from "./icons";
 import s from "./Landing.module.css";
-import { QuotaRow } from "./QuotaRow";
+import { QuotaGroup } from "./QuotaRow";
 import ui from "./ui.module.css";
 
 // Product shots in public/landing, at 1.5x for the web inbox and 2x for the phones:
-//   web-inbox-*      the app at /sample (development only), 1440 by 900, its data the mockups'
+//   web-inbox-*      the app at /sample-hero (development only), 1440 by 900, after a click
+//                    on the question with images
 //   android-*        the design v2 mockups' Android inbox, question sheet and lock screen
 // Each comes dark and light; `<picture>` picks the one the browser asks for.
 function Shot({
@@ -52,10 +53,10 @@ function Phone({ name, alt }: { name: string; alt: string }) {
 }
 
 const FEATURES = [
-  ["Quota windows", "Every plan's limits on one screen, read from CodexBar."],
-  ["Questions", "An agent asks and keeps working. Your tap becomes its next prompt."],
-  ["Permission prompts", "A blocked tool call, the exact command, Allow or Deny."],
+  ["Questions", "An agent asks, with code or images. Your tap becomes its next prompt."],
   ["Runs", "Long commands that need you at the machine, live on your lock screen."],
+  ["Quota windows", "Every plan's limits on one screen, read from CodexBar."],
+  ["Permission prompts", "Off unless you turn them on: the exact command, Allow or Deny."],
 ] as const;
 
 const INSTALL = [
@@ -165,8 +166,9 @@ export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
           You answer from anywhere.
         </h1>
         <p className={`t-lead ${s.dim} ${s.lead}`}>
-          Quota windows, questions and permission prompts from every coding agent, answered with one
-          tap<span className={s.wideOnly}> and pushed back into the session</span>.
+          Questions from every coding agent, with their code and images, answered with one tap
+          <span className={s.wideOnly}> and pushed back into the session</span>. Runs and quota
+          windows on the same screen.
         </p>
         <div className={s.actions}>
           <a href="/v1/auth/github" className={`t-action ${ui.btn} ${ui.lg} ${ui.fill}`}>
@@ -193,7 +195,7 @@ export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
           </div>
           <Shot
             name="web-inbox"
-            alt="The web inbox: a permission prompt selected beside the list, quota windows on the right"
+            alt="The web inbox: a question with two images open beside the list, quota windows on the right"
             width={2160}
             height={1350}
             className={s.browserShot}
@@ -219,13 +221,8 @@ export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
         short="Each window fills in its provider's colour; the part you'll use before the reset is hatched."
       >
         <div className={s.quotas}>
-          {quotas.map((q) => (
-            <QuotaRow
-              key={`${q.provider}/${q.window.id}`}
-              q={q}
-              settings={DEFAULT_SETTINGS}
-              now={now}
-            />
+          {groups(quotas).map((g) => (
+            <QuotaGroup key={g.provider} g={g} settings={DEFAULT_SETTINGS} now={now} />
           ))}
         </div>
       </Section>
@@ -273,7 +270,8 @@ export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
             Starbridge
           </span>
           <span className={s.dim}>
-            Your phone, browsers and machines hold the keys. The server stores only ciphertext.
+            Only your own phone, browsers and machines can read your questions, answers and quotas.
+            The server cannot.
           </span>
         </div>
         <div className={s.footCol}>

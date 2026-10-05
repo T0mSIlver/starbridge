@@ -28,7 +28,7 @@ export function sample(now = Date.now()) {
   const decision = (
     id: string,
     ago: number,
-    src: ReturnType<typeof source>,
+    src: ReturnType<typeof source> & { sessionTitle?: string },
     question: string,
     context: string,
     options: string[],
@@ -53,7 +53,10 @@ export function sample(now = Date.now()) {
       decision: decision(
         "d1",
         12 * min,
-        devbox("orchestrate-merges-server-before-cli"),
+        {
+          ...devbox("orchestrate-merges-server-before-cli"),
+          sessionTitle: "Orchestrate the merges: server PR first, then the CLI",
+        },
         "Merge the server PR before the CLI PR?",
         "Both touch `packages/protocol`. Merging the server first lets the CLI rebase onto the final routes:\n```\ngit rebase origin/main\npnpm test\n```\nThe CLI PR then needs one more review.",
         ["Server first", "CLI first"],
@@ -89,6 +92,7 @@ export function sample(now = Date.now()) {
             data: shots[v],
             alt: `Hero ${v}`,
           })),
+          links: [{ url: "https://claude.ai/artifact/4Esy3goyohvLThcPVCKaEf" }],
         },
       ),
       machine: member("MacBook"),

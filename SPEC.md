@@ -313,7 +313,8 @@ How it generalizes is open.
   co-signs its first entry. A pairing code
   carries an 80-bit secret the server never sees, which keys an HMAC on both
   pairing messages. The recovery seed shows as 24 BIP-39 words
-  (`@scure/bip39`, audited, MIT); 12 for accounts made since 2026-10-05 (below).
+  (`@scure/bip39`, audited, MIT); 12 for accounts made since 2026-10-05, and a recovery key
+  instead of words since 2026-10-06 (below).
 
 - 2026-10-04. Server (#5): self-hosters sign in with `OWNER_TOKEN` (`POST /v1/auth/owner`); the
   Android app gets its GitHub session through a `starbridge://auth#session=` redirect. A session
@@ -585,6 +586,14 @@ How it generalizes is open.
   between them become `/docs` links; other relative links go to GitHub. The web page, the landing
   page and Android link there, since GitHub links 404 while the repository is private. The
   overview and the landing page say Starbridge works best with Claude Code and supports Codex.
+- 2026-10-05. The landing page leads with questions (#210): its lead, feature list and browser
+  shot put questions, images and runs first and permission prompts last, since they are off by
+  default. The browser shot is `/sample-hero` (development only): the sample inbox without its
+  permission prompt or lost run, the question with images open. The footer says that only the
+  owner's own devices can read questions, answers and quotas.
+- 2026-10-05. A browser whose device was revoked gets the landing page, not sign-in (#209).
+  Revoking a device keeps its sessions' hashes until they would have expired, and the server
+  answers them 401 `revoked`; the browser then forgets the device and is a visitor again.
 
 - 2026-10-05. Uptime alert with no new accounts: `.github/workflows/uptime.yml` checks
   `/healthz` and `/healthz/backup` hourly (every 5 minutes once the repository is public), opens one issue labelled `outage` (GitHub
@@ -878,11 +887,39 @@ How it generalizes is open.
   `DateFormat.is24HourFormat`, the browser's language on the web. Android also writes dates in
   the phone's language ("Oct 7" in English, "7 oct." in French) from Android's own patterns, where
   it used fixed English ones; words such as "tomorrow" stay English, as the rest of the UI.
+- 2026-10-05. Links on questions (owner, launch test #171: "there should be a more explicit 'the
+  agent pushed this artifact for you to see'"). A link on a question is something the agent wants
+  the owner to see before answering: a page it built (a Claude artifact), a PR, a doc. It never
+  answers the question; that is `answerIn`'s job. Both clients show links under "Attached by the
+  agent", each as "Open" and its title (else "Claude artifact", else host and path) with an
+  open-outside icon, and the skill gives each link a `title` naming what it shows. A claude.ai
+  link opens in the browser, where the owner is signed in, rather than in the Claude app, which
+  shows artifacts only in its in-app browser.
+- 2026-10-05. Questions on the web after the launch test (#165, #170, #172, #173, #179). Images open
+  in a full-screen viewer in the same tab (wheel or pinch to zoom, drag to pan, double click for
+  real pixels, arrow keys between images), not a new tab. On a wide screen the list and Quota
+  windows panes resize by dragging their edge or with the arrow keys on it, remembered on the
+  device (double click resets); phones have no handles. The open question's content is centred
+  in its pane up to 720 px, so a short question leaves even margins instead of one wide band. The
+  session name is cut in the middle only when its line runs out of room. Settings, Inbox:
+  "Sound for new questions" (off by default) chimes once per new question, prompt or flip to
+  waiting while a Starbridge page is open, once across the browser's tabs. Nothing plays with no
+  page open: a service worker cannot play audio and browsers honour no sound option on Web Push,
+  so sound without a page is the OS's notification setting (macOS: Notifications, the browser,
+  "Play sound for notifications"). Browsers start audio only after a tap or key on the page, so
+  a page opened and never touched stays silent.
 - 2026-10-05. Runs on the web (#188, #190). Runs still skip Web Push, since a push that shows no
   notification costs the browser subscription, so the page polls them every 2 s while one runs and
   the page is visible, and every 10 s otherwise; that keeps it within a few seconds of the phone,
   which gets each update by push. A lost run shows no elapsed time in its corner: its last news
   may predate most of its life, so the time would read as 0.
+
+- 2026-10-05. Quota windows grouped by provider (#160, layout C of
+  https://claude.ai/artifact/XMemEeP3dEBAagDiz4Ys6i). The provider's name heads one card (Android)
+  or one block (web, the landing page included), with the machine beside it when several upload;
+  its windows follow as rows that name only the window. Groups come in the order of their first
+  window under "Quota order", so a provider with a window running out leads, and its running-out
+  window leads inside it. The provider shows once, so skimming the list reads provider names only.
 
 - 2026-10-05. A device sees quotas as soon as it joins, and pulling to refresh gets fresh ones
   (#158). A snapshot is sealed to the devices in the directory when it is posted, so a device that
@@ -897,6 +934,17 @@ How it generalizes is open.
 - 2026-10-05. `starbridge pair` pairs with https://starbridge.run unless `--server` or
   `STARBRIDGE_SERVER` names a self-hosted server (#154), as `setup` already did.
 
+- 2026-10-06. A recovery key, not words (owner ruling on #199, replaces the words of #157). Chrome
+  flagged starbridge.run as a dangerous site: a new site that shows 12 BIP-39 words and later asks
+  for them back is what seed-phrase phishing looks like. New accounts get the same 16-byte seed
+  as a recovery key: the seed and a 12-bit check, 28 Crockford base32 characters in seven groups
+  of four, read in any case, with or without dashes, with Crockford's look-alikes. The check
+  catches all but 1 in 4,096 typos, as BIP-39's 4 bits caught all but 1 in 16 for 12 words; a
+  character outside the alphabet is named where it stands. Strength and derivation are those of
+  the 12-word entry above: 128 bits, stretched to the Ed25519 seed by BLAKE2b-256. Accounts with
+  24 or 12 words keep recovering with them: the entry tells words from a key by their letter runs.
+  No page says "seed", "phrase" or asks for words; the clients only show keys. #199 closes once
+  this is deployed and Chrome no longer warns.
 - 2026-10-05. The `AskUserQuestion` hook answers instead of denying (#200). Claude Code 2.1.289
   shows every `PreToolUse` deny as a red "hook error", which reads as Starbridge failing. The
   hook now allows the call with `updatedInput.answers`, one answer per question saying to ask
@@ -908,6 +956,61 @@ How it generalizes is open.
   you". Now the decision goes quietly and the `waiting` item pushes; Android fetches a decision
   it has not seen when its waiting state arrives, as the web page's service worker already did.
   An app older than this change shows no notification for such a question until it syncs.
+- 2026-10-05. A blocked question shows by its look, not a state line (#191, owner's pick of
+  proposal B, "Filled and hollow", from https://claude.ai/artifact/EMcUnTsGhyTsiCNujo4JT6). This
+  replaces the "Waiting for you 1:12" tag of the #166 entry above. A question whose agent waits
+  on it is filled: `accent-soft` behind the whole item (the web row, the Android card, the head
+  of the web detail and of the Android sheet), its question at weight 500, its kind icon (the
+  speech bubble) in amber. A question its agent works around is hollow: no ground, an outlined
+  card on Android (`line-strong`, no fill), its question at weight 400, its icon in `fg2`. A
+  permission prompt always blocks, so it looks like a waiting question. The time goes in the
+  meta row's time slot: while an agent waits, a clock ticking m:ss in amber at weight 500 from
+  when it started waiting (a prompt from when it was asked), else the item's age. No row,
+  card, sheet or notification carries a state tag, prompts included; screen readers hear
+  "Waiting for you, 2 minutes" at the start of the item's label (web `aria-label`, Android
+  `stateDescription`). Without colour the state still reads: fill against outline, 500
+  against 400, a clock against an age. Kind icons: Android prompt cards already draw the
+  terminal symbol in amber, and question cards gain the question symbol before the question,
+  amber while the agent waits, so both clients colour kind icons alike (the owner's fallback,
+  no coloured icons anywhere, applied only if Android could not). A flip to waiting moves the
+  item up with the expressive spring (web: `motion.state`), fills it and starts its clock at
+  0:00; a flip back moves it down, hollow, with no alert. Android notifications: waiting
+  questions post on their own high-importance channel, "Waiting for you"; questions the agent
+  works around on "Questions", at default importance (sound, no heads-up). Both are new channel
+  ids, since Android never lowers an existing channel's importance; the old "Decisions" channel
+  is deleted. A flip cancels the notification and posts it again on the other channel: alerting
+  once to waiting, silently back. So the phone hears of a flip back, the machine now pushes it
+  too, where #122 posted it `quiet`; clients post nothing audible for it. While the agent waits, the header ticks (the public version on the lock screen too).
+  The text is the agent's context, with inline code set in mono rather than shown with
+  backticks; a prompt's title is its tool alone ("Bash"). Web push keeps one word, since
+  nothing else there can be styled: a question pushed as waiting reads "Waiting · machine ·
+  project".
+- 2026-10-05. A question's first option is the agent's default (owner, #191). Agents still
+  never answer for the owner (#122), and nothing happens when the owner does not answer, so a
+  default has no timer; it is the agent's proposal. The skill tells agents to list their
+  default first (`--recommended` still names it when it is not). Clients show it first, as the
+  one filled amber button; the web detail and the Android sheet add "Default" inside that
+  button, after the label, at weight 400, like the web's key hints. Rows, cards and
+  notification buttons show it first and filled only, for room. Screen readers hear "Default"
+  (Android's `stateDescription` "Recommended" becomes "Default"). The protocol is unchanged:
+  `recommended` names the default, and `default` stays what older clients need.
+- 2026-10-05. Group by waiting (owner, #191). The inbox's view menu offers three groupings,
+  remembered on the device: none (one feed), "Group by machine", and "Group by waiting", which
+  sorts under two headers: "Waiting on you" with its count in amber (prompts and questions
+  whose agent waits), and "When you can" with its count in `fg2`. Runs stay above the groups,
+  as in the one feed, and the order inside each group is the feed's. Items look the same in
+  every grouping. A saved "Group by machine" carries over.
+- 2026-10-05. A typed reply on every question (#201, owner). A question with options also takes
+  a typed reply, as a side option: a neutral text button "Reply" after the options in the web
+  detail and the Android sheet opens a text field with Send. Rows, cards and notifications do
+  not carry it; they open the question. A question with no options stays typed only. The reply
+  goes alone, with no choice, and the agent gets the same line as any typed answer: `Answer to
+  d_… (question): <text>`. Protocol: an answer to a decision with options carries `choice` or
+  `text`, and a machine checks the choice against the options only when there is one. A CLI
+  from before this change rejects a text-only answer to a decision with options, so the
+  answer would be lost: the CLI marks the decisions it posts with `replies: true`, and clients
+  show Reply only on those. The skill still asks for options good enough that one of them is
+  right, and says a reply is a steer to act on.
 
 ## Encryption, with existing libraries
 

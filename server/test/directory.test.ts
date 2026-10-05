@@ -161,5 +161,8 @@ test("revoking a machine drops its token; revoking a device ends its sessions", 
   await revoke(s, acct, "devbox");
   await revoke(s, acct, "laptop");
   expect((await s.call("GET", "/v1/me", { token: m.token })).status).toBe(401);
-  expect((await s.call("GET", "/v1/me", { token: laptop.token })).status).toBe(401);
+  const me = await s.call("GET", "/v1/me", { token: laptop.token });
+  expect(me.status).toBe(401);
+  // The revoked device's browser learns why, so it shows the landing page, not sign-in.
+  expect(me.json.error).toBe("revoked");
 });

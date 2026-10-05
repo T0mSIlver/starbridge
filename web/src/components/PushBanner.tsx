@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { PushState } from "@/lib/push";
 import { useApp } from "./AppProvider";
+import b from "./PushBanner.module.css";
 import ui from "./ui.module.css";
 
 /** Offers Web Push until it is on; says so when the browser blocks it or needs the app installed. */
@@ -16,33 +17,23 @@ export function PushBanner() {
   if (!ready || state === undefined || state === "on" || state === "unsupported") return null;
   if (state === "install")
     return (
-      <p className={ui.notice} style={{ marginBottom: "var(--s4)" }} data-testid="install-hint">
+      <p className={`t-meta ${b.banner}`} data-testid="install-hint">
         To get notifications here, tap Share, then Add to Home Screen, and open Starbridge from
         there. The Home Screen app keeps its own keys, so it joins as a new device.
       </p>
     );
   if (state === "denied")
     return (
-      <p className={ui.notice} style={{ marginBottom: "var(--s4)" }}>
+      <p className={`t-meta ${b.banner}`}>
         Notifications are blocked for this site in the browser&apos;s settings.
       </p>
     );
   return (
-    <div
-      className={ui.notice}
-      style={{
-        display: "flex",
-        flexWrap: "wrap",
-        alignItems: "center",
-        justifyContent: "space-between",
-        gap: "var(--s3)",
-        marginBottom: "var(--s4)",
-      }}
-    >
+    <div className={`t-meta ${b.banner}`}>
       <span>Get a notification when an agent needs you.</span>
       <button
         type="button"
-        className={ui.button}
+        className={`t-meta ${ui.btn} ${ui.sm}`}
         onClick={async () => {
           setError(undefined);
           try {
@@ -54,7 +45,7 @@ export function PushBanner() {
       >
         Turn on notifications
       </button>
-      {error && <span className={ui.error}>{error}</span>}
+      {error && <span className={b.error}>{error}</span>}
     </div>
   );
 }

@@ -40,10 +40,13 @@ import {
   pairingRequest,
   parsePairingCode,
   RECOVERY,
+  RecoveryKeyError,
+  type RecoveryKeyReading,
+  readRecoveryKey,
   ready,
+  recoveryKey,
   recoveryKeyPair,
-  recoverySeedFromWords,
-  recoveryWords,
+  recoverySeedFromKey,
   revokeEntryAsync,
   type SealedItem,
   type Settled,
@@ -154,6 +157,8 @@ export async function boot(): Promise<Boot> {
   } catch (e) {
     if (e instanceof ApiError && e.status === 401) {
       const last = await store.get("current");
+      // Its device was revoked: this browser is a visitor again, not a device signing back in.
+      if (last && e.code === "revoked") await store.del("device", last);
       return { state: "signed-out", known: !!last && !!(await store.get("device", last)) };
     }
     throw e;
@@ -233,7 +238,7 @@ async function newDevice(account: string, name: string) {
 
 /** A first device whose keys, genesis entry and recovery words exist, not yet on the server. */
 export interface FirstDevice {
-  words: string[];
+  recoveryKey: string;
   /** Posts the genesis; safe to call again after a failure, with the same keys and entry. */
   commit: () => Promise<void>;
 }
@@ -246,10 +251,10 @@ export interface FirstDevice {
 export async function prepareFirstDevice(account: string, name: string): Promise<FirstDevice> {
   await ready;
   const { record, member } = await newDevice(account, name);
-  const seed = crypto.getRandomValues(new Uint8Array(32));
+  const seed = crypto.getRandomValues(new Uint8Array(16));
   const recovery = recoveryKeyPair(seed);
   let entry: SignedEnvelope;
-  let words: string[];
+  let shown: string;
   try {
     entry = await genesisEntryAsync({
       account,
@@ -258,7 +263,7 @@ export async function prepareFirstDevice(account: string, name: string): Promise
       recovery,
       at: now(),
     });
-    words = recoveryWords(seed).split(" ");
+    shown = recoveryKey(seed);
   } finally {
     seed.fill(0);
     recovery.privateKey.fill(0);
@@ -275,7 +280,7 @@ export async function prepareFirstDevice(account: string, name: string): Promise
     }
     await pinTo(account, [entry], dir);
   };
-  return { words, commit };
+  return { recoveryKey: shown, commit };
 }
 
 /**
@@ -283,9 +288,14 @@ export async function prepareFirstDevice(account: string, name: string): Promise
  * signature must check against the key the words make, so a server cannot serve a chain of its
  * own here.
  */
-export async function recover(account: string, name: string, words: string): Promise<void> {
+export async function recover(account: string, name: string, typed: string): Promise<void> {
   await ready;
-  const seed = recoverySeedFromWords(words);
+  let seed: Uint8Array;
+  try {
+    seed = recoverySeedFromKey(typed);
+  } catch (e) {
+    throw e instanceof RecoveryKeyError ? new Error(problemText(e.reading) ?? e.message) : e;
+  }
   const recovery = recoveryKeyPair(seed);
   try {
     // Keys first: the pin is read after the last await before signing, so a pin another tab
@@ -294,11 +304,18 @@ export async function recover(account: string, name: string, words: string): Pro
     const entries = await api.directory();
     // A browser that pinned this account before must not sign onto an older prefix.
     const pin = await store.get("pin", account);
-    const dir = verifyDirectory(entries, {
-      account,
-      recoveryPk: toB64(recovery.publicKey),
-      ...(pin ? { pin } : {}),
-    });
+    let dir: Directory;
+    try {
+      dir = verifyDirectory(entries, {
+        account,
+        recoveryPk: toB64(recovery.publicKey),
+        ...(pin ? { pin } : {}),
+      });
+    } catch (e) {
+      if (e instanceof ProtocolError && e.message === "bad-genesis: recovery key differs")
+        throw new Error("This is a recovery key, but not this account's.");
+      throw e;
+    }
     const entry = addEntry(dir, { id: RECOVERY, signKey: recovery.privateKey }, member, now());
     const next = verifyDirectory([...entries, entry], { account });
     await store.put("device", record, account);
@@ -307,6 +324,46 @@ export async function recover(account: string, name: string, words: string): Pro
   } finally {
     seed.fill(0);
     recovery.privateKey.fill(0);
+  }
+}
+
+/** What the recovery entry shows while typing: a problem, else how far along it is. */
+export interface RecoveryEntry {
+  complete: boolean;
+  status: string;
+  problem?: string;
+}
+
+export function readRecoveryEntry(text: string): RecoveryEntry {
+  const reading = readRecoveryKey(text, { typing: true });
+  const problem = problemText(reading);
+  if (problem) return { complete: false, status: "", problem };
+  if (reading.format === "words") {
+    const of = reading.count > 12 ? 24 : 12;
+    return {
+      complete: reading.count === 12 || reading.count === 24,
+      status: `${reading.count} of ${of} words`,
+    };
+  }
+  return { complete: reading.count === 28, status: `${reading.count} of 28 characters` };
+}
+
+function problemText({ format, problem }: RecoveryKeyReading): string | undefined {
+  switch (problem?.kind) {
+    case undefined:
+      return undefined;
+    case "bad-character":
+      return `Character ${problem.index + 1}, "${problem.char}", is not in a recovery key.`;
+    case "length":
+      return `A recovery key has 28 characters; this has ${problem.count}.`;
+    case "unknown-word":
+      return `Word ${problem.index + 1}, "${problem.word}", is not on the word list.`;
+    case "word-count":
+      return `Older accounts recover with 12 or 24 words; this has ${problem.count}.`;
+    case "checksum":
+      return format === "key"
+        ? "A character is wrong. Check each group against what you wrote down."
+        : "One word is wrong, or two are swapped. Check each word and the order.";
   }
 }
 

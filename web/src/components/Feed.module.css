@@ -28,30 +28,33 @@
   border-radius: var(--radius-sm);
 }
 
-.tilePrompt {
+/* Filled while an agent waits on the item, outlined while it works around it (#191). */
+.tileFilled {
+  border: 1px solid transparent;
   background: var(--accent-soft);
   color: var(--accent);
 }
 
-.tileQuestion {
+.tileHollow {
   border: 1px solid var(--line-strong);
   color: var(--fg2);
 }
 
-.wait,
-.working {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--s1);
-  white-space: nowrap;
+.tile,
+.question {
+  transition:
+    background var(--t-state),
+    border-color var(--t-state),
+    color var(--t-state),
+    font-weight var(--t-state);
 }
 
-.wait {
+.waitTime {
   color: var(--accent);
   font-weight: 500;
+  font-variant-numeric: tabular-nums;
 }
 
-.working,
 .dim {
   color: var(--fg2);
 }
@@ -73,13 +76,25 @@
 }
 
 .sessionName {
+  display: flex;
+  min-width: 0;
   color: var(--fg2);
   white-space: nowrap;
-  overflow: hidden;
 }
 
 .sessionName :global(.t-snippet) {
   color: var(--fg);
+}
+
+.sessionHead {
+  min-width: 0;
+  margin-left: 0.5ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sessionTail {
+  flex: none;
 }
 
 .open {
@@ -119,6 +134,34 @@
 
 .row[aria-current="true"] {
   background: var(--surface2);
+}
+
+.row {
+  transition: background var(--t-state);
+}
+
+.row.blocks {
+  background: var(--accent-soft);
+}
+
+.row.blocks[aria-current="true"] {
+  background: color-mix(in srgb, var(--surface2) 60%, var(--accent-soft));
+}
+
+.question {
+  font-weight: 400;
+}
+
+.blocks .question {
+  font-weight: 500;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .row,
+  .tile,
+  .question {
+    transition: none;
+  }
 }
 
 .row:not([aria-current="true"]):hover {

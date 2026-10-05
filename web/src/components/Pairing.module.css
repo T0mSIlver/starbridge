@@ -113,10 +113,26 @@
   }
 }
 
-/* Join requests, above any page while one is open. */
+/* Join requests float over any page while one is open, so neither column moves: bottom right
+   from 600 px, above the bottom bar on a phone. */
 .requests {
+  position: fixed;
+  z-index: 20;
+  right: var(--s4);
+  bottom: calc(var(--size-bar-web) + env(safe-area-inset-bottom) + var(--s4));
+  left: var(--s4);
   display: grid;
   gap: var(--s3);
-  max-width: var(--size-content);
-  padding: var(--s4);
+}
+
+.requests > .panel {
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.18);
+}
+
+@media (min-width: 600px) {
+  .requests {
+    bottom: var(--s6);
+    left: auto;
+    width: min(400px, calc(100vw - 2 * var(--s4)));
+  }
 }
