@@ -62,6 +62,8 @@ import dev.starbridge.app.ui.inbox.DecisionActions
 import dev.starbridge.app.ui.inbox.DecisionScreen
 import dev.starbridge.app.ui.inbox.InboxScreen
 import dev.starbridge.app.ui.inbox.InboxViewModel
+import dev.starbridge.app.ui.inbox.PromptActions
+import dev.starbridge.app.ui.inbox.PromptLogScreen
 import dev.starbridge.app.ui.quotas.QuotasScreen
 import dev.starbridge.app.ui.quotas.QuotasViewModel
 import dev.starbridge.app.ui.setup.SetupScreen
@@ -73,6 +75,7 @@ import kotlinx.serialization.Serializable
 import java.time.Instant
 
 @Serializable data object InboxKey : NavKey
+@Serializable data object PromptLogKey : NavKey
 @Serializable data class DecisionKey(val id: String) : NavKey
 @Serializable data object QuotasKey : NavKey
 @Serializable data object DevicesKey : NavKey
@@ -163,7 +166,7 @@ fun Main(openDecisions: Int, notice: StateFlow<String?>, dismiss: () -> Unit, op
         containerColor = MaterialTheme.colorScheme.surface,
         navigationItems = {
             for (tab in tabs) {
-                val selected = current == tab.key || (tab.key == InboxKey && current is DecisionKey)
+                val selected = current == tab.key || (tab.key == InboxKey && (current is DecisionKey || current == PromptLogKey))
                 NavigationSuiteItem(
                     navigationSuiteType = suite,
                     selected = selected,
@@ -201,6 +204,7 @@ fun Main(openDecisions: Int, notice: StateFlow<String?>, dismiss: () -> Unit, op
                     ) {
                         val vm: InboxViewModel = hiltViewModel()
                         val decisions by vm.decisions.collectAsStateWithLifecycle()
+                        val prompts by vm.prompts.collectAsStateWithLifecycle()
                         val selected = (backStack.lastOrNull() as? DecisionKey)?.id
                         InboxScreen(
                             decisions,
@@ -211,7 +215,15 @@ fun Main(openDecisions: Int, notice: StateFlow<String?>, dismiss: () -> Unit, op
                             }),
                             selected = selected,
                             refresh = refresh(vm::refresh),
+                            prompts = prompts,
+                            promptActions = PromptActions(answer = vm::answerPrompt, openLog = { backStack.add(PromptLogKey) }),
+                            pollPrompts = vm::refreshPrompts,
                         )
+                    }
+                    entry<PromptLogKey> {
+                        val vm: InboxViewModel = hiltViewModel()
+                        val prompts by vm.prompts.collectAsStateWithLifecycle()
+                        PromptLogScreen(prompts, now)
                     }
                     entry<DecisionKey>(metadata = ListDetailSceneStrategy.detailPane() + motion.decision) { key ->
                         val vm: InboxViewModel = hiltViewModel()

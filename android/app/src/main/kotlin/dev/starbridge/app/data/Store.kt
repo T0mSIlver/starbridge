@@ -6,6 +6,8 @@ import kotlinx.coroutines.flow.StateFlow
 interface Store {
     val phase: StateFlow<Phase>
     val decisions: StateFlow<List<Decision>>
+    /** Permission prompts of the last week, waiting ones included (#57). */
+    val prompts: StateFlow<List<Prompt>>
     val windows: StateFlow<List<QuotaWindow>>
     val members: StateFlow<List<Member>>
     val approval: StateFlow<Approval>
@@ -37,6 +39,10 @@ interface Store {
 
     fun refresh()
     fun answer(id: String, choice: String?, text: String?)
+    /** Allows prompt [id] for [scope] ("once", "session", "project"), or denies it with [message]. */
+    fun answerPrompt(id: String, allow: Boolean, scope: String, message: String?)
+    /** Reads prompts again, quickly, while one waits on screen. */
+    fun refreshPrompts()
 
     fun lookUpPairing(code: String)
     fun approvePairing()

@@ -35,6 +35,10 @@
             android:name=".push.AnswerReceiver"
             android:exported="false" />
 
+        <receiver
+            android:name=".push.PromptReceiver"
+            android:exported="false" />
+
         <service
             android:name=".push.FcmService"
             android:exported="false">

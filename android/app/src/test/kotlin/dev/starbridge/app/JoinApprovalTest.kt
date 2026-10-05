@@ -21,6 +21,7 @@ import dev.starbridge.app.protocol.Sodium
 import dev.starbridge.app.protocol.envelopeJson
 import dev.starbridge.app.protocol.toB64
 import dev.starbridge.app.data.Decision
+import dev.starbridge.app.data.Prompt
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -146,6 +147,8 @@ class JoinApprovalTest {
             override fun decision(decision: Decision) {}
             override fun cancel(id: String) {}
             override fun join(id: String, name: String) {}
+            override fun prompt(prompt: Prompt) {}
+            override fun cancelPrompt(prompt: Prompt) {}
         }
         val store = ServerStore(disk, OkHttpClient(), sodium, envelopes, directories, Pairings(sodium), joins, alerts, "Phone", server, false, scope)
 

@@ -36,6 +36,29 @@ data class Decision(
     val open get() = answeredAt == null && answer == null
 }
 
+/** A wider allow a prompt offers: "session" or "project", its label and the exact rule it adds. */
+data class PromptScope(val scope: String, val label: String, val rule: String)
+
+/**
+ * An agent waiting at a permission prompt (#57). [input] is the tool's input as JSON text,
+ * redacted on the machine. [ended] says how it ended once it did ("Answered on devbox").
+ */
+data class Prompt(
+    val id: String,
+    val tool: String,
+    val summary: String,
+    val description: String?,
+    val input: String,
+    val scopes: List<PromptScope>,
+    val source: Source,
+    val createdAt: Instant,
+    val expiresAt: Instant,
+    val ended: String? = null,
+    val endedAt: Instant? = null,
+) {
+    fun waiting(now: Instant) = ended == null && now.isBefore(expiresAt)
+}
+
 /** Where a window is headed by its reset, as the uploader computed it. */
 sealed interface Pace {
     data object Even : Pace

@@ -2,9 +2,11 @@ package dev.starbridge.app.data
 
 import dev.starbridge.app.protocol.Decision
 import dev.starbridge.app.protocol.Member
+import dev.starbridge.app.protocol.Permission
 import dev.starbridge.app.protocol.Pin
 import dev.starbridge.app.protocol.ProtocolJson
 import dev.starbridge.app.protocol.QuotaSnapshot
+import dev.starbridge.app.protocol.Settled
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
@@ -19,6 +21,19 @@ data class SavedDecision(
     val answeredAt: String? = null,
     /** Set when this device answered: the choice or the text. */
     val answer: String? = null,
+)
+
+/**
+ * A permission prompt this device opened and verified, and how it ended: [answer] is this
+ * device's ("allow:once", "deny"), [settled] the asking machine's notice.
+ */
+@Serializable
+data class SavedPrompt(
+    val from: String,
+    val body: Permission,
+    val answeredAt: String? = null,
+    val answer: String? = null,
+    val settled: Settled? = null,
 )
 
 /** The latest verified snapshot from one machine. */
@@ -42,6 +57,9 @@ data class Saved(
     val entries: List<JsonElement> = emptyList(),
     val cursor: String = "",
     val decisions: List<SavedDecision> = emptyList(),
+    /** Where the last read of permission prompts and settled notices stopped. */
+    val promptCursor: String = "",
+    val prompts: List<SavedPrompt> = emptyList(),
     val quotas: List<SavedQuota> = emptyList(),
     /** "fcm" or "unifiedpush". */
     val pushType: String = "fcm",

@@ -2,7 +2,7 @@
 // account, so a browser signed in to a second account keeps both devices apart.
 import type { Pin } from "@starbridge/protocol";
 import type { StoredKeys } from "./crypto/keys";
-import type { Reply } from "./types";
+import type { PromptReply, Reply } from "./types";
 
 /** This browser's member of an account's directory. */
 export interface DeviceRecord {
@@ -22,6 +22,8 @@ type Records = {
   device: DeviceRecord;
   pin: Pin;
   answers: SentAnswers;
+  /** What this browser answered to permission prompts, by permission id. */
+  promptAnswers: Record<string, PromptReply & { answeredAt: string }>;
   /** The last account signed in here: the service worker's default. */
   current: string;
   /** Quota alerts already notified, so a snapshot every few minutes does not repeat them. */

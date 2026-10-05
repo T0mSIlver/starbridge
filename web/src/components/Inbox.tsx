@@ -7,6 +7,7 @@ import type { InboxItem, Reply } from "@/lib/types";
 import { useApp } from "./AppProvider";
 import { AnsweredDecision, AnsweredLine, OpenDecision, ordered } from "./DecisionCard";
 import s from "./Inbox.module.css";
+import { Prompts } from "./Prompts";
 import { PushBanner } from "./PushBanner";
 import ui from "./ui.module.css";
 
@@ -47,6 +48,7 @@ export function Inbox() {
         )}
       </header>
       <PushBanner />
+      <Prompts />
       {inbox.rejected.length > 0 && (
         <p className={ui.error} role="status">
           {inbox.rejected.length === 1 ? "One decision" : `${inbox.rejected.length} decisions`}{" "}

@@ -20,6 +20,8 @@ import dev.starbridge.app.ui.devices.DevicesScreen
 import dev.starbridge.app.ui.inbox.DecisionActions
 import dev.starbridge.app.ui.inbox.DecisionScreen
 import dev.starbridge.app.ui.inbox.InboxScreen
+import dev.starbridge.app.ui.inbox.PromptActions
+import dev.starbridge.app.ui.inbox.PromptLogScreen
 import dev.starbridge.app.ui.quotas.QuotasScreen
 import dev.starbridge.app.ui.setup.SetupActions
 import dev.starbridge.app.ui.setup.SetupScreen
@@ -68,6 +70,12 @@ class ScreenshotTest(private val dark: Boolean) {
     }
 
     @Test fun inbox() = capture("inbox") { InboxScreen(fake.decisions, now, decisionActions) }
+
+    @Test fun inboxPrompts() = capture("inbox-prompts") {
+        InboxScreen(fake.decisions, now, decisionActions, prompts = fake.prompts, promptActions = PromptActions({ _, _, _, _ -> }, {}))
+    }
+
+    @Test fun promptLog() = capture("prompt-log") { PromptLogScreen(fake.prompts, now) }
 
     @Test fun decision() = capture("decision") { DecisionScreen(fake.decisions[1], now, onAnswer = { _, _, _ -> }) }
 

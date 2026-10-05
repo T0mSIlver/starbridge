@@ -12,6 +12,8 @@ import dev.starbridge.app.protocol.JoinRequestBody
 import dev.starbridge.app.protocol.Joins
 import dev.starbridge.app.protocol.KeyPair
 import dev.starbridge.app.protocol.PairingApprovalBody
+import dev.starbridge.app.protocol.Permission
+import dev.starbridge.app.protocol.Settled
 import dev.starbridge.app.protocol.PairingCode
 import dev.starbridge.app.protocol.PairingRequestBody
 import dev.starbridge.app.protocol.Pairings
@@ -53,10 +55,12 @@ import kotlin.math.roundToInt
 import dev.starbridge.app.protocol.Decision as DecisionBody
 import dev.starbridge.app.protocol.Member as DirectoryMember
 
-/** Shows and clears decision notifications; the app's is [dev.starbridge.app.push.Notifier]. */
+/** Shows and clears notifications; the app's is [dev.starbridge.app.push.Notifier]. */
 interface Alerts {
     fun decision(decision: Decision)
     fun cancel(id: String)
+    fun prompt(prompt: Prompt)
+    fun cancelPrompt(prompt: Prompt)
     /** A browser or phone signed in to the account asks to join. */
     fun join(id: String, name: String)
 }
@@ -95,6 +99,7 @@ class ServerStore(
 
     override val phase = MutableStateFlow<Phase>(Phase.SignedOut)
     override val decisions = MutableStateFlow<List<Decision>>(emptyList())
+    override val prompts = MutableStateFlow<List<Prompt>>(emptyList())
     override val windows = MutableStateFlow<List<QuotaWindow>>(emptyList())
     override val members = MutableStateFlow<List<Member>>(emptyList())
     override val approval = MutableStateFlow<Approval>(Approval.Idle)
@@ -147,6 +152,7 @@ class ServerStore(
         server.value = saved.server
         push.value = push.value.copy(type = saved.pushType, registered = saved.push?.type == saved.pushType)
         decisions.value = saved.decisions.map(::toUi)
+        prompts.value = saved.prompts.map(::toUi)
         windows.value = saved.quotas.flatMap(::toUi)
         members.value = directory?.let(::toUi).orEmpty()
     }
@@ -533,6 +539,7 @@ class ServerStore(
         syncDirectory()
         if (phase.value != Phase.Ready) return
         syncDecisions()
+        syncPrompts()
         syncQuotas()
     }
 
@@ -580,6 +587,115 @@ class ServerStore(
         }
         persist(saved.copy(cursor = cursor, decisions = byId.values.sortedBy { it.body.createdAt }.takeLast(500)))
     }
+
+    /**
+     * Reads permission prompts and settled notices past the cursor. A prompt comes again once it
+     * is answered or settled, with its time; a notice counts only from the machine that asked.
+     */
+    private suspend fun syncPrompts() {
+        var cursor = saved.promptCursor
+        val byId = saved.prompts.associateBy { it.body.id }.toMutableMap()
+        val read = mutableListOf<Listed>()
+        while (true) {
+            val page = api().items("permission,settled", cursor)
+            read += page.items
+            cursor = page.cursor
+            if (page.items.size < 100) break
+        }
+        // A settled prompt comes back after its notice, so prompts go first: a notice whose
+        // prompt is new to this phone would otherwise find nothing to close.
+        for (listed in read.sortedBy { if (it.item.kind == "permission") 0 else 1 }) takePrompt(listed.item, listed.answeredAt, byId)
+        keepPrompts(byId, cursor)
+    }
+
+    /** Merges one verified prompt or notice into [byId]; clears the notification of one that ended. */
+    private fun takePrompt(item: SealedItem, answeredAt: String?, byId: MutableMap<String, SavedPrompt>): SavedPrompt? {
+        when (item.kind) {
+            "permission" -> {
+                val known = byId[item.id]
+                if (known != null) {
+                    if (answeredAt != null && known.answeredAt == null) {
+                        byId[item.id] = known.copy(answeredAt = answeredAt)
+                        alerts.cancelPrompt(toUi(known))
+                    }
+                    return null
+                }
+                val (from, body) = open(item) ?: return null
+                return SavedPrompt(from, body as Permission, answeredAt).also { byId[item.id] = it }
+            }
+            "settled" -> {
+                val (from, body) = open(item) ?: return null
+                val notice = body as Settled
+                val p = byId[notice.itemId]
+                if (p == null) {
+                    settleDecision(notice.itemId, from)
+                    return null
+                }
+                if (p.from != from) return null
+                byId[p.body.id] = p.copy(settled = notice, answeredAt = p.answeredAt ?: notice.at)
+                alerts.cancelPrompt(toUi(p))
+            }
+        }
+        return null
+    }
+
+    /** A settled notice may close one of the machine's decisions: it counts as answered. */
+    private fun settleDecision(id: String, from: String) {
+        val d = saved.decisions.find { it.body.id == id && it.from == from } ?: return
+        alerts.cancel(id)
+        if (d.answeredAt == null) persist(saved.copy(decisions = saved.decisions.map { if (it === d) it.copy(answeredAt = now()) else it }))
+    }
+
+    /** Keeps a week of prompts, the log's span, as the server does. */
+    private fun keepPrompts(byId: Map<String, SavedPrompt>, cursor: String = saved.promptCursor) {
+        val weekAgo = Instant.now().minus(7, ChronoUnit.DAYS)
+        val kept = byId.values.filter { instant(it.body.createdAt)?.isAfter(weekAgo) != false }.sortedBy { it.body.createdAt }
+        persist(saved.copy(promptCursor = cursor, prompts = kept))
+    }
+
+    override fun refreshPrompts() = run(showBusy = false) {
+        if (phase.value == Phase.Ready) syncPrompts()
+    }
+
+    override fun answerPrompt(id: String, allow: Boolean, scope: String, message: String?) =
+        run(showBusy = false) { sendPrompt(id, allow, scope, message) }
+
+    /**
+     * Signs the answer, bound to the prompt's id and input hash, and seals it to the machine that
+     * asked. A deny is for this call only; a wider allow only for a scope the prompt offered.
+     */
+    suspend fun sendPrompt(id: String, allow: Boolean, scope: String, message: String?) {
+        val p = saved.prompts.find { it.body.id == id } ?: throw IllegalStateException("No such prompt.")
+        if (p.answeredAt != null || p.answer != null) throw IllegalStateException("Already answered.")
+        val chosen = if (allow) scope else "once"
+        if (chosen != "once" && p.body.suggestions.none { it.scope == chosen }) throw IllegalArgumentException("Not offered.")
+        val machine = directory?.members?.get(p.from)?.takeIf { it.active }?.member
+            ?: throw IllegalStateException("The machine that asked is no longer in your directory.")
+        val body = buildJsonObject {
+            put("v", 1)
+            put("id", newId("pa_"))
+            put("permissionId", id)
+            put("to", machine.id)
+            put("answeredAt", now())
+            put("behavior", if (allow) "allow" else "deny")
+            put("scope", chosen)
+            put("inputHash", p.body.inputHash)
+            if (!allow) message?.trim()?.takeIf { it.isNotEmpty() }?.let { put("message", it.take(500)) }
+        }
+        val item = envelopes.seal("permission-answer", body, me.id, signKey, listOf(machine))
+        try {
+            api().postItem(item)
+        } catch (e: ApiException) {
+            if (e.error == "already-answered" || e.error == "expired") syncPrompts()
+            throw e
+        }
+        val answer = if (allow) "allow:$chosen" else "deny"
+        persist(saved.copy(prompts = saved.prompts.map { if (it.body.id == id) it.copy(answeredAt = now(), answer = answer) else it }))
+    }
+
+    /** For the notification's buttons: holds the lock like any other change. */
+    suspend fun sendPromptFromNotification(id: String, allow: Boolean, scope: String) =
+        lock.withLock { sendPrompt(id, allow, scope, null) }
 
     private suspend fun syncQuotas() {
         val quotas = api().quota().mapNotNull { listed -> open(listed.item)?.let { (from, body) -> SavedQuota(from, body as QuotaSnapshot) } }
@@ -640,6 +756,11 @@ class ServerStore(
         val id = p["id"]?.jsonPrimitive?.content ?: return@withLock
         when (kind) {
             "answered" -> {
+                saved.prompts.find { it.body.id == id }?.let { p ->
+                    alerts.cancelPrompt(toUi(p))
+                    if (p.answeredAt == null) persist(saved.copy(prompts = saved.prompts.map { if (it === p) it.copy(answeredAt = now()) else it }))
+                    return@withLock
+                }
                 alerts.cancel(id)
                 val d = saved.decisions.find { it.body.id == id }
                 if (d != null && d.answeredAt == null) persist(saved.copy(decisions = saved.decisions.map { if (it === d) it.copy(answeredAt = now()) else it }))
@@ -660,6 +781,21 @@ class ServerStore(
                 val saved1 = SavedDecision(from, body as DecisionBody, answeredAt)
                 persist(saved.copy(decisions = saved.decisions + saved1))
                 if (answeredAt == null) alerts.decision(toUi(saved1))
+            }
+            "permission", "settled" -> {
+                if (kind == "permission" && saved.prompts.any { it.body.id == id }) return@withLock
+                val box = p["box"]?.jsonPrimitive?.content
+                var answeredAt: String? = null
+                val item = if (box != null) {
+                    SealedItem(1, kind, id, p.getValue("from").jsonPrimitive.content, p["re"]?.jsonPrimitive?.content, listOf(SealedBox(me.id, box)))
+                } else {
+                    api().item(id).also { answeredAt = it.answeredAt }.item
+                }
+                if (directory?.members?.containsKey(item.from) != true) syncDirectory()
+                val byId = saved.prompts.associateBy { it.body.id }.toMutableMap()
+                val added = takePrompt(item, answeredAt, byId)
+                keepPrompts(byId)
+                if (added != null && added.answeredAt == null) alerts.prompt(toUi(added))
             }
             "quota" -> syncQuotas()
             "join" -> {
@@ -960,6 +1096,37 @@ class ServerStore(
             createdAt = instant(b.createdAt) ?: Instant.EPOCH,
             answer = d.answer,
             answeredAt = instant(d.answeredAt) ?: d.answer?.let { Instant.now() },
+        )
+    }
+
+    /** How a prompt ended, in words, from this device's answer or the machine's notice. */
+    private fun ended(p: SavedPrompt): String? {
+        p.answer?.let { return if (it.startsWith("allow")) "Allowed here" else "Denied here" }
+        val s = p.settled
+        return when {
+            s?.outcome == "keyboard" -> "Answered on ${p.body.source.machine}"
+            s?.outcome == "timeout" -> "Timed out: left to the keyboard"
+            s?.outcome == "device" && s.device == me.id -> "Answered here"
+            s?.outcome == "device" -> "Answered from ${directory?.members?.get(s.device)?.member?.name ?: "another device"}"
+            p.answeredAt != null -> "Answered on another device"
+            else -> null
+        }
+    }
+
+    private fun toUi(p: SavedPrompt): Prompt {
+        val b = p.body
+        return Prompt(
+            id = b.id,
+            tool = b.tool,
+            summary = b.summary,
+            description = b.description,
+            input = b.input,
+            scopes = b.suggestions.map { PromptScope(it.scope, it.label, it.rule) },
+            source = Source(b.source.machine, b.source.project, b.source.session, b.source.sessionTitle, b.source.links.orEmpty().map { SessionLink(it.kind, it.url) }),
+            createdAt = instant(b.createdAt) ?: Instant.EPOCH,
+            expiresAt = instant(b.expiresAt) ?: Instant.EPOCH,
+            ended = ended(p),
+            endedAt = instant(p.answeredAt),
         )
     }
 
