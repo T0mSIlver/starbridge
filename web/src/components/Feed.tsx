@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { imageSrc } from "@/lib/attachments";
 import { ago, type Entry, type MachineKind, type Past, timer } from "@/lib/feed";
+import { useFind } from "@/lib/find";
 import { clockTime } from "@/lib/format";
 import { duration, progressText, runState } from "@/lib/runs";
 import type { Decision, PromptItem, RunItem, Source } from "@/lib/types";
@@ -23,6 +24,25 @@ export function useNow(live: boolean, ms = 1000): number {
 
 /** A machine's icon by its kind; a generic computer while its machine does not say (#122). */
 export const machineIcon = (kind?: MachineKind) => kind ?? "desktop";
+
+const literal = (w: string) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/** `text` with the Find query's words marked, bold on `surface2`: never amber, which means "needs you". */
+export function Hit({ text }: { text: string }) {
+  const words = useFind().toLowerCase().split(/\s+/).filter(Boolean);
+  if (words.length === 0 || !text) return text;
+  const parts = text.split(new RegExp(`(${words.map(literal).join("|")})`, "gi"));
+  return parts.map((part, i) =>
+    i % 2 ? (
+      // biome-ignore lint/suspicious/noArrayIndexKey: the parts of one string, in order
+      <mark key={i} className={s.hit}>
+        {part}
+      </mark>
+    ) : (
+      part
+    ),
+  );
+}
 
 /**
  * Facts Starbridge knows: the machine's kind and name, the repo, the time on the right. While an
@@ -46,11 +66,15 @@ export function MetaRow({
   return (
     <div className={`${size === "dense" ? "t-meta" : "t-small"} ${s.meta}`}>
       <Icon name={machineIcon(kind)} size={size === "dense" ? 16 : 17} />
-      <span>{machine}</span>
+      <span>
+        <Hit text={machine} />
+      </span>
       {repo && (
         <>
           <span aria-hidden="true">·</span>
-          <span className={s.repo}>{repo}</span>
+          <span className={s.repo}>
+            <Hit text={repo} />
+          </span>
         </>
       )}
       <span className={`${s.time} ${waiting ? s.waitTime : ""}`}>{time}</span>
@@ -199,7 +223,7 @@ export function NeedRow({ entry, now, selected, comfy, onSelect, actions }: RowP
         ) : entry.type === "question" ? (
           <>
             <div className={`${comfy ? "t-action" : "t-label"} ${s.question}`}>
-              {entry.item.decision.question}
+              <Hit text={entry.item.decision.question} />
             </div>
             <Thumbs d={entry.item.decision} width={comfy ? 140 : 112} />
           </>
@@ -214,9 +238,13 @@ function PromptBody({ p, comfy }: { p: PromptItem; comfy?: boolean }) {
   return (
     <>
       <div className={`${comfy ? "t-small" : "t-meta"} ${s.tool}`}>
-        <span className={s.toolName}>{p.permission.tool}</span>
+        <span className={s.toolName}>
+          <Hit text={p.permission.tool} />
+        </span>
       </div>
-      <pre className={`${comfy ? "t-code" : "t-snippet"} ${s.cmd}`}>{p.permission.summary}</pre>
+      <pre className={`${comfy ? "t-code" : "t-snippet"} ${s.cmd}`}>
+        <Hit text={p.permission.summary} />
+      </pre>
     </>
   );
 }
@@ -256,7 +284,7 @@ export function RunRow({ item, now, comfy }: { item: RunItem; now: number; comfy
       />
       <div className={`${comfy ? "t-action" : "t-label"} ${s.runTitle}`}>
         <Play size={12} />
-        {r.title}
+        <Hit text={r.title} />
       </div>
       <div className={`t-meta ${s.dim}`}>{r.reason}</div>
       {state === "running" ? (
@@ -349,10 +377,10 @@ export function PastRow({
           time={clockTime(new Date(past.closed))}
         />
         <div className={`${e.type === "prompt" ? "t-snippet" : "t-small"} ${s.pastText}`}>
-          {past.text}
+          <Hit text={past.text} />
         </div>
         <div className={`t-meta ${s.dim}`}>
-          {past.outcome} · {by}
+          <Hit text={past.outcome} /> · {by}
         </div>
       </div>
     </div>
