@@ -32,7 +32,9 @@ else
   live=web-b next=web-a port=3010
 fi
 $compose up -d --no-deps --force-recreate $next
-healthy http://127.0.0.1:$port/ $next
+# A copy that never turns healthy is stopped, so the live one stays the only one running and a
+# retried deploy replaces the failed copy, not the live one.
+healthy http://127.0.0.1:$port/ $next || { $compose stop $next; exit 1; }
 
 # Caddy takes the Caddyfile through its admin API on every deploy: a reload keeps open
 # connections, where recreating the container would drop them, and an unchanged one is a no-op.
