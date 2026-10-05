@@ -1,9 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import { track } from "@/lib/analytics";
 import { AGENTS_GUIDE, REPO, SELF_HOST } from "@/lib/links";
 import { DEFAULT_SETTINGS } from "@/lib/quotaSettings";
 import { sample } from "@/lib/sample";
+import { Analytics } from "./Analytics";
 import { Icon, Mark } from "./icons";
 import s from "./Landing.module.css";
 import { QuotaRow } from "./QuotaRow";
@@ -65,7 +67,8 @@ const INSTALL = [
 function Install() {
   const [at, setAt] = useState(0);
   const [copied, setCopied] = useState(false);
-  const cmd = INSTALL[at]?.[1] ?? "";
+  const [method, cmd] = INSTALL[at] ?? ["", ""];
+  const onCopied = () => track("copy-install", { method });
   return (
     <div className={s.install}>
       <div className={`t-meta ${s.tabs}`} role="tablist" aria-label="Install with">
@@ -92,13 +95,14 @@ function Install() {
             try {
               await navigator.clipboard.writeText(cmd);
               setCopied(true);
+              onCopied();
             } catch {}
           }}
         >
           <Icon name={copied ? "check" : "copy"} size={16} />
         </button>
       </div>
-      <pre className={`t-code ${s.cmd}`} role="tabpanel">
+      <pre className={`t-code ${s.cmd}`} role="tabpanel" onCopy={onCopied}>
         {cmd}
       </pre>
     </div>
@@ -137,6 +141,7 @@ export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
   const now = new Date();
   return (
     <div className={s.page}>
+      <Analytics />
       <header className={`t-small ${s.top}`}>
         <span className={`t-subtitle ${s.brand}`}>
           <Mark size={22} />

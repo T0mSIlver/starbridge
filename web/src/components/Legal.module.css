@@ -18,10 +18,6 @@
   gap: var(--s2);
 }
 
-.todo {
-  color: var(--accent);
-}
-
 .links {
   display: flex;
   gap: var(--s4);

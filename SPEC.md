@@ -607,6 +607,13 @@ How it generalizes is open.
   code (stored columns in `server/src/db.ts`, retention in `server/src/limits.ts`, logs and
   backups in `deploy/`); the operator's legal entity, jurisdiction, rights statement, liability
   wording and account-deletion process stay marked TODO until the owner decides them.
+- 2026-10-05. Legal pages filled in (owner): the operator is Tom Vaucourt as a non-professional
+  individual in France, with the host's address (Hetzner) instead of his own, as LCEN art. 6
+  allows. Current features stay free, 60 days' notice before any price; 30 days' notice before a
+  shutdown; suspension appeals to abuse@ within 30 days, answered within 14; French law and
+  courts, consumers keep their own; no fixed log age (logs hold no IPs and rotate by size);
+  account deletion confirmed by a code in a public gist on the GitHub account, done within 30
+  days; GDPR rights with CNIL as the authority.
 
 - 2026-10-05. Platforms (owner). The web app ships first everywhere it can: installed to the home
   screen on iOS (Web Push works for home-screen web apps since iOS 16.4) and as an installed app
@@ -739,6 +746,22 @@ How it generalizes is open.
   (the hosted owner signs in through GitHub like everyone, and `accounts.owner` marks only the
   self-hosted owner-token account); whoever can open the database reads it. `/privacy` lists the
   counts in their own section.
+- 2026-10-05. Page analytics (owner ruling on #141, as built). Umami 3.4.0 with Postgres 18 runs
+  in the deploy's Compose project, on a network of its own. Only the landing page, `/privacy`
+  and `/terms` load its tracker, from `/stats/script.js` on starbridge.run; Caddy passes that
+  file and `/stats/api/send` to Umami and nothing else, so no DNS record is needed. Auto-tracking
+  is off and each public page records its own view, because the tracker would otherwise follow
+  the app's client-side navigation after an owner-token sign-in from the landing page. Copying
+  an install command records `copy-install` with the method (Script, Homebrew, npm). No cookie,
+  no browser storage, no stored IP address: the visitor hash's salt changes daily
+  (`SALT_ROTATION=day`), Do Not Track is honoured, and `/privacy` lists what Umami records, so
+  there is no consent banner. The dashboard listens on the VPS's `127.0.0.1:3001` only; the owner
+  reaches it through an SSH tunnel. The first deploy makes the database password and Umami's
+  secret on the box (`deploy/host/umami-env.sh`); `deploy/umami-setup.sh` then replaces the
+  default admin password and creates the website under the id the pages send, which is fixed in
+  `web/src/lib/analytics.ts`. The nightly backup also dumps Umami's database (`pg_dump -Fc`, 14
+  days). Umami drops headless browsers' hits as bots, so a Playwright check needs a desktop user
+  agent.
 
 - 2026-10-05. Agents reach the owner through Starbridge (#121, owner). The skill and the
   SessionStart rule say Starbridge is how an agent reaches its user: a card for a decision that is
