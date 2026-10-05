@@ -20,9 +20,11 @@ for i in $(seq 1 "$N"); do
     (cd "$d" && ./config.sh --unattended --url "https://github.com/$REPO" --token "$tok" \
       --name "devbox-$i" --labels starbridge-devbox --work _work --replace)
   fi
-  # Hosted-runner equivalents the workflows expect.
+  # Hosted-runner equivalents the workflows expect. Temp files go to the job's temp folder, which
+  # the runner empties after each job, instead of /tmp, a small RAM disk that tests filled.
   cat > "$d/.env" <<EOF
 LANG=C.UTF-8
+TMPDIR=$d/_work/_temp
 GRADLE_USER_HOME=$GRADLE_HOME
 ANDROID_HOME=$HOME/.local/opt/android-sdk
 ANDROID_SDK_ROOT=$HOME/.local/opt/android-sdk
