@@ -161,6 +161,10 @@ export default function starbridge(pi: PiApi) {
   let current: Ctx | undefined;
   /** Disposers of the link, by the session it was registered for. */
   const links = new Map<string, () => void>();
+  /** Aborted when the session ends, so prompts still on the devices are settled. */
+  let ended = new AbortController();
+  /** The "Answer here" dialogs, one at a time. */
+  let dialogs: Promise<void> = Promise.resolve();
 
   pi.on("before_agent_start", (e) =>
     text ? { systemPrompt: `${e.systemPrompt}\n\n${text}` } : undefined,
@@ -185,19 +189,26 @@ export default function starbridge(pi: PiApi) {
           hook: (text, signal) => permissionHook(text, signal, file),
           ...(ctx.hasUI
             ? {
-                keyboard: async (signal: AbortSignal) => {
-                  const what = details.command ?? details.path ?? details.toolName ?? "a tool";
-                  await ctx.ui.select(
-                    `Permission Required: sent to your devices through Starbridge\n${what}`,
-                    ["Answer here"],
-                    { signal },
-                  );
-                  // Closed because a device answered: the keyboard did nothing.
-                  if (signal.aborted) await new Promise(() => {});
-                },
+                keyboard: (signal: AbortSignal) =>
+                  new Promise<void>((resolve) => {
+                    const what = details.command ?? details.path ?? details.toolName ?? "a tool";
+                    // Pi strands a dialog that another opens over it, so they take turns.
+                    const show = async () => {
+                      if (signal.aborted) return;
+                      await ctx.ui.select(
+                        `Permission Required: sent to your devices through Starbridge\n${what}`,
+                        ["Answer here"],
+                        { signal },
+                      );
+                      // Closed because a device answered or the session ended: the keyboard did nothing.
+                      if (!signal.aborted) resolve();
+                    };
+                    dialogs = dialogs.then(show, show);
+                  }),
               }
             : {}),
           sleep,
+          ended: ended.signal,
         });
       }),
     );
@@ -205,6 +216,7 @@ export default function starbridge(pi: PiApi) {
 
   pi.on("session_start", (_e, ctx) => {
     current = ctx;
+    ended = new AbortController();
     void loop?.stop();
     loop = undefined;
     // `pi -p` and `--mode json` end after one prompt: nothing would be there to submit into.
@@ -259,6 +271,7 @@ export default function starbridge(pi: PiApi) {
     const ending = loop;
     loop = undefined;
     current = undefined;
+    ended.abort();
     for (const dispose of links.values()) dispose();
     links.clear();
     delete process.env[ANSWERS_ENV];

@@ -96,3 +96,15 @@ test("Pi's bash call reaches the CLI as a command, other asks as their path or v
     ),
   ).toMatchObject({ tool_name: "mcp", tool_input: { value: "github.create_issue" } });
 });
+
+test("the session ending stops the CLI, which settles the prompt, and the link defers", async () => {
+  const h = hook(ALLOW, 10_000);
+  const k = keyboard(10_000);
+  const ended = new AbortController();
+  const v = authorize("{}", { hook: h.run, keyboard: k.open, sleep, ended: ended.signal }, 10);
+  await sleep(50);
+  ended.abort();
+  expect(await v).toEqual({ kind: "defer" });
+  expect(h.calls.map((c) => c.aborted)).toEqual([true]);
+  expect(k.shown.map((d) => d.closed)).toEqual([true]);
+});

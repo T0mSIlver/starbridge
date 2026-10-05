@@ -74,6 +74,8 @@ export interface LinkDeps {
   /** Resolves when the keyboard takes the prompt back; never while `signal` aborts it. */
   keyboard?(signal: AbortSignal): Promise<void>;
   sleep(ms: number): Promise<void>;
+  /** Aborts when the session ends: the CLI settles the prompt on the devices, and the link defers. */
+  ended?: AbortSignal;
 }
 
 /** How long the CLI gets to defer at once (Starbridge off, unpaired) before the dialog shows. */
@@ -87,6 +89,26 @@ export async function authorize(
 ): Promise<Verdict> {
   const devices = new AbortController();
   const here = new AbortController();
+  const end = () => {
+    here.abort();
+    devices.abort();
+  };
+  if (deps.ended?.aborted) return { kind: "defer" };
+  deps.ended?.addEventListener("abort", end);
+  try {
+    return await decide(stdin, deps, quietMs, devices, here);
+  } finally {
+    deps.ended?.removeEventListener("abort", end);
+  }
+}
+
+async function decide(
+  stdin: string,
+  deps: LinkDeps,
+  quietMs: number,
+  devices: AbortController,
+  here: AbortController,
+): Promise<Verdict> {
   const answered = deps
     .hook(stdin, devices.signal)
     .then(verdictOf, () => ({ kind: "defer" }) as Verdict);
