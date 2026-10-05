@@ -1,5 +1,7 @@
 package dev.starbridge.app.ui.inbox
 
+import androidx.compose.foundation.layout.widthIn
+import dev.starbridge.app.data.PromptScope
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -173,14 +175,24 @@ fun PromptCard(prompt: Prompt, now: Instant, actions: PromptActions, shape: Shap
                 }
                 Box(Modifier.align(Alignment.TopEnd)) {
                     DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                        // Each wider allow shows the exact rule it adds before it is chosen (PROTOCOL.md).
                         prompt.scopes.forEach { scope ->
-                            DropdownMenuItem(text = { Text(scope.label) }, onClick = { menu = false; send(true, scope.scope, null) })
+                            DropdownMenuItem(text = { ScopeText(scope) }, onClick = { menu = false; send(true, scope.scope, null) }, modifier = Modifier.widthIn(max = 320.dp))
                         }
                         DropdownMenuItem(text = { Text("Deny with a note") }, onClick = { menu = false; actions.open(prompt.id) })
                     }
                 }
             }
         }
+    }
+}
+
+/** A wider allow: its label, and under it the exact rule it adds, in mono and in full. */
+@Composable
+private fun ScopeText(scope: PromptScope) {
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text(scope.label, style = StarbridgeTheme.type.label, color = MaterialTheme.colorScheme.onSurface)
+        Text(scope.rule, style = StarbridgeTheme.type.code.copy(fontSize = 13.sp, lineHeight = 18.sp), color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
@@ -247,15 +259,17 @@ fun PromptSheet(prompt: Prompt, now: Instant, actions: PromptActions) {
                         modifier = Modifier.fillMaxWidth(),
                     )
                 } else if (prompt.scopes.isNotEmpty()) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+                    // Stacked, each with the exact rule it adds, in full (PROTOCOL.md).
+                    Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
                         prompt.scopes.forEach { scope ->
                             OutlinedButton(
                                 onClick = { send(true, scope.scope, null) },
                                 enabled = !sent,
+                                shape = RoundedCornerShape(Spacing.s4),
                                 border = ButtonDefaults.outlinedButtonBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(scheme.outlineVariant)),
-                                contentPadding = PaddingValues(horizontal = Spacing.s3),
-                                modifier = Modifier.weight(1f).heightIn(min = 40.dp),
-                            ) { Text(scope.label, style = StarbridgeTheme.type.label, color = scheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                                contentPadding = PaddingValues(horizontal = Spacing.s4, vertical = Spacing.s3),
+                                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                            ) { Box(Modifier.fillMaxWidth()) { ScopeText(scope) } }
                         }
                     }
                 }

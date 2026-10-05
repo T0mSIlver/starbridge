@@ -74,6 +74,8 @@ interface Alerts {
     fun run(run: Run)
     /** Quota alerts the uploader newly raised; each shows once, if this phone opted in. */
     fun quota(notices: List<QuotaNotice>) {}
+    /** Signed out: every notification goes, since they show decrypted questions and commands. */
+    fun clearAll() {}
 }
 
 /** How long pull to refresh on Quotas waits for the machines' fresh snapshots. */
@@ -230,6 +232,8 @@ class ServerStore(
         joinAsks.value = emptyList()
         comparison.value = Comparison.Idle
         disk.wipe()
+        alerts.clearAll()
+        pendingPush = null
         saved = Saved(saved.server, pushType = saved.pushType)
         secrets = Secrets()
         directory = null
@@ -535,13 +539,19 @@ class ServerStore(
         val entries = api().directory(0)
         // The chain's first entry must carry this key's own signature, which a server cannot fake.
         val dir = directories.verify(entries, saved.account, recoveryPk = toB64(recovery.public))
-        val member = newMember()
-        val entry = directories.addEntry(dir, RECOVERY, recovery.secret, member, now())
-        api().append(entry)
-        val all = entries + ProtocolJson.encodeToJsonElement(entry)
+        // The keys made for an earlier attempt stay until the chain holds them: when its reply was
+        // lost, the server has bound the session to that member, and a retry finds it there (#274).
+        val member = saved.recovering ?: newMember().also { persist(saved.copy(recovering = it)) }
+        val all = if (dir.members[member.id]?.active == true) {
+            entries
+        } else {
+            val entry = directories.addEntry(dir, RECOVERY, recovery.secret, member, now())
+            api().append(entry)
+            entries + ProtocolJson.encodeToJsonElement(entry)
+        }
         val after = directories.verify(all, saved.account, Pin(dir.length, dir.head))
         directory = after
-        persist(saved.copy(me = member, entries = all, pin = Pin(after.length, after.head)))
+        persist(saved.copy(me = member, recovering = null, entries = all, pin = Pin(after.length, after.head)))
         sync()
     }
 
@@ -572,6 +582,8 @@ class ServerStore(
         syncPrompts()
         syncQuotas()
         syncRuns()
+        // The server answered, so a push route that failed to register gets another try.
+        pendingPush?.let { runCatching { subscribeHeld(it) } }
     }
 
     /** Fetches what is new and replays the whole chain; it must extend the pin. */
@@ -983,17 +995,32 @@ class ServerStore(
     }
 
     /** Registers where pushes go; a new endpoint replaces the old subscription. */
-    suspend fun subscribe(type: String, endpoint: String, keys: Pair<String, String>?) = lock.withLock {
-        if (phase.value != Phase.Ready || type != saved.pushType) return@withLock
+    suspend fun subscribe(type: String, endpoint: String, keys: Pair<String, String>?) = lock.withLock { subscribeHeld(PushRoute(type, endpoint, keys)) }
+
+    /** Registers a route that failed earlier, offline say: on a new network, and after each sync (#274). */
+    suspend fun retryPush() = lock.withLock { pendingPush?.let { runCatching { subscribeHeld(it) } } }
+
+    private class PushRoute(val type: String, val endpoint: String, val keys: Pair<String, String>?)
+
+    /** The route whose registration failed, kept until one succeeds or the phone signs out. */
+    @Volatile private var pendingPush: PushRoute? = null
+
+    private suspend fun subscribeHeld(route: PushRoute) {
+        if (phase.value != Phase.Ready || route.type != saved.pushType) return
         val old = saved.push
-        if (old != null && old.type == type && old.endpoint == endpoint) return@withLock
+        if (old != null && old.type == route.type && old.endpoint == route.endpoint) {
+            pendingPush = null
+            return
+        }
+        pendingPush = route
         if (old != null) {
             runCatching { api().unsubscribe(old.id) }
             // Forgotten first, so a failed replacement is not mistaken for a working route.
             persist(saved.copy(push = null))
         }
-        val id = api().subscribe(type, endpoint, keys)
-        persist(saved.copy(push = SavedPush(type, id, endpoint)))
+        val id = api().subscribe(route.type, route.endpoint, route.keys)
+        persist(saved.copy(push = SavedPush(route.type, id, route.endpoint)))
+        pendingPush = null
     }
 
     override fun setPushType(type: String) = run(showBusy = false) {

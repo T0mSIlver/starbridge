@@ -1,6 +1,7 @@
 package dev.starbridge.app.data
 
 import dev.starbridge.app.protocol.PairingMessage
+import dev.starbridge.app.protocol.ProtocolException
 import dev.starbridge.app.protocol.ProtocolJson
 import dev.starbridge.app.protocol.SealedItem
 import dev.starbridge.app.protocol.SignedEnvelope
@@ -148,7 +149,9 @@ class Api(private val http: OkHttpClient, private val server: String, private va
         val longPoll = http.newBuilder().readTimeout((waitSeconds + 15).toLong(), TimeUnit.SECONDS).build()
         val (status, body) = call("GET", "/pairings/$rendezvous/result?wait=$waitSeconds", headers = mapOf("X-Claim" to claim), client = longPoll)
         if (status == 204 || body == null) return null
-        return PairingResult(body.jsonObject.getValue("approval"))
+        // A reply without one is the server's fault, never the end of the app (#274).
+        val approval = (body as? JsonObject)?.get("approval") ?: throw ProtocolException("malformed", "pairing result without an approval")
+        return PairingResult(approval)
     }
 
     private fun longPoll(waitSeconds: Int) = http.newBuilder().readTimeout((waitSeconds + 15).toLong(), TimeUnit.SECONDS).build()

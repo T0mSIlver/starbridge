@@ -292,6 +292,11 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
 
     override fun cancel(id: String) = manager.cancel(tag(id))
 
+    override fun clearAll() {
+        shown.clear()
+        manager.cancelAll()
+    }
+
     // --- Permission prompts ------------------------------------------------------
 
     /** One notification per session, updated in place: the prompt it shows now. */
