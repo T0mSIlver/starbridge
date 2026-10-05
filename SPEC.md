@@ -998,18 +998,6 @@ How it generalizes is open.
   show Reply only on those. The skill still asks for options good enough that one of them is
   right, and says a reply is a steer to act on.
 
-- 2026-10-06. A recovery key, not words (owner ruling on #199, replaces the words of #157). Chrome
-  flagged starbridge.run as a dangerous site: a new site that shows 12 BIP-39 words and later asks
-  for them back is what seed-phrase phishing looks like. New accounts get the same 16-byte seed
-  as a recovery key: the seed and a 12-bit check, 28 Crockford base32 characters in seven groups
-  of four, read in any case, with or without dashes, with Crockford's look-alikes. The check
-  catches all but 1 in 4,096 typos, as BIP-39's 4 bits caught all but 1 in 16 for 12 words; a
-  character outside the alphabet is named where it stands. Strength and derivation are those of
-  the 12-word entry above: 128 bits, stretched to the Ed25519 seed by BLAKE2b-256. Accounts with
-  24 or 12 words keep recovering with them: the entry tells words from a key by their letter runs.
-  No page says "seed", "phrase" or asks for words; the clients only show keys. #199 closes once
-  this is deployed and Chrome no longer warns.
-
 ## Encryption, with existing libraries
 
 - libsodium sealed boxes (`crypto_box_seal`, X25519 + XSalsa20-Poly1305): an
