@@ -345,7 +345,7 @@ It posts the prompt through the agent (or to the server itself when no agent run
 at most `--wait`, 570 s by default, under the 600 s Claude Code gives a hook. An accepted
 answer prints the hook's decision: `allow`, with `updatedPermissions` built from Claude Code's
 own suggestions for a wider scope (destination `session`, or `localSettings` for the project),
-or `deny` with the message. Only `addRules` allow rules and `addDirectories` are offered, and
+or `deny` with the message, or with one saying the owner denied it when the answer has none. Only `addRules` allow rules and `addDirectories` are offered, and
 only when their rules fit the 500-character `rule` in full; `setMode` and other suggestions stay
 at the keyboard. Before printing, the machine marks the prompt settled, then posts `settled:
 device`; without an agent it gives that post 5 s, and SIGTERM or the deadline during it still end
