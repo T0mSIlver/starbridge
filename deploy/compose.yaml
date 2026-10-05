@@ -18,15 +18,25 @@ services:
       driver: json-file
       options: { max-size: 10m, max-file: "5" }
 
-  web:
+  # Two copies of the page, swapped one at a time on each deploy (deploy/host/apply.sh); Caddy
+  # sends requests to the first healthy one. Only Caddy reaches them; they hold no secrets and need
+  # no environment.
+  web-a:
     build:
       context: ..
       dockerfile: web/Dockerfile
     image: starbridge-web:latest
     restart: unless-stopped
-    # Only Caddy reaches the page; it holds no secrets and needs no environment.
     ports:
-      - "127.0.0.1:3000:3000"
+      - "127.0.0.1:3010:3000"
+    logging: *logging
+
+  web-b:
+    image: starbridge-web:latest
+    pull_policy: never
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3011:3000"
     logging: *logging
 
   # Umami, the cookieless analytics of the public pages (SPEC.md, #141). Caddy serves its

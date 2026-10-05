@@ -215,11 +215,23 @@ export class Push {
       };
       const body = payload(s.member_id);
       this.queue(account, s.type, async () => {
+        // The push may have waited its turn while the device was revoked or unsubscribed.
+        if (!this.stillSubscribed(account, s.id)) return;
         const r = await this.send(target, body);
         this.onSent?.(s.type, r);
         if (r === "gone") this.db.query("DELETE FROM push_subscriptions WHERE id = ?").run(s.id);
       });
     }
+  }
+
+  private stillSubscribed(account: string, id: string): boolean {
+    return !!this.db
+      .query(
+        `SELECT 1 FROM push_subscriptions s JOIN members m
+           ON m.account_id = s.account_id AND m.id = s.member_id AND m.active = 1
+         WHERE s.id = ? AND s.account_id = ?`,
+      )
+      .get(id, account);
   }
 
   private queue(account: string, type: PushType, job: () => Promise<void>): void {

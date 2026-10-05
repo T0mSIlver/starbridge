@@ -3,6 +3,10 @@
 		# The Hetzner firewall lets in TCP only, so don't advertise HTTP/3.
 		protocols h1 h2
 	}
+	# The idle copy of the page fails its health check every second, by design.
+	log default {
+		exclude http.handlers.reverse_proxy.health_checker.active
+	}
 }
 
 # The server serves the API, the OAuth callback and /healthz*; the web page serves the rest.
@@ -10,8 +14,15 @@
 starbridge.run {
 	encode zstd gzip
 	@server path /v1/* /healthz /healthz/*
+	# A deploy restarts the server (#150): while it is down, Caddy holds each request and retries
+	# it for up to 30 s, so clients see a pause instead of a 502.
 	handle @server {
-		reverse_proxy 127.0.0.1:8080
+		reverse_proxy 127.0.0.1:8080 {
+			lb_try_duration 30s
+			lb_try_interval 250ms
+			health_uri /healthz
+			health_interval 1s
+		}
 	}
 	# Umami: only the tracker script and its collect endpoint are public. The rest of /stats
 	# falls through to the page's 404; the dashboard is reached through an SSH tunnel.
@@ -20,7 +31,16 @@ starbridge.run {
 		uri strip_prefix /stats
 		reverse_proxy 127.0.0.1:3001
 	}
+	# Two copies of the page, web-a and web-b; a deploy starts the idle one, waits for its health,
+	# then stops the other (deploy/host/apply.sh). `first` sends every request to the first healthy
+	# copy, so the two builds never serve at once.
 	handle {
-		reverse_proxy 127.0.0.1:3000
+		reverse_proxy 127.0.0.1:3010 127.0.0.1:3011 {
+			lb_policy first
+			lb_try_duration 30s
+			lb_try_interval 250ms
+			health_uri /
+			health_interval 1s
+		}
 	}
 }

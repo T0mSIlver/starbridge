@@ -529,7 +529,7 @@ async function main() {
   }
 
   step("a decision answered in an artifact links it, and `starbridge settle` closes it");
-  const artifact = "https://claude.ai/artifact/2ig2MyNRD484b7oZea5vkZ";
+  const artifact = "https://claude.ai/artifact/Xq7pLm2VnR4tBz9KcW1sYd";
   const pointer = cli(
     "pointer",
     [
