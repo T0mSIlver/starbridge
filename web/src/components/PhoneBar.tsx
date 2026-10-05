@@ -11,16 +11,19 @@ export function PhoneBar({
   back,
   view,
   find = true,
+  always = false,
 }: {
   title: string;
   back?: () => void;
   view?: React.ReactNode;
   find?: boolean;
+  /** Shown at every width: the way back from an item opened in a narrow window. */
+  always?: boolean;
 }) {
   const q = useFind();
   const [finding, setFinding] = useState(false);
   return (
-    <header className={s.bar}>
+    <header className={`${s.bar} ${always ? s.always : ""}`}>
       {back ? (
         <button type="button" className={s.icon} aria-label="Back" onClick={back}>
           <Icon name="back" size={22} />
