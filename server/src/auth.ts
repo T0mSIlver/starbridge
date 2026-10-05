@@ -95,6 +95,15 @@ export function identify(c: Context<Env>): Caller | undefined {
   };
 }
 
+/** The caller's session belonged to a device the directory has since revoked. */
+function wasRevoked(c: Context<Env>): boolean {
+  const token = bearer(c) ?? getCookie(c, SESSION_COOKIE);
+  if (!token) return false;
+  return !!c.var.db
+    .query("SELECT 1 FROM revoked_sessions WHERE token_hash = ? AND expires_at >= ?")
+    .get(hashToken(token), new Date().toISOString());
+}
+
 type Need = "device" | "paired-device" | "machine" | "any" | "paired";
 
 /**
@@ -104,7 +113,7 @@ type Need = "device" | "paired-device" | "machine" | "any" | "paired";
 export function requireCaller(...needs: Need[]): MiddlewareHandler<Env> {
   return async (c, next) => {
     const caller = identify(c);
-    if (!caller) fail(401, "unauthenticated");
+    if (!caller) fail(401, wasRevoked(c) ? "revoked" : "unauthenticated");
     const admits: Record<Need, boolean> = {
       any: true,
       device: caller.role === "device",

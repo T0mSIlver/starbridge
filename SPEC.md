@@ -580,6 +580,14 @@ How it generalizes is open.
   worker's scope and Android deep links are unchanged. It reuses the Roborazzi screenshots,
   cropped to WebP in `web/public/landing`, and its sign-in button goes straight to GitHub;
   self-hosters reach the owner-token form from its footer.
+- 2026-10-05. The landing page leads with questions (#210): its lead, feature list and browser
+  shot put questions, images and runs first and permission prompts last, since they are off by
+  default. The browser shot is `/sample-hero` (development only): the sample inbox without its
+  permission prompt or lost run, the question with images open. The footer says that only the
+  owner's own devices can read questions, answers and quotas.
+- 2026-10-05. A browser whose device was revoked gets the landing page, not sign-in (#209).
+  Revoking a device keeps its sessions' hashes until they would have expired, and the server
+  answers them 401 `revoked`; the browser then forgets the device and is a visitor again.
 
 - 2026-10-05. Uptime alert with no new accounts: `.github/workflows/uptime.yml` checks
   `/healthz` and `/healthz/backup` hourly (every 5 minutes once the repository is public), opens one issue labelled `outage` (GitHub

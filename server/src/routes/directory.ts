@@ -62,6 +62,10 @@ function syncMembers(db: Database, account: string, dir: Directory): void {
   for (const { member, active } of dir.members.values()) {
     upsert.run(account, member.id, member.role, member.boxPk, member.signPk, active ? 1 : 0);
     if (!active) {
+      db.query(
+        `INSERT OR IGNORE INTO revoked_sessions (token_hash, expires_at)
+         SELECT token_hash, expires_at FROM sessions WHERE account_id = ? AND member_id = ?`,
+      ).run(account, member.id);
       db.query("DELETE FROM sessions WHERE account_id = ? AND member_id = ?").run(
         account,
         member.id,

@@ -157,6 +157,8 @@ export async function boot(): Promise<Boot> {
   } catch (e) {
     if (e instanceof ApiError && e.status === 401) {
       const last = await store.get("current");
+      // Its device was revoked: this browser is a visitor again, not a device signing back in.
+      if (last && e.code === "revoked") await store.del("device", last);
       return { state: "signed-out", known: !!last && !!(await store.get("device", last)) };
     }
     throw e;
