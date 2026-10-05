@@ -685,8 +685,8 @@ How it generalizes is open.
   question its options answer, two to five lines of context saying what each option changes,
   links and images only when they help decide, one question per card. Agents never answer for
   the owner: no default to apply when nobody answers; a blocked agent works on something else,
-  builds both options when cheap and asks which to keep, or waits (`ask --default` is optional;
-  #122 makes `default` optional in the protocol). A `PreToolUse` hook on `AskUserQuestion`
+  builds both options when cheap and asks which to keep, or waits (`ask --default` is optional,
+  and #127 made `default` optional in the protocol). A `PreToolUse` hook on `AskUserQuestion`
   (`starbridge hook ask-user`) turns the question away towards `starbridge ask`, unless the
   machine is unpaired or the server does not answer within 3 s. The skill no longer covers
   permission prompts (#124). `evals/skill` checks all this with real Claude Code and Codex
