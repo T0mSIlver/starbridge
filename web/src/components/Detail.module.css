@@ -88,13 +88,6 @@
   background: var(--accent-soft);
 }
 
-/* "Default" after the first option's label, quiet like the key hints. */
-.default {
-  margin-left: var(--s1h);
-  font-weight: 400;
-  opacity: 0.75;
-}
-
 @media (prefers-reduced-motion: reduce) {
   .head {
     transition: none;

@@ -1073,10 +1073,9 @@ How it generalizes is open.
   never answer for the owner (#122), and nothing happens when the owner does not answer, so a
   default has no timer; it is the agent's proposal. The skill tells agents to list their
   default first (`--recommended` still names it when it is not). Clients show it first, as the
-  one filled amber button; the web detail and the Android sheet add "Default" inside that
-  button, after the label, at weight 400, like the web's key hints. Rows, cards and
-  notification buttons show it first and filled only, for room. Screen readers hear "Default"
-  (Android's `stateDescription` "Recommended" becomes "Default"). The protocol is unchanged:
+  one filled amber button, first; the Android sheet adds a check (#254 dropped the "Default"
+  label both clients showed after it, since place, check and amber already say it). Screen
+  readers hear "Default" (Android's `stateDescription` "Recommended" becomes "Default"). The protocol is unchanged:
   `recommended` names the default, and `default` stays what older clients need.
 - 2026-10-05. Group by waiting (owner, #191). The inbox's view menu offers three groupings,
   remembered on the device: none (one feed), "Group by machine", and "Group by waiting", which

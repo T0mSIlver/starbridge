@@ -184,7 +184,6 @@ export function QuestionDetail({
               onClick={() => send({ choice: o })}
             >
               {o}
-              {i === 0 && <span className={s.default}>Default</span>}
               {keys && i < 4 && <Kbd k={String(i + 1)} />}
             </button>
           ))}
