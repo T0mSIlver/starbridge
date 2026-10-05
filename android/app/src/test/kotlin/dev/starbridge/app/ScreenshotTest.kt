@@ -100,5 +100,11 @@ class ScreenshotTest(private val dark: Boolean) {
         JoinPrompt(listOf(ask), Comparison.Digits(ask, "042917"), JoinActions({}, {}, {}, {}))
     }
 
+    @Test fun joinDigitsRetry() = capture("join-digits-retry") {
+        val ask = JoinAsk("04106105", "Firefox on Linux", now, elsewhere = false)
+        val error = "Can't reach https://starbridge.run: timeout"
+        JoinPrompt(listOf(ask), Comparison.Digits(ask, "042917", error = error), JoinActions({}, {}, {}, {}))
+    }
+
     @Test fun setupRecoveryKey() = capture("setup-recovery-key") { SetupScreen(Phase.RecoveryKey(fake.recoveryWords), "https://starbridge.run", false, setupActions, {}) }
 }

@@ -108,7 +108,8 @@ data class JoinAsk(val id: String, val name: String, val at: Instant, val elsewh
 sealed interface Comparison {
     data object Idle : Comparison
     data class Waiting(val ask: JoinAsk) : Comparison
-    data class Digits(val ask: JoinAsk, val digits: String, val approving: Boolean = false) : Comparison
+    /** [error]: the last approval failed on the way and can be retried. */
+    data class Digits(val ask: JoinAsk, val digits: String, val approving: Boolean = false, val error: String? = null) : Comparison
     data class Done(val message: String) : Comparison
     data class Failed(val message: String) : Comparison
 }

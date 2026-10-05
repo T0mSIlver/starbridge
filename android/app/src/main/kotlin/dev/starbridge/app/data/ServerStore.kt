@@ -831,7 +831,8 @@ class ServerStore(
                     val now = try {
                         api().join(id, after, 60)
                     } catch (e: IOException) {
-                        if (e is ApiException) throw e
+                        // Giving up would lose this phone's key, and the server takes one.
+                        if (!transient(e)) throw e
                         delay(5_000)
                         continue
                     }
@@ -855,7 +856,7 @@ class ServerStore(
     override fun approveJoin() = run(showBusy = false) {
         val (view, body, keys) = compared ?: return@run
         val shown = comparison.value as? Comparison.Digits ?: return@run
-        comparison.value = shown.copy(approving = true)
+        comparison.value = shown.copy(approving = true, error = null)
         try {
             syncDirectory()
             val joining = body.member()
@@ -876,9 +877,13 @@ class ServerStore(
             alerts.cancel("join:${view.id}")
             comparison.value = Comparison.Done("${body.name} joined.")
         } catch (e: Exception) {
-            comparison.value = Comparison.Failed(describe(e))
+            // The server holds this phone's key for the join, so a blip keeps the digits and
+            // their keys for another try; the entry appended already is reused.
+            comparison.value = if (e is IOException && transient(e)) shown.copy(error = describe(e)) else Comparison.Failed(describe(e))
         }
     }
+
+    private fun transient(e: IOException) = e !is ApiException || e.status >= 500 || e.status == 429
 
     override fun refuseJoin(id: String) = run(showBusy = false) {
         compareJob?.cancel()

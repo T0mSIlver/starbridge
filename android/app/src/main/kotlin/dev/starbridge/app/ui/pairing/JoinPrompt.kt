@@ -81,11 +81,12 @@ fun JoinPrompt(asks: List<JoinAsk>, comparison: Comparison, actions: JoinActions
                 Column(verticalArrangement = Arrangement.spacedBy(Spacing.s3)) {
                     Text("Approve only if ${comparison.ask.name} shows these same digits.", style = StarbridgeTheme.type.body)
                     Text(formatDigits(comparison.digits), style = StarbridgeTheme.type.figure, color = MaterialTheme.colorScheme.onSurface)
+                    comparison.error?.let { Text(it, style = StarbridgeTheme.type.body, color = colors.bad) }
                 }
             },
             confirmButton = {
                 TextButton(onClick = actions.approve, enabled = !comparison.approving) {
-                    if (comparison.approving) CircularProgressIndicator(Modifier.size(Spacing.s5), strokeWidth = 2.dp) else Text("Approve")
+                    if (comparison.approving) CircularProgressIndicator(Modifier.size(Spacing.s5), strokeWidth = 2.dp) else Text(if (comparison.error != null) "Try again" else "Approve")
                 }
             },
             dismissButton = {
