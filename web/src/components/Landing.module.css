@@ -61,9 +61,8 @@
 .shot {
   display: block;
   width: 100%;
-  max-width: var(--size-shot);
   height: auto;
-  margin-bottom: var(--s2);
+  margin-top: var(--s2);
   border-radius: var(--radius-xl);
   background: var(--bg);
   outline: 1px solid var(--line);
@@ -130,5 +129,18 @@
   .features {
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: var(--s8);
+  }
+
+  /* Headings, texts and shots each line up across the three columns. */
+  .feature {
+    display: grid;
+    grid-row: span 3;
+    grid-template-rows: subgrid;
+    align-content: start;
+    row-gap: var(--s3);
+  }
+
+  .shot {
+    max-width: var(--size-shot);
   }
 }
