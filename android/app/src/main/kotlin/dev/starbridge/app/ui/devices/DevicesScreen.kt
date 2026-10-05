@@ -194,6 +194,8 @@ fun Confirm(title: String, text: String, action: String, onConfirm: () -> Unit, 
 fun PairCard(approval: Approval, actions: DeviceActions, otherWays: @Composable ColumnScope.() -> Unit = {}) {
     val colors = StarbridgeTheme.colors
     var code by rememberSaveable { mutableStateOf("") }
+    // The approved code is spent: the card offers the next pairing with an empty field.
+    LaunchedEffect(approval is Approval.Done) { if (approval is Approval.Done) code = "" }
     Panel(Modifier.fillMaxWidth()) {
         AnimatedContent(approval, contentKey = { it::class }, label = "pairing") { state ->
             Column(verticalArrangement = Arrangement.spacedBy(Spacing.s3)) {

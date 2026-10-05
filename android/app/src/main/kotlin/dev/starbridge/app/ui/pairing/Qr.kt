@@ -39,6 +39,7 @@ import dev.starbridge.app.ui.theme.StarbridgeTheme
 import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
 import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
+import com.google.mlkit.common.MlKitException
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.EncodeHintType
 import com.google.zxing.qrcode.QRCodeWriter
@@ -84,6 +85,8 @@ private fun scan(context: Context, onResult: (String) -> Unit, onError: (String)
     GmsBarcodeScanning.getClient(context, options).startScan()
         .addOnSuccessListener { barcode -> barcode.rawValue?.let(onResult) }
         .addOnFailureListener { e ->
+            // Closing the scanner is no failure, whichever listener it reaches.
+            if ((e as? MlKitException)?.errorCode == MlKitException.CANCELLED) return@addOnFailureListener
             Log.w("Starbridge", "scan failed", e)
             onError("This phone cannot scan here. Type the code instead.")
         }

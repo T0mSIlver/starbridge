@@ -964,6 +964,8 @@ class ServerStore(
     // --- Pairing and revoking ----------------------------------------------------
 
     override fun lookUpPairing(code: String) = run(showBusy = false) {
+        // A shown QR code's wait must not overwrite the request looked up now.
+        showJob?.cancel()
         approval.value = Approval.Checking
         val parsed = try {
             codeFromLink(code)
