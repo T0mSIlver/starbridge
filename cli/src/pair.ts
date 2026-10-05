@@ -22,13 +22,14 @@ import { rememberMachineKind } from "./settings";
 /** A pairing code expires after this long (PROTOCOL.md). */
 const CODE_LIFETIME_MS = 10 * 60_000;
 const POLL_SECONDS = 60;
+/** The hosted server; `--server` or `STARBRIDGE_SERVER` points at a self-hosted one. */
+export const DEFAULT_SERVER = "https://starbridge.run";
 
 export async function pair(
   ctx: Ctx,
   opts: { server?: string; name?: string; force?: boolean },
 ): Promise<number> {
-  const server = opts.server ?? ctx.env.STARBRIDGE_SERVER;
-  if (!server) throw new UsageError("pair needs --server <url> (or STARBRIDGE_SERVER)");
+  const server = opts.server ?? ctx.env.STARBRIDGE_SERVER ?? DEFAULT_SERVER;
   if (ctx.store.machine() && !opts.force)
     throw new UsageError("this machine is already paired; pass --force to pair it again");
 

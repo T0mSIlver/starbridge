@@ -11,7 +11,7 @@ import { ApiError } from "../api";
 import type { AgentConfig } from "../config";
 import { type Ctx, UsageError } from "../context";
 import { type AskInput, ask } from "../decisions";
-import { pair } from "../pair";
+import { DEFAULT_SERVER, pair } from "../pair";
 import { permissionsEnabled } from "../permissions";
 import { pushOnce } from "../quota";
 import { rememberMachineKind, setPermissions } from "../settings";
@@ -43,8 +43,6 @@ import {
   unavailable,
 } from "./service";
 import type { Sys } from "./sys";
-
-export const DEFAULT_SERVER = "https://starbridge.run";
 
 export interface SetupOpts {
   /** `--yes`: every question takes its default; sys.prompt answers so. */
