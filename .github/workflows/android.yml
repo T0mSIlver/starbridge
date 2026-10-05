@@ -44,7 +44,8 @@ jobs:
       # verifyRoborazziDebug runs every unit test and fails when a screen drifts
       # from app/screenshots/.
       - name: Build and test
-        run: ./gradlew --console=plain assembleRelease verifyRoborazziDebug
+        # No daemon and an in-process Kotlin compiler: nothing stays in memory after the build on the shared dev box.
+        run: ./gradlew --no-daemon --console=plain -Pkotlin.compiler.execution.strategy=in-process assembleRelease verifyRoborazziDebug
 
       - name: Screenshot diffs
         if: failure()
