@@ -1,5 +1,11 @@
 package dev.starbridge.app.ui.inbox
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.text.TextStyle
+import dev.starbridge.app.data.Grouping
+import dev.starbridge.app.ui.SheetBody
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.scaleIn
@@ -88,7 +94,6 @@ import dev.starbridge.app.ui.cardShape
 import dev.starbridge.app.ui.fieldColors
 import dev.starbridge.app.ui.groupGap
 import dev.starbridge.app.ui.rowShape
-import dev.starbridge.app.ui.since
 import dev.starbridge.app.ui.theme.Spacing
 import dev.starbridge.app.ui.theme.StarbridgeTheme
 import kotlinx.coroutines.delay
@@ -133,25 +138,33 @@ private sealed interface Item {
     val machine: Source
     val key: String
 
+    /** Whether an agent waits on it: a prompt, or a question its agent marked waiting. */
+    val blocks: Boolean
+
     class RunItem(val run: Run) : Item {
         override val machine get() = run.source
         override val key get() = "run/${run.id}"
+        override val blocks get() = false
     }
 
     class PromptItem(val prompt: Prompt) : Item {
         override val machine get() = prompt.source
         override val key get() = "p/${prompt.id}"
+        override val blocks get() = true
     }
 
     class Question(val decision: Decision) : Item {
         override val machine get() = decision.source
         override val key get() = "d/${decision.id}"
+        override val blocks get() = decision.waiting
     }
 }
 
 /**
  * One feed: runs, then permission prompts, then questions, the ones an agent waits on first.
- * "Group by machine" splits the same feed under each machine. History holds what was answered.
+ * "Group by machine" splits the same feed under each machine; "Group by waiting" puts what
+ * blocks an agent under "Waiting on you" and the rest under "When you can", runs above both.
+ * History holds what was answered.
  */
 @Composable
 fun InboxScreen(
@@ -197,13 +210,29 @@ fun InboxScreen(
     ) {
         if (feed.isEmpty()) {
             item(key = "empty") { Empty() }
-        } else if (view.byMachine) {
-            feed.groupBy { it.machine.machine }.forEach { (machine, items) ->
-                item(key = "machine/$machine") { MachineHeader(items.first().machine) }
-                cards(items, at, actions, replies, promptActions, view.buttons)
-            }
         } else {
-            cards(feed, at, actions, replies, promptActions, view.buttons)
+            when (view.grouping) {
+                Grouping.Machine -> feed.groupBy { it.machine.machine }.forEach { (machine, items) ->
+                    item(key = "machine/$machine") { MachineHeader(items.first().machine) }
+                    cards(items, at, actions, replies, promptActions, view.buttons)
+                }
+                Grouping.Waiting -> {
+                    val (running, rest) = feed.partition { it is Item.RunItem }
+                    val (blocking, later) = rest.partition { it.blocks }
+                    cards(running, at, actions, replies, promptActions, view.buttons)
+                    if (blocking.isNotEmpty()) {
+                        // A prompt settled elsewhere stays a moment in place, but no longer counts.
+                        val count = blocking.count { it !is Item.PromptItem || it.prompt.waiting(at) }
+                        item(key = "group/waiting") { GroupHeader("Waiting on you", count, StarbridgeTheme.colors.accent) }
+                        cards(blocking, at, actions, replies, promptActions, view.buttons)
+                    }
+                    if (later.isNotEmpty()) {
+                        item(key = "group/later") { GroupHeader("When you can", later.size, MaterialTheme.colorScheme.onSurfaceVariant) }
+                        cards(later, at, actions, replies, promptActions, view.buttons)
+                    }
+                }
+                Grouping.None -> cards(feed, at, actions, replies, promptActions, view.buttons)
+            }
         }
         history(history, view.historyOpen, { onView(view.copy(historyOpen = it)) }, actions, promptActions)
     }
@@ -214,7 +243,8 @@ private const val PROMPT_POLL_MS = 1_500L
 private fun LazyListScope.cards(items: List<Item>, now: Instant, actions: DecisionActions, replies: Replies, promptActions: PromptActions?, buttons: CardButtons) {
     itemsIndexed(items, key = { _, it -> it.key }) { i, item ->
         val shape = cardShape(i, items.size)
-        val m = Modifier.animateItem()
+        // A question its agent starts or stops waiting on moves with the expressive spring.
+        val m = Modifier.animateItem(placementSpec = MaterialTheme.motionScheme.defaultSpatialSpec())
         when (item) {
             is Item.RunItem -> RunCard(item.run, now, shape, m)
             is Item.PromptItem -> if (item.prompt.waiting(now) && promptActions != null) PromptCard(item.prompt, now, promptActions, shape, m) else ClosedPrompt(item.prompt, shape, m)
@@ -242,18 +272,18 @@ private fun NeedsYou(count: Int, running: Int) {
     )
 }
 
-/** One feed or grouped by machine, remembered on this phone. */
+/** One feed, grouped by machine or by waiting, remembered on this phone. */
 @Composable
 private fun ViewMenu(view: InboxView, onView: (InboxView) -> Unit) {
     var open by remember { mutableStateOf(false) }
     Box {
         IconButton(onClick = { open = true }) { Symbol(Sym.Filter, size = 22.dp, tint = MaterialTheme.colorScheme.onSurfaceVariant, contentDescription = "View") }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            listOf(false to "One feed", true to "Group by machine").forEach { (byMachine, label) ->
+            listOf(Grouping.None to "One feed", Grouping.Machine to "Group by machine", Grouping.Waiting to "Group by waiting").forEach { (grouping, label) ->
                 DropdownMenuItem(
                     text = { Text(label) },
-                    leadingIcon = { if (view.byMachine == byMachine) Symbol(Sym.Check, size = 20.dp) else Spacer(Modifier.size(20.dp)) },
-                    onClick = { open = false; onView(view.copy(byMachine = byMachine)) },
+                    leadingIcon = { if (view.grouping == grouping) Symbol(Sym.Check, size = 20.dp) else Spacer(Modifier.size(20.dp)) },
+                    onClick = { open = false; onView(view.copy(grouping = grouping)) },
                     modifier = Modifier.semantics { role = Role.RadioButton },
                 )
             }
@@ -271,6 +301,22 @@ private fun MachineHeader(source: Source) {
     }
 }
 
+/** "Waiting on you 2": a group's name under "Group by waiting", its count in [countColor]. */
+@Composable
+private fun GroupHeader(name: String, count: Int, countColor: Color) {
+    val style = StarbridgeTheme.type.label
+    Text(
+        buildAnnotatedString {
+            append(name)
+            append("  ")
+            withStyle(SpanStyle(color = countColor)) { append("$count") }
+        },
+        style = style,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(start = Spacing.s2, top = Spacing.s4 - groupGap, bottom = Spacing.s2 - groupGap).semantics { heading() },
+    )
+}
+
 /** Nothing open: the cookie shape with a check, and History under it. */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -284,26 +330,45 @@ private fun Empty() {
 }
 
 /**
- * A question in the feed: amber ground and "Waiting for you" once its agent waits on it, and its
- * options when the Answer buttons setting allows them (#181, as the web's rows).
+ * A question in the feed, by the one rule for both clients (#191): one its agent waits on is
+ * filled, amber's faint ground and the question at weight 500, with the clock in the time slot;
+ * one the agent works around is hollow, an outlined card with no fill and the question at 400.
+ * No line of text says which; a screen reader hears it first. Its options show when the Answer
+ * buttons setting allows them (#181, as the web's rows).
  */
 @Composable
 private fun DecisionCard(decision: Decision, now: Instant, actions: DecisionActions, replies: Replies, shape: Shape, buttons: CardButtons, modifier: Modifier = Modifier) {
     val scheme = MaterialTheme.colorScheme
-    val ground = if (decision.waiting) promptGround() else scheme.surfaceContainer
-    Surface(modifier.fillMaxWidth(), shape = shape, color = ground) {
-        Column(Modifier.clickable(onClickLabel = "Open the question") { actions.open(decision.id) }.padding(Spacing.s4), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            MetaRow(decision.source, since(decision.createdAt, now))
-            Text(decision.question, style = StarbridgeTheme.type.subtitle, color = scheme.onSurface)
+    val waiting = decision.waiting
+    val spec = MaterialTheme.motionScheme.fastEffectsSpec<Color>()
+    val ground by animateColorAsState(if (waiting) promptGround() else scheme.surface.copy(alpha = 0f), spec)
+    val border by animateColorAsState(if (waiting) scheme.outline.copy(alpha = 0f) else scheme.outline, spec)
+    val icon by animateColorAsState(if (waiting) StarbridgeTheme.colors.accent else scheme.onSurfaceVariant, spec)
+    val label = decision.waitingSince?.let { waitingLabel(it, now) }
+    Surface(modifier.fillMaxWidth(), shape = shape, color = ground, border = BorderStroke(1.dp, border)) {
+        Column(
+            Modifier.clickable(onClickLabel = "Open the question") { actions.open(decision.id) }
+                .semantics { if (waiting) stateDescription = label ?: "Waiting for you" }
+                .padding(Spacing.s4),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            MetaRow(decision.source, timeSlot(decision.waitingSince, decision.createdAt, now), clock = waiting)
+            Row(verticalAlignment = Alignment.Top) {
+                Symbol(Sym.Question, size = 22.dp, tint = icon, modifier = Modifier.padding(top = 1.dp))
+                Spacer(Modifier.width(Spacing.s2))
+                Text(decision.question, style = StarbridgeTheme.type.subtitle.weight(waiting), color = scheme.onSurface)
+            }
             Images(decision.images, maxHeight = 160.dp, crop = true, modifier = Modifier.padding(vertical = Spacing.s1))
-            StateLine(decision, now)
             if (cardOptions(decision, buttons)) {
                 Spacer(Modifier.height(Spacing.s1))
-                Options(decision, replies.sending[decision.id], height = 40.dp, other = if (decision.waiting) scheme.surfaceContainer else scheme.surfaceContainerHighest, answer = answer(decision, actions.answer))
+                Options(decision, replies.sending[decision.id], height = 40.dp, other = if (waiting) scheme.surfaceContainer else scheme.surfaceContainerHighest, answer = answer(decision, actions.answer))
             }
         }
     }
 }
+
+/** A question's title: weight 500 while its agent waits on it, else 400. */
+internal fun TextStyle.weight(waiting: Boolean) = if (waiting) this else copy(fontWeight = FontWeight(400))
 
 /**
  * Whether a card carries the question's options: the setting decides, for every question with
@@ -325,17 +390,18 @@ private fun answer(decision: Decision, send: (String, String?, String?) -> Unit)
 }
 
 /**
- * The options as a connected group, the recommended one first and the one amber button. Side by
+ * The options as a connected group, the agent's default first and the one amber button. Side by
  * side when there are two short ones, else stacked; the one going out takes the check, and taps
- * are dropped until the server replies.
+ * are dropped until the server replies. In the sheet ([check]), stacked, the default says "Default".
  */
 @Composable
 fun Options(decision: Decision, sending: String?, height: Dp, other: Color, answer: (String?, String?) -> Unit, check: Boolean = false) {
     val colors = StarbridgeTheme.colors
-    val ordered = decision.options.sortedByDescending { it == decision.recommended }
+    val ordered = decision.ordered
     val end = height / 2
     val pick = { option: String -> if (sending == null) answer(option, null) }
-    val row = ordered.size <= 2 && ordered.all { it.length <= 18 }
+    // The sheet stacks them, so "Default" fits beside its label.
+    val row = !check && ordered.size <= 2 && ordered.all { it.length <= 18 }
     @Composable
     fun One(i: Int, option: String, modifier: Modifier) {
         val first = i == 0
@@ -345,20 +411,24 @@ fun Options(decision: Decision, sending: String?, height: Dp, other: Color, answ
         } else {
             RoundedCornerShape(topStart = if (first) end else 8.dp, topEnd = if (first) end else 8.dp, bottomStart = if (last) end else 8.dp, bottomEnd = if (last) end else 8.dp)
         }
-        val recommended = option == decision.recommended
+        val recommended = option == decision.proposal
         Button(
             onClick = { pick(option) },
             shape = if (option == sending) RoundedCornerShape(end) else shape,
             colors = if (recommended) ButtonDefaults.buttonColors(containerColor = colors.accent, contentColor = colors.onAccent)
             else ButtonDefaults.buttonColors(containerColor = if (option == sending) MaterialTheme.colorScheme.onSurface else other, contentColor = if (option == sending) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.onSurface),
             contentPadding = PaddingValues(horizontal = Spacing.s4),
-            modifier = modifier.heightIn(min = height).semantics { if (recommended) stateDescription = "Recommended" },
+            modifier = modifier.heightIn(min = height).semantics { if (recommended) stateDescription = "Default" },
         ) {
             if (check && recommended) {
                 Symbol(Sym.Check, size = 18.dp)
                 Spacer(Modifier.width(Spacing.s2))
             }
-            Text(option, style = if (height > 48.dp) StarbridgeTheme.type.action else StarbridgeTheme.type.label, textAlign = TextAlign.Center)
+            Text(
+                if (check && recommended) withDefault(option) else AnnotatedString(option),
+                style = if (height > 48.dp) StarbridgeTheme.type.action else StarbridgeTheme.type.label,
+                textAlign = TextAlign.Center,
+            )
         }
     }
     if (row) {
@@ -368,35 +438,49 @@ fun Options(decision: Decision, sending: String?, height: Dp, other: Color, answ
     }
 }
 
+/** "Run it now Default": the label, then "Default" at weight 400, as the web's key hints. */
+private fun withDefault(option: String) = buildAnnotatedString {
+    append(option)
+    withStyle(SpanStyle(fontWeight = FontWeight(400))) { append("  Default") }
+}
+
 /**
- * A question's sheet, under the meta row the sheet draws: what the agent asked, its state, its
- * words and code, and the answer. Answered, it shows how it closed.
+ * A question's sheet: the meta row and what the agent asked head it, filled or hollow as its card
+ * is (#191); then its words and code, and the answer. Answered, it shows how it closed.
  */
 @Composable
-fun DecisionSheet(decision: Decision, now: Instant, onAnswer: (String, String?, String?) -> Unit, replies: Replies, modifier: Modifier = Modifier) {
+fun DecisionSheet(decision: Decision, now: Instant, onAnswer: (String, String?, String?) -> Unit, replies: Replies) {
     val scheme = MaterialTheme.colorScheme
     val wasOpen = remember(decision.id) { decision.isOpen(now) }
     val send = answer(decision, onAnswer)
     val sending = replies.sending[decision.id]
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        Text(decision.question, style = StarbridgeTheme.type.question, color = scheme.onSurface)
-        if (decision.isOpen(now)) StateLine(decision, now)
-        Context(decision.context)
-        Links(decision.links)
-        val paired = decision.images.size == decision.options.size && decision.images.size > 1 && decision.answerIn == null
-        when {
-            !decision.isOpen(now) -> {
-                Images(decision.images, maxHeight = 360.dp)
-                Outcome(decision, now, arrived = wasOpen)
-            }
-            paired -> Picks(decision, sending, send)
-            else -> {
-                Images(decision.images, maxHeight = 360.dp)
-                val page = decision.answerIn
-                when {
-                    page != null -> AnswerElsewhere(page)
-                    decision.options.isEmpty() -> FreeText(replies.drafts[decision.id].orEmpty(), { replies.drafts[decision.id] = it }, sending != null) { send(null, it) }
-                    else -> Options(decision, sending, height = 56.dp, other = scheme.surfaceContainerHighest, answer = send, check = true)
+    val open = decision.isOpen(now)
+    val since = decision.waitingSince?.takeIf { open }
+    SheetBody(
+        decision.source,
+        timeSlot(since, decision.createdAt, now),
+        decision.agent,
+        blocked = if (open && decision.waiting) since?.let { waitingLabel(it, now) } ?: "Waiting for you" else null,
+        head = { Text(decision.question, style = StarbridgeTheme.type.question.weight(open && decision.waiting), color = scheme.onSurface) },
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Context(decision.context)
+            Links(decision.links)
+            val paired = decision.images.size == decision.options.size && decision.images.size > 1 && decision.answerIn == null
+            when {
+                !open -> {
+                    Images(decision.images, maxHeight = 360.dp)
+                    Outcome(decision, now, arrived = wasOpen)
+                }
+                paired -> Picks(decision, sending, send)
+                else -> {
+                    Images(decision.images, maxHeight = 360.dp)
+                    val page = decision.answerIn
+                    when {
+                        page != null -> AnswerElsewhere(page)
+                        decision.options.isEmpty() -> FreeText(replies.drafts[decision.id].orEmpty(), { replies.drafts[decision.id] = it }, sending != null) { send(null, it) }
+                        else -> Options(decision, sending, height = 56.dp, other = scheme.surfaceContainerHighest, answer = send, check = true)
+                    }
                 }
             }
         }
@@ -412,13 +496,13 @@ private fun Picks(decision: Decision, sending: String?, answer: (String?, String
             row.forEach { (image, option) ->
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
                     Images(listOf(image), maxHeight = 240.dp)
-                    val recommended = option == decision.recommended
+                    val recommended = option == decision.proposal
                     Button(
                         onClick = { if (sending == null) answer(option, null) },
                         colors = if (recommended) ButtonDefaults.buttonColors(containerColor = colors.accent, contentColor = colors.onAccent)
                         else ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHighest, contentColor = MaterialTheme.colorScheme.onSurface),
-                        modifier = Modifier.fillMaxWidth().height(48.dp),
-                    ) { Text(option, style = StarbridgeTheme.type.action, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                        modifier = Modifier.fillMaxWidth().height(48.dp).semantics { if (recommended) stateDescription = "Default" },
+                    ) { Text(if (recommended) withDefault(option) else AnnotatedString(option), style = StarbridgeTheme.type.action, maxLines = 1, overflow = TextOverflow.Ellipsis) }
                 }
             }
             if (row.size == 1) Spacer(Modifier.weight(1f))

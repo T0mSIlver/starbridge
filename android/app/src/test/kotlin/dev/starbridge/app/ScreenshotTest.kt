@@ -31,9 +31,9 @@ import dev.starbridge.app.ui.devices.AddDeviceScreen
 import dev.starbridge.app.ui.Tab
 import dev.starbridge.app.data.Decision
 import dev.starbridge.app.data.InboxView
+import dev.starbridge.app.data.Grouping
 import dev.starbridge.app.data.CardButtons
 import dev.starbridge.app.ui.since
-import dev.starbridge.app.ui.SheetBody
 import dev.starbridge.app.ui.inbox.rememberDrafts
 import dev.starbridge.app.ui.inbox.Replies
 import dev.starbridge.app.ui.inbox.PromptSheet
@@ -108,7 +108,11 @@ class ScreenshotTest(private val dark: Boolean) {
     @Test fun inbox() = capture("inbox") { Phone(Tab.Inbox, 4) { Inbox() } }
 
     @Config(qualifiers = "w412dp-h1400dp-xxhdpi")
-    @Test fun inboxByMachine() = capture("inbox-by-machine") { Phone(Tab.Inbox, 4) { Inbox(InboxView(byMachine = true)) } }
+    @Test fun inboxByMachine() = capture("inbox-by-machine") { Phone(Tab.Inbox, 4) { Inbox(InboxView(grouping = Grouping.Machine)) } }
+
+    // What blocks an agent under "Waiting on you", the rest under "When you can" (#191).
+    @Config(qualifiers = "w412dp-h1400dp-xxhdpi")
+    @Test fun inboxByWaiting() = capture("inbox-by-waiting") { Phone(Tab.Inbox, 4) { Inbox(InboxView(grouping = Grouping.Waiting)) } }
 
     @Config(qualifiers = "w412dp-h1600dp-xxhdpi")
     @Test fun inboxHistory() = capture("inbox-history") { Phone(Tab.Inbox, 4) { Inbox(InboxView(historyOpen = true)) } }
@@ -138,7 +142,7 @@ class ScreenshotTest(private val dark: Boolean) {
     // Sheets open over whatever page is up; the mockups show them over Quotas.
     @Composable
     private fun QuestionSheet(d: Decision) {
-        Sheet({ QuotasScreen(fake.windows, now) }) { SheetBody(d.source, since(d.createdAt, now), d.agent) { DecisionSheet(d, now, { _, _, _ -> }, Replies(rememberDrafts(), emptyMap())) } }
+        Sheet({ QuotasScreen(fake.windows, now) }) { DecisionSheet(d, now, { _, _, _ -> }, Replies(rememberDrafts(), emptyMap())) }
     }
 
     @Test fun sheetQuestion() = capture("sheet-question") { QuestionSheet(fake.decisions.first { it.id == "d1" }) }
@@ -160,7 +164,7 @@ class ScreenshotTest(private val dark: Boolean) {
 
     @Test fun sheetPrompt() = capture("sheet-prompt") {
         val p = fake.prompts.first()
-        Sheet({ QuotasScreen(fake.windows, now) }) { SheetBody(p.source, since(p.createdAt, now), p.agent) { PromptSheet(p, now, promptActions) } }
+        Sheet({ QuotasScreen(fake.windows, now) }) { PromptSheet(p, now, promptActions) }
     }
 
     @Config(qualifiers = "w412dp-h1060dp-xxhdpi")

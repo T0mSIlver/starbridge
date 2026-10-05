@@ -14,6 +14,10 @@ import androidx.compose.ui.unit.dp
 import dev.starbridge.app.ui.BottomBar
 import dev.starbridge.app.ui.Tab
 import dev.starbridge.app.ui.SheetHandle
+import dev.starbridge.app.ui.SheetGround
+import dev.starbridge.app.ui.LocalSheetGround
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.CompositionLocalProvider
 import dev.starbridge.app.ui.SheetShape
 import dev.starbridge.app.ui.theme.StarbridgeTheme
 import androidx.compose.material3.Surface
@@ -48,7 +52,8 @@ fun Sheet(behind: @Composable () -> Unit, sheet: @Composable () -> Unit) {
             behind()
             Box(Modifier.fillMaxSize().background(StarbridgeTheme.colors.scrim))
             Surface(Modifier.align(Alignment.BottomCenter).fillMaxWidth(), shape = SheetShape, color = scheme.surfaceContainer) {
-                Column { SheetHandle(); sheet() }
+                val ground = remember { SheetGround() }
+                Column { SheetHandle(ground.color); CompositionLocalProvider(LocalSheetGround provides ground) { sheet() } }
             }
         }
         Spacer(Modifier.fillMaxWidth().height(24.dp).background(scheme.surfaceContainer))

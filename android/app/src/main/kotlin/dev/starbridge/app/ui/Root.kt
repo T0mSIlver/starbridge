@@ -232,8 +232,13 @@ fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> U
                         val view by vm.view.collectAsStateWithLifecycle()
                         InboxScreen(
                             decisions,
-                            // A running run's timer and a lost run's "No news for" tick each second.
-                            seconds(Run.shown(runs, Instant.now()).any { it.state(Instant.now()) in LIVE_RUNS }, now),
+                            // A running run's timer, a lost run's "No news for" and the clock of
+                            // an item an agent waits on tick each second.
+                            seconds(
+                                Run.shown(runs, Instant.now()).any { it.state(Instant.now()) in LIVE_RUNS } ||
+                                    decisions.any { it.waiting && it.isOpen(Instant.now()) } || prompts.any { it.waiting(Instant.now()) },
+                                now,
+                            ),
                             DecisionActions(answer = vm::answer, open = { open(DecisionKey(it)) }),
                             refresh = refresh(vm::refresh),
                             replies = Replies(drafts, sending),
@@ -250,14 +255,14 @@ fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> U
                         val decisions by vm.decisions.collectAsStateWithLifecycle()
                         val sending by vm.sending.collectAsStateWithLifecycle()
                         val d = decisions.find { it.id == key.id } ?: return@entry
-                        SheetBody(d.source, since(d.createdAt, now), d.agent) { DecisionSheet(d, seconds(d.waiting, now), vm::answer, Replies(drafts, sending)) }
+                        DecisionSheet(d, seconds(d.waiting, now), vm::answer, Replies(drafts, sending))
                     }
                     entry<PromptKey>(metadata = BottomSheetSceneStrategy.sheet) { key ->
                         val vm: InboxViewModel = hiltViewModel()
                         val prompts by vm.prompts.collectAsStateWithLifecycle()
                         val p = prompts.find { it.id == key.id } ?: return@entry
                         val at = seconds(p.waiting(Instant.now()), now)
-                        SheetBody(p.source, since(p.createdAt, at), p.agent) { PromptSheet(p, at, PromptActions(answer = vm::answerPrompt)) }
+                        PromptSheet(p, at, PromptActions(answer = vm::answerPrompt))
                     }
                     entry<QuotasKey> {
                         val vm: QuotasViewModel = hiltViewModel()

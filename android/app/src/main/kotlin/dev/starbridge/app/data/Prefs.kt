@@ -12,10 +12,13 @@ import javax.inject.Singleton
 enum class Colours { Starbridge, Wallpaper }
 
 /**
- * How the inbox shows, remembered on this phone: one feed or grouped by machine, History open or
- * closed, and when question cards carry their answer buttons (#138).
+ * How the inbox shows, remembered on this phone: one feed, grouped by machine or by waiting,
+ * History open or closed, and when question cards carry their answer buttons (#138).
  */
-data class InboxView(val byMachine: Boolean = false, val historyOpen: Boolean = false, val buttons: CardButtons = CardButtons.Always)
+data class InboxView(val grouping: Grouping = Grouping.None, val historyOpen: Boolean = false, val buttons: CardButtons = CardButtons.Always)
+
+/** The inbox's groups: none, one per machine, or what blocks an agent above what can wait (#191). */
+enum class Grouping { None, Machine, Waiting }
 
 /** When a question's card carries its answer buttons; tapping the card opens the question either way. */
 enum class CardButtons { Always, WhenWaiting, Never }
@@ -58,7 +61,9 @@ class Prefs @Inject constructor(@ApplicationContext context: Context) {
 
     private val _inbox = MutableStateFlow(
         InboxView(
-            prefs.getBoolean(BY_MACHINE, false),
+            // "Group by machine" was a switch before grouping by waiting; it carries over.
+            Grouping.entries.find { it.name == prefs.getString(GROUPING, null) }
+                ?: if (prefs.getBoolean(BY_MACHINE, false)) Grouping.Machine else Grouping.None,
             prefs.getBoolean(HISTORY_OPEN, false),
             CardButtons.entries.find { it.name == prefs.getString(BUTTONS, null) } ?: CardButtons.Always,
         ),
@@ -66,7 +71,7 @@ class Prefs @Inject constructor(@ApplicationContext context: Context) {
     val inbox: StateFlow<InboxView> = _inbox
 
     fun setInbox(value: InboxView) {
-        prefs.edit().putBoolean(BY_MACHINE, value.byMachine).putBoolean(HISTORY_OPEN, value.historyOpen).putString(BUTTONS, value.buttons.name).apply()
+        prefs.edit().putString(GROUPING, value.grouping.name).remove(BY_MACHINE).putBoolean(HISTORY_OPEN, value.historyOpen).putString(BUTTONS, value.buttons.name).apply()
         _inbox.value = value
     }
 
@@ -85,6 +90,7 @@ class Prefs @Inject constructor(@ApplicationContext context: Context) {
         const val QUOTA = "quota"
         const val QUOTA_SHOWN = "quota-shown"
         const val BY_MACHINE = "inbox-by-machine"
+        const val GROUPING = "inbox-grouping"
         const val HISTORY_OPEN = "inbox-history-open"
         const val BUTTONS = "inbox-card-buttons"
         val json = Json { ignoreUnknownKeys = true; encodeDefaults = false }

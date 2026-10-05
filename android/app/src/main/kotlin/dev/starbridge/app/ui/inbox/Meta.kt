@@ -1,8 +1,6 @@
 package dev.starbridge.app.ui.inbox
 
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.text.InlineTextContent
-import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -15,20 +13,18 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.text.Placeholder
-import androidx.compose.ui.text.PlaceholderVerticalAlign
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
-import dev.starbridge.app.data.Decision
 import dev.starbridge.app.data.Source
 import dev.starbridge.app.data.openLink
 import dev.starbridge.app.ui.Sym
 import dev.starbridge.app.ui.Symbol
+import dev.starbridge.app.ui.since
 import dev.starbridge.app.ui.span
 import dev.starbridge.app.ui.theme.Spacing
 import dev.starbridge.app.ui.theme.StarbridgeTheme
@@ -46,10 +42,11 @@ fun machineSym(kind: String?) = when (kind) {
 
 /**
  * The one meta row: facts Starbridge knows, never the agent's words. The machine's kind and
- * name, the repo, then [time] at the end.
+ * name, the repo, then [time] at the end: in amber at weight 500 while an agent waits ([clock]),
+ * as the time slot is the only place that state shows (#191).
  */
 @Composable
-fun MetaRow(source: Source, time: String, modifier: Modifier = Modifier) {
+fun MetaRow(source: Source, time: String, modifier: Modifier = Modifier, clock: Boolean = false) {
     val color = MaterialTheme.colorScheme.onSurfaceVariant
     val style = StarbridgeTheme.type.machine
     Row(modifier.height(20.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -63,7 +60,15 @@ fun MetaRow(source: Source, time: String, modifier: Modifier = Modifier) {
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
-        if (time.isNotEmpty()) Text(time, style = style, color = color, maxLines = 1, modifier = Modifier.padding(start = Spacing.s3))
+        if (time.isNotEmpty()) {
+            Text(
+                time,
+                style = if (clock) style.copy(fontWeight = FontWeight(500)) else style,
+                color = if (clock) StarbridgeTheme.colors.accent else color,
+                maxLines = 1,
+                modifier = Modifier.padding(start = Spacing.s3),
+            )
+        }
     }
 }
 
@@ -73,38 +78,20 @@ fun waited(since: Instant, now: Instant): String {
     return if (s < 3600) "${s / 60}:${"%02d".format(s % 60)}" else span(since, now)
 }
 
-/**
- * "Waiting for you 1:12", in amber: what holds an agent up. The icon is placed in the text, so it
- * sits on the text's centre line at any font scale.
- */
-@Composable
-fun WaitTag(since: Instant?, now: Instant, modifier: Modifier = Modifier) {
-    val accent = StarbridgeTheme.colors.accent
-    val style = StarbridgeTheme.type.label
-    val icon = with(LocalDensity.current) { 16.dp.toSp() }
-    Text(
-        buildAnnotatedString {
-            appendInlineContent(ICON, " ")
-            append(" Waiting for you")
-            since?.let { append(" ${waited(it, now)}") }
-        },
-        inlineContent = mapOf(ICON to InlineTextContent(Placeholder(icon, icon, PlaceholderVerticalAlign.TextCenter)) { Symbol(Sym.Waiting, size = 16.dp, tint = accent) }),
-        style = style,
-        color = accent,
-        maxLines = 1,
-        modifier = modifier,
-    )
-}
-
-private const val ICON = "icon"
+/** The time slot: how long the agent has waited, from [waitingSince], else the item's age. */
+fun timeSlot(waitingSince: Instant?, createdAt: Instant, now: Instant) = if (waitingSince != null) waited(waitingSince, now) else since(createdAt, now)
 
 /**
- * A question's state, shown only once its agent waits on it: a question with no state line is
- * one the agent works around (#166).
+ * What a screen reader hears first on an item that blocks an agent, as no text on it says so:
+ * "Waiting for you, 2 minutes".
  */
-@Composable
-fun StateLine(decision: Decision, now: Instant, modifier: Modifier = Modifier) {
-    if (decision.waiting) WaitTag(decision.waitingSince, now, modifier)
+fun waitingLabel(since: Instant, now: Instant): String {
+    val m = Duration.between(since, now).toMinutes().coerceAtLeast(0)
+    return "Waiting for you, " + when (m) {
+        0L -> "under a minute"
+        1L -> "1 minute"
+        else -> "$m minutes"
+    }
 }
 
 /** "orchestrate-m…r-before-cli": the middle gives way, so both ends stay readable. */
