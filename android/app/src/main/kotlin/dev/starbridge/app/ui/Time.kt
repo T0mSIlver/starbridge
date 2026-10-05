@@ -1,7 +1,12 @@
 package dev.starbridge.app.ui
 
+import android.text.format.DateFormat
+import androidx.compose.runtime.staticCompositionLocalOf
 import java.time.Duration
 import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 /** "38 min", "1 h 50 min", "2 d 4 h": the two largest units, rounded down. */
 fun span(from: Instant, to: Instant): String {
@@ -29,30 +34,31 @@ fun elapsed(from: Instant, to: Instant): String {
 fun ago(now: Instant, then: Instant): String =
     if (Duration.between(then, now).toMinutes() < 1) "just now" else "${span(then, now)} ago"
 
-/** "at 22:00" today, "tomorrow at 09:00", else "on Tue 6 Oct at 09:00", in the phone's zone. */
-fun moment(at: Instant, now: Instant, zone: java.time.ZoneId = java.time.ZoneId.systemDefault()): String {
-    val day = at.atZone(zone).toLocalDate()
-    val today = now.atZone(zone).toLocalDate()
-    val time = "at ${clock(at, zone)}"
-    return when (day) {
-        today -> time
-        today.plusDays(1) -> "tomorrow $time"
-        else -> "on ${java.time.format.DateTimeFormatter.ofPattern("EEE d MMM", java.util.Locale.ENGLISH).format(day)} $time"
-    }
-}
+/**
+ * Whether times read 24-hour: the Clock setting, else the phone's own choice. The root provides
+ * it; 24-hour where nothing does, as in screenshots.
+ */
+val LocalClock24 = staticCompositionLocalOf { true }
 
-/** "22:00" in the phone's zone. */
-fun clock(at: Instant, zone: java.time.ZoneId = java.time.ZoneId.systemDefault()): String =
-    java.time.format.DateTimeFormatter.ofPattern("HH:mm").withZone(zone).format(at)
+/** The phone's language's own pattern for [skeleton], such as "MMM d" in English, "d MMM" in French. */
+private fun format(skeleton: String, locale: Locale) =
+    DateTimeFormatter.ofPattern(DateFormat.getBestDateTimePattern(locale, skeleton), locale)
 
-/** CodexBar's absolute reset: "14:30" today, "tomorrow 14:30", else "7 Oct, 22:00". */
-fun resetClock(at: Instant, now: Instant, zone: java.time.ZoneId = java.time.ZoneId.systemDefault()): String {
-    val day = at.atZone(zone).toLocalDate()
-    val today = now.atZone(zone).toLocalDate()
-    return when (day) {
-        today -> clock(at, zone)
-        today.plusDays(1) -> "tomorrow ${clock(at, zone)}"
-        else -> "${java.time.format.DateTimeFormatter.ofPattern("d MMM", java.util.Locale.ENGLISH).format(day)}, ${clock(at, zone)}"
+/** "22:00" or "10:00 PM" in the phone's zone. */
+fun clock(at: Instant, h24: Boolean, zone: ZoneId = ZoneId.systemDefault(), locale: Locale = Locale.getDefault()): String =
+    format(if (h24) "Hm" else "hm", locale).withZone(zone).format(at)
+
+/** A date without the year in the phone's language: "Oct 7", "7 oct." */
+fun day(at: Instant, zone: ZoneId = ZoneId.systemDefault(), locale: Locale = Locale.getDefault()): String =
+    format("MMMd", locale).withZone(zone).format(at)
+
+/** CodexBar's absolute reset: "14:30" today, "tomorrow 14:30", else "Oct 7, 22:00". */
+fun resetClock(at: Instant, now: Instant, h24: Boolean, zone: ZoneId = ZoneId.systemDefault(), locale: Locale = Locale.getDefault()): String {
+    val time = clock(at, h24, zone, locale)
+    return when (at.atZone(zone).toLocalDate()) {
+        now.atZone(zone).toLocalDate() -> time
+        now.atZone(zone).toLocalDate().plusDays(1) -> "tomorrow $time"
+        else -> "${day(at, zone, locale)}, $time"
     }
 }
 

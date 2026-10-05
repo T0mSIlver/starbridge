@@ -16,6 +16,7 @@ import dev.starbridge.app.data.Approval
 import dev.starbridge.app.data.Phase
 import dev.starbridge.app.data.Comparison
 import dev.starbridge.app.data.JoinAsk
+import dev.starbridge.app.ui.LocalClock24
 import dev.starbridge.app.ui.devices.DeviceActions
 import dev.starbridge.app.ui.pairing.JoinActions
 import dev.starbridge.app.ui.pairing.JoinPrompt
@@ -147,18 +148,22 @@ class ScreenshotTest(private val dark: Boolean) {
     @Test fun quotas() = capture("quotas") { Phone(Tab.Quotas, 4) { QuotasScreen(fake.windows, now) } }
 
     @Config(qualifiers = "w412dp-h1060dp-xxhdpi")
-    @Test fun quotasNotifying() = capture("quotas-notifying") { Phone(Tab.Quotas, 4) { QuotasScreen(fake.windows, now, settings = QuotaSettings(notify = listOf("claude"))) } }
+    // Running out first off: the order set holds, so the windows that run out stay in place.
+    @Test fun quotasYourOrder() = capture("quotas-your-order") { Phone(Tab.Quotas, 4) { QuotasScreen(fake.windows, now, settings = QuotaSettings(order = listOf("mistral", "codex"), runningOutFirst = false)) } }
 
-    // Remaining, clock times, a 5-day week with strong ticks, Codex first, Gemini hidden, Z.ai notifying.
-    private val tuned = QuotaSettings(showUsed = false, absoluteResets = true, workDays = 5, ticks = QuotaSettings.Ticks.HighContrast, order = listOf("codex"), hidden = listOf("gemini"), notify = listOf("zai"))
+    // Remaining, clock times, a 5-day week with strong ticks, Codex first, Gemini hidden.
+    private val tuned = QuotaSettings(showUsed = false, absoluteResets = true, workDays = 5, ticks = QuotaSettings.Ticks.HighContrast, order = listOf("codex"), hidden = listOf("gemini"))
 
     @Test fun quotasTuned() = capture("quotas-tuned") { QuotasScreen(fake.windows, now, settings = tuned) }
+
+    // The same, with the Clock setting on 12-hour.
+    @Test fun quotasTuned12h() = capture("quotas-tuned-12h") { CompositionLocalProvider(LocalClock24 provides false) { QuotasScreen(fake.windows, now, settings = tuned) } }
 
     // The mockup's settings, scrolled: the whole page.
     @Config(qualifiers = "w412dp-h2400dp-xxhdpi")
     @Test fun settings() = capture("settings") {
         Phone(Tab.Settings, 4) {
-            SettingsScreen(fake.windows, QuotaSettings(hidden = listOf("gemini")), fake.members.size, Colours.Starbridge, fake.push, "https://starbridge.run", settingsActions)
+            SettingsScreen(fake.windows, QuotaSettings(hidden = listOf("gemini"), notify = listOf("claude")), fake.members.size, Colours.Starbridge, fake.push, "https://starbridge.run", settingsActions)
         }
     }
 

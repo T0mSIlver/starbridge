@@ -5,7 +5,10 @@ VER=2.337.0
 REPO=T0mSIlver/starbridge
 BASE=$HOME/.local/opt/gh-runners
 N=${N:-3}
-mkdir -p "$BASE" "$HOME/.config/systemd/user"
+# One Gradle home for all runners: Gradle locks its caches for concurrent builds, and android.yml
+# turns off setup-gradle's cache restore on these runners, which used to overwrite files in use.
+GRADLE_HOME=$BASE/gradle
+mkdir -p "$BASE" "$GRADLE_HOME" "$HOME/.config/systemd/user"
 TAR=$BASE/actions-runner-linux-x64-$VER.tar.gz
 [ -f "$TAR" ] || curl -fsSL -o "$TAR" "https://github.com/actions/runner/releases/download/v$VER/actions-runner-linux-x64-$VER.tar.gz"
 for i in $(seq 1 "$N"); do
@@ -17,10 +20,12 @@ for i in $(seq 1 "$N"); do
     (cd "$d" && ./config.sh --unattended --url "https://github.com/$REPO" --token "$tok" \
       --name "devbox-$i" --labels starbridge-devbox --work _work --replace)
   fi
-  # Hosted-runner equivalents the workflows expect.
+  # Hosted-runner equivalents the workflows expect. Temp files go to the job's temp folder, which
+  # the runner empties after each job, instead of /tmp, a small RAM disk that tests filled.
   cat > "$d/.env" <<EOF
 LANG=C.UTF-8
-GRADLE_USER_HOME=$d/.gradle
+TMPDIR=$d/_work/_temp
+GRADLE_USER_HOME=$GRADLE_HOME
 ANDROID_HOME=$HOME/.local/opt/android-sdk
 ANDROID_SDK_ROOT=$HOME/.local/opt/android-sdk
 PATH=$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin

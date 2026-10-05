@@ -264,7 +264,6 @@ fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> U
                             now,
                             settings = settings,
                             refresh = refresh(vm::refresh),
-                            onNotify = { p, on -> vm.setSettings(settings.copy(notify = if (on) (settings.notify + p).distinct() else settings.notify - p)) },
                         )
                     }
                     entry<SettingsKey> {
@@ -276,10 +275,12 @@ fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> U
                         val push by vm.push.collectAsStateWithLifecycle()
                         val server by vm.server.collectAsStateWithLifecycle()
                         val inbox by vm.inbox.collectAsStateWithLifecycle()
+                        val clock by vm.clock.collectAsStateWithLifecycle()
                         SettingsScreen(
                             windows, quota, members.size, colours, push, server,
-                            SettingsActions(vm::setQuota, vm::setColours, vm::setPush, vm::signOut, devices = { backStack.add(DevicesKey) }, addDevice = { backStack.add(AddDeviceKey) }, inbox = vm::setInbox),
+                            SettingsActions(vm::setQuota, vm::setColours, vm::setPush, vm::signOut, devices = { backStack.add(DevicesKey) }, addDevice = { backStack.add(AddDeviceKey) }, inbox = vm::setInbox, clock = vm::setClock),
                             inbox = inbox,
+                            clock = clock,
                         )
                     }
                     entry<DevicesKey> {

@@ -448,6 +448,29 @@ async function main() {
     throw new Error("the bars do not show what is left");
   await shoot(page, "quotas-tuned");
 
+  step("quota settings: the order set holds over running out first");
+  await page
+    .getByRole("navigation", { name: "Main" })
+    .getByRole("link", { name: "Settings" })
+    .click();
+  await page.getByRole("switch", { name: "Running out first" }).uncheck();
+  await page.getByRole("link", { name: "Quotas" }).click();
+  await page.locator("article").first().waitFor();
+  await shoot(page, "quotas-your-order");
+
+  step("clock setting: 24-hour times in a browser whose language uses 12-hour");
+  await page
+    .getByRole("navigation", { name: "Main" })
+    .getByRole("link", { name: "Settings" })
+    .click();
+  await page.getByLabel("24-hour", { exact: true }).check({ force: true });
+  await shoot(page, "settings-clock");
+  await page.getByRole("link", { name: "Quotas" }).click();
+  await page.locator("article").first().waitFor();
+  if (/\b[AP]M\b/.test(await page.locator("main").innerText()))
+    throw new Error("the 24-hour setting still shows AM or PM");
+  await shoot(page, "quotas-24h");
+
   step("a newly raised quota alert notifies a browser that opted in to its provider");
   // A 5-hour window at 85%, 3 hours in: "low" at 20% left, and it runs out before the reset.
   const at = (ms: number) => new Date(Date.now() + ms).toISOString().replace(/\.\d+Z$/, "Z");

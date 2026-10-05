@@ -20,6 +20,7 @@ import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
+import androidx.compose.material3.IconToggleButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.ToggleButton
@@ -55,6 +56,7 @@ import androidx.compose.ui.zIndex
 import androidx.lifecycle.ViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.starbridge.app.data.CardButtons
+import dev.starbridge.app.data.Clock
 import dev.starbridge.app.data.Colours
 import dev.starbridge.app.data.InboxView
 import dev.starbridge.app.data.openLink
@@ -85,6 +87,8 @@ class SettingsViewModel @Inject constructor(private val store: Store, private va
     fun setInbox(value: InboxView) = prefs.setInbox(value)
     fun setQuota(value: QuotaSettings) = prefs.setQuota(value)
     fun setColours(value: Colours) = prefs.setColours(value)
+    val clock = prefs.clock
+    fun setClock(value: Clock) = prefs.setClock(value)
     fun setPush(type: String) = store.setPushType(type)
     fun signOut() = store.signOut()
 }
@@ -98,6 +102,7 @@ class SettingsActions(
     val devices: () -> Unit,
     val addDevice: () -> Unit,
     val inbox: (InboxView) -> Unit = {},
+    val clock: (Clock) -> Unit = {},
 )
 
 /** Everything this phone keeps for itself, and the account's devices. The settings stay on the phone. */
@@ -112,13 +117,14 @@ fun SettingsScreen(
     actions: SettingsActions,
     modifier: Modifier = Modifier,
     inbox: InboxView = InboxView(),
+    clock: Clock = Clock.System,
 ) {
     val context = LocalContext.current
     var signingOut by rememberSaveable { mutableStateOf(false) }
     val set = actions.quota
     Page("Settings", modifier, titleGap = Spacing.s2) {
         item { Section("Quota windows") }
-        val quotaRows = 5
+        val quotaRows = 6
         item {
             ChoiceRow(0, quotaRows, "Bar shows") { Segments(listOf(true to "Used", false to "Left"), quota.showUsed) { set(quota.copy(showUsed = it)) } }
         }
@@ -130,8 +136,9 @@ fun SettingsScreen(
                 Segments(listOf(null to "Off", 4 to "4", 5 to "5", 7 to "7 days"), quota.workDays) { set(quota.copy(workDays = it)) }
             }
         }
-        item { SwitchRow(3, quotaRows, "Warn before a window runs out", quota.notifyPace) { set(quota.copy(notifyPace = it)) } }
-        item { SwitchRow(4, quotaRows, "Warn at 50% and 20% left", quota.notifyLow) { set(quota.copy(notifyLow = it)) } }
+        item { SwitchRow(3, quotaRows, "Running out first", quota.runningOutFirst) { set(quota.copy(runningOutFirst = it)) } }
+        item { SwitchRow(4, quotaRows, "Warn before a window runs out", quota.notifyPace) { set(quota.copy(notifyPace = it)) } }
+        item { SwitchRow(5, quotaRows, "Warn at 50% and 20% left", quota.notifyLow) { set(quota.copy(notifyLow = it)) } }
 
         val providers = quota.providers(windows)
         if (providers.isNotEmpty()) {
@@ -140,10 +147,12 @@ fun SettingsScreen(
                 val labels = windows.filter { it.provider == p }.map { it.window }.distinct().joinToString(", ")
                 ProviderRow(
                     p,
-                    labels + if (p in quota.notify) " · notifying" else "",
+                    labels,
                     shown = p !in quota.hidden,
+                    notify = p in quota.notify,
                     shape = rowShape(i, providers.size),
                     onShow = { on -> set(quota.copy(hidden = if (on) quota.hidden - p else (quota.hidden + p).distinct())) },
+                    onNotify = { on -> set(quota.copy(notify = if (on) (quota.notify + p).distinct() else quota.notify - p)) },
                     first = i == 0,
                     last = i == providers.lastIndex,
                     onMove = { by ->
@@ -168,6 +177,13 @@ fun SettingsScreen(
         item { Section("Colours") }
         item { RadioRow(0, 2, "Starbridge", colours == Colours.Starbridge) { actions.colours(Colours.Starbridge) } }
         item { RadioRow(1, 2, "Match wallpaper", colours == Colours.Wallpaper) { actions.colours(Colours.Wallpaper) } }
+
+        item { Section("Clock") }
+        item {
+            ChoiceRow(0, 1, "Time format") {
+                Segments(listOf(Clock.System to "System", Clock.H12 to "12-hour", Clock.H24 to "24-hour"), clock, actions.clock)
+            }
+        }
 
         item { Section("Notifications") }
         item {
@@ -271,7 +287,8 @@ private fun Line(content: @Composable RowScope.() -> Unit) {
 }
 
 /**
- * A provider: its windows, a handle to drag it up or down (long press), and whether it shows.
+ * A provider: its windows, a handle to drag it up or down (long press), a bell for its quota
+ * notifications, and whether it shows.
  * Screen readers get "Move up" and "Move down" instead of the drag.
  */
 @Composable
@@ -279,10 +296,12 @@ private fun ProviderRow(
     name: String,
     sub: String,
     shown: Boolean,
+    notify: Boolean,
     shape: Shape,
     first: Boolean,
     last: Boolean,
     onShow: (Boolean) -> Unit,
+    onNotify: (Boolean) -> Unit,
     onMove: (Int) -> Unit,
     placement: (dragging: Boolean) -> Modifier,
 ) {
@@ -330,6 +349,9 @@ private fun ProviderRow(
                     }
                 },
             )
+            IconToggleButton(checked = notify, onCheckedChange = onNotify, enabled = shown) {
+                Symbol(Sym.Bell, size = 20.dp, filled = notify, tint = if (notify) scheme.onSurface else StarbridgeTheme.colors.fg3, contentDescription = "Notify about $name")
+            }
             Switch(checked = shown, onCheckedChange = onShow)
         }
     }

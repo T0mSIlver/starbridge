@@ -3,7 +3,7 @@
 // upload, and a run-out time that passed reads "Ran out".
 import { relative } from "./format";
 import { clock, type QuotaSettings } from "./quotaSettings";
-import type { QuotaAlert, QuotaCardData, QuotaWindow } from "./types";
+import type { QuotaAlert, QuotaWindow } from "./types";
 
 /** The colour of the word: grey on pace, amber with headroom unused, red when it runs out. */
 export type State = "ok" | "unused" | "out" | "ran-out" | "unknown";
@@ -41,25 +41,15 @@ export function status(
     if (at && Date.parse(at) <= now.getTime())
       return { state: "ran-out", word: `Ran out at ${clock(at, now)}`, reset };
     if (!at) return { state: "out", word: "Will run out", reset };
-    const by = s.absoluteResets ? `at ${clock(at, now)}` : relative(at, now);
+    const time = clock(at, now);
+    // "at 14:20", "at Oct 7, 14:20", but "tomorrow 07:20".
+    const by = !s.absoluteResets
+      ? relative(at, now)
+      : time.startsWith("tomorrow")
+        ? time
+        : `at ${time}`;
     return { state: "out", word: `Will run out ${by}`, reset };
   }
   if (alert?.kind === "unused-headroom") return { state: "unused", word: "Headroom unused", reset };
   return { state: "ok", word: "On pace", reset };
-}
-
-/** Windows that will run out or ran out lead on every screen; the rest keep their order. */
-export function runningOutFirst(
-  cards: QuotaCardData[],
-  s: Pick<QuotaSettings, "absoluteResets">,
-  now = new Date(),
-): QuotaCardData[] {
-  const out = (c: QuotaCardData) => {
-    const st = status(c.window, c.alert, s, now).state;
-    return st === "out" || st === "ran-out" ? 0 : 1;
-  };
-  return cards
-    .map((c, i) => ({ c, i, o: out(c) }))
-    .sort((a, b) => a.o - b.o || a.i - b.i)
-    .map(({ c }) => c);
 }

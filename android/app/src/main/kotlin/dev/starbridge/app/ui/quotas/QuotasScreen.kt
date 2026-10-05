@@ -6,7 +6,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -17,10 +16,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -45,6 +41,7 @@ import dev.starbridge.app.data.Prefs
 import dev.starbridge.app.data.QuotaSettings
 import dev.starbridge.app.data.QuotaWindow
 import dev.starbridge.app.data.Store
+import dev.starbridge.app.ui.LocalClock24
 import dev.starbridge.app.ui.Page
 import dev.starbridge.app.ui.Refresh
 import dev.starbridge.app.ui.Sym
@@ -66,7 +63,6 @@ class QuotasViewModel @Inject constructor(private val store: Store, private val 
     val windows = store.windows
     val settings = prefs.quota
     fun refresh() = store.refresh()
-    fun setSettings(value: QuotaSettings) = prefs.setQuota(value)
 }
 
 /** One card per window, hidden providers out; windows that will run out first, then the settings' order. */
@@ -77,8 +73,6 @@ fun QuotasScreen(
     modifier: Modifier = Modifier,
     settings: QuotaSettings = QuotaSettings(),
     refresh: Refresh? = null,
-    /** Turns a provider's notifications on or off, from an alert card. */
-    onNotify: (provider: String, on: Boolean) -> Unit = { _, _ -> },
 ) {
     val shown = settings.arrange(windows, now)
     val updated = windows.mapNotNull { it.takenAt }.maxOrNull()
@@ -107,7 +101,7 @@ fun QuotasScreen(
             )
         }
         itemsIndexed(shown, key = { _, it -> it.id }) { i, w ->
-            WindowCard(w, now, settings, cardShape(i, shown.size), onNotify = { onNotify(w.provider, it) }, modifier = Modifier.animateItem())
+            WindowCard(w, now, settings, cardShape(i, shown.size), modifier = Modifier.animateItem())
         }
     }
 }
@@ -156,31 +150,25 @@ private class Tone(val color: Color, val word: String)
 private fun tone(window: QuotaWindow, now: Instant): Tone {
     val c = StarbridgeTheme.colors
     val neutral = MaterialTheme.colorScheme.onSurfaceVariant
+    val h24 = LocalClock24.current
     if (window.ended(now)) return Tone(neutral, "Window reset")
     return when (val pace = window.pace) {
         Pace.Even -> Tone(c.ok, "On pace")
-        is Pace.RunsOut -> Tone(c.bad, if (pace.at.isAfter(now)) "Will run out in ${span(now, pace.at)}" else "Ran out at ${clock(pace.at)}")
+        is Pace.RunsOut -> Tone(c.bad, if (pace.at.isAfter(now)) "Will run out in ${span(now, pace.at)}" else "Ran out at ${clock(pace.at, h24)}")
         is Pace.Unused -> Tone(c.warn, "Headroom unused")
         Pace.Unknown -> Tone(neutral, "Too early to tell")
     }
 }
 
-/** What "Notify me" turned on, in a few words. */
-private fun notifies(settings: QuotaSettings) = when {
-    settings.notifyLow && settings.notifyPace -> "When low and before it runs out"
-    settings.notifyLow -> "At 50% and 20% left"
-    settings.notifyPace -> "Before it runs out"
-    else -> ""
-}
-
 @Composable
-private fun WindowCard(window: QuotaWindow, now: Instant, settings: QuotaSettings, shape: Shape, onNotify: (Boolean) -> Unit, modifier: Modifier = Modifier) {
+private fun WindowCard(window: QuotaWindow, now: Instant, settings: QuotaSettings, shape: Shape, modifier: Modifier = Modifier) {
     val scheme = MaterialTheme.colorScheme
     val type = StarbridgeTheme.type
     val tone = tone(window, now)
     val ended = window.ended(now)
     val course = window.course(now)
     val bar = settings.bar(window, now)
+    val h24 = LocalClock24.current
     val card = scheme.surfaceContainer
     Surface(modifier.fillMaxWidth(), shape = shape, color = card) {
         Column(Modifier.padding(Spacing.s4), verticalArrangement = Arrangement.spacedBy(Spacing.s3)) {
@@ -213,38 +201,11 @@ private fun WindowCard(window: QuotaWindow, now: Instant, settings: QuotaSetting
                 Text(tone.word, style = type.metaStrong, color = tone.color, maxLines = 1, modifier = Modifier.weight(1f))
                 Spacer(Modifier.width(Spacing.s2))
                 Text(
-                    window.resetsAt?.let { if (ended) "Reset ${ago(now, it)}" else if (settings.absoluteResets) "Resets ${resetClock(it, now)}" else "Resets in ${span(now, it)}" } ?: "Reset time unknown",
+                    window.resetsAt?.let { if (ended) "Reset ${ago(now, it)}" else if (settings.absoluteResets) "Resets ${resetClock(it, now, h24)}" else "Resets in ${span(now, it)}" } ?: "Reset time unknown",
                     style = type.meta,
                     color = scheme.onSurfaceVariant,
                     maxLines = 1,
                 )
-            }
-            // A window that will run out, or one with a headroom alert; one that ran out is past warning.
-            if ((course == Course.WillRunOut || window.alert && course == Course.Steady) && !ended) Notify(window.provider in settings.notify, notifies(settings), onNotify)
-        }
-    }
-}
-
-/** "Notify me" on a window that needs watching; "Notifying" once its provider notifies. */
-@Composable
-private fun Notify(on: Boolean, what: String, onNotify: (Boolean) -> Unit) {
-    val scheme = MaterialTheme.colorScheme
-    Column {
-        HorizontalDivider(color = scheme.outlineVariant, modifier = Modifier.padding(top = 2.dp))
-        Row(Modifier.padding(top = Spacing.s3), verticalAlignment = Alignment.CenterVertically) {
-            Text(if (on) what else "", style = StarbridgeTheme.type.meta, color = scheme.onSurfaceVariant, modifier = Modifier.weight(1f))
-            Spacer(Modifier.width(Spacing.s3))
-            Button(
-                onClick = { onNotify(!on) },
-                // Neutral either way, under Match wallpaper too: amber is for what needs the owner.
-                colors = if (on) ButtonDefaults.buttonColors(containerColor = scheme.onSurface, contentColor = scheme.surface)
-                else ButtonDefaults.buttonColors(containerColor = scheme.surfaceContainerHighest, contentColor = scheme.onSurface),
-                contentPadding = PaddingValues(horizontal = Spacing.s4),
-                modifier = Modifier.height(Spacing.s10),
-            ) {
-                Symbol(Sym.Bell, size = 18.dp, filled = on)
-                Spacer(Modifier.width(Spacing.s2))
-                Text(if (on) "Notifying" else "Notify me", style = StarbridgeTheme.type.label)
             }
         }
     }
