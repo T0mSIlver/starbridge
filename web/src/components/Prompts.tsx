@@ -27,7 +27,7 @@ export function settledText(p: PromptItem, deviceName: (id: string) => string): 
   if (out === "keyboard") return `Answered on ${p.permission.source.machine}`;
   if (out === "timeout") return "Timed out: left to the keyboard";
   if (out === "device" && p.settled?.device) return `Answered from ${deviceName(p.settled.device)}`;
-  return "Answered on another device";
+  return p.answeredAt ? "Answered on another device" : "No longer waiting";
 }
 
 /**
@@ -39,7 +39,7 @@ export function Prompts() {
   const now = Date.now();
   const shown = prompts.filter(
     (p) =>
-      (!p.answeredAt && Date.parse(p.permission.expiresAt) > now) ||
+      (p.closedAt === undefined && !p.answeredAt && Date.parse(p.permission.expiresAt) > now) ||
       (p.closedAt !== undefined && now - p.closedAt < CLOSING_MS),
   );
   if (shown.length === 0) return null;
@@ -56,7 +56,7 @@ export function Prompts() {
       <ul className={ui.list}>
         {shown.map((p, i) => (
           <li key={p.permission.id}>
-            {p.answeredAt ? (
+            {p.answeredAt || p.closedAt !== undefined ? (
               <p className={`${ui.card} t-body ${s.closed}`} role="status">
                 <code className="t-code">{p.permission.summary}</code>
                 <span>{settledText(p, deviceName)}</span>

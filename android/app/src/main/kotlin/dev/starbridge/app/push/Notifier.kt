@@ -227,16 +227,24 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
         manager.notify(tag, b.build())
     }
 
-    /** Says what was sent, then clears itself. */
+    /** Says what was sent, then clears itself, unless a newer prompt of the session shows. */
     fun promptAnswered(prompt: Prompt, what: String) {
         if (!allowed()) return
         val tag = promptTag(prompt)
-        shown[tag] = prompt.id
-        @Suppress("MissingPermission")
-        manager.notify(tag, promptBase(prompt).setContentText(what).setStyle(null).setTimeoutAfter(4_000).setSilent(true).build())
+        synchronized(shown) {
+            if (shown[tag] != null && shown[tag] != prompt.id) return
+            shown[tag] = prompt.id
+            @Suppress("MissingPermission")
+            manager.notify(tag, promptBase(prompt).setContentText(what).setStyle(null).setTimeoutAfter(4_000).setSilent(true).build())
+        }
     }
 
-    fun promptFailed(prompt: Prompt, why: String) = postPrompt(prompt, "Not sent: $why")
+    fun promptFailed(prompt: Prompt, why: String) {
+        synchronized(shown) {
+            if (shown[promptTag(prompt)].let { it != null && it != prompt.id }) return
+            postPrompt(prompt, "Not sent: $why")
+        }
+    }
 
     /** Clears the session's notification if it still shows this prompt. */
     override fun cancelPrompt(prompt: Prompt) {

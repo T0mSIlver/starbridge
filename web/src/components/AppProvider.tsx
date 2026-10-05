@@ -114,11 +114,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const openIds = new Set(open.map((p) => p.permission.id));
       const closed = was
         .filter((p) => !openIds.has(p.permission.id))
-        .map((p) => ({
-          ...p,
-          answeredAt: p.answeredAt ?? new Date(at).toISOString(),
-          closedAt: p.closedAt ?? at,
-        }))
+        // Closed, not answered: the server also drops a prompt from the open list when it
+        // expires, so only a settled notice says who answered it.
+        .map((p) => ({ ...p, closedAt: p.closedAt ?? at }))
         .filter((p) => at - (p.closedAt ?? at) < 3_000);
       const withNotice = (p: PromptItem) => {
         const st = byKey.get(`${p.machine.id}/${p.permission.id}`);
@@ -151,8 +149,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (e.data.kind === "quota") refreshQuotas().catch(() => {});
       else if (["permission", "settled", "answered"].includes(e.data.kind))
         refreshPrompts().catch(() => {});
-      if (e.data.kind !== "quota" && e.data.kind !== "permission" && e.data.kind !== "settled")
-        refreshInbox().catch(() => {});
+      // A settled notice may close a decision too.
+      if (e.data.kind !== "quota" && e.data.kind !== "permission") refreshInbox().catch(() => {});
     };
     document.addEventListener("visibilitychange", tick);
     navigator.serviceWorker?.addEventListener("message", onMessage);

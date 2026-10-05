@@ -20,6 +20,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -81,12 +82,12 @@ private fun Code(text: String, modifier: Modifier = Modifier, maxLines: Int = In
     Text(
         text,
         style = StarbridgeTheme.type.code,
-        color = StarbridgeTheme.colors.fg,
+        color = MaterialTheme.colorScheme.onSurface,
         maxLines = maxLines,
         overflow = TextOverflow.Ellipsis,
         modifier = modifier
             .fillMaxWidth()
-            .background(StarbridgeTheme.colors.surface2, RoundedCornerShape(Radius.lg))
+            .background(MaterialTheme.colorScheme.surfaceContainerHighest, RoundedCornerShape(Radius.lg))
             .padding(horizontal = Spacing.s4, vertical = Spacing.s3),
     )
 }
@@ -98,7 +99,7 @@ fun PromptsHeader(onLog: () -> Unit, modifier: Modifier = Modifier) {
         Spacer(Modifier.width(Spacing.s2))
         Label("Prompts", Modifier.weight(1f))
         TextButton(onClick = onLog, modifier = Modifier.heightIn(min = Sizes.tap)) {
-            Text("Last 7 days", style = StarbridgeTheme.type.small, color = StarbridgeTheme.colors.fg2)
+            Text("Last 7 days", style = StarbridgeTheme.type.small, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
@@ -107,8 +108,8 @@ fun PromptsHeader(onLog: () -> Unit, modifier: Modifier = Modifier) {
 @Composable
 fun ClosedPrompt(prompt: Prompt, modifier: Modifier = Modifier) {
     Panel(modifier.fillMaxWidth()) {
-        Text(prompt.summary, style = StarbridgeTheme.type.code, color = StarbridgeTheme.colors.fg, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Text(prompt.ended.orEmpty(), style = StarbridgeTheme.type.small, color = StarbridgeTheme.colors.fg2)
+        Text(prompt.summary, style = StarbridgeTheme.type.code, color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(prompt.ended.orEmpty(), style = StarbridgeTheme.type.small, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
@@ -143,34 +144,34 @@ fun PromptCard(prompt: Prompt, now: Instant, actions: PromptActions, modifier: M
     Panel(modifier.fillMaxWidth()) {
         Column(verticalArrangement = Arrangement.spacedBy(Spacing.s3)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(prompt.tool, style = StarbridgeTheme.type.label, color = colors.fg)
+                Text(prompt.tool, style = StarbridgeTheme.type.label, color = MaterialTheme.colorScheme.onSurface)
                 Spacer(Modifier.width(Spacing.s2))
                 Text(
                     listOf(s.machine, s.project, s.title ?: s.session.take(8)).filter { it.isNotBlank() }.joinToString(" · "),
                     style = StarbridgeTheme.type.machine,
-                    color = colors.fg2,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false),
                 )
-                Text(" · ${ago(now, prompt.createdAt)}", style = StarbridgeTheme.type.machine, color = colors.fg2, maxLines = 1)
+                Text(" · ${ago(now, prompt.createdAt)}", style = StarbridgeTheme.type.machine, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
             }
             Code(prompt.summary)
-            prompt.description?.let { Text(it, style = StarbridgeTheme.type.body, color = colors.fg2) }
+            prompt.description?.let { Text(it, style = StarbridgeTheme.type.body, color = MaterialTheme.colorScheme.onSurfaceVariant) }
             Text(
                 if (showInput) "Hide the full input" else "Show the full input",
                 style = StarbridgeTheme.type.small,
-                color = colors.fg2,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.heightIn(min = Sizes.tap).clickable { showInput = !showInput }.padding(vertical = Spacing.s3),
             )
             if (showInput) {
                 Text(
                     prettyInput(prompt.input),
                     style = StarbridgeTheme.type.code,
-                    color = colors.fg,
+                    color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(colors.surface2, RoundedCornerShape(Radius.lg))
+                        .background(MaterialTheme.colorScheme.surfaceContainerHighest, RoundedCornerShape(Radius.lg))
                         .horizontalScroll(rememberScrollState())
                         .padding(horizontal = Spacing.s4, vertical = Spacing.s3),
                 )
@@ -184,7 +185,7 @@ fun PromptCard(prompt: Prompt, now: Instant, actions: PromptActions, modifier: M
                 ) { Text("Allow once", style = StarbridgeTheme.type.action) }
                 prompt.scopes.forEach { scope ->
                     OutlinedButton(onClick = { send(true, scope.scope, null) }, enabled = !sent, modifier = Modifier.heightIn(min = Sizes.tap)) {
-                        Text(scope.label, style = StarbridgeTheme.type.action, color = colors.fg)
+                        Text(scope.label, style = StarbridgeTheme.type.action, color = MaterialTheme.colorScheme.onSurface)
                     }
                 }
                 OutlinedButton(onClick = { denying = !denying }, enabled = !sent, modifier = Modifier.heightIn(min = Sizes.tap)) {
@@ -223,7 +224,7 @@ fun PromptLogScreen(prompts: List<Prompt>, now: Instant, modifier: Modifier = Mo
             Text(
                 "No permission prompts in the last 7 days.",
                 style = StarbridgeTheme.type.body,
-                color = StarbridgeTheme.colors.fg2,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(padding).padding(Spacing.s6),
             )
             return@Screen
@@ -231,9 +232,9 @@ fun PromptLogScreen(prompts: List<Prompt>, now: Instant, modifier: Modifier = Mo
         LazyColumn(contentPadding = listPadding(padding)) {
             itemsIndexed(rows, key = { _, it -> it.id }) { i, p ->
                 Column(Modifier.padding(vertical = Spacing.s1)) {
-                    if (i > 0) HorizontalDivider(color = StarbridgeTheme.colors.line)
+                    if (i > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     Column(Modifier.padding(vertical = Spacing.s3, horizontal = Spacing.s1), verticalArrangement = Arrangement.spacedBy(Spacing.s1)) {
-                        Text(p.summary, style = StarbridgeTheme.type.code, color = StarbridgeTheme.colors.fg, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(p.summary, style = StarbridgeTheme.type.code, color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Text(
                             "${p.tool} · ${p.source.machine} · ${p.source.project} · ${ago(now, p.createdAt)}",
                             style = StarbridgeTheme.type.small,
@@ -242,7 +243,7 @@ fun PromptLogScreen(prompts: List<Prompt>, now: Instant, modifier: Modifier = Mo
                         Text(
                             p.ended ?: if (p.waiting(now)) "Waiting" else "Expired",
                             style = StarbridgeTheme.type.small,
-                            color = StarbridgeTheme.colors.fg2,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 }

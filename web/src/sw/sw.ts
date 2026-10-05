@@ -107,10 +107,9 @@ async function onPush(text: string): Promise<void> {
     // Checked like any item, so a forged notice cannot clear a real prompt.
     const { settled } = await openSettled(ctx, item);
     answered.add(`${account}/${settled.itemId}`);
-    const tagged = await self.registration.getNotifications({
-      tag: promptTag(settled.itemId),
-    });
-    for (const n of tagged) n.close();
+    // It may close a prompt or a decision.
+    for (const t of [tag(settled.itemId), promptTag(settled.itemId)])
+      for (const n of await self.registration.getNotifications({ tag: t })) n.close();
   } else await showAlerts(account as string, await openPushedQuota(ctx, item));
 }
 

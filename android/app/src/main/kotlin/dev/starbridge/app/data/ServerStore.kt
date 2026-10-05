@@ -481,13 +481,24 @@ class ServerStore(
             "settled" -> {
                 val (from, body) = open(item) ?: return null
                 val notice = body as Settled
-                val p = byId[notice.itemId] ?: return null
+                val p = byId[notice.itemId]
+                if (p == null) {
+                    settleDecision(notice.itemId, from)
+                    return null
+                }
                 if (p.from != from) return null
                 byId[p.body.id] = p.copy(settled = notice, answeredAt = p.answeredAt ?: notice.at)
                 alerts.cancelPrompt(toUi(p))
             }
         }
         return null
+    }
+
+    /** A settled notice may close one of the machine's decisions: it counts as answered. */
+    private fun settleDecision(id: String, from: String) {
+        val d = saved.decisions.find { it.body.id == id && it.from == from } ?: return
+        alerts.cancel(id)
+        if (d.answeredAt == null) persist(saved.copy(decisions = saved.decisions.map { if (it === d) it.copy(answeredAt = now()) else it }))
     }
 
     /** Keeps a week of prompts, the log's span, as the server does. */
