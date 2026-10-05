@@ -49,10 +49,14 @@ export class Switch {
     await this.poller?.stop();
   }
 
-  /** Stops, and tells the agent this session ended. */
+  /**
+   * Stops, and tells the agent this session ended. Waits at most 2 s for that: a hung agent
+   * must not hold up the session's exit, and a missed `bye` only leaves a stale entry in `status`.
+   */
   async end(): Promise<void> {
     await this.stop();
-    await this.lastAgent?.bye();
+    const bye = this.lastAgent?.bye();
+    if (bye) await Promise.race([bye, this.paths.sleep(2_000)]);
   }
 
   private async loop() {
