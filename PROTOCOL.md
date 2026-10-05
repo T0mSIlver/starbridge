@@ -197,6 +197,7 @@ createdAt, expiresAt, version}`; `state` is `open`, `comparing`, `approved` or `
 | `GET /items?kind=<kinds>&after=<cursor>&open=1` | device | items with only the caller's box, and `cursor`; `kinds` is a comma-separated list of machine-signed kinds, all of them when left out; `open=1` keeps only unanswered decisions and permissions still in their answer window |
 | `GET /items/:id` | device, machine | one item, the caller's box only; push points here when the item exceeds 4 KB |
 | `GET /quota` | device | the latest quota item from each machine |
+| `POST /quota/ask?wait=<s>` | device | ask every machine for a fresh quota snapshot → `{askedAt, behind}`; with `wait`, holds until each active machine that has a snapshot posted a newer one; `behind` counts those that have not |
 
 Item ids are random, chosen by the sender. A machine re-posts a run under its id as it changes;
 the server replaces the earlier post and moves it past every cursor. Any other reused id, or a
@@ -226,6 +227,13 @@ first one.
 machine came after `cursor`, else holds the request
 until one arrives or `wait` (at most 300) passes and replies `{items: [], cursor}`. The Claude Code
 mod keeps one such request open and re-opens it on every reply; the CLI's `wait` does the same.
+
+Each reply also carries `directory`, the number of entries in the account's directory, and
+`quotaAsked`, when a device last asked for fresh quotas (`POST /quota/ask`), if one did since
+the server started. A machine that sends back `directory=<n>&quotaAsked=<time>` with what it
+knows gets a reply at once when the directory is longer or a device asked since, and every
+directory append ends its open waits. So the machine's agent re-reads the directory as soon as a
+device joins and posts a fresh snapshot sealed to it, and posts one when a device asks.
 A machine checks that an answer's `decisionId` is one it asked and its `choice` one of the
 decision's options; for permission answers, see below.
 
@@ -286,6 +294,7 @@ code below. Per-address limits count an IPv6 client as its /64.
 | `POST /joins` | 10 a minute per account; request text 4 KB: 400 `bad-schema` |
 | `GET /joins` waiting | 16 per account; `GET /joins/:id` waiting: 4 per join: 429 `too-many-waits` |
 | `GET /answers` waiting | 32 per machine: 429 `too-many-waits` |
+| `POST /quota/ask` | 6 a minute per account |
 | `POST /push/subscriptions` | 30 a minute per account, on top of the subscription caps |
 
 Answers skip the decision count and may use the last 8 MB, so a full account can still answer. An hourly sweep drops answered
