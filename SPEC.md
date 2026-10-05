@@ -710,6 +710,13 @@ How it generalizes is open.
   their kinds by name and skip unknown pushes, so they never see it. Two optional fields for the
   design (orchestrator): `source.machineKind` (`server`, `desktop`, `laptop`, `cloud`) and a
   decision's `agent` (`claude-code`, `codex`), as permissions have.
+- 2026-10-05. Google Play and CI disk (#148): a release also attaches `starbridge-VERSION.aab`,
+  signed with `release.jks` like the APK. Play App Signing keeps that key as the app signing key
+  and accepts it as the upload key too (#59's handoff), so Play builds and GitHub APKs share one
+  signature. The three self-hosted runners share one Gradle home,
+  `~/.local/opt/gh-runners/gradle`, which Gradle locks for concurrent builds; `android.yml`
+  turns setup-gradle's cache off on them (`cache-disabled` when `vars.RUNNER` is set), since its
+  restore overwrote files a concurrent job was reading (#142). This freed 3.6 GB.
 - 2026-10-05. Waiting state on the machine (#122) and permission prompts off by default (#124).
   `starbridge waiting <id>` and `starbridge working <id>` post a decision's state; `ask
   --waiting` posts it already waiting, quietly, since the decision's own push just went out,
