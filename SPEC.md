@@ -170,6 +170,14 @@ What the probe showed (2026-10-04, in the Desktop Code tab):
   (longest gap measured: 23 minutes).
 - A hot reload of the mod aborts its in-flight requests at once.
 
+Changed (#68, part 2, 2026-10-05): the mod talks to the machine's agent over its unix socket
+with `$.http.fetch`. Each session sends `hello`, long-polls its own events (`wait=25`), submits
+them and acks them; it runs no CLI, takes no lease and watches no file. When no agent answers
+`GET /v1/status` with a 2xx (none installed, stopped, or a 426), the mod runs the CLI path above
+and checks for the agent every 30 s, so machines without the agent keep working until setup
+ships. Both paths share the set of submitted, unconfirmed lines, so a switch submits nothing
+twice. The "agent not running" status line waits until the CLI path goes.
+
 The other path is Claude Code channels (code.claude.com/docs/en/channels,
 research preview). A channel is an MCP server that pushes events into an open
 session, and a channel that declares `claude/channel/permission` can also answer
@@ -491,6 +499,12 @@ How it generalizes is open.
   `already-settled`. The server, which cannot read `expiresAt`, refuses answers 10 minutes after
   the permission arrived. `GET /items` takes a comma-separated `kind` list and `open=1`; the
   machine's `checkPermissionAnswer` lives in the protocol package.
+- 2026-10-05. Claude Code plugin (#68, part 2): the repo is the `starbridge` marketplace
+  (`.claude-plugin/marketplace.json`) with two plugins. `starbridge` (`plugin/`) holds the skill
+  and a `SessionStart` command hook that adds the rule "Whenever you need me to decide
+  something, use the `starbridge` skill." as context, so no CLAUDE.md edit; it has no `bin/`.
+  `starbridge-mod` (`mod/`) is the thin mod. `skill/` moved into `plugin/skills/`. The
+  `/starbridge:setup` command waits for `starbridge setup` (part 3).
 
 ## Encryption, with existing libraries
 
