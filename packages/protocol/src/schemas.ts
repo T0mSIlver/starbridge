@@ -165,6 +165,35 @@ export const Source = z.object({
 });
 export type Source = z.infer<typeof Source>;
 
+/**
+ * A picture the agent attaches to a decision: a mockup, a failing screen, a chart. It travels
+ * inside the signed and sealed body like the text, so it costs its size once per box; the CLI
+ * downscales images to keep a decision within the server's per-item cap (PROTOCOL.md, Limits).
+ */
+export const DecisionImage = z.object({
+  /** PNG or JPEG only: never SVG, which can carry script. */
+  type: z.enum(["image/png", "image/jpeg"]),
+  width: z.number().int().min(1).max(8192),
+  height: z.number().int().min(1).max(8192),
+  data: B64.max(256 * 1024),
+  /** What the image shows, for screen readers and the notification. */
+  alt: z.string().max(300).optional(),
+});
+export type DecisionImage = z.infer<typeof DecisionImage>;
+
+/**
+ * A page the owner may open to decide, typically a claude.ai artifact the agent built. HTTPS
+ * only, so a client never opens a script or an app scheme.
+ */
+export const DecisionLink = z.object({
+  url: z
+    .string()
+    .max(2048)
+    .regex(/^https:\/\/[\x21-\x7e]+$/, "an https URL in printable ASCII"),
+  title: z.string().min(1).max(100).optional(),
+});
+export type DecisionLink = z.infer<typeof DecisionLink>;
+
 export const Decision = z
   .object({
     v: z.literal(1),
@@ -183,6 +212,15 @@ export const Decision = z
       at: Time.optional(),
     }),
     source: Source,
+    images: z.array(DecisionImage).max(4).optional(),
+    links: z.array(DecisionLink).max(4).optional(),
+    /**
+     * Set when the owner answers on that page, such as a claude.ai artifact whose button wakes
+     * the agent, and not in Starbridge: the decision then has no options, and closes when the
+     * machine posts `settled` or its default time passes. Never both, so the owner
+     * never answers one question in two places.
+     */
+    answerIn: DecisionLink.optional(),
   })
   .superRefine((d, ctx) => {
     if (d.options.length === 1) ctx.addIssue({ code: "custom", message: "options: 0 or 2 to 4" });
@@ -192,6 +230,8 @@ export const Decision = z
       ctx.addIssue({ code: "custom", message: "recommended must be one of the options" });
     if (d.options.length === 0 && d.recommended !== undefined)
       ctx.addIssue({ code: "custom", message: "recommended needs options" });
+    if (d.answerIn !== undefined && d.options.length > 0)
+      ctx.addIssue({ code: "custom", message: "a decision answered elsewhere has no options" });
   });
 export type Decision = z.infer<typeof Decision>;
 

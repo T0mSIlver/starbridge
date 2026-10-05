@@ -408,6 +408,519 @@
         }
       },
       "valid": false
+    },
+    {
+      "name": "images and links",
+      "body": {
+        "v": 1,
+        "id": "dec_1",
+        "to": [
+          "phone",
+          "phone2"
+        ],
+        "createdAt": "2026-10-04T10:00:00Z",
+        "question": "Run inference on the Mac while you are away?",
+        "context": "The bench needs the GPU for about 40 minutes. No: it waits for tonight.",
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "recommended": "Yes",
+        "default": {
+          "action": "Wait for tonight",
+          "at": "2026-10-04T11:00:00Z"
+        },
+        "source": {
+          "machine": "dev box",
+          "project": "localvoxtral",
+          "session": "s_42"
+        },
+        "images": [
+          {
+            "type": "image/png",
+            "width": 1,
+            "height": 1,
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg",
+            "alt": "The settings screen, cropped"
+          },
+          {
+            "type": "image/png",
+            "width": 1,
+            "height": 1,
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg"
+          }
+        ],
+        "links": [
+          {
+            "url": "https://claude.ai/public/artifacts/0b3f0e7c",
+            "title": "Both mockups"
+          }
+        ]
+      },
+      "valid": true
+    },
+    {
+      "name": "link without a title",
+      "body": {
+        "v": 1,
+        "id": "dec_1",
+        "to": [
+          "phone",
+          "phone2"
+        ],
+        "createdAt": "2026-10-04T10:00:00Z",
+        "question": "Run inference on the Mac while you are away?",
+        "context": "The bench needs the GPU for about 40 minutes. No: it waits for tonight.",
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "recommended": "Yes",
+        "default": {
+          "action": "Wait for tonight",
+          "at": "2026-10-04T11:00:00Z"
+        },
+        "source": {
+          "machine": "dev box",
+          "project": "localvoxtral",
+          "session": "s_42"
+        },
+        "links": [
+          {
+            "url": "https://claude.ai/public/artifacts/0b3f0e7c"
+          }
+        ]
+      },
+      "valid": true
+    },
+    {
+      "name": "svg image",
+      "body": {
+        "v": 1,
+        "id": "dec_1",
+        "to": [
+          "phone",
+          "phone2"
+        ],
+        "createdAt": "2026-10-04T10:00:00Z",
+        "question": "Run inference on the Mac while you are away?",
+        "context": "The bench needs the GPU for about 40 minutes. No: it waits for tonight.",
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "recommended": "Yes",
+        "default": {
+          "action": "Wait for tonight",
+          "at": "2026-10-04T11:00:00Z"
+        },
+        "source": {
+          "machine": "dev box",
+          "project": "localvoxtral",
+          "session": "s_42"
+        },
+        "images": [
+          {
+            "type": "image/svg+xml",
+            "width": 1,
+            "height": 1,
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg",
+            "alt": "The settings screen, cropped"
+          }
+        ]
+      },
+      "valid": false
+    },
+    {
+      "name": "five images",
+      "body": {
+        "v": 1,
+        "id": "dec_1",
+        "to": [
+          "phone",
+          "phone2"
+        ],
+        "createdAt": "2026-10-04T10:00:00Z",
+        "question": "Run inference on the Mac while you are away?",
+        "context": "The bench needs the GPU for about 40 minutes. No: it waits for tonight.",
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "recommended": "Yes",
+        "default": {
+          "action": "Wait for tonight",
+          "at": "2026-10-04T11:00:00Z"
+        },
+        "source": {
+          "machine": "dev box",
+          "project": "localvoxtral",
+          "session": "s_42"
+        },
+        "images": [
+          {
+            "type": "image/png",
+            "width": 1,
+            "height": 1,
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg",
+            "alt": "The settings screen, cropped"
+          },
+          {
+            "type": "image/png",
+            "width": 1,
+            "height": 1,
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg",
+            "alt": "The settings screen, cropped"
+          },
+          {
+            "type": "image/png",
+            "width": 1,
+            "height": 1,
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg",
+            "alt": "The settings screen, cropped"
+          },
+          {
+            "type": "image/png",
+            "width": 1,
+            "height": 1,
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg",
+            "alt": "The settings screen, cropped"
+          },
+          {
+            "type": "image/png",
+            "width": 1,
+            "height": 1,
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg",
+            "alt": "The settings screen, cropped"
+          }
+        ]
+      },
+      "valid": false
+    },
+    {
+      "name": "image of width 0",
+      "body": {
+        "v": 1,
+        "id": "dec_1",
+        "to": [
+          "phone",
+          "phone2"
+        ],
+        "createdAt": "2026-10-04T10:00:00Z",
+        "question": "Run inference on the Mac while you are away?",
+        "context": "The bench needs the GPU for about 40 minutes. No: it waits for tonight.",
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "recommended": "Yes",
+        "default": {
+          "action": "Wait for tonight",
+          "at": "2026-10-04T11:00:00Z"
+        },
+        "source": {
+          "machine": "dev box",
+          "project": "localvoxtral",
+          "session": "s_42"
+        },
+        "images": [
+          {
+            "type": "image/png",
+            "width": 0,
+            "height": 1,
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg",
+            "alt": "The settings screen, cropped"
+          }
+        ]
+      },
+      "valid": false
+    },
+    {
+      "name": "image data not base64url",
+      "body": {
+        "v": 1,
+        "id": "dec_1",
+        "to": [
+          "phone",
+          "phone2"
+        ],
+        "createdAt": "2026-10-04T10:00:00Z",
+        "question": "Run inference on the Mac while you are away?",
+        "context": "The bench needs the GPU for about 40 minutes. No: it waits for tonight.",
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "recommended": "Yes",
+        "default": {
+          "action": "Wait for tonight",
+          "at": "2026-10-04T11:00:00Z"
+        },
+        "source": {
+          "machine": "dev box",
+          "project": "localvoxtral",
+          "session": "s_42"
+        },
+        "images": [
+          {
+            "type": "image/png",
+            "width": 1,
+            "height": 1,
+            "data": "iVBO+w==",
+            "alt": "The settings screen, cropped"
+          }
+        ]
+      },
+      "valid": false
+    },
+    {
+      "name": "plain http link",
+      "body": {
+        "v": 1,
+        "id": "dec_1",
+        "to": [
+          "phone",
+          "phone2"
+        ],
+        "createdAt": "2026-10-04T10:00:00Z",
+        "question": "Run inference on the Mac while you are away?",
+        "context": "The bench needs the GPU for about 40 minutes. No: it waits for tonight.",
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "recommended": "Yes",
+        "default": {
+          "action": "Wait for tonight",
+          "at": "2026-10-04T11:00:00Z"
+        },
+        "source": {
+          "machine": "dev box",
+          "project": "localvoxtral",
+          "session": "s_42"
+        },
+        "links": [
+          {
+            "url": "http://claude.ai/public/artifacts/0b3f0e7c"
+          }
+        ]
+      },
+      "valid": false
+    },
+    {
+      "name": "script link",
+      "body": {
+        "v": 1,
+        "id": "dec_1",
+        "to": [
+          "phone",
+          "phone2"
+        ],
+        "createdAt": "2026-10-04T10:00:00Z",
+        "question": "Run inference on the Mac while you are away?",
+        "context": "The bench needs the GPU for about 40 minutes. No: it waits for tonight.",
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "recommended": "Yes",
+        "default": {
+          "action": "Wait for tonight",
+          "at": "2026-10-04T11:00:00Z"
+        },
+        "source": {
+          "machine": "dev box",
+          "project": "localvoxtral",
+          "session": "s_42"
+        },
+        "links": [
+          {
+            "url": "javascript:alert(1)"
+          }
+        ]
+      },
+      "valid": false
+    },
+    {
+      "name": "five links",
+      "body": {
+        "v": 1,
+        "id": "dec_1",
+        "to": [
+          "phone",
+          "phone2"
+        ],
+        "createdAt": "2026-10-04T10:00:00Z",
+        "question": "Run inference on the Mac while you are away?",
+        "context": "The bench needs the GPU for about 40 minutes. No: it waits for tonight.",
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "recommended": "Yes",
+        "default": {
+          "action": "Wait for tonight",
+          "at": "2026-10-04T11:00:00Z"
+        },
+        "source": {
+          "machine": "dev box",
+          "project": "localvoxtral",
+          "session": "s_42"
+        },
+        "links": [
+          {
+            "url": "https://claude.ai/public/artifacts/0b3f0e7c",
+            "title": "Both mockups"
+          },
+          {
+            "url": "https://claude.ai/public/artifacts/0b3f0e7c",
+            "title": "Both mockups"
+          },
+          {
+            "url": "https://claude.ai/public/artifacts/0b3f0e7c",
+            "title": "Both mockups"
+          },
+          {
+            "url": "https://claude.ai/public/artifacts/0b3f0e7c",
+            "title": "Both mockups"
+          },
+          {
+            "url": "https://claude.ai/public/artifacts/0b3f0e7c",
+            "title": "Both mockups"
+          }
+        ]
+      },
+      "valid": false
+    },
+    {
+      "name": "empty link title",
+      "body": {
+        "v": 1,
+        "id": "dec_1",
+        "to": [
+          "phone",
+          "phone2"
+        ],
+        "createdAt": "2026-10-04T10:00:00Z",
+        "question": "Run inference on the Mac while you are away?",
+        "context": "The bench needs the GPU for about 40 minutes. No: it waits for tonight.",
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "recommended": "Yes",
+        "default": {
+          "action": "Wait for tonight",
+          "at": "2026-10-04T11:00:00Z"
+        },
+        "source": {
+          "machine": "dev box",
+          "project": "localvoxtral",
+          "session": "s_42"
+        },
+        "links": [
+          {
+            "url": "https://claude.ai/public/artifacts/0b3f0e7c",
+            "title": ""
+          }
+        ]
+      },
+      "valid": false
+    },
+    {
+      "name": "answered in an artifact",
+      "body": {
+        "v": 1,
+        "id": "dec_1",
+        "to": [
+          "phone",
+          "phone2"
+        ],
+        "createdAt": "2026-10-04T10:00:00Z",
+        "question": "Run inference on the Mac while you are away?",
+        "context": "The bench needs the GPU for about 40 minutes. No: it waits for tonight.",
+        "options": [],
+        "default": {
+          "action": "Wait for tonight",
+          "at": "2026-10-04T11:00:00Z"
+        },
+        "source": {
+          "machine": "dev box",
+          "project": "localvoxtral",
+          "session": "s_42"
+        },
+        "answerIn": {
+          "url": "https://claude.ai/public/artifacts/0b3f0e7c",
+          "title": "Both mockups"
+        },
+        "links": [
+          {
+            "url": "https://github.com/T0mSIlver/starbridge/pull/86"
+          }
+        ]
+      },
+      "valid": true
+    },
+    {
+      "name": "answered in an artifact and with options",
+      "body": {
+        "v": 1,
+        "id": "dec_1",
+        "to": [
+          "phone",
+          "phone2"
+        ],
+        "createdAt": "2026-10-04T10:00:00Z",
+        "question": "Run inference on the Mac while you are away?",
+        "context": "The bench needs the GPU for about 40 minutes. No: it waits for tonight.",
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "recommended": "Yes",
+        "default": {
+          "action": "Wait for tonight",
+          "at": "2026-10-04T11:00:00Z"
+        },
+        "source": {
+          "machine": "dev box",
+          "project": "localvoxtral",
+          "session": "s_42"
+        },
+        "answerIn": {
+          "url": "https://claude.ai/public/artifacts/0b3f0e7c",
+          "title": "Both mockups"
+        }
+      },
+      "valid": false
+    },
+    {
+      "name": "answered on a plain http page",
+      "body": {
+        "v": 1,
+        "id": "dec_1",
+        "to": [
+          "phone",
+          "phone2"
+        ],
+        "createdAt": "2026-10-04T10:00:00Z",
+        "question": "Run inference on the Mac while you are away?",
+        "context": "The bench needs the GPU for about 40 minutes. No: it waits for tonight.",
+        "options": [],
+        "default": {
+          "action": "Wait for tonight",
+          "at": "2026-10-04T11:00:00Z"
+        },
+        "source": {
+          "machine": "dev box",
+          "project": "localvoxtral",
+          "session": "s_42"
+        },
+        "answerIn": {
+          "url": "http://example.com"
+        }
+      },
+      "valid": false
     }
   ],
   "answer": [
