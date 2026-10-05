@@ -983,3 +983,13 @@ goes in git.
   ciphertext encrypted once with a key in each box would free the per-device
   cost, at the price of a new item field and storage on the server; not
   needed while the owner pairs two or three devices.
+- 2026-10-05: the installed web app (#116), checked with Playwright 1.63's
+  WebKit 26.6 and Chromium 153. WebKit stores an X25519 `CryptoKey` in
+  IndexedDB but reads the whole record back as null; Ed25519 and AES keys
+  round-trip. The page then lost its device on every load, so key generation
+  now writes the keys and reads them back once, and falls back to libsodium
+  keys when they don't return. Whether Safari on iOS has the same bug is an
+  owner check on #116. iOS gives Web Push only to Home Screen apps, which keep
+  their own storage, so a Safari tab shows the Add to Home Screen step instead
+  of the push button. Chrome prefixes the app name to an installed window's
+  title unless the title starts with it, so titles read "Starbridge · Quotas".

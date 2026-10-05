@@ -26,6 +26,8 @@ type Records = {
   promptAnswers: Record<string, PromptReply & { answeredAt: string }>;
   /** The last account signed in here: the service worker's default. */
   current: string;
+  /** Keys written and read back once by `keeps`. */
+  probe: StoredKeys;
 };
 
 const DB = "starbridge";
@@ -135,5 +137,25 @@ export async function update<K extends keyof Records>(
     });
   } finally {
     d.close();
+  }
+}
+
+/**
+ * Whether IndexedDB gives these keys back. WebKit stores an X25519 CryptoKey but reads the record
+ * back as null (Playwright's WebKit 26.6), which would lose the device on the next load.
+ */
+export async function keeps(keys: StoredKeys): Promise<boolean> {
+  // A key of its own, so a probe in another tab cannot delete this one midway.
+  const slot = crypto.randomUUID();
+  try {
+    await put("probe", keys, slot);
+    const back = await get("probe", slot);
+    return (
+      back?.kind === "raw" || (back?.box instanceof CryptoKey && back.sign instanceof CryptoKey)
+    );
+  } catch {
+    return false;
+  } finally {
+    await del("probe", slot).catch(() => {});
   }
 }
