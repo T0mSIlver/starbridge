@@ -1120,6 +1120,13 @@ so the mod is the first path.
   both clients, amber on a blocked item and `fg2` otherwise. The question sheet and the web
   detail keep their
   amber head or ground; #254 changes their options and Reply.
+- 2026-10-06. Allow covers what the owner saw (#274, web client 1 and 2). A permission's
+  `summary` is one line capped at 200 characters, so a command could hide a destructive tail
+  past it. The web detail now shows the whole redacted `input` (a command in full, else
+  indented JSON), and Allow, its key and the wider grants wait until the input's end has been
+  on screen. A phone row keeps Allow only when the whole input fits on one line of 200
+  characters, shown whole. Session and project grants show their exact rule beside their
+  label instead of in a tooltip, which touch screens never show.
 
 ## Encryption, with existing libraries
 

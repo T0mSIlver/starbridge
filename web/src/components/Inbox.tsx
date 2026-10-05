@@ -14,6 +14,7 @@ import {
 import { matches, useFind } from "@/lib/find";
 import { clockTime } from "@/lib/format";
 import { closedByPhrase, promptOutcome } from "@/lib/outcome";
+import { fitsRow } from "@/lib/permissionInput";
 import { type Prefs, usePref } from "@/lib/prefs";
 import { afterAnswer, selectedId, step } from "@/lib/selection";
 import type { InboxItem, PromptItem } from "@/lib/types";
@@ -576,16 +577,19 @@ function RowActions({
   };
   if (entry.type === "prompt") {
     if (!promptOpen(entry.item, Date.now())) return null;
+    // Allow only where the row shows the whole input (#274); otherwise the detail has it.
     return (
       <>
-        <button
-          type="button"
-          className={`t-label ${ui.btn} ${ui.rec}`}
-          disabled={busy}
-          onClick={run(() => onPrompt(entry.item, { behavior: "allow", scope: "once" }))}
-        >
-          Allow
-        </button>
+        {fitsRow(entry.item.permission) && (
+          <button
+            type="button"
+            className={`t-label ${ui.btn} ${ui.rec}`}
+            disabled={busy}
+            onClick={run(() => onPrompt(entry.item, { behavior: "allow", scope: "once" }))}
+          >
+            Allow
+          </button>
+        )}
         <button
           type="button"
           className={`t-label ${ui.btn}`}

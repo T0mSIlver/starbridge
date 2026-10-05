@@ -461,6 +461,13 @@ a decision's context, a permission prompt's command and a session's name.
   terminal icon, the exact command in mono, Allow and Deny,
   and how long it has waited. A question shows its text as the title, then
   its options, its default (the first) filled.
+- Allow covers what the owner saw. A prompt's detail shows the whole tool
+  input, never the one-line summary: a command in full, else the input as
+  indented JSON. Allow, by button, key or a wider grant, waits until the
+  input's end has been on screen. A row carries Allow only when its input fits
+  on one line of 200 characters, shown whole; otherwise only Deny, and the
+  detail allows. A wider grant (this session, this project) shows its exact
+  rule in mono beside its label, never only in a tooltip.
 - Every inbox item is the same container (#248): on Android a filled card
   (`surface`) with no border and no shadow; on the web a box as its settings
   rows are (`surface`, a `line` border, `radius.sm`). An item that blocks an
