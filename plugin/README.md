@@ -4,18 +4,9 @@ The `starbridge` skill teaches agents that Starbridge is how they reach the
 owner: a card for each decision that is theirs or each piece of work they must
 act on, written so the owner can answer it cold, and `starbridge run` around
 any command that blocks them or needs them at the machine. A `SessionStart`
-hook adds the matching rule to every session's context. When `rules.md` in
-the Starbridge config directory (`~/.config/starbridge`, or
-`$XDG_CONFIG_HOME/starbridge`, `$STARBRIDGE_CONFIG_DIR`) has rules for runs,
-the hook adds them too, and agents wrap the commands they name as well. Write the
-rules in plain words, for example:
-
-```
-Tell me when you run the e2e tests that take over my Mac, or local inference.
-```
-
-Sessions started afterwards follow them. Uninstalling the plugin removes the
-rules from sessions and the skill; `rules.md` stays.
+hook adds the matching rule to every session's context. To tell agents more,
+such as which commands to report or which merges to ask about, put lines in
+their own instruction files: `docs/tell-your-agents.md` says where.
 
 A `PreToolUse` hook on `AskUserQuestion` runs `starbridge hook ask-user`, which
 turns the question away and tells the agent to post it with `starbridge ask`.
