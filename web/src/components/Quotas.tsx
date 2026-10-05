@@ -105,7 +105,16 @@ function Groups({
       const g = list.find((x) => key(x) === id);
       if (!g) return;
       moved.splice(to, 0, g);
-      const sequence = [...new Set(moved.slice(first).map((x) => x.provider))];
+      // A provider with a leading group on another machine keeps its slot, so the leaders stay put.
+      const leading = new Set(list.slice(0, first).map((x) => x.provider));
+      const sequence = [
+        ...new Set(
+          moved
+            .slice(first)
+            .map((x) => x.provider)
+            .filter((p) => !leading.has(p)),
+        ),
+      ];
       setOrder(reorder(providerOrder(all, settings), sequence));
     },
   });
