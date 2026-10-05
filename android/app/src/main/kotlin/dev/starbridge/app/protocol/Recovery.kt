@@ -88,7 +88,11 @@ object RecoveryKeys {
     private val wordRun = Regex("(^|[^\\p{L}\\p{N}])\\p{L}{5,8}[^\\p{L}\\p{N}]")
     private val letterRuns = Regex("(?<![\\p{L}\\p{N}])\\p{L}{3,}(?![\\p{L}\\p{N}])")
 
-    private fun looksLikeWords(text: String) = wordRun.containsMatchIn(text) || letterRuns.findAll(text).count() >= 8
+    private fun looksLikeWords(text: String): Boolean {
+        if (wordRun.containsMatchIn(text) || letterRuns.findAll(text).count() >= 8) return true
+        val words = Bip39.split(text)
+        return words.size >= 12 && words.all { it in Bip39.words }
+    }
 
     private fun chars(text: String) = text.uppercase().replace(Regex("[\\s-]"), "").replace('O', '0').replace(Regex("[IL]"), "1")
 
@@ -118,7 +122,10 @@ object RecoveryKeys {
             return Reading(true, words.size, if (sodium == null && problem?.startsWith("Word ") != true) null else problem)
         }
         val chars = chars(text)
-        val bad = chars.indexOfFirst { it !in CROCKFORD }
+        // A U in a word from the list, or the start of one, may be an older account's words,
+        // which only read as words from the eighth: while typing, it waits.
+        val maybeWords = sodium == null && Bip39.split(text).any { w -> w.length >= 3 && 'u' in w && Bip39.words.any { it.startsWith(w) } }
+        val bad = chars.indexOfFirst { it !in CROCKFORD && !(maybeWords && it == 'U') }
         val problem = when {
             bad >= 0 -> "Character ${bad + 1}, \"${chars[bad]}\", is not in a recovery key."
             sodium == null -> null

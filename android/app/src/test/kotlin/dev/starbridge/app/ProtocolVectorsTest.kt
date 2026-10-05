@@ -249,6 +249,10 @@ class ProtocolVectorsTest {
         assertEquals(null, RecoveryKeys.read(key.take(9)).problem)
         assertEquals("A recovery key has 28 characters; this has 8.", RecoveryKeys.read(key.take(9), sodium).problem)
         assertEquals(true, RecoveryKeys.read(keys.getValue("recovery").jsonObject.str("words")).words)
+        assertEquals(recovery.str("seed"), toB64(RecoveryKeys.seed(recovery.str("words").replace(" ", "1"), sodium)))
+        assertEquals(null, RecoveryKeys.read("cup run").problem)
+        assertEquals(null, RecoveryKeys.read("1cup2run").problem)
+        assertEquals("Character 4, \"U\", is not in a recovery key.", RecoveryKeys.read("7KQU").problem)
     }
 
     @Test
