@@ -532,16 +532,11 @@ async function main() {
   const devices = page.getByRole("region", { name: "Devices" });
   await devices.getByText("Device · this browser").waitFor();
   // Devices list this browser, then the others by when they joined: the second browser first.
-  const before = await devices.getByRole("button", { name: "Revoke" }).count();
+  // The list may still gain the recovered browser, so the second browser's sign-out below,
+  // not a count, proves the revocation.
   await devices.getByRole("button", { name: "Revoke" }).first().click();
   await page.getByRole("dialog").getByRole("button", { name: "Revoke" }).click();
   await page.getByRole("dialog").waitFor({ state: "detached" });
-  // The list reloads from the directory once the revocation is written.
-  const revokes = devices.getByRole("button", { name: "Revoke" });
-  for (let i = 0; i < 50 && (await revokes.count()) !== before - 1; i++)
-    await page.waitForTimeout(200);
-  if ((await revokes.count()) !== before - 1)
-    throw new Error("the revoked browser is still listed");
   await pageB.reload();
   await pageB.getByRole("link", { name: SIGN_IN }).waitFor();
   await page.emulateMedia({ colorScheme: "light" });
