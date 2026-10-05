@@ -3,12 +3,9 @@
 import { useState } from "react";
 import { track } from "@/lib/analytics";
 import { AGENTS_GUIDE, REPO, SELF_HOST } from "@/lib/links";
-import { DEFAULT_SETTINGS, groups } from "@/lib/quotaSettings";
-import { sample } from "@/lib/sample";
 import { Analytics } from "./Analytics";
 import { Icon, Mark } from "./icons";
 import s from "./Landing.module.css";
-import { QuotaGroup } from "./QuotaRow";
 import ui from "./ui.module.css";
 
 // Product shots in public/landing, at 1.5x for the web inbox and 2x for the phones:
@@ -56,7 +53,10 @@ function Phone({ name, alt }: { name: string; alt: string }) {
 const FEATURES = [
   ["Questions", "Decide from anywhere. Your tap becomes the agent's next prompt."],
   ["Runs", "Builds, releases and heavy jobs stay on your lock screen until they end."],
-  ["Quotas", "See which plan has room, and hear before a window resets unused."],
+  [
+    "Quotas",
+    "What's left on each AI plan, from CodexBar, with an optional alert before a window runs out.",
+  ],
   ["Permission prompts", "Allow or deny a command away from the keyboard. Off by default."],
 ] as const;
 
@@ -114,14 +114,11 @@ function Install() {
 function Section({
   title,
   text,
-  short,
   flip,
   children,
 }: {
   title: string;
   text: string;
-  /** The text on phones, when shorter. */
-  short?: string;
   flip?: boolean;
   children: React.ReactNode;
 }) {
@@ -129,8 +126,7 @@ function Section({
     <section className={`${s.section} ${flip ? s.flip : ""}`}>
       <div className={s.sectionText}>
         <h2 className="t-title">{title}</h2>
-        <p className={`t-prose ${s.dim} ${short ? s.wideOnly : ""}`}>{text}</p>
-        {short && <p className={`t-prose ${s.dim} ${s.narrowOnly}`}>{short}</p>}
+        <p className={`t-prose ${s.dim}`}>{text}</p>
       </div>
       <div className={s.box}>{children}</div>
     </section>
@@ -139,8 +135,6 @@ function Section({
 
 /** What a visitor without a device on this browser sees at `/` (design v2, direction B). */
 export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
-  const [quotas] = useState(() => sample().quotas.cards.slice(0, 4));
-  const now = new Date();
   return (
     <div className={s.page}>
       <Analytics />
@@ -169,7 +163,7 @@ export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
         <p className={`t-lead ${s.dim} ${s.lead}`}>
           Answer your coding agents with one tap
           <span className={s.wideOnly}> on your phone or in a browser</span>, and the waiting
-          session carries on. Follow the runs that affect you, and know what each AI plan has left.
+          session carries on. You also follow the runs that affect you until they pass or fail.
         </p>
         <div className={s.actions}>
           <a href="/v1/auth/github" className={`t-action ${ui.btn} ${ui.lg} ${ui.fill}`}>
@@ -237,18 +231,6 @@ export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
             width={824}
             height={1784}
           />
-        </div>
-      </Section>
-
-      <Section
-        title="Know what each plan has left"
-        text="What your plans have left decides which agent you start next. Starbridge shows each plan's limits, such as a 5-hour and a weekly window, read from CodexBar. It notifies you before one resets with headroom unused, or when it runs low."
-        short="Every plan's windows, read from CodexBar. You hear before one resets unused, or when it runs low."
-      >
-        <div className={s.quotas}>
-          {groups(quotas).map((g) => (
-            <QuotaGroup key={g.provider} g={g} settings={DEFAULT_SETTINGS} now={now} />
-          ))}
         </div>
       </Section>
 

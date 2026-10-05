@@ -1037,18 +1037,19 @@ How it generalizes is open.
   owner opens it, not when the page loads with it open.
 - 2026-10-06. Launch positioning (owner, launch copy pass). Starbridge is the control surface
   for your coding agents, and it should look as simple as it is. The landing page, the docs, the
-  README and the launch post sell three features, each by why it matters to the reader:
+  README and the launch post sell two features, each by why it matters to the reader:
   - Questions. An agent asks for a decision that is yours, you answer with one tap on your phone
-    or in a browser, and the answer reaches the waiting session as its next prompt. No agent
-    sits idle until you are back at the terminal.
+    or in a browser, and the answer reaches the waiting session as its next prompt. The work
+    goes on while you are away from the terminal.
   - Runs. A run is anything an agent starts that you want to follow closely because it affects
     you: something time-sensitive, heavy work on your machine, a build, a release, an eval, or a
     test that takes over the screen or keyboard. Its progress stays on your lock screen until it
     passes or fails. Taking over the screen is one example, not the definition.
-  - Quotas. Knowing what each plan has left belongs on the control surface, because it decides
-    which agent you start next and on which plan. Starbridge shows the windows CodexBar reads
-    for every plan, and notifies you before a window resets with headroom unused, or when it
-    runs low. Starbridge wraps CodexBar; it does not replace it.
+  - Quotas get one line, not a section or a place in the hero (owner, overriding a first
+    framing): what's left on each AI plan, read from CodexBar, with an optional alert before a
+    window runs out. Users don't launch agents from Starbridge, and the power users it targets
+    run several accounts behind their own proxies and don't check quotas by hand. Alerts are
+    opt-in per device and per provider, so copy never says they are on.
   Permission prompts stay a secondary, opt-in feature. The copy says "on each machine that runs
   agents", never "on each machine" alone, and "sign in on the web or in the Android app".
   Contact on `/privacy` is privacy@starbridge.run; abuse@ appears only in `/terms`, for
