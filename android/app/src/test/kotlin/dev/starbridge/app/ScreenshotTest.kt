@@ -172,15 +172,19 @@ class ScreenshotTest(private val dark: Boolean) {
 
     @Test fun addDeviceFound() = capture("add-device-found") { Phone(null, 0) { AddDeviceScreen(fake.approval, deviceActions) } }
 
-    @Test fun setupSignIn() = capture("setup-sign-in") { SetupScreen(Phase.SignedOut, "https://starbridge.run", false, setupActions, {}) }
+    @Test fun setupSignIn() = capture("setup-sign-in") { Phone(null, 0) { SetupScreen(Phase.SignedOut, "https://starbridge.run", false, setupActions, {}) } }
 
-    @Test fun setupFirstDevice() = capture("setup-first-device") { SetupScreen(Phase.NoDevice(accountExists = false), "https://starbridge.run", false, setupActions, {}) }
+    @Test fun setupFirstDevice() = capture("setup-first-device") { Phone(null, 0) { SetupScreen(Phase.NoDevice(accountExists = false), "https://starbridge.run", false, setupActions, {}) } }
 
-    @Test fun setupJoin() = capture("setup-join") { SetupScreen(Phase.Joining("7KQ2-M9XD-4TPV-HB3N-R8CE-WY6F"), "https://starbridge.run", false, setupActions, {}) }
+    @Test fun setupJoin() = capture("setup-join") { Phone(null, 0) { SetupScreen(Phase.Joining("7KQ2-M9XD-4TPV-HB3N-R8CE-WY6F"), "https://starbridge.run", false, setupActions, {}) } }
 
-    @Test fun setupJoinChoose() = capture("setup-join-choose") { SetupScreen(Phase.NoDevice(accountExists = true), "https://starbridge.run", false, setupActions, {}) }
+    @Test fun setupJoinChoose() = capture("setup-join-choose") { Phone(null, 0) { SetupScreen(Phase.NoDevice(accountExists = true), "https://starbridge.run", false, setupActions, {}) } }
 
-    @Test fun setupJoinDigits() = capture("setup-join-digits") { SetupScreen(Phase.JoiningByDigits("042917"), "https://starbridge.run", false, setupActions, {}) }
+    @Test fun setupJoinAsking() = capture("setup-join-asking") { Phone(null, 0) { SetupScreen(Phase.JoiningByDigits(null), "https://starbridge.run", false, setupActions, {}) } }
+
+    @Test fun setupSelfHosted() = capture("setup-self-hosted") { Phone(null, 0) { SetupScreen(Phase.SignedOut, "https://starbridge.example.com", false, setupActions, {}) } }
+
+    @Test fun setupJoinDigits() = capture("setup-join-digits") { Phone(null, 0) { SetupScreen(Phase.JoiningByDigits("042917"), "https://starbridge.run", false, setupActions, {}) } }
 
     @Test fun addDeviceQr() = capture("add-device-qr") {
         Phone(null, 0) { AddDeviceScreen(Approval.Showing("7KQ2-M9XD-4TPV-HB3N-R8CE-WY6F", "https://starbridge.run/pair#7KQ2-M9XD-4TPV-HB3N-R8CE-WY6F"), deviceActions) }
@@ -197,5 +201,5 @@ class ScreenshotTest(private val dark: Boolean) {
         JoinPrompt(listOf(ask), Comparison.Digits(ask, "042917", error = error), JoinActions({}, {}, {}, {}))
     }
 
-    @Test fun setupRecoveryKey() = capture("setup-recovery-key") { SetupScreen(Phase.RecoveryKey(fake.recoveryWords), "https://starbridge.run", false, setupActions, {}) }
+    @Test fun setupRecoveryKey() = capture("setup-recovery-key") { Phone(null, 0) { SetupScreen(Phase.RecoveryKey(fake.recoveryWords), "https://starbridge.run", false, setupActions, {}) } }
 }
