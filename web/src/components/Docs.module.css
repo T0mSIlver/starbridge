@@ -130,6 +130,15 @@
   padding-left: var(--s6);
 }
 
+/* A grid item would otherwise grow to its widest code line. */
+.text li {
+  min-width: 0;
+}
+
+.text li > * + * {
+  margin-top: var(--s3);
+}
+
 .text code {
   font-family: var(--mono);
   font-size: 0.875em;
@@ -141,19 +150,28 @@
   background: var(--surface2);
 }
 
+/* The Copy button sits beside the code, not over it, centred on the first line: 16px of
+   padding plus half the 20px line, less half the button's 28px. */
 .text [data-code] {
-  position: relative;
+  display: flex;
+  align-items: flex-start;
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
   background: var(--surface);
 }
 
 .text pre {
+  flex: 1;
+  min-width: 0;
   overflow-x: auto;
-  padding: var(--s4) var(--s5);
-  padding-right: var(--s20);
+  padding: var(--s4) var(--s3) var(--s4) var(--s5);
   font-size: 14px;
   line-height: 20px;
+}
+
+.text [data-wrap] pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .text pre code {
@@ -161,9 +179,8 @@
 }
 
 .text [data-copy] {
-  position: absolute;
-  top: var(--s2);
-  right: var(--s2);
+  flex: none;
+  margin: var(--s3) var(--s3) 0 0;
   padding: var(--s1) var(--s2h);
   border: 1px solid var(--line);
   border-radius: var(--radius-pill);
@@ -184,6 +201,23 @@
   color: var(--fg);
 }
 
+.text dl {
+  display: grid;
+  gap: var(--s1);
+}
+
+.text dt {
+  margin-top: var(--s3);
+}
+
+.text dt:first-child {
+  margin-top: 0;
+}
+
+.text dd {
+  color: var(--fg2);
+}
+
 .text table {
   display: block;
   overflow-x: auto;
@@ -194,7 +228,7 @@
 
 .text th,
 .text td {
-  padding: var(--s2) var(--s3);
+  padding: var(--s2);
   border-bottom: 1px solid var(--line);
   text-align: left;
   vertical-align: top;
