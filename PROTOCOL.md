@@ -52,6 +52,20 @@ Clients replay the chain with `verifyDirectory` and keep a pin `{length, head}`.
 must extend the pin, so the server can neither insert a key, nor roll back a revocation, nor serve
 a chain of its own.
 
+A pin cannot show that a chain is current: a server can hold back entries it has, such as a
+revocation, and serve a shorter chain that still extends the pin. Devices therefore sign the
+head they hold, `dir: {length, head}`, into each answer and permission answer. A machine keeps
+the longest head each device signed, and refuses every device's answer while a device active in
+its chain has signed a head that chain does not hold (`holdsHead`): the server is withholding
+entries, or serving that device another chain. The refusal lifts once the server serves the
+missing entries, or once the machine's chain revokes that device.
+
+This bounds the attack rather than ending it. A server that withholds a phone's revocation from a
+machine can relay that phone's answers only until any other device answers that machine; from
+then on it must drop every message from the owner's other devices to it, which the owner sees as
+answers that never arrive. A machine cannot detect a revocation that no device has told it about,
+since the server is its only channel; the revoked device's key can sign any stale head itself.
+
 ## Pairing
 
 A new member (a machine, or a second device) makes its keys and shows a 24-character code: 8
@@ -381,7 +395,8 @@ Answering a permission from a phone is a trust decision, so:
   permission once it is settled. It dies with the prompt, at most 10 minutes; the server refuses
   later answers with 409 `expired`.
 - **The machine refreshes the directory before it accepts an allow**, so a revoked device's
-  answers are refused as soon as the revocation is in the chain.
+  answers are refused as soon as the revocation is in the chain, and refuses every answer while
+  another device has signed a longer chain than the server serves it (Directory, above).
 - **The device chooses only a scope, never a rule.** The machine keeps the rule behind each
   suggestion; "always" writes only Claude Code's local project settings
   (`.claude/settings.local.json`), never user settings.
