@@ -234,10 +234,7 @@ export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
         text="The agent asks and keeps working. Your answer reaches its session as the next prompt."
       >
         <div className={s.crop}>
-          <Phone
-            name="android-question"
-            alt="A question with two images in Android's sheet"
-          />
+          <Phone name="android-question" alt="A question with two images in Android's sheet" />
         </div>
       </Section>
 
