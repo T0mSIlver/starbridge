@@ -34,6 +34,8 @@ export async function createApp(config: Config, fetchFn: typeof fetch = fetch) {
     db,
     push: new Push(config, db, fetchFn),
     answers: new Waiters(),
+    quotas: new Waiters(),
+    quotaAsks: new Map(),
     pairings: new Waiters(),
     joins: new Waiters(),
     limiter: new RateLimiter(),

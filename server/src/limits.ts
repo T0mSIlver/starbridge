@@ -57,6 +57,9 @@ export const DEFAULT_LIMITS = {
   /** Push subscription writes per account. */
   pushSubscribes: [30, MINUTE] as RateWindow,
 
+  /** Asks for fresh quota snapshots per account; each makes every machine run CodexBar. */
+  quotaAsks: [6, MINUTE] as RateWindow,
+
   /** Open answer long-polls per machine: one per waiting session plus the mod. */
   answerWaits: 32,
   /** Open result long-polls per pairing, and open request long-polls per rendezvous id. */

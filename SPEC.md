@@ -795,6 +795,17 @@ How it generalizes is open.
   and pi's `AGENTS.override.md` replaces the repo's `AGENTS.md`, so it only suits repos without
   one.
 
+- 2026-10-05. A device sees quotas as soon as it joins, and pulling to refresh gets fresh ones
+  (#158). A snapshot is sealed to the devices in the directory when it is posted, so a device that
+  joined later read nothing until the next upload, up to 5 minutes. Fixed at the source: every
+  directory append ends the machines' answer long-polls, whose replies now carry the directory's
+  length, and the agent posts a fresh snapshot (CodexBar takes about 4 s) once its re-read
+  directory holds a new device. Pull to refresh on Android's Quotas calls `POST /quota/ask`, which
+  wakes the machines the same way and holds until each has posted, then refetches. Asks are
+  rate-limited to 6 a minute per account, since each runs CodexBar on every machine. The web page
+  has no refresh gesture and gets none: it refetches quotas when opened, and a new browser is
+  covered by the re-upload on join.
+
 ## Encryption, with existing libraries
 
 - libsodium sealed boxes (`crypto_box_seal`, X25519 + XSalsa20-Poly1305): an
