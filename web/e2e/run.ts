@@ -507,8 +507,8 @@ async function main() {
         by.set(name, was ? [was[0], at + ms - was[0]] : [at, ms]);
       }
       for (const [name, [at, ms]] of by) {
-        const phone = name.startsWith("phone");
-        const crop = phone ? "crop=390:844:0:0," : "";
+        // The headed window paints 720 px; desktop GIFs keep the rail, the list and the detail's edge.
+        const crop = name.startsWith("phone") ? "crop=390:720:0:0" : "crop=900:480:0:0";
         const r = spawnSync("ffmpeg", [
           "-y",
           "-loglevel",
@@ -520,7 +520,7 @@ async function main() {
           "-i",
           webm,
           "-vf",
-          `${crop}fps=25,scale=${phone ? 390 : 960}:-1:flags=lanczos,split[a][b];[a]palettegen[p];[b][p]paletteuse`,
+          `${crop},fps=25,split[a][b];[a]palettegen[p];[b][p]paletteuse`,
           join(MOTION_VIDEO, `${name}.gif`),
         ]);
         if (r.status !== 0) throw new Error(`ffmpeg ${name}: ${r.stderr}`);
