@@ -78,6 +78,51 @@ function Head({ since, children }: { since?: string; children: React.ReactNode }
   return <div className={`${s.head} ${since ? s.blocks : ""}`}>{children}</div>;
 }
 
+/** A typed answer and its Send button. */
+function FreeText({
+  id,
+  sending,
+  focus,
+  onSend,
+}: {
+  id: string;
+  sending: boolean;
+  focus?: boolean;
+  onSend: (text: string) => void;
+}) {
+  const [text, setText] = useState("");
+  return (
+    <form
+      className={s.free}
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (text.trim()) onSend(text.trim());
+      }}
+    >
+      <label className="sr-only" htmlFor={`answer-${id}`}>
+        Your answer
+      </label>
+      <textarea
+        id={`answer-${id}`}
+        className={`${ui.input} t-body`}
+        rows={2}
+        placeholder="Reply"
+        value={text}
+        // biome-ignore lint/a11y/noAutofocus: opened by the Reply button, to type at once
+        autoFocus={focus}
+        onChange={(e) => setText(e.target.value)}
+      />
+      <button
+        type="submit"
+        className={`t-label ${ui.btn} ${ui.fill}`}
+        disabled={sending || !text.trim()}
+      >
+        Send
+      </button>
+    </form>
+  );
+}
+
 /** A question: what the agent asked, its state, its words, its options, and its session. */
 export function QuestionDetail({
   item,
@@ -96,7 +141,7 @@ export function QuestionDetail({
 }) {
   const d = item.decision;
   const { send, sending, error } = useSend(onAnswer);
-  const [text, setText] = useState("");
+  const [replying, setReplying] = useState(false);
   const options = closed || d.answerIn ? [] : ordered(d);
   useKeys(keys && options.length > 0, (key) => {
     const choice = /^[1-4]$/.test(key) ? options[Number(key) - 1] : undefined;
@@ -145,33 +190,24 @@ export function QuestionDetail({
           ))}
         </fieldset>
       ) : (
-        <form
-          className={s.free}
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (text.trim()) send({ text: text.trim() });
-          }}
-        >
-          <label className="sr-only" htmlFor={`answer-${d.id}`}>
-            Your answer
-          </label>
-          <textarea
-            id={`answer-${d.id}`}
-            className={`${ui.input} t-body`}
-            rows={2}
-            placeholder="Reply"
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-          />
-          <button
-            type="submit"
-            className={`t-label ${ui.btn} ${ui.fill}`}
-            disabled={sending || !text.trim()}
-          >
-            Send
-          </button>
-        </form>
+        <FreeText id={d.id} sending={sending} onSend={(t) => send({ text: t })} />
       )}
+      {!closed &&
+        d.replies &&
+        options.length > 0 &&
+        !d.answerIn &&
+        // A typed reply in place of the options (#201): quiet, so the options stay the answer.
+        (replying ? (
+          <FreeText id={d.id} sending={sending} focus onSend={(t) => send({ text: t })} />
+        ) : (
+          <button
+            type="button"
+            className={`t-small ${s.link} ${s.reply}`}
+            onClick={() => setReplying(true)}
+          >
+            Reply
+          </button>
+        ))}
       {error && (
         <p className={ui.error} role="alert">
           Not sent: {error}
