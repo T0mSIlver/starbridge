@@ -76,6 +76,24 @@ test("pair prints a link and a QR code that carry the code", async () => {
   expect(await done).toBe(0);
 });
 
+test("pair uses the hosted server unless --server or STARBRIDGE_SERVER names another", async () => {
+  const real = globalThis.fetch;
+  const asked: string[] = [];
+  globalThis.fetch = (async (url: string | URL | Request) => {
+    asked.push(String(url));
+    throw new Error("offline");
+  }) as unknown as typeof fetch;
+  try {
+    await expect(run(["pair"], testCtx())).rejects.toThrow("offline");
+    await expect(
+      run(["pair"], testCtx({ STARBRIDGE_SERVER: "https://self.example" })),
+    ).rejects.toThrow("offline");
+  } finally {
+    globalThis.fetch = real;
+  }
+  expect(asked).toEqual(["https://starbridge.run/v1/pairings", "https://self.example/v1/pairings"]);
+});
+
 test("a machine the owner removed says so and how to pair it again", async () => {
   const ctx = await paired(server);
   await server.revoke(ctx.store.machine()?.id as string);

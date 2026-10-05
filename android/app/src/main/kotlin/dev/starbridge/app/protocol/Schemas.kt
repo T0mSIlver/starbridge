@@ -225,7 +225,7 @@ data class DecisionImage(
     fun check() {
         schema(type in IMAGE_TYPES, "images.type")
         schema(width in 1..8192 && height in 1..8192, "images.size")
-        schema(data.length <= 256 * 1024, "images.data")
+        schema(data.length <= 512 * 1024, "images.data")
         b64(data, "images.data")
         alt?.let { len(it, 0, 300, "images.alt") }
     }

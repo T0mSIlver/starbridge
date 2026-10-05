@@ -1,6 +1,8 @@
 package dev.starbridge.app.ui.inbox
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.text.InlineTextContent
+import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -13,6 +15,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.Placeholder
+import androidx.compose.ui.text.PlaceholderVerticalAlign
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextDecoration
@@ -68,30 +73,38 @@ fun waited(since: Instant, now: Instant): String {
     return if (s < 3600) "${s / 60}:${"%02d".format(s % 60)}" else span(since, now)
 }
 
-/** "Waiting for you 1:12", in amber: what holds an agent up. */
+/**
+ * "Waiting for you 1:12", in amber: what holds an agent up. The icon is placed in the text, so it
+ * sits on the text's centre line at any font scale.
+ */
 @Composable
 fun WaitTag(since: Instant?, now: Instant, modifier: Modifier = Modifier) {
     val accent = StarbridgeTheme.colors.accent
-    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
-        Symbol(Sym.Waiting, size = 16.dp, tint = accent)
-        Spacer(Modifier.width(Spacing.s1))
-        Text("Waiting for you" + (since?.let { " ${waited(it, now)}" } ?: ""), style = StarbridgeTheme.type.label, color = accent, maxLines = 1)
-    }
+    val style = StarbridgeTheme.type.label
+    val icon = with(LocalDensity.current) { 16.dp.toSp() }
+    Text(
+        buildAnnotatedString {
+            appendInlineContent(ICON, " ")
+            append(" Waiting for you")
+            since?.let { append(" ${waited(it, now)}") }
+        },
+        inlineContent = mapOf(ICON to InlineTextContent(Placeholder(icon, icon, PlaceholderVerticalAlign.TextCenter)) { Symbol(Sym.Waiting, size = 16.dp, tint = accent) }),
+        style = style,
+        color = accent,
+        maxLines = 1,
+        modifier = modifier,
+    )
 }
 
-/** A question's state: neutral while its agent works on other things, amber once it waits. */
+private const val ICON = "icon"
+
+/**
+ * A question's state, shown only once its agent waits on it: a question with no state line is
+ * one the agent works around (#166).
+ */
 @Composable
 fun StateLine(decision: Decision, now: Instant, modifier: Modifier = Modifier) {
-    if (decision.waiting) {
-        WaitTag(decision.waitingSince, now, modifier)
-        return
-    }
-    val color = MaterialTheme.colorScheme.onSurfaceVariant
-    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
-        Symbol(Sym.Working, size = 16.dp, tint = color)
-        Spacer(Modifier.width(Spacing.s1))
-        Text("Working on other things", style = StarbridgeTheme.type.small, color = color, maxLines = 1)
-    }
+    if (decision.waiting) WaitTag(decision.waitingSince, now, modifier)
 }
 
 /** "orchestrate-m…r-before-cli": the middle gives way, so both ends stay readable. */
