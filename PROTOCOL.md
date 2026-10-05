@@ -314,6 +314,9 @@ shows whether its agent is blocked on it: working on other things, or waiting fo
   decision without one is `working`.
 - A flip to `waiting` notifies once: the machine posts it without `quiet`, and every other
   update `quiet`, so a repeated `waiting` or a flip back to `working` pushes nothing.
+- A decision asked already waiting is posted `quiet` and its `waiting` item pushes, so the one
+  notification says the agent waits. A device that has not seen the decision fetches it with
+  `GET /items/:id`.
 - A client that does not know the kind never lists it (lists name their kinds) and ignores
   its push.
 
