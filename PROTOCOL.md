@@ -319,6 +319,26 @@ Answering a permission from a phone is a trust decision, so:
   it answers nothing and the agent's own dialog decides.
 - **Opt-in per machine.** Nothing is routed until `starbridge permissions enable`.
 
+### On the machine
+
+`starbridge hook permission --agent claude-code` runs as Claude Code's `PermissionRequest` hook.
+It posts the prompt through the agent (or to the server itself when no agent runs) and waits
+at most `--wait`, 570 s by default, under the 600 s Claude Code gives a hook. An accepted
+answer prints the hook's decision: `allow`, with `updatedPermissions` built from Claude Code's
+own suggestions for a wider scope (destination `session`, or `localSettings` for the project),
+or `deny` with the message. Only `addRules` allow rules and `addDirectories` are offered, and
+only when their rules fit the 500-character `rule` in full; `setMode` and other suggestions stay
+at the keyboard. Before printing, the machine marks the prompt settled, then posts `settled:
+device`; without an agent it gives that post 5 s, and SIGTERM or the deadline during it still end
+the hook with no answer.
+
+The keyboard can answer first. Esc or No sends the hook SIGTERM; it posts `settled: keyboard`
+and exits. A keyboard Yes sends no signal, so `starbridge hook settle` runs on `PostToolUse` and
+`PermissionDenied`, settling the session's waiting prompt whose `inputHash` matches the call's
+input (Claude Code's `PermissionRequest` input carries no `tool_use_id`), and on `Stop` and
+`SessionEnd`, settling every waiting prompt of the session. The waiting hook then exits at
+once through the agent, or within 5 s on its own path. At the deadline the hook prints nothing,
+so the dialog decides, and posts `settled: timeout`.
 ## Local agent API
 
 `starbridge agent` runs once per machine as a user service. It holds the machine's keys and its
@@ -348,6 +368,10 @@ for an unknown route or decision, 502 when the server refused or failed (`detail
 | `POST /sessions/:id/bye` | the session ended; its session-scoped state goes |
 | `GET /sessions/:id/events?wait=<s>` | `{events: [{type, ack, line, decisionId?}]}`: what the session has not confirmed, held up to `wait` while there is nothing |
 | `POST /sessions/:id/ack` | `{acks}`: confirm events by their `ack`; others' tokens do nothing |
+| `POST /permissions` | `{hook, agent, source: {project, session, sessionTitle?, links?}, waitMs}`: post a permission prompt from the hook's input → `{id}`; 403 `disabled` until `starbridge permissions enable` |
+| `POST /permissions/:id/wait` | `{wait}`: `{output}` once an accepted answer is in, the hook's stdout, handed out once; `{settled}` when the prompt ended another way; `{}` when `wait` passed |
+| `POST /permissions/:id/settle` | `{outcome: "keyboard" \| "timeout"}` → `{settled}`: the hook's wait ended without an answer |
+| `POST /sessions/:id/permissions/settle` | `{inputHash?}` → `{settled: [ids]}`: the keyboard answered the session's waiting prompt for that input, or all of them without `inputHash` |
 
 Paths are under `/v1`. Event types today are `answer` and `default` (a decision's default time
 passed with no answer, sent only once the server confirmed no answer was waiting at that
@@ -355,5 +379,6 @@ time). A client skips types it does not know. The agent keeps answers in the CLI
 so a restart loses nothing unconfirmed.
 
 Features plug in as `Feature`s (`cli/src/agent/server.ts`): routes, the events they hand
-sessions, the acks they take, `bye`, a background loop and their part of `status`. #57 adds
-`POST /permissions` and a `permission` event, #60 `POST /runs`.
+sessions, the acks they take, `bye`, a background loop and their part of `status`. #60 adds
+`POST /runs`.
+

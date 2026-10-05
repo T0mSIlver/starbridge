@@ -506,6 +506,17 @@ How it generalizes is open.
   `starbridge-mod` (`mod/`) is the thin mod. `skill/` moved into `plugin/skills/`. The
   `/starbridge:setup` command waits for `starbridge setup` (part 3).
 
+- 2026-10-05. Permission prompts on the machine (#57): Claude Code 2.1.289's `PermissionRequest`
+  input carries no `tool_use_id` (probe log), so `hook settle` matches the call by the hash of
+  its `tool_input` on `PostToolUse` and `PermissionDenied`, and settles all of the session's
+  waiting prompts on `Stop` and `SessionEnd`. Only `addRules` allow rules and `addDirectories`
+  suggestions are offered for "this session" and "always", and only when their rules fit the
+  500-character rule text in full, since the scope applies every rule; a `setMode` suggestion (seen in the
+  probe as `acceptEdits`) changes more than the call, so it stays at the keyboard. Without an
+  agent the hook polls the server every 5 s, so a keyboard answer releases it within 5 s
+  instead of at once. The `starbridge` plugin's `hooks.json` carries the hook entries
+  (`PermissionRequest` with the 600 s timeout, the four settle events with 30 s).
+
 ## Encryption, with existing libraries
 
 - libsodium sealed boxes (`crypto_box_seal`, X25519 + XSalsa20-Poly1305): an

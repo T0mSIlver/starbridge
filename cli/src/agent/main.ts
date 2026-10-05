@@ -1,6 +1,7 @@
 import { type Ctx, parseDuration } from "../context";
 import { socketPath } from "./api";
 import { Decisions } from "./decisions";
+import { Permissions } from "./permissions";
 import { Quota } from "./quota";
 import { Agent } from "./server";
 
@@ -20,7 +21,11 @@ export function makeAgent(ctx: Ctx, opts: AgentOpts = {}): Agent {
   const intervalMs = parseDuration(opts.interval ?? file.interval ?? "5m");
   const socket = opts.socket ?? socketPath(ctx.env, ctx.store.dir);
   const quota = { providers, intervalMs, ...(codexbar ? { codexbar } : {}) };
-  const agent = new Agent(ctx, socket, (hub) => [new Decisions(hub), new Quota(hub, quota)]);
+  const agent = new Agent(ctx, socket, (hub) => [
+    new Decisions(hub),
+    new Quota(hub, quota),
+    new Permissions(hub),
+  ]);
   return agent;
 }
 
