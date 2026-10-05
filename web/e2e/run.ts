@@ -102,11 +102,14 @@ async function browser() {
   });
 }
 
+/** The landing page's link, or the sign-in screen's. */
+const SIGN_IN = /^(Sign in|Continue) with GitHub$/;
+
 async function signIn(ctx: BrowserContext): Promise<Page> {
   const page = await ctx.newPage();
   page.on("console", (m) => m.type() === "error" && console.log(`[page] ${m.text()}`));
   await page.goto(ORIGIN);
-  await page.getByRole("link", { name: "Sign in with GitHub" }).click();
+  await page.getByRole("link", { name: SIGN_IN }).click();
   return page;
 }
 
@@ -192,7 +195,7 @@ async function main() {
   step("sign in with GitHub (stub) and set up the first device");
   const page = await signIn(a);
   failPage = page;
-  await page.getByRole("button", { name: "Make keys" }).click();
+  await page.getByRole("button", { name: "Create the keys" }).click();
   await page.getByRole("heading", { name: "Save your recovery key" }).waitFor();
   const words = (await page.locator("ol li span:last-child").allTextContents()).join(" ");
   if (words.split(" ").length !== 24) throw new Error(`expected 24 words, got: ${words}`);
@@ -212,7 +215,11 @@ async function main() {
   const machineHome = join(tmp, "machine");
   const pair = cli("pair", ["pair", "--name", "devbox"], machineHome);
   const code = (await pair.waitFor(/Pairing code: (\S+)/))[1] as string;
-  await page.getByRole("link", { name: "Settings" }).click();
+  await page
+    .getByRole("navigation", { name: "Main" })
+    .getByRole("link", { name: "Settings" })
+    .click();
+  await page.getByRole("link", { name: "Add a device" }).click();
   await page.getByLabel("Pair a machine or device").fill(code);
   await page.getByRole("button", { name: "Check code" }).click();
   await page.getByRole("button", { name: "Approve" }).click();
@@ -417,12 +424,16 @@ async function main() {
   await shoot(page, "quotas");
 
   step("quota settings: remaining, clock times, workdays");
-  await page.getByRole("link", { name: "Settings" }).click();
-  await page.getByRole("heading", { name: "Quota settings" }).waitFor();
-  for (const label of ["Remaining", "Clock time", "5 days", "High contrast"])
-    await page.getByLabel(label, { exact: true }).check();
-  await shoot(page, "quota-settings");
-  await page.getByRole("link", { name: "Back to quotas" }).click();
+  await page
+    .getByRole("navigation", { name: "Main" })
+    .getByRole("link", { name: "Settings" })
+    .click();
+  await page.getByRole("heading", { name: "Settings" }).waitFor();
+  // Each radio hides inside its segment, which takes the click.
+  for (const label of ["Left", "Resets 14:20", "5", "High contrast"])
+    await page.getByLabel(label, { exact: true }).check({ force: true });
+  await shoot(page, "settings");
+  await page.getByRole("link", { name: "Quotas" }).click();
   await page.locator("article").first().waitFor();
   if (!(await page.locator("article").first().innerText()).includes("% left"))
     throw new Error("the bars do not show what is left");
@@ -451,9 +462,12 @@ async function main() {
     machineHome,
   );
   if ((await alertPush.exited) !== 0) throw new Error("quota push failed");
-  await page.getByRole("link", { name: "Settings" }).click();
-  await page.locator("li", { hasText: "e2e" }).getByLabel("Notify").check();
-  await page.getByRole("link", { name: "Back to quotas" }).click();
+  await page
+    .getByRole("navigation", { name: "Main" })
+    .getByRole("link", { name: "Settings" })
+    .click();
+  await page.getByLabel("Notify about e2e").check();
+  await page.getByRole("link", { name: "Quotas" }).click();
   await page.waitForFunction(
     () =>
       navigator.serviceWorker.ready
@@ -475,7 +489,6 @@ async function main() {
   step("add a second browser by pairing code");
   const b = await ff.newContext();
   const pageB = await signIn(b);
-  await pageB.getByRole("button", { name: "Get a pairing code" }).click();
   const codeB = (
     await pageB
       .getByTestId("pairing-code")
@@ -483,7 +496,11 @@ async function main() {
       .textContent({ timeout: 10_000 })
   )?.trim();
   if (!codeB) throw new Error("no pairing code on the second browser");
-  await page.getByRole("link", { name: "Settings" }).click();
+  await page
+    .getByRole("navigation", { name: "Main" })
+    .getByRole("link", { name: "Settings" })
+    .click();
+  await page.getByRole("link", { name: "Add a device" }).click();
   await page.getByLabel("Pair a machine or device").fill(codeB);
   await page.getByRole("button", { name: "Check code" }).click();
   await page.getByText(/read and answer as a device/).waitFor();
@@ -500,20 +517,25 @@ async function main() {
   await pageC.getByRole("heading", { name: "Inbox" }).waitFor({ timeout: 30_000 });
 
   step("revoke the second browser");
-  await page.reload();
-  await page.getByRole("heading", { name: "Devices" }).waitFor();
-  const rowB = page.locator("li", { hasText: "This device" }).first();
-  await rowB.waitFor();
-  const firstOther = page
-    .locator("li")
-    .filter({ has: page.getByRole("button", { name: "Revoke" }) })
-    .filter({ hasText: "Device ·" })
-    .first();
-  await firstOther.getByRole("button", { name: "Revoke" }).click();
-  await firstOther.getByRole("button", { name: /^Revoke .+/ }).click();
-  await page.getByText("Revoked").first().waitFor();
+  await page
+    .getByRole("navigation", { name: "Main" })
+    .getByRole("link", { name: "Settings" })
+    .click();
+  const devices = page.getByRole("region", { name: "Devices" });
+  await devices.getByText("Device · this browser").waitFor();
+  // Devices list this browser, then the others by when they joined: the second browser first.
+  const before = await devices.getByRole("button", { name: "Revoke" }).count();
+  await devices.getByRole("button", { name: "Revoke" }).first().click();
+  await page.getByRole("dialog").getByRole("button", { name: "Revoke" }).click();
+  await page.getByRole("dialog").waitFor({ state: "detached" });
+  // The list reloads from the directory once the revocation is written.
+  const revokes = devices.getByRole("button", { name: "Revoke" });
+  for (let i = 0; i < 50 && (await revokes.count()) !== before - 1; i++)
+    await page.waitForTimeout(200);
+  if ((await revokes.count()) !== before - 1)
+    throw new Error("the revoked browser is still listed");
   await pageB.reload();
-  await pageB.getByRole("link", { name: "Sign in with GitHub" }).waitFor();
+  await pageB.getByRole("link", { name: SIGN_IN }).waitFor();
   await page.emulateMedia({ colorScheme: "light" });
   await shoot(page, "devices");
 
@@ -522,7 +544,7 @@ async function main() {
   const code3 = (await linked.waitFor(/Pairing code: (\S+)/))[1] as string;
   await a.clearCookies();
   await page.goto(`${ORIGIN}/pair#${code3}`);
-  await page.getByRole("link", { name: "Sign in with GitHub" }).click();
+  await page.getByRole("link", { name: SIGN_IN }).click();
   await page.getByText("Let laptop post decisions and quotas?").waitFor({ timeout: 30_000 });
   await page.getByRole("button", { name: "Approve" }).click();
   await linked.waitFor(/Paired "laptop"/);
@@ -531,7 +553,7 @@ async function main() {
   step("sign in again: the session binds to the existing device without pairing");
   await a.clearCookies();
   await page.goto(ORIGIN);
-  await page.getByRole("link", { name: "Sign in with GitHub" }).click();
+  await page.getByRole("link", { name: SIGN_IN }).click();
   await page.getByRole("heading", { name: "Inbox" }).waitFor({ timeout: 30_000 });
   await page.getByText("Merge #19 (server) before the web PR rebases?").first().waitFor();
 

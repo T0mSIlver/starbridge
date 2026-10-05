@@ -299,6 +299,7 @@ spacing:
   s6: 24
   s8: 32
   s10: 40
+  s16: 64 # the web's page margins beside the rail
 # The Material 3 shape scale.
 radius:
   xs: 4

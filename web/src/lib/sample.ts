@@ -3,7 +3,7 @@
 import type { Member } from "@starbridge/protocol";
 import type { Quotas, Runs } from "./device";
 import shots from "./sample-shots.json";
-import type { InboxItem, PromptItem, QuotaCardData, RunItem } from "./types";
+import type { Device, InboxItem, PromptItem, QuotaCardData, RunItem } from "./types";
 
 const min = 60_000;
 const member = (name: string): Member => ({
@@ -222,7 +222,32 @@ export function sample(now = Date.now()) {
       card("mistral", window("monthly", "Monthly credits", 55, 60, 12 * 24 * h, 43200)),
     ],
   };
+  const device = (
+    id: string,
+    name: string,
+    role: "device" | "machine",
+    days: number,
+    self = false,
+  ) =>
+    ({
+      id,
+      name,
+      role,
+      boxPk: "",
+      signPk: "",
+      addedAt: at(days * 24 * 60 * min),
+      status: "active",
+      self,
+    }) as Device;
+  const devices = [
+    device("d_self", "Firefox on the MacBook", "device", 3, true),
+    device("d_px11", "Pixel 11 Pro", "device", 20),
+    device("d_px9", "Pixel 9", "device", 23),
+    device("m_devbox", "dev box", "machine", 30),
+    device("m_mini", "mac mini", "machine", 30),
+  ];
   return {
+    devices,
     inbox: { items, rejected: [] },
     prompts,
     runs: { items: runs, rejected: [] } as Runs,

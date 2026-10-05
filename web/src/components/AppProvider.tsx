@@ -10,7 +10,7 @@ import {
   type QuotaSettings,
   saveSettings,
 } from "@/lib/quotaSettings";
-import type { InboxItem, PromptItem, PromptReply, Reply } from "@/lib/types";
+import type { Device, InboxItem, PromptItem, PromptReply, Reply } from "@/lib/types";
 
 // The protocol code and libsodium load here, after the first paint.
 const load = () => import("@/lib/device");
@@ -37,6 +37,8 @@ export type Store = {
   loadPromptLog: () => Promise<void>;
   /** A directory member's name, for "Answered from Pixel". */
   deviceName: (id: string) => string;
+  /** The mockups' devices, on /sample only (SampleProvider), where no device is ready. */
+  sampleDevices?: Device[];
 };
 
 export const StoreContext = createContext<Store | null>(null);

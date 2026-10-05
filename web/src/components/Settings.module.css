@@ -1,0 +1,238 @@
+/* Settings on the web (direction A): sections of rows in bordered boxes. */
+
+.page {
+  display: grid;
+  gap: var(--s10);
+  align-content: start;
+  max-width: calc(var(--size-content) + 2 * var(--s16));
+  padding: var(--s10) var(--s16);
+}
+
+.section {
+  display: grid;
+  gap: var(--s3);
+}
+
+.box {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.box > :not(:last-child) {
+  border-bottom: 1px solid var(--line);
+}
+
+.row,
+.device,
+.provider,
+.linkRow {
+  display: flex;
+  align-items: center;
+  gap: var(--s4);
+  min-height: var(--size-tap);
+  padding: var(--s3) var(--s4);
+}
+
+.rowText {
+  flex: 1;
+  min-width: 0;
+}
+
+.sub,
+.dim {
+  color: var(--fg2);
+}
+
+.muted,
+.provider .dim {
+  color: var(--fg3);
+}
+
+.provider {
+  gap: var(--s3);
+  padding-block: var(--s2h);
+}
+
+.dragging {
+  opacity: 0.5;
+}
+
+.handle {
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--fg3);
+  cursor: grab;
+}
+
+.providerName {
+  flex: 1;
+  min-width: 0;
+}
+
+.notify {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  color: var(--fg2);
+}
+
+.segmented {
+  display: inline-flex;
+  flex: none;
+}
+
+.segment {
+  display: inline-flex;
+  align-items: center;
+  height: var(--s8);
+  padding: 0 var(--s3);
+  margin-left: -1px;
+  border: 1px solid var(--line-strong);
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.segment:first-child {
+  margin-left: 0;
+  border-radius: var(--radius-dense) 0 0 var(--radius-dense);
+}
+
+.segment:last-child {
+  border-radius: 0 var(--radius-dense) var(--radius-dense) 0;
+}
+
+.segment:has(:checked) {
+  background: var(--surface2);
+}
+
+.segment:has(:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* A switch: 32 by 18, its knob on the right and the track in `fg` when on. */
+.switch {
+  appearance: none;
+  position: relative;
+  flex: none;
+  width: var(--s8);
+  height: 18px;
+  border-radius: var(--radius-pill);
+  background: var(--surface2);
+  cursor: pointer;
+  transition: background var(--t-fast);
+}
+
+.switch::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--fg2);
+  transition:
+    left var(--t-fast),
+    background var(--t-fast);
+}
+
+.switch:checked {
+  background: var(--fg);
+}
+
+.switch:checked::after {
+  left: 16px;
+  background: var(--bg);
+}
+
+.switch:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.device {
+  gap: var(--s3);
+}
+
+.deviceIcon {
+  display: grid;
+  place-items: center;
+  width: var(--s8);
+  height: var(--s8);
+  border-radius: var(--radius-dense);
+  background: var(--surface2);
+}
+
+.revokeSpace {
+  width: 84px;
+}
+
+.foot {
+  padding: var(--s3) var(--s4);
+}
+
+.linkRow {
+  color: inherit;
+  text-decoration: none;
+  justify-content: space-between;
+}
+
+.linkRow:hover {
+  background: color-mix(in srgb, var(--surface2) 50%, transparent);
+}
+
+.dialog {
+  margin: auto;
+  width: min(440px, calc(100vw - 2 * var(--s4)));
+  padding: var(--s6);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--fg);
+  box-shadow: 0 24px 64px var(--scrim);
+}
+
+.dialog[open] {
+  display: grid;
+  gap: var(--s3);
+}
+
+.dialog::backdrop {
+  background: var(--scrim);
+}
+
+.dialogActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--s2);
+  margin-top: var(--s2);
+}
+
+.error {
+  color: var(--bad);
+}
+
+@media (max-width: 599px) {
+  .page {
+    padding: var(--s6) var(--s4) var(--s8);
+    gap: var(--s8);
+  }
+
+  .title {
+    display: none;
+  }
+
+  .row {
+    flex-wrap: wrap;
+  }
+
+  .revokeSpace {
+    display: none;
+  }
+}
