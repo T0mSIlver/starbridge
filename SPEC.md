@@ -812,6 +812,9 @@ How it generalizes is open.
   the phone's language ("Oct 7" in English, "7 oct." in French) from Android's own patterns, where
   it used fixed English ones; words such as "tomorrow" stay English, as the rest of the UI.
 
+- 2026-10-05. `starbridge pair` pairs with https://starbridge.run unless `--server` or
+  `STARBRIDGE_SERVER` names a self-hosted server (#154), as `setup` already did.
+
 ## Encryption, with existing libraries
 
 - libsodium sealed boxes (`crypto_box_seal`, X25519 + XSalsa20-Poly1305): an
