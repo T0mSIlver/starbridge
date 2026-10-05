@@ -722,7 +722,8 @@ How it generalizes is open.
 - 2026-10-05. Runs with no news (#190). A run that reports no progress shows an indeterminate
   bar while it runs. A lost run (no update for 3 minutes) shows no time in its meta row: a run
   killed before its first heartbeat has its last news at its start, so the only duration known
-  would read "0 s". Its line "No news for 3 min 37 s" ticks each second, and it shows no progress.
+  would read "0 s". Its line "Lost, no news for 3 min 37 s" ticks each second, and it shows no
+  progress (the word "Lost" since #249).
 - 2026-10-05. Android notification channels and order (#196). The channels sit in two groups,
   "Needs you" (Decisions, Permission prompts, Join requests) and "Activity" (Runs, Quotas), instead
   of Android's "Other". Each notification carries a sort key, questions and prompts first, then
@@ -1038,6 +1039,13 @@ How it generalizes is open.
   update a skill that differs. It offers the Starbridge Pi package when `pi` is on the PATH
   (`pi install git:github.com/T0mSIlver/starbridge`), unless Pi's settings list it already.
   Each asks first, `--yes` takes the defaults (install), and `--no-plugin` skips all three.
+- 2026-10-06. A lost run says so (#249). The run killed with -9 in the fix check of #59 was lost
+  on the phone already: its card had no time and no bar, as #190 decided, but its only line,
+  "No news for 12 min 59 s", read as a quiet live run. Both clients now write "Lost, no news for
+  12 min 59 s". Nothing keeps a dead run alive: a run's heartbeat lives in the `starbridge run`
+  process, so after a kill the server keeps its last update, without an exit, and each client
+  turns it lost 3 minutes after that update with no server-side expiry, since the server cannot
+  read a sealed run.
   `status` reports both, and `uninstall` removes the skill folder (only when it holds the
   Starbridge skill) and the Pi package. The docs drop the curl step for Codex.
 - 2026-10-05. A blocked question shows by its look, not a state line (#191, owner's pick of

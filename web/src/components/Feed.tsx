@@ -262,7 +262,7 @@ function runOutcome(r: RunItem["run"], now: number): { text: string; tone: strin
   if (state === "passed") return { text: `Passed in ${took}`, tone: s.ok };
   if (state === "failed")
     return { text: `Failed, exit ${r.exit?.code}, after ${took}`, tone: s.bad };
-  return { text: `No news for ${duration(now - Date.parse(r.at))}`, tone: s.dim };
+  return { text: `Lost, no news for ${duration(now - Date.parse(r.at))}`, tone: s.dim };
 }
 
 /** A command an agent runs under `starbridge run`: what, why, and how far along. */
