@@ -44,13 +44,15 @@ export async function uninstall(sys: Sys, opts: UninstallOpts): Promise<number> 
       project: "starbridge",
       session: "",
     };
+    // The id and the hint `ask` prints are for agents, not for someone uninstalling.
+    const quiet = { ...ctx, out: () => {} };
     try {
       await withAgent(
-        ctx,
-        (agent) => askVia(ctx, agent, input, {}),
-        () => ask(ctx, input, {}),
+        quiet,
+        (agent) => askVia(quiet, agent, input, {}),
+        () => ask(quiet, input, {}),
       );
-      ctx.out(`Asked your devices to revoke "${machine.name}" (the id above).`);
+      ctx.out(`Posted "${input.question}" to your devices.`);
     } catch (e) {
       ctx.out(`Could not post the revoke reminder: ${(e as Error).message}`);
     }
