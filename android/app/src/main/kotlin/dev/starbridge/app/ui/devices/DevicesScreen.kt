@@ -62,6 +62,7 @@ import dev.starbridge.app.ui.groupGap
 import dev.starbridge.app.ui.groupShape
 import dev.starbridge.app.ui.pairing.QrWays
 import dev.starbridge.app.ui.pairing.rememberScanner
+import dev.starbridge.app.ui.day
 import dev.starbridge.app.ui.pairing.ShowingQr
 import dev.starbridge.app.ui.listPadding
 import dev.starbridge.app.ui.theme.Sizes
@@ -269,7 +270,7 @@ private fun MemberRow(member: Member, now: Instant, shape: Shape, onRevoke: () -
             Spacer(Modifier.width(Spacing.s4))
             Column(Modifier.weight(1f)) {
                 Text(member.name, style = StarbridgeTheme.type.body, color = scheme.onSurface)
-                val added = "added ${date(member.addedAt)}"
+                val added = "added ${day(member.addedAt)}"
                 Text(
                     when {
                         member.current -> "This phone"
@@ -289,5 +290,4 @@ private fun MemberRow(member: Member, now: Instant, shape: Shape, onRevoke: () -
     }
 }
 
-private fun date(at: Instant) = java.time.format.DateTimeFormatter.ofPattern("d MMM", java.util.Locale.ENGLISH).withZone(java.time.ZoneId.systemDefault()).format(at)
 
