@@ -607,6 +607,13 @@ How it generalizes is open.
   code (stored columns in `server/src/db.ts`, retention in `server/src/limits.ts`, logs and
   backups in `deploy/`); the operator's legal entity, jurisdiction, rights statement, liability
   wording and account-deletion process stay marked TODO until the owner decides them.
+- 2026-10-05. Legal pages filled in (owner): the operator is Tom Vaucourt as a non-professional
+  individual in France, with the host's address (Hetzner) instead of his own, as LCEN art. 6
+  allows. Current features stay free, 60 days' notice before any price; 30 days' notice before a
+  shutdown; suspension appeals to abuse@ within 30 days, answered within 14; French law and
+  courts, consumers keep their own; no fixed log age (logs hold no IPs and rotate by size);
+  account deletion confirmed by a code in a public gist on the GitHub account, done within 30
+  days; GDPR rights with CNIL as the authority.
 
 - 2026-10-05. Platforms (owner). The web app ships first everywhere it can: installed to the home
   screen on iOS (Web Push works for home-screen web apps since iOS 16.4) and as an installed app
