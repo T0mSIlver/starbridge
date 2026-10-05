@@ -284,7 +284,10 @@ function closedLine(p: Past): string {
   return `${p.outcome}${by} · ${at}`;
 }
 
-/** On a phone's row: Allow and Deny, or the question's options. */
+/**
+ * On a phone's row: Allow and Deny, or the question's options when the Answer buttons setting
+ * allows them (#138). Prompts keep theirs: their agent always waits.
+ */
 function RowActions({
   entry,
   onPrompt,
@@ -301,6 +304,7 @@ function RowActions({
   ) => Promise<void>;
 }) {
   const [busy, setBusy] = useState(false);
+  const [when] = usePref("rowAnswers");
   const run = (f: () => Promise<void>) => async () => {
     setBusy(true);
     try {
@@ -335,6 +339,7 @@ function RowActions({
     );
   }
   if (entry.type !== "question" || entry.item.decision.answerIn) return null;
+  if (when === "never" || (when === "waiting" && !entry.item.waitingSince)) return null;
   const d = entry.item.decision;
   const options = ordered(d);
   if (options.length === 0) return null;

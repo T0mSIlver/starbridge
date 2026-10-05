@@ -6,9 +6,16 @@ export type Prefs = {
   groupByMachine: boolean;
   historyOpen: boolean;
   theme: "system" | "light" | "dark";
+  /** When a question's row carries its answer buttons on a phone (#138). */
+  rowAnswers: "always" | "waiting" | "never";
 };
 
-const DEFAULTS: Prefs = { groupByMachine: false, historyOpen: false, theme: "system" };
+const DEFAULTS: Prefs = {
+  groupByMachine: false,
+  historyOpen: false,
+  theme: "system",
+  rowAnswers: "always",
+};
 
 import { PREFS_KEY as KEY } from "./themeScript";
 
