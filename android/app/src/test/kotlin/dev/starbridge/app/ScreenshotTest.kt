@@ -22,6 +22,7 @@ import dev.starbridge.app.ui.pairing.JoinActions
 import dev.starbridge.app.ui.pairing.JoinPrompt
 import dev.starbridge.app.ui.devices.DevicesScreen
 import dev.starbridge.app.ui.inbox.DecisionActions
+import dev.starbridge.app.ui.inbox.FindScreen
 import dev.starbridge.app.ui.inbox.InboxScreen
 import dev.starbridge.app.ui.inbox.PromptActions
 import dev.starbridge.app.data.QuotaSettings
@@ -106,6 +107,11 @@ class ScreenshotTest(private val dark: Boolean) {
 
     // The mockup's inbox: the run, the prompt, the question an agent waits on, then the others.
     @Test fun inbox() = capture("inbox") { Phone(Tab.Inbox, 4) { Inbox() } }
+
+    // Find over the inbox: open matches under "Needs you", answered ones under "History", the words marked.
+    @Test fun find() = capture("find") { Phone(null, 0) { FindScreen(fake.decisions, fake.prompts, now, {}, {}, {}, initial = "starbridge") } }
+
+    @Test fun findNothing() = capture("find-nothing") { Phone(null, 0) { FindScreen(fake.decisions, fake.prompts, now, {}, {}, {}, initial = "kubernetes") } }
 
     // The landing page's hero phone: no prompt, so the question with images shows (#210).
     @Test fun inboxLanding() = capture("inbox-landing") { Phone(Tab.Inbox, 3) { InboxScreen(fake.decisions, now, decisionActions, runs = fake.runs) } }

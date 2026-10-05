@@ -608,6 +608,8 @@ The PNG and ICO files are rendered from the SVG; redraw them when the mark
 changes.
 
 The product name has no wordmark: it is "Starbridge" in the sans, weight 500.
+In the lockup, the name's baseline sits on the mark's bottom edge, the planet's ground line, with
+a gap of 0.4 of the mark (Android: `ui/Lockup.kt`).
 
 ## Roles
 

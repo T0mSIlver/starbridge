@@ -49,6 +49,7 @@ import dev.starbridge.app.ui.settings.SettingsActions
 import dev.starbridge.app.ui.devices.AddDeviceScreen
 import dev.starbridge.app.ui.devices.DevicesViewModel
 import dev.starbridge.app.ui.inbox.DecisionActions
+import dev.starbridge.app.ui.inbox.FindScreen
 import dev.starbridge.app.ui.inbox.InboxScreen
 import dev.starbridge.app.ui.inbox.InboxViewModel
 import dev.starbridge.app.ui.inbox.Replies
@@ -69,6 +70,7 @@ import java.time.Instant
 @Serializable data object InboxKey : NavKey
 @Serializable data class DecisionKey(val id: String) : NavKey
 @Serializable data class PromptKey(val id: String) : NavKey
+@Serializable data object FindKey : NavKey
 @Serializable data object QuotasKey : NavKey
 @Serializable data object SettingsKey : NavKey
 @Serializable data object DevicesKey : NavKey
@@ -211,7 +213,8 @@ fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> U
         val motion = fadeThrough()
         Scaffold(
             snackbarHost = { SnackbarHost(host) },
-            bottomBar = { if (suite == NavigationSuiteType.None) BottomBar(tabOf(current), openDecisions, go) },
+            // Find covers the screen, as Material's search view does on phones.
+            bottomBar = { if (suite == NavigationSuiteType.None && FindKey !in backStack) BottomBar(tabOf(current), openDecisions, go) },
             containerColor = MaterialTheme.colorScheme.surface,
         ) { padding ->
             NavDisplay(
@@ -248,6 +251,20 @@ fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> U
                             runs = runs,
                             view = view,
                             onView = vm::setView,
+                            onFind = { backStack.add(FindKey) },
+                        )
+                    }
+                    entry<FindKey> {
+                        val vm: InboxViewModel = hiltViewModel()
+                        val decisions by vm.decisions.collectAsStateWithLifecycle()
+                        val prompts by vm.prompts.collectAsStateWithLifecycle()
+                        FindScreen(
+                            decisions,
+                            prompts,
+                            now,
+                            openDecision = { open(DecisionKey(it)) },
+                            openPrompt = { open(PromptKey(it)) },
+                            onBack = { backStack.removeAt(backStack.lastIndex) },
                         )
                     }
                     entry<DecisionKey>(metadata = BottomSheetSceneStrategy.sheet) { key ->
