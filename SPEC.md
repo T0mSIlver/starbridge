@@ -892,6 +892,12 @@ How it generalizes is open.
 - 2026-10-05. `starbridge pair` pairs with https://starbridge.run unless `--server` or
   `STARBRIDGE_SERVER` names a self-hosted server (#154), as `setup` already did.
 
+- 2026-10-05. The `AskUserQuestion` hook answers instead of denying (#200). Claude Code 2.1.289
+  shows every `PreToolUse` deny as a red "hook error", which reads as Starbridge failing. The
+  hook now allows the call with `updatedInput.answers`, one answer per question saying to ask
+  through `starbridge ask`; Claude Code shows that as an answered question and opens no dialog
+  (checked in a real session). Input it cannot read is still denied.
+
 ## Encryption, with existing libraries
 
 - libsodium sealed boxes (`crypto_box_seal`, X25519 + XSalsa20-Poly1305): an
