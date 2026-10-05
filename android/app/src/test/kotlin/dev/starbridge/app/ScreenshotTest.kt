@@ -41,6 +41,7 @@ import dev.starbridge.app.ui.inbox.DecisionSheet
 import dev.starbridge.app.data.Colours
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.onNodeWithContentDescription
 import dev.starbridge.app.ui.quotas.QuotasScreen
 import dev.starbridge.app.ui.setup.SetupActions
 import dev.starbridge.app.ui.setup.SetupScreen
@@ -112,6 +113,13 @@ class ScreenshotTest(private val dark: Boolean) {
     // Answer buttons only on the question the agent waits on (#138).
     @Test fun inboxButtonsWhenWaiting() = capture("inbox-buttons-when-waiting") { Phone(Tab.Inbox, 4) { Inbox(InboxView(buttons = CardButtons.WhenWaiting)) } }
 
+    // A phone screenshot and a long option: the card crops the image to its top and stacks the
+    // options, with the setting at Always (#170, #181).
+    @Config(qualifiers = "w412dp-h1400dp-xxhdpi")
+    @Test fun inboxImages() = capture("inbox-images") {
+        Phone(Tab.Inbox, 2) { InboxScreen(listOf(fake.screenshot) + fake.decisions.filter { it.id == "d3" }, now, decisionActions) }
+    }
+
     @Test fun inboxEmpty() = capture("inbox-empty") { Phone(Tab.Inbox, 0) { InboxScreen(fake.decisions.filterNot { it.isOpen(now) }, now, decisionActions, promptActions = promptActions) } }
 
     // Runs as they end, and text at 200%.
@@ -132,6 +140,11 @@ class ScreenshotTest(private val dark: Boolean) {
     @Test fun sheetWaiting() = capture("sheet-waiting") { QuestionSheet(fake.decisions.first { it.id == "d2" }) }
 
     @Test fun sheetPick() = capture("sheet-pick") { QuestionSheet(fake.decisions.first { it.id == "d3" }) }
+
+    @Test fun sheetScreenshot() = capture("sheet-screenshot") { QuestionSheet(fake.screenshot) }
+
+    // Full screen, opened from the sheet's image (#170).
+    @Test fun imageViewer() = capture("image-viewer", before = { compose.onNodeWithContentDescription("Inbox, dark").performClick() }) { QuestionSheet(fake.screenshot) }
 
     @Test fun sheetAnswerIn() = capture("sheet-answer-in") { QuestionSheet(fake.answerIn) }
 

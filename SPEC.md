@@ -313,7 +313,7 @@ How it generalizes is open.
   co-signs its first entry. A pairing code
   carries an 80-bit secret the server never sees, which keys an HMAC on both
   pairing messages. The recovery seed shows as 24 BIP-39 words
-  (`@scure/bip39`, audited, MIT).
+  (`@scure/bip39`, audited, MIT); 12 for accounts made since 2026-10-05 (below).
 
 - 2026-10-04. Server (#5): self-hosters sign in with `OWNER_TOKEN` (`POST /v1/auth/owner`); the
   Android app gets its GitHub session through a `starbridge://auth#session=` redirect. A session
@@ -678,6 +678,24 @@ How it generalizes is open.
   applies to question rows on a phone width; wide screens never carry them, since the open
   question sits beside the list. Permission prompts keep Allow and Deny on their rows, since
   their agent always waits.
+- 2026-10-05. A question's state and its answer buttons, after the launch test (#166, #181;
+  agreed between the web and Android sessions). "Working on other things" read as the agent's
+  words, so a question its agent works around shows no state line at all; one its agent waits on
+  shows "Waiting for you 1:12" in amber, its icon on the text's centre line, on the card or row,
+  in the detail and in the notification, where it sits outside the agent's words (Android: in the
+  header after the machine and repo). Permission prompts keep the same tag. Answer buttons follow
+  only the setting, on both clients: every question with options shows them on its card or phone
+  row under Always, the ones whose agent waits under When the agent waits, none under Never.
+  Images and long labels no longer hide them; more than two options, or a label over 18
+  characters, stack. A question answered on another page (`answerIn`) or in free text has no
+  buttons, and opens its detail.
+- 2026-10-05. Images on Android (#170). A card crops its images to the card's width from the
+  top, at most 160 dp tall, so a phone screenshot no longer shows as a thumbnail in an empty band;
+  the sheet shows each in its own shape. A tap opens a full-screen viewer on black: pinch or
+  double-tap to zoom, drag to pan, swipe between images, decoded up to 4096 px. Decisions saved
+  by an app from before images (#62) kept bodies without them, so the app reads its open
+  decisions again from the server once. The notification puts the agent's Markdown code in mono,
+  without backticks.
 - 2026-10-05. Quota settings and notifications, as built (#115). Settings live on each device
   (web `localStorage`, Android preferences) and sit on a Quota settings page opened from the
   Quotas screen: bars show used or remaining, reset times relative or as a clock time
@@ -795,6 +813,21 @@ How it generalizes is open.
   and pi's `AGENTS.override.md` replaces the repo's `AGENTS.md`, so it only suits repos without
   one.
 
+- 2026-10-05. 12 recovery words for new accounts (owner ruling on #157). The recovery seed is now
+  16 bytes, shown as 12 BIP-39 words, instead of 32 bytes as 24. 128 bits of entropy is what
+  Ed25519 itself offers (about 2^126 work to break a key), so 24 words added length without
+  adding security. Someone holding the recovery public key, the server included, would have to
+  try 2^128 seeds offline, or 2^108 per account across a million accounts. The seed is random,
+  not chosen by a person, so it needs no slow key derivation such as Argon2; BLAKE2b-256 of
+  "starbridge/v1/recovery-seed", NUL, the seed, stretches it to the 32 bytes Ed25519 takes, as
+  `pairingKey` does for the pairing secret. Accounts made earlier keep their 24 words, whose
+  32-byte seed stays the Ed25519 seed; the word count tells the two apart, and nothing on the
+  server changes. Fewer words was rejected: one word carries 11 bits, and 9 words (99 bits) is
+  no BIP-39 length. The entry says to separate words with spaces, and accepts anything that is
+  not a letter as a separator (dashes, commas, line breaks, numbering); it names the first word
+  that is not on the list, and a failed checksum (a wrong list word, or two swapped) says to
+  check each word and the order.
+
 - 2026-10-05. Quota order, one rule on both clients (#159, #162, owner). Hidden providers drop out;
   the rest go by provider in the order set in Quota settings (providers not in it follow in the
   uploader's order), each provider's windows in the uploader's order. A "Running out first"
@@ -822,6 +855,8 @@ How it generalizes is open.
   rate-limited to 6 a minute per account, since each runs CodexBar on every machine. The web page
   has no refresh gesture and gets none; it polls quotas every minute, and every 3 s for its first
   30 s while it holds none, so a browser that just joined shows the re-upload within seconds.
+- 2026-10-05. `starbridge pair` pairs with https://starbridge.run unless `--server` or
+  `STARBRIDGE_SERVER` names a self-hosted server (#154), as `setup` already did.
 
 ## Encryption, with existing libraries
 

@@ -106,8 +106,16 @@ to tap Compare digits. Without the approval's MAC the joining device trusts no d
 
 ## Recovery
 
-The first device shows a 32-byte recovery seed once, as 24 BIP-39 words. When every device is
-lost, a new device turns the words into the recovery key pair, verifies the chain with that
+The first device shows a 16-byte recovery seed once, as 12 BIP-39 words. The recovery key pair
+is `crypto_sign_seed_keypair` of BLAKE2b-256 of "starbridge/v1/recovery-seed", NUL, the seed
+(`recoveryKeyPair`). Accounts made before 2026-10-05 hold a 32-byte seed shown as 24 words, which
+is the Ed25519 seed itself; the word count tells the two apart.
+
+Typed words are split on anything that is not a letter, so spaces, dashes, commas, line breaks and
+numbering all work (`splitRecoveryWords`). `recoveryWordsProblem` names the first word missing
+from the BIP-39 list, else a count other than 12 or 24, else a failed checksum.
+
+When every device is lost, a new device turns the words into the recovery key pair, verifies the chain with that
 public key (entry 0's `recoverySig` must check against it, which a copied public key cannot
 fake), and signs its own `add` entry with it.
 

@@ -149,6 +149,24 @@ class Fake(private val now: Instant) {
         answerIn = Link("https://claude.ai/artifact/2ig2MyNRD484b7oZea5vkZ"),
     )
 
+    /**
+     * The owner's launch test (#170, #181): a 1236x2676 phone screenshot, as `ask --image` sends
+     * it, and an option too long to sit beside the other.
+     */
+    val screenshot = Decision(
+        id = "d8",
+        question = "Does this inbox screenshot look right?",
+        context = "Rendered by Roborazzi from `ScreenshotTest`.",
+        options = listOf("Looks right", "Something is missing"),
+        recommended = "Looks right",
+        default = null,
+        defaultAt = null,
+        source = Source("dev box", "sb-test", "s8", machineKind = "server"),
+        createdAt = ago(11),
+        agent = "claude-code",
+        images = listOf(Image(toB64(javaClass.getResourceAsStream("/fake/phone-inbox.png")!!.readBytes()), 1236, 2676, alt = "Inbox, dark")),
+    )
+
     /** No options: the sheet takes a reply. */
     val freeText = Decision(
         id = "d7",

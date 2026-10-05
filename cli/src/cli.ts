@@ -38,8 +38,10 @@ const HELP = `starbridge: post decisions to your devices, report runs, upload qu
       Remove the agent service, the Claude Code plugins and this binary, and ask your devices to revoke this
       machine. Asks before it deletes the keys and state (--purge: without asking). CodexBar stays.
 
-  starbridge pair --server <url> [--name <name>] [--force]
+  starbridge pair [--server <url>] [--name <name>] [--force]
       Make this machine's keys and print a pairing code to type on a device.
+      --server <url>          a self-hosted server (default: $STARBRIDGE_SERVER, else
+                              https://starbridge.run)
 
   starbridge ask --question <text> [--option <text>]... [options]
       Post a decision to every paired device and print its id. Devices show it as
