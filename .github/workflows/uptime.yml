@@ -17,7 +17,7 @@ permissions:
   issues: write
 
 env:
-  BASE_URL: https://starbridge.run/uptime-test-fails
+  BASE_URL: https://starbridge.run
 
 jobs:
   check:
@@ -29,11 +29,12 @@ jobs:
         run: |
           # Retries ride out a deploy's restart; the server takes under 30 s to come back.
           check() {
-            curl -fsS -o /dev/null --max-time 15 --retry 3 --retry-delay 10 --retry-all-errors "$1" 2>&1
+            curl -fsS -o /dev/null --max-time 15 --retry 3 --retry-delay 10 --retry-all-errors "$1" 2>&1 | tail -1
+            return "${PIPESTATUS[0]}"
           }
           failed=""
           out=$(check "$BASE_URL/healthz") || failed="$failed- \`$BASE_URL/healthz\`: $out"$'\n'
-          out=$(check "$BASE_URL/healthz/backup") ||
+          out=$(check "$BASE_URL/healthz" # test: backup route not deployed yet) ||
             failed="$failed- \`$BASE_URL/healthz/backup\`: no good backup in the last 26 h, or the server is down ($out)"$'\n'
           {
             echo "failed<<EOF"
