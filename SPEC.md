@@ -655,6 +655,17 @@ How it generalizes is open.
   shows a flip to waiting as the question's notification again, with "Waiting for you". The
   rail's Find filters the inbox by its words; the rail counts paired machines, since the page
   cannot tell which are connected.
+- 2026-10-05. Design v2 on the web: settings, first run and landing page, as built. Settings is one
+  page: quota display and warnings, providers (drag or arrow keys to reorder, Notify, Show),
+  devices with Revoke behind a dialog, Colours (System, Light, Dark, applied before the first
+  paint), and a link to "How to tell your agents". Providers get a Notify switch, not the
+  mockup's "Warn at 90%" field, since #115 fixed the thresholds; device rows show the date
+  added, since the page has no last-seen data. Add a device opens on a QR code for the new
+  phone; the `starbridge pair` code field sits below it. A browser joining an account shows its
+  own QR code (a `/pair#code` link that a signed-in device opens), with "Can't scan? Compare
+  digits" and the recovery key as fallbacks. The landing page's browser shot is the real app at
+  `/sample`; its phone shots are the round 4 Android mockups until Android's design v2 ships,
+  when Roborazzi shots replace them.
 - 2026-10-05. Answer buttons on inbox rows, web (#138). Settings, Inbox: "Answer buttons on
   questions", Always (the default), When the agent waits, or Never, remembered on the device. It
   applies to question rows on a phone width; wide screens never carry them, since the open

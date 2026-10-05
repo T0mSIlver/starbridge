@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { AGENTS_GUIDE } from "@/lib/links";
 import { applyTheme, type Prefs, usePref } from "@/lib/prefs";
 import { providerOrder, type QuotaSettings } from "@/lib/quotaSettings";
 import type { Device } from "@/lib/types";
@@ -13,8 +14,6 @@ import ui from "./ui.module.css";
 
 const load = () => import("@/lib/device");
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
-export const AGENTS_GUIDE =
-  "https://github.com/T0mSIlver/starbridge/blob/main/docs/tell-your-agents.md";
 
 export function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (

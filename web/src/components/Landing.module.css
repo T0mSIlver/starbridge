@@ -1,17 +1,29 @@
+/* The landing page (design v2, direction B: product showcase), `size.page` wide. */
+
 .page {
+  --gutter: var(--s4);
+  overflow-x: clip;
+  padding: 0 var(--gutter);
+}
+
+.page > * {
   max-width: var(--size-page);
-  margin: 0 auto;
-  padding: var(--s4) var(--s4) var(--s10);
-  display: flex;
-  flex-direction: column;
-  gap: var(--s10);
+  margin-inline: auto;
+}
+
+.dim {
+  color: var(--fg2);
+}
+
+.faint {
+  color: var(--fg3);
 }
 
 .top {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  min-height: var(--size-tap);
+  gap: var(--s8);
+  height: var(--s18);
 }
 
 .brand {
@@ -20,127 +32,447 @@
   gap: var(--s2);
 }
 
-.link {
-  color: var(--fg2);
-  text-underline-offset: 3px;
+.nav {
+  display: flex;
+  gap: var(--s8);
+  margin: 0 auto;
 }
 
-.link:hover {
+.nav a {
+  color: var(--fg2);
+  text-decoration: none;
+}
+
+.nav a:hover {
   color: var(--fg);
 }
 
-.hero {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s4);
-  max-width: var(--size-content);
+.signIn {
+  height: calc(var(--s8) + var(--s1));
+  padding: 0 var(--s4);
 }
 
-.lede {
-  color: var(--fg2);
+.hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: center;
+  padding-top: var(--s30);
+  text-align: center;
+}
+
+.lead {
+  max-width: var(--size-lead);
+  margin-top: var(--s6);
 }
 
 .actions {
   display: flex;
   flex-wrap: wrap;
+  justify-content: center;
   gap: var(--s3);
-  margin-top: var(--s2);
+  margin: var(--s10) 0 var(--s5);
+}
+
+/* The web inbox in a browser window, the Android inbox overlapping it on the right. */
+.page > .showcase {
+  position: relative;
+  max-width: var(--size-showcase);
+  height: calc(var(--size-browser) * 5 / 6);
+  margin-top: var(--s24);
+}
+
+.glow {
+  position: absolute;
+  left: 24%;
+  top: 13%;
+  width: 65%;
+  height: 71%;
+  background: radial-gradient(closest-side, var(--accent-soft), transparent);
+}
+
+.browser {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: var(--size-browser);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--surface);
+  box-shadow:
+    0 0 0 1px var(--line-strong),
+    0 40px 120px var(--scrim);
+}
+
+.chrome {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  height: var(--s10);
+  padding: 0 var(--s4);
+  background: var(--surface2);
+}
+
+.chrome i {
+  width: var(--s2);
+  height: var(--s2);
+  border-radius: 50%;
+  background: var(--fg3);
+}
+
+.chrome span {
+  margin: 0 auto;
+  padding: 2px var(--s24);
+  border-radius: var(--radius-dense);
+  background: var(--bg);
+  color: var(--fg2);
+}
+
+.browserShot {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.heroPhone {
+  position: absolute;
+  right: 0;
+  top: calc(var(--s40) + var(--s10));
+  width: var(--size-shot);
+}
+
+.phone {
+  padding: var(--s2);
+  border-radius: calc(var(--radius-phone) + var(--s2));
+  background: #050505;
+  box-shadow: 0 0 0 1px var(--line-strong);
+}
+
+.phoneScreen {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: var(--radius-phone);
 }
 
 .features {
   display: grid;
-  gap: var(--s10);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--s8);
+  margin-top: var(--s16);
 }
 
 .feature {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s3);
-}
-
-.shot {
-  display: block;
-  width: 100%;
-  height: auto;
-  margin-top: var(--s2);
-  border-radius: var(--radius-xl);
-  background: var(--bg);
-  outline: 1px solid var(--line);
-}
-
-.block {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s3);
-  max-width: var(--size-content);
-}
-
-.install {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s3);
-}
-
-.install dt {
-  color: var(--fg2);
-  margin-bottom: var(--s1);
-}
-
-.cmd {
-  display: block;
-  padding: var(--s3) var(--s4);
-  border-radius: var(--radius-lg);
-  background: var(--surface);
-  overflow-x: auto;
-  white-space: pre;
-  user-select: all;
-}
-
-.foot {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  gap: var(--s3);
-  padding-top: var(--s6);
+  padding-top: var(--s5);
   border-top: 1px solid var(--line);
 }
 
-.textButton {
-  border: none;
-  background: none;
-  color: var(--fg2);
-  text-decoration: underline;
-  text-underline-offset: 3px;
+.feature h3 {
+  font-weight: 500;
 }
 
+.feature p {
+  margin-top: var(--s1h);
+}
+
+.section {
+  display: grid;
+  grid-template-columns: calc(var(--s40) * 2.5) minmax(0, 1fr);
+  gap: var(--s20);
+  align-items: center;
+  margin-top: var(--s40);
+}
+
+.flip {
+  grid-template-columns: minmax(0, 1fr) calc(var(--s40) * 2.5);
+}
+
+.flip .sectionText {
+  order: 2;
+}
+
+.sectionText p {
+  margin-top: var(--s4);
+}
+
+.box {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  place-items: center;
+  padding: var(--s12);
+  border-radius: var(--radius-xl);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.quotas {
+  width: calc(var(--size-aside) + var(--s40) - var(--s5));
+  max-width: 100%;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--bg);
+}
+
+.quotas > :last-child {
+  border-bottom: 0;
+}
+
+/* The question sheet, cut to its lower half where the sheet sits. */
+.crop {
+  width: var(--size-shot);
+  height: calc(var(--size-media) + var(--s40));
+  margin-bottom: calc(-1 * var(--s12));
+  overflow: hidden;
+  display: flex;
+  align-items: flex-end;
+}
+
+.lock {
+  width: calc(var(--size-media) + var(--s12) + var(--s3));
+  max-width: 100%;
+  height: calc(var(--s40) * 2.5);
+  overflow: hidden;
+  border-radius: var(--radius-xl);
+}
+
+.lock img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.installSection {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: center;
+  gap: var(--s3);
+  margin-top: var(--s40);
+  text-align: center;
+}
+
+.install {
+  width: var(--size-content);
+  max-width: 100%;
+  margin-top: var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.tabs {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  gap: var(--s1);
+  padding: var(--s2);
+  border-bottom: 1px solid var(--line);
+}
+
+.tab {
+  padding: var(--s1h) var(--s3);
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: none;
+  color: var(--fg2);
+}
+
+.tab[aria-selected="true"] {
+  background: var(--surface2);
+  color: var(--fg);
+}
+
+.copy {
+  position: absolute;
+  right: var(--s2);
+  top: 50%;
+  transform: translateY(-50%);
+  display: grid;
+  padding: var(--s1h);
+  border: 0;
+  background: none;
+  color: var(--fg2);
+}
+
+.cmd {
+  padding: var(--s5);
+  white-space: pre-wrap;
+  word-break: break-all;
+  text-align: center;
+}
+
+.foot {
+  display: grid;
+  grid-template-columns: 2fr repeat(3, 1fr);
+  gap: var(--s8);
+  margin-top: var(--s40);
+  padding: var(--s12) 0 var(--s16);
+  border-top: 1px solid var(--line);
+}
+
+.footBrand,
+.footCol {
+  display: grid;
+  gap: var(--s3);
+  align-content: start;
+}
+
+.footCol {
+  gap: var(--s2h);
+}
+
+.footInline {
+  display: none;
+}
+
+.narrowOnly {
+  display: none;
+}
+
+.footCol a,
+.footInline a,
+.textButton {
+  color: var(--fg2);
+  text-decoration: none;
+}
+
+.footCol a:hover,
 .textButton:hover {
   color: var(--fg);
 }
 
-@media (min-width: 840px) {
-  .page {
-    padding-top: var(--s6);
+.textButton {
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: left;
+}
+
+/* Narrower than the showcase: the phone carries the hero, and every section stacks. */
+@media (max-width: 1279px) {
+  .page > .showcase {
+    height: auto;
+    margin-top: var(--s12);
   }
 
-  .hero {
-    padding: var(--s10) 0;
+  .browser,
+  .glow {
+    display: none;
+  }
+
+  .heroPhone {
+    position: relative;
+    top: 0;
+    width: calc(var(--size-shot) - var(--s10));
+    margin: 0 auto;
+  }
+
+  .section,
+  .flip {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--s6);
+    margin-top: var(--s18);
+  }
+
+  .flip .sectionText {
+    order: 0;
   }
 
   .features {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: var(--s8);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  /* Headings, texts and shots each line up across the three columns. */
-  .feature {
+  .installSection,
+  .foot {
+    margin-top: var(--s18);
+  }
+}
+
+@media (max-width: 599px) {
+  .top {
+    height: var(--size-top-web);
+  }
+
+  .nav {
+    display: none;
+  }
+
+  .signIn {
+    margin-left: auto;
+    height: var(--s8);
+    padding: 0 var(--s3);
+  }
+
+  .hero {
+    padding-top: var(--s12);
+  }
+
+  .lead {
+    margin-top: var(--s4);
+  }
+
+  .actions {
     display: grid;
-    grid-row: span 3;
-    grid-template-rows: subgrid;
-    align-content: start;
-    row-gap: var(--s3);
+    justify-self: stretch;
+    justify-content: stretch;
+    gap: var(--s2);
+    margin: var(--s6) 0 var(--s5);
   }
 
-  .shot {
-    max-width: var(--size-shot);
+  .features {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--s6);
+  }
+
+  .feature {
+    padding-top: var(--s4);
+  }
+
+  .feature p {
+    margin-top: var(--s1);
+  }
+
+  .box {
+    padding: 0;
+    background: none;
+  }
+
+  .crop,
+  .lock {
+    display: none;
+  }
+
+  .section:has(.crop),
+  .section:has(.lock) {
+    display: none;
+  }
+
+  .foot {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--s4);
+    padding-top: var(--s8);
+  }
+
+  .footCol,
+  .wideOnly {
+    display: none;
+  }
+
+  .narrowOnly {
+    display: block;
+  }
+
+  .footInline {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--s3) var(--s5);
+  }
+
+  .quotas > :nth-child(n + 4) {
+    display: none;
+  }
+
+  .quotas > :nth-child(3) {
+    border-bottom: 0;
   }
 }
