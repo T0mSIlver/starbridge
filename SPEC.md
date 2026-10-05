@@ -693,7 +693,7 @@ How it generalizes is open.
   signature. The three self-hosted runners share one Gradle home,
   `~/.local/opt/gh-runners/gradle`, which Gradle locks for concurrent builds; `android.yml`
   turns setup-gradle's cache off on them (`cache-disabled` when `vars.RUNNER` is set), since its
-  restore overwrote files a concurrent job was reading (#142). That freed 3.6 GB of 1.8 GB homes.
+  restore overwrote files a concurrent job was reading (#142). This freed 3.6 GB.
 
 ## Encryption, with existing libraries
 
