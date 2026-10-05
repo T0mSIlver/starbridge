@@ -56,7 +56,10 @@ export interface AskInput {
 }
 
 /** What the server stores at most for one decision, all boxes together (PROTOCOL.md, Limits). */
-export const ITEM_BYTES = 256 * 1024;
+export const ITEM_BYTES = 2 * 1024 * 1024;
+
+/** One image's file at most: the schema's 512 KB of base64url (`DecisionImage.data`). */
+const IMAGE_BYTES = 384 * 1024;
 
 /** Exit code when nobody answered before `--timeout`. */
 export const EXIT_TIMEOUT = 2;
@@ -174,7 +177,10 @@ function sealWithPictures(
   if (pictures.length === 0) return { decision: base, item: sealed(base) };
   if (pictures.length > 4) throw new UsageError("--image: at most 4 images");
   const perBox = boxBytes(sealed(base)) / to.length;
-  let share = Math.floor(((ITEM_BYTES / to.length - perBox) * 9) / 16 / pictures.length);
+  let share = Math.min(
+    IMAGE_BYTES,
+    Math.floor(((ITEM_BYTES / to.length - perBox) * 9) / 16 / pictures.length),
+  );
   for (let tries = 0; tries < 5; tries++) {
     if (share < 1024) break;
     const decision = checked({ ...base, images: pictures.map((p) => fitPicture(p, share)) });
@@ -387,10 +393,28 @@ function printAnswer(ctx: Ctx, a: Answer, question: string | undefined, json?: b
 export async function poll(
   ctx: Ctx,
   s: Session,
-  opts: { cursor?: string; seconds: number; shared: boolean; directory?: Directory },
-): Promise<{ cursor?: string; directory: Directory }> {
+  opts: {
+    cursor?: string;
+    seconds: number;
+    shared: boolean;
+    directory?: Directory;
+    /**
+     * The agent's poll also returns when a device joins or asks for quotas (PROTOCOL.md,
+     * "Answers for machines"); `quotaAsked` is the last ask the server reported.
+     */
+    watch?: { quotaAsked?: string };
+  },
+): Promise<{ cursor?: string; directory: Directory; quotaAsked?: string }> {
   let directory = opts.directory ?? (await refreshDirectory(ctx, s));
-  const page = await s.api.answers(opts.cursor, opts.seconds, ctx.signal);
+  const page = await s.api.answers(
+    opts.cursor,
+    opts.seconds,
+    ctx.signal,
+    opts.watch && { directory: directory.length, ...opts.watch },
+  );
+  const quotaAsked = page.quotaAsked !== undefined ? { quotaAsked: page.quotaAsked } : {};
+  if (page.items.length === 0 && (page.directory ?? 0) > directory.length)
+    directory = await refreshDirectory(ctx, s);
   if (page.items.length > 0) {
     // A new device may have answered since the directory was read.
     directory = await refreshDirectory(ctx, s);
@@ -415,7 +439,7 @@ export async function poll(
         st.cursor = page.cursor;
     });
   }
-  return { cursor: page.cursor ?? opts.cursor, directory };
+  return { cursor: page.cursor ?? opts.cursor, directory, ...quotaAsked };
 }
 
 /**

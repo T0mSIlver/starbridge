@@ -197,6 +197,49 @@ test("the answer long-poll returns at once when answers wait, else completes whe
   expect(now.json.cursor).toBe(r.json.cursor);
 });
 
+test("a machine's answer poll returns when a device joins, and at once when it knows less", async () => {
+  const first = await s.call("GET", "/v1/answers", { token: devbox.token });
+  const known = first.json.directory as number;
+  const polling = s.call("GET", `/v1/answers?wait=30&directory=${known}`, { token: devbox.token });
+  await Bun.sleep(20);
+  expect(s.deps.answers.count(`${acct.id}/devbox`)).toBe(1);
+  await pair(s, acct, "tablet", "device", await signIn(s));
+  const r = await polling;
+  expect(r.json).toMatchObject({ items: [], directory: known + 1 });
+
+  const stale = await s.call("GET", `/v1/answers?wait=30&directory=${known}`, {
+    token: devbox.token,
+  });
+  expect(stale.json.directory).toBe(known + 1);
+});
+
+test("a device's quota ask wakes the machines and waits for their fresh snapshots", async () => {
+  await post(devbox, quota("q1"));
+  const first = await s.call("GET", "/v1/answers", { token: devbox.token });
+  expect(first.json.quotaAsked).toBeUndefined();
+  const watch = `/v1/answers?wait=30&directory=${first.json.directory}`;
+  const polling = s.call("GET", watch, { token: devbox.token });
+  await Bun.sleep(20);
+
+  const asking = s.call("POST", "/v1/quota/ask?wait=30", { token: phone.token });
+  const woken = await polling;
+  expect(woken.json.quotaAsked).toBeString();
+  let done = false;
+  asking.then(() => (done = true));
+  await Bun.sleep(20);
+  expect(done).toBe(false);
+  await post(devbox, quota("q2"));
+  const asked = await asking;
+  expect(asked.json).toEqual({ askedAt: woken.json.quotaAsked, behind: 0 });
+
+  // Once the machine passes the ask it saw, its poll waits again.
+  const seen = `${watch}&quotaAsked=${woken.json.quotaAsked}`;
+  const started = Date.now();
+  await s.call("GET", seen.replace("wait=30", "wait=0.2"), { token: devbox.token });
+  expect(Date.now() - started).toBeGreaterThanOrEqual(150);
+  expect((await s.call("POST", "/v1/quota/ask", { token: devbox.token })).status).toBe(403);
+});
+
 test("answers are for machines only", async () => {
   expect((await s.call("GET", "/v1/answers", { token: phone.token })).status).toBe(403);
   expect((await s.call("GET", "/v1/items", { token: devbox.token })).status).toBe(403);

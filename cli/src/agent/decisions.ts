@@ -4,7 +4,7 @@
  * Everything lives in the CLI's state file, under its lock, so an agent restart loses nothing a
  * session has not confirmed, and the CLI's own path (no agent) reads the same state.
  */
-import { type Directory, ProtocolError } from "@starbridge/protocol";
+import { activeMembers, type Directory, ProtocolError } from "@starbridge/protocol";
 import { type Ctx, iso, session, UsageError } from "../context";
 import {
   type AskInput,
@@ -27,10 +27,20 @@ const MAX_BACKOFF_MS = 60_000;
 /** How often an unpaired agent checks whether `starbridge pair` ran. */
 const UNPAIRED_MS = 5_000;
 
+/** Why the machine should post a quota snapshot now. */
+export type QuotaWanted = "a device joined" | "a device asked";
+
 export class Decisions implements Feature {
   private lastOkAt: Date | undefined;
   private lastError: string | undefined;
-  constructor(private readonly hub: Hub) {}
+  /** The active devices and the last quota ask, as of the previous poll. */
+  private devices: Set<string> | undefined;
+  private quotaAsked: string | undefined;
+
+  constructor(
+    private readonly hub: Hub,
+    private readonly wantQuota: (why: QuotaWanted) => void = () => {},
+  ) {}
 
   private get ctx(): Ctx {
     return this.hub.ctx;
@@ -110,6 +120,21 @@ export class Decisions implements Feature {
     };
   }
 
+  /**
+   * Snapshots are sealed to the devices in the directory, so a device that joined reads nothing
+   * until the next one: ask for one now, and when a device asks. The first poll only records.
+   */
+  private watch(dir: Directory, quotaAsked: string | undefined) {
+    const now = new Set(activeMembers(dir, "device").map((d) => d.id));
+    const before = this.devices;
+    this.devices = now;
+    if (before && [...now].some((id) => !before.has(id))) this.wantQuota("a device joined");
+    const asked = this.quotaAsked;
+    this.quotaAsked = quotaAsked;
+    if (before && quotaAsked !== undefined && quotaAsked !== asked)
+      this.wantQuota("a device asked");
+  }
+
   /** One long-poll after another from the shared cursor, each held until an answer comes. */
   async run(signal: AbortSignal): Promise<void> {
     let failures = 0;
@@ -132,8 +157,10 @@ export class Decisions implements Feature {
           seconds,
           shared: true,
           ...(directory ? { directory: directory.dir } : {}),
+          watch: this.quotaAsked !== undefined ? { quotaAsked: this.quotaAsked } : {},
         });
         if (r.directory !== directory?.dir) directory = { dir: r.directory, at: Date.now() };
+        this.watch(r.directory, r.quotaAsked);
         this.lastOkAt = this.ctx.now();
         if (this.lastError !== undefined) this.hub.log("server reachable again");
         this.lastError = undefined;

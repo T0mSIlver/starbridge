@@ -36,16 +36,32 @@ private val ARTIFACT_PATH = Regex("/artifacts?/")
 
 private const val CLAUDE_APP = "com.anthropic.claude"
 
-/** Opens a link: claude.ai in the Claude app when it is installed and takes it, else a browser. */
+/** A Claude artifact's page, which the Claude app shows only in its in-app browser. */
+private fun isArtifact(uri: Uri) = uri.host == "claude.ai" && ARTIFACT_PATH.containsMatchIn(uri.path.orEmpty())
+
+/**
+ * The intent that opens [url] outside the Claude app: an artifact goes to the browser, since the
+ * Claude app, which claims claude.ai links, shows it only in its in-app browser (#171).
+ */
+fun browserIntent(url: String): Intent {
+    val uri = Uri.parse(url)
+    val view = Intent(Intent.ACTION_VIEW, uri)
+    // A selector with no host matches browsers only, not apps that claim one domain.
+    if (isArtifact(uri)) view.selector = Intent(Intent.ACTION_VIEW, Uri.parse("https:")).addCategory(Intent.CATEGORY_BROWSABLE)
+    return view
+}
+
+/** Opens a link: a claude.ai session in the Claude app when it is installed and takes it, else [browserIntent]. */
 fun openLink(context: Context, url: String) {
-    val view = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-    if (Uri.parse(url).host == "claude.ai") {
+    val uri = Uri.parse(url)
+    if (uri.host == "claude.ai" && !isArtifact(uri)) {
         try {
-            context.startActivity(Intent(view).setPackage(CLAUDE_APP))
+            context.startActivity(Intent(Intent.ACTION_VIEW, uri).setPackage(CLAUDE_APP))
             return
         } catch (_: ActivityNotFoundException) {
             // Not installed, or it does not open this kind of link.
         }
     }
-    runCatching { context.startActivity(view) }
+    runCatching { context.startActivity(browserIntent(url)) }
+        .recoverCatching { context.startActivity(Intent(Intent.ACTION_VIEW, uri)) }
 }
