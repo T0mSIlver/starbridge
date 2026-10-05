@@ -6,8 +6,6 @@ on:
   schedule:
     - cron: "*/5 * * * *"
   workflow_dispatch:
-  push:
-    branches: [uptime-alert]
 
 concurrency:
   group: uptime
@@ -34,7 +32,7 @@ jobs:
           }
           failed=""
           out=$(check "$BASE_URL/healthz") || failed="$failed- \`$BASE_URL/healthz\`: $out"$'\n'
-          out=$(check "$BASE_URL/healthz") ||
+          out=$(check "$BASE_URL/healthz/backup") ||
             failed="$failed- \`$BASE_URL/healthz/backup\`: no good backup in the last 26 h, or the server is down ($out)"$'\n'
           {
             echo "failed<<EOF"
