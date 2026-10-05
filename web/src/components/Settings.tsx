@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { AGENTS_GUIDE } from "@/lib/links";
 import { applyTheme, type Prefs, usePref } from "@/lib/prefs";
 import { providerOrder, type QuotaSettings } from "@/lib/quotaSettings";
 import type { Device } from "@/lib/types";
@@ -13,8 +14,6 @@ import ui from "./ui.module.css";
 
 const load = () => import("@/lib/device");
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
-export const AGENTS_GUIDE =
-  "https://github.com/T0mSIlver/starbridge/blob/main/docs/tell-your-agents.md";
 
 export function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -103,6 +102,26 @@ export function Switch({
 
 const toggle = (list: string[], p: string, on: boolean) =>
   on ? [...new Set([...list, p])] : list.filter((x) => x !== p);
+
+function InboxSection() {
+  const [rowAnswers, setRowAnswers] = usePref("rowAnswers");
+  return (
+    <Section title="Inbox">
+      <Row label="Answer buttons on questions" sub="On a phone">
+        <Segmented<Prefs["rowAnswers"]>
+          label="Answer buttons on questions"
+          value={rowAnswers}
+          options={[
+            ["always", "Always"],
+            ["waiting", "When the agent waits"],
+            ["never", "Never"],
+          ]}
+          onChange={setRowAnswers}
+        />
+      </Row>
+    </Section>
+  );
+}
 
 function QuotaSection() {
   const { quotaSettings: q, setQuotaSettings: set } = useApp();
@@ -397,6 +416,7 @@ export function Settings() {
       <PhoneBar title="Settings" find={false} />
       <div className={s.page}>
         <h1 className={`t-heading ${s.title}`}>Settings</h1>
+        <InboxSection />
         <QuotaSection />
         <ProviderSection />
         <DeviceSection />

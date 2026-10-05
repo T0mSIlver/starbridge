@@ -1,0 +1,58 @@
+{
+  "agent": "codex",
+  "model": "gpt-6.1-sol",
+  "arm": "after",
+  "scenario": "long-e2e",
+  "rep": 1,
+  "turns": [
+    {
+      "commands": [
+        "/usr/bin/zsh -lc 'cat /tmp/skill-eval-mtrZ0L/after-long-e2e-1/cfg/skills/starbridge/SKILL.md'",
+        "/usr/bin/zsh -lc \"starbridge run --title \\\"Onboarding e2e\\\" --reason \\\"takes over your Mac screen and keyboard for about ten minutes\\\" -- bash -c 'make e2e'\""
+      ],
+      "final": "The e2e suite passed: all 4 onboarding flows succeeded. Ran it through Starbridge so you received the running and completion notifications.",
+      "session": "01a10ccf-7533-71e0-bfa8-31c44d0ed842",
+      "tokens": 65176,
+      "exit": 0,
+      "seconds": 20.004
+    }
+  ],
+  "decisions": [],
+  "laterDecisions": [],
+  "runs": [
+    {
+      "v": 1,
+      "id": "r_HvHfSrinYUXXe18j",
+      "to": [
+        "phone"
+      ],
+      "title": "Onboarding e2e",
+      "reason": "takes over your Mac screen and keyboard for about ten minutes",
+      "source": {
+        "machine": "devbox",
+        "project": "proj",
+        "session": ""
+      },
+      "startedAt": "2026-10-05T16:04:56Z",
+      "at": "2026-10-05T16:05:00Z",
+      "progress": {
+        "done": 4,
+        "total": 4,
+        "unit": "step"
+      },
+      "exit": {
+        "code": 0,
+        "at": "2026-10-05T16:05:00Z"
+      }
+    }
+  ],
+  "gh": [],
+  "judge": {
+    "cold": null,
+    "consequences": null,
+    "terminal": false,
+    "links": null,
+    "plain": null,
+    "notes": ""
+  }
+}

@@ -172,7 +172,7 @@ const askedBy = (session: string, question: string) =>
 /** Posts a decision for `session` with the CLI, as an agent's `starbridge ask` does. */
 async function ask(session: string, question: string, extra: string[] = []): Promise<string> {
   const r =
-    await $`starbridge ask --session ${session} --question ${question} --option Alpha --option Beta --default Alpha --default-at 2h ${extra}`
+    await $`starbridge ask --session ${session} --question ${question} --option Alpha --option Beta --default Alpha ${extra}`
       .env({ ...process.env, ...env })
       .quiet();
   return r.stdout.toString().trim();
@@ -205,7 +205,7 @@ function noWaiting(c: Claude, id = c.sessionId): string | undefined {
 
 const TASK =
   "Use the starbridge skill to ask the owner which file name to use for the release notes: " +
-  "options `alpha.md` and `beta.md`, default `alpha.md` in 2h, context: a test of Starbridge. " +
+  "options `alpha.md` and `beta.md`, context: a test of Starbridge. " +
   'Question: "{q}". After posting, create `progress-{n}.txt` containing the word started, ' +
   "then end your turn. When the answer arrives, create the chosen file with the line chosen.";
 
@@ -261,7 +261,7 @@ const cases: Record<string, () => Promise<Row>> = {
     const q = `Live check (#48): did this reach your phone? (${new Date().toISOString().slice(11, 16)} UTC)`;
     await a.send(
       "Use the starbridge skill to ask the owner this question, with options `Yes` and `No`, " +
-        `default \`Yes\` in 1h, context: a live end-to-end test of Starbridge answers. Question: "${q}". ` +
+        `context: a live end-to-end test of Starbridge answers. Question: "${q}". ` +
         "After posting, create `progress-owner.txt` containing the word started, then end your turn. " +
         "When the answer arrives, create `owner-answer.txt` with the chosen option.",
     );
@@ -450,23 +450,6 @@ const cases: Record<string, () => Promise<Row>> = {
       result: !crossed && !waited ? "pass" : "FAIL",
       timing: `post → prompt ${secs(gb.at - posted)} (b), ${secs(gc.at - posted)} (c)`,
       note: `${crossed ? "an answer reached the other session" : "each got only its own answer"}; ${waited ?? "neither waited"}`,
-    };
-  },
-
-  /** Nobody answers: at the default time the mod tells the session to apply its default. */
-  async default() {
-    const a = claude("default");
-    await a.start();
-    const at = new Date(Date.now() + 45_000);
-    const id = await ask(a.sessionId, "Default after 45 s?", ["--default-at", at.toISOString()]);
-    const got = await until("the default notice", () => a.prompt(`No answer to ${id}`), 180_000);
-    await a.idle();
-    await a.stop();
-    return {
-      name: "default time",
-      result: "pass",
-      timing: `default time → prompt ${secs(got.at - at.getTime())}`,
-      note: "no answer posted; the notice arrived as its own prompt",
     };
   },
 };

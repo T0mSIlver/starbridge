@@ -153,6 +153,10 @@ test("several CLI clients at once: ask, wait, answers and quota push all go thro
   await server.answer(ids[2] as string, { choice: "Wait" });
   expect(await Promise.all(waiting)).toEqual([0, 0, 0]);
   expect(w1.lines).toEqual([`Answer to ${ids[0]} (Merge #12 now?): Merge`]);
+  // The wait for one decision marked it waiting.
+  expect((await server.opened("waiting")).map((w) => [w.decisionId, w.state])).toEqual([
+    [ids[0] as string, "waiting"],
+  ]);
   expect(wAny.lines).toHaveLength(1);
   expect(JSON.parse(mod.lines[0] as string)).toEqual({
     decisionId: ids[2],
@@ -169,42 +173,6 @@ test("several CLI clients at once: ask, wait, answers and quota push all go thro
   expect(await server.opened("quota")).toHaveLength(1);
   // The client never had keys of its own.
   expect(q.store.machine()).toBeUndefined();
-});
-
-test("the default-time notice comes on time, once, and a late answer still arrives", async () => {
-  const { socket } = await machine();
-  const c = client(socket);
-  const s1 = session(socket, "s1");
-  const at = new Date(Date.now() + 2_000).toISOString();
-  const id = await ask(c, "--session", "s1", "--project", "p", "--default-at", at);
-  const started = Date.now();
-  const [notice] = await s1.events(15);
-  expect(Date.now() - started).toBeLessThan(6_000);
-  expect(notice?.type).toBe("default");
-  expect(notice?.line).toMatch(
-    new RegExp(
-      `^No answer to ${id} \\(Merge #12 now\\?\\) by its default time .+: apply your default: Merge at 18:00$`,
-    ),
-  );
-  await s1.ack([notice?.ack as string]);
-  expect(await s1.events()).toEqual([]);
-  await server.answer(id, { choice: "Wait" });
-  await until(async () => (await s1.events()).length === 1);
-  expect((await s1.events())[0]?.type).toBe("answer");
-});
-
-test("no notice while the server cannot be reached: an answer may be waiting there", async () => {
-  const { socket } = await machine();
-  const c = client(socket);
-  const s1 = session(socket, "s1");
-  // The agent's next two polls fail (retried after 2 s, then 4 s); the third gets the answer.
-  server.failures.push("/answers", "/answers");
-  const at = new Date(Date.now() + 1_000).toISOString();
-  const id = await ask(c, "--session", "s1", "--project", "p", "--default-at", at);
-  await server.answer(id, { choice: "Wait" });
-  expect(await s1.events(4)).toEqual([]);
-  await until(async () => (await s1.events()).length > 0, 10_000);
-  expect((await s1.events()).map((e) => e.type)).toEqual(["answer"]);
 });
 
 test("an agent restart loses no unconfirmed answer", async () => {
@@ -288,8 +256,11 @@ test("the CLI goes to the server itself when no agent runs, or when the agent ca
 test("the agent refuses bad requests with the CLI's own messages", async () => {
   const { socket } = await machine();
   const c = client(socket);
-  expect(await run(["ask", "--question", "Q?", "--project", "p"], c)).toBe(1);
-  expect(c.errors.at(-1)).toContain("--default");
+  expect(await run(["ask", "--project", "p"], c)).toBe(1);
+  expect(c.errors.at(-1)).toContain("--question");
+  const both = ["--answer-in", "https://claude.ai/artifact/x", "--option", "A", "--option", "B"];
+  expect(await run(["ask", "--question", "Q?", "--project", "p", ...both], c)).toBe(1);
+  expect(c.errors.at(-1)).toContain("--answer-in takes no --option");
   expect(await run(["wait", "d_nosuch"], c)).toBe(1);
   expect(c.errors.at(-1)).toContain("not a decision this machine asked");
   await expect(new AgentClient(socket).call("GET", "/v1/sessions/a%20b/events")).rejects.toThrow(

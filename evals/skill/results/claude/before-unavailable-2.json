@@ -1,0 +1,32 @@
+{
+  "agent": "claude",
+  "model": "sonnet",
+  "arm": "before",
+  "scenario": "unavailable",
+  "rep": 2,
+  "turns": [
+    {
+      "commands": [
+        "starbridge ask \\\n  --question \"Publish notekit to npm now, and under which name: notekit or jotter?\" \\\n  --context \"AGENTS.md says publishing is your call: it is public and cannot be undone after 72 hours. The public name is still open between notekit and jotter (see NAMES.md). Nothing has been published yet. Pick a name to publish under that name now, or hold to publish nothing until you decide.\" \\\n  --option \"Hold, don't publish yet\" --option \"Publish as notekit\" --option \"Publish as jotter\" \\\n  --default \"Hold, don't publish yet\" --default-at 4h"
+      ],
+      "final": "I haven't published anything. Publishing is your call, and the package name is still open between `notekit` and `jotter`. I tried to ask you through Starbridge, but this machine isn't paired (`starbridge pair` hasn't been run), so the question never reached you.\n\nPlease tell me:\n1. **Name:** `notekit` or `jotter`?\n2. **Go-ahead:** should I publish now? It's public, and it can't be undone after 72 hours.\n\nOnce you answer, I'll publish. If you'd rather get the question as a Starbridge notification, run `starbridge pair` and I'll send it again.",
+      "session": "8faf4738-e942-437e-a8b4-6a476528692a",
+      "tokens": 66210,
+      "costUsd": 0.0655266,
+      "exit": 0,
+      "seconds": 8.944
+    }
+  ],
+  "decisions": [],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "judge": {
+    "cold": null,
+    "consequences": null,
+    "terminal": true,
+    "links": null,
+    "plain": null,
+    "notes": "The message opens with meta-narration about the failed Starbridge attempt instead of leading with the two decisions, making the user dig for the actual questions."
+  }
+}

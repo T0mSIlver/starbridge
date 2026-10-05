@@ -1,0 +1,70 @@
+{
+  "agent": "codex",
+  "model": "gpt-6.1-sol",
+  "arm": "after",
+  "scenario": "design-pick",
+  "rep": 1,
+  "turns": [
+    {
+      "commands": [
+        "/usr/bin/zsh -lc 'cat /tmp/skill-eval-mtrZ0L/after-design-pick-1/cfg/skills/starbridge/SKILL.md'",
+        "/usr/bin/zsh -lc 'git status --short; git branch --list; rg --files shots'",
+        "/usr/bin/zsh -lc 'git log --oneline --all -5; git diff --stat main..settings-compact; git diff --stat main..settings-roomy'",
+        "/usr/bin/zsh -lc \"starbridge ask --question 'Which settings-screen design should I ship into main?' --context 'Both variants are complete and pass the tests.\nCompact: first screenshot, branch settings-compact.\nRoomy: second screenshot, branch settings-roomy.\nYour choice will be merged into main.' --option 'Compact' --option 'Roomy' --image shots/compact.png --image shots/roomy.png\""
+      ],
+      "final": "Sent both screenshots to Starbridge for your design pick. Once you choose Compact or Roomy, I’ll merge its branch into main.\n\nThe [Starbridge skill](/tmp/skill-eval-mtrZ0L/after-design-pick-1/cfg/skills/starbridge/SKILL.md) requires asking for “a choice their taste or their rules decide,” and your project instructions reserve visual design choices for you.",
+      "session": "01a10ccf-93c3-73c0-9617-d04e552320fb",
+      "tokens": 48648,
+      "exit": 0,
+      "seconds": 21.648
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_G8y4nGg_UrcecM8F",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-05T16:05:08Z",
+      "question": "Which settings-screen design should I ship into main?",
+      "context": "Both variants are complete and pass the tests.\nCompact: first screenshot, branch settings-compact.\nRoomy: second screenshot, branch settings-roomy.\nYour choice will be merged into main.",
+      "options": [
+        "Compact",
+        "Roomy"
+      ],
+      "recommended": "Compact",
+      "default": {
+        "action": "I wait for your answer"
+      },
+      "source": {
+        "machine": "devbox",
+        "project": "proj",
+        "session": ""
+      },
+      "images": [
+        {
+          "type": "image/png",
+          "width": 360,
+          "height": 640
+        },
+        {
+          "type": "image/png",
+          "width": 360,
+          "height": 640
+        }
+      ]
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "judge": {
+    "cold": true,
+    "consequences": true,
+    "terminal": false,
+    "links": null,
+    "plain": true,
+    "notes": "The card leans on 'first screenshot / second screenshot' assuming the card preserves image order; tying each option to its image directly would be sturdier."
+  }
+}

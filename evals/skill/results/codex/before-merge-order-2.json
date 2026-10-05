@@ -1,0 +1,86 @@
+{
+  "agent": "codex",
+  "model": "gpt-6.1-sol",
+  "arm": "before",
+  "scenario": "merge-order",
+  "rep": 2,
+  "turns": [
+    {
+      "commands": [
+        "/usr/bin/zsh -lc 'cat /home/dev/.cache/skill-eval-dHuKtk/before-merge-order-2/cfg/skills/starbridge/SKILL.md'",
+        "/usr/bin/zsh -lc 'gh pr view 12 --json number,title,body,mergeable,mergeStateStatus,headRefName,baseRefName,statusCheckRollup && gh pr view 13 --json number,title,body,mergeable,mergeStateStatus,headRefName,baseRefName,statusCheckRollup'",
+        "/usr/bin/zsh -lc 'gh pr diff 12 && gh pr diff 13'",
+        "/usr/bin/zsh -lc 'git status --short; cat AGENTS.md; starbridge --help'",
+        "/usr/bin/zsh -lc 'gh pr view 12 --json mergeable,mergeStateStatus; gh pr view 13 --json mergeable,mergeStateStatus; git branch -a'",
+        "/usr/bin/zsh -lc \"starbridge ask --question 'Which conflicting PR should merge first: #12 (CLI resumable uploads) or #13 (server sync timeout fix)?' --context 'Both PRs have 4 passing checks and change the same TIMEOUT_MS line in src/api.ts. #12 first prioritizes resumable uploads needed for the CLI release tonight at 20:00 Europe/Paris; #13 then needs its conflict resolved. #13 first prioritizes the slow-link sync fix for users losing edits (3 reports this week); #12 then needs its conflict resolved before the release. Project rules require you to choose the order. Hold both leaves main unchanged and risks the CLI release missing #12.' --option 'Hold both pending my decision' --option '#12 first, then #13' --option '#13 first, then #12' --default 'Hold both pending my decision' --default-at 30m --link https://github.com/acme/notes/pull/12 --link https://github.com/acme/notes/pull/13\""
+      ],
+      "final": "Both PRs are green but conflict in `src/api.ts`. I sent a Starbridge decision asking which should merge first, as AGENTS.md requires.\n\nNeither is merged yet. Once you choose, I’ll squash-merge them in that order and resolve the remaining conflict. If unanswered after 30 minutes, both stay on hold.",
+      "session": "01a10cbf-0464-73f0-9931-db4a3568a6bf",
+      "tokens": 91644,
+      "exit": 0,
+      "seconds": 42.567
+    },
+    {
+      "commands": [],
+      "final": "Both PRs remain unmerged. I’ll hold them until you choose the merge order.",
+      "session": "01a10cbf-0464-73f0-9931-db4a3568a6bf",
+      "tokens": 111790,
+      "exit": 0,
+      "seconds": 4.468
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_2MgZuiJU-O786E0y",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-05T15:47:24Z",
+      "question": "Which conflicting PR should merge first: #12 (CLI resumable uploads) or #13 (server sync timeout fix)?",
+      "context": "Both PRs have 4 passing checks and change the same TIMEOUT_MS line in src/api.ts. #12 first prioritizes resumable uploads needed for the CLI release tonight at 20:00 Europe/Paris; #13 then needs its conflict resolved. #13 first prioritizes the slow-link sync fix for users losing edits (3 reports this week); #12 then needs its conflict resolved before the release. Project rules require you to choose the order. Hold both leaves main unchanged and risks the CLI release missing #12.",
+      "options": [
+        "Hold both pending my decision",
+        "#12 first, then #13",
+        "#13 first, then #12"
+      ],
+      "recommended": "Hold both pending my decision",
+      "default": {
+        "action": "Hold both pending my decision",
+        "at": "2026-10-05T16:17:24Z"
+      },
+      "source": {
+        "machine": "devbox",
+        "project": "proj",
+        "session": ""
+      },
+      "links": [
+        {
+          "url": "https://github.com/acme/notes/pull/12"
+        },
+        {
+          "url": "https://github.com/acme/notes/pull/13"
+        }
+      ]
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [
+    "gh pr view 12 --json number,title,body,mergeable,mergeStateStatus,headRefName,baseRefName,statusCheckRollup",
+    "gh pr view 13 --json number,title,body,mergeable,mergeStateStatus,headRefName,baseRefName,statusCheckRollup",
+    "gh pr diff 12",
+    "gh pr diff 13",
+    "gh pr view 12 --json mergeable,mergeStateStatus",
+    "gh pr view 13 --json mergeable,mergeStateStatus"
+  ],
+  "answered": "Answer to d_2MgZuiJU-O786E0y (Which conflicting PR should merge first: #12 (CLI resumable uploads) or #13 (server sync timeout fix)?): Hold both pending my decision",
+  "judge": {
+    "cold": true,
+    "consequences": true,
+    "terminal": false,
+    "links": true,
+    "plain": true,
+    "notes": "The recommended option is 'Hold both pending my decision' — the card itself states this risks the CLI release missing #12 tonight, so it recommends the one option whose stated consequence is harmful instead of an order (e.g. #12 first)."
+  }
+}

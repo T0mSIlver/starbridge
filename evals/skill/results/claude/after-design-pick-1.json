@@ -1,0 +1,70 @@
+{
+  "agent": "claude",
+  "model": "sonnet",
+  "arm": "after",
+  "scenario": "design-pick",
+  "rep": 1,
+  "turns": [
+    {
+      "commands": [
+        "git branch -a && ls shots",
+        "git log --oneline main..settings-compact main..settings-roomy; git diff --stat main settings-compact; git diff --stat main settings-roomy; starbridge ask \\\n  --question \"Which settings-screen design should I merge into main: compact or roomy?\" \\\n  --context \"Both variants are done and pass tests. Screenshots in order: compact, roomy.\nCompact: branch settings-compact.\nRoomy: branch settings-roomy.\nYour pick gets merged with git merge; nothing is merged yet.\" \\\n  --option \"Compact\" --option \"Roomy\" \\\n  --image shots/compact.png --image shots/roomy.png"
+      ],
+      "final": "I haven't merged either variant. Which settings screen ships is your call, so I posted a Starbridge card asking you to pick compact or roomy. It includes both screenshots and the branch names, `settings-compact` and `settings-roomy`.\n\nWhen you answer, I'll run `git merge` on the branch you pick.",
+      "session": "3bac8978-49ce-4c09-8023-f06100454e4b",
+      "tokens": 65266,
+      "costUsd": 0.0630192,
+      "exit": 0,
+      "seconds": 8.602
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_0vsKDkRd9YFuYlC8",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-05T16:04:26Z",
+      "question": "Which settings-screen design should I merge into main: compact or roomy?",
+      "context": "Both variants are done and pass tests. Screenshots in order: compact, roomy.\nCompact: branch settings-compact.\nRoomy: branch settings-roomy.\nYour pick gets merged with git merge; nothing is merged yet.",
+      "options": [
+        "Compact",
+        "Roomy"
+      ],
+      "recommended": "Compact",
+      "default": {
+        "action": "I wait for your answer"
+      },
+      "source": {
+        "machine": "devbox",
+        "project": "proj",
+        "session": "3bac8978-49ce-4c09-8023-f06100454e4b",
+        "sessionTitle": "proj-12"
+      },
+      "images": [
+        {
+          "type": "image/png",
+          "width": 360,
+          "height": 640
+        },
+        {
+          "type": "image/png",
+          "width": 360,
+          "height": 640
+        }
+      ]
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "judge": {
+    "cold": true,
+    "consequences": true,
+    "terminal": false,
+    "links": null,
+    "plain": true,
+    "notes": "Compact is recommended with no word on why, so the owner can't weigh the agent's reasoning against their own taste."
+  }
+}

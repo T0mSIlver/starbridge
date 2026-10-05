@@ -17,6 +17,7 @@ import { Api, ApiError } from "./api";
 import { encodeKeys } from "./config";
 import { type Ctx, iso, UsageError } from "./context";
 import { terminalQr } from "./qr";
+import { rememberMachineKind } from "./settings";
 
 /** A pairing code expires after this long (PROTOCOL.md). */
 const CODE_LIFETIME_MS = 10 * 60_000;
@@ -100,5 +101,6 @@ export async function pair(
     s.answers = {};
   });
   ctx.out(`Paired "${name}" (${id}). Keys are in ${ctx.store.dir}.`);
+  rememberMachineKind(ctx);
   return 0;
 }

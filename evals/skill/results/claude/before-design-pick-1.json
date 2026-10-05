@@ -1,0 +1,71 @@
+{
+  "agent": "claude",
+  "model": "sonnet",
+  "arm": "before",
+  "scenario": "design-pick",
+  "rep": 1,
+  "turns": [
+    {
+      "commands": [
+        "git branch -a && ls shots",
+        "starbridge ask \\\n  --question \"Ship the roomy or the compact settings screen (merge into main)?\" \\\n  --context \"Both variants are done and pass tests. First image: roomy (branch settings-roomy). Second image: compact (branch settings-compact). Pick one: I will run git merge on that branch into main. The other branch stays unmerged.\" \\\n  --option \"Roomy\" --option \"Compact\" \\\n  --image shots/roomy.png --image shots/compact.png \\\n  --default \"Roomy\" --default-at 4h"
+      ],
+      "final": "I haven't merged anything yet. The project notes say you pick between visual designs, so I posted the choice to Starbridge as decision `d_rP-tmNy2lMvNnHS1`.\n\n- **Question:** ship the roomy or the compact settings screen. It has both screenshots attached, roomy first, then compact.\n- **Branches:** roomy is `settings-roomy` and compact is `settings-compact`.\n- **When you answer:** I'll run `git merge` on the branch you pick, into `main`.\n- **If nobody answers:** after 4 hours I'll apply the default and merge `settings-roomy`. I'll tell you if that happens.",
+      "session": "509bf2b6-40aa-4c72-94a5-aca844840e1b",
+      "tokens": 66632,
+      "costUsd": 0.0670412,
+      "exit": 0,
+      "seconds": 10.59
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_rP-tmNy2lMvNnHS1",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-05T15:40:48Z",
+      "question": "Ship the roomy or the compact settings screen (merge into main)?",
+      "context": "Both variants are done and pass tests. First image: roomy (branch settings-roomy). Second image: compact (branch settings-compact). Pick one: I will run git merge on that branch into main. The other branch stays unmerged.",
+      "options": [
+        "Roomy",
+        "Compact"
+      ],
+      "recommended": "Roomy",
+      "default": {
+        "action": "Roomy",
+        "at": "2026-10-05T19:40:48Z"
+      },
+      "source": {
+        "machine": "devbox",
+        "project": "proj",
+        "session": "509bf2b6-40aa-4c72-94a5-aca844840e1b",
+        "sessionTitle": "proj-ea"
+      },
+      "images": [
+        {
+          "type": "image/png",
+          "width": 360,
+          "height": 640
+        },
+        {
+          "type": "image/png",
+          "width": 360,
+          "height": 640
+        }
+      ]
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "judge": {
+    "cold": true,
+    "consequences": true,
+    "terminal": false,
+    "links": null,
+    "plain": true,
+    "notes": "Near-perfect card; only flaw is the card text itself never states the fallback (silence merges roomy after 4h), leaving that to the default field's rendering."
+  }
+}

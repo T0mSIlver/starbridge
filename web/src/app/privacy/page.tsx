@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { LegalPage, Todo } from "@/components/Legal";
+import { LegalPage } from "@/components/Legal";
 
 export const metadata: Metadata = { title: "Privacy" };
 
@@ -10,12 +10,12 @@ export default function Privacy() {
     <LegalPage title="Privacy">
       <p>
         This covers the hosted service at starbridge.run and the Starbridge Android app. A server
-        you host yourself keeps its data on your own machine. Last updated:{" "}
-        <Todo>publication date</Todo>.
+        you host yourself keeps its data on your own machine. Last updated: 5 October 2026.
       </p>
       <p>
-        Operator: <Todo>legal name and address of the operator</Todo>. Contact:{" "}
-        <a href="mailto:abuse@starbridge.run">abuse@starbridge.run</a>.
+        Operator: Tom Vaucourt, an individual in France, running Starbridge as a non-professional.
+        Contact: <a href="mailto:abuse@starbridge.run">abuse@starbridge.run</a>. Host: Hetzner
+        Online GmbH, Industriestr. 25, 91710 Gunzenhausen, Germany, +49 9831 505-0.
       </p>
 
       <h2 className="t-heading">What the server stores</h2>
@@ -59,10 +59,38 @@ export default function Privacy() {
         The web server (Caddy) keeps no access log. The server, Caddy and the web page log startup,
         errors and failed pushes; these lines can include an account id or a push endpoint, but not
         IP addresses or your content. Each keeps five files of 10 MB, so how long a log covers
-        depends on traffic. <Todo>a fixed maximum age for logs, if one is wanted</Todo>. To enforce
-        rate limits, the server counts requests per IP address in memory; it never writes them to
-        disk, and a restart clears them.
+        depends on traffic. To enforce rate limits, the server counts requests per IP address in
+        memory; it never writes them to disk, and a restart clears them.
       </p>
+
+      <h2 className="t-heading">Usage counts</h2>
+      <p>
+        To learn how Starbridge is used, the server counts what it already handles, per day. During
+        the day it keeps one row per event; the rows that count active accounts, devices and
+        machines hold their ids, so each counts once. When the day ends, the server keeps only the
+        day&apos;s totals and deletes those rows. The totals hold no ids, and only the operator can
+        read them, on the server. The daily totals are:
+      </p>
+      <ul>
+        <li>
+          accounts, devices and machines that used the server that day, with devices split into the
+          web page and the Android app;
+        </li>
+        <li>accounts, devices and machines in total, and new accounts;</li>
+        <li>
+          items posted, by kind: decisions, answers, permission prompts, their answers, notices that
+          a prompt or decision is over, quota snapshots, run updates and waiting states;
+        </li>
+        <li>
+          answers by client (web page or Android app), and how long decisions and permission prompts
+          waited for their answer, as the median and the 90th percentile;
+        </li>
+        <li>
+          pushes by push service and outcome (sent, failed, gone, no route, dropped), and the same
+          for pushes relayed for self-hosted servers;
+        </li>
+        <li>push targets by push service.</li>
+      </ul>
 
       <h2 className="t-heading">Who else sees what</h2>
       <ul>
@@ -90,7 +118,20 @@ export default function Privacy() {
       <p>
         Self-hosted servers without their own push credentials send pushes through starbridge.run,
         which passes them to these services. Those pushes carry only encrypted content or ids. There
-        are no ads, analytics or trackers in the app, the web page or the server.
+        are no ads, and no analytics beyond the usage counts above and the page analytics below.
+      </p>
+
+      <h2 className="t-heading">Page analytics</h2>
+      <p>
+        The landing page, this page and the terms count visits with Umami, which runs on the same
+        server; the signed-in app and the Android app do not. For each view Umami records the page,
+        its title, the referring site, your browser, operating system, device type, screen size and
+        language, and the country, region and city it looks up from your IP address. Copying an
+        install command records which one. Umami sets no cookie, stores nothing in your browser and
+        does not store your IP address: it tells visitors apart by a hash of the IP address, the
+        browser and a salt that changes every day, so a visit cannot be traced back to you or linked
+        to your visits on other days. A browser that sends Do Not Track is not counted. The records
+        stay until the operator deletes them, and the nightly backups keep them for 14 days more.
       </p>
 
       <h2 className="t-heading">Deletion</h2>
@@ -98,21 +139,19 @@ export default function Privacy() {
         Removing a device or machine from your account ends its sign-in and deletes its push
         targets; a push target the push service reports as gone is deleted too. To delete your whole
         account, email <a href="mailto:abuse@starbridge.run">abuse@starbridge.run</a> with your
-        GitHub login.{" "}
-        <Todo>
-          how the operator confirms the request comes from the account&apos;s owner, and how soon it
-          is done
-        </Todo>
-        . Backups age out within 14 days after that.
+        GitHub login. To show the account is yours, you post a code the operator sends you in a
+        public gist on that GitHub account. The operator deletes the account within 30 days of that,
+        and backups age out within 14 days after.
       </p>
 
       <h2 className="t-heading">Your rights</h2>
       <p>
-        <Todo>
-          the rights that apply (for example under the GDPR), the legal basis for processing, and
-          the authority to complain to; these depend on the operator&apos;s jurisdiction
-        </Todo>
-        .
+        The GDPR applies. The legal basis for storing your data is running the service you signed up
+        for; logs and rate limits rest on the operator&apos;s legitimate interest in keeping it
+        working and safe. You can ask to access, correct, delete or export your data, or object to
+        its processing, at <a href="mailto:abuse@starbridge.run">abuse@starbridge.run</a>. Your
+        content is encrypted, so only your devices can export it. You can complain to the CNIL
+        (cnil.fr) or your own country&apos;s data protection authority.
       </p>
 
       <h2 className="t-heading">Changes</h2>

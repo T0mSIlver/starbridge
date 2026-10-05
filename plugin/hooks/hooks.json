@@ -65,6 +65,18 @@
           }
         ]
       }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "AskUserQuestion",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "starbridge hook ask-user",
+            "timeout": 10
+          }
+        ]
+      }
     ]
   }
 }

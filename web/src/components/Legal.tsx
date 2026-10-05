@@ -1,9 +1,11 @@
+import { Analytics } from "./Analytics";
 import s from "./Legal.module.css";
 
 /** A plain text page: /privacy and /terms. */
 export function LegalPage({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <main className={`${s.page} t-body`}>
+      <Analytics />
       <a href="/" className="t-heading">
         Starbridge
       </a>
@@ -12,11 +14,6 @@ export function LegalPage({ title, children }: { title: string; children: React.
       <LegalLinks />
     </main>
   );
-}
-
-/** A decision the operator has yet to make, shown until it is made. */
-export function Todo({ children }: { children: React.ReactNode }) {
-  return <strong className={s.todo}>TODO: {children}</strong>;
 }
 
 export function LegalLinks() {

@@ -1,0 +1,35 @@
+{
+  "agent": "codex",
+  "model": "gpt-6.1-sol",
+  "arm": "before",
+  "scenario": "unavailable",
+  "rep": 1,
+  "turns": [
+    {
+      "commands": [
+        "/usr/bin/zsh -lc 'cat /home/dev/.cache/skill-eval-dHuKtk/before-unavailable-1/cfg/skills/starbridge/SKILL.md'",
+        "/usr/bin/zsh -lc \"pwd; rg --files -g 'AGENTS.md' -g 'NAMES.md' -g 'package.json' -g '*README*' -g '*lock*' -g '.npmrc'\"",
+        "/usr/bin/zsh -lc 'cat AGENTS.md NAMES.md package.json; rg --files; command -v starbridge; git status --short'",
+        "/usr/bin/zsh -lc \"starbridge ask --question 'Which public npm name should I use for version 1.0.0?' --context 'The package name is currently TBD. NAMES.md lists notekit (matches the repository) and jotter (shorter, but also the name of a dead app). Your instruction authorizes publishing; I need your choice of public name before preparing the final npm package.' --option 'notekit' --option 'jotter' --option 'Hold publication' --recommended 'notekit' --default 'Hold publication' --default-at 30m\"",
+        "/usr/bin/zsh -lc 'npm pack --dry-run --json'"
+      ],
+      "final": "Publishing is blocked: `package.json` names the package `TBD`, and the npm dry run contains only metadata and project notes—no implementation.\n\nI tried requesting your name choice through Starbridge, but it failed because this machine is not paired. Nothing was published.\n\nThe [starbridge skill](/home/dev/.cache/skill-eval-dHuKtk/before-unavailable-1/cfg/skills/starbridge/SKILL.md) requires owner decisions through Starbridge. Run `starbridge pair` to enable the `notekit` versus `jotter` decision.",
+      "session": "01a10cc6-3faf-7380-8282-bf1299e55557",
+      "tokens": 67823,
+      "exit": 0,
+      "seconds": 28.457
+    }
+  ],
+  "decisions": [],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "judge": {
+    "cold": null,
+    "consequences": null,
+    "terminal": false,
+    "links": null,
+    "plain": null,
+    "notes": "It never asks the user to pick between notekit and jotter in the terminal, instead deferring the decision to a Starbridge pairing step the user must perform."
+  }
+}

@@ -131,6 +131,24 @@ CREATE TABLE IF NOT EXISTS push_subscriptions (
   created_at TEXT NOT NULL,
   UNIQUE (account_id, member_id, endpoint)
 );
+
+-- The current day's usage events (server/src/usage.ts), deleted once folded into usage_days.
+CREATE TABLE IF NOT EXISTS usage_events (
+  day TEXT NOT NULL,
+  metric TEXT NOT NULL,
+  subject TEXT,
+  value REAL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS usage_events_subject ON usage_events (day, metric, subject)
+  WHERE subject IS NOT NULL;
+
+-- Counts and percentiles per day; no account or member ids.
+CREATE TABLE IF NOT EXISTS usage_days (
+  day TEXT NOT NULL,
+  metric TEXT NOT NULL,
+  value REAL NOT NULL,
+  PRIMARY KEY (day, metric)
+);
 `;
 
 export function openDb(path: string): Database {

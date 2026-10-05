@@ -1,148 +1,310 @@
-import { Mark } from "./icons";
+"use client";
+
+import { useState } from "react";
+import { track } from "@/lib/analytics";
+import { AGENTS_GUIDE, REPO, SELF_HOST } from "@/lib/links";
+import { DEFAULT_SETTINGS } from "@/lib/quotaSettings";
+import { sample } from "@/lib/sample";
+import { Analytics } from "./Analytics";
+import { Icon, Mark } from "./icons";
 import s from "./Landing.module.css";
+import { QuotaRow } from "./QuotaRow";
 import ui from "./ui.module.css";
 
-const REPO = "https://github.com/T0mSIlver/starbridge";
-
-// Roborazzi screenshots from android/app/screenshots, cropped below a whole card (quotas
-// at 1899 px, decision 1454, inbox-prompts 2104)
-// with 60 px of the screen's background added, so no frame cuts a line:
-//   ffmpeg -i quotas-dark.png -vf "crop=1233:1899:0:0,pad=1233:1959:0:0:0x0c0c0c,scale=616:-1" -quality 82 quotas-dark.webp
-// Light pads with 0xf4f4f4. `height` is the webp's height at 616 px wide.
-const FEATURES = [
-  {
-    shot: "quotas",
-    height: 979,
-    title: "Quota windows",
-    text: "Every AI plan's limits on one screen, read from CodexBar: whether you will run out before the reset, and headroom about to go unused.",
-    alt: "Quota cards: one window will run out, two have headroom unused",
-  },
-  {
-    shot: "decision",
-    height: 756,
-    title: "Decisions",
-    text: "An agent asks a question with options and keeps working. Your tap goes back into its session as a prompt.",
-    alt: "A decision with two options, the recommended one in amber",
-  },
-  {
-    shot: "inbox-prompts",
-    height: 1081,
-    title: "Permission prompts",
-    text: "Claude Code's permission prompts from every session and machine in one list: allow once, for the session, always, or deny.",
-    alt: "A Bash permission prompt with allow and deny buttons",
-  },
-];
-
-const INSTALL = [
-  { label: "Script", cmd: "curl -fsSL https://starbridge.run/install.sh | sh" },
-  { label: "Homebrew", cmd: "brew install T0mSIlver/starbridge/starbridge" },
-  { label: "npm", cmd: "npm i -g starbridge" },
-];
-
-function Shot({ name, alt, height }: { name: string; alt: string; height: number }) {
+// Product shots in public/landing, at 1.5x for the web inbox and 2x for the phones:
+//   web-inbox-*      the app at /sample (development only), 1440 by 900, its data the mockups'
+//   android-*        the design v2 mockups' Android inbox, question sheet and lock screen
+// Each comes dark and light; `<picture>` picks the one the browser asks for.
+function Shot({
+  name,
+  alt,
+  width,
+  height,
+  className,
+}: {
+  name: string;
+  alt: string;
+  width: number;
+  height: number;
+  className?: string;
+}) {
   // Dark is the default where the browser reports no preference (DESIGN.md, "Rules").
   return (
     <picture>
       <source media="(prefers-color-scheme: light)" srcSet={`/landing/${name}-light.webp`} />
       <img
-        className={s.shot}
+        className={className}
         src={`/landing/${name}-dark.webp`}
         alt={alt}
-        width={616}
+        width={width}
         height={height}
-        loading="lazy"
       />
     </picture>
   );
 }
 
-/** What a visitor without a device on this browser sees at `/`. */
-export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
+function Phone({ name, alt }: { name: string; alt: string }) {
   return (
-    <main className={s.page}>
-      <header className={s.top}>
-        <span className={s.brand}>
-          <Mark />
-          <span className="t-heading">Starbridge</span>
+    <div className={s.phone}>
+      <Shot name={name} alt={alt} width={824} height={1784} className={s.phoneScreen} />
+    </div>
+  );
+}
+
+const FEATURES = [
+  ["Quota windows", "Every plan's limits on one screen, read from CodexBar."],
+  ["Questions", "An agent asks and keeps working. Your tap becomes its next prompt."],
+  ["Permission prompts", "A blocked tool call, the exact command, Allow or Deny."],
+  ["Runs", "Long commands that need you at the machine, live on your lock screen."],
+] as const;
+
+const INSTALL = [
+  ["Script", "curl -fsSL https://starbridge.run/install.sh | sh"],
+  ["Homebrew", "brew install T0mSIlver/starbridge/starbridge"],
+  ["npm", "npm i -g starbridge"],
+] as const;
+
+function Install() {
+  const [at, setAt] = useState(0);
+  const [copied, setCopied] = useState(false);
+  const [method, cmd] = INSTALL[at] ?? ["", ""];
+  const onCopied = () => track("copy-install", { method });
+  return (
+    <div className={s.install}>
+      <div className={`t-meta ${s.tabs}`} role="tablist" aria-label="Install with">
+        {INSTALL.map(([label], i) => (
+          <button
+            key={label}
+            type="button"
+            role="tab"
+            aria-selected={i === at}
+            className={s.tab}
+            onClick={() => {
+              setAt(i);
+              setCopied(false);
+            }}
+          >
+            {label}
+          </button>
+        ))}
+        <button
+          type="button"
+          className={s.copy}
+          aria-label={copied ? "Copied" : "Copy"}
+          onClick={async () => {
+            try {
+              await navigator.clipboard.writeText(cmd);
+              setCopied(true);
+              onCopied();
+            } catch {}
+          }}
+        >
+          <Icon name={copied ? "check" : "copy"} size={16} />
+        </button>
+      </div>
+      <pre className={`t-code ${s.cmd}`} role="tabpanel" onCopy={onCopied}>
+        {cmd}
+      </pre>
+    </div>
+  );
+}
+
+function Section({
+  title,
+  text,
+  short,
+  flip,
+  children,
+}: {
+  title: string;
+  text: string;
+  /** The text on phones, when shorter. */
+  short?: string;
+  flip?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className={`${s.section} ${flip ? s.flip : ""}`}>
+      <div className={s.sectionText}>
+        <h2 className="t-title">{title}</h2>
+        <p className={`t-prose ${s.dim} ${short ? s.wideOnly : ""}`}>{text}</p>
+        {short && <p className={`t-prose ${s.dim} ${s.narrowOnly}`}>{short}</p>}
+      </div>
+      <div className={s.box}>{children}</div>
+    </section>
+  );
+}
+
+/** What a visitor without a device on this browser sees at `/` (design v2, direction B). */
+export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
+  const [quotas] = useState(() => sample().quotas.cards.slice(0, 4));
+  const now = new Date();
+  return (
+    <div className={s.page}>
+      <Analytics />
+      <header className={`t-small ${s.top}`}>
+        <span className={`t-subtitle ${s.brand}`}>
+          <Mark size={22} />
+          Starbridge
         </span>
-        <a className={`t-label ${s.link}`} href={REPO}>
-          GitHub
+        <nav className={s.nav} aria-label="Site">
+          <a href="#features">Features</a>
+          <a href={`${REPO}/tree/main/docs`}>Docs</a>
+          <a href={SELF_HOST}>Self-host</a>
+          <a href={REPO}>GitHub</a>
+        </nav>
+        <a href="/v1/auth/github" className={`t-label ${ui.btn} ${ui.fill} ${s.signIn}`}>
+          Sign in
         </a>
       </header>
 
       <section className={s.hero}>
-        <h1 className="t-display">Supervise your coding agents from your phone.</h1>
-        <p className={`t-body ${s.lede}`}>
-          Quota windows, decisions and permission prompts, answered with one tap and pushed back
-          into the session.
+        <h1 className="t-hero">
+          Your agents ask.
+          <br />
+          You answer from anywhere.
+        </h1>
+        <p className={`t-lead ${s.dim} ${s.lead}`}>
+          Quota windows, questions and permission prompts from every coding agent, answered with one
+          tap<span className={s.wideOnly}> and pushed back into the session</span>.
         </p>
         <div className={s.actions}>
-          <a href="/v1/auth/github" className={`${ui.button} ${ui.primary}`}>
+          <a href="/v1/auth/github" className={`t-action ${ui.btn} ${ui.lg} ${ui.fill}`}>
+            <Icon name="github" size={18} />
             Sign in with GitHub
           </a>
-          <a href="#install" className={ui.button}>
-            Install
+          <a href="#install" className={`t-action ${ui.btn} ${ui.lg}`}>
+            Install the CLI
           </a>
         </div>
+        <p className={`t-meta ${s.faint} ${s.wideOnly}`}>
+          Open source, MIT · end-to-end encrypted · self-host or use starbridge.run
+        </p>
       </section>
 
-      <div className={s.features}>
-        {FEATURES.map((f) => (
-          <section key={f.shot} className={s.feature}>
-            <h2 className="t-heading">{f.title}</h2>
-            <p className={s.lede}>{f.text}</p>
-            <Shot name={f.shot} alt={f.alt} height={f.height} />
-          </section>
+      <div className={s.showcase}>
+        <div className={s.glow} aria-hidden="true" />
+        <div className={s.browser}>
+          <div className={s.chrome} aria-hidden="true">
+            <i />
+            <i />
+            <i />
+            <span className="t-caption">starbridge.run</span>
+          </div>
+          <Shot
+            name="web-inbox"
+            alt="The web inbox: a permission prompt selected beside the list, quota windows on the right"
+            width={2160}
+            height={1350}
+            className={s.browserShot}
+          />
+        </div>
+        <div className={s.heroPhone}>
+          <Phone name="android-inbox" alt="The Android inbox with a run, a prompt and questions" />
+        </div>
+      </div>
+
+      <div id="features" className={s.features}>
+        {FEATURES.map(([title, text]) => (
+          <div key={title} className={s.feature}>
+            <h3 className="t-prose">{title}</h3>
+            <p className={`t-reading ${s.dim}`}>{text}</p>
+          </div>
         ))}
       </div>
 
-      <section className={s.block}>
-        <h2 className="t-heading">End-to-end encrypted</h2>
-        <p className={s.lede}>
-          Your phone, your browsers and your machines hold the keys. The server only holds
-          ciphertext.
-        </p>
-      </section>
-
-      <section id="install" className={s.block}>
-        <h2 className="t-heading">Install</h2>
-        <p className={s.lede}>
-          On each machine that runs agents, install the CLI. It then sets up the agent service and
-          the Claude Code plugin.
-        </p>
-        <dl className={s.install}>
-          {INSTALL.map((i) => (
-            <div key={i.label}>
-              <dt className="t-label">{i.label}</dt>
-              <dd>
-                <code className={`t-code ${s.cmd}`}>{i.cmd}</code>
-              </dd>
-            </div>
+      <Section
+        title="See which window runs out first"
+        text="Each window fills in its provider's colour, with a tick where a steady pace would be now. The part you will use before the reset is hatched, and the status says when it runs out."
+        short="Each window fills in its provider's colour; the part you'll use before the reset is hatched."
+      >
+        <div className={s.quotas}>
+          {quotas.map((q) => (
+            <QuotaRow
+              key={`${q.provider}/${q.window.id}`}
+              q={q}
+              settings={DEFAULT_SETTINGS}
+              now={now}
+            />
           ))}
-        </dl>
-        <p className={s.lede}>
-          On Android, install the APK from{" "}
-          <a className={s.link} href={`${REPO}/releases/latest`}>
-            GitHub Releases
-          </a>
-          . On iPhone and desktop, install this page as an app, with notifications.
+        </div>
+      </Section>
+
+      <Section
+        flip
+        title="One tap, back in the session"
+        text="The agent asks and keeps working. Your answer reaches its session as the next prompt."
+      >
+        <div className={s.crop}>
+          <Phone
+            name="android-question"
+            alt="A question in Android's sheet, with its two options"
+          />
+        </div>
+      </Section>
+
+      <Section
+        title="Runs that need you at the machine"
+        text="When an agent starts something that takes over your screen or keyboard, it says why, and the run's progress stays on your lock screen until it passes or fails."
+      >
+        <div className={s.lock}>
+          <Shot
+            name="android-lock"
+            alt="The lock screen with a run's progress and a waiting prompt"
+            width={824}
+            height={1784}
+          />
+        </div>
+      </Section>
+
+      <section id="install" className={s.installSection}>
+        <h2 className="t-title">Install on each machine</h2>
+        <p className={`t-prose ${s.dim} ${s.wideOnly}`}>
+          The CLI sets up the agent service and the Claude Code plugin.
         </p>
+        <Install />
       </section>
 
-      <footer className={s.foot}>
-        <a className={s.link} href={REPO}>
-          Source on GitHub, MIT licence
-        </a>
-        <a className={s.link} href="/privacy">
-          Privacy
-        </a>
-        <a className={s.link} href="/terms">
-          Terms
-        </a>
-        <button type="button" className={s.textButton} onClick={onOwnerToken}>
-          Self-hosted: sign in with the owner token
-        </button>
+      <footer className={`t-small ${s.foot}`}>
+        <div className={s.footBrand}>
+          <span className={`t-action ${s.brand}`}>
+            <Mark size={20} />
+            Starbridge
+          </span>
+          <span className={s.dim}>
+            Your phone, browsers and machines hold the keys. The server stores only ciphertext.
+          </span>
+        </div>
+        <div className={s.footCol}>
+          <span>Product</span>
+          <a href="#features">Quota windows</a>
+          <a href="#features">Questions</a>
+          <a href="#features">Permission prompts</a>
+          <a href="#features">Runs</a>
+        </div>
+        <div className={s.footCol}>
+          <span>Source</span>
+          <a href={REPO}>GitHub, MIT licence</a>
+          <a href={SELF_HOST}>Self-host</a>
+          <button type="button" className={s.textButton} onClick={onOwnerToken}>
+            Use your own server
+          </button>
+          <a href={AGENTS_GUIDE}>How to tell your agents</a>
+          <a href={`${REPO}/releases`}>Changelog</a>
+        </div>
+        <div className={s.footCol}>
+          <span>Legal</span>
+          <a href="/privacy">Privacy</a>
+          <a href="/terms">Terms</a>
+        </div>
+        <nav className={s.footInline} aria-label="Links">
+          <a href={REPO}>GitHub</a>
+          <a href={SELF_HOST}>Self-host</a>
+          <a href={AGENTS_GUIDE}>How to tell your agents</a>
+          <a href="/privacy">Privacy</a>
+          <a href="/terms">Terms</a>
+        </nav>
       </footer>
-    </main>
+    </div>
   );
 }

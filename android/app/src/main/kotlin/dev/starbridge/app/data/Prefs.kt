@@ -11,8 +11,14 @@ import javax.inject.Singleton
 /** The "Colours" setting (DESIGN.md, "The look"): DESIGN.md's palette, or Material You from the wallpaper. */
 enum class Colours { Starbridge, Wallpaper }
 
-/** How the inbox shows, remembered on this phone: one feed or grouped by machine, and History open or closed. */
-data class InboxView(val byMachine: Boolean = false, val historyOpen: Boolean = false)
+/**
+ * How the inbox shows, remembered on this phone: one feed or grouped by machine, History open or
+ * closed, and when question cards carry their answer buttons (#138).
+ */
+data class InboxView(val byMachine: Boolean = false, val historyOpen: Boolean = false, val buttons: CardButtons = CardButtons.Always)
+
+/** When a question's card carries its answer buttons; tapping the card opens the question either way. */
+enum class CardButtons { Always, WhenWaiting, Never }
 
 /** Display settings: nothing secret, so plain preferences rather than the [Vault]. */
 @Singleton
@@ -39,11 +45,17 @@ class Prefs @Inject constructor(@ApplicationContext context: Context) {
         _quota.value = value
     }
 
-    private val _inbox = MutableStateFlow(InboxView(prefs.getBoolean(BY_MACHINE, false), prefs.getBoolean(HISTORY_OPEN, false)))
+    private val _inbox = MutableStateFlow(
+        InboxView(
+            prefs.getBoolean(BY_MACHINE, false),
+            prefs.getBoolean(HISTORY_OPEN, false),
+            CardButtons.entries.find { it.name == prefs.getString(BUTTONS, null) } ?: CardButtons.Always,
+        ),
+    )
     val inbox: StateFlow<InboxView> = _inbox
 
     fun setInbox(value: InboxView) {
-        prefs.edit().putBoolean(BY_MACHINE, value.byMachine).putBoolean(HISTORY_OPEN, value.historyOpen).apply()
+        prefs.edit().putBoolean(BY_MACHINE, value.byMachine).putBoolean(HISTORY_OPEN, value.historyOpen).putString(BUTTONS, value.buttons.name).apply()
         _inbox.value = value
     }
 
@@ -62,6 +74,7 @@ class Prefs @Inject constructor(@ApplicationContext context: Context) {
         const val QUOTA_SHOWN = "quota-shown"
         const val BY_MACHINE = "inbox-by-machine"
         const val HISTORY_OPEN = "inbox-history-open"
+        const val BUTTONS = "inbox-card-buttons"
         val json = Json { ignoreUnknownKeys = true; encodeDefaults = false }
     }
 }

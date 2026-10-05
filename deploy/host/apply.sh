@@ -10,6 +10,7 @@ systemctl enable --now starbridge-backup.timer
 install -m 755 host/deploy-rev.sh /usr/local/sbin/starbridge-deploy
 
 host/server-env.sh
+host/umami-env.sh
 $compose build --pull server web
 $compose up -d --remove-orphans
 # The bind-mounted Caddyfile is a new file on every release; recreate Caddy only when it changed.
@@ -18,17 +19,20 @@ if ! cmp -s /opt/starbridge.old/deploy/Caddyfile Caddyfile; then
 fi
 docker image prune -f >/dev/null
 
+# healthy URL SERVICE [SECONDS]
 healthy() {
-  for _ in $(seq 30); do
+  for _ in $(seq "${3:-30}"); do
     curl -fsS "$1" >/dev/null 2>&1 && return 0
     sleep 1
   done
-  echo "$2 not healthy after 30 s" >&2
+  echo "$2 not healthy after ${3:-30} s" >&2
   $compose logs --tail 50 "$2" >&2
   return 1
 }
 healthy http://127.0.0.1:8080/healthz server
 healthy http://127.0.0.1:3000/ web
+# Umami migrates its database on its first start.
+healthy http://127.0.0.1:3001/api/heartbeat umami 120
 
 # /healthz/backup fails until a first backup ran; run one now rather than wait for the night.
 [ -e "$(docker volume inspect -f '{{.Mountpoint}}' starbridge_data)/last-backup" ] ||

@@ -46,9 +46,32 @@ It unpacks the ref into `/opt/starbridge`, builds the server and web images on t
 |---|---|
 | Compose project | `sudo docker compose -p starbridge -f /opt/starbridge/deploy/compose.yaml` |
 | Database | volume `starbridge_data`, `/data/starbridge.db` in the container |
-| Backups | `/var/backups/starbridge/starbridge-YYYYMMDD.db`, nightly at 03:15 UTC, 14 days; Hetzner backups cover the rest |
+| Backups | `/var/backups/starbridge/starbridge-YYYYMMDD.db` and `umami-YYYYMMDD.dump`, nightly at 03:15 UTC, 14 days; Hetzner backups cover the rest |
+| Analytics | Umami (`umami`, `umami-db`), volume `starbridge_umami-db`; secrets in `/etc/starbridge/umami.env` and `umami-db.env`, made on the first deploy |
 | Uptime | `.github/workflows/uptime.yml` checks `/healthz` and `/healthz/backup` (503 once the last backup is over 26 h old) hourly and opens an `outage` issue on failure |
 | FCM check | `sudo /opt/starbridge/deploy/host/check-fcm.sh` mints a token with the service account |
+| Usage counts | `sudo docker compose -p starbridge -f /opt/starbridge/deploy/compose.yaml exec server bun server.js usage 14` prints the last 14 days (`server/src/usage.ts`) |
+
+## Analytics
+
+Umami counts visits to the public pages (`SPEC.md`, "Page analytics"). Its dashboard listens on
+the box's `127.0.0.1:3001` only:
+
+```bash
+ssh -i ~/.ssh/starbridge_ed25519 -N -L 3001:127.0.0.1:3001 deploy@starbridge.run
+```
+
+then open `http://localhost:3001` and log in as `admin` with the password in
+`~/.config/starbridge/secrets/umami-admin-password`. After the first deploy with Umami, run
+`deploy/umami-setup.sh` once: it sets that password and adds the website. To leave your own
+visits out, run `localStorage.setItem("umami.disabled", "1")` in the browser's console on
+starbridge.run.
+
+## Restore
 
 To restore, stop the server, copy a backup over `starbridge.db` in the volume, delete
 `starbridge.db-wal` and `starbridge.db-shm`, `chown 1000:1000` it and start the server.
+
+To restore Umami, stop `umami`, then
+`sudo docker compose -p starbridge -f /opt/starbridge/deploy/compose.yaml exec -T umami-db pg_restore -U umami -d umami --clean < umami-YYYYMMDD.dump`
+and start `umami`.

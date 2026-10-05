@@ -5,7 +5,7 @@
 //
 // Needs `npx playwright install firefox` once. Writes screenshots to web/screenshots.
 import { type ChildProcess, spawn, spawnSync } from "node:child_process";
-import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { type BrowserContext, firefox, type Page } from "playwright";
@@ -17,6 +17,14 @@ const ORIGIN = `http://localhost:${PORTS.web}`;
 const SHOTS = join(WEB, "screenshots");
 const tmp = mkdtempSync(join(tmpdir(), "starbridge-e2e-"));
 const children: ChildProcess[] = [];
+
+/** Two PNGs to attach to a decision: the sample data's pair of landing heroes (lib/sample.ts). */
+function image(which: "a" | "b"): string {
+  const shots = JSON.parse(readFileSync(join(WEB, "src/lib/sample-shots.json"), "utf8"));
+  const path = join(tmp, `hero-${which}.png`);
+  writeFileSync(path, Buffer.from(shots[which.toUpperCase()], "base64url"));
+  return path;
+}
 
 function step(text: string) {
   console.log(`\n== ${text}`);
@@ -188,7 +196,7 @@ async function main() {
   step("a browser with no device lands on the landing page");
   const visitor = await a.newPage();
   await visitor.goto(ORIGIN);
-  await visitor.getByRole("heading", { name: /Supervise your coding agents/ }).waitFor();
+  await visitor.getByRole("heading", { name: /Your agents ask/ }).waitFor();
   await shoot(visitor, "landing");
   await visitor.close();
 
@@ -332,9 +340,9 @@ async function main() {
       "--session-link",
       "desktop=claude://claude.ai/epitaxy/local_dbf54d69-f2ac-4a14-b298-d7bb6ecf0e3f",
       "--image",
-      join(ROOT, "android/app/screenshots/decision-light.png"),
+      image("a"),
       "--image",
-      join(ROOT, "android/app/screenshots/decision-dark.png"),
+      image("b"),
       "--link",
       "https://claude.ai/public/artifacts/0b3f0e7c",
     ],
@@ -524,16 +532,11 @@ async function main() {
   const devices = page.getByRole("region", { name: "Devices" });
   await devices.getByText("Device · this browser").waitFor();
   // Devices list this browser, then the others by when they joined: the second browser first.
-  const before = await devices.getByRole("button", { name: "Revoke" }).count();
+  // The list may still gain the recovered browser, so the second browser's sign-out below,
+  // not a count, proves the revocation.
   await devices.getByRole("button", { name: "Revoke" }).first().click();
   await page.getByRole("dialog").getByRole("button", { name: "Revoke" }).click();
   await page.getByRole("dialog").waitFor({ state: "detached" });
-  // The list reloads from the directory once the revocation is written.
-  const revokes = devices.getByRole("button", { name: "Revoke" });
-  for (let i = 0; i < 50 && (await revokes.count()) !== before - 1; i++)
-    await page.waitForTimeout(200);
-  if ((await revokes.count()) !== before - 1)
-    throw new Error("the revoked browser is still listed");
   await pageB.reload();
   await pageB.getByRole("link", { name: SIGN_IN }).waitFor();
   await page.emulateMedia({ colorScheme: "light" });

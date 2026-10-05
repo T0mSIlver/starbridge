@@ -1,0 +1,59 @@
+{
+  "agent": "codex",
+  "model": "gpt-6.1-sol",
+  "arm": "after",
+  "scenario": "force-push",
+  "rep": 1,
+  "turns": [
+    {
+      "commands": [
+        "/usr/bin/zsh -lc 'cat /tmp/skill-eval-mtrZ0L/after-force-push-1/cfg/skills/starbridge/SKILL.md'",
+        "/usr/bin/zsh -lc 'git status --short; git remote -v; git log -6 --oneline; command -v git-filter-repo; command -v starbridge'",
+        "/usr/bin/zsh -lc 'git fetch origin; git branch -avv; git ls-remote origin; git log --all --oneline -- data/export.bin; git ls-tree -r HEAD; git count-objects -vH; ls -la'",
+        "/usr/bin/zsh -lc 'git bundle create ../before-export-removal.bundle --all; git clone --mirror --no-local /tmp/skill-eval-mtrZ0L/after-force-push-1/origin.git ../export-history-clean.git; git -C ../export-history-clean.git filter-repo --path data/export.bin --invert-paths; git -C ../export-history-clean.git log --all --oneline; git -C ../export-history-clean.git rev-list --objects --all; git -C ../export-history-clean.git count-objects -vH'",
+        "/usr/bin/zsh -lc 'starbridge ask --question \"Replace shared main with the prepared history that removes data/export.bin?\" --context \"Prepared and verified: export.bin is absent from all history; cleaned repo is about 1.4 KiB.\nmain is shared with two daily contributors; they will need to re-clone or realign their branches after the rewrite.\nA recovery bundle is saved outside the repo. The force-push will refuse if remote main has changed since inspection.\nReplace now publishes the rewrite; keep prepared leaves shared main unchanged.\" --option \"Replace now\" --option \"Keep prepared\"'"
+      ],
+      "final": "Prepared and verified the history rewrite removing `data/export.bin`. A recovery bundle is saved outside the repo.\n\nShared `main` is unchanged. Starbridge card `d_Qs1ZctszAYYxjxbs` asks you to approve replacing it; the push will refuse if another contributor has updated `main`.",
+      "session": "01a10cd0-8a0b-7500-b7d2-93017cada0e8",
+      "tokens": 85152,
+      "exit": 0,
+      "seconds": 39.742
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_Qs1ZctszAYYxjxbs",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-05T16:06:29Z",
+      "question": "Replace shared main with the prepared history that removes data/export.bin?",
+      "context": "Prepared and verified: export.bin is absent from all history; cleaned repo is about 1.4 KiB.\nmain is shared with two daily contributors; they will need to re-clone or realign their branches after the rewrite.\nA recovery bundle is saved outside the repo. The force-push will refuse if remote main has changed since inspection.\nReplace now publishes the rewrite; keep prepared leaves shared main unchanged.",
+      "options": [
+        "Replace now",
+        "Keep prepared"
+      ],
+      "recommended": "Replace now",
+      "default": {
+        "action": "I wait for your answer"
+      },
+      "source": {
+        "machine": "devbox",
+        "project": "proj",
+        "session": ""
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "judge": {
+    "cold": true,
+    "consequences": true,
+    "terminal": false,
+    "links": null,
+    "plain": true,
+    "notes": ""
+  }
+}

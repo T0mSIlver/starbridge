@@ -35,7 +35,7 @@ export interface Timing {
   waitSeconds: number;
   /** How often a session that does not poll checks the state file. */
   checkMs: number;
-  /** How often it reads its answers even when the state file did not change: defaults fall due. */
+  /** How often it reads its answers even when no change of the state file was seen. */
   recheckMs: number;
   /** How long a lease lasts past its last renewal. */
   leaseMs: number;
@@ -176,7 +176,6 @@ export class Poller {
       }
       const { decisionId: id, line } = parsed;
       if (typeof id !== "string" || typeof line !== "string") continue;
-      // An answer and its default-time notice confirm separately.
       const ack = typeof parsed.ack === "string" ? parsed.ack : id;
       // A /clear during the call made another session current: the answer waits, unconfirmed,
       // until session `me` is resumed.

@@ -607,6 +607,13 @@ How it generalizes is open.
   code (stored columns in `server/src/db.ts`, retention in `server/src/limits.ts`, logs and
   backups in `deploy/`); the operator's legal entity, jurisdiction, rights statement, liability
   wording and account-deletion process stay marked TODO until the owner decides them.
+- 2026-10-05. Legal pages filled in (owner): the operator is Tom Vaucourt as a non-professional
+  individual in France, with the host's address (Hetzner) instead of his own, as LCEN art. 6
+  allows. Current features stay free, 60 days' notice before any price; 30 days' notice before a
+  shutdown; suspension appeals to abuse@ within 30 days, answered within 14; French law and
+  courts, consumers keep their own; no fixed log age (logs hold no IPs and rotate by size);
+  account deletion confirmed by a code in a public gist on the GitHub account, done within 30
+  days; GDPR rights with CNIL as the authority.
 
 - 2026-10-05. Platforms (owner). The web app ships first everywhere it can: installed to the home
   screen on iOS (Web Push works for home-screen web apps since iOS 16.4) and as an installed app
@@ -655,6 +662,22 @@ How it generalizes is open.
   shows a flip to waiting as the question's notification again, with "Waiting for you". The
   rail's Find filters the inbox by its words; the rail counts paired machines, since the page
   cannot tell which are connected.
+- 2026-10-05. Design v2 on the web: settings, first run and landing page, as built. Settings is one
+  page: quota display and warnings, providers (drag or arrow keys to reorder, Notify, Show),
+  devices with Revoke behind a dialog, Colours (System, Light, Dark, applied before the first
+  paint), and a link to "How to tell your agents". Providers get a Notify switch, not the
+  mockup's "Warn at 90%" field, since #115 fixed the thresholds; device rows show the date
+  added, since the page has no last-seen data. Add a device opens on a QR code for the new
+  phone; the `starbridge pair` code field sits below it. A browser joining an account shows its
+  own QR code (a `/pair#code` link that a signed-in device opens), with "Can't scan? Compare
+  digits" and the recovery key as fallbacks. The landing page's browser shot is the real app at
+  `/sample`; its phone shots are the round 4 Android mockups until Android's design v2 ships,
+  when Roborazzi shots replace them.
+- 2026-10-05. Answer buttons on inbox rows, web (#138). Settings, Inbox: "Answer buttons on
+  questions", Always (the default), When the agent waits, or Never, remembered on the device. It
+  applies to question rows on a phone width; wide screens never carry them, since the open
+  question sits beside the list. Permission prompts keep Allow and Deny on their rows, since
+  their agent always waits.
 - 2026-10-05. Quota settings and notifications, as built (#115). Settings live on each device
   (web `localStorage`, Android preferences) and sit on a Quota settings page opened from the
   Quotas screen: bars show used or remaining, reset times relative or as a clock time
@@ -694,6 +717,83 @@ How it generalizes is open.
   `~/.local/opt/gh-runners/gradle`, which Gradle locks for concurrent builds; `android.yml`
   turns setup-gradle's cache off on them (`cache-disabled` when `vars.RUNNER` is set), since its
   restore overwrote files a concurrent job was reading (#142). This freed 3.6 GB.
+- 2026-10-05. Waiting state on the machine (#122) and permission prompts off by default (#124).
+  `starbridge waiting <id>` and `starbridge working <id>` post a decision's state; `ask
+  --waiting` posts it already waiting, quietly, since the decision's own push just went out,
+  and `wait <id>` marks it waiting before it blocks. The CLI keeps each decision's waiting id
+  and last state, posts nothing when the state is unchanged, and refuses once the decision is
+  answered. The default-time machinery is gone: no `--default-at` (accepted and ignored, with a
+  warning, until the skill drops it), no `default` session event, no notice line, and `wait`
+  ends only at `--timeout`. `--default` is optional; without it the CLI sends "Waits for your
+  answer" for older clients. Decisions carry `agent` (`--agent`, else `claude-code` when Claude
+  Code runs the CLI, which sets `CLAUDECODE=1`), and every source carries `machineKind`:
+  `pair` and `setup` guess it (cloud session or codespace, a battery, Linux with no display,
+  else desktop) and `starbridge config machine-kind` corrects it. `starbridge config
+  permissions on|off` replaces `starbridge permissions enable|disable`, so one command holds the
+  machine's settings; setup asks, default no, and says the Claude app already shows prompts
+  for Remote Control sessions.
+- 2026-10-05. Release keys backed up off the dev box (owner): `release.jks`, its password file
+  and `minisign.key` are in an AES-256 encrypted disk image, `starbridge-release-keys.dmg`, in the
+  owner's iCloud Drive and Google Drive; its passphrase is in his Google Password Manager under
+  `starbridge.run`, user `release-keys-dmg`. Google Play: a personal developer account, developer
+  name `T0mSIlver`, identity check pending; production needs a 14-day closed test with 12 testers.
+
+- 2026-10-05. Usage counts (#140, owner ruling: learn how Starbridge is used without client
+  telemetry or anything new collected). The server counts requests it handles anyway
+  (`server/src/usage.ts`): during a day, `usage_events` holds one row per event, with the
+  account or member id only where a count is of distinct ones (active accounts, machines, and
+  devices split by sign-in: the cookie is the web page, a bearer token the Android app). Each
+  hour, and at start, every finished day is folded into `usage_days` (day, metric, value: counts,
+  and p50 and p90 of seconds to answer) and its events are deleted, so no per-user row outlives
+  its day. Metrics: `active.*`, `items.<kind>` per post, `answered.<kind>.seconds` and
+  `answered.by.<client>` per device answer, `push.<type>.<outcome>` per push, `relay.<type>.<outcome>` per push relayed for another server, and at the close
+  `total.*`, `new.accounts` and `total.push-targets.<type>`. Read access is a CLI, not an admin
+  page: `bun server.js usage [days]` inside the server container on the VPS
+  (`deploy/README.md`). It is the simpler of the two, adds no route, and needs no owner flag
+  (the hosted owner signs in through GitHub like everyone, and `accounts.owner` marks only the
+  self-hosted owner-token account); whoever can open the database reads it. `/privacy` lists the
+  counts in their own section.
+- 2026-10-05. Page analytics (owner ruling on #141, as built). Umami 3.4.0 with Postgres 18 runs
+  in the deploy's Compose project, on a network of its own. Only the landing page, `/privacy`
+  and `/terms` load its tracker, from `/stats/script.js` on starbridge.run; Caddy passes that
+  file and `/stats/api/send` to Umami and nothing else, so no DNS record is needed. Auto-tracking
+  is off and each public page records its own view, because the tracker would otherwise follow
+  the app's client-side navigation after an owner-token sign-in from the landing page. Copying
+  an install command records `copy-install` with the method (Script, Homebrew, npm). No cookie,
+  no browser storage, no stored IP address: the visitor hash's salt changes daily
+  (`SALT_ROTATION=day`), Do Not Track is honoured, and `/privacy` lists what Umami records, so
+  there is no consent banner. The dashboard listens on the VPS's `127.0.0.1:3001` only; the owner
+  reaches it through an SSH tunnel. The first deploy makes the database password and Umami's
+  secret on the box (`deploy/host/umami-env.sh`); `deploy/umami-setup.sh` then replaces the
+  default admin password and creates the website under the id the pages send, which is fixed in
+  `web/src/lib/analytics.ts`. The nightly backup also dumps Umami's database (`pg_dump -Fc`, 14
+  days). Umami drops headless browsers' hits as bots, so a Playwright check needs a desktop user
+  agent.
+
+- 2026-10-05. Agents reach the owner through Starbridge (#121, owner). The skill and the
+  SessionStart rule say Starbridge is how an agent reaches its user: a card for a decision that is
+  theirs, a card before ending a turn on work that waits on them (a PR to review, a failure only
+  they can fix), `starbridge run` around commands that block them; everything else the agent
+  decides, and it asks in the terminal only when `starbridge` fails. A card answers cold: a
+  question its options answer, two to five lines of context saying what each option changes,
+  links and images only when they help decide, one question per card. Agents never answer for
+  the owner: no default to apply when nobody answers; a blocked agent works on something else,
+  builds both options when cheap and asks which to keep, or waits (`ask --default` is optional,
+  and #127 made `default` optional in the protocol). A `PreToolUse` hook on `AskUserQuestion`
+  (`starbridge hook ask-user`) turns the question away towards `starbridge ask`, unless the
+  machine is unpaired or the server does not answer within 3 s. The skill no longer covers
+  permission prompts (#124). `evals/skill` checks all this with real Claude Code and Codex
+  sessions; under the owner's home, Claude Code loads `~/.claude/CLAUDE.md` as an ancestor
+  folder's even with `CLAUDE_CONFIG_DIR` set, so eval sessions run under `/tmp`.
+
+- 2026-10-05. No Starbridge rules file (#126, owner). The SessionStart hook adds only its two fixed
+  rules; `rules.md` is gone. Users tell agents what else to ask or report in the agents' own
+  instruction files, and `docs/tell-your-agents.md` says where, with lines to copy. Personal
+  files over a repo's shared ones, checked by real runs (Claude Code 2.1.289, Codex CLI 0.160.0,
+  pi 0.87.1): globally `~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md`, `~/.pi/agent/AGENTS.md`;
+  per repo, Claude Code's `CLAUDE.local.md` loads beside the shared `CLAUDE.md`, while Codex's
+  and pi's `AGENTS.override.md` replaces the repo's `AGENTS.md`, so it only suits repos without
+  one.
 
 ## Encryption, with existing libraries
 

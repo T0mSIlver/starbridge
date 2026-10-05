@@ -39,9 +39,9 @@ Keys and state live in `~/.config/starbridge` (or `$XDG_CONFIG_HOME`,
 `$STARBRIDGE_CONFIG_DIR`), mode 0600.
 
 ```bash
-starbridge ask --question "Merge #12 now?" --option Merge --option Wait \
-  --default Merge --default-at 2h --wait
-starbridge wait d_Xk3…             # exit 2: nobody answered in time
+starbridge ask --question "Merge #12 now?" --option Merge --option Wait
+starbridge waiting d_Xk3…          # out of other work: "Waiting for you" on every device
+starbridge wait d_Xk3… --timeout 1h   # exit 2: nobody answered in time
 starbridge quota push --provider claude --provider codex   # every 5 minutes
 ```
 
@@ -63,11 +63,9 @@ machine is not paired or the server is down, `run` warns once and goes on.
 The command's output is a pipe, not a terminal; tools that print progress
 only to a terminal print none here.
 
-The owner's rules go in `rules.md` in the config directory, in plain words,
-for example "Tell me when you run the e2e tests that take over my Mac, or
-local inference." They add to the default above, never replace it. The
-`starbridge` Claude Code plugin loads them into every session
-(`plugin/README.md`).
+To have agents report other commands too, such as local inference, tell them
+in their own instruction files (`docs/tell-your-agents.md`). That adds to the
+default above, never replaces it.
 
 `starbridge answers` is for the Claude Code mod (`mod/README.md`): it hands a
 session the answers to the decisions it asked.
@@ -92,11 +90,22 @@ skip a step. `starbridge status` prints the same checks. `starbridge
 uninstall` removes the service, the plugins and then the binary, asks your devices to revoke
 the machine, and deletes the keys only when you say so (`--purge`).
 
-`starbridge permissions enable` sends this machine's Claude Code permission
-prompts to your devices too, where they can be allowed or denied; the prompt
-stays open at the keyboard and the first answer wins. The `starbridge`
-plugin's hooks run `starbridge hook permission` and `starbridge hook settle`,
-which do nothing while it is off (PROTOCOL.md, "Permission prompts").
+If you use the Claude app, turn off its "Code updates" notifications, which fire at the end of
+every turn, and keep "Code permission requests" on. If you turn on Starbridge's own permission
+prompts (below), turn "Code permission requests" off too, so one prompt does not notify twice.
+
+Permission prompts stay at the keyboard unless you say yes in setup or run
+`starbridge config permissions on`; the Claude app already shows them for
+Remote Control sessions. When on, this machine's Claude Code prompts also go to
+your devices, where they can be allowed or denied; the prompt stays open at the
+keyboard and the first answer wins. The `starbridge` plugin's hooks run
+`starbridge hook permission` and `starbridge hook settle`, which exit at once
+while it is off (PROTOCOL.md, "Permission prompts").
+
+The plugin's `PreToolUse` hook runs `starbridge hook ask-user` on Claude Code's
+`AskUserQuestion`: it turns the question away and tells the agent to post it with `starbridge
+ask`, so it reaches you away from the terminal. When the machine is not paired or the server
+does not answer, the hook lets the question through.
 
 `quota push` runs `codexbar usage --format json` for each provider, or once
 for every enabled provider when none is named. A provider that fails or is

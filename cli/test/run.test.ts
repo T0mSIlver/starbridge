@@ -188,27 +188,20 @@ test("the reporter posts the start at once, then progress throttled, a heartbeat
   expect(posts).toHaveLength(count);
 });
 
-test("the plugin's SessionStart hook adds the owner's rules file, escaped, next to the decision rule", async () => {
+test("the plugin's SessionStart hook adds the rule to reach the owner and the run rule, and ignores a rules.md", async () => {
   const hook = join(import.meta.dir, "..", "..", "plugin", "hooks", "session-start.sh");
   const ctx = testCtx();
-  const context = async () => {
-    const p = Bun.spawn(["sh", hook], { env: { STARBRIDGE_CONFIG_DIR: ctx.store.dir } });
-    const out = JSON.parse(await new Response(p.stdout).text());
-    expect(out.hookSpecificOutput.hookEventName).toBe("SessionStart");
-    return out.hookSpecificOutput.additionalContext as string;
-  };
-  const rule = "Whenever you need me to decide something, use the `starbridge` skill.";
-  const bare = await context();
-  expect(bare.startsWith(`${rule}\n\nWhen a command you are about to run blocks me`)).toBe(true);
-  expect(bare).toContain("`starbridge run`");
-  expect(bare).not.toContain("My rules");
-  const rules = 'Tell me when you run "e2e" tests\n\tthat take over my Mac \\ or inference.\n';
-  await Bun.write(join(ctx.store.dir, "rules.md"), rules);
-  const text = await context();
-  expect(text.startsWith(`${rule}\n\nWhen a command`)).toBe(true);
-  expect(text).toContain("or matches one of my rules below");
+  await Bun.write(join(ctx.store.dir, "rules.md"), "Tell me when you run inference.\n");
+  const p = Bun.spawn(["sh", hook], { env: { STARBRIDGE_CONFIG_DIR: ctx.store.dir } });
+  const out = JSON.parse(await new Response(p.stdout).text());
+  expect(out.hookSpecificOutput.hookEventName).toBe("SessionStart");
+  const text = out.hookSpecificOutput.additionalContext as string;
+  expect(text).toContain(
+    "Starbridge is how you reach me: use the `starbridge` skill, instead of asking here or with AskUserQuestion",
+  );
+  expect(text).toContain("\n\nWhen a command you are about to run blocks me");
   expect(text).toContain("`starbridge run`");
-  expect(text.endsWith(rules.trimEnd())).toBe(true);
+  expect(text).not.toContain("inference");
 });
 
 test("an agent from before runs (404 on the route) is skipped: the run goes to the server", async () => {
