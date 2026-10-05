@@ -30,6 +30,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -87,6 +88,7 @@ class ServerStore(
     override val server = MutableStateFlow(saved.server)
     override val busy = MutableStateFlow(false)
     override val notice = MutableStateFlow<String?>(null)
+    override val sending = MutableStateFlow<Map<String, String>>(emptyMap())
 
     init {
         directory = runCatching { verified(saved.entries) }.getOrNull()
@@ -457,7 +459,18 @@ class ServerStore(
 
     // --- Answering ---------------------------------------------------------------
 
-    override fun answer(id: String, choice: String?, text: String?) = run(showBusy = false) { send(id, choice, text) }
+    /** One answer per decision at a time: the decision stays locked until the server replies. */
+    override fun answer(id: String, choice: String?, text: String?) {
+        if (id in sending.value) return
+        sending.update { it + (id to (choice ?: text.orEmpty())) }
+        run(showBusy = false) {
+            try {
+                send(id, choice, text)
+            } finally {
+                sending.update { it - id }
+            }
+        }
+    }
 
     /**
      * Signs the answer and seals it to the machine that asked, the only recipient the server

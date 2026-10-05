@@ -89,7 +89,8 @@ class Fake(private val now: Instant) {
             options = emptyList(),
             recommended = null,
             default = "Picks Falkenstein",
-            defaultAt = later(120),
+            // 10:00 tomorrow: the fallback says which day.
+            defaultAt = later(20 * 60),
             source = Source("dev box", "starbridge", "deploy"),
             createdAt = ago(40),
         ),

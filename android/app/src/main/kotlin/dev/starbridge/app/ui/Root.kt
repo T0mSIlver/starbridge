@@ -54,6 +54,8 @@ import dev.starbridge.app.ui.inbox.DecisionActions
 import dev.starbridge.app.ui.inbox.DecisionScreen
 import dev.starbridge.app.ui.inbox.InboxScreen
 import dev.starbridge.app.ui.inbox.InboxViewModel
+import dev.starbridge.app.ui.inbox.Replies
+import dev.starbridge.app.ui.inbox.rememberDrafts
 import dev.starbridge.app.ui.quotas.QuotasScreen
 import dev.starbridge.app.ui.quotas.QuotasViewModel
 import dev.starbridge.app.ui.setup.SetupScreen
@@ -135,6 +137,8 @@ fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> U
     val now = now()
     // An answer-in decision stops waiting at its default time, so count against the ticking clock.
     val openDecisions = decisions.count { it.isOpen(now) }
+    // Shared by a decision's card and its detail, which are separate entries.
+    val drafts = rememberDrafts()
     val host = Notices(notice, dismiss)
     val listDetail = rememberListDetailSceneStrategy<NavKey>()
     val twoPane = calculatePaneScaffoldDirective(currentWindowAdaptiveInfo()).maxHorizontalPartitions > 1
@@ -191,6 +195,7 @@ fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> U
                     ) {
                         val vm: InboxViewModel = hiltViewModel()
                         val decisions by vm.decisions.collectAsStateWithLifecycle()
+                        val sending by vm.sending.collectAsStateWithLifecycle()
                         val selected = (backStack.lastOrNull() as? DecisionKey)?.id
                         InboxScreen(
                             decisions,
@@ -201,16 +206,19 @@ fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> U
                             }),
                             selected = selected,
                             refresh = refresh(vm::refresh),
+                            replies = Replies(drafts, sending),
                         )
                     }
                     entry<DecisionKey>(metadata = ListDetailSceneStrategy.detailPane()) { key ->
                         val vm: InboxViewModel = hiltViewModel()
                         val decisions by vm.decisions.collectAsStateWithLifecycle()
+                        val sending by vm.sending.collectAsStateWithLifecycle()
                         DecisionScreen(
                             decisions.find { it.id == key.id },
                             now,
                             onAnswer = vm::answer,
                             onBack = if (twoPane) null else ({ backStack.removeAt(backStack.lastIndex) }),
+                            replies = Replies(drafts, sending),
                         )
                     }
                     entry<QuotasKey> {
