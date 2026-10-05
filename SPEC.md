@@ -982,14 +982,15 @@ goes in git.
   starts each session as a child `claude --print --sdk-url …
   --input-format stream-json --permission-mode auto`. The child's debug log
   shows the user's plugin (`localvoxtral-remote`) and mods
-  (`orchestrator-cache` from `CLAUDE_CODE_PLUGIN_DIRS`,
+  (`orchestrator-cache` from `CLAUDE_CODE_PLUGIN_DIRS` in user settings,
   `prompt-cache-control` from `~/.claude/skills`) loading, and the project
   hooks fired. Claude Code ignores `CLAUDE_CODE_PLUGIN_DIRS` in project
   settings and logs a warning, so a mod loads only from user or managed
   settings or an installed plugin. An `ask` rule still prompts in auto mode.
   For it the `PermissionRequest` hook fired, with `permission_mode: "auto"`
   and no `tool_use_id` as in the terminal, and the prompt also went to the
-  Claude app, `--print` notwithstanding. Classifier blocks were seen in the
+  Claude app. So the earlier reading that the hook does not fire under `-p`
+  does not hold for a `--print` child driven over `--sdk-url`. Classifier blocks were seen in the
   cloud probe below, also in auto mode. Each blocked call fired `PreToolUse`
   then `PermissionDenied`, and no `PermissionRequest`. The hooks docs say
   the same: "It doesn't fire in auto mode, where Claude Code denies
