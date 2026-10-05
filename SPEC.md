@@ -758,8 +758,7 @@ How it generalizes is open.
   restore overwrote files a concurrent job was reading (#142). This freed 3.6 GB.
 - 2026-10-05. Waiting state on the machine (#122) and permission prompts off by default (#124).
   `starbridge waiting <id>` and `starbridge working <id>` post a decision's state; `ask
-  --waiting` posts it already waiting, quietly, since the decision's own push just went out,
-  and `wait <id>` marks it waiting before it blocks. The CLI keeps each decision's waiting id
+  --waiting` posts it already waiting, and `wait <id>` marks it waiting before it blocks. The CLI keeps each decision's waiting id
   and last state, posts nothing when the state is unchanged, and refuses once the decision is
   answered. The default-time machinery is gone: no `--default-at` (accepted and ignored, with a
   warning, until the skill drops it), no `default` session event, no notice line, and `wait`
@@ -904,6 +903,17 @@ How it generalizes is open.
   24 or 12 words keep recovering with them: the entry tells words from a key by their letter runs.
   No page says "seed", "phrase" or asks for words; the clients only show keys. #199 closes once
   this is deployed and Chrome no longer warns.
+- 2026-10-05. The `AskUserQuestion` hook answers instead of denying (#200). Claude Code 2.1.289
+  shows every `PreToolUse` deny as a red "hook error", which reads as Starbridge failing. The
+  hook now allows the call with `updatedInput.answers`, one answer per question saying to ask
+  through `starbridge ask`; Claude Code shows that as an answered question and opens no dialog
+  (checked in a real session). Input it cannot read is still denied.
+- 2026-10-05. A question asked already waiting notifies as waiting (#202). `ask --waiting`
+  used to push the decision, which carries no state, then post its `waiting` item quietly, so
+  the phone's notification said "Working on other things" while the app said "Waiting for
+  you". Now the decision goes quietly and the `waiting` item pushes; Android fetches a decision
+  it has not seen when its waiting state arrives, as the web page's service worker already did.
+  An app older than this change shows no notification for such a question until it syncs.
 
 ## Encryption, with existing libraries
 

@@ -218,7 +218,8 @@ export async function postDecision(ctx: Ctx, s: Session, input: AskInput): Promi
   );
   // A wait for this decision starts at the cursor known now, so it never misses its answer.
   const cursor = ctx.store.state().cursor;
-  await s.api.postItem(item);
+  // Asked already waiting, its waiting state pushes instead, so the notification says so.
+  await s.api.postItem(input.waiting ? { ...item, quiet: true } : item);
   ctx.store.updateState((st) => {
     st.asked[decision.id] = {
       question: decision.question,
@@ -229,9 +230,7 @@ export async function postDecision(ctx: Ctx, s: Session, input: AskInput): Promi
       ...(decision.answerIn ? { answerIn: true } : {}),
     };
   });
-  // Its own push already notified, so this state goes quietly.
-  if (input.waiting)
-    await markWaiting(ctx, () => postWaiting(ctx, s, decision.id, "waiting", true));
+  if (input.waiting) await markWaiting(ctx, () => postWaiting(ctx, s, decision.id, "waiting"));
   return decision;
 }
 
@@ -250,7 +249,7 @@ export async function ask(
 
 /**
  * Posts decision `id`'s waiting state under the one id it keeps. Only a flip to `waiting`
- * pushes, unless `quiet`; posting the state it already has does nothing. Returns whether it
+ * pushes; posting the state it already has does nothing. Returns whether it
  * posted. A decision answered meanwhile throws a UsageError saying so.
  */
 export async function postWaiting(
@@ -258,7 +257,6 @@ export async function postWaiting(
   s: Session,
   id: string,
   state: Waiting["state"],
-  quiet = false,
 ): Promise<boolean> {
   const asked = ctx.store.state().asked[id];
   if (!asked) throw new UsageError(`${id} is not a decision this machine asked`);
@@ -284,7 +282,7 @@ export async function postWaiting(
   } satisfies Waiting;
   const item = seal("waiting", body, { id: s.machine.id, signKey: s.keys.sign.privateKey }, to);
   try {
-    await s.api.postItem(quiet || state === "working" ? { ...item, quiet: true } : item);
+    await s.api.postItem(state === "working" ? { ...item, quiet: true } : item);
   } catch (e) {
     if (e instanceof ApiError && e.code === "already-answered")
       throw new UsageError(`${id} is already answered`);
