@@ -1038,6 +1038,8 @@ How it generalizes is open.
   update a skill that differs. It offers the Starbridge Pi package when `pi` is on the PATH
   (`pi install git:github.com/T0mSIlver/starbridge`), unless Pi's settings list it already.
   Each asks first, `--yes` takes the defaults (install), and `--no-plugin` skips all three.
+  `status` reports both, and `uninstall` removes the skill folder (only when it holds the
+  Starbridge skill) and the Pi package. The docs drop the curl step for Codex.
 - 2026-10-06. Deploys without downtime (#150, owner ruling of 2026-10-05). Caddy holds a request
   for up to 30 s (`lb_try_duration`) while its upstream is down, retrying every 250 ms, and
   checks each upstream's health every second. The page runs as two copies, `web-a` on 3010 and
@@ -1056,8 +1058,6 @@ How it generalizes is open.
   and `/` and opened a 1 s long-poll every 200 ms saw no failed request; the server's restart
   held requests for at most 1.3 s. Rolling back to a release from before this one brings back
   the old restart gap.
-  `status` reports both, and `uninstall` removes the skill folder (only when it holds the
-  Starbridge skill) and the Pi package. The docs drop the curl step for Codex.
 - 2026-10-05. A blocked question shows by its look, not a state line (#191, owner's pick of
   proposal B, "Filled and hollow", from https://claude.ai/artifact/EMcUnTsGhyTsiCNujo4JT6). This
   replaces the "Waiting for you 1:12" tag of the #166 entry above. A question whose agent waits
