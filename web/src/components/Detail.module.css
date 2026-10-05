@@ -36,10 +36,6 @@
   gap: var(--s2);
 }
 
-.right {
-  margin-left: auto;
-}
-
 .command {
   margin: 0;
   padding: var(--s4) var(--s5);
@@ -73,4 +69,34 @@
   display: grid;
   gap: var(--s2);
   justify-items: start;
+}
+
+.head {
+  display: grid;
+  gap: var(--s4);
+  transition:
+    background var(--t-state),
+    padding var(--t-state),
+    margin var(--t-state);
+}
+
+/* Filled while the agent waits: the same ground as its row (#191). */
+.head.blocks {
+  margin: calc(-1 * var(--s4)) calc(-1 * var(--s4)) 0;
+  padding: var(--s4);
+  border-radius: var(--radius-lg);
+  background: var(--accent-soft);
+}
+
+/* "Default" after the first option's label, quiet like the key hints. */
+.default {
+  margin-left: var(--s1h);
+  font-weight: 400;
+  opacity: 0.75;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .head {
+    transition: none;
+  }
 }

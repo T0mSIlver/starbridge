@@ -2,13 +2,13 @@
 
 import type { DecisionLink } from "@starbridge/protocol";
 import { useEffect, useRef, useState } from "react";
-import { ago, type MachineKind } from "@/lib/feed";
+import type { MachineKind } from "@/lib/feed";
 import { answerPlace } from "@/lib/outcome";
 import type { InboxItem, PromptItem, PromptReply, Reply } from "@/lib/types";
 import { Images, Links } from "./Attachments";
 import { Context } from "./Context";
 import s from "./Detail.module.css";
-import { KindTile, MetaRow, SessionLine, StateLine, WaitTag } from "./Feed";
+import { KindTile, MetaRow, SessionLine, slotTime } from "./Feed";
 import { ordered } from "./options";
 import ui from "./ui.module.css";
 
@@ -73,6 +73,11 @@ function AnswerElsewhere({ page }: { page: DecisionLink }) {
   );
 }
 
+/** The meta row and title, on an amber ground while the agent waits on the item (#191). */
+function Head({ since, children }: { since?: string; children: React.ReactNode }) {
+  return <div className={`${s.head} ${since ? s.blocks : ""}`}>{children}</div>;
+}
+
 /** A question: what the agent asked, its state, its words, its options, and its session. */
 export function QuestionDetail({
   item,
@@ -101,15 +106,17 @@ export function QuestionDetail({
 
   return (
     <article className={s.detail} aria-label="Selected item">
-      <MetaRow
-        machine={d.source.machine}
-        kind={kindOf(d.source)}
-        repo={d.source.project}
-        time={ago(d.createdAt, now)}
-        size="comfy"
-      />
-      <h2 className="t-heading">{d.question}</h2>
-      {!closed && <StateLine item={item} now={now} comfy />}
+      <Head since={closed ? undefined : item.waitingSince}>
+        <MetaRow
+          machine={d.source.machine}
+          kind={kindOf(d.source)}
+          repo={d.source.project}
+          time={slotTime(d.createdAt, closed ? undefined : item.waitingSince, now)}
+          waiting={!closed && !!item.waitingSince}
+          size="comfy"
+        />
+        <h2 className="t-heading">{d.question}</h2>
+      </Head>
       <Context text={d.context} className={`t-reading ${s.context}`} />
       <Images d={d} />
       <Links d={d} />
@@ -126,13 +133,13 @@ export function QuestionDetail({
             <button
               key={o}
               type="button"
-              className={`t-label ${ui.btn} ${o === d.recommended ? ui.rec : ""}`}
+              className={`t-label ${ui.btn} ${i === 0 ? ui.rec : ""}`}
               disabled={sending}
               aria-keyshortcuts={keys && i < 4 ? String(i + 1) : undefined}
               onClick={() => send({ choice: o })}
             >
               {o}
-              {o === d.recommended && <span className="sr-only">, recommended</span>}
+              {i === 0 && <span className={s.default}>Default</span>}
               {keys && i < 4 && <Kbd k={String(i + 1)} />}
             </button>
           ))}
@@ -202,22 +209,20 @@ export function PromptDetail({
 
   return (
     <article className={s.detail} aria-label="Selected item">
-      <MetaRow
-        machine={p.source.machine}
-        kind={kindOf(p.source)}
-        repo={p.source.project}
-        time={ago(p.createdAt, now)}
-        size="comfy"
-      />
-      <div className={s.toolHead}>
-        <KindTile type="prompt" size={28} />
-        <h2 className="t-action">{p.tool}</h2>
-        {!closed && (
-          <span className={s.right}>
-            <WaitTag since={p.createdAt} now={now} comfy />
-          </span>
-        )}
-      </div>
+      <Head since={closed ? undefined : p.createdAt}>
+        <MetaRow
+          machine={p.source.machine}
+          kind={kindOf(p.source)}
+          repo={p.source.project}
+          time={slotTime(p.createdAt, closed ? undefined : p.createdAt, now)}
+          waiting={!closed}
+          size="comfy"
+        />
+        <div className={s.toolHead}>
+          <KindTile type="prompt" filled={!closed} size={28} />
+          <h2 className="t-action">{p.tool}</h2>
+        </div>
+      </Head>
       <pre className={`t-command ${s.command}`}>{p.summary}</pre>
       {p.description && <p className={`t-reading ${s.context}`}>{p.description}</p>}
       {closed ? (

@@ -54,6 +54,10 @@
   color: var(--accent);
 }
 
+.countQuiet {
+  color: var(--fg2);
+}
+
 .keys {
   color: var(--fg3);
 }

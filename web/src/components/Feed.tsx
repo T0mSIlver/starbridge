@@ -5,7 +5,7 @@ import { imageSrc } from "@/lib/attachments";
 import { ago, type Entry, type MachineKind, type Past, timer } from "@/lib/feed";
 import { clockTime } from "@/lib/format";
 import { duration, progressText, runState } from "@/lib/runs";
-import type { Decision, InboxItem, PromptItem, RunItem, Source } from "@/lib/types";
+import type { Decision, PromptItem, RunItem, Source } from "@/lib/types";
 import s from "./Feed.module.css";
 import { Icon, Play } from "./icons";
 
@@ -24,18 +24,23 @@ export function useNow(live: boolean, ms = 1000): number {
 /** A machine's icon by its kind; a generic computer while its machine does not say (#122). */
 export const machineIcon = (kind?: MachineKind) => kind ?? "desktop";
 
-/** Facts Starbridge knows: the machine's kind and name, the repo, the time on the right. */
+/**
+ * Facts Starbridge knows: the machine's kind and name, the repo, the time on the right. While an
+ * agent waits on the item, the time is how long it has waited, in amber (#191).
+ */
 export function MetaRow({
   machine,
   kind,
   repo,
   time,
+  waiting,
   size = "dense",
 }: {
   machine: string;
   kind?: MachineKind;
   repo: string;
   time: string;
+  waiting?: boolean;
   size?: "dense" | "comfy";
 }) {
   return (
@@ -48,16 +53,27 @@ export function MetaRow({
           <span className={s.repo}>{repo}</span>
         </>
       )}
-      <span className={s.time}>{time}</span>
+      <span className={`${s.time} ${waiting ? s.waitTime : ""}`}>{time}</span>
     </div>
   );
 }
 
-/** A terminal for a permission prompt, in amber because it blocks; a speech bubble for a question. */
-export function KindTile({ type, size = 32 }: { type: "prompt" | "question"; size?: number }) {
+/**
+ * A terminal for a permission prompt, a speech bubble for a question: filled in amber while its
+ * agent waits on it, outlined while it works around it (#191).
+ */
+export function KindTile({
+  type,
+  filled,
+  size = 32,
+}: {
+  type: "prompt" | "question";
+  filled: boolean;
+  size?: number;
+}) {
   return (
     <span
-      className={`${s.tile} ${type === "prompt" ? s.tilePrompt : s.tileQuestion}`}
+      className={`${s.tile} ${filled ? s.tileFilled : s.tileHollow}`}
       style={{ width: size, height: size }}
     >
       <Icon name={type === "prompt" ? "term" : "ask"} size={Math.round(size * 0.56)} />
@@ -65,21 +81,16 @@ export function KindTile({ type, size = 32 }: { type: "prompt" | "question"; siz
   );
 }
 
-export function WaitTag({ since, now, comfy }: { since: string; now: number; comfy?: boolean }) {
-  return (
-    <span className={`${comfy ? "t-small" : "t-meta"} ${s.wait}`}>
-      <Icon name="waiting" size={comfy ? 16 : 15} />
-      Waiting for you {timer(since, now)}
-    </span>
-  );
+/** When the item's agent started waiting on it: a prompt always, a question once marked. */
+export function waitingSince(e: Entry): string | undefined {
+  if (e.type === "prompt") return e.item.permission.createdAt;
+  if (e.type === "question") return e.item.waitingSince;
+  return undefined;
 }
 
-/**
- * "Waiting for you" once the agent marks itself blocked on the question (#122); nothing while it
- * works around it, so every line under the question is either a state or the agent's words (#166).
- */
-export function StateLine({ item, now, comfy }: { item: InboxItem; now: number; comfy?: boolean }) {
-  return item.waitingSince ? <WaitTag since={item.waitingSince} now={now} comfy={comfy} /> : null;
+/** The time slot: how long the agent has waited, else how long ago the item came. */
+export function slotTime(at: string, since: string | undefined, now: number): string {
+  return since ? timer(since, now) : ago(at, now);
 }
 
 /** "Claude" or "Codex", for "Open in". */
@@ -152,35 +163,40 @@ type RowProps = {
 /** One prompt or question in the feed; the whole row selects it. */
 export function NeedRow({ entry, now, selected, comfy, onSelect, actions }: RowProps) {
   const type = entry.type === "prompt" ? "prompt" : "question";
+  const since = waitingSince(entry);
+  const waited = since ? `Waiting for you, ${duration(now - Date.parse(since))}. ` : "";
   return (
     <div
-      className={`${s.row} ${comfy ? s.comfy : ""}`}
+      className={`${s.row} ${comfy ? s.comfy : ""} ${since ? s.blocks : ""}`}
       aria-current={selected ? "true" : undefined}
+      data-row={entry.id}
     >
       <button
         type="button"
         className={s.hit}
         data-id={entry.id}
-        aria-label={label(entry)}
+        aria-label={waited + label(entry)}
         tabIndex={selected ? 0 : -1}
         onClick={onSelect}
       />
-      <KindTile type={type} size={comfy ? 36 : 32} />
+      <KindTile type={type} filled={!!since} size={comfy ? 36 : 32} />
       <div className={s.body}>
         <MetaRow
           machine={entry.machine}
           kind={entry.kind}
           repo={entry.repo}
-          time={ago(entry.at, now)}
+          time={slotTime(entry.at, since, now)}
+          waiting={!!since}
           size={comfy ? "comfy" : "dense"}
         />
         {entry.type === "prompt" ? (
-          <PromptBody p={entry.item} now={now} comfy={comfy} />
+          <PromptBody p={entry.item} comfy={comfy} />
         ) : entry.type === "question" ? (
           <>
-            <div className={comfy ? "t-action" : "t-label"}>{entry.item.decision.question}</div>
+            <div className={`${comfy ? "t-action" : "t-label"} ${s.question}`}>
+              {entry.item.decision.question}
+            </div>
             <Thumbs d={entry.item.decision} width={comfy ? 140 : 112} />
-            <StateLine item={entry.item} now={now} comfy={comfy} />
           </>
         ) : null}
         {actions && <div className={s.actions}>{actions}</div>}
@@ -189,12 +205,11 @@ export function NeedRow({ entry, now, selected, comfy, onSelect, actions }: RowP
   );
 }
 
-function PromptBody({ p, now, comfy }: { p: PromptItem; now: number; comfy?: boolean }) {
+function PromptBody({ p, comfy }: { p: PromptItem; comfy?: boolean }) {
   return (
     <>
       <div className={`${comfy ? "t-small" : "t-meta"} ${s.tool}`}>
         <span className={s.toolName}>{p.permission.tool}</span>
-        <WaitTag since={p.permission.createdAt} now={now} comfy={comfy} />
       </div>
       <pre className={`${comfy ? "t-code" : "t-snippet"} ${s.cmd}`}>{p.permission.summary}</pre>
     </>
@@ -320,7 +335,7 @@ export function PastRow({
         tabIndex={selected ? 0 : -1}
         onClick={onSelect}
       />
-      <KindTile type={e.type === "prompt" ? "prompt" : "question"} />
+      <KindTile type={e.type === "prompt" ? "prompt" : "question"} filled={false} />
       <div className={s.pastBody}>
         <MetaRow
           machine={e.machine}
