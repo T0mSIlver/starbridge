@@ -30,9 +30,14 @@ async function webCryptoKeys(): Promise<DeviceKeys> {
   };
 }
 
-export async function generateDeviceKeys(): Promise<DeviceKeys> {
+/** `keeps` checks that storage gives WebCrypto keys back; raw keys replace any it loses. */
+export async function generateDeviceKeys(
+  keeps: (keys: StoredKeys) => Promise<boolean> = async () => true,
+): Promise<DeviceKeys> {
   try {
-    return await webCryptoKeys();
+    const keys = await webCryptoKeys();
+    if (!(await keeps(keys.stored))) throw new Error("storage loses WebCrypto keys");
+    return keys;
   } catch {
     await sodium.ready;
     const box = sodium.crypto_box_keypair();

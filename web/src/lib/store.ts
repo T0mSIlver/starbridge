@@ -28,6 +28,8 @@ type Records = {
   current: string;
   /** Quota alerts already notified, so a snapshot every few minutes does not repeat them. */
   alerts: string[];
+  /** Keys written and read back once by `keeps`. */
+  probe: StoredKeys;
 };
 
 const DB = "starbridge";
@@ -137,5 +139,23 @@ export async function update<K extends keyof Records>(
     });
   } finally {
     d.close();
+  }
+}
+
+/**
+ * Whether IndexedDB gives these keys back. WebKit stores an X25519 CryptoKey but reads the record
+ * back as null (Playwright's WebKit 26.6), which would lose the device on the next load.
+ */
+export async function keeps(keys: StoredKeys): Promise<boolean> {
+  try {
+    await put("probe", keys);
+    const back = await get("probe");
+    return (
+      back?.kind === "raw" || (back?.box instanceof CryptoKey && back.sign instanceof CryptoKey)
+    );
+  } catch {
+    return false;
+  } finally {
+    await del("probe").catch(() => {});
   }
 }

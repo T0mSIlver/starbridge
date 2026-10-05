@@ -125,7 +125,7 @@ export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
           <a className={s.link} href={`${REPO}/releases/latest`}>
             GitHub Releases
           </a>
-          . Anywhere else, use this page.
+          . On iPhone and desktop, install this page as an app, with notifications.
         </p>
       </section>
 

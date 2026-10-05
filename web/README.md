@@ -54,3 +54,18 @@ xvfb-run -a node web/e2e/run.ts
 
 It runs headed because headless Firefox cannot show notifications. With `codexbar` on the PATH the
 quota step uploads real windows; without it, the CLI's recorded fixtures.
+
+## Installed app check
+
+`e2e/install.ts` checks the installed app without an iPhone or a desktop install: WebKit as an
+iPhone shows the Add to Home Screen step in a tab and not in the Home Screen app, and Chromium
+runs its installability check on the manifest, installs the page and launches it in its own
+window. It writes the screenshots in `docs/install/`. Ports 3880 and 3881 on localhost.
+
+```bash
+npx playwright install webkit chromium && sudo npx playwright install-deps webkit
+```
+
+```bash
+xvfb-run -a -s "-screen 0 1280x860x24" node web/e2e/install.ts
+```
