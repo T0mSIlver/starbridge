@@ -44,6 +44,26 @@ data class Appended(val length: Int, val head: String)
 
 class PairingResult(val approval: JsonElement)
 
+/** A join request as the server relays it (PROTOCOL.md, "Joining by digits"). */
+@Serializable
+data class JoinView(
+    val id: String,
+    val request: String,
+    val commitment: String,
+    /** "open", "comparing", "approved" or "cancelled". */
+    val state: String,
+    val approver: String? = null,
+    val approverKey: String? = null,
+    val joinerKey: String? = null,
+    val approval: JsonElement? = null,
+    val createdAt: String,
+    val expiresAt: String,
+    val version: Long,
+)
+
+@Serializable
+data class JoinList(val joins: List<JoinView>, val cursor: String)
+
 /** The server's routes this client uses, as PROTOCOL.md lists them. */
 class Api(private val http: OkHttpClient, private val server: String, private val session: String?) {
     private val json = "application/json".toMediaType()
@@ -129,6 +149,41 @@ class Api(private val http: OkHttpClient, private val server: String, private va
         val (status, body) = call("GET", "/pairings/$rendezvous/result?wait=$waitSeconds", headers = mapOf("X-Claim" to claim), client = longPoll)
         if (status == 204 || body == null) return null
         return PairingResult(body.jsonObject.getValue("approval"))
+    }
+
+    private fun longPoll(waitSeconds: Int) = http.newBuilder().readTimeout((waitSeconds + 15).toLong(), TimeUnit.SECONDS).build()
+
+    /** Holds until a new member posts under [rendezvous]; null when [waitSeconds] pass first. */
+    suspend fun awaitPairing(rendezvous: String, waitSeconds: Int): JsonElement? {
+        val (status, body) = call("GET", "/pairings/$rendezvous?wait=$waitSeconds", client = longPoll(waitSeconds))
+        if (status == 204 || body == null) return null
+        return body.jsonObject.getValue("request")
+    }
+
+    private fun join(body: JsonElement?): JoinView = ProtocolJson.decodeFromJsonElement(body!!.jsonObject.getValue("join"))
+
+    suspend fun postJoin(request: String, commitment: String): JoinView =
+        join(call("POST", "/joins", buildJsonObject { put("request", request); put("commitment", commitment) }).second)
+
+    /** Open join requests; with [waitSeconds], holds until one changes past [after]. */
+    suspend fun joins(after: String, waitSeconds: Int): JoinList =
+        ProtocolJson.decodeFromJsonElement(call("GET", "/joins?after=$after&wait=$waitSeconds", client = longPoll(waitSeconds)).second!!)
+
+    suspend fun join(id: String, after: Long, waitSeconds: Int): JoinView =
+        join(call("GET", "/joins/$id?after=$after&wait=$waitSeconds", client = longPoll(waitSeconds)).second)
+
+    suspend fun claimJoin(id: String, key: String, approver: String): JoinView =
+        join(call("POST", "/joins/$id/approver", buildJsonObject { put("key", key); put("approver", approver) }).second)
+
+    suspend fun revealJoin(id: String, key: String): JoinView =
+        join(call("POST", "/joins/$id/reveal", buildJsonObject { put("key", key) }).second)
+
+    suspend fun approveJoin(id: String, approval: PairingMessage) {
+        call("POST", "/joins/$id/approve", buildJsonObject { put("approval", ProtocolJson.encodeToJsonElement(approval)) })
+    }
+
+    suspend fun cancelJoin(id: String) {
+        call("DELETE", "/joins/$id")
     }
 
     suspend fun postItem(item: SealedItem) {

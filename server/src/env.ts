@@ -14,6 +14,8 @@ export interface Deps {
   answers: Waiters;
   /** Wakes pairing-result long-polls; keyed by rendezvous id. */
   pairings: Waiters;
+  /** Wakes join long-polls; keyed by "join:<id>" and "account:<account>". */
+  joins: Waiters;
   limiter: RateLimiter;
 }
 

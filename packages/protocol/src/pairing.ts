@@ -59,6 +59,20 @@ export function parsePairingCode(text: string): PairingCode {
 }
 
 /**
+ * The link a QR code carries: `<server>/pair#<code>`. Opened in a browser, it shows the web page
+ * with the code filled in; the fragment never reaches the server.
+ */
+export function pairingLink(server: string, code: PairingCode): string {
+  return `${server.replace(/\/+$/, "")}/pair#${formatPairingCode(code)}`;
+}
+
+/** A code typed by hand, or read from a scanned pairing link: the part after `#` if any. */
+export function codeFromLink(text: string): PairingCode {
+  const hash = text.indexOf("#");
+  return parsePairingCode(hash >= 0 ? text.slice(hash + 1) : text);
+}
+
+/**
  * The new member's claim secret, sent as `X-Claim` to fetch its approval and machine token:
  * 32 random bytes, base64url. The server keeps only `claimHash` of it.
  */

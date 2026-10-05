@@ -31,6 +31,22 @@
       "expect": "bad-encoding"
     }
   ],
+  "links": [
+    {
+      "note": "pairingLink(server, code); codeFromLink takes what follows #, or the whole text",
+      "server": "https://starbridge.run/",
+      "link": "https://starbridge.run/pair#008J-4CT4-ANK7-F24S-NAXW-SQFE",
+      "expect": "008J-4CT4-ANK7-F24S-NAXW-SQFE"
+    },
+    {
+      "input": "https://example.org/pair#008j-4ct4-ank7-f24s-naxw-sqfe",
+      "expect": "008J-4CT4-ANK7-F24S-NAXW-SQFE"
+    },
+    {
+      "input": "https://starbridge.run/pair#0123-4567",
+      "expect": "bad-encoding"
+    }
+  ],
   "bind": {
     "note": "verifyBind({account, member, nonce, sig}, signPk); message is bindMessage's bytes.",
     "account": "acct_tom",

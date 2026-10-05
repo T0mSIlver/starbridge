@@ -53,8 +53,15 @@ export const DEFAULT_LIMITS = {
 
   /** Open answer long-polls per machine: one per waiting session plus the mod. */
   answerWaits: 32,
-  /** Open result long-polls per pairing. */
+  /** Open result long-polls per pairing, and open request long-polls per rendezvous id. */
   pairingWaits: 4,
+
+  /** Join requests per account. */
+  joins: [10, MINUTE] as RateWindow,
+  /** Open long-polls on the account's join list: one per open page or app. */
+  joinListWaits: 16,
+  /** Open long-polls per join request: its joining device and the comparing device. */
+  joinWaits: 4,
 };
 
 export type Limits = typeof DEFAULT_LIMITS;

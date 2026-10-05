@@ -331,3 +331,18 @@ test("a result long-poll whose pairing expired and was replaced gets nothing", a
   expect(r.status).toBe(404);
   expect(r.json.token).toBeUndefined();
 });
+
+test("a device showing a QR code waits for the new member's request", async () => {
+  const s = await makeServer();
+  const acct = await setupAccount(s);
+  const code = newPairingCode();
+  const path = `/v1/pairings/${code.rendezvous}`;
+  expect((await s.call("GET", `${path}?wait=0.05`, { token: acct.device.token })).status).toBe(204);
+  expect((await s.call("GET", path, { token: acct.device.token })).status).toBe(404);
+  const waiting = s.call("GET", `${path}?wait=30`, { token: acct.device.token });
+  const p = await request(s, "devbox", generateMemberKeys(), code);
+  expect(p.r.status).toBe(201);
+  const got = await waiting;
+  expect(got.status).toBe(200);
+  expect(openPairingRequest(got.json.request, code).id).toBe("devbox");
+});

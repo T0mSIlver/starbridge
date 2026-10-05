@@ -78,6 +78,8 @@ sealed interface Approval {
     /** The code's request checked out: who asks to join, to show before approving. */
     data class Found(val name: String, val kind: Kind, val code: String) : Approval
     data class Approving(val found: Found) : Approval
+    /** This phone shows a QR code (a pairing link) and waits for a new phone to scan it. */
+    data class Showing(val code: String, val link: String) : Approval
     data class Done(val name: String) : Approval
     data class Failed(val message: String) : Approval
 }
@@ -87,8 +89,10 @@ sealed interface Phase {
     data object SignedOut : Phase
     /** Signed in but not in the directory yet. [accountExists]: another device set it up. */
     data class NoDevice(val accountExists: Boolean) : Phase
-    /** Waiting for another device to approve this one; it shows [code]. */
-    data class Joining(val code: String) : Phase
+    /** Waiting for another device to approve this one; it shows [code], or [scanned] it. */
+    data class Joining(val code: String, val scanned: Boolean = false) : Phase
+    /** Asked the account's devices to approve this one; [digits] once one of them took it. */
+    data class JoiningByDigits(val digits: String?) : Phase
     /** The first device shows the recovery words once. */
     data class RecoveryKey(val words: List<String>) : Phase
     data object Ready : Phase
@@ -96,3 +100,16 @@ sealed interface Phase {
 
 /** How pushes reach this phone. */
 data class PushSetting(val type: String, val fcmAvailable: Boolean, val distributors: List<String>, val registered: Boolean)
+
+/** A browser or phone signed in to the account that asks to join; [elsewhere] when another device compares digits for it. */
+data class JoinAsk(val id: String, val name: String, val at: Instant, val elsewhere: Boolean)
+
+/** Comparing digits for a join request, on this phone. */
+sealed interface Comparison {
+    data object Idle : Comparison
+    data class Waiting(val ask: JoinAsk) : Comparison
+    /** [error]: the last approval failed on the way and can be retried. */
+    data class Digits(val ask: JoinAsk, val digits: String, val approving: Boolean = false, val error: String? = null) : Comparison
+    data class Done(val message: String) : Comparison
+    data class Failed(val message: String) : Comparison
+}

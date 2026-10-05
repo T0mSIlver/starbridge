@@ -1,37 +1,77 @@
 import type { Register } from "claude-code";
+import { AgentLoop, HEADERS, socketPath } from "./agent.ts";
 import { configDir, Poller } from "./poller.ts";
+import { Switch } from "./switch.ts";
 
 /**
- * Starts the answer loop in each interactive session; see poller.ts. A hot reload loads this
- * module afresh: the old loop dies with the old module, and `session.start` starts a new one.
+ * Starts the answer loop in each interactive session: through the machine's agent when it runs
+ * (agent.ts), else through the CLI (poller.ts); switch.ts picks. A hot reload loads this module
+ * afresh: the old loop dies with the old module, and `session.start` starts a new one.
  */
 export const register: Register = (on) => {
-  let poller: Poller | undefined;
+  let loop: Switch | undefined;
 
   on("session.start", async ($, e, next) => {
     const started = await next(e);
     if (!e.isInteractive) return started;
-    void poller?.stop();
-    const dir = configDir({
+    void loop?.stop();
+    const env = {
+      STARBRIDGE_AGENT_SOCKET: await $.env.get("STARBRIDGE_AGENT_SOCKET"),
       STARBRIDGE_CONFIG_DIR: await $.env.get("STARBRIDGE_CONFIG_DIR"),
+      STARBRIDGE_NO_AGENT: await $.env.get("STARBRIDGE_NO_AGENT"),
       XDG_CONFIG_HOME: await $.env.get("XDG_CONFIG_HOME"),
+      XDG_RUNTIME_DIR: await $.env.get("XDG_RUNTIME_DIR"),
       HOME: await $.env.get("HOME"),
+    };
+    const dir = configDir(env);
+    const socket = socketPath(env);
+    const fetch = async (method: string, path: string, body?: unknown) => {
+      const r = await $.http.fetch(`http://agent${path}`, {
+        method,
+        socketPath: socket,
+        headers: body === undefined ? HEADERS : { ...HEADERS, "content-type": "application/json" },
+        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      });
+      return { status: r.status, text: r.text };
+    };
+    const log = (text: string) => $.ui.log(text, { to: "debug" });
+    const status = (text: string | undefined) => $.ui.status(text);
+    const submit = (text: string) => void $.prompt.submit({ text });
+    const sessionId = () => $.session.id();
+    const now = () => $.clock.now();
+    const sleep = (ms: number) => $.clock.sleep(ms);
+    loop = new Switch({
+      // The CLI honours STARBRIDGE_NO_AGENT too, so the CLI path then reaches the server itself.
+      agentUp: async () =>
+        !env.STARBRIDGE_NO_AGENT && (await fetch("GET", "/v1/status")).status < 300,
+      agent: (unconfirmed) =>
+        new AgentLoop(
+          { sessionId, cwd: () => $.session.cwd(), fetch, now, sleep, submit, status, log },
+          unconfirmed,
+        ),
+      poller: (unconfirmed) =>
+        new Poller(
+          {
+            sessionId,
+            run: (argv, timeoutMs) => $.process.run(argv, { timeoutMs }),
+            read: (path) => $.fs.read(path),
+            write: (path, text) => $.fs.write(path, text),
+            mtime: async (path) => (await $.fs.stat(path).catch(() => undefined))?.mtimeMs,
+            now,
+            sleep,
+            submit,
+            status,
+            log,
+          },
+          dir,
+          undefined,
+          undefined,
+          unconfirmed,
+        ),
+      sleep,
+      clearStatus: () => status(undefined),
+      log,
     });
-    poller = new Poller(
-      {
-        sessionId: () => $.session.id(),
-        run: (argv, timeoutMs) => $.process.run(argv, { timeoutMs }),
-        read: (path) => $.fs.read(path),
-        write: (path, text) => $.fs.write(path, text),
-        mtime: async (path) => (await $.fs.stat(path).catch(() => undefined))?.mtimeMs,
-        now: () => $.clock.now(),
-        sleep: (ms) => $.clock.sleep(ms),
-        submit: (text) => void $.prompt.submit({ text }),
-        status: (text) => $.ui.status(text),
-        log: (text) => $.ui.log(text, { to: "debug" }),
-      },
-      dir,
-    );
     return started;
   });
 
@@ -39,8 +79,8 @@ export const register: Register = (on) => {
   // `session.start`, and the loop reads the id each step. Only the end of the process stops it.
   on("session.end", async (_$, e, next) => {
     if (e.reason !== "clear" && e.reason !== "resume") {
-      await poller?.stop();
-      poller = undefined;
+      await loop?.end();
+      loop = undefined;
     }
     return next(e);
   });

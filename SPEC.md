@@ -170,6 +170,14 @@ What the probe showed (2026-10-04, in the Desktop Code tab):
   (longest gap measured: 23 minutes).
 - A hot reload of the mod aborts its in-flight requests at once.
 
+Changed (#68, part 2, 2026-10-05): the mod talks to the machine's agent over its unix socket
+with `$.http.fetch`. Each session sends `hello`, long-polls its own events (`wait=25`), submits
+them and acks them; it runs no CLI, takes no lease and watches no file. When no agent answers
+`GET /v1/status` with a 2xx (none installed, stopped, or a 426), the mod runs the CLI path above
+and checks for the agent every 30 s, so machines without the agent keep working until setup
+ships. Both paths share the set of submitted, unconfirmed lines, so a switch submits nothing
+twice. The "agent not running" status line waits until the CLI path goes.
+
 The other path is Claude Code channels (code.claude.com/docs/en/channels,
 research preview). A channel is an MCP server that pushes events into an open
 session, and a channel that declares `claude/channel/permission` can also answer
@@ -491,6 +499,12 @@ How it generalizes is open.
   `already-settled`. The server, which cannot read `expiresAt`, refuses answers 10 minutes after
   the permission arrived. `GET /items` takes a comma-separated `kind` list and `open=1`; the
   machine's `checkPermissionAnswer` lives in the protocol package.
+- 2026-10-05. Claude Code plugin (#68, part 2): the repo is the `starbridge` marketplace
+  (`.claude-plugin/marketplace.json`) with two plugins. `starbridge` (`plugin/`) holds the skill
+  and a `SessionStart` command hook that adds the rule "Whenever you need me to decide
+  something, use the `starbridge` skill." as context, so no CLAUDE.md edit; it has no `bin/`.
+  `starbridge-mod` (`mod/`) is the thin mod. `skill/` moved into `plugin/skills/`. The
+  `/starbridge:setup` command waits for `starbridge setup` (part 3).
 
 - 2026-10-05. Permission prompts on the machine (#57): Claude Code 2.1.289's `PermissionRequest`
   input carries no `tool_use_id` (probe log), so `hook settle` matches the call by the hash of
@@ -605,6 +619,12 @@ One pnpm monorepo:
   an Ed25519 seed printed as words when the first device is set up, can sign
   a new device once all are lost. Clients check the signatures, so the server
   cannot slip its own key in. Revoking is a signed entry too.
+- Pairing without typing (2026-10-05, #66): a device signed in to the same
+  account joins by digits, a 6-digit short authentication string with a
+  commitment (ZRTP, Matrix SAS) that both screens show; or a phone scans a QR
+  code an existing device shows; or the owner opens the link `starbridge pair`
+  prints. The 24-character code stays as the fallback. Design and vectors in
+  PROTOCOL.md, "Joining by digits".
 - A decision is sealed to each device's key and signed by the machine. The
   answer is sealed to the asking machine and signed by the device. Quota
   snapshots and alerts use the same envelope, so the server holds ciphertext
