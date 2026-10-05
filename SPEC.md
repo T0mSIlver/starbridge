@@ -514,8 +514,8 @@ How it generalizes is open.
   500-character rule text in full, since the scope applies every rule; a `setMode` suggestion (seen in the
   probe as `acceptEdits`) changes more than the call, so it stays at the keyboard. Without an
   agent the hook polls the server every 5 s, so a keyboard answer releases it within 5 s
-  instead of at once. The plugin's hook entries land once the plugin (#79) is on main; until
-  then a test settings file carries them.
+  instead of at once. The `starbridge` plugin's `hooks.json` carries the hook entries
+  (`PermissionRequest` with the 600 s timeout, the four settle events with 30 s).
 
 ## Encryption, with existing libraries
 
