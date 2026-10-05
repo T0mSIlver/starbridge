@@ -897,6 +897,59 @@ How it generalizes is open.
   you". Now the decision goes quietly and the `waiting` item pushes; Android fetches a decision
   it has not seen when its waiting state arrives, as the web page's service worker already did.
   An app older than this change shows no notification for such a question until it syncs.
+- 2026-10-05. A blocked question shows by its look, not a state line (#191, owner's pick of
+  proposal B, "Filled and hollow", from https://claude.ai/artifact/EMcUnTsGhyTsiCNujo4JT6). This
+  replaces the "Waiting for you 1:12" tag of the #166 entry above. A question whose agent waits
+  on it is filled: `accent-soft` behind the whole item (the web row, the Android card, the head
+  of the web detail and of the Android sheet), its question at weight 500, its kind icon (the
+  speech bubble) in amber. A question its agent works around is hollow: no ground, an outlined
+  card on Android (`line-strong`, no fill), its question at weight 400, its icon in `fg2`. A
+  permission prompt always blocks, so it looks like a waiting question. The time goes in the
+  meta row's time slot: while an agent waits, a clock ticking m:ss in amber at weight 500 from
+  when it started waiting (a prompt from when it was asked), else the item's age. No row,
+  card, sheet or notification carries a state tag, prompts included; screen readers hear
+  "Waiting for you, 2 minutes" at the start of the item's label (web `aria-label`, Android
+  `stateDescription`). Without colour the state still reads: fill against outline, 500
+  against 400, a clock against an age. Kind icons: Android prompt cards already draw the
+  terminal symbol in amber, and question cards gain the question symbol before the question,
+  amber while the agent waits, so both clients colour kind icons alike (the owner's fallback,
+  no coloured icons anywhere, applied only if Android could not). A flip to waiting moves the
+  item up with the expressive spring (web: `motion.state`), fills it and starts its clock at
+  0:00; a flip back moves it down, hollow, with no alert. Android notifications: waiting
+  questions post on their own high-importance channel, "Waiting for you"; questions the agent
+  works around on "Questions", at default importance (sound, no heads-up). A flip cancels the
+  notification and posts it again on the other channel: alerting once to waiting, silently
+  back. While the agent waits, the header ticks (the public version on the lock screen too).
+  The text is the agent's context, with inline code set in mono rather than shown with
+  backticks; a prompt's title is its tool alone ("Bash"). Web push keeps one word, since
+  nothing else there can be styled: a question pushed as waiting reads "Waiting · machine ·
+  project".
+- 2026-10-05. A question's first option is the agent's default (owner, #191). Agents still
+  never answer for the owner (#122), and nothing happens when the owner does not answer, so a
+  default has no timer; it is the agent's proposal. The skill tells agents to list their
+  default first (`--recommended` still names it when it is not). Clients show it first, as the
+  one filled amber button; the web detail and the Android sheet add "Default" inside that
+  button, after the label, at weight 400, like the web's key hints. Rows, cards and
+  notification buttons show it first and filled only, for room. Screen readers hear "Default"
+  (Android's `stateDescription` "Recommended" becomes "Default"). The protocol is unchanged:
+  `recommended` names the default, and `default` stays what older clients need.
+- 2026-10-05. Group by waiting (owner, #191). The inbox's view menu offers three groupings,
+  remembered on the device: none (one feed), "Group by machine", and "Group by waiting", which
+  sorts under two headers: "Waiting on you" with its count in amber (prompts and questions
+  whose agent waits), and "When you can" with its count in `fg2`. Runs stay above the groups,
+  as in the one feed, and the order inside each group is the feed's. Items look the same in
+  every grouping. A saved "Group by machine" carries over.
+- 2026-10-05. A typed reply on every question (#201, owner). A question with options also takes
+  a typed reply, as a side option: a neutral text button "Reply" after the options in the web
+  detail and the Android sheet opens a text field with Send. Rows, cards and notifications do
+  not carry it; they open the question. A question with no options stays typed only. The reply
+  goes alone, with no choice, and the agent gets the same line as any typed answer: `Answer to
+  d_… (question): <text>`. Protocol: an answer to a decision with options carries `choice` or
+  `text`, and a machine checks the choice against the options only when there is one. A CLI
+  from before this change rejects a text-only answer to a decision with options, so the
+  answer would be lost: the CLI marks the decisions it posts with `replies: true`, and clients
+  show Reply only on those. The skill still asks for options good enough that one of them is
+  right, and says a reply is a steer to act on.
 
 ## Encryption, with existing libraries
 

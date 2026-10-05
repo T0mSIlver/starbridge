@@ -243,7 +243,7 @@ typography:
     lineHeight: 20
     letterSpacing: 0
     tabular: true
-  meta: # the web's dense rows: the meta row, state lines, secondary lines
+  meta: # the web's dense rows: the meta row, secondary lines
     font: sans
     size: 13
     weight: 400
@@ -427,10 +427,11 @@ a decision's context, a permission prompt's command and a session's name.
 - Write tokens, never a raw colour, size or radius. A component that needs a
   new primitive adds it here in the same commit and says why.
 - Amber is for "needs you" only, and never fills a bar or a track. It shows
-  as text with a count or a timer ("Waiting for you 1:12", the inbox count),
-  as a tint (`accent-soft`) behind a whole item that needs you, as the one
-  filled recommended button, and as "Headroom unused", which the owner treats
-  as waste to act on. A screen at rest has no amber.
+  as text with a count or a timer (a blocked item's clock, the inbox count),
+  as a tint (`accent-soft`) behind a whole item that blocks an agent, as the
+  kind icon of such an item, as the one filled default button, and as
+  "Headroom unused", which the owner treats as waste to act on. A screen at
+  rest has no amber.
 - Lab colours show in one place only: a quota bar's fill. Never as text, a
   dot, a border or a container. Position keeps them apart from amber: a lab
   colour is always inside a meter's track, amber is a line of text or a tint
@@ -445,12 +446,16 @@ a decision's context, a permission prompt's command and a session's name.
   first on every screen while "Running out first" is on (the default).
 - A permission prompt and a question look different. A prompt shows a
   terminal tile in `accent-soft`, the exact command in mono, Allow and Deny,
-  and how long it has waited. A question shows its text as the title, its
-  state line, then its options.
-- A question's state line shows only once its agent marks itself blocked:
-  "Waiting for you" (`accent`) with how long, the waiting icon on the text's
-  centre line. A question with no state line is one the agent works around;
-  amber's absence says so, and no sentence does.
+  and how long it has waited. A question shows its text as the title, then
+  its options, its default (the first) filled.
+- An item that blocks an agent is filled; one it works around is hollow. A
+  prompt, and a question whose agent waits on it: `accent-soft` behind the
+  whole item, its kind icon in `accent`, its title at weight 500, and in the
+  meta row's time slot a clock ticking m:ss in `accent`, weight 500. A
+  question its agent works around: no ground, an outlined card on Android
+  (`line-strong`), its icon in `fg2`, its title at weight 400, its age in the
+  time slot. No line of text says which; screen readers get it in the item's
+  label. Fill, weight and the clock keep it readable without colour.
 - Every item opens with one meta row of facts Starbridge knows: the machine's
   kind icon and name, the repo, and the time right-aligned. The agent's own
   words come below it. Details end with the session name, truncated in the
@@ -469,7 +474,8 @@ a decision's context, a permission prompt's command and a session's name.
 - Shapes follow the Material 3 scale: cards `radius.xl`, buttons `radius.pill`
   (round ends in a connected group, inner corners `radius.sm`), inset areas
   such as code `radius.lg`, inputs `radius.xs` on top. Cards on the dark
-  ground are filled (`surface`), with no border and no shadow.
+  ground are filled (`surface`), with no border and no shadow, except a
+  question its agent works around, which is outlined.
 - Quota tracks are `size.track` thick on Android and `size.track-dense` on
   the web.
 
@@ -545,7 +551,7 @@ The product name has no wordmark: it is "Starbridge" in the sans, weight 500.
 | `reading` | | the agent's text in the web's detail pane |
 | `label` | label large | web buttons, section names, status words |
 | `machine` | body medium | ids, numbers and times, in the sans |
-| `meta` | | the web's dense rows: meta row, state lines, secondary lines |
+| `meta` | | the web's dense rows: meta row, secondary lines |
 | `caption` | body small | group names in a list, footnotes, navigation bar labels |
 | `key` | label small | keyboard hints, counts in badges |
 | `figure` | headline small | a large number, such as used percent |
