@@ -30,6 +30,7 @@ import dev.starbridge.app.ui.devices.AddDeviceScreen
 import dev.starbridge.app.ui.Tab
 import dev.starbridge.app.data.Decision
 import dev.starbridge.app.data.InboxView
+import dev.starbridge.app.data.CardButtons
 import dev.starbridge.app.ui.since
 import dev.starbridge.app.ui.SheetBody
 import dev.starbridge.app.ui.inbox.rememberDrafts
@@ -107,6 +108,9 @@ class ScreenshotTest(private val dark: Boolean) {
     @Config(qualifiers = "w412dp-h1600dp-xxhdpi")
     @Test fun inboxHistory() = capture("inbox-history") { Phone(Tab.Inbox, 4) { Inbox(InboxView(historyOpen = true)) } }
 
+    // Answer buttons only on the question the agent waits on (#138).
+    @Test fun inboxButtonsWhenWaiting() = capture("inbox-buttons-when-waiting") { Phone(Tab.Inbox, 4) { Inbox(InboxView(buttons = CardButtons.WhenWaiting)) } }
+
     @Test fun inboxEmpty() = capture("inbox-empty") { Phone(Tab.Inbox, 0) { InboxScreen(fake.decisions.filterNot { it.isOpen(now) }, now, decisionActions, promptActions = promptActions) } }
 
     // Runs as they end, and text at 200%.
@@ -151,7 +155,7 @@ class ScreenshotTest(private val dark: Boolean) {
     @Test fun quotasTuned() = capture("quotas-tuned") { QuotasScreen(fake.windows, now, settings = tuned) }
 
     // The mockup's settings, scrolled: the whole page.
-    @Config(qualifiers = "w412dp-h1640dp-xxhdpi")
+    @Config(qualifiers = "w412dp-h2400dp-xxhdpi")
     @Test fun settings() = capture("settings") {
         Phone(Tab.Settings, 4) {
             SettingsScreen(fake.windows, QuotaSettings(hidden = listOf("gemini")), fake.members.size, Colours.Starbridge, fake.push, "https://starbridge.run", settingsActions)
