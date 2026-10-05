@@ -34,6 +34,12 @@
   padding: var(--s3) var(--s4);
 }
 
+/* A loading row's one line of text. */
+.bone {
+  width: 40%;
+  height: var(--s3);
+}
+
 .rowText {
   flex: 1;
   min-width: 0;
@@ -66,6 +72,13 @@
   background: none;
   color: var(--fg3);
   cursor: grab;
+  transition: color var(--t-fast) var(--ease);
+}
+
+@media (hover: hover) {
+  .handle:hover {
+    color: var(--fg);
+  }
 }
 
 .providerName {
@@ -93,8 +106,18 @@
   margin-left: -1px;
   border: 1px solid var(--line-strong);
   font-weight: 500;
+  color: var(--fg2);
   white-space: nowrap;
   cursor: pointer;
+  transition:
+    background var(--t-fast) var(--ease),
+    color var(--t-fast) var(--ease);
+}
+
+@media (hover: hover) {
+  .segment:hover {
+    color: var(--fg);
+  }
 }
 
 .segment:first-child {
@@ -108,10 +131,12 @@
 
 .segment:has(:checked) {
   background: var(--surface2);
+  color: var(--fg);
 }
 
 .segment:has(:focus-visible) {
-  outline: 2px solid var(--accent);
+  position: relative;
+  outline: 2px solid var(--fg);
   outline-offset: 2px;
 }
 
@@ -125,7 +150,7 @@
   border-radius: var(--radius-pill);
   background: var(--surface2);
   cursor: pointer;
-  transition: background var(--t-fast);
+  transition: background var(--t-fast) var(--ease);
 }
 
 .switch::after {
@@ -138,8 +163,8 @@
   border-radius: 50%;
   background: var(--fg2);
   transition:
-    left var(--t-fast),
-    background var(--t-fast);
+    left var(--t-fast) var(--ease),
+    background var(--t-fast) var(--ease);
 }
 
 .switch:checked {
@@ -183,8 +208,15 @@
   justify-content: space-between;
 }
 
-.linkRow:hover {
-  background: color-mix(in srgb, var(--surface2) 50%, transparent);
+.linkRow {
+  border-radius: inherit;
+  transition: background var(--t-fast) var(--ease);
+}
+
+@media (hover: hover) {
+  .linkRow:hover {
+    background: var(--surface2);
+  }
 }
 
 .dialog {
@@ -201,6 +233,10 @@
 .dialog[open] {
   display: grid;
   gap: var(--s3);
+}
+
+.dialog:focus-visible {
+  outline: 0;
 }
 
 .dialog::backdrop {

@@ -76,6 +76,9 @@ export function usePref<K extends keyof Prefs>(key: K): [Prefs[K], (v: Prefs[K])
 /** Sets `data-theme` on <html> for the Colours setting; "system" leaves it to the browser. */
 export function applyTheme(theme: Prefs["theme"]): void {
   const html = document.documentElement;
+  // Off for a frame, so every colour switches at once instead of each fading on its own.
+  html.classList.add("no-motion");
   if (theme === "system") html.removeAttribute("data-theme");
   else html.dataset.theme = theme;
+  requestAnimationFrame(() => requestAnimationFrame(() => html.classList.remove("no-motion")));
 }

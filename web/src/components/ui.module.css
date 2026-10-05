@@ -1,208 +1,11 @@
-/* Shared parts: page head, cards, buttons, status pills. */
-
-.head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--s3);
-  margin-bottom: var(--s6);
-}
-
-.section {
-  margin: var(--s8) 0 var(--s3);
-  color: var(--fg2);
-}
-
-.list {
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: var(--s3);
-}
-
-/* Filled, no border and no shadow (DESIGN.md, "Rules"). */
-.card {
-  background: var(--surface);
-  border-radius: var(--radius-xl);
-  padding: var(--s5);
-}
-
-.button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--s2);
-  min-height: var(--size-tap);
-  padding: 0 var(--s6);
-  border-radius: var(--radius-pill);
-  border: 1px solid var(--line-strong);
-  background: transparent;
-  color: var(--fg);
-  font-size: 16px;
-  font-weight: 500;
-  letter-spacing: 0.009em;
-  text-decoration: none;
-  transition:
-    background var(--t-fast),
-    border-color var(--t-fast);
-}
-
-.button:hover {
-  background: var(--surface2);
-}
-
-.button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-/* The main action of a screen at rest: filled, never amber. */
-.primary {
-  background: var(--fg);
-  border-color: var(--fg);
-  color: var(--bg);
-}
-
-.primary:hover {
-  background: var(--fg2);
-  border-color: var(--fg2);
-}
-
-/* What needs the owner: the recommended option, a pairing to approve. */
-.beaconFill {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--on-accent);
-}
-
-.beaconFill:hover {
-  background: var(--accent-hi);
-  border-color: var(--accent-hi);
-}
-
-.danger {
-  color: var(--bad);
-}
-
-.danger:hover {
-  background: var(--bad-soft);
-}
-
-.pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 24px;
-  padding: 0 10px;
-  border-radius: var(--radius-pill);
-  white-space: nowrap;
-}
-
-.pill::before {
-  content: "";
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: currentColor;
-}
-
-.ok {
-  color: var(--ok);
-  background: var(--ok-soft);
-}
-
-.warn {
-  color: var(--warn);
-  background: var(--warn-soft);
-}
-
-.bad {
-  color: var(--bad);
-  background: var(--bad-soft);
-}
-
-.info {
-  color: var(--info);
-  background: var(--info-soft);
-}
-
-.beacon {
-  color: var(--accent);
-  background: var(--accent-soft);
-}
-
-.muted {
-  color: var(--fg3);
-  background: var(--surface2);
-}
-
-/* The amber dot beside what is open. */
-.dot {
-  flex: none;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--accent);
-}
-
-.count {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--s2);
-  color: var(--fg2);
-}
-
-.empty {
-  color: var(--fg2);
-  text-align: center;
-  padding: var(--s8) var(--s4);
-}
-
-.input {
-  width: 100%;
-  min-height: var(--size-tap);
-  padding: var(--s3);
-  border-radius: var(--radius-xs) var(--radius-xs) 0 0;
-  border: 0;
-  border-bottom: 1px solid var(--line-strong);
-  background: var(--surface2);
-  resize: vertical;
-}
-
-.input:focus {
-  outline: 0;
-  border-bottom: 2px solid var(--fg);
-}
-
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s2);
-}
-
-.field > label {
-  color: var(--fg2);
-}
-
-.error {
-  color: var(--bad);
-  background: var(--bad-soft);
-  border-radius: var(--radius-md);
-  padding: var(--s2) var(--s3);
-  overflow-wrap: anywhere;
-}
-
-.notice {
-  color: var(--fg2);
-  background: var(--surface2);
-  border-radius: var(--radius-md);
-  padding: var(--s3) var(--s4);
-}
+/* Shared parts: buttons, inputs, notices and status lines. Hover, press and focus follow
+   DESIGN.md, "Motion and states": hover only where a pointer hovers, press one tone darker. */
 
 /* Design v2 buttons: 40 px tall with the `label` type, `.lg` 48 px with `action`, `.sm` 32 px
    with `meta`; pass the type class with them. `.rec` is the recommended option, the only amber
    one; `.fill` the main action at rest. */
-.btn {
+.btn,
+.button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -215,14 +18,47 @@
   color: var(--fg);
   text-decoration: none;
   white-space: nowrap;
-  transition: background var(--t-fast);
+  transition:
+    background var(--t-fast) var(--ease),
+    border-color var(--t-fast) var(--ease),
+    color var(--t-fast) var(--ease);
 }
 
-.btn:hover {
-  background: var(--surface2);
+/* The Inbox's notification offer, before design v2: a large button with its own type. */
+.button {
+  height: var(--size-tap);
+  padding: 0 var(--s6);
+  font-weight: 500;
 }
 
-.btn:disabled {
+@media (hover: hover) {
+  .btn:hover:not(:disabled),
+  .button:hover:not(:disabled) {
+    background: var(--surface2);
+  }
+
+  .rec:hover:not(:disabled) {
+    background: var(--accent-hi);
+    border-color: var(--accent-hi);
+  }
+
+  .fill:hover:not(:disabled) {
+    background: var(--fg2);
+    border-color: var(--fg2);
+  }
+
+  .destroy:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--bad) 88%, var(--fg));
+  }
+}
+
+.btn:active:not(:disabled),
+.button:active:not(:disabled) {
+  background: var(--line-strong);
+}
+
+.btn:disabled,
+.button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
@@ -247,15 +83,29 @@
   color: var(--on-accent);
 }
 
-.rec:hover {
+.rec:active:not(:disabled) {
   background: var(--accent-hi);
-  border-color: var(--accent-hi);
 }
 
 .fill {
   background: var(--fg);
   border-color: var(--fg);
   color: var(--bg);
+}
+
+.fill:active:not(:disabled) {
+  background: var(--fg2);
+}
+
+/* A destructive confirm, only inside its dialog (DESIGN.md, "Rules"). */
+.destroy {
+  background: var(--bad);
+  border-color: var(--bad);
+  color: var(--bg);
+}
+
+.destroy:active:not(:disabled) {
+  background: color-mix(in srgb, var(--bad) 80%, var(--fg));
 }
 
 .kbd {
@@ -271,14 +121,84 @@
   opacity: 0.7;
 }
 
-/* A destructive confirm, only inside its dialog (DESIGN.md, "Rules"). */
-.destroy {
-  background: var(--bad);
-  border-color: var(--bad);
-  color: var(--bg);
+/* A text field: outlined, `size.tap` tall; it shows focus by its border, not a ring. */
+.field {
+  width: 100%;
+  height: var(--size-tap);
+  padding: 0 var(--s3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  transition: border-color var(--t-fast) var(--ease);
 }
 
-.destroy:hover {
-  background: var(--bad);
-  opacity: 0.9;
+textarea.field {
+  height: auto;
+  padding: var(--s3);
+  resize: vertical;
+}
+
+.field:focus-visible {
+  outline: 0;
+  border-color: var(--fg);
+  box-shadow: inset 0 0 0 1px var(--fg);
+}
+
+/* The filled field of a reply in the detail pane. */
+.input {
+  width: 100%;
+  min-height: var(--size-tap);
+  padding: var(--s3);
+  border-radius: var(--radius-xs) var(--radius-xs) 0 0;
+  border: 0;
+  border-bottom: 1px solid var(--line-strong);
+  background: var(--surface2);
+  resize: vertical;
+}
+
+.input:focus {
+  outline: 0;
+  border-bottom: 2px solid var(--fg);
+}
+
+/* A text link that acts as a button: "Use your own server", "Can't scan?". */
+.link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--fg2);
+  text-decoration: underline;
+  text-decoration-color: var(--line-strong);
+  text-underline-offset: 3px;
+  transition:
+    color var(--t-fast) var(--ease),
+    text-decoration-color var(--t-fast) var(--ease);
+}
+
+@media (hover: hover) {
+  .link:hover {
+    color: var(--fg);
+    text-decoration-color: currentColor;
+  }
+}
+
+/* An id or detail beside a message, such as an error's digest. */
+.faint {
+  color: var(--fg3);
+  overflow-wrap: anywhere;
+}
+
+.error {
+  color: var(--bad);
+  background: var(--bad-soft);
+  border-radius: var(--radius-md);
+  padding: var(--s2) var(--s3);
+  overflow-wrap: anywhere;
+}
+
+.notice {
+  color: var(--fg2);
+  background: var(--surface2);
+  border-radius: var(--radius-md);
+  padding: var(--s3) var(--s4);
 }

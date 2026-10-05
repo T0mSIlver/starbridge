@@ -38,6 +38,7 @@ type Design = {
   radius: Record<string, number>;
   size: Record<string, number>;
   motion: Record<string, number>;
+  easing: string;
 };
 
 function load(): Design {
@@ -199,6 +200,7 @@ function tokensCss(d: Design): string {
     ...px("radius-", d.radius),
     ...px("size-", d.size),
     ...Object.entries(d.motion).map(([k, v]) => `  --t-${k}: ${v}ms;`),
+    `  --ease: ${d.easing};`,
     "}",
     "",
     "@media (prefers-color-scheme: light) {",

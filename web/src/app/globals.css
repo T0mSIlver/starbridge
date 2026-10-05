@@ -1,3 +1,4 @@
+/* biome-ignore-all lint/complexity/noImportantStyles: reduced motion and the theme switch must win over every component's own transitions. */
 /* Reset and body. Tokens and type roles are generated into styles/. */
 
 :root {
@@ -20,8 +21,16 @@
   white-space: nowrap;
 }
 
+/* The page keeps its scrollbar's gutter, so nothing shifts when it starts to scroll; scrollbars
+   are thin and on-token (DESIGN.md, "Motion and states"). Overlay scrollbars ignore both. */
 html {
   -webkit-text-size-adjust: 100%;
+  scrollbar-gutter: stable;
+  scrollbar-color: var(--line-strong) transparent;
+}
+
+* {
+  scrollbar-width: thin;
 }
 
 body {
@@ -50,10 +59,97 @@ button {
 }
 
 :focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--fg);
   outline-offset: 2px;
 }
 
-::selection {
-  background: var(--accent-soft);
+/* Reduced motion: every change still happens, at once. `.no-motion` is set for the frame a theme
+   changes, so colours switch together instead of each fading at its own pace. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after,
+  ::backdrop {
+    animation-duration: 0s !important;
+    animation-delay: 0s !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0s !important;
+    transition-delay: 0s !important;
+  }
+}
+
+.no-motion,
+.no-motion * {
+  transition: none !important;
+}
+
+/* What appears while the page is open (DESIGN.md, "Motion and states"). */
+@keyframes appear {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+@keyframes drop {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+@keyframes enter {
+  from {
+    opacity: 0;
+    transform: translateX(8px);
+  }
+}
+
+/* As classes, global like the type roles, since a CSS module would rename the keyframes. */
+.m-appear {
+  animation: appear var(--t-state) var(--ease);
+}
+
+.m-rise {
+  animation: rise var(--t-state) var(--ease);
+}
+
+.m-rise::backdrop {
+  animation: appear var(--t-state) var(--ease);
+}
+
+.m-drop {
+  animation: drop var(--t-fast) var(--ease);
+}
+
+.m-enter {
+  animation: enter var(--t-state) var(--ease);
+}
+
+/* A skeleton: hidden for the first 200 ms, so a fast load shows none, then a slow pulse. */
+@keyframes show {
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes pulse {
+  50% {
+    background: var(--line);
+  }
+}
+
+.skeleton {
+  border-radius: var(--radius-xs);
+  background: var(--surface2);
+  opacity: 0;
+  animation:
+    show var(--t-state) var(--ease) 200ms forwards,
+    pulse 1.6s ease-in-out 450ms infinite;
 }

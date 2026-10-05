@@ -13,15 +13,18 @@
   }
 }
 
+/* Each pane keeps its scrollbar's gutter, so opening History never shifts its rows. */
 .list {
   min-width: 0;
   overflow-y: auto;
+  scrollbar-gutter: stable;
   border-right: 1px solid var(--line);
 }
 
 .detail {
   min-width: 0;
   overflow-y: auto;
+  scrollbar-gutter: stable;
   padding: var(--s8) var(--s10);
 }
 
@@ -169,4 +172,10 @@
     border-inline: 1px solid var(--line);
     min-height: 100dvh;
   }
+}
+
+/* The page itself never scrolls beside the panes, which keep their own gutters, so it gives back
+   the gutter globals.css keeps. */
+:global(html):has(.panes) {
+  scrollbar-gutter: auto;
 }
