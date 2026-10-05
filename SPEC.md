@@ -788,6 +788,9 @@ How it generalizes is open.
   and pi's `AGENTS.override.md` replaces the repo's `AGENTS.md`, so it only suits repos without
   one.
 
+- 2026-10-05. `starbridge pair` pairs with https://starbridge.run unless `--server` or
+  `STARBRIDGE_SERVER` names a self-hosted server (#154), as `setup` already did.
+
 ## Encryption, with existing libraries
 
 - libsodium sealed boxes (`crypto_box_seal`, X25519 + XSalsa20-Poly1305): an
