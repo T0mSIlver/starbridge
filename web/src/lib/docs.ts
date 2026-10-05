@@ -16,7 +16,8 @@ export const DOCS = [
 
 export type Doc = (typeof DOCS)[number];
 
-const ROOT = join(process.cwd(), "..");
+// Read at build time only, so the deploy image traces none of these files.
+const ROOT = join(/* turbopackIgnore: true */ process.cwd(), "..");
 
 /** `/docs` or `/docs/<slug>`. */
 export const docHref = (d: Doc) => (d.slug ? `/docs/${d.slug}` : "/docs");
