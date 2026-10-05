@@ -197,11 +197,15 @@ test("the plugin's SessionStart hook adds the owner's rules file, escaped, next 
     return out.hookSpecificOutput.additionalContext as string;
   };
   const rule = "Whenever you need me to decide something, use the `starbridge` skill.";
-  expect(await context()).toBe(rule);
+  const bare = await context();
+  expect(bare.startsWith(`${rule}\n\nWhen a command you are about to run blocks me`)).toBe(true);
+  expect(bare).toContain("`starbridge run`");
+  expect(bare).not.toContain("My rules");
   const rules = 'Tell me when you run "e2e" tests\n\tthat take over my Mac \\ or inference.\n';
   await Bun.write(join(ctx.store.dir, "rules.md"), rules);
   const text = await context();
   expect(text.startsWith(`${rule}\n\nWhen a command`)).toBe(true);
+  expect(text).toContain("or matches one of my rules below");
   expect(text).toContain("`starbridge run`");
   expect(text.endsWith(rules.trimEnd())).toBe(true);
 });

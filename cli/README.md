@@ -45,8 +45,10 @@ starbridge wait d_Xk3…             # exit 2: nobody answered in time
 starbridge quota push --provider claude --provider codex   # every 5 minutes
 ```
 
-`starbridge run` wraps a command the owner wants to hear about, as their
-rules say (below). The owner's devices show its title, its reason, the time
+`starbridge run` wraps a command the owner wants to hear about. Agents wrap,
+unasked, any command that blocks the owner or needs them at the machine (e2e
+tests that take over the screen, keyboard or session, anything that holds a
+device they use), and any command the owner's rules (below) name. The owner's devices show its title, its reason, the time
 elapsed and the progress its output prints (an OSC 9;4 sequence, `[3/7]`,
 `42%`), then pass or fail with the exit code and duration:
 
@@ -63,8 +65,9 @@ only to a terminal print none here.
 
 The owner's rules go in `rules.md` in the config directory, in plain words,
 for example "Tell me when you run the e2e tests that take over my Mac, or
-local inference." The `starbridge` Claude Code plugin loads them into every
-session (`plugin/README.md`).
+local inference." They add to the default above, never replace it. The
+`starbridge` Claude Code plugin loads them into every session
+(`plugin/README.md`).
 
 `starbridge answers` is for the Claude Code mod (`mod/README.md`): it hands a
 session the answers to the decisions it asked.
