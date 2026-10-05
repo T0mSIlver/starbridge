@@ -1074,6 +1074,13 @@ How it generalizes is open.
   listed in the first 1.5 s after the list shows came with the page and don't fade in, since
   the inbox, prompts and runs load one after another. History's rows fade in only when the
   owner opens it, not when the page loads with it open.
+- 2026-10-06. Logo and Android Find (owner, from https://claude.ai/artifact/9ddJ2PwPrBc7KmQdeDVqDN,
+  after three rounds of mark concepts). The original mark stays: a space elevator's tether must
+  be vertical, which ruled out the tilted R5. The name sits on the mark's baseline, standing on
+  the planet's ground, rather than centred on it, in every lockup: the web rail, landing nav,
+  docs header and first-run frame, and Android's first run. On Android, Find is option A: a
+  search icon before View in the Inbox top bar opens Material 3's search view, with results
+  grouped and marked as on the web (spec on #244).
 - 2026-10-06. Web layout round (owner, from https://claude.ai/artifact/9ddJ2PwPrBc7KmQdeDVqDN).
   The inbox's detail pane scales with its width: from a 1000 px pane (side panes narrowed, or a
   wide screen) its content takes 86% of the pane up to 1280 px, attached images show up to

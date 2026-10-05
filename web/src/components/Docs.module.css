@@ -23,6 +23,11 @@
   text-decoration: none;
 }
 
+/* The name stands on the mark's ground: its baseline on the mark's bottom edge (DESIGN.md). */
+.brand {
+  align-items: baseline;
+}
+
 .section {
   color: var(--fg2);
 }

@@ -610,7 +610,14 @@ notification icon) draw all three shapes in one colour.
 The PNG and ICO files are rendered from the SVG; redraw them when the mark
 changes.
 
-The product name has no wordmark: it is "Starbridge" in the sans, weight 500.
+The product name has no wordmark: it is "Starbridge" in the sans, weight 500. Beside the mark,
+the name stands on the mark's ground: its baseline sits on the mark's bottom
+edge (y 90 of the grid, where the planet's edge ends), and its "g" descends
+below. The gap is 0.4 × the mark's size (`s2` at 20 px). The web aligns them
+with `align-items: baseline`, since a mark's synthesized baseline is its
+bottom edge; Android with `alignBy` (the mark at its height, the name at
+`LastBaseline`). The mark alone (favicon, app and notification icons, the
+phone top bar) is unchanged.
 
 ## Roles
 
