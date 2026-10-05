@@ -276,8 +276,8 @@ want a longer history keep their own copy.
 
 ## Runs
 
-An agent wraps a command in `starbridge run --title --reason -- <command>` when one of the
-owner's rules matches it (`cli/README.md`). The machine posts a `run` when the command starts,
+An agent wraps a command in `starbridge run --title --reason -- <command>` when it blocks the
+owner or needs them at the machine, or when one of the owner's rules names it (`cli/README.md`). The machine posts a `run` when the command starts,
 re-posts it as the output shows progress (at most every 10 s) and at least every minute, and a
 last time when the command exits.
 
