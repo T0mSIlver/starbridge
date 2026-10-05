@@ -666,6 +666,11 @@ How it generalizes is open.
   digits" and the recovery key as fallbacks. The landing page's browser shot is the real app at
   `/sample`; its phone shots are the round 4 Android mockups until Android's design v2 ships,
   when Roborazzi shots replace them.
+- 2026-10-05. Answer buttons on inbox rows, web (#138). Settings, Inbox: "Answer buttons on
+  questions", Always (the default), When the agent waits, or Never, remembered on the device. It
+  applies to question rows on a phone width; wide screens never carry them, since the open
+  question sits beside the list. Permission prompts keep Allow and Deny on their rows, since
+  their agent always waits.
 - 2026-10-05. Quota settings and notifications, as built (#115). Settings live on each device
   (web `localStorage`, Android preferences) and sit on a Quota settings page opened from the
   Quotas screen: bars show used or remaining, reset times relative or as a clock time

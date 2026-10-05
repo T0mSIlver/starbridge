@@ -103,6 +103,26 @@ export function Switch({
 const toggle = (list: string[], p: string, on: boolean) =>
   on ? [...new Set([...list, p])] : list.filter((x) => x !== p);
 
+function InboxSection() {
+  const [rowAnswers, setRowAnswers] = usePref("rowAnswers");
+  return (
+    <Section title="Inbox">
+      <Row label="Answer buttons on questions" sub="On a phone">
+        <Segmented<Prefs["rowAnswers"]>
+          label="Answer buttons on questions"
+          value={rowAnswers}
+          options={[
+            ["always", "Always"],
+            ["waiting", "When the agent waits"],
+            ["never", "Never"],
+          ]}
+          onChange={setRowAnswers}
+        />
+      </Row>
+    </Section>
+  );
+}
+
 function QuotaSection() {
   const { quotaSettings: q, setQuotaSettings: set } = useApp();
   const patch = (p: Partial<QuotaSettings>) => set({ ...q, ...p });
@@ -396,6 +416,7 @@ export function Settings() {
       <PhoneBar title="Settings" find={false} />
       <div className={s.page}>
         <h1 className={`t-heading ${s.title}`}>Settings</h1>
+        <InboxSection />
         <QuotaSection />
         <ProviderSection />
         <DeviceSection />

@@ -69,6 +69,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dev.starbridge.app.data.CardButtons
 import dev.starbridge.app.data.Decision
 import dev.starbridge.app.data.InboxView
 import dev.starbridge.app.data.Link
@@ -199,10 +200,10 @@ fun InboxScreen(
         } else if (view.byMachine) {
             feed.groupBy { it.machine.machine }.forEach { (machine, items) ->
                 item(key = "machine/$machine") { MachineHeader(items.first().machine) }
-                cards(items, at, actions, replies, promptActions)
+                cards(items, at, actions, replies, promptActions, view.buttons)
             }
         } else {
-            cards(feed, at, actions, replies, promptActions)
+            cards(feed, at, actions, replies, promptActions, view.buttons)
         }
         history(history, view.historyOpen, { onView(view.copy(historyOpen = it)) }, actions, promptActions)
     }
@@ -210,14 +211,14 @@ fun InboxScreen(
 
 private const val PROMPT_POLL_MS = 1_500L
 
-private fun LazyListScope.cards(items: List<Item>, now: Instant, actions: DecisionActions, replies: Replies, promptActions: PromptActions?) {
+private fun LazyListScope.cards(items: List<Item>, now: Instant, actions: DecisionActions, replies: Replies, promptActions: PromptActions?, buttons: CardButtons) {
     itemsIndexed(items, key = { _, it -> it.key }) { i, item ->
         val shape = cardShape(i, items.size)
         val m = Modifier.animateItem()
         when (item) {
             is Item.RunItem -> RunCard(item.run, now, shape, m)
             is Item.PromptItem -> if (item.prompt.waiting(now) && promptActions != null) PromptCard(item.prompt, now, promptActions, shape, m) else ClosedPrompt(item.prompt, shape, m)
-            is Item.Question -> DecisionCard(item.decision, now, actions, replies, shape, m)
+            is Item.Question -> DecisionCard(item.decision, now, actions, replies, shape, buttons, m)
         }
     }
 }
@@ -284,7 +285,7 @@ private fun Empty() {
 
 /** A question in the feed: amber ground once its agent waits on it, its options when they fit. */
 @Composable
-private fun DecisionCard(decision: Decision, now: Instant, actions: DecisionActions, replies: Replies, shape: Shape, modifier: Modifier = Modifier) {
+private fun DecisionCard(decision: Decision, now: Instant, actions: DecisionActions, replies: Replies, shape: Shape, buttons: CardButtons, modifier: Modifier = Modifier) {
     val scheme = MaterialTheme.colorScheme
     val ground = if (decision.waiting) promptGround() else scheme.surfaceContainer
     Surface(modifier.fillMaxWidth(), shape = shape, color = ground) {
@@ -293,7 +294,12 @@ private fun DecisionCard(decision: Decision, now: Instant, actions: DecisionActi
             Text(decision.question, style = StarbridgeTheme.type.subtitle, color = scheme.onSurface)
             Images(decision.images, maxHeight = 105.dp, modifier = Modifier.padding(vertical = Spacing.s1))
             StateLine(decision, now)
-            if (fitsOnCard(decision)) {
+            val shown = when (buttons) {
+                CardButtons.Always -> true
+                CardButtons.WhenWaiting -> decision.waiting
+                CardButtons.Never -> false
+            }
+            if (shown && fitsOnCard(decision)) {
                 Spacer(Modifier.height(Spacing.s1))
                 Options(decision, replies.sending[decision.id], height = 40.dp, other = if (decision.waiting) scheme.surfaceContainer else scheme.surfaceContainerHighest, answer = answer(decision, actions.answer))
             }

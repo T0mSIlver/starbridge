@@ -232,6 +232,11 @@
     flex-wrap: wrap;
   }
 
+  /* A label keeps room for a few words; a wide control wraps below it. */
+  .row .rowText {
+    flex-basis: 10em;
+  }
+
   .revokeSpace {
     display: none;
   }
