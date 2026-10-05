@@ -25,7 +25,7 @@ defaults:
 jobs:
   build:
     name: build, unit tests, screenshots
-    runs-on: ubuntu-24.04
+    runs-on: ${{ vars.RUNNER || 'ubuntu-24.04' }}
     steps:
       - uses: actions/checkout@v7
 
