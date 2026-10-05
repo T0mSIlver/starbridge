@@ -1,0 +1,10 @@
+{
+  "name": "starbridge",
+  "version": "0.2.0",
+  "description": "The starbridge skill, and a rule that has every session use it whenever it needs the owner to decide something",
+  "author": {
+    "name": "Tom Vaucourt"
+  },
+  "homepage": "https://github.com/T0mSIlver/starbridge",
+  "license": "MIT"
+}
