@@ -1,5 +1,12 @@
 package dev.starbridge.app.ui
 
+import androidx.compose.animation.ContentTransform
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -38,6 +45,7 @@ import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.unit.IntOffset
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDecorator
@@ -45,6 +53,7 @@ import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
+import androidx.navigation3.scene.Scene
 import androidx.navigation3.ui.NavDisplay
 import dev.starbridge.app.data.Phase
 import dev.starbridge.app.ui.devices.DevicesScreen
@@ -176,12 +185,16 @@ fun Main(openDecisions: Int, notice: StateFlow<String?>, dismiss: () -> Unit, op
             }
         },
     ) {
+        val motion = navMotion()
         Scaffold(snackbarHost = { SnackbarHost(host) }, containerColor = MaterialTheme.colorScheme.surface) { padding ->
             NavDisplay(
                 backStack = backStack,
                 modifier = Modifier.fillMaxSize().padding(padding),
                 sceneStrategies = listOf(listDetail),
                 entryDecorators = listOf(rememberSaveableStateHolderNavEntryDecorator(), rememberViewModelStoreNavEntryDecorator()),
+                transitionSpec = { motion.fadeThrough },
+                popTransitionSpec = { motion.pop(initialState) },
+                predictivePopTransitionSpec = { motion.pop(initialState) },
                 entryProvider = entryProvider {
                     entry<InboxKey>(
                         metadata = ListDetailSceneStrategy.listPane(detailPlaceholder = { DecisionScreen(null, now, onAnswer = { _, _, _ -> }) }),
@@ -200,7 +213,7 @@ fun Main(openDecisions: Int, notice: StateFlow<String?>, dismiss: () -> Unit, op
                             refresh = refresh(vm::refresh),
                         )
                     }
-                    entry<DecisionKey>(metadata = ListDetailSceneStrategy.detailPane()) { key ->
+                    entry<DecisionKey>(metadata = ListDetailSceneStrategy.detailPane() + motion.decision) { key ->
                         val vm: InboxViewModel = hiltViewModel()
                         val decisions by vm.decisions.collectAsStateWithLifecycle()
                         DecisionScreen(
@@ -227,6 +240,43 @@ fun Main(openDecisions: Int, notice: StateFlow<String?>, dismiss: () -> Unit, op
                 },
             )
         }
+    }
+}
+
+/**
+ * Navigation on the expressive motion scheme, which Navigation 3 does not read on its own: tabs
+ * fade through, and a decision slides in and back out along the shared X axis. Navigation 3 reads
+ * an entry's specs only when navigating to it, so going back checks the scene it leaves.
+ */
+private class NavMotion(
+    val fadeThrough: ContentTransform,
+    private val back: ContentTransform,
+    /** The decision entry's metadata: its forward slide, and the mark [pop] looks for. */
+    val decision: Map<String, Any>,
+) {
+    fun pop(leaving: Scene<*>) = if (leaving.metadata[DECISION] == true) back else fadeThrough
+}
+
+private const val DECISION = "starbridge.decision"
+
+@Composable
+private fun navMotion(): NavMotion {
+    val scheme = MaterialTheme.motionScheme
+    val spatial = scheme.defaultSpatialSpec<IntOffset>()
+    val scale = scheme.defaultSpatialSpec<Float>()
+    val effects = scheme.defaultEffectsSpec<Float>()
+    val fast = scheme.fastEffectsSpec<Float>()
+    return remember(scheme) {
+        fun axis(forward: Boolean): ContentTransform {
+            val sign = if (forward) 1 else -1
+            return (slideInHorizontally(spatial) { sign * it / 5 } + fadeIn(effects)) togetherWith
+                (slideOutHorizontally(spatial) { -sign * it / 5 } + fadeOut(fast))
+        }
+        NavMotion(
+            fadeThrough = (fadeIn(effects) + scaleIn(scale, initialScale = 0.92f)) togetherWith fadeOut(fast),
+            back = axis(forward = false),
+            decision = NavDisplay.transitionSpec { axis(forward = true) } + mapOf(DECISION to true),
+        )
     }
 }
 

@@ -19,9 +19,6 @@ fun envelopeJson(env: SignedEnvelope): JsonObject = buildJsonObject {
     env.recoverySig?.let { put("recoverySig", it) }
 }
 
-/** Which role may sign each item kind: machines ask and report quotas, devices answer. */
-private val SIGNER_ROLE = mapOf("decision" to "machine", "quota" to "machine", "answer" to "device")
-
 class Opened<T>(val signer: Member, val body: T, val bodyText: String)
 
 class Envelopes(private val sodium: Sodium) {
@@ -47,21 +44,18 @@ class Envelopes(private val sodium: Sodium) {
      * its `to` must name exactly the recipients; the item's id and `re` come from the body.
      */
     fun seal(kind: String, body: JsonObject, signer: String, signKey: ByteArray, recipients: List<Member>): SealedItem {
-        val (id, re, named) = when (val parsed = parseBody(kind, body.toString())) {
-            is Decision -> Triple(parsed.id, null, parsed.to)
-            is QuotaSnapshot -> Triple(parsed.id, null, parsed.to)
-            is Answer -> Triple(parsed.id, parsed.decisionId, listOf(parsed.to))
-            else -> throw IllegalArgumentException("$kind is not an item kind")
-        }
+        val parsed = parseBody(kind, body.toString()) as? ItemBody
+            ?: throw IllegalArgumentException("$kind is not an item kind")
+        val named = parsed.recipients
         val ids = recipients.map { it.id }
         require(named.size == ids.size && named.toSet() == ids.toSet()) { "body.to must list exactly the recipients" }
         val plain = utf8(envelopeJson(sign(kind, body, signer, signKey)).toString())
         return SealedItem(
             v = 1,
             kind = kind,
-            id = id,
+            id = parsed.id,
             from = signer,
-            re = re,
+            re = parsed.re,
             boxes = recipients.map { SealedBox(it.id, toB64(sodium.seal(plain, fromB64(it.boxPk)))) },
         )
     }
@@ -93,16 +87,10 @@ class Envelopes(private val sodium: Sodium) {
         if (!entry.active) throw ProtocolException("revoked-signer", env.signer)
         if (entry.member.role != SIGNER_ROLE[item.kind]) throw ProtocolException("signer-not-allowed", "${entry.member.role} cannot sign ${item.kind}")
         verify(env, entry.member.signPk)
-        val body = parseBody(item.kind, env.body)
-        val (bodyId, re, named) = when (body) {
-            is Decision -> Triple(body.id, null, body.to)
-            is QuotaSnapshot -> Triple(body.id, null, body.to)
-            is Answer -> Triple(body.id, body.decisionId, listOf(body.to))
-            else -> error("unreachable")
-        }
-        if (bodyId != item.id) throw ProtocolException("id-mismatch", "body id is not the item id")
-        if (item.re != re) throw ProtocolException("id-mismatch", "re is not the answered decision")
-        if (me !in named) throw ProtocolException("wrong-recipient", "body does not name me")
+        val body = parseBody(item.kind, env.body) as ItemBody
+        if (body.id != item.id) throw ProtocolException("id-mismatch", "body id is not the item id")
+        if (item.re != body.re) throw ProtocolException("id-mismatch", "re is not the item the body refers to")
+        if (me !in body.recipients) throw ProtocolException("wrong-recipient", "body does not name me")
         return Opened(entry.member, body, env.body)
     }
 }
@@ -115,6 +103,9 @@ fun parseBody(kind: String, text: String): Any {
         "decision" -> parseJson(Decision.serializer(), json).also { it.check() }
         "answer" -> parseJson(Answer.serializer(), json).also { it.check() }
         "quota" -> parseJson(QuotaSnapshot.serializer(), json).also { it.check() }
+        "permission" -> parseJson(Permission.serializer(), json).also { it.check() }
+        "permission-answer" -> parseJson(PermissionAnswer.serializer(), json).also { it.check() }
+        "settled" -> parseJson(Settled.serializer(), json).also { it.check() }
         else -> throw ProtocolException("wrong-kind", kind)
     }
 }

@@ -50,8 +50,37 @@ export type DirectoryEntry = z.infer<typeof DirectoryEntry>;
 
 // --- Signed and sealed envelopes ---------------------------------------------
 
-export const Kind = z.enum(["directory", "decision", "answer", "quota"]);
+/**
+ * Kinds of sealed item, and for each: the role that signs it (it is sealed to members of the
+ * other role: a machine's items to every active device, a device's to the one machine it
+ * answers), and for a kind that refers to an earlier item, the body field naming it and that
+ * item's possible kinds. The item's `re` hint repeats that field.
+ */
+export const ITEM_KINDS = {
+  decision: { signer: "machine" },
+  answer: { signer: "device", re: { field: "decisionId", kinds: ["decision"] } },
+  quota: { signer: "machine" },
+  permission: { signer: "machine" },
+  "permission-answer": { signer: "device", re: { field: "permissionId", kinds: ["permission"] } },
+  settled: { signer: "machine", re: { field: "itemId", kinds: ["permission", "decision"] } },
+} as const satisfies Record<
+  string,
+  { signer: "device" | "machine"; re?: { field: string; kinds: readonly string[] } }
+>;
+
+export type ItemKind = keyof typeof ITEM_KINDS;
+const ITEM_KIND_NAMES = Object.keys(ITEM_KINDS) as [ItemKind, ...ItemKind[]];
+export const ItemKind = z.enum(ITEM_KIND_NAMES);
+
+export const Kind = z.enum(["directory", ...ITEM_KIND_NAMES]);
 export type Kind = z.infer<typeof Kind>;
+
+/** The id an item refers to through its kind's `re` field, if the kind has one. */
+export function reOf(kind: ItemKind, body: object): string | undefined {
+  const rule = ITEM_KINDS[kind];
+  if (!("re" in rule)) return undefined;
+  return (body as Record<string, unknown>)[rule.re.field] as string;
+}
 
 /** The signer's member id, or "recovery" for a directory entry signed by the recovery key. */
 export const RECOVERY = "recovery";
@@ -81,10 +110,13 @@ export type SignedEnvelope = z.infer<typeof SignedEnvelope>;
  */
 export const SealedItem = z.object({
   v: z.literal(1),
-  kind: z.enum(["decision", "answer", "quota"]),
+  kind: ItemKind,
   id: Id,
   from: Id,
-  /** On an answer: the decision it answers, so the server can mark that decision answered. */
+  /**
+   * The item this one refers to (ITEM_KINDS' `re`): the decision an answer answers, the
+   * permission a permission answer or a settled notice closes. The server marks it answered.
+   */
   re: Id.optional(),
   boxes: z
     .array(z.object({ to: Id, box: B64 }))
@@ -122,6 +154,17 @@ export const SessionLink = z
   });
 export type SessionLink = z.infer<typeof SessionLink>;
 
+/** The machine, project and session an item comes from. */
+export const Source = z.object({
+  machine: z.string().min(1).max(100),
+  project: z.string().max(200),
+  session: z.string().max(200),
+  /** The session's name, as Claude Code shows it. Optional: older machines omit it. */
+  sessionTitle: z.string().max(200).optional(),
+  links: z.array(SessionLink).max(3).optional(),
+});
+export type Source = z.infer<typeof Source>;
+
 export const Decision = z
   .object({
     v: z.literal(1),
@@ -139,14 +182,7 @@ export const Decision = z
       action: z.string().min(1).max(300),
       at: Time.optional(),
     }),
-    source: z.object({
-      machine: z.string().min(1).max(100),
-      project: z.string().max(200),
-      session: z.string().max(200),
-      /** The session's name, as Claude Code shows it. Optional: older machines omit it. */
-      sessionTitle: z.string().max(200).optional(),
-      links: z.array(SessionLink).max(3).optional(),
-    }),
+    source: Source,
   })
   .superRefine((d, ctx) => {
     if (d.options.length === 1) ctx.addIssue({ code: "custom", message: "options: 0 or 2 to 4" });
@@ -174,6 +210,105 @@ export const Answer = z
     message: "exactly one of choice and text",
   });
 export type Answer = z.infer<typeof Answer>;
+
+// --- Permission prompts -----------------------------------------------------
+
+/** A permission prompt lives at most this long; the server refuses answers after it. */
+export const PERMISSION_TTL_MS = 10 * 60 * 1000;
+
+export const PermissionAgent = z.enum(["claude-code", "codex"]);
+export type PermissionAgent = z.infer<typeof PermissionAgent>;
+
+/** How far an allow reaches: this call, the rest of the session, or always in this project. */
+export const PermissionScope = z.enum(["once", "session", "project"]);
+export type PermissionScope = z.infer<typeof PermissionScope>;
+
+/**
+ * A wider allow the machine offers, shown with the exact rule it would add. The machine keeps
+ * the rule it would write; an answer names only the scope, so a device cannot inject a rule.
+ */
+export const PermissionSuggestion = z.object({
+  label: z.string().min(1).max(100),
+  rule: z.string().min(1).max(500),
+  scope: z.enum(["session", "project"]),
+});
+export type PermissionSuggestion = z.infer<typeof PermissionSuggestion>;
+
+/** An agent waiting at a permission prompt, as the machine shows it to devices. */
+export const Permission = z
+  .object({
+    v: z.literal(1),
+    id: Id,
+    to: z.array(Id).min(1),
+    createdAt: Time,
+    agent: PermissionAgent,
+    tool: z.string().min(1).max(100),
+    /** One line: the Bash command, or the edited path. */
+    summary: z.string().min(1).max(200),
+    /** What the agent says the call does. */
+    description: z.string().max(500).optional(),
+    /** The tool's input as JSON text, with secrets redacted on the machine. */
+    input: z.string().max(8000),
+    /** BLAKE2b-256 of the tool input before redaction (`hashInput`); answers repeat it. */
+    inputHash: B64,
+    suggestions: z.array(PermissionSuggestion).max(2),
+    expiresAt: Time,
+    source: Source,
+  })
+  .superRefine((p, ctx) => {
+    const ttl = Date.parse(p.expiresAt) - Date.parse(p.createdAt);
+    if (!(ttl > 0 && ttl <= PERMISSION_TTL_MS))
+      ctx.addIssue({ code: "custom", message: "expiresAt: after createdAt, at most 10 minutes" });
+    if (new Set(p.suggestions.map((x) => x.scope)).size !== p.suggestions.length)
+      ctx.addIssue({ code: "custom", message: "one suggestion per scope" });
+  });
+export type Permission = z.infer<typeof Permission>;
+
+/** A device's answer to a permission prompt, bound to its id and its input's hash. */
+export const PermissionAnswer = z
+  .object({
+    v: z.literal(1),
+    id: Id,
+    permissionId: Id,
+    /** The machine that asked. */
+    to: Id,
+    answeredAt: Time,
+    behavior: z.enum(["allow", "deny"]),
+    scope: PermissionScope,
+    inputHash: B64,
+    /** On a deny: what the agent should do instead. */
+    message: z.string().max(500).optional(),
+  })
+  .superRefine((a, ctx) => {
+    if (a.behavior === "deny" && a.scope !== "once")
+      ctx.addIssue({ code: "custom", message: "a deny is for this call only" });
+    if (a.behavior === "allow" && a.message !== undefined)
+      ctx.addIssue({ code: "custom", message: "message is for a deny" });
+  });
+export type PermissionAnswer = z.infer<typeof PermissionAnswer>;
+
+/**
+ * The machine's notice that one of its items no longer waits for an answer: a permission
+ * answered at the keyboard or in the Claude app, timed out, or resolved by a device's answer
+ * (`device` names it); or a decision answered outside Starbridge (`elsewhere`, such as the
+ * page its `answerIn` names) or withdrawn by the agent.
+ */
+export const Settled = z
+  .object({
+    v: z.literal(1),
+    id: Id,
+    /** The permission or decision it closes, posted by the same machine. */
+    itemId: Id,
+    to: z.array(Id).min(1),
+    at: Time,
+    outcome: z.enum(["keyboard", "timeout", "device", "elsewhere", "withdrawn"]).optional(),
+    /** With outcome "device": the device whose answer the machine applied. */
+    device: Id.optional(),
+  })
+  .refine((s) => (s.outcome === "device") === (s.device !== undefined), {
+    message: "device is set exactly when outcome is device",
+  });
+export type Settled = z.infer<typeof Settled>;
 
 // --- Quotas ------------------------------------------------------------------
 
@@ -248,6 +383,9 @@ export const BODY_SCHEMAS = {
   decision: Decision,
   answer: Answer,
   quota: QuotaSnapshot,
-} as const;
+  permission: Permission,
+  "permission-answer": PermissionAnswer,
+  settled: Settled,
+} as const satisfies Record<Kind, z.ZodType>;
 
 export type BodyOf<K extends Kind> = z.infer<(typeof BODY_SCHEMAS)[K]>;

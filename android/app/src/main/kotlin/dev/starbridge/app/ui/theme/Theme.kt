@@ -165,7 +165,8 @@ private val typography = Typography().let { m ->
     Typography(
         displayLarge = flex(m.displayLarge),
         displayMedium = flex(m.displayMedium),
-        displaySmall = flex(m.displaySmall),
+        // The large flexible top app bar sets its expanded title in displaySmall.
+        displaySmall = type.title,
         headlineLarge = type.title,
         headlineMedium = type.figure.copy(fontFeatureSettings = null),
         headlineSmall = type.heading,
