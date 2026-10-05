@@ -41,7 +41,13 @@ export function status(
     if (at && Date.parse(at) <= now.getTime())
       return { state: "ran-out", word: `Ran out at ${clock(at, now)}`, reset };
     if (!at) return { state: "out", word: "Will run out", reset };
-    const by = s.absoluteResets ? `at ${clock(at, now)}` : relative(at, now);
+    const time = clock(at, now);
+    // "at 14:20", "at Oct 7, 14:20", but "tomorrow 07:20".
+    const by = !s.absoluteResets
+      ? relative(at, now)
+      : time.startsWith("tomorrow")
+        ? time
+        : `at ${time}`;
     return { state: "out", word: `Will run out ${by}`, reset };
   }
   if (alert?.kind === "unused-headroom") return { state: "unused", word: "Headroom unused", reset };

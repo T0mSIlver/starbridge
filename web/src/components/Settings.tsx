@@ -396,6 +396,26 @@ function RevokeDialog({
   );
 }
 
+function ClockSection() {
+  const [clock, setClock] = usePref("clock");
+  return (
+    <Section title="Clock">
+      <Row label="Time format">
+        <Segmented<Prefs["clock"]>
+          label="Time format"
+          value={clock}
+          options={[
+            ["system", "System"],
+            ["12", "12-hour"],
+            ["24", "24-hour"],
+          ]}
+          onChange={setClock}
+        />
+      </Row>
+    </Section>
+  );
+}
+
 function ColourSection() {
   const [theme, setTheme] = usePref("theme");
   useEffect(() => applyTheme(theme), [theme]);
@@ -428,6 +448,7 @@ export function Settings() {
         <ProviderSection />
         <DeviceSection />
         <ColourSection />
+        <ClockSection />
         <Section title="Agents">
           <a className={s.linkRow} href={AGENTS_GUIDE} target="_blank" rel="noopener noreferrer">
             <span className="t-small">How to tell your agents</span>

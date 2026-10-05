@@ -821,6 +821,12 @@ How it generalizes is open.
   so every quota card has the same height and the control sits where the other per-provider
   settings are.
 
+- 2026-10-05. Clock setting (#161, owner). Settings, Clock, "Time format": System (the default),
+  12-hour or 24-hour, per device. System follows the device: Android's
+  `DateFormat.is24HourFormat`, the browser's language on the web. Android also writes dates in
+  the phone's language ("Oct 7" in English, "7 oct." in French) from Android's own patterns, where
+  it used fixed English ones; words such as "tomorrow" stay English, as the rest of the UI.
+
 ## Encryption, with existing libraries
 
 - libsodium sealed boxes (`crypto_box_seal`, X25519 + XSalsa20-Poly1305): an

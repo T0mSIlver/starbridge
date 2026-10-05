@@ -45,3 +45,13 @@ test("a window whose reset passed is over until the next upload", () => {
     reset: "",
   });
 });
+
+test("a run-out time tomorrow reads without 'at'", () => {
+  const s = status(
+    window({ runsOutAt: "2026-10-06T07:20:00Z" }, "2026-10-07T12:00:00Z"),
+    undefined,
+    { absoluteResets: true },
+    now,
+  );
+  expect(s.word).toMatch(/^Will run out tomorrow \d/);
+});

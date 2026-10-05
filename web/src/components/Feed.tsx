@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { imageSrc } from "@/lib/attachments";
 import { ago, type Entry, type MachineKind, middle, type Past, timer } from "@/lib/feed";
+import { clockTime } from "@/lib/format";
 import { duration, progressText, runState } from "@/lib/runs";
 import type { Decision, InboxItem, PromptItem, RunItem, Source } from "@/lib/types";
 import s from "./Feed.module.css";
@@ -264,9 +265,6 @@ export function RunRow({ item, now, comfy }: { item: RunItem; now: number; comfy
   );
 }
 
-const clockTime = (iso: string) =>
-  new Date(iso).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
-
 /** History's head: collapsed by default, its state remembered on this device. */
 export function HistoryHead({
   open,
@@ -319,7 +317,12 @@ export function PastRow({
       />
       <KindTile type={e.type === "prompt" ? "prompt" : "question"} />
       <div className={s.pastBody}>
-        <MetaRow machine={e.machine} kind={e.kind} repo={e.repo} time={clockTime(past.closed)} />
+        <MetaRow
+          machine={e.machine}
+          kind={e.kind}
+          repo={e.repo}
+          time={clockTime(new Date(past.closed))}
+        />
         <div className={`${e.type === "prompt" ? "t-snippet" : "t-small"} ${s.pastText}`}>
           {past.text}
         </div>
