@@ -8,6 +8,8 @@ export type Prefs = {
   theme: "system" | "light" | "dark";
   /** When a question's row carries its answer buttons on a phone (#138). */
   rowAnswers: "always" | "waiting" | "never";
+  /** 12- or 24-hour times; "system" follows the browser's language (#161). */
+  clock: "system" | "12" | "24";
 };
 
 const DEFAULTS: Prefs = {
@@ -15,6 +17,7 @@ const DEFAULTS: Prefs = {
   historyOpen: false,
   theme: "system",
   rowAnswers: "always",
+  clock: "system",
 };
 
 import { PREFS_KEY as KEY } from "./themeScript";
@@ -34,6 +37,10 @@ function read(): Prefs {
   } catch {}
   cache = { raw, value };
   return value;
+}
+
+export function getPref<K extends keyof Prefs>(key: K): Prefs[K] {
+  return read()[key];
 }
 
 export function setPref<K extends keyof Prefs>(key: K, value: Prefs[K]): void {
