@@ -4,23 +4,29 @@ import ui from "./ui.module.css";
 
 const REPO = "https://github.com/T0mSIlver/starbridge";
 
-// Roborazzi screenshots from android/app/screenshots, cropped to the top 1800 px:
-//   ffmpeg -i quotas-dark.png -vf "crop=1233:1800:0:0,scale=616:-1" -quality 82 quotas-dark.webp
+// Roborazzi screenshots from android/app/screenshots, cropped below a whole card (quotas
+// at 1899 px, decision 1454, inbox-prompts 2104)
+// with 60 px of the screen's background added, so no frame cuts a line:
+//   ffmpeg -i quotas-dark.png -vf "crop=1233:1899:0:0,pad=1233:1959:0:0:0x0c0c0c,scale=616:-1" -quality 82 quotas-dark.webp
+// Light pads with 0xf4f4f4. `height` is the webp's height at 616 px wide.
 const FEATURES = [
   {
     shot: "quotas",
+    height: 979,
     title: "Quota windows",
     text: "Every AI plan's limits on one screen, read from CodexBar: whether you will run out before the reset, and headroom about to go unused.",
     alt: "Quota cards: one window will run out, two have headroom unused",
   },
   {
     shot: "decision",
+    height: 756,
     title: "Decisions",
     text: "An agent asks a question with options and keeps working. Your tap goes back into its session as a prompt.",
     alt: "A decision with two options, the recommended one in amber",
   },
   {
     shot: "inbox-prompts",
+    height: 1081,
     title: "Permission prompts",
     text: "Claude Code's permission prompts from every session and machine in one list: allow once, for the session, always, or deny.",
     alt: "A Bash permission prompt with allow and deny buttons",
@@ -33,7 +39,7 @@ const INSTALL = [
   { label: "npm", cmd: "npm i -g starbridge" },
 ];
 
-function Shot({ name, alt }: { name: string; alt: string }) {
+function Shot({ name, alt, height }: { name: string; alt: string; height: number }) {
   // Dark is the default where the browser reports no preference (DESIGN.md, "Rules").
   return (
     <picture>
@@ -43,7 +49,7 @@ function Shot({ name, alt }: { name: string; alt: string }) {
         src={`/landing/${name}-dark.webp`}
         alt={alt}
         width={616}
-        height={899}
+        height={height}
         loading="lazy"
       />
     </picture>
@@ -83,9 +89,9 @@ export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
       <div className={s.features}>
         {FEATURES.map((f) => (
           <section key={f.shot} className={s.feature}>
-            <Shot name={f.shot} alt={f.alt} />
             <h2 className="t-heading">{f.title}</h2>
             <p className={s.lede}>{f.text}</p>
+            <Shot name={f.shot} alt={f.alt} height={f.height} />
           </section>
         ))}
       </div>
