@@ -263,6 +263,11 @@
   text-overflow: ellipsis;
 }
 
+.cmdWhole {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .run {
   display: grid;
   gap: var(--s1);

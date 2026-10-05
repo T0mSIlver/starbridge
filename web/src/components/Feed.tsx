@@ -5,6 +5,7 @@ import { imageSrc } from "@/lib/attachments";
 import { ago, type Entry, type MachineKind, type Past, timer } from "@/lib/feed";
 import { useFind } from "@/lib/find";
 import { clockTime } from "@/lib/format";
+import { fitsRow, fullInput } from "@/lib/permissionInput";
 import { duration, progressText, runState } from "@/lib/runs";
 import type { Decision, PromptItem, RunItem, Source } from "@/lib/types";
 import s from "./Feed.module.css";
@@ -242,9 +243,16 @@ function PromptBody({ p, comfy }: { p: PromptItem; comfy?: boolean }) {
           <Hit text={p.permission.tool} />
         </span>
       </div>
-      <pre className={`${comfy ? "t-code" : "t-snippet"} ${s.cmd}`}>
-        <Hit text={p.permission.summary} />
-      </pre>
+      {/* A phone's row carries Allow when the input fits it: then it shows the input whole. */}
+      {comfy && fitsRow(p.permission) ? (
+        <pre className={`t-code ${s.cmd} ${s.cmdWhole}`}>
+          <Hit text={fullInput(p.permission)} />
+        </pre>
+      ) : (
+        <pre className={`${comfy ? "t-code" : "t-snippet"} ${s.cmd}`}>
+          <Hit text={p.permission.summary} />
+        </pre>
+      )}
     </>
   );
 }
