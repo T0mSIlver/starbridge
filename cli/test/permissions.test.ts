@@ -322,6 +322,11 @@ test("secrets are redacted before sealing; the hash covers the input as received
   expect(
     redactText("-----BEGIN RSA PRIVATE KEY-----\nProc-Type: 4,ENCRYPTED\n\nMIIE+/x\nAB="),
   ).toBe("-----BEGIN RSA PRIVATE KEY-----\nProc-Type: 4,ENCRYPTED\n[redacted]");
+  expect(redactText("-----BEGIN RSA PRIVATE KEY-----\nAAAA \nMIIE\n")).toBe(
+    "-----BEGIN RSA PRIVATE KEY-----\n[redacted]",
+  );
+  const mention = 'echo "-----BEGIN RSA PRIVATE KEY-----" > out';
+  expect(redactText(mention)).toBe(mention);
   expect(redactText("Authorization: OAuth jd9e33 x")).toBe("Authorization: OAuth [redacted] x");
   const structured = build("mcp__db__connect", { password: "hunter2", api_key: "zf3", user: "u" });
   expect(JSON.parse(structured.input)).toEqual({

@@ -87,8 +87,8 @@ const PRIVATE_KEY = /-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----/;
  * `Proc-Type`, `DEK-Info`), which stay, and base64 lines, which go, with or without the END line.
  */
 const PEM_BODY =
-  /(-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----)((?:\r?\n(?:[A-Za-z-]+: [^\r\n]*|[A-Za-z0-9+/=]*)(?=\r?\n|$))*)/g;
-const PEM_HEADER = /\r?\n[A-Za-z-]+: [^\r\n]*/g;
+  /(-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----)((?:\r?\n(?:[A-Za-z-]+:[^\r\n]*|[A-Za-z0-9+/=]*[ \t]*)(?=\r?\n|$))*)/g;
+const PEM_HEADER = /\r?\n[A-Za-z-]+:[^\r\n]*/g;
 
 /** A name whose value is a secret: `FOO_KEY`, `GITHUB_TOKEN`, `password`. */
 const SECRET_NAME = /^[A-Za-z0-9_-]*(?:KEY|TOKEN|SECRET|PASSWORD|PASSWD)[A-Za-z0-9_-]*$/i;
@@ -114,11 +114,13 @@ const URL_PASSWORD = /\b([a-z][a-z0-9+.-]*:\/\/[A-Za-z0-9_.~%!*+-]*:)[A-Za-z0-9_
 
 /** Removes secrets from one string. */
 export function redactText(text: string): string {
-  let out = text.replace(
-    PEM_BODY,
-    (_, begin: string, body: string) =>
-      `${begin}${(body.match(PEM_HEADER) ?? []).join("")}\n${REDACTED}`,
-  );
+  let out = text.replace(PEM_BODY, (all: string, begin: string, body: string) => {
+    const headers = (body.match(PEM_HEADER) ?? []).join("");
+    // A BEGIN line with no base64 after it is only text about a key.
+    return /[A-Za-z0-9+/=]/.test(body.replace(PEM_HEADER, ""))
+      ? `${begin}${headers}\n${REDACTED}`
+      : all;
+  });
   for (const p of SECRET_PATTERNS) out = out.replace(p, REDACTED);
   return out
     .replace(AUTH_HEADER, (_, head: string) => `${head}${REDACTED}`)
