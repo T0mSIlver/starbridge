@@ -76,7 +76,12 @@ test("compareVersions sorts release candidates before their release", () => {
 /** A releases page in GitHub's layout, serving one signed release of a fake binary. */
 function fakeReleases(
   version: string,
-  opts: { tamper?: "binary" | "sums"; key?: ReturnType<typeof signer> } = {},
+  opts: {
+    tamper?: "binary" | "sums";
+    key?: ReturnType<typeof signer>;
+    /** The version the signature names: an older release served under `version`'s tag. */
+    signed?: string;
+  } = {},
 ) {
   const key = signer();
   const asset = platformAsset();
@@ -84,7 +89,10 @@ function fakeReleases(
   const sums = `${createHash("sha256").update(binary).digest("hex")}  ${asset}\n`;
   const files: Record<string, string> = {
     SHA256SUMS: opts.tamper === "sums" ? `${"0".repeat(64)}  ${asset}\n` : sums,
-    "SHA256SUMS.minisig": (opts.key ?? key).sign(Buffer.from(sums), `starbridge v${version}`),
+    "SHA256SUMS.minisig": (opts.key ?? key).sign(
+      Buffer.from(sums),
+      `starbridge v${opts.signed ?? version}`,
+    ),
     [asset]: opts.tamper === "binary" ? `${binary}# changed\n` : binary,
   };
   const server = Bun.serve({
@@ -112,7 +120,7 @@ beforeEach(() => {
 afterEach(() => release?.server.stop(true));
 
 /** Runs a copy of install.sh that trusts `pubkey`, with PATH stripped of minisign if asked. */
-async function install(url: string, pubkey: string, withMinisign: boolean) {
+async function install(url: string, pubkey: string, withMinisign: boolean, version?: string) {
   const script = join(dir, "install.sh");
   writeFileSync(
     script,
@@ -130,6 +138,7 @@ async function install(url: string, pubkey: string, withMinisign: boolean) {
       STARBRIDGE_RELEASES_URL: url,
       STARBRIDGE_INSTALL_DIR: join(dir, "bin"),
       STARBRIDGE_NO_SETUP: "1",
+      ...(version ? { STARBRIDGE_VERSION: version } : {}),
     },
     stdout: "pipe",
     stderr: "pipe",
@@ -146,7 +155,8 @@ const hasMinisign = spawnSync("minisign", ["-v"]).status === 0;
 const verifiers = hasMinisign ? ["openssl", "minisign"] : ["openssl"];
 
 describe.each(verifiers)("install.sh checking with %s", (verifier) => {
-  const run = (url: string, pubkey: string) => install(url, pubkey, verifier === "minisign");
+  const run = (url: string, pubkey: string, version?: string) =>
+    install(url, pubkey, verifier === "minisign", version);
 
   test("installs the signed binary", async () => {
     release = fakeReleases("9.9.9");
@@ -175,6 +185,16 @@ describe.each(verifiers)("install.sh checking with %s", (verifier) => {
     expect(r.err).toContain("does not carry the release signature");
     expect(existsSync(r.bin)).toBe(false);
   });
+
+  test("refuses an older signed release served as the version asked for", async () => {
+    release = fakeReleases("9.9.9", { signed: "1.0.0" });
+    const r = await run(release.url, release.pubkey, "9.9.9");
+    expect(r.err).toContain('SHA256SUMS is signed for "starbridge v1.0.0", not starbridge v9.9.9');
+    expect(existsSync(r.bin)).toBe(false);
+    release.server.stop(true);
+    release = fakeReleases("9.9.9");
+    expect((await run(release.url, release.pubkey, "v9.9.9")).code).toBe(0);
+  });
 });
 
 describe("update", () => {
@@ -201,6 +221,15 @@ describe("update", () => {
     const path = installed();
     await expect(update(ctx(), { kind: "binary", path }, release.pubkey)).rejects.toThrow(
       "does not match its hash",
+    );
+    expect(readFileSync(path, "utf8")).toBe("old");
+  });
+
+  test("refuses an older signed release a mirror serves as the latest", async () => {
+    release = fakeReleases("99.0.0", { signed: "0.0.1" });
+    const path = installed();
+    await expect(update(ctx(), { kind: "binary", path }, release.pubkey)).rejects.toThrow(
+      'signed for "starbridge v0.0.1"',
     );
     expect(readFileSync(path, "utf8")).toBe("old");
   });

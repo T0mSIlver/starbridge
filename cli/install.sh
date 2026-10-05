@@ -4,7 +4,8 @@
 #   curl -fsSL https://github.com/T0mSIlver/starbridge/releases/latest/download/install.sh | sh
 #
 # It accepts the binary only if its hash is in SHA256SUMS and SHA256SUMS carries the release
-# key's minisign signature. It checks the signature with minisign when installed, else openssl.
+# key's minisign signature, for STARBRIDGE_VERSION when that is set. It checks the signature with
+# minisign when installed, else openssl.
 #
 # STARBRIDGE_VERSION=1.2.3      a version other than the latest release
 # STARBRIDGE_INSTALL_DIR=<dir>  instead of ~/.local/bin
@@ -93,7 +94,7 @@ openssl_verify() {
 }
 
 if command -v minisign >/dev/null 2>&1; then
-  minisign -Vq -P "$PUBKEY" -m "$tmp/SHA256SUMS" -x "$tmp/SHA256SUMS.minisig" ||
+  comment="trusted comment: $(minisign -VQ -P "$PUBKEY" -m "$tmp/SHA256SUMS" -x "$tmp/SHA256SUMS.minisig")" ||
     fail "SHA256SUMS does not carry the release signature"
 elif command -v openssl >/dev/null 2>&1 &&
   openssl pkeyutl -help 2>&1 | grep -q rawin && openssl list -digest-algorithms 2>/dev/null | grep -qi blake2b512; then
@@ -101,6 +102,11 @@ elif command -v openssl >/dev/null 2>&1 &&
     fail "SHA256SUMS does not carry the release signature"
 else
   fail "needs minisign (https://jedisct1.github.io/minisign/) or OpenSSL 3 to check the release signature"
+fi
+# The trusted comment names the version the signature is for, whatever tag served it.
+signed=${comment#trusted comment: }
+if [ -n "${STARBRIDGE_VERSION:-}" ] && [ "$signed" != "starbridge v${STARBRIDGE_VERSION#v}" ]; then
+  fail "SHA256SUMS is signed for \"$signed\", not starbridge v${STARBRIDGE_VERSION#v}"
 fi
 
 want=$(awk -v f="$asset" '$2 == f || $2 == "*" f { print $1 }' "$tmp/SHA256SUMS")
