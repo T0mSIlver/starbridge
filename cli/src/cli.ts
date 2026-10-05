@@ -6,6 +6,9 @@ import { type Ctx, UsageError } from "./context";
 import { type AskInput, answers, ask, wait } from "./decisions";
 import { pair } from "./pair";
 import { quotaPush } from "./quota";
+import { installKind, ReleaseError } from "./release";
+import { removeBinary, update } from "./update";
+import { VERSION } from "./version";
 
 const HELP = `starbridge: post decisions to your devices, upload quota windows
 
@@ -46,6 +49,15 @@ const HELP = `starbridge: post decisions to your devices, upload quota windows
   starbridge quota push [--provider <name>]... [--interval 5m] [--once] [--codexbar <path>]
       Run \`codexbar usage --format json\` for each provider (or for every enabled one),
       compute pace and alerts, and post a sealed snapshot every interval.
+
+  starbridge update
+      Install the latest release once its signature checks out (brew and npm installs: use
+      their manager).
+
+  starbridge uninstall
+      Remove this binary. Keys and state stay.
+
+  starbridge --version
 
 Keys and state live in $STARBRIDGE_CONFIG_DIR, else $XDG_CONFIG_HOME/starbridge, else
 ~/.config/starbridge.`;
@@ -147,6 +159,16 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
         });
         return await quotaPush(ctx, { ...values, providers: values.provider ?? [] });
       }
+      case "update":
+        parseArgs({ args: rest, options: {} });
+        return await update(ctx, installKind());
+      case "uninstall":
+        parseArgs({ args: rest, options: {} });
+        return removeBinary(ctx, installKind());
+      case "--version":
+      case "-v":
+        ctx.out(`starbridge ${VERSION}`);
+        return 0;
       case undefined:
       case "help":
       case "--help":
@@ -157,7 +179,12 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
         throw new UsageError(`unknown command: ${command} (try starbridge --help)`);
     }
   } catch (e) {
-    if (e instanceof UsageError || e instanceof ApiError || e instanceof ProtocolError) {
+    if (
+      e instanceof UsageError ||
+      e instanceof ApiError ||
+      e instanceof ProtocolError ||
+      e instanceof ReleaseError
+    ) {
       ctx.err(`starbridge: ${e.message}`);
       return 1;
     }
