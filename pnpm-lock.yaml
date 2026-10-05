@@ -129,6 +129,9 @@ importers:
       libsodium-wrappers:
         specifier: ^0.8.4
         version: 0.8.4
+      marked:
+        specifier: ~18.0.14
+        version: 18.0.14
       next:
         specifier: 16.3.4
         version: 16.3.4(@types/node@20.19.43)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -700,6 +703,11 @@ packages:
   libsodium@0.8.4:
     resolution: {integrity: sha512-lMcYaRi0zcs7tarATsQUYC7rstliIXZuoq0c6zXSgNtSNtdvBgkSegjWhpMJAXzKX3SUSwIp7+zEsob+j3LuRw==}
 
+  marked@18.0.14:
+    resolution: {integrity: sha512-mBHK6FBHuBAlhgRe88w9F0O1AbwwXJUcQibUbC/QcdTbVGAD7aWza+xt3N6oT/jCZx3/OMeS+8rnuiHZcQ9s7A==}
+    engines: {node: '>= 20'}
+    hasBin: true
+
   minimalistic-assert@1.0.1:
     resolution: {integrity: sha512-UtJcAD4yEaGtjPezWuO9wC4nwUnVH/8/Im3yEHQP4b67cXlD/Qr9hdITCU1xDbSEXg2XKNaP8jsReV7vQd00/A==}
 
@@ -1187,6 +1195,8 @@ snapshots:
       libsodium: 0.8.4
 
   libsodium@0.8.4: {}
+
+  marked@18.0.14: {}
 
   minimalistic-assert@1.0.1: {}
 

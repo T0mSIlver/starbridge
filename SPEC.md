@@ -579,6 +579,12 @@ How it generalizes is open.
   worker's scope and Android deep links are unchanged. It reuses the Roborazzi screenshots,
   cropped to WebP in `web/public/landing`, and its sign-in button goes straight to GitHub;
   self-hosters reach the owner-token form from its footer.
+- 2026-10-05. Docs at `/docs` on the web page (#211), not a Zensical site: the pages listed in
+  `web/src/lib/docs.ts` are Markdown files of the repository (`docs/index.md`, `cli/README.md`,
+  `docs/tell-your-agents.md`, `server/README.md`), rendered with `marked` at build time. Links
+  between them become `/docs` links; other relative links go to GitHub. The web page, the landing
+  page and Android link there, since GitHub links 404 while the repository is private. The
+  overview and the landing page say Starbridge works best with Claude Code and supports Codex.
 
 - 2026-10-05. Uptime alert with no new accounts: `.github/workflows/uptime.yml` checks
   `/healthz` and `/healthz/backup` hourly (every 5 minutes once the repository is public), opens one issue labelled `outage` (GitHub

@@ -149,7 +149,7 @@ export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
         </span>
         <nav className={s.nav} aria-label="Site">
           <a href="#features">Features</a>
-          <a href={`${REPO}/tree/main/docs`}>Docs</a>
+          <a href="/docs">Docs</a>
           <a href={SELF_HOST}>Self-host</a>
           <a href={REPO}>GitHub</a>
         </nav>
@@ -263,6 +263,7 @@ export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
           The CLI sets up the agent service and the Claude Code plugin.
         </p>
         <Install />
+        <p className={`t-meta ${s.faint}`}>Works best with Claude Code; Codex supported.</p>
       </section>
 
       <footer className={`t-small ${s.foot}`}>

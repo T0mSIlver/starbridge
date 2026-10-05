@@ -217,7 +217,7 @@ fun SettingsScreen(
     }
 }
 
-private const val GUIDE = "https://github.com/T0mSIlver/starbridge/blob/main/docs/tell-your-agents.md"
+private const val GUIDE = "https://starbridge.run/docs/tell-your-agents"
 
 /** How pushes reach this phone, as a state. */
 private fun push(push: PushSetting) = when {

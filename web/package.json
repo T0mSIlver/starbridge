@@ -16,6 +16,7 @@
     "@noble/ciphers": "^2.4.0",
     "@starbridge/protocol": "workspace:*",
     "libsodium-wrappers": "^0.8.4",
+    "marked": "^18.0.14",
     "next": "16.3.4",
     "react": "19.2.8",
     "react-dom": "19.2.8",
