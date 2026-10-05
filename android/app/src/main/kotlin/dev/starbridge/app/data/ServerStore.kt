@@ -25,6 +25,7 @@ import dev.starbridge.app.protocol.Run as RunBody
 import dev.starbridge.app.protocol.SealedBox
 import dev.starbridge.app.protocol.SealedItem
 import dev.starbridge.app.protocol.Settled
+import dev.starbridge.app.protocol.Waiting
 import dev.starbridge.app.protocol.SignedEnvelope
 import dev.starbridge.app.protocol.Sodium
 import dev.starbridge.app.protocol.bindMessage
@@ -584,9 +585,15 @@ class ServerStore(
         // How each item a settled notice closed was closed, with the time: the notice lists before
         // the decision it closed, which moved past it.
         val closings = mutableMapOf<String, Pair<String?, String>>()
+        val waits = mutableListOf<Pair<String, Waiting>>()
         while (true) {
-            val page = api().items("decision,settled", cursor)
+            val page = api().items("decision,settled,waiting", cursor)
             for (listed in page.items) {
+                if (listed.item.kind == "waiting") {
+                    val (from, body) = open(listed.item) ?: continue
+                    waits += from to body as Waiting
+                    continue
+                }
                 if (listed.item.kind == "settled") {
                     val (_, body) = open(listed.item) ?: continue
                     body as Settled
@@ -611,7 +618,20 @@ class ServerStore(
             cursor = page.cursor
             if (page.items.size < 100) break
         }
+        // An update may list before the decision it is about, so they apply once all are read.
+        for ((from, w) in waits) byId[w.decisionId]?.let { d -> wait(d, from, w)?.let { byId[w.decisionId] = it } }
         persist(saved.copy(cursor = cursor, decisions = byId.values.sortedBy { it.body.createdAt }.takeLast(500)))
+    }
+
+    /**
+     * [d] with the agent's waiting state from [w], or null when [w] changes nothing: it must come
+     * from the machine that asked, and only a later update replaces an earlier one.
+     */
+    private fun wait(d: SavedDecision, from: String, w: Waiting): SavedDecision? {
+        if (d.from != from) return null
+        val at = instant(w.at) ?: return null
+        if (d.waitingAt != null && instant(d.waitingAt)?.isBefore(at) == false) return null
+        return d.copy(waiting = w.state, waitingAt = w.at)
     }
 
     /**
@@ -883,6 +903,22 @@ class ServerStore(
                 val added = takePrompt(item, answeredAt, byId)
                 keepPrompts(byId)
                 if (added != null && added.answeredAt == null) alerts.prompt(toUi(added))
+            }
+            "waiting" -> {
+                // Pushed only when the agent flips to waiting: re-notify once, if still open.
+                val box = p["box"]?.jsonPrimitive?.content
+                val item = if (box != null) {
+                    SealedItem(1, "waiting", id, p.getValue("from").jsonPrimitive.content, p["re"]?.jsonPrimitive?.content, listOf(SealedBox(me.id, box)))
+                } else {
+                    api().item(id).item
+                }
+                if (directory?.members?.containsKey(item.from) != true) syncDirectory()
+                val (from, body) = open(item) ?: return@withLock
+                body as Waiting
+                val d = saved.decisions.find { it.body.id == body.decisionId } ?: return@withLock
+                val updated = wait(d, from, body) ?: return@withLock
+                persist(saved.copy(decisions = saved.decisions.map { if (it === d) updated else it }))
+                if (d.waiting != "waiting" && updated.waiting == "waiting" && d.answeredAt == null && d.answer == null) alerts.decision(toUi(updated))
             }
             "quota" -> syncQuotas()
             "join" -> {
@@ -1190,8 +1226,12 @@ class ServerStore(
                 b.source.session,
                 b.source.sessionTitle,
                 b.source.links.orEmpty().map { SessionLink(it.kind, it.url) },
+                machineKind = b.source.machineKind,
             ),
             createdAt = instant(b.createdAt) ?: Instant.EPOCH,
+            agent = b.agent,
+            waiting = d.waiting == "waiting",
+            waitingSince = if (d.waiting == "waiting") instant(d.waitingAt) else null,
             images = b.images.orEmpty().map { Image(it.data, it.width, it.height, it.alt) },
             links = b.links.orEmpty().map { Link(it.url, it.title) },
             answerIn = b.answerIn?.let { Link(it.url, it.title) },
@@ -1224,7 +1264,8 @@ class ServerStore(
             description = b.description,
             input = b.input,
             scopes = b.suggestions.map { PromptScope(it.scope, it.label, it.rule) },
-            source = Source(b.source.machine, b.source.project, b.source.session, b.source.sessionTitle, b.source.links.orEmpty().map { SessionLink(it.kind, it.url) }),
+            source = Source(b.source.machine, b.source.project, b.source.session, b.source.sessionTitle, b.source.links.orEmpty().map { SessionLink(it.kind, it.url) }, b.source.machineKind),
+            agent = b.agent,
             createdAt = instant(b.createdAt) ?: Instant.EPOCH,
             expiresAt = instant(b.expiresAt) ?: Instant.EPOCH,
             ended = ended(p),
@@ -1260,7 +1301,7 @@ class ServerStore(
             id = b.id,
             title = b.title,
             reason = b.reason,
-            source = Source(b.source.machine, b.source.project, b.source.session, b.source.sessionTitle, b.source.links.orEmpty().map { SessionLink(it.kind, it.url) }),
+            source = Source(b.source.machine, b.source.project, b.source.session, b.source.sessionTitle, b.source.links.orEmpty().map { SessionLink(it.kind, it.url) }, b.source.machineKind),
             startedAt = instant(b.startedAt) ?: Instant.EPOCH,
             at = instant(b.at) ?: Instant.EPOCH,
             progress = b.progress?.let { Run.Progress(it.done, it.total, it.unit == "percent") },

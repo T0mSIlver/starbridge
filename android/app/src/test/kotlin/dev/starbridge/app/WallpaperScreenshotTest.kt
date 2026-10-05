@@ -15,7 +15,7 @@ import dev.starbridge.app.data.Colours
 import dev.starbridge.app.ui.devices.DeviceActions
 import dev.starbridge.app.ui.devices.DevicesScreen
 import dev.starbridge.app.ui.inbox.DecisionActions
-import dev.starbridge.app.ui.inbox.DecisionScreen
+import dev.starbridge.app.ui.inbox.PromptActions
 import dev.starbridge.app.ui.inbox.InboxScreen
 import dev.starbridge.app.ui.quotas.QuotasScreen
 import dev.starbridge.app.ui.theme.StarbridgeTheme
@@ -62,9 +62,9 @@ class WallpaperScreenshotTest(private val wallpaper: Wallpaper, private val dark
         compose.onRoot().captureRoboImage("screenshots/wallpaper/$name-${wallpaper.name.lowercase()}-$scheme.png")
     }
 
-    @Test fun inbox() = capture("inbox") { InboxScreen(fake.decisions, now, DecisionActions({ _, _, _ -> }, {}), selected = fake.decisions[0].id) }
-
-    @Test fun decision() = capture("decision") { DecisionScreen(fake.decisions[1], now, onAnswer = { _, _, _ -> }) }
+    @Test fun inbox() = capture("inbox") {
+        Phone(Tab.Inbox, 4) { InboxScreen(fake.decisions, now, DecisionActions({ _, _, _ -> }, {}), prompts = fake.prompts, promptActions = PromptActions({ _, _, _, _ -> }), runs = fake.runs) }
+    }
 
     // The mockup's "Match wallpaper" quotas, notifying on.
     @Config(qualifiers = "w412dp-h1060dp-xxhdpi")

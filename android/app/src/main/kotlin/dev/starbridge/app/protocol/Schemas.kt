@@ -103,6 +103,7 @@ val SIGNER_ROLE = mapOf(
     "permission" to "machine",
     "permission-answer" to "device",
     "settled" to "machine",
+    "waiting" to "machine",
     "run" to "machine",
 )
 val ITEM_KINDS = SIGNER_ROLE.keys
@@ -429,6 +430,33 @@ data class Settled(
         device?.let { id(it, "device") }
         time(at, "at")
         schema((outcome == "device") == (device != null), "device is set exactly when outcome is device")
+    }
+}
+
+/**
+ * Whether the agent is blocked on one of its machine's decisions (Waiting in schemas.ts): the
+ * machine re-posts it under one id per decision, and the latest `at` wins. None means working.
+ */
+@Serializable
+data class Waiting(
+    val v: Int,
+    override val id: String,
+    val decisionId: String,
+    val to: List<String>,
+    val at: String,
+    val state: String,
+) : ItemBody {
+    override val re get() = decisionId
+    override val recipients get() = to
+
+    fun check() {
+        schema(v == 1, "v")
+        id(id, "id")
+        id(decisionId, "decisionId")
+        schema(to.isNotEmpty(), "to")
+        to.forEach { id(it, "to") }
+        time(at, "at")
+        schema(state == "working" || state == "waiting", "state")
     }
 }
 
