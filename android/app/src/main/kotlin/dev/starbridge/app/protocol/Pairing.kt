@@ -43,6 +43,15 @@ fun parsePairingCode(text: String): PairingCode {
     return splitCode(chars)
 }
 
+/**
+ * The link a QR code carries: `<server>/pair#<code>`. Opened in a browser, it shows the web page
+ * with the code filled in; the fragment never reaches the server.
+ */
+fun pairingLink(server: String, code: PairingCode): String = "${server.trimEnd('/')}/pair#${code.formatted()}"
+
+/** A code typed by hand, or read from a scanned pairing link: the part after `#` if any. */
+fun codeFromLink(text: String): PairingCode = parsePairingCode(text.substringAfter('#'))
+
 @Serializable
 data class PairingMessage(val body: String, val mac: String)
 

@@ -74,3 +74,29 @@ export type PairingRequest = {
   signPk: string;
   at: string;
 };
+
+/** A join request as the server relays it (PROTOCOL.md, "Joining by digits"). */
+export type JoinView = {
+  id: string;
+  /** The joining device's request text: JSON of its name and public keys. */
+  request: string;
+  commitment: string;
+  state: "open" | "comparing" | "approved" | "cancelled";
+  approver?: string;
+  approverKey?: string;
+  joinerKey?: string;
+  approval?: unknown;
+  createdAt: string;
+  expiresAt: string;
+  version: number;
+};
+
+/** A join request as the Devices banner shows it, its request parsed. */
+export type JoinAsk = {
+  id: string;
+  name: string;
+  at: string;
+  /** Set while a device compares digits for it. */
+  approver?: string;
+  view: JoinView;
+};

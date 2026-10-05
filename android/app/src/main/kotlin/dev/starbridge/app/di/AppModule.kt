@@ -23,6 +23,7 @@ import dev.starbridge.app.data.ServerStore
 import dev.starbridge.app.data.Store
 import dev.starbridge.app.protocol.Directories
 import dev.starbridge.app.protocol.Envelopes
+import dev.starbridge.app.protocol.Joins
 import dev.starbridge.app.protocol.Pairings
 import dev.starbridge.app.protocol.Sodium
 import dev.starbridge.app.push.Notifier
@@ -64,6 +65,7 @@ object AppModule {
             envelopes = envelopes,
             directories = Directories(sodium, envelopes),
             pairings = Pairings(sodium),
+            joins = Joins(sodium),
             alerts = notifier,
             deviceName = name,
             defaultServer = BuildConfig.DEFAULT_SERVER,

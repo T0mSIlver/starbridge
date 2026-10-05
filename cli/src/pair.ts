@@ -8,6 +8,7 @@ import {
   newClaimSecret,
   newPairingCode,
   openPairingApproval,
+  pairingLink,
   pairingRequest,
   publicKeys,
   verifyDirectory,
@@ -15,6 +16,7 @@ import {
 import { Api, ApiError } from "./api";
 import { encodeKeys } from "./config";
 import { type Ctx, iso, UsageError } from "./context";
+import { terminalQr } from "./qr";
 
 /** A pairing code expires after this long (PROTOCOL.md). */
 const CODE_LIFETIME_MS = 10 * 60_000;
@@ -56,8 +58,13 @@ export async function pair(
     }
   }
 
+  const link = pairingLink(server, code);
   ctx.out(`Pairing code: ${formatPairingCode(code)}`);
-  ctx.out(`Type it under Devices in the Starbridge app or web page within 10 minutes.`);
+  ctx.out(`Scan this with the Starbridge app or your phone's camera, or open ${link}`);
+  for (const line of terminalQr(link)) ctx.out(line);
+  ctx.out(
+    "Or type the code under Devices in the Starbridge app or web page. It expires in 10 minutes.",
+  );
 
   const deadline = ctx.now().getTime() + CODE_LIFETIME_MS;
   let result: { approval: unknown; token?: string } | undefined;

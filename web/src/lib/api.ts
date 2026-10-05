@@ -1,6 +1,7 @@
 // The routes of PROTOCOL.md a device calls. Same origin, so the session cookie rides along; the
 // page and the service worker both use this.
 import type { PairingMessage, SealedItem, SignedEnvelope } from "@starbridge/protocol";
+import type { JoinView } from "./types";
 
 export class ApiError extends Error {
   constructor(
@@ -69,6 +70,13 @@ export const api = {
 
   pairing: (rendezvous: string) =>
     call<{ request: unknown }>("GET", `/pairings/${encodeURIComponent(rendezvous)}`),
+  /** Holds until the new member posts under `rendezvous`; undefined when `wait` passes first. */
+  awaitPairing: (rendezvous: string, wait: number, signal?: AbortSignal) =>
+    call<{ request: unknown } | undefined>(
+      "GET",
+      `/pairings/${encodeURIComponent(rendezvous)}?wait=${wait}`,
+      { signal },
+    ),
   approve: (rendezvous: string, approval: PairingMessage) =>
     call<{ approved: true }>("POST", `/pairings/${encodeURIComponent(rendezvous)}/approve`, {
       body: { approval },
@@ -82,6 +90,35 @@ export const api = {
       `/pairings/${encodeURIComponent(rendezvous)}/result?wait=${wait}`,
       { headers: { "x-claim": claim }, signal },
     ),
+
+  postJoin: (request: string, commitment: string) =>
+    call<{ join: JoinView }>("POST", "/joins", { body: { request, commitment } }),
+  /** Open join requests; with `wait`, holds until any changes past `after`. */
+  joins: (after: string, wait: number, signal?: AbortSignal) =>
+    call<{ joins: JoinView[]; cursor: string }>(
+      "GET",
+      `/joins?after=${encodeURIComponent(after)}&wait=${wait}`,
+      { signal },
+    ),
+  join: (id: string, after: number, wait: number, signal?: AbortSignal) =>
+    call<{ join: JoinView }>(
+      "GET",
+      `/joins/${encodeURIComponent(id)}?after=${after}&wait=${wait}`,
+      { signal },
+    ),
+  claimJoin: (id: string, key: string, approver: string) =>
+    call<{ join: JoinView }>("POST", `/joins/${encodeURIComponent(id)}/approver`, {
+      body: { key, approver },
+    }),
+  revealJoin: (id: string, key: string) =>
+    call<{ join: JoinView }>("POST", `/joins/${encodeURIComponent(id)}/reveal`, {
+      body: { key },
+    }),
+  approveJoin: (id: string, approval: PairingMessage) =>
+    call<{ approved: true }>("POST", `/joins/${encodeURIComponent(id)}/approve`, {
+      body: { approval },
+    }),
+  cancelJoin: (id: string) => call<void>("DELETE", `/joins/${encodeURIComponent(id)}`),
 
   items: (kind: string, after?: string, opts: { open?: boolean } = {}) =>
     call<{ items: Stored[]; cursor: string }>(

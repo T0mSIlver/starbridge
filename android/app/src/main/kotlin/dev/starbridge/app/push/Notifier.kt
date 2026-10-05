@@ -39,6 +39,11 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
                 description = "Agents waiting for you to allow a command or an edit"
             },
         )
+        manager.createNotificationChannel(
+            NotificationChannel(JOIN_CHANNEL, "Join requests", NotificationManager.IMPORTANCE_HIGH).apply {
+                description = "A browser or phone signed in to your account asks to join"
+            },
+        )
     }
 
     // POST_NOTIFICATIONS exists from Android 13; before that the app's notification setting rules.
@@ -257,8 +262,34 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
         }
     }
 
+    /** Tapping it opens the app, which shows the request to compare digits with. */
+    override fun join(id: String, name: String) {
+        if (!allowed()) return
+        val open = PendingIntent.getActivity(
+            context,
+            tag(id),
+            Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+        @Suppress("MissingPermission")
+        manager.notify(
+            tag(id),
+            NotificationCompat.Builder(context, JOIN_CHANNEL)
+                .setSmallIcon(R.drawable.ic_notification)
+                .setContentTitle("$name wants to join")
+                .setContentText("Open Starbridge to compare digits and approve it.")
+                .setCategory(NotificationCompat.CATEGORY_STATUS)
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setContentIntent(open)
+                .setAutoCancel(true)
+                .setTimeoutAfter(10 * 60_000L)
+                .build(),
+        )
+    }
+
     companion object {
         const val CHANNEL = "decisions"
         const val PROMPTS = "prompts"
+        const val JOIN_CHANNEL = "joins"
     }
 }

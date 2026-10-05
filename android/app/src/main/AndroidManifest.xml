@@ -55,6 +55,10 @@
             </intent-filter>
         </service>
 
+        <!-- Play services fetches the QR scanner module at install, not at the first scan. -->
+        <meta-data
+            android:name="com.google.mlkit.vision.DEPENDENCIES"
+            android:value="barcode_ui" />
         <!-- The app asks for the FCM token once it is set up, not at every start. -->
         <meta-data
             android:name="firebase_messaging_auto_init_enabled"

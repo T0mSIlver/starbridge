@@ -1,7 +1,9 @@
 "use client";
 
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import type { FirstDevice as PreparedDevice } from "@/lib/device";
+import { hasPairCode, holdPairCode } from "@/lib/pairLink";
 import { useApp } from "./AppProvider";
 import { Mark } from "./icons";
 import { Setup } from "./Setup";
@@ -151,12 +153,29 @@ function FirstDevice({ account }: { account: string }) {
 function Join({ account, stale }: { account: string; stale: boolean }) {
   const { reload } = useApp();
   const [name, setName] = useDefaultName();
-  const [mode, setMode] = useState<"choose" | "code" | "words">("choose");
+  const [mode, setMode] = useState<"choose" | "digits" | "code" | "words">("choose");
   const [code, setCode] = useState<string>();
+  const [digits, setDigits] = useState<string>();
   const [words, setWords] = useState("");
   const cancel = useRef<() => void>(undefined);
   const { busy, error, run } = useAction();
   useEffect(() => () => cancel.current?.(), []);
+
+  const ask = () =>
+    run(async () => {
+      setMode("digits");
+      const join = await (await load()).startDigitJoin(account, name.trim());
+      cancel.current = join.cancel;
+      join.digits.then(setDigits, () => {});
+      try {
+        await join.done;
+      } catch (e) {
+        setMode("choose");
+        setDigits(undefined);
+        throw e;
+      }
+      await reload();
+    });
 
   const pair = () =>
     run(async () => {
@@ -188,12 +207,51 @@ function Join({ account, stale }: { account: string; stale: boolean }) {
             type="button"
             className={`${ui.button} ${ui.primary} ${s.go}`}
             disabled={!name.trim()}
+            onClick={ask}
+          >
+            Ask my other devices
+          </button>
+          <button
+            type="button"
+            className={`${ui.button} ${s.go}`}
+            disabled={!name.trim()}
             onClick={pair}
           >
             Get a pairing code
           </button>
           <button type="button" className={`${ui.button} ${s.go}`} onClick={() => setMode("words")}>
             Use the recovery key
+          </button>
+        </>
+      )}
+      {mode === "digits" && (
+        <>
+          {digits ? (
+            <>
+              <p className={s.step}>
+                Check that your other device shows these digits, then approve {name.trim()} there.
+              </p>
+              <p className="t-figure" data-testid="join-digits">
+                {`${digits.slice(0, 3)} ${digits.slice(3)}`}
+              </p>
+            </>
+          ) : (
+            <p className={s.step}>
+              Open Starbridge on your phone or another signed-in browser. It asks whether to let{" "}
+              {name.trim()} join; tap Compare digits there.
+            </p>
+          )}
+          {busy && <p className="t-small">Waiting for approval…</p>}
+          <button
+            type="button"
+            className={`${ui.button} ${s.go}`}
+            onClick={() => {
+              cancel.current?.();
+              setDigits(undefined);
+              setMode("choose");
+            }}
+          >
+            {digits ? "Digits differ: cancel" : "Cancel"}
           </button>
         </>
       )}
@@ -294,6 +352,13 @@ function Problem({ title, text, error }: { title: string; text: string; error: s
 /** Shows the screen for where this browser stands, and the app once it is a ready device. */
 export function Gate({ children }: { children: React.ReactNode }) {
   const { boot } = useApp();
+  const router = useRouter();
+  const path = usePathname();
+  // A pairing link opened before sign-in or setup: keep its code, and go back to it after.
+  useEffect(() => holdPairCode(), []);
+  useEffect(() => {
+    if (boot.state === "ready" && path !== "/pair" && hasPairCode()) router.replace("/pair");
+  }, [boot.state, path, router]);
   switch (boot.state) {
     case "loading":
       return (

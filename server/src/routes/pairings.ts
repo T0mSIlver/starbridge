@@ -105,13 +105,37 @@ pairingRoutes.post("/pairings", async (c) => {
     return true;
   })();
   if (!created) fail(409, "taken", "rendezvous id in use; make a new code");
+  c.var.pairings.wake(`request:${body.rendezvous}`);
   return c.json({ expiresInSeconds: LIFETIME_MS / 1000 }, 201);
 });
 
-pairingRoutes.get("/pairings/:rendezvous", requireCaller("paired-device"), (c) => {
+/**
+ * The request under a rendezvous id. With `wait`, a device that showed a QR code holds the
+ * request open until the new member posts, and gets 204 if `wait` passes first.
+ */
+pairingRoutes.get("/pairings/:rendezvous", requireCaller("paired-device"), async (c) => {
   rateLimit(c, `pair-read:${c.var.caller.account}`, [30, 60_000]);
-  const p = load(c, c.req.param("rendezvous"));
-  if (p.account_id && p.account_id !== c.var.caller.account) fail(404, "not-found");
+  const rendezvous = c.req.param("rendezvous");
+  if (!RENDEZVOUS.test(rendezvous)) fail(404, "not-found");
+  const find = () => {
+    sweepPairings(c.var.db);
+    const p = c.var.db
+      .query("SELECT * FROM pairings WHERE rendezvous = ?")
+      .get(rendezvous) as Pairing | null;
+    return p && Date.now() - p.created_at <= LIFETIME_MS ? p : null;
+  };
+  let p = find();
+  const seconds = waitSeconds(c);
+  if (!p && seconds > 0) {
+    if (c.var.pairings.count(`request:${rendezvous}`) >= c.var.config.limits.pairingWaits)
+      fail(429, "too-many-waits", "this rendezvous id already has its long-polls open");
+    holdOpen(c);
+    await c.var.pairings.wait(`request:${rendezvous}`, seconds, c.req.raw.signal);
+    p = find();
+    if (!p) return c.body(null, 204);
+  }
+  if (!p || (p.account_id && p.account_id !== c.var.caller.account))
+    fail(404, "not-found", "no such pairing, or it expired");
   return c.json({ request: JSON.parse(p.request) });
 });
 
