@@ -26,7 +26,13 @@ import dev.starbridge.app.ui.inbox.InboxScreen
 import dev.starbridge.app.ui.inbox.PromptActions
 import dev.starbridge.app.ui.inbox.PromptLogScreen
 import dev.starbridge.app.data.QuotaSettings
-import dev.starbridge.app.ui.quotas.QuotaSettingsScreen
+import dev.starbridge.app.ui.settings.SettingsActions
+import dev.starbridge.app.ui.settings.SettingsScreen
+import dev.starbridge.app.ui.devices.AddDeviceScreen
+import dev.starbridge.app.ui.Tab
+import dev.starbridge.app.data.Colours
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.performClick
 import dev.starbridge.app.ui.quotas.QuotasScreen
 import dev.starbridge.app.ui.setup.SetupActions
 import dev.starbridge.app.ui.setup.SetupScreen
@@ -44,7 +50,7 @@ import java.time.Instant
 // when a screen drifts.
 @RunWith(ParameterizedRobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-@Config(sdk = [36], qualifiers = "w411dp-h891dp-xxhdpi")
+@Config(sdk = [36], qualifiers = "w412dp-h892dp-xxhdpi")
 class ScreenshotTest(private val dark: Boolean) {
     companion object {
         @JvmStatic
@@ -62,19 +68,17 @@ class ScreenshotTest(private val dark: Boolean) {
     private val now = Instant.parse("2026-10-04T14:00:00Z")
     private val fake = Fake(now)
     private val decisionActions = DecisionActions({ _, _, _ -> }, {})
-    private val deviceActions = DeviceActions({}, {}, {}, {}, {}, {}, {}, {})
+    private val deviceActions = DeviceActions({}, {}, {}, {}, {})
+    private val settingsActions = SettingsActions({}, {}, {}, {}, {}, {})
     private val setupActions = SetupActions({ "" }, { _, _ -> }, {}, {}, {}, {}, {}, {}, {}, {})
 
-    private fun capture(name: String, content: @Composable () -> Unit) {
+    private fun capture(name: String, before: () -> Unit = {}, content: @Composable () -> Unit) {
         compose.setContent {
             StarbridgeTheme(darkTheme = dark) {
                 Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) { content() }
             }
         }
-        // Images decode off the main thread: let them land before the capture.
-        compose.waitForIdle()
-        Thread.sleep(300)
-        compose.waitForIdle()
+        before()
         // Images decode off the main thread: let them land before the capture.
         compose.waitForIdle()
         Thread.sleep(300)
@@ -107,25 +111,38 @@ class ScreenshotTest(private val dark: Boolean) {
 
     @Test fun decisionAnswerIn() = capture("decision-answer-in") { DecisionScreen(fake.decisions.first { it.answerIn != null }, now, onAnswer = { _, _, _ -> }) }
 
-    @Test fun quotas() = capture("quotas") { QuotasScreen(fake.windows, now) }
+    @Config(qualifiers = "w412dp-h1060dp-xxhdpi")
+    @Test fun quotas() = capture("quotas") { Phone(Tab.Quotas, 4) { QuotasScreen(fake.windows, now) } }
+
+    @Config(qualifiers = "w412dp-h1060dp-xxhdpi")
+    @Test fun quotasNotifying() = capture("quotas-notifying") { Phone(Tab.Quotas, 4) { QuotasScreen(fake.windows, now, settings = QuotaSettings(notify = listOf("claude"))) } }
 
     // Remaining, clock times, a 5-day week with strong ticks, Codex first, Gemini hidden, Z.ai notifying.
     private val tuned = QuotaSettings(showUsed = false, absoluteResets = true, workDays = 5, ticks = QuotaSettings.Ticks.HighContrast, order = listOf("codex"), hidden = listOf("gemini"), notify = listOf("zai"))
 
     @Test fun quotasTuned() = capture("quotas-tuned") { QuotasScreen(fake.windows, now, settings = tuned) }
 
-    @Config(qualifiers = "w411dp-h2100dp-xxhdpi")
-    @Test fun quotaSettings() = capture("quota-settings") { QuotaSettingsScreen(fake.windows, tuned, {}) }
+    // The mockup's settings, scrolled: the whole page.
+    @Config(qualifiers = "w412dp-h1640dp-xxhdpi")
+    @Test fun settings() = capture("settings") {
+        Phone(Tab.Settings, 4) {
+            SettingsScreen(fake.windows, QuotaSettings(hidden = listOf("gemini")), fake.members.size, Colours.Starbridge, fake.push, "https://starbridge.run", settingsActions)
+        }
+    }
 
     @Test fun quotasEmpty() = capture("quotas-empty") { QuotasScreen(emptyList(), now) }
 
     @Test fun quotasStale() = capture("quotas-stale") { QuotasScreen(fake.staleWindows, now) }
 
-    // Tall enough to show "This phone": notifications, colours and the server.
-    @Config(qualifiers = "w411dp-h1500dp-xxhdpi")
-    @Test fun devices() = capture("devices") { DevicesScreen(fake.members, Approval.Idle, fake.push, "https://starbridge.run", now, deviceActions) }
+    @Test fun devices() = capture("devices") { Phone(null, 0) { DevicesScreen(fake.members, now, deviceActions) } }
 
-    @Test fun devicesPairing() = capture("devices-pairing") { DevicesScreen(fake.members, fake.approval, fake.push, "https://starbridge.run", now, deviceActions) }
+    @Test fun devicesRevoke() = capture("devices-revoke", before = { compose.onAllNodesWithText("Revoke")[0].performClick() }) {
+        Phone(null, 0) { DevicesScreen(fake.members, now, deviceActions) }
+    }
+
+    @Test fun addDevice() = capture("add-device") { Phone(null, 0) { AddDeviceScreen(Approval.Idle, deviceActions) } }
+
+    @Test fun addDeviceFound() = capture("add-device-found") { Phone(null, 0) { AddDeviceScreen(fake.approval, deviceActions) } }
 
     @Test fun setupSignIn() = capture("setup-sign-in") { SetupScreen(Phase.SignedOut, "https://starbridge.run", false, setupActions, {}) }
 
@@ -137,8 +154,8 @@ class ScreenshotTest(private val dark: Boolean) {
 
     @Test fun setupJoinDigits() = capture("setup-join-digits") { SetupScreen(Phase.JoiningByDigits("042917"), "https://starbridge.run", false, setupActions, {}) }
 
-    @Test fun devicesShowingQr() = capture("devices-qr") {
-        DevicesScreen(fake.members, Approval.Showing("7KQ2-M9XD-4TPV-HB3N-R8CE-WY6F", "https://starbridge.run/pair#7KQ2-M9XD-4TPV-HB3N-R8CE-WY6F"), fake.push, "https://starbridge.run", now, deviceActions)
+    @Test fun addDeviceQr() = capture("add-device-qr") {
+        Phone(null, 0) { AddDeviceScreen(Approval.Showing("7KQ2-M9XD-4TPV-HB3N-R8CE-WY6F", "https://starbridge.run/pair#7KQ2-M9XD-4TPV-HB3N-R8CE-WY6F"), deviceActions) }
     }
 
     @Test fun joinDigits() = capture("join-digits") {

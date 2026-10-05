@@ -156,6 +156,8 @@ data class QuotaWindow(
     /** The uploading machine's name, set when more than one machine uploads quotas. */
     val machine: String? = null,
     val windowMinutes: Int? = null,
+    /** When the uploader took the snapshot this window comes from. */
+    val takenAt: Instant? = null,
 )
 
 enum class Kind { Device, Machine }

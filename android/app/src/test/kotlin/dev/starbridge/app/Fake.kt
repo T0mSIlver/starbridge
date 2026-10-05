@@ -198,13 +198,14 @@ class Fake(private val now: Instant) {
         ),
     )
 
+    /** The mockups' windows (design v2, round 4), updated a minute ago. */
     val windows = listOf(
-        QuotaWindow("claude-5h", "claude", "5-hour", 81, later(110), Pace.RunsOut(later(50)), steadyPercent = 63),
-        QuotaWindow("claude-week", "claude", "Weekly", 62, later(3120), Pace.Even, steadyPercent = 58, windowMinutes = 10080),
-        QuotaWindow("zai-5h", "zai", "5-hour", 12, later(38), Pace.Unused(86), alert = true, steadyPercent = 87),
-        QuotaWindow("codex-week", "codex", "Weekly", 34, later(1140), Pace.Unused(41), steadyPercent = 89, windowMinutes = 10080),
-        QuotaWindow("mistral-month", "mistral", "Monthly credits", 55, later(12960), Pace.Even, steadyPercent = 52),
-        QuotaWindow("gemini-day", "gemini", "Daily", 3, later(1400), Pace.Unknown),
+        QuotaWindow("claude-5h", "claude", "5-hour", 81, later(110), Pace.RunsOut(later(50)), alert = true, steadyPercent = 63, takenAt = ago(1)),
+        QuotaWindow("gemini-day", "gemini", "Daily", 100, later(360), Pace.RunsOut(ago(140)), alert = true, steadyPercent = 48, takenAt = ago(1)),
+        QuotaWindow("codex-week", "codex", "Weekly", 34, later(1140), Pace.Unused(41), steadyPercent = 72, windowMinutes = 10080, takenAt = ago(1)),
+        QuotaWindow("zai-5h", "zai", "5-hour", 12, later(38), Pace.Unused(86), steadyPercent = 88, takenAt = ago(1)),
+        QuotaWindow("claude-week", "claude", "Weekly", 62, later(3120), Pace.Even, steadyPercent = 58, windowMinutes = 10080, takenAt = ago(1)),
+        QuotaWindow("mistral-month", "mistral", "Monthly credits", 55, later(17280), Pace.Even, steadyPercent = 60, takenAt = ago(1)),
     )
 
     /**
@@ -217,11 +218,11 @@ class Fake(private val now: Instant) {
     )
 
     val members = listOf(
-        Member("m1", "Pixel 11 Pro", Kind.Device, ago(60 * 24 * 3), current = true),
-        Member("m2", "Firefox on the Mac", Kind.Device, ago(60 * 24 * 3)),
-        Member("m3", "dev box", Kind.Machine, ago(60 * 24 * 3)),
-        Member("m4", "Mac", Kind.Machine, ago(60 * 24 * 2)),
-        Member("m5", "mini PC", Kind.Machine, ago(60 * 20)),
+        Member("m1", "Pixel 11 Pro", Kind.Device, ago(60 * 24 * 23), current = true),
+        Member("m2", "Pixel 9", Kind.Device, ago(60 * 24 * 22)),
+        Member("m3", "Firefox on the MacBook", Kind.Device, ago(60 * 24 * 2)),
+        Member("m4", "dev box", Kind.Machine, ago(60 * 24 * 23)),
+        Member("m5", "mac mini", Kind.Machine, ago(60 * 24 * 20)),
     )
 
     val approval = Approval.Found("CI runner on the Mac", Kind.Machine, "7KQ2-M9XD-4TPV-HB3N-R8CE-WY6F")

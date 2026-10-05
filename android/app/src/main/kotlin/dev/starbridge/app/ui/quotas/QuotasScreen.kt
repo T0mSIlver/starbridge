@@ -2,58 +2,42 @@ package dev.starbridge.app.ui.quotas
 
 import android.content.Intent
 import android.net.Uri
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.InlineTextContent
-import androidx.compose.foundation.text.appendInlineContent
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Settings
-import androidx.compose.material.icons.outlined.Speed
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.TextButton
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
-import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialShapes
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
-import androidx.compose.material3.toShape
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ProgressIndicatorDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.text.Placeholder
-import androidx.compose.ui.text.PlaceholderVerticalAlign
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
-import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.starbridge.app.data.Pace
@@ -61,13 +45,13 @@ import dev.starbridge.app.data.Prefs
 import dev.starbridge.app.data.QuotaSettings
 import dev.starbridge.app.data.QuotaWindow
 import dev.starbridge.app.data.Store
-import dev.starbridge.app.ui.Panel
+import dev.starbridge.app.ui.Page
 import dev.starbridge.app.ui.Refresh
-import dev.starbridge.app.ui.Refreshable
-import dev.starbridge.app.ui.Screen
-import dev.starbridge.app.ui.StatusWord
+import dev.starbridge.app.ui.Sym
+import dev.starbridge.app.ui.Symbol
 import dev.starbridge.app.ui.ago
-import dev.starbridge.app.ui.listPadding
+import dev.starbridge.app.ui.cardShape
+import dev.starbridge.app.ui.clock
 import dev.starbridge.app.ui.resetClock
 import dev.starbridge.app.ui.span
 import dev.starbridge.app.ui.theme.Radius
@@ -85,7 +69,7 @@ class QuotasViewModel @Inject constructor(private val store: Store, private val 
     fun setSettings(value: QuotaSettings) = prefs.setQuota(value)
 }
 
-/** One card per window, hidden providers out, in the settings' order. */
+/** One card per window, hidden providers out; windows that will run out first, then the settings' order. */
 @Composable
 fun QuotasScreen(
     windows: List<QuotaWindow>,
@@ -93,38 +77,37 @@ fun QuotasScreen(
     modifier: Modifier = Modifier,
     settings: QuotaSettings = QuotaSettings(),
     refresh: Refresh? = null,
-    /** Turns on a provider's notifications, from an alert card. */
-    onNotify: (String) -> Unit = {},
-    onSettings: () -> Unit = {},
+    /** Turns a provider's notifications on or off, from an alert card. */
+    onNotify: (provider: String, on: Boolean) -> Unit = { _, _ -> },
 ) {
     val shown = settings.arrange(windows, now)
-    Screen("Quotas", modifier, actions = {
-        IconButton(onClick = onSettings) { Icon(Icons.Outlined.Settings, contentDescription = "Quota settings") }
-    }) { padding ->
-        Refreshable(refresh) {
-            LazyColumn(
-                contentPadding = listPadding(padding),
-                verticalArrangement = Arrangement.spacedBy(Spacing.s3),
-            ) {
-                if (windows.isEmpty()) item { NoQuotas() }
-                else if (shown.isEmpty()) item {
-                    Text(
-                        "Every provider is hidden. Show them again in the settings.",
-                        style = StarbridgeTheme.type.body,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(Spacing.s4),
-                    )
-                }
-                items(shown, key = { it.id }) { w ->
-                    WindowCard(
-                        w,
-                        now,
-                        settings,
-                        onNotify = if (w.provider in settings.notify) null else ({ onNotify(w.provider) }),
-                        modifier = Modifier.animateItem(),
-                    )
-                }
+    val updated = windows.mapNotNull { it.takenAt }.maxOrNull()
+    Page(
+        "Quotas",
+        modifier,
+        refresh = refresh,
+        trailing = updated?.let {
+            {
+                Text(
+                    "Updated ${ago(now, it)}",
+                    style = StarbridgeTheme.type.meta,
+                    color = StarbridgeTheme.colors.fg3,
+                    modifier = Modifier.padding(bottom = Spacing.s2),
+                )
             }
+        },
+    ) {
+        if (windows.isEmpty()) item { NoQuotas() }
+        else if (shown.isEmpty()) item {
+            Text(
+                "Every provider is hidden",
+                style = StarbridgeTheme.type.body,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(Spacing.s4),
+            )
+        }
+        itemsIndexed(shown, key = { _, it -> it.id }) { i, w ->
+            WindowCard(w, now, settings, cardShape(i, shown.size), onNotify = { onNotify(w.provider, it) }, modifier = Modifier.animateItem())
         }
     }
 }
@@ -141,16 +124,10 @@ private fun NoQuotas() {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(Spacing.s4),
     ) {
-        Box(Modifier.size(Spacing.s10 * 2).background(MaterialTheme.colorScheme.secondaryContainer, MaterialShapes.Cookie9Sided.toShape()), contentAlignment = Alignment.Center) {
-            Icon(Icons.Outlined.Speed, contentDescription = null, tint = MaterialTheme.colorScheme.secondary, modifier = Modifier.size(Spacing.s10))
+        Box(Modifier.size(160.dp).background(MaterialTheme.colorScheme.surfaceContainerHighest, MaterialShapes.Cookie9Sided.toShape()), contentAlignment = Alignment.Center) {
+            Symbol(Sym.Speed, size = 56.dp, tint = MaterialTheme.colorScheme.onSurface)
         }
-        Text("No machine sends quotas yet", style = StarbridgeTheme.type.heading, color = MaterialTheme.colorScheme.onSurface, textAlign = TextAlign.Center)
-        Text(
-            "On a paired machine with CodexBar, run this. It sends your plans' windows every 5 minutes.",
-            style = StarbridgeTheme.type.body,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-        )
+        Text("No quotas yet", style = StarbridgeTheme.type.heading, color = MaterialTheme.colorScheme.onSurface, textAlign = TextAlign.Center)
         Surface(shape = RoundedCornerShape(Radius.lg), color = MaterialTheme.colorScheme.surfaceContainerHighest, modifier = Modifier.fillMaxWidth()) {
             Text("starbridge quota push", style = StarbridgeTheme.type.code, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(Spacing.s4))
         }
@@ -167,7 +144,12 @@ private fun NoQuotas() {
  */
 private fun QuotaWindow.ended(now: Instant) = resetsAt?.isAfter(now) == false
 
-/** A pace's colour and word; DESIGN.md: never colour without the word. */
+private fun QuotaWindow.course(now: Instant): Course = when (val p = pace) {
+    is Pace.RunsOut if !ended(now) -> if (p.at.isAfter(now)) Course.WillRunOut else Course.RanOut
+    else -> Course.Steady
+}
+
+/** The state in words, coloured; DESIGN.md: the words carry the state, never a colour alone. */
 private class Tone(val color: Color, val word: String)
 
 @Composable
@@ -177,132 +159,93 @@ private fun tone(window: QuotaWindow, now: Instant): Tone {
     if (window.ended(now)) return Tone(neutral, "Window reset")
     return when (val pace = window.pace) {
         Pace.Even -> Tone(c.ok, "On pace")
-        is Pace.RunsOut -> Tone(c.bad, if (pace.at.isAfter(now)) "Will run out" else "Ran out")
+        is Pace.RunsOut -> Tone(c.bad, if (pace.at.isAfter(now)) "Will run out in ${span(now, pace.at)}" else "Ran out at ${clock(pace.at)}")
         is Pace.Unused -> Tone(c.warn, "Headroom unused")
         Pace.Unknown -> Tone(neutral, "Too early to tell")
     }
 }
 
-private const val DOT = "provider"
-
-/** The provider's dot, in its lab's colour, set in the line of text so it stays on the first line. */
-@Composable
-private fun providerDot(provider: String): Map<String, InlineTextContent> {
-    val color = StarbridgeTheme.provider(provider)
-    val (width, height) = with(LocalDensity.current) { (Spacing.s2 * 2).toSp() to Spacing.s2.toSp() }
-    return mapOf(
-        DOT to InlineTextContent(Placeholder(width, height, PlaceholderVerticalAlign.TextCenter)) {
-            Box(Modifier.size(Spacing.s2).background(color, CircleShape))
-        },
-    )
+/** What "Notify me" turned on, in a few words. */
+private fun notifies(settings: QuotaSettings) = when {
+    settings.notifyLow && settings.notifyPace -> "When low and before it runs out"
+    settings.notifyLow -> "At 50% and 20% left"
+    settings.notifyPace -> "Before it runs out"
+    else -> ""
 }
 
 @Composable
-private fun WindowCard(window: QuotaWindow, now: Instant, settings: QuotaSettings, onNotify: (() -> Unit)?, modifier: Modifier = Modifier) {
+private fun WindowCard(window: QuotaWindow, now: Instant, settings: QuotaSettings, shape: Shape, onNotify: (Boolean) -> Unit, modifier: Modifier = Modifier) {
+    val scheme = MaterialTheme.colorScheme
+    val type = StarbridgeTheme.type
     val tone = tone(window, now)
     val ended = window.ended(now)
+    val course = window.course(now)
     val bar = settings.bar(window, now)
-    val at = { t: Instant -> if (settings.absoluteResets) resetClock(t, now) else if (t.isAfter(now)) "in ${span(now, t)}" else ago(now, t) }
-    Panel(modifier.fillMaxWidth()) {
-        Row(verticalAlignment = Alignment.Bottom) {
-            Text(
-                buildAnnotatedString {
-                    appendInlineContent(DOT)
-                    append(window.provider)
-                    withStyle(SpanStyle(color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = StarbridgeTheme.type.small.fontWeight)) { append("  ${window.window}") }
-                    window.machine?.let { withStyle(SpanStyle(color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = StarbridgeTheme.type.small.fontWeight)) { append(" · $it") } }
-                },
-                style = StarbridgeTheme.type.action,
-                color = MaterialTheme.colorScheme.onSurface,
-                inlineContent = providerDot(window.provider),
-                modifier = Modifier.weight(1f).padding(bottom = Spacing.s1),
-            )
-            Text(
-                buildAnnotatedString {
-                    append("${bar.percent}")
-                    withStyle(SpanStyle(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = StarbridgeTheme.type.action.fontSize)) { append("% ${bar.word}") }
-                },
-                style = StarbridgeTheme.type.figure,
-                color = if (ended) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
-            )
+    val card = scheme.surfaceContainer
+    Surface(modifier.fillMaxWidth(), shape = shape, color = card) {
+        Column(Modifier.padding(Spacing.s4), verticalArrangement = Arrangement.spacedBy(Spacing.s3)) {
+            // One 24 dp line: the figure's glyphs are taller than the line they sit on.
+            Row(Modifier.height(24.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    buildAnnotatedString {
+                        append(window.provider)
+                        withStyle(SpanStyle(color = scheme.onSurfaceVariant)) {
+                            append(" ${window.window}")
+                            window.machine?.let { append(" · $it") }
+                        }
+                    },
+                    style = type.body,
+                    color = scheme.onSurface,
+                    maxLines = 1,
+                    modifier = Modifier.weight(1f),
+                )
+                Text(
+                    buildAnnotatedString {
+                        append("${if (course == Course.RanOut && settings.showUsed) 100 else bar.percent}")
+                        withStyle(SpanStyle(fontSize = type.label.fontSize, fontWeight = type.label.fontWeight)) { append("%") }
+                    },
+                    style = type.figure.copy(lineHeight = type.figure.fontSize),
+                    color = if (ended) scheme.onSurfaceVariant else scheme.onSurface,
+                )
+            }
+            Meter(bar, course, StarbridgeTheme.provider(window.provider), settings.showUsed, card)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(tone.word, style = type.metaStrong, color = tone.color, maxLines = 1, modifier = Modifier.weight(1f))
+                Spacer(Modifier.width(Spacing.s2))
+                Text(
+                    window.resetsAt?.let { if (ended) "Reset ${ago(now, it)}" else if (settings.absoluteResets) "Resets ${resetClock(it, now)}" else "Resets in ${span(now, it)}" } ?: "Reset time unknown",
+                    style = type.meta,
+                    color = scheme.onSurfaceVariant,
+                    maxLines = 1,
+                )
+            }
+            // A window that will run out, or one with a headroom alert; one that ran out is past warning.
+            if ((course == Course.WillRunOut || window.alert && course == Course.Steady) && !ended) Notify(window.provider in settings.notify, notifies(settings), onNotify)
         }
-        Spacer(Modifier.padding(top = Spacing.s3))
-        Meter(bar, settings.ticks, tone.color)
-        Spacer(Modifier.padding(top = Spacing.s3))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            StatusWord(tone.word, tone.color)
+    }
+}
+
+/** "Notify me" on a window that needs watching; "Notifying" once its provider notifies. */
+@Composable
+private fun Notify(on: Boolean, what: String, onNotify: (Boolean) -> Unit) {
+    val scheme = MaterialTheme.colorScheme
+    Column {
+        HorizontalDivider(color = scheme.outlineVariant, modifier = Modifier.padding(top = 2.dp))
+        Row(Modifier.padding(top = Spacing.s3), verticalAlignment = Alignment.CenterVertically) {
+            Text(if (on) what else "", style = StarbridgeTheme.type.meta, color = scheme.onSurfaceVariant, modifier = Modifier.weight(1f))
             Spacer(Modifier.width(Spacing.s3))
-            Text(
-                window.resetsAt?.let { if (ended) "Reset ${at(it)}" else "Resets ${at(it)}" } ?: "Reset time unknown",
-                style = StarbridgeTheme.type.machine,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.weight(1f),
-                textAlign = TextAlign.End,
-            )
-        }
-        Text(detail(window, now, at), style = StarbridgeTheme.type.small, color = if (window.alert && !ended) tone.color else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = Spacing.s2))
-        if (window.alert && !ended && onNotify != null) {
-            TextButton(onClick = onNotify, modifier = Modifier.heightIn(min = Sizes.tap)) {
-                Text("Notify me next time", style = StarbridgeTheme.type.action)
+            Button(
+                onClick = { onNotify(!on) },
+                // Neutral either way, under Match wallpaper too: amber is for what needs the owner.
+                colors = if (on) ButtonDefaults.buttonColors(containerColor = scheme.onSurface, contentColor = scheme.surface)
+                else ButtonDefaults.buttonColors(containerColor = scheme.surfaceContainerHighest, contentColor = scheme.onSurface),
+                contentPadding = PaddingValues(horizontal = Spacing.s4),
+                modifier = Modifier.height(Spacing.s10),
+            ) {
+                Symbol(Sym.Bell, size = 18.dp, filled = on)
+                Spacer(Modifier.width(Spacing.s2))
+                Text(if (on) "Notifying" else "Notify me", style = StarbridgeTheme.type.label)
             }
         }
     }
-}
-
-/**
- * The window's use as a Material 3 Expressive progress indicator, `size.track` thick, with its gap
- * and stop mark, and a tick where a steady pace would be now. The fill springs to a new value.
- */
-@Composable
-private fun Meter(bar: QuotaSettings.Bar, ticks: QuotaSettings.Ticks, color: Color) {
-    val colors = StarbridgeTheme.colors
-    val fill by animateFloatAsState((bar.percent / 100f).coerceIn(0f, 1f), MaterialTheme.motionScheme.slowSpatialSpec(), label = "fill")
-    val description = "${bar.percent}% ${bar.word}" + (bar.steady?.let { ", steady pace $it%" } ?: "")
-    BoxWithConstraints(Modifier.fillMaxWidth().semantics { contentDescription = description }) {
-        LinearProgressIndicator(
-            progress = { fill },
-            modifier = Modifier.fillMaxWidth().height(Sizes.track).align(Alignment.Center),
-            color = color,
-            trackColor = MaterialTheme.colorScheme.secondaryContainer,
-            strokeCap = StrokeCap.Round,
-            gapSize = ProgressIndicatorDefaults.LinearIndicatorTrackGapSize,
-            drawStopIndicator = {
-                ProgressIndicatorDefaults.drawStopIndicator(this, ProgressIndicatorDefaults.LinearTrackStopIndicatorSize, colors.fg3, StrokeCap.Round)
-            },
-        )
-        // CodexBar's workday ticks: subtle cut the bar in the card's colour, high contrast draw them.
-        val tickColor = if (ticks == QuotaSettings.Ticks.HighContrast) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.surfaceContainer
-        bar.ticks.forEach { t ->
-            val width = Spacing.s1 / 2
-            Box(
-                Modifier
-                    .offset(x = maxWidth * t - width / 2)
-                    .width(width)
-                    .height(Sizes.track)
-                    .align(Alignment.CenterStart)
-                    .background(tickColor),
-            )
-        }
-        bar.steady?.let { steady ->
-            val tick = Spacing.s1 / 2
-            Box(
-                Modifier
-                    .offset(x = (maxWidth - tick) * (steady / 100f))
-                    .width(tick)
-                    .height(Sizes.track + Spacing.s2)
-                    .align(Alignment.CenterStart)
-                    .background(MaterialTheme.colorScheme.onSurfaceVariant, RoundedCornerShape(Radius.xs)),
-            )
-        }
-    }
-}
-
-private fun detail(window: QuotaWindow, now: Instant, at: (Instant) -> String): String = if (window.ended(now)) {
-    "Ended at ${window.usedPercent}% used; waiting for the next upload"
-} else when (val pace = window.pace) {
-    is Pace.RunsOut if !pace.at.isAfter(now) -> window.resetsAt?.let { "Back at the reset, ${at(it)}" } ?: "Back at the reset"
-    Pace.Even -> "Lasts until the reset"
-    is Pace.RunsOut -> "Runs out in ${span(now, pace.at)}" + (window.resetsAt?.let { ", ${span(pace.at, it)} before the reset" } ?: "")
-    is Pace.Unused -> "${pace.percent}% left unused at the reset"
-    Pace.Unknown -> "Too early in the window to tell the pace"
 }
