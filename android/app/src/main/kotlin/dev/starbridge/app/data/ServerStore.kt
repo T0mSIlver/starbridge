@@ -157,7 +157,8 @@ class ServerStore(
         push.value = push.value.copy(type = saved.pushType, registered = saved.push?.type == saved.pushType)
         decisions.value = saved.decisions.map(::toUi)
         prompts.value = saved.prompts.map(::toUi)
-        val named = saved.quotas.map { it.from }.distinct().size > 1
+        // As the web: named once the account has more than one active machine.
+        val named = (directory?.members?.values?.count { it.active && it.member.role == "machine" } ?: 0) > 1
         windows.value = saved.quotas.flatMap { toUi(it, named) }
         runs.value = saved.runs.map(::toUi)
         members.value = directory?.let(::toUi).orEmpty()
