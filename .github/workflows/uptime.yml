@@ -6,6 +6,8 @@ on:
   schedule:
     - cron: "*/5 * * * *"
   workflow_dispatch:
+  push:
+    branches: [uptime-alert]
 
 concurrency:
   group: uptime
@@ -15,7 +17,7 @@ permissions:
   issues: write
 
 env:
-  BASE_URL: https://starbridge.run
+  BASE_URL: https://starbridge.run/uptime-test-fails
 
 jobs:
   check:
