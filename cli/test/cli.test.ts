@@ -94,6 +94,15 @@ test("pair uses the hosted server unless --server or STARBRIDGE_SERVER names ano
   expect(asked).toEqual(["https://starbridge.run/v1/pairings", "https://self.example/v1/pairings"]);
 });
 
+test("a machine the owner removed says so and how to pair it again", async () => {
+  const ctx = await paired(server);
+  await server.revoke(ctx.store.machine()?.id as string);
+  expect(await run(ASK, ctx)).toBe(1);
+  expect(ctx.errors.at(-1)).toBe(
+    "starbridge: this machine was removed from your Starbridge account: run `starbridge pair --force` to add it again",
+  );
+});
+
 test("ask seals a decision the phone can open, recommended first", async () => {
   const ctx = await paired(server);
   expect(await run([...ASK, "--session", "s1"], ctx)).toBe(0);
