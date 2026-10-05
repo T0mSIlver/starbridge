@@ -70,3 +70,24 @@ test("on shutdown, an open long-poll answers at once with nothing, as if its wai
     server.stop(true);
   }
 });
+
+test("on shutdown, a quota ask still waiting for a machine answers at once", async () => {
+  const s = await makeServer();
+  const acct = await setupAccount(s);
+  const devbox = await pair(s, acct, "devbox", "machine");
+  const quota = seal(
+    "quota",
+    { v: 1, id: "q1", to: ["phone"], takenAt: at, providers: [], alerts: [] },
+    { id: "devbox", signKey: devbox.keys.sign.privateKey },
+    [acct.device.member],
+  );
+  expect((await s.call("POST", "/v1/items", { token: devbox.token, body: quota })).status).toBe(
+    201,
+  );
+  const started = Date.now();
+  const asking = s.call("POST", "/v1/quota/ask?wait=30", { token: acct.device.token });
+  await Bun.sleep(100);
+  s.deps.quotas.close();
+  expect((await asking).json.behind).toBe(1);
+  expect(Date.now() - started).toBeLessThan(2000);
+});

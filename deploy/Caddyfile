@@ -33,7 +33,7 @@ starbridge.run {
 	}
 	# Two copies of the page, web-a and web-b; a deploy starts the idle one, waits for its health,
 	# then stops the other (deploy/host/apply.sh). `first` sends every request to the first healthy
-	# copy, so the two versions never serve one visit.
+	# copy, so the two builds never serve at once.
 	handle {
 		reverse_proxy 127.0.0.1:3010 127.0.0.1:3011 {
 			lb_policy first

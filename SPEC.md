@@ -1043,7 +1043,9 @@ How it generalizes is open.
   checks each upstream's health every second. The page runs as two copies, `web-a` on 3010 and
   `web-b` on 3011: a deploy starts the idle one, waits for its health, then stops the other.
   Caddy sends every request to the first healthy copy (`lb_policy first`), so it switches
-  without a config change and one visit never mixes two builds. The server stays one instance,
+  without a config change and the two builds never serve at once. A page loaded before the
+  switch may still ask for a script chunk of the old build, which the new copy lacks; Next.js
+  then reloads the page, as it did before #150. The server stays one instance,
   since it holds the long-polls and SQLite: on SIGTERM it ends every long-poll as if its wait
   passed and exits, and the client's next request waits in Caddy for the new server. A changed
   Caddyfile reaches the running Caddy through its admin API (`/load`), since recreating the

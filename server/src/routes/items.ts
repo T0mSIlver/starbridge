@@ -389,7 +389,7 @@ itemRoutes.post("/quota/ask", requireCaller("paired-device"), async (c) => {
     ).n;
   const end = Date.now() + waitSeconds(c) * 1000;
   if (Date.now() < end) holdOpen(c);
-  while (behind() > 0 && Date.now() < end && !c.req.raw.signal.aborted)
+  while (behind() > 0 && Date.now() < end && !c.req.raw.signal.aborted && !c.var.quotas.closed)
     await c.var.quotas.wait(caller.account, (end - Date.now()) / 1000, c.req.raw.signal);
   return c.json({ askedAt, behind: behind() });
 });

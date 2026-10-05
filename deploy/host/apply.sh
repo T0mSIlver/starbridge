@@ -41,7 +41,8 @@ if ! cmp -s /opt/starbridge.old/deploy/Caddyfile Caddyfile; then
   curl -fsS --retry 10 --retry-connrefused --retry-delay 1 -X POST \
     -H 'Content-Type: text/caddyfile' --data-binary @Caddyfile http://127.0.0.1:2019/load
 fi
-# Caddy's health check sees the new copy within a second; then the old one can go.
+# Caddy checks health every second: let it see the new copy before the old one goes. Requests
+# in flight at the stop are GETs, which Caddy retries on the new copy.
 sleep 2
 $compose stop $live
 

@@ -1,7 +1,8 @@
 /** Wakes long-polls in this process when something they wait for arrives. */
 export class Waiters {
   private readonly waiting = new Map<string, Set<(woken: boolean) => void>>();
-  private closed = false;
+  /** Set once the server shuts down: every wait ends at once. */
+  closed = false;
 
   /**
    * Resolves true when `wake(key)` is called, false after `seconds` or when `signal` aborts.
