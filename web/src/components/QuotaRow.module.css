@@ -49,11 +49,6 @@
   row-gap: 0;
 }
 
-.bottom .state {
-  min-width: 0;
-  white-space: normal;
-}
-
 .reset {
   margin-left: auto;
 }
@@ -81,6 +76,11 @@
 
 .state {
   font-weight: 500;
+}
+
+.bottom .state {
+  min-width: 0;
+  white-space: normal;
 }
 
 .ok,
