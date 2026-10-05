@@ -424,7 +424,8 @@ async function main() {
   await page.getByRole("link", { name: "Settings" }).click();
   await page.getByRole("heading", { name: "Settings" }).waitFor();
   for (const label of ["Left", "Resets 14:20", "5", "High contrast"])
-    await page.getByLabel(label, { exact: true }).check();
+    // Each radio hides inside its segment, which takes the click.
+    await page.getByLabel(label, { exact: true }).check({ force: true });
   await shoot(page, "settings");
   await page.getByRole("link", { name: "Quotas" }).click();
   await page.locator("article").first().waitFor();
