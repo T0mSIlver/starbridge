@@ -57,11 +57,6 @@
   background: var(--fg2);
 }
 
-.meter > .tick,
-.meter > .cap {
-  top: calc(-1 * var(--s1));
-  bottom: calc(-1 * var(--s1));
-}
 
 .tick {
   width: var(--size-tick);
@@ -82,4 +77,11 @@
 
 .start {
   left: calc(var(--size-cap) / -2);
+}
+
+/* The tick and the cap stand `s1` beyond the track. */
+.meter > .tick,
+.meter > .cap {
+  top: calc(-1 * var(--s1));
+  bottom: calc(-1 * var(--s1));
 }

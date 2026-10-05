@@ -3,12 +3,10 @@
 import { useEffect, useState } from "react";
 import { imageSrc } from "@/lib/attachments";
 import { ago, type Entry, type MachineKind, middle, type Past, timer } from "@/lib/feed";
-import { closedAt } from "@/lib/outcome";
 import { duration, progressText, runState } from "@/lib/runs";
 import type { Decision, InboxItem, PromptItem, RunItem, Source } from "@/lib/types";
 import s from "./Feed.module.css";
 import { Icon, Play } from "./icons";
-import { ordered } from "./options";
 
 /** The clock, ticking every `ms` while `live`. */
 export function useNow(live: boolean, ms = 1000): number {
@@ -332,8 +330,3 @@ export function PastRow({
     </div>
   );
 }
-
-/** Whether a question is closed, so the detail shows its answer instead of its options. */
-export const isClosed = (item: InboxItem, now: number) => !!closedAt(item, new Date(now));
-
-export { ordered };

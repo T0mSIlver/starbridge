@@ -1,8 +1,8 @@
 // The mockups' data (DESIGN.md, design v2), for the landing page's product shots and the
 // dev-only /sample pages that screenshots compare against. Times are relative to `now`.
 import type { Member } from "@starbridge/protocol";
-import shots from "./sample-shots.json";
 import type { Quotas, Runs } from "./device";
+import shots from "./sample-shots.json";
 import type { InboxItem, PromptItem, QuotaCardData, RunItem } from "./types";
 
 const min = 60_000;

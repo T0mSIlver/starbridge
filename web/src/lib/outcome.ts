@@ -9,14 +9,9 @@ export function answerPlace(link: DecisionLink): string {
   return label === "Claude artifact" ? "the artifact" : label;
 }
 
-/**
- * When the decision stopped waiting for the owner: its answer, or, for one answered on another
- * page, its default time, since no answer reaches Starbridge and the agent applies its default.
- */
-export function closedAt(item: InboxItem, now: Date = new Date()): string | undefined {
-  if (item.answeredAt) return item.answeredAt;
-  const at = item.decision.answerIn && item.decision.default.at;
-  return at && Date.parse(at) <= now.getTime() ? at : undefined;
+/** When the decision stopped waiting for the owner: answered, or settled by its agent. */
+export function closedAt(item: InboxItem): string | undefined {
+  return item.answeredAt;
 }
 
 /** The answer, or how a decision answered on another page closed. */
@@ -26,7 +21,7 @@ export function outcomeText(item: InboxItem): string {
   if (item.settled === "withdrawn") return "Withdrawn";
   const page = item.decision.answerIn;
   if (!page) return "Answered";
-  return item.answeredAt ? `Answered in ${answerPlace(page)}` : "No answer by its default time";
+  return `Answered in ${answerPlace(page)}`;
 }
 
 /** Who closed it: this browser, the agent (withdrawn, or for another page), or another device. */

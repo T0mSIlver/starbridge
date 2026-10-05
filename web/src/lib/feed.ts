@@ -58,7 +58,7 @@ export function needsYou(inbox: InboxItem[], prompts: PromptItem[], now: number)
     e.type === "prompt" ? 0 : e.type === "question" && e.item.waitingSince ? 1 : 2;
   return [
     ...prompts.filter((p) => promptOpen(p, now)).map(promptEntry),
-    ...inbox.filter((i) => !closedAt(i, new Date(now))).map(questionEntry),
+    ...inbox.filter((i) => !closedAt(i)).map(questionEntry),
   ].sort((a, b) => rank(a) - rank(b) || a.at.localeCompare(b.at));
 }
 
@@ -108,7 +108,7 @@ export function history(
   now: number,
 ): Past[] {
   const questions = inbox.flatMap((i): Past[] => {
-    const closed = closedAt(i, new Date(now));
+    const closed = closedAt(i);
     return closed
       ? [{ entry: questionEntry(i), closed, text: i.decision.question, outcome: outcomeText(i) }]
       : [];
