@@ -803,8 +803,8 @@ How it generalizes is open.
   directory holds a new device. Pull to refresh on Android's Quotas calls `POST /quota/ask`, which
   wakes the machines the same way and holds until each has posted, then refetches. Asks are
   rate-limited to 6 a minute per account, since each runs CodexBar on every machine. The web page
-  has no refresh gesture and gets none: it refetches quotas when opened, and a new browser is
-  covered by the re-upload on join.
+  has no refresh gesture and gets none; it polls quotas every minute, and every 3 s for its first
+  30 s while it holds none, so a browser that just joined shows the re-upload within seconds.
 
 ## Encryption, with existing libraries
 
