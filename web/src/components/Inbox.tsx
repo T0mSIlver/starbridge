@@ -201,7 +201,7 @@ export function Inbox() {
           {inbox.rejected.length} hidden: failed verification ({inbox.rejected[0]?.error})
         </p>
       )}
-      {grouping === "priority" ? (
+      {grouping === "waiting" ? (
         <>
           {runEntries.length > 0 && (
             <>
@@ -482,7 +482,7 @@ function RowActions({
   );
 }
 
-/** One feed, Group by machine or Group by priority, remembered on this device. */
+/** One feed, Group by machine or Group by waiting, remembered on this device. */
 function ViewMenu({
   grouping,
   setGrouping,
@@ -528,7 +528,7 @@ function ViewMenu({
             [
               ["One feed", "none"],
               ["Group by machine", "machine"],
-              ["Group by priority", "priority"],
+              ["Group by waiting", "waiting"],
             ] as const
           ).map(([label, value]) => (
             <button

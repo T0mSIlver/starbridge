@@ -3,8 +3,8 @@
 import { useCallback, useSyncExternalStore } from "react";
 
 export type Prefs = {
-  /** The inbox in one feed, by machine, or by priority: what an agent waits on first (#191). */
-  grouping: "none" | "machine" | "priority";
+  /** The inbox in one feed, by machine, or by whether an agent waits (#191). */
+  grouping: "none" | "machine" | "waiting";
   historyOpen: boolean;
   theme: "system" | "light" | "dark";
   /** When a question's row carries its answer buttons on a phone (#138). */
