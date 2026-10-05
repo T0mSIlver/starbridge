@@ -17,6 +17,11 @@ Tell me when you run the e2e tests that take over my Mac, or local inference.
 Sessions started afterwards follow them. Uninstalling the plugin removes the
 rules from sessions and the skill; `rules.md` stays.
 
+A `PreToolUse` hook on `AskUserQuestion` runs `starbridge hook ask-user`, which
+turns the question away and tells the agent to post it with `starbridge ask`.
+When the machine is not paired or the server does not answer, it lets the
+question through.
+
 It also sends this machine's permission prompts to your devices, once you turn
 that on with `starbridge permissions enable`: `PermissionRequest` runs
 `starbridge hook permission`, and `PostToolUse`, `PermissionDenied`, `Stop`
