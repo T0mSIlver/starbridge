@@ -1,7 +1,7 @@
 // Quota settings, per browser (SPEC.md, "Quota settings follow CodexBar"): a curated set of
 // CodexBar's own settings with CodexBar's meaning. They stay in this browser; the server learns
 // nothing of them. Android keeps the same set (QuotaSettings.kt).
-import { relative } from "./format";
+import { clockTime, relative } from "./format";
 import type { QuotaAlert, QuotaCardData, QuotaWindow } from "./types";
 
 export type Ticks = "subtle" | "high-contrast" | "hidden";
@@ -141,7 +141,7 @@ const sameDay = (a: Date, b: Date) =>
 /** CodexBar's absolute reset: "14:30" today, "tomorrow 14:30", else "Oct 7, 22:00". */
 export function clock(iso: string, now = new Date()): string {
   const d = new Date(iso);
-  const time = d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+  const time = clockTime(d);
   if (sameDay(d, now)) return time;
   const tomorrow = new Date(now);
   tomorrow.setDate(now.getDate() + 1);

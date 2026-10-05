@@ -806,6 +806,12 @@ How it generalizes is open.
   so every quota card has the same height and the control sits where the other per-provider
   settings are.
 
+- 2026-10-05. Clock setting (#161, owner). Settings, Clock, "Time format": System (the default),
+  12-hour or 24-hour, per device. System follows the device: Android's
+  `DateFormat.is24HourFormat`, the browser's language on the web. Android also writes dates in
+  the phone's language ("Oct 7" in English, "7 oct." in French) from Android's own patterns, where
+  it used fixed English ones; words such as "tomorrow" stay English, as the rest of the UI.
+
 - 2026-10-05. A device sees quotas as soon as it joins, and pulling to refresh gets fresh ones
   (#158). A snapshot is sealed to the devices in the directory when it is posted, so a device that
   joined later read nothing until the next upload, up to 5 minutes. Fixed at the source: every

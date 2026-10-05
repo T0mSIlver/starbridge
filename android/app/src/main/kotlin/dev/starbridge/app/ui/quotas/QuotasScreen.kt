@@ -41,6 +41,7 @@ import dev.starbridge.app.data.Prefs
 import dev.starbridge.app.data.QuotaSettings
 import dev.starbridge.app.data.QuotaWindow
 import dev.starbridge.app.data.Store
+import dev.starbridge.app.ui.LocalClock24
 import dev.starbridge.app.ui.Page
 import dev.starbridge.app.ui.Refresh
 import dev.starbridge.app.ui.Sym
@@ -149,10 +150,11 @@ private class Tone(val color: Color, val word: String)
 private fun tone(window: QuotaWindow, now: Instant): Tone {
     val c = StarbridgeTheme.colors
     val neutral = MaterialTheme.colorScheme.onSurfaceVariant
+    val h24 = LocalClock24.current
     if (window.ended(now)) return Tone(neutral, "Window reset")
     return when (val pace = window.pace) {
         Pace.Even -> Tone(c.ok, "On pace")
-        is Pace.RunsOut -> Tone(c.bad, if (pace.at.isAfter(now)) "Will run out in ${span(now, pace.at)}" else "Ran out at ${clock(pace.at)}")
+        is Pace.RunsOut -> Tone(c.bad, if (pace.at.isAfter(now)) "Will run out in ${span(now, pace.at)}" else "Ran out at ${clock(pace.at, h24)}")
         is Pace.Unused -> Tone(c.warn, "Headroom unused")
         Pace.Unknown -> Tone(neutral, "Too early to tell")
     }
@@ -166,6 +168,7 @@ private fun WindowCard(window: QuotaWindow, now: Instant, settings: QuotaSetting
     val ended = window.ended(now)
     val course = window.course(now)
     val bar = settings.bar(window, now)
+    val h24 = LocalClock24.current
     val card = scheme.surfaceContainer
     Surface(modifier.fillMaxWidth(), shape = shape, color = card) {
         Column(Modifier.padding(Spacing.s4), verticalArrangement = Arrangement.spacedBy(Spacing.s3)) {
@@ -198,7 +201,7 @@ private fun WindowCard(window: QuotaWindow, now: Instant, settings: QuotaSetting
                 Text(tone.word, style = type.metaStrong, color = tone.color, maxLines = 1, modifier = Modifier.weight(1f))
                 Spacer(Modifier.width(Spacing.s2))
                 Text(
-                    window.resetsAt?.let { if (ended) "Reset ${ago(now, it)}" else if (settings.absoluteResets) "Resets ${resetClock(it, now)}" else "Resets in ${span(now, it)}" } ?: "Reset time unknown",
+                    window.resetsAt?.let { if (ended) "Reset ${ago(now, it)}" else if (settings.absoluteResets) "Resets ${resetClock(it, now, h24)}" else "Resets in ${span(now, it)}" } ?: "Reset time unknown",
                     style = type.meta,
                     color = scheme.onSurfaceVariant,
                     maxLines = 1,
