@@ -103,6 +103,7 @@ val SIGNER_ROLE = mapOf(
     "permission" to "machine",
     "permission-answer" to "device",
     "settled" to "machine",
+    "run" to "machine",
 )
 val ITEM_KINDS = SIGNER_ROLE.keys
 val KINDS = setOf("directory") + ITEM_KINDS
@@ -419,6 +420,59 @@ data class Settled(
         device?.let { id(it, "device") }
         time(at, "at")
         schema((outcome == "device") == (device != null), "device is set exactly when outcome is device")
+    }
+}
+
+// --- Runs --------------------------------------------------------------------
+
+/** RUN_HEARTBEAT_MS and RUN_STALE_MS in schemas.ts. */
+const val RUN_HEARTBEAT_MS = 60_000L
+const val RUN_STALE_MS = 3 * RUN_HEARTBEAT_MS
+
+@Serializable
+data class RunProgress(val done: Int, val total: Int, val unit: String)
+
+@Serializable
+data class RunExit(val code: Int, val at: String)
+
+/** A command an agent wrapped in `starbridge run`, re-posted under its id as it changes. */
+@Serializable
+data class Run(
+    val v: Int,
+    override val id: String,
+    val to: List<String>,
+    val title: String,
+    val reason: String,
+    val source: Source,
+    val startedAt: String,
+    val at: String,
+    val progress: RunProgress? = null,
+    val exit: RunExit? = null,
+) : ItemBody {
+    override val recipients get() = to
+
+    fun check() {
+        schema(v == 1, "v")
+        id(id, "id")
+        schema(to.isNotEmpty(), "to")
+        to.forEach { id(it, "to") }
+        len(title, 1, 100, "title")
+        len(reason, 1, 200, "reason")
+        source.check()
+        time(startedAt, "startedAt")
+        time(at, "at")
+        val started = instantOf(startedAt)
+        schema(!instantOf(at).isBefore(started), "at: not before startedAt")
+        progress?.let { p ->
+            schema(p.unit in setOf("step", "percent"), "progress.unit")
+            schema(p.total >= 1 && p.done in 0..p.total, "done is at most total")
+            schema(p.unit == "step" || p.total == 100, "a percent is out of 100")
+        }
+        exit?.let { e ->
+            schema(e.code in 0..255, "exit.code")
+            time(e.at, "exit.at")
+            schema(!instantOf(e.at).isBefore(started), "exit.at: not before startedAt")
+        }
     }
 }
 

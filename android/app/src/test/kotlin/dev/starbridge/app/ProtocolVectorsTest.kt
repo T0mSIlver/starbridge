@@ -211,7 +211,7 @@ class ProtocolVectorsTest {
     @Test
     fun schemas() {
         val v = load("schemas.json")
-        for (kind in listOf("decision", "answer", "permission", "permission-answer", "settled")) {
+        for (kind in listOf("decision", "answer", "permission", "permission-answer", "settled", "run")) {
             for (case in v.getValue(kind).jsonArray.map { it.jsonObject }) {
                 val valid = try {
                     parseBody(kind, case.getValue("body").toString())

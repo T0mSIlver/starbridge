@@ -231,7 +231,14 @@ describe("pace.json", () => {
 
 describe("schemas.json", () => {
   const v = V.schemas;
-  const kinds = ["decision", "answer", "permission", "permission-answer", "settled"] as const;
+  const kinds = [
+    "decision",
+    "answer",
+    "permission",
+    "permission-answer",
+    "settled",
+    "run",
+  ] as const;
   for (const kind of kinds) {
     const schema = BODY_SCHEMAS[kind];
     for (const c of v[kind]) {
