@@ -710,6 +710,13 @@ How it generalizes is open.
   their kinds by name and skip unknown pushes, so they never see it. Two optional fields for the
   design (orchestrator): `source.machineKind` (`server`, `desktop`, `laptop`, `cloud`) and a
   decision's `agent` (`claude-code`, `codex`), as permissions have.
+- 2026-10-05. Google Play and CI disk (#148): a release also attaches `starbridge-VERSION.aab`,
+  signed with `release.jks` like the APK. Play App Signing keeps that key as the app signing key
+  and accepts it as the upload key too (#59's handoff), so Play builds and GitHub APKs share one
+  signature. The three self-hosted runners share one Gradle home,
+  `~/.local/opt/gh-runners/gradle`, which Gradle locks for concurrent builds; `android.yml`
+  turns setup-gradle's cache off on them (`cache-disabled` when `vars.RUNNER` is set), since its
+  restore overwrote files a concurrent job was reading (#142). This freed 3.6 GB.
 - 2026-10-05. Waiting state on the machine (#122) and permission prompts off by default (#124).
   `starbridge waiting <id>` and `starbridge working <id>` post a decision's state; `ask
   --waiting` posts it already waiting, quietly, since the decision's own push just went out,
@@ -787,6 +794,17 @@ How it generalizes is open.
   per repo, Claude Code's `CLAUDE.local.md` loads beside the shared `CLAUDE.md`, while Codex's
   and pi's `AGENTS.override.md` replaces the repo's `AGENTS.md`, so it only suits repos without
   one.
+
+- 2026-10-05. Quota order, one rule on both clients (#159, #162, owner). Hidden providers drop out;
+  the rest go by provider in the order set in Quota settings (providers not in it follow in the
+  uploader's order), each provider's windows in the uploader's order. A "Running out first"
+  setting, on by default as Design v2 chose, then moves windows that will run out or ran out,
+  and have not reset, above the others, in that same order. Off, the order set holds for every
+  window. Alert windows no longer lead when no order is set: the old fallback is why the phone
+  and the browser sorted differently. Order stays per device. Notify moves off Android's cards
+  to Settings, Providers, as on the web (#163): a bell beside each provider's Show switch,
+  so every quota card has the same height and the control sits where the other per-provider
+  settings are.
 
 - 2026-10-05. `starbridge pair` pairs with https://starbridge.run unless `--server` or
   `STARBRIDGE_SERVER` names a self-hosted server (#154), as `setup` already did.

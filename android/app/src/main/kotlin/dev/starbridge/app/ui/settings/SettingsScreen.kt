@@ -20,6 +20,7 @@ import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
+import androidx.compose.material3.IconToggleButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.ToggleButton
@@ -118,7 +119,7 @@ fun SettingsScreen(
     val set = actions.quota
     Page("Settings", modifier, titleGap = Spacing.s2) {
         item { Section("Quota windows") }
-        val quotaRows = 5
+        val quotaRows = 6
         item {
             ChoiceRow(0, quotaRows, "Bar shows") { Segments(listOf(true to "Used", false to "Left"), quota.showUsed) { set(quota.copy(showUsed = it)) } }
         }
@@ -130,8 +131,9 @@ fun SettingsScreen(
                 Segments(listOf(null to "Off", 4 to "4", 5 to "5", 7 to "7 days"), quota.workDays) { set(quota.copy(workDays = it)) }
             }
         }
-        item { SwitchRow(3, quotaRows, "Warn before a window runs out", quota.notifyPace) { set(quota.copy(notifyPace = it)) } }
-        item { SwitchRow(4, quotaRows, "Warn at 50% and 20% left", quota.notifyLow) { set(quota.copy(notifyLow = it)) } }
+        item { SwitchRow(3, quotaRows, "Running out first", quota.runningOutFirst) { set(quota.copy(runningOutFirst = it)) } }
+        item { SwitchRow(4, quotaRows, "Warn before a window runs out", quota.notifyPace) { set(quota.copy(notifyPace = it)) } }
+        item { SwitchRow(5, quotaRows, "Warn at 50% and 20% left", quota.notifyLow) { set(quota.copy(notifyLow = it)) } }
 
         val providers = quota.providers(windows)
         if (providers.isNotEmpty()) {
@@ -140,10 +142,12 @@ fun SettingsScreen(
                 val labels = windows.filter { it.provider == p }.map { it.window }.distinct().joinToString(", ")
                 ProviderRow(
                     p,
-                    labels + if (p in quota.notify) " · notifying" else "",
+                    labels,
                     shown = p !in quota.hidden,
+                    notify = p in quota.notify,
                     shape = rowShape(i, providers.size),
                     onShow = { on -> set(quota.copy(hidden = if (on) quota.hidden - p else (quota.hidden + p).distinct())) },
+                    onNotify = { on -> set(quota.copy(notify = if (on) (quota.notify + p).distinct() else quota.notify - p)) },
                     first = i == 0,
                     last = i == providers.lastIndex,
                     onMove = { by ->
@@ -271,7 +275,8 @@ private fun Line(content: @Composable RowScope.() -> Unit) {
 }
 
 /**
- * A provider: its windows, a handle to drag it up or down (long press), and whether it shows.
+ * A provider: its windows, a handle to drag it up or down (long press), a bell for its quota
+ * notifications, and whether it shows.
  * Screen readers get "Move up" and "Move down" instead of the drag.
  */
 @Composable
@@ -279,10 +284,12 @@ private fun ProviderRow(
     name: String,
     sub: String,
     shown: Boolean,
+    notify: Boolean,
     shape: Shape,
     first: Boolean,
     last: Boolean,
     onShow: (Boolean) -> Unit,
+    onNotify: (Boolean) -> Unit,
     onMove: (Int) -> Unit,
     placement: (dragging: Boolean) -> Modifier,
 ) {
@@ -330,6 +337,9 @@ private fun ProviderRow(
                     }
                 },
             )
+            IconToggleButton(checked = notify, onCheckedChange = onNotify, enabled = shown) {
+                Symbol(Sym.Bell, size = 20.dp, filled = notify, tint = if (notify) scheme.onSurface else StarbridgeTheme.colors.fg3, contentDescription = "Notify about $name")
+            }
             Switch(checked = shown, onCheckedChange = onShow)
         }
     }
