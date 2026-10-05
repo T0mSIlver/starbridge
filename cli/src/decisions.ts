@@ -32,6 +32,13 @@ import {
 } from "./context";
 import { fitPicture, loadPicture, type Picture } from "./images";
 import { acceptPermissionAnswer } from "./permissions";
+import { PI_ANSWERS, piSessionTitle } from "./pi";
+
+/**
+ * The coding agent that asks. Pi stays on the machine: clients parse a decision's `agent` as
+ * `Agent`, so a decision from Pi carries none until they accept agents they do not know.
+ */
+export type Harness = Agent | "pi";
 
 export interface AskInput {
   question?: string;
@@ -42,10 +49,12 @@ export interface AskInput {
   default?: string;
   /** Post it already `waiting`: the agent has nothing else to do. */
   waiting?: boolean;
-  /** The coding agent asking; default: Claude Code or Codex when it runs the command. */
-  agent?: Agent;
+  /** The coding agent asking; default: Claude Code, Codex or Pi when it runs the command. */
+  agent?: Harness;
   /** Where a Codex session runs: its `CODEX_HOME` and the `codex` that answers reach it with. */
   codex?: CodexSession;
+  /** A Pi session whose Starbridge extension submits answers into it. */
+  piAnswers?: boolean;
   project?: string;
   session?: string;
   sessionTitle?: string;
@@ -89,20 +98,30 @@ export function resolveSource(
   const agent = agentOf(input, env).agent;
   // The id of the agent that asks: an agent started from another one's shell inherits its id too.
   const session =
-    input.session ?? (agent === "codex" ? env.CODEX_THREAD_ID : env.CLAUDE_CODE_SESSION_ID) ?? "";
+    input.session ??
+    (agent === "codex"
+      ? env.CODEX_THREAD_ID
+      : agent === "pi"
+        ? env.PI_SESSION_ID
+        : env.CLAUDE_CODE_SESSION_ID) ??
+    "";
   const codex = agent === "codex" ? (input.codex ?? codexSession(env)) : undefined;
+  const piAnswers = agent === "pi" && (input.piAnswers ?? env[PI_ANSWERS] === "1");
   const claude =
     session &&
     agent !== "codex" &&
+    agent !== "pi" &&
     (input.sessionTitle === undefined || input.sessionLinks === undefined)
       ? claudeSession(env, session)
       : undefined;
-  const title = input.sessionTitle ?? claude?.title;
+  const title =
+    input.sessionTitle ?? (agent === "pi" ? piSessionTitle(env) : undefined) ?? claude?.title;
   const at = (path: string) => resolve(cwd, path);
   return {
     ...input,
     ...(agent ? { agent } : {}),
     ...(codex ? { codex } : {}),
+    ...(piAnswers ? { piAnswers } : {}),
     project: input.project ?? basename(cwd),
     session,
     ...(title !== undefined ? { sessionTitle: title } : {}),
@@ -149,7 +168,7 @@ export function buildDecision(input: AskInput, ctx: Ctx, machine: string, to: st
     options,
     ...(options.length > 0 ? { recommended: input.recommended ?? options[0] } : {}),
     default: { action: input.default || NO_DEFAULT },
-    ...agentOf(input, ctx.env),
+    ...protocolAgent(agentOf(input, ctx.env).agent),
     source: sourceFor(input, ctx, machine),
     ...(links.length > 0 ? { links } : {}),
     ...(input.answerIn !== undefined ? { answerIn: link(input.answerIn) } : {}),
@@ -159,14 +178,18 @@ export function buildDecision(input: AskInput, ctx: Ctx, machine: string, to: st
 }
 
 /**
- * `--agent`, else Claude Code or Codex when it runs this command: Claude Code sets CLAUDECODE=1,
- * Codex gives every command its session id in CODEX_THREAD_ID.
+ * `--agent`, else Claude Code, Codex or Pi when it runs this command: Claude Code sets
+ * CLAUDECODE=1, Codex gives every command its session id in CODEX_THREAD_ID, Pi in PI_SESSION_ID.
  */
-function agentOf(input: AskInput, env: Ctx["env"]): { agent?: Agent } {
+function agentOf(input: AskInput, env: Ctx["env"]): { agent?: Harness } {
   if (input.agent !== undefined) return { agent: input.agent };
   if (env.CLAUDECODE === "1") return { agent: "claude-code" };
-  return env.CODEX_THREAD_ID ? { agent: "codex" } : {};
+  if (env.CODEX_THREAD_ID) return { agent: "codex" };
+  return env.PI_SESSION_ID ? { agent: "pi" } : {};
 }
+
+const protocolAgent = (agent: Harness | undefined): { agent?: Agent } =>
+  agent === undefined || agent === "pi" ? {} : { agent };
 
 function checked(decision: unknown): Decision {
   try {
@@ -261,7 +284,7 @@ export async function ask(
   const resolved = resolveSource(input, ctx.env, process.cwd());
   const decision = await postDecision(ctx, s, { ...resolved, waiting: input.waiting || opts.wait });
   ctx.out(decision.id);
-  if (!opts.wait) ctx.err(deliveryLine(decision.id, delivery(resolved.agent, false)));
+  if (!opts.wait) ctx.err(deliveryLine(decision.id, delivery(resolved, false)));
   if (!opts.wait) return 0;
   return wait(ctx, { id: decision.id, timeout: opts.timeout, json: opts.json }, s);
 }
@@ -392,15 +415,20 @@ export function checkAnswer(
 }
 
 /**
- * How an answer comes back into the session that asked: as a prompt, which Claude Code's mod
- * submits and the agent queues into a Codex session it can reach, or only through `wait`.
+ * How an answer comes back into the session that asked: as a prompt, which Claude Code's mod and
+ * the Pi extension submit and the agent queues into a Codex session it can reach, or only
+ * through `wait`.
  */
 export type Delivery = "prompt" | "wait";
 
-/** With no agent running, only Claude Code's mod brings an answer back; it polls by itself. */
-export function delivery(agent: Agent | undefined, codexReachable: boolean): Delivery {
-  if (agent === "claude-code") return "prompt";
-  return agent === "codex" && codexReachable ? "prompt" : "wait";
+/** With no agent running, Codex gets nothing back; the mod and the Pi extension poll by themselves. */
+export function delivery(
+  input: Pick<AskInput, "agent" | "piAnswers">,
+  codexReachable: boolean,
+): Delivery {
+  if (input.agent === "claude-code") return "prompt";
+  if (input.agent === "pi") return input.piAnswers ? "prompt" : "wait";
+  return input.agent === "codex" && codexReachable ? "prompt" : "wait";
 }
 
 /** What `ask` prints after the id, on stderr, so the asking agent knows what to do next. */

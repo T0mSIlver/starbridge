@@ -21,14 +21,20 @@ Keep a per-repo file out of git by adding its name to `.git/info/exclude`.
 Checked on 2026-10-05 with Claude Code 2.1.289, Codex CLI 0.160.0 and pi
 0.87.1.
 
-Codex and pi don't load the Claude Code plugin, so each line below names the
+Codex doesn't load the Claude Code plugin, so each line below names the
 command it needs. Codex also reads skills from `~/.codex/skills`: copy
 `plugin/skills/starbridge` there so it knows how to write a card. When
 `starbridge agent` runs, it queues each answer into the Codex session that
-asked, with `codex queue` (Codex CLI 0.160 or later, interactive sessions). In
-`codex exec`, in pi, or with no agent running, nothing brings the answer back
-after a turn ends; `starbridge ask` says so, and the skill then has the agent
-wait with `starbridge wait <id>` before it ends the turn.
+asked, with `codex queue` (Codex CLI 0.160 or later, interactive sessions).
+
+Pi gets the skill, the two rules and its answers from the Starbridge Pi
+package: `pi install git:github.com/T0mSIlver/starbridge`. In an interactive
+Pi session, each answer comes back as a new prompt, through the agent or the
+CLI, as in Claude Code.
+
+In `codex exec`, `pi -p`, or Codex with no agent running, nothing brings the
+answer back after a turn ends; `starbridge ask` says so, and the skill then
+has the agent wait with `starbridge wait <id>` before it ends the turn.
 
 ## Lines to copy
 

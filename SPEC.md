@@ -973,6 +973,29 @@ How it generalizes is open.
   skill follows that line instead of naming agents. `evals/skill` runs `codex exec`, so it
   checks the wait path: it answers a Codex card on the server during the turn, as the owner
   would.
+- 2026-10-06. Pi is the third harness (#232; research on the issue, Pi 0.87.1). A Pi extension
+  can call `pi.sendUserMessage(text, { deliverAs: "followUp" })` at any time: an idle session
+  starts a turn with it, a busy one runs it once the agent finishes, as the mod and `codex
+  queue` do. So the Pi extension (`mod/pi/starbridge.ts`) runs the mod's own answer loop
+  (`agent.ts`, `poller.ts`, `switch.ts`, which never depended on Claude Code), through the
+  machine's agent or the CLI, and submits each answer that way. It runs only where Pi has a UI
+  (TUI and RPC), since `pi -p` ends after one prompt, and while it runs it sets
+  `STARBRIDGE_PI_ANSWERS=1` for the session's commands. It also appends `plugin/hooks/rule.md`, the
+  rule the `SessionStart` hook adds in Claude Code, to Pi's system prompt. The repository's root
+  `package.json` is a Pi package (that extension and `plugin/skills`): `pi install
+  git:github.com/T0mSIlver/starbridge`. `ask` detects Pi from `PI_SESSION_ID`, which Pi's bash
+  tool gives every command, after Claude Code and Codex. It records that session id and takes
+  the card's session title from the name in `PI_SESSION_FILE`. It says the answer comes back as
+  a prompt only with `STARBRIDGE_PI_ANSWERS=1`, else it prints the `starbridge wait` line. A
+  decision from Pi carries no `agent`: clients parse it as `claude-code | codex`, so `pi` would
+  make the decision unreadable to every client released so far. Pi has no built-in
+  AskUserQuestion and no permission prompts; both come from third-party extensions, so Starbridge
+  intercepts neither (blocking a tool by name would tie it to one extension), the skill tells
+  every agent to avoid any tool that asks the user, and permission prompts stay Claude Code only.
+  Checked with a real Pi 0.87.1 TUI (GLM 5.3) in a throwaway HOME, the local server, the built
+  web page in Firefox and `starbridge agent`: Pi posted the card, the web page answered "French",
+  and Pi wrote the file. Without the agent, an answer given during a `sleep 40` ran once that
+  turn ended.
 - 2026-10-05. A blocked question shows by its look, not a state line (#191, owner's pick of
   proposal B, "Filled and hollow", from https://claude.ai/artifact/EMcUnTsGhyTsiCNujo4JT6). This
   replaces the "Waiting for you 1:12" tag of the #166 entry above. A question whose agent waits

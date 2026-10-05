@@ -428,3 +428,35 @@ test("a Codex session the agent cannot reach is told to wait, and its wait gets 
     await codex.close().catch(() => {});
   }
 });
+
+test("a Pi session with the extension gets its answer as an event, titled from its file", async () => {
+  const { socket } = await machine();
+  const dir = mkdtempSync(join(tmpdir(), "starbridge-pi-"));
+  const file = join(dir, "session.jsonl");
+  writeFileSync(
+    file,
+    `${JSON.stringify({ type: "session", id: "p1" })}\n${JSON.stringify({ type: "session_info", name: "Fix the build" })}\n`,
+  );
+  const pi = { PI_SESSION_ID: "p1", PI_SESSION_FILE: file, CLAUDE_CODE_SESSION_ID: "c1" };
+  const c = testCtx({ STARBRIDGE_AGENT_SOCKET: socket, ...pi, STARBRIDGE_PI_ANSWERS: "1" });
+  const id = await ask(c, "--project", "p");
+  expect(c.errors.at(-1)).toBe("The answer will come back into this session as a new prompt.");
+  const [d] = await server.opened("decision");
+  // Clients parse `agent` as a closed list, so Pi is left out.
+  expect([d?.agent, d?.source.session, d?.source.sessionTitle]).toEqual([
+    undefined,
+    "p1",
+    "Fix the build",
+  ]);
+
+  const s = session(socket, "p1");
+  await s.hello();
+  await server.answer(id, { choice: "Merge" });
+  await until(async () => (await s.events()).length === 1);
+  expect((await s.events())[0]?.line).toBe(`Answer to ${id} (Merge #12 now?): Merge`);
+
+  // Without the extension (`pi -p`, or not installed), nothing brings the answer back.
+  const bare = testCtx({ STARBRIDGE_AGENT_SOCKET: socket, ...pi });
+  await ask(bare, "--project", "p");
+  expect(bare.errors.at(-1)).toContain("run `starbridge wait");
+});
