@@ -2,6 +2,7 @@ package dev.starbridge.app.data
 
 import android.util.Log
 import dev.starbridge.app.protocol.Bip39
+import dev.starbridge.app.protocol.RecoveryKeys
 import dev.starbridge.app.protocol.recoverySignSeed
 import dev.starbridge.app.protocol.Directories
 import dev.starbridge.app.protocol.Directory
@@ -160,7 +161,7 @@ class ServerStore(
             saved.joining != null -> Phase.Joining(saved.joining!!, saved.joiningScanned)
             saved.digitJoin != null -> Phase.JoiningByDigits(saved.digitJoin!!.digits)
             saved.me == null || saved.pin == null -> Phase.NoDevice(saved.accountExists)
-            secrets.recoverySeed != null -> Phase.RecoveryKey(Bip39.entropyToMnemonic(fromB64(secrets.recoverySeed!!)).split(" "))
+            secrets.recoverySeed != null -> Phase.RecoveryKey(RecoveryKeys.shown(fromB64(secrets.recoverySeed!!), sodium))
             else -> Phase.Ready
         }
         server.value = saved.server
@@ -529,9 +530,7 @@ class ServerStore(
     }
 
     override fun recover(words: String) = run {
-        val list = Bip39.split(words)
-        Bip39.problem(list)?.let { throw IllegalArgumentException(it) }
-        val recovery = sodium.signSeedKeyPair(recoverySignSeed(Bip39.mnemonicToEntropy(list.joinToString(" ")), sodium))
+        val recovery = sodium.signSeedKeyPair(recoverySignSeed(RecoveryKeys.seed(words, sodium), sodium))
         val entries = api().directory(0)
         // The chain's first entry must carry this key's own signature, which a server cannot fake.
         val dir = directories.verify(entries, saved.account, recoveryPk = toB64(recovery.public))
@@ -1220,7 +1219,7 @@ class ServerStore(
             runCatching {
                 syncDirectory()
                 val dir = directory!!
-                // The last device stays: removing it would leave only the recovery words.
+                // The last device stays: removing it would leave only the recovery key.
                 if (dir.active("device").size > 1) api().append(directories.revokeEntry(dir, me.id, signKey, me.id, now()))
             }
         }

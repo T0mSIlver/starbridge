@@ -201,8 +201,8 @@ class ScreenshotTest(private val dark: Boolean) {
     @Test fun addDeviceJoined() = capture("add-device-joined") { Phone(null, 0) { AddDeviceScreen(Approval.Done("Chrome on Mac"), deviceActions) } }
 
     @Test fun setupRecover() = capture("setup-recover", before = {
-        compose.onNodeWithText("Use the recovery words").performClick()
-        compose.onNode(hasSetTextAction()).performTextInput("1. animal\n2. embark\n3. drastik\n4. bamboo ")
+        compose.onNodeWithText("Use the recovery key").performClick()
+        compose.onNode(hasSetTextAction()).performTextInput("7kq2 m9xd 4tpu")
     }) { Phone(null, 0) { SetupScreen(Phase.NoDevice(accountExists = true), "https://starbridge.run", false, setupActions, {}) } }
 
     @Test fun addDeviceFound() = capture("add-device-found") { Phone(null, 0) { AddDeviceScreen(fake.approval, deviceActions) } }
@@ -240,5 +240,5 @@ class ScreenshotTest(private val dark: Boolean) {
         JoinPrompt(listOf(ask), Comparison.Digits(ask, "042917", error = error), JoinActions({}, {}, {}, {}))
     }
 
-    @Test fun setupRecoveryKey() = capture("setup-recovery-key") { Phone(null, 0) { SetupScreen(Phase.RecoveryKey(fake.recoveryWords), "https://starbridge.run", false, setupActions, {}) } }
+    @Test fun setupRecoveryKey() = capture("setup-recovery-key") { Phone(null, 0) { SetupScreen(Phase.RecoveryKey(fake.recoveryKey), "https://starbridge.run", false, setupActions, {}) } }
 }

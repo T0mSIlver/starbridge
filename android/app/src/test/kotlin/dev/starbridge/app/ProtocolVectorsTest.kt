@@ -12,6 +12,7 @@ import dev.starbridge.app.protocol.Member
 import dev.starbridge.app.protocol.Pairings
 import dev.starbridge.app.protocol.Pin
 import dev.starbridge.app.protocol.ProtocolException
+import dev.starbridge.app.protocol.RecoveryKeys
 import dev.starbridge.app.protocol.recoverySignSeed
 import dev.starbridge.app.protocol.ProtocolJson
 import dev.starbridge.app.protocol.SealedItem
@@ -236,14 +237,29 @@ class ProtocolVectorsTest {
     }
 
     @Test
+    fun recoveryKey() {
+        val recovery = keys.getValue("recovery12").jsonObject
+        val key = recovery.str("key")
+        assertEquals(key, RecoveryKeys.encode(fromB64(recovery.str("seed")), sodium))
+        for (typed in listOf(key, key.lowercase(), key.replace("-", ""), key.replace("-", " "), key.replace('0', 'O').replace('1', 'l'), recovery.str("words"))) {
+            assertEquals(recovery.str("seed"), toB64(RecoveryKeys.seed(typed, sodium)))
+        }
+        assertEquals("Character 5, \"U\", is not in a recovery key.", RecoveryKeys.read(key.take(5) + "U" + key.drop(6)).problem)
+        assertEquals("A character is wrong. Check each group against what you wrote down.", RecoveryKeys.read(key.take(5) + (if (key[5] == '2') '3' else '2') + key.drop(6), sodium).problem)
+        assertEquals(null, RecoveryKeys.read(key.take(9)).problem)
+        assertEquals("A recovery key has 28 characters; this has 8.", RecoveryKeys.read(key.take(9), sodium).problem)
+        assertEquals(true, RecoveryKeys.read(keys.getValue("recovery").jsonObject.str("words")).words)
+    }
+
+    @Test
     fun recoveryWordEntry() {
         val words = keys.getValue("recovery12").jsonObject.str("words").split(" ")
         for (typed in listOf(words.joinToString("-"), words.joinToString(", "), words.mapIndexed { i, w -> "${i + 1}. $w" }.joinToString("\n"), words.joinToString("  ").uppercase())) {
             assertEquals(words, Bip39.split(typed))
             assertEquals(null, Bip39.problem(Bip39.split(typed)))
         }
-        assertEquals("Word 3, \"mountian\", is not a recovery word.", Bip39.problem(words.toMutableList().also { it[2] = "mountian" }))
-        assertEquals("A recovery key has 12 words, or 24 for an older account; this has 11.", Bip39.problem(words.drop(1)))
+        assertEquals("Word 3, \"mountian\", is not on the word list.", Bip39.problem(words.toMutableList().also { it[2] = "mountian" }))
+        assertEquals("Older accounts recover with 12 or 24 words; this has 11.", Bip39.problem(words.drop(1)))
         assertEquals("One word is wrong, or two are swapped. Check each word and the order.", Bip39.problem(listOf(words[1], words[0]) + words.drop(2)))
     }
 

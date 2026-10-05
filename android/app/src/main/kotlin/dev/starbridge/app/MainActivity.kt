@@ -79,7 +79,7 @@ class MainActivity : ComponentActivity() {
                 val phase by store.phase.collectAsStateWithLifecycle()
                 val decisions by store.decisions.collectAsStateWithLifecycle()
                 LaunchedEffect(phase) {
-                    // The recovery words stay out of screenshots and the recents screen.
+                    // The recovery key stays out of screenshots and the recents screen.
                     if (phase is Phase.RecoveryKey) window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
                     else window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
                     if (phase == Phase.Ready) {
