@@ -47,4 +47,9 @@ test("a decision answered elsewhere closes when settled, or at its default time"
   // A plain decision never closes by itself.
   const plain = { decision: { ...decision, answerIn: undefined } } as InboxItem;
   expect(closedAt(plain, after)).toBeUndefined();
+  // Withdrawn by the agent, not answered by another device.
+  const withdrawn = { ...plain, answeredAt: "2026-10-05T11:30:00Z", settled: "withdrawn" as const };
+  expect(outcomeText(withdrawn)).toBe("Withdrawn");
+  expect(closedBy(withdrawn)).toBe("The agent");
+  expect(closedBy({ ...withdrawn, settled: undefined })).toBe("Another device");
 });

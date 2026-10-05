@@ -42,6 +42,8 @@ data class Decision(
     /** This device's answer; null when it was answered elsewhere or is still open. */
     val answer: String? = null,
     val answeredAt: Instant? = null,
+    /** How the machine closed it, when its settled notice did: "withdrawn" or "elsewhere". */
+    val settled: String? = null,
 ) {
     /**
      * Waiting for the owner. A decision answered on another page also stops waiting at its default

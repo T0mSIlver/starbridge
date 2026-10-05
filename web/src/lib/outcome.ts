@@ -23,13 +23,14 @@ export function closedAt(item: InboxItem, now: Date = new Date()): string | unde
 export function outcomeText(item: InboxItem): string {
   // Answers are sealed to the asking machine: only the device that sent one can show it.
   if (item.reply) return "choice" in item.reply ? item.reply.choice : item.reply.text;
+  if (item.settled === "withdrawn") return "Withdrawn";
   const page = item.decision.answerIn;
   if (!page) return "Answered";
   return item.answeredAt ? `Answered in ${answerPlace(page)}` : "No answer by its default time";
 }
 
-/** Who closed it: this browser, the agent for another page, or another device. */
+/** Who closed it: this browser, the agent (withdrawn, or for another page), or another device. */
 export function closedBy(item: InboxItem): string {
   if (item.reply) return "This browser";
-  return item.decision.answerIn ? "The agent" : "Another device";
+  return item.settled || item.decision.answerIn ? "The agent" : "Another device";
 }

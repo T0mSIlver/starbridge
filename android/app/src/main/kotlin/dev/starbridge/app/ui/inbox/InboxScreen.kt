@@ -475,15 +475,16 @@ private fun AnswerElsewhere(page: Link) {
 
 /** The answer, or how a decision answered on another page closed. */
 private fun outcome(decision: Decision, now: Instant) = decision.answer ?: when {
+    decision.settled == "withdrawn" -> "Withdrawn"
     decision.lapsed(now) -> "No answer by its default time"
     decision.answerIn != null -> "Answered in ${decision.answerIn.place()}"
     else -> "Answered"
 }
 
-/** Who answered: this phone with its answer, the agent for another page, or another device. */
+/** Who closed it: this phone with its answer, the agent (withdrawn, or for another page), or another device. */
 private fun answeredBy(decision: Decision) = when {
     decision.answer != null -> "This phone"
-    decision.answerIn != null -> "The agent"
+    decision.settled != null || decision.answerIn != null -> "The agent"
     else -> "Another device"
 }
 

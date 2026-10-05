@@ -1,6 +1,6 @@
 // The web's view of protocol data (packages/protocol). Components import these as types only;
 // the protocol code and libsodium load lazily (lib/device.ts).
-import type { Decision, Member, QuotaAlert, QuotaWindow } from "@starbridge/protocol";
+import type { Decision, Member, QuotaAlert, QuotaWindow, Settled } from "@starbridge/protocol";
 
 export type { Decision, QuotaAlert, QuotaWindow };
 
@@ -16,6 +16,8 @@ export type InboxItem = {
   answeredAt?: string;
   /** The answer, when this browser sent it; other devices' answers are sealed to the machine. */
   reply?: Reply;
+  /** How the machine closed it, when its settled notice did rather than an answer. */
+  settled?: Settled["outcome"];
 };
 
 /** One quota card: a window, its provider, and the alert raised for it. */

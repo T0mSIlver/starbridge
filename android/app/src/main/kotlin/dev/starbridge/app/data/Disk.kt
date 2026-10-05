@@ -19,6 +19,8 @@ data class SavedDecision(
     val answeredAt: String? = null,
     /** Set when this device answered: the choice or the text. */
     val answer: String? = null,
+    /** How the machine closed it, when its settled notice did rather than an answer. */
+    val settled: String? = null,
 )
 
 /** The latest verified snapshot from one machine. */

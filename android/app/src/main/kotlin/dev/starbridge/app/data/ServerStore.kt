@@ -18,6 +18,7 @@ import dev.starbridge.app.protocol.QuotaSnapshot
 import dev.starbridge.app.protocol.RECOVERY
 import dev.starbridge.app.protocol.SealedBox
 import dev.starbridge.app.protocol.SealedItem
+import dev.starbridge.app.protocol.Settled
 import dev.starbridge.app.protocol.SignedEnvelope
 import dev.starbridge.app.protocol.Sodium
 import dev.starbridge.app.protocol.bindMessage
@@ -416,19 +417,32 @@ class ServerStore(
     private suspend fun syncDecisions() {
         var cursor = saved.cursor
         val byId = saved.decisions.associateBy { it.body.id }.toMutableMap()
+        // How each item a settled notice closed was closed, with the time: the notice lists before
+        // the decision it closed, which moved past it.
+        val closings = mutableMapOf<String, Pair<String?, String>>()
         while (true) {
-            val page = api().items("decision", cursor)
+            val page = api().items("decision,settled", cursor)
             for (listed in page.items) {
+                if (listed.item.kind == "settled") {
+                    val (_, body) = open(listed.item) ?: continue
+                    body as Settled
+                    closings[body.itemId] = body.outcome to listed.receivedAt
+                    continue
+                }
+                // The notice that closed it arrived in the same write, so it carries the same time;
+                // a later one, after a device's answer, closed nothing.
+                val settled = closings[listed.item.id]?.takeIf { it.second == listed.answeredAt }?.first
                 val known = byId[listed.item.id]
                 if (known != null) {
-                    if (listed.answeredAt != null && known.answeredAt == null) {
-                        byId[known.body.id] = known.copy(answeredAt = listed.answeredAt)
+                    // A settled push marked it answered already, without saying how.
+                    if (listed.answeredAt != null && (known.answeredAt == null || settled != null)) {
+                        byId[known.body.id] = known.copy(answeredAt = listed.answeredAt, settled = settled ?: known.settled)
                         alerts.cancel(known.body.id)
                     }
                     continue
                 }
                 val (from, body) = open(listed.item) ?: continue
-                byId[listed.item.id] = SavedDecision(from, body as DecisionBody, listed.answeredAt)
+                byId[listed.item.id] = SavedDecision(from, body as DecisionBody, listed.answeredAt, settled = settled)
             }
             cursor = page.cursor
             if (page.items.size < 100) break
@@ -660,6 +674,7 @@ class ServerStore(
             answerIn = b.answerIn?.let { Link(it.url, it.title) },
             answer = d.answer,
             answeredAt = instant(d.answeredAt) ?: d.answer?.let { Instant.now() },
+            settled = d.settled,
         )
     }
 
