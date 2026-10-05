@@ -29,9 +29,8 @@ In `pi -p`, the agent waits for the answer with `starbridge wait` before it
 ends its turn.
 
 ⁴ With [pi-permission-system](https://github.com/gotgenes/pi-packages/tree/main/packages/pi-permission-system):
-add `"authorizerChain": ["starbridge"]` to its `config.json`
-(`~/.pi/agent/extensions/pi-permission-system/config.json`), then
-`starbridge config permissions on`. Your devices can allow a call once or deny
+`starbridge config permissions on` offers to add `starbridge` to its
+`authorizerChain` (in `~/.pi/agent/extensions/pi-permission-system/config.json`). Your devices can allow a call once or deny
 it; "Answer here" in Pi brings back its own prompt.
 
 Claude Code loads the Starbridge plugin, which brings the rules above, the

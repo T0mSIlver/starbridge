@@ -1004,8 +1004,8 @@ How it generalizes is open.
   and Pi wrote the file. Without the agent, an answer given during a `sleep 40` ran once that
   turn ended. Both again on Pi 1.0.4 (fullscreen TUI, its new default), and the agent path again
   on 0.87.1, with the code as merged.
-- 2026-10-06. Pi's permission prompts (owner, #232), through pi-permission-system (33.1.1), which
-  most Pi users run. Its authorizer chain asks each link the owner names in its `config.json`
+- 2026-10-06. Pi's permission prompts (owner, #232), through pi-permission-system (33.1.1 for Pi
+  0.87, 39.1.0 for Pi 1.0, same chain API), which most Pi users run. Its authorizer chain asks each link the owner names in its `config.json`
   (`authorizerChain`) before its own dialog, whenever a rule says `ask`; a link answers allow,
   deny with a reason, or defer. The Pi extension registers the link `starbridge` through the
   service pi-permission-system publishes on `globalThis` per session, since Pi packages share no
@@ -1013,15 +1013,22 @@ How it generalizes is open.
   runs, with the same input shape: Pi's tool name and its command or path, and no suggestions,
   since the chain never lets a link allow for the session, so devices offer Allow (this call)
   and Deny. Nothing reaches the devices until the owner both names the link and turns on
-  `starbridge config permissions`, as for Claude Code. The link defers, and Pi shows its own
+  `starbridge config permissions`, as for Claude Code. Turning it on (`config permissions on`,
+  or setup) offers on a terminal to add the link to `authorizerChain`, keeping the rest of the
+  file; without a terminal it prints the line to add and writes nothing. The link defers, and Pi shows its own
   dialog, while Starbridge is off, the machine is unpaired, the server does not answer, or after
   570 s. The chain runs before pi-permission-system's dialog, so while the devices have the
   prompt Pi shows "Answer here": choosing it stops the CLI, which settles the prompt on the
   devices as answered at the keyboard, and the link defers to the dialog. The dialog appears
-  only after 1 s, so a CLI that defers at once shows nothing. Checked with a real Pi TUI and
+  only after 1 s, so a CLI that defers at once shows nothing. Pi strands a dialog that another
+  opens over it, so overlapping asks show theirs one at a time. A session that ends stops its
+  links' CLIs, which settles their prompts on the devices. Checked with a real Pi TUI and
   pi-permission-system: `touch approved.txt` allowed from the web page; `touch second.txt`
   taken back with "Answer here" and denied in Pi's dialog, settled `keyboard` on the devices;
-  with permissions off, Pi's dialog came up at once and nothing was posted.
+  with permissions off, Pi's dialog came up at once and nothing was posted. Again on Pi 1.0.4
+  with pi-permission-system 39.1.0: allowed from the web page, taken back and denied, and two
+  parallel asks, one allowed from the web page and the other, whose dialog came next, at the
+  keyboard; `config permissions on` added the link to the chain on a terminal.
 - 2026-10-05. A blocked question shows by its look, not a state line (#191, owner's pick of
   proposal B, "Filled and hollow", from https://claude.ai/artifact/EMcUnTsGhyTsiCNujo4JT6). This
   replaces the "Waiting for you 1:12" tag of the #166 entry above. A question whose agent waits
