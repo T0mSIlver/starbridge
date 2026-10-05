@@ -92,6 +92,7 @@ import dev.starbridge.app.data.Source
 import dev.starbridge.app.data.Store
 import dev.starbridge.app.data.openLink
 import dev.starbridge.app.data.place
+import dev.starbridge.app.ui.Lockup
 import dev.starbridge.app.ui.Page
 import dev.starbridge.app.ui.Refresh
 import dev.starbridge.app.ui.Sym
@@ -186,6 +187,7 @@ fun InboxScreen(
     runs: List<Run> = emptyList(),
     view: InboxView = InboxView(),
     onView: (InboxView) -> Unit = {},
+    onFind: () -> Unit = {},
 ) {
     // While a prompt is on screen, read prompts every 1.5 s, so one settled elsewhere leaves
     // at once; the clock ticks with it for the 3 s a closed prompt stays.
@@ -216,7 +218,11 @@ fun InboxScreen(
         modifier,
         refresh = refresh,
         subtitle = if (feed.isEmpty()) null else ({ NeedsYou(needYou, running) }),
-        trailing = { ViewMenu(view, onView) },
+        trailing = {
+            IconButton(onClick = onFind) { Symbol(Sym.Search, size = 22.dp, tint = MaterialTheme.colorScheme.onSurfaceVariant, contentDescription = "Find") }
+            ViewMenu(view, onView)
+        },
+        header = { Lockup(24.dp, 22.sp) },
     ) {
         if (feed.isEmpty()) {
             item(key = "empty") { Empty() }
@@ -313,7 +319,7 @@ private fun MachineHeader(source: Source) {
 
 /** "Waiting on you 2": a group's name under "Group by waiting", its count in [countColor]. */
 @Composable
-private fun GroupHeader(name: String, count: Int, countColor: Color) {
+internal fun GroupHeader(name: String, count: Int, countColor: Color) {
     val style = StarbridgeTheme.type.label
     Text(
         buildAnnotatedString {
@@ -580,7 +586,7 @@ private fun AnswerElsewhere(page: Link) {
 }
 
 /** The answer, or how a question answered on another page closed. */
-private fun outcome(decision: Decision, now: Instant) = decision.answer ?: when {
+internal fun outcome(decision: Decision, now: Instant) = decision.answer ?: when {
     decision.settled == "withdrawn" -> "Withdrawn"
     decision.lapsed(now) -> "No answer by its default time"
     decision.answerIn != null -> "Answered in ${decision.answerIn.place()}"
@@ -588,7 +594,7 @@ private fun outcome(decision: Decision, now: Instant) = decision.answer ?: when 
 }
 
 /** Who closed it: this phone, the agent (withdrawn, or for another page), or another device. */
-private fun answeredBy(decision: Decision) = when {
+internal fun answeredBy(decision: Decision) = when {
     decision.answer != null -> "this phone"
     decision.settled != null || decision.answerIn != null -> "the agent"
     else -> "another device"
@@ -638,7 +644,7 @@ private fun inline(text: String, background: Color): AnnotatedString = buildAnno
 }
 
 /** What History holds: answered questions and ended prompts, newest first, and today's count. */
-private class History(decisions: List<Decision>, prompts: List<Prompt>, now: Instant) {
+internal class History(decisions: List<Decision>, prompts: List<Prompt>, now: Instant) {
     val rows: List<Pair<Instant, Any>> = (
         decisions.map { (it.answeredAt ?: it.defaultAt ?: it.createdAt) to it } +
             prompts.map { (it.endedAt ?: it.expiresAt) to it }
@@ -672,20 +678,41 @@ private fun LazyListScope.history(history: History, open: Boolean, onOpen: (Bool
     itemsIndexed(history.rows, key = { _, (_, it) -> if (it is Decision) "h/d/${it.id}" else "h/p/${(it as Prompt).id}" }) { i, (at, it) ->
         val shape = rowShape(i, history.rows.size)
         when (it) {
-            is Decision -> HistoryRow(it.source, it.question, false, "${outcome(it, at)} · on ${answeredBy(it)}", shape) { actions.open(it.id) }
-            is Prompt -> HistoryRow(it.source, it.summary, true, it.ended ?: "Expired", shape) { promptActions?.open?.invoke(it.id) }
+            is Decision -> HistoryRow(it.source, it.question, false, closedHow(it, at), shape) { actions.open(it.id) }
+            is Prompt -> HistoryRow(it.source, it.summary, true, closedHow(it), shape) { promptActions?.open?.invoke(it.id) }
         }
     }
 }
 
+/** How a History row closed: the answer and who gave it, or how a prompt ended. */
+internal fun closedHow(decision: Decision, at: Instant) = "${outcome(decision, at)} · on ${answeredBy(decision)}"
+internal fun closedHow(prompt: Prompt) = prompt.ended ?: "Expired"
+
+/**
+ * One line of History, also Find's result row: the meta row, the question or command, and how it
+ * closed, when it did ([how] empty while open). Find marks its [words] and passes an open row's
+ * [ground] and time.
+ */
 @Composable
-private fun HistoryRow(source: Source, text: String, prompt: Boolean, how: String, shape: Shape, onClick: () -> Unit) {
+internal fun HistoryRow(
+    source: Source,
+    text: String,
+    prompt: Boolean,
+    how: String,
+    shape: Shape,
+    words: List<String> = emptyList(),
+    ground: Color = MaterialTheme.colorScheme.surfaceContainer,
+    time: String = "",
+    clock: Boolean = false,
+    onClick: () -> Unit,
+) {
     val scheme = MaterialTheme.colorScheme
-    Surface(Modifier.fillMaxWidth().clickable(onClick = onClick), shape = shape, color = scheme.surfaceContainer) {
+    val hit = hitStyle()
+    Surface(Modifier.fillMaxWidth().clickable(onClick = onClick), shape = shape, color = ground) {
         Column(Modifier.padding(horizontal = Spacing.s4, vertical = Spacing.s3), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            MetaRow(source, "")
-            Text(text, style = if (prompt) StarbridgeTheme.type.code.copy(fontSize = 13.sp) else StarbridgeTheme.type.small, color = scheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(how, style = StarbridgeTheme.type.meta, color = scheme.onSurfaceVariant, maxLines = 1)
+            MetaRow(source, time, clock = clock, words = words)
+            Text(highlight(text, words, hit), style = if (prompt) StarbridgeTheme.type.code.copy(fontSize = 13.sp) else StarbridgeTheme.type.small, color = scheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (how.isNotEmpty()) Text(highlight(how, words, hit), style = StarbridgeTheme.type.meta, color = scheme.onSurfaceVariant, maxLines = 1)
         }
     }
 }

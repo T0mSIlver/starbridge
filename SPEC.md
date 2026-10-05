@@ -1111,6 +1111,15 @@ so the mod is the first path.
   Below that it keeps today's 720 px column. Thumbnails on a row shrink with a narrowed list
   rather than running past its edge. The View button is an icon with the tooltip "View", and
   its menu drops "Remembered on this device", since the inbox's head is dense.
+- 2026-10-06. Find on Android is option A of https://claude.ai/artifact/9ddJ2PwPrBc7KmQdeDVqDN:
+  a search icon beside View in the Inbox's title row opens Material 3's search view, full screen
+  over the bottom bar. It matches as the web's Find does (every word, in the machine, repo, the
+  agent's words or the session, and a History item's answer) and lists the open matches under
+  "Needs you", then "History". Runs are left out, since Android has no page for one. Enter opens
+  the first result, Down moves into the list, Escape clears and then closes, Back closes.
+- 2026-10-06. Logo: the original mark with the baseline lockup ("Starbridge" stands on the mark's
+  ground line, the gap 0.4 of the mark). On Android it heads the Inbox above its title (mark 24 dp,
+  name 22 sp), as Android has no top app bar, and the first run (mark 56 dp, name 40 sp).
 - 2026-10-06. Find on the web searches History too (owner picked option 1 of
   the layout round). The rail's Find box and its `/` key stay;
   while it holds a query, the list shows the matching open items in one feed, whatever the
