@@ -28,6 +28,12 @@ export const DEFAULT_LIMITS = {
   itemBytes: 256 * 1024,
   /** Sealed box of one answer, in bytes: an answer's text is at most 4000 characters. */
   answerBytes: 32 * 1024,
+  /** Stored runs per account; each lives runRetention after its last update. */
+  runs: 500,
+  /** Sealed boxes of one run update, in bytes. */
+  runBytes: 32 * 1024,
+  /** Runs are dropped this long after their last update. */
+  runRetention: DAY,
   /** Answered decisions and their answers are dropped this long after the answer. */
   answeredRetention: 7 * DAY,
   /** Unanswered decisions, and quota snapshots no machine has replaced, are dropped after this. */

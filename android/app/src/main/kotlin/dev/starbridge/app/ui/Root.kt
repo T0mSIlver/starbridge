@@ -57,6 +57,7 @@ import androidx.navigation3.scene.Scene
 import androidx.navigation3.ui.NavDisplay
 import dev.starbridge.app.data.Decision
 import dev.starbridge.app.data.Phase
+import dev.starbridge.app.data.Run
 import dev.starbridge.app.ui.devices.DevicesScreen
 import dev.starbridge.app.ui.devices.DevicesViewModel
 import dev.starbridge.app.ui.inbox.DecisionActions
@@ -100,6 +101,18 @@ private fun now(): Instant = produceState(Instant.now()) {
         value = Instant.now()
     }
 }.value
+
+/** A clock that ticks each second while [live], for a run's time elapsed; else [slow]. */
+@Composable
+private fun seconds(live: Boolean, slow: Instant): Instant {
+    val fast = produceState(Instant.now(), live) {
+        while (live) {
+            value = Instant.now()
+            delay(1_000)
+        }
+    }.value
+    return if (live) fast else slow
+}
 
 /** Shows the store's notices as snackbars. */
 @Composable
@@ -213,10 +226,11 @@ fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> U
                         val decisions by vm.decisions.collectAsStateWithLifecycle()
                         val sending by vm.sending.collectAsStateWithLifecycle()
                         val prompts by vm.prompts.collectAsStateWithLifecycle()
+                        val runs by vm.runs.collectAsStateWithLifecycle()
                         val selected = (backStack.lastOrNull() as? DecisionKey)?.id
                         InboxScreen(
                             decisions,
-                            now,
+                            seconds(runs.any { it.state(Instant.now()) == Run.State.Running }, now),
                             DecisionActions(answer = vm::answer, open = { id ->
                                 if (backStack.lastOrNull() is DecisionKey) backStack.removeAt(backStack.lastIndex)
                                 backStack.add(DecisionKey(id))
@@ -227,6 +241,7 @@ fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> U
                             prompts = prompts,
                             promptActions = PromptActions(answer = vm::answerPrompt, openLog = { backStack.add(PromptLogKey) }),
                             pollPrompts = vm::refreshPrompts,
+                            runs = runs,
                         )
                     }
                     entry<PromptLogKey> {

@@ -54,7 +54,8 @@ export type DirectoryEntry = z.infer<typeof DirectoryEntry>;
  * Kinds of sealed item, and for each: the role that signs it (it is sealed to members of the
  * other role: a machine's items to every active device, a device's to the one machine it
  * answers), and for a kind that refers to an earlier item, the body field naming it and that
- * item's possible kinds. The item's `re` hint repeats that field.
+ * item's possible kinds. The item's `re` hint repeats that field. A kind with `updates` is
+ * re-posted under the same id as it changes, and the server keeps only the latest.
  */
 export const ITEM_KINDS = {
   decision: { signer: "machine" },
@@ -63,9 +64,10 @@ export const ITEM_KINDS = {
   permission: { signer: "machine" },
   "permission-answer": { signer: "device", re: { field: "permissionId", kinds: ["permission"] } },
   settled: { signer: "machine", re: { field: "itemId", kinds: ["permission", "decision"] } },
+  run: { signer: "machine", updates: true },
 } as const satisfies Record<
   string,
-  { signer: "device" | "machine"; re?: { field: string; kinds: readonly string[] } }
+  { signer: "device" | "machine"; re?: { field: string; kinds: readonly string[] }; updates?: true }
 >;
 
 export type ItemKind = keyof typeof ITEM_KINDS;
@@ -350,6 +352,53 @@ export const Settled = z
   });
 export type Settled = z.infer<typeof Settled>;
 
+// --- Runs --------------------------------------------------------------------
+
+/** A machine re-posts a running run at least this often, progress or not. */
+export const RUN_HEARTBEAT_MS = 60 * 1000;
+/** A running run with no update for this long has lost its machine: devices stop showing it. */
+export const RUN_STALE_MS = 3 * RUN_HEARTBEAT_MS;
+
+/** What a command's output said of its progress: `[3/7]` as steps, `42%` or OSC 9;4 as percent. */
+export const RunProgress = z
+  .object({
+    done: z.number().int().min(0),
+    total: z.number().int().min(1),
+    unit: z.enum(["step", "percent"]),
+  })
+  .refine((p) => p.done <= p.total, { message: "done is at most total" })
+  .refine((p) => p.unit === "step" || p.total === 100, { message: "a percent is out of 100" });
+export type RunProgress = z.infer<typeof RunProgress>;
+
+/**
+ * A command an agent wrapped in `starbridge run` because one of the owner's rules matched it.
+ * The machine re-posts it under the same id as it progresses and once it exits; devices keep the
+ * update with the latest `at`.
+ */
+export const Run = z
+  .object({
+    v: z.literal(1),
+    id: Id,
+    to: z.array(Id).min(1),
+    title: z.string().min(1).max(100),
+    /** Why the owner hears of it, e.g. "uses your session and keyboard". */
+    reason: z.string().min(1).max(200),
+    source: Source,
+    startedAt: Time,
+    /** When the machine sent this update. */
+    at: Time,
+    progress: RunProgress.optional(),
+    /** Set once the command exited: its exit code (128 + n when signal n ended it). */
+    exit: z.object({ code: z.number().int().min(0).max(255), at: Time }).optional(),
+  })
+  .superRefine((r, ctx) => {
+    if (Date.parse(r.at) < Date.parse(r.startedAt))
+      ctx.addIssue({ code: "custom", message: "at: not before startedAt" });
+    if (r.exit && Date.parse(r.exit.at) < Date.parse(r.startedAt))
+      ctx.addIssue({ code: "custom", message: "exit.at: not before startedAt" });
+  });
+export type Run = z.infer<typeof Run>;
+
 // --- Quotas ------------------------------------------------------------------
 
 export const PaceStage = z.enum(["ahead", "on-track", "behind", "unknown"]);
@@ -426,6 +475,7 @@ export const BODY_SCHEMAS = {
   permission: Permission,
   "permission-answer": PermissionAnswer,
   settled: Settled,
+  run: Run,
 } as const satisfies Record<Kind, z.ZodType>;
 
 export type BodyOf<K extends Kind> = z.infer<(typeof BODY_SCHEMAS)[K]>;

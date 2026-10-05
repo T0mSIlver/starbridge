@@ -16,6 +16,16 @@ fun span(from: Instant, to: Instant): String {
     }
 }
 
+/** "8 s", "2 min 05 s", "1 h 03 min": a run's time, to the second while it is short. */
+fun elapsed(from: Instant, to: Instant): String {
+    val s = Duration.between(from, to).seconds.coerceAtLeast(0)
+    return when {
+        s < 60 -> "$s s"
+        s < 3600 -> "${s / 60} min ${"%02d".format(s % 60)} s"
+        else -> "${s / 3600} h ${"%02d".format(s % 3600 / 60)} min"
+    }
+}
+
 fun ago(now: Instant, then: Instant): String =
     if (Duration.between(then, now).toMinutes() < 1) "just now" else "${span(then, now)} ago"
 

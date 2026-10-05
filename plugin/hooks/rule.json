@@ -1,6 +1,0 @@
-{
-  "hookSpecificOutput": {
-    "hookEventName": "SessionStart",
-    "additionalContext": "Whenever you need me to decide something, use the `starbridge` skill."
-  }
-}

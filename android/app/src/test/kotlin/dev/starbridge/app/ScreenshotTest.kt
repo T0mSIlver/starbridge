@@ -95,6 +95,10 @@ class ScreenshotTest(private val dark: Boolean) {
 
     @Test fun promptLog() = capture("prompt-log") { PromptLogScreen(fake.prompts, now) }
 
+    // Taller: runs on top of the open decisions.
+    @Config(qualifiers = "w411dp-h1500dp-xxhdpi")
+    @Test fun inboxRuns() = capture("inbox-runs") { InboxScreen(fake.decisions, now, decisionActions, runs = fake.runs) }
+
     @Test fun decision() = capture("decision") { DecisionScreen(fake.decisions[1], now, onAnswer = { _, _, _ -> }) }
 
     @Test fun decisionImages() = capture("decision-images") { DecisionScreen(fake.decisions.first { it.images.isNotEmpty() }, now, onAnswer = { _, _, _ -> }) }

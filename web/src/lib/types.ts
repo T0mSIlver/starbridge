@@ -7,10 +7,11 @@ import type {
   PermissionScope,
   QuotaAlert,
   QuotaWindow,
+  Run,
   Settled,
 } from "@starbridge/protocol";
 
-export type { Decision, Permission, QuotaAlert, QuotaWindow, Settled };
+export type { Decision, Permission, QuotaAlert, QuotaWindow, Run, Settled };
 
 /** A tap on an option, or typed text when the decision has none. */
 export type Reply = { choice: string } | { text: string };
@@ -57,6 +58,9 @@ export type QuotaCardData = {
   window: QuotaWindow;
   alert?: QuotaAlert;
 };
+
+/** An opened and verified run, and the name of the machine that signed it. */
+export type RunItem = { run: Run; machine: string };
 
 /** A directory member, as the Devices screen lists it. */
 export type Device = Member & {

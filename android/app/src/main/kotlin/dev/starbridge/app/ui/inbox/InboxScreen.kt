@@ -86,12 +86,14 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.starbridge.app.data.Decision
 import dev.starbridge.app.data.Link
 import dev.starbridge.app.data.place
 import dev.starbridge.app.data.Prompt
+import dev.starbridge.app.data.Run
 import dev.starbridge.app.data.Source
 import dev.starbridge.app.data.Store
 import dev.starbridge.app.data.openLink
@@ -118,6 +120,7 @@ class InboxViewModel @Inject constructor(private val store: Store) : ViewModel()
     val decisions = store.decisions
     val sending = store.sending
     val prompts = store.prompts
+    val runs = store.runs
     fun answerPrompt(id: String, allow: Boolean, scope: String, message: String?) = store.answerPrompt(id, allow, scope, message)
     fun refreshPrompts() = store.refreshPrompts()
     fun answer(id: String, choice: String?, text: String?) = store.answer(id, choice, text)
@@ -142,7 +145,10 @@ fun rememberDrafts(): SnapshotStateMap<String, String> = rememberSaveable(
     ),
 ) { mutableStateMapOf() }
 
-/** Open decisions first, newest on top; answered ones below, one line each. */
+/**
+ * Runs on top while they run and for a while after; then open decisions, newest on top; answered
+ * ones below, one line each.
+ */
 @Composable
 fun InboxScreen(
     decisions: List<Decision>,
@@ -155,6 +161,7 @@ fun InboxScreen(
     prompts: List<Prompt> = emptyList(),
     promptActions: PromptActions? = null,
     pollPrompts: () -> Unit = {},
+    runs: List<Run> = emptyList(),
 ) {
     // While a prompt is on screen, read prompts every 1.5 s, so one settled elsewhere leaves
     // at once; the clock ticks with it for the 3 s a closed prompt stays.
@@ -169,6 +176,7 @@ fun InboxScreen(
             pollPrompts()
         }
     }
+    val shownRuns = Run.shown(runs, now)
     val open = decisions.filter { it.isOpen(now) }.sortedByDescending { it.createdAt }
     val answered = decisions.filterNot { it.isOpen(now) }.sortedByDescending { it.answeredAt ?: it.defaultAt }
     Screen("Inbox", modifier, subtitle = { NeedsYou(open.size) }) { padding ->
@@ -177,7 +185,8 @@ fun InboxScreen(
                 contentPadding = listPadding(padding),
                 verticalArrangement = Arrangement.spacedBy(Spacing.s3),
             ) {
-                if (shown.isNotEmpty() && promptActions != null) {
+                val showPrompts = shown.isNotEmpty() && promptActions != null
+                if (showPrompts && promptActions != null) {
                     item(key = "prompts") { PromptsHeader(promptActions.openLog, Modifier.animateItem()) }
                     itemsIndexed(shown, key = { _, it -> "p:${it.id}" }) { _, p ->
                         if (p.waiting(at)) {
@@ -186,7 +195,14 @@ fun InboxScreen(
                             ClosedPrompt(p, Modifier.animateItem())
                         }
                     }
-                    if (open.isNotEmpty()) item(key = "decisions") { Label("Decisions", Modifier.padding(top = Spacing.s4, start = Spacing.s1).animateItem()) }
+                }
+                if (shownRuns.isNotEmpty()) {
+                    val top = if (showPrompts) Spacing.s4 else 0.dp
+                    item(key = "runs") { Label("Runs", Modifier.padding(top = top, start = Spacing.s1).animateItem()) }
+                    itemsIndexed(shownRuns, key = { _, it -> "run/${it.id}" }) { _, it -> RunCard(it, now, Modifier.animateItem()) }
+                }
+                if ((showPrompts || shownRuns.isNotEmpty()) && open.isNotEmpty()) {
+                    item(key = "decisions") { Label("Decisions", Modifier.padding(top = Spacing.s4, start = Spacing.s1).animateItem()) }
                 }
                 itemsIndexed(open, key = { _, it -> it.id }) { _, it ->
                     OpenDecision(it, now, actions, replies, selected = it.id == selected, modifier = Modifier.animateItem())

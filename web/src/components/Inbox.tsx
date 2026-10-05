@@ -11,6 +11,7 @@ import { AnsweredDecision, AnsweredLine, OpenDecision, ordered } from "./Decisio
 import s from "./Inbox.module.css";
 import { Prompts } from "./Prompts";
 import { PushBanner } from "./PushBanner";
+import { Runs } from "./Runs";
 import ui from "./ui.module.css";
 
 // Where the side rail leaves room for a list beside the detail (Shell.module.css).
@@ -51,6 +52,7 @@ export function Inbox() {
       </header>
       <PushBanner />
       <Prompts />
+      <Runs />
       {inbox.rejected.length > 0 && (
         <p className={ui.error} role="status">
           {inbox.rejected.length === 1 ? "One decision" : `${inbox.rejected.length} decisions`}{" "}

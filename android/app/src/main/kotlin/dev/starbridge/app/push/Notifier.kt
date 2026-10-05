@@ -21,11 +21,19 @@ import dev.starbridge.app.data.Prefs
 import dev.starbridge.app.data.bitmap
 import dev.starbridge.app.data.place
 import dev.starbridge.app.data.Prompt
+import dev.starbridge.app.data.Run
+import dev.starbridge.app.protocol.RUN_STALE_MS
+import dev.starbridge.app.ui.elapsed
+import java.time.Duration
+import java.time.Instant
 
 /**
  * One notification per open decision. Its buttons are the options, the recommended one first,
  * and answer through [AnswerReceiver] without opening the app, from the lock screen too. A
  * decision without options gets a reply field instead.
+ *
+ * One notification per run: ongoing while it runs (a Live Update on Android 16 and later), then
+ * pass or fail.
  */
 class Notifier(private val context: Context, private val prefs: Prefs) : Alerts {
     private val manager = NotificationManagerCompat.from(context)
@@ -44,6 +52,11 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
         manager.createNotificationChannel(
             NotificationChannel(JOIN_CHANNEL, "Join requests", NotificationManager.IMPORTANCE_HIGH).apply {
                 description = "A browser or phone signed in to your account asks to join"
+            },
+        )
+        manager.createNotificationChannel(
+            NotificationChannel(RUNS, "Runs", NotificationManager.IMPORTANCE_DEFAULT).apply {
+                description = "Commands your agents run that your rules name, until they pass or fail"
             },
         )
     }
@@ -310,10 +323,70 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
         )
     }
 
+    /**
+     * Running: ongoing and silent, the time elapsed as a chronometer from the start, the progress
+     * as a bar and in the status bar chip. It times out when the machine goes quiet past
+     * RUN_STALE_MS. Ended: pass or fail with the duration, and it alerts once. Runs that ended
+     * more than [Run.SHOWN_AFTER] ago, or lost their machine, show nothing.
+     */
+    override fun run(run: Run) {
+        if (!allowed()) return
+        val now = Instant.now()
+        val state = run.state(now)
+        if (Run.shown(listOf(run), now).isEmpty() || state == Run.State.Lost) {
+            manager.cancel(RUNS, tag(run.id))
+            return
+        }
+        val open = PendingIntent.getActivity(
+            context,
+            tag(run.id),
+            Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+        val b = NotificationCompat.Builder(context, RUNS)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle(run.title)
+            .setSubText(run.source.machine)
+            .setContentIntent(open)
+            .setCategory(NotificationCompat.CATEGORY_PROGRESS)
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+            .setPublicVersion(
+                NotificationCompat.Builder(context, RUNS)
+                    .setSmallIcon(R.drawable.ic_notification)
+                    .setContentTitle("A run on ${run.source.machine}")
+                    .build(),
+            )
+        if (state == Run.State.Running) {
+            val p = run.progress
+            b.setContentText(listOfNotNull(p?.text, run.reason).joinToString(" · "))
+                .setOngoing(true)
+                .setRequestPromotedOngoing(true)
+                .setShowWhen(true)
+                .setWhen(run.startedAt.toEpochMilli())
+                .setUsesChronometer(true)
+                .setProgress(p?.total ?: 0, p?.done ?: 0, p == null)
+                .setSilent(true)
+                .setOnlyAlertOnce(true)
+                .setTimeoutAfter((RUN_STALE_MS - Duration.between(run.at, now).toMillis()).coerceAtLeast(1_000))
+            p?.let { b.setShortCriticalText(it.text) }
+        } else {
+            val took = elapsed(run.startedAt, run.endedAt ?: run.at)
+            val outcome = if (state == Run.State.Passed) "Passed in $took" else "Failed, exit ${run.exitCode}, after $took"
+            b.setContentText(outcome)
+                .setStyle(NotificationCompat.BigTextStyle().bigText("$outcome\n${run.reason}"))
+                .setShowWhen(true)
+                .setWhen((run.endedAt ?: run.at).toEpochMilli())
+                .setAutoCancel(true)
+        }
+        @Suppress("MissingPermission")
+        manager.notify(RUNS, tag(run.id), b.build())
+    }
+
     companion object {
         const val CHANNEL = "decisions"
         const val PROMPTS = "prompts"
         const val JOIN_CHANNEL = "joins"
+        const val RUNS = "runs"
 
         /** Wide enough for an expanded notification on any phone, small enough for its bitmap limit. */
         private const val PICTURE_EDGE = 1024

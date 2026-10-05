@@ -478,6 +478,20 @@ How it generalizes is open.
   `starbridge update` replaces script installs only and points brew and npm installs at their
   manager; `starbridge uninstall` removes the binary, and part 3 adds the service, plugins and
   config to it. Release downloads need the repo public.
+- 2026-10-05. Runs (#60, built): a run is one sealed `run` item that the machine
+  re-posts under its id; the server keeps the latest (`ITEM_KINDS` `updates`), at
+  most 500 per account, for a day after the last update, and pushes it to FCM and
+  UnifiedPush only. `starbridge run` posts the start, progress at most every 10 s,
+  a heartbeat every minute and the exit; devices treat a run quiet for 3 minutes as
+  lost. Its command's output goes through a pipe, not a terminal, so tools that
+  print progress only to a terminal show none. The rules file is `rules.md` in the
+  config directory. The web page and the Android Inbox show runs above the
+  decisions, finished ones for 30 minutes; Android adds a notification per run,
+  a Live Update on Android 16, whose end alerts once. Agents also wrap, unasked,
+  any command that blocks the owner or needs them at the machine (e2e tests that
+  take over the screen, keyboard or session, anything holding a device he uses);
+  his rules add to that default, never replace it, and the reason stays required
+  (owner). The plugin's SessionStart hook states that default in every session.
 - 2026-10-05. Local agent (#68, part 1): `starbridge agent` is the same binary, one per machine.
   It keeps the one answer long-poll and the quota timer, and serves the CLI and sessions over
   HTTP on a unix socket (PROTOCOL.md, "Local agent API"). Answers stay in the CLI's state file,

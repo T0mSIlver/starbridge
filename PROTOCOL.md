@@ -27,6 +27,7 @@ code cannot show: the HTTP API and the flows.
   | `permission` | machine | |
   | `permission-answer` | device | `permissionId`, a permission |
   | `settled` | machine | `itemId`, a permission or a decision the same machine posted |
+  | `run` | machine | |
 
 - A decision's images (PNG or JPEG) and links (HTTPS) are part of its signed body, so each box
   carries every image, and the 256 KB cap in Limits covers them once per device.
@@ -184,10 +185,12 @@ createdAt, expiresAt, version}`; `state` is `open`, `comparing`, `approved` or `
 | `GET /items/:id` | device, machine | one item, the caller's box only; push points here when the item exceeds 4 KB |
 | `GET /quota` | device | the latest quota item from each machine |
 
-Item ids are random, chosen by the sender. Cursors are opaque strings; without `after`, a list
-starts at the first item. An item with `re` marks the item it names answered, so every device
-moves it out of the open inbox: an answer its decision, a permission answer its permission, a
-settled notice the permission or decision it closes.
+Item ids are random, chosen by the sender. A machine re-posts a run under its id as it changes;
+the server replaces the earlier post and moves it past every cursor. Any other reused id, or a
+run id posted by another machine or as another kind, is 409 `duplicate-id`. Cursors are opaque strings;
+without `after`, a list starts at the first item. An item with `re` marks the item it names
+answered, so every device moves it out of the open inbox: an answer its decision, a permission
+answer its permission, a settled notice the permission or decision it closes.
 
 Lists return `{items: [{item, cursor, receivedAt, answeredAt?}], cursor}`, 100 at a time, where
 `item` holds only the caller's box and `answeredAt` is set on answered decisions and permissions.
@@ -227,9 +230,9 @@ sealed to once a device answers it; `{v, kind: "join", id}` to every device when
 A settled notice is pushed as a new item. FCM gets it as data field `p`; Web Push and UnifiedPush
 encrypt it per RFC 8291.
 
-Quota snapshots go to FCM and UnifiedPush only. Browsers expect every Web Push to show a
+Quota snapshots and runs go to FCM and UnifiedPush only. Browsers expect every Web Push to show a
 notification and drop a subscription that keeps showing none (Firefox after 16), so the web page
-fetches `GET /quota` when it opens instead. Decisions, permissions, settled notices and
+fetches `GET /quota` and `GET /items?kind=run` instead. Decisions, permissions, settled notices and
 `answered` still go to Web Push.
 
 The server checks that a push URL's host resolves only to public addresses, then connects to the
@@ -252,7 +255,8 @@ code below. Per-address limits count an IPv6 client as its /64.
 |---|---|
 | `POST /items` | 120 a minute per account |
 | Stored decisions, open or answered | 10000 per account: 409 `too-many-items` |
-| Stored boxes | 128 MB per account, of which machine-signed items may fill all but the last 8 MB: 409 `too-many-items`; 256 KB per machine-signed item and 32 KB per answer or permission answer: 413 `too-large` |
+| Stored runs | 500 per account: 409 `too-many-items` for a new run; updates still pass |
+| Stored boxes | 128 MB per account, of which machine-signed items may fill all but the last 8 MB: 409 `too-many-items`; 256 KB per machine-signed item, 32 KB per run update and 32 KB per answer or permission answer: 413 `too-large` |
 | `POST /directory` | 30 an hour per account |
 | Directory entries, revocations included | 200 per account: 409 `directory-full`; 8 KB per entry: 413 `too-large` |
 | Sessions | 50 per account; signing in past that ends the oldest, unpaired ones first |
@@ -266,9 +270,24 @@ code below. Per-address limits count an IPv6 client as its /64.
 
 Answers skip the decision count and may use the last 8 MB, so a full account can still answer. An hourly sweep drops answered
 decisions and their answers 7 days after the answer, permissions, permission answers and settled
-notices 7 days after they arrived, unanswered decisions and quota snapshots 30
+notices 7 days after they arrived, runs a day after their last update, unanswered decisions and quota snapshots 30
 days after they arrived, quota snapshots of revoked machines, and expired sessions. Clients that
 want a longer history keep their own copy.
+
+## Runs
+
+An agent wraps a command in `starbridge run --title --reason -- <command>` when it blocks the
+owner or needs them at the machine, or when one of the owner's rules names it (`cli/README.md`). The machine posts a `run` when the command starts,
+re-posts it as the output shows progress (at most every 10 s) and at least every minute, and a
+last time when the command exits.
+
+- `run` `{v, id, to, title, reason, source, startedAt, at, progress?, exit?}`: `at` is when the
+  machine sent this update, and devices keep the update with the latest `at`. `progress`
+  `{done, total, unit: "step" | "percent"}` is the last progress the output printed: `[3/7]` as
+  steps, `42%` or an OSC 9;4 progress sequence as a percent out of 100. `exit` `{code, at}` is
+  set once the command exited, `code` being 128 + n when signal n ended it.
+- A running run with no update for 3 minutes (`RUN_STALE_MS`) lost its machine: devices stop
+  showing it as running.
 
 ## Permission prompts
 
@@ -364,6 +383,7 @@ for an unknown route or decision, 502 when the server refused or failed (`detail
 | `POST /decisions` | `{input}` with `ask`'s fields (`question`, `default`, `options`, `project`, `session`, …); the client fills `project`, `session`, title and links from its own process → `{id}` |
 | `POST /answers/next` | `{id?, wait?}`: the answer to decision `id`, or the first answer no `wait` printed, marked printed → `{answer?, question?, defaultAt?}`; 404 `unknown-decision`. `starbridge wait` |
 | `POST /quota` | `{providers?}`: run CodexBar and post a snapshot now → `{snapshot}` |
+| `POST /runs` | `{run}`: seal one update of a `starbridge run` to every device and post it; `run` is `{id, title, reason, startedAt, at, progress?, exit?, project, session, sessionTitle?, links?}` → `{id}` |
 | `POST /sessions/:id/hello` | `{pid?, cwd?, title?}`: a session starts → `{version}` |
 | `POST /sessions/:id/bye` | the session ended; its session-scoped state goes |
 | `GET /sessions/:id/events?wait=<s>` | `{events: [{type, ack, line, decisionId?}]}`: what the session has not confirmed, held up to `wait` while there is nothing |
@@ -379,6 +399,4 @@ time). A client skips types it does not know. The agent keeps answers in the CLI
 so a restart loses nothing unconfirmed.
 
 Features plug in as `Feature`s (`cli/src/agent/server.ts`): routes, the events they hand
-sessions, the acks they take, `bye`, a background loop and their part of `status`. #60 adds
-`POST /runs`.
-
+sessions, the acks they take, `bye`, a background loop and their part of `status`.

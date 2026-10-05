@@ -9,6 +9,8 @@ interface Store {
     /** Permission prompts of the last week, waiting ones included (#57). */
     val prompts: StateFlow<List<Prompt>>
     val windows: StateFlow<List<QuotaWindow>>
+    /** Runs the server still holds: the latest update of each, for a day. */
+    val runs: StateFlow<List<Run>>
     val members: StateFlow<List<Member>>
     val approval: StateFlow<Approval>
     /** Open join requests from browsers and phones signed in to the account. */

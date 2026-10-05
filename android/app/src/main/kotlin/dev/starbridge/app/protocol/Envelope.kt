@@ -106,6 +106,7 @@ fun parseBody(kind: String, text: String): Any {
         "permission" -> parseJson(Permission.serializer(), json).also { it.check() }
         "permission-answer" -> parseJson(PermissionAnswer.serializer(), json).also { it.check() }
         "settled" -> parseJson(Settled.serializer(), json).also { it.check() }
+        "run" -> parseJson(Run.serializer(), json).also { it.check() }
         else -> throw ProtocolException("wrong-kind", kind)
     }
 }

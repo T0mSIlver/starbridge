@@ -131,7 +131,10 @@ export class LiveServer {
   }
 
   /** Items of `kind` as the phone lists them, opened and verified; `open=1` for open ones. */
-  async opened<K extends "decision" | "quota" | "permission" | "settled">(kind: K, query = "") {
+  async opened<K extends "decision" | "quota" | "permission" | "settled" | "run">(
+    kind: K,
+    query = "",
+  ) {
     const { items } = (await this.phone("GET", `/items?kind=${kind}${query}`)) as {
       items: Stored[];
     };
