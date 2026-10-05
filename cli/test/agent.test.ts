@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { LiveServer } from "@starbridge/server/test-support";
 import { PNG } from "pngjs";
 import type { SessionEvent, Status } from "../src/agent/api";
-import { AgentClient, AgentError } from "../src/agent/client";
+import { AgentClient, AgentError, Interrupted } from "../src/agent/client";
 import { makeAgent } from "../src/agent/main";
 import type { Agent } from "../src/agent/server";
 import { run } from "../src/cli";
@@ -350,4 +350,23 @@ test("once the agent posted the decision, a 426 on the wait never posts it again
     await new Promise<void>((r) => fake.close(() => r()));
   }
   expect(await server.opened("decision")).toEqual([]);
+});
+
+test("a call whose signal already aborted is interrupted without opening a request (#98)", async () => {
+  const errors: unknown[] = [];
+  const onError = (e: unknown) => errors.push(e);
+  process.on("uncaughtException", onError);
+  try {
+    const abort = new AbortController();
+    abort.abort();
+    const client = new AgentClient(join(tmpdir(), "starbridge-no-agent.sock"));
+    await expect(
+      client.call("POST", "/v1/permissions/x/wait", { wait: 1 }, 5_000, abort.signal),
+    ).rejects.toBeInstanceOf(Interrupted);
+    // A destroyed request reports its hang-up on a later tick.
+    await new Promise((r) => setTimeout(r, 50));
+    expect(errors).toEqual([]);
+  } finally {
+    process.off("uncaughtException", onError);
+  }
 });
