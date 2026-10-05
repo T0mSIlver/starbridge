@@ -1,10 +1,12 @@
 name: uptime
 
-# Checks starbridge.run every 5 minutes. On failure it opens one issue labelled `outage`, which
+# Checks starbridge.run every hour. On failure it opens one issue labelled `outage`, which
 # GitHub emails to the repository's watchers, and closes it with a comment once checks pass.
 on:
   schedule:
-    - cron: "*/5 * * * *"
+    # Hourly while the repository is private, where each run bills at least one Actions minute;
+    # switch to "*/5 * * * *" once it is public, where runs are free.
+    - cron: "17 * * * *"
   workflow_dispatch:
 
 concurrency:
