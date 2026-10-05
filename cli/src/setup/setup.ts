@@ -26,6 +26,16 @@ import {
   probeSet,
 } from "./codexbar";
 import {
+  codexSkill,
+  codexSkillDir,
+  hasCodex,
+  hasPi,
+  installCodexSkill,
+  installPiPackage,
+  PI_PACKAGE,
+  piPackage,
+} from "./harnesses";
+import {
   autoUpdate,
   enableAutoUpdate,
   hasClaude,
@@ -109,9 +119,13 @@ export async function setup(sys: Sys, opts: SetupOpts): Promise<number> {
   } else await serviceStep(sys, opts, JSON.stringify(ctx.store.agentConfig()) !== configBefore);
 
   if (opts.noPlugin) {
-    section(ctx, "Claude Code");
+    section(ctx, "Agents");
     ctx.out("Skipped (--no-plugin).");
-  } else await pluginStep(sys);
+  } else {
+    await pluginStep(sys);
+    await codexStep(sys);
+    await piStep(sys);
+  }
   await permissionStep(sys);
 
   section(ctx, "Check");
@@ -346,6 +360,52 @@ async function pluginStep(sys: Sys) {
       ctx.out(`Removed ${old.what}.`);
     } else ctx.out(`Kept ${old.what}: sessions may load Starbridge twice.`);
   }
+}
+
+/** The skill in Codex's skills folder, asked first, and updated when this CLI has another. */
+async function codexStep(sys: Sys) {
+  const { ctx, prompt } = sys;
+  if (!hasCodex(sys)) return;
+  section(ctx, "Codex");
+  const dir = codexSkillDir(sys);
+  const state = codexSkill(sys);
+  if (state === "current") {
+    ctx.out(`The starbridge skill is in ${dir}.`);
+    return;
+  }
+  const verb = state === "missing" ? "Install" : "Update";
+  if (await prompt.confirm(`${verb} the Starbridge skill for Codex in ${dir}?`, true)) {
+    try {
+      installCodexSkill(sys);
+      ctx.out(`${verb === "Install" ? "Installed" : "Updated"} ${dir}/SKILL.md.`);
+    } catch (e) {
+      ctx.out(`Could not write the skill: ${(e as Error).message}`);
+    }
+  } else ctx.out("Codex sessions won't know the skill: rerun setup to install it.");
+}
+
+/** The Starbridge Pi package: the skill, the rules and answers into the session. */
+async function piStep(sys: Sys) {
+  const { ctx, prompt } = sys;
+  if (!hasPi(sys)) return;
+  section(ctx, "Pi");
+  if (piPackage(sys)) {
+    ctx.out("The Starbridge Pi package is installed.");
+    return;
+  }
+  if (
+    await prompt.confirm(
+      `Install the Starbridge Pi package (the skill, and answers into the session)? This runs \`pi install ${PI_PACKAGE}\`.`,
+      true,
+    )
+  ) {
+    try {
+      await installPiPackage(sys);
+      ctx.out("Installed. Pi sessions load it when they next start.");
+    } catch (e) {
+      ctx.out(`Could not install it: ${(e as Error).message}`);
+    }
+  } else ctx.out(`Skipped: \`pi install ${PI_PACKAGE}\` installs it later.`);
 }
 
 /** Off unless asked: the Claude app already answers prompts for Remote Control sessions. */

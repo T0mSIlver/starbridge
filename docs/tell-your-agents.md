@@ -33,23 +33,19 @@ ends its turn.
 `authorizerChain` (in `~/.pi/agent/extensions/pi-permission-system/config.json`). Your devices can allow a call once or deny
 it; "Answer here" in Pi brings back its own prompt.
 
-Claude Code loads the Starbridge plugin, which brings the rules above, the
-skill and the hooks. Codex doesn't load plugins: copy the skill into
-`~/.codex/skills` so it knows how to write a question, and it runs the same
-`starbridge` commands.
+`starbridge setup` offers to install Starbridge in each agent it finds, and
+asks before each one:
 
-```bash
-mkdir -p ~/.codex/skills/starbridge
-curl -fsSL -o ~/.codex/skills/starbridge/SKILL.md \
-  https://raw.githubusercontent.com/T0mSIlver/starbridge/main/plugin/skills/starbridge/SKILL.md
-```
-
-Pi installs the Starbridge Pi package, which brings the skill, the rules and
-the extension that puts each answer into the session:
-
-```bash
-pi install git:github.com/T0mSIlver/starbridge
-```
+- Claude Code: the Starbridge plugin, which brings the rules above, the skill
+  and the hooks.
+- Codex: the skill, in `~/.codex/skills/starbridge` (or under `$CODEX_HOME`),
+  so it knows how to write a question. Codex doesn't load plugins, so it runs
+  the same `starbridge` commands without the rules: add the lines you want
+  below. A later setup offers to update the skill when the CLI carries a newer
+  one.
+- Pi: the Starbridge Pi package (`pi install
+  git:github.com/T0mSIlver/starbridge`), which brings the skill, the rules and
+  the extension that puts each answer into the session.
 
 ## Where the lines go
 

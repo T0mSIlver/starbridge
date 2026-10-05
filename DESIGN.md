@@ -478,6 +478,9 @@ a decision's context, a permission prompt's command and a session's name.
   middle, and "Open in Claude" or "Open in Codex" as text, with no logos.
 - An answered item goes to History, collapsed by default, as one line: the
   answer, the question, which device answered and when.
+- Find (the web rail's box) lists the matching open items, then "History · N"
+  with the matching answered ones, answers included. A matched word is bold
+  on `surface2`, never amber.
 - Destructive actions are neutral text buttons on the row; only the confirm
   button in their dialog is red (`bad`).
 - Copy inside the UI is labels and states only, never a sentence explaining

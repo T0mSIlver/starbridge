@@ -26,13 +26,14 @@ const HELP = `starbridge: post decisions to your devices, report runs, upload qu
                    [--no-quota] [--no-service] [--no-plugin]
       Set this machine up, or check and repair it: pair it, find or install CodexBar and pick
       the providers to upload, install the agent as a user service (systemd or launchd), install
-      the Claude Code plugins, and upload a first quota snapshot. Each step asks first; --yes
+      Starbridge in each agent found (the Claude Code plugins, the Codex skill, the Pi package;
+      --no-plugin skips them), and upload a first quota snapshot. Each step asks first; --yes
       takes every default, which installs CodexBar when it is missing, the plugins, and replaces
       a hand-written \`starbridge quota push\` unit and manual mod or skill installs.
 
   starbridge status
       Print the versions, the pairing, the agent and its service, the server, each provider, the
-      Claude Code plugins and the sessions the agent sees.
+      Claude Code plugins, the Codex skill, the Pi package and the sessions the agent sees.
 
   starbridge uninstall [--yes] [--purge]
       Remove the agent service, the Claude Code plugins and this binary, and ask your devices to revoke this

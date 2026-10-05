@@ -1031,6 +1031,15 @@ How it generalizes is open.
   with pi-permission-system 39.1.0: allowed from the web page, taken back and denied, and two
   parallel asks, one allowed from the web page and the other, whose dialog came next, at the
   keyboard; `config permissions on` added the link to the chain on a terminal.
+- 2026-10-06. Setup installs Starbridge in every agent it finds (#239). After the Claude Code
+  plugins, it offers the skill to Codex when `codex` is on the PATH, written to
+  `$CODEX_HOME/skills/starbridge/SKILL.md` (default `~/.codex`) from the copy the CLI carries,
+  so it needs no download from the repository and matches the CLI's version; a rerun offers to
+  update a skill that differs. It offers the Starbridge Pi package when `pi` is on the PATH
+  (`pi install git:github.com/T0mSIlver/starbridge`), unless Pi's settings list it already.
+  Each asks first, `--yes` takes the defaults (install), and `--no-plugin` skips all three.
+  `status` reports both, and `uninstall` removes the skill folder (only when it holds the
+  Starbridge skill) and the Pi package. The docs drop the curl step for Codex.
 - 2026-10-05. A blocked question shows by its look, not a state line (#191, owner's pick of
   proposal B, "Filled and hollow", from https://claude.ai/artifact/EMcUnTsGhyTsiCNujo4JT6). This
   replaces the "Waiting for you 1:12" tag of the #166 entry above. A question whose agent waits
@@ -1100,6 +1109,15 @@ How it generalizes is open.
   Below that it keeps today's 720 px column. Thumbnails on a row shrink with a narrowed list
   rather than running past its edge. The View button is an icon with the tooltip "View", and
   its menu drops "Remembered on this device", since the inbox's head is dense.
+- 2026-10-06. Find on the web searches History too (owner picked option 1 of
+  https://claude.ai/artifact/9ddJ2PwPrBc7KmQdeDVqDN). The rail's Find box and its `/` key stay;
+  while it holds a query, the list shows the matching open items in one feed, whatever the
+  grouping, then "History · N" with the matching answered items, History open or not. A
+  History item also matches by its answer. Matched words show bold on `surface2`, never in
+  amber; Escape in the box clears it. Android's search waits for the owner's pick.
+
+## Encryption, with existing libraries
+
 
 ## Encryption, with existing libraries
 
