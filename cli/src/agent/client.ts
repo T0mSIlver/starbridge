@@ -53,6 +53,9 @@ export class AgentClient {
   ): Promise<T> {
     const text = body === undefined ? undefined : JSON.stringify(body);
     return new Promise<T>((resolve, reject) => {
+      // Before any request exists: one destroyed before its error listener is attached emits
+      // "socket hang up" with nobody listening, which crashes the process (#98).
+      if (signal?.aborted) return reject(new Interrupted("interrupted"));
       const req = request(
         {
           socketPath: this.socket,
@@ -93,10 +96,6 @@ export class AgentClient {
           res.on("error", reject);
         },
       );
-      if (signal?.aborted) {
-        req.destroy();
-        return reject(new Interrupted("interrupted"));
-      }
       const onAbort = () => {
         req.destroy();
         reject(new Interrupted("interrupted"));
