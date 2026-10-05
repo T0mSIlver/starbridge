@@ -314,7 +314,7 @@ export async function runCommand(ctx: Ctx, opts: RunOpts): Promise<number> {
       project: source.project,
       session: source.session,
       ...(source.sessionTitle ? { sessionTitle: source.sessionTitle } : {}),
-      ...(source.links.length > 0 ? { links: source.links } : {}),
+      ...(source.sessionLinks.length > 0 ? { links: source.sessionLinks } : {}),
     },
     opts.post ?? makePoster(ctx),
     ctx,

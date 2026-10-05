@@ -71,7 +71,7 @@ class MainActivity : ComponentActivity() {
                     }
                 }
                 if (phase == Phase.Ready) {
-                    Main(decisions.count { it.open }, store.notice, store::dismissNotice, openDecision.receiveAsFlow())
+                    Main(decisions, store.notice, store::dismissNotice, openDecision.receiveAsFlow())
                     val asks by store.joinAsks.collectAsStateWithLifecycle()
                     val comparison by store.comparison.collectAsStateWithLifecycle()
                     JoinPrompt(asks, comparison, JoinActions(store::compareJoin, store::approveJoin, store::refuseJoin, store::closeComparison))

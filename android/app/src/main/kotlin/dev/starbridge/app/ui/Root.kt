@@ -55,6 +55,7 @@ import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.scene.Scene
 import androidx.navigation3.ui.NavDisplay
+import dev.starbridge.app.data.Decision
 import dev.starbridge.app.data.Phase
 import dev.starbridge.app.data.Run
 import dev.starbridge.app.ui.devices.DevicesScreen
@@ -63,6 +64,8 @@ import dev.starbridge.app.ui.inbox.DecisionActions
 import dev.starbridge.app.ui.inbox.DecisionScreen
 import dev.starbridge.app.ui.inbox.InboxScreen
 import dev.starbridge.app.ui.inbox.InboxViewModel
+import dev.starbridge.app.ui.inbox.Replies
+import dev.starbridge.app.ui.inbox.rememberDrafts
 import dev.starbridge.app.ui.inbox.PromptActions
 import dev.starbridge.app.ui.inbox.PromptLogScreen
 import dev.starbridge.app.ui.quotas.QuotasScreen
@@ -154,9 +157,13 @@ private fun suiteType(): NavigationSuiteType {
  */
 @OptIn(ExperimentalMaterial3AdaptiveApi::class)
 @Composable
-fun Main(openDecisions: Int, notice: StateFlow<String?>, dismiss: () -> Unit, openDecision: Flow<String>) {
+fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> Unit, openDecision: Flow<String>) {
     val backStack = rememberNavBackStack(InboxKey)
     val now = now()
+    // An answer-in decision stops waiting at its default time, so count against the ticking clock.
+    val openDecisions = decisions.count { it.isOpen(now) }
+    // Shared by a decision's card and its detail, which are separate entries.
+    val drafts = rememberDrafts()
     val host = Notices(notice, dismiss)
     val listDetail = rememberListDetailSceneStrategy<NavKey>()
     val twoPane = calculatePaneScaffoldDirective(currentWindowAdaptiveInfo()).maxHorizontalPartitions > 1
@@ -217,6 +224,7 @@ fun Main(openDecisions: Int, notice: StateFlow<String?>, dismiss: () -> Unit, op
                     ) {
                         val vm: InboxViewModel = hiltViewModel()
                         val decisions by vm.decisions.collectAsStateWithLifecycle()
+                        val sending by vm.sending.collectAsStateWithLifecycle()
                         val prompts by vm.prompts.collectAsStateWithLifecycle()
                         val runs by vm.runs.collectAsStateWithLifecycle()
                         val selected = (backStack.lastOrNull() as? DecisionKey)?.id
@@ -229,6 +237,7 @@ fun Main(openDecisions: Int, notice: StateFlow<String?>, dismiss: () -> Unit, op
                             }),
                             selected = selected,
                             refresh = refresh(vm::refresh),
+                            replies = Replies(drafts, sending),
                             prompts = prompts,
                             promptActions = PromptActions(answer = vm::answerPrompt, openLog = { backStack.add(PromptLogKey) }),
                             pollPrompts = vm::refreshPrompts,
@@ -243,11 +252,13 @@ fun Main(openDecisions: Int, notice: StateFlow<String?>, dismiss: () -> Unit, op
                     entry<DecisionKey>(metadata = ListDetailSceneStrategy.detailPane() + motion.decision) { key ->
                         val vm: InboxViewModel = hiltViewModel()
                         val decisions by vm.decisions.collectAsStateWithLifecycle()
+                        val sending by vm.sending.collectAsStateWithLifecycle()
                         DecisionScreen(
                             decisions.find { it.id == key.id },
                             now,
                             onAnswer = vm::answer,
                             onBack = if (twoPane) null else ({ backStack.removeAt(backStack.lastIndex) }),
+                            replies = Replies(drafts, sending),
                         )
                     }
                     entry<QuotasKey> {

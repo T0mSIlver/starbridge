@@ -33,6 +33,9 @@ have answered costs the owner an interruption.
 | recommended | `--recommended` | The option you would pick. It shows first. Defaults to the first option, so list your pick first. |
 | default | `--default` | What you will do if nobody answers. Required. |
 | default time | `--default-at` | When you apply the default: `30m`, `2h`, or an ISO time. Always set it. |
+| images | `--image`, up to 4 times | PNG or JPEG files the owner should see to decide: two mockups to compare, the failing screen, a chart. The CLI scales them down to fit. |
+| links | `--link`, up to 4 times | HTTPS pages to open, such as a claude.ai artifact you built. Context only: the owner still answers in Starbridge. The Claude app opens them on the phone. |
+| answer in | `--answer-in`, once | The page where the owner answers instead, such as an artifact whose buttons send the pick to this session. Takes no `--option`. |
 
 Checks before posting:
 
@@ -41,6 +44,11 @@ Checks before posting:
 - Does the context say what each option changes? "Merge: ships tonight's
   release with the fix. Wait: the release goes out without it."
 - Is the default something you will really do at that time?
+
+Show rather than describe when the choice is visual: attach the screenshots
+or mockups, one per option, in the order of the options, and say in the
+context which image is which. An image costs the owner a glance; a paragraph
+describing a layout costs them a guess.
 
 Example:
 
@@ -52,12 +60,46 @@ starbridge ask \
   --default "Merge" --default-at 2h
 ```
 
+With images and an artifact:
+
+```bash
+starbridge ask \
+  --question "Ship the compact or the roomy settings screen?" \
+  --context "First image: roomy, fits 6 rows and matches the inbox. Second: compact, fits 9. Try both in the artifact." \
+  --option "Roomy" --option "Compact" \
+  --image shots/roomy.png --image shots/compact.png \
+  --link https://claude.ai/public/artifacts/0b3f0e7c \
+  --default "Roomy" --default-at 4h
+```
+
 It prints the decision id, such as `d_Xk3…`. The CLI adds this session's
 title and its Remote Control and Desktop links on its own, so the owner can
-open the session from the decision; `--session-title` and `--link` override
-them. Long context goes in a file:
+open the session from the decision; `--session-title` and `--session-link`
+override them. Long context goes in a file:
 `--context-file notes.md`, or `--json decision.json` with the fields
-`question`, `context`, `options`, `recommended`, `default` and `defaultAt`.
+`question`, `context`, `options`, `recommended`, `default`, `defaultAt`,
+`images` (file paths, or `{path, alt}`) and `links` (URLs, or `{url, title}`).
+
+## One question, one place to answer it
+
+An artifact can have buttons that send a message to this session. When yours
+does, the owner answers there, so post the decision with `--answer-in` and
+no options: Starbridge shows only a button that opens the page. When the
+artifact is only something to look at, link it with `--link` and keep the
+options in Starbridge. Never put the same question on both: the owner would
+answer it twice, or answer one surface and leave the other open.
+
+When the artifact's message arrives, close the decision so it leaves the
+owner's inbox, then act on the answer:
+
+```bash
+starbridge settle d_Xk3…
+```
+
+`settle` also withdraws a decision you no longer need (`--outcome
+withdrawn`), for example after the owner answered in chat. If nothing came
+from the artifact by the default time, the decision leaves the inbox on its
+own and the mod tells you to apply your default.
 
 ## After you post: keep working
 

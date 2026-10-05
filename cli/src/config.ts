@@ -54,6 +54,10 @@ export interface State {
       default?: string;
       /** Set once the mod confirmed it told the session the default time passed. */
       defaulted?: boolean;
+      /** Answered on its `answerIn` page instead of Starbridge. */
+      answerIn?: boolean;
+      /** Closed with `settle`: no answer and no default-time notice will follow. */
+      settled?: boolean;
       cursor?: string;
       /** The Claude Code session that asked; the mod delivers the answer there only. */
       session?: string;

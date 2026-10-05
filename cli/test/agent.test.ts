@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, expect, setDefaultTimeout, test } from "bun:test";
-import { statSync } from "node:fs";
+import { mkdtempSync, statSync, writeFileSync } from "node:fs";
 import { createServer, type IncomingMessage, request } from "node:http";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { LiveServer } from "@starbridge/server/test-support";
+import { PNG } from "pngjs";
 import type { SessionEvent, Status } from "../src/agent/api";
 import { AgentClient, AgentError } from "../src/agent/client";
 import { makeAgent } from "../src/agent/main";
@@ -63,6 +65,21 @@ async function ask(c: TestCtx, ...extra: string[]): Promise<string> {
   if (code !== 0) throw new Error(c.errors.join("\n"));
   return c.lines[before] as string;
 }
+
+test("an image path relative to the asking directory reaches the agent whole", async () => {
+  const { socket } = await machine();
+  const dir = mkdtempSync(join(tmpdir(), "starbridge-ask-"));
+  writeFileSync(join(dir, "shot.png"), PNG.sync.write(new PNG({ width: 4, height: 2 })));
+  const cwd = process.cwd();
+  process.chdir(dir);
+  try {
+    await ask(client(socket), "--project", "p", "--image", "shot.png");
+  } finally {
+    process.chdir(cwd);
+  }
+  const [d] = await server.opened("decision");
+  expect(d?.images).toMatchObject([{ type: "image/png", width: 4, height: 2 }]);
+});
 
 test("two sessions each get only their own answers, held until they arrive, until acked", async () => {
   const { socket } = await machine();

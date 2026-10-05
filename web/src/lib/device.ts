@@ -727,7 +727,15 @@ function expectKind<K extends SealedItem["kind"]>(item: SealedItem, kind: K) {
   return item as SealedItem & { kind: K };
 }
 
-async function openDecision(ctx: Ctx, s: Stored, sent: store.SentAnswers): Promise<InboxItem> {
+/** How each item a settled notice closed was closed, by item id, with the time it closed. */
+type Closings = Map<string, { outcome: Settled["outcome"]; at: string }>;
+
+async function openDecision(
+  ctx: Ctx,
+  s: Stored,
+  sent: store.SentAnswers,
+  closings: Closings = new Map(),
+): Promise<InboxItem> {
   expectKind(s.item, "decision");
   const { signer: machine, body } = await openAsync(
     s.item as SealedItem & { kind: "decision" },
@@ -735,10 +743,15 @@ async function openDecision(ctx: Ctx, s: Stored, sent: store.SentAnswers): Promi
     ctx.dir,
   );
   const reply = sent[body.id];
+  // The notice that closed it arrived in the same write, so it carries the same time; a later
+  // one, after a device's answer, closed nothing.
+  const closing = closings.get(body.id);
+  const settled = closing && closing.at === s.answeredAt ? closing.outcome : undefined;
   return {
     decision: body as Decision,
     machine,
     ...(s.answeredAt ? { answeredAt: s.answeredAt } : {}),
+    ...(settled ? { settled } : {}),
     ...(reply
       ? { reply: "choice" in reply ? { choice: reply.choice } : { text: reply.text } }
       : {}),
@@ -777,9 +790,19 @@ export async function loadInbox(ctx: Ctx, inbox: Inbox = { items: [], rejected: 
   );
   const rejected = [...inbox.rejected];
   const retry: Stored[] = [];
+  // A settled notice lists before the decision it closed, which moved past it.
+  const closings: Closings = new Map();
   const take = async (s: Stored, again: boolean) => {
+    if (s.item.kind === "settled") {
+      // Only tells how a decision closed: one that fails to open costs that and nothing else.
+      try {
+        const { body } = await openAsync(expectKind(s.item, "settled"), me(ctx), ctx.dir);
+        closings.set(body.itemId, { outcome: body.outcome, at: s.receivedAt });
+      } catch {}
+      return;
+    }
     try {
-      const item = await openDecision(ctx, s, sent);
+      const item = await openDecision(ctx, s, sent, closings);
       byId.set(item.decision.id, item);
     } catch (e) {
       // A revoked machine's old decisions no longer verify; nothing to show or warn about.
@@ -795,7 +818,7 @@ export async function loadInbox(ctx: Ctx, inbox: Inbox = { items: [], rejected: 
   for (const s of inbox.retry ?? []) await take(s, true);
   let cursor = inbox.cursor;
   for (;;) {
-    const page = await api.items("decision", cursor);
+    const page = await api.items("decision,settled", cursor);
     for (const s of page.items) await take(s, false);
     cursor = page.cursor;
     if (page.items.length < 100) break;

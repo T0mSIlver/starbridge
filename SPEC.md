@@ -502,6 +502,23 @@ How it generalizes is open.
   names (`agent.json`, written by setup, or flags), never a path a client sends. No uid check
   on the socket's peer: neither Bun nor Node exposes `SO_PEERCRED`; the 0700 directory and 0600
   socket keep other users out.
+- 2026-10-05. Images and links on a decision (#62): optional `images` (at
+  most 4, PNG or JPEG, never SVG) and `links` (at most 4, HTTPS) in the
+  signed body, so the server needs no change. `starbridge ask --image` scales
+  each image down until the sealed decision fits the 256 KB per-decision cap;
+  `--link` takes a URL, and the session's own links moved to
+  `--session-link`. Android opens a claude.ai link in the Claude app
+  (`com.anthropic.claude`) when that app takes it, else in the browser, and
+  uses the first image as the notification's big picture.
+- 2026-10-05. One question has one answer surface (owner, #62). A Claude
+  artifact's button can message the agent (the Needs You page does), so a
+  decision's links are context only, and a decision with `answerIn` is
+  answered on that page: no options, a single "Answer in the artifact"
+  button, and it closes when the agent runs `starbridge settle` (a `settled`
+  notice, shared with permission prompts, #57) or at its default time. Both
+  at once has no legitimate case, so the schema refuses `answerIn` beside
+  options. `settle --outcome withdrawn` also closes a decision the agent no
+  longer needs.
 - 2026-10-05. Setup (#68, part 3): `setup`, `status` and `uninstall` live in `cli/src/setup/`.
   Setup pins CodexBar 0.72.0 and the SHA-256 of each CLI tarball. On Linux it takes the static
   musl build where the glibc one would not start: on musl, and where `libcurl.so.4` is missing,
@@ -878,3 +895,12 @@ goes in git.
   `process.spawn` streams only the mod's own children. So #60 times agent
   commands from the mod with no wrapper, and reads progress from output only
   under `starbridge run`.
+- 2026-10-05: image budget (#62). Each box carries the whole body, so an
+  image byte costs about (4/3)² bytes per device: base64url in the body, then
+  base64url of the sealed envelope. With the 256 KB cap, the images of one
+  decision get about 140 KB raw with one device, 70 KB with two and 47 KB
+  with three. The CLI's pure-JS JPEG encoder fits a 1233x2673 phone screenshot
+  in 72 KB at 515x1117 and in 20 KB at 272x589, in under 0.1 s. A shared
+  ciphertext encrypted once with a key in each box would free the per-device
+  cost, at the price of a new item field and storage on the server; not
+  needed while the owner pairs two or three devices.

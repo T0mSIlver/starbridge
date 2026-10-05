@@ -1,8 +1,7 @@
 package dev.starbridge.app.ui.inbox
 
-import android.content.Intent
-import android.net.Uri
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.scaleIn
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
@@ -33,6 +32,8 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.automirrored.rounded.Send
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ButtonGroup
 import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.DropdownMenuItem
@@ -60,7 +61,10 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.compose.runtime.setValue
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.ui.Alignment
@@ -86,10 +90,13 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.starbridge.app.data.Decision
+import dev.starbridge.app.data.Link
+import dev.starbridge.app.data.place
 import dev.starbridge.app.data.Prompt
 import dev.starbridge.app.data.Run
 import dev.starbridge.app.data.Source
 import dev.starbridge.app.data.Store
+import dev.starbridge.app.data.openLink
 import dev.starbridge.app.ui.Beacon
 import dev.starbridge.app.ui.Label
 import dev.starbridge.app.ui.Panel
@@ -97,7 +104,7 @@ import dev.starbridge.app.ui.Refresh
 import dev.starbridge.app.ui.Refreshable
 import dev.starbridge.app.ui.Screen
 import dev.starbridge.app.ui.ago
-import dev.starbridge.app.ui.clock
+import dev.starbridge.app.ui.moment
 import dev.starbridge.app.ui.fieldColors
 import dev.starbridge.app.ui.listPadding
 import dev.starbridge.app.ui.theme.Radius
@@ -111,6 +118,7 @@ import javax.inject.Inject
 @HiltViewModel
 class InboxViewModel @Inject constructor(private val store: Store) : ViewModel() {
     val decisions = store.decisions
+    val sending = store.sending
     val prompts = store.prompts
     val runs = store.runs
     fun answerPrompt(id: String, allow: Boolean, scope: String, message: String?) = store.answerPrompt(id, allow, scope, message)
@@ -121,6 +129,21 @@ class InboxViewModel @Inject constructor(private val store: Store) : ViewModel()
 
 /** What a decision card can do: answer with an option or text, or open the full decision. */
 class DecisionActions(val answer: (id: String, choice: String?, text: String?) -> Unit, val open: (String) -> Unit)
+
+/**
+ * What a decision's card and its detail share while the owner answers: the reply drafts, by
+ * decision id, and the answers going out, which lock the decision until the server replies.
+ */
+class Replies(val drafts: SnapshotStateMap<String, String>, val sending: Map<String, String>)
+
+/** Reply drafts that survive rotation and process death; one map serves the card and the detail. */
+@Composable
+fun rememberDrafts(): SnapshotStateMap<String, String> = rememberSaveable(
+    saver = listSaver(
+        save = { it.flatMap { (id, text) -> listOf(id, text) } },
+        restore = { saved -> mutableStateMapOf<String, String>().apply { saved.chunked(2).forEach { (id, text) -> put(id, text) } } },
+    ),
+) { mutableStateMapOf() }
 
 /**
  * Runs on top while they run and for a while after; then open decisions, newest on top; answered
@@ -134,6 +157,7 @@ fun InboxScreen(
     modifier: Modifier = Modifier,
     selected: String? = null,
     refresh: Refresh? = null,
+    replies: Replies = Replies(rememberDrafts(), emptyMap()),
     prompts: List<Prompt> = emptyList(),
     promptActions: PromptActions? = null,
     pollPrompts: () -> Unit = {},
@@ -153,8 +177,8 @@ fun InboxScreen(
         }
     }
     val shownRuns = Run.shown(runs, now)
-    val open = decisions.filter { it.open }.sortedByDescending { it.createdAt }
-    val answered = decisions.filterNot { it.open }.sortedByDescending { it.answeredAt }
+    val open = decisions.filter { it.isOpen(now) }.sortedByDescending { it.createdAt }
+    val answered = decisions.filterNot { it.isOpen(now) }.sortedByDescending { it.answeredAt ?: it.defaultAt }
     Screen("Inbox", modifier, subtitle = { NeedsYou(open.size) }) { padding ->
         Refreshable(refresh) {
             LazyColumn(
@@ -181,7 +205,7 @@ fun InboxScreen(
                     item(key = "decisions") { Label("Decisions", Modifier.padding(top = Spacing.s4, start = Spacing.s1).animateItem()) }
                 }
                 itemsIndexed(open, key = { _, it -> it.id }) { _, it ->
-                    OpenDecision(it, now, actions, selected = it.id == selected, modifier = Modifier.animateItem())
+                    OpenDecision(it, now, actions, replies, selected = it.id == selected, modifier = Modifier.animateItem())
                 }
                 if (answered.isNotEmpty()) {
                     item(key = "answered") { Label("Answered", Modifier.padding(top = Spacing.s4, start = Spacing.s1).animateItem()) }
@@ -236,7 +260,7 @@ private fun Source(decision: Decision, now: Instant, revealable: Boolean = false
         Modifier
     }
     Row(reveal, verticalAlignment = Alignment.CenterVertically) {
-        if (decision.open) {
+        if (decision.isOpen(now)) {
             Beacon()
             Spacer(Modifier.width(Spacing.s2))
         }
@@ -255,14 +279,14 @@ private fun Source(decision: Decision, now: Instant, revealable: Boolean = false
 
 /**
  * Opens the session that asked: claude.ai/code links go to the Claude app when it is installed,
- * else the browser. Desktop links are for a computer and stay hidden here.
+ * else the browser (openLink). Desktop links are for a computer and stay hidden here.
  */
 @Composable
 private fun SessionLinks(source: Source) {
     val context = LocalContext.current
     source.links.filter { it.kind != "desktop" }.forEach { link ->
         TextButton(
-            onClick = { runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(link.url))) } },
+            onClick = { openLink(context, link.url) },
             modifier = Modifier.heightIn(min = Sizes.tap),
         ) {
             Icon(Icons.AutoMirrored.Rounded.OpenInNew, contentDescription = null, modifier = Modifier.size(Spacing.s5))
@@ -272,14 +296,17 @@ private fun SessionLinks(source: Source) {
     }
 }
 
-/** "If nobody answers: Waits until tonight, at 22:00", the default in the text colour. */
+/**
+ * "If nobody answers: Waits until tonight, at 22:00", the default in the text colour; a default
+ * on another day says which.
+ */
 @Composable
-private fun Fallback(decision: Decision) {
+private fun Fallback(decision: Decision, now: Instant) {
     Text(
         buildAnnotatedString {
             append("If nobody answers: ")
             withStyle(SpanStyle(color = MaterialTheme.colorScheme.onSurface)) { append(decision.default) }
-            decision.defaultAt?.let { append(", at ${clock(it)}") }
+            decision.defaultAt?.let { append(", ${moment(it, now)}") }
         },
         style = StarbridgeTheme.type.small,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -287,7 +314,7 @@ private fun Fallback(decision: Decision) {
 }
 
 @Composable
-private fun OpenDecision(decision: Decision, now: Instant, actions: DecisionActions, selected: Boolean, modifier: Modifier = Modifier) {
+private fun OpenDecision(decision: Decision, now: Instant, actions: DecisionActions, replies: Replies, selected: Boolean, modifier: Modifier = Modifier) {
     // On wide screens the card shown in the detail pane steps up a surface.
     Panel(modifier.fillMaxWidth(), color = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainer) {
         Column(
@@ -299,25 +326,34 @@ private fun OpenDecision(decision: Decision, now: Instant, actions: DecisionActi
             if (decision.context.isNotBlank()) {
                 Text(plain(decision.context), style = StarbridgeTheme.type.body, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 3, overflow = TextOverflow.Ellipsis)
             }
+            Images(decision.images, maxHeight = Sizes.media / 2, modifier = Modifier.padding(top = Spacing.s2))
         }
+        Links(decision.links, Modifier.padding(top = Spacing.s2))
         Spacer(Modifier.padding(top = Spacing.s4))
-        Answer(decision, actions.answer)
+        Answer(decision, actions.answer, replies)
         Spacer(Modifier.padding(top = Spacing.s3))
-        Fallback(decision)
+        Fallback(decision, now)
     }
 }
 
-/** The options as a connected button group, or a reply field when there are none. */
+/**
+ * The options as a connected button group, or a reply field when there are none; or, for a
+ * decision answered on another page, the one button that opens it.
+ */
 @Composable
-private fun Answer(decision: Decision, answer: (String, String?, String?) -> Unit) {
+private fun Answer(decision: Decision, answer: (String, String?, String?) -> Unit, replies: Replies) {
     val haptics = LocalHapticFeedback.current
-    if (decision.options.isEmpty()) {
-        FreeText {
+    val page = decision.answerIn
+    val sending = replies.sending[decision.id]
+    if (page != null) {
+        AnswerElsewhere(page)
+    } else if (decision.options.isEmpty()) {
+        FreeText(replies.drafts[decision.id].orEmpty(), { replies.drafts[decision.id] = it }, sending = sending != null) {
             haptics.performHapticFeedback(HapticFeedbackType.Confirm)
             answer(decision.id, null, it)
         }
     } else {
-        Options(decision) {
+        Options(decision, sending) {
             haptics.performHapticFeedback(HapticFeedbackType.Confirm)
             answer(decision.id, it, null)
         }
@@ -328,27 +364,15 @@ private fun Answer(decision: Decision, answer: (String, String?, String?) -> Uni
  * A connected button group (Material 3 Expressive). The recommended option leads, filled in
  * amber, the only filled button; the others are outlined. Side by side when every label fits on
  * one line, each as wide as its label needs; else stacked, since options run up to 100
- * characters. The tapped option takes its checked shape while the answer goes out.
+ * characters. The option [sending] names takes its checked shape while the answer goes out, and
+ * taps are dropped until the server replies. If it fails, the options take taps again.
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun Options(decision: Decision, onAnswer: (String) -> Unit) {
+fun Options(decision: Decision, sending: String?, onAnswer: (String) -> Unit) {
     val ordered = decision.options.sortedByDescending { it == decision.recommended }
-    var chosen by remember(decision.id) { mutableStateOf<String?>(null) }
-    // A second tap while the answer goes out is dropped. If it fails, the decision stays open
-    // and the options take taps again.
-    LaunchedEffect(chosen) {
-        if (chosen != null) {
-            delay(RETRY_AFTER_MS)
-            chosen = null
-        }
-    }
-    val pick = { option: String ->
-        if (chosen == null) {
-            chosen = option
-            onAnswer(option)
-        }
-    }
+    val chosen = sending
+    val pick = { option: String -> if (chosen == null) onAnswer(option) }
     val measurer = rememberTextMeasurer()
     val style = StarbridgeTheme.type.action
     val density = LocalDensity.current
@@ -401,8 +425,6 @@ fun Options(decision: Decision, onAnswer: (String) -> Unit) {
         }
     }
 }
-
-private const val RETRY_AFTER_MS = 3_000L
 
 /** An option's padding on each side of its label. */
 private val optionPadding = Spacing.s4
@@ -471,13 +493,13 @@ private fun stacked(index: Int, count: Int): ToggleButtonShapes {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun FreeText(onAnswer: (String) -> Unit) {
-    var text by rememberSaveable { mutableStateOf("") }
-    val send = { if (text.isNotBlank()) onAnswer(text.trim()) }
+private fun FreeText(text: String, onText: (String) -> Unit, sending: Boolean, onAnswer: (String) -> Unit) {
+    val send = { if (text.isNotBlank() && !sending) onAnswer(text.trim()) }
     Row(verticalAlignment = Alignment.CenterVertically) {
         TextField(
             value = text,
-            onValueChange = { text = it.take(4000) },
+            onValueChange = { onText(it.take(4000)) },
+            enabled = !sending,
             placeholder = { Text("Your answer") },
             textStyle = StarbridgeTheme.type.body,
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
@@ -486,26 +508,79 @@ private fun FreeText(onAnswer: (String) -> Unit) {
             modifier = Modifier.weight(1f),
         )
         Spacer(Modifier.width(Spacing.s2))
-        FilledIconButton(onClick = send, enabled = text.isNotBlank(), modifier = Modifier.size(Sizes.tap)) {
+        FilledIconButton(onClick = send, enabled = text.isNotBlank() && !sending, modifier = Modifier.size(Sizes.tap)) {
             Icon(Icons.AutoMirrored.Rounded.Send, contentDescription = "Send")
         }
     }
 }
 
-/** Who answered: this phone with its answer, or another device. */
-private fun answeredBy(decision: Decision) = if (decision.answer != null) "This phone" else "Another device"
+/**
+ * The owner answers on that page, never here: the decision's only action, filled in amber
+ * because it is what needs the owner.
+ */
+@Composable
+private fun AnswerElsewhere(page: Link) {
+    val context = LocalContext.current
+    val colors = StarbridgeTheme.colors
+    Button(
+        onClick = { openLink(context, page.url) },
+        colors = ButtonDefaults.buttonColors(containerColor = colors.accent, contentColor = colors.onAccent),
+        modifier = Modifier.fillMaxWidth().heightIn(min = Sizes.tap),
+    ) {
+        Icon(Icons.AutoMirrored.Rounded.OpenInNew, contentDescription = null, modifier = Modifier.size(Spacing.s5))
+        Spacer(Modifier.width(Spacing.s2))
+        Text("Answer in ${page.place()}", style = StarbridgeTheme.type.action, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
 
-/** An answered decision in one line: the answer, the question, which device answered and when. */
+/** The answer, or how a decision answered on another page closed. */
+private fun outcome(decision: Decision, now: Instant) = decision.answer ?: when {
+    decision.settled == "withdrawn" -> "Withdrawn"
+    decision.lapsed(now) -> "No answer by its default time"
+    decision.answerIn != null -> "Answered in ${decision.answerIn.place()}"
+    else -> "Answered"
+}
+
+/** Who closed it: this phone with its answer, the agent (withdrawn, or for another page), or another device. */
+private fun answeredBy(decision: Decision) = when {
+    decision.answer != null -> "This phone"
+    decision.settled != null || decision.answerIn != null -> "The agent"
+    else -> "Another device"
+}
+
+/**
+ * An answered decision in one line: the answer, the question, which device answered and when.
+ * With large text, who and when go on a second line, so they never crowd out the answer.
+ */
 @Composable
 private fun AnsweredLine(decision: Decision, now: Instant, onOpen: () -> Unit) {
-    val colors = StarbridgeTheme.colors
-    Row(
-        Modifier.fillMaxWidth().heightIn(min = Sizes.tap).clickable(onClickLabel = "Read the whole decision", onClick = onOpen).padding(horizontal = Spacing.s1, vertical = Spacing.s3),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
+    val modifier = Modifier.fillMaxWidth().heightIn(min = Sizes.tap).clickable(onClickLabel = "Read the whole decision", onClick = onOpen).padding(horizontal = Spacing.s1, vertical = Spacing.s3)
+    val at = decision.answeredAt?.let { " · ${ago(now, it)}" }.orEmpty()
+    val by: @Composable (Int) -> Unit = { lines ->
+        Text(answeredBy(decision) + at, style = StarbridgeTheme.type.machine, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = lines, overflow = TextOverflow.Ellipsis)
+    }
+    if (LocalDensity.current.fontScale > LARGE_TEXT) {
+        Column(modifier, verticalArrangement = Arrangement.spacedBy(Spacing.s1)) {
+            AnsweredText(decision, now, Modifier)
+            by(2)
+        }
+    } else {
+        Row(modifier, verticalAlignment = Alignment.CenterVertically) {
+            AnsweredText(decision, now, Modifier.weight(1f))
+            Spacer(Modifier.width(Spacing.s3))
+            by(1)
+        }
+    }
+}
+
+/** Past this font scale, an answered line's who and when move below it. */
+private const val LARGE_TEXT = 1.3f
+
+@Composable
+private fun AnsweredText(decision: Decision, now: Instant, modifier: Modifier) {
+    Text(
             buildAnnotatedString {
-                withStyle(SpanStyle(color = MaterialTheme.colorScheme.onSurface, fontWeight = StarbridgeTheme.type.label.fontWeight)) { append(decision.answer ?: "Answered") }
+                withStyle(SpanStyle(color = MaterialTheme.colorScheme.onSurface, fontWeight = StarbridgeTheme.type.label.fontWeight)) { append(outcome(decision, now)) }
                 append("  ")
                 append(decision.question)
             },
@@ -513,27 +588,25 @@ private fun AnsweredLine(decision: Decision, now: Instant, onOpen: () -> Unit) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f),
+            modifier = modifier,
         )
-        Spacer(Modifier.width(Spacing.s3))
-        val at = decision.answeredAt?.let { " · ${ago(now, it)}" }.orEmpty()
-        Text(answeredBy(decision) + at, style = StarbridgeTheme.type.machine, color = colors.fg3, maxLines = 1)
-    }
 }
 
+/** How it closed. With [arrived], the answer just landed and the check springs in. */
 @Composable
-private fun Outcome(decision: Decision, now: Instant) {
+private fun Outcome(decision: Decision, now: Instant, arrived: Boolean) {
     val colors = StarbridgeTheme.colors
+    val shown = remember { MutableTransitionState(!arrived).apply { targetState = true } }
     Row(verticalAlignment = Alignment.CenterVertically) {
-        // The check springs in when the answer lands (the theme's expressive motion scheme).
-        AnimatedVisibility(visible = true, enter = scaleIn(MaterialTheme.motionScheme.fastSpatialSpec())) {
+        // The theme's expressive motion scheme.
+        AnimatedVisibility(visibleState = shown, enter = scaleIn(MaterialTheme.motionScheme.fastSpatialSpec())) {
             Icon(Icons.Rounded.Check, contentDescription = null, tint = colors.ok, modifier = Modifier.size(Spacing.s5))
         }
         Spacer(Modifier.width(Spacing.s2))
         val at = decision.answeredAt?.let { " · ${ago(now, it)}" }.orEmpty()
         Text(
             buildAnnotatedString {
-                withStyle(SpanStyle(color = MaterialTheme.colorScheme.onSurface)) { append(decision.answer ?: "Answered") }
+                withStyle(SpanStyle(color = MaterialTheme.colorScheme.onSurface)) { append(outcome(decision, now)) }
                 append(" · ${answeredBy(decision)}$at")
             },
             style = StarbridgeTheme.type.body,
@@ -548,14 +621,22 @@ private fun Outcome(decision: Decision, now: Instant) {
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DecisionScreen(decision: Decision?, now: Instant, onAnswer: (String, String?, String?) -> Unit, modifier: Modifier = Modifier, onBack: (() -> Unit)? = null) {
-    val colors = StarbridgeTheme.colors
+fun DecisionScreen(
+    decision: Decision?,
+    now: Instant,
+    onAnswer: (String, String?, String?) -> Unit,
+    modifier: Modifier = Modifier,
+    onBack: (() -> Unit)? = null,
+    replies: Replies = Replies(rememberDrafts(), emptyMap()),
+) {
     if (decision == null) {
         Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text("Pick a decision to read it in full.", style = StarbridgeTheme.type.body, color = colors.fg3)
+            Text("Pick a decision to read it in full.", style = StarbridgeTheme.type.body, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         return
     }
+    // Open when this screen first showed it: an answer that lands here animates its check.
+    val wasOpen = remember(decision.id) { decision.isOpen(now) }
     Scaffold(
         modifier = modifier,
         contentWindowInsets = WindowInsets(0),
@@ -580,11 +661,13 @@ fun DecisionScreen(decision: Decision?, now: Instant, onAnswer: (String, String?
         ) {
             Column(Modifier.widthIn(max = Sizes.content), verticalArrangement = Arrangement.spacedBy(Spacing.s4)) {
                 Source(decision, now, revealable = true)
-                Text(decision.question, style = StarbridgeTheme.type.heading, color = MaterialTheme.colorScheme.onSurface)
+                Text(decision.question, style = StarbridgeTheme.type.question, color = MaterialTheme.colorScheme.onSurface)
                 Context(decision.context)
+                Images(decision.images, maxHeight = Sizes.media)
+                Links(decision.links)
                 Spacer(Modifier.padding(top = Spacing.s1))
-                if (decision.open) Answer(decision, onAnswer) else Outcome(decision, now)
-                Fallback(decision)
+                if (decision.isOpen(now)) Answer(decision, onAnswer, replies) else Outcome(decision, now, arrived = wasOpen)
+                Fallback(decision, now)
             }
         }
     }
