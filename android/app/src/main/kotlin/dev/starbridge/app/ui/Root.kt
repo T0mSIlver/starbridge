@@ -264,7 +264,6 @@ fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> U
                             now,
                             settings = settings,
                             refresh = refresh(vm::refresh),
-                            onNotify = { p, on -> vm.setSettings(settings.copy(notify = if (on) (settings.notify + p).distinct() else settings.notify - p)) },
                         )
                     }
                     entry<SettingsKey> {

@@ -34,14 +34,36 @@ class QuotaSettingsTest {
         )
     }
 
-    @Test fun arrangeHidesAndOrders() {
-        val windows = listOf(
-            week,
-            week.copy(id = "z", provider = "zai", alert = true),
-            week.copy(id = "c", provider = "codex"),
+    // The same cases as the web's quotaSettings.test.ts (SPEC.md, "Quota order"). Wednesday noon.
+    private val noon = local(7, 12)
+    private fun win(provider: String, label: String, pace: Pace, resetsAt: Instant = local(12)) =
+        week.copy(id = "$provider/$label", provider = provider, window = label, pace = pace, resetsAt = resetsAt, alert = pace is Pace.Unused)
+
+    // In the uploader's order: claude's two windows apart, a headroom alert, one that will run out,
+    // one that ran out, one that ran out and has since reset.
+    private val windows = listOf(
+        win("claude", "5-hour", Pace.Even),
+        win("zai", "5-hour", Pace.Unused(40)),
+        win("codex", "Weekly", Pace.RunsOut(local(8))),
+        win("claude", "Weekly", Pace.RunsOut(local(7, 9))),
+        win("gemini", "Daily", Pace.RunsOut(local(7, 9)), resetsAt = local(7, 10)),
+        win("mistral", "Monthly", Pace.Even),
+    )
+    private fun arranged(s: QuotaSettings) = s.copy(hidden = listOf("mistral")).arrange(windows, noon).map { "${it.provider} ${it.window}" }
+
+    @Test fun arrangeRunningOutFirstThenUploaderOrder() {
+        assertEquals(listOf("claude Weekly", "codex Weekly", "claude 5-hour", "zai 5-hour", "gemini Daily"), arranged(QuotaSettings()))
+    }
+
+    @Test fun arrangeRunningOutFirstThenOrderSet() {
+        assertEquals(listOf("claude Weekly", "codex Weekly", "zai 5-hour", "gemini Daily", "claude 5-hour"), arranged(QuotaSettings(order = listOf("zai", "gemini"))))
+    }
+
+    @Test fun arrangeKeepsOrderSetWhenRunningOutFirstIsOff() {
+        assertEquals(
+            listOf("zai 5-hour", "gemini Daily", "claude 5-hour", "claude Weekly", "codex Weekly"),
+            arranged(QuotaSettings(order = listOf("zai", "gemini"), runningOutFirst = false)),
         )
-        assertEquals(listOf("zai", "claude", "codex"), QuotaSettings().arrange(windows, local(7)).map { it.provider })
-        assertEquals(listOf("codex", "zai"), QuotaSettings(order = listOf("codex"), hidden = listOf("claude")).arrange(windows, local(7)).map { it.provider })
     }
 
     @Test fun notifiesOnlyOptedInProvidersAndKinds() {
