@@ -19,9 +19,9 @@ export default function Terms() {
       <p>
         Starbridge relays encrypted messages between your coding agents and your devices: quota
         windows, decisions and your answers. It is free to use.{" "}
-        <Todo>whether it stays free, and notice before any price</Todo>. Its limits, such as how
-        much each account stores and for how long, are on the <a href="/privacy">privacy page</a>,
-        and the operator can change them.
+        <Todo>whether it stays free, and notice before any price</Todo>. Each account can store a
+        bounded amount, and the server deletes data on the schedule on the{" "}
+        <a href="/privacy">privacy page</a>. The operator can change both.
       </p>
 
       <h2 className="t-heading">Your account</h2>

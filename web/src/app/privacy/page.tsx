@@ -58,10 +58,10 @@ export default function Privacy() {
       <p>
         The web server (Caddy) keeps no access log. The server, Caddy and the web page log startup,
         errors and failed pushes; these lines can include an account id or a push endpoint, but not
-        IP addresses or your content. Each log rotates at 50 MB, so how long it covers depends on
-        traffic. <Todo>a fixed maximum age for logs, if one is wanted</Todo>. To enforce rate
-        limits, the server counts requests per IP address in memory; it never writes them to disk,
-        and a restart clears them.
+        IP addresses or your content. Each keeps five files of 10 MB, so how long a log covers
+        depends on traffic. <Todo>a fixed maximum age for logs, if one is wanted</Todo>. To enforce
+        rate limits, the server counts requests per IP address in memory; it never writes them to
+        disk, and a restart clears them.
       </p>
 
       <h2 className="t-heading">Who else sees what</h2>
