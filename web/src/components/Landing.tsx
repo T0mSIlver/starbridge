@@ -12,8 +12,8 @@ import { QuotaGroup } from "./QuotaRow";
 import ui from "./ui.module.css";
 
 // Product shots in public/landing, at 1.5x for the web inbox and 2x for the phones:
-//   web-inbox-*      the app at /sample-hero (development only), 1440 by 900, the question
-//                    with images selected
+//   web-inbox-*      the app at /sample-hero (development only), 1440 by 900, after a click
+//                    on the question with images
 //   android-*        the design v2 mockups' Android inbox, question sheet and lock screen
 // Each comes dark and light; `<picture>` picks the one the browser asks for.
 function Shot({
