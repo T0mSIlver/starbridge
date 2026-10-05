@@ -83,8 +83,8 @@ export function MetaRow({
 }
 
 /**
- * A terminal for a permission prompt, a speech bubble for a question: filled in amber while its
- * agent waits on it, outlined while it works around it (#191).
+ * A terminal for a permission prompt, a speech bubble for a question, straight on its card: amber
+ * while its agent waits on it, `fg2` while it works around it (#248).
  */
 export function KindTile({
   type,
@@ -349,17 +349,22 @@ export function HistoryHead({
 export function PastRow({
   past,
   by,
+  comfy,
   selected,
   onSelect,
 }: {
   past: Past;
   by: string;
+  comfy?: boolean;
   selected?: boolean;
   onSelect: () => void;
 }) {
   const e = past.entry;
   return (
-    <div className={`${s.row} ${s.past}`} aria-current={selected ? "true" : undefined}>
+    <div
+      className={`${s.row} ${s.past} ${comfy ? s.comfy : ""}`}
+      aria-current={selected ? "true" : undefined}
+    >
       <button
         type="button"
         className={s.hit}
@@ -368,7 +373,11 @@ export function PastRow({
         tabIndex={selected ? 0 : -1}
         onClick={onSelect}
       />
-      <KindTile type={e.type === "prompt" ? "prompt" : "question"} filled={false} />
+      <KindTile
+        type={e.type === "prompt" ? "prompt" : "question"}
+        filled={false}
+        size={comfy ? 36 : 32}
+      />
       <div className={s.pastBody}>
         <MetaRow
           machine={e.machine}

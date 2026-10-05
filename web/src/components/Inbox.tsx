@@ -20,6 +20,7 @@ import type { InboxItem, PromptItem } from "@/lib/types";
 import { useApp } from "./AppProvider";
 import { PromptDetail, QuestionDetail } from "./Detail";
 import { HistoryHead, machineIcon, NeedRow, PastRow, RunRow, useNow, waitingSince } from "./Feed";
+import feed from "./Feed.module.css";
 import s from "./Inbox.module.css";
 import { Icon } from "./icons";
 import { ordered } from "./options";
@@ -197,10 +198,49 @@ export function Inbox() {
       />
     );
   const sub = (label: React.ReactNode) => <div className={`t-caption ${s.sub}`}>{label}</div>;
+  // Under a grouping's header, the group's items share one box (#248).
+  const grouped = view !== "none";
+  const seg = (children: React.ReactNode) => (
+    <div className={`${feed.seg} ${comfy ? feed.comfy : ""}`}>{children}</div>
+  );
 
   const count = needs.length;
   const waitingOn = needs.filter((e) => waitingSince(e));
   const whenYouCan = needs.filter((e) => !waitingSince(e));
+  const historyPart = (
+    <>
+      {finding ? (
+        past.length > 0 && sub(`History · ${past.length}`)
+      ) : (
+        <HistoryHead
+          open={historyOpen}
+          count={closedToday(past, now)}
+          comfy={comfy}
+          onToggle={() => {
+            setHistoryOpen(!historyOpen);
+            setHistoryToggled(true);
+          }}
+        />
+      )}
+      {showPast && (
+        <div
+          className={historyToggled ? "m-appear" : undefined}
+          onAnimationEnd={() => setHistoryToggled(false)}
+        >
+          {past.map((p) => (
+            <PastRow
+              key={p.entry.id}
+              past={p}
+              by={p.entry.type === "question" ? closedByPhrase(p.entry.item) : ""}
+              comfy={comfy}
+              selected={wide && p.entry.id === selected}
+              onSelect={() => (wide ? setPicked(p.entry.id) : setOpened(p.entry.id))}
+            />
+          ))}
+        </div>
+      )}
+    </>
+  );
   const list = (
     <section className={s.list} ref={listRef} aria-label="Inbox">
       <header className={`t-small ${s.head}`}>
@@ -223,7 +263,7 @@ export function Inbox() {
           {runEntries.length > 0 && (
             <>
               {sub("Running")}
-              {runEntries.map(row)}
+              {seg(runEntries.map(row))}
             </>
           )}
           {waitingOn.length > 0 && (
@@ -233,7 +273,7 @@ export function Inbox() {
                   Waiting on you <span className={s.count}>{waitingOn.length}</span>
                 </>,
               )}
-              {waitingOn.map(row)}
+              {seg(waitingOn.map(row))}
             </>
           )}
           {whenYouCan.length > 0 && (
@@ -243,7 +283,7 @@ export function Inbox() {
                   When you can <span className={s.countQuiet}>{whenYouCan.length}</span>
                 </>,
               )}
-              {whenYouCan.map(row)}
+              {seg(whenYouCan.map(row))}
             </>
           )}
         </>
@@ -255,7 +295,7 @@ export function Inbox() {
                 <Icon name={machineIcon(g.kind)} size={13} className={s.subIcon} /> {g.machine}
               </>,
             )}
-            {g.entries.map(row)}
+            {seg(g.entries.map(row))}
           </div>
         ))
       ) : (
@@ -282,35 +322,7 @@ export function Inbox() {
           <p className={`t-small ${s.empty}`}>Nothing matches</p>
         ) : null)}
       <div className={s.gap} />
-      {finding ? (
-        past.length > 0 && sub(`History · ${past.length}`)
-      ) : (
-        <HistoryHead
-          open={historyOpen}
-          count={closedToday(past, now)}
-          comfy={comfy}
-          onToggle={() => {
-            setHistoryOpen(!historyOpen);
-            setHistoryToggled(true);
-          }}
-        />
-      )}
-      {showPast && (
-        <div
-          className={historyToggled ? "m-appear" : undefined}
-          onAnimationEnd={() => setHistoryToggled(false)}
-        >
-          {past.map((p) => (
-            <PastRow
-              key={p.entry.id}
-              past={p}
-              by={p.entry.type === "question" ? closedByPhrase(p.entry.item) : ""}
-              selected={wide && p.entry.id === selected}
-              onSelect={() => (wide ? setPicked(p.entry.id) : setOpened(p.entry.id))}
-            />
-          ))}
-        </div>
-      )}
+      {grouped ? seg(historyPart) : historyPart}
     </section>
   );
 
