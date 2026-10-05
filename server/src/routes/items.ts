@@ -12,7 +12,7 @@ const PAGE = 100;
 
 type KindRule = {
   signer: "device" | "machine";
-  re?: { field: string; kinds: readonly ItemKind[] };
+  re?: { field: string; kinds: readonly ItemKind[]; open?: true };
   updates?: true;
 };
 
@@ -195,16 +195,21 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
             .all(caller.account, item.re) as { to_id: string }[]
         ).map((r) => r.to_id);
       } else {
-        // A machine's notice that one of its own items is over (a settled prompt, a withdrawn
-        // decision): one each.
         if (!target || target.from_id !== me)
           fail(404, "not-found", `no such ${rule.re.kinds.join(" or ")} from this machine`);
-        if (
-          db
-            .query("SELECT 1 FROM items WHERE account_id = ? AND kind = ? AND re = ?")
-            .get(caller.account, item.kind, item.re)
-        )
+        const other = db
+          .query("SELECT 1 FROM items WHERE account_id = ? AND kind = ? AND re = ? AND id != ?")
+          .get(caller.account, item.kind, item.re, item.id);
+        if (rule.re.open) {
+          // A machine's note on one of its open items (a decision's waiting state): one per
+          // item, re-posted under its id, until the item is answered.
+          if (target.answered_at) fail(409, "already-answered");
+          if (other) fail(409, "duplicate-id", `${item.re} has a ${item.kind} under another id`);
+        } else if (other) {
+          // A machine's notice that one of its own items is over (a settled prompt, a withdrawn
+          // decision): one each.
           fail(409, "already-settled");
+        }
       }
     }
     const earlier = db
@@ -249,8 +254,8 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
     for (const b of item.boxes) box.run(caller.account, item.id, b.to, b.box);
     // Marks the referred item answered and moves it past every cursor, so devices listing after
     // their cursor see it again, answered. A settled notice after a device's answer changes
-    // nothing: the prompt was already answered.
-    if (item.re !== undefined)
+    // nothing: the prompt was already answered. An open kind's note closes nothing.
+    if (item.re !== undefined && !rule.re?.open)
       db.query(
         "UPDATE items SET answered_at = ?, seq = ? WHERE account_id = ? AND id = ? AND answered_at IS NULL",
       ).run(iso, nextSeq(db), caller.account, item.re);

@@ -19,6 +19,147 @@
         ],
         "recommended": "Yes",
         "default": {
+          "action": "Wait for tonight"
+        },
+        "source": {
+          "machine": "dev box",
+          "project": "localvoxtral",
+          "session": "s_42"
+        }
+      },
+      "valid": true
+    },
+    {
+      "name": "with agent and machine kind",
+      "body": {
+        "v": 1,
+        "id": "dec_1",
+        "to": [
+          "phone",
+          "phone2"
+        ],
+        "createdAt": "2026-10-04T10:00:00Z",
+        "question": "Run inference on the Mac while you are away?",
+        "context": "The bench needs the GPU for about 40 minutes. No: it waits for tonight.",
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "recommended": "Yes",
+        "default": {
+          "action": "Wait for tonight"
+        },
+        "source": {
+          "machine": "dev box",
+          "project": "localvoxtral",
+          "session": "s_42",
+          "machineKind": "laptop"
+        },
+        "agent": "codex"
+      },
+      "valid": true
+    },
+    {
+      "name": "an unknown agent",
+      "body": {
+        "v": 1,
+        "id": "dec_1",
+        "to": [
+          "phone",
+          "phone2"
+        ],
+        "createdAt": "2026-10-04T10:00:00Z",
+        "question": "Run inference on the Mac while you are away?",
+        "context": "The bench needs the GPU for about 40 minutes. No: it waits for tonight.",
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "recommended": "Yes",
+        "default": {
+          "action": "Wait for tonight"
+        },
+        "source": {
+          "machine": "dev box",
+          "project": "localvoxtral",
+          "session": "s_42"
+        },
+        "agent": "aider"
+      },
+      "valid": false
+    },
+    {
+      "name": "an unknown machine kind",
+      "body": {
+        "v": 1,
+        "id": "dec_1",
+        "to": [
+          "phone",
+          "phone2"
+        ],
+        "createdAt": "2026-10-04T10:00:00Z",
+        "question": "Run inference on the Mac while you are away?",
+        "context": "The bench needs the GPU for about 40 minutes. No: it waits for tonight.",
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "recommended": "Yes",
+        "default": {
+          "action": "Wait for tonight"
+        },
+        "source": {
+          "machine": "dev box",
+          "project": "localvoxtral",
+          "session": "s_42",
+          "machineKind": "phone"
+        }
+      },
+      "valid": false
+    },
+    {
+      "name": "no default",
+      "body": {
+        "v": 1,
+        "id": "dec_1",
+        "to": [
+          "phone",
+          "phone2"
+        ],
+        "createdAt": "2026-10-04T10:00:00Z",
+        "question": "Run inference on the Mac while you are away?",
+        "context": "The bench needs the GPU for about 40 minutes. No: it waits for tonight.",
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "recommended": "Yes",
+        "source": {
+          "machine": "dev box",
+          "project": "localvoxtral",
+          "session": "s_42"
+        }
+      },
+      "valid": true
+    },
+    {
+      "name": "a default time from an older machine, ignored",
+      "body": {
+        "v": 1,
+        "id": "dec_1",
+        "to": [
+          "phone",
+          "phone2"
+        ],
+        "createdAt": "2026-10-04T10:00:00Z",
+        "question": "Run inference on the Mac while you are away?",
+        "context": "The bench needs the GPU for about 40 minutes. No: it waits for tonight.",
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "recommended": "Yes",
+        "default": {
           "action": "Wait for tonight",
           "at": "2026-10-04T11:00:00Z"
         },
@@ -44,8 +185,7 @@
         "context": "The bench needs the GPU for about 40 minutes. No: it waits for tonight.",
         "options": [],
         "default": {
-          "action": "Wait for tonight",
-          "at": "2026-10-04T11:00:00Z"
+          "action": "Wait for tonight"
         },
         "source": {
           "machine": "dev box",
@@ -72,8 +212,7 @@
         ],
         "recommended": "Yes",
         "default": {
-          "action": "Wait for tonight",
-          "at": "2026-10-04T11:00:00Z"
+          "action": "Wait for tonight"
         },
         "source": {
           "machine": "dev box",
@@ -104,8 +243,7 @@
         ],
         "recommended": "a",
         "default": {
-          "action": "Wait for tonight",
-          "at": "2026-10-04T11:00:00Z"
+          "action": "Wait for tonight"
         },
         "source": {
           "machine": "dev box",
@@ -133,8 +271,7 @@
         ],
         "recommended": "Maybe",
         "default": {
-          "action": "Wait for tonight",
-          "at": "2026-10-04T11:00:00Z"
+          "action": "Wait for tonight"
         },
         "source": {
           "machine": "dev box",
@@ -162,8 +299,7 @@
         ],
         "recommended": "Yes",
         "default": {
-          "action": "Wait for tonight",
-          "at": "2026-10-04T11:00:00Z"
+          "action": "Wait for tonight"
         },
         "source": {
           "machine": "dev box",
@@ -188,8 +324,7 @@
         ],
         "recommended": "Yes",
         "default": {
-          "action": "Wait for tonight",
-          "at": "2026-10-04T11:00:00Z"
+          "action": "Wait for tonight"
         },
         "source": {
           "machine": "dev box",
@@ -217,8 +352,7 @@
         ],
         "recommended": "Yes",
         "default": {
-          "action": "Wait for tonight",
-          "at": "2026-10-04T11:00:00Z"
+          "action": "Wait for tonight"
         },
         "source": {
           "machine": "dev box",
@@ -257,8 +391,7 @@
         ],
         "recommended": "Yes",
         "default": {
-          "action": "Wait for tonight",
-          "at": "2026-10-04T11:00:00Z"
+          "action": "Wait for tonight"
         },
         "source": {
           "machine": "dev box",
@@ -287,8 +420,7 @@
         ],
         "recommended": "Yes",
         "default": {
-          "action": "Wait for tonight",
-          "at": "2026-10-04T11:00:00Z"
+          "action": "Wait for tonight"
         },
         "source": {
           "machine": "dev box",
@@ -322,8 +454,7 @@
         ],
         "recommended": "Yes",
         "default": {
-          "action": "Wait for tonight",
-          "at": "2026-10-04T11:00:00Z"
+          "action": "Wait for tonight"
         },
         "source": {
           "machine": "dev box",
@@ -357,8 +488,7 @@
         ],
         "recommended": "Yes",
         "default": {
-          "action": "Wait for tonight",
-          "at": "2026-10-04T11:00:00Z"
+          "action": "Wait for tonight"
         },
         "source": {
           "machine": "dev box",
@@ -392,8 +522,7 @@
         ],
         "recommended": "Yes",
         "default": {
-          "action": "Wait for tonight",
-          "at": "2026-10-04T11:00:00Z"
+          "action": "Wait for tonight"
         },
         "source": {
           "machine": "dev box",
@@ -427,8 +556,7 @@
         ],
         "recommended": "Yes",
         "default": {
-          "action": "Wait for tonight",
-          "at": "2026-10-04T11:00:00Z"
+          "action": "Wait for tonight"
         },
         "source": {
           "machine": "dev box",
@@ -477,8 +605,7 @@
         ],
         "recommended": "Yes",
         "default": {
-          "action": "Wait for tonight",
-          "at": "2026-10-04T11:00:00Z"
+          "action": "Wait for tonight"
         },
         "source": {
           "machine": "dev box",
@@ -511,8 +638,7 @@
         ],
         "recommended": "Yes",
         "default": {
-          "action": "Wait for tonight",
-          "at": "2026-10-04T11:00:00Z"
+          "action": "Wait for tonight"
         },
         "source": {
           "machine": "dev box",
@@ -549,8 +675,7 @@
         ],
         "recommended": "Yes",
         "default": {
-          "action": "Wait for tonight",
-          "at": "2026-10-04T11:00:00Z"
+          "action": "Wait for tonight"
         },
         "source": {
           "machine": "dev box",
@@ -615,8 +740,7 @@
         ],
         "recommended": "Yes",
         "default": {
-          "action": "Wait for tonight",
-          "at": "2026-10-04T11:00:00Z"
+          "action": "Wait for tonight"
         },
         "source": {
           "machine": "dev box",
@@ -653,8 +777,7 @@
         ],
         "recommended": "Yes",
         "default": {
-          "action": "Wait for tonight",
-          "at": "2026-10-04T11:00:00Z"
+          "action": "Wait for tonight"
         },
         "source": {
           "machine": "dev box",
@@ -691,8 +814,7 @@
         ],
         "recommended": "Yes",
         "default": {
-          "action": "Wait for tonight",
-          "at": "2026-10-04T11:00:00Z"
+          "action": "Wait for tonight"
         },
         "source": {
           "machine": "dev box",
@@ -725,8 +847,7 @@
         ],
         "recommended": "Yes",
         "default": {
-          "action": "Wait for tonight",
-          "at": "2026-10-04T11:00:00Z"
+          "action": "Wait for tonight"
         },
         "source": {
           "machine": "dev box",
@@ -759,8 +880,7 @@
         ],
         "recommended": "Yes",
         "default": {
-          "action": "Wait for tonight",
-          "at": "2026-10-04T11:00:00Z"
+          "action": "Wait for tonight"
         },
         "source": {
           "machine": "dev box",
@@ -810,8 +930,7 @@
         ],
         "recommended": "Yes",
         "default": {
-          "action": "Wait for tonight",
-          "at": "2026-10-04T11:00:00Z"
+          "action": "Wait for tonight"
         },
         "source": {
           "machine": "dev box",
@@ -841,8 +960,7 @@
         "context": "The bench needs the GPU for about 40 minutes. No: it waits for tonight.",
         "options": [],
         "default": {
-          "action": "Wait for tonight",
-          "at": "2026-10-04T11:00:00Z"
+          "action": "Wait for tonight"
         },
         "source": {
           "machine": "dev box",
@@ -879,8 +997,7 @@
         ],
         "recommended": "Yes",
         "default": {
-          "action": "Wait for tonight",
-          "at": "2026-10-04T11:00:00Z"
+          "action": "Wait for tonight"
         },
         "source": {
           "machine": "dev box",
@@ -908,8 +1025,7 @@
         "context": "The bench needs the GPU for about 40 minutes. No: it waits for tonight.",
         "options": [],
         "default": {
-          "action": "Wait for tonight",
-          "at": "2026-10-04T11:00:00Z"
+          "action": "Wait for tonight"
         },
         "source": {
           "machine": "dev box",
@@ -1871,6 +1987,79 @@
           "total": 7,
           "unit": "step"
         }
+      },
+      "valid": false
+    }
+  ],
+  "waiting": [
+    {
+      "name": "waiting",
+      "body": {
+        "v": 1,
+        "id": "wait_1",
+        "decisionId": "dec_1",
+        "to": [
+          "phone",
+          "phone2"
+        ],
+        "at": "2026-10-04T10:20:00Z",
+        "state": "waiting"
+      },
+      "valid": true
+    },
+    {
+      "name": "working",
+      "body": {
+        "v": 1,
+        "id": "wait_1",
+        "decisionId": "dec_1",
+        "to": [
+          "phone",
+          "phone2"
+        ],
+        "at": "2026-10-04T10:20:00Z",
+        "state": "working"
+      },
+      "valid": true
+    },
+    {
+      "name": "an unknown state",
+      "body": {
+        "v": 1,
+        "id": "wait_1",
+        "decisionId": "dec_1",
+        "to": [
+          "phone",
+          "phone2"
+        ],
+        "at": "2026-10-04T10:20:00Z",
+        "state": "blocked"
+      },
+      "valid": false
+    },
+    {
+      "name": "no decision",
+      "body": {
+        "v": 1,
+        "id": "wait_1",
+        "to": [
+          "phone",
+          "phone2"
+        ],
+        "at": "2026-10-04T10:20:00Z",
+        "state": "waiting"
+      },
+      "valid": false
+    },
+    {
+      "name": "no recipients",
+      "body": {
+        "v": 1,
+        "id": "wait_1",
+        "decisionId": "dec_1",
+        "to": [],
+        "at": "2026-10-04T10:20:00Z",
+        "state": "waiting"
       },
       "valid": false
     }
