@@ -128,7 +128,7 @@ fun FindScreen(
         if (words.isEmpty()) emptyList()
         else History(decisions.filterNot { it.isOpen(now) }, prompts.filterNot { it.waiting(now) }, now).rows.filter { (at, it) ->
             when (it) {
-                is Decision -> matches(words, it.texts() + closedHow(it, at))
+                is Decision -> matches(words, it.texts() + outcome(it, at))
                 else -> matches(words, (it as Prompt).texts() + closedHow(it))
             }
         }

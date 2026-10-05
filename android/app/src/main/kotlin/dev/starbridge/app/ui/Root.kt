@@ -261,7 +261,8 @@ fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> U
                         FindScreen(
                             decisions,
                             prompts,
-                            now,
+                            // As in the inbox: an item an agent waits on ticks each second.
+                            seconds(decisions.any { it.waiting && it.isOpen(Instant.now()) } || prompts.any { it.waiting(Instant.now()) }, now),
                             openDecision = { open(DecisionKey(it)) },
                             openPrompt = { open(PromptKey(it)) },
                             onBack = { backStack.removeAt(backStack.lastIndex) },
