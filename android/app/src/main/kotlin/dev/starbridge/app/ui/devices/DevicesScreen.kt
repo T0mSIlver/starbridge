@@ -32,6 +32,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import kotlinx.coroutines.delay
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -81,6 +83,7 @@ import androidx.compose.foundation.layout.height
 class DevicesViewModel @Inject constructor(private val store: Store) : ViewModel() {
     val members = store.members
     val approval = store.approval
+    fun refreshDirectory() = store.refreshDirectory()
     val actions = DeviceActions(store::lookUpPairing, store::approvePairing, store::closePairing, store::revoke, store::showCode)
 }
 
@@ -93,6 +96,8 @@ class DeviceActions(
     val showCode: () -> Unit,
 )
 
+private const val DIRECTORY_POLL_MS = 30_000L
+
 /** The account's devices and machines, each with Revoke; adding one opens its own page. */
 @Composable
 fun DevicesScreen(
@@ -104,7 +109,15 @@ fun DevicesScreen(
     onAdd: () -> Unit = {},
     /** A pairing code read by the scanner; a phone that cannot scan opens Add a device instead. */
     onScan: (String) -> Unit = {},
+    pollDirectory: () -> Unit = {},
 ) {
+    // A device or machine revoked elsewhere leaves the list without a restart: no push says so.
+    LaunchedEffect(Unit) {
+        while (true) {
+            pollDirectory()
+            delay(DIRECTORY_POLL_MS)
+        }
+    }
     val scan = rememberScanner(onResult = onScan, onError = { onAdd() })
     // Devices first, then machines, each in the order the directory added them.
     val rows = members.sortedBy { it.kind != Kind.Device }

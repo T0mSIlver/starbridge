@@ -703,6 +703,10 @@ class ServerStore(
         if (phase.value == Phase.Ready) syncPrompts()
     }
 
+    override fun refreshDirectory() = run(showBusy = false) {
+        if (phase.value == Phase.Ready) syncDirectory()
+    }
+
     override fun answerPrompt(id: String, allow: Boolean, scope: String, message: String?) =
         run(showBusy = false) { sendPrompt(id, allow, scope, message) }
 

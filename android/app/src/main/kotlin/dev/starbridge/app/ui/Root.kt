@@ -286,7 +286,7 @@ fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> U
                     entry<DevicesKey> {
                         val vm: DevicesViewModel = hiltViewModel()
                         val members by vm.members.collectAsStateWithLifecycle()
-                        DevicesScreen(members, now, vm.actions, onBack = { backStack.removeAt(backStack.lastIndex) }, onAdd = { backStack.add(AddDeviceKey) }, onScan = { vm.actions.lookUp(it); backStack.add(AddDeviceKey) })
+                        DevicesScreen(members, now, vm.actions, onBack = { backStack.removeAt(backStack.lastIndex) }, onAdd = { backStack.add(AddDeviceKey) }, onScan = { vm.actions.lookUp(it); backStack.add(AddDeviceKey) }, pollDirectory = vm::refreshDirectory)
                     }
                     entry<AddDeviceKey> {
                         val vm: DevicesViewModel = hiltViewModel()
