@@ -528,8 +528,11 @@ async function main() {
   await devices.getByRole("button", { name: "Revoke" }).first().click();
   await page.getByRole("dialog").getByRole("button", { name: "Revoke" }).click();
   await page.getByRole("dialog").waitFor({ state: "detached" });
-  if ((await devices.getByRole("button", { name: "Revoke" }).count()) !== before - 1)
-    throw new Error("the revoked browser is still listed");
+  // The list reloads from the directory once the revocation is written.
+  const revokes = devices.getByRole("button", { name: "Revoke" });
+  for (let i = 0; i < 50 && (await revokes.count()) !== before - 1; i++)
+    await page.waitForTimeout(200);
+  if ((await revokes.count()) !== before - 1) throw new Error("the revoked browser is still listed");
   await pageB.reload();
   await pageB.getByRole("link", { name: SIGN_IN }).waitFor();
   await page.emulateMedia({ colorScheme: "light" });
