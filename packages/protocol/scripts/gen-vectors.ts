@@ -1049,6 +1049,11 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
       now: T(12),
     },
     {
+      name: "reset passed: no alert",
+      window: { ...win, usedPercent: 90, resetsAt: T(11, 30) },
+      now: T(12),
+    },
+    {
       name: "no length, 15% left: low at 20 only",
       window: { ...win, usedPercent: 85, windowMinutes: null },
       now: T(12),

@@ -94,7 +94,8 @@ export function alertsFor(
   rule: AlertRule = DEFAULT_ALERT_RULE,
 ): QuotaAlert[] {
   const { pace, resetsAt, windowMinutes } = w;
-  if (resetsAt === null) return [];
+  // A window whose reset passed belongs to a cycle that ended; the next upload brings the new one.
+  if (resetsAt === null || Date.parse(resetsAt) <= now.getTime()) return [];
   const alerts: QuotaAlert[] = [];
   const left = 100 - Math.min(100, w.usedPercent);
   const threshold = Math.min(...rule.lowThresholds.filter((t) => left <= t));

@@ -316,6 +316,27 @@
       ]
     },
     {
+      "name": "reset passed: no alert",
+      "window": {
+        "id": "primary",
+        "label": "5h",
+        "usedPercent": 90,
+        "windowMinutes": 300,
+        "resetsAt": "2026-10-04T11:30:00Z"
+      },
+      "now": "2026-10-04T12:00:00Z",
+      "provider": "zai",
+      "expectPace": {
+        "stage": "behind",
+        "expectedUsedPercent": 100,
+        "deltaPercent": -10,
+        "projectedUsedPercent": 90,
+        "willLastToReset": true,
+        "runsOutAt": null
+      },
+      "expectAlerts": []
+    },
+    {
       "name": "no length, 15% left: low at 20 only",
       "window": {
         "id": "primary",
