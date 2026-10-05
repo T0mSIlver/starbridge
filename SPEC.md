@@ -973,6 +973,11 @@ How it generalizes is open.
   skill follows that line instead of naming agents. `evals/skill` runs `codex exec`, so it
   checks the wait path: it answers a Codex card on the server during the turn, as the owner
   would.
+- 2026-10-06. Agents clients do not know (orchestrator, for #232). `Agent` gains `pi`, and items
+  carry `agent` as any name of up to 40 lowercase letters, digits and dashes (`AgentName`):
+  clients show an agent they do not know as none, with no "Open in" link, instead of refusing
+  the decision or prompt. So a future harness never makes items unreadable to older clients.
+  Clients released before this change still refuse an agent outside `claude-code | codex`.
 - 2026-10-06. Pi is the third harness (#232; research on the issue, Pi 0.87.1). A Pi extension
   can call `pi.sendUserMessage(text, { deliverAs: "followUp" })` at any time: an idle session
   starts a turn with it, a busy one runs it once the agent finishes, as the mod and `codex
@@ -987,9 +992,8 @@ How it generalizes is open.
   tool gives every command, after Claude Code and Codex. It records that session id and takes
   the card's session title from the name in `PI_SESSION_FILE`. It says the answer comes back as
   a prompt only with `STARBRIDGE_PI_ANSWERS=1`, else it prints the `starbridge wait` line. A
-  decision from Pi carries no `agent`: clients parse it as `claude-code | codex`, so `pi` would
-  make the decision unreadable to every client released so far. Pi has no built-in
-  AskUserQuestion and no permission prompts; both come from third-party extensions, so Starbridge
+  decision from Pi carries `agent: "pi"` (the entry above); a client released before it refuses
+  such a decision. Pi has no built-in AskUserQuestion and no permission prompts; both come from third-party extensions, so Starbridge
   intercepts neither (blocking a tool by name would tie it to one extension), the skill tells
   every agent to avoid any tool that asks the user, and permission prompts stay Claude Code only.
   Checked with a real Pi 0.87.1 TUI (GLM 5.3) in a throwaway HOME, the local server, the built

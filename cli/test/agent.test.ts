@@ -442,9 +442,8 @@ test("a Pi session with the extension gets its answer as an event, titled from i
   const id = await ask(c, "--project", "p");
   expect(c.errors.at(-1)).toBe("The answer will come back into this session as a new prompt.");
   const [d] = await server.opened("decision");
-  // Clients parse `agent` as a closed list, so Pi is left out.
   expect([d?.agent, d?.source.session, d?.source.sessionTitle]).toEqual([
-    undefined,
+    "pi",
     "p1",
     "Fix the build",
   ]);

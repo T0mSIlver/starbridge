@@ -93,9 +93,13 @@ export function slotTime(at: string, since: string | undefined, now: number): st
   return since ? timer(since, now) : ago(at, now);
 }
 
-/** "Claude" or "Codex", for "Open in". */
-export function agentName(agent?: string): string {
-  return agent === "codex" ? "Codex" : "Claude";
+/**
+ * "Claude" or "Codex", for "Open in": older machines send no agent and run Claude Code. An agent
+ * this page does not know gets no "Open in".
+ */
+export function agentName(agent?: string): string | undefined {
+  if (agent === undefined || agent === "claude-code") return "Claude";
+  return agent === "codex" ? "Codex" : undefined;
 }
 
 /** Characters of a session's name kept after the cut. */
@@ -105,7 +109,8 @@ const TAIL = 12;
 export function SessionLine({ source, agent }: { source: Source; agent?: string }) {
   const name = source.sessionTitle || source.session;
   const links = source.links ?? [];
-  const link = links.find((l) => l.kind !== "desktop") ?? links[0];
+  const app = agentName(agent);
+  const link = app ? (links.find((l) => l.kind !== "desktop") ?? links[0]) : undefined;
   if (!name && !link) return null;
   return (
     <div className={`t-meta ${s.session}`}>
@@ -124,7 +129,7 @@ export function SessionLine({ source, agent }: { source: Source; agent?: string 
           href={link.url}
           {...(link.kind === "desktop" ? {} : { target: "_blank", rel: "noopener noreferrer" })}
         >
-          Open in {agentName(agent)}
+          Open in {app}
         </a>
       )}
     </div>

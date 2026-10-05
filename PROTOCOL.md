@@ -33,7 +33,7 @@ code cannot show: the HTTP API and the flows.
 
 - Every machine-signed body names its `source` (machine, project, session, and optionally the
   session's title and links, and `machineKind`: `server`, `desktop`, `laptop` or `cloud`, for
-  its icon). A decision may name its `agent`, `claude-code` or `codex`, as a permission does.
+  its icon). A decision may name its `agent`, `claude-code`, `codex` or `pi`, as a permission does. Clients accept any agent name (lowercase letters, digits and dashes, at most 40), so a newer machine's agent never makes an item unreadable; an agent a client does not know gets no "Open in" link.
 - A decision's images (PNG or JPEG) and links (HTTPS) are part of its signed body, so each box
   carries every image, and the 2 MB cap in Limits covers them once per device.
   A decision with `answerIn` is answered on that page (a claude.ai artifact whose button wakes
@@ -439,7 +439,7 @@ for an unknown route or decision, 502 when the server refused or failed (`detail
 | Route | What |
 |---|---|
 | `GET /status` | `{version, api, pid, startedAt, socket, machine?, server: {reachable, lastOkAt?, lastError?}, quota: {providers, intervalSeconds, lastPostAt?, lastError?}, sessions}` |
-| `POST /decisions` | `{input}` with `ask`'s fields (`question`, `options`, `waiting`, `agent`, `project`, `session`, …); the client fills `project`, `session`, title and links from its own process, for Codex `codex` (`{home, bin}`: its `CODEX_HOME` and `codex` binary), and for Pi `agent: "pi"` (never sent to devices) with `piAnswers: true` while the Starbridge Pi extension runs in the session → `{id, delivery}`: `prompt` when the answer will come back into the session as a prompt (Claude Code's mod; the Pi extension; Codex, which the agent reaches with `codex queue` while the session's app-server daemon listens), else `wait` |
+| `POST /decisions` | `{input}` with `ask`'s fields (`question`, `options`, `waiting`, `agent`, `project`, `session`, …); the client fills `project`, `session`, title and links from its own process, for Codex `codex` (`{home, bin}`: its `CODEX_HOME` and `codex` binary), and for Pi `piAnswers: true` while the Starbridge Pi extension runs in the session → `{id, delivery}`: `prompt` when the answer will come back into the session as a prompt (Claude Code's mod; the Pi extension; Codex, which the agent reaches with `codex queue` while the session's app-server daemon listens), else `wait` |
 | `POST /decisions/:id/waiting` | `{state: "working" \| "waiting"}` → `{posted}`: post the decision's waiting state, `posted: false` when it already had it; 404 `unknown-decision`, 400 when it is answered. `starbridge waiting`, `working` |
 | `POST /answers/next` | `{id?, wait?}`: the answer to decision `id`, or the first answer no `wait` printed, marked printed → `{answer?, question?}`; 404 `unknown-decision`. `starbridge wait` |
 | `POST /quota` | `{providers?}`: run CodexBar and post a snapshot now → `{snapshot}` |

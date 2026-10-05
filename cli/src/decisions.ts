@@ -34,12 +34,6 @@ import { fitPicture, loadPicture, type Picture } from "./images";
 import { acceptPermissionAnswer } from "./permissions";
 import { PI_ANSWERS, piSessionTitle } from "./pi";
 
-/**
- * The coding agent that asks. Pi stays on the machine: clients parse a decision's `agent` as
- * `Agent`, so a decision from Pi carries none until they accept agents they do not know.
- */
-export type Harness = Agent | "pi";
-
 export interface AskInput {
   question?: string;
   context?: string;
@@ -50,7 +44,7 @@ export interface AskInput {
   /** Post it already `waiting`: the agent has nothing else to do. */
   waiting?: boolean;
   /** The coding agent asking; default: Claude Code, Codex or Pi when it runs the command. */
-  agent?: Harness;
+  agent?: Agent;
   /** Where a Codex session runs: its `CODEX_HOME` and the `codex` that answers reach it with. */
   codex?: CodexSession;
   /** A Pi session whose Starbridge extension submits answers into it. */
@@ -168,7 +162,7 @@ export function buildDecision(input: AskInput, ctx: Ctx, machine: string, to: st
     options,
     ...(options.length > 0 ? { recommended: input.recommended ?? options[0] } : {}),
     default: { action: input.default || NO_DEFAULT },
-    ...protocolAgent(agentOf(input, ctx.env).agent),
+    ...agentOf(input, ctx.env),
     source: sourceFor(input, ctx, machine),
     ...(links.length > 0 ? { links } : {}),
     ...(input.answerIn !== undefined ? { answerIn: link(input.answerIn) } : {}),
@@ -181,15 +175,12 @@ export function buildDecision(input: AskInput, ctx: Ctx, machine: string, to: st
  * `--agent`, else Claude Code, Codex or Pi when it runs this command: Claude Code sets
  * CLAUDECODE=1, Codex gives every command its session id in CODEX_THREAD_ID, Pi in PI_SESSION_ID.
  */
-function agentOf(input: AskInput, env: Ctx["env"]): { agent?: Harness } {
+function agentOf(input: AskInput, env: Ctx["env"]): { agent?: Agent } {
   if (input.agent !== undefined) return { agent: input.agent };
   if (env.CLAUDECODE === "1") return { agent: "claude-code" };
   if (env.CODEX_THREAD_ID) return { agent: "codex" };
   return env.PI_SESSION_ID ? { agent: "pi" } : {};
 }
-
-const protocolAgent = (agent: Harness | undefined): { agent?: Agent } =>
-  agent === undefined || agent === "pi" ? {} : { agent };
 
 function checked(decision: unknown): Decision {
   try {

@@ -169,7 +169,11 @@ data class SealedItem(
 data class DecisionDefault(val action: String, val at: String? = null)
 
 val MACHINE_KINDS = setOf("server", "desktop", "laptop", "cloud")
-val AGENTS = setOf("claude-code", "codex")
+/**
+ * An agent as items carry it (AgentName in schemas.ts): a known one or one a newer machine sends,
+ * which this app shows as none rather than refusing the item.
+ */
+val AGENT_NAME = Regex("^[a-z0-9][a-z0-9-]{0,39}$")
 
 /** Each link kind's URL prefix (SESSION_LINK_PREFIX in schemas.ts). */
 val SESSION_LINK_PREFIX = mapOf(
@@ -251,7 +255,7 @@ data class Decision(
     val options: List<String>,
     val recommended: String? = null,
     @SerialName("default") val fallback: DecisionDefault? = null,
-    /** claude-code or codex; older machines omit it. */
+    /** claude-code, codex, pi, or a newer agent; older machines omit it. */
     val agent: String? = null,
     val source: Source,
     val images: List<DecisionImage>? = null,
@@ -274,7 +278,7 @@ data class Decision(
         schema(options.size <= 4, "options")
         options.forEach { len(it, 1, 100, "option") }
         fallback?.let { len(it.action, 1, 300, "default.action") }
-        agent?.let { schema(it in AGENTS, "agent") }
+        agent?.let { schema(AGENT_NAME.matches(it), "agent") }
         source.check()
         images?.let { schema(it.size <= 4, "images"); it.forEach(DecisionImage::check) }
         links?.let { schema(it.size <= 4, "links"); it.forEach(DecisionLink::check) }
@@ -360,7 +364,7 @@ data class Permission(
         schema(to.isNotEmpty(), "to")
         to.forEach { id(it, "to") }
         time(createdAt, "createdAt")
-        schema(agent in setOf("claude-code", "codex"), "agent")
+        schema(AGENT_NAME.matches(agent), "agent")
         len(tool, 1, 100, "tool")
         len(summary, 1, 200, "summary")
         description?.let { len(it, 0, 500, "description") }
