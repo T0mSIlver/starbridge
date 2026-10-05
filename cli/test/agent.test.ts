@@ -288,8 +288,9 @@ test("the CLI goes to the server itself when no agent runs, or when the agent ca
 test("the agent refuses bad requests with the CLI's own messages", async () => {
   const { socket } = await machine();
   const c = client(socket);
-  expect(await run(["ask", "--question", "Q?", "--project", "p"], c)).toBe(1);
-  expect(c.errors.at(-1)).toContain("--default");
+  const both = ["--answer-in", "https://claude.ai/artifact/x", "--option", "A", "--option", "B"];
+  expect(await run(["ask", "--question", "Q?", "--project", "p", ...both], c)).toBe(1);
+  expect(c.errors.at(-1)).toContain("--answer-in takes no --option");
   expect(await run(["wait", "d_nosuch"], c)).toBe(1);
   expect(c.errors.at(-1)).toContain("not a decision this machine asked");
   await expect(new AgentClient(socket).call("GET", "/v1/sessions/a%20b/events")).rejects.toThrow(

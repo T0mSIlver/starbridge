@@ -197,7 +197,7 @@ test("the plugin's SessionStart hook adds the owner's rules file, escaped, after
     expect(out.hookSpecificOutput.hookEventName).toBe("SessionStart");
     return out.hookSpecificOutput.additionalContext as string;
   };
-  const rule = "Starbridge is how you reach me: use the `starbridge` skill instead of asking here";
+  const rule = "Starbridge is how you reach me: use the `starbridge` skill, instead of asking here or with AskUserQuestion";
   const bare = await context();
   expect(bare).toContain(rule);
   expect(bare).toContain("\n\nWhen a command you are about to run blocks me");

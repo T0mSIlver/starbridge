@@ -7,7 +7,7 @@ import { runAgent } from "./agent/main";
 import { ApiError } from "./api";
 import { type Ctx, UsageError } from "./context";
 import { type AskInput, answers, ask, settle, wait } from "./decisions";
-import { hookPermission, hookSettle, permissionsCommand } from "./hook";
+import { hookAskUser, hookPermission, hookSettle, permissionsCommand } from "./hook";
 import { pair } from "./pair";
 import { pushOnce, quotaPush } from "./quota";
 import { installKind, ReleaseError } from "./release";
@@ -40,13 +40,13 @@ const HELP = `starbridge: post decisions to your devices, report runs, upload qu
   starbridge pair --server <url> [--name <name>] [--force]
       Make this machine's keys and print a pairing code to type on a device.
 
-  starbridge ask --question <text> --default <text> [--option <text>]... [options]
+  starbridge ask --question <text> [--option <text>]... [options]
       Post a decision to every paired device and print its id.
       --context <text>        why it is asked and what each option changes
       --context-file <path>   the same, from a file ("-" for stdin)
       --option <text>         2 to 4 times; none asks for a free-text answer
       --recommended <text>    one of the options (default: the first)
-      --default <text>        what you do if nobody answers
+      --default <text>        what you do if nobody answers (default: wait for the answer)
       --default-at <when>     when: an ISO time or a duration such as 30m
       --project <name>        default: the current directory's name
       --session <id>          default: $CLAUDE_CODE_SESSION_ID
@@ -114,6 +114,11 @@ const HELP = `starbridge: post decisions to your devices, report runs, upload qu
       For Claude Code's PermissionRequest hook, and for its PostToolUse, PermissionDenied,
       Stop and SessionEnd hooks: hook JSON on stdin; prints the hook's decision, or nothing
       to leave the prompt to the keyboard.
+
+  starbridge hook ask-user
+      For Claude Code's PreToolUse hook on AskUserQuestion: denies the call and tells the
+      agent to use \`starbridge ask\`; prints nothing, which lets it through, when this
+      machine is not paired or the server does not answer.
 
   starbridge update
       Install the latest release once its signature checks out (brew and npm installs: use
@@ -354,7 +359,10 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
         });
         if (sub === "permission") return await hookPermission(ctx, readText("-"), values);
         if (sub === "settle") return await hookSettle(ctx, readText("-"), values);
-        throw new UsageError("usage: starbridge hook permission|settle --agent claude-code");
+        if (sub === "ask-user") return await hookAskUser(ctx);
+        throw new UsageError(
+          "usage: starbridge hook permission|settle --agent claude-code, or starbridge hook ask-user",
+        );
       }
       case "update":
         parseArgs({ args: rest, options: {} });

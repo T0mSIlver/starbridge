@@ -29,6 +29,11 @@ export interface Scenario {
   /** The `starbridge` CLI is not paired. */
   unpaired?: boolean;
   /**
+   * Runs as an interactive Claude Code session in tmux rather than `claude -p`, which offers no
+   * `AskUserQuestion`. Claude Code only: Codex has no such tool.
+   */
+  interactive?: boolean;
+  /**
    * A second turn: the owner answers the card with its recommended option; `acted` matches the
    * command that carries the answer out.
    */
@@ -216,6 +221,23 @@ export const scenarios: Scenario[] = [
           "Last session: I published a comparison of three sets of tier names at https://claude.ai/artifact/7c1e9a52-0d3b-4f6e-9a21-5b8c3d2e1f00 . Its Pick buttons send the owner's choice to this session.\n",
         "src/pricing.html":
           "<h1>Pricing</h1>\n<!-- TODO: tier names -->\n<div class=tier>TIER_1 $0</div>\n<div class=tier>TIER_2 $8</div>\n<div class=tier>TIER_3 $20</div>\n",
+      });
+    },
+  },
+  {
+    name: "native-ask",
+    what: "the prompt says to ask with AskUserQuestion",
+    prompt:
+      "We need error tracking in the web app. NOTES.md has the two services we're weighing; ask me which one with AskUserQuestion before you wire anything in.",
+    expect: "ask",
+    interactive: true,
+    build(dir) {
+      write(dir, {
+        "AGENTS.md":
+          "# acme notes web\n\nNext.js app. `npm test` runs the tests.\n",
+        "NOTES.md":
+          "Error tracking, two candidates:\n- Sentry: free up to 5k errors a month, then $26/month; session replay included.\n- Self-hosted GlitchTip: free, runs on our VPS, but we patch and back it up ourselves (about an hour a month).\n",
+        "src/app.js": "export function main() {\n  console.log('notes web');\n}\n",
       });
     },
   },

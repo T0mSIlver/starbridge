@@ -92,11 +92,20 @@ skip a step. `starbridge status` prints the same checks. `starbridge
 uninstall` removes the service, the plugins and then the binary, asks your devices to revoke
 the machine, and deletes the keys only when you say so (`--purge`).
 
+If you use the Claude app, turn off its "Code updates" notifications, which fire at the end of
+every turn, and keep "Code permission requests" on. If you turn on Starbridge's own permission
+prompts (below), turn "Code permission requests" off too, so one prompt does not notify twice.
+
 `starbridge permissions enable` sends this machine's Claude Code permission
 prompts to your devices too, where they can be allowed or denied; the prompt
 stays open at the keyboard and the first answer wins. The `starbridge`
 plugin's hooks run `starbridge hook permission` and `starbridge hook settle`,
 which do nothing while it is off (PROTOCOL.md, "Permission prompts").
+
+The plugin's `PreToolUse` hook runs `starbridge hook ask-user` on Claude Code's
+`AskUserQuestion`: it turns the question away and tells the agent to post it with `starbridge
+ask`, so it reaches you away from the terminal. When the machine is not paired or the server
+does not answer, the hook lets the question through.
 
 `quota push` runs `codexbar usage --format json` for each provider, or once
 for every enabled provider when none is named. A provider that fails or is

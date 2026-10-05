@@ -116,9 +116,11 @@ function sourceFor(input: AskInput, ctx: Ctx, machine: string): Decision["source
   };
 }
 
+/** The default a decision gets when the agent sets none: it waits for the owner. */
+export const NO_DEFAULT = "I wait for your answer";
+
 export function buildDecision(input: AskInput, ctx: Ctx, machine: string, to: string[]): Decision {
   if (!input.question) throw new UsageError("ask needs --question");
-  if (!input.default) throw new UsageError("ask needs --default: what you do if nobody answers");
   const options = input.options ?? [];
   const link = (l: string | DecisionLink) => (typeof l === "string" ? { url: l } : l);
   const links = (input.links ?? []).map(link);
@@ -135,7 +137,8 @@ export function buildDecision(input: AskInput, ctx: Ctx, machine: string, to: st
     context: input.context ?? "",
     options,
     ...(options.length > 0 ? { recommended: input.recommended ?? options[0] } : {}),
-    default: { action: input.default },
+    // Clients from before 2026-10-05 require a default (#127); agents set none (#121).
+    default: { action: input.default || NO_DEFAULT },
     source: sourceFor(input, ctx, machine),
     ...(links.length > 0 ? { links } : {}),
     ...(input.answerIn !== undefined ? { answerIn: link(input.answerIn) } : {}),

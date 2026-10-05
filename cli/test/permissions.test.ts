@@ -7,9 +7,9 @@ import { AgentClient } from "../src/agent/client";
 import { makeAgent } from "../src/agent/main";
 import type { Agent } from "../src/agent/server";
 import { run } from "../src/cli";
-import { hookPermission, hookSettle } from "../src/hook";
+import { ASK_USER_REASON, hookAskUser, hookPermission, hookSettle } from "../src/hook";
 import { buildPermission, DENIED, fitJson, redactText, summarize } from "../src/permissions";
-import { paired, type TestCtx, until } from "./helpers";
+import { paired, type TestCtx, testCtx, until } from "./helpers";
 
 setDefaultTimeout(30_000);
 
@@ -391,4 +391,25 @@ test("an unreachable server, bad input or another agent never blocks the hook", 
   expect(await hookPermission(ctx, "not json", { agent: "claude-code" })).toBe(0);
   expect(await hookPermission(ctx, request(), { agent: "codex" })).toBe(0);
   expect(ctx.lines).toEqual([]);
+});
+
+test("hook ask-user turns AskUserQuestion away while the server answers, and lets it through otherwise", async () => {
+  const unpaired = testCtx();
+  expect(await hookAskUser(unpaired)).toBe(0);
+  expect(unpaired.lines).toEqual([]);
+
+  const machine = await paired(server);
+  expect(await hookAskUser(machine)).toBe(0);
+  expect(JSON.parse(machine.lines[0] as string)).toEqual({
+    hookSpecificOutput: {
+      hookEventName: "PreToolUse",
+      permissionDecision: "deny",
+      permissionDecisionReason: ASK_USER_REASON,
+    },
+  });
+
+  machine.lines.length = 0;
+  server.failures.push("/healthz");
+  expect(await hookAskUser(machine)).toBe(0);
+  expect(machine.lines).toEqual([]);
 });

@@ -52,10 +52,10 @@ const model = opt.model ?? (agent === "claude" ? "sonnet" : "gpt-6.1-sol");
 const repo = join(import.meta.dir, "..", "..");
 const out = opt.out ?? join(import.meta.dir, "results", agent);
 mkdirSync(out, { recursive: true });
-// On disk rather than /tmp (a Codex home grows to 60 MB), and outside the repo and the
-// scratchpad: a path naming Starbridge would hint the agent.
-mkdirSync(join(homedir(), ".cache"), { recursive: true });
-const work = mkdtempSync(join(homedir(), ".cache", "skill-eval-"));
+// Never under the owner's home: Claude Code walks up from the project and would load
+// ~/.claude/CLAUDE.md as an ancestor's. Not in the scratchpad either: a path naming Starbridge
+// would hint the agent. Each run's folder goes once its record is written (a Codex home is 60 MB).
+const work = mkdtempSync("/tmp/skill-eval-");
 const bun = process.execPath;
 const which = (cmd: string) => {
   const r = spawnSync("sh", ["-c", `command -v ${cmd}`], { encoding: "utf8" });
@@ -104,6 +104,8 @@ exit 0
 
 interface Turn {
   commands: string[];
+  /** Each `AskUserQuestion` call, and whether a hook turned it away (else its dialog showed). */
+  askUser?: { denied: boolean }[];
   final: string;
   tokens?: number;
   costUsd?: number;
@@ -221,6 +223,104 @@ async function turn(
   return { commands, final, session, tokens, costUsd, exit, seconds: (Date.now() - t0) / 1000 };
 }
 
+/**
+ * One turn of an interactive Claude Code session in a detached tmux window, read from its
+ * transcript: `claude -p` offers no `AskUserQuestion`. Ends when the session idles, or when an
+ * `AskUserQuestion` dialog waits for the keyboard.
+ */
+async function interactiveTurn(
+  dir: string,
+  env: Record<string, string>,
+  prompt: string,
+  plugin: string,
+  cfg: string,
+): Promise<Turn & { session?: string }> {
+  const t0 = Date.now();
+  const id = crypto.randomUUID();
+  const tmux = `skill-eval-${id.slice(0, 8)}`;
+  // A fresh config dir would show onboarding and the folder-trust question first.
+  writeFileSync(
+    join(cfg, ".claude.json"),
+    JSON.stringify({
+      hasCompletedOnboarding: true,
+      theme: "dark",
+      projects: { [dir]: { hasTrustDialogAccepted: true } },
+    }),
+  );
+  const cmd = [
+    "env",
+    "-i",
+    ...Object.entries({ ...env, TERM: "xterm-256color" }).map(([k, v]) => `${k}=${v}`),
+    agentBin,
+    "--session-id",
+    id,
+    "--plugin-dir",
+    plugin,
+    "--setting-sources",
+    "project",
+    "--allowedTools",
+    "Bash Write Edit Read Glob Grep",
+    "--model",
+    model,
+    prompt,
+  ];
+  spawnSync("tmux", ["new-session", "-d", "-s", tmux, "-x", "200", "-y", "50", "-c", dir, ...cmd]);
+  const file = join(cfg, "projects", dir.replace(/[^a-zA-Z0-9]/g, "-"), `${id}.jsonl`);
+  const pane = () =>
+    spawnSync("tmux", ["capture-pane", "-p", "-t", tmux], { encoding: "utf8" }).stdout ?? "";
+  const entries = () =>
+    existsSync(file)
+      ? readFileSync(file, "utf8")
+          .split("\n")
+          .flatMap((l) => {
+            try {
+              return [JSON.parse(l)];
+            } catch {
+              return [];
+            }
+          })
+      : [];
+  // The pending call reaches the transcript only once answered, so its dialog is read off the
+  // pane: "Enter to select" twice in a row means it waits for the keyboard.
+  let quietSince = Date.now();
+  let lastSize = -1;
+  let dialog = 0;
+  while (Date.now() - t0 < 12 * 60_000) {
+    await Bun.sleep(2000);
+    const es = entries();
+    const p = pane();
+    dialog = /Enter to select/.test(p) ? dialog + 1 : 0;
+    if (dialog >= 2) break;
+    if (/esc to interrupt/i.test(p) || es.length !== lastSize) {
+      quietSince = Date.now();
+      lastSize = es.length;
+      continue;
+    }
+    if (es.some((e) => e.type === "assistant") && Date.now() - quietSince > 8000) break;
+  }
+  spawnSync("tmux", ["kill-session", "-t", tmux]);
+  const es = entries();
+  const results = new Map<string, boolean>();
+  for (const e of es)
+    if (e.type === "user" && Array.isArray(e.message?.content))
+      for (const b of e.message.content)
+        if (b.type === "tool_result") results.set(b.tool_use_id, !!b.is_error);
+  const commands: string[] = [];
+  const askUser: { denied: boolean }[] = [];
+  let final = "";
+  for (const e of es) {
+    if (e.type !== "assistant") continue;
+    for (const b of e.message?.content ?? []) {
+      if (b.type === "tool_use" && b.name === "Bash") commands.push(b.input?.command ?? "");
+      if (b.type === "tool_use" && b.name === "AskUserQuestion")
+        askUser.push({ denied: results.get(b.id) === true });
+      if (b.type === "text" && b.text) final = b.text;
+    }
+  }
+  if (dialog >= 2) askUser.push({ denied: false });
+  return { commands, askUser, final, session: id, exit: 0, seconds: (Date.now() - t0) / 1000 };
+}
+
 const strip = (items: Record<string, unknown>[]) =>
   items.map((d) => ({
     ...d,
@@ -314,7 +414,9 @@ async function one(s: Scenario, arm: string, rep: number): Promise<RunRecord> {
     for (const b of s.name === "design-pick" ? ["settings-roomy", "settings-compact"] : [])
       sh("git", ["branch", b], proj, env);
 
-    const first = await turn(proj, env, s.prompt, plugin);
+    const first = s.interactive
+      ? await interactiveTurn(proj, env, s.prompt, plugin, cfg)
+      : await turn(proj, env, s.prompt, plugin);
     rec.turns.push(first);
     const opened = s.unpaired ? [] : ((await live.opened("decision")) as Record<string, unknown>[]);
     rec.decisions = strip(opened);
@@ -347,7 +449,9 @@ async function one(s: Scenario, arm: string, rep: number): Promise<RunRecord> {
 
 const only = opt.only ? new Set((opt.only as string).split(",")) : undefined;
 const jobs: (() => Promise<RunRecord>)[] = [];
-for (const s of scenarios.filter((x) => !only || only.has(x.name)))
+for (const s of scenarios.filter(
+  (x) => (!only || only.has(x.name)) && (agent === "claude" || !x.interactive),
+))
   for (const arm of Object.keys(arms))
     for (let rep = 1; rep <= Number(opt.reps); rep++) jobs.push(() => one(s, arm, rep));
 

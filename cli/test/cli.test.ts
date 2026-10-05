@@ -8,6 +8,7 @@ import jpeg from "jpeg-js";
 import jsQR from "jsqr";
 import { PNG } from "pngjs";
 import { run } from "../src/cli";
+import { NO_DEFAULT } from "../src/decisions";
 import { FAKE_CODEXBAR, paired, testCtx, until } from "./helpers";
 
 let server: LiveServer;
@@ -243,9 +244,14 @@ test("ask refuses a decision that would not stand alone", async () => {
   const ctx = await paired(server);
   expect(await run(["ask", "--question", "Q?", "--option", "Only", "--default", "x"], ctx)).toBe(1);
   expect(await run([...ASK, "--recommended", "Neither"], ctx)).toBe(1);
-  expect(await run(["ask", "--question", "Q?"], ctx)).toBe(1);
-  expect(ctx.errors.at(-1)).toContain("--default");
   expect(await server.opened("decision")).toEqual([]);
+});
+
+test("ask without --default waits for the owner: no default time", async () => {
+  const ctx = await paired(server);
+  expect(await run(["ask", "--question", "Q?", "--option", "A", "--option", "B"], ctx)).toBe(0);
+  const [d] = await server.opened("decision");
+  expect(d?.default).toEqual({ action: NO_DEFAULT });
 });
 
 test("ask --wait prints the answer the phone sends", async () => {
