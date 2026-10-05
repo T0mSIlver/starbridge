@@ -146,6 +146,8 @@
   --size-aside: 320px;
   --size-pane-head: 48px;
   --size-content: 720px;
+  --size-settings-label: 220px;
+  --size-quota-provider: 200px;
   --size-track: 10px;
   --size-track-dense: 6px;
   --size-tick: 2px;

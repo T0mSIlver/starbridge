@@ -1,0 +1,49 @@
+/* A list reordered live (Reorder.tsx). The dragged item follows the pointer with no transition;
+   the others slide aside at `motion.state`; on release it settles at `motion.fast`. Reduced
+   motion turns the slides off in globals.css, and the order still changes. */
+
+.active .item {
+  transition: transform var(--t-state) var(--ease);
+}
+
+.dragged {
+  position: relative;
+  z-index: 2;
+  background: var(--surface);
+  box-shadow: 0 0 0 1px var(--line-strong);
+  cursor: grabbing;
+}
+
+.settling {
+  transition: transform var(--t-fast) var(--ease);
+}
+
+/* The handle takes the pointer whole, so a touch drags the item rather than the page. */
+.handle {
+  display: grid;
+  place-items: center;
+  flex: none;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--fg3);
+  cursor: grab;
+  touch-action: none;
+  transition: color var(--t-fast) var(--ease);
+}
+
+.handle[aria-disabled="true"] {
+  visibility: hidden;
+}
+
+@media (hover: hover) {
+  .handle:hover {
+    color: var(--fg);
+  }
+}
+
+.active,
+.active * {
+  cursor: grabbing;
+  user-select: none;
+}

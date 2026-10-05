@@ -768,6 +768,24 @@ export function revoke(ctx: Ctx, id: string): Promise<Ctx> {
   return append(ctx, (dir) => revokeEntryAsync(dir, me(ctx), id, now()));
 }
 
+/**
+ * Signs this browser out, as Android's Sign out does: it leaves the account's devices unless it
+ * is the last one (which would leave only the recovery key), ends its session, drops its push
+ * subscription and forgets its keys and what it answered.
+ */
+export async function signOut(ctx: Ctx): Promise<void> {
+  const others = [...ctx.dir.members.values()].filter(
+    (m) => m.member.role === "device" && m.active && m.member.id !== ctx.device.id,
+  );
+  if (others.length > 0) await revoke(ctx, ctx.device.id).catch(() => {});
+  await api.logout().catch(() => {});
+  const reg = await navigator.serviceWorker?.getRegistration("/").catch(() => undefined);
+  await (await reg?.pushManager.getSubscription())?.unsubscribe().catch(() => {});
+  for (const kind of ["device", "pin", "answers", "promptAnswers"] as const)
+    await store.del(kind, ctx.account);
+  await store.del("current");
+}
+
 // --- Decisions ------------------------------------------------------------------------------
 
 export interface Inbox {

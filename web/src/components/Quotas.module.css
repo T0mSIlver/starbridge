@@ -20,7 +20,7 @@
   color: var(--bad);
 }
 
-/* One card per provider, apart as Android's cards are, with no line between them. */
+/* Under 900 px, one card per provider, apart as Android's cards are, with no line between them. */
 .rows {
   display: grid;
   gap: var(--s3);
@@ -54,5 +54,37 @@
 
   .rows {
     padding: 0;
+  }
+}
+
+/* From 900 px: one table, as dense as the inbox, the full width up to `size.page`. */
+@media (min-width: 900px) {
+  .page {
+    max-width: calc(var(--size-page) + 2 * var(--s16));
+  }
+
+  .rows {
+    gap: 0;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-md);
+    background: var(--surface);
+  }
+
+  .rows > * {
+    border: 0;
+    border-radius: 0;
+    background: var(--surface);
+  }
+
+  .rows > :first-child {
+    border-radius: var(--radius-md) var(--radius-md) 0 0;
+  }
+
+  .rows > :last-of-type {
+    border-radius: 0 0 var(--radius-md) var(--radius-md);
+  }
+
+  .rows > * + * {
+    border-top: 1px solid var(--line);
   }
 }
