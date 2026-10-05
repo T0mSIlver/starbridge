@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { closedAt } from "@/lib/outcome";
 import { useApp } from "./AppProvider";
 import { DevicesIcon, GaugeIcon, InboxIcon, Mark } from "./icons";
 import s from "./Shell.module.css";
@@ -14,7 +15,7 @@ const TABS = [
 
 export function Shell({ children }: { children: React.ReactNode }) {
   const path = usePathname();
-  const open = useApp().inbox.items.filter((item) => !item.answeredAt).length;
+  const open = useApp().inbox.items.filter((item) => !closedAt(item)).length;
   return (
     <div className={s.frame}>
       <nav className={s.nav} aria-label="Main">

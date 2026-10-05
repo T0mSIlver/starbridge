@@ -29,6 +29,18 @@ fun elapsed(from: Instant, to: Instant): String {
 fun ago(now: Instant, then: Instant): String =
     if (Duration.between(then, now).toMinutes() < 1) "just now" else "${span(then, now)} ago"
 
+/** "at 22:00" today, "tomorrow at 09:00", else "on Tue 6 Oct at 09:00", in the phone's zone. */
+fun moment(at: Instant, now: Instant, zone: java.time.ZoneId = java.time.ZoneId.systemDefault()): String {
+    val day = at.atZone(zone).toLocalDate()
+    val today = now.atZone(zone).toLocalDate()
+    val time = "at ${clock(at, zone)}"
+    return when (day) {
+        today -> time
+        today.plusDays(1) -> "tomorrow $time"
+        else -> "on ${java.time.format.DateTimeFormatter.ofPattern("EEE d MMM", java.util.Locale.ENGLISH).format(day)} $time"
+    }
+}
+
 /** "22:00" in the phone's zone. */
 fun clock(at: Instant, zone: java.time.ZoneId = java.time.ZoneId.systemDefault()): String =
     java.time.format.DateTimeFormatter.ofPattern("HH:mm").withZone(zone).format(at)

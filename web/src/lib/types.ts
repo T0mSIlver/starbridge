@@ -25,6 +25,8 @@ export type InboxItem = {
   answeredAt?: string;
   /** The answer, when this browser sent it; other devices' answers are sealed to the machine. */
   reply?: Reply;
+  /** How the machine closed it, when its settled notice did rather than an answer. */
+  settled?: Settled["outcome"];
 };
 
 /** An answer to a permission prompt: allow for a scope, or deny with a note to the agent. */

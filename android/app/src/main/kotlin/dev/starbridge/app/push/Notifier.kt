@@ -18,6 +18,8 @@ import dev.starbridge.app.data.Alerts
 import dev.starbridge.app.data.Colours
 import dev.starbridge.app.data.Decision
 import dev.starbridge.app.data.Prefs
+import dev.starbridge.app.data.bitmap
+import dev.starbridge.app.data.place
 import dev.starbridge.app.data.Prompt
 import dev.starbridge.app.data.Run
 import dev.starbridge.app.protocol.RUN_STALE_MS
@@ -87,7 +89,7 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
             .setContentTitle(d.question)
             .setContentText(d.context)
             .setSubText(d.source.machine)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(d.context + "\n\nIf nobody answers: " + d.default))
+            .setStyle(style(d))
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
@@ -101,6 +103,16 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
             )
             .setContentIntent(open)
             .setOnlyAlertOnce(true)
+    }
+
+    /**
+     * The first image as the big picture, with the context beneath it, when the decision has
+     * one; else the context in full and the default.
+     */
+    private fun style(d: Decision): NotificationCompat.Style {
+        val picture = d.images.firstOrNull()?.bitmap(PICTURE_EDGE)
+            ?: return NotificationCompat.BigTextStyle().bigText(d.context + "\n\nIf nobody answers: " + d.default)
+        return NotificationCompat.BigPictureStyle().bigPicture(picture).setSummaryText(d.context)
     }
 
     /**
@@ -124,7 +136,18 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
         if (!allowed()) return
         val b = base(decision)
         if (note != null) b.setContentText(note).setStyle(NotificationCompat.BigTextStyle().bigText(note)).setSilent(true)
-        if (decision.options.isEmpty()) {
+        val page = decision.answerIn
+        if (page != null) {
+            // Answered on that page, never here: the one button opens it. A claude.ai link goes to
+            // the Claude app when that app claims it, else the browser.
+            val view = PendingIntent.getActivity(
+                context,
+                tag(decision.id),
+                Intent(Intent.ACTION_VIEW, Uri.parse(page.url)),
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+            )
+            b.addAction(NotificationCompat.Action.Builder(0, "Answer in ${page.place()}", view).build())
+        } else if (decision.options.isEmpty()) {
             val input = RemoteInput.Builder(AnswerReceiver.EXTRA_TEXT).setLabel("Your answer").build()
             b.addAction(
                 NotificationCompat.Action.Builder(0, "Answer", answerIntent(decision, null, tag(decision.id), mutable = true))
@@ -364,5 +387,8 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
         const val PROMPTS = "prompts"
         const val JOIN_CHANNEL = "joins"
         const val RUNS = "runs"
+
+        /** Wide enough for an expanded notification on any phone, small enough for its bitmap limit. */
+        private const val PICTURE_EDGE = 1024
     }
 }

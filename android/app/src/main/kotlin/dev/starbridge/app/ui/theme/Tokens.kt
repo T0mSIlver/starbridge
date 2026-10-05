@@ -292,6 +292,7 @@ object Sizes {
     val rail = 240.dp
     val content = 720.dp
     val track = 10.dp
+    val media = 360.dp
 }
 
 object Motion {

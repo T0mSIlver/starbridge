@@ -313,10 +313,16 @@ async function main() {
       "3f2a9c1e-5b7d-4e8a-9c0f-1d2e3f4a5b6c",
       "--session-title",
       "Merge the server PR (#19)",
-      "--link",
+      "--session-link",
       "remote-control=https://claude.ai/code/session_01UZCLSHk7GjaUdtNBsLAvvt",
-      "--link",
+      "--session-link",
       "desktop=claude://claude.ai/epitaxy/local_dbf54d69-f2ac-4a14-b298-d7bb6ecf0e3f",
+      "--image",
+      join(ROOT, "android/app/screenshots/decision-light.png"),
+      "--image",
+      join(ROOT, "android/app/screenshots/decision-dark.png"),
+      "--link",
+      "https://claude.ai/public/artifacts/0b3f0e7c",
     ],
     machineHome,
   );
@@ -336,6 +342,17 @@ async function main() {
   )
     throw new Error("the open decision has no Open session link to its Remote Control session");
   await page.getByText("Merge the server PR (#19)").first().waitFor();
+  const pane = page.locator('section[aria-label="Selected decision"]');
+  const widths = await pane
+    .locator("img")
+    .evaluateAll((imgs) => imgs.map((i) => (i as HTMLImageElement).naturalWidth));
+  if (widths.length !== 2 || widths.some((w) => w === 0))
+    throw new Error(`the open decision shows ${widths.length} images, widths ${widths}`);
+  if (
+    (await pane.getByRole("link", { name: "Claude artifact" }).getAttribute("href")) !==
+    "https://claude.ai/public/artifacts/0b3f0e7c"
+  )
+    throw new Error("the open decision has no chip for its Claude artifact");
 
   // Desktop: one selection, whether picked by click or by J and K; focus follows it in the list.
   const row = page.locator('button[aria-current="true"]');
@@ -351,6 +368,37 @@ async function main() {
     if (!(await row.evaluate((el) => el === document.activeElement)))
       throw new Error(`after ${key}, focus is not on the selected row`);
   }
+  step("a decision answered in an artifact links it, and `starbridge settle` closes it");
+  const artifact = "https://claude.ai/artifact/2ig2MyNRD484b7oZea5vkZ";
+  const pointer = cli(
+    "pointer",
+    [
+      ...["ask", "--question", "Which of the three settings layouts should ship?"],
+      ...[
+        "--context",
+        "Each layout is live in the artifact. Its buttons send your pick to the session.",
+      ],
+      ...["--answer-in", artifact, "--default", "Ship the roomy layout"],
+      ...["--project", "starbridge", "--session-title", "Settings screen (#88)"],
+    ],
+    machineHome,
+  );
+  const [pointerId] = await pointer.waitFor(/d_[\w-]+/);
+  if ((await pointer.exited) !== 0) throw new Error("ask --answer-in failed");
+  const pointerRow = page.locator(`button[data-id="${pointerId}"]`);
+  await pointerRow.waitFor({ timeout: 30_000 });
+  await pointerRow.click();
+  const answerIn = pane.getByRole("link", { name: "Answer in the artifact" });
+  if ((await answerIn.getAttribute("href")) !== artifact)
+    throw new Error("the decision does not link the artifact it is answered in");
+  if ((await pane.locator("fieldset, textarea").count()) > 0)
+    throw new Error("a decision answered in an artifact also offers an answer here");
+  await shoot(page, "answer-in");
+  const settle = cli("settle", ["settle", pointerId as string], machineHome);
+  if ((await settle.exited) !== 0) throw new Error("settle failed");
+  // The settled notice arrives by Web Push, and the page reloads the inbox.
+  await pointerRow.getByText("Answered in the artifact").waitFor({ timeout: 30_000 });
+
   await page.getByRole("link", { name: "Quotas" }).click();
   await page.locator("article").first().waitFor();
   await shoot(page, "quotas");

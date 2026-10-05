@@ -6,7 +6,7 @@ import { answersVia, askVia, quotaVia, waitVia } from "./agent/commands";
 import { runAgent } from "./agent/main";
 import { ApiError } from "./api";
 import { type Ctx, UsageError } from "./context";
-import { type AskInput, answers, ask, wait } from "./decisions";
+import { type AskInput, answers, ask, settle, wait } from "./decisions";
 import { hookPermission, hookSettle, permissionsCommand } from "./hook";
 import { pair } from "./pair";
 import { pushOnce, quotaPush } from "./quota";
@@ -51,11 +51,24 @@ const HELP = `starbridge: post decisions to your devices, report runs, upload qu
       --project <name>        default: the current directory's name
       --session <id>          default: $CLAUDE_CODE_SESSION_ID
       --session-title <text>  default: the Claude Code session's name
-      --link <kind>=<url>     where to open the session, up to 3 times; kind is
+      --image <path>          a PNG or JPEG to show with the question, up to 4 times;
+                              scaled down to fit the server's size cap
+      --link <url>            an https page to open, such as a claude.ai artifact,
+                              up to 4 times; context only, the answer still comes here
+      --answer-in <url>       the https page where the owner answers instead, such as
+                              an artifact whose button wakes you; takes no --option.
+                              Close it with \`settle\` once you have the answer
+      --session-link <kind>=<url>
+                              where to open the session, up to 3 times; kind is
                               remote-control, desktop or web (default: what Claude
                               Code records for the session: Remote Control, Desktop)
       --json <path>           read these fields from a JSON file ("-" for stdin)
       --wait                  then wait for the answer, as \`wait\` does
+
+  starbridge settle <decision id> [--outcome elsewhere|withdrawn]
+      Close a decision without a Starbridge answer: answered on its --answer-in page
+      (elsewhere, the default for those) or no longer needed (withdrawn). Devices move it
+      out of the inbox, and no default-time notice follows.
 
   starbridge wait [<decision id>] [--timeout <duration>] [--json]
       Print the answer, or with no id the next answer to any decision from this machine.
@@ -118,10 +131,10 @@ function interactive(): Prompt {
   return terminalPrompt();
 }
 
-/** `--link remote-control=https://claude.ai/code/session_…`; the schema checks kind and URL. */
-function parseLink(text: string): SessionLink {
+/** `--session-link remote-control=https://claude.ai/code/session_…`; the schema checks both. */
+function parseSessionLink(text: string): SessionLink {
   const at = text.indexOf("=");
-  if (at <= 0) throw new UsageError(`--link takes <kind>=<url>: ${text}`);
+  if (at <= 0) throw new UsageError(`--session-link takes <kind>=<url>: ${text}`);
   return { kind: text.slice(0, at), url: text.slice(at + 1) } as SessionLink;
 }
 
@@ -159,7 +172,10 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
             project: { type: "string" },
             session: { type: "string" },
             "session-title": { type: "string" },
+            "session-link": { type: "string", multiple: true },
+            image: { type: "string", multiple: true },
             link: { type: "string", multiple: true },
+            "answer-in": { type: "string" },
             json: { type: "string" },
             wait: { type: "boolean" },
             timeout: { type: "string" },
@@ -178,14 +194,29 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
           ...(v.project !== undefined ? { project: v.project } : {}),
           ...(v.session !== undefined ? { session: v.session } : {}),
           ...(v["session-title"] !== undefined ? { sessionTitle: v["session-title"] } : {}),
-          ...(v.link !== undefined ? { links: v.link.map(parseLink) } : {}),
+          ...(v["session-link"] !== undefined
+            ? { sessionLinks: v["session-link"].map(parseSessionLink) }
+            : {}),
+          ...(v.image !== undefined ? { images: v.image } : {}),
+          ...(v.link !== undefined ? { links: v.link } : {}),
+          ...(v["answer-in"] !== undefined ? { answerIn: v["answer-in"] } : {}),
         };
+        if (v.wait && input.answerIn !== undefined)
+          throw new UsageError("--answer-in takes no --wait: the answer comes from that page");
         const opts = { wait: v.wait, timeout: v.timeout };
         return await withAgent(
           ctx,
           (agent) => askVia(ctx, agent, input, opts),
           () => ask(ctx, input, opts),
         );
+      }
+      case "settle": {
+        const { values, positionals } = parseArgs({
+          args: rest,
+          allowPositionals: true,
+          options: { outcome: { type: "string" } },
+        });
+        return await settle(ctx, { id: positionals[0], ...values });
       }
       case "wait": {
         const { values, positionals } = parseArgs({

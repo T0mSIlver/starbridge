@@ -239,6 +239,7 @@ size:
   rail: 240
   content: 720
   track: 10
+  media: 360 # the tallest an attached image shows in a decision
 # The web's stand-ins for Material's motion scheme; Android uses
 # MotionScheme.expressive() and these only where Compose takes a duration.
 motion:

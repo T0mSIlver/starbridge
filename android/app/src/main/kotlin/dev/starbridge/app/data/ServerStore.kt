@@ -13,7 +13,6 @@ import dev.starbridge.app.protocol.Joins
 import dev.starbridge.app.protocol.KeyPair
 import dev.starbridge.app.protocol.PairingApprovalBody
 import dev.starbridge.app.protocol.Permission
-import dev.starbridge.app.protocol.Settled
 import dev.starbridge.app.protocol.PairingCode
 import dev.starbridge.app.protocol.PairingRequestBody
 import dev.starbridge.app.protocol.Pairings
@@ -25,6 +24,7 @@ import dev.starbridge.app.protocol.RECOVERY
 import dev.starbridge.app.protocol.Run as RunBody
 import dev.starbridge.app.protocol.SealedBox
 import dev.starbridge.app.protocol.SealedItem
+import dev.starbridge.app.protocol.Settled
 import dev.starbridge.app.protocol.SignedEnvelope
 import dev.starbridge.app.protocol.Sodium
 import dev.starbridge.app.protocol.bindMessage
@@ -38,6 +38,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -113,6 +114,7 @@ class ServerStore(
     override val server = MutableStateFlow(saved.server)
     override val busy = MutableStateFlow(false)
     override val notice = MutableStateFlow<String?>(null)
+    override val sending = MutableStateFlow<Map<String, String>>(emptyMap())
 
     init {
         directory = runCatching { verified(saved.entries) }.getOrNull()
@@ -574,19 +576,32 @@ class ServerStore(
     private suspend fun syncDecisions() {
         var cursor = saved.cursor
         val byId = saved.decisions.associateBy { it.body.id }.toMutableMap()
+        // How each item a settled notice closed was closed, with the time: the notice lists before
+        // the decision it closed, which moved past it.
+        val closings = mutableMapOf<String, Pair<String?, String>>()
         while (true) {
-            val page = api().items("decision", cursor)
+            val page = api().items("decision,settled", cursor)
             for (listed in page.items) {
+                if (listed.item.kind == "settled") {
+                    val (_, body) = open(listed.item) ?: continue
+                    body as Settled
+                    closings[body.itemId] = body.outcome to listed.receivedAt
+                    continue
+                }
+                // The notice that closed it arrived in the same write, so it carries the same time;
+                // a later one, after a device's answer, closed nothing.
+                val settled = closings[listed.item.id]?.takeIf { it.second == listed.answeredAt }?.first
                 val known = byId[listed.item.id]
                 if (known != null) {
-                    if (listed.answeredAt != null && known.answeredAt == null) {
-                        byId[known.body.id] = known.copy(answeredAt = listed.answeredAt)
+                    // A settled push marked it answered already, without saying how.
+                    if (listed.answeredAt != null && (known.answeredAt == null || settled != null)) {
+                        byId[known.body.id] = known.copy(answeredAt = listed.answeredAt, settled = settled ?: known.settled)
                         alerts.cancel(known.body.id)
                     }
                     continue
                 }
                 val (from, body) = open(listed.item) ?: continue
-                byId[listed.item.id] = SavedDecision(from, body as DecisionBody, listed.answeredAt)
+                byId[listed.item.id] = SavedDecision(from, body as DecisionBody, listed.answeredAt, settled = settled)
             }
             cursor = page.cursor
             if (page.items.size < 100) break
@@ -634,7 +649,7 @@ class ServerStore(
                 val notice = body as Settled
                 val p = byId[notice.itemId]
                 if (p == null) {
-                    settleDecision(notice.itemId, from)
+                    settleDecision(notice.itemId, from, notice.outcome)
                     return null
                 }
                 if (p.from != from) return null
@@ -646,10 +661,11 @@ class ServerStore(
     }
 
     /** A settled notice may close one of the machine's decisions: it counts as answered. */
-    private fun settleDecision(id: String, from: String) {
+    /** A notice after a device's answer closed nothing, so only an open decision takes its [outcome]. */
+    private fun settleDecision(id: String, from: String, outcome: String?) {
         val d = saved.decisions.find { it.body.id == id && it.from == from } ?: return
         alerts.cancel(id)
-        if (d.answeredAt == null) persist(saved.copy(decisions = saved.decisions.map { if (it === d) it.copy(answeredAt = now()) else it }))
+        if (d.answeredAt == null && d.answer == null) persist(saved.copy(decisions = saved.decisions.map { if (it === d) it.copy(answeredAt = now(), settled = outcome) else it }))
     }
 
     /** Keeps a week of prompts, the log's span, as the server does. */
@@ -743,7 +759,18 @@ class ServerStore(
 
     // --- Answering ---------------------------------------------------------------
 
-    override fun answer(id: String, choice: String?, text: String?) = run(showBusy = false) { send(id, choice, text) }
+    /** One answer per decision at a time: the decision stays locked until the server replies. */
+    override fun answer(id: String, choice: String?, text: String?) {
+        if (id in sending.value) return
+        sending.update { it + (id to (choice ?: text.orEmpty())) }
+        run(showBusy = false) {
+            try {
+                send(id, choice, text)
+            } finally {
+                sending.update { it - id }
+            }
+        }
+    }
 
     /**
      * Signs the answer and seals it to the machine that asked, the only recipient the server
@@ -1144,8 +1171,12 @@ class ServerStore(
                 b.source.links.orEmpty().map { SessionLink(it.kind, it.url) },
             ),
             createdAt = instant(b.createdAt) ?: Instant.EPOCH,
+            images = b.images.orEmpty().map { Image(it.data, it.width, it.height, it.alt) },
+            links = b.links.orEmpty().map { Link(it.url, it.title) },
+            answerIn = b.answerIn?.let { Link(it.url, it.title) },
             answer = d.answer,
             answeredAt = instant(d.answeredAt) ?: d.answer?.let { Instant.now() },
+            settled = d.settled,
         )
     }
 

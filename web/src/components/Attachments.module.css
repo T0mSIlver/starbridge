@@ -1,0 +1,75 @@
+.images {
+  display: grid;
+  gap: var(--s2);
+}
+
+/* Two or more: two columns, so a pair of mockups sits side by side. */
+.grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.image {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-lg);
+  background: var(--surface2);
+  overflow: hidden;
+  cursor: zoom-in;
+}
+
+.image img {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: var(--size-media);
+  object-fit: contain;
+}
+
+.thumb {
+  flex: none;
+  align-self: flex-start;
+  width: var(--s10);
+  height: var(--s10);
+  border-radius: var(--radius-sm);
+  object-fit: cover;
+  background: var(--surface2);
+}
+
+.links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+}
+
+/* An assist chip (Material 3): outlined, small corners, an icon before the label. */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  min-height: var(--s8);
+  max-width: 100%;
+  padding: 0 var(--s4) 0 var(--s2);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  color: var(--fg);
+  text-decoration: none;
+  transition: background var(--t-fast);
+}
+
+.chip span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chip svg {
+  flex: none;
+  color: var(--fg2);
+}
+
+.chip:hover {
+  background: var(--surface2);
+}
