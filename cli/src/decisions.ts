@@ -142,6 +142,7 @@ export function buildDecision(input: AskInput, ctx: Ctx, machine: string, to: st
     source: sourceFor(input, ctx, machine),
     ...(links.length > 0 ? { links } : {}),
     ...(input.answerIn !== undefined ? { answerIn: link(input.answerIn) } : {}),
+    ...(options.length > 0 ? { replies: true as const } : {}),
   };
   return checked(decision);
 }
@@ -347,7 +348,7 @@ export async function settle(ctx: Ctx, opts: { id?: string; outcome?: string }):
 
 /**
  * Checks an answer item: sealed to this machine, signed by an active device, for a decision this
- * machine asked, with one of that decision's options (or free text when it had none).
+ * machine asked, with one of that decision's options or a typed reply.
  */
 export function checkAnswer(
   raw: unknown,
@@ -364,12 +365,10 @@ export function checkAnswer(
   );
   const decision = asked[body.decisionId];
   if (!decision) throw new ProtocolError("unknown-member", `not my decision: ${body.decisionId}`);
-  if (decision.options.length > 0) {
-    if (body.choice === undefined || !decision.options.includes(body.choice))
-      throw new ProtocolError("bad-schema", "choice is not one of the options");
-  } else if (body.text === undefined) {
-    throw new ProtocolError("bad-schema", "free-text decision answered with a choice");
-  }
+  // A typed reply answers any decision (`replies`); a choice must be one of its options. The
+  // schema already holds an answer to exactly one of the two.
+  if (body.choice !== undefined && !decision.options.includes(body.choice))
+    throw new ProtocolError("bad-schema", "choice is not one of the options");
   return body;
 }
 
