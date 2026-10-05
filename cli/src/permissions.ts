@@ -428,6 +428,12 @@ export function outcomeOf(p: PendingPermission | undefined): PermissionOutcome {
   return {};
 }
 
+/**
+ * Sent with a deny that carries no message. Without one Claude Code tells the agent "Permission
+ * denied by hook", which reads as a misconfigured hook rather than the owner's choice.
+ */
+export const DENIED = "The owner denied this on their phone or browser, through Starbridge.";
+
 /** What Claude Code's `PermissionRequest` hook prints for an accepted answer. */
 export function hookDecision(p: PendingPermission): unknown {
   const a = p.answer;
@@ -438,7 +444,7 @@ export function hookDecision(p: PendingPermission): unknown {
           behavior: "allow",
           ...(a.scope !== "once" ? { updatedPermissions: updatesFor(p.updates, a.scope) } : {}),
         }
-      : { behavior: "deny", ...(a.message ? { message: a.message } : {}) };
+      : { behavior: "deny", message: a.message || DENIED };
   return { hookSpecificOutput: { hookEventName: "PermissionRequest", decision } };
 }
 

@@ -8,7 +8,7 @@ import { makeAgent } from "../src/agent/main";
 import type { Agent } from "../src/agent/server";
 import { run } from "../src/cli";
 import { hookPermission, hookSettle } from "../src/hook";
-import { buildPermission, fitJson, redactText, summarize } from "../src/permissions";
+import { buildPermission, DENIED, fitJson, redactText, summarize } from "../src/permissions";
 import { paired, type TestCtx, until } from "./helpers";
 
 setDefaultTimeout(30_000);
@@ -121,6 +121,14 @@ test("a deny carries its message to the agent", async () => {
     behavior: "deny",
     message: "Push to a branch instead",
   });
+});
+
+test("a deny without a message tells the agent the owner denied it", async () => {
+  const ctx = await machine();
+  const { out, permission } = await ask(ctx);
+  await server.answerPermission(permission.id, { behavior: "deny", scope: "once" });
+  await out;
+  expect(decision(ctx).hookSpecificOutput.decision).toEqual({ behavior: "deny", message: DENIED });
 });
 
 test("wider scopes return Claude Code's own rules with the scope's destination; mode changes are never offered", async () => {
