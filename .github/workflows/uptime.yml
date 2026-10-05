@@ -34,7 +34,7 @@ jobs:
           }
           failed=""
           out=$(check "$BASE_URL/healthz") || failed="$failed- \`$BASE_URL/healthz\`: $out"$'\n'
-          out=$(check "$BASE_URL/healthz" # test: backup route not deployed yet) ||
+          out=$(check "$BASE_URL/healthz") ||
             failed="$failed- \`$BASE_URL/healthz/backup\`: no good backup in the last 26 h, or the server is down ($out)"$'\n'
           {
             echo "failed<<EOF"
@@ -43,10 +43,11 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Open, update or close the outage issue
+        if: ${{ !cancelled() }}
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          FAILED: ${{ steps.check.outputs.failed }}
+          FAILED: ${{ steps.check.outcome == 'success' && steps.check.outputs.failed || '- The check step itself failed; see the run.' }}
         run: |
           now=$(date -u '+%Y-%m-%d %H:%M UTC')
           issue=$(gh issue list --label outage --state open --json number --jq '.[0].number // empty')
