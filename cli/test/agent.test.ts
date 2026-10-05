@@ -383,7 +383,8 @@ async function codexHome(fail = false) {
     `#!/bin/sh\necho "$CODEX_HOME $*" >> ${log}\n${fail ? "echo 'no active session' >&2; exit 1" : ""}\n`,
     { mode: 0o755 },
   );
-  const env = { CODEX_THREAD_ID: "t1", CODEX_HOME: home, PATH: bin };
+  // Started from a Claude Code shell, Codex inherits its session id too.
+  const env = { CODEX_THREAD_ID: "t1", CLAUDE_CODE_SESSION_ID: "c1", CODEX_HOME: home, PATH: bin };
   return { env, log, close: () => new Promise<void>((r) => daemon.close(() => r())) };
 }
 

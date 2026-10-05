@@ -86,11 +86,15 @@ export function resolveSource(
   env: Ctx["env"],
   cwd: string,
 ): AskInput & { project: string; session: string; sessionLinks: SessionLink[] } {
-  const session = input.session ?? env.CLAUDE_CODE_SESSION_ID ?? env.CODEX_THREAD_ID ?? "";
   const agent = agentOf(input, env).agent;
+  // The id of the agent that asks: an agent started from another one's shell inherits its id too.
+  const session =
+    input.session ?? (agent === "codex" ? env.CODEX_THREAD_ID : env.CLAUDE_CODE_SESSION_ID) ?? "";
   const codex = agent === "codex" ? (input.codex ?? codexSession(env)) : undefined;
   const claude =
-    session && (input.sessionTitle === undefined || input.sessionLinks === undefined)
+    session &&
+    agent !== "codex" &&
+    (input.sessionTitle === undefined || input.sessionLinks === undefined)
       ? claudeSession(env, session)
       : undefined;
   const title = input.sessionTitle ?? claude?.title;
