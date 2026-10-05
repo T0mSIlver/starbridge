@@ -55,3 +55,7 @@ fun resetClock(at: Instant, now: Instant, zone: java.time.ZoneId = java.time.Zon
         else -> "${java.time.format.DateTimeFormatter.ofPattern("d MMM", java.util.Locale.ENGLISH).format(day)}, ${clock(at, zone)}"
     }
 }
+
+/** "now", "12 min", "2 h 5 min": how long ago, for a meta row. */
+fun since(then: Instant, now: Instant): String =
+    if (Duration.between(then, now).toMinutes() < 1) "now" else span(then, now)
