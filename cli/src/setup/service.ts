@@ -4,7 +4,7 @@
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { delimiter, dirname, join } from "node:path";
-import { lastLine, run, type Sys } from "./sys";
+import { failure, run, type Sys } from "./sys";
 
 export const UNIT = "starbridge-agent.service";
 export const LABEL = "run.starbridge.agent";
@@ -134,7 +134,7 @@ export async function unavailable(sys: Sys): Promise<string | undefined> {
   if (k === "systemd") {
     const r = await systemctl(sys, "show-environment");
     if (r === null) return "systemctl is not installed";
-    if (r.code !== 0) return `no systemd user manager (${lastLine(r)})`;
+    if (r.code !== 0) return `no systemd user manager (${failure(r)})`;
   }
   return undefined;
 }
@@ -170,12 +170,12 @@ export async function installService(
     ];
     for (const args of steps) {
       const r = await systemctl(sys, ...args);
-      if (r?.code !== 0) throw new Error(`systemctl --user ${args.join(" ")}: ${lastLine(r)}`);
+      if (r?.code !== 0) throw new Error(`systemctl --user ${args.join(" ")}: ${failure(r)}`);
     }
   } else if (go) {
     await launchctl(sys, "bootout", `gui/${sys.uid}/${LABEL}`);
     const r = await launchctl(sys, "bootstrap", `gui/${sys.uid}`, path);
-    if (r?.code !== 0) throw new Error(`launchctl bootstrap: ${lastLine(r)}`);
+    if (r?.code !== 0) throw new Error(`launchctl bootstrap: ${failure(r)}`);
   }
   return { path, restarted: go };
 }
@@ -195,7 +195,7 @@ export async function removeService(sys: Sys): Promise<boolean> {
     const r = await launchctl(sys, "bootout", `gui/${sys.uid}/${LABEL}`);
     // 3 and 113: not loaded, so nothing runs.
     if (r?.code !== 0 && r?.code !== 3 && r?.code !== 113)
-      throw new Error(`launchctl bootout: ${lastLine(r)}`);
+      throw new Error(`launchctl bootout: ${failure(r)}`);
     rmSync(path, { force: true });
   }
   return true;
@@ -203,7 +203,7 @@ export async function removeService(sys: Sys): Promise<boolean> {
 
 async function stopUnit(sys: Sys, unit: string) {
   const r = await systemctl(sys, "disable", "--now", unit);
-  if (r?.code !== 0) throw new Error(`systemctl --user disable --now ${unit}: ${lastLine(r)}`);
+  if (r?.code !== 0) throw new Error(`systemctl --user disable --now ${unit}: ${failure(r)}`);
 }
 
 export interface ServiceState {
@@ -221,7 +221,7 @@ export async function serviceState(sys: Sys): Promise<ServiceState> {
     const enabled = await systemctl(sys, "is-enabled", UNIT);
     return {
       installed,
-      state: active?.stdout.trim() || lastLine(active),
+      state: active?.stdout.trim() || failure(active),
       enabled: enabled?.stdout.trim() === "enabled",
     };
   }
@@ -249,7 +249,7 @@ export async function lingering(sys: Sys): Promise<boolean | undefined> {
 
 export async function enableLinger(sys: Sys): Promise<string | undefined> {
   const r = await run(sys, "loginctl", ["enable-linger"], { timeoutMs: 30_000 });
-  return r?.code === 0 ? undefined : lastLine(r);
+  return r?.code === 0 ? undefined : failure(r);
 }
 
 /** A unit someone wrote by hand to run `starbridge quota push`, which the agent replaces. */

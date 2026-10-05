@@ -4,7 +4,7 @@
  */
 import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { lastLine, run, type Sys, which } from "./sys";
+import { failure, run, type Sys, which } from "./sys";
 
 export const MARKETPLACE = "starbridge";
 export const MARKETPLACE_SOURCE = "T0mSIlver/starbridge";
@@ -63,13 +63,13 @@ export async function installPlugins(sys: Sys, state: PluginState): Promise<stri
   if (!state.marketplace) {
     const r = await claude(sys, "plugin", "marketplace", "add", MARKETPLACE_SOURCE);
     if (r?.code !== 0)
-      throw new Error(`claude plugin marketplace add ${MARKETPLACE_SOURCE}: ${lastLine(r)}`);
+      throw new Error(`claude plugin marketplace add ${MARKETPLACE_SOURCE}: ${failure(r)}`);
     done.push(`Added the ${MARKETPLACE} marketplace.`);
   }
   for (const id of PLUGINS) {
     if (state.plugins[id]) continue;
     const r = await claude(sys, "plugin", "install", id, "--scope", "user");
-    if (r?.code !== 0) throw new Error(`claude plugin install ${id}: ${lastLine(r)}`);
+    if (r?.code !== 0) throw new Error(`claude plugin install ${id}: ${failure(r)}`);
     done.push(`Installed the ${id} plugin.`);
   }
   return done;
@@ -82,7 +82,7 @@ export async function removePlugins(sys: Sys, state: PluginState): Promise<strin
     if (!state.plugins[id]) continue;
     const r = await claude(sys, "plugin", "uninstall", id, "--scope", "user");
     done.push(
-      r?.code === 0 ? `Uninstalled the ${id} plugin.` : `Could not uninstall ${id}: ${lastLine(r)}`,
+      r?.code === 0 ? `Uninstalled the ${id} plugin.` : `Could not uninstall ${id}: ${failure(r)}`,
     );
   }
   if (state.marketplace) {
@@ -90,7 +90,7 @@ export async function removePlugins(sys: Sys, state: PluginState): Promise<strin
     done.push(
       r?.code === 0
         ? `Removed the ${MARKETPLACE} marketplace.`
-        : `Could not remove the marketplace: ${lastLine(r)}`,
+        : `Could not remove the marketplace: ${failure(r)}`,
     );
   }
   return done;
