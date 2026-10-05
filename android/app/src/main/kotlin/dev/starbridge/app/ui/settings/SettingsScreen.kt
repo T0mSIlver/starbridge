@@ -27,6 +27,13 @@ import androidx.compose.material3.ToggleButtonDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.VisibilityThreshold
+import androidx.compose.animation.core.spring
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.unit.IntOffset
+import dev.starbridge.app.ui.groupGap
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -48,6 +55,7 @@ import androidx.compose.ui.zIndex
 import androidx.lifecycle.ViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.starbridge.app.data.Colours
+import dev.starbridge.app.data.openLink
 import dev.starbridge.app.data.Prefs
 import dev.starbridge.app.data.PushSetting
 import dev.starbridge.app.data.QuotaSettings
@@ -130,11 +138,14 @@ fun SettingsScreen(
                     shown = p !in quota.hidden,
                     shape = rowShape(i, providers.size),
                     onShow = { on -> set(quota.copy(hidden = if (on) quota.hidden - p else (quota.hidden + p).distinct())) },
+                    first = i == 0,
+                    last = i == providers.lastIndex,
                     onMove = { by ->
                         val to = (i + by).coerceIn(0, providers.lastIndex)
                         if (to != i) set(quota.copy(order = providers.toMutableList().apply { add(to, removeAt(i)) }))
                     },
-                    modifier = Modifier.animateItem(),
+                    // The row under the finger follows it, not the placement animation.
+                    placement = { dragging -> Modifier.animateItem(placementSpec = if (dragging) null else spring(stiffness = Spring.StiffnessMediumLow, visibilityThreshold = IntOffset.VisibilityThreshold)) },
                 )
             }
         }
@@ -161,6 +172,9 @@ fun SettingsScreen(
             }
         }
 
+        item { Section("Agents") }
+        item { LinkRow(0, 1, "How to tell your agents", null, Sym.Open) { openLink(context, GUIDE) } }
+
         item { Section("Account") }
         item { LinkRow(0, 2, "Server", server, null) {} }
         item { LinkRow(1, 2, "Sign out", null, Sym.Logout) { signingOut = true } }
@@ -175,6 +189,8 @@ fun SettingsScreen(
         )
     }
 }
+
+private const val GUIDE = "https://github.com/T0mSIlver/starbridge/blob/main/docs/tell-your-agents.md"
 
 /** How pushes reach this phone, as a state. */
 private fun push(push: PushSetting) = when {
@@ -248,15 +264,27 @@ private fun Line(content: @Composable RowScope.() -> Unit) {
  * Screen readers get "Move up" and "Move down" instead of the drag.
  */
 @Composable
-private fun ProviderRow(name: String, sub: String, shown: Boolean, shape: Shape, onShow: (Boolean) -> Unit, onMove: (Int) -> Unit, modifier: Modifier = Modifier) {
+private fun ProviderRow(
+    name: String,
+    sub: String,
+    shown: Boolean,
+    shape: Shape,
+    first: Boolean,
+    last: Boolean,
+    onShow: (Boolean) -> Unit,
+    onMove: (Int) -> Unit,
+    placement: (dragging: Boolean) -> Modifier,
+) {
     val scheme = MaterialTheme.colorScheme
     var offset by remember { mutableFloatStateOf(0f) }
     var dragging by remember { mutableStateOf(false) }
+    var height by remember { mutableIntStateOf(0) }
     val move by rememberUpdatedState(onMove)
-    val step = with(androidx.compose.ui.platform.LocalDensity.current) { 64.dp.toPx() }
+    val ends by rememberUpdatedState(first to last)
     Surface(
-        modifier
+        placement(dragging)
             .fillMaxWidth()
+            .onSizeChanged { height = it.height }
             .zIndex(if (dragging) 1f else 0f)
             .graphicsLayer { translationY = offset }
             .semantics {
@@ -282,10 +310,12 @@ private fun ProviderRow(name: String, sub: String, shown: Boolean, shape: Shape,
                         onDragCancel = { dragging = false; offset = 0f },
                     ) { change, drag ->
                         change.consume()
-                        offset += drag.y
-                        // Past half a row, the provider swaps with its neighbour.
-                        if (offset > step / 2) { move(1); offset -= step }
-                        if (offset < -step / 2) { move(-1); offset += step }
+                        // A row and its 2 dp gap; past half of it, the provider swaps with its neighbour.
+                        val step = height + groupGap.toPx()
+                        val (top, bottom) = ends
+                        offset = (offset + drag.y).coerceIn(if (top) 0f else -step, if (bottom) 0f else step)
+                        if (offset > step / 2 && !bottom) { move(1); offset -= step }
+                        if (offset < -step / 2 && !top) { move(-1); offset += step }
                     }
                 },
             )

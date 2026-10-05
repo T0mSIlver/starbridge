@@ -40,7 +40,8 @@ enum class Course { Steady, WillRunOut, RanOut }
 fun Meter(bar: QuotaSettings.Bar, course: Course, provider: Color, showUsed: Boolean, card: Color, modifier: Modifier = Modifier) {
     val scheme = MaterialTheme.colorScheme
     val colors = StarbridgeTheme.colors
-    val target = if (course == Course.RanOut) 1f else bar.percent / 100f
+    // Ran out: full when the bar shows use, empty when it shows what's left.
+    val target = if (course == Course.RanOut && showUsed) 1f else bar.percent / 100f
     val fill by animateFloatAsState(target.coerceIn(0f, 1f), MaterialTheme.motionScheme.slowSpatialSpec(), label = "fill")
     val description = "${bar.percent}% ${bar.word}" + (bar.steady?.let { ", steady pace $it%" } ?: "")
     val track = scheme.surfaceContainerHighest
@@ -55,7 +56,7 @@ fun Meter(bar: QuotaSettings.Bar, course: Course, provider: Color, showUsed: Boo
         val gap = Sizes.cap.toPx()
         val x = fill * w
         val burning = course == Course.WillRunOut
-        val full = course == Course.RanOut || fill >= 1f
+        val full = fill >= 1f
         // The track starts a gap after the fill, as Material's progress indicator does.
         val trackStart = if (x > 0f) x + gap else 0f
         if (!full && trackStart < w) drawRoundRect(track, Offset(trackStart, top), Size(w - trackStart, h), r)
