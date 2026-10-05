@@ -39,10 +39,15 @@ class NotificationScreenshotTest(private val dark: Boolean) {
         @JvmStatic
         @ParameterizedRobolectricTestRunner.Parameters(name = "dark={0}")
         fun schemes() = listOf(arrayOf<Any>(false), arrayOf<Any>(true))
+
+        // One zone, as ScreenshotTest's: Robolectric restores the zone it found at the first test.
+        init {
+            java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone("UTC"))
+        }
     }
 
     private val app = ApplicationProvider.getApplicationContext<Application>()
-    private val now = Instant.now()
+    private val now = Instant.parse("2026-10-04T14:00:00Z")
     private val fake = Fake(now)
 
     private fun build(context: Context): View {
@@ -70,7 +75,7 @@ class NotificationScreenshotTest(private val dark: Boolean) {
     }
 
     @Test fun notifications() {
-        // The header's time and chronometer read Robolectric's clocks, which start in 1970.
+        // The header's time and chronometer read Robolectric's clock, which starts in 1970.
         ShadowSystemClock.advanceBy(Duration.ofMillis(now.toEpochMilli()))
         RuntimeEnvironment.setQualifiers(if (dark) "+night" else "+notnight")
         val activity = Robolectric.buildActivity(ComponentActivity::class.java).setup().get()
