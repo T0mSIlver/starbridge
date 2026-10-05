@@ -7,15 +7,18 @@ import { useApp } from "./AppProvider";
 import s from "./Runs.module.css";
 import ui from "./ui.module.css";
 
-/** Ticks every second while something runs, so the time elapsed moves. */
-function useNow(live: boolean): number {
+/**
+ * Ticks every second while something runs, so the time elapsed moves, else every minute while
+ * runs are held, so finished ones leave the list on time.
+ */
+function useNow(live: boolean, held: boolean): number {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     setNow(Date.now());
-    if (!live) return;
-    const timer = setInterval(() => setNow(Date.now()), 1000);
+    if (!live && !held) return;
+    const timer = setInterval(() => setNow(Date.now()), live ? 1000 : 60_000);
     return () => clearInterval(timer);
-  }, [live]);
+  }, [live, held]);
   return now;
 }
 
@@ -23,9 +26,9 @@ function useNow(live: boolean): number {
 export function Runs() {
   const { runs } = useApp();
   const items = runs?.items ?? [];
-  // Lost runs stay a day on the server; only running ones need the clock.
+  // Lost runs stay a day on the server; only running ones need the clock every second.
   const live = items.some((i) => runState(i.run, Date.now()) === "running");
-  const now = useNow(live);
+  const now = useNow(live, items.length > 0);
   const shown = shownRuns(items, now);
   if (shown.length === 0) return null;
   return (

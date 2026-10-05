@@ -718,14 +718,15 @@ class ServerStore(
             cursor = page.cursor
             if (page.items.size < 100) break
         }
-        keepRuns(fresh)
+        keepRuns(fresh, fromSync = true)
     }
 
     /**
      * Keeps each update newer than the one held for its run (by `at`, then the exit), drops runs
-     * with no news for a day, as the server does, and hands each newer update to [alerts].
+     * with no news for a day, as the server does, and hands each newer update to [alerts]. A sync
+     * skips runs it first learns of already ended, so a new phone does not alert for old results.
      */
-    private fun keepRuns(updates: List<SavedRun>) {
+    private fun keepRuns(updates: List<SavedRun>, fromSync: Boolean = false) {
         fun rank(r: SavedRun) = (instant(r.body.at) ?: Instant.EPOCH) to (r.body.exit != null)
         val held = saved.runs.associateBy { it.body.id }.toMutableMap()
         val newer = updates.filter { u ->
@@ -733,7 +734,7 @@ class ServerStore(
             val (at, exited) = rank(u)
             val wins = h == null || rank(h).let { (hAt, hExited) -> at > hAt || (at == hAt && exited && !hExited) }
             if (wins) held[u.body.id] = u
-            wins
+            wins && !(fromSync && h == null && exited)
         }
         val dayAgo = Instant.now().minus(java.time.Duration.ofDays(1))
         persist(saved.copy(runs = held.values.filter { toUi(it).lastNews > dayAgo }.sortedBy { it.body.startedAt }))
