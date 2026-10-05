@@ -1095,7 +1095,9 @@ so the mod is the first path.
   so dropping events beats filling the disk. The Actions deploy key could deploy any ancestor
   of main, including releases without today's limits; `starbridge-deploy` now deploys only
   main's head or a commit on main that contains the deployed one. Rollbacks stay with the
-  owner, through `deploy/deploy.sh`.
+  owner, through `deploy/deploy.sh`. Caddy's image pins its version, since a new image
+  recreates Caddy and drops every open connection: that happens only when
+  `deploy/caddy.Dockerfile` changes, and is the one deploy step that is not zero-downtime.
 - 2026-10-05. A typed reply on every question (#201, owner). A question with options also takes
   a typed reply, as a side option: a neutral text button "Reply" after the options in the web
   detail and the Android sheet opens a text field with Send. Rows, cards and notifications do
