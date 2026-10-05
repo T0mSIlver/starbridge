@@ -89,7 +89,10 @@ export async function latestVersion(releases = RELEASES_URL): Promise<string> {
   return m[1] as string;
 }
 
-/** Downloads one asset of a release and returns it only if the signed SHA256SUMS lists its hash. */
+/**
+ * Downloads one asset of `version` and returns it only if SHA256SUMS, signed for that version,
+ * lists its hash.
+ */
 export async function downloadVerified(
   version: string,
   asset: string,
@@ -98,7 +101,10 @@ export async function downloadVerified(
   const base = `${opts.releases ?? RELEASES_URL}/download/v${version}`;
   const sums = new Uint8Array(await (await get(`${base}/SHA256SUMS`)).arrayBuffer());
   const minisig = await (await get(`${base}/SHA256SUMS.minisig`)).text();
-  verifyMinisign(sums, minisig, opts.pubkey);
+  // The signature covers the version in its trusted comment, not the tag it was served under.
+  const signed = verifyMinisign(sums, minisig, opts.pubkey);
+  if (signed !== `starbridge v${version}`)
+    throw new ReleaseError(`SHA256SUMS is signed for "${signed}", not starbridge v${version}`);
   const want = parseSums(new TextDecoder().decode(sums)).get(asset);
   if (!want) throw new ReleaseError(`SHA256SUMS lists no ${asset}`);
   const bytes = new Uint8Array(await (await get(`${base}/${asset}`)).arrayBuffer());
