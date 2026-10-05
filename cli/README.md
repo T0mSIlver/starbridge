@@ -31,10 +31,12 @@ To check a download by hand: `minisign -Vm SHA256SUMS -P <key>`, then
 ## Use
 
 ```bash
-starbridge pair --server https://starbridge.example
+starbridge pair
 ```
 
-`pair` prints a code; type it under Devices on your phone or the web page.
+`pair` prints a code; type it under Devices on your phone or the web page. It
+pairs with https://starbridge.run; to use a self-hosted server, pass
+`--server https://starbridge.example` or set `STARBRIDGE_SERVER`.
 Keys and state live in `~/.config/starbridge` (or `$XDG_CONFIG_HOME`,
 `$STARBRIDGE_CONFIG_DIR`), mode 0600.
 

@@ -822,6 +822,8 @@ How it generalizes is open.
   rate-limited to 6 a minute per account, since each runs CodexBar on every machine. The web page
   has no refresh gesture and gets none; it polls quotas every minute, and every 3 s for its first
   30 s while it holds none, so a browser that just joined shows the re-upload within seconds.
+- 2026-10-05. `starbridge pair` pairs with https://starbridge.run unless `--server` or
+  `STARBRIDGE_SERVER` names a self-hosted server (#154), as `setup` already did.
 
 ## Encryption, with existing libraries
 
