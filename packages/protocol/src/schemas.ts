@@ -200,7 +200,7 @@ export const DecisionImage = z.object({
   type: z.enum(["image/png", "image/jpeg"]),
   width: z.number().int().min(1).max(8192),
   height: z.number().int().min(1).max(8192),
-  data: B64.max(256 * 1024),
+  data: B64.max(512 * 1024),
   /** What the image shows, for screen readers and the notification. */
   alt: z.string().max(300).optional(),
 });

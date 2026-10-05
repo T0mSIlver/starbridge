@@ -163,9 +163,9 @@ test("ask attaches images scaled to fit the server's cap, and links", async () =
   const [d] = await server.opened("decision");
   expect(d?.links).toEqual([{ url: artifact }]);
   const [scaled, kept] = d?.images ?? [];
-  // The large one became a JPEG no larger than a screen, with its aspect ratio.
+  // The large one became a JPEG, with its aspect ratio.
   expect(scaled?.type).toBe("image/jpeg");
-  expect(scaled?.width).toBeLessThanOrEqual(1600);
+  expect(scaled?.width).toBeLessThanOrEqual(2400);
   expect(Math.abs((scaled?.width ?? 0) / (scaled?.height ?? 1) - 1.6)).toBeLessThan(0.02);
   // The small one already fit, so it went as is.
   expect(kept).toMatchObject({ type: "image/png", width: 4, height: 2 });
