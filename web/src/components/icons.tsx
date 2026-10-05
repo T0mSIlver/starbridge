@@ -64,12 +64,6 @@ const PATHS = {
     </>
   ),
   waiting: <path d="M7 3h10M7 21h10M8 3v2.5a4 4 0 0 0 8 0V3M8 21v-2.5a4 4 0 0 1 8 0V21" />,
-  working: (
-    <>
-      <path d="M4 12a8 8 0 0 1 14-5.3M20 12a8 8 0 0 1-14 5.3" />
-      <path d="M18 3v4h-4M6 21v-4h4" />
-    </>
-  ),
   check: <path d="m5 12 5 5 9-10" />,
   more: (
     <>
@@ -78,6 +72,7 @@ const PATHS = {
       <circle cx="12" cy="19" r="1" />
     </>
   ),
+  close: <path d="M6 6l12 12M18 6 6 18" />,
   back: <path d="M19 12H5M11 6l-6 6 6 6" />,
   phone: (
     <>
@@ -112,6 +107,7 @@ const PATHS = {
     </>
   ),
   drag: <path d="M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01" />,
+  prev: <path d="m15 6-6 6 6 6" />,
   chev: <path d="m9 6 6 6-6 6" />,
   down: <path d="m6 9 6 6 6-6" />,
   qr: (

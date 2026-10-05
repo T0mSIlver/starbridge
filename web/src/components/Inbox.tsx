@@ -26,6 +26,7 @@ import { ordered } from "./options";
 import { PhoneBar } from "./PhoneBar";
 import { PushBanner } from "./PushBanner";
 import { QuotaAside } from "./QuotaAside";
+import { Resizer } from "./Resizer";
 import ui from "./ui.module.css";
 
 // From here the list and the detail sit side by side (Inbox.module.css).
@@ -82,7 +83,10 @@ export function Inbox() {
   const [picked, setPicked] = useState<string>();
   // Phones and narrow windows show the detail in place of the list once a row is tapped.
   const [opened, setOpened] = useState<string>();
-  const selected = wide ? selectedId(ids, picked) : opened;
+  // What this page answered, which may still be listed as open until the inbox reloads.
+  const answeredHere = useRef(new Set<string>());
+  const firstOpen = needs.find((e) => !answeredHere.current.has(e.id))?.id;
+  const selected = wide ? selectedId(ids, picked, firstOpen) : opened;
   useEffect(() => {
     if (wide && selected && picked !== selected) setPicked(selected);
   }, [wide, selected, picked]);
@@ -112,6 +116,7 @@ export function Inbox() {
 
   const openIds = needs.map((e) => e.id);
   const moveOn = (id: string) => {
+    answeredHere.current.add(id);
     const next = afterAnswer(openIds, id);
     setPicked((cur) => (cur === id ? next : cur));
   };
@@ -264,12 +269,74 @@ export function Inbox() {
       </div>
     );
   return (
-    <div className={s.panes}>
-      <h1 className="sr-only">Inbox</h1>
-      {list}
+    <Panes list={list}>
       <section className={s.detail} aria-label="Selected">
         {detail(selected)}
       </section>
+    </Panes>
+  );
+}
+
+/** Defaults before the owner drags an edge: tokens.css's, also for a render on the server. */
+const SIZES = { "--size-rail": 240, "--size-list": 420, "--size-aside": 320 };
+
+function token(name: keyof typeof SIZES): number {
+  if (typeof document === "undefined") return SIZES[name];
+  const px = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue(name));
+  return Number.isFinite(px) ? px : SIZES[name];
+}
+
+function useWindowWidth(): number {
+  return useSyncExternalStore(
+    (change) => {
+      window.addEventListener("resize", change);
+      return () => window.removeEventListener("resize", change);
+    },
+    () => window.innerWidth,
+    () => 1440,
+  );
+}
+
+// The open question keeps at least this much; Quota windows show from 1400 px (Inbox.module.css).
+const DETAIL_MIN = 400;
+const ASIDE_FROM = 1400;
+
+/** The wide layout: list, open item and Quota windows, with edges the owner drags (#173). */
+function Panes({ list, children }: { list: React.ReactNode; children: React.ReactNode }) {
+  const [listPref, setList] = usePref("listWidth");
+  const [asidePref, setAside] = usePref("asideWidth");
+  const vw = useWindowWidth();
+  const aside = vw >= ASIDE_FROM;
+  const room = vw - token("--size-rail") - DETAIL_MIN;
+  const asideW = aside ? Math.min(asidePref ?? token("--size-aside"), room / 2) : 0;
+  const listW = Math.min(listPref ?? token("--size-list"), room - asideW);
+  const style = {
+    "--pane-list": `${listW}px`,
+    ...(aside ? { "--pane-aside": `${asideW}px` } : {}),
+  } as React.CSSProperties;
+  return (
+    <div className={s.panes} style={style}>
+      <h1 className="sr-only">Inbox</h1>
+      {list}
+      <Resizer
+        label="Inbox width"
+        width={listW}
+        min={300}
+        max={Math.max(300, room - asideW)}
+        side="left"
+        onChange={setList}
+      />
+      {children}
+      {aside && (
+        <Resizer
+          label="Quota windows width"
+          width={asideW}
+          min={260}
+          max={Math.max(260, room - listW)}
+          side="right"
+          onChange={setAside}
+        />
+      )}
       <QuotaAside />
     </div>
   );

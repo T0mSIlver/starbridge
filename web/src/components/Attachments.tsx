@@ -1,21 +1,16 @@
 "use client";
 
-import type { DecisionImage } from "@starbridge/protocol";
-import { imageBlob, imageSrc, linkLabel } from "@/lib/attachments";
+import { useState } from "react";
+import { imageSrc, linkLabel } from "@/lib/attachments";
 import type { Decision } from "@/lib/types";
 import s from "./Attachments.module.css";
 import { Icon } from "./icons";
+import { Viewer } from "./Viewer";
 
-/** Opens the full-size image in a new tab; browsers block opening a data: URL there. */
-function openFull(img: DecisionImage) {
-  const url = URL.createObjectURL(imageBlob(img));
-  window.open(url, "_blank", "noopener");
-  setTimeout(() => URL.revokeObjectURL(url), 60_000);
-}
-
-/** The decision's images, side by side when there are several, so mockups compare at a glance. */
+/** The decision's images, side by side when there are several; each opens the viewer. */
 export function Images({ d }: { d: Decision }) {
   const images = d.images ?? [];
+  const [open, setOpen] = useState<number>();
   if (images.length === 0) return null;
   return (
     <div className={`${s.images} ${images.length > 1 ? s.grid : ""}`}>
@@ -25,13 +20,16 @@ export function Images({ d }: { d: Decision }) {
           key={i}
           type="button"
           className={s.image}
-          onClick={() => openFull(img)}
-          title="Open full size"
+          onClick={() => setOpen(i)}
+          aria-label={img.alt ? `View ${img.alt}` : "View image"}
         >
           {/* biome-ignore lint/performance/noImgElement: decrypted data, nothing for next/image to fetch */}
           <img src={imageSrc(img)} alt={img.alt ?? ""} width={img.width} height={img.height} />
         </button>
       ))}
+      {open !== undefined && (
+        <Viewer images={images} start={open} onClose={() => setOpen(undefined)} />
+      )}
     </div>
   );
 }
@@ -44,16 +42,22 @@ export function Thumb({ d }: { d: Decision }) {
   return <img className={s.thumb} src={imageSrc(img)} alt="" width={40} height={40} />;
 }
 
-/** Pages the agent attached, such as a Claude artifact, as chips that open in a new tab. */
+/**
+ * Pages the agent attached for the owner to see before answering, such as a Claude artifact it
+ * built (SPEC 2026-10-05, links on questions): labelled as the agent's, each opening a new tab.
+ */
 export function Links({ d }: { d: Decision }) {
   const links = d.links ?? [];
   if (links.length === 0) return null;
   return (
-    <nav className={s.links} aria-label="Links">
+    <nav className={s.links} aria-labelledby={`links-${d.id}`}>
+      <span id={`links-${d.id}`} className={`t-caption ${s.linksLabel}`}>
+        Attached by the agent
+      </span>
       {links.map((l) => (
         <a key={l.url} className={s.chip} href={l.url} target="_blank" rel="noopener noreferrer">
-          <Icon name="link" size={18} />
-          <span className="t-label">{linkLabel(l)}</span>
+          <span className="t-label">Open {linkLabel(l)}</span>
+          <Icon name="open" size={16} />
         </a>
       ))}
     </nav>

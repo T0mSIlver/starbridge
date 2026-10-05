@@ -206,7 +206,7 @@ async function main() {
   await page.getByRole("button", { name: "Create the keys" }).click();
   await page.getByRole("heading", { name: "Save your recovery key" }).waitFor();
   const words = (await page.locator("ol li span:last-child").allTextContents()).join(" ");
-  if (words.split(" ").length !== 24) throw new Error(`expected 24 words, got: ${words}`);
+  if (words.split(" ").length !== 12) throw new Error(`expected 12 words, got: ${words}`);
   await shoot(page, "setup");
   await page.setViewportSize({ width: 1280, height: 860 });
   await page.emulateMedia({ colorScheme: "light" });
@@ -233,7 +233,8 @@ async function main() {
   await page.getByRole("button", { name: "Approve" }).click();
   await pair.waitFor(/Paired "devbox"/);
   if ((await pair.exited) !== 0) throw new Error("pair failed");
-  await page.getByText("devbox joined.").waitFor();
+  await page.getByRole("status", { name: "Pairing result" }).getByText("devbox joined").waitFor();
+  await shoot(page, "pair-joined");
 
   step("refuse a second pairing");
   const other = cli("pair-refused", ["pair", "--name", "stranger"], join(tmp, "stranger"));
@@ -303,6 +304,8 @@ async function main() {
   console.log("notifications:", JSON.stringify(notifications));
   if (!notifications.some((n) => n.title === "Run the migration on the staging database now?"))
     throw new Error("no Web Push notification for the decision");
+  // With History open the answered question stays listed, which is where it lingered (#214).
+  await page.getByRole("button", { name: /History/ }).click();
   await page.getByRole("button", { name: /Run it/ }).click();
   await ask.waitFor(/Answer to d_\S+ \(Run the migration on the staging database now\?\): Run it/);
   if ((await ask.exited) !== 0) throw new Error("ask --wait failed");
@@ -313,6 +316,13 @@ async function main() {
     i++
   )
     await page.waitForTimeout(200);
+
+  // It was the last open question, so the detail pane empties rather than showing it answered.
+  await page
+    .locator('section[aria-label="Selected"] h2')
+    .waitFor({ state: "detached", timeout: 10_000 });
+  await shoot(page, "inbox-cleared");
+  await page.getByRole("button", { name: /History/ }).click();
 
   step("leave one open decision for the screenshots");
   const open = cli(
@@ -470,6 +480,28 @@ async function main() {
     throw new Error("the 24-hour setting still shows AM or PM");
   await shoot(page, "quotas-24h");
 
+  step("the inbox's quota aside fits its column with clock times on (#168)");
+  await page
+    .getByRole("navigation", { name: "Main" })
+    .getByRole("link", { name: "Settings" })
+    .click();
+  // 12-hour times are the longest: "Will run out at Oct 12, 12:02 AM".
+  await page.getByLabel("12-hour", { exact: true }).check({ force: true });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.getByRole("link", { name: "Inbox" }).click();
+  const aside = page.getByRole("complementary", { name: "Quota windows" });
+  await aside.locator("article").first().waitFor();
+  const { scroll, client } = await aside.evaluate((el) => ({
+    scroll: el.scrollWidth,
+    client: el.clientWidth,
+  }));
+  if (scroll > client) throw new Error(`the quota aside overflows: ${scroll} > ${client} px`);
+  for (const scheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme: scheme });
+    await page.waitForTimeout(150);
+    await page.screenshot({ path: join(SHOTS, `inbox-aside-wide-${scheme}.png`) });
+  }
+
   step("a newly raised quota alert notifies a browser that opted in to its provider");
   // A 5-hour window at 85%, 3 hours in: "low" at 20% left, and it runs out before the reset.
   const at = (ms: number) => new Date(Date.now() + ms).toISOString().replace(/\.\d+Z$/, "Z");
@@ -520,6 +552,27 @@ async function main() {
   step("add a second browser by pairing code");
   const b = await ff.newContext();
   const pageB = await signIn(b);
+  await pageB.getByTestId("pairing-code").waitFor({ timeout: 10_000 });
+  await shoot(pageB, "join-browser");
+  // Switching to digits cancels the QR code's wait; that cancel shows no error.
+  await pageB.getByRole("button", { name: "Can't scan? Compare digits" }).click();
+  await pageB.getByText(/Open Starbridge on a signed-in device/).waitFor();
+  await pageB.waitForTimeout(1000);
+  // Next.js's route announcer is an empty alert too; the page's errors are paragraphs.
+  const digitsError = pageB.locator('p[role="alert"]');
+  if (await digitsError.count())
+    throw new Error(`digits show an error: ${await digitsError.textContent()}`);
+  await shoot(pageB, "join-digits");
+  // The signed-in browser gets the join request as a panel over the page; refusing ends it in a
+  // result that clears itself.
+  const joinAsk = page.getByTestId("join-request");
+  await joinAsk.waitFor({ timeout: 30_000 });
+  await shoot(page, "join-request");
+  await joinAsk.getByRole("button", { name: "Refuse" }).click();
+  const result = page.getByRole("status", { name: "Pairing result" });
+  await result.waitFor();
+  await result.waitFor({ state: "detached", timeout: 15_000 });
+  await pageB.getByRole("button", { name: "Cancel" }).click();
   const codeB = (
     await pageB
       .getByTestId("pairing-code")
@@ -537,13 +590,28 @@ async function main() {
   await page.getByText(/read and answer as a device/).waitFor();
   await page.getByRole("button", { name: "Approve" }).click();
   await pageB.getByRole("heading", { name: "Inbox" }).waitFor({ timeout: 30_000 });
+  await pageB.getByRole("button", { name: "Turn on notifications" }).waitFor();
+  await shoot(pageB, "inbox-banner");
   // The new device sees decisions sealed after it joined; the open one predates it.
 
   step("recover a third browser with the words");
   const c = await ff.newContext();
   const pageC = await signIn(c);
   await pageC.getByRole("button", { name: "Use the recovery key" }).click();
-  await pageC.getByLabel("Your 24 recovery words").fill(words);
+  const entry = pageC.getByLabel("Your recovery words, separated by spaces");
+  const typo = words.split(" ");
+  typo[2] = "mountian";
+  await entry.fill(`${typo.join(" ")} `);
+  await pageC.getByText('Word 3, "mountian", is not a recovery word.').waitFor();
+  await shoot(pageC, "recovery-typo");
+  // Numbering and dashes separate words as well as spaces do.
+  await entry.fill(
+    words
+      .split(" ")
+      .map((w, i) => `${i + 1}-${w}`)
+      .join("\n"),
+  );
+  await pageC.getByText("12 of 12 words").waitFor();
   await pageC.getByRole("button", { name: "Recover" }).click();
   await pageC.getByRole("heading", { name: "Inbox" }).waitFor({ timeout: 30_000 });
 
