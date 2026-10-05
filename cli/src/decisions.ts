@@ -256,6 +256,7 @@ export async function postDecision(ctx: Ctx, s: Session, input: AskInput): Promi
       question: decision.question,
       options: decision.options,
       askedAt: decision.createdAt,
+      to: decision.to,
       ...(cursor !== undefined ? { cursor } : {}),
       ...(decision.source.session ? { session: decision.source.session } : {}),
       ...(decision.answerIn ? { answerIn: true } : {}),
@@ -354,6 +355,11 @@ export async function settle(ctx: Ctx, opts: { id?: string; outcome?: string }):
   if (outcome !== "elsewhere" && outcome !== "withdrawn")
     throw new UsageError("--outcome is elsewhere or withdrawn");
   const s = session(ctx);
+  // Closed here first: from now on no answer to it is accepted or delivered, even if the post fails.
+  ctx.store.updateState((st) => {
+    const a = st.asked[id];
+    if (a) a.settled = true;
+  });
   const to = devices(await refreshDirectory(ctx, s));
   const body = {
     v: 1 as const,
@@ -373,37 +379,51 @@ export async function settle(ctx: Ctx, opts: { id?: string; outcome?: string }):
       e instanceof ApiError && ["already-answered", "already-settled"].includes(e.code);
     if (!closed) throw e;
   }
-  ctx.store.updateState((st) => {
-    const a = st.asked[id];
-    if (a) a.settled = true;
-  });
   return 0;
 }
 
+/** What `checkAnswer` reads of a decision this machine asked. */
+type Asked = Pick<State["asked"][string], "options" | "settled" | "answerIn" | "to">;
+
 /**
- * Checks an answer item: sealed to this machine, signed by an active device, for a decision this
- * machine asked, with one of that decision's options or a typed reply.
+ * Checks an answer item: sealed to this machine, signed by an active device that the decision was
+ * sealed to, for an open decision this machine asked that takes answers in Starbridge, with one of
+ * its options or a typed reply.
  */
 export function checkAnswer(
   raw: unknown,
   s: Session,
   dir: Directory,
-  asked: Record<string, { options: string[] }>,
+  asked: Record<string, Asked>,
 ): Answer {
   const item = parseWith(SealedItem, raw);
   if (item.kind !== "answer") throw new ProtocolError("wrong-kind", item.kind);
-  const { body } = open(
+  const { body, signer } = open(
     item as SealedItem & { kind: "answer" },
     { id: s.machine.id, box: s.keys.box },
     dir,
   );
   const decision = asked[body.decisionId];
   if (!decision) throw new ProtocolError("unknown-member", `not my decision: ${body.decisionId}`);
+  // A server can hold a signed answer back and release it once the agent moved on.
+  if (decision.settled)
+    throw new ProtocolError("id-mismatch", `${body.decisionId} is settled: no answer counts`);
+  if (decision.answerIn)
+    throw new ProtocolError("id-mismatch", `${body.decisionId} is answered on its own page`);
+  // Decisions asked before the machine kept recipients have none, and take no answer.
+  if (!decision.to?.includes(signer.id))
+    throw new ProtocolError("unknown-member", `${body.decisionId} was not sent to ${signer.id}`);
   // A typed reply answers any decision (`replies`); a choice must be one of its options. The
   // schema already holds an answer to exactly one of the two.
   if (body.choice !== undefined && !decision.options.includes(body.choice))
     throw new ProtocolError("bad-schema", "choice is not one of the options");
   return body;
+}
+
+/** Whether decision `id`'s answer may reach its session: neither settled nor answered elsewhere. */
+export function deliverable(st: State, id: string): boolean {
+  const asked = st.asked[id];
+  return !!asked && !asked.settled && !asked.answerIn;
 }
 
 /**
@@ -506,7 +526,11 @@ export function takeAnswer(
   id: string | undefined,
 ): { answer: Answer; question?: string } | undefined {
   const found = (st: State) =>
-    id ? st.answers[id] : Object.values(st.answers).find((a) => !a.seen);
+    id
+      ? deliverable(st, id)
+        ? st.answers[id]
+        : undefined
+      : Object.values(st.answers).find((a) => !a.seen && deliverable(st, a.answer.decisionId));
   if (!found(store.state())) return undefined;
   let taken: { answer: Answer; question?: string } | undefined;
   store.updateState((st) => {
@@ -534,6 +558,8 @@ export async function wait(
   const target = opts.id;
   if (target && !state.asked[target])
     throw new UsageError(`${target} is not a decision this machine asked`);
+  if (target && !deliverable(state, target))
+    throw new UsageError(`${target} is settled or answered on its own page: no answer will come`);
 
   const report = (found: { answer: Answer; question?: string }) => {
     printAnswer(ctx, found.answer, found.question, opts.json);
@@ -604,7 +630,7 @@ export function sessionLines(st: State, session: string): SessionLine[] {
   const lines: SessionLine[] = [];
   for (const [id, a] of Object.entries(st.answers)) {
     const asked = st.asked[id];
-    if (!asked || a.seen || asked.session !== session) continue;
+    if (!asked || a.seen || asked.session !== session || !deliverable(st, id)) continue;
     lines.push({
       type: "answer",
       decisionId: id,

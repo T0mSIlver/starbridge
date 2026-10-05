@@ -56,6 +56,8 @@ export interface State {
       answerIn?: boolean;
       /** Closed with `settle`: no answer will follow. */
       settled?: boolean;
+      /** The devices it was sealed to, the only ones whose answer counts. */
+      to?: string[];
       /** The decision's waiting state as last posted, under the one id it keeps. */
       waiting?: { id: string; state: Waiting["state"] };
       cursor?: string;

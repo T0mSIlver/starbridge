@@ -1115,6 +1115,13 @@ How it generalizes is open.
   grouping, then "History · N" with the matching answered items, History open or not. A
   History item also matches by its answer. Matched words show bold on `surface2`, never in
   amber; Escape in the box clears it. Android's search waits for the owner's pick.
+- 2026-10-06. Answers on the machine (#260, from the Codex audit). A machine accepts a
+  decision's answer only from a device the decision was sealed to (it keeps each decision's
+  recipients), only while the decision is open, and never for an `answerIn` decision. A settled
+  decision's answer is never delivered, even one accepted before the settle, because the server
+  could hold a signed answer back until the agent moved on. `settle` closes the decision locally
+  before it posts, and `wait` on a settled decision fails at once. Decisions asked before this
+  change have no recipients on record and take no answer; the agent asks again.
 
 ## Encryption, with existing libraries
 
