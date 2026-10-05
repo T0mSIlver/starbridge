@@ -462,9 +462,11 @@ a decision's context, a permission prompt's command and a session's name.
   terminal icon, the exact command in mono, Allow and Deny,
   and how long it has waited. A question shows its text as the title, then
   its options, its default (the first) filled.
-- Every inbox item is a filled card (`surface`), with no border and no
-  shadow (#248). An item that blocks an agent (a prompt, and a question whose
-  agent waits on it) differs by its card alone: the amber fill
+- Every inbox item is the same container (#248): on Android a filled card
+  (`surface`) with no border and no shadow; on the web a box as its settings
+  rows are (`surface`, a `line` border, `radius.sm`). An item that blocks an
+  agent (a prompt, and a question whose agent waits on it) differs by its
+  fill alone: the amber fill
   (`accent-soft` over `surface`), its kind icon in `accent`, its title at
   weight 500, and in the meta row's time slot a clock ticking m:ss in
   `accent`, weight 500. A question its agent works around keeps the plain
@@ -472,12 +474,13 @@ a decision's context, a permission prompt's command and a session's name.
   slot. Kind icons sit on the card, with no tile. No line of text says which;
   screen readers get it in the item's label. Fill, weight and the clock keep
   it readable without colour.
-- In One feed each item is its own card, `s2` apart. Under a grouping's
-  header (Group by machine, Group by waiting) the group's cards join into one
-  segmented group, 2 px apart, rounded outside as a card and `radius.xs`
-  inside; History joins the same way in those views.
-- On a card, secondary buttons and the command box are tonal: `surface2`, or
-  `surface` on an amber card. Nothing on a card is outlined.
+- In One feed each item stands apart, `s2` from the next. Under a grouping's
+  header (Group by machine, Group by waiting) the group's items are joined,
+  and History with them: on Android a segmented group (2 dp apart, rounded
+  outside as a card and `radius.xs` inside, Material 3 Expressive); on the
+  web one box with hairline dividers.
+- On Android, secondary buttons and the command box on a card are tonal:
+  `surface2`, or `surface` on an amber card. Nothing on a card is outlined.
 - Every item opens with one meta row of facts Starbridge knows: the machine's
   kind icon and name, the repo, and the time right-aligned. The agent's own
   words come below it. Details end with the session name, truncated in the
@@ -498,11 +501,11 @@ a decision's context, a permission prompt's command and a session's name.
 - Labels are sentence case, never uppercase.
 - Shapes follow the Material 3 scale: cards `radius.xl`, buttons `radius.pill`
   (round ends in a connected group, inner corners `radius.sm`), inset areas
-  such as code `radius.lg`, inputs `radius.xs` on top. Cards are filled
-  (`surface`), with no border and no shadow. Android's inbox cards are
+  such as code `radius.lg`, inputs `radius.xs` on top. Android's cards are
+  filled (`surface`), with no border and no shadow; its inbox cards are
   `radius.xl` with 20 dp inside, 16 dp from the screen's edges; one-line
-  cards (History's rows) round at 20 dp. The web's are `radius.md` in the
-  dense list and `radius.lg` on a phone.
+  cards (History's rows) round at 20 dp. The web keeps its own dense shapes
+  and takes none of Material's: its inbox items are `radius.sm` boxes.
 - Quota tracks are `size.track` thick on Android and `size.track-dense` on
   the web.
 

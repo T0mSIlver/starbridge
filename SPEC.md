@@ -1122,17 +1122,19 @@ How it generalizes is open.
   a filled card on `surface`, Material 3's filled card, with no border and no shadow, and what
   blocks an agent differs by one thing: its card takes the amber fill (`accent-soft` over
   `surface`). The title's weight, the clock in the time slot and the screen reader's label stay as
-  #191 set them. How the cards sit depends on the view, as the owner picked: in One feed each item
-  is its own card ("One card each"), `s2` apart, as Material spaces a collection of cards; under
-  "Group by machine" and "Group by waiting", the cards under one header join into a segmented
-  group (Material 3 Expressive's segmented list), 2 px apart with `radius.xs` inside, since a
-  group under its header reads as one set; so does History in those views. Android: corners
-  `radius.xl` (28 dp), 20 dp inside, 16 dp page margins; in One feed History's one-line rows
-  round at 20 dp, since a corner scales with its container. Web: the list pane's rows become the
-  same cards, `radius.md` wide and `radius.lg` on a phone, the selected one on `surface2`. Kind
-  icons sit on the card without a tile on both clients, amber on a blocked card and `fg2`
-  otherwise; secondary buttons and the command box on a card are tonal (`surface2`, or `surface`
-  on amber), so nothing on a card is outlined. The question sheet and the web detail keep their
+  #191 set them. How the items sit depends on the view, as the owner picked: in One feed each
+  item stands apart; under "Group by machine" and "Group by waiting", the items under one header
+  are visibly joined, since a group under its header reads as one set; so is History in those
+  views. Android follows Material 3 Expressive literally: filled cards, corners `radius.xl` (28
+  dp), 20 dp inside, 16 dp page margins, `s2` apart in One feed (Material's spacing in a
+  collection of cards; History's one-line rows round at 20 dp, since a corner scales with its
+  container), and a segmented group when grouped, 2 dp apart with `radius.xs` inside. The web
+  takes the idea, not Material's shapes (owner: "we're not making a Material 3 web app"): it keeps
+  the dense look of Design v2's direction A, and each item is a box as the web's settings rows
+  are (`surface`, a `line` border, `radius.sm`), `s2` apart in One feed; when grouped, a group's
+  items share one such box with hairline dividers. Kind icons sit on the item without a tile on
+  both clients, amber on a blocked item and `fg2` otherwise. The question sheet and the web
+  detail keep their
   amber head or ground; #254 changes their options and Reply.
 
 ## Encryption, with existing libraries

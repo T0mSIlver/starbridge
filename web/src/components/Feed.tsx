@@ -373,7 +373,11 @@ export function PastRow({
         tabIndex={selected ? 0 : -1}
         onClick={onSelect}
       />
-      <KindTile type={e.type === "prompt" ? "prompt" : "question"} filled={false} />
+      <KindTile
+        type={e.type === "prompt" ? "prompt" : "question"}
+        filled={false}
+        size={comfy ? 36 : 32}
+      />
       <div className={s.pastBody}>
         <MetaRow
           machine={e.machine}

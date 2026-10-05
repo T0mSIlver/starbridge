@@ -118,13 +118,14 @@
   border: 1px solid var(--line-strong);
 }
 
-/* Every item is a card of its own, filled with `surface`, `s2` apart; one that blocks an agent
-   takes the amber fill instead (#248). Rounder on a phone, where the cards are larger. */
+/* Every item is a box of its own, as the web's settings rows are: `surface`, a `line` border,
+   `radius.sm`, `s2` apart. One that blocks an agent takes the amber fill instead (#248). */
 .row,
 .run,
 .historyHead {
   margin: 0 var(--s2) var(--s2);
-  border-radius: var(--radius-md);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
   background: var(--surface);
 }
 
@@ -132,7 +133,6 @@
 .run.comfy,
 .historyHead.comfy {
   margin: 0 var(--s3) var(--s2);
-  border-radius: var(--radius-lg);
 }
 
 /* A row: its icon, then the meta row and the content. A button covers it to select it; the
@@ -159,7 +159,6 @@
 }
 
 .row.blocks {
-  --tonal: var(--surface);
   background: linear-gradient(var(--accent-soft), var(--accent-soft)), var(--surface);
 }
 
@@ -224,12 +223,10 @@
 
 .past {
   padding-block: var(--s2h);
-  border-radius: var(--radius-sm);
 }
 
 .past.comfy {
   padding-block: var(--s3);
-  border-radius: var(--radius-md);
 }
 
 .pastText {
@@ -259,7 +256,8 @@
 .cmd {
   padding: var(--s1h) var(--s2h);
   border-radius: var(--radius-dense);
-  background: var(--tonal, var(--surface2));
+  background: var(--bg);
+  border: 1px solid var(--line);
   white-space: pre;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -364,28 +362,27 @@
   font-weight: 600;
 }
 
-/* Under a grouping's header, the group's cards join into one segmented group (Material 3
-   Expressive): `radius.xs` inside, the card's own corner outside, 2 px apart (#248). */
+/* Under a grouping's header, the group's items share one box with hairline dividers, as a
+   settings section does (#248). */
 .seg {
-  --outer: var(--radius-md);
+  margin: 0 var(--s2) var(--s2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
 }
 
 .seg.comfy {
-  --outer: var(--radius-lg);
+  margin: 0 var(--s3) var(--s2);
 }
 
 .seg :is(.row, .run, .historyHead) {
-  margin-bottom: 2px;
-  border-radius: var(--radius-xs);
+  width: 100%;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
 }
 
-.seg > :first-child {
-  border-top-left-radius: var(--outer);
-  border-top-right-radius: var(--outer);
-}
-
-.seg > :last-child,
-.seg > :last-child > :last-child {
-  border-bottom-left-radius: var(--outer);
-  border-bottom-right-radius: var(--outer);
+.seg > * + *,
+.seg > div > .past {
+  border-top: 1px solid var(--line);
 }

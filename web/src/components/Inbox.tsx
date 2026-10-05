@@ -198,7 +198,7 @@ export function Inbox() {
       />
     );
   const sub = (label: React.ReactNode) => <div className={`t-caption ${s.sub}`}>{label}</div>;
-  // Under a grouping's header, the group's cards join into one segmented group (#248).
+  // Under a grouping's header, the group's items share one box (#248).
   const grouped = view !== "none";
   const seg = (children: React.ReactNode) => (
     <div className={`${feed.seg} ${comfy ? feed.comfy : ""}`}>{children}</div>
@@ -588,7 +588,7 @@ function RowActions({
         </button>
         <button
           type="button"
-          className={`t-label ${ui.btn} ${ui.tonal}`}
+          className={`t-label ${ui.btn}`}
           disabled={busy}
           onClick={run(() => onPrompt(entry.item, { behavior: "deny", scope: "once" }))}
         >
@@ -608,7 +608,7 @@ function RowActions({
         <button
           key={o}
           type="button"
-          className={`t-label ${ui.btn} ${i === 0 ? ui.rec : ui.tonal}`}
+          className={`t-label ${ui.btn} ${i === 0 ? ui.rec : ""}`}
           disabled={busy}
           onClick={run(() => onQuestion(entry.item, { choice: o }))}
         >
