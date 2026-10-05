@@ -283,7 +283,8 @@ export async function postWaiting(
   } satisfies Waiting;
   const item = seal("waiting", body, { id: s.machine.id, signKey: s.keys.sign.privateKey }, to);
   try {
-    await s.api.postItem(state === "working" ? { ...item, quiet: true } : item);
+    // Both flips push: a phone moves the question's notification between its channels (#191).
+    await s.api.postItem(item);
   } catch (e) {
     if (e instanceof ApiError && e.code === "already-answered")
       throw new UsageError(`${id} is already answered`);

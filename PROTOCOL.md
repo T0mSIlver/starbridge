@@ -320,8 +320,8 @@ shows whether its agent is blocked on it: working on other things, or waiting fo
   under one id per decision and re-posts it under that id whenever the agent flips the state,
   until the decision is answered or settled. Devices keep the update with the latest `at`; a
   decision without one is `working`.
-- A flip to `waiting` notifies once: the machine posts it without `quiet`, and every other
-  update `quiet`, so a repeated `waiting` or a flip back to `working` pushes nothing.
+- Each flip pushes: to `waiting` it notifies once more, and back to `working` it lets a device
+  move or quiet the question's notification without a sound. A repeated state posts nothing.
 - A decision asked already waiting is posted `quiet` and its `waiting` item pushes, so the one
   notification says the agent waits. A device that has not seen the decision fetches it with
   `GET /items/:id`.
