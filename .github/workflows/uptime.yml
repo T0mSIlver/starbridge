@@ -47,8 +47,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          FAILED: ${{ steps.check.outcome == 'success' && steps.check.outputs.failed || '- The check step itself failed; see the run.' }}
+          OUTCOME: ${{ steps.check.outcome }}
+          FAILED: ${{ steps.check.outputs.failed }}
         run: |
+          [ "$OUTCOME" = success ] || FAILED="- The check step itself failed; see the run."$'\n'
           now=$(date -u '+%Y-%m-%d %H:%M UTC')
           issue=$(gh issue list --label outage --state open --json number --jq '.[0].number // empty')
           if [ -n "$FAILED" ]; then
