@@ -6,6 +6,7 @@ import type { FirstDevice as PreparedDevice } from "@/lib/device";
 import { hasPairCode, holdPairCode } from "@/lib/pairLink";
 import { useApp } from "./AppProvider";
 import { Mark } from "./icons";
+import { LegalLinks } from "./Legal";
 import { Setup } from "./Setup";
 import s from "./Setup.module.css";
 import ui from "./ui.module.css";
@@ -111,6 +112,7 @@ function SignIn() {
         </form>
       </details>
       {error && <p className={ui.error}>{error}</p>}
+      <LegalLinks />
     </Page>
   );
 }
