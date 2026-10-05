@@ -14,7 +14,7 @@ import { type AskInput, ask } from "../decisions";
 import { DEFAULT_SERVER, pair } from "../pair";
 import { permissionsEnabled } from "../permissions";
 import { pushOnce } from "../quota";
-import { rememberMachineKind, setPermissions } from "../settings";
+import { offerPiChain, rememberMachineKind, setPermissions } from "../settings";
 import {
   type Found,
   findCodexbar,
@@ -414,6 +414,7 @@ async function permissionStep(sys: Sys) {
   section(ctx, "Permission prompts");
   if (permissionsEnabled(ctx)) {
     ctx.out("Sent to your devices (`starbridge config permissions off` stops it).");
+    await offerPiChain(ctx, prompt);
     return;
   }
   const on = await prompt.confirm(
@@ -426,6 +427,7 @@ async function permissionStep(sys: Sys) {
       ? "Sent to your devices (`starbridge config permissions off` stops it)."
       : "They stay at the keyboard (`starbridge config permissions on` sends them).",
   );
+  if (on) await offerPiChain(ctx, prompt);
 }
 
 function summary(snap: QuotaSnapshot): string {
