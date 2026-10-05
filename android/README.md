@@ -1,7 +1,7 @@
 # Starbridge for Android
 
 Inbox, Quotas and Settings (with Devices and machines), against a Starbridge server. Kotlin,
-Jetpack Compose, Material 3 Expressive, Hilt and Navigation 3, as vidtheque.
+Jetpack Compose, Material 3 Expressive, Hilt and Navigation 3.
 
 - `protocol/`: packages/protocol in Kotlin (sign, seal, open, the directory
   chain, pairing, recovery words), checked against its test vectors.

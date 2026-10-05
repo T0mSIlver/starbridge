@@ -6,40 +6,81 @@ waits on you. It also wraps commands that take over your machine in
 `starbridge run`. Anything else you want to hear about goes in the agent's own
 instruction files, in your words. Starbridge never writes to them.
 
-## Where to put the lines
+## What each agent supports
 
-Use your personal files. A repo's `AGENTS.md` or `CLAUDE.md` is committed, so
-it applies to everyone who works on that repo.
+| | Claude Code | Codex | Pi |
+|---|---|---|---|
+| Questions | ✓ | ✓ | ✓ |
+| Answers into the live session | ✓ | ✓¹ | ✓³ |
+| "Waiting for you" | ✓ | ✓ | ✓ |
+| Runs | ✓ | ✓ | ✓ |
+| Permission prompts | Opt-in | No | Opt-in⁴ |
+| `AskUserQuestion` hook | ✓ | n/a² | n/a² |
 
-| Agent | All your repos | One repo, only you |
-|---|---|---|
-| Claude Code | `~/.claude/CLAUDE.md` | `CLAUDE.local.md` at the repo root. Claude Code loads it alongside the repo's `CLAUDE.md`. |
-| Codex | `~/.codex/AGENTS.md` | `AGENTS.override.md` at the repo root. It replaces the repo's `AGENTS.md`, so use it only in a repo without one. |
-| pi | `~/.pi/agent/AGENTS.md` | `AGENTS.override.md`, which replaces the repo's `AGENTS.md`, as in Codex. |
+¹ In interactive sessions, when `starbridge agent` runs (Codex CLI 0.160 or
+later). In `codex exec`, the agent waits for the answer with `starbridge wait`
+before it ends its turn.
 
-Keep a per-repo file out of git by adding its name to `.git/info/exclude`.
-Checked on 2026-10-05 with Claude Code 2.1.289, Codex CLI 0.160.0 and pi
+² Codex and Pi have no `AskUserQuestion` tool. The hook turns Claude Code's
+questions in the terminal into Starbridge questions.
+
+³ In the interactive TUI and RPC mode, through `starbridge agent` or the CLI.
+In `pi -p`, the agent waits for the answer with `starbridge wait` before it
+ends its turn.
+
+⁴ With [pi-permission-system](https://github.com/gotgenes/pi-packages/tree/main/packages/pi-permission-system):
+`starbridge config permissions on` offers to add `starbridge` to its
+`authorizerChain` (in `~/.pi/agent/extensions/pi-permission-system/config.json`). Your devices can allow a call once or deny
+it; "Answer here" in Pi brings back its own prompt.
+
+`starbridge setup` offers to install Starbridge in each agent it finds, and
+asks before each one:
+
+- Claude Code: the Starbridge plugin, which brings the rules above, the skill
+  and the hooks.
+- Codex: the skill, in `~/.codex/skills/starbridge` (or under `$CODEX_HOME`),
+  so it knows how to write a question. Codex doesn't load plugins, so it runs
+  the same `starbridge` commands without the rules: add the lines you want
+  below. A later setup offers to update the skill when the CLI carries a newer
+  one.
+- Pi: the Starbridge Pi package (`pi install
+  git:github.com/T0mSIlver/starbridge`), which brings the skill, the rules and
+  the extension that puts each answer into the session.
+
+## Where the lines go
+
+Put your lines in a file only you use. A repo's `AGENTS.md` or `CLAUDE.md` is
+committed, so lines there apply to everyone who works on the repo.
+
+<dl>
+<dt>Claude Code</dt>
+<dd>Every repo: <code>~/.claude/CLAUDE.md</code>. One repo: <code>CLAUDE.local.md</code>.</dd>
+<dt>Codex</dt>
+<dd>Every repo: <code>~/.codex/AGENTS.md</code>. One repo: <code>AGENTS.override.md</code>.</dd>
+<dt>Pi</dt>
+<dd>Every repo: <code>~/.pi/agent/AGENTS.md</code>. One repo: <code>AGENTS.override.md</code>.</dd>
+</dl>
+
+The one-repo files go at the repo root. Add the file's name to
+`.git/info/exclude` to keep it out of git.
+
+Claude Code reads `CLAUDE.local.md` in addition to the repo's `CLAUDE.md`.
+`AGENTS.override.md` replaces the repo's `AGENTS.md` instead, so in a repo that
+has an `AGENTS.md`, put your lines in the every-repo file.
+
+Checked on 2026-10-05 with Claude Code 2.1.289, Codex CLI 0.160.0 and Pi
 0.87.1.
-
-Codex and pi don't load the Claude Code plugin, so each line below names the
-command it needs. Codex also reads skills from `~/.codex/skills`: copy
-`plugin/skills/starbridge` there so it knows how to write a card. When
-`starbridge agent` runs, it queues each answer into the Codex session that
-asked, with `codex queue` (Codex CLI 0.160 or later, interactive sessions). In
-`codex exec`, in pi, or with no agent running, nothing brings the answer back
-after a turn ends; `starbridge ask` says so, and the skill then has the agent
-wait with `starbridge wait <id>` before it ends the turn.
 
 ## Lines to copy
 
 Paste the lines you want and edit them to fit.
 
 ```
-Ask me through Starbridge (`starbridge ask`) before you merge a pull request.
 Ask me through Starbridge before you deploy.
+Ask me through Starbridge (`starbridge ask`) before you merge a pull request.
 Ask me through Starbridge before you force-push or delete data.
 When CI fails and the fix is not obvious, ask me through Starbridge what to do.
-When a long task is done, post a Starbridge card with the next step for me to pick.
+When a long task is done, ask me through Starbridge which next step to take.
 Run the e2e tests that take over my Mac through `starbridge run`.
 Tell me through `starbridge run` when you run local inference.
 ```

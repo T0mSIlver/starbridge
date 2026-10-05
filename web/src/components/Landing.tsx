@@ -241,9 +241,7 @@ export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
           script runs it; after Homebrew or npm, run it yourself.
         </p>
         <Install />
-        <p className={`t-meta ${s.faint}`}>
-          Works with Claude Code and Codex. Pi support is coming.
-        </p>
+        <p className={`t-meta ${s.faint}`}>Works best with Claude Code; Codex and Pi supported.</p>
       </section>
 
       <footer className={`t-small ${s.foot}`}>

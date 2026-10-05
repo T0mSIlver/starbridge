@@ -54,8 +54,10 @@ export function renderDoc(doc: Doc): string {
         const id = n ? `${base}-${n}` : base;
         return `<h${depth} id="${id}"><a href="#${id}">${this.parser.parseInline(tokens)}</a></h${depth}>\n`;
       },
-      code({ text }: Tokens.Code) {
-        return `<div data-code><pre><code>${attr(text)}</code></pre><button type="button" data-copy aria-label="Copy"></button></div>\n`;
+      // A block without a language is text to paste, such as an agent's rules: it wraps.
+      code({ text, lang }: Tokens.Code) {
+        const wrap = lang ? "" : " data-wrap";
+        return `<div data-code${wrap}><pre><code>${attr(text)}</code></pre><button type="button" data-copy aria-label="Copy"></button></div>\n`;
       },
       link({ href, title: t, tokens }: Tokens.Link) {
         const to = rewrite(doc.file, href);

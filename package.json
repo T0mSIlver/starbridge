@@ -6,5 +6,16 @@
     "test": "pnpm -r --if-present test",
     "typecheck": "pnpm -r --if-present typecheck",
     "lint": "pnpm -r --if-present lint"
+  },
+  "keywords": [
+    "pi-package"
+  ],
+  "pi": {
+    "extensions": [
+      "./mod/pi/starbridge.ts"
+    ],
+    "skills": [
+      "./plugin/skills"
+    ]
   }
 }

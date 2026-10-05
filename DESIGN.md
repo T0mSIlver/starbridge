@@ -152,7 +152,8 @@ fonts:
 # The type scale, one role per job, on Material 3's sizes where a role has
 # one. Sizes and line heights in px (sp on Android), letterSpacing in em.
 # `tabular: true` turns on tabular figures (tnum) so numbers line up.
-# `compact` overrides a role on the web under 600 px wide.
+# `compact` overrides a role on the web under 600 px wide; `wide` overrides it
+# in the web's detail pane from `size.detail-wide-from`.
 typography:
   hero: # the landing page's headline, web only
     font: sans
@@ -180,6 +181,7 @@ typography:
     weight: 500
     lineHeight: 32
     letterSpacing: 0
+    wide: { size: 30, lineHeight: 38 }
   question: # title large: a question in Android's sheet
     font: sans
     size: 22
@@ -224,6 +226,7 @@ typography:
     weight: 400
     lineHeight: 24
     letterSpacing: 0
+    wide: { size: 17, lineHeight: 28 }
   small: # body medium
     font: sans
     size: 14
@@ -336,6 +339,9 @@ size:
   cap: 4 # the red cap where a projected overrun meets the limit
   hatch: 6
   media: 360 # the tallest an attached image shows in a decision
+  media-wide: 560 # the same, in a wide detail pane
+  detail-wide-from: 1000 # the web's detail pane width from which its content widens and its type steps up
+  detail-wide: 1280 # the widest a wide detail pane's content runs
   page: 1200 # the landing page's width
   showcase: 1240 # the landing hero's product shot: a browser window and a phone
   browser: 1080 # the browser window in it
@@ -367,8 +373,7 @@ accent: the amber of the icon's climber, which means "needs you" and nothing
 else. Everything else is black, white and grey, except the quota bars, which
 fill in each provider's lab colour.
 
-Design v2 (2026-10-05, SPEC.md) gives each surface a job, and the mockups in
-https://claude.ai/artifact/4Esy3goyohvLThcPVCKaEf are the source for every
+Design v2 (2026-10-05, SPEC.md) gives each surface a job, and the owner's mockups are the source for every
 screen: the landing page shows the product (direction B), the web app is a
 quiet, dense control surface for any browser (A), and Android is full
 Material 3 Expressive (C).
@@ -413,7 +418,10 @@ rail (Inbox, Quotas, Settings) that becomes a bottom bar under 600 px, list
 and detail panes with the quota windows beside them, hover states, keys for
 the options (1 to 4) and for moving (J, K), and no ripples or floating
 buttons. Under 600 px the same structure turns comfortable: larger rows, and
-a question's options and a prompt's Allow and Deny on the row. On the web,
+a question's options and a prompt's Allow and Deny on the row. The detail
+pane never sits as a strip in empty ground: from `size.detail-wide-from` wide, its content
+takes 86% of the pane up to `size.detail-wide`, images grow to `size.media-wide`, and the
+roles with a `wide` size step up. On the web,
 "Colours" picks the theme: System (the default), Light or Dark, set as
 `data-theme` on `<html>` and remembered on the device. It pairs with the app
 without imitating Android.
@@ -469,6 +477,9 @@ a decision's context, a permission prompt's command and a session's name.
   middle, and "Open in Claude" or "Open in Codex" as text, with no logos.
 - An answered item goes to History, collapsed by default, as one line: the
   answer, the question, which device answered and when.
+- Find (the web rail's box) lists the matching open items, then "History · N"
+  with the matching answered ones, answers included. A matched word is bold
+  on `surface2`, never amber.
 - Destructive actions are neutral text buttons on the row; only the confirm
   button in their dialog is red (`bad`).
 - Copy inside the UI is labels and states only, never a sentence explaining
@@ -490,7 +501,7 @@ a decision's context, a permission prompt's command and a session's name.
 
 Decided 2026-10-05: the web moves only where motion shows what changed,
 and never makes an action wait. It follows the quiet dashboards in the
-design research (https://claude.ai/artifact/43JkSwnLEVmakivuuoZqXw: Linear,
+design research (Linear,
 Vercel, Tailscale), where views and selections switch at once and a read row
 changes in place; durations and the easing come from Material 3, so the web
 and Android move alike.

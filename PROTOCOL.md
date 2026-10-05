@@ -33,7 +33,7 @@ code cannot show: the HTTP API and the flows.
 
 - Every machine-signed body names its `source` (machine, project, session, and optionally the
   session's title and links, and `machineKind`: `server`, `desktop`, `laptop` or `cloud`, for
-  its icon). A decision may name its `agent`, `claude-code` or `codex`, as a permission does.
+  its icon). A decision may name its `agent`, `claude-code`, `codex` or `pi`, as a permission does. Clients accept any agent name (lowercase letters, digits and dashes, at most 40), so a newer machine's agent never makes an item unreadable; an agent a client does not know gets no "Open in" link.
 - A decision's images (PNG or JPEG) and links (HTTPS) are part of its signed body, so each box
   carries every image, and the 2 MB cap in Limits covers them once per device.
   A decision with `answerIn` is answered on that page (a claude.ai artifact whose button wakes
@@ -166,7 +166,7 @@ errors use the codes in `packages/protocol/src/sodium.ts`.
 | Route | Who | What |
 |---|---|---|
 | `GET /directory?from=<seq>` | device, machine | `{entries}` from `seq` on |
-| `POST /directory` | device | append `{entry}`; 409 unless its `seq` is the next one; 403 `machine-cap` past the account's machine limit (5 on the hosted server); 409 `directory-full` past 200 entries |
+| `POST /directory` | device | append `{entry}`; 409 unless its `seq` is the next one; 403 `machine-cap` past the account's machine limit (5 on the hosted server); 409 `directory-full` for an add past 200 entries ("Limits") |
 
 The server runs `verifyDirectory` before it accepts an entry, to refuse garbage early. Clients
 never rely on that check.
@@ -292,10 +292,11 @@ code below. Per-address limits count an IPv6 client as its /64.
 |---|---|
 | `POST /items` | 120 a minute per account |
 | Stored decisions, open or answered | 10000 per account: 409 `too-many-items` |
+| Stored permission prompts, open or settled | 10000 per account: 409 `too-many-items` |
 | Stored runs | 500 per account: 409 `too-many-items` for a new run; updates still pass |
-| Stored boxes | 128 MB per account, of which machine-signed items may fill all but the last 8 MB: 409 `too-many-items`; 2 MB per machine-signed item (all its boxes), 32 KB per run update and 32 KB per answer or permission answer: 413 `too-large` |
+| Stored items | 128 MB per account, counting each item's boxes plus 512 bytes for the item and for each box, of which machine-signed items may fill all but the last 8 MB: 409 `too-many-items`; 2 MB per machine-signed item (all its boxes), 32 KB per run update and 32 KB per answer or permission answer: 413 `too-large` |
 | `POST /directory` | 30 an hour per account |
-| Directory entries, revocations included | 200 per account: 409 `directory-full`; 8 KB per entry: 413 `too-large` |
+| Directory entries | from entry 200 on, a device's `add`: 409 `directory-full`; revocations always pass, and the recovery key may add 20 more devices; 8 KB per entry: 413 `too-large` |
 | Sessions | 50 per account; signing in past that ends the oldest, unpaired ones first |
 | `GET /auth/github/callback` | 20 a minute per address |
 | Pairing messages | 4 KB each: 400 `bad-schema` |
@@ -305,6 +306,12 @@ code below. Per-address limits count an IPv6 client as its /64.
 | `GET /answers` waiting | 32 per machine: 429 `too-many-waits` |
 | `POST /quota/ask` | 6 a minute per account |
 | `POST /push/subscriptions` | 30 a minute per account, on top of the subscription caps |
+
+The directory cap stops the chain growing, since every client replays all of it, without
+locking the owner out: revoking a lost member stays possible, and each member is revoked once,
+so revocations never outnumber adds; an owner who lost every device can still recover. A chain
+is therefore at most about 440 entries. Nothing compacts it: a full account starts a new one
+through the operator.
 
 Answers skip the decision count and may use the last 8 MB, so a full account can still answer. An hourly sweep drops answered
 decisions and their answers 7 days after the answer, permissions, permission answers and settled
@@ -399,7 +406,9 @@ Answering a permission from a phone is a trust decision, so:
 
 ### On the machine
 
-`starbridge hook permission --agent claude-code` runs as Claude Code's `PermissionRequest` hook.
+`starbridge hook permission --agent claude-code` runs as Claude Code's `PermissionRequest` hook;
+the Starbridge Pi extension runs it with `--agent pi` from its link in pi-permission-system's
+authorizer chain, with the same input shape (Pi's tool name, no suggestions, so an allow is once).
 It posts the prompt through the agent (or to the server itself when no agent runs) and waits
 at most `--wait`, 570 s by default, under the 600 s Claude Code gives a hook. An accepted
 answer prints the hook's decision: `allow`, with `updatedPermissions` built from Claude Code's
@@ -439,7 +448,7 @@ for an unknown route or decision, 502 when the server refused or failed (`detail
 | Route | What |
 |---|---|
 | `GET /status` | `{version, api, pid, startedAt, socket, machine?, server: {reachable, lastOkAt?, lastError?}, quota: {providers, intervalSeconds, lastPostAt?, lastError?}, sessions}` |
-| `POST /decisions` | `{input}` with `ask`'s fields (`question`, `options`, `waiting`, `agent`, `project`, `session`, …); the client fills `project`, `session`, title and links from its own process, and for Codex `codex` (`{home, bin}`: its `CODEX_HOME` and `codex` binary) → `{id, delivery}`: `prompt` when the answer will come back into the session as a prompt (Claude Code's mod; Codex, which the agent reaches with `codex queue` while the session's app-server daemon listens), else `wait` |
+| `POST /decisions` | `{input}` with `ask`'s fields (`question`, `options`, `waiting`, `agent`, `project`, `session`, …); the client fills `project`, `session`, title and links from its own process, for Codex `codex` (`{home, bin}`: its `CODEX_HOME` and `codex` binary), and for Pi `piAnswers: true` while the Starbridge Pi extension runs in the session → `{id, delivery}`: `prompt` when the answer will come back into the session as a prompt (Claude Code's mod; the Pi extension; Codex, which the agent reaches with `codex queue` while the session's app-server daemon listens), else `wait` |
 | `POST /decisions/:id/waiting` | `{state: "working" \| "waiting"}` → `{posted}`: post the decision's waiting state, `posted: false` when it already had it; 404 `unknown-decision`, 400 when it is answered. `starbridge waiting`, `working` |
 | `POST /answers/next` | `{id?, wait?}`: the answer to decision `id`, or the first answer no `wait` printed, marked printed → `{answer?, question?}`; 404 `unknown-decision`. `starbridge wait` |
 | `POST /quota` | `{providers?}`: run CodexBar and post a snapshot now → `{snapshot}` |

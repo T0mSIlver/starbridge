@@ -10,6 +10,7 @@ import { type AskInput, ask } from "../decisions";
 import type { InstallKind } from "../release";
 import { removeBinary } from "../update";
 import { findCodexbar } from "./codexbar";
+import { codexSkillDir, hasPi, piPackage, removeCodexSkill, removePiPackage } from "./harnesses";
 import { hasClaude, legacyInstalls, pluginState, removePlugins } from "./plugins";
 import { legacyUnits, removeLegacy, removeService } from "./service";
 import type { Sys } from "./sys";
@@ -83,6 +84,16 @@ export async function uninstall(sys: Sys, opts: UninstallOpts): Promise<number> 
         ctx.out(`Removed ${old.what}.`);
       }
   }
+
+  if (removeCodexSkill(sys)) ctx.out(`Removed ${codexSkillDir(sys)}.`);
+  const piSource = hasPi(sys) ? piPackage(sys) : undefined;
+  if (piSource)
+    try {
+      await removePiPackage(sys, piSource);
+      ctx.out("Removed the Starbridge Pi package.");
+    } catch (e) {
+      ctx.out(`Could not remove the Pi package: ${(e as Error).message}`);
+    }
 
   const dir = ctx.store.dir;
   if (!stopped && existsSync(dir)) {

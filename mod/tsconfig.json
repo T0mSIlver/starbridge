@@ -11,5 +11,13 @@
     "noEmit": true,
     "types": ["bun"]
   },
-  "include": ["hooks/poller.ts", "hooks/agent.ts", "hooks/switch.ts", "test", "e2e"]
+  "include": [
+    "../cli/src/text.d.ts",
+    "hooks/poller.ts",
+    "hooks/agent.ts",
+    "hooks/switch.ts",
+    "pi",
+    "test",
+    "e2e"
+  ]
 }

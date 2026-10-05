@@ -109,8 +109,16 @@
   margin: var(--s1) 0 2px;
 }
 
+.thumbs {
+  min-width: 0;
+}
+
+/* Shrinks with a narrowed list pane (#173) rather than running past its edge. */
 .thumbs img {
   display: block;
+  flex: 0 1 auto;
+  min-width: 0;
+  aspect-ratio: 1 / 0.62;
   object-fit: cover;
   border-radius: var(--radius-sm);
   border: 1px solid var(--line-strong);
@@ -323,4 +331,12 @@
 
 [aria-expanded="true"] > .chev {
   transform: rotate(90deg);
+}
+
+/* A Find match: bold on `surface2`, never amber. */
+.match {
+  border-radius: 2px;
+  background: var(--surface2);
+  color: inherit;
+  font-weight: 600;
 }

@@ -30,10 +30,24 @@
   padding: var(--s8) var(--s10);
 }
 
-/* Centred, so a short question leaves even margins rather than one wide band (#179). */
+/* Centred, so a short question leaves even margins rather than one wide band (#179). A wide
+   pane, once its side panes are narrowed, widens the content, its images and its type
+   (type.css), so it never sits in a strip of empty ground. */
+.detail {
+  container: detail / inline-size;
+}
+
 .detail > * {
   max-width: var(--size-content);
   margin-inline: auto;
+}
+
+/* `size.detail-wide-from`: a query cannot read a custom property. */
+@container detail (min-width: 1000px) {
+  .detail > * {
+    --size-media: var(--size-media-wide);
+    max-width: min(86cqi, var(--size-detail-wide));
+  }
 }
 
 .head {
@@ -97,6 +111,11 @@
   margin-left: auto;
 }
 
+.viewButton {
+  width: var(--s8);
+  padding: 0;
+}
+
 .viewOpen {
   border-color: var(--fg2);
 }
@@ -146,13 +165,6 @@
 .check {
   display: grid;
   width: var(--s4);
-}
-
-.menuNote {
-  margin-top: var(--s1);
-  padding: var(--s1h) var(--s2) 2px;
-  border-top: 1px solid var(--line);
-  color: var(--fg3);
 }
 
 /* Narrow: the page scrolls, above the bottom bar on phones. */

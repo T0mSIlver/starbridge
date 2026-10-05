@@ -60,6 +60,8 @@ export function Inbox() {
   // list comes back.
   const [historyToggled, setHistoryToggled] = useState(false);
   const find = useFind();
+  // Find searches History too, so its prompt log loads once a query starts, not per keystroke.
+  const finding = find.trim() !== "";
   const wide = useWide();
   const live =
     prompts.length > 0 || inbox.items.some((i) => i.waitingSince) || !!runs?.items.length;
@@ -67,8 +69,8 @@ export function Inbox() {
   const now = useNow(true, live ? 1000 : 60_000);
 
   useEffect(() => {
-    if (historyOpen) loadPromptLog().catch(() => {});
-  }, [historyOpen, loadPromptLog]);
+    if (historyOpen || finding) loadPromptLog().catch(() => {});
+  }, [historyOpen, finding, loadPromptLog]);
 
   const keep = (e: Entry) => !find || matches(find, [e.machine, e.repo, ...text(e)]);
   const all = [...needsYou(inbox.items, prompts, now), ...running(runs?.items ?? [], now)];
@@ -79,11 +81,14 @@ export function Inbox() {
     for (const p of [...(promptLog ?? []), ...prompts]) seen.set(p.permission.id, p);
     return [...seen.values()];
   }, [promptLog, prompts]);
+  // History's matches, answers included, list under the open items while finding.
   const past = history(inbox.items, allPrompts, (p) => promptOutcome(p, deviceName), now).filter(
-    (p) => keep(p.entry),
+    (p) => !finding || matches(find, [p.entry.machine, p.entry.repo, ...text(p.entry), p.outcome]),
   );
+  const showPast = historyOpen || finding;
+  const view = finding ? "none" : grouping;
 
-  const ids = [...needs, ...(historyOpen ? past.map((p) => p.entry) : [])].map((e) => e.id);
+  const ids = [...needs, ...(showPast ? past.map((p) => p.entry) : [])].map((e) => e.id);
   const [picked, setPicked] = useState<string>();
   // Phones and narrow windows show the detail in place of the list once a row is tapped.
   const [opened, setOpened] = useState<string>();
@@ -213,7 +218,7 @@ export function Inbox() {
           {inbox.rejected.length} hidden: failed verification ({inbox.rejected[0]?.error})
         </p>
       )}
-      {grouping === "waiting" ? (
+      {view === "waiting" ? (
         <>
           {runEntries.length > 0 && (
             <>
@@ -242,7 +247,7 @@ export function Inbox() {
             </>
           )}
         </>
-      ) : grouping === "machine" ? (
+      ) : view === "machine" ? (
         byMachine(runEntries, needs).map((g) => (
           <div key={g.machine}>
             {sub(
@@ -269,20 +274,28 @@ export function Inbox() {
           )}
         </>
       )}
-      {needs.length === 0 && runEntries.length === 0 && (
-        <p className={`t-small ${s.empty}`}>{find ? "Nothing matches" : "Nothing needs you"}</p>
-      )}
+      {needs.length === 0 &&
+        runEntries.length === 0 &&
+        (!finding ? (
+          <p className={`t-small ${s.empty}`}>Nothing needs you</p>
+        ) : past.length === 0 ? (
+          <p className={`t-small ${s.empty}`}>Nothing matches</p>
+        ) : null)}
       <div className={s.gap} />
-      <HistoryHead
-        open={historyOpen}
-        count={closedToday(past, now)}
-        comfy={comfy}
-        onToggle={() => {
-          setHistoryOpen(!historyOpen);
-          setHistoryToggled(true);
-        }}
-      />
-      {historyOpen && (
+      {finding ? (
+        past.length > 0 && sub(`History · ${past.length}`)
+      ) : (
+        <HistoryHead
+          open={historyOpen}
+          count={closedToday(past, now)}
+          comfy={comfy}
+          onToggle={() => {
+            setHistoryOpen(!historyOpen);
+            setHistoryToggled(true);
+          }}
+        />
+      )}
+      {showPast && (
         <div
           className={historyToggled ? "m-appear" : undefined}
           onAnimationEnd={() => setHistoryToggled(false)}
@@ -625,14 +638,16 @@ function ViewMenu({
     <div className={s.view} ref={ref}>
       <button
         type="button"
-        className={icon ? s.iconButton : `t-meta ${ui.btn} ${ui.sm} ${open ? s.viewOpen : ""}`}
+        className={
+          icon ? s.iconButton : `${ui.btn} ${ui.sm} ${s.viewButton} ${open ? s.viewOpen : ""}`
+        }
         aria-haspopup="menu"
         aria-expanded={open}
-        aria-label={icon ? "View" : undefined}
+        aria-label="View"
+        title={icon ? undefined : "View"}
         onClick={() => setOpen(!open)}
       >
         <Icon name="view" size={icon ? 22 : 16} />
-        {!icon && "View"}
       </button>
       {open && (
         <div className={`t-small m-drop ${s.menu}`} role="menu">
@@ -660,7 +675,6 @@ function ViewMenu({
               {label}
             </button>
           ))}
-          <div className={`t-caption ${s.menuNote}`}>Remembered on this device</div>
         </div>
       )}
     </div>
