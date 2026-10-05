@@ -845,6 +845,16 @@ How it generalizes is open.
   the phone's language ("Oct 7" in English, "7 oct." in French) from Android's own patterns, where
   it used fixed English ones; words such as "tomorrow" stay English, as the rest of the UI.
 
+- 2026-10-05. A device sees quotas as soon as it joins, and pulling to refresh gets fresh ones
+  (#158). A snapshot is sealed to the devices in the directory when it is posted, so a device that
+  joined later read nothing until the next upload, up to 5 minutes. Fixed at the source: every
+  directory append ends the machines' answer long-polls, whose replies now carry the directory's
+  length, and the agent posts a fresh snapshot (CodexBar takes about 4 s) once its re-read
+  directory holds a new device. Pull to refresh on Android's Quotas calls `POST /quota/ask`, which
+  wakes the machines the same way and holds until each has posted, then refetches. Asks are
+  rate-limited to 6 a minute per account, since each runs CodexBar on every machine. The web page
+  has no refresh gesture and gets none; it polls quotas every minute, and every 3 s for its first
+  30 s while it holds none, so a browser that just joined shows the re-upload within seconds.
 - 2026-10-05. `starbridge pair` pairs with https://starbridge.run unless `--server` or
   `STARBRIDGE_SERVER` names a self-hosted server (#154), as `setup` already did.
 
