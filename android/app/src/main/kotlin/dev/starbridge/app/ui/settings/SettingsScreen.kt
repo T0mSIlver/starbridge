@@ -56,6 +56,7 @@ import androidx.compose.ui.zIndex
 import androidx.lifecycle.ViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.starbridge.app.data.CardButtons
+import dev.starbridge.app.data.Clock
 import dev.starbridge.app.data.Colours
 import dev.starbridge.app.data.InboxView
 import dev.starbridge.app.data.openLink
@@ -86,6 +87,8 @@ class SettingsViewModel @Inject constructor(private val store: Store, private va
     fun setInbox(value: InboxView) = prefs.setInbox(value)
     fun setQuota(value: QuotaSettings) = prefs.setQuota(value)
     fun setColours(value: Colours) = prefs.setColours(value)
+    val clock = prefs.clock
+    fun setClock(value: Clock) = prefs.setClock(value)
     fun setPush(type: String) = store.setPushType(type)
     fun signOut() = store.signOut()
 }
@@ -99,6 +102,7 @@ class SettingsActions(
     val devices: () -> Unit,
     val addDevice: () -> Unit,
     val inbox: (InboxView) -> Unit = {},
+    val clock: (Clock) -> Unit = {},
 )
 
 /** Everything this phone keeps for itself, and the account's devices. The settings stay on the phone. */
@@ -113,6 +117,7 @@ fun SettingsScreen(
     actions: SettingsActions,
     modifier: Modifier = Modifier,
     inbox: InboxView = InboxView(),
+    clock: Clock = Clock.System,
 ) {
     val context = LocalContext.current
     var signingOut by rememberSaveable { mutableStateOf(false) }
@@ -172,6 +177,13 @@ fun SettingsScreen(
         item { Section("Colours") }
         item { RadioRow(0, 2, "Starbridge", colours == Colours.Starbridge) { actions.colours(Colours.Starbridge) } }
         item { RadioRow(1, 2, "Match wallpaper", colours == Colours.Wallpaper) { actions.colours(Colours.Wallpaper) } }
+
+        item { Section("Clock") }
+        item {
+            ChoiceRow(0, 1, "Time format") {
+                Segments(listOf(Clock.System to "System", Clock.H12 to "12-hour", Clock.H24 to "24-hour"), clock, actions.clock)
+            }
+        }
 
         item { Section("Notifications") }
         item {
