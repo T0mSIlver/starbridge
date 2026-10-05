@@ -76,7 +76,10 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.starbridge.app.data.CardButtons
 import dev.starbridge.app.data.Decision
@@ -190,11 +193,15 @@ fun InboxScreen(
     val at = if (tick.isAfter(now)) tick else now
     val shown = if (promptActions == null) emptyList() else shownPrompts(prompts, at)
     val polling = shown.isNotEmpty()
-    LaunchedEffect(polling) {
-        while (polling) {
-            delay(PROMPT_POLL_MS)
-            tick = Instant.now()
-            pollPrompts()
+    // Only while the app is in front: in the background the poll would run on unseen.
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(polling, lifecycle) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            while (polling) {
+                delay(PROMPT_POLL_MS)
+                tick = Instant.now()
+                pollPrompts()
+            }
         }
     }
     val shownRuns = Run.shown(runs, now)
