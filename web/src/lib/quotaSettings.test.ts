@@ -3,6 +3,7 @@ import {
   arrange,
   bar,
   DEFAULT_SETTINGS,
+  groups,
   type QuotaSettings,
   toNotify,
   workdayExpected,
@@ -129,6 +130,16 @@ test("arrange: the order set holds for every window when running out first is of
     "claude 5-hour",
     "claude Weekly",
     "codex Weekly",
+  ]);
+});
+
+test("groups: one per provider, in the order of its first window", () => {
+  const g = groups(arrange(windows, settings({ hidden: ["mistral"] }), now));
+  expect(g.map((x) => `${x.provider}: ${x.cards.map((c) => c.window.label).join(", ")}`)).toEqual([
+    "claude: Weekly, 5-hour",
+    "codex: Weekly",
+    "zai: 5-hour",
+    "gemini: Daily",
   ]);
 });
 

@@ -1,10 +1,35 @@
 import { status } from "@/lib/quota";
-import { bar, type QuotaSettings } from "@/lib/quotaSettings";
+import { bar, type QuotaGroup as Group, type QuotaSettings } from "@/lib/quotaSettings";
 import type { QuotaCardData } from "@/lib/types";
 import { Meter } from "./Meter";
 import s from "./QuotaRow.module.css";
 
-/** One quota window as a row: name and figure, its meter, its status word and reset. */
+/** One provider's windows under its name, and the machine that sent them when there are several. */
+export function QuotaGroup({
+  g,
+  settings,
+  now,
+  comfy = false,
+}: {
+  g: Group;
+  settings: QuotaSettings;
+  now: Date;
+  comfy?: boolean;
+}) {
+  return (
+    <section className={`${s.group} ${comfy ? s.groupComfy : ""}`} aria-label={g.provider}>
+      <h2 className={`${comfy ? "t-action" : "t-label"} ${s.head}`}>
+        <span className={s.name}>{g.provider}</span>
+        {g.machine && <span className={`t-meta ${s.dim}`}>{g.machine}</span>}
+      </h2>
+      {g.cards.map((q) => (
+        <QuotaRow key={q.window.id} q={q} settings={settings} now={now} comfy={comfy} />
+      ))}
+    </section>
+  );
+}
+
+/** One quota window as a row under its provider: window name and figure, meter, status and reset. */
 export function QuotaRow({
   q,
   settings,
@@ -24,10 +49,7 @@ export function QuotaRow({
   return (
     <article className={`${s.row} ${comfy ? s.comfy : ""}`} aria-label={`${provider} ${w.label}`}>
       <div className={`${comfy ? "t-body" : "t-small"} ${s.top}`}>
-        <span className={s.name}>
-          {provider} <span className={s.dim}>{w.label}</span>
-          {q.machine && <span className={s.dim}> · {q.machine}</span>}
-        </span>
+        <span className={s.name}>{w.label}</span>
         <span className={s.figure}>
           {figure}% <span className={s.word}>{b.word}</span>
         </span>
@@ -42,7 +64,7 @@ export function QuotaRow({
       />
       <div className={`${comfy ? "t-small" : "t-meta"} ${s.bottom}`}>
         <span className={`${s.state} ${s[st.state]}`}>{st.word}</span>
-        <span className={s.dim}>{st.reset}</span>
+        <span className={`${s.dim} ${s.reset}`}>{st.reset}</span>
       </div>
     </article>
   );

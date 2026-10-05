@@ -899,6 +899,13 @@ How it generalizes is open.
   which gets each update by push. A lost run shows no elapsed time in its corner: its last news
   may predate most of its life, so the time would read as 0.
 
+- 2026-10-05. Quota windows grouped by provider (#160, layout C of
+  https://claude.ai/artifact/XMemEeP3dEBAagDiz4Ys6i). The provider's name heads one card (Android)
+  or one block (web, the landing page included), with the machine beside it when several upload;
+  its windows follow as rows that name only the window. Groups come in the order of their first
+  window under "Quota order", so a provider with a window running out leads, and its running-out
+  window leads inside it. The provider shows once, so skimming the list reads provider names only.
+
 - 2026-10-05. A device sees quotas as soon as it joins, and pulling to refresh gets fresh ones
   (#158). A snapshot is sealed to the devices in the directory when it is posted, so a device that
   joined later read nothing until the next upload, up to 5 minutes. Fixed at the source: every
