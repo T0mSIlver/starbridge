@@ -79,6 +79,8 @@ class ScreenshotTest(private val dark: Boolean) {
 
     @Test fun quotasEmpty() = capture("quotas-empty") { QuotasScreen(emptyList(), now) }
 
+    @Test fun quotasStale() = capture("quotas-stale") { QuotasScreen(fake.staleWindows, now) }
+
     // Tall enough to show "This phone": notifications, colours and the server.
     @Config(qualifiers = "w411dp-h1500dp-xxhdpi")
     @Test fun devices() = capture("devices") { DevicesScreen(fake.members, Approval.Idle, fake.push, "https://starbridge.run", now, deviceActions) }

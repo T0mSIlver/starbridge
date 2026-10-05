@@ -201,6 +201,36 @@ data class Source(
     }
 }
 
+/** PNG or JPEG only: never SVG, which can carry script (DecisionImage in schemas.ts). */
+val IMAGE_TYPES = setOf("image/png", "image/jpeg")
+private val HTTPS_URL_RE = Regex("^https://[\\x21-\\x7e]+$")
+
+@Serializable
+data class DecisionImage(
+    val type: String,
+    val width: Int,
+    val height: Int,
+    val data: String,
+    val alt: String? = null,
+) {
+    fun check() {
+        schema(type in IMAGE_TYPES, "images.type")
+        schema(width in 1..8192 && height in 1..8192, "images.size")
+        schema(data.length <= 256 * 1024, "images.data")
+        b64(data, "images.data")
+        alt?.let { len(it, 0, 300, "images.alt") }
+    }
+}
+
+/** A page to open, typically a claude.ai artifact; HTTPS only (DecisionLink in schemas.ts). */
+@Serializable
+data class DecisionLink(val url: String, val title: String? = null) {
+    fun check() {
+        schema(url.length <= 2048 && HTTPS_URL_RE.matches(url), "links.url")
+        title?.let { len(it, 1, 100, "links.title") }
+    }
+}
+
 @Serializable
 data class Decision(
     val v: Int,
@@ -213,6 +243,10 @@ data class Decision(
     val recommended: String? = null,
     @SerialName("default") val fallback: DecisionDefault,
     val source: Source,
+    val images: List<DecisionImage>? = null,
+    val links: List<DecisionLink>? = null,
+    /** The page the owner answers on instead of Starbridge (answerIn in schemas.ts). */
+    val answerIn: DecisionLink? = null,
 ) : ItemBody {
     override val recipients get() = to
 
@@ -229,6 +263,12 @@ data class Decision(
         len(fallback.action, 1, 300, "default.action")
         fallback.at?.let { time(it, "default.at") }
         source.check()
+        images?.let { schema(it.size <= 4, "images"); it.forEach(DecisionImage::check) }
+        links?.let { schema(it.size <= 4, "links"); it.forEach(DecisionLink::check) }
+        answerIn?.let {
+            it.check()
+            schema(options.isEmpty(), "a decision answered elsewhere has no options")
+        }
         schema(options.size != 1, "options: 0 or 2 to 4")
         schema(options.toSet().size == options.size, "options must be distinct")
         if (options.isNotEmpty()) schema(recommended != null && recommended in options, "recommended must be one of the options")

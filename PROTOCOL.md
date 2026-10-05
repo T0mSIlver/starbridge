@@ -28,6 +28,12 @@ code cannot show: the HTTP API and the flows.
   | `permission-answer` | device | `permissionId`, a permission |
   | `settled` | machine | `itemId`, a permission or a decision the same machine posted |
 
+- A decision's images (PNG or JPEG) and links (HTTPS) are part of its signed body, so each box
+  carries every image, and the 256 KB cap in Limits covers them once per device.
+  A decision with `answerIn` is answered on that page (a claude.ai artifact whose button wakes
+  the agent), never in Starbridge: it has no options, devices show the page and no answer
+  field, and it closes when the machine posts `settled` for it or its default time passes.
+
 ## Directory
 
 The account's directory is a hash chain of signed entries listing each member's X25519 and

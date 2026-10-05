@@ -61,6 +61,7 @@ import dev.starbridge.app.ui.Refresh
 import dev.starbridge.app.ui.Refreshable
 import dev.starbridge.app.ui.Screen
 import dev.starbridge.app.ui.StatusWord
+import dev.starbridge.app.ui.ago
 import dev.starbridge.app.ui.listPadding
 import dev.starbridge.app.ui.span
 import dev.starbridge.app.ui.theme.Radius
@@ -86,7 +87,7 @@ fun QuotasScreen(windows: List<QuotaWindow>, now: Instant, modifier: Modifier = 
                 verticalArrangement = Arrangement.spacedBy(Spacing.s3),
             ) {
                 if (windows.isEmpty()) item { NoQuotas() }
-                items(windows.sortedByDescending { it.alert }, key = { it.id }) { WindowCard(it, now, Modifier.animateItem()) }
+                items(windows.sortedByDescending { it.alert && !it.ended(now) }, key = { it.id }) { WindowCard(it, now, Modifier.animateItem()) }
             }
         }
     }
@@ -124,17 +125,25 @@ private fun NoQuotas() {
     }
 }
 
+/**
+ * The window reset after this snapshot: its use and pace belong to the window that ended, so the
+ * card says so until a machine uploads the new one.
+ */
+private fun QuotaWindow.ended(now: Instant) = resetsAt?.isAfter(now) == false
+
 /** A pace's colour and word; DESIGN.md: never colour without the word. */
 private class Tone(val color: Color, val word: String)
 
 @Composable
-private fun tone(pace: Pace): Tone {
+private fun tone(window: QuotaWindow, now: Instant): Tone {
     val c = StarbridgeTheme.colors
-    return when (pace) {
+    val neutral = MaterialTheme.colorScheme.onSurfaceVariant
+    if (window.ended(now)) return Tone(neutral, "Window reset")
+    return when (val pace = window.pace) {
         Pace.Even -> Tone(c.ok, "On pace")
-        is Pace.RunsOut -> Tone(c.bad, "Will run out")
+        is Pace.RunsOut -> Tone(c.bad, if (pace.at.isAfter(now)) "Will run out" else "Ran out")
         is Pace.Unused -> Tone(c.warn, "Headroom unused")
-        Pace.Unknown -> Tone(c.fg3, "Too early to tell")
+        Pace.Unknown -> Tone(neutral, "Too early to tell")
     }
 }
 
@@ -154,7 +163,8 @@ private fun providerDot(provider: String): Map<String, InlineTextContent> {
 
 @Composable
 private fun WindowCard(window: QuotaWindow, now: Instant, modifier: Modifier = Modifier) {
-    val tone = tone(window.pace)
+    val tone = tone(window, now)
+    val ended = window.ended(now)
     Panel(modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.Bottom) {
             Text(
@@ -174,7 +184,7 @@ private fun WindowCard(window: QuotaWindow, now: Instant, modifier: Modifier = M
                     withStyle(SpanStyle(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = StarbridgeTheme.type.action.fontSize)) { append("%") }
                 },
                 style = StarbridgeTheme.type.figure,
-                color = MaterialTheme.colorScheme.onSurface,
+                color = if (ended) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
             )
         }
         Spacer(Modifier.padding(top = Spacing.s3))
@@ -184,14 +194,14 @@ private fun WindowCard(window: QuotaWindow, now: Instant, modifier: Modifier = M
             StatusWord(tone.word, tone.color)
             Spacer(Modifier.width(Spacing.s3))
             Text(
-                window.resetsAt?.let { "Resets in ${span(now, it)}" } ?: "Reset time unknown",
+                window.resetsAt?.let { if (ended) "Reset ${ago(now, it)}" else "Resets in ${span(now, it)}" } ?: "Reset time unknown",
                 style = StarbridgeTheme.type.machine,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.weight(1f),
                 textAlign = TextAlign.End,
             )
         }
-        Text(detail(window, now), style = StarbridgeTheme.type.small, color = if (window.alert) tone.color else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = Spacing.s2))
+        Text(detail(window, now), style = StarbridgeTheme.type.small, color = if (window.alert && !ended) tone.color else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = Spacing.s2))
     }
 }
 
@@ -230,7 +240,10 @@ private fun Meter(window: QuotaWindow, color: Color) {
     }
 }
 
-private fun detail(window: QuotaWindow, now: Instant): String = when (val pace = window.pace) {
+private fun detail(window: QuotaWindow, now: Instant): String = if (window.ended(now)) {
+    "Ended at ${window.usedPercent}% used; waiting for the next upload"
+} else when (val pace = window.pace) {
+    is Pace.RunsOut if !pace.at.isAfter(now) -> window.resetsAt?.let { "Back at the reset, in ${span(now, it)}" } ?: "Back at the reset"
     Pace.Even -> "Lasts until the reset"
     is Pace.RunsOut -> "Runs out in ${span(now, pace.at)}" + (window.resetsAt?.let { ", ${span(pace.at, it)} before the reset" } ?: "")
     is Pace.Unused -> "${pace.percent}% left unused at the reset"

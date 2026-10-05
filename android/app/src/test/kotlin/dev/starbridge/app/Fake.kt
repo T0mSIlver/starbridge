@@ -126,6 +126,15 @@ class Fake(private val now: Instant) {
         QuotaWindow("gemini-day", "gemini", "Daily", 3, later(1400), Pace.Unknown),
     )
 
+    /**
+     * Snapshots the clock overtook: one ran out before its reset; two reset with no upload since.
+     */
+    val staleWindows = listOf(
+        QuotaWindow("gemini-day", "gemini", "Daily", 100, later(40), Pace.RunsOut(ago(10)), alert = true, steadyPercent = 92),
+        QuotaWindow("codex-5h", "codex", "5-hour", 100, ago(25), Pace.RunsOut(ago(90)), alert = true, steadyPercent = 100),
+        QuotaWindow("claude-week", "claude", "Weekly", 97, ago(5), Pace.Even, steadyPercent = 100),
+    )
+
     val members = listOf(
         Member("m1", "Pixel 11 Pro", Kind.Device, ago(60 * 24 * 3), current = true),
         Member("m2", "Firefox on the Mac", Kind.Device, ago(60 * 24 * 3)),
