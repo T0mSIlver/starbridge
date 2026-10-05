@@ -1,5 +1,13 @@
 package dev.starbridge.app.ui.inbox
 
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -228,14 +236,6 @@ fun PromptSheet(prompt: Prompt, now: Instant, actions: PromptActions) {
         Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Command(prompt.summary, StarbridgeTheme.type.code.copy(fontSize = 17.sp, lineHeight = 26.sp), scheme.surfaceContainerHighest, RoundedCornerShape(Spacing.s4), PaddingValues(horizontal = 18.dp, vertical = Spacing.s4))
             prompt.description?.let { Text(it, style = StarbridgeTheme.type.reading.copy(lineHeight = 22.sp), color = scheme.onSurfaceVariant) }
-            if (input) {
-                Text(
-                    prettyInput(prompt.input),
-                    style = StarbridgeTheme.type.code,
-                    color = scheme.onSurface,
-                    modifier = Modifier.fillMaxWidth().background(scheme.surfaceContainerHighest, RoundedCornerShape(Spacing.s4)).horizontalScroll(rememberScrollState()).padding(Spacing.s4),
-                )
-            }
             if (waiting) {
                 AllowDeny(56.dp, !sent, scheme.surfaceContainerHighest, onAllow = { send(true, "once", null) }, onDeny = { if (denying) send(false, "once", note.ifBlank { null }) else denying = true })
                 if (denying) {
@@ -260,11 +260,40 @@ fun PromptSheet(prompt: Prompt, now: Instant, actions: PromptActions) {
                     }
                 }
             }
+            FullInput(prompt.input, input) { input = !input }
+        }
+    }
+}
+
+/**
+ * "Full input": a row with a chevron that opens the tool's input under itself, as Material's
+ * expandable sections do, so nothing above it moves and Allow and Deny stay under the thumb (#265).
+ */
+@Composable
+private fun FullInput(input: String, open: Boolean, onToggle: () -> Unit) {
+    val scheme = MaterialTheme.colorScheme
+    val turn by animateFloatAsState(if (open) 180f else 0f, MaterialTheme.motionScheme.fastSpatialSpec(), label = "chevron")
+    Column {
+        Row(
+            Modifier.fillMaxWidth().heightIn(min = 48.dp).clip(RoundedCornerShape(Spacing.s3))
+                .clickable(onClickLabel = if (open) "Hide the full input" else "Show the full input", onClick = onToggle)
+                .semantics { stateDescription = if (open) "Expanded" else "Collapsed" }
+                .padding(horizontal = Spacing.s1),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("Full input", style = StarbridgeTheme.type.label, color = scheme.onSurface, modifier = Modifier.weight(1f))
+            Symbol(Sym.ExpandMore, size = 22.dp, tint = scheme.onSurfaceVariant, modifier = Modifier.rotate(turn))
+        }
+        AnimatedVisibility(
+            open,
+            enter = expandVertically(MaterialTheme.motionScheme.defaultSpatialSpec()) + fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()),
+            exit = shrinkVertically(MaterialTheme.motionScheme.fastSpatialSpec()) + fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()),
+        ) {
             Text(
-                if (input) "Hide the full input" else "Show the full input",
-                style = StarbridgeTheme.type.small,
-                color = scheme.onSurfaceVariant,
-                modifier = Modifier.clickable { input = !input }.padding(vertical = Spacing.s1),
+                prettyInput(input),
+                style = StarbridgeTheme.type.code,
+                color = scheme.onSurface,
+                modifier = Modifier.padding(top = Spacing.s1).fillMaxWidth().background(scheme.surfaceContainerHighest, RoundedCornerShape(Spacing.s4)).horizontalScroll(rememberScrollState()).padding(Spacing.s4),
             )
         }
     }

@@ -1115,6 +1115,11 @@ How it generalizes is open.
   grouping, then "History · N" with the matching answered items, History open or not. A
   History item also matches by its answer. Matched words show bold on `surface2`, never in
   amber; Escape in the box clears it. Android's search waits for the owner's pick.
+- 2026-10-06. A prompt sheet's full input opens in place (#265): "Full input" is a full-width
+  row with a chevron at the end of the sheet, and the JSON expands under it, as Material's
+  expandable sections do. Nothing above the row moves, so Allow and Deny stay where they were.
+  A full-screen view was the other option; it hides the command and the buttons while the
+  owner reads, for an input that is rarely long.
 
 ## Encryption, with existing libraries
 

@@ -173,6 +173,12 @@ class ScreenshotTest(private val dark: Boolean) {
         Sheet({ QuotasScreen(fake.windows, now) }) { PromptSheet(p, now, promptActions) }
     }
 
+    // The full input open, under its control: Allow and Deny stay where they were (#265).
+    @Test fun sheetPromptInput() = capture("sheet-prompt-input", before = { compose.onNodeWithText("Full input").performClick() }) {
+        val p = fake.prompts.first()
+        Sheet({ QuotasScreen(fake.windows, now) }) { PromptSheet(p, now, promptActions) }
+    }
+
     @Config(qualifiers = "w412dp-h1060dp-xxhdpi")
     @Test fun quotas() = capture("quotas") { Phone(Tab.Quotas, 4) { QuotasScreen(fake.windows, now) } }
 
