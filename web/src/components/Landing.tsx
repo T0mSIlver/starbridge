@@ -14,7 +14,8 @@ import ui from "./ui.module.css";
 // Product shots in public/landing, at 1.5x for the web inbox and 2x for the phones:
 //   web-inbox-*      the app at /sample-hero (development only), 1440 by 900, after a click
 //                    on the question with images
-//   android-*        the design v2 mockups' Android inbox, question sheet and lock screen
+//   android-inbox-*, android-question-*  Roborazzi shots of the app: `inbox-landing`, `sheet-pick`
+//   android-lock-*   the design v2 mockups' lock screen, which Roborazzi cannot render
 // Each comes dark and light; `<picture>` picks the one the browser asks for.
 function Shot({
   name,
@@ -202,7 +203,7 @@ export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
           />
         </div>
         <div className={s.heroPhone}>
-          <Phone name="android-inbox" alt="The Android inbox with a run, a prompt and questions" />
+          <Phone name="android-inbox" alt="The Android inbox with runs and questions" />
         </div>
       </div>
 
@@ -233,10 +234,7 @@ export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
         text="The agent asks and keeps working. Your answer reaches its session as the next prompt."
       >
         <div className={s.crop}>
-          <Phone
-            name="android-question"
-            alt="A question in Android's sheet, with its two options"
-          />
+          <Phone name="android-question" alt="A question with two images in Android's sheet" />
         </div>
       </Section>
 

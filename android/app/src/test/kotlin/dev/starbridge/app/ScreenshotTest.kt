@@ -107,6 +107,9 @@ class ScreenshotTest(private val dark: Boolean) {
     // The mockup's inbox: the run, the prompt, the question an agent waits on, then the others.
     @Test fun inbox() = capture("inbox") { Phone(Tab.Inbox, 4) { Inbox() } }
 
+    // The landing page's hero phone: no prompt, so the question with images shows (#210).
+    @Test fun inboxLanding() = capture("inbox-landing") { Phone(Tab.Inbox, 3) { InboxScreen(fake.decisions, now, decisionActions, runs = fake.runs) } }
+
     @Config(qualifiers = "w412dp-h1400dp-xxhdpi")
     @Test fun inboxByMachine() = capture("inbox-by-machine") { Phone(Tab.Inbox, 4) { Inbox(InboxView(grouping = Grouping.Machine)) } }
 

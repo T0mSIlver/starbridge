@@ -686,8 +686,9 @@ How it generalizes is open.
   phone; the `starbridge pair` code field sits below it. A browser joining an account shows its
   own QR code (a `/pair#code` link that a signed-in device opens), with "Can't scan? Compare
   digits" and the recovery key as fallbacks. The landing page's browser shot is the real app at
-  `/sample`; its phone shots are the round 4 Android mockups until Android's design v2 ships,
-  when Roborazzi shots replace them.
+  `/sample`; its phone shots are the app's Roborazzi shots (`inbox-landing`, an inbox with no
+  prompt, and `sheet-pick`, a question with two images, #210), with the round 4 mockup's lock
+  screen, which Roborazzi cannot render.
 - 2026-10-05. Answer buttons on inbox rows, web (#138). Settings, Inbox: "Answer buttons on
   questions", Always (the default), When the agent waits, or Never, remembered on the device. It
   applies to question rows on a phone width; wide screens never carry them, since the open
