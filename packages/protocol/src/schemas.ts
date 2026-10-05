@@ -249,6 +249,11 @@ export const Decision = z
      * never answers one question in two places.
      */
     answerIn: DecisionLink.optional(),
+    /**
+     * The machine takes a typed reply in place of one of the options (#201): clients then offer
+     * "Reply" under them. Machines from before it leave it out and accept only a choice.
+     */
+    replies: z.literal(true).optional(),
   })
   .superRefine((d, ctx) => {
     if (d.options.length === 1) ctx.addIssue({ code: "custom", message: "options: 0 or 2 to 4" });
