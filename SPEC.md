@@ -811,6 +811,11 @@ How it generalizes is open.
   `DateFormat.is24HourFormat`, the browser's language on the web. Android also writes dates in
   the phone's language ("Oct 7" in English, "7 oct." in French) from Android's own patterns, where
   it used fixed English ones; words such as "tomorrow" stay English, as the rest of the UI.
+- 2026-10-05. Runs on the web (#188, #190). Runs still skip Web Push, since a push that shows no
+  notification costs the browser subscription, so the page polls them every 2 s while one runs and
+  the page is visible, and every 10 s otherwise; that keeps it within a few seconds of the phone,
+  which gets each update by push. A lost run shows no elapsed time in its corner: its last news
+  may predate most of its life, so the time would read as 0.
 
 ## Encryption, with existing libraries
 

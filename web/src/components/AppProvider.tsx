@@ -10,6 +10,7 @@ import {
   type QuotaSettings,
   saveSettings,
 } from "@/lib/quotaSettings";
+import { runState } from "@/lib/runs";
 import type { Device, InboxItem, PromptItem, PromptReply, Reply } from "@/lib/types";
 
 // The protocol code and libsodium load here, after the first paint.
@@ -47,8 +48,12 @@ const Ctx_ = StoreContext;
 const POLL_MS = 20_000;
 /** While a prompt waits, it leaves within a second or two of being settled elsewhere. */
 const PROMPT_POLL_MS = 1_500;
-/** Runs skip Web Push (PROTOCOL.md, "Push"), so the page polls them while it is visible. */
+/**
+ * Runs skip Web Push (PROTOCOL.md, "Push"), so the page polls them while it is visible: often
+ * while one runs, so its steps show about when the phone gets them by push (#188).
+ */
 const RUNS_POLL_MS = 10_000;
+const LIVE_RUNS_POLL_MS = 2_000;
 /** Quotas skip Web Push too; the uploader posts every 5 minutes. */
 const QUOTA_POLL_MS = 60_000;
 
@@ -181,19 +186,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setRuns(await d.loadRuns(fresh));
   }, [current]);
 
+  const runLive = !!runs?.items.some((i) => runState(i.run, Date.now()) === "running");
   useEffect(() => {
     if (!ctx) return;
     const tick = () => {
       if (document.visibilityState === "visible") refreshRuns().catch(() => {});
     };
     tick();
-    const timer = setInterval(tick, RUNS_POLL_MS);
+    const timer = setInterval(tick, runLive ? LIVE_RUNS_POLL_MS : RUNS_POLL_MS);
     document.addEventListener("visibilitychange", tick);
     return () => {
       clearInterval(timer);
       document.removeEventListener("visibilitychange", tick);
     };
-  }, [ctx, refreshRuns]);
+  }, [ctx, refreshRuns, runLive]);
 
   // Poll while the page is visible, and refresh as soon as the service worker sees a push.
   useEffect(() => {
