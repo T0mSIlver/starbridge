@@ -1021,7 +1021,9 @@ How it generalizes is open.
   prompt Pi shows "Answer here": choosing it stops the CLI, which settles the prompt on the
   devices as answered at the keyboard, and the link defers to the dialog. The dialog appears
   only after 1 s, so a CLI that defers at once shows nothing. Pi strands a dialog that another
-  opens over it, so overlapping asks show theirs one at a time. A session that ends stops its
+  opens over it, so overlapping asks show theirs one at a time, each holding the screen until
+  pi-permission-system announces its decision (`permissions:decision`), since after "Answer
+  here" its own dialog follows (at most 10 min). A session that ends stops its
   links' CLIs, which settles their prompts on the devices. Checked with a real Pi TUI and
   pi-permission-system: `touch approved.txt` allowed from the web page; `touch second.txt`
   taken back with "Answer here" and denied in Pi's dialog, settled `keyboard` on the devices;

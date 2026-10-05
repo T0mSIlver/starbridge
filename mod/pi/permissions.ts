@@ -14,6 +14,7 @@
 
 /** The fields of pi-permission-system's `PromptPermissionDetails` this link reads. */
 export interface AskDetails {
+  requestId?: string;
   toolName?: string;
   command?: string;
   path?: string;
