@@ -15,6 +15,9 @@ const WEB = join(ROOT, "web");
 const PORTS = { web: 3870, server: 3871, github: 3872, push: 3873 };
 const ORIGIN = `http://localhost:${PORTS.web}`;
 const SHOTS = join(WEB, "screenshots");
+// Set to a folder to record the inbox's motion there, as one GIF per motion (needs ffmpeg).
+const MOTION_VIDEO = process.env.MOTION_VIDEO;
+const DESKTOP = { width: 1280, height: 860 };
 const tmp = mkdtempSync(join(tmpdir(), "starbridge-e2e-"));
 const children: ChildProcess[] = [];
 
@@ -198,7 +201,10 @@ async function main() {
   await web.waitFor(/Ready|started server/i);
 
   const ff = await browser();
-  const a = await ff.newContext({ permissions: ["notifications"] });
+  const a = await ff.newContext({
+    permissions: ["notifications"],
+    ...(MOTION_VIDEO ? { recordVideo: { dir: join(tmp, "video"), size: DESKTOP } } : {}),
+  });
 
   step("a browser with no device lands on the landing page");
   const visitor = await a.newPage();
@@ -416,6 +422,112 @@ async function main() {
     if (!(await row.evaluate((el) => el.contains(document.activeElement))))
       throw new Error(`after ${key}, focus is not on the selected row`);
   }
+  step("inbox motion: an arrival, a flip to waiting, an answer, History, a phone's detail");
+  {
+    const m = await a.newPage();
+    const start = Date.now();
+    const marks: [string, number, number][] = [];
+    const mark = async (name: string, f: () => Promise<unknown>, ms: number) => {
+      const at = Date.now() - start;
+      await f();
+      await m.waitForTimeout(ms);
+      marks.push([name, at, Date.now() - start - at]);
+    };
+    await m.setViewportSize(DESKTOP);
+    await m.goto(ORIGIN);
+    await m.getByText("Merge #19 (server) before the web PR rebases?").first().waitFor();
+    await m.waitForTimeout(2000);
+    const QUESTION = "Bump the lockfile before the release branch?";
+    let id = "";
+    await mark(
+      "arrive",
+      async () => {
+        const ask = cli(
+          "ask-motion",
+          [
+            "ask",
+            "--question",
+            QUESTION,
+            "--option",
+            "Bump it",
+            "--option",
+            "Leave it",
+            "--project",
+            "starbridge",
+            "--session",
+            "motion",
+          ],
+          machineHome,
+        );
+        id = (await ask.waitFor(/^d_\S+$/m))[0];
+        await m.locator(`[data-row="${id}"]`).waitFor({ timeout: 30_000 });
+      },
+      1200,
+    );
+    await mark(
+      "flip",
+      async () => {
+        if ((await cli("waiting", ["waiting", id], machineHome).exited) !== 0)
+          throw new Error("starbridge waiting failed");
+        await m.getByRole("button", { name: /^Waiting for you.*Bump the lockfile/ }).waitFor();
+      },
+      1200,
+    );
+    await m.locator(`button[data-id="${id}"]`).click();
+    await m.waitForTimeout(600);
+    await mark(
+      "leave",
+      async () => {
+        await m
+          .locator('section[aria-label="Selected"]')
+          .getByRole("button", { name: /Bump it/ })
+          .click();
+        await m.locator(`[data-row="${id}"]`).waitFor({ state: "detached" });
+      },
+      1000,
+    );
+    // The answered row fades out, then nothing of it is left to select or read.
+    if ((await m.locator(`button[data-id="${id}"]`).count()) > 0)
+      throw new Error("the answered row is still selectable");
+    await mark("history", () => m.getByRole("button", { name: /History/ }).click(), 1000);
+    await mark("history", () => m.getByRole("button", { name: /History/ }).click(), 800);
+    await m.setViewportSize({ width: 390, height: 844 });
+    await m.waitForTimeout(800);
+    await mark("phone-detail", () => m.locator("button[data-id]").first().click(), 1000);
+    await mark("phone-detail", () => m.getByRole("button", { name: /Back/ }).click(), 800);
+    const video = m.video();
+    await m.close();
+    if (MOTION_VIDEO && video) {
+      mkdirSync(MOTION_VIDEO, { recursive: true });
+      const webm = await video.path();
+      cpSync(webm, join(MOTION_VIDEO, "inbox.webm"));
+      const by = new Map<string, [number, number]>();
+      for (const [name, at, ms] of marks) {
+        const was = by.get(name);
+        by.set(name, was ? [was[0], at + ms - was[0]] : [at, ms]);
+      }
+      for (const [name, [at, ms]] of by) {
+        const phone = name.startsWith("phone");
+        const crop = phone ? "crop=390:844:0:0," : "";
+        const r = spawnSync("ffmpeg", [
+          "-y",
+          "-loglevel",
+          "error",
+          "-ss",
+          String(Math.max(0, at - 300) / 1000),
+          "-t",
+          String((ms + 300) / 1000),
+          "-i",
+          webm,
+          "-vf",
+          `${crop}fps=25,scale=${phone ? 390 : 960}:-1:flags=lanczos,split[a][b];[a]palettegen[p];[b][p]paletteuse`,
+          join(MOTION_VIDEO, `${name}.gif`),
+        ]);
+        if (r.status !== 0) throw new Error(`ffmpeg ${name}: ${r.stderr}`);
+      }
+    }
+  }
+
   step("a decision answered in an artifact links it, and `starbridge settle` closes it");
   const artifact = "https://claude.ai/artifact/2ig2MyNRD484b7oZea5vkZ";
   const pointer = cli(

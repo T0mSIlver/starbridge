@@ -56,6 +56,8 @@ export function Inbox() {
     useApp();
   const [grouping, setGrouping] = usePref("grouping");
   const [historyOpen, setHistoryOpen] = usePref("historyOpen");
+  // History's rows fade in when the owner opens it, not when the page loads with it open.
+  const [historyToggled, setHistoryToggled] = useState(false);
   const find = useFind();
   const wide = useWide();
   const live =
@@ -68,8 +70,9 @@ export function Inbox() {
   }, [historyOpen, loadPromptLog]);
 
   const keep = (e: Entry) => !find || matches(find, [e.machine, e.repo, ...text(e)]);
-  const needs = needsYou(inbox.items, prompts, now).filter(keep);
-  const runEntries = running(runs?.items ?? [], now).filter(keep);
+  const all = [...needsYou(inbox.items, prompts, now), ...running(runs?.items ?? [], now)];
+  const needs = all.filter((e) => e.type !== "run" && keep(e));
+  const runEntries = all.filter((e) => e.type === "run" && keep(e));
   const allPrompts = useMemo(() => {
     const seen = new Map<string, PromptItem>();
     for (const p of [...(promptLog ?? []), ...prompts]) seen.set(p.permission.id, p);
@@ -94,7 +97,11 @@ export function Inbox() {
   const latest = useRef({ ids, selected });
   latest.current = { ids, selected };
   const listRef = useRef<HTMLDivElement>(null);
-  useRowMoves(listRef);
+  useRowMotion(
+    listRef,
+    all.map((e) => e.id),
+    `${grouping} ${find} ${wide}`,
+  );
   useEffect(() => {
     if (!wide) return;
     const onKey = (e: KeyboardEvent) => {
@@ -265,18 +272,24 @@ export function Inbox() {
         open={historyOpen}
         count={closedToday(past, now)}
         comfy={comfy}
-        onToggle={() => setHistoryOpen(!historyOpen)}
+        onToggle={() => {
+          setHistoryOpen(!historyOpen);
+          setHistoryToggled(true);
+        }}
       />
-      {historyOpen &&
-        past.map((p) => (
-          <PastRow
-            key={p.entry.id}
-            past={p}
-            by={p.entry.type === "question" ? closedByPhrase(p.entry.item) : ""}
-            selected={wide && p.entry.id === selected}
-            onSelect={() => (wide ? setPicked(p.entry.id) : setOpened(p.entry.id))}
-          />
-        ))}
+      {historyOpen && (
+        <div className={historyToggled ? "m-appear" : undefined}>
+          {past.map((p) => (
+            <PastRow
+              key={p.entry.id}
+              past={p}
+              by={p.entry.type === "question" ? closedByPhrase(p.entry.item) : ""}
+              selected={wide && p.entry.id === selected}
+              onSelect={() => (wide ? setPicked(p.entry.id) : setOpened(p.entry.id))}
+            />
+          ))}
+        </div>
+      )}
     </section>
   );
 
@@ -284,7 +297,7 @@ export function Inbox() {
     return (
       <div className={s.single}>
         <PhoneBar title="Inbox" back={() => setOpened(undefined)} always />
-        <div className={s.openDetail}>
+        <div className={`m-enter ${s.openDetail}`}>
           {detail(opened) ?? <p className={`t-small ${s.empty}`}>Answered</p>}
         </div>
       </div>
@@ -374,29 +387,100 @@ function Panes({ list, children }: { list: React.ReactNode; children: React.Reac
   );
 }
 
+// Items listed this soon after the list shows came with the page, so they don't fade in.
+const SETTLE = 1500;
+
+/** A duration token from tokens.css, in ms. */
+function ms(name: "--t-fast" | "--t-state"): number {
+  return Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue(name));
+}
+
+type Placed = { row: HTMLElement; prev: Element | null; next: Element | null };
+type Snapshot = {
+  list: HTMLElement;
+  view: string;
+  shown: number;
+  seen: Set<string>;
+  order: string[];
+  tops: Map<string, number>;
+  rows: Map<string, Placed>;
+};
+
 /**
- * Slides each row from where it was to where it is, over `--t-state`, when the order changes,
- * such as a question that flips to waiting moving up (#191).
+ * The list's motion (DESIGN.md, "Motion and states"): an item that arrives while the page is
+ * open fades in; an answered item fades out where it was, then the list closes up at once; a row
+ * whose place in the order changes, such as a question that flips to waiting (#191), slides
+ * there. Rows that only shift because others came or left stay put, and a change of view or
+ * filter moves nothing. `ids` holds every open item, filtered out or not.
  */
-function useRowMoves(list: React.RefObject<HTMLElement | null>) {
-  const tops = useRef(new Map<string, number>());
+function useRowMotion(list: React.RefObject<HTMLElement | null>, ids: string[], view: string) {
+  const last = useRef<Snapshot>(undefined);
   useLayoutEffect(() => {
-    const rows = list.current?.querySelectorAll<HTMLElement>("[data-row]") ?? [];
-    const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const next = new Map<string, number>();
-    for (const row of rows) {
-      const id = row.dataset.row as string;
-      // Layout position: unmoved by page or list scroll, and by a move still running.
-      const top = row.offsetTop;
-      next.set(id, top);
-      const was = tops.current.get(id);
-      if (still || was === undefined || Math.abs(was - top) < 1) continue;
-      row.animate([{ transform: `translateY(${was - top}px)` }, { transform: "none" }], {
-        duration: 250,
-        easing: "cubic-bezier(0.2, 0, 0, 1)",
+    const el = list.current;
+    if (!el) return;
+    const measure = () => {
+      const rows = [...el.querySelectorAll<HTMLElement>("[data-row]")];
+      return {
+        order: rows.map((r) => r.dataset.row as string),
+        // Layout position: unmoved by page or list scroll, and by a move still running.
+        tops: new Map(rows.map((r) => [r.dataset.row as string, r.offsetTop])),
+        rows: new Map<string, Placed>(
+          rows.map((r) => [
+            r.dataset.row as string,
+            { row: r, prev: r.previousElementSibling, next: r.nextElementSibling },
+          ]),
+        ),
+      };
+    };
+    const now = measure();
+    const was = last.current;
+    const fresh = !was || was.list !== el;
+    const shown = fresh ? performance.now() : was.shown;
+    const seen = new Set([...(fresh ? [] : was.seen), ...ids]);
+    last.current = { list: el, view, shown, seen, ...now };
+    if (fresh || was.view !== view) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+    const easing = getComputedStyle(el).getPropertyValue("--ease").trim() || "ease-out";
+    const before = was.order.filter((id) => now.tops.has(id));
+    const after = now.order.filter((id) => was.tops.has(id));
+    after.forEach((id, i) => {
+      if (before[i] === id) return;
+      const dy = (was.tops.get(id) as number) - (now.tops.get(id) as number);
+      if (Math.abs(dy) < 1) return;
+      now.rows.get(id)?.row.animate([{ transform: `translateY(${dy}px)` }, { transform: "none" }], {
+        duration: ms("--t-state"),
+        easing,
       });
+    });
+
+    const settled = performance.now() - shown > SETTLE;
+    for (const [id, { row }] of now.rows)
+      if (settled && !was.tops.has(id) && !was.seen.has(id))
+        row.animate([{ opacity: 0 }, { opacity: 1 }], { duration: ms("--t-state"), easing });
+
+    // Answered or gone: put the row back where it was, inert, fade it out, then close up.
+    for (const [id, { row, prev, next }] of was.rows) {
+      if (now.tops.has(id) || ids.includes(id) || row.isConnected) continue;
+      if (prev?.parentElement && el.contains(prev)) prev.after(row);
+      else if (next?.parentElement && el.contains(next)) next.before(row);
+      else continue;
+      row.removeAttribute("data-row");
+      for (const n of row.querySelectorAll("[data-id]")) n.removeAttribute("data-id");
+      row.setAttribute("aria-hidden", "true");
+      row.inert = true;
+      row
+        .animate([{ opacity: 1 }, { opacity: 0 }], {
+          duration: ms("--t-fast"),
+          easing,
+          fill: "forwards",
+        })
+        .finished.catch(() => {})
+        .then(() => {
+          row.remove();
+          if (last.current?.list === el) Object.assign(last.current, measure());
+        });
     }
-    tops.current = next;
   });
 }
 
@@ -524,7 +608,7 @@ function ViewMenu({
         {!icon && "View"}
       </button>
       {open && (
-        <div className={`t-small ${s.menu}`} role="menu">
+        <div className={`t-small m-drop ${s.menu}`} role="menu">
           {(
             [
               ["One feed", "none"],

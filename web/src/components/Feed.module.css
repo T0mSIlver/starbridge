@@ -43,10 +43,10 @@
 .tile,
 .question {
   transition:
-    background var(--t-state),
-    border-color var(--t-state),
-    color var(--t-state),
-    font-weight var(--t-state);
+    background var(--t-state) var(--ease),
+    border-color var(--t-state) var(--ease),
+    color var(--t-state) var(--ease),
+    font-weight var(--t-state) var(--ease);
 }
 
 .waitTime {
@@ -137,7 +137,7 @@
 }
 
 .row {
-  transition: background var(--t-state);
+  transition: background var(--t-state) var(--ease);
 }
 
 .row.blocks {
@@ -318,4 +318,9 @@
 
 .chev {
   margin-left: auto;
+  transition: transform var(--t-fast) var(--ease);
+}
+
+[aria-expanded="true"] > .chev {
+  transform: rotate(90deg);
 }

@@ -240,7 +240,7 @@ export function RunRow({ item, now, comfy }: { item: RunItem; now: number; comfy
   const fill = p ? Math.round((p.done / p.total) * 100) : 0;
   const end = state === "running" ? now : Date.parse(r.exit?.at ?? r.at);
   return (
-    <article className={`${s.run} ${comfy ? s.comfy : ""}`} aria-label={r.title}>
+    <article className={`${s.run} ${comfy ? s.comfy : ""}`} aria-label={r.title} data-row={r.id}>
       <MetaRow
         machine={item.machine}
         kind={(r.source as { machineKind?: MachineKind }).machineKind}
@@ -307,7 +307,7 @@ export function HistoryHead({
       <Icon name="history" size={16} />
       <span className={s.historyTitle}>History</span>
       <span>{count} answered today</span>
-      <Icon name={open ? "down" : "chev"} size={16} className={s.chev} />
+      <Icon name="chev" size={16} className={s.chev} />
     </button>
   );
 }
