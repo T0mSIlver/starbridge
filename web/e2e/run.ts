@@ -5,7 +5,7 @@
 //
 // Needs `npx playwright install firefox` once. Writes screenshots to web/screenshots.
 import { type ChildProcess, spawn, spawnSync } from "node:child_process";
-import { cpSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { type BrowserContext, firefox, type Page } from "playwright";
@@ -409,6 +409,62 @@ async function main() {
   await page.getByRole("link", { name: "Quotas" }).click();
   await page.locator("article").first().waitFor();
   await shoot(page, "quotas");
+
+  step("quota settings: remaining, clock times, workdays");
+  await page.getByRole("link", { name: "Settings" }).click();
+  await page.getByRole("heading", { name: "Quota settings" }).waitFor();
+  for (const label of ["Remaining", "Clock time", "5 days", "High contrast"])
+    await page.getByLabel(label, { exact: true }).check();
+  await shoot(page, "quota-settings");
+  await page.getByRole("link", { name: "Back to quotas" }).click();
+  await page.locator("article").first().waitFor();
+  if (!(await page.locator("article").first().innerText()).includes("% left"))
+    throw new Error("the bars do not show what is left");
+  await shoot(page, "quotas-tuned");
+
+  step("a newly raised quota alert notifies a browser that opted in to its provider");
+  // A 5-hour window at 85%, 3 hours in: "low" at 20% left, and it runs out before the reset.
+  const at = (ms: number) => new Date(Date.now() + ms).toISOString().replace(/\.\d+Z$/, "Z");
+  const usage = [
+    {
+      provider: "e2e",
+      source: "api",
+      usage: {
+        updatedAt: at(0),
+        primary: { windowMinutes: 300, usedPercent: 85, resetsAt: at(2 * 3600_000) },
+      },
+    },
+  ];
+  const fakeBar = join(tmp, "codexbar-e2e.sh");
+  writeFileSync(fakeBar, `#!/bin/sh\ncat <<'EOF'\n${JSON.stringify(usage)}\nEOF\n`, {
+    mode: 0o755,
+  });
+  const alertPush = cli(
+    "quota-alert",
+    ["quota", "push", "--once", "--codexbar", fakeBar, "--provider", "e2e"],
+    machineHome,
+  );
+  if ((await alertPush.exited) !== 0) throw new Error("quota push failed");
+  await page.getByRole("link", { name: "Settings" }).click();
+  await page.locator("li", { hasText: "e2e" }).getByLabel("Notify").check();
+  await page.getByRole("link", { name: "Back to quotas" }).click();
+  await page.waitForFunction(
+    () =>
+      navigator.serviceWorker.ready
+        .then((r) => r.getNotifications())
+        .then((ns) => ns.some((n) => n.title === "e2e 5-hour: 20% left")),
+    undefined,
+    { timeout: 30_000 },
+  );
+  // The next snapshot lists the same alerts without notify: nothing shows again.
+  const again = cli(
+    "quota-again",
+    ["quota", "push", "--once", "--codexbar", fakeBar, "--provider", "e2e"],
+    machineHome,
+  );
+  if ((await again.exited) !== 0) throw new Error("quota push failed");
+  if (again.output().includes("(new)"))
+    throw new Error("the second snapshot raised its alerts again");
 
   step("add a second browser by pairing code");
   const b = await ff.newContext();
