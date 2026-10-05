@@ -22,6 +22,8 @@ data class QuotaSettings(
     val ticks: Ticks = Ticks.Subtle,
     /** Providers in the order to show them; the ones not listed follow in the uploader's order. */
     val order: List<String> = emptyList(),
+    /** Windows that will run out or ran out lead, else [order] holds for every window. */
+    val runningOutFirst: Boolean = true,
     val hidden: List<String> = emptyList(),
     /** Providers whose alerts notify; none by default. */
     val notify: List<String> = emptyList(),
@@ -40,19 +42,15 @@ data class QuotaSettings(
     }
 
     /**
-     * The windows to show: hidden providers out, windows that will run out or ran out first, then
-     * this order. With no order set, windows with an alert come next, as before the setting existed.
+     * The windows to show (SPEC.md, "Quota order"): hidden providers out, the rest by provider in
+     * this order, each provider's windows in the uploader's order. With [runningOutFirst], windows
+     * that will run out or ran out, and have not reset, lead in that same order.
      */
     fun arrange(windows: List<QuotaWindow>, now: Instant): List<QuotaWindow> {
-        val shown = windows.filter { it.provider !in hidden }
-        val live = { w: QuotaWindow -> w.resetsAt?.isAfter(now) != false }
-        val ordered = if (order.isEmpty()) {
-            shown.sortedByDescending { it.alert && live(it) }
-        } else {
-            val rank = providers(windows).withIndex().associate { (i, p) -> p to i }
-            shown.sortedBy { rank[it.provider] ?: 0 }
-        }
-        return ordered.sortedByDescending { it.pace is Pace.RunsOut && live(it) }
+        val rank = providers(windows).withIndex().associate { (i, p) -> p to i }
+        val ordered = windows.filter { it.provider !in hidden }.sortedBy { rank.getValue(it.provider) }
+        if (!runningOutFirst) return ordered
+        return ordered.sortedByDescending { it.pace is Pace.RunsOut && it.resetsAt?.isAfter(now) != false }
     }
 
     /** Whether this phone shows a notification for [notice]. */
