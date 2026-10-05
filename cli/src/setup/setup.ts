@@ -3,6 +3,7 @@
  * installs the agent's user service and the Claude Code plugins, then uploads a first snapshot.
  * Every step shows what it found, so a rerun changes only what is missing.
  */
+
 import type { QuotaSnapshot } from "@starbridge/protocol";
 import type { Status } from "../agent/api";
 import { AgentClient, withAgent } from "../agent/client";
@@ -15,6 +16,7 @@ import { DEFAULT_SERVER, pair } from "../pair";
 import { permissionsEnabled } from "../permissions";
 import { pushOnce } from "../quota";
 import { offerPiChain, rememberMachineKind, setPermissions } from "../settings";
+import { VERSION } from "../version";
 import {
   type Found,
   findCodexbar,
@@ -275,9 +277,12 @@ async function serviceStep(sys: Sys, opts: SetupOpts, configChanged: boolean) {
       }
     } else ctx.out(`Kept ${unit.name}: it and the agent both upload quotas.`);
   }
+  // After a brew or npm upgrade the agent still runs the old binary.
+  const running = await agentVersion(ctx);
+  const outdated = running !== undefined && running !== VERSION;
   let installed: { path: string; restarted: boolean };
   try {
-    installed = await installService(sys, configChanged);
+    installed = await installService(sys, configChanged || outdated);
   } catch (e) {
     ctx.out(`Could not start the agent service: ${(e as Error).message}`);
     return;
@@ -305,6 +310,17 @@ async function serviceStep(sys: Sys, opts: SetupOpts, configChanged: boolean) {
       const err = await enableLinger(sys);
       ctx.out(err ? `loginctl enable-linger failed: ${err}` : "Lingering is on.");
     } else ctx.out("The agent stops when your last session ends.");
+  }
+}
+
+/** The running agent's version, or undefined when none answers. */
+async function agentVersion(ctx: Ctx): Promise<string | undefined> {
+  const agent = AgentClient.for(ctx);
+  if (!agent) return undefined;
+  try {
+    return (await agent.call<Status>("GET", "/v1/status", undefined, 2_000)).version;
+  } catch {
+    return undefined;
   }
 }
 
