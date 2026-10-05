@@ -152,7 +152,8 @@ fonts:
 # The type scale, one role per job, on Material 3's sizes where a role has
 # one. Sizes and line heights in px (sp on Android), letterSpacing in em.
 # `tabular: true` turns on tabular figures (tnum) so numbers line up.
-# `compact` overrides a role on the web under 600 px wide.
+# `compact` overrides a role on the web under 600 px wide; `wide` overrides it
+# in the web's detail pane from `size.detail-wide-from`.
 typography:
   hero: # the landing page's headline, web only
     font: sans
@@ -180,6 +181,7 @@ typography:
     weight: 500
     lineHeight: 32
     letterSpacing: 0
+    wide: { size: 30, lineHeight: 38 }
   question: # title large: a question in Android's sheet
     font: sans
     size: 22
@@ -224,6 +226,7 @@ typography:
     weight: 400
     lineHeight: 24
     letterSpacing: 0
+    wide: { size: 17, lineHeight: 28 }
   small: # body medium
     font: sans
     size: 14
@@ -336,6 +339,9 @@ size:
   cap: 4 # the red cap where a projected overrun meets the limit
   hatch: 6
   media: 360 # the tallest an attached image shows in a decision
+  media-wide: 560 # the same, in a wide detail pane
+  detail-wide-from: 1000 # the web's detail pane width from which its content widens and its type steps up
+  detail-wide: 1280 # the widest a wide detail pane's content runs
   page: 1200 # the landing page's width
   showcase: 1240 # the landing hero's product shot: a browser window and a phone
   browser: 1080 # the browser window in it
@@ -413,7 +419,10 @@ rail (Inbox, Quotas, Settings) that becomes a bottom bar under 600 px, list
 and detail panes with the quota windows beside them, hover states, keys for
 the options (1 to 4) and for moving (J, K), and no ripples or floating
 buttons. Under 600 px the same structure turns comfortable: larger rows, and
-a question's options and a prompt's Allow and Deny on the row. On the web,
+a question's options and a prompt's Allow and Deny on the row. The detail
+pane never sits as a strip in empty ground: from `size.detail-wide-from` wide, its content
+takes 86% of the pane up to `size.detail-wide`, images grow to `size.media-wide`, and the
+roles with a `wide` size step up. On the web,
 "Colours" picks the theme: System (the default), Light or Dark, set as
 `data-theme` on `<html>` and remembered on the device. It pairs with the app
 without imitating Android.

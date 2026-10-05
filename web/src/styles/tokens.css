@@ -152,6 +152,9 @@
   --size-cap: 4px;
   --size-hatch: 6px;
   --size-media: 360px;
+  --size-media-wide: 560px;
+  --size-detail-wide-from: 1000px;
+  --size-detail-wide: 1280px;
   --size-page: 1200px;
   --size-showcase: 1240px;
   --size-browser: 1080px;

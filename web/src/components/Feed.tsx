@@ -148,7 +148,7 @@ export function Thumbs({ d, width }: { d: Decision; width: number }) {
           key={i}
           src={imageSrc(img)}
           alt={img.alt ?? ""}
-          style={{ width, height: Math.round(width * 0.62) }}
+          style={{ flexBasis: width }}
         />
       ))}
     </div>

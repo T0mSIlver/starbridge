@@ -4,7 +4,8 @@
 //   web/src/styles/tokens.css   custom properties, light and dark, with a
 //                               --provider-<id> colour per provider
 //   web/src/styles/type.css     one .t-<role> class per typography role, with
-//                               its compact size under 600 px
+//                               its compact size under 600 px and its wide size
+//                               in a wide detail pane
 //   android/.../ui/theme/Tokens.kt
 //
 //   bun web/scripts/tokens.ts          rewrite all three
@@ -28,6 +29,7 @@ type Role = Metrics & {
   weight: number;
   tabular?: boolean;
   compact?: Partial<Metrics>;
+  wide?: Partial<Metrics>;
 };
 type Design = {
   colors: { light: Record<string, string>; dark: Record<string, string> };
@@ -61,9 +63,11 @@ function load(): Design {
   for (const [name, role] of Object.entries(design.typography)) {
     if (!(role.font in design.fonts))
       throw new Error(`typography.${name}: unknown font ${role.font}`);
-    for (const key of Object.keys(role.compact ?? {})) {
-      if (!["size", "lineHeight", "letterSpacing"].includes(key))
-        throw new Error(`typography.${name}.compact: ${key} is not a size`);
+    for (const variant of ["compact", "wide"] as const) {
+      for (const key of Object.keys(role[variant] ?? {})) {
+        if (!["size", "lineHeight", "letterSpacing"].includes(key))
+          throw new Error(`typography.${name}.${variant}: ${key} is not a size`);
+      }
     }
   }
   for (const [id, value] of Object.entries(design.providers)) {
@@ -241,6 +245,12 @@ function typeCss(d: Design): string {
   lines.push("@media (max-width: 599px) {");
   for (const [name, r] of roles) {
     if (r.compact) lines.push(`  .t-${name} {`, ...metrics(r.compact, "    "), "  }");
+  }
+  lines.push("}", "");
+  // The inbox's detail pane is the container named `detail` (Inbox.module.css).
+  lines.push(`@container detail (min-width: ${d.size["detail-wide-from"]}px) {`);
+  for (const [name, r] of roles) {
+    if (r.wide) lines.push(`  .t-${name} {`, ...metrics(r.wide, "    "), "  }");
   }
   lines.push("}", "");
   return lines.join("\n");
