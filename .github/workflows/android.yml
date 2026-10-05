@@ -34,7 +34,11 @@ jobs:
           distribution: temurin
           java-version: 21
 
+      # The self-hosted runners share one GRADLE_USER_HOME, which Gradle locks for concurrent
+      # builds; a cache restore would overwrite files another job is reading.
       - uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-disabled: ${{ vars.RUNNER != '' }}
 
       # verifyRoborazziDebug runs every unit test and fails when a screen drifts
       # from app/screenshots/.

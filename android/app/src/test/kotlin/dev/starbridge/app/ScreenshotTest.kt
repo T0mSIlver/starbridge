@@ -150,10 +150,11 @@ class ScreenshotTest(private val dark: Boolean) {
     @Test fun quotas() = capture("quotas") { Phone(Tab.Quotas, 4) { QuotasScreen(fake.windows, now) } }
 
     @Config(qualifiers = "w412dp-h1060dp-xxhdpi")
-    @Test fun quotasNotifying() = capture("quotas-notifying") { Phone(Tab.Quotas, 4) { QuotasScreen(fake.windows, now, settings = QuotaSettings(notify = listOf("claude"))) } }
+    // Running out first off: the order set holds, so the windows that run out stay in place.
+    @Test fun quotasYourOrder() = capture("quotas-your-order") { Phone(Tab.Quotas, 4) { QuotasScreen(fake.windows, now, settings = QuotaSettings(order = listOf("mistral", "codex"), runningOutFirst = false)) } }
 
-    // Remaining, clock times, a 5-day week with strong ticks, Codex first, Gemini hidden, Z.ai notifying.
-    private val tuned = QuotaSettings(showUsed = false, absoluteResets = true, workDays = 5, ticks = QuotaSettings.Ticks.HighContrast, order = listOf("codex"), hidden = listOf("gemini"), notify = listOf("zai"))
+    // Remaining, clock times, a 5-day week with strong ticks, Codex first, Gemini hidden.
+    private val tuned = QuotaSettings(showUsed = false, absoluteResets = true, workDays = 5, ticks = QuotaSettings.Ticks.HighContrast, order = listOf("codex"), hidden = listOf("gemini"))
 
     @Test fun quotasTuned() = capture("quotas-tuned") { QuotasScreen(fake.windows, now, settings = tuned) }
 
@@ -161,7 +162,7 @@ class ScreenshotTest(private val dark: Boolean) {
     @Config(qualifiers = "w412dp-h2400dp-xxhdpi")
     @Test fun settings() = capture("settings") {
         Phone(Tab.Settings, 4) {
-            SettingsScreen(fake.windows, QuotaSettings(hidden = listOf("gemini")), fake.members.size, Colours.Starbridge, fake.push, "https://starbridge.run", settingsActions)
+            SettingsScreen(fake.windows, QuotaSettings(hidden = listOf("gemini"), notify = listOf("claude")), fake.members.size, Colours.Starbridge, fake.push, "https://starbridge.run", settingsActions)
         }
     }
 
