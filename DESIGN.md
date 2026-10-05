@@ -445,15 +445,17 @@ a decision's context, a permission prompt's command and a session's name.
   full, with the cap and no tick. Windows that will run out or ran out sort
   first on every screen while "Running out first" is on (the default).
 - A permission prompt and a question look different. A prompt shows a
-  terminal tile in `accent-soft`, the exact command in mono, Allow and Deny,
+  terminal icon, the exact command in mono, Allow and Deny,
   and how long it has waited. A question shows its text as the title, then
   its options, its default (the first) filled.
 - An item that blocks an agent is filled; one it works around is hollow. A
   prompt, and a question whose agent waits on it: `accent-soft` behind the
-  whole item, its kind icon in `accent`, its title at weight 500, and in the
+  whole item, its kind icon in `accent` on that ground with no tile of its
+  own, its title at weight 500, and in the
   meta row's time slot a clock ticking m:ss in `accent`, weight 500. A
   question its agent works around: no ground, an outlined card on Android
-  (`line-strong`), its icon in `fg2`, its title at weight 400, its age in the
+  (`line-strong`), its icon in `fg2` (on the web, in an outlined tile), its
+  title at weight 400, its age in the
   time slot. No line of text says which; screen readers get it in the item's
   label. Fill, weight and the clock keep it readable without colour.
 - Every item opens with one meta row of facts Starbridge knows: the machine's

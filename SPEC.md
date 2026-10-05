@@ -917,9 +917,11 @@ How it generalizes is open.
   item up with the expressive spring (web: `motion.state`), fills it and starts its clock at
   0:00; a flip back moves it down, hollow, with no alert. Android notifications: waiting
   questions post on their own high-importance channel, "Waiting for you"; questions the agent
-  works around on "Questions", at default importance (sound, no heads-up). A flip cancels the
-  notification and posts it again on the other channel: alerting once to waiting, silently
-  back. While the agent waits, the header ticks (the public version on the lock screen too).
+  works around on "Questions", at default importance (sound, no heads-up). Both are new channel
+  ids, since Android never lowers an existing channel's importance; the old "Decisions" channel
+  is deleted. A flip cancels the notification and posts it again on the other channel: alerting
+  once to waiting, silently back. So the phone hears of a flip back, the machine now pushes it
+  too, where #122 posted it `quiet`; clients post nothing audible for it. While the agent waits, the header ticks (the public version on the lock screen too).
   The text is the agent's context, with inline code set in mono rather than shown with
   backticks; a prompt's title is its tool alone ("Bash"). Web push keeps one word, since
   nothing else there can be styled: a question pushed as waiting reads "Waiting · machine ·
