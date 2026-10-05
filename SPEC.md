@@ -585,6 +585,10 @@ How it generalizes is open.
   emails the owner) and closes it once both pass. `/healthz/backup` answers 503 when the last
   good nightly backup is over 26 h old; it reads the age of a file `backup.sh` touches beside
   the database, and says nothing else.
+- 2026-10-05. `https://starbridge.run/install.sh` is `cli/install.sh`, served by the web page as a
+  route prerendered at build time, so each deploy serves the script of the revision it built.
+  Caddy could not: it is recreated only when the Caddyfile changes, so a bind-mounted file would
+  stay the previous release's. Each GitHub Release still carries a copy as an asset.
 
 ## Encryption, with existing libraries
 
