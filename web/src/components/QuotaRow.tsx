@@ -64,7 +64,7 @@ export function QuotaRow({
       />
       <div className={`${comfy ? "t-small" : "t-meta"} ${s.bottom}`}>
         <span className={`${s.state} ${s[st.state]}`}>{st.word}</span>
-        <span className={s.dim}>{st.reset}</span>
+        <span className={`${s.dim} ${s.reset}`}>{st.reset}</span>
       </div>
     </article>
   );

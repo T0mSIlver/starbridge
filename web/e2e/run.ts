@@ -470,6 +470,28 @@ async function main() {
     throw new Error("the 24-hour setting still shows AM or PM");
   await shoot(page, "quotas-24h");
 
+  step("the inbox's quota aside fits its column with clock times on (#168)");
+  await page
+    .getByRole("navigation", { name: "Main" })
+    .getByRole("link", { name: "Settings" })
+    .click();
+  // 12-hour times are the longest: "Will run out at Oct 12, 12:02 AM".
+  await page.getByLabel("12-hour", { exact: true }).check({ force: true });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.getByRole("link", { name: "Inbox" }).click();
+  const aside = page.getByRole("complementary", { name: "Quota windows" });
+  await aside.locator("article").first().waitFor();
+  const { scroll, client } = await aside.evaluate((el) => ({
+    scroll: el.scrollWidth,
+    client: el.clientWidth,
+  }));
+  if (scroll > client) throw new Error(`the quota aside overflows: ${scroll} > ${client} px`);
+  for (const scheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme: scheme });
+    await page.waitForTimeout(150);
+    await page.screenshot({ path: join(SHOTS, `inbox-aside-wide-${scheme}.png`) });
+  }
+
   step("a newly raised quota alert notifies a browser that opted in to its provider");
   // A 5-hour window at 85%, 3 hours in: "low" at 20% left, and it runs out before the reset.
   const at = (ms: number) => new Date(Date.now() + ms).toISOString().replace(/\.\d+Z$/, "Z");

@@ -20,6 +20,7 @@
 
 .row {
   display: grid;
+  min-width: 0;
   gap: var(--s2);
   padding: var(--s3) var(--s4);
 }
@@ -42,12 +43,29 @@
   white-space: nowrap;
 }
 
+/* A long state and its reset share a narrow column by wrapping, the reset kept right (#168). */
+.bottom {
+  flex-wrap: wrap;
+  row-gap: 0;
+}
+
+.bottom .state {
+  min-width: 0;
+  white-space: normal;
+}
+
+.reset {
+  margin-left: auto;
+}
+
 .name {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .figure {
+  flex-shrink: 0;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
