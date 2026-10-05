@@ -40,14 +40,19 @@ data class QuotaSettings(
     }
 
     /**
-     * The windows to show: hidden providers out, then this order. With no order set, windows with
-     * an alert come first, as before the setting existed.
+     * The windows to show: hidden providers out, windows that will run out or ran out first, then
+     * this order. With no order set, windows with an alert come next, as before the setting existed.
      */
     fun arrange(windows: List<QuotaWindow>, now: Instant): List<QuotaWindow> {
         val shown = windows.filter { it.provider !in hidden }
-        if (order.isEmpty()) return shown.sortedByDescending { it.alert && it.resetsAt?.isAfter(now) != false }
-        val rank = providers(windows).withIndex().associate { (i, p) -> p to i }
-        return shown.sortedBy { rank[it.provider] ?: 0 }
+        val live = { w: QuotaWindow -> w.resetsAt?.isAfter(now) != false }
+        val ordered = if (order.isEmpty()) {
+            shown.sortedByDescending { it.alert && live(it) }
+        } else {
+            val rank = providers(windows).withIndex().associate { (i, p) -> p to i }
+            shown.sortedBy { rank[it.provider] ?: 0 }
+        }
+        return ordered.sortedByDescending { it.pace is Pace.RunsOut && live(it) }
     }
 
     /** Whether this phone shows a notification for [notice]. */

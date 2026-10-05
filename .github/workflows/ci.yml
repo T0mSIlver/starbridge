@@ -5,13 +5,18 @@ on:
     branches: [main]
   pull_request:
 
+# Jobs run on the dev box's self-hosted runners while the repository variable RUNNER is set
+# (deploy/setup-runners.sh); delete the variable to go back to GitHub's runners.
 jobs:
   test:
     name: test
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.RUNNER || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v5
       - uses: pnpm/action-setup@v4
+        with:
+          # Per job: runners on one machine would share ~/setup-pnpm and clobber each other.
+          dest: ${{ runner.temp }}/setup-pnpm
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.4.2
@@ -20,10 +25,13 @@ jobs:
 
   typecheck:
     name: typecheck
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.RUNNER || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v5
       - uses: pnpm/action-setup@v4
+        with:
+          # Per job: runners on one machine would share ~/setup-pnpm and clobber each other.
+          dest: ${{ runner.temp }}/setup-pnpm
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.4.2
@@ -32,10 +40,13 @@ jobs:
 
   lint:
     name: lint
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.RUNNER || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v5
       - uses: pnpm/action-setup@v4
+        with:
+          # Per job: runners on one machine would share ~/setup-pnpm and clobber each other.
+          dest: ${{ runner.temp }}/setup-pnpm
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.4.2
