@@ -64,12 +64,8 @@ const REDACTED = "[redacted]";
  */
 const TOKEN = "[A-Za-z0-9_+/=.~:@%!#*^-]";
 
-/**
- * Token shapes of common providers, after Claude Code 2.1.234's list, plus PEM private keys whose
- * body is base64 up to their END line.
- */
+/** Token shapes of common providers, after Claude Code 2.1.234's list. */
 const SECRET_PATTERNS: RegExp[] = [
-  /-----BEGIN ([A-Z0-9 ]*)PRIVATE KEY-----\r?\n[A-Za-z0-9+/=\r\n]+-----END \1PRIVATE KEY-----/g,
   /\bsk-ant-[A-Za-z0-9_-]{20,}/g,
   /\bsk-(?:proj-)?[A-Za-z0-9_-]{20,}/g,
   /\bgh[pousr]_[A-Za-z0-9]{20,}/g,
@@ -86,6 +82,14 @@ const SECRET_PATTERNS: RegExp[] = [
 /** A private key's opening line: a Bash command holding one never goes to devices. */
 const PRIVATE_KEY = /-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----/;
 
+/**
+ * A PEM private key's body after its opening line: `Name: value` headers (an encrypted key's
+ * `Proc-Type`, `DEK-Info`), which stay, and base64 lines, which go, with or without the END line.
+ */
+const PEM_BODY =
+  /(-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----)((?:\r?\n(?:[A-Za-z-]+: [^\r\n]*|[A-Za-z0-9+/=]*)(?=\r?\n|$))*)/g;
+const PEM_HEADER = /\r?\n[A-Za-z-]+: [^\r\n]*/g;
+
 /** A name whose value is a secret: `FOO_KEY`, `GITHUB_TOKEN`, `password`. */
 const SECRET_NAME = /^[A-Za-z0-9_-]*(?:KEY|TOKEN|SECRET|PASSWORD|PASSWD)[A-Za-z0-9_-]*$/i;
 
@@ -99,9 +103,9 @@ const ASSIGNMENT = new RegExp(
   "gi",
 );
 
-/** `Authorization: Bearer …` and its proxy twin: the credential goes. */
+/** `Authorization: <scheme> …` and its proxy twin: the credential goes, the scheme stays. */
 const AUTH_HEADER = new RegExp(
-  `\\b((?:Proxy-)?Authorization\\s*:\\s*(?:(?:Bearer|Basic|Digest|Token)\\s+)?)${TOKEN}+`,
+  `\\b((?:Proxy-)?Authorization\\s*:\\s*(?:[A-Za-z-]+\\s+)?)${TOKEN}+`,
   "gi",
 );
 
@@ -110,7 +114,11 @@ const URL_PASSWORD = /\b([a-z][a-z0-9+.-]*:\/\/[A-Za-z0-9_.~%!*+-]*:)[A-Za-z0-9_
 
 /** Removes secrets from one string. */
 export function redactText(text: string): string {
-  let out = text;
+  let out = text.replace(
+    PEM_BODY,
+    (_, begin: string, body: string) =>
+      `${begin}${(body.match(PEM_HEADER) ?? []).join("")}\n${REDACTED}`,
+  );
   for (const p of SECRET_PATTERNS) out = out.replace(p, REDACTED);
   return out
     .replace(AUTH_HEADER, (_, head: string) => `${head}${REDACTED}`)

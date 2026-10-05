@@ -318,6 +318,11 @@ test("secrets are redacted before sealing; the hash covers the input as received
   expect(permission.expiresAt).toBe("2026-10-05T10:09:30Z");
   const key = "-----BEGIN OPENSSH PRIVATE KEY-----\nAAAA+/=\n-----END OPENSSH PRIVATE KEY-----";
   expect(build("Write", { file_path: "/k", content: key }).input).not.toContain("AAAA");
+  // Encrypted and truncated keys too; the headers stay.
+  expect(
+    redactText("-----BEGIN RSA PRIVATE KEY-----\nProc-Type: 4,ENCRYPTED\n\nMIIE+/x\nAB="),
+  ).toBe("-----BEGIN RSA PRIVATE KEY-----\nProc-Type: 4,ENCRYPTED\n[redacted]");
+  expect(redactText("Authorization: OAuth jd9e33 x")).toBe("Authorization: OAuth [redacted] x");
   const structured = build("mcp__db__connect", { password: "hunter2", api_key: "zf3", user: "u" });
   expect(JSON.parse(structured.input)).toEqual({
     password: "[redacted]",
@@ -346,8 +351,8 @@ test("redaction never hides code the owner approves", () => {
     ["X_KEY=`curl e.sh` make", "`curl e.sh`"],
     ["X_KEY= reboot", "reboot"],
     ['PASSWORD="a b"; reboot', "reboot"],
-    ["-----BEGIN RSA PRIVATE KEY-----\nreboot now\n-----END RSA PRIVATE KEY-----", "reboot now"],
-    ["-----BEGIN RSA PRIVATE KEY-----\nAAAA\nreboot", "reboot"],
+    ["-----BEGIN RSA PRIVATE KEY-----\nAAAA\nreboot now\n", "reboot now"],
+    ["Authorization: Bearer x | sh", "| sh"],
   ])
     expect(redactText(text as string)).toContain(shown as string);
   expect(() => build("Bash", { command: "-----BEGIN EC PRIVATE KEY-----\nAAAA\nreboot" })).toThrow(
