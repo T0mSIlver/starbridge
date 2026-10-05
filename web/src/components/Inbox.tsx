@@ -60,6 +60,8 @@ export function Inbox() {
   // list comes back.
   const [historyToggled, setHistoryToggled] = useState(false);
   const find = useFind();
+  // Find searches History too, so its prompt log loads once a query starts, not per keystroke.
+  const finding = find.trim() !== "";
   const wide = useWide();
   const live =
     prompts.length > 0 || inbox.items.some((i) => i.waitingSince) || !!runs?.items.length;
@@ -67,8 +69,8 @@ export function Inbox() {
   const now = useNow(true, live ? 1000 : 60_000);
 
   useEffect(() => {
-    if (historyOpen || find) loadPromptLog().catch(() => {});
-  }, [historyOpen, find, loadPromptLog]);
+    if (historyOpen || finding) loadPromptLog().catch(() => {});
+  }, [historyOpen, finding, loadPromptLog]);
 
   const keep = (e: Entry) => !find || matches(find, [e.machine, e.repo, ...text(e)]);
   const all = [...needsYou(inbox.items, prompts, now), ...running(runs?.items ?? [], now)];
@@ -79,8 +81,7 @@ export function Inbox() {
     for (const p of [...(promptLog ?? []), ...prompts]) seen.set(p.permission.id, p);
     return [...seen.values()];
   }, [promptLog, prompts]);
-  // Find searches History too, answers included, and lists its matches under the open items.
-  const finding = find.trim() !== "";
+  // History's matches, answers included, list under the open items while finding.
   const past = history(inbox.items, allPrompts, (p) => promptOutcome(p, deviceName), now).filter(
     (p) => !finding || matches(find, [p.entry.machine, p.entry.repo, ...text(p.entry), p.outcome]),
   );
