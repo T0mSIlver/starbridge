@@ -14,6 +14,9 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: pnpm/action-setup@v4
+        with:
+          # Per job: runners on one machine would share ~/setup-pnpm and clobber each other.
+          dest: ${{ runner.temp }}/setup-pnpm
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.4.2
@@ -26,6 +29,9 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: pnpm/action-setup@v4
+        with:
+          # Per job: runners on one machine would share ~/setup-pnpm and clobber each other.
+          dest: ${{ runner.temp }}/setup-pnpm
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.4.2
@@ -38,6 +44,9 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: pnpm/action-setup@v4
+        with:
+          # Per job: runners on one machine would share ~/setup-pnpm and clobber each other.
+          dest: ${{ runner.temp }}/setup-pnpm
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.4.2
