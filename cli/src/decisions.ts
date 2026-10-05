@@ -6,6 +6,7 @@ import {
   Decision,
   type DecisionLink,
   type Directory,
+  holdsHead,
   open,
   ProtocolError,
   parseWith,
@@ -407,6 +408,41 @@ export function checkAnswer(
 }
 
 /**
+ * Records the directory head a device signed into answer `raw`, then refuses it while any device
+ * active in `dir` has signed a head the machine's chain `entries` lacks: the server is holding
+ * back entries, perhaps the revocation of the device that signed this answer.
+ */
+export function checkCurrent(
+  raw: unknown,
+  s: Session,
+  dir: Directory,
+  entries: unknown[],
+  st: State,
+) {
+  const item = SealedItem.safeParse(raw);
+  const kind = item.success ? item.data.kind : undefined;
+  if (item.success && (kind === "answer" || kind === "permission-answer")) {
+    const { body, signer } = open(
+      item.data as SealedItem & { kind: "answer" | "permission-answer" },
+      { id: s.machine.id, box: s.keys.box },
+      dir,
+    );
+    const head = body.dir;
+    const known = st.heads?.[signer.id];
+    if (head && (!known || head.length > known.length || !holdsHead(entries, head))) {
+      st.heads ??= {};
+      st.heads[signer.id] = head;
+    }
+  }
+  for (const [id, head] of Object.entries(st.heads ?? {}))
+    if (dir.members.get(id)?.active && !holdsHead(entries, head))
+      throw new ProtocolError(
+        "rollback",
+        `the server is holding back directory entries ${id} has seen (${head.length}, this machine has ${dir.length}): no answer counts until it serves them`,
+      );
+}
+
+/**
  * How an answer comes back into the session that asked: as a prompt, which Claude Code's mod and
  * the Pi extension submit and the agent queues into a Codex session it can reach, or only
  * through `wait`.
@@ -474,9 +510,11 @@ export async function poll(
     // A new device may have answered since the directory was read.
     directory = await refreshDirectory(ctx, s);
     const dir = directory;
+    const entries = ctx.store.directory();
     ctx.store.updateState((st) => {
       for (const raw of page.items) {
         try {
+          checkCurrent(raw, s, dir, entries, st);
           // Machines' inboxes hold answers to decisions and to permission prompts (#57).
           if ((raw as { kind?: unknown } | null)?.kind === "permission-answer") {
             const { answer, device } = acceptPermissionAnswer(raw, s, dir, st, Date.now());

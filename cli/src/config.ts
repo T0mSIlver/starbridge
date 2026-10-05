@@ -70,6 +70,12 @@ export interface State {
    * submitted it (`answers --ack`).
    */
   answers: Record<string, { answer: Answer; seen: boolean }>;
+  /**
+   * The longest directory head each device signed into an answer: while a device active in the
+   * machine's chain signed one that chain lacks, the server is withholding entries (PROTOCOL.md,
+   * Directory) and no answer counts.
+   */
+  heads?: Record<string, Pin>;
   /** Permission prompts this machine posted (#57), by id, until a day after they expire. */
   permissions?: Record<string, PendingPermission>;
   /** Quota alerts already raised, by `alertKey`: the reset of the cycle they were raised in. */
