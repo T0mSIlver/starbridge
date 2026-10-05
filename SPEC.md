@@ -838,6 +838,15 @@ How it generalizes is open.
   to Settings, Providers, as on the web (#163): a bell beside each provider's Show switch,
   so every quota card has the same height and the control sits where the other per-provider
   settings are.
+- 2026-10-05. Full-size images on questions (#170). The owner's phone screenshot (1236×2676 PNG,
+  171 KB) arrived as a ~515 px JPEG and looked pixelated: the 256 KB cap held every device's box
+  together, so three devices left about 47 KB per image. A decision's boxes may now hold 2 MB
+  together and an image's base64url 512 KB (both clients' schemas), and the CLI keeps a file as
+  is up to a 3000 px edge, so that screenshot reaches six devices unchanged and the clients'
+  full-screen viewers can zoom into real pixels. The request body limit rises to 3 MB to match.
+  WebP was not the fix: the pure-JS encoders save a third at best, and the cap was the cause. A
+  self-hosted server older than this refuses a new CLI's larger decisions with 413 `too-large`
+  until it updates.
 
 - 2026-10-05. Clock setting (#161, owner). Settings, Clock, "Time format": System (the default),
   12-hour or 24-hour, per device. System follows the device: Android's

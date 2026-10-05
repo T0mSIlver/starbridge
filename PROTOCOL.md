@@ -35,7 +35,7 @@ code cannot show: the HTTP API and the flows.
   session's title and links, and `machineKind`: `server`, `desktop`, `laptop` or `cloud`, for
   its icon). A decision may name its `agent`, `claude-code` or `codex`, as a permission does.
 - A decision's images (PNG or JPEG) and links (HTTPS) are part of its signed body, so each box
-  carries every image, and the 256 KB cap in Limits covers them once per device.
+  carries every image, and the 2 MB cap in Limits covers them once per device.
   A decision with `answerIn` is answered on that page (a claude.ai artifact whose button wakes
   the agent), never in Starbridge: it has no options, devices show the page and no answer
   field, and it closes when the machine posts `settled` for it.
@@ -284,7 +284,7 @@ code below. Per-address limits count an IPv6 client as its /64.
 | `POST /items` | 120 a minute per account |
 | Stored decisions, open or answered | 10000 per account: 409 `too-many-items` |
 | Stored runs | 500 per account: 409 `too-many-items` for a new run; updates still pass |
-| Stored boxes | 128 MB per account, of which machine-signed items may fill all but the last 8 MB: 409 `too-many-items`; 256 KB per machine-signed item, 32 KB per run update and 32 KB per answer or permission answer: 413 `too-large` |
+| Stored boxes | 128 MB per account, of which machine-signed items may fill all but the last 8 MB: 409 `too-many-items`; 2 MB per machine-signed item (all its boxes), 32 KB per run update and 32 KB per answer or permission answer: 413 `too-large` |
 | `POST /directory` | 30 an hour per account |
 | Directory entries, revocations included | 200 per account: 409 `directory-full`; 8 KB per entry: 413 `too-large` |
 | Sessions | 50 per account; signing in past that ends the oldest, unpaired ones first |
