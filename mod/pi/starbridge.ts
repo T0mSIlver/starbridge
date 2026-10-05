@@ -5,7 +5,7 @@
  * machine's agent, else the CLI) and submits each answer as a user message. An idle session
  * starts a turn with it; a busy one runs it once the agent finishes (`deliverAs: "followUp"`).
  *
- * While the loop runs, the session's commands get STARBRIDGE_PI_ANSWERS=1, so `starbridge ask`
+ * While the loop runs, the session's commands get its id in STARBRIDGE_PI_ANSWERS, so `starbridge ask`
  * says the answer comes back as a prompt. In `pi -p` it says to `starbridge wait` instead.
  *
  * With pi-permission-system installed, it also registers the `starbridge` link in its authorizer
@@ -219,7 +219,7 @@ export default function starbridge(pi: PiApi) {
     const submit = (line: string) => pi.sendUserMessage(line, { deliverAs: "followUp" });
     const status = (s: string | undefined) => ctx.ui.setStatus("starbridge", s);
     const log = (_s: string) => {};
-    env[ANSWERS_ENV] = "1";
+    env[ANSWERS_ENV] = ctx.sessionManager.getSessionId();
     loop = new Switch({
       agentUp: async () =>
         !env.STARBRIDGE_NO_AGENT && (await fetch("GET", "/v1/status")).status < 300,

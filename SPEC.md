@@ -985,13 +985,14 @@ How it generalizes is open.
   (`agent.ts`, `poller.ts`, `switch.ts`, which never depended on Claude Code), through the
   machine's agent or the CLI, and submits each answer that way. It runs only where Pi has a UI
   (TUI and RPC), since `pi -p` ends after one prompt, and while it runs it sets
-  `STARBRIDGE_PI_ANSWERS=1` for the session's commands. It also appends `plugin/hooks/rule.md`, the
+  `STARBRIDGE_PI_ANSWERS` to the session's id for its commands. It also appends `plugin/hooks/rule.md`, the
   rule the `SessionStart` hook adds in Claude Code, to Pi's system prompt. The repository's root
   `package.json` is a Pi package (that extension and `plugin/skills`): `pi install
   git:github.com/T0mSIlver/starbridge`. `ask` detects Pi from `PI_SESSION_ID`, which Pi's bash
   tool gives every command, after Claude Code and Codex. It records that session id and takes
   the card's session title from the name in `PI_SESSION_FILE`. It says the answer comes back as
-  a prompt only with `STARBRIDGE_PI_ANSWERS=1`, else it prints the `starbridge wait` line. A
+  a prompt only when `STARBRIDGE_PI_ANSWERS` is that session's id (a `pi -p` started from the
+  session's shell inherits it), else it prints the `starbridge wait` line. A
   decision from Pi carries `agent: "pi"` (the entry above); a client released before it refuses
   such a decision. Pi has no built-in AskUserQuestion and no permission prompts; both come from third-party extensions, so Starbridge
   intercepts neither (blocking a tool by name would tie it to one extension), the skill tells

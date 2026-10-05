@@ -100,7 +100,8 @@ export function resolveSource(
         : env.CLAUDE_CODE_SESSION_ID) ??
     "";
   const codex = agent === "codex" ? (input.codex ?? codexSession(env)) : undefined;
-  const piAnswers = agent === "pi" && (input.piAnswers ?? env[PI_ANSWERS] === "1");
+  const piAnswers =
+    agent === "pi" && (input.piAnswers ?? (!!session && env[PI_ANSWERS] === session));
   const claude =
     session &&
     agent !== "codex" &&

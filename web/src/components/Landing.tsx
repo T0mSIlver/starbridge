@@ -258,7 +258,7 @@ export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
           The CLI sets up the agent service and the Claude Code plugin.
         </p>
         <Install />
-        <p className={`t-meta ${s.faint}`}>Works best with Claude Code; Codex supported.</p>
+        <p className={`t-meta ${s.faint}`}>Works best with Claude Code; Codex and Pi supported.</p>
       </section>
 
       <footer className={`t-small ${s.foot}`}>
