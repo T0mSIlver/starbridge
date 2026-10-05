@@ -177,6 +177,13 @@ function QuotaSection() {
           />
         </Row>
       )}
+      <Row label="Running out first">
+        <Switch
+          label="Running out first"
+          checked={q.runningOutFirst}
+          onChange={(runningOutFirst) => patch({ runningOutFirst })}
+        />
+      </Row>
       <Row label="Warn when a window runs low">
         <Switch
           label="Warn when a window runs low"
