@@ -9,7 +9,7 @@ and sealed to each of your devices, so the server sees ciphertext only.
 Linux or macOS, into `~/.local/bin`:
 
 ```bash
-curl -fsSL https://github.com/T0mSIlver/starbridge/releases/latest/download/install.sh | sh
+curl -fsSL https://starbridge.run/install.sh | sh
 ```
 
 or `brew install T0mSIlver/starbridge/starbridge`, or `npm install -g starbridge`

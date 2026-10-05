@@ -11,6 +11,8 @@ COPY web/package.json web/
 RUN pnpm install --frozen-lockfile --filter @starbridge/web...
 COPY packages/protocol packages/protocol
 COPY web web
+# Served at /install.sh (web/src/app/install.sh/route.ts).
+COPY cli/install.sh cli/install.sh
 # Caddy routes /v1 to the server; the rewrite only serves a request that reaches here anyway.
 ENV STARBRIDGE_SERVER=http://127.0.0.1:8080 NEXT_TELEMETRY_DISABLED=1
 RUN cd web && bun run build
