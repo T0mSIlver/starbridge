@@ -703,6 +703,10 @@ How it generalizes is open.
   version, so it carries the same buttons: Deny and a question's options answer from there,
   Allow asks for the unlock first, as decided for #57; the question and the command stay hidden.
   Tapping a prompt's notification opens that prompt's sheet, as a question's opens its own.
+- 2026-10-05. Runs with no news (#190). A run that reports no progress shows an indeterminate
+  bar while it runs. A lost run (no update for 3 minutes) shows no time in its meta row: a run
+  killed before its first heartbeat has its last news at its start, so the only duration known
+  would read "0 s". Its line "No news for 3 min 37 s" ticks each second, and it shows no progress.
 - 2026-10-05. Quota settings and notifications, as built (#115). Settings live on each device
   (web `localStorage`, Android preferences) and sit on a Quota settings page opened from the
   Quotas screen: bars show used or remaining, reset times relative or as a clock time

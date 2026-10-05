@@ -125,6 +125,9 @@ class ScreenshotTest(private val dark: Boolean) {
     // Runs as they end, and text at 200%.
     @Test fun inboxEnded() = capture("inbox-ended") { Phone(Tab.Inbox, 0) { InboxScreen(emptyList(), now, decisionActions, runs = fake.endedRuns) } }
 
+    // The indeterminate bar never settles: stop the clock mid-sweep.
+    @Test fun inboxQuietRuns() = capture("inbox-quiet-runs", before = { compose.mainClock.autoAdvance = false; repeat(70) { compose.mainClock.advanceTimeByFrame() } }) { Phone(Tab.Inbox, 0) { InboxScreen(emptyList(), now, decisionActions, runs = fake.quietRuns) } }
+
     @Test fun inboxLargeText() = capture("inbox-large-text") {
         CompositionLocalProvider(LocalDensity provides Density(LocalDensity.current.density, fontScale = 2f)) { Phone(Tab.Inbox, 4) { Inbox() } }
     }

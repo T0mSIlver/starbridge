@@ -192,6 +192,15 @@ class Fake(private val now: Instant) {
         ),
     )
 
+    /**
+     * Runs with no news to show (#190): one that prints no progress, and one killed before its
+     * first heartbeat, lost for 3 min 37 s.
+     */
+    val quietRuns = listOf(
+        Run("r5", "Lost run test", "uses your session and keyboard", devBox, startedAt = secondsAgo(217 + 180), at = secondsAgo(217 + 180)),
+        Run("r6", "Integration suite", "runs the emulator on the dev box", Source("mac mini", "localvoxtral", "suite", machineKind = "desktop"), startedAt = secondsAgo(95), at = secondsAgo(20)),
+    )
+
     /** Runs as they end: passed, failed, lost. */
     val endedRuns = listOf(
         Run("r3", "Android e2e", "runs the emulator on the dev box", devBox, startedAt = secondsAgo(900), at = secondsAgo(420), exitCode = 1, endedAt = secondsAgo(420)),

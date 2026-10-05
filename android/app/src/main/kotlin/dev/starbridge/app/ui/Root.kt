@@ -96,6 +96,8 @@ private fun now(): Instant = produceState(Instant.now()) {
     }
 }.value
 
+private val LIVE_RUNS = setOf(Run.State.Running, Run.State.Lost)
+
 /** A clock that ticks each second while [live], for a run's time elapsed; else [slow]. */
 @Composable
 private fun seconds(live: Boolean, slow: Instant): Instant {
@@ -230,7 +232,8 @@ fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> U
                         val view by vm.view.collectAsStateWithLifecycle()
                         InboxScreen(
                             decisions,
-                            seconds(runs.any { it.state(Instant.now()) == Run.State.Running }, now),
+                            // A running run's timer and a lost run's "No news for" tick each second.
+                            seconds(Run.shown(runs, Instant.now()).any { it.state(Instant.now()) in LIVE_RUNS }, now),
                             DecisionActions(answer = vm::answer, open = { open(DecisionKey(it)) }),
                             refresh = refresh(vm::refresh),
                             replies = Replies(drafts, sending),
