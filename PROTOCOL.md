@@ -298,8 +298,8 @@ first answer wins.
 
 - `permission` `{v, id, to, createdAt, agent, tool, summary, description?, input, inputHash,
   suggestions, expiresAt, source}`: `input` is the tool input as JSON text, redacted on the
-  machine (provider token patterns, PEM blocks, `*_KEY=` and `*_TOKEN=` values) and at most 8000
-  characters; `inputHash` is `hashInput` of the input before redaction (BLAKE2b-256); `expiresAt`
+  machine (provider token patterns, PEM private keys, `Authorization` headers, URL passwords, and
+  `*_KEY`, `*_TOKEN` or `*_PASSWORD` values) and at most 8000 characters; `inputHash` is `hashInput` of the input before redaction (BLAKE2b-256); `expiresAt`
   is at most 10 minutes after `createdAt`. Each of the at most 2 `suggestions`
   `{label, rule, scope: "session" | "project"}` shows the exact rule a wider allow would add.
 - `permission-answer` `{v, id, permissionId, to, answeredAt, behavior: "allow" | "deny", scope:
@@ -333,7 +333,10 @@ Answering a permission from a phone is a trust decision, so:
 - **Allow needs the phone's unlock on Android; deny never does**, since denying is always safe.
   "Always" needs the app open and shows the exact rule.
 - **The input is redacted on the machine before sealing**, because it shows on lock screens and
-  in notification history.
+  in notification history. Redaction hides only single tokens: a value holding spaces, quotes,
+  `$`, backticks or shell operators stays visible, so it cannot hide code the owner allows. A
+  Bash command holding a private key stays at the keyboard. A wider scope is offered only when
+  its rule shows in full, with no redaction.
 - **The hook never allows anything by itself.** When it errors, times out or loses the network,
   it answers nothing and the agent's own dialog decides.
 - **Opt-in per machine.** Nothing is routed until `starbridge permissions enable`.

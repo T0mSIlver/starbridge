@@ -57,9 +57,19 @@ const KEEP_MS = 24 * 3600_000;
 
 const REDACTED = "[redacted]";
 
-/** Token shapes of common providers, after Claude Code 2.1.234's list, plus PEM blocks. */
+/**
+ * What a redacted span may hold: one token, without whitespace, quotes, `$`, backticks, brackets
+ * or shell operators. A span outside it stays visible, because a device's allow approves what it
+ * shows: `X_TOKEN="$(curl … | sh)"` must not read as `X_TOKEN=[redacted]`.
+ */
+const TOKEN = "[A-Za-z0-9_+/=.~:@%!#*^-]";
+
+/**
+ * Token shapes of common providers, after Claude Code 2.1.234's list, plus PEM private keys whose
+ * body is base64 up to their END line.
+ */
 const SECRET_PATTERNS: RegExp[] = [
-  /-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----[\s\S]*?(-----END [A-Z0-9 ]*PRIVATE KEY-----|$)/g,
+  /-----BEGIN ([A-Z0-9 ]*)PRIVATE KEY-----\r?\n[A-Za-z0-9+/=\r\n]+-----END \1PRIVATE KEY-----/g,
   /\bsk-ant-[A-Za-z0-9_-]{20,}/g,
   /\bsk-(?:proj-)?[A-Za-z0-9_-]{20,}/g,
   /\bgh[pousr]_[A-Za-z0-9]{20,}/g,
@@ -73,27 +83,53 @@ const SECRET_PATTERNS: RegExp[] = [
   /\bey[JI][A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/g,
 ];
 
+/** A private key's opening line: a Bash command holding one never goes to devices. */
+const PRIVATE_KEY = /-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----/;
+
+/** A name whose value is a secret: `FOO_KEY`, `GITHUB_TOKEN`, `password`. */
+const SECRET_NAME = /^[A-Za-z0-9_-]*(?:KEY|TOKEN|SECRET|PASSWORD|PASSWD)[A-Za-z0-9_-]*$/i;
+
 /**
- * `FOO_KEY=…`, `GITHUB_TOKEN: …`, `--password=…`: the value goes. A quoted value runs past
- * escaped quotes to its closing quote, or to the end when it has none.
+ * `FOO_KEY=…`, `GITHUB_TOKEN: …`, `API_KEY = '…'`, `--password=…`: the value goes when it is one
+ * token, quoted or not. An `=` takes no space after it unless it has one before, since
+ * `X_KEY= cmd` runs `cmd`. A single-quoted value ends at the next quote, as in the shell.
  */
-const ASSIGNMENT =
-  /\b([A-Za-z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD|PASSWD)[A-Za-z0-9_]*)(\s*[=:]\s*)("(?:[^"\\]|\\[\s\S])*(?:"|$)|'(?:[^'\\]|\\[\s\S])*(?:'|$)|[^\s"',;&|]+)/gi;
+const ASSIGNMENT = new RegExp(
+  `\\b([A-Za-z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD|PASSWD)[A-Za-z0-9_]*)(\\s*:\\s*|\\s+=\\s*|=)("${TOKEN}*"|'${TOKEN}*'|${TOKEN}+)`,
+  "gi",
+);
+
+/** `Authorization: Bearer …` and its proxy twin: the credential goes. */
+const AUTH_HEADER = new RegExp(
+  `\\b((?:Proxy-)?Authorization\\s*:\\s*(?:(?:Bearer|Basic|Digest|Token)\\s+)?)${TOKEN}+`,
+  "gi",
+);
+
+/** The password in a URL's userinfo, `https://user:pass@host`. */
+const URL_PASSWORD = /\b([a-z][a-z0-9+.-]*:\/\/[A-Za-z0-9_.~%!*+-]*:)[A-Za-z0-9_.~%!*+=,-]+@/gi;
 
 /** Removes secrets from one string. */
 export function redactText(text: string): string {
   let out = text;
   for (const p of SECRET_PATTERNS) out = out.replace(p, REDACTED);
-  return out.replace(ASSIGNMENT, (_, name: string, sep: string) => `${name}${sep}${REDACTED}`);
+  return out
+    .replace(AUTH_HEADER, (_, head: string) => `${head}${REDACTED}`)
+    .replace(URL_PASSWORD, (_, head: string) => `${head}${REDACTED}@`)
+    .replace(ASSIGNMENT, (_, name: string, sep: string) => `${name}${sep}${REDACTED}`);
 }
 
-/** Redacts every string in a JSON value, keys included. */
+/** Redacts every string in a JSON value, keys included, and a token under a secret's name. */
 export function redactValue(value: unknown): unknown {
   if (typeof value === "string") return redactText(value);
   if (Array.isArray(value)) return value.map(redactValue);
   if (value && typeof value === "object")
     return Object.fromEntries(
-      Object.entries(value).map(([k, v]) => [redactText(k), redactValue(v)]),
+      Object.entries(value).map(([k, v]) => [
+        redactText(k),
+        SECRET_NAME.test(k) && typeof v === "string" && new RegExp(`^${TOKEN}+$`).test(v)
+          ? REDACTED
+          : redactValue(v),
+      ]),
     );
   return value;
 }
@@ -184,8 +220,9 @@ export function usableUpdates(suggestions: unknown[] | undefined): PermissionUpd
 }
 
 /**
- * The exact rule text the owner sees for `updates`, or "" when it does not fit in full: a wider
- * scope applies every rule, so it is offered only when the owner can read them all.
+ * The exact rule text the owner sees for `updates`, or "" when it does not show in full: a wider
+ * scope applies every rule, so it is offered only when the owner can read them all, secrets
+ * included.
  */
 export function ruleText(updates: PermissionUpdate[]): string {
   const parts = updates.flatMap((u) =>
@@ -193,8 +230,8 @@ export function ruleText(updates: PermissionUpdate[]): string {
       ? (u.rules ?? []).map((r) => (r.ruleContent ? `${r.toolName}(${r.ruleContent})` : r.toolName))
       : (u.directories ?? []).map((d) => `access to ${d}`),
   );
-  const text = redactText(parts.join(", ")).replace(/\s+/g, " ").trim();
-  return text.length <= RULE_MAX ? text : "";
+  const text = parts.join(", ").replace(/\s+/g, " ").trim();
+  return text.length <= RULE_MAX && redactText(text) === text ? text : "";
 }
 
 /** Where Claude Code writes an update for each wider scope. */
@@ -223,6 +260,9 @@ export function buildPermission(
   const tool = typeof hook.tool_name === "string" ? hook.tool_name : "";
   if (!tool) throw new UsageError("the hook input has no tool_name");
   const raw = hook.tool_input ?? {};
+  // Hiding the key would hide the lines around it from the owner, and showing it leaks it.
+  if (tool === "Bash" && PRIVATE_KEY.test(JSON.stringify(raw)))
+    throw new UsageError("the command holds a private key: it stays at the keyboard");
   const updates = usableUpdates(hook.permission_suggestions);
   const rule = ruleText(updates);
   const project = opts.source.project;
