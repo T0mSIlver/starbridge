@@ -11,13 +11,7 @@ install -m 755 host/deploy-rev.sh /usr/local/sbin/starbridge-deploy
 
 host/server-env.sh
 host/umami-env.sh
-$compose build --pull server web
-$compose up -d --remove-orphans
-# The bind-mounted Caddyfile is a new file on every release; recreate Caddy only when it changed.
-if ! cmp -s /opt/starbridge.old/deploy/Caddyfile Caddyfile; then
-  $compose up -d --force-recreate caddy
-fi
-docker image prune -f >/dev/null
+$compose build --pull server web-a
 
 # healthy URL SERVICE [SECONDS]
 healthy() {
@@ -29,8 +23,35 @@ healthy() {
   $compose logs --tail 50 "$2" >&2
   return 1
 }
+
+# No request fails during a deploy (#150). The page runs as two copies: start the idle one, wait
+# for its health, then stop the live one; Caddy sends requests to the first healthy copy.
+if [ -n "$($compose ps -q --status running web-a)" ]; then
+  live=web-a next=web-b port=3011
+else
+  live=web-b next=web-a port=3010
+fi
+$compose up -d --no-deps --force-recreate $next
+healthy http://127.0.0.1:$port/ $next
+
+# Caddy takes a changed Caddyfile through its admin API: a reload keeps open connections, where
+# recreating the container would drop them.
+$compose up -d caddy
+if ! cmp -s /opt/starbridge.old/deploy/Caddyfile Caddyfile; then
+  curl -fsS --retry 10 --retry-connrefused --retry-delay 1 -X POST \
+    -H 'Content-Type: text/caddyfile' --data-binary @Caddyfile http://127.0.0.1:2019/load
+fi
+# Caddy's health check sees the new copy within a second; then the old one can go.
+sleep 2
+$compose stop $live
+
+# The server stays one instance: it holds the long-polls and SQLite. On SIGTERM it ends its
+# long-polls and exits, and Caddy holds requests until the new one answers. --remove-orphans
+# drops the single `web` of releases before two copies.
+$compose up -d --remove-orphans server umami umami-db caddy
+docker image prune -f >/dev/null
+
 healthy http://127.0.0.1:8080/healthz server
-healthy http://127.0.0.1:3000/ web
 # Umami migrates its database on its first start.
 healthy http://127.0.0.1:3001/api/heartbeat umami 120
 

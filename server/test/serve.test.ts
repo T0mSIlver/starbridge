@@ -50,3 +50,23 @@ test("over real HTTP, an answer long-poll outlives the idle timeout and complete
     server.stop(true);
   }
 });
+
+test("on shutdown, an open long-poll answers at once with nothing, as if its wait passed", async () => {
+  const s = await makeServer();
+  const acct = await setupAccount(s);
+  const devbox = await pair(s, acct, "devbox", "machine");
+  const server = Bun.serve({ port: 0, fetch: (req, srv) => s.app.fetch(req, { server: srv }) });
+  try {
+    const polling = fetch(`http://localhost:${server.port}/v1/answers?wait=60`, {
+      headers: { authorization: `Bearer ${devbox.token}` },
+    });
+    while (s.deps.answers.count(`${acct.id}/devbox`) === 0) await Bun.sleep(10);
+    s.deps.answers.close();
+    const res = await polling;
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { items: unknown[] }).items).toEqual([]);
+    expect(await s.deps.answers.wait("any", 60)).toBe(false);
+  } finally {
+    server.stop(true);
+  }
+});
