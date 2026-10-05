@@ -29,6 +29,8 @@ const BACKOFF_MS = 2_000;
 const MAX_BACKOFF_MS = 60_000;
 /** How long the agent waits before queueing an answer into a Codex session again. */
 const CODEX_RETRY_MS = 60_000;
+/** How many times the agent tries to queue one answer into a Codex session. */
+const CODEX_TRIES = 30;
 /** How often an unpaired agent checks whether `starbridge pair` ran. */
 const UNPAIRED_MS = 5_000;
 
@@ -38,8 +40,8 @@ export type QuotaWanted = "a device joined" | "a device asked";
 export class Decisions implements Feature {
   private lastOkAt: Date | undefined;
   private lastError: string | undefined;
-  /** Codex answers whose `codex queue` failed, by decision id: when to try again. */
-  private retryAt = new Map<string, number>();
+  /** Codex answers whose `codex queue` failed, by decision id: tries so far, and when next. */
+  private retries = new Map<string, { tries: number; at: number }>();
   /** The active devices and the last quota ask, as of the previous poll. */
   private devices: Set<string> | undefined;
   private quotaAsked: string | undefined;
@@ -144,36 +146,38 @@ export class Decisions implements Feature {
   }
 
   /**
-   * Queues each new answer to a Codex session into it with `codex queue`, claiming it first so
-   * no `wait` prints it too. A failed queue releases the answer, for a `wait` or the next try.
+   * Queues each new answer to a Codex session into it with `codex queue`, and marks it seen only
+   * once that succeeded: an agent that dies meanwhile queues it again, rather than never. A
+   * session that is gone gets CODEX_TRIES tries, a minute apart; the answer stays for a `wait`.
    */
   private async deliverCodex() {
     const now = Date.now();
     for (const [id, a] of Object.entries(this.ctx.store.state().answers)) {
       const asked = this.ctx.store.state().asked[id];
-      if (a.seen || !asked?.codex || !asked.session || (this.retryAt.get(id) ?? 0) > now) continue;
-      let claimed = false;
-      this.ctx.store.updateState((st) => {
-        const x = st.answers[id];
-        if (x && !x.seen) claimed = x.seen = true;
-      });
-      if (!claimed) continue;
+      if (a.seen || !asked?.codex || !asked.session) continue;
+      const retry = this.retries.get(id) ?? { tries: 0, at: 0 };
+      if (retry.tries >= CODEX_TRIES || retry.at > now) continue;
       const error = await codexQueue(
         asked.codex,
         asked.session,
         answerLine(a.answer, asked.question),
       );
       if (error === undefined) {
-        this.retryAt.delete(id);
+        this.retries.delete(id);
+        this.ctx.store.updateState((st) => {
+          const x = st.answers[id];
+          if (x) x.seen = true;
+        });
         this.hub.log(`answer to ${id} queued into Codex session ${asked.session}`);
         continue;
       }
-      this.ctx.store.updateState((st) => {
-        const x = st.answers[id];
-        if (x) x.seen = false;
-      });
-      this.retryAt.set(id, now + CODEX_RETRY_MS);
-      this.hub.log(`answer to ${id}: codex queue failed (${error}); retrying in 1 min`);
+      const tries = retry.tries + 1;
+      this.retries.set(id, { tries, at: now + CODEX_RETRY_MS });
+      this.hub.log(
+        tries < CODEX_TRIES
+          ? `answer to ${id}: codex queue failed (${error}); retrying in 1 min`
+          : `answer to ${id}: codex queue failed ${tries} times (${error}); giving up`,
+      );
     }
   }
 

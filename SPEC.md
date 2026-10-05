@@ -911,7 +911,7 @@ How it generalizes is open.
   MCP tool that waits, and `notify` either block the turn as `wait` does or bring nothing back.
   So `ask` records a Codex session (`CODEX_THREAD_ID`, its `CODEX_HOME` and `codex`), and the
   machine's agent queues each answer into it, confirming the answer only when `codex queue`
-  succeeds; on failure it releases the answer and tries again a minute later. `ask` prints how
+  succeeds; on failure it tries again a minute later, 30 times at most. `ask` prints how
   the answer comes back: as a prompt (Claude Code; Codex when the agent runs and the session's
   daemon socket accepts a connection) or not, and then the skill has the agent wait with
   `starbridge wait <id> --timeout 5m` before it ends its turn (`codex exec`, pi, no agent). The
