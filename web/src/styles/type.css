@@ -191,3 +191,14 @@
     line-height: 24px;
   }
 }
+
+@container detail (min-width: 1000px) {
+  .t-heading {
+    font-size: 30px;
+    line-height: 38px;
+  }
+  .t-reading {
+    font-size: 17px;
+    line-height: 28px;
+  }
+}

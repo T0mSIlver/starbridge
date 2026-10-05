@@ -625,14 +625,16 @@ function ViewMenu({
     <div className={s.view} ref={ref}>
       <button
         type="button"
-        className={icon ? s.iconButton : `t-meta ${ui.btn} ${ui.sm} ${open ? s.viewOpen : ""}`}
+        className={
+          icon ? s.iconButton : `${ui.btn} ${ui.sm} ${s.viewButton} ${open ? s.viewOpen : ""}`
+        }
         aria-haspopup="menu"
         aria-expanded={open}
-        aria-label={icon ? "View" : undefined}
+        aria-label="View"
+        title={icon ? undefined : "View"}
         onClick={() => setOpen(!open)}
       >
         <Icon name="view" size={icon ? 22 : 16} />
-        {!icon && "View"}
       </button>
       {open && (
         <div className={`t-small m-drop ${s.menu}`} role="menu">
@@ -660,7 +662,6 @@ function ViewMenu({
               {label}
             </button>
           ))}
-          <div className={`t-caption ${s.menuNote}`}>Remembered on this device</div>
         </div>
       )}
     </div>

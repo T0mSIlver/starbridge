@@ -31,7 +31,7 @@ First comment:
 > my machine, I follow its progress until it passes or fails. The app also shows what's left on
 > each AI plan, read from CodexBar, with an optional alert before a window runs out.
 >
-> It works with Claude Code and Codex; Pi support is coming. Phones, browsers and machines each
+> It works with Claude Code, Codex and Pi. Phones, browsers and machines each
 > hold their own keys, and everything is encrypted end to end, so the server stores only
 > ciphertext. The hosted server is free, or you can run your own: one Bun process and a SQLite
 > file.
@@ -43,7 +43,7 @@ First comment:
 
 > Starbridge: your coding agents ask, your phone buzzes, you tap an answer, and the waiting
 > session carries on. Follow their releases and evals until they pass or fail.
-> Claude Code and Codex, end-to-end encrypted, free or self-hosted. starbridge.run
+> Claude Code, Codex and Pi, end-to-end encrypted, free or self-hosted. starbridge.run
 
 (Under 300 characters, which fits Bluesky's limit.)
 

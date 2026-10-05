@@ -313,6 +313,9 @@ object Sizes {
     val cap = 4.dp
     val hatch = 6.dp
     val media = 360.dp
+    val mediaWide = 560.dp
+    val detailWideFrom = 1000.dp
+    val detailWide = 1280.dp
     val page = 1200.dp
     val showcase = 1240.dp
     val browser = 1080.dp
