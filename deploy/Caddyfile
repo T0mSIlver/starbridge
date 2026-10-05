@@ -27,9 +27,37 @@ starbridge.run {
 	# Umami: only the tracker script and its collect endpoint are public. The rest of /stats
 	# falls through to the page's 404; the dashboard is reached through an SSH tunnel.
 	@stats path /stats/script.js /stats/api/send
+	# Anyone can post events, and Umami stores each one: their size and rate are bounded, per
+	# address and in all. Umami's data is worth little, so past the limit events are dropped with
+	# a 429. A visitor sends one event per page view. `route` keeps the order as written, so the
+	# limit sees the path before its prefix is stripped.
 	handle @stats {
-		uri strip_prefix /stats
-		reverse_proxy 127.0.0.1:3001
+		route {
+			request_body {
+				max_size 8KB
+			}
+			rate_limit {
+				zone stats_address {
+					match {
+						path /stats/api/send
+					}
+					key {http.request.remote.host}
+					ipv6_prefix 64
+					events 30
+					window 1m
+				}
+				zone stats_all {
+					match {
+						path /stats/api/send
+					}
+					key stats
+					events 300
+					window 1m
+				}
+			}
+			uri strip_prefix /stats
+			reverse_proxy 127.0.0.1:3001
+		}
 	}
 	# Two copies of the page, web-a and web-b; a deploy starts the idle one, waits for its health,
 	# then stops the other (deploy/host/apply.sh). `first` sends every request to the first healthy

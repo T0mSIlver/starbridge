@@ -382,8 +382,9 @@ so the mod is the first path.
   RSA 4096 PKCS12 keystore, alias `starbridge`, kept in `~/.config/starbridge/secrets/` and in
   Actions secrets; losing it means a new app id, so it needs a copy off the dev box. A merge to
   main deploys from Actions once CI passes, over SSH with its own key, whose forced command can
-  only deploy a commit that is on GitHub's main: the box fetches that commit itself with a
-  read-only GitHub deploy key. `deploy/deploy.sh` stays for rollbacks and other refs. The
+  only deploy a commit that is on GitHub's main (since 2026-10-06, main's head or one newer
+  than the deployed one): the box fetches that commit itself with a read-only GitHub deploy
+  key. `deploy/deploy.sh` stays for rollbacks and other refs. The
   `cli-v*` workflow folded into the release one.
 - 2026-10-05. Per-account bounds before hosted signups (#65): every route that stores
   something has a cap or a retention rule, and the writes that grow it a rate limit, sized for an
@@ -1086,6 +1087,15 @@ so the mod is the first path.
   `GET /answers`, `POST /quota/ask`, `GET /pairings/:rendezvous`) identifies its caller again
   after the wait and answers 401 if the session or token was revoked meanwhile. Usage counts
   key machines and devices by account and member id, since member ids repeat across accounts.
+- 2026-10-06. Bounds on anonymous analytics, and no rollback from Actions (#260, audit findings).
+  `/stats/api/send` is open to anyone and Umami stores every event, so its Postgres volume
+  could fill the VPS disk. Caddy, now built with `caddy-ratelimit`, takes 30 events a minute
+  per address (IPv6 per /64) and 300 in all, 8 KB each, and answers 429 past that; an hourly
+  timer keeps each Umami table to 180 days and a million rows. Umami's data is worth little,
+  so dropping events beats filling the disk. The Actions deploy key could deploy any ancestor
+  of main, including releases without today's limits; `starbridge-deploy` now deploys only
+  main's head or a commit on main that contains the deployed one. Rollbacks stay with the
+  owner, through `deploy/deploy.sh`.
 - 2026-10-05. A typed reply on every question (#201, owner). A question with options also takes
   a typed reply, as a side option: a neutral text button "Reply" after the options in the web
   detail and the Android sheet opens a text field with Send. Rows, cards and notifications do
