@@ -811,6 +811,27 @@ How it generalizes is open.
   `DateFormat.is24HourFormat`, the browser's language on the web. Android also writes dates in
   the phone's language ("Oct 7" in English, "7 oct." in French) from Android's own patterns, where
   it used fixed English ones; words such as "tomorrow" stay English, as the rest of the UI.
+- 2026-10-05. Links on questions (owner, launch test #171: "there should be a more explicit 'the
+  agent pushed this artifact for you to see'"). A link on a question is something the agent wants
+  the owner to see before answering: a page it built (a Claude artifact), a PR, a doc. It never
+  answers the question; that is `answerIn`'s job. Both clients show links under "Attached by the
+  agent", each as "Open" and its title (else "Claude artifact", else host and path) with an
+  open-outside icon, and the skill gives each link a `title` naming what it shows. A claude.ai
+  link opens in the browser, where the owner is signed in, rather than in the Claude app, which
+  shows artifacts only in its in-app browser.
+- 2026-10-05. Questions on the web after the launch test (#165, #170, #172, #173, #179). Images open
+  in a full-screen viewer in the same tab (wheel or pinch to zoom, drag to pan, double click for
+  real pixels, arrow keys between images), not a new tab. On a wide screen the list and Quota
+  windows panes resize by dragging their edge or with the arrow keys on it, remembered on the
+  device (double click resets); phones have no handles. The open question's content is centred
+  in its pane up to 720 px, so a short question leaves even margins instead of one wide band. The
+  session name is cut in the middle only when its line runs out of room. Settings, Inbox:
+  "Sound for new questions" (off by default) chimes once per new question, prompt or flip to
+  waiting while a Starbridge page is open, once across the browser's tabs. Nothing plays with no
+  page open: a service worker cannot play audio and browsers honour no sound option on Web Push,
+  so sound without a page is the OS's notification setting (macOS: Notifications, the browser,
+  "Play sound for notifications"). Browsers start audio only after a tap or key on the page, so
+  a page opened and never touched stays silent.
 
 ## Encryption, with existing libraries
 

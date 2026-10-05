@@ -38,20 +38,15 @@
   color: var(--fg2);
 }
 
-.wait,
-.working {
+.wait {
   display: inline-flex;
   align-items: center;
   gap: var(--s1);
   white-space: nowrap;
-}
-
-.wait {
   color: var(--accent);
   font-weight: 500;
 }
 
-.working,
 .dim {
   color: var(--fg2);
 }
@@ -73,13 +68,25 @@
 }
 
 .sessionName {
+  display: flex;
+  min-width: 0;
   color: var(--fg2);
   white-space: nowrap;
-  overflow: hidden;
 }
 
 .sessionName :global(.t-snippet) {
   color: var(--fg);
+}
+
+.sessionHead {
+  min-width: 0;
+  margin-left: 0.5ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sessionTail {
+  flex: none;
 }
 
 .open {

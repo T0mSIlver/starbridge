@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { imageSrc } from "@/lib/attachments";
-import { ago, type Entry, type MachineKind, middle, type Past, timer } from "@/lib/feed";
+import { ago, type Entry, type MachineKind, type Past, timer } from "@/lib/feed";
 import { clockTime } from "@/lib/format";
 import { duration, progressText, runState } from "@/lib/runs";
 import type { Decision, InboxItem, PromptItem, RunItem, Source } from "@/lib/types";
@@ -74,21 +74,21 @@ export function WaitTag({ since, now, comfy }: { since: string; now: number; com
   );
 }
 
-/** Whether the agent works on other things meanwhile, or waits on this question (#122). */
+/**
+ * "Waiting for you" once the agent marks itself blocked on the question (#122); nothing while it
+ * works around it, so every line under the question is either a state or the agent's words (#166).
+ */
 export function StateLine({ item, now, comfy }: { item: InboxItem; now: number; comfy?: boolean }) {
-  if (item.waitingSince) return <WaitTag since={item.waitingSince} now={now} comfy={comfy} />;
-  return (
-    <span className={`${comfy ? "t-small" : "t-meta"} ${s.working}`}>
-      <Icon name="working" size={comfy ? 16 : 15} />
-      Working on other things
-    </span>
-  );
+  return item.waitingSince ? <WaitTag since={item.waitingSince} now={now} comfy={comfy} /> : null;
 }
 
 /** "Claude" or "Codex", for "Open in". */
 export function agentName(agent?: string): string {
   return agent === "codex" ? "Codex" : "Claude";
 }
+
+/** Characters of a session's name kept after the cut. */
+const TAIL = 12;
 
 /** The session's name, cut in the middle, and where to open it (DESIGN.md, "Rules"). */
 export function SessionLine({ source, agent }: { source: Source; agent?: string }) {
@@ -100,7 +100,11 @@ export function SessionLine({ source, agent }: { source: Source; agent?: string 
     <div className={`t-meta ${s.session}`}>
       {name && (
         <span className={s.sessionName} title={name}>
-          Session <span className="t-snippet">{middle(name, 26)}</span>
+          Session
+          {/* Cut in the middle only when the line runs out of room: the head shrinks, the tail
+              stays (#172). */}
+          <span className={`t-snippet ${s.sessionHead}`}>{name.slice(0, -TAIL)}</span>
+          <span className={`t-snippet ${s.sessionTail}`}>{name.slice(-TAIL)}</span>
         </span>
       )}
       {link && (

@@ -10,6 +10,7 @@ import {
   type QuotaSettings,
   saveSettings,
 } from "@/lib/quotaSettings";
+import { chimeForNew, unlockSound } from "@/lib/sound";
 import type { Device, InboxItem, PromptItem, PromptReply, Reply } from "@/lib/types";
 
 // The protocol code and libsodium load here, after the first paint.
@@ -208,6 +209,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const onMessage = (e: MessageEvent) => {
       if (e.data?.type === "starbridge:push-error") console.error("push:", e.data.error);
       if (e.data?.type !== "starbridge:push") return;
+      if (["decision", "permission", "waiting"].includes(e.data.kind)) chimeForNew();
       if (e.data.kind === "quota") refreshQuotas().catch(() => {});
       else if (["permission", "settled", "answered"].includes(e.data.kind))
         refreshPrompts().catch(() => {});
@@ -216,6 +218,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     };
     document.addEventListener("visibilitychange", tick);
     navigator.serviceWorker?.addEventListener("message", onMessage);
+    unlockSound();
     return () => {
       clearInterval(timer);
       document.removeEventListener("visibilitychange", tick);
