@@ -1,0 +1,278 @@
+/* The inbox feed, dense on the web (direction A); `.comfy` under 600 px. */
+
+.meta {
+  display: flex;
+  align-items: center;
+  gap: var(--s1h);
+  min-width: 0;
+  height: 20px;
+  color: var(--fg2);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.repo {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.time {
+  margin-left: auto;
+  padding-left: var(--s3);
+}
+
+.tile {
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-sm);
+}
+
+.tilePrompt {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.tileQuestion {
+  border: 1px solid var(--line-strong);
+  color: var(--fg2);
+}
+
+.wait,
+.working {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s1);
+  white-space: nowrap;
+}
+
+.wait {
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.working,
+.dim {
+  color: var(--fg2);
+}
+
+.ok {
+  color: var(--ok);
+}
+
+.bad {
+  color: var(--bad);
+}
+
+.session {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  padding-top: var(--s3);
+  border-top: 1px solid var(--line);
+}
+
+.sessionName {
+  color: var(--fg2);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.sessionName :global(.t-snippet) {
+  color: var(--fg);
+}
+
+.open {
+  margin-left: auto;
+  white-space: nowrap;
+  text-underline-offset: 3px;
+}
+
+.thumbs {
+  display: flex;
+  gap: var(--s2);
+  margin: var(--s1) 0 2px;
+}
+
+.thumbs img {
+  display: block;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line-strong);
+}
+
+/* A row: its tile, then the meta row and the content. A button covers it to select it; the
+   actions on a phone's row sit above that button. */
+.row {
+  position: relative;
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
+  gap: var(--s3);
+  padding: var(--s3) var(--s4);
+  border-bottom: 1px solid var(--line);
+}
+
+.row.comfy {
+  grid-template-columns: 36px minmax(0, 1fr);
+  padding: var(--s4);
+}
+
+.row[aria-current="true"] {
+  background: var(--surface2);
+}
+
+.row:not([aria-current="true"]):hover {
+  background: color-mix(in srgb, var(--surface2) 50%, transparent);
+}
+
+.hit {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: none;
+}
+
+.hit:focus-visible {
+  outline-offset: -2px;
+}
+
+.body,
+.pastBody {
+  display: grid;
+  gap: var(--s1);
+  min-width: 0;
+}
+
+.pastBody {
+  gap: 2px;
+}
+
+.past {
+  padding-block: var(--s2h);
+}
+
+.pastText {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.actions {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  margin-top: var(--s1);
+}
+
+.tool {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+}
+
+.toolName {
+  font-weight: 500;
+}
+
+.cmd {
+  padding: var(--s1h) var(--s2h);
+  border-radius: var(--radius-dense);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  white-space: pre;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.run {
+  display: grid;
+  gap: var(--s1);
+  padding: var(--s3) var(--s4);
+  border-bottom: 1px solid var(--line);
+}
+
+.run.comfy {
+  padding: var(--s4);
+}
+
+.runTitle {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+}
+
+.progress {
+  display: flex;
+  align-items: center;
+  gap: var(--s2h);
+  margin-top: var(--s1);
+}
+
+.progressTrack {
+  position: relative;
+  flex: 1;
+  height: var(--s1);
+  border-radius: calc(var(--s1) / 2);
+  background: var(--surface2);
+  overflow: hidden;
+}
+
+.progressFill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--fg);
+  border-radius: calc(var(--s1) / 2);
+}
+
+.indeterminate {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 30%;
+  background: var(--fg);
+  border-radius: calc(var(--s1) / 2);
+  animation: slide 1.4s ease-in-out infinite;
+}
+
+@keyframes slide {
+  from {
+    left: -30%;
+  }
+  to {
+    left: 100%;
+  }
+}
+
+.outcome {
+  font-weight: 500;
+}
+
+.historyHead {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  width: 100%;
+  padding: var(--s3) var(--s4);
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: none;
+  color: var(--fg2);
+  text-align: left;
+}
+
+.historyHead.comfy {
+  padding: var(--s4);
+}
+
+.historyHead:hover {
+  background: color-mix(in srgb, var(--surface2) 50%, transparent);
+}
+
+.historyTitle {
+  color: var(--fg);
+  font-weight: 500;
+}
+
+.chev {
+  margin-left: auto;
+}

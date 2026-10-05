@@ -148,6 +148,9 @@ export class Push {
   private readonly queues = new Map<string, { running: number; waiting: (() => void)[] }>();
   private fcmToken?: { value: string; expires: number };
 
+  /** Called with each push's outcome, for the daily usage counts. */
+  onSent?: (type: PushType, result: PushResult | "dropped") => void;
+
   constructor(
     private readonly config: Config,
     private readonly db: Database,
@@ -211,14 +214,15 @@ export class Push {
         keys: s.keys ? JSON.parse(s.keys) : undefined,
       };
       const body = payload(s.member_id);
-      this.queue(account, async () => {
+      this.queue(account, s.type, async () => {
         const r = await this.send(target, body);
+        this.onSent?.(s.type, r);
         if (r === "gone") this.db.query("DELETE FROM push_subscriptions WHERE id = ?").run(s.id);
       });
     }
   }
 
-  private queue(account: string, job: () => Promise<void>): void {
+  private queue(account: string, type: PushType, job: () => Promise<void>): void {
     let q = this.queues.get(account);
     if (!q) {
       q = { running: 0, waiting: [] };
@@ -226,6 +230,7 @@ export class Push {
     }
     if (q.waiting.length >= ACCOUNT_QUEUE) {
       console.error(`push queue full for account ${account}; dropping a push`);
+      this.onSent?.(type, "dropped");
       return;
     }
     const queue = q;

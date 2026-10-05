@@ -9,6 +9,7 @@ import {
   checkPermissionAnswer,
   type Directory,
   hashInput,
+  type MachineKind,
   open,
   PERMISSION_TTL_MS,
   type Permission,
@@ -23,7 +24,15 @@ import {
 } from "@starbridge/protocol";
 import { claudeSession } from "./claude";
 import type { PendingPermission, PermissionUpdate, State } from "./config";
-import { type Ctx, devices, iso, refreshDirectory, type Session, UsageError } from "./context";
+import {
+  type Ctx,
+  devices,
+  iso,
+  machineKind,
+  refreshDirectory,
+  type Session,
+  UsageError,
+} from "./context";
 
 /** What Claude Code's `PermissionRequest` hook gets on stdin (fields Starbridge reads). */
 export interface PermissionHookInput {
@@ -262,6 +271,7 @@ export function buildPermission(
     agent: Permission["agent"];
     source: PermissionSourceInput;
     machine: string;
+    machineKind?: MachineKind;
     to: string[];
     now: Date;
     waitMs: number;
@@ -304,6 +314,7 @@ export function buildPermission(
     expiresAt: iso(new Date(opts.now.getTime() + Math.floor(ttl / 1000) * 1000)),
     source: {
       machine: opts.machine,
+      ...(opts.machineKind ? { machineKind: opts.machineKind } : {}),
       project: project.slice(0, 200),
       session: opts.source.session.slice(0, 200),
       ...(opts.source.sessionTitle ? { sessionTitle: opts.source.sessionTitle.slice(0, 200) } : {}),
@@ -355,6 +366,7 @@ export async function postPermission(
   const { permission, updates } = buildPermission(hook, {
     ...opts,
     machine: s.machine.name,
+    ...machineKind(ctx),
     to: to.map((d) => d.id),
     now: ctx.now(),
   });

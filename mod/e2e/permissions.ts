@@ -45,7 +45,7 @@ while (!/Pairing code: \S+/.test(text))
   text += new TextDecoder().decode((await reader.read()).value);
 await server.approve((/Pairing code: (\S+)/.exec(text) as RegExpExecArray)[1] as string);
 await pairing.exited;
-await $`bun ${CLI} permissions enable`.env(cliEnv).quiet();
+await $`bun ${CLI} config permissions on`.env(cliEnv).quiet();
 const agent: Subprocess = Bun.spawn(["bun", CLI, "agent", "--no-quota"], {
   env: cliEnv,
   stderr: "pipe",

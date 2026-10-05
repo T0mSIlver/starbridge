@@ -644,6 +644,33 @@ How it generalizes is open.
   only on an empty account; self-hosting sits behind "Use your own server". Copy inside the UI is
   labels and states only. Icons: a custom set drawn to the mark on the web; Material Symbols
   Rounded tuned to Google Sans Flex on Android; a native iOS app, if any, would use SF Symbols.
+- 2026-10-05. Design v2 on the web, inbox as built. One feed orders what holds an agent up
+  first: permission prompts, then questions whose agent waits, then questions it works around,
+  each oldest first; "Group by machine" keeps that order inside each machine and orders the
+  machines by their most pressing item. History lists answered questions and the last 7 days of
+  prompts, replacing the separate Prompts page. On phones every question shows its options on
+  its row, as does every prompt with Allow and Deny. Deny sends no note to the agent, and a
+  question with options has no free-text reply, both as in the mockups. A question's waiting
+  state comes from #127's `waiting` items signed by the asking machine; the service worker
+  shows a flip to waiting as the question's notification again, with "Waiting for you". The
+  rail's Find filters the inbox by its words; the rail counts paired machines, since the page
+  cannot tell which are connected.
+- 2026-10-05. Design v2 on the web: settings, first run and landing page, as built. Settings is one
+  page: quota display and warnings, providers (drag or arrow keys to reorder, Notify, Show),
+  devices with Revoke behind a dialog, Colours (System, Light, Dark, applied before the first
+  paint), and a link to "How to tell your agents". Providers get a Notify switch, not the
+  mockup's "Warn at 90%" field, since #115 fixed the thresholds; device rows show the date
+  added, since the page has no last-seen data. Add a device opens on a QR code for the new
+  phone; the `starbridge pair` code field sits below it. A browser joining an account shows its
+  own QR code (a `/pair#code` link that a signed-in device opens), with "Can't scan? Compare
+  digits" and the recovery key as fallbacks. The landing page's browser shot is the real app at
+  `/sample`; its phone shots are the round 4 Android mockups until Android's design v2 ships,
+  when Roborazzi shots replace them.
+- 2026-10-05. Answer buttons on inbox rows, web (#138). Settings, Inbox: "Answer buttons on
+  questions", Always (the default), When the agent waits, or Never, remembered on the device. It
+  applies to question rows on a phone width; wide screens never carry them, since the open
+  question sits beside the list. Permission prompts keep Allow and Deny on their rows, since
+  their agent always waits.
 - 2026-10-05. Quota settings and notifications, as built (#115). Settings live on each device
   (web `localStorage`, Android preferences) and sit on a Quota settings page opened from the
   Quotas screen: bars show used or remaining, reset times relative or as a clock time
@@ -676,6 +703,42 @@ How it generalizes is open.
   their kinds by name and skip unknown pushes, so they never see it. Two optional fields for the
   design (orchestrator): `source.machineKind` (`server`, `desktop`, `laptop`, `cloud`) and a
   decision's `agent` (`claude-code`, `codex`), as permissions have.
+- 2026-10-05. Waiting state on the machine (#122) and permission prompts off by default (#124).
+  `starbridge waiting <id>` and `starbridge working <id>` post a decision's state; `ask
+  --waiting` posts it already waiting, quietly, since the decision's own push just went out,
+  and `wait <id>` marks it waiting before it blocks. The CLI keeps each decision's waiting id
+  and last state, posts nothing when the state is unchanged, and refuses once the decision is
+  answered. The default-time machinery is gone: no `--default-at` (accepted and ignored, with a
+  warning, until the skill drops it), no `default` session event, no notice line, and `wait`
+  ends only at `--timeout`. `--default` is optional; without it the CLI sends "Waits for your
+  answer" for older clients. Decisions carry `agent` (`--agent`, else `claude-code` when Claude
+  Code runs the CLI, which sets `CLAUDECODE=1`), and every source carries `machineKind`:
+  `pair` and `setup` guess it (cloud session or codespace, a battery, Linux with no display,
+  else desktop) and `starbridge config machine-kind` corrects it. `starbridge config
+  permissions on|off` replaces `starbridge permissions enable|disable`, so one command holds the
+  machine's settings; setup asks, default no, and says the Claude app already shows prompts
+  for Remote Control sessions.
+- 2026-10-05. Release keys backed up off the dev box (owner): `release.jks`, its password file
+  and `minisign.key` are in an AES-256 encrypted disk image, `starbridge-release-keys.dmg`, in the
+  owner's iCloud Drive and Google Drive; its passphrase is in his Google Password Manager under
+  `starbridge.run`, user `release-keys-dmg`. Google Play: a personal developer account, developer
+  name `T0mSIlver`, identity check pending; production needs a 14-day closed test with 12 testers.
+
+- 2026-10-05. Usage counts (#140, owner ruling: learn how Starbridge is used without client
+  telemetry or anything new collected). The server counts requests it handles anyway
+  (`server/src/usage.ts`): during a day, `usage_events` holds one row per event, with the
+  account or member id only where a count is of distinct ones (active accounts, machines, and
+  devices split by sign-in: the cookie is the web page, a bearer token the Android app). Each
+  hour, and at start, every finished day is folded into `usage_days` (day, metric, value: counts,
+  and p50 and p90 of seconds to answer) and its events are deleted, so no per-user row outlives
+  its day. Metrics: `active.*`, `items.<kind>` per post, `answered.<kind>.seconds` and
+  `answered.by.<client>` per device answer, `push.<type>.<outcome>` per push, `relay.<type>.<outcome>` per push relayed for another server, and at the close
+  `total.*`, `new.accounts` and `total.push-targets.<type>`. Read access is a CLI, not an admin
+  page: `bun server.js usage [days]` inside the server container on the VPS
+  (`deploy/README.md`). It is the simpler of the two, adds no route, and needs no owner flag
+  (the hosted owner signs in through GitHub like everyone, and `accounts.owner` marks only the
+  self-hosted owner-token account); whoever can open the database reads it. `/privacy` lists the
+  counts in their own section.
 
 - 2026-10-05. Agents reach the owner through Starbridge (#121, owner). The skill and the
   SessionStart rule say Starbridge is how an agent reaches its user: a card for a decision that is

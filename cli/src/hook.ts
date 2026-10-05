@@ -199,22 +199,6 @@ export async function hookSettle(
   return 0;
 }
 
-/** `starbridge permissions enable|disable|status`. */
-export function permissionsCommand(ctx: Ctx, sub: string | undefined): number {
-  if (sub === "enable" || sub === "disable") {
-    const config = ctx.store.agentConfig();
-    ctx.store.saveAgentConfig({ ...config, permissions: { enabled: sub === "enable" } });
-  } else if (sub !== "status" && sub !== undefined) {
-    throw new UsageError("usage: starbridge permissions enable|disable|status");
-  }
-  ctx.out(
-    permissionsEnabled(ctx)
-      ? "Permission prompts go to Starbridge."
-      : "Permission prompts stay at the keyboard.",
-  );
-  return 0;
-}
-
 /** What an agent reads when its `AskUserQuestion` is turned away. */
 export const ASK_USER_REASON =
   "The user is away from this terminal: ask through Starbridge instead. Run `starbridge ask` with the question, the context they need to answer it cold, the options and what each one changes, your recommendation first, as the `starbridge` skill says. Then keep working on what does not depend on the answer.";

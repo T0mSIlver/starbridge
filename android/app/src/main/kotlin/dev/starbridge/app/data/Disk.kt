@@ -24,6 +24,9 @@ data class SavedDecision(
     val answer: String? = null,
     /** How the machine closed it, when its settled notice did rather than an answer. */
     val settled: String? = null,
+    /** The agent's latest waiting state for it, "working" or "waiting", and when it flipped. */
+    val waiting: String? = null,
+    val waitingAt: String? = null,
 )
 
 /**

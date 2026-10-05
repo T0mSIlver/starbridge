@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { basename, resolve } from "node:path";
 import {
+  type Agent,
   type Answer,
   Decision,
   type DecisionLink,
@@ -12,6 +13,7 @@ import {
   type SessionLink,
   type Settled,
   seal,
+  type Waiting,
 } from "@starbridge/protocol";
 import { ApiError } from "./api";
 import { claudeSession } from "./claude";
@@ -20,6 +22,7 @@ import {
   type Ctx,
   devices,
   iso,
+  machineKind,
   parseDuration,
   refreshDirectory,
   type Session,
@@ -34,9 +37,12 @@ export interface AskInput {
   context?: string;
   options?: string[];
   recommended?: string;
+  /** What the agent does meanwhile; clients from before 2026-10-05 require one. */
   default?: string;
-  /** ISO time, or a duration from now such as "30m". */
-  defaultAt?: string;
+  /** Post it already `waiting`: the agent has nothing else to do. */
+  waiting?: boolean;
+  /** The coding agent asking; default: Claude Code when it runs the command. */
+  agent?: Agent;
   project?: string;
   session?: string;
   sessionTitle?: string;
@@ -52,23 +58,16 @@ export interface AskInput {
 /** What the server stores at most for one decision, all boxes together (PROTOCOL.md, Limits). */
 export const ITEM_BYTES = 256 * 1024;
 
-/** Exit code when nobody answered before the deadline: the agent applies its default. */
+/** Exit code when nobody answered before `--timeout`. */
 export const EXIT_TIMEOUT = 2;
+/** Sent as the default for clients from before 2026-10-05, which require one and show it. */
+export const NO_DEFAULT = "Waits for your answer";
 /** Exit code on Ctrl-C, as a shell reports SIGINT. */
 const EXIT_INTERRUPTED = 130;
 /** The server holds a long-poll at most this long (PROTOCOL.md). */
 const MAX_POLL_SECONDS = 300;
 /** Pause before retrying after a network or server error. */
 const RETRY_MS = 5_000;
-
-function timeFrom(text: string, now: Date): string {
-  if (/^\d{4}-\d{2}-\d{2}T/.test(text)) {
-    const t = Date.parse(text);
-    if (Number.isNaN(t)) throw new UsageError(`not a time: ${text}`);
-    return iso(new Date(t));
-  }
-  return iso(new Date(now.getTime() + parseDuration(text)));
-}
 
 /**
  * Fills in which session asks, from the asking process's environment and directory. Unless the
@@ -109,15 +108,13 @@ function sourceFor(input: AskInput, ctx: Ctx, machine: string): Decision["source
   const r = resolveSource(input, ctx.env, process.cwd());
   return {
     machine,
+    ...machineKind(ctx),
     project: r.project,
     session: r.session,
     ...(r.sessionTitle ? { sessionTitle: r.sessionTitle } : {}),
     ...(r.sessionLinks.length > 0 ? { links: r.sessionLinks } : {}),
   };
 }
-
-/** The default a decision gets when the agent sets none: it waits for the owner. */
-export const NO_DEFAULT = "I wait for your answer";
 
 export function buildDecision(input: AskInput, ctx: Ctx, machine: string, to: string[]): Decision {
   if (!input.question) throw new UsageError("ask needs --question");
@@ -137,13 +134,19 @@ export function buildDecision(input: AskInput, ctx: Ctx, machine: string, to: st
     context: input.context ?? "",
     options,
     ...(options.length > 0 ? { recommended: input.recommended ?? options[0] } : {}),
-    // Clients from before 2026-10-05 require a default (#127); agents set none (#121).
     default: { action: input.default || NO_DEFAULT },
+    ...agentOf(input, ctx.env),
     source: sourceFor(input, ctx, machine),
     ...(links.length > 0 ? { links } : {}),
     ...(input.answerIn !== undefined ? { answerIn: link(input.answerIn) } : {}),
   };
   return checked(decision);
+}
+
+/** `--agent`, else Claude Code when it runs this command (it sets CLAUDECODE=1). */
+function agentOf(input: AskInput, env: Ctx["env"]): { agent?: Agent } {
+  if (input.agent !== undefined) return { agent: input.agent };
+  return env.CLAUDECODE === "1" ? { agent: "claude-code" } : {};
 }
 
 function checked(decision: unknown): Decision {
@@ -215,16 +218,14 @@ export async function postDecision(ctx: Ctx, s: Session, input: AskInput): Promi
       question: decision.question,
       options: decision.options,
       askedAt: decision.createdAt,
-      // Local until the CLI drops default times (#122): the decision no longer carries one.
-      ...(input.defaultAt
-        ? { defaultAt: timeFrom(input.defaultAt, new Date(decision.createdAt)) }
-        : {}),
-      default: input.default,
       ...(cursor !== undefined ? { cursor } : {}),
       ...(decision.source.session ? { session: decision.source.session } : {}),
       ...(decision.answerIn ? { answerIn: true } : {}),
     };
   });
+  // Its own push already notified, so this state goes quietly.
+  if (input.waiting)
+    await markWaiting(ctx, () => postWaiting(ctx, s, decision.id, "waiting", true));
   return decision;
 }
 
@@ -235,16 +236,75 @@ export async function ask(
   opts: { wait?: boolean; timeout?: string; json?: boolean },
 ): Promise<number> {
   const s = session(ctx);
-  const decision = await postDecision(ctx, s, input);
+  const decision = await postDecision(ctx, s, { ...input, waiting: input.waiting || opts.wait });
   ctx.out(decision.id);
   if (!opts.wait) return 0;
   return wait(ctx, { id: decision.id, timeout: opts.timeout, json: opts.json }, s);
 }
 
 /**
+ * Posts decision `id`'s waiting state under the one id it keeps. Only a flip to `waiting`
+ * pushes, unless `quiet`; posting the state it already has does nothing. Returns whether it
+ * posted. A decision answered meanwhile throws a UsageError saying so.
+ */
+export async function postWaiting(
+  ctx: Ctx,
+  s: Session,
+  id: string,
+  state: Waiting["state"],
+  quiet = false,
+): Promise<boolean> {
+  const asked = ctx.store.state().asked[id];
+  if (!asked) throw new UsageError(`${id} is not a decision this machine asked`);
+  if (ctx.store.state().answers[id] || asked.settled)
+    throw new UsageError(`${id} is already answered`);
+  if ((asked.waiting?.state ?? "working") === state) return false;
+  // The id is kept before the first post, so a lost reply or a second process reuses it.
+  let waitingId = "";
+  ctx.store.updateState((st) => {
+    const a = st.asked[id];
+    if (!a) return;
+    a.waiting ??= { id: `w_${randomBytes(12).toString("base64url")}`, state: "working" };
+    waitingId = a.waiting.id;
+  });
+  const to = devices(await refreshDirectory(ctx, s));
+  const body = {
+    v: 1 as const,
+    id: waitingId,
+    decisionId: id,
+    to: to.map((d) => d.id),
+    at: iso(ctx.now()),
+    state,
+  } satisfies Waiting;
+  const item = seal("waiting", body, { id: s.machine.id, signKey: s.keys.sign.privateKey }, to);
+  try {
+    await s.api.postItem(quiet || state === "working" ? { ...item, quiet: true } : item);
+  } catch (e) {
+    if (e instanceof ApiError && e.code === "already-answered")
+      throw new UsageError(`${id} is already answered`);
+    throw e;
+  }
+  ctx.store.updateState((st) => {
+    const a = st.asked[id];
+    if (a) a.waiting = { id: body.id, state };
+  });
+  return true;
+}
+
+/** `starbridge waiting <id>` and `starbridge working <id>`. */
+export async function setWaiting(
+  ctx: Ctx,
+  opts: { id?: string; state: Waiting["state"] },
+): Promise<number> {
+  if (!opts.id) throw new UsageError(`${opts.state} needs a decision id`);
+  await postWaiting(ctx, session(ctx), opts.id, opts.state);
+  return 0;
+}
+
+/**
  * Closes a decision this machine asked without a Starbridge answer: answered on its `answerIn`
  * page (`elsewhere`), or no longer needed (`withdrawn`). Every device moves it out of the open
- * inbox, and the mod no longer reports its default time.
+ * inbox.
  */
 export async function settle(ctx: Ctx, opts: { id?: string; outcome?: string }): Promise<number> {
   const id = opts.id;
@@ -381,9 +441,9 @@ export function takeAnswer(
 }
 
 /**
- * Waits for the answer to decision `id`, or without `id` for the next answer to any decision
- * this machine asked. Exits 0 with the answer, or EXIT_TIMEOUT at the deadline: `--timeout`, else
- * the decision's default time, else never.
+ * Waits for the answer to decision `id`, marking it `waiting`, or without `id` for the next
+ * answer to any decision this machine asked. Exits 0 with the answer, or EXIT_TIMEOUT once
+ * `--timeout` passes.
  */
 export async function wait(
   ctx: Ctx,
@@ -403,11 +463,10 @@ export async function wait(
 
   const already = takeAnswer(ctx.store, target);
   if (already) return report(already);
+  if (target) await markWaiting(ctx, () => postWaiting(ctx, s, target, "waiting"));
 
   let deadline = Number.POSITIVE_INFINITY;
   if (opts.timeout) deadline = ctx.now().getTime() + parseDuration(opts.timeout);
-  else if (target && state.asked[target]?.defaultAt)
-    deadline = Date.parse(state.asked[target]?.defaultAt as string);
 
   // A wait for one decision reads from where that decision was asked; a wait for any answer
   // reads from, and moves, the shared cursor.
@@ -417,8 +476,7 @@ export async function wait(
     const left = deadline - ctx.now().getTime();
     if (ctx.signal?.aborted) return EXIT_INTERRUPTED;
     if (left <= 0) {
-      const what = target ?? "any decision";
-      ctx.err(`No answer to ${what} yet: apply the default.`);
+      ctx.err(`No answer to ${target ?? "any decision"} yet.`);
       return EXIT_TIMEOUT;
     }
     try {
@@ -441,56 +499,29 @@ export async function wait(
   }
 }
 
+/** Marks a decision waiting on the way into a wait; a failure only costs the devices' label. */
+export async function markWaiting(ctx: Ctx, post: () => Promise<unknown>): Promise<void> {
+  try {
+    await post();
+  } catch (e) {
+    ctx.err(`starbridge: could not mark it waiting: ${(e as Error).message}`);
+  }
+}
+
 /** Keeps a `--wait` cycle under the 30 s the mod's host allows a call to run. */
 export const MAX_CYCLE_SECONDS = 25;
 
-/** The line the mod submits when a decision's default time passed with no answer. */
-function defaultLine(id: string, asked: State["asked"][string]): string {
-  const what = asked.default ? `apply your default: ${asked.default}` : "apply your default";
-  return `No answer to ${id} (${asked.question}) by its default time ${asked.defaultAt}: ${what}`;
-}
-
-/** The `--ack` token for a default-time line; a plain decision id confirms an answer. */
-const DEFAULT_ACK = ":default";
-
-/** One line for a session: an answer, or the notice that a default time passed unanswered. */
+/** One line for a session: the answer to a decision it asked. */
 export interface SessionLine {
-  type: "answer" | "default";
+  type: "answer";
   decisionId: string;
-  /** What confirms it: the decision id, or `<id>:default`. */
+  /** What confirms it: the decision id. */
   ack: string;
   line: string;
 }
 
-/** Whether decision `id`, asked by `session`, passed its default time with no answer. */
-function overdue(st: State, session: string, id: string, now: number): boolean {
-  const asked = st.asked[id];
-  return (
-    asked?.session === session &&
-    !asked.defaulted &&
-    !asked.settled &&
-    !st.answers[id] &&
-    asked.defaultAt !== undefined &&
-    Date.parse(asked.defaultAt) <= now
-  );
-}
-
-export function anyOverdue(st: State, session: string, now: number): boolean {
-  return Object.keys(st.asked).some((id) => overdue(st, session, id, now));
-}
-
-/**
- * The lines session `session` has not confirmed: answers to decisions it asked that no `wait`
- * printed, and a notice for each of its decisions whose default time passed unanswered. A notice
- * goes out only for default times up to `checkedUntil`, the time the server was last asked for
- * answers, so an answer waiting there is never reported missing.
- */
-export function sessionLines(
-  st: State,
-  session: string,
-  now: number,
-  checkedUntil: number,
-): SessionLine[] {
+/** The answers to decisions session `session` asked that no `wait` printed nor the mod confirmed. */
+export function sessionLines(st: State, session: string): SessionLine[] {
   const lines: SessionLine[] = [];
   for (const [id, a] of Object.entries(st.answers)) {
     const asked = st.asked[id];
@@ -502,44 +533,15 @@ export function sessionLines(
       line: answerLine(a.answer, asked.question),
     });
   }
-  for (const [id, asked] of Object.entries(st.asked)) {
-    if (!overdue(st, session, id, Math.min(now, checkedUntil))) continue;
-    lines.push({
-      type: "default",
-      decisionId: id,
-      ack: `${id}${DEFAULT_ACK}`,
-      line: defaultLine(id, asked),
-    });
-  }
   return lines;
 }
 
 /** Confirms lines session `session` submitted; tokens for other sessions' decisions do nothing. */
 export function ackLines(st: State, session: string, tokens: string[]) {
   for (const token of tokens) {
-    if (token.endsWith(DEFAULT_ACK)) {
-      const asked = st.asked[token.slice(0, -DEFAULT_ACK.length)];
-      if (asked?.session === session) asked.defaulted = true;
-      continue;
-    }
     const a = st.answers[token];
     if (a && !a.seen && st.asked[token]?.session === session) a.seen = true;
   }
-}
-
-/** Milliseconds until the next default time of an unanswered decision (of `session`, if given). */
-export function nextDefaultMs(st: State, now: number, session?: string): number | undefined {
-  const left = Object.entries(st.asked)
-    .filter(
-      ([id, a]) =>
-        (session === undefined || a.session === session) &&
-        !a.defaulted &&
-        !a.settled &&
-        !st.answers[id],
-    )
-    .flatMap(([, a]) => (a.defaultAt ? [Date.parse(a.defaultAt) - now] : []))
-    .filter((ms) => ms > 0);
-  return left.length > 0 ? Math.min(...left) : undefined;
 }
 
 /** What `answers` prints for each line, as the mod reads it. */
@@ -549,8 +551,7 @@ const printLine = (ctx: Ctx, l: SessionLine) =>
 /**
  * For the Claude Code mod: hands over the answers to decisions that session `session` asked and
  * that neither a `wait` printed nor the mod confirmed, one JSON line `{decisionId, ack, line}`
- * each. A decision whose default time passed with no answer gets one line too, telling the agent
- * to apply its default. The mod confirms each line it submitted with `--ack <ack>`; until then
+ * each. The mod confirms each line it submitted with `--ack <ack>`; until then
  * the next call hands it over again, so a line the mod held back (its session ended meanwhile) is
  * not lost. With `wait`, and nothing to hand over, first long-polls once for at most that many
  * seconds from the shared cursor. One cycle per call: an error exits 1, and the mod decides when
@@ -569,36 +570,17 @@ export async function answers(
     return 0;
   }
   const seconds = opts.wait === undefined ? undefined : waitSeconds(opts.wait);
-  // The owner may have answered while no poller ran: fetch what is waiting before saying nobody
-  // answered. When the server cannot be reached, the notice waits for a later call.
-  let checkedUntil = Number.POSITIVE_INFINITY;
-  const st = ctx.store.state();
-  if (anyOverdue(st, target, ctx.now().getTime())) {
-    try {
-      await poll(ctx, session(ctx), { cursor: st.cursor, seconds: 0, shared: true });
-    } catch (e) {
-      if (e instanceof UsageError || e instanceof ProtocolError) throw e;
-      ctx.err(`starbridge: ${(e as Error).message}; the default-time notice waits`);
-      checkedUntil = Number.NEGATIVE_INFINITY;
-    }
-  }
-  const first = sessionLines(ctx.store.state(), target, ctx.now().getTime(), checkedUntil);
+  const first = sessionLines(ctx.store.state(), target);
   for (const l of first) printLine(ctx, l);
   if (first.length > 0 || seconds === undefined) return 0;
-  // Wake for this session's next default time, so its notice is not a whole cycle late.
-  const due = nextDefaultMs(ctx.store.state(), ctx.now().getTime(), target);
-  const hold = Math.min(seconds, due === undefined ? seconds : Math.ceil(due / 1000));
-  const s = session(ctx);
   try {
-    await poll(ctx, s, { cursor: ctx.store.state().cursor, seconds: hold, shared: true });
+    await poll(ctx, session(ctx), { cursor: ctx.store.state().cursor, seconds, shared: true });
   } catch (e) {
     if (e instanceof UsageError || e instanceof ProtocolError) throw e;
     ctx.err(`starbridge: ${(e as Error).message}`);
     return 1;
   }
-  // That poll fetched every waiting answer, so a due notice can go now.
-  for (const l of sessionLines(ctx.store.state(), target, ctx.now().getTime(), Infinity))
-    printLine(ctx, l);
+  for (const l of sessionLines(ctx.store.state(), target)) printLine(ctx, l);
   return 0;
 }
 

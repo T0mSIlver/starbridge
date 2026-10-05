@@ -84,7 +84,7 @@ function session(id: string, opts: { gated?: boolean; timing?: Timing } = {}) {
   return { get: () => s, poller };
 }
 
-async function ask(question: string, sessionId?: string, defaultAt?: string): Promise<string> {
+async function ask(question: string, sessionId?: string): Promise<string> {
   const args = [
     "ask",
     "--question",
@@ -97,7 +97,6 @@ async function ask(question: string, sessionId?: string, defaultAt?: string): Pr
     "Yes",
   ];
   if (sessionId) args.push("--session", sessionId);
-  if (defaultAt) args.push("--default-at", defaultAt);
   expect(await run(args, cli)).toBe(0);
   return cli.lines.at(-1) as string;
 }
@@ -261,23 +260,4 @@ test("a session that does not poll also keeps an answer through a /clear", async
   a.get().id = "s-a";
   await until(() => a.get().submitted.length === 1);
   expect(polling(a)).toBe(0);
-});
-
-test("a session that does not poll hears when a default time passes, once", async () => {
-  const lead = session("s-lead");
-  await until(() => polling(lead) > 0);
-  const a = session("s-a", { timing: { ...FAST, recheckMs: 100 } });
-  const da = await ask("Merge #12 now?", "s-a", new Date(Date.now() + 300).toISOString());
-  // The state file does not change when the time passes; the recheck finds it.
-  await until(() => a.get().submitted.length === 1, 3000);
-  expect(a.get().submitted[0]).toMatch(
-    new RegExp(
-      `^No answer to ${da} \\(Merge #12 now\\?\\) by its default time .+: apply your default: Yes$`,
-    ),
-  );
-  await server.answer(da, { choice: "No" });
-  await until(() => a.get().submitted.length === 2);
-  await Bun.sleep(300);
-  expect(a.get().submitted[1]).toBe(`Answer to ${da} (Merge #12 now?): No`);
-  expect(lead.get().submitted).toEqual([]);
 });

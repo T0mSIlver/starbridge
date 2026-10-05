@@ -1,8 +1,5 @@
-import type { Metadata } from "next";
-import { QuotaSettingsForm } from "@/components/QuotaSettings";
-
-export const metadata: Metadata = { title: "Quota settings" };
+import { redirect } from "next/navigation";
 
 export default function QuotaSettingsPage() {
-  return <QuotaSettingsForm />;
+  redirect("/settings");
 }

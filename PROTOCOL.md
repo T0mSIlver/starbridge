@@ -365,7 +365,8 @@ Answering a permission from a phone is a trust decision, so:
   its rule shows in full, with no redaction.
 - **The hook never allows anything by itself.** When it errors, times out or loses the network,
   it answers nothing and the agent's own dialog decides.
-- **Opt-in per machine.** Nothing is routed until `starbridge permissions enable`.
+- **Opt-in per machine.** Nothing is routed until `starbridge config permissions on` (setup
+  asks, default no); while off, the hook exits at once.
 
 ### On the machine
 
@@ -409,22 +410,22 @@ for an unknown route or decision, 502 when the server refused or failed (`detail
 | Route | What |
 |---|---|
 | `GET /status` | `{version, api, pid, startedAt, socket, machine?, server: {reachable, lastOkAt?, lastError?}, quota: {providers, intervalSeconds, lastPostAt?, lastError?}, sessions}` |
-| `POST /decisions` | `{input}` with `ask`'s fields (`question`, `default`, `options`, `project`, `session`, …); the client fills `project`, `session`, title and links from its own process → `{id}` |
-| `POST /answers/next` | `{id?, wait?}`: the answer to decision `id`, or the first answer no `wait` printed, marked printed → `{answer?, question?, defaultAt?}`; 404 `unknown-decision`. `starbridge wait` |
+| `POST /decisions` | `{input}` with `ask`'s fields (`question`, `options`, `waiting`, `agent`, `project`, `session`, …); the client fills `project`, `session`, title and links from its own process → `{id}` |
+| `POST /decisions/:id/waiting` | `{state: "working" \| "waiting"}` → `{posted}`: post the decision's waiting state, `posted: false` when it already had it; 404 `unknown-decision`, 400 when it is answered. `starbridge waiting`, `working` |
+| `POST /answers/next` | `{id?, wait?}`: the answer to decision `id`, or the first answer no `wait` printed, marked printed → `{answer?, question?}`; 404 `unknown-decision`. `starbridge wait` |
 | `POST /quota` | `{providers?}`: run CodexBar and post a snapshot now → `{snapshot}` |
 | `POST /runs` | `{run}`: seal one update of a `starbridge run` to every device and post it; `run` is `{id, title, reason, startedAt, at, progress?, exit?, project, session, sessionTitle?, links?}` → `{id}` |
 | `POST /sessions/:id/hello` | `{pid?, cwd?, title?}`: a session starts → `{version}` |
 | `POST /sessions/:id/bye` | the session ended; its session-scoped state goes |
 | `GET /sessions/:id/events?wait=<s>` | `{events: [{type, ack, line, decisionId?}]}`: what the session has not confirmed, held up to `wait` while there is nothing |
 | `POST /sessions/:id/ack` | `{acks}`: confirm events by their `ack`; others' tokens do nothing |
-| `POST /permissions` | `{hook, agent, source: {project, session, sessionTitle?, links?}, waitMs}`: post a permission prompt from the hook's input → `{id}`; 403 `disabled` until `starbridge permissions enable` |
+| `POST /permissions` | `{hook, agent, source: {project, session, sessionTitle?, links?}, waitMs}`: post a permission prompt from the hook's input → `{id}`; 403 `disabled` until `starbridge config permissions on` |
 | `POST /permissions/:id/wait` | `{wait}`: `{output}` once an accepted answer is in, the hook's stdout, handed out once; `{settled}` when the prompt ended another way; `{}` when `wait` passed |
 | `POST /permissions/:id/settle` | `{outcome: "keyboard" \| "timeout"}` → `{settled}`: the hook's wait ended without an answer |
 | `POST /sessions/:id/permissions/settle` | `{inputHash?}` → `{settled: [ids]}`: the keyboard answered the session's waiting prompt for that input, or all of them without `inputHash` |
 
-Paths are under `/v1`. Event types today are `answer` and `default` (a decision's default time
-passed with no answer, sent only once the server confirmed no answer was waiting at that
-time). A client skips types it does not know. The agent keeps answers in the CLI's state file,
+Paths are under `/v1`. The one event type today is `answer`. A client skips types it does not
+know. The agent keeps answers in the CLI's state file,
 so a restart loses nothing unconfirmed.
 
 Features plug in as `Feature`s (`cli/src/agent/server.ts`): routes, the events they hand

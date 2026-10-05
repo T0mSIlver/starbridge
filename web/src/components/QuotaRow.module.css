@@ -1,0 +1,57 @@
+.row {
+  display: grid;
+  gap: var(--s2);
+  padding: var(--s3) var(--s4);
+  border-bottom: 1px solid var(--line);
+}
+
+.comfy {
+  gap: var(--s2h);
+  padding: var(--s4);
+}
+
+.top,
+.bottom {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--s2);
+  white-space: nowrap;
+}
+
+.name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.figure {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.word {
+  font-weight: 400;
+  color: var(--fg2);
+}
+
+.dim {
+  color: var(--fg2);
+}
+
+.state {
+  font-weight: 500;
+}
+
+.ok,
+.unknown {
+  color: var(--ok);
+}
+
+.unused {
+  color: var(--warn);
+}
+
+.out,
+.ran-out {
+  color: var(--bad);
+}

@@ -24,6 +24,7 @@ import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontVariation
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.LineHeightStyle
 import dev.starbridge.app.R
 import dev.starbridge.app.data.Colours
 import androidx.compose.ui.unit.sp
@@ -48,8 +49,11 @@ private fun flex(style: TextStyle): TextStyle {
     // DESIGN.md gives tracking in em, Material in sp; text fields animate between the two, which
     // needs one unit.
     val tracking = style.letterSpacing.let { if (it.isEm) (it.value * size).sp else it }
-    return style.copy(fontFamily = family, letterSpacing = tracking)
+    // CSS spreads a line's extra height evenly above and below, as the web and the mockups do.
+    return style.copy(fontFamily = family, letterSpacing = tracking, lineHeightStyle = CSS_LINE)
 }
+
+private val CSS_LINE = LineHeightStyle(LineHeightStyle.Alignment.Center, LineHeightStyle.Trim.None)
 
 private fun family(res: Int, vararg weights: Int) = FontFamily(
     weights.map { Font(res, FontWeight(it), variationSettings = FontVariation.Settings(FontVariation.weight(it))) },
@@ -57,6 +61,7 @@ private fun family(res: Int, vararg weights: Int) = FontFamily(
 
 /** DESIGN.md's type roles: the generated styles, each with its own optical size. */
 class StarbridgeFaces internal constructor(t: StarbridgeType) {
+    val display = flex(t.display)
     val title = flex(t.title)
     val heading = flex(t.heading)
     val question = flex(t.question)
@@ -66,7 +71,17 @@ class StarbridgeFaces internal constructor(t: StarbridgeType) {
     val figure = flex(t.figure)
     val machine = flex(t.machine)
     val label = flex(t.label)
-    val code = t.code
+    val code = t.code.copy(lineHeightStyle = CSS_LINE)
+
+    val subtitle = flex(t.subtitle)
+    val meta = flex(t.meta)
+    /** [meta] at the label's weight: a state word under a card's title or bar. */
+    val metaStrong = flex(t.meta.copy(fontWeight = t.label.fontWeight))
+    val caption = flex(t.caption)
+    /** A tab's label. */
+    val tab = flex(t.caption.copy(fontWeight = t.label.fontWeight))
+    val reading = flex(t.reading)
+    val command = t.command.copy(lineHeightStyle = CSS_LINE)
 }
 
 private val type = StarbridgeFaces(StarbridgeType(family(R.font.google_sans_flex, 400, 500, 600), family(R.font.google_sans_code, 400, 500)))
@@ -76,7 +91,7 @@ private val LocalProviders = staticCompositionLocalOf { DarkProviders }
 
 /**
  * DESIGN.md's tokens. Screens read these for what the design fixes (amber, the quota and device
- * states, `fg3`, the provider dots) and Material's roles for everything else, so that "Match
+ * states, `fg3`, the lab colours of quota bars) and Material's roles for everything else, so that "Match
  * wallpaper" reaches every surface, container and component.
  */
 object StarbridgeTheme {
@@ -84,7 +99,7 @@ object StarbridgeTheme {
         @Composable @ReadOnlyComposable get() = LocalColors.current
     val type: StarbridgeFaces get() = dev.starbridge.app.ui.theme.type
 
-    /** [provider]'s dot, by its CodexBar id; `fg3` for a provider DESIGN.md lacks. */
+    /** [provider]'s lab colour, by its CodexBar id: a quota bar's fill only; `fg3` for a provider DESIGN.md lacks. */
     @Composable @ReadOnlyComposable
     fun provider(provider: String): Color = LocalProviders.current[provider.lowercase().filter { it in 'a'..'z' || it in '0'..'9' }] ?: colors.fg3
 }

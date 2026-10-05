@@ -4,7 +4,7 @@ import type { DecisionImage } from "@starbridge/protocol";
 import { imageBlob, imageSrc, linkLabel } from "@/lib/attachments";
 import type { Decision } from "@/lib/types";
 import s from "./Attachments.module.css";
-import { LinkIcon } from "./icons";
+import { Icon } from "./icons";
 
 /** Opens the full-size image in a new tab; browsers block opening a data: URL there. */
 function openFull(img: DecisionImage) {
@@ -52,7 +52,7 @@ export function Links({ d }: { d: Decision }) {
     <nav className={s.links} aria-label="Links">
       {links.map((l) => (
         <a key={l.url} className={s.chip} href={l.url} target="_blank" rel="noopener noreferrer">
-          <LinkIcon size={18} />
+          <Icon name="link" size={18} />
           <span className="t-label">{linkLabel(l)}</span>
         </a>
       ))}

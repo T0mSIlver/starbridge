@@ -1,21 +1,22 @@
 import { expect, test } from "bun:test";
-import { status } from "./quota";
-import type { QuotaWindow } from "./types";
+import { runningOutFirst, status } from "./quota";
+import type { QuotaCardData, QuotaWindow } from "./types";
 
 const now = new Date("2026-10-05T10:00:00Z");
+const rel = { absoluteResets: false };
 const window = (
   pace: Partial<NonNullable<QuotaWindow["pace"]>>,
-  resetsAt = "2026-10-10T20:00:00Z",
+  resetsAt = "2026-10-05T12:00:00Z",
 ) =>
   ({
-    id: "secondary",
-    label: "Weekly",
-    usedPercent: 100,
+    id: "primary",
+    label: "5-hour",
+    usedPercent: 81,
     resetsAt,
     pace: {
       stage: "ahead",
-      expectedUsedPercent: 23,
-      deltaPercent: 77,
+      expectedUsedPercent: 63,
+      deltaPercent: 18,
       projectedUsedPercent: null,
       willLastToReset: false,
       runsOutAt: null,
@@ -23,53 +24,35 @@ const window = (
     },
   }) as QuotaWindow;
 
-test("a run-out time that passed reads Ran out, not a run-out in the past", () => {
-  const s = status(
-    window({ runsOutAt: "2026-10-05T09:56:00Z" }),
-    {
-      kind: "runs-out",
-      provider: "codex",
-      window: "secondary",
-      runsOutAt: "2026-10-05T09:56:00Z",
-      resetsAt: "2026-10-10T20:00:00Z",
-    },
-    now,
-  );
-  expect(s).toMatchObject({
+test("a window that will run out says when, and its reset without 'in'", () => {
+  expect(status(window({ runsOutAt: "2026-10-05T10:50:00Z" }), undefined, rel, now)).toEqual({
     state: "out",
-    word: "Ran out",
-    detail: "Back at the reset, in 5 days.",
+    word: "Will run out in 50 min",
+    reset: "2 h",
   });
+});
+
+test("a run-out time that passed reads Ran out at its clock time", () => {
+  const s = status(window({ runsOutAt: "2026-10-05T09:40:00Z" }), undefined, rel, now);
+  expect(s.state).toBe("ran-out");
+  expect(s.word).toMatch(/^Ran out at \d\d:\d\d/);
 });
 
 test("a window whose reset passed is over until the next upload", () => {
-  const s = status(
-    window({ runsOutAt: "2026-10-05T09:00:00Z" }, "2026-10-05T09:30:00Z"),
-    undefined,
-    now,
-  );
-  expect(s).toEqual({
+  expect(status(window({}, "2026-10-05T09:30:00Z"), undefined, rel, now)).toEqual({
     state: "unknown",
     word: "Window reset",
-    detail: "Ended at 100% used; waiting for the next upload.",
-    resets: "Reset 30 min ago",
+    reset: "",
   });
 });
 
-test("a run-out ahead keeps its alert", () => {
-  const s = status(
-    window({ runsOutAt: "2026-10-05T10:46:00Z" }),
-    {
-      kind: "runs-out",
-      provider: "codex",
-      window: "secondary",
-      runsOutAt: "2026-10-05T10:46:00Z",
-      resetsAt: "2026-10-10T20:00:00Z",
-    },
-    now,
-  );
-  expect(s).toMatchObject({
-    word: "Will run out",
-    detail: "Runs out in 46 min at this pace; resets in 5 days.",
-  });
+test("windows that run out lead, the others keep their order", () => {
+  const card = (p: string, w: QuotaWindow) => ({ provider: p, window: w }) as QuotaCardData;
+  const calm = window({ willLastToReset: true, stage: "on-track" });
+  const cards = [
+    card("a", calm),
+    card("b", window({ runsOutAt: "2026-10-05T10:50:00Z" })),
+    card("c", calm),
+  ];
+  expect(runningOutFirst(cards, rel, now).map((c) => c.provider)).toEqual(["b", "a", "c"]);
 });

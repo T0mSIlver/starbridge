@@ -51,7 +51,7 @@ export class Permissions implements Feature {
       path: "/v1/permissions",
       handle: async (req: Request) => {
         if (!permissionsEnabled(this.ctx))
-          throw new HttpError(403, "disabled", "run `starbridge permissions enable` first");
+          throw new HttpError(403, "disabled", "run `starbridge config permissions on` first");
         const b = obj(req.body);
         const agent = PermissionAgent.safeParse(b.agent);
         const source = obj(b.source);

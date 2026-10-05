@@ -6,6 +6,7 @@ import webpush from "web-push";
 import { createApp } from "../src/app";
 import type { Config } from "../src/config";
 import { checkTarget } from "../src/push";
+import { aggregate, dayOf } from "../src/usage";
 import {
   type Account,
   type Actor,
@@ -335,6 +336,14 @@ test("relay mode: a server without credentials forwards FCM and Web Push through
     expect(JSON.parse(fcmSends()[0].data.p).box).toBe(d.boxes[0]?.box);
     const req = seen.find((x) => x.path === "/wp/relayed");
     expect(JSON.parse(browser.decrypt(req?.body as Buffer)).id).toBe("d1");
+    // Both servers count the pushes: the sender by its own outcome, the relay as relayed.
+    await s.deps.push.idle();
+    const today = dayOf(Date.now());
+    expect(aggregate(s.deps.db, today)).toMatchObject({ "push.fcm.ok": 1, "push.webpush.ok": 1 });
+    expect(aggregate(relay.deps.db, today)).toMatchObject({
+      "relay.fcm.ok": 1,
+      "relay.webpush.ok": 1,
+    });
   } finally {
     relayServer.stop(true);
   }
