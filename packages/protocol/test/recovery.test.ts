@@ -1,12 +1,15 @@
 import { beforeAll, expect, test } from "bun:test";
 import {
   generateRecoverySeed,
+  RecoveryKeyError,
   RecoveryWordsError,
   type RecoveryWordsProblem,
+  readRecoveryKey,
   ready,
+  recoveryKey,
   recoveryKeyPair,
+  recoverySeedFromKey,
   recoverySeedFromWords,
-  recoveryWords,
   recoveryWordsProblem,
   splitRecoveryWords,
 } from "../src";
@@ -17,8 +20,64 @@ beforeAll(() => ready);
 const twelve = keys.recovery12.words;
 const list = twelve.split(" ");
 
-test("a new account gets 12 words", () => {
-  expect(recoveryWords(generateRecoverySeed()).split(" ")).toHaveLength(12);
+test("a new account gets a key of seven groups of four", () => {
+  expect(recoveryKey(generateRecoverySeed())).toMatch(
+    /^[0-9A-HJKMNP-TV-Z]{4}(-[0-9A-HJKMNP-TV-Z]{4}){6}$/,
+  );
+});
+
+const key = keys.recovery12.key;
+const seed = recoverySeedFromKey(key);
+
+test.each([
+  ["lower case", key.toLowerCase()],
+  ["no dashes", key.replace(/-/g, "")],
+  ["spaces", key.replace(/-/g, " ")],
+  ["look-alikes", key.replace(/0/g, "O").replace(/1/g, "l")],
+  ["words of the same seed", twelve],
+])("the key reads with %s", (_, text) => {
+  expect(recoverySeedFromKey(text)).toEqual(seed);
+});
+
+test("points at a character no key holds", () => {
+  const typo = `${key.slice(0, 5)}U${key.slice(6)}`;
+  expect(readRecoveryKey(typo).problem).toEqual({ kind: "bad-character", index: 4, char: "U" });
+});
+
+test("a wrong character fails the check", () => {
+  const typo = `${key.slice(0, 5)}${key[5] === "2" ? "3" : "2"}${key.slice(6)}`;
+  expect(readRecoveryKey(typo).problem).toEqual({ kind: "checksum" });
+  expect(() => recoverySeedFromKey(typo)).toThrow(RecoveryKeyError);
+});
+
+test("while typing, only what more typing cannot fix counts", () => {
+  expect(readRecoveryKey(key.slice(0, 9), { typing: true })).toEqual({
+    format: "key",
+    count: 8,
+    problem: null,
+  });
+  expect(readRecoveryKey(key.slice(0, 9)).problem).toEqual({ kind: "length", count: 8 });
+  expect(readRecoveryKey("orbit lanter", { typing: true })).toEqual({
+    format: "words",
+    count: 2,
+    problem: null,
+  });
+  expect(readRecoveryKey("orbit lanter ", { typing: true }).problem).toEqual({
+    kind: "unknown-word",
+    index: 1,
+    word: "lanter",
+  });
+});
+
+test.each([
+  ["a key", key, "key"],
+  ["a key without dashes", key.replace(/-/g, ""), "key"],
+  ["24 words", keys.recovery.words, "words"],
+  ["12 short words", "able baby cat dog egg fan gap hat ice jar key lab", "words"],
+  ["one long word, still typing", "abandon", "key"],
+  ["one long word, finished", "abandon ", "words"],
+])("%s reads as %s", (_, text, format) => {
+  expect(readRecoveryKey(text, { typing: true }).format).toBe(format as "key" | "words");
 });
 
 test.each([
