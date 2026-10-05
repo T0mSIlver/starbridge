@@ -153,6 +153,12 @@ fonts:
 # lineHeight as a multiple, letterSpacing in em.
 # `tabular: true` turns on tabular figures (tnum) so numbers line up.
 typography:
+  display: # display medium, the landing page's one headline
+    font: sans
+    size: 45
+    weight: 500
+    lineHeight: 1.1556
+    letterSpacing: 0
   title: # headline large
     font: sans
     size: 32
@@ -240,6 +246,8 @@ size:
   content: 720
   track: 10
   media: 360 # the tallest an attached image shows in a decision
+  page: 1040 # the landing page's width, three screenshots side by side
+  shot: 320 # the widest a screenshot shows on the landing page
 # The web's stand-ins for Material's motion scheme; Android uses
 # MotionScheme.expressive() and these only where Compose takes a duration.
 motion:
@@ -382,6 +390,7 @@ weight.
 
 | Type role | Material role | Use |
 |---|---|---|
+| `display` | display medium | the landing page's headline, web only |
 | `title` | headline large | screen title in the large flexible top app bar |
 | `heading` | headline small | section and card titles |
 | `question` | title large | a decision's question |

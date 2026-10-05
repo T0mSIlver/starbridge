@@ -573,6 +573,12 @@ How it generalizes is open.
   rather than the clients growing a Markdown renderer. A deny with no typed message tells the
   agent the owner denied it, since Claude Code's default reads as a broken hook. Setup reports a
   failed step by the first line of its stderr.
+- 2026-10-05. Landing page: `/` shows it to a signed-out browser that holds no device of the
+  account it last signed in to; a browser with one gets the sign-in screen and its Inbox, as
+  before. No route moved, so `/pair` links, the OAuth callback's redirect to `/`, the service
+  worker's scope and Android deep links are unchanged. It reuses the Roborazzi screenshots,
+  cropped to WebP in `web/public/landing`, and its sign-in button goes straight to GitHub;
+  self-hosters reach the owner-token form from its footer.
 
 - 2026-10-05. Uptime alert with no new accounts: `.github/workflows/uptime.yml` checks
   `/healthz` and `/healthz/backup` hourly (every 5 minutes once the repository is public), opens one issue labelled `outage` (GitHub

@@ -6,6 +6,7 @@ import type { FirstDevice as PreparedDevice } from "@/lib/device";
 import { hasPairCode, holdPairCode } from "@/lib/pairLink";
 import { useApp } from "./AppProvider";
 import { Mark } from "./icons";
+import { Landing } from "./Landing";
 import { Setup } from "./Setup";
 import s from "./Setup.module.css";
 import ui from "./ui.module.css";
@@ -70,7 +71,7 @@ function useDefaultName(): [string, (v: string) => void] {
   return [name, setName];
 }
 
-function SignIn() {
+function SignIn({ ownerToken = false }: { ownerToken?: boolean }) {
   const { reload } = useApp();
   const [token, setToken] = useState("");
   const { busy, error, run } = useAction();
@@ -81,7 +82,7 @@ function SignIn() {
       <a href="/v1/auth/github" className={`${ui.button} ${ui.primary} ${s.go}`}>
         Sign in with GitHub
       </a>
-      <details>
+      <details open={ownerToken}>
         <summary className="t-small">Self-hosted: sign in with the owner token</summary>
         <form
           className={ui.field}
@@ -352,6 +353,7 @@ function Problem({ title, text, error }: { title: string; text: string; error: s
 /** Shows the screen for where this browser stands, and the app once it is a ready device. */
 export function Gate({ children }: { children: React.ReactNode }) {
   const { boot } = useApp();
+  const [ownerToken, setOwnerToken] = useState(false);
   const router = useRouter();
   const path = usePathname();
   // A pairing link opened before sign-in or setup: keep its code, and go back to it after.
@@ -375,7 +377,10 @@ export function Gate({ children }: { children: React.ReactNode }) {
         />
       );
     case "signed-out":
-      return <SignIn />;
+      // Visitors land on the landing page; a browser with a device signs in to its Inbox.
+      if (path === "/" && !boot.known && !ownerToken)
+        return <Landing onOwnerToken={() => setOwnerToken(true)} />;
+      return <SignIn ownerToken={ownerToken} />;
     case "first-device":
       return <FirstDevice account={boot.account} />;
     case "join":

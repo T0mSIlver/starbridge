@@ -182,6 +182,13 @@ async function main() {
   const ff = await browser();
   const a = await ff.newContext({ permissions: ["notifications"] });
 
+  step("a browser with no device lands on the landing page");
+  const visitor = await a.newPage();
+  await visitor.goto(ORIGIN);
+  await visitor.getByRole("heading", { name: /Supervise your coding agents/ }).waitFor();
+  await shoot(visitor, "landing");
+  await visitor.close();
+
   step("sign in with GitHub (stub) and set up the first device");
   const page = await signIn(a);
   failPage = page;
