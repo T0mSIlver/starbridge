@@ -6,7 +6,7 @@ import type { QuotaSnapshot } from "@starbridge/protocol";
 import { iso } from "../context";
 import { pushOnce } from "../quota";
 import type { Status } from "./api";
-import { type Feature, HttpError, type Hub, pause } from "./server";
+import { type Feature, HttpError, type Hub } from "./server";
 
 export interface QuotaConfig {
   /** Empty: no timer; `POST /v1/quota` still works, for every provider CodexBar has on. */
@@ -18,6 +18,9 @@ export interface QuotaConfig {
 export class Quota implements Feature {
   private lastPostAt: Date | undefined;
   private lastError: string | undefined;
+  /** Set by `now`; the loop posts again instead of sleeping. */
+  private wanted: string | undefined;
+  private wake: (() => void) | undefined;
 
   constructor(
     private readonly hub: Hub,
@@ -58,6 +61,28 @@ export class Quota implements Feature {
     }
   }
 
+  /** Posts a snapshot now, or right after the one being taken, rather than at the next interval. */
+  now(why: string) {
+    if (this.config.providers.length === 0) return;
+    this.wanted = why;
+    this.wake?.();
+  }
+
+  /** Waits `ms`, or until `now` or `signal` ends the wait. */
+  private nap(ms: number, signal: AbortSignal): Promise<void> {
+    return new Promise((resolve) => {
+      const done = () => {
+        clearTimeout(t);
+        signal.removeEventListener("abort", done);
+        this.wake = undefined;
+        resolve();
+      };
+      const t = setTimeout(done, ms);
+      signal.addEventListener("abort", done);
+      this.wake = done;
+    });
+  }
+
   status(into: Status) {
     into.quota = {
       providers: this.config.providers,
@@ -74,6 +99,8 @@ export class Quota implements Feature {
     }
     while (!signal.aborted) {
       const started = Date.now();
+      if (this.wanted) this.hub.log(`quota: ${this.wanted}`);
+      this.wanted = undefined;
       if (this.hub.ctx.store.machine()) {
         try {
           const snap = await this.push(this.config.providers, this.config.codexbar);
@@ -85,7 +112,8 @@ export class Quota implements Feature {
           this.hub.log(`quota: ${(e as Error).message}`);
         }
       }
-      await pause(Math.max(0, started + this.config.intervalMs - Date.now()), signal);
+      if (!this.wanted)
+        await this.nap(Math.max(0, started + this.config.intervalMs - Date.now()), signal);
     }
   }
 }

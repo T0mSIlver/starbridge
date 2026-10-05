@@ -73,6 +73,9 @@ interface Alerts {
     fun quota(notices: List<QuotaNotice>) {}
 }
 
+/** How long pull to refresh on Quotas waits for the machines' fresh snapshots. */
+private const val QUOTA_ASK_SECONDS = 15
+
 /**
  * The app's state against the server. Everything it shows was verified here first: the
  * directory chain against the pin, and each item against the directory (PROTOCOL.md).
@@ -546,6 +549,21 @@ class ServerStore(
     // --- Syncing -----------------------------------------------------------------
 
     override fun refresh() = run { sync() }
+
+    // Outside the lock: the machines take seconds to post, and answers must not wait on them.
+    override fun refreshQuotas() {
+        scope.launch {
+            busy.value = true
+            try {
+                if (phase.value == Phase.Ready) api().askQuota(QUOTA_ASK_SECONDS)
+            } catch (e: ApiException) {
+                // Asked too often, or a server without asks: the sync shows what it holds.
+            } catch (e: IOException) {
+                // Offline: the sync reports it.
+            }
+            run { sync() }
+        }
+    }
 
     private suspend fun sync() {
         if (phase.value != Phase.Ready) return
