@@ -34,6 +34,8 @@ export async function createApp(config: Config, fetchFn: typeof fetch = fetch) {
     db,
     push: new Push(config, db, fetchFn),
     answers: new Waiters(),
+    quotas: new Waiters(),
+    quotaAsks: new Map(),
     pairings: new Waiters(),
     joins: new Waiters(),
     limiter: new RateLimiter(),
@@ -78,7 +80,8 @@ export async function createApp(config: Config, fetchFn: typeof fetch = fetch) {
   });
   app.use(
     bodyLimit({
-      maxSize: 1024 * 1024,
+      // A decision with images, sealed to every device: `itemBytes` plus the JSON around it.
+      maxSize: 3 * 1024 * 1024,
       onError: (c) => c.json({ error: "too-large" }, 413),
     }),
   );

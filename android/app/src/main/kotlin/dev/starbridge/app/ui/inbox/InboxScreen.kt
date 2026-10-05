@@ -283,7 +283,10 @@ private fun Empty() {
     }
 }
 
-/** A question in the feed: amber ground once its agent waits on it, its options when they fit. */
+/**
+ * A question in the feed: amber ground and "Waiting for you" once its agent waits on it, and its
+ * options when the Answer buttons setting allows them (#181, as the web's rows).
+ */
 @Composable
 private fun DecisionCard(decision: Decision, now: Instant, actions: DecisionActions, replies: Replies, shape: Shape, buttons: CardButtons, modifier: Modifier = Modifier) {
     val scheme = MaterialTheme.colorScheme
@@ -292,14 +295,9 @@ private fun DecisionCard(decision: Decision, now: Instant, actions: DecisionActi
         Column(Modifier.clickable(onClickLabel = "Open the question") { actions.open(decision.id) }.padding(Spacing.s4), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             MetaRow(decision.source, since(decision.createdAt, now))
             Text(decision.question, style = StarbridgeTheme.type.subtitle, color = scheme.onSurface)
-            Images(decision.images, maxHeight = 105.dp, modifier = Modifier.padding(vertical = Spacing.s1))
+            Images(decision.images, maxHeight = 160.dp, crop = true, modifier = Modifier.padding(vertical = Spacing.s1))
             StateLine(decision, now)
-            val shown = when (buttons) {
-                CardButtons.Always -> true
-                CardButtons.WhenWaiting -> decision.waiting
-                CardButtons.Never -> false
-            }
-            if (shown && fitsOnCard(decision)) {
+            if (cardOptions(decision, buttons)) {
                 Spacer(Modifier.height(Spacing.s1))
                 Options(decision, replies.sending[decision.id], height = 40.dp, other = if (decision.waiting) scheme.surfaceContainer else scheme.surfaceContainerHighest, answer = answer(decision, actions.answer))
             }
@@ -307,8 +305,15 @@ private fun DecisionCard(decision: Decision, now: Instant, actions: DecisionActi
     }
 }
 
-/** Two short options and nothing to look at first: the card answers; else the sheet does. */
-private fun fitsOnCard(d: Decision) = d.answerIn == null && d.images.isEmpty() && d.options.size in 1..2 && d.options.all { it.length <= 18 }
+/**
+ * Whether a card carries the question's options: the setting decides, for every question with
+ * options. One answered on another page, or in free text, opens its sheet instead.
+ */
+internal fun cardOptions(d: Decision, buttons: CardButtons) = d.answerIn == null && d.options.isNotEmpty() && when (buttons) {
+    CardButtons.Always -> true
+    CardButtons.WhenWaiting -> d.waiting
+    CardButtons.Never -> false
+}
 
 @Composable
 private fun answer(decision: Decision, send: (String, String?, String?) -> Unit): (String?, String?) -> Unit {

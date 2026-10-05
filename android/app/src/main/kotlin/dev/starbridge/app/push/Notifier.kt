@@ -2,15 +2,16 @@ package dev.starbridge.app.push
 
 import android.Manifest
 import android.app.NotificationChannel
+import android.app.NotificationChannelGroup
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import dev.starbridge.app.data.Source
-import android.text.style.ForegroundColorSpan
-import android.text.TextUtils
-import android.text.Spanned
 import android.text.SpannableString
+import android.text.SpannableStringBuilder
+import android.text.Spanned
+import android.text.style.TypefaceSpan
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
@@ -24,6 +25,7 @@ import dev.starbridge.app.data.Colours
 import dev.starbridge.app.data.Decision
 import dev.starbridge.app.data.Prefs
 import dev.starbridge.app.data.bitmap
+import dev.starbridge.app.data.browserIntent
 import dev.starbridge.app.data.place
 import dev.starbridge.app.data.Prompt
 import dev.starbridge.app.data.QuotaNotice
@@ -45,28 +47,36 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
     private val manager = NotificationManagerCompat.from(context)
 
     init {
+        // Grouped, so Android's settings list them under these names rather than "Other" (#196).
+        manager.createNotificationChannelGroup(NotificationChannelGroup(NEEDS_YOU, "Needs you"))
+        manager.createNotificationChannelGroup(NotificationChannelGroup(ACTIVITY, "Activity"))
         manager.createNotificationChannel(
             NotificationChannel(CHANNEL, "Decisions", NotificationManager.IMPORTANCE_HIGH).apply {
+                group = NEEDS_YOU
                 description = "Questions your agents need you to answer"
             },
         )
         manager.createNotificationChannel(
             NotificationChannel(PROMPTS, "Permission prompts", NotificationManager.IMPORTANCE_HIGH).apply {
+                group = NEEDS_YOU
                 description = "Agents waiting for you to allow a command or an edit"
             },
         )
         manager.createNotificationChannel(
             NotificationChannel(JOIN_CHANNEL, "Join requests", NotificationManager.IMPORTANCE_HIGH).apply {
+                group = NEEDS_YOU
                 description = "A browser or phone signed in to your account asks to join"
             },
         )
         manager.createNotificationChannel(
             NotificationChannel(RUNS, "Runs", NotificationManager.IMPORTANCE_DEFAULT).apply {
+                group = ACTIVITY
                 description = "Commands your agents run that your rules name, until they pass or fail"
             },
         )
         manager.createNotificationChannel(
             NotificationChannel(QUOTAS, "Quotas", NotificationManager.IMPORTANCE_LOW).apply {
+                group = ACTIVITY
                 description = "Quota windows running low, running out, or resetting with headroom unused, for the providers you pick"
             },
         )
@@ -89,6 +99,7 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
                 "q:${n.provider}/${n.window}/${n.kind}",
                 0,
                 NotificationCompat.Builder(context, QUOTAS)
+                    .setSortKey(ORDER_QUOTA)
                     .setSmallIcon(R.drawable.ic_notification)
                     .setColor(accent())
                     .setContentTitle(n.title)
@@ -114,11 +125,27 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
     /** The meta row in the header, after "Starbridge": the machine and the repo. */
     private fun header(s: Source) = listOf(s.machine, s.project).filter { it.isNotBlank() }.joinToString(" · ")
 
-    /** A question's state, "Waiting for you" in amber, as the inbox shows it. */
-    private fun state(d: Decision): CharSequence = if (d.waiting) {
-        SpannableString("Waiting for you").apply { setSpan(ForegroundColorSpan(accent()), 0, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE) }
-    } else {
-        "Working on other things"
+    /**
+     * The header after "Starbridge": the machine and the repo, then "Waiting for you" once the
+     * agent waits, so the state never reads as the agent's words (#166).
+     */
+    private fun header(d: Decision) = header(d.source) + if (d.waiting) " · Waiting for you" else ""
+
+    /** The agent's words, its Markdown code in mono and without the backticks. */
+    private fun words(text: String): CharSequence = SpannableStringBuilder().apply {
+        text.split("```").forEachIndexed { i, part ->
+            if (i % 2 == 1) {
+                mono(part.substringAfter('\n', part).trimEnd('\n'))
+            } else {
+                part.split('`').forEachIndexed { j, piece -> if (j % 2 == 1) mono(piece) else append(piece) }
+            }
+        }
+    }.trim()
+
+    private fun SpannableStringBuilder.mono(code: String) {
+        val at = length
+        append(code)
+        setSpan(TypefaceSpan("monospace"), at, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
     }
 
     /**
@@ -127,7 +154,11 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
      */
     private fun accent() = context.getColor(if (prefs.colours.value == Colours.Wallpaper) R.color.accent_wallpaper else R.color.accent)
 
-    private fun base(d: Decision): NotificationCompat.Builder {
+    /**
+     * [actions] go on both versions: with sensitive content hidden, the lock screen shows the
+     * public one, and its buttons are the only ones there (#183).
+     */
+    private fun base(d: Decision, actions: List<NotificationCompat.Action> = emptyList()): NotificationCompat.Builder {
         val open = PendingIntent.getActivity(
             context,
             tag(d.id),
@@ -135,11 +166,12 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
         return NotificationCompat.Builder(context, CHANNEL)
+            .setSortKey(ORDER_QUESTION)
             .setSmallIcon(R.drawable.ic_notification)
             .setColor(accent())
             .setContentTitle(d.question)
-            .setContentText(state(d))
-            .setSubText(header(d.source))
+            .setContentText(words(d.context))
+            .setSubText(header(d))
             .setStyle(style(d))
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
@@ -150,22 +182,23 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
                     .setColor(accent())
                     .setContentTitle("A question needs you")
                     .setSubText(header(d.source))
+                    .setContentIntent(open)
+                    .apply { actions.forEach(::addAction) }
                     .build(),
             )
             .setContentIntent(open)
+            // The buttons are the answers: no system chips for links or replies beside them.
+            .setAllowSystemGeneratedContextualActions(false)
+            .apply { actions.forEach(::addAction) }
             .setOnlyAlertOnce(true)
             // Waiting: the header counts up from when the agent started to wait.
             .apply { d.waitingSince?.let { setWhen(it.toEpochMilli()).setShowWhen(true).setUsesChronometer(true) } }
     }
 
-    /**
-     * The first image as the big picture, with the state beneath it, when the question has one;
-     * else the state, then the agent's words in full.
-     */
+    /** The first image as the big picture when the question has one, else the agent's words in full. */
     private fun style(d: Decision): NotificationCompat.Style {
-        val picture = d.images.firstOrNull()?.bitmap(PICTURE_EDGE)
-            ?: return NotificationCompat.BigTextStyle().bigText(if (d.context.isBlank()) state(d) else TextUtils.concat(state(d), "\n", d.context))
-        return NotificationCompat.BigPictureStyle().bigPicture(picture).setSummaryText(state(d))
+        val picture = d.images.firstOrNull()?.bitmap(PICTURE_EDGE) ?: return NotificationCompat.BigTextStyle().bigText(words(d.context))
+        return NotificationCompat.BigPictureStyle().bigPicture(picture).setSummaryText(words(d.context))
     }
 
     /**
@@ -191,40 +224,41 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
 
     private fun post(decision: Decision, note: String?) {
         if (!allowed()) return
-        val b = base(decision)
+        val b = base(decision, actions(decision))
         if (note != null) b.setContentText(note).setStyle(NotificationCompat.BigTextStyle().bigText(note)).setSilent(true)
+        @Suppress("MissingPermission")
+        manager.notify(tag(decision.id), b.build())
+    }
+
+    /** A question's buttons: its options, a reply field, or the page it is answered on. */
+    private fun actions(decision: Decision): List<NotificationCompat.Action> {
         val page = decision.answerIn
         if (page != null) {
-            // Answered on that page, never here: the one button opens it. A claude.ai link goes to
-            // the Claude app when that app claims it, else the browser.
+            // Answered on that page, never here: the one button opens it, an artifact in the browser.
             val view = PendingIntent.getActivity(
                 context,
                 tag(decision.id),
-                Intent(Intent.ACTION_VIEW, Uri.parse(page.url)),
+                browserIntent(page.url),
                 PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
             )
-            b.addAction(NotificationCompat.Action.Builder(0, "Answer in ${page.place()}", view).build())
-        } else if (decision.options.isEmpty()) {
+            return listOf(NotificationCompat.Action.Builder(0, "Answer in ${page.place()}", view).build())
+        }
+        if (decision.options.isEmpty()) {
             val input = RemoteInput.Builder(AnswerReceiver.EXTRA_TEXT).setLabel("Your answer").build()
-            b.addAction(
+            return listOf(
                 NotificationCompat.Action.Builder(0, "Answer", answerIntent(decision, null, tag(decision.id), mutable = true))
                     .addRemoteInput(input)
                     .setAllowGeneratedReplies(false)
                     .setAuthenticationRequired(false)
                     .build(),
             )
-        } else {
-            // Android shows three buttons; the recommended option leads, the app holds the rest.
-            decision.options.sortedByDescending { it == decision.recommended }.take(3).forEachIndexed { i, option ->
-                b.addAction(
-                    NotificationCompat.Action.Builder(0, option, answerIntent(decision, option, tag(decision.id) * 31 + i, mutable = false))
-                        .setAuthenticationRequired(false)
-                        .build(),
-                )
-            }
         }
-        @Suppress("MissingPermission")
-        manager.notify(tag(decision.id), b.build())
+        // Android shows three buttons; the recommended option leads, the app holds the rest.
+        return decision.options.sortedByDescending { it == decision.recommended }.take(3).mapIndexed { i, option ->
+            NotificationCompat.Action.Builder(0, option, answerIntent(decision, option, tag(decision.id) * 31 + i, mutable = false))
+                .setAuthenticationRequired(false)
+                .build()
+        }
     }
 
     /** Replaces the buttons with the answer, then clears itself. */
@@ -261,24 +295,29 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
     )
 
-    private fun promptBase(p: Prompt): NotificationCompat.Builder {
+    /** The command in mono, the one thing to judge from the shade; the app shows the agent's words (#182). */
+    private fun command(p: Prompt): CharSequence = SpannableString(p.summary).apply { setSpan(TypefaceSpan("monospace"), 0, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE) }
+
+    /** [actions] go on the public version too, as a question's do. A tap opens the prompt's sheet. */
+    private fun promptBase(p: Prompt, actions: List<NotificationCompat.Action> = emptyList()): NotificationCompat.Builder {
         val title = "${p.tool} · waiting for you"
         val open = PendingIntent.getActivity(
             context,
             promptTag(p),
-            Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
+            Intent(context, MainActivity::class.java).putExtra(MainActivity.EXTRA_PROMPT, p.id).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
         return NotificationCompat.Builder(context, PROMPTS)
+            .setSortKey(ORDER_QUESTION)
             .setSmallIcon(R.drawable.ic_notification)
             .setColor(accent())
             .setContentTitle(title)
-            .setContentText(p.summary)
+            .setContentText(command(p))
             .setSubText(header(p.source))
             .setWhen(p.createdAt.toEpochMilli())
             .setShowWhen(true)
             .setUsesChronometer(true)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(listOfNotNull(p.summary, p.description).joinToString("\n\n")))
+            .setStyle(NotificationCompat.BigTextStyle().bigText(command(p)))
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             // The lock screen shows the tool, the machine and the repo, never the command.
@@ -293,9 +332,14 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
                     .setWhen(p.createdAt.toEpochMilli())
                     .setShowWhen(true)
                     .setUsesChronometer(true)
+                    .setContentIntent(open)
+                    .apply { actions.forEach(::addAction) }
                     .build(),
             )
             .setContentIntent(open)
+            // No "Open link" chip for a URL in the command: Allow and Deny are the only buttons.
+            .setAllowSystemGeneratedContextualActions(false)
+            .apply { actions.forEach(::addAction) }
             .setOnlyAlertOnce(true)
             .setTimeoutAfter(maxOf(1_000L, p.expiresAt.toEpochMilli() - System.currentTimeMillis()))
     }
@@ -309,18 +353,16 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
     private fun postPrompt(prompt: Prompt, note: String?) {
         if (!allowed()) return
         val tag = promptTag(prompt)
-        val b = promptBase(prompt)
-        if (note != null) b.setContentText(note).setStyle(NotificationCompat.BigTextStyle().bigText(note)).setSilent(true)
-        b.addAction(
+        val actions = listOf(
             NotificationCompat.Action.Builder(0, "Allow", promptIntent(prompt, true, "once", tag * 31))
                 .setAuthenticationRequired(true)
                 .build(),
-        )
-        b.addAction(
             NotificationCompat.Action.Builder(0, "Deny", promptIntent(prompt, false, "once", tag * 31 + 2))
                 .setAuthenticationRequired(false)
                 .build(),
         )
+        val b = promptBase(prompt, actions)
+        if (note != null) b.setContentText(note).setStyle(NotificationCompat.BigTextStyle().bigText(note)).setSilent(true)
         shown[tag] = prompt.id
         @Suppress("MissingPermission")
         manager.notify(tag, b.build())
@@ -369,6 +411,7 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
         manager.notify(
             tag(id),
             NotificationCompat.Builder(context, JOIN_CHANNEL)
+                .setSortKey(ORDER_JOIN)
                 .setSmallIcon(R.drawable.ic_notification)
                 .setContentTitle("$name wants to join")
                 .setContentText("Open Starbridge to compare digits and approve it.")
@@ -402,6 +445,7 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
         val b = NotificationCompat.Builder(context, RUNS)
+            .setSortKey(ORDER_RUN)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(listOfNotNull(run.title, run.progress?.let { if (it.percent) "${it.done}%" else "${it.done} of ${it.total}" }).joinToString(" · "))
             .setSubText(header(run.source))
@@ -446,6 +490,17 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
         const val JOIN_CHANNEL = "joins"
         const val RUNS = "runs"
         const val QUOTAS = "quotas"
+        private const val NEEDS_YOU = "needs-you"
+        private const val ACTIVITY = "activity"
+
+        /**
+         * Order inside the app's bundle, where Android sorts by these keys before importance: what
+         * needs the owner above runs, whose ongoing or ended notifications ranked first (#196).
+         */
+        const val ORDER_QUESTION = "1"
+        const val ORDER_JOIN = "2"
+        const val ORDER_RUN = "3"
+        const val ORDER_QUOTA = "4"
 
         /** Wide enough for an expanded notification on any phone, small enough for its bitmap limit. */
         private const val PICTURE_EDGE = 1024
