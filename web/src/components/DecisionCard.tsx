@@ -187,10 +187,6 @@ export function OpenDecision({
         </form>
       )}
       {error && <p className={ui.error}>Not sent: {error}</p>}
-      <p className={`t-small ${s.default}`}>
-        If nobody answers: <b>{d.default.action}</b>
-        {d.default.at ? ` ${relative(d.default.at)}` : ""}.
-      </p>
       <SessionLinks d={d} />
     </article>
   );

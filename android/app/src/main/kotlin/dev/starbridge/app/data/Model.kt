@@ -33,7 +33,7 @@ data class Decision(
     val context: String,
     val options: List<String>,
     val recommended: String?,
-    val default: String,
+    val default: String?,
     val defaultAt: Instant?,
     val source: Source,
     val createdAt: Instant,

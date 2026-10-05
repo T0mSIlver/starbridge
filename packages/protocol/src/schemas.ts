@@ -54,8 +54,10 @@ export type DirectoryEntry = z.infer<typeof DirectoryEntry>;
  * Kinds of sealed item, and for each: the role that signs it (it is sealed to members of the
  * other role: a machine's items to every active device, a device's to the one machine it
  * answers), and for a kind that refers to an earlier item, the body field naming it and that
- * item's possible kinds. The item's `re` hint repeats that field. A kind with `updates` is
- * re-posted under the same id as it changes, and the server keeps only the latest.
+ * item's possible kinds. The item's `re` hint repeats that field, and the server marks the
+ * referred item answered, unless the kind is `open` (it describes the item, closing nothing).
+ * A kind with `updates` is re-posted under the same id as it changes, and the server keeps
+ * only the latest.
  */
 export const ITEM_KINDS = {
   decision: { signer: "machine" },
@@ -65,9 +67,18 @@ export const ITEM_KINDS = {
   "permission-answer": { signer: "device", re: { field: "permissionId", kinds: ["permission"] } },
   settled: { signer: "machine", re: { field: "itemId", kinds: ["permission", "decision"] } },
   run: { signer: "machine", updates: true },
+  waiting: {
+    signer: "machine",
+    re: { field: "decisionId", kinds: ["decision"], open: true },
+    updates: true,
+  },
 } as const satisfies Record<
   string,
-  { signer: "device" | "machine"; re?: { field: string; kinds: readonly string[] }; updates?: true }
+  {
+    signer: "device" | "machine";
+    re?: { field: string; kinds: readonly string[]; open?: true };
+    updates?: true;
+  }
 >;
 
 export type ItemKind = keyof typeof ITEM_KINDS;
@@ -158,9 +169,19 @@ export const SessionLink = z
   });
 export type SessionLink = z.infer<typeof SessionLink>;
 
+/** The coding agent behind a decision or a permission prompt. */
+export const Agent = z.enum(["claude-code", "codex"]);
+export type Agent = z.infer<typeof Agent>;
+
+/** What a machine is, for its icon; clients without it show a generic computer. */
+export const MachineKind = z.enum(["server", "desktop", "laptop", "cloud"]);
+export type MachineKind = z.infer<typeof MachineKind>;
+
 /** The machine, project and session an item comes from. */
 export const Source = z.object({
   machine: z.string().min(1).max(100),
+  /** Optional: older machines omit it. */
+  machineKind: MachineKind.optional(),
   project: z.string().max(200),
   session: z.string().max(200),
   /** The session's name, as Claude Code shows it. Optional: older machines omit it. */
@@ -210,18 +231,21 @@ export const Decision = z
     /** 2 to 4 choices, or none for a free-text answer. */
     options: z.array(z.string().min(1).max(100)).max(4),
     recommended: z.string().optional(),
-    default: z.object({
-      /** What the agent does if nobody answers. */
-      action: z.string().min(1).max(300),
-      at: Time.optional(),
-    }),
+    /** Optional: older machines omit it. */
+    agent: Agent.optional(),
+    /**
+     * Optional, and no client shows it: agents never answer for the owner, so a decision has no
+     * default. Machines keep sending one for clients from before 2026-10-05, which require it;
+     * its `at`, if any, is dropped.
+     */
+    default: z.object({ action: z.string().min(1).max(300) }).optional(),
     source: Source,
     images: z.array(DecisionImage).max(4).optional(),
     links: z.array(DecisionLink).max(4).optional(),
     /**
      * Set when the owner answers on that page, such as a claude.ai artifact whose button wakes
      * the agent, and not in Starbridge: the decision then has no options, and closes when the
-     * machine posts `settled` or its default time passes. Never both, so the owner
+     * machine posts `settled`. Never both, so the owner
      * never answers one question in two places.
      */
     answerIn: DecisionLink.optional(),
@@ -260,8 +284,8 @@ export type Answer = z.infer<typeof Answer>;
 /** A permission prompt lives at most this long; the server refuses answers after it. */
 export const PERMISSION_TTL_MS = 10 * 60 * 1000;
 
-export const PermissionAgent = z.enum(["claude-code", "codex"]);
-export type PermissionAgent = z.infer<typeof PermissionAgent>;
+export const PermissionAgent = Agent;
+export type PermissionAgent = Agent;
 
 /** How far an allow reaches: this call, the rest of the session, or always in this project. */
 export const PermissionScope = z.enum(["once", "session", "project"]);
@@ -353,6 +377,21 @@ export const Settled = z
     message: "device is set exactly when outcome is device",
   });
 export type Settled = z.infer<typeof Settled>;
+
+/**
+ * Whether the agent is blocked on one of its machine's decisions: `working` on other things, or
+ * `waiting` for the owner. The machine re-posts it under one id per decision whenever the agent
+ * flips it; devices keep the update with the latest `at`. A decision without one is `working`.
+ */
+export const Waiting = z.object({
+  v: z.literal(1),
+  id: Id,
+  decisionId: Id,
+  to: z.array(Id).min(1),
+  at: Time,
+  state: z.enum(["working", "waiting"]),
+});
+export type Waiting = z.infer<typeof Waiting>;
 
 // --- Runs --------------------------------------------------------------------
 
@@ -491,6 +530,7 @@ export const BODY_SCHEMAS = {
   "permission-answer": PermissionAnswer,
   settled: Settled,
   run: Run,
+  waiting: Waiting,
 } as const satisfies Record<Kind, z.ZodType>;
 
 export type BodyOf<K extends Kind> = z.infer<(typeof BODY_SCHEMAS)[K]>;

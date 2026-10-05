@@ -1182,8 +1182,8 @@ class ServerStore(
             context = b.context,
             options = b.options,
             recommended = b.recommended,
-            default = b.fallback.action,
-            defaultAt = instant(b.fallback.at),
+            default = b.fallback?.action,
+            defaultAt = instant(b.fallback?.at),
             source = Source(
                 b.source.machine,
                 b.source.project,

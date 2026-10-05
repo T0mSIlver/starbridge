@@ -29,12 +29,16 @@ code cannot show: the HTTP API and the flows.
   | `permission-answer` | device | `permissionId`, a permission |
   | `settled` | machine | `itemId`, a permission or a decision the same machine posted |
   | `run` | machine | |
+  | `waiting` | machine | `decisionId`, an open decision the same machine posted |
 
+- Every machine-signed body names its `source` (machine, project, session, and optionally the
+  session's title and links, and `machineKind`: `server`, `desktop`, `laptop` or `cloud`, for
+  its icon). A decision may name its `agent`, `claude-code` or `codex`, as a permission does.
 - A decision's images (PNG or JPEG) and links (HTTPS) are part of its signed body, so each box
   carries every image, and the 256 KB cap in Limits covers them once per device.
   A decision with `answerIn` is answered on that page (a claude.ai artifact whose button wakes
   the agent), never in Starbridge: it has no options, devices show the page and no answer
-  field, and it closes when the machine posts `settled` for it or its default time passes.
+  field, and it closes when the machine posts `settled` for it.
 
 ## Directory
 
@@ -191,7 +195,8 @@ the server replaces the earlier post and moves it past every cursor. Any other r
 run id posted by another machine or as another kind, is 409 `duplicate-id`. Cursors are opaque strings;
 without `after`, a list starts at the first item. An item with `re` marks the item it names
 answered, so every device moves it out of the open inbox: an answer its decision, a permission
-answer its permission, a settled notice the permission or decision it closes.
+answer its permission, a settled notice the permission or decision it closes. A `waiting` item
+is the exception: it describes its decision and closes nothing.
 
 Lists return `{items: [{item, cursor, receivedAt, answeredAt?}], cursor}`, 100 at a time, where
 `item` holds only the caller's box and `answeredAt` is set on answered decisions and permissions.
@@ -203,7 +208,8 @@ to anyone but active devices (machine-signed kinds) or the asking machine (devic
 404 when `re` names no such item, one sealed to another device, or one another machine posted;
 409 `already-answered` when the item `re` names is answered or settled, 409 `expired` for a
 permission answered more than 10 minutes after it arrived, 409 `already-settled` for a second
-settled notice.
+settled notice, 409 `duplicate-id` for a `waiting` item under another id than its decision's
+first one.
 
 ### Answers for machines (long-poll)
 
@@ -228,7 +234,7 @@ A push payload is JSON text: `{v, kind, id, from, re?, box?}` for a new item, wi
 own box when the payload stays within 3 KB, else without it and the device fetches
 `GET /items/:id`; `{v, kind: "answered", id}` to every device a decision or permission was
 sealed to once a device answers it; `{v, kind: "join", id}` to every device when a join is posted.
-A settled notice is pushed as a new item. FCM gets it as data field `p`; Web Push and UnifiedPush
+A settled notice and a `waiting` item are pushed as new items. FCM gets it as data field `p`; Web Push and UnifiedPush
 encrypt it per RFC 8291.
 
 A quota snapshot asks for a push only when it raises an alert: the uploader marks that alert
@@ -238,8 +244,8 @@ settings whether to show it.
 
 Quota snapshots and runs go to FCM and UnifiedPush only. Browsers expect every Web Push to show a
 notification and drop a subscription that keeps showing none (Firefox after 16), so the web page
-fetches `GET /quota` and `GET /items?kind=run` instead. Decisions, permissions, settled notices and
-`answered` still go to Web Push.
+fetches `GET /quota` and `GET /items?kind=run` instead. Decisions, permissions, settled notices,
+waiting states and `answered` still go to Web Push.
 
 The server checks that a push URL's host resolves only to public addresses, then connects to the
 address it checked, with SNI and the certificate check still on the host name, so a DNS answer
@@ -276,9 +282,23 @@ code below. Per-address limits count an IPv6 client as its /64.
 
 Answers skip the decision count and may use the last 8 MB, so a full account can still answer. An hourly sweep drops answered
 decisions and their answers 7 days after the answer, permissions, permission answers and settled
-notices 7 days after they arrived, runs a day after their last update, unanswered decisions and quota snapshots 30
+notices 7 days after they arrived, runs a day after their last update, a decision's waiting state with its decision, unanswered decisions and quota snapshots 30
 days after they arrived, quota snapshots of revoked machines, and expired sessions. Clients that
 want a longer history keep their own copy.
+
+## Waiting state
+
+Agents never answer a question for the owner, so a decision has no default time. Instead it
+shows whether its agent is blocked on it: working on other things, or waiting for the owner.
+
+- `waiting` `{v, id, decisionId, to, at, state: "working" | "waiting"}`: the machine posts it
+  under one id per decision and re-posts it under that id whenever the agent flips the state,
+  until the decision is answered or settled. Devices keep the update with the latest `at`; a
+  decision without one is `working`.
+- A flip to `waiting` notifies once: the machine posts it without `quiet`, and every other
+  update `quiet`, so a repeated `waiting` or a flip back to `working` pushes nothing.
+- A client that does not know the kind never lists it (lists name their kinds) and ignores
+  its push.
 
 ## Runs
 

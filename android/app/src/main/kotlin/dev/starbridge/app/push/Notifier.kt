@@ -147,7 +147,7 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
      */
     private fun style(d: Decision): NotificationCompat.Style {
         val picture = d.images.firstOrNull()?.bitmap(PICTURE_EDGE)
-            ?: return NotificationCompat.BigTextStyle().bigText(d.context + "\n\nIf nobody answers: " + d.default)
+            ?: return NotificationCompat.BigTextStyle().bigText(d.context + (d.default?.let { "\n\nIf nobody answers: $it" } ?: ""))
         return NotificationCompat.BigPictureStyle().bigPicture(picture).setSummaryText(d.context)
     }
 

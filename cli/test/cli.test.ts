@@ -77,15 +77,12 @@ test("pair prints a link and a QR code that carry the code", async () => {
 
 test("ask seals a decision the phone can open, recommended first", async () => {
   const ctx = await paired(server);
-  expect(await run([...ASK, "--default-at", "30m", "--session", "s1"], ctx)).toBe(0);
+  expect(await run([...ASK, "--session", "s1"], ctx)).toBe(0);
   const [d] = await server.opened("decision");
   expect(d?.id).toBe(ctx.lines[0] as string);
   expect(d?.options).toEqual(["Merge", "Wait"]);
   expect(d?.recommended).toBe("Merge");
   expect(d?.source).toMatchObject({ machine: "devbox", session: "s1" });
-  const at = Date.parse(d?.default.at as string) - Date.now();
-  expect(at).toBeGreaterThan(29 * 60_000);
-  expect(at).toBeLessThanOrEqual(30 * 60_000);
 });
 
 test("ask names the session and links to it from Claude Code's record, unless flags say otherwise", async () => {

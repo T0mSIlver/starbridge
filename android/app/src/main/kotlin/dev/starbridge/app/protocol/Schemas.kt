@@ -163,8 +163,12 @@ data class SealedItem(
 
 // --- Decisions and answers ---------------------------------------------------
 
+/** A decision's optional default (schemas.ts); `at` comes only from machines before 2026-10-05. */
 @Serializable
 data class DecisionDefault(val action: String, val at: String? = null)
+
+val MACHINE_KINDS = setOf("server", "desktop", "laptop", "cloud")
+val AGENTS = setOf("claude-code", "codex")
 
 /** Each link kind's URL prefix (SESSION_LINK_PREFIX in schemas.ts). */
 val SESSION_LINK_PREFIX = mapOf(
@@ -184,9 +188,12 @@ data class Source(
     val session: String,
     val sessionTitle: String? = null,
     val links: List<SessionLink>? = null,
+    /** server, desktop, laptop or cloud; older machines omit it (MachineKind in schemas.ts). */
+    val machineKind: String? = null,
 ) {
     fun check() {
         len(machine, 1, 100, "source.machine")
+        machineKind?.let { schema(it in MACHINE_KINDS, "source.machineKind") }
         len(project, 0, 200, "source.project")
         len(session, 0, 200, "source.session")
         sessionTitle?.let { len(it, 0, 200, "source.sessionTitle") }
@@ -242,7 +249,9 @@ data class Decision(
     val context: String,
     val options: List<String>,
     val recommended: String? = null,
-    @SerialName("default") val fallback: DecisionDefault,
+    @SerialName("default") val fallback: DecisionDefault? = null,
+    /** claude-code or codex; older machines omit it. */
+    val agent: String? = null,
     val source: Source,
     val images: List<DecisionImage>? = null,
     val links: List<DecisionLink>? = null,
@@ -261,8 +270,8 @@ data class Decision(
         len(context, 0, 8000, "context")
         schema(options.size <= 4, "options")
         options.forEach { len(it, 1, 100, "option") }
-        len(fallback.action, 1, 300, "default.action")
-        fallback.at?.let { time(it, "default.at") }
+        fallback?.let { len(it.action, 1, 300, "default.action") }
+        agent?.let { schema(it in AGENTS, "agent") }
         source.check()
         images?.let { schema(it.size <= 4, "images"); it.forEach(DecisionImage::check) }
         links?.let { schema(it.size <= 4, "links"); it.forEach(DecisionLink::check) }
