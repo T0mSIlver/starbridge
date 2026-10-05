@@ -122,8 +122,8 @@ try {
       options: d.options,
       recommended: d.options.length ? d.recommended : undefined,
       default: d.default.action,
-      // Hours from now, so the card shows a default time like the original's.
-      defaultAt: "2h",
+      // Two hours from now, when the original had a default time.
+      ...(d.default.at ? { defaultAt: "2h" } : {}),
       links: (d.links ?? []).map((l: { url: string }) => l.url),
       ...(images.length ? { images } : {}),
       ...(d.answerIn ? { answerIn: d.answerIn.url } : {}),

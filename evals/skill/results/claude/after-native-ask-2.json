@@ -1,0 +1,64 @@
+{
+  "agent": "claude",
+  "model": "sonnet",
+  "arm": "after",
+  "scenario": "native-ask",
+  "rep": 2,
+  "turns": [
+    {
+      "commands": [
+        "starbridge ask \\\n  --question \"Use Sentry or self-hosted GlitchTip for web app error tracking?\" \\\n  --context \"Sentry: free to 5k errors/month, then \\$26/month; session replay included; hosted, no upkeep.\nGlitchTip: free, runs on our VPS, but we patch and back it up ourselves (about 1 hour/month).\nNothing is wired in yet; I'll integrate whichever you pick.\" \\\n  --option \"Sentry\" --option \"GlitchTip (self-hosted)\" --recommended \"Sentry\""
+      ],
+      "askUser": [
+        {
+          "denied": true
+        }
+      ],
+      "final": "I've posted the question to you on Starbridge (card `d_9SBHZK9H9xNT70nH`): Sentry or self-hosted GlitchTip. The card recommends Sentry, because it needs no upkeep and includes session replay.\n\nI used Starbridge instead of AskUserQuestion because a hook rejected the AskUserQuestion call and said to use Starbridge. I haven't wired anything in yet. I'll integrate whichever one you pick once your answer comes back.",
+      "session": "e6cc7421-ac19-42b6-8c6d-1d0426237f68",
+      "exit": 0,
+      "seconds": 24.089
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_9SBHZK9H9xNT70nH",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-05T16:05:06Z",
+      "question": "Use Sentry or self-hosted GlitchTip for web app error tracking?",
+      "context": "Sentry: free to 5k errors/month, then $26/month; session replay included; hosted, no upkeep.\nGlitchTip: free, runs on our VPS, but we patch and back it up ourselves (about 1 hour/month).\nNothing is wired in yet; I'll integrate whichever you pick.",
+      "options": [
+        "Sentry",
+        "GlitchTip (self-hosted)"
+      ],
+      "recommended": "Sentry",
+      "default": {
+        "action": "I wait for your answer"
+      },
+      "source": {
+        "machine": "devbox",
+        "project": "proj",
+        "session": "e6cc7421-ac19-42b6-8c6d-1d0426237f68",
+        "sessionTitle": "proj-3d"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [
+    "gh auth token",
+    "gh auth token",
+    "gh issue list -R anthropics/claude-code --author @me --state closed --search closed:>2026-09-05 --json number,title,closedAt,stateReason --limit 30"
+  ],
+  "judge": {
+    "cold": true,
+    "consequences": true,
+    "terminal": false,
+    "links": null,
+    "plain": true,
+    "notes": ""
+  }
+}

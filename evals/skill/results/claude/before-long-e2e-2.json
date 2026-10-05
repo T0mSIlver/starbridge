@@ -1,0 +1,59 @@
+{
+  "agent": "claude",
+  "model": "sonnet",
+  "arm": "before",
+  "scenario": "long-e2e",
+  "rep": 2,
+  "turns": [
+    {
+      "commands": [
+        "starbridge run --title \"iOS simulator e2e\" --reason \"takes over your screen and keyboard for about ten minutes\" -- bash -c 'make e2e'"
+      ],
+      "final": "The e2e suite passed: all 4 onboarding flows ran green after your copy change in `src/onboarding.txt`.\n\nI ran it through `starbridge run`, since `make e2e` takes over your screen and keyboard. Your phone should show the run as finished.",
+      "session": "4365a9f2-6633-4c37-b9b2-19da0cea1c2a",
+      "tokens": 65786,
+      "costUsd": 0.06198,
+      "exit": 0,
+      "seconds": 15.366
+    }
+  ],
+  "decisions": [],
+  "laterDecisions": [],
+  "runs": [
+    {
+      "v": 1,
+      "id": "r_MTqU0Gws3Fu_0Yu7",
+      "to": [
+        "phone"
+      ],
+      "title": "iOS simulator e2e",
+      "reason": "takes over your screen and keyboard for about ten minutes",
+      "source": {
+        "machine": "devbox",
+        "project": "proj",
+        "session": "4365a9f2-6633-4c37-b9b2-19da0cea1c2a",
+        "sessionTitle": "proj-90"
+      },
+      "startedAt": "2026-10-05T15:40:36Z",
+      "at": "2026-10-05T15:40:40Z",
+      "progress": {
+        "done": 4,
+        "total": 4,
+        "unit": "step"
+      },
+      "exit": {
+        "code": 0,
+        "at": "2026-10-05T15:40:40Z"
+      }
+    }
+  ],
+  "gh": [],
+  "judge": {
+    "cold": null,
+    "consequences": null,
+    "terminal": false,
+    "links": null,
+    "plain": null,
+    "notes": ""
+  }
+}
