@@ -14,7 +14,7 @@ instruction files, in your words. Starbridge never writes to them.
 | Answers into the live session | ✓ | ✓¹ | ✓³ |
 | "Waiting for you" | ✓ | ✓ | ✓ |
 | Runs | ✓ | ✓ | ✓ |
-| Permission prompts | Opt-in | No | No |
+| Permission prompts | Opt-in | No | Opt-in⁴ |
 | `AskUserQuestion` hook | ✓ | n/a² | n/a² |
 
 ¹ In interactive sessions, when `starbridge agent` runs (Codex CLI 0.160 or
@@ -27,6 +27,12 @@ questions in the terminal into Starbridge questions.
 ³ In the interactive TUI and RPC mode, through `starbridge agent` or the CLI.
 In `pi -p`, the agent waits for the answer with `starbridge wait` before it
 ends its turn.
+
+⁴ With [pi-permission-system](https://github.com/gotgenes/pi-packages/tree/main/packages/pi-permission-system):
+add `"authorizerChain": ["starbridge"]` to its `config.json`
+(`~/.pi/agent/extensions/pi-permission-system/config.json`), then
+`starbridge config permissions on`. Your devices can allow a call once or deny
+it; "Answer here" in Pi brings back its own prompt.
 
 Claude Code loads the Starbridge plugin, which brings the rules above, the
 skill and the hooks. Codex doesn't load plugins: copy the skill into

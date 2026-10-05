@@ -23,7 +23,6 @@ import {
   seal,
 } from "@starbridge/protocol";
 import { claudeSession } from "./claude";
-import { piSessionTitle } from "./pi";
 import type { PendingPermission, PermissionUpdate, State } from "./config";
 import {
   type Ctx,
@@ -34,6 +33,7 @@ import {
   type Session,
   UsageError,
 } from "./context";
+import { piSessionTitle } from "./pi";
 
 /**
  * What Claude Code's `PermissionRequest` hook gets on stdin (fields Starbridge reads). The Pi
@@ -212,11 +212,10 @@ export function summarize(tool: string, input: unknown): string {
   const o = (input && typeof input === "object" ? input : {}) as Record<string, unknown>;
   const pick = (...keys: string[]) =>
     keys.map((k) => o[k]).find((v): v is string => typeof v === "string" && v.length > 0);
-  const main =
-    isShell(tool)
-      ? pick("command")
-      : (pick("file_path", "notebook_path", "path", "url", "query", "pattern") ??
-        `${tool} ${JSON.stringify(input) ?? ""}`);
+  const main = isShell(tool)
+    ? pick("command")
+    : (pick("file_path", "notebook_path", "path", "url", "query", "pattern") ??
+      `${tool} ${JSON.stringify(input) ?? ""}`);
   return oneLine(redactText(main ?? tool), SUMMARY_MAX) || tool;
 }
 

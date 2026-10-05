@@ -994,13 +994,32 @@ How it generalizes is open.
   a prompt only when `STARBRIDGE_PI_ANSWERS` is that session's id (a `pi -p` started from the
   session's shell inherits it), else it prints the `starbridge wait` line. A
   decision from Pi carries `agent: "pi"` (the entry above); a client released before it refuses
-  such a decision. Pi has no built-in AskUserQuestion and no permission prompts; both come from third-party extensions, so Starbridge
-  intercepts neither (blocking a tool by name would tie it to one extension), the skill tells
-  every agent to avoid any tool that asks the user, and permission prompts stay Claude Code only.
+  such a decision. Pi has no built-in AskUserQuestion and no permission prompts; both come from third-party
+  extensions. Starbridge does not intercept ask tools (blocking a tool by name would tie it to
+  one extension); the skill tells every agent to avoid any tool that asks the user. Permission
+  prompts go through pi-permission-system (the entry above).
   Checked with a real Pi 0.87.1 TUI (GLM 5.3) in a throwaway HOME, the local server, the built
   web page in Firefox and `starbridge agent`: Pi posted the card, the web page answered "French",
   and Pi wrote the file. Without the agent, an answer given during a `sleep 40` ran once that
   turn ended.
+- 2026-10-06. Pi's permission prompts (owner, #232), through pi-permission-system (33.1.1), which
+  most Pi users run. Its authorizer chain asks each link the owner names in its `config.json`
+  (`authorizerChain`) before its own dialog, whenever a rule says `ask`; a link answers allow,
+  deny with a reason, or defer. The Pi extension registers the link `starbridge` through the
+  service pi-permission-system publishes on `globalThis` per session, since Pi packages share no
+  modules. The link runs `starbridge hook permission --agent pi`, the command Claude Code's hook
+  runs, with the same input shape: Pi's tool name and its command or path, and no suggestions,
+  since the chain never lets a link allow for the session, so devices offer Allow (this call)
+  and Deny. Nothing reaches the devices until the owner both names the link and turns on
+  `starbridge config permissions`, as for Claude Code. The link defers, and Pi shows its own
+  dialog, while Starbridge is off, the machine is unpaired, the server does not answer, or after
+  570 s. The chain runs before pi-permission-system's dialog, so while the devices have the
+  prompt Pi shows "Answer here": choosing it stops the CLI, which settles the prompt on the
+  devices as answered at the keyboard, and the link defers to the dialog. The dialog appears
+  only after 1 s, so a CLI that defers at once shows nothing. Checked with a real Pi TUI and
+  pi-permission-system: `touch approved.txt` allowed from the web page; `touch second.txt`
+  taken back with "Answer here" and denied in Pi's dialog, settled `keyboard` on the devices;
+  with permissions off, Pi's dialog came up at once and nothing was posted.
 - 2026-10-05. A blocked question shows by its look, not a state line (#191, owner's pick of
   proposal B, "Filled and hollow", from https://claude.ai/artifact/EMcUnTsGhyTsiCNujo4JT6). This
   replaces the "Waiting for you 1:12" tag of the #166 entry above. A question whose agent waits

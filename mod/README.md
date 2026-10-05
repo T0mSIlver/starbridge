@@ -89,6 +89,17 @@ busy. It also adds the plugin's rule (`plugin/hooks/rule.md`) to Pi's system
 prompt. `pi -p` gets no loop, so `starbridge ask` tells the agent there to
 `starbridge wait`.
 
+With [pi-permission-system](https://github.com/gotgenes/pi-packages/tree/main/packages/pi-permission-system)
+installed, `pi/permissions.ts` registers a `starbridge` link in its authorizer
+chain, which the owner turns on with `"authorizerChain": ["starbridge"]` in its
+`config.json`. When a rule says `ask`, the link runs `starbridge hook permission
+--agent pi`, as Claude Code's hook does, and returns the devices' allow (this
+call only: the chain never lets a link allow for the session) or deny with
+their message. Meanwhile Pi shows "Answer here", which takes the prompt back
+from the devices and opens pi-permission-system's own dialog. The link defers
+to that dialog at once while `starbridge config permissions` is off, the
+machine is not paired or the server does not answer, and after 570 s.
+
 ## Develop
 
 ```bash

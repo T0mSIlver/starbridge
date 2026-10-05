@@ -154,6 +154,10 @@ starbridge config permissions on
 Then each prompt also goes to your devices, where you allow or deny it. The prompt stays open at
 the keyboard, and the first answer wins.
 
+Pi's prompts come from pi-permission-system. With the Starbridge Pi package installed, add
+`"authorizerChain": ["starbridge"]` to its `config.json` as well. Your devices then allow a call
+once or deny it, and "Answer here" in Pi brings back pi-permission-system's own prompt.
+
 If you use the Claude app, turn off its "Code updates" notifications, which fire at the end of
 every turn. Keep "Code permission requests" on, unless you turned on Starbridge's permission
 prompts, so that one prompt doesn't notify you twice.
