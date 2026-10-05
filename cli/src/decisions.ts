@@ -224,7 +224,8 @@ export async function postDecision(ctx: Ctx, s: Session, input: AskInput): Promi
     };
   });
   // Its own push already notified, so this state goes quietly.
-  if (input.waiting) await postWaiting(ctx, s, decision.id, "waiting", true);
+  if (input.waiting)
+    await markWaiting(ctx, () => postWaiting(ctx, s, decision.id, "waiting", true));
   return decision;
 }
 
@@ -258,10 +259,18 @@ export async function postWaiting(
   if (ctx.store.state().answers[id] || asked.settled)
     throw new UsageError(`${id} is already answered`);
   if ((asked.waiting?.state ?? "working") === state) return false;
+  // The id is kept before the first post, so a lost reply or a second process reuses it.
+  let waitingId = "";
+  ctx.store.updateState((st) => {
+    const a = st.asked[id];
+    if (!a) return;
+    a.waiting ??= { id: `w_${randomBytes(12).toString("base64url")}`, state: "working" };
+    waitingId = a.waiting.id;
+  });
   const to = devices(await refreshDirectory(ctx, s));
   const body = {
     v: 1 as const,
-    id: asked.waiting?.id ?? `w_${randomBytes(12).toString("base64url")}`,
+    id: waitingId,
     decisionId: id,
     to: to.map((d) => d.id),
     at: iso(ctx.now()),
