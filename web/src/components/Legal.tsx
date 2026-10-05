@@ -14,11 +14,6 @@ export function LegalPage({ title, children }: { title: string; children: React.
   );
 }
 
-/** A decision the operator has yet to make, shown until it is made. */
-export function Todo({ children }: { children: React.ReactNode }) {
-  return <strong className={s.todo}>TODO: {children}</strong>;
-}
-
 export function LegalLinks() {
   return (
     <nav className={`${s.links} t-small`}>
