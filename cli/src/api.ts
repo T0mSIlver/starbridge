@@ -11,6 +11,9 @@ export class ApiError extends Error {
   }
 }
 
+/** The server did not answer at all: down, or this machine is offline. */
+export class Unreachable extends Error {}
+
 /** The routes of PROTOCOL.md that a machine calls. */
 export class Api {
   constructor(
@@ -26,12 +29,19 @@ export class Api {
     const headers: Record<string, string> = { ...opts.headers };
     if (this.token) headers.authorization = `Bearer ${this.token}`;
     if (opts.body !== undefined) headers["content-type"] = "application/json";
-    const res = await fetch(`${this.server.replace(/\/+$/, "")}/v1${path}`, {
-      method,
-      headers,
-      body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
-      signal: opts.signal,
-    });
+    const base = this.server.replace(/\/+$/, "");
+    let res: Response;
+    try {
+      res = await fetch(`${base}/v1${path}`, {
+        method,
+        headers,
+        body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
+        signal: opts.signal,
+      });
+    } catch (e) {
+      if (opts.signal?.aborted) throw e;
+      throw new Unreachable(`cannot reach ${base}: ${(e as Error).message}`);
+    }
     const text = await res.text();
     let json: unknown;
     try {
@@ -63,9 +73,11 @@ export class Api {
     rendezvous: string,
     claim: string,
     wait: number,
+    signal?: AbortSignal,
   ): Promise<{ approval: unknown; token?: string } | undefined> {
     const r = await this.call("GET", `/pairings/${rendezvous}/result?wait=${wait}`, {
       headers: { "x-claim": claim },
+      ...(signal ? { signal } : {}),
     });
     if (r.status === 204) return undefined;
     return r.json as { approval: unknown; token?: string };
