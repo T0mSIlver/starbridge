@@ -74,7 +74,8 @@ starbridge ask --question "How should I proceed with the PRs?" \
 
 Flags: `--question`, `--context` or `--context-file`, `--option` (2 to 4),
 `--recommended`, `--image` (up to 4 PNG or JPEG files), `--link` (up to 4 HTTPS URLs),
-`--answer-in`. Or `--json card.json` with `question`, `context`, `options`,
+`--answer-in`, `--waiting`, and `--agent codex` when Codex runs it (Claude
+Code is detected). Or `--json card.json` with `question`, `context`, `options`,
 `recommended`, `images`, `links`. It prints the
 decision id, such as `d_Xk3…`, and adds this session's title and links on its
 own.
@@ -86,8 +87,8 @@ own.
 - Ask what you can decide yourself.
 - Post several cards where one would do.
 - Post a wall of text, or links for reference.
-- Answer for them. A card waits for the user; never set a default to apply if
-  nobody answers.
+- Act on a question's behalf. No answer means you keep waiting; leave out
+  `--default`.
 - Block on the answer: no `--wait`, no `starbridge wait`.
 
 ## Answers in an artifact
@@ -102,9 +103,12 @@ longer need, for example after the user answered in the terminal.
 ## After you post
 
 Go on with the work that does not depend on the answer. When the answer
-blocks you, work on something else; or, when both options are cheap to
-build, build both and ask which result to keep; or end your turn, saying what
-waits on the card.
+blocks you, work on something else, or, when both options are cheap to build,
+build both and ask which result to keep. When only the answer unblocks you,
+run `starbridge waiting <id>`: their devices show "Waiting for you" and
+notify them once more. If you find more work before the answer comes, run
+`starbridge working <id>`. Blocked from the start? Post with `starbridge ask …
+--waiting`. Then end your turn, saying what waits on the card.
 
 The answer arrives as a new prompt, possibly while you work on something else:
 
