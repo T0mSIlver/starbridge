@@ -892,6 +892,15 @@ How it generalizes is open.
 - 2026-10-05. `starbridge pair` pairs with https://starbridge.run unless `--server` or
   `STARBRIDGE_SERVER` names a self-hosted server (#154), as `setup` already did.
 
+- 2026-10-05. How an answer reaches each agent (#203). Only the Claude Code plugin brings an
+  answer back into a session after its turn ends, as a prompt. Codex, pi and any agent without
+  it never got the answer: the skill told every agent never to block on `starbridge wait`. The
+  skill now has two paths. In Claude Code with the plugin, the agent ends its turn with the card
+  open, as before. In any other agent, it never ends its turn with a card open: once only the
+  answer is left, it runs `starbridge wait <id> --timeout 5m`, again on exit 2, and acts on what
+  it prints. `evals/skill` answers a Codex card on the server during the turn, as the owner
+  would, instead of sending a prompt Codex could not receive.
+
 ## Encryption, with existing libraries
 
 - libsodium sealed boxes (`crypto_box_seal`, X25519 + XSalsa20-Poly1305): an

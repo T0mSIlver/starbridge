@@ -23,7 +23,10 @@ Checked on 2026-10-05 with Claude Code 2.1.289, Codex CLI 0.160.0 and pi
 
 Codex and pi don't load the Claude Code plugin, so each line below names the
 command it needs. Codex also reads skills from `~/.codex/skills`: copy
-`plugin/skills/starbridge` there so it knows how to write a card.
+`plugin/skills/starbridge` there so it knows how to write a card. Without the
+plugin, no answer reaches a session after its turn ends, so the skill tells
+these agents to wait for it with `starbridge wait <id>` before they end the
+turn.
 
 ## Lines to copy
 
