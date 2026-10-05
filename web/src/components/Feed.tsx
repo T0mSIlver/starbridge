@@ -35,7 +35,7 @@ export function Hit({ text }: { text: string }) {
   return parts.map((part, i) =>
     i % 2 ? (
       // biome-ignore lint/suspicious/noArrayIndexKey: the parts of one string, in order
-      <mark key={i} className={s.hit}>
+      <mark key={i} className={s.match}>
         {part}
       </mark>
     ) : (
@@ -83,8 +83,8 @@ export function MetaRow({
 }
 
 /**
- * A terminal for a permission prompt, a speech bubble for a question: filled in amber while its
- * agent waits on it, outlined while it works around it (#191).
+ * A terminal for a permission prompt, a speech bubble for a question, straight on its card: amber
+ * while its agent waits on it, `fg2` while it works around it (#248).
  */
 export function KindTile({
   type,
@@ -349,17 +349,22 @@ export function HistoryHead({
 export function PastRow({
   past,
   by,
+  comfy,
   selected,
   onSelect,
 }: {
   past: Past;
   by: string;
+  comfy?: boolean;
   selected?: boolean;
   onSelect: () => void;
 }) {
   const e = past.entry;
   return (
-    <div className={`${s.row} ${s.past}`} aria-current={selected ? "true" : undefined}>
+    <div
+      className={`${s.row} ${s.past} ${comfy ? s.comfy : ""}`}
+      aria-current={selected ? "true" : undefined}
+    >
       <button
         type="button"
         className={s.hit}

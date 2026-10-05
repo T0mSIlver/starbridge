@@ -305,6 +305,7 @@ export function Inbox() {
               key={p.entry.id}
               past={p}
               by={p.entry.type === "question" ? closedByPhrase(p.entry.item) : ""}
+              comfy={comfy}
               selected={wide && p.entry.id === selected}
               onSelect={() => (wide ? setPicked(p.entry.id) : setOpened(p.entry.id))}
             />
@@ -576,7 +577,7 @@ function RowActions({
         </button>
         <button
           type="button"
-          className={`t-label ${ui.btn}`}
+          className={`t-label ${ui.btn} ${ui.tonal}`}
           disabled={busy}
           onClick={run(() => onPrompt(entry.item, { behavior: "deny", scope: "once" }))}
         >
@@ -596,7 +597,7 @@ function RowActions({
         <button
           key={o}
           type="button"
-          className={`t-label ${ui.btn} ${i === 0 ? ui.rec : ""}`}
+          className={`t-label ${ui.btn} ${i === 0 ? ui.rec : ui.tonal}`}
           disabled={busy}
           onClick={run(() => onQuestion(entry.item, { choice: o }))}
         >

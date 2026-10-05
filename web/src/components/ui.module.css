@@ -202,3 +202,16 @@ textarea.field {
   border-radius: var(--radius-md);
   padding: var(--s3) var(--s4);
 }
+
+/* A secondary button on a card: filled a tone off the card, with no outline (#248). A card that
+   is itself `surface2` or amber sets `--tonal`. */
+.tonal {
+  border-color: transparent;
+  background: var(--tonal, var(--surface2));
+}
+
+@media (hover: hover) {
+  .tonal:hover:not(:disabled) {
+    background: var(--line);
+  }
+}
