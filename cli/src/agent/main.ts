@@ -3,6 +3,7 @@ import { socketPath } from "./api";
 import { Decisions } from "./decisions";
 import { Permissions } from "./permissions";
 import { Quota } from "./quota";
+import { Runs } from "./runs";
 import { Agent } from "./server";
 
 export interface AgentOpts {
@@ -25,6 +26,7 @@ export function makeAgent(ctx: Ctx, opts: AgentOpts = {}): Agent {
     new Decisions(hub),
     new Quota(hub, quota),
     new Permissions(hub),
+    new Runs(hub),
   ]);
   return agent;
 }

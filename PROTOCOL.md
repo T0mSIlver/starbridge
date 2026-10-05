@@ -276,8 +276,8 @@ want a longer history keep their own copy.
 
 ## Runs
 
-An agent wraps a command in `starbridge run --title --reason -- <command>` when one of the
-owner's rules matches it (`cli/README.md`). The machine posts a `run` when the command starts,
+An agent wraps a command in `starbridge run --title --reason -- <command>` when it blocks the
+owner or needs them at the machine, or when one of the owner's rules names it (`cli/README.md`). The machine posts a `run` when the command starts,
 re-posts it as the output shows progress (at most every 10 s) and at least every minute, and a
 last time when the command exits.
 
@@ -383,6 +383,7 @@ for an unknown route or decision, 502 when the server refused or failed (`detail
 | `POST /decisions` | `{input}` with `ask`'s fields (`question`, `default`, `options`, `project`, `session`, …); the client fills `project`, `session`, title and links from its own process → `{id}` |
 | `POST /answers/next` | `{id?, wait?}`: the answer to decision `id`, or the first answer no `wait` printed, marked printed → `{answer?, question?, defaultAt?}`; 404 `unknown-decision`. `starbridge wait` |
 | `POST /quota` | `{providers?}`: run CodexBar and post a snapshot now → `{snapshot}` |
+| `POST /runs` | `{run}`: seal one update of a `starbridge run` to every device and post it; `run` is `{id, title, reason, startedAt, at, progress?, exit?, project, session, sessionTitle?, links?}` → `{id}` |
 | `POST /sessions/:id/hello` | `{pid?, cwd?, title?}`: a session starts → `{version}` |
 | `POST /sessions/:id/bye` | the session ended; its session-scoped state goes |
 | `GET /sessions/:id/events?wait=<s>` | `{events: [{type, ack, line, decisionId?}]}`: what the session has not confirmed, held up to `wait` while there is nothing |
@@ -398,6 +399,4 @@ time). A client skips types it does not know. The agent keeps answers in the CLI
 so a restart loses nothing unconfirmed.
 
 Features plug in as `Feature`s (`cli/src/agent/server.ts`): routes, the events they hand
-sessions, the acks they take, `bye`, a background loop and their part of `status`. #60 adds
-`POST /runs`.
-
+sessions, the acks they take, `bye`, a background loop and their part of `status`.

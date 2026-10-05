@@ -11,6 +11,7 @@ import { hookPermission, hookSettle, permissionsCommand } from "./hook";
 import { pair } from "./pair";
 import { pushOnce, quotaPush } from "./quota";
 import { installKind, ReleaseError } from "./release";
+import { runCommand } from "./run";
 import { setup } from "./setup/setup";
 import { status } from "./setup/status";
 import { defaults, makeSys, type Prompt, terminalPrompt } from "./setup/sys";
@@ -18,7 +19,7 @@ import { uninstall } from "./setup/uninstall";
 import { update } from "./update";
 import { VERSION } from "./version";
 
-const HELP = `starbridge: post decisions to your devices, upload quota windows
+const HELP = `starbridge: post decisions to your devices, report runs, upload quota windows
 
   starbridge setup [--yes] [--server <url>] [--name <name>] [--providers <a,b>]
                    [--no-quota] [--no-service] [--no-plugin]
@@ -69,6 +70,15 @@ const HELP = `starbridge: post decisions to your devices, upload quota windows
   starbridge answers --session <id> --ack <ack>...
       For the Claude Code mod: confirm it submitted these lines (each line's "ack"), so they
       are not printed again.
+
+  starbridge run --title <text> --reason <text> -- <command> [<arg>...]
+      Run the command, its output passed through unchanged, and show it on every device:
+      the title, the reason, the time elapsed and the progress its output prints (OSC 9;4,
+      [3/7], 42%), then pass or fail. Exits with the command's own code. Wrap the whole
+      command, chained or not: -- bash -c 'make && make e2e'.
+      --title <text>          what it is, at most 100 characters, e.g. "Mac e2e"
+      --reason <text>         why the owner hears of it, at most 200 characters,
+                              e.g. "uses your session and keyboard"
 
   starbridge quota push [--provider <name>]... [--interval 5m] [--once] [--codexbar <path>]
       Run \`codexbar usage --format json\` for each provider (or for every enabled one),
@@ -274,6 +284,17 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
           purge: v.purge,
           install: installKind(),
         });
+      }
+      case "run": {
+        // Everything after `--` is the command, flags included.
+        const end = rest.indexOf("--");
+        if (end < 0)
+          throw new UsageError("run needs the command after --: starbridge run ... -- <command>");
+        const { values } = parseArgs({
+          args: rest.slice(0, end),
+          options: { title: { type: "string" }, reason: { type: "string" } },
+        });
+        return await runCommand(ctx, { ...values, command: rest.slice(end + 1) });
       }
       case "agent": {
         const { values } = parseArgs({

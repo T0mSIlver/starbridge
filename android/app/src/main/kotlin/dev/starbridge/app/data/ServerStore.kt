@@ -22,6 +22,7 @@ import dev.starbridge.app.protocol.ProtocolException
 import dev.starbridge.app.protocol.ProtocolJson
 import dev.starbridge.app.protocol.QuotaSnapshot
 import dev.starbridge.app.protocol.RECOVERY
+import dev.starbridge.app.protocol.Run as RunBody
 import dev.starbridge.app.protocol.SealedBox
 import dev.starbridge.app.protocol.SealedItem
 import dev.starbridge.app.protocol.SignedEnvelope
@@ -63,6 +64,8 @@ interface Alerts {
     fun cancelPrompt(prompt: Prompt)
     /** A browser or phone signed in to the account asks to join. */
     fun join(id: String, name: String)
+    /** A run's newest update: shows, updates or ends its notification. */
+    fun run(run: Run)
 }
 
 /**
@@ -101,6 +104,7 @@ class ServerStore(
     override val decisions = MutableStateFlow<List<Decision>>(emptyList())
     override val prompts = MutableStateFlow<List<Prompt>>(emptyList())
     override val windows = MutableStateFlow<List<QuotaWindow>>(emptyList())
+    override val runs = MutableStateFlow<List<Run>>(emptyList())
     override val members = MutableStateFlow<List<Member>>(emptyList())
     override val approval = MutableStateFlow<Approval>(Approval.Idle)
     override val joinAsks = MutableStateFlow<List<JoinAsk>>(emptyList())
@@ -154,6 +158,7 @@ class ServerStore(
         decisions.value = saved.decisions.map(::toUi)
         prompts.value = saved.prompts.map(::toUi)
         windows.value = saved.quotas.flatMap(::toUi)
+        runs.value = saved.runs.map(::toUi)
         members.value = directory?.let(::toUi).orEmpty()
     }
 
@@ -541,6 +546,7 @@ class ServerStore(
         syncDecisions()
         syncPrompts()
         syncQuotas()
+        syncRuns()
     }
 
     /** Fetches what is new and replays the whole chain; it must extend the pin. */
@@ -702,6 +708,39 @@ class ServerStore(
         persist(saved.copy(quotas = quotas))
     }
 
+    /** Every run the server holds, the latest update of each. */
+    private suspend fun syncRuns() {
+        var cursor = ""
+        val fresh = mutableListOf<SavedRun>()
+        while (true) {
+            val page = api().items("run", cursor)
+            for (listed in page.items) open(listed.item)?.let { (from, body) -> fresh += SavedRun(from, body as RunBody) }
+            cursor = page.cursor
+            if (page.items.size < 100) break
+        }
+        keepRuns(fresh, fromSync = true)
+    }
+
+    /**
+     * Keeps each update newer than the one held for its run (by `at`, then the exit), drops runs
+     * with no news for a day, as the server does, and hands each newer update to [alerts]. A sync
+     * skips runs it first learns of already ended, so a new phone does not alert for old results.
+     */
+    private fun keepRuns(updates: List<SavedRun>, fromSync: Boolean = false) {
+        fun rank(r: SavedRun) = (instant(r.body.at) ?: Instant.EPOCH) to (r.body.exit != null)
+        val held = saved.runs.associateBy { it.body.id }.toMutableMap()
+        val newer = updates.filter { u ->
+            val h = held[u.body.id]
+            val (at, exited) = rank(u)
+            val wins = h == null || rank(h).let { (hAt, hExited) -> at > hAt || (at == hAt && exited && !hExited) }
+            if (wins) held[u.body.id] = u
+            wins && !(fromSync && h == null && exited)
+        }
+        val dayAgo = Instant.now().minus(java.time.Duration.ofDays(1))
+        persist(saved.copy(runs = held.values.filter { toUi(it).lastNews > dayAgo }.sortedBy { it.body.startedAt }))
+        newer.forEach { alerts.run(toUi(it)) }
+    }
+
     // --- Answering ---------------------------------------------------------------
 
     override fun answer(id: String, choice: String?, text: String?) = run(showBusy = false) { send(id, choice, text) }
@@ -802,6 +841,17 @@ class ServerStore(
                 val list = api().joins("0", 0)
                 listJoins(list)
                 list.joins.find { it.id == id }?.let(::toAsk)?.let { alerts.join("join:${it.id}", it.name) }
+            }
+            "run" -> {
+                val box = p["box"]?.jsonPrimitive?.content
+                val item = if (box != null) {
+                    SealedItem(1, "run", id, p.getValue("from").jsonPrimitive.content, null, listOf(SealedBox(me.id, box)))
+                } else {
+                    api().item(id).item
+                }
+                if (directory?.members?.containsKey(item.from) != true) syncDirectory()
+                val (from, body) = open(item) ?: return@withLock
+                keepRuns(listOf(SavedRun(from, body as RunBody)))
             }
         }
     }
@@ -1153,6 +1203,21 @@ class ServerStore(
                 steadyPercent = pace?.expectedUsedPercent?.roundToInt()?.coerceIn(0, 100),
             )
         }
+    }
+
+    private fun toUi(r: SavedRun): Run {
+        val b = r.body
+        return Run(
+            id = b.id,
+            title = b.title,
+            reason = b.reason,
+            source = Source(b.source.machine, b.source.project, b.source.session, b.source.sessionTitle, b.source.links.orEmpty().map { SessionLink(it.kind, it.url) }),
+            startedAt = instant(b.startedAt) ?: Instant.EPOCH,
+            at = instant(b.at) ?: Instant.EPOCH,
+            progress = b.progress?.let { Run.Progress(it.done, it.total, it.unit == "percent") },
+            exitCode = b.exit?.code,
+            endedAt = instant(b.exit?.at),
+        )
     }
 
     private fun toUi(dir: Directory): List<Member> {
