@@ -64,6 +64,32 @@ export default function Privacy() {
         disk, and a restart clears them.
       </p>
 
+      <h2 className="t-heading">Usage counts</h2>
+      <p>
+        To learn how Starbridge is used, the server counts what it already handles, per day. During
+        the day it keeps one row per event; the rows that count active accounts, devices and
+        machines hold their ids, so each counts once. When the day ends, the server keeps only the
+        day&apos;s totals and deletes those rows. The totals hold no ids, and only the operator can
+        read them, on the server. The daily totals are:
+      </p>
+      <ul>
+        <li>
+          accounts, devices and machines that used the server that day, with devices split into
+          the web page and the Android app;
+        </li>
+        <li>accounts, devices and machines in total, and new accounts;</li>
+        <li>
+          items posted, by kind: decisions, answers, permission prompts, their answers, notices
+          that a prompt or decision is over, quota snapshots, run updates and waiting states;
+        </li>
+        <li>
+          answers by client (web page or Android app), and how long decisions and permission
+          prompts waited for their answer, as the median and the 90th percentile;
+        </li>
+        <li>pushes by push service and outcome (sent, failed, gone, no route, dropped);</li>
+        <li>push targets by push service.</li>
+      </ul>
+
       <h2 className="t-heading">Who else sees what</h2>
       <ul>
         <li>

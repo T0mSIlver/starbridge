@@ -688,6 +688,22 @@ How it generalizes is open.
   design (orchestrator): `source.machineKind` (`server`, `desktop`, `laptop`, `cloud`) and a
   decision's `agent` (`claude-code`, `codex`), as permissions have.
 
+- 2026-10-05. Usage counts (#140, owner ruling: learn how Starbridge is used without client
+  telemetry or anything new collected). The server counts requests it handles anyway
+  (`server/src/usage.ts`): during a day, `usage_events` holds one row per event, with the
+  account or member id only where a count is of distinct ones (active accounts, machines, and
+  devices split by sign-in: the cookie is the web page, a bearer token the Android app). Each
+  hour, and at start, every finished day is folded into `usage_days` (day, metric, value: counts,
+  and p50 and p90 of seconds to answer) and its events are deleted, so no per-user row outlives
+  its day. Metrics: `active.*`, `items.<kind>` per post, `answered.<kind>.seconds` and
+  `answered.by.<client>` per device answer, `push.<type>.<outcome>` per push, and at the close
+  `total.*`, `new.accounts` and `total.push-targets.<type>`. Read access is a CLI, not an admin
+  page: `bun server.js usage [days]` inside the server container on the VPS
+  (`deploy/README.md`). It is the simpler of the two, adds no route, and needs no owner flag
+  (the hosted owner signs in through GitHub like everyone, and `accounts.owner` marks only the
+  self-hosted owner-token account); whoever can open the database reads it. `/privacy` lists the
+  counts in their own section.
+
 ## Encryption, with existing libraries
 
 - libsodium sealed boxes (`crypto_box_seal`, X25519 + XSalsa20-Poly1305): an
