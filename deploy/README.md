@@ -24,8 +24,14 @@ To roll back, or to deploy a branch, from the dev box with any ref that is on Gi
 deploy/deploy.sh                 # origin/main
 ```
 
-It unpacks the ref into `/opt/starbridge`, builds the server and web images on the box and restarts the stack
-(`deploy/host/apply.sh`). The previous release stays in `/opt/starbridge.old`.
+It unpacks the ref into `/opt/starbridge`, builds the server and web images on the box and rolls them
+out (`deploy/host/apply.sh`). The previous release stays in `/opt/starbridge.old`.
+
+No request fails during a deploy (`SPEC.md`, #150). The page runs as two copies, `web-a` (port
+3010) and `web-b` (3011): the deploy starts the idle one, waits for its health, then stops the
+other, and Caddy sends requests to the first healthy copy. The server restarts in place; Caddy
+holds requests for up to 30 s meanwhile. A changed Caddyfile is loaded into the running Caddy
+through its admin API on `127.0.0.1:2019`.
 
 ## First setup
 

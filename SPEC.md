@@ -1038,6 +1038,22 @@ How it generalizes is open.
   update a skill that differs. It offers the Starbridge Pi package when `pi` is on the PATH
   (`pi install git:github.com/T0mSIlver/starbridge`), unless Pi's settings list it already.
   Each asks first, `--yes` takes the defaults (install), and `--no-plugin` skips all three.
+- 2026-10-06. Deploys without downtime (#150, owner ruling of 2026-10-05). Caddy holds a request
+  for up to 30 s (`lb_try_duration`) while its upstream is down, retrying every 250 ms, and
+  checks each upstream's health every second. The page runs as two copies, `web-a` on 3010 and
+  `web-b` on 3011: a deploy starts the idle one, waits for its health, then stops the other.
+  Caddy sends every request to the first healthy copy (`lb_policy first`), so it switches
+  without a config change and one visit never mixes two builds. The server stays one instance,
+  since it holds the long-polls and SQLite: on SIGTERM it ends every long-poll as if its wait
+  passed and exits, and the client's next request waits in Caddy for the new server. A changed
+  Caddyfile reaches the running Caddy through its admin API (`/load`), since recreating the
+  container drops every connection. The idle copy's failed health checks stay out of Caddy's
+  log. Checked on a local copy of the stack (the compose file, Caddyfile and `apply.sh` as
+  committed, in Docker-in-Docker): during the first deploy from the old layout, a deploy that
+  replaced both images, and one that changed the Caddyfile, a script that requested `/healthz`
+  and `/` and opened a 1 s long-poll every 200 ms saw no failed request; the server's restart
+  held requests for at most 1.3 s. Rolling back to a release from before this one brings back
+  the old restart gap.
   `status` reports both, and `uninstall` removes the skill folder (only when it holds the
   Starbridge skill) and the Pi package. The docs drop the curl step for Codex.
 - 2026-10-05. A blocked question shows by its look, not a state line (#191, owner's pick of
