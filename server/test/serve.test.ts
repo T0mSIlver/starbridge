@@ -84,9 +84,14 @@ test("on shutdown, a quota ask still waiting for a machine answers at once", asy
   expect((await s.call("POST", "/v1/items", { token: devbox.token, body: quota })).status).toBe(
     201,
   );
+  // The snapshot must predate the ask by a millisecond or more, or the machine is not behind.
+  await Bun.sleep(5);
   const started = Date.now();
+  let done = false;
   const asking = s.call("POST", "/v1/quota/ask?wait=30", { token: acct.device.token });
+  asking.then(() => (done = true));
   await Bun.sleep(100);
+  expect(done).toBe(false);
   s.deps.quotas.close();
   expect((await asking).json.behind).toBe(1);
   expect(Date.now() - started).toBeLessThan(2000);
