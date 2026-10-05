@@ -21,6 +21,7 @@ import dev.starbridge.app.data.Prefs
 import dev.starbridge.app.data.bitmap
 import dev.starbridge.app.data.place
 import dev.starbridge.app.data.Prompt
+import dev.starbridge.app.data.QuotaNotice
 import dev.starbridge.app.data.Run
 import dev.starbridge.app.protocol.RUN_STALE_MS
 import dev.starbridge.app.ui.elapsed
@@ -59,6 +60,41 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
                 description = "Commands your agents run that your rules name, until they pass or fail"
             },
         )
+        manager.createNotificationChannel(
+            NotificationChannel(QUOTAS, "Quotas", NotificationManager.IMPORTANCE_LOW).apply {
+                description = "Quota windows running low, running out, or resetting with headroom unused, for the providers you pick"
+            },
+        )
+    }
+
+    /** Quiet: one per window and kind, replaced by the next, and only for providers this phone picked. */
+    override fun quota(notices: List<QuotaNotice>) {
+        if (!allowed()) return
+        val settings = prefs.quota.value
+        for (n in notices) {
+            if (!settings.wants(n) || !prefs.firstShow(n.key)) continue
+            val open = PendingIntent.getActivity(
+                context,
+                0,
+                Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+            )
+            @Suppress("MissingPermission")
+            manager.notify(
+                "q:${n.provider}/${n.window}/${n.kind}",
+                0,
+                NotificationCompat.Builder(context, QUOTAS)
+                    .setSmallIcon(R.drawable.ic_notification)
+                    .setColor(accent())
+                    .setContentTitle(n.title)
+                    .setContentText(n.text)
+                    .setCategory(NotificationCompat.CATEGORY_STATUS)
+                    .setPriority(NotificationCompat.PRIORITY_LOW)
+                    .setContentIntent(open)
+                    .setAutoCancel(true)
+                    .build(),
+            )
+        }
     }
 
     // POST_NOTIFICATIONS exists from Android 13; before that the app's notification setting rules.
@@ -387,6 +423,7 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
         const val PROMPTS = "prompts"
         const val JOIN_CHANNEL = "joins"
         const val RUNS = "runs"
+        const val QUOTAS = "quotas"
 
         /** Wide enough for an expanded notification on any phone, small enough for its bitmap limit. */
         private const val PICTURE_EDGE = 1024

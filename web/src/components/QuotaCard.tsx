@@ -1,5 +1,6 @@
 import type { CSSProperties } from "react";
 import { status } from "@/lib/quota";
+import { bar, type QuotaSettings, resetTime } from "@/lib/quotaSettings";
 import type { QuotaCardData } from "@/lib/types";
 import s from "./QuotaCard.module.css";
 import ui from "./ui.module.css";
@@ -10,12 +11,24 @@ function dotStyle(provider: string): CSSProperties {
   return { "--dot": `var(--provider-${id}, var(--fg3))` } as CSSProperties;
 }
 
-export function QuotaCard({ q }: { q: QuotaCardData }) {
+export function QuotaCard({
+  q,
+  settings,
+  onNotify,
+  now = new Date(),
+}: {
+  q: QuotaCardData;
+  settings: QuotaSettings;
+  /** Turns on this provider's notifications; offered on an alert card while they are off. */
+  onNotify?: () => void;
+  now?: Date;
+}) {
   const { provider, window: w, alert } = q;
-  const { state, word, detail, resets } = status(w, alert);
-  const used = Math.round(w.usedPercent);
-  const expected = w.pace ? Math.round(w.pace.expectedUsedPercent) : null;
-  const fill = Math.min(Math.max(used, 0), 100);
+  const { state, word, detail, resets } = status(w, alert, now, (iso) =>
+    resetTime(iso, settings, now),
+  );
+  const b = bar(w, settings, now);
+  const label = `${provider} ${w.label} ${b.word}`;
   return (
     <article className={`${ui.card} ${s.card}`}>
       <div className={s.top}>
@@ -28,28 +41,37 @@ export function QuotaCard({ q }: { q: QuotaCardData }) {
           {q.machine && <span className={`t-machine ${s.machine}`}>{q.machine}</span>}
         </h2>
         <span className="t-figure">
-          {used}
-          <span className={s.percent}>%</span>
+          {b.percent}
+          <span className={s.percent}>% {b.word}</span>
         </span>
       </div>
       {/* biome-ignore lint/a11y/useSemanticElements: <meter> cannot draw the steady-pace mark */}
       <div
         className={s.bar}
         role="meter"
-        aria-label={`${provider} ${w.label} used`}
+        aria-label={label}
         aria-valuemin={0}
         aria-valuemax={100}
-        aria-valuenow={used}
-        aria-valuetext={`${used}% used${expected !== null ? `, steady pace ${expected}%` : ""}`}
+        aria-valuenow={b.percent}
+        aria-valuetext={`${b.percent}% ${b.word}${b.steady !== null ? `, steady pace ${b.steady}%` : ""}`}
       >
         {/* A filled part, a gap, the rest of the track with a stop mark at its end. */}
-        {used > 0 && <span className={`${s.fill} ${s[state]}`} style={{ flexBasis: `${fill}%` }} />}
-        {fill < 100 && <span className={s.rest} />}
-        {expected !== null && (
+        {b.percent > 0 && (
+          <span className={`${s.fill} ${s[state]}`} style={{ flexBasis: `${b.percent}%` }} />
+        )}
+        {b.percent < 100 && <span className={s.rest} />}
+        {b.ticks.map((t) => (
+          <span
+            key={t}
+            className={`${s.tick} ${settings.ticks === "high-contrast" ? s.strong : ""}`}
+            style={{ left: `${t}%` }}
+          />
+        ))}
+        {b.steady !== null && (
           <span
             className={s.expected}
-            style={{ left: `${Math.min(expected, 100)}%` }}
-            title={`A steady pace would be at ${expected}%`}
+            style={{ left: `${Math.min(b.steady, 100)}%` }}
+            title={`A steady pace would be at ${b.steady}% ${b.word}`}
           />
         )}
       </div>
@@ -61,6 +83,11 @@ export function QuotaCard({ q }: { q: QuotaCardData }) {
         <p className={`t-small ${s.alert}`} role="status">
           {detail}
         </p>
+      )}
+      {alert && onNotify && (
+        <button type="button" className={`${ui.button} ${s.notify}`} onClick={onNotify}>
+          Notify me next time
+        </button>
       )}
     </article>
   );

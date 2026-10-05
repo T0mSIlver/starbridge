@@ -158,3 +158,23 @@
 .alert {
   color: var(--fg2);
 }
+
+/* Workday boundaries on a weekly bar (CodexBar's workday ticks). */
+.tick {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--surface);
+  opacity: 0.6;
+}
+
+.tick.strong {
+  opacity: 1;
+  background: var(--fg2);
+}
+
+.notify {
+  align-self: flex-start;
+}

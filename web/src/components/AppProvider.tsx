@@ -3,6 +3,13 @@
 import type { Settled } from "@starbridge/protocol";
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import type { Boot, Ctx, Inbox, Quotas, Runs } from "@/lib/device";
+import {
+  DEFAULT_SETTINGS,
+  loadSettings,
+  notifyAlerts,
+  type QuotaSettings,
+  saveSettings,
+} from "@/lib/quotaSettings";
 import type { InboxItem, PromptItem, PromptReply, Reply } from "@/lib/types";
 
 // The protocol code and libsodium load here, after the first paint.
@@ -19,6 +26,9 @@ type Store = {
   /** Replaces the context after a directory write (approve, revoke). */
   update: (ctx: Ctx) => void;
   refreshQuotas: () => Promise<void>;
+  /** This browser's quota settings (lib/quotaSettings.ts). */
+  quotaSettings: QuotaSettings;
+  setQuotaSettings: (s: QuotaSettings) => void;
   /** Permission prompts open now, and those that just closed (Prompts.tsx). */
   prompts: PromptItem[];
   answerPrompt: (item: PromptItem, reply: PromptReply) => Promise<void>;
@@ -36,11 +46,21 @@ const POLL_MS = 20_000;
 const PROMPT_POLL_MS = 1_500;
 /** Runs skip Web Push (PROTOCOL.md, "Push"), so the page polls them while it is visible. */
 const RUNS_POLL_MS = 10_000;
+/** Quotas skip Web Push too; the uploader posts every 5 minutes. */
+const QUOTA_POLL_MS = 60_000;
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [boot, setBoot] = useState<Store["boot"]>({ state: "loading" });
   const [inbox, setInbox] = useState<Inbox>({ items: [], rejected: [] });
   const [quotas, setQuotas] = useState<Quotas>();
+  const [quotaSettings, setSettingsState] = useState<QuotaSettings>(DEFAULT_SETTINGS);
+  const settingsRef = useRef(quotaSettings);
+  settingsRef.current = quotaSettings;
+  useEffect(() => setSettingsState(loadSettings()), []);
+  const setQuotaSettings = useCallback((s: QuotaSettings) => {
+    saveSettings(s);
+    setSettingsState(s);
+  }, []);
   const [prompts, setPrompts] = useState<PromptItem[]>([]);
   const [promptLog, setPromptLog] = useState<PromptItem[]>();
   const promptsRef = useRef(prompts);
@@ -134,8 +154,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const fresh = await current();
     if (!fresh) return;
     const d = await load();
-    setQuotas(await d.loadQuotas(fresh));
+    const next = await d.loadQuotas(fresh);
+    setQuotas(next);
+    await notifyAlerts(next.cards, settingsRef.current);
   }, [current]);
+
+  // While the page is visible, or in the background once a provider notifies.
+  useEffect(() => {
+    if (!ctx) return;
+    const tick = () => {
+      if (document.visibilityState === "visible" || settingsRef.current.notify.length > 0)
+        refreshQuotas().catch(() => {});
+    };
+    tick();
+    const timer = setInterval(tick, QUOTA_POLL_MS);
+    return () => clearInterval(timer);
+  }, [ctx, refreshQuotas]);
 
   const refreshRuns = useCallback(async () => {
     const fresh = await current();
@@ -265,6 +299,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         answer,
         update,
         refreshQuotas,
+        quotaSettings,
+        setQuotaSettings,
         prompts,
         answerPrompt,
         promptLog,

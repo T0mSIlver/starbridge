@@ -24,7 +24,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.InlineTextContent
 import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Speed
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
@@ -54,6 +57,8 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.lifecycle.ViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.starbridge.app.data.Pace
+import dev.starbridge.app.data.Prefs
+import dev.starbridge.app.data.QuotaSettings
 import dev.starbridge.app.data.QuotaWindow
 import dev.starbridge.app.data.Store
 import dev.starbridge.app.ui.Panel
@@ -63,6 +68,7 @@ import dev.starbridge.app.ui.Screen
 import dev.starbridge.app.ui.StatusWord
 import dev.starbridge.app.ui.ago
 import dev.starbridge.app.ui.listPadding
+import dev.starbridge.app.ui.resetClock
 import dev.starbridge.app.ui.span
 import dev.starbridge.app.ui.theme.Radius
 import dev.starbridge.app.ui.theme.Sizes
@@ -72,22 +78,52 @@ import java.time.Instant
 import javax.inject.Inject
 
 @HiltViewModel
-class QuotasViewModel @Inject constructor(private val store: Store) : ViewModel() {
+class QuotasViewModel @Inject constructor(private val store: Store, private val prefs: Prefs) : ViewModel() {
     val windows = store.windows
+    val settings = prefs.quota
     fun refresh() = store.refresh()
+    fun setSettings(value: QuotaSettings) = prefs.setQuota(value)
 }
 
-/** One card per window; windows with an alert come first. */
+/** One card per window, hidden providers out, in the settings' order. */
 @Composable
-fun QuotasScreen(windows: List<QuotaWindow>, now: Instant, modifier: Modifier = Modifier, refresh: Refresh? = null) {
-    Screen("Quotas", modifier) { padding ->
+fun QuotasScreen(
+    windows: List<QuotaWindow>,
+    now: Instant,
+    modifier: Modifier = Modifier,
+    settings: QuotaSettings = QuotaSettings(),
+    refresh: Refresh? = null,
+    /** Turns on a provider's notifications, from an alert card. */
+    onNotify: (String) -> Unit = {},
+    onSettings: () -> Unit = {},
+) {
+    val shown = settings.arrange(windows, now)
+    Screen("Quotas", modifier, actions = {
+        IconButton(onClick = onSettings) { Icon(Icons.Outlined.Settings, contentDescription = "Quota settings") }
+    }) { padding ->
         Refreshable(refresh) {
             LazyColumn(
                 contentPadding = listPadding(padding),
                 verticalArrangement = Arrangement.spacedBy(Spacing.s3),
             ) {
                 if (windows.isEmpty()) item { NoQuotas() }
-                items(windows.sortedByDescending { it.alert && !it.ended(now) }, key = { it.id }) { WindowCard(it, now, Modifier.animateItem()) }
+                else if (shown.isEmpty()) item {
+                    Text(
+                        "Every provider is hidden. Show them again in the settings.",
+                        style = StarbridgeTheme.type.body,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(Spacing.s4),
+                    )
+                }
+                items(shown, key = { it.id }) { w ->
+                    WindowCard(
+                        w,
+                        now,
+                        settings,
+                        onNotify = if (w.provider in settings.notify) null else ({ onNotify(w.provider) }),
+                        modifier = Modifier.animateItem(),
+                    )
+                }
             }
         }
     }
@@ -162,9 +198,11 @@ private fun providerDot(provider: String): Map<String, InlineTextContent> {
 }
 
 @Composable
-private fun WindowCard(window: QuotaWindow, now: Instant, modifier: Modifier = Modifier) {
+private fun WindowCard(window: QuotaWindow, now: Instant, settings: QuotaSettings, onNotify: (() -> Unit)?, modifier: Modifier = Modifier) {
     val tone = tone(window, now)
     val ended = window.ended(now)
+    val bar = settings.bar(window, now)
+    val at = { t: Instant -> if (settings.absoluteResets) resetClock(t, now) else if (t.isAfter(now)) "in ${span(now, t)}" else ago(now, t) }
     Panel(modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.Bottom) {
             Text(
@@ -181,28 +219,33 @@ private fun WindowCard(window: QuotaWindow, now: Instant, modifier: Modifier = M
             )
             Text(
                 buildAnnotatedString {
-                    append("${window.usedPercent}")
-                    withStyle(SpanStyle(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = StarbridgeTheme.type.action.fontSize)) { append("%") }
+                    append("${bar.percent}")
+                    withStyle(SpanStyle(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = StarbridgeTheme.type.action.fontSize)) { append("% ${bar.word}") }
                 },
                 style = StarbridgeTheme.type.figure,
                 color = if (ended) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
             )
         }
         Spacer(Modifier.padding(top = Spacing.s3))
-        Meter(window, tone.color)
+        Meter(bar, settings.ticks, tone.color)
         Spacer(Modifier.padding(top = Spacing.s3))
         Row(verticalAlignment = Alignment.CenterVertically) {
             StatusWord(tone.word, tone.color)
             Spacer(Modifier.width(Spacing.s3))
             Text(
-                window.resetsAt?.let { if (ended) "Reset ${ago(now, it)}" else "Resets in ${span(now, it)}" } ?: "Reset time unknown",
+                window.resetsAt?.let { if (ended) "Reset ${at(it)}" else "Resets ${at(it)}" } ?: "Reset time unknown",
                 style = StarbridgeTheme.type.machine,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.weight(1f),
                 textAlign = TextAlign.End,
             )
         }
-        Text(detail(window, now), style = StarbridgeTheme.type.small, color = if (window.alert && !ended) tone.color else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = Spacing.s2))
+        Text(detail(window, now, at), style = StarbridgeTheme.type.small, color = if (window.alert && !ended) tone.color else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = Spacing.s2))
+        if (window.alert && !ended && onNotify != null) {
+            TextButton(onClick = onNotify, modifier = Modifier.heightIn(min = Sizes.tap)) {
+                Text("Notify me next time", style = StarbridgeTheme.type.action)
+            }
+        }
     }
 }
 
@@ -211,13 +254,13 @@ private fun WindowCard(window: QuotaWindow, now: Instant, modifier: Modifier = M
  * and stop mark, and a tick where a steady pace would be now. The fill springs to a new value.
  */
 @Composable
-private fun Meter(window: QuotaWindow, color: Color) {
+private fun Meter(bar: QuotaSettings.Bar, ticks: QuotaSettings.Ticks, color: Color) {
     val colors = StarbridgeTheme.colors
-    val used by animateFloatAsState((window.usedPercent / 100f).coerceIn(0f, 1f), MaterialTheme.motionScheme.slowSpatialSpec(), label = "used")
-    val description = "${window.usedPercent}% used" + (window.steadyPercent?.let { ", steady pace $it%" } ?: "")
+    val fill by animateFloatAsState((bar.percent / 100f).coerceIn(0f, 1f), MaterialTheme.motionScheme.slowSpatialSpec(), label = "fill")
+    val description = "${bar.percent}% ${bar.word}" + (bar.steady?.let { ", steady pace $it%" } ?: "")
     BoxWithConstraints(Modifier.fillMaxWidth().semantics { contentDescription = description }) {
         LinearProgressIndicator(
-            progress = { used },
+            progress = { fill },
             modifier = Modifier.fillMaxWidth().height(Sizes.track).align(Alignment.Center),
             color = color,
             trackColor = MaterialTheme.colorScheme.secondaryContainer,
@@ -227,7 +270,20 @@ private fun Meter(window: QuotaWindow, color: Color) {
                 ProgressIndicatorDefaults.drawStopIndicator(this, ProgressIndicatorDefaults.LinearTrackStopIndicatorSize, colors.fg3, StrokeCap.Round)
             },
         )
-        window.steadyPercent?.let { steady ->
+        // CodexBar's workday ticks: subtle cut the bar in the card's colour, high contrast draw them.
+        val tickColor = if (ticks == QuotaSettings.Ticks.HighContrast) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.surfaceContainer
+        bar.ticks.forEach { t ->
+            val width = Spacing.s1 / 2
+            Box(
+                Modifier
+                    .offset(x = maxWidth * t - width / 2)
+                    .width(width)
+                    .height(Sizes.track)
+                    .align(Alignment.CenterStart)
+                    .background(tickColor),
+            )
+        }
+        bar.steady?.let { steady ->
             val tick = Spacing.s1 / 2
             Box(
                 Modifier
@@ -241,10 +297,10 @@ private fun Meter(window: QuotaWindow, color: Color) {
     }
 }
 
-private fun detail(window: QuotaWindow, now: Instant): String = if (window.ended(now)) {
+private fun detail(window: QuotaWindow, now: Instant, at: (Instant) -> String): String = if (window.ended(now)) {
     "Ended at ${window.usedPercent}% used; waiting for the next upload"
 } else when (val pace = window.pace) {
-    is Pace.RunsOut if !pace.at.isAfter(now) -> window.resetsAt?.let { "Back at the reset, in ${span(now, it)}" } ?: "Back at the reset"
+    is Pace.RunsOut if !pace.at.isAfter(now) -> window.resetsAt?.let { "Back at the reset, ${at(it)}" } ?: "Back at the reset"
     Pace.Even -> "Lasts until the reset"
     is Pace.RunsOut -> "Runs out in ${span(now, pace.at)}" + (window.resetsAt?.let { ", ${span(pace.at, it)} before the reset" } ?: "")
     is Pace.Unused -> "${pace.percent}% left unused at the reset"

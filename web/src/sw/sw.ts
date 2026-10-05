@@ -2,13 +2,12 @@
 // The service worker: opens Web Push payloads (PROTOCOL.md, "Push") with this browser's device
 // key, verifies them against the pinned directory, and shows the decision with its options as
 // notification actions where the browser supports them. Built to public/sw.js by `bun run sw`.
-import type { QuotaSnapshot, SealedItem } from "@starbridge/protocol";
+import type { SealedItem } from "@starbridge/protocol";
 import {
   answer,
   deviceContext,
   openPushedDecision,
   openPushedPermission,
-  openPushedQuota,
   openSettled,
 } from "../lib/device";
 import { answerPlace } from "../lib/outcome";
@@ -80,7 +79,8 @@ async function onPush(text: string): Promise<void> {
       for (const n of await self.registration.getNotifications({ tag: t })) n.close();
     return;
   }
-  if (payload.kind === "answer") return;
+  // Quota snapshots skip Web Push; the page notifies about quota alerts (quotaSettings.ts).
+  if (payload.kind === "answer" || payload.kind === "quota") return;
   if (payload.kind === "join") {
     await self.registration.showNotification("A device wants to join", {
       body: "Open Starbridge to compare digits with it and approve it.",
@@ -120,7 +120,7 @@ async function onPush(text: string): Promise<void> {
     // It may close a prompt or a decision.
     for (const t of [tag(settled.itemId), promptTag(settled.itemId)])
       for (const n of await self.registration.getNotifications({ tag: t })) n.close();
-  } else await showAlerts(account as string, await openPushedQuota(ctx, item));
+  }
 }
 
 function maxActions(): number {
@@ -183,28 +183,6 @@ async function showPrompt(account: string, item: PromptItem): Promise<void> {
   });
   if (done())
     for (const n of await self.registration.getNotifications({ tag: promptTag(p.id) })) n.close();
-}
-
-async function showAlerts(account: string, snapshot: QuotaSnapshot): Promise<void> {
-  // Snapshots arrive every few minutes; notify each alert once per reset.
-  const seen = new Set((await store.get("alerts", account)) ?? []);
-  const fresh: string[] = [];
-  for (const a of snapshot.alerts) {
-    if (a.kind === "low") continue;
-    const key = `${a.kind}/${a.provider}/${a.window}/${a.resetsAt}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    fresh.push(key);
-    const title =
-      a.kind === "runs-out"
-        ? `${a.provider} will run out before it resets`
-        : `${a.provider} resets with ${Math.round(a.unusedPercent)}% unused`;
-    await self.registration.showNotification(title, { tag: `q:${a.provider}/${a.window}` });
-  }
-  if (fresh.length)
-    await store.update("alerts", account, (old) =>
-      [...new Set([...(old ?? []), ...fresh])].slice(-200),
-    );
 }
 
 async function onClick(n: Notification, action: string): Promise<void> {

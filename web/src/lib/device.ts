@@ -768,11 +768,6 @@ export async function openPushedDecision(ctx: Ctx, item: SealedItem): Promise<In
   return openDecision(ctx, { item, cursor: "", receivedAt: "" }, sent);
 }
 
-/** Opens a quota snapshot a push carried. */
-export async function openPushedQuota(ctx: Ctx, item: SealedItem) {
-  return (await openAsync(expectKind(item, "quota"), me(ctx), ctx.dir)).body;
-}
-
 /**
  * Reads the directory again and checks this device is still in it; undefined once revoked. Run
  * before each load, so items from members paired elsewhere since boot verify.
@@ -1016,15 +1011,16 @@ export async function loadQuotas(ctx: Ctx): Promise<Quotas> {
     for (const p of body.providers) {
       if (p.error) out.errors.push({ provider: p.provider, machine: machine.name, error: p.error });
       for (const w of p.windows) {
-        // The card's state follows a pace alert; "low" only notifies.
-        const alert = body.alerts.find(
-          (a) => a.provider === p.provider && a.window === w.id && a.kind !== "low",
-        );
+        const alerts = body.alerts.filter((a) => a.provider === p.provider && a.window === w.id);
+        // The card's state follows the pace alert; "low" only notifies.
+        const alert = alerts.find((a) => a.kind !== "low");
         out.cards.push({
           provider: p.provider,
           ...(machines > 1 ? { machine: machine.name } : {}),
           window: w,
           ...(alert ? { alert } : {}),
+          alerts,
+          snapshot: body.id,
         });
       }
     }
