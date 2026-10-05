@@ -20,6 +20,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.graphics.toArgb
 import androidx.core.net.toUri
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
@@ -48,6 +49,9 @@ class MainActivity : ComponentActivity() {
     /** Decisions to open, from a notification tap. */
     private val openDecision = Channel<String>(Channel.CONFLATED)
 
+    /** The phone's 12/24-hour choice, read again on resume: changing it is no configuration change. */
+    private val system24 = mutableStateOf(true)
+
     private val askNotifications = registerForActivityResult(ActivityResultContracts.RequestPermission()) {}
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -61,7 +65,7 @@ class MainActivity : ComponentActivity() {
             LaunchedEffect(colours) { splashFor(colours) }
             val clock by prefs.clock.collectAsStateWithLifecycle()
             val h24 = when (clock) {
-                Clock.System -> DateFormat.is24HourFormat(this)
+                Clock.System -> system24.value
                 Clock.H12 -> false
                 Clock.H24 -> true
             }
@@ -99,6 +103,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        system24.value = DateFormat.is24HourFormat(this)
         if (store.phase.value == Phase.Ready) store.refresh()
         // Join requests arrive live while the app is in front; a push covers the rest.
         store.watchJoins(true)
