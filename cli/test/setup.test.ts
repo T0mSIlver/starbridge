@@ -9,7 +9,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { LiveServer } from "@starbridge/server/test-support";
 import { makeAgent } from "../src/agent/main";
 import type { Agent } from "../src/agent/server";
@@ -55,7 +55,8 @@ async function machine() {
   const log = join(home, "calls.log");
   Object.assign(ctx.env, {
     HOME: home,
-    PATH: `${FAKE_BIN}:/usr/bin:/bin`,
+    // The fake claude runs bun, which CI does not keep in /usr/bin.
+    PATH: `${FAKE_BIN}:${dirname(process.execPath)}:/usr/bin:/bin`,
     USER: "dev",
     FAKE_LOG: log,
     FAKE_STATE: join(home, "fake-state"),
