@@ -13,7 +13,7 @@ export default function Terms() {
       <p>
         Operator: Tom Vaucourt, an individual in France, running Starbridge as a non-professional.
         Contact: <a href="mailto:abuse@starbridge.run">abuse@starbridge.run</a>. Host: Hetzner
-        Online GmbH, Industriestr. 25, 91710 Gunzenhausen, Germany.
+        Online GmbH, Industriestr. 25, 91710 Gunzenhausen, Germany, +49 9831 505-0.
       </p>
 
       <h2 className="t-heading">The service</h2>
