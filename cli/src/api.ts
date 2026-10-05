@@ -62,13 +62,13 @@ export class Api {
     return r.json as { approval: unknown; token?: string };
   }
 
-  async directory(from: number): Promise<unknown[]> {
-    const r = await this.call("GET", `/directory?from=${from}`);
+  async directory(from: number, signal?: AbortSignal): Promise<unknown[]> {
+    const r = await this.call("GET", `/directory?from=${from}`, signal ? { signal } : {});
     return (r.json as { entries: unknown[] }).entries;
   }
 
-  async postItem(item: SealedItem): Promise<void> {
-    await this.call("POST", "/items", { body: item });
+  async postItem(item: SealedItem, signal?: AbortSignal): Promise<void> {
+    await this.call("POST", "/items", { body: item, ...(signal ? { signal } : {}) });
   }
 
   async answers(

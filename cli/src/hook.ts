@@ -22,7 +22,6 @@ import {
   permissionsEnabled,
   postPermission,
   postSettled,
-  settle,
   waitingFor,
 } from "./permissions";
 
@@ -30,6 +29,8 @@ import {
 const SLACK_MS = 15_000;
 /** How long the hook's own path holds each answer poll, so it sees a settle soon. */
 const DIRECT_POLL_SECONDS = 5;
+/** How long reporting a prompt settled may hold up the hook's own path. */
+const REPORT_MS = 5_000;
 
 function parseHook(text: string): PermissionHookInput & Record<string, unknown> {
   const v = JSON.parse(text) as unknown;
@@ -108,27 +109,36 @@ async function direct(ctx: Ctx, ask: Ask, deadline: number): Promise<unknown> {
   const id = await postPermission(ctx, s, ask.hook, ask);
   let cursor = ctx.store.state().permissions?.[id]?.cursor;
   let directory: Awaited<ReturnType<typeof poll>>["directory"] | undefined;
-  const quiet = { ...ctx, signal: undefined };
+  /** Marks the prompt settled and reports it, giving up after `REPORT_MS` or on `signal`. */
+  const settle = async (outcome: "keyboard" | "timeout" | "device", signal?: AbortSignal) => {
+    const how = markSettled(ctx, id, outcome);
+    if (!how) return false;
+    const cut = AbortSignal.timeout(REPORT_MS);
+    await postSettled(ctx, s, id, how, signal ? AbortSignal.any([signal, cut]) : cut).catch((e) =>
+      ctx.err(`starbridge: could not report the prompt settled: ${(e as Error).message}`),
+    );
+    return true;
+  };
+  const ended = () => ctx.signal?.aborted || ctx.now().getTime() >= deadline;
   while (true) {
     const p = ctx.store.state().permissions?.[id];
-    if (!p || (p.settled && !p.answer)) return undefined;
-    if (p.answer && !p.settled) {
-      const how = markSettled(ctx, id, "device");
-      if (!how) return undefined;
-      await postSettled(quiet, s, id, how).catch((e) =>
-        ctx.err(`starbridge: could not report the prompt settled: ${(e as Error).message}`),
-      );
-      return hookDecision(p);
-    }
-    if (p.settled) return undefined;
+    if (!p || p.settled) return undefined;
+    // Claude Code sends SIGTERM when the keyboard answers Esc or No; it drops a later answer.
     if (ctx.signal?.aborted) {
-      await settle(quiet, s, id, "keyboard");
+      await settle("keyboard");
       return undefined;
     }
     const left = deadline - ctx.now().getTime();
     if (left <= 0) {
-      await settle(quiet, s, id, "timeout");
+      await settle("timeout");
       return undefined;
+    }
+    if (p.answer) {
+      // Reporting may not outlive the hook: SIGTERM or the deadline still end it with no answer.
+      const cut = AbortSignal.timeout(left);
+      const signal = ctx.signal ? AbortSignal.any([ctx.signal, cut]) : cut;
+      if (!(await settle("device", signal)) || ended()) return undefined;
+      return hookDecision(p);
     }
     try {
       const seconds = Math.max(1, Math.min(DIRECT_POLL_SECONDS, Math.ceil(left / 1000)));
@@ -172,8 +182,15 @@ export async function hookSettle(
         ),
       async () => {
         const s = session(ctx);
-        for (const id of waitingFor(ctx.store.state(), sessionId, inputHash))
-          await settle(ctx, s, id, "keyboard");
+        // Every prompt is settled locally first, so a failed report leaves none of them waiting.
+        const settled = waitingFor(ctx.store.state(), sessionId, inputHash).flatMap((id) => {
+          const how = markSettled(ctx, id, "keyboard");
+          return how ? [{ id, how }] : [];
+        });
+        for (const { id, how } of settled)
+          await postSettled(ctx, s, id, how, AbortSignal.timeout(REPORT_MS)).catch((e) =>
+            ctx.err(`starbridge: could not report ${id} settled: ${(e as Error).message}`),
+          );
       },
     );
   } catch (e) {

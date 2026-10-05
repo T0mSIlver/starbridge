@@ -40,6 +40,8 @@ export class LiveServer {
    * outage on demand.
    */
   readonly failures: string[] = [];
+  /** The next HTTP requests to these paths never get a response, once each. */
+  readonly stalls: string[] = [];
 
   private constructor(
     private readonly s: Server,
@@ -74,6 +76,11 @@ export class LiveServer {
     if (fail >= 0) {
       this.failures.splice(fail, 1);
       return Response.json({ error: "unavailable" }, { status: 503 });
+    }
+    const stall = this.stalls.indexOf(path);
+    if (stall >= 0) {
+      this.stalls.splice(stall, 1);
+      return new Promise<Response>(() => {});
     }
     return this.s.app.fetch(req, { server });
   }

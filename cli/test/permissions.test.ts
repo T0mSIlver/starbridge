@@ -180,6 +180,54 @@ test("an answer for another input, a scope not offered, or from a revoked device
   await until(async () => (await server.opened("settled"))[0]?.outcome === "timeout");
 });
 
+test("wider scopes are offered only when their rules show in full", async () => {
+  const long = {
+    ...RULES,
+    rules: Array.from({ length: 30 }, (_, i) => ({
+      toolName: "Bash",
+      ruleContent: `make t${i}:*`,
+    })),
+  };
+  const ctx = await machine();
+  const { out, permission } = await ask(ctx, request(PUSH, [RULES, long]), "1s");
+  expect(permission.suggestions).toEqual([]);
+  await out;
+});
+
+test("without an agent, SIGTERM or the deadline during the settled report still ends the hook with no answer", async () => {
+  for (const cancel of ["sigterm", "deadline"] as const) {
+    const abort = new AbortController();
+    const ctx = await machine(false);
+    ctx.signal = abort.signal;
+    const { out, permission } = await ask(ctx, request(), cancel === "deadline" ? "3s" : undefined);
+    // The answer skips HTTP, so the hook's settled notice is the next post, and it hangs.
+    const posts = server.log.filter((l) => l === "POST /items").length;
+    server.stalls.push("/items");
+    server.inject(
+      await server.sealPermissionAnswer(permission.id, { behavior: "allow", scope: "once" }),
+    );
+    await until(() => server.log.filter((l) => l === "POST /items").length > posts);
+    const started = Date.now();
+    if (cancel === "sigterm") abort.abort();
+    expect(await out).toBe(0);
+    expect(Date.now() - started).toBeLessThan(3_500);
+    expect(ctx.lines).toEqual([]);
+  }
+});
+
+test("without an agent, Stop settles every waiting prompt of the session even when a report fails", async () => {
+  const ctx = await machine(false);
+  const first = await ask(ctx, request());
+  const second = await ask(ctx, request({ command: "git push origin dev" }));
+  server.failures.push("/items");
+  const stop = JSON.stringify({ session_id: SESSION, hook_event_name: "Stop" });
+  expect(await hookSettle(ctx, stop, { agent: "claude-code" })).toBe(0);
+  expect(await first.out).toBe(0);
+  expect(await second.out).toBe(0);
+  expect(ctx.lines).toEqual([]);
+  expect((await server.opened("settled")).map((st) => st.itemId)).toEqual([second.permission.id]);
+});
+
 test("a keyboard answer settles the prompt: PostToolUse for the same call releases the hook", async () => {
   const ctx = await machine();
   const { out, permission } = await ask(ctx);
@@ -265,6 +313,9 @@ test("secrets are redacted before sealing; the hash covers the input as received
   expect(redactText("GITHUB_TOKEN: abc123 and FOO=bar")).toBe(
     "GITHUB_TOKEN: [redacted] and FOO=bar",
   );
+  expect(redactText('CUSTOM_TOKEN="abc\\"sensitive-suffix" x')).toBe("CUSTOM_TOKEN=[redacted] x");
+  expect(redactText("API_KEY='abc\\'rest' x")).toBe("API_KEY=[redacted] x");
+  expect(redactText('PASSWORD="unterminated secret')).toBe("PASSWORD=[redacted]");
   expect(summarize("Edit", { file_path: "/a/b.ts", old_string: "x" })).toBe("/a/b.ts");
   const big = fitJson({ content: "x".repeat(20_000), file_path: "/a" });
   expect(big.length).toBeLessThanOrEqual(8000);

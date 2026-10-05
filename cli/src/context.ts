@@ -41,10 +41,14 @@ export function session(ctx: Ctx): Session {
  * Another process may have moved it meanwhile from a longer fetch: under the lock, the longer
  * chain wins, and each must extend the other's pin.
  */
-export async function refreshDirectory(ctx: Ctx, s: Session): Promise<Directory> {
+export async function refreshDirectory(
+  ctx: Ctx,
+  s: Session,
+  signal?: AbortSignal,
+): Promise<Directory> {
   const account = s.machine.account;
   const cached = ctx.store.directory();
-  const fresh = await s.api.directory(cached.length);
+  const fresh = await s.api.directory(cached.length, signal);
   const entries = [...cached, ...fresh];
   const ours = verifyDirectory(entries, { account, pin: s.machine.pin });
   const dir = ctx.store.locked(() => {

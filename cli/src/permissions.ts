@@ -73,9 +73,12 @@ const SECRET_PATTERNS: RegExp[] = [
   /\bey[JI][A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/g,
 ];
 
-/** `FOO_KEY=…`, `GITHUB_TOKEN: …`, `--password=…`: the value goes. */
+/**
+ * `FOO_KEY=…`, `GITHUB_TOKEN: …`, `--password=…`: the value goes. A quoted value runs past
+ * escaped quotes to its closing quote, or to the end when it has none.
+ */
 const ASSIGNMENT =
-  /\b([A-Za-z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD|PASSWD)[A-Za-z0-9_]*)(\s*[=:]\s*)("[^"]*"|'[^']*'|[^\s"',;&|]+)/gi;
+  /\b([A-Za-z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD|PASSWD)[A-Za-z0-9_]*)(\s*[=:]\s*)("(?:[^"\\]|\\[\s\S])*(?:"|$)|'(?:[^'\\]|\\[\s\S])*(?:'|$)|[^\s"',;&|]+)/gi;
 
 /** Removes secrets from one string. */
 export function redactText(text: string): string {
@@ -180,14 +183,18 @@ export function usableUpdates(suggestions: unknown[] | undefined): PermissionUpd
   return out;
 }
 
-/** The exact rule text the owner sees for `updates`. */
+/**
+ * The exact rule text the owner sees for `updates`, or "" when it does not fit in full: a wider
+ * scope applies every rule, so it is offered only when the owner can read them all.
+ */
 export function ruleText(updates: PermissionUpdate[]): string {
   const parts = updates.flatMap((u) =>
     u.type === "addRules"
       ? (u.rules ?? []).map((r) => (r.ruleContent ? `${r.toolName}(${r.ruleContent})` : r.toolName))
       : (u.directories ?? []).map((d) => `access to ${d}`),
   );
-  return oneLine(redactText(parts.join(", ")), RULE_MAX);
+  const text = redactText(parts.join(", ")).replace(/\s+/g, " ").trim();
+  return text.length <= RULE_MAX ? text : "";
 }
 
 /** Where Claude Code writes an update for each wider scope. */
@@ -406,14 +413,15 @@ export function markSettled(
   return marked;
 }
 
-/** Tells the devices how prompt `id` ended. */
+/** Tells the devices how prompt `id` ended. `signal` cuts the requests. */
 export async function postSettled(
   ctx: Ctx,
   s: Session,
   id: string,
   how: { outcome: Settled["outcome"]; device?: string },
+  signal?: AbortSignal,
 ): Promise<void> {
-  const to = devices(await refreshDirectory(ctx, s));
+  const to = devices(await refreshDirectory(ctx, s, signal));
   const body: Settled = {
     v: 1,
     id: `st_${randomBytes(12).toString("base64url")}`,
@@ -425,20 +433,8 @@ export async function postSettled(
   };
   await s.api.postItem(
     seal("settled", body, { id: s.machine.id, signKey: s.keys.sign.privateKey }, to),
+    signal,
   );
-}
-
-/** `markSettled`, then `postSettled`. False when it was settled already. */
-export async function settle(
-  ctx: Ctx,
-  s: Session,
-  id: string,
-  outcome: "keyboard" | "timeout" | "device",
-): Promise<boolean> {
-  const how = markSettled(ctx, id, outcome);
-  if (!how) return false;
-  await postSettled(ctx, s, id, how);
-  return true;
 }
 
 /**
