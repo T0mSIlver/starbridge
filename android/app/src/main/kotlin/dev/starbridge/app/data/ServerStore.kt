@@ -833,6 +833,7 @@ class ServerStore(
                     } catch (e: IOException) {
                         // Giving up would lose this phone's key, and the server takes one.
                         if (!transient(e)) throw e
+                        if (instant(view.expiresAt)?.isBefore(Instant.now()) != false) throw IllegalStateException("The request expired.")
                         delay(5_000)
                         continue
                     }
