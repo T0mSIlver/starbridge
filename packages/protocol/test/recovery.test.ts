@@ -50,7 +50,18 @@ test("a wrong character fails the check", () => {
   expect(() => recoverySeedFromKey(typo)).toThrow(RecoveryKeyError);
 });
 
+test("words separated by digits recover", () => {
+  expect(recoverySeedFromKey(list.join("1"))).toEqual(recoverySeedFromWords(twelve));
+});
+
 test("while typing, only what more typing cannot fix counts", () => {
+  // "run" holds a U, which no key does, but the eighth word may still make it words.
+  expect(readRecoveryKey("cup run", { typing: true }).problem).toBeNull();
+  expect(readRecoveryKey("7KQU", { typing: true }).problem).toEqual({
+    kind: "bad-character",
+    index: 3,
+    char: "U",
+  });
   expect(readRecoveryKey(key.slice(0, 9), { typing: true })).toEqual({
     format: "key",
     count: 8,
@@ -76,6 +87,14 @@ test.each([
   ["12 short words", "able baby cat dog egg fan gap hat ice jar key lab", "words"],
   ["one long word, still typing", "abandon", "key"],
   ["one long word, finished", "abandon ", "words"],
+  [
+    "words numbered without spaces",
+    keys.recovery.words
+      .split(" ")
+      .map((w, i) => `${i + 1}${w}`)
+      .join(""),
+    "words",
+  ],
 ])("%s reads as %s", (_, text, format) => {
   expect(readRecoveryKey(text, { typing: true }).format).toBe(format as "key" | "words");
 });
