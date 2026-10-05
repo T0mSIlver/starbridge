@@ -650,6 +650,16 @@ class ServerStore(
      * [d] with the agent's waiting state from [w], or null when [w] changes nothing: it must come
      * from the machine that asked, and only a later update replaces an earlier one.
      */
+    /** Fetches decision [id] and keeps it; null when it does not open. */
+    private suspend fun fetchDecision(id: String): SavedDecision? {
+        val listed = api().item(id)
+        if (directory?.members?.containsKey(listed.item.from) != true) syncDirectory()
+        val (from, body) = open(listed.item) ?: return null
+        val d = SavedDecision(from, body as DecisionBody, listed.answeredAt)
+        persist(saved.copy(decisions = saved.decisions + d))
+        return d
+    }
+
     private fun wait(d: SavedDecision, from: String, w: Waiting): SavedDecision? {
         if (d.from != from) return null
         val at = instant(w.at) ?: return null
@@ -932,7 +942,8 @@ class ServerStore(
                 if (added != null && added.answeredAt == null) alerts.prompt(toUi(added))
             }
             "waiting" -> {
-                // Pushed only when the agent flips to waiting: re-notify once, if still open.
+                // Pushed only when the agent flips to waiting: re-notify once, if still open. A
+                // question asked already waiting pushes only this, so its decision may be new here.
                 val box = p["box"]?.jsonPrimitive?.content
                 val item = if (box != null) {
                     SealedItem(1, "waiting", id, p.getValue("from").jsonPrimitive.content, p["re"]?.jsonPrimitive?.content, listOf(SealedBox(me.id, box)))
@@ -942,7 +953,7 @@ class ServerStore(
                 if (directory?.members?.containsKey(item.from) != true) syncDirectory()
                 val (from, body) = open(item) ?: return@withLock
                 body as Waiting
-                val d = saved.decisions.find { it.body.id == body.decisionId } ?: return@withLock
+                val d = saved.decisions.find { it.body.id == body.decisionId } ?: fetchDecision(body.decisionId) ?: return@withLock
                 val updated = wait(d, from, body) ?: return@withLock
                 persist(saved.copy(decisions = saved.decisions.map { if (it === d) updated else it }))
                 if (d.waiting != "waiting" && updated.waiting == "waiting" && d.answeredAt == null && d.answer == null) alerts.decision(toUi(updated))
