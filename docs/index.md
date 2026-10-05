@@ -3,7 +3,7 @@
 Starbridge is where you supervise your coding agents from your phone or a browser. When an agent
 needs a decision from you, you answer with one tap and the answer goes back into the session
 that asked. You also follow the runs that affect you, such as a release or heavy work on your
-machine, and see what each AI plan has left.
+machine.
 
 Your phone, browsers and machines encrypt everything they send each other, so the server stores
 only ciphertext. Use the free server at starbridge.run, or [host your own](../server/README.md).
@@ -35,9 +35,9 @@ only ciphertext. Use the free server at starbridge.run, or [host your own](../se
   help you decide. Your tap reaches its session as the next prompt.
 - **Runs.** A build, a release, an eval or heavy work on your machine shows its progress on your
   devices until it passes or fails.
-- **Quotas.** Each plan's limits, such as a 5-hour and a weekly window, read from
-  [CodexBar](https://github.com/steipete/CodexBar). A notification comes before a window resets
-  with headroom unused, or when it runs low.
+- **Quotas.** What's left on each AI plan, read from
+  [CodexBar](https://github.com/steipete/CodexBar), with an optional alert before a window runs
+  out.
 - **Permission prompts.** Allow or deny, from your phone, the commands Claude Code asks
   permission to run. Off until you turn them on.
 

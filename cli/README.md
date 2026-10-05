@@ -134,7 +134,8 @@ other commands, such as local inference, say so in their instruction files
 
 The background service runs `codexbar usage --format json` for each provider you picked and uploads a
 snapshot every 5 minutes. A provider that fails is sent as an error and never stops the others.
-Your devices notify you before a window resets with headroom unused, or when it runs low.
+Alerts before a window runs out are off until you turn on "Notify" for a provider in each
+device's Settings.
 
 To upload without the service:
 
