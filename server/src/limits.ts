@@ -24,8 +24,11 @@ export const DEFAULT_LIMITS = {
   storedBytes: 128 * 1024 * 1024,
   /** Stored bytes only answers may use, so a full account can still answer. */
   answerReserve: 8 * 1024 * 1024,
-  /** Sealed boxes of one decision or quota snapshot, in bytes. */
-  itemBytes: 256 * 1024,
+  /**
+   * Sealed boxes of one decision or quota snapshot, in bytes. Each box carries the decision's
+   * images, so this is what lets a phone screenshot reach three or four devices at full size.
+   */
+  itemBytes: 2 * 1024 * 1024,
   /** Sealed box of one answer, in bytes: an answer's text is at most 4000 characters. */
   answerBytes: 32 * 1024,
   /** Stored runs per account; each lives runRetention after its last update. */
@@ -56,6 +59,9 @@ export const DEFAULT_LIMITS = {
 
   /** Push subscription writes per account. */
   pushSubscribes: [30, MINUTE] as RateWindow,
+
+  /** Asks for fresh quota snapshots per account; each makes every machine run CodexBar. */
+  quotaAsks: [6, MINUTE] as RateWindow,
 
   /** Open answer long-polls per machine: one per waiting session plus the mod. */
   answerWaits: 32,

@@ -313,7 +313,8 @@ How it generalizes is open.
   co-signs its first entry. A pairing code
   carries an 80-bit secret the server never sees, which keys an HMAC on both
   pairing messages. The recovery seed shows as 24 BIP-39 words
-  (`@scure/bip39`, audited, MIT); 12 for accounts made since 2026-10-05 (below).
+  (`@scure/bip39`, audited, MIT); 12 for accounts made since 2026-10-05, and a recovery key
+  instead of words since 2026-10-06 (below).
 
 - 2026-10-04. Server (#5): self-hosters sign in with `OWNER_TOKEN` (`POST /v1/auth/owner`); the
   Android app gets its GitHub session through a `starbridge://auth#session=` redirect. A session
@@ -678,6 +679,44 @@ How it generalizes is open.
   applies to question rows on a phone width; wide screens never carry them, since the open
   question sits beside the list. Permission prompts keep Allow and Deny on their rows, since
   their agent always waits.
+- 2026-10-05. A question's state and its answer buttons, after the launch test (#166, #181;
+  agreed between the web and Android sessions). "Working on other things" read as the agent's
+  words, so a question its agent works around shows no state line at all; one its agent waits on
+  shows "Waiting for you 1:12" in amber, its icon on the text's centre line, on the card or row,
+  in the detail and in the notification, where it sits outside the agent's words (Android: in the
+  header after the machine and repo). Permission prompts keep the same tag. Answer buttons follow
+  only the setting, on both clients: every question with options shows them on its card or phone
+  row under Always, the ones whose agent waits under When the agent waits, none under Never.
+  Images and long labels no longer hide them; more than two options, or a label over 18
+  characters, stack. A question answered on another page (`answerIn`) or in free text has no
+  buttons, and opens its detail.
+- 2026-10-05. Images on Android (#170). A card crops its images to the card's width from the
+  top, at most 160 dp tall, so a phone screenshot no longer shows as a thumbnail in an empty band;
+  the sheet shows each in its own shape. A tap opens a full-screen viewer on black: pinch or
+  double-tap to zoom, drag to pan, swipe between images, decoded up to 4096 px. Decisions saved
+  by an app from before images (#62) kept bodies without them, so the app reads its open
+  decisions again from the server once. The notification puts the agent's Markdown code in mono,
+  without backticks.
+- 2026-10-05. Android notifications after the launch test (#182, #183, #184). A permission
+  prompt's notification shows only its command, in mono; the agent's description stays in the
+  app. Questions and prompts turn off Android's own contextual chips ("Open link"), so the only
+  buttons are the answers. With sensitive content hidden, the lock screen shows the public
+  version, so it carries the same buttons: Deny and a question's options answer from there,
+  Allow asks for the unlock first, as decided for #57; the question and the command stay hidden.
+  Tapping a prompt's notification opens that prompt's sheet, as a question's opens its own.
+- 2026-10-05. Runs with no news (#190). A run that reports no progress shows an indeterminate
+  bar while it runs. A lost run (no update for 3 minutes) shows no time in its meta row: a run
+  killed before its first heartbeat has its last news at its start, so the only duration known
+  would read "0 s". Its line "No news for 3 min 37 s" ticks each second, and it shows no progress.
+- 2026-10-05. Android notification channels and order (#196). The channels sit in two groups,
+  "Needs you" (Decisions, Permission prompts, Join requests) and "Activity" (Runs, Quotas), instead
+  of Android's "Other". Each notification carries a sort key, questions and prompts first, then
+  join requests, runs and quotas, because Android orders an app's bundled notifications by sort
+  key before importance. Not yet checked on a device.
+- 2026-10-05. Links on questions, Android (#171, the web session's rule): under "Attached by the
+  agent", each chip reads "Open" and the link's title, else its label, with an open-outside icon.
+  A Claude artifact, as a link or as `answerIn`, opens in the browser, since the Claude app shows
+  it only in its in-app browser; a session link still opens in the Claude app.
 - 2026-10-05. Quota settings and notifications, as built (#115). Settings live on each device
   (web `localStorage`, Android preferences) and sit on a Quota settings page opened from the
   Quotas screen: bars show used or remaining, reset times relative or as a clock time
@@ -820,15 +859,51 @@ How it generalizes is open.
   to Settings, Providers, as on the web (#163): a bell beside each provider's Show switch,
   so every quota card has the same height and the control sits where the other per-provider
   settings are.
+- 2026-10-05. Full-size images on questions (#170). The owner's phone screenshot (1236×2676 PNG,
+  171 KB) arrived as a ~515 px JPEG and looked pixelated: the 256 KB cap held every device's box
+  together, so three devices left about 47 KB per image. A decision's boxes may now hold 2 MB
+  together and an image's base64url 512 KB (both clients' schemas), and the CLI keeps a file as
+  is up to a 3000 px edge, so that screenshot reaches six devices unchanged and the clients'
+  full-screen viewers can zoom into real pixels. The request body limit rises to 3 MB to match.
+  WebP was not the fix: the pure-JS encoders save a third at best, and the cap was the cause. A
+  self-hosted server older than this refuses a new CLI's larger decisions with 413 `too-large`
+  until it updates.
 
 - 2026-10-05. Clock setting (#161, owner). Settings, Clock, "Time format": System (the default),
   12-hour or 24-hour, per device. System follows the device: Android's
   `DateFormat.is24HourFormat`, the browser's language on the web. Android also writes dates in
   the phone's language ("Oct 7" in English, "7 oct." in French) from Android's own patterns, where
   it used fixed English ones; words such as "tomorrow" stay English, as the rest of the UI.
+- 2026-10-05. Runs on the web (#188, #190). Runs still skip Web Push, since a push that shows no
+  notification costs the browser subscription, so the page polls them every 2 s while one runs and
+  the page is visible, and every 10 s otherwise; that keeps it within a few seconds of the phone,
+  which gets each update by push. A lost run shows no elapsed time in its corner: its last news
+  may predate most of its life, so the time would read as 0.
 
+- 2026-10-05. A device sees quotas as soon as it joins, and pulling to refresh gets fresh ones
+  (#158). A snapshot is sealed to the devices in the directory when it is posted, so a device that
+  joined later read nothing until the next upload, up to 5 minutes. Fixed at the source: every
+  directory append ends the machines' answer long-polls, whose replies now carry the directory's
+  length, and the agent posts a fresh snapshot (CodexBar takes about 4 s) once its re-read
+  directory holds a new device. Pull to refresh on Android's Quotas calls `POST /quota/ask`, which
+  wakes the machines the same way and holds until each has posted, then refetches. Asks are
+  rate-limited to 6 a minute per account, since each runs CodexBar on every machine. The web page
+  has no refresh gesture and gets none; it polls quotas every minute, and every 3 s for its first
+  30 s while it holds none, so a browser that just joined shows the re-upload within seconds.
 - 2026-10-05. `starbridge pair` pairs with https://starbridge.run unless `--server` or
   `STARBRIDGE_SERVER` names a self-hosted server (#154), as `setup` already did.
+
+- 2026-10-06. A recovery key, not words (owner ruling on #199, replaces the words of #157). Chrome
+  flagged starbridge.run as a dangerous site: a new site that shows 12 BIP-39 words and later asks
+  for them back is what seed-phrase phishing looks like. New accounts get the same 16-byte seed
+  as a recovery key: the seed and a 12-bit check, 28 Crockford base32 characters in seven groups
+  of four, read in any case, with or without dashes, with Crockford's look-alikes. The check
+  catches all but 1 in 4,096 typos, as BIP-39's 4 bits caught all but 1 in 16 for 12 words; a
+  character outside the alphabet is named where it stands. Strength and derivation are those of
+  the 12-word entry above: 128 bits, stretched to the Ed25519 seed by BLAKE2b-256. Accounts with
+  24 or 12 words keep recovering with them: the entry tells words from a key by their letter runs.
+  No page says "seed", "phrase" or asks for words; the clients only show keys. #199 closes once
+  this is deployed and Chrome no longer warns.
 
 ## Encryption, with existing libraries
 

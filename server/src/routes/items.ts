@@ -1,12 +1,12 @@
 import type { Database } from "bun:sqlite";
 import { ITEM_KINDS, ItemKind, PERMISSION_TTL_MS, SealedItem } from "@starbridge/protocol";
-import { Hono } from "hono";
+import { type Context, Hono } from "hono";
 import { fail, memberOf, recheck, requireCaller } from "../auth";
 import { nextSeq } from "../db";
 import type { Env } from "../env";
 import { holdOpen, json, waitSeconds } from "../http";
 import { rateLimit } from "../limits";
-import { activeMember } from "./directory";
+import { activeMember, wakeMachines } from "./directory";
 
 const PAGE = 100;
 
@@ -110,6 +110,15 @@ function list(
 
 function page(items: Stored[], from: number) {
   return { items, cursor: items.at(-1)?.cursor ?? String(from) };
+}
+
+/** What a machine's answer long-poll watches besides answers. */
+function watched(c: Context<Env>, account: string) {
+  const { n } = c.var.db
+    .query("SELECT COUNT(*) AS n FROM directory WHERE account_id = ?")
+    .get(account) as { n: number };
+  const asked = c.var.quotaAsks.get(account);
+  return { directory: n, ...(asked ? { quotaAsked: asked } : {}) };
 }
 
 /** What a push carries: the recipient's own box when it fits, else the id to fetch. */
@@ -271,6 +280,7 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
     c.var.usage.record(`answered.${answered.kind}.seconds`, null, seconds);
     c.var.usage.record(`answered.by.${caller.client}`);
   }
+  if (item.kind === "quota") c.var.quotas.wake(caller.account);
   if (fromDevice) {
     c.var.answers.wake(`${caller.account}/${to[0]}`);
     const payload = JSON.stringify({ v: 1, kind: "answered", id: item.re });
@@ -329,9 +339,22 @@ itemRoutes.get("/answers", requireCaller("machine"), async (c) => {
   const me = memberOf(caller);
   const from = after(c.req.query("after"));
   const fetch = () => list(c.var.db, caller.account, me, MACHINE_KINDS, from);
+  // A machine that passes what it knows hears at once when the directory grew past it or a
+  // device asked for fresh quotas since.
+  const known = c.req.query("directory");
+  if (known !== undefined && !/^\d{1,6}$/.test(known))
+    fail(400, "bad-request", "directory must be a directory length");
+  const changed = () => {
+    if (known === undefined) return false;
+    const now = watched(c, caller.account);
+    return (
+      now.directory > Number(known) ||
+      (now.quotaAsked !== undefined && now.quotaAsked !== c.req.query("quotaAsked"))
+    );
+  };
   let items = fetch();
   const seconds = waitSeconds(c);
-  if (items.length === 0 && seconds > 0) {
+  if (items.length === 0 && !changed() && seconds > 0) {
     if (c.var.answers.count(`${caller.account}/${me}`) >= c.var.config.limits.answerWaits)
       fail(
         429,
@@ -343,5 +366,30 @@ itemRoutes.get("/answers", requireCaller("machine"), async (c) => {
     if (await c.var.answers.wait(`${caller.account}/${me}`, seconds, c.req.raw.signal))
       items = fetch();
   }
-  return c.json(page(items, from));
+  return c.json({ ...page(items, from), ...watched(c, caller.account) });
+});
+
+itemRoutes.post("/quota/ask", requireCaller("paired-device"), async (c) => {
+  const caller = c.var.caller;
+  const { db } = c.var;
+  rateLimit(c, `quota-asks:${caller.account}`, c.var.config.limits.quotaAsks);
+  const askedAt = new Date().toISOString();
+  c.var.quotaAsks.set(caller.account, askedAt);
+  wakeMachines(c, caller.account);
+  // Machines whose latest snapshot predates the ask; one that never posted is not waited for.
+  const behind = () =>
+    (
+      db
+        .query(
+          `SELECT COUNT(*) AS n FROM items i JOIN members m ON m.account_id = i.account_id
+           AND m.id = i.from_id AND m.active = 1
+           WHERE i.account_id = ? AND i.kind = 'quota' AND i.received_at < ?`,
+        )
+        .get(caller.account, askedAt) as { n: number }
+    ).n;
+  const end = Date.now() + waitSeconds(c) * 1000;
+  if (Date.now() < end) holdOpen(c);
+  while (behind() > 0 && Date.now() < end && !c.req.raw.signal.aborted)
+    await c.var.quotas.wait(caller.account, (end - Date.now()) / 1000, c.req.raw.signal);
+  return c.json({ askedAt, behind: behind() });
 });

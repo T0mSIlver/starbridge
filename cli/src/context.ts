@@ -77,7 +77,10 @@ export async function refreshDirectory(
     return ours;
   });
   const me = dir.members.get(s.machine.id);
-  if (!me?.active) throw new UsageError("this machine was revoked: run `starbridge pair` again");
+  if (!me?.active)
+    throw new UsageError(
+      "this machine was removed from your Starbridge account: run `starbridge pair --force` to add it again",
+    );
   return dir;
 }
 

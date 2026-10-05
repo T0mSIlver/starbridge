@@ -10,6 +10,7 @@ import {
   type QuotaSettings,
   saveSettings,
 } from "@/lib/quotaSettings";
+import { runState } from "@/lib/runs";
 import type { Device, InboxItem, PromptItem, PromptReply, Reply } from "@/lib/types";
 
 // The protocol code and libsodium load here, after the first paint.
@@ -47,10 +48,20 @@ const Ctx_ = StoreContext;
 const POLL_MS = 20_000;
 /** While a prompt waits, it leaves within a second or two of being settled elsewhere. */
 const PROMPT_POLL_MS = 1_500;
-/** Runs skip Web Push (PROTOCOL.md, "Push"), so the page polls them while it is visible. */
+/**
+ * Runs skip Web Push (PROTOCOL.md, "Push"), so the page polls them while it is visible: often
+ * while one runs, so its steps show about when the phone gets them by push (#188).
+ */
 const RUNS_POLL_MS = 10_000;
+const LIVE_RUNS_POLL_MS = 2_000;
 /** Quotas skip Web Push too; the uploader posts every 5 minutes. */
 const QUOTA_POLL_MS = 60_000;
+/**
+ * A device that just joined reads no snapshot until each machine posts one sealed to it, which
+ * machines do within seconds of the join: until then the page looks every few seconds.
+ */
+const QUOTA_JOIN_POLL_MS = 3_000;
+const QUOTA_JOIN_MS = 30_000;
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [boot, setBoot] = useState<Store["boot"]>({ state: "loading" });
@@ -153,26 +164,41 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     });
   }, [current]);
 
-  const refreshQuotas = useCallback(async () => {
+  const fetchQuotas = useCallback(async () => {
     const fresh = await current();
     if (!fresh) return;
     const d = await load();
     const next = await d.loadQuotas(fresh);
     setQuotas(next);
     await notifyAlerts(next.cards, settingsRef.current);
+    return next;
   }, [current]);
+  const refreshQuotas = useCallback(async () => {
+    await fetchQuotas();
+  }, [fetchQuotas]);
 
   // While the page is visible, or in the background once a provider notifies.
   useEffect(() => {
     if (!ctx) return;
+    const started = Date.now();
+    let soon: ReturnType<typeof setTimeout> | undefined;
     const tick = () => {
       if (document.visibilityState === "visible" || settingsRef.current.notify.length > 0)
-        refreshQuotas().catch(() => {});
+        fetchQuotas()
+          .then((next) => {
+            clearTimeout(soon);
+            if (next?.cards.length === 0 && Date.now() - started < QUOTA_JOIN_MS)
+              soon = setTimeout(tick, QUOTA_JOIN_POLL_MS);
+          })
+          .catch(() => {});
     };
     tick();
     const timer = setInterval(tick, QUOTA_POLL_MS);
-    return () => clearInterval(timer);
-  }, [ctx, refreshQuotas]);
+    return () => {
+      clearInterval(timer);
+      clearTimeout(soon);
+    };
+  }, [ctx, fetchQuotas]);
 
   const refreshRuns = useCallback(async () => {
     const fresh = await current();
@@ -181,19 +207,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setRuns(await d.loadRuns(fresh));
   }, [current]);
 
+  const runLive = !!runs?.items.some((i) => runState(i.run, Date.now()) === "running");
   useEffect(() => {
     if (!ctx) return;
     const tick = () => {
       if (document.visibilityState === "visible") refreshRuns().catch(() => {});
     };
     tick();
-    const timer = setInterval(tick, RUNS_POLL_MS);
+    const timer = setInterval(tick, runLive ? LIVE_RUNS_POLL_MS : RUNS_POLL_MS);
     document.addEventListener("visibilitychange", tick);
     return () => {
       clearInterval(timer);
       document.removeEventListener("visibilitychange", tick);
     };
-  }, [ctx, refreshRuns]);
+  }, [ctx, refreshRuns, runLive]);
 
   // Poll while the page is visible, and refresh as soon as the service worker sees a push.
   useEffect(() => {

@@ -194,6 +194,11 @@ class Api(private val http: OkHttpClient, private val server: String, private va
 
     suspend fun item(id: String): Listed = get("/items/$id")
 
+    /** Asks every machine for a fresh quota snapshot; returns once they posted or [waitSeconds] pass. */
+    suspend fun askQuota(waitSeconds: Int) {
+        call("POST", "/quota/ask?wait=$waitSeconds", client = longPoll(waitSeconds))
+    }
+
     suspend fun quota(): List<Listed> = call("GET", "/quota").second!!.jsonObject.getValue("items").let { ProtocolJson.decodeFromJsonElement(it) }
 
     /** Returns the subscription id. [keys] carries RFC 8291's p256dh and auth for UnifiedPush. */

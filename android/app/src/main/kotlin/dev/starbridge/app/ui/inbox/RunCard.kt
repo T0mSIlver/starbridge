@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -20,6 +22,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -41,8 +44,10 @@ fun RunCard(run: Run, now: Instant, shape: Shape, modifier: Modifier = Modifier)
     val colors = StarbridgeTheme.colors
     val type = StarbridgeTheme.type
     val state = run.state(now)
+    // A lost run's length is unknown: its last news may predate its end by minutes (#190).
     val time = when (state) {
         Run.State.Running -> waited(run.startedAt, now)
+        Run.State.Lost -> ""
         else -> elapsed(run.startedAt, run.endedAt ?: run.at)
     }
     Surface(modifier.fillMaxWidth().semantics(mergeDescendants = true) {}, shape = shape, color = scheme.surfaceContainer) {
@@ -55,13 +60,24 @@ fun RunCard(run: Run, now: Instant, shape: Shape, modifier: Modifier = Modifier)
             }
             Text(run.reason.replaceFirstChar { it.uppercase() }, style = type.small, color = scheme.onSurfaceVariant)
             when (state) {
-                Run.State.Running -> run.progress?.let { Progress(it) }
+                Run.State.Running -> run.progress?.let { Progress(it) } ?: Working()
                 Run.State.Passed -> Text("Passed", style = type.metaStrong, color = colors.ok)
                 Run.State.Failed -> Text("Failed, exit ${run.exitCode}", style = type.metaStrong, color = colors.bad)
                 Run.State.Lost -> Text("No news for ${elapsed(run.at, now)}", style = type.metaStrong, color = colors.fg3)
             }
         }
     }
+}
+
+/** No progress reported: Material's indeterminate bar, in the same colours as [Progress]. */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun Working() {
+    LinearProgressIndicator(
+        color = MaterialTheme.colorScheme.onSurface,
+        trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+        modifier = Modifier.fillMaxWidth().padding(top = Spacing.s1).height(6.dp).semantics { contentDescription = "Running" },
+    )
 }
 
 /** The fill in `fg`, a gap, then the track, as Material's indicator; "3 of 7" under it. */

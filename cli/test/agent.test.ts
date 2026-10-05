@@ -279,6 +279,30 @@ test("the agent uploads quotas on its timer", async () => {
   expect(status.quota.lastPostAt).toBeDefined();
 });
 
+/** A device's call to the server. */
+async function asDevice(token: string, method: string, path: string) {
+  const r = await fetch(`${server.url}/v1${path}`, {
+    method,
+    headers: { authorization: `Bearer ${token}` },
+  });
+  return (await r.json()) as { items: unknown[]; behind?: number };
+}
+
+test("the agent posts a snapshot as soon as a device joins, and when one asks", async () => {
+  await machine({ providers: ["claude"], interval: "1h" });
+  await until(async () => (await server.opened("quota")).length >= 1, 10_000);
+  const tablet = await server.addDevice("tablet");
+  // Sealed before the tablet joined, the first snapshot has no box for it; the hourly timer
+  // would leave it with nothing.
+  await until(async () => (await asDevice(tablet.token, "GET", "/quota")).items.length === 1);
+
+  const [before] = await server.opened("quota");
+  const asked = await asDevice(server.owner.device.token, "POST", "/quota/ask?wait=10");
+  expect(asked.behind).toBe(0);
+  const [after] = await server.opened("quota");
+  expect(after?.id).not.toBe(before?.id);
+});
+
 test("a malformed path gets 400 and the agent keeps serving", async () => {
   const { socket } = await machine();
   await expect(
