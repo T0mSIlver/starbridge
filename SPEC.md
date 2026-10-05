@@ -1027,6 +1027,13 @@ How it generalizes is open.
   answer would be lost: the CLI marks the decisions it posts with `replies: true`, and clients
   show Reply only on those. The skill still asks for options good enough that one of them is
   right, and says a reply is a steer to act on.
+- 2026-10-05. Inbox motion on the web, as DESIGN.md's "Motion and states" lists it (#191).
+  Only rows whose order among the listed rows changes slide, such as a question flipping to
+  waiting and the rows it passes; rows that shift because an item came or left jump, so an
+  answered row's gap closes at once. Changing the grouping or the search moves nothing. Items
+  listed in the first 1.5 s after the list shows came with the page and don't fade in, since
+  the inbox, prompts and runs load one after another. History's rows fade in only when the
+  owner opens it, not when the page loads with it open.
 
 ## Encryption, with existing libraries
 
