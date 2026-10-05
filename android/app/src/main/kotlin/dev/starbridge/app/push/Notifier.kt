@@ -7,10 +7,9 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import dev.starbridge.app.data.Source
-import android.text.style.ForegroundColorSpan
-import android.text.TextUtils
+import android.text.SpannableStringBuilder
 import android.text.Spanned
-import android.text.SpannableString
+import android.text.style.TypefaceSpan
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
@@ -114,11 +113,27 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
     /** The meta row in the header, after "Starbridge": the machine and the repo. */
     private fun header(s: Source) = listOf(s.machine, s.project).filter { it.isNotBlank() }.joinToString(" · ")
 
-    /** A question's state, "Waiting for you" in amber, as the inbox shows it. */
-    private fun state(d: Decision): CharSequence = if (d.waiting) {
-        SpannableString("Waiting for you").apply { setSpan(ForegroundColorSpan(accent()), 0, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE) }
-    } else {
-        "Working on other things"
+    /**
+     * The header after "Starbridge": the machine and the repo, then "Waiting for you" once the
+     * agent waits, so the state never reads as the agent's words (#166).
+     */
+    private fun header(d: Decision) = header(d.source) + if (d.waiting) " · Waiting for you" else ""
+
+    /** The agent's words, its Markdown code in mono and without the backticks. */
+    private fun words(text: String): CharSequence = SpannableStringBuilder().apply {
+        text.split("```").forEachIndexed { i, part ->
+            if (i % 2 == 1) {
+                mono(part.substringAfter('\n', part).trimEnd('\n'))
+            } else {
+                part.split('`').forEachIndexed { j, piece -> if (j % 2 == 1) mono(piece) else append(piece) }
+            }
+        }
+    }.trim()
+
+    private fun SpannableStringBuilder.mono(code: String) {
+        val at = length
+        append(code)
+        setSpan(TypefaceSpan("monospace"), at, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
     }
 
     /**
@@ -138,8 +153,8 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
             .setSmallIcon(R.drawable.ic_notification)
             .setColor(accent())
             .setContentTitle(d.question)
-            .setContentText(state(d))
-            .setSubText(header(d.source))
+            .setContentText(words(d.context))
+            .setSubText(header(d))
             .setStyle(style(d))
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
@@ -158,14 +173,10 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
             .apply { d.waitingSince?.let { setWhen(it.toEpochMilli()).setShowWhen(true).setUsesChronometer(true) } }
     }
 
-    /**
-     * The first image as the big picture, with the state beneath it, when the question has one;
-     * else the state, then the agent's words in full.
-     */
+    /** The first image as the big picture when the question has one, else the agent's words in full. */
     private fun style(d: Decision): NotificationCompat.Style {
-        val picture = d.images.firstOrNull()?.bitmap(PICTURE_EDGE)
-            ?: return NotificationCompat.BigTextStyle().bigText(if (d.context.isBlank()) state(d) else TextUtils.concat(state(d), "\n", d.context))
-        return NotificationCompat.BigPictureStyle().bigPicture(picture).setSummaryText(state(d))
+        val picture = d.images.firstOrNull()?.bitmap(PICTURE_EDGE) ?: return NotificationCompat.BigTextStyle().bigText(words(d.context))
+        return NotificationCompat.BigPictureStyle().bigPicture(picture).setSummaryText(words(d.context))
     }
 
     /**

@@ -678,6 +678,24 @@ How it generalizes is open.
   applies to question rows on a phone width; wide screens never carry them, since the open
   question sits beside the list. Permission prompts keep Allow and Deny on their rows, since
   their agent always waits.
+- 2026-10-05. A question's state and its answer buttons, after the launch test (#166, #181;
+  agreed between the web and Android sessions). "Working on other things" read as the agent's
+  words, so a question its agent works around shows no state line at all; one its agent waits on
+  shows "Waiting for you 1:12" in amber, its icon on the text's centre line, on the card or row,
+  in the detail and in the notification, where it sits outside the agent's words (Android: in the
+  header after the machine and repo). Permission prompts keep the same tag. Answer buttons follow
+  only the setting, on both clients: every question with options shows them on its card or phone
+  row under Always, the ones whose agent waits under When the agent waits, none under Never.
+  Images and long labels no longer hide them; more than two options, or a label over 18
+  characters, stack. A question answered on another page (`answerIn`) or in free text has no
+  buttons, and opens its detail.
+- 2026-10-05. Images on Android (#170). A card crops its images to the card's width from the
+  top, at most 160 dp tall, so a phone screenshot no longer shows as a thumbnail in an empty band;
+  the sheet shows each in its own shape. A tap opens a full-screen viewer on black: pinch or
+  double-tap to zoom, drag to pan, swipe between images, decoded up to 4096 px. Decisions saved
+  by an app from before images (#62) kept bodies without them, so the app reads its open
+  decisions again from the server once. The notification puts the agent's Markdown code in mono,
+  without backticks.
 - 2026-10-05. Quota settings and notifications, as built (#115). Settings live on each device
   (web `localStorage`, Android preferences) and sit on a Quota settings page opened from the
   Quotas screen: bars show used or remaining, reset times relative or as a clock time
