@@ -258,6 +258,8 @@ data class Decision(
     val links: List<DecisionLink>? = null,
     /** The page the owner answers on instead of Starbridge (answerIn in schemas.ts). */
     val answerIn: DecisionLink? = null,
+    /** The machine takes a typed reply in place of an option (#201); older machines omit it. */
+    val replies: Boolean? = null,
 ) : ItemBody {
     override val recipients get() = to
 
@@ -280,6 +282,7 @@ data class Decision(
             it.check()
             schema(options.isEmpty(), "a decision answered elsewhere has no options")
         }
+        replies?.let { schema(it, "replies is true or absent") }
         schema(options.size != 1, "options: 0 or 2 to 4")
         schema(options.toSet().size == options.size, "options must be distinct")
         if (options.isNotEmpty()) schema(recommended != null && recommended in options, "recommended must be one of the options")

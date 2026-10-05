@@ -1282,6 +1282,7 @@ class ServerStore(
             answer = d.answer,
             answeredAt = instant(d.answeredAt) ?: d.answer?.let { Instant.now() },
             settled = d.settled,
+            replies = b.replies == true,
         )
     }
 

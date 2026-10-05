@@ -54,6 +54,8 @@ data class Decision(
     val answeredAt: Instant? = null,
     /** How the machine closed it, when its settled notice did: "withdrawn" or "elsewhere". */
     val settled: String? = null,
+    /** The machine takes a typed reply in place of an option (#201). */
+    val replies: Boolean = false,
 ) {
     /**
      * Waiting for the owner. A decision answered on another page also stops waiting at its default
