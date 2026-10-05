@@ -902,6 +902,14 @@ How it generalizes is open.
   you". Now the decision goes quietly and the `waiting` item pushes; Android fetches a decision
   it has not seen when its waiting state arrives, as the web page's service worker already did.
   An app older than this change shows no notification for such a question until it syncs.
+- 2026-10-05. How an answer reaches each agent (#203). Only the Claude Code plugin brings an
+  answer back into a session after its turn ends, as a prompt. Codex, pi and any agent without
+  it never got the answer: the skill told every agent never to block on `starbridge wait`. The
+  skill now has two paths. In Claude Code with the plugin, the agent ends its turn with the card
+  open, as before. In any other agent, it never ends its turn with a card open: once only the
+  answer is left, it runs `starbridge wait <id> --timeout 5m`, again on exit 2, and acts on what
+  it prints. `evals/skill` answers a Codex card on the server during the turn, as the owner
+  would, instead of sending a prompt Codex could not receive.
 
 ## Encryption, with existing libraries
 
