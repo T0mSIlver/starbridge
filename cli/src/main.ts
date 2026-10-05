@@ -8,6 +8,8 @@ process.on("SIGINT", () => {
   if (controller.signal.aborted) process.exit(130);
   controller.abort();
 });
+// systemd and launchd stop the agent with SIGTERM: it removes its socket on the way out.
+process.on("SIGTERM", () => controller.abort());
 const ctx: Ctx = {
   env: process.env,
   store: new Store(configDir(process.env)),
