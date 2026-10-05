@@ -158,6 +158,10 @@ export function run(
  */
 export function failure(r: RunOut | null): string {
   if (!r) return "not installed";
-  const lines = (text: string) => text.split("\n").map((l) => l.trim()).filter(Boolean);
+  const lines = (text: string) =>
+    text
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean);
   return lines(r.stderr)[0] ?? lines(r.stdout).pop() ?? `exited ${r.code ?? "on a signal"}`;
 }
