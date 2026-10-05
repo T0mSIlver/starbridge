@@ -28,7 +28,7 @@ export function sample(now = Date.now()) {
   const decision = (
     id: string,
     ago: number,
-    src: ReturnType<typeof source>,
+    src: ReturnType<typeof source> & { sessionTitle?: string },
     question: string,
     context: string,
     options: string[],
