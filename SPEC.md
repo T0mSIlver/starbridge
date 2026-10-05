@@ -1065,6 +1065,13 @@ How it generalizes is open.
   listed in the first 1.5 s after the list shows came with the page and don't fade in, since
   the inbox, prompts and runs load one after another. History's rows fade in only when the
   owner opens it, not when the page loads with it open.
+- 2026-10-06. Web layout round (owner, from https://claude.ai/artifact/9ddJ2PwPrBc7KmQdeDVqDN).
+  The inbox's detail pane scales with its width: from a 1000 px pane (side panes narrowed, or a
+  wide screen) its content takes 86% of the pane up to 1280 px, attached images show up to
+  560 px tall, and the question and the agent's text step up one size (DESIGN.md `wide`).
+  Below that it keeps today's 720 px column. Thumbnails on a row shrink with a narrowed list
+  rather than running past its edge. The View button is an icon with the tooltip "View", and
+  its menu drops "Remembered on this device", since the inbox's head is dense.
 
 ## Encryption, with existing libraries
 
