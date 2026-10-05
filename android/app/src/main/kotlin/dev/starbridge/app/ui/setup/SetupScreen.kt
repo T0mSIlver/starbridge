@@ -112,7 +112,7 @@ fun SetupScreen(phase: Phase, server: String, busy: Boolean, actions: SetupActio
         is Phase.NoDevice -> if (phase.accountExists) Join(busy, actions, modifier) else FirstDevice(busy, actions, modifier)
         is Phase.Joining -> Waiting("Approve this phone", if (phase.scanned) "Approve it on the device that shows the QR code." else "Type this code on a device you already use: ${phase.code}", null, actions.cancelJoin, modifier)
         is Phase.JoiningByDigits -> Waiting("Compare digits", "Approve on your other device if the digits match.", phase.digits, actions.cancelJoin, modifier)
-        is Phase.RecoveryKey -> Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = Spacing.s4)) { RecoveryKey(phase.words, actions.saved) }
+        is Phase.RecoveryKey -> Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = Spacing.s4, end = Spacing.s4, bottom = Spacing.s10), verticalArrangement = Arrangement.spacedBy(Spacing.s4)) { RecoveryKey(phase.words, actions.saved) }
         Phase.Ready -> Unit
     }
 }
