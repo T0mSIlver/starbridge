@@ -277,6 +277,7 @@ object Spacing {
     val s6 = 24.dp
     val s8 = 32.dp
     val s10 = 40.dp
+    val s16 = 64.dp
 }
 
 object Radius {

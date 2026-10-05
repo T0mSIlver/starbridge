@@ -57,7 +57,6 @@
   background: var(--fg2);
 }
 
-
 .tick {
   width: var(--size-tick);
   margin-left: calc(var(--size-tick) / -2);

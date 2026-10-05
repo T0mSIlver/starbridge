@@ -270,3 +270,15 @@
   border-color: currentColor;
   opacity: 0.7;
 }
+
+/* A destructive confirm, only inside its dialog (DESIGN.md, "Rules"). */
+.destroy {
+  background: var(--bad);
+  border-color: var(--bad);
+  color: var(--bg);
+}
+
+.destroy:hover {
+  background: var(--bad);
+  opacity: 0.9;
+}

@@ -1,0 +1,122 @@
+/* Pairing panels on the web: a QR code to scan, a request to approve, digits to compare. */
+
+.crumbs {
+  margin-bottom: var(--s1);
+  color: var(--fg2);
+}
+
+.crumbs a {
+  color: inherit;
+}
+
+.panel {
+  display: grid;
+  gap: var(--s4);
+  align-content: start;
+  padding: var(--s6);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.qr {
+  grid-template-columns: auto 1fr;
+  gap: var(--s6);
+  align-items: start;
+}
+
+.code {
+  width: 224px;
+  padding: var(--s3);
+  border-radius: var(--radius-sm);
+  background: #fff;
+}
+
+.qrSvg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.qrText {
+  display: grid;
+  gap: var(--s3);
+  align-content: start;
+}
+
+.meta {
+  display: flex;
+  align-items: center;
+  gap: var(--s1h);
+  color: var(--fg2);
+}
+
+.right {
+  margin-left: auto;
+}
+
+.dim {
+  color: var(--fg2);
+}
+
+.error {
+  color: var(--bad);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+}
+
+.digits {
+  display: flex;
+  gap: var(--s1h);
+}
+
+.digit {
+  display: grid;
+  place-items: center;
+  width: var(--s10);
+  height: 52px;
+  border-radius: var(--radius-dense);
+  background: var(--surface2);
+  font-weight: 600;
+}
+
+.digit:nth-child(4) {
+  margin-left: var(--s2h);
+}
+
+.codeRow {
+  display: flex;
+  gap: var(--s2);
+}
+
+.input {
+  flex: 1;
+  min-width: 0;
+  height: var(--s10);
+  padding: 0 var(--s3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-dense);
+  background: var(--surface);
+}
+
+@media (max-width: 599px) {
+  .qr {
+    grid-template-columns: 1fr;
+  }
+
+  .codeRow {
+    flex-direction: column;
+  }
+}
+
+/* Join requests, above any page while one is open. */
+.requests {
+  display: grid;
+  gap: var(--s3);
+  max-width: var(--size-content);
+  padding: var(--s4);
+}
