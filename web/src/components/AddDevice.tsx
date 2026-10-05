@@ -10,6 +10,7 @@ import { useApp, useDevice } from "./AppProvider";
 import { useNow } from "./Feed";
 import { Icon } from "./icons";
 import p from "./Pairing.module.css";
+import { type PairOutcome, PairResult } from "./PairResult";
 import { PhoneBar } from "./PhoneBar";
 import { QrCode } from "./QrCode";
 import s from "./Settings.module.css";
@@ -33,7 +34,7 @@ export function AddDevice() {
   const [shown, setShown] = useState<ShownCode & { until: number }>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
-  const [done, setDone] = useState<string>();
+  const [done, setDone] = useState<PairOutcome>();
   const cancelShown = useRef<() => void>(undefined);
   const now = useNow(!!shown);
   useEffect(() => () => cancelShown.current?.(), []);
@@ -58,6 +59,8 @@ export function AddDevice() {
       next.request.then(
         (r) => {
           setShown(undefined);
+          // A request from the QR code replaces the result of a typed code approved meanwhile.
+          setDone(undefined);
           setReq(r);
         },
         (e) => {
@@ -80,8 +83,8 @@ export function AddDevice() {
     run(async () => setReq(await (await load()).readPairing(fromLink)));
   }, []);
 
-  const reset = (text: string) => {
-    setDone(text);
+  const reset = (outcome: PairOutcome) => {
+    setDone(outcome);
     setReq(undefined);
     setCode("");
   };
@@ -96,7 +99,13 @@ export function AddDevice() {
           </nav>
           <h1 className={`t-heading ${s.title}`}>Add a device</h1>
         </div>
-        {req ? (
+        {done ? (
+          <PairResult outcome={done}>
+            <Link href="/settings" className={`t-label ${ui.btn} ${ui.rec}`}>
+              Back to Devices
+            </Link>
+          </PairResult>
+        ) : req ? (
           <article className={p.panel} aria-label="Pairing request">
             <div className={`t-meta ${p.meta}`}>
               <Icon name={req.role === "machine" ? "desktop" : "phone"} size={16} />
@@ -123,7 +132,15 @@ export function AddDevice() {
                 onClick={() =>
                   run(async () => {
                     update(await (await load()).approvePairing(ctx, req));
-                    reset(`${req.name} joined.`);
+                    reset({
+                      name: req.name,
+                      icon: req.role === "machine" ? "desktop" : "phone",
+                      title: `${req.name} joined`,
+                      sub:
+                        req.role === "machine"
+                          ? "It can now post decisions and quota windows."
+                          : "It can now read and answer as a device.",
+                    });
                   })
                 }
               >
@@ -133,7 +150,14 @@ export function AddDevice() {
                 type="button"
                 className={`t-label ${ui.btn}`}
                 disabled={busy}
-                onClick={() => reset(`Refused ${req.name}. Its code expires within 10 minutes.`)}
+                onClick={() =>
+                  reset({
+                    name: req.name,
+                    icon: req.role === "machine" ? "desktop" : "phone",
+                    title: `Refused ${req.name}`,
+                    sub: "Its code expires within 10 minutes.",
+                  })
+                }
               >
                 Refuse
               </button>
@@ -176,11 +200,6 @@ export function AddDevice() {
               <Icon name="qr" size={18} /> Show a QR code
             </button>
           </div>
-        )}
-        {done && (
-          <p className={`t-small ${p.dim}`} role="status">
-            {done}
-          </p>
         )}
         {error && (
           <p className={`t-small ${p.error}`} role="alert">

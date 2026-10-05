@@ -3,13 +3,15 @@
 
 .panes {
   display: grid;
-  grid-template-columns: var(--size-list) minmax(0, 1fr) var(--size-aside);
+  grid-template-columns:
+    var(--pane-list, var(--size-list)) 0 minmax(0, 1fr) 0
+    var(--pane-aside, var(--size-aside));
   height: 100dvh;
 }
 
 @media (max-width: 1399px) {
   .panes {
-    grid-template-columns: var(--size-list) minmax(0, 1fr);
+    grid-template-columns: var(--pane-list, var(--size-list)) 0 minmax(0, 1fr);
   }
 }
 
@@ -28,8 +30,10 @@
   padding: var(--s8) var(--s10);
 }
 
+/* Centred, so a short question leaves even margins rather than one wide band (#179). */
 .detail > * {
-  max-width: calc(var(--size-content) - 2 * var(--s10));
+  max-width: var(--size-content);
+  margin-inline: auto;
 }
 
 .head {

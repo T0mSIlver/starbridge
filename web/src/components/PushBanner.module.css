@@ -1,0 +1,18 @@
+/* A notice inside the Needs you column's padding, not a card across it. */
+.banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2) var(--s3);
+  margin: var(--s3) var(--s4) 0;
+  padding: var(--s2) var(--s3);
+  border-radius: var(--radius-dense);
+  background: var(--surface2);
+  color: var(--fg2);
+}
+
+.error {
+  flex-basis: 100%;
+  color: var(--bad);
+}

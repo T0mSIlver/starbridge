@@ -10,6 +10,11 @@ export type Prefs = {
   rowAnswers: "always" | "waiting" | "never";
   /** 12- or 24-hour times; "system" follows the browser's language (#161). */
   clock: "system" | "12" | "24";
+  /** Widths in px of the wide inbox's list and Quota windows panes, once dragged (#173). */
+  listWidth: number | null;
+  asideWidth: number | null;
+  /** A chime for new questions and prompts while a Starbridge page is open (#165). */
+  sound: boolean;
 };
 
 const DEFAULTS: Prefs = {
@@ -18,6 +23,9 @@ const DEFAULTS: Prefs = {
   theme: "system",
   rowAnswers: "always",
   clock: "system",
+  listWidth: null,
+  asideWidth: null,
+  sound: false,
 };
 
 import { PREFS_KEY as KEY } from "./themeScript";

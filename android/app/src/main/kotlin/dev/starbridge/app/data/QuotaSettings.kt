@@ -53,6 +53,13 @@ data class QuotaSettings(
         return ordered.sortedByDescending { it.pace is Pace.RunsOut && it.resetsAt?.isAfter(now) != false }
     }
 
+    /**
+     * Arranged windows under one heading per provider and machine (#160): groups in the order
+     * their first window comes, so a provider with a window running out leads.
+     */
+    fun groups(arranged: List<QuotaWindow>): List<List<QuotaWindow>> =
+        arranged.groupBy { it.provider to it.machine }.values.toList()
+
     /** Whether this phone shows a notification for [notice]. */
     fun wants(notice: QuotaNotice) =
         notice.provider in notify && if (notice.kind == "low") notifyLow else notifyPace

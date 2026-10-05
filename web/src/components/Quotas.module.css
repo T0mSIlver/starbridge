@@ -20,6 +20,20 @@
   color: var(--bad);
 }
 
+/* One card per provider, apart as Android's cards are, with no line between them. */
+.rows {
+  display: grid;
+  gap: var(--s3);
+  padding: var(--s3) var(--s3) 0;
+}
+
+.rows > * {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--surface);
+}
+
 .empty {
   padding: var(--s8) var(--s4);
   color: var(--fg2);
@@ -39,13 +53,6 @@
   }
 
   .rows {
-    border: 1px solid var(--line);
-    border-radius: var(--radius-sm);
-    overflow: hidden;
-    background: var(--surface);
-  }
-
-  .rows > :last-child {
-    border-bottom: 0;
+    padding: 0;
   }
 }

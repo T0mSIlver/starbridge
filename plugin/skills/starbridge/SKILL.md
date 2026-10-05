@@ -117,6 +117,10 @@ The answer arrives as a new prompt, possibly while you work on something else:
 Answer to d_Xk3… (Run the orders migration now, or after tonight's 18:00 backup?): Now
 ```
 
+The user may type a reply instead of picking an option; it then replaces the
+option after the colon. A reply is the user steering you: act on it, and ask
+again only if it leaves the choice open.
+
 Act on it right away. Post again only when the outcome changes what the user
 would do, for example when the merge failed or the fix needs their call.
 Otherwise, say it in your final message.
