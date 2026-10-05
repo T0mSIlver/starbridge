@@ -28,10 +28,13 @@ import {
   probeSet,
 } from "./codexbar";
 import {
+  codexRulePath,
   codexSkill,
   codexSkillDir,
   hasCodex,
+  hasCodexRule,
   hasPi,
+  installCodexRule,
   installCodexSkill,
   installPiPackage,
   PI_PACKAGE,
@@ -399,19 +402,33 @@ async function codexStep(sys: Sys) {
   section(ctx, "Codex");
   const dir = codexSkillDir(sys);
   const state = codexSkill(sys);
-  if (state === "current") {
-    ctx.out(`The starbridge skill is in ${dir}.`);
-    return;
+  if (state === "current") ctx.out(`The starbridge skill is in ${dir}.`);
+  else {
+    const verb = state === "missing" ? "Install" : "Update";
+    if (await prompt.confirm(`${verb} the Starbridge skill for Codex in ${dir}?`, true)) {
+      try {
+        installCodexSkill(sys);
+        ctx.out(`${verb === "Install" ? "Installed" : "Updated"} ${dir}/SKILL.md.`);
+      } catch (e) {
+        ctx.out(`Could not write the skill: ${(e as Error).message}`);
+      }
+    } else ctx.out("Codex sessions won't know the skill: rerun setup to install it.");
   }
-  const verb = state === "missing" ? "Install" : "Update";
-  if (await prompt.confirm(`${verb} the Starbridge skill for Codex in ${dir}?`, true)) {
+  const rule = codexRulePath(sys);
+  if (hasCodexRule(sys)) ctx.out(`The starbridge rule is in ${rule}.`);
+  else if (
+    await prompt.confirm(
+      "Let `starbridge ask`, `waiting`, `wait` and `settle` run outside Codex's sandbox, which has no network?",
+      true,
+    )
+  ) {
     try {
-      installCodexSkill(sys);
-      ctx.out(`${verb === "Install" ? "Installed" : "Updated"} ${dir}/SKILL.md.`);
+      installCodexRule(sys);
+      ctx.out(`Wrote ${rule}.`);
     } catch (e) {
-      ctx.out(`Could not write the skill: ${(e as Error).message}`);
+      ctx.out(`Could not write the rule: ${(e as Error).message}`);
     }
-  } else ctx.out("Codex sessions won't know the skill: rerun setup to install it.");
+  } else ctx.out("Codex's sandbox will stop `starbridge ask`: rerun setup to add the rule.");
 }
 
 /** The Starbridge Pi package: the skill, the rules and answers into the session. */

@@ -37,12 +37,15 @@ it; "Answer here" in Pi brings back its own prompt.
 asks before each one:
 
 - Claude Code: the Starbridge plugin, which brings the rules above, the skill
-  and the hooks.
+  and the hooks, and allow rules so that `starbridge ask`, `waiting`, `wait`
+  and `settle` run without a permission prompt.
 - Codex: the skill, in `~/.codex/skills/starbridge` (or under `$CODEX_HOME`),
   so it knows how to write a question. Codex doesn't load plugins, so it runs
   the same `starbridge` commands without the rules: add the lines you want
   below. A later setup offers to update the skill when the CLI carries a newer
-  one.
+  one. Codex runs commands in a sandbox with no network, so setup also writes
+  `~/.codex/rules/starbridge.rules`, which runs `starbridge ask`, `waiting`,
+  `wait` and `settle` outside it.
 - Pi: the Starbridge Pi package (`pi install
   git:github.com/T0mSIlver/starbridge`), which brings the skill, the rules and
   the extension that puts each answer into the session.

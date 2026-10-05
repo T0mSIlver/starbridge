@@ -10,7 +10,15 @@ import { type AskInput, ask } from "../decisions";
 import type { InstallKind } from "../release";
 import { removeBinary } from "../update";
 import { findCodexbar } from "./codexbar";
-import { codexSkillDir, hasPi, piPackage, removeCodexSkill, removePiPackage } from "./harnesses";
+import {
+  codexRulePath,
+  codexSkillDir,
+  hasPi,
+  piPackage,
+  removeCodexRule,
+  removeCodexSkill,
+  removePiPackage,
+} from "./harnesses";
 import {
   hasClaude,
   legacyInstalls,
@@ -97,6 +105,7 @@ export async function uninstall(sys: Sys, opts: UninstallOpts): Promise<number> 
   }
 
   if (removeCodexSkill(sys)) ctx.out(`Removed ${codexSkillDir(sys)}.`);
+  if (removeCodexRule(sys)) ctx.out(`Removed ${codexRulePath(sys)}.`);
   const piSource = hasPi(sys) ? piPackage(sys) : undefined;
   if (piSource)
     try {

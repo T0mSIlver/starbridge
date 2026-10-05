@@ -141,6 +141,9 @@ test("setup --yes replaces the dev box's manual installs and uploads a first sna
     readFileSync(join(import.meta.dir, "../../plugin/skills/starbridge/SKILL.md"), "utf8"),
   );
   expect(m.calls()).toContain("pi install git:github.com/T0mSIlver/starbridge");
+  expect(readFileSync(join(m.home, ".codex/rules/starbridge.rules"), "utf8")).toContain(
+    '"starbridge", ["ask"',
+  );
 
   const [snap] = await server.opened("quota");
   expect(snap?.providers.map((p) => p.provider)).toEqual(["codex", "zai"]);
@@ -222,6 +225,7 @@ test("uninstall removes the service and plugins, asks the devices to revoke, kee
     JSON.parse(readFileSync(join(m.home, ".claude/settings.json"), "utf8")).permissions.allow,
   ).toEqual([]);
   expect(existsSync(join(m.home, ".codex/skills/starbridge"))).toBe(false);
+  expect(existsSync(join(m.home, ".codex/rules/starbridge.rules"))).toBe(false);
   expect(m.calls()).toContain("pi remove git:github.com/T0mSIlver/starbridge");
   const [d] = await server.opened("decision");
   expect(d?.question).toBe("Revoke devbox? It was uninstalled.");
