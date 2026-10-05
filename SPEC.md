@@ -313,7 +313,8 @@ How it generalizes is open.
   co-signs its first entry. A pairing code
   carries an 80-bit secret the server never sees, which keys an HMAC on both
   pairing messages. The recovery seed shows as 24 BIP-39 words
-  (`@scure/bip39`, audited, MIT); 12 for accounts made since 2026-10-05 (below).
+  (`@scure/bip39`, audited, MIT); 12 for accounts made since 2026-10-05, and a recovery key
+  instead of words since 2026-10-06 (below).
 
 - 2026-10-04. Server (#5): self-hosters sign in with `OWNER_TOKEN` (`POST /v1/auth/owner`); the
   Android app gets its GitHub session through a `starbridge://auth#session=` redirect. A session
@@ -919,6 +920,17 @@ How it generalizes is open.
 - 2026-10-05. `starbridge pair` pairs with https://starbridge.run unless `--server` or
   `STARBRIDGE_SERVER` names a self-hosted server (#154), as `setup` already did.
 
+- 2026-10-06. A recovery key, not words (owner ruling on #199, replaces the words of #157). Chrome
+  flagged starbridge.run as a dangerous site: a new site that shows 12 BIP-39 words and later asks
+  for them back is what seed-phrase phishing looks like. New accounts get the same 16-byte seed
+  as a recovery key: the seed and a 12-bit check, 28 Crockford base32 characters in seven groups
+  of four, read in any case, with or without dashes, with Crockford's look-alikes. The check
+  catches all but 1 in 4,096 typos, as BIP-39's 4 bits caught all but 1 in 16 for 12 words; a
+  character outside the alphabet is named where it stands. Strength and derivation are those of
+  the 12-word entry above: 128 bits, stretched to the Ed25519 seed by BLAKE2b-256. Accounts with
+  24 or 12 words keep recovering with them: the entry tells words from a key by their letter runs.
+  No page says "seed", "phrase" or asks for words; the clients only show keys. #199 closes once
+  this is deployed and Chrome no longer warns.
 - 2026-10-05. The `AskUserQuestion` hook answers instead of denying (#200). Claude Code 2.1.289
   shows every `PreToolUse` deny as a red "hook error", which reads as Starbridge failing. The
   hook now allows the call with `updatedInput.answers`, one answer per question saying to ask

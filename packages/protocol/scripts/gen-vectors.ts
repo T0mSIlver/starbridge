@@ -33,6 +33,7 @@ import {
   publicKeys,
   RECOVERY,
   ready,
+  recoveryKey,
   recoveryKeyPair,
   recoveryWords,
   revokeEntry,
@@ -91,9 +92,10 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
     })),
     recovery: { seed: toB64(recoverySeed), words: recoveryWords(recoverySeed), signPk: recoveryPk },
     recovery12: {
-      note: 'A 16-byte seed, 12 words: the signing seed is BLAKE2b-256 of "starbridge/v1/recovery-seed", NUL, the seed.',
+      note: 'A 16-byte seed, as 12 words and as a recovery key (the seed and 12 bits of BLAKE2b-256 of "starbridge/v1/recovery-check", NUL, the seed, in Crockford base32): the signing seed is BLAKE2b-256 of "starbridge/v1/recovery-seed", NUL, the seed.',
       seed: toB64(recovery12Seed),
       words: recoveryWords(recovery12Seed),
+      key: recoveryKey(recovery12Seed),
       signPk: toB64(recoveryKeyPair(recovery12Seed).publicKey),
     },
   };
