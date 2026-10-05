@@ -608,6 +608,21 @@ How it generalizes is open.
   backups in `deploy/`); the operator's legal entity, jurisdiction, rights statement, liability
   wording and account-deletion process stay marked TODO until the owner decides them.
 
+- 2026-10-05. Platforms (owner). The web app ships first everywhere it can: installed to the home
+  screen on iOS (Web Push works for home-screen web apps since iOS 16.4) and as an installed app
+  on desktop browsers. No native iOS app until there is demand and a device to test on. A
+  desktop app, if one comes, is Tauri over Electron so it reuses the web code; a Mac surface may
+  instead live inside CodexBar's menu bar, upstream.
+- 2026-10-05. Quota settings follow CodexBar (owner). Starbridge offers a curated set of
+  CodexBar's own settings, with CodexBar's meaning, in its own clients and per device: the bar
+  shows used or remaining (`usageBarsShowUsed`), reset times relative or absolute
+  (`resetTimesShowAbsolute`), workday ticks on weekly bars (`weeklyProgressWorkDays`), warning
+  thresholds per window (`quotaWarningThresholds`) and a pace warning
+  (`predictivePaceWarningNotificationsEnabled`), and hiding or reordering providers. The warning
+  settings are the quota notifications: off by default, enabled per provider (also from an
+  alert card), at most one push per window per reset, on their own low-priority channel. Cost
+  tracking, menu-bar-only settings and confetti stay out.
+
 ## Encryption, with existing libraries
 
 - libsodium sealed boxes (`crypto_box_seal`, X25519 + XSalsa20-Poly1305): an
