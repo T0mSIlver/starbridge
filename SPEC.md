@@ -696,6 +696,13 @@ How it generalizes is open.
   by an app from before images (#62) kept bodies without them, so the app reads its open
   decisions again from the server once. The notification puts the agent's Markdown code in mono,
   without backticks.
+- 2026-10-05. Android notifications after the launch test (#182, #183, #184). A permission
+  prompt's notification shows only its command, in mono; the agent's description stays in the
+  app. Questions and prompts turn off Android's own contextual chips ("Open link"), so the only
+  buttons are the answers. With sensitive content hidden, the lock screen shows the public
+  version, so it carries the same buttons: Deny and a question's options answer from there,
+  Allow asks for the unlock first, as decided for #57; the question and the command stay hidden.
+  Tapping a prompt's notification opens that prompt's sheet, as a question's opens its own.
 - 2026-10-05. Quota settings and notifications, as built (#115). Settings live on each device
   (web `localStorage`, Android preferences) and sit on a Quota settings page opened from the
   Quotas screen: bars show used or remaining, reset times relative or as a clock time

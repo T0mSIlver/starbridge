@@ -151,7 +151,7 @@ private fun suiteType(): NavigationSuiteType {
  */
 @OptIn(ExperimentalMaterial3AdaptiveApi::class)
 @Composable
-fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> Unit, openDecision: Flow<String>) {
+fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> Unit, opening: Flow<NavKey>) {
     val backStack = rememberNavBackStack(InboxKey)
     val now = now()
     // An answer-in decision stops waiting at its default time, so count against the ticking clock.
@@ -161,11 +161,12 @@ fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> U
     val host = Notices(notice, dismiss)
     val sheets = remember { BottomSheetSceneStrategy<NavKey>() }
     val colors = StarbridgeTheme.colors
-    LaunchedEffect(openDecision) {
-        openDecision.collect { id ->
+    // A notification's tap: its question's or prompt's sheet, over the inbox.
+    LaunchedEffect(opening) {
+        opening.collect { key ->
             backStack.clear()
             backStack.add(InboxKey)
-            backStack.add(DecisionKey(id))
+            backStack.add(key)
         }
     }
     val current = backStack.lastOrNull()

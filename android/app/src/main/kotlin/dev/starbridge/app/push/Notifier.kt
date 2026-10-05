@@ -7,6 +7,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import dev.starbridge.app.data.Source
+import android.text.SpannableString
 import android.text.SpannableStringBuilder
 import android.text.Spanned
 import android.text.style.TypefaceSpan
@@ -142,7 +143,11 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
      */
     private fun accent() = context.getColor(if (prefs.colours.value == Colours.Wallpaper) R.color.accent_wallpaper else R.color.accent)
 
-    private fun base(d: Decision): NotificationCompat.Builder {
+    /**
+     * [actions] go on both versions: with sensitive content hidden, the lock screen shows the
+     * public one, and its buttons are the only ones there (#183).
+     */
+    private fun base(d: Decision, actions: List<NotificationCompat.Action> = emptyList()): NotificationCompat.Builder {
         val open = PendingIntent.getActivity(
             context,
             tag(d.id),
@@ -165,9 +170,14 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
                     .setColor(accent())
                     .setContentTitle("A question needs you")
                     .setSubText(header(d.source))
+                    .setContentIntent(open)
+                    .apply { actions.forEach(::addAction) }
                     .build(),
             )
             .setContentIntent(open)
+            // The buttons are the answers: no system chips for links or replies beside them.
+            .setAllowSystemGeneratedContextualActions(false)
+            .apply { actions.forEach(::addAction) }
             .setOnlyAlertOnce(true)
             // Waiting: the header counts up from when the agent started to wait.
             .apply { d.waitingSince?.let { setWhen(it.toEpochMilli()).setShowWhen(true).setUsesChronometer(true) } }
@@ -202,8 +212,14 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
 
     private fun post(decision: Decision, note: String?) {
         if (!allowed()) return
-        val b = base(decision)
+        val b = base(decision, actions(decision))
         if (note != null) b.setContentText(note).setStyle(NotificationCompat.BigTextStyle().bigText(note)).setSilent(true)
+        @Suppress("MissingPermission")
+        manager.notify(tag(decision.id), b.build())
+    }
+
+    /** A question's buttons: its options, a reply field, or the page it is answered on. */
+    private fun actions(decision: Decision): List<NotificationCompat.Action> {
         val page = decision.answerIn
         if (page != null) {
             // Answered on that page, never here: the one button opens it. A claude.ai link goes to
@@ -214,28 +230,24 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
                 Intent(Intent.ACTION_VIEW, Uri.parse(page.url)),
                 PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
             )
-            b.addAction(NotificationCompat.Action.Builder(0, "Answer in ${page.place()}", view).build())
-        } else if (decision.options.isEmpty()) {
+            return listOf(NotificationCompat.Action.Builder(0, "Answer in ${page.place()}", view).build())
+        }
+        if (decision.options.isEmpty()) {
             val input = RemoteInput.Builder(AnswerReceiver.EXTRA_TEXT).setLabel("Your answer").build()
-            b.addAction(
+            return listOf(
                 NotificationCompat.Action.Builder(0, "Answer", answerIntent(decision, null, tag(decision.id), mutable = true))
                     .addRemoteInput(input)
                     .setAllowGeneratedReplies(false)
                     .setAuthenticationRequired(false)
                     .build(),
             )
-        } else {
-            // Android shows three buttons; the recommended option leads, the app holds the rest.
-            decision.options.sortedByDescending { it == decision.recommended }.take(3).forEachIndexed { i, option ->
-                b.addAction(
-                    NotificationCompat.Action.Builder(0, option, answerIntent(decision, option, tag(decision.id) * 31 + i, mutable = false))
-                        .setAuthenticationRequired(false)
-                        .build(),
-                )
-            }
         }
-        @Suppress("MissingPermission")
-        manager.notify(tag(decision.id), b.build())
+        // Android shows three buttons; the recommended option leads, the app holds the rest.
+        return decision.options.sortedByDescending { it == decision.recommended }.take(3).mapIndexed { i, option ->
+            NotificationCompat.Action.Builder(0, option, answerIntent(decision, option, tag(decision.id) * 31 + i, mutable = false))
+                .setAuthenticationRequired(false)
+                .build()
+        }
     }
 
     /** Replaces the buttons with the answer, then clears itself. */
@@ -272,24 +284,28 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
     )
 
-    private fun promptBase(p: Prompt): NotificationCompat.Builder {
+    /** The command in mono, the one thing to judge from the shade; the app shows the agent's words (#182). */
+    private fun command(p: Prompt): CharSequence = SpannableString(p.summary).apply { setSpan(TypefaceSpan("monospace"), 0, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE) }
+
+    /** [actions] go on the public version too, as a question's do. A tap opens the prompt's sheet. */
+    private fun promptBase(p: Prompt, actions: List<NotificationCompat.Action> = emptyList()): NotificationCompat.Builder {
         val title = "${p.tool} · waiting for you"
         val open = PendingIntent.getActivity(
             context,
             promptTag(p),
-            Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
+            Intent(context, MainActivity::class.java).putExtra(MainActivity.EXTRA_PROMPT, p.id).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
         return NotificationCompat.Builder(context, PROMPTS)
             .setSmallIcon(R.drawable.ic_notification)
             .setColor(accent())
             .setContentTitle(title)
-            .setContentText(p.summary)
+            .setContentText(command(p))
             .setSubText(header(p.source))
             .setWhen(p.createdAt.toEpochMilli())
             .setShowWhen(true)
             .setUsesChronometer(true)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(listOfNotNull(p.summary, p.description).joinToString("\n\n")))
+            .setStyle(NotificationCompat.BigTextStyle().bigText(command(p)))
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             // The lock screen shows the tool, the machine and the repo, never the command.
@@ -304,9 +320,14 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
                     .setWhen(p.createdAt.toEpochMilli())
                     .setShowWhen(true)
                     .setUsesChronometer(true)
+                    .setContentIntent(open)
+                    .apply { actions.forEach(::addAction) }
                     .build(),
             )
             .setContentIntent(open)
+            // No "Open link" chip for a URL in the command: Allow and Deny are the only buttons.
+            .setAllowSystemGeneratedContextualActions(false)
+            .apply { actions.forEach(::addAction) }
             .setOnlyAlertOnce(true)
             .setTimeoutAfter(maxOf(1_000L, p.expiresAt.toEpochMilli() - System.currentTimeMillis()))
     }
@@ -320,18 +341,16 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
     private fun postPrompt(prompt: Prompt, note: String?) {
         if (!allowed()) return
         val tag = promptTag(prompt)
-        val b = promptBase(prompt)
-        if (note != null) b.setContentText(note).setStyle(NotificationCompat.BigTextStyle().bigText(note)).setSilent(true)
-        b.addAction(
+        val actions = listOf(
             NotificationCompat.Action.Builder(0, "Allow", promptIntent(prompt, true, "once", tag * 31))
                 .setAuthenticationRequired(true)
                 .build(),
-        )
-        b.addAction(
             NotificationCompat.Action.Builder(0, "Deny", promptIntent(prompt, false, "once", tag * 31 + 2))
                 .setAuthenticationRequired(false)
                 .build(),
         )
+        val b = promptBase(prompt, actions)
+        if (note != null) b.setContentText(note).setStyle(NotificationCompat.BigTextStyle().bigText(note)).setSilent(true)
         shown[tag] = prompt.id
         @Suppress("MissingPermission")
         manager.notify(tag, b.build())
