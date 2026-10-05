@@ -978,7 +978,8 @@ How it generalizes is open.
   clients show an agent they do not know as none, with no "Open in" link, instead of refusing
   the decision or prompt. So a future harness never makes items unreadable to older clients.
   Clients released before this change still refuse an agent outside `claude-code | codex`.
-- 2026-10-06. Pi is the third harness (#232; research on the issue, Pi 0.87.1). A Pi extension
+- 2026-10-06. Pi is the third harness (#232; research on the issue, Pi 0.87.1; checked again on
+  Pi 1.0.4, whose changelog since 0.87.1 changes none of the API it uses). A Pi extension
   can call `pi.sendUserMessage(text, { deliverAs: "followUp" })` at any time: an idle session
   starts a turn with it, a busy one runs it once the agent finishes, as the mod and `codex
   queue` do. So the Pi extension (`mod/pi/starbridge.ts`) runs the mod's own answer loop
@@ -1000,7 +1001,8 @@ How it generalizes is open.
   Checked with a real Pi 0.87.1 TUI (GLM 5.3) in a throwaway HOME, the local server, the built
   web page in Firefox and `starbridge agent`: Pi posted the card, the web page answered "French",
   and Pi wrote the file. Without the agent, an answer given during a `sleep 40` ran once that
-  turn ended.
+  turn ended. Both again on Pi 1.0.4 (fullscreen TUI, its new default), and the agent path again
+  on 0.87.1, with the code as merged.
 - 2026-10-05. A blocked question shows by its look, not a state line (#191, owner's pick of
   proposal B, "Filled and hollow", from https://claude.ai/artifact/EMcUnTsGhyTsiCNujo4JT6). This
   replaces the "Waiting for you 1:12" tag of the #166 entry above. A question whose agent waits
