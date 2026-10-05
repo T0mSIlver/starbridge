@@ -91,6 +91,10 @@ export function Inbox() {
   const answeredHere = useRef(new Set<string>());
   const firstOpen = needs.find((e) => !answeredHere.current.has(e.id))?.id;
   const selected = wide ? selectedId(ids, picked, firstOpen) : opened;
+  // Opening an item mid-fade unmounts History before its animation ends.
+  useEffect(() => {
+    if (opened) setHistoryToggled(false);
+  }, [opened]);
   useEffect(() => {
     if (wide && selected && picked !== selected) setPicked(selected);
   }, [wide, selected, picked]);
