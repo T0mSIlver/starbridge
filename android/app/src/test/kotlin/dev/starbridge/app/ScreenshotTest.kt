@@ -149,6 +149,9 @@ class ScreenshotTest(private val dark: Boolean) {
 
     @Test fun sheetWaiting() = capture("sheet-waiting") { QuestionSheet(fake.decisions.first { it.id == "d2" }) }
 
+    // "Reply" opened under the options: a typed answer in place of them (#201).
+    @Test fun sheetReply() = capture("sheet-reply", before = { compose.onNodeWithText("Reply").performClick() }) { QuestionSheet(fake.decisions.first { it.id == "d2" }) }
+
     @Test fun sheetPick() = capture("sheet-pick") { QuestionSheet(fake.decisions.first { it.id == "d3" }) }
 
     @Test fun sheetScreenshot() = capture("sheet-screenshot") { QuestionSheet(fake.screenshot) }

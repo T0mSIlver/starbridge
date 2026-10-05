@@ -39,7 +39,10 @@ import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -479,7 +482,10 @@ fun DecisionSheet(decision: Decision, now: Instant, onAnswer: (String, String?, 
                     when {
                         page != null -> AnswerElsewhere(page)
                         decision.options.isEmpty() -> FreeText(replies.drafts[decision.id].orEmpty(), { replies.drafts[decision.id] = it }, sending != null) { send(null, it) }
-                        else -> Options(decision, sending, height = 56.dp, other = scheme.surfaceContainerHighest, answer = send, check = true)
+                        else -> {
+                            Options(decision, sending, height = 56.dp, other = scheme.surfaceContainerHighest, answer = send, check = true)
+                            if (decision.replies) Reply(decision.id, replies, sending != null) { send(null, it) }
+                        }
                     }
                 }
             }
@@ -510,8 +516,26 @@ private fun Picks(decision: Decision, sending: String?, answer: (String?, String
     }
 }
 
+/**
+ * "Reply" under the options, quiet: a typed answer in place of them, for when none is right
+ * (#201). It opens the text field, which stays open while a draft is kept.
+ */
 @Composable
-private fun FreeText(text: String, onText: (String) -> Unit, sending: Boolean, onAnswer: (String) -> Unit) {
+private fun Reply(id: String, replies: Replies, sending: Boolean, onAnswer: (String) -> Unit) {
+    var open by rememberSaveable(id) { mutableStateOf(!replies.drafts[id].isNullOrEmpty()) }
+    if (!open) {
+        TextButton(onClick = { open = true }, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurfaceVariant)) {
+            Text("Reply", style = StarbridgeTheme.type.label)
+        }
+    } else {
+        val focus = remember { FocusRequester() }
+        LaunchedEffect(Unit) { if (replies.drafts[id].isNullOrEmpty()) focus.requestFocus() }
+        FreeText(replies.drafts[id].orEmpty(), { replies.drafts[id] = it }, sending, Modifier.focusRequester(focus), onAnswer)
+    }
+}
+
+@Composable
+private fun FreeText(text: String, onText: (String) -> Unit, sending: Boolean, field: Modifier = Modifier, onAnswer: (String) -> Unit) {
     val send = { if (text.isNotBlank() && !sending) onAnswer(text.trim()) }
     Row(verticalAlignment = Alignment.CenterVertically) {
         TextField(
@@ -523,7 +547,7 @@ private fun FreeText(text: String, onText: (String) -> Unit, sending: Boolean, o
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
             keyboardActions = KeyboardActions(onSend = { send() }),
             colors = fieldColors(),
-            modifier = Modifier.weight(1f),
+            modifier = field.weight(1f),
         )
         Spacer(Modifier.width(Spacing.s2))
         FilledIconButton(onClick = send, enabled = text.isNotBlank() && !sending, modifier = Modifier.size(48.dp)) {
