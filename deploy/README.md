@@ -18,7 +18,7 @@ fetches main from GitHub with a read-only deploy key and refuses commits that ar
 unpacks the commit and runs `host/apply.sh`. `deploy/setup-actions-deploy.sh` installs both keys
 on the box; the private halves stay in `~/.config/starbridge/secrets`.
 
-To roll back, or to deploy a branch, from the dev box with any ref that is on GitHub:
+To roll back, or to deploy a branch, from the operator's machine with any ref that is on GitHub:
 
 ```bash
 deploy/deploy.sh                 # origin/main

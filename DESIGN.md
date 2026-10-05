@@ -373,8 +373,7 @@ accent: the amber of the icon's climber, which means "needs you" and nothing
 else. Everything else is black, white and grey, except the quota bars, which
 fill in each provider's lab colour.
 
-Design v2 (2026-10-05, SPEC.md) gives each surface a job, and the mockups in
-https://claude.ai/artifact/4Esy3goyohvLThcPVCKaEf are the source for every
+Design v2 (2026-10-05, SPEC.md) gives each surface a job, and the owner's mockups are the source for every
 screen: the landing page shows the product (direction B), the web app is a
 quiet, dense control surface for any browser (A), and Android is full
 Material 3 Expressive (C).
@@ -502,7 +501,7 @@ a decision's context, a permission prompt's command and a session's name.
 
 Decided 2026-10-05: the web moves only where motion shows what changed,
 and never makes an action wait. It follows the quiet dashboards in the
-design research (https://claude.ai/artifact/43JkSwnLEVmakivuuoZqXw: Linear,
+design research (Linear,
 Vercel, Tailscale), where views and selections switch at once and a read row
 changes in place; durations and the easing come from Material 3, so the web
 and Android move alike.

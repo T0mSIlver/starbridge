@@ -1,5 +1,5 @@
 #!/bin/sh
-# Run once from the dev box after the first deploy with Umami. Through an SSH tunnel to its
+# Run once from the operator's machine after the first deploy with Umami. Through an SSH tunnel to its
 # dashboard, it replaces Umami's default admin password with a random one, kept in
 # ~/.config/starbridge/secrets/umami-admin-password, and adds the website whose id the public
 # pages send (WEBSITE_ID in web/src/lib/analytics.ts). Safe to run again.
