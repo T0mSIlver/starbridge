@@ -68,15 +68,18 @@ import dev.starbridge.app.ui.theme.Spacing
 import dev.starbridge.app.ui.theme.StarbridgeTheme
 import java.time.Instant
 import javax.inject.Inject
+import dev.starbridge.app.ui.Symbol
+import dev.starbridge.app.ui.Sym
+import dev.starbridge.app.ui.Page
+import androidx.compose.ui.unit.dp
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.foundation.layout.height
 
 @HiltViewModel
-class DevicesViewModel @Inject constructor(private val store: Store, prefs: Prefs) : ViewModel() {
+class DevicesViewModel @Inject constructor(private val store: Store) : ViewModel() {
     val members = store.members
     val approval = store.approval
-    val push = store.push
-    val server = store.server
-    val colours = prefs.colours
-    val actions = DeviceActions(store::lookUpPairing, store::approvePairing, store::closePairing, store::revoke, store::setPushType, store::signOut, prefs::setColours, store::showCode)
+    val actions = DeviceActions(store::lookUpPairing, store::approvePairing, store::closePairing, store::revoke, store::showCode)
 }
 
 class DeviceActions(
@@ -84,54 +87,34 @@ class DeviceActions(
     val approve: () -> Unit,
     val close: () -> Unit,
     val revoke: (String) -> Unit,
-    val setPush: (String) -> Unit,
-    val signOut: () -> Unit,
-    val setColours: (Colours) -> Unit,
     /** Shows a QR code for a new phone to scan. */
     val showCode: () -> Unit,
 )
 
-/** Pairing first, then the devices that read decisions, the machines that post them, and this phone. */
+/** The account's devices and machines, each with Revoke; adding one opens its own page. */
 @Composable
 fun DevicesScreen(
     members: List<Member>,
-    approval: Approval,
-    push: PushSetting,
-    server: String,
     now: Instant,
     actions: DeviceActions,
     modifier: Modifier = Modifier,
-    colours: Colours = Colours.Starbridge,
-    otherWaysToPair: @Composable ColumnScope.() -> Unit = { QrWays(onScan = actions.lookUp, onShow = actions.showCode) },
+    onBack: () -> Unit = {},
+    onAdd: () -> Unit = {},
 ) {
-    val devices = members.filter { it.kind == Kind.Device }
-    val machines = members.filter { it.kind == Kind.Machine }
+    // Devices first, then machines, each in the order the directory added them.
+    val rows = members.sortedBy { it.kind != Kind.Device }
     var revoking by rememberSaveable { mutableStateOf<String?>(null) }
-    var signingOut by rememberSaveable { mutableStateOf(false) }
-    Screen("Devices", modifier) { padding ->
-        LazyColumn(
-            contentPadding = listPadding(padding),
-            verticalArrangement = Arrangement.spacedBy(groupGap),
-        ) {
-            item { PairCard(approval, actions, otherWaysToPair) }
-            item { Section("Devices") }
-            itemsIndexed(devices, key = { _, it -> it.id }) { i, it -> MemberRow(it, now, groupShape(i, devices.size)) { revoking = it.id } }
-            item { Section("Machines") }
-            if (machines.isEmpty()) {
-                item { Text("None yet. Run starbridge pair on a machine and type its code above.", style = StarbridgeTheme.type.small, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = Spacing.s1)) }
-            }
-            itemsIndexed(machines, key = { _, it -> it.id }) { i, it -> MemberRow(it, now, groupShape(i, machines.size)) { revoking = it.id } }
-            item { Section("This phone") }
-            item { Notifications(push, actions.setPush, groupShape(0, 3)) }
-            item { ColoursSetting(colours, actions.setColours, groupShape(1, 3)) }
-            item { Account(server, groupShape(2, 3)) { signingOut = true } }
-            item {
-                Text(
-                    "The recovery words were shown once, when you set up your first device. They can add a new device if you lose all of them.",
-                    style = StarbridgeTheme.type.small,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = Spacing.s3, start = Spacing.s1, end = Spacing.s1),
-                )
+    Page("Devices", modifier, onBack = onBack, titleGap = Spacing.s4) {
+        itemsIndexed(rows, key = { _, it -> it.id }) { i, it -> MemberRow(it, now, groupShape(i, rows.size, outer = Spacing.s5)) { revoking = it.id } }
+        item {
+            FilledTonalButton(
+                onClick = onAdd,
+                colors = ButtonDefaults.filledTonalButtonColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHighest, contentColor = MaterialTheme.colorScheme.onSurface),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.s1, vertical = Spacing.s4 - groupGap).height(Sizes.tap),
+            ) {
+                Symbol(Sym.Qr, size = 20.dp)
+                Spacer(Modifier.width(Spacing.s2))
+                Text("Add a device", style = StarbridgeTheme.type.action)
             }
         }
     }
@@ -139,31 +122,30 @@ fun DevicesScreen(
         val name = members.find { it.id == id }?.name ?: id
         Confirm(
             title = "Revoke $name?",
-            text = "It stops receiving decisions and quotas, and can no longer post or answer. To bring it back, pair it again.",
+            text = "It can no longer read or answer anything. This can't be undone.",
             action = "Revoke",
             onConfirm = { actions.revoke(id); revoking = null },
             onDismiss = { revoking = null },
         )
     }
-    if (signingOut) {
-        Confirm(
-            title = "Sign out?",
-            text = "This phone forgets its keys and leaves your devices. If it is your only device, you will need the recovery words to set up another.",
-            action = "Sign out",
-            onConfirm = { actions.signOut(); signingOut = false },
-            onDismiss = { signingOut = false },
-        )
+}
+
+/** Adding a machine or device: its code, or a QR code for a new phone. */
+@Composable
+fun AddDeviceScreen(
+    approval: Approval,
+    actions: DeviceActions,
+    modifier: Modifier = Modifier,
+    onBack: () -> Unit = {},
+    otherWaysToPair: @Composable ColumnScope.() -> Unit = { QrWays(onScan = actions.lookUp, onShow = actions.showCode) },
+) {
+    Page("Add a device", modifier, onBack = onBack, titleGap = Spacing.s4) {
+        item { PairCard(approval, actions, otherWaysToPair) }
     }
 }
 
-/** A group's name, above its rows. */
 @Composable
-private fun Section(text: String) {
-    Label(text, Modifier.padding(start = Spacing.s1, top = Spacing.s6, bottom = Spacing.s2))
-}
-
-@Composable
-private fun Confirm(title: String, text: String, action: String, onConfirm: () -> Unit, onDismiss: () -> Unit) {
+fun Confirm(title: String, text: String, action: String, onConfirm: () -> Unit, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
@@ -265,80 +247,35 @@ fun PairCard(approval: Approval, actions: DeviceActions, otherWays: @Composable 
     }
 }
 
-/** One row of a grouped list: [content] on `surface` in its group's [shape]. */
-@Composable
-private fun GroupRow(shape: Shape, content: @Composable ColumnScope.() -> Unit) {
-    Surface(Modifier.fillMaxWidth(), shape = shape, color = MaterialTheme.colorScheme.surfaceContainer) {
-        Column(Modifier.padding(horizontal = Spacing.s5, vertical = Spacing.s4), content = content)
-    }
-}
-
+/** A member: its kind's icon, name and when it joined; Revoke is a neutral text button. */
 @Composable
 private fun MemberRow(member: Member, now: Instant, shape: Shape, onRevoke: () -> Unit) {
-    val colors = StarbridgeTheme.colors
-    GroupRow(shape) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(if (member.kind == Kind.Machine) Icons.Rounded.Computer else Icons.Rounded.Smartphone, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(Spacing.s6))
+    val scheme = MaterialTheme.colorScheme
+    Surface(Modifier.fillMaxWidth(), shape = shape, color = scheme.surfaceContainer) {
+        Row(Modifier.padding(Spacing.s4), verticalAlignment = Alignment.CenterVertically) {
+            Symbol(if (member.kind == Kind.Machine) Sym.Computer else Sym.Phone, tint = scheme.onSurface)
             Spacer(Modifier.width(Spacing.s4))
             Column(Modifier.weight(1f)) {
-                Text(member.name, style = if (member.kind == Kind.Machine) StarbridgeTheme.type.machine.copy(fontSize = StarbridgeTheme.type.body.fontSize) else StarbridgeTheme.type.body, color = MaterialTheme.colorScheme.onSurface)
-                Text(if (member.current) "This phone" else "Added ${ago(now, member.addedAt)}", style = StarbridgeTheme.type.small, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(member.name, style = StarbridgeTheme.type.body, color = scheme.onSurface)
+                val added = "added ${date(member.addedAt)}"
+                Text(
+                    when {
+                        member.current -> "This phone"
+                        member.kind == Kind.Machine -> "Machine · $added"
+                        else -> added.replaceFirstChar { it.uppercase() }
+                    },
+                    style = StarbridgeTheme.type.small,
+                    color = scheme.onSurfaceVariant,
+                )
             }
             if (!member.current) {
-                TextButton(
-                    onClick = onRevoke,
-                    modifier = Modifier.heightIn(min = Sizes.tap),
-                    colors = ButtonDefaults.textButtonColors(contentColor = colors.bad),
-                ) { Text("Revoke", style = StarbridgeTheme.type.action) }
+                TextButton(onClick = onRevoke, colors = ButtonDefaults.textButtonColors(contentColor = scheme.onSurface)) {
+                    Text("Revoke", style = StarbridgeTheme.type.label)
+                }
             }
         }
     }
 }
 
-/** How pushes arrive on this phone. */
-@Composable
-private fun Notifications(push: PushSetting, onPush: (String) -> Unit, shape: Shape) {
-    val colors = StarbridgeTheme.colors
-    GroupRow(shape) {
-        Text("Notifications through", style = StarbridgeTheme.type.body, color = MaterialTheme.colorScheme.onSurface)
-        Spacer(Modifier.padding(top = Spacing.s3))
-        Choice(listOf("fcm" to "Google", "unifiedpush" to "UnifiedPush"), push.type, onPush, Modifier.fillMaxWidth())
-        Spacer(Modifier.padding(top = Spacing.s3))
-        val (status, color) = when {
-            push.registered -> "Registered with your server" to colors.ok
-            push.type == "unifiedpush" && push.distributors.isEmpty() -> "Install a UnifiedPush distributor, such as ntfy, then pick UnifiedPush again" to colors.warn
-            push.type == "fcm" && !push.fcmAvailable -> "This build has no Firebase project; pick UnifiedPush" to colors.warn
-            else -> "Not registered yet" to colors.warn
-        }
-        StatusWord(status, color)
-    }
-}
+private fun date(at: Instant) = java.time.format.DateTimeFormatter.ofPattern("d MMM", java.util.Locale.ENGLISH).withZone(java.time.ZoneId.systemDefault()).format(at)
 
-/** The "Colours" setting: DESIGN.md's palette, or Material You; amber, the quota colours and the provider dots stay. */
-@Composable
-private fun ColoursSetting(colours: Colours, onColours: (Colours) -> Unit, shape: Shape) {
-    GroupRow(shape) {
-        Text("Colours", style = StarbridgeTheme.type.body, color = MaterialTheme.colorScheme.onSurface)
-        Spacer(Modifier.padding(top = Spacing.s3))
-        Choice(listOf(Colours.Starbridge to "Starbridge", Colours.Wallpaper to "Match wallpaper"), colours, onColours, Modifier.fillMaxWidth())
-        Spacer(Modifier.padding(top = Spacing.s3))
-        Text("Amber, the quota colours and the provider dots stay the same under both.", style = StarbridgeTheme.type.small, color = MaterialTheme.colorScheme.onSurfaceVariant)
-    }
-}
-
-/** The server this phone uses, and signing out. */
-@Composable
-private fun Account(server: String, shape: Shape, onSignOut: () -> Unit) {
-    val colors = StarbridgeTheme.colors
-    GroupRow(shape) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text("Server", style = StarbridgeTheme.type.body, color = MaterialTheme.colorScheme.onSurface)
-                Text(server, style = StarbridgeTheme.type.machine, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            TextButton(onClick = onSignOut, colors = ButtonDefaults.textButtonColors(contentColor = colors.bad), modifier = Modifier.heightIn(min = Sizes.tap)) {
-                Text("Sign out", style = StarbridgeTheme.type.action)
-            }
-        }
-    }
-}

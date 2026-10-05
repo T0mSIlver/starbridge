@@ -17,6 +17,8 @@ enum class Wallpaper(val seed: Int) {
     Warm(0xFFB5562B.toInt()),
     Cool(0xFF2B5D8C.toInt()),
     LowChroma(0xFF8A8478.toInt()),
+    /** The mockups' "Match wallpaper" example. */
+    Green(0xFF4E7A3C.toInt()),
     ;
 
     fun scheme(dark: Boolean): ColorScheme {
