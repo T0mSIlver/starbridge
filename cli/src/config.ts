@@ -70,6 +70,8 @@ export interface State {
   answers: Record<string, { answer: Answer; seen: boolean }>;
   /** Permission prompts this machine posted (#57), by id, until a day after they expire. */
   permissions?: Record<string, PendingPermission>;
+  /** Quota alerts already raised, by `alertKey`: the reset of the cycle they were raised in. */
+  alerts?: Record<string, string>;
 }
 
 /**
