@@ -574,6 +574,12 @@ How it generalizes is open.
   agent the owner denied it, since Claude Code's default reads as a broken hook. Setup reports a
   failed step by the first line of its stderr.
 
+- 2026-10-05. Uptime alert with no new accounts: `.github/workflows/uptime.yml` checks
+  `/healthz` and `/healthz/backup` hourly (every 5 minutes once the repository is public), opens one issue labelled `outage` (GitHub
+  emails the owner) and closes it once both pass. `/healthz/backup` answers 503 when the last
+  good nightly backup is over 26 h old; it reads the age of a file `backup.sh` touches beside
+  the database, and says nothing else.
+
 ## Encryption, with existing libraries
 
 - libsodium sealed boxes (`crypto_box_seal`, X25519 + XSalsa20-Poly1305): an

@@ -5,11 +5,11 @@
 	}
 }
 
-# The server serves the API, the OAuth callback and /healthz; the web page serves the rest.
+# The server serves the API, the OAuth callback and /healthz*; the web page serves the rest.
 # One origin keeps the SameSite=Lax session cookie and the server's cross-site check working.
 starbridge.run {
 	encode zstd gzip
-	@server path /v1/* /healthz
+	@server path /v1/* /healthz /healthz/*
 	handle @server {
 		reverse_proxy 127.0.0.1:8080
 	}
