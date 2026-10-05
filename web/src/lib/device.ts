@@ -79,7 +79,8 @@ export interface Ctx {
 }
 
 export type Boot =
-  | { state: "signed-out" }
+  /** `known`: this browser holds a device of the account it last signed in to. */
+  | { state: "signed-out"; known: boolean }
   | { state: "first-device"; account: string }
   /** The account has devices and this browser is not one of them (or lost its binding). */
   | { state: "join"; account: string; stale: boolean }
@@ -146,14 +147,17 @@ async function trusted(account: string): Promise<{ dir: Directory; entries: Sign
 }
 
 export async function boot(): Promise<Boot> {
-  await ready;
   let me: Awaited<ReturnType<typeof api.me>>;
   try {
     me = await api.me();
   } catch (e) {
-    if (e instanceof ApiError && e.status === 401) return { state: "signed-out" };
+    if (e instanceof ApiError && e.status === 401) {
+      const last = await store.get("current");
+      return { state: "signed-out", known: !!last && !!(await store.get("device", last)) };
+    }
     throw e;
   }
+  await ready;
   const { account } = me;
   await store.put("current", account);
   const device = await store.get("device", account);

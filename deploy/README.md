@@ -47,6 +47,7 @@ It unpacks the ref into `/opt/starbridge`, builds the server and web images on t
 | Compose project | `sudo docker compose -p starbridge -f /opt/starbridge/deploy/compose.yaml` |
 | Database | volume `starbridge_data`, `/data/starbridge.db` in the container |
 | Backups | `/var/backups/starbridge/starbridge-YYYYMMDD.db`, nightly at 03:15 UTC, 14 days; Hetzner backups cover the rest |
+| Uptime | `.github/workflows/uptime.yml` checks `/healthz` and `/healthz/backup` (503 once the last backup is over 26 h old) hourly and opens an `outage` issue on failure |
 | FCM check | `sudo /opt/starbridge/deploy/host/check-fcm.sh` mints a token with the service account |
 
 To restore, stop the server, copy a backup over `starbridge.db` in the volume, delete

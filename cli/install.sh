@@ -1,7 +1,10 @@
 #!/bin/sh
 # Installs the starbridge CLI into ~/.local/bin from a GitHub Release, then runs `starbridge setup`.
 #
-#   curl -fsSL https://github.com/T0mSIlver/starbridge/releases/latest/download/install.sh | sh
+#   curl -fsSL https://starbridge.run/install.sh | sh
+#
+# starbridge.run serves this file from the deployed revision of main; each release also
+# carries a copy as an asset.
 #
 # It accepts the binary only if its hash is in SHA256SUMS and SHA256SUMS carries the release
 # key's minisign signature, for STARBRIDGE_VERSION when that is set. It checks the signature with

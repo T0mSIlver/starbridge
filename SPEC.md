@@ -573,6 +573,34 @@ How it generalizes is open.
   rather than the clients growing a Markdown renderer. A deny with no typed message tells the
   agent the owner denied it, since Claude Code's default reads as a broken hook. Setup reports a
   failed step by the first line of its stderr.
+- 2026-10-05. Landing page: `/` shows it to a signed-out browser that holds no device of the
+  account it last signed in to; a browser with one gets the sign-in screen and its Inbox, as
+  before. No route moved, so `/pair` links, the OAuth callback's redirect to `/`, the service
+  worker's scope and Android deep links are unchanged. It reuses the Roborazzi screenshots,
+  cropped to WebP in `web/public/landing`, and its sign-in button goes straight to GitHub;
+  self-hosters reach the owner-token form from its footer.
+
+- 2026-10-05. Uptime alert with no new accounts: `.github/workflows/uptime.yml` checks
+  `/healthz` and `/healthz/backup` hourly (every 5 minutes once the repository is public), opens one issue labelled `outage` (GitHub
+  emails the owner) and closes it once both pass. `/healthz/backup` answers 503 when the last
+  good nightly backup is over 26 h old; it reads the age of a file `backup.sh` touches beside
+  the database, and says nothing else.
+- 2026-10-05. `https://starbridge.run/install.sh` is `cli/install.sh`, served by the web page as a
+  route prerendered at build time, so each deploy serves the script of the revision it built.
+  Caddy could not: it is recreated only when the Caddyfile changes, so a bind-mounted file would
+  stay the previous release's. Each GitHub Release still carries a copy as an asset.
+- 2026-10-05. Homebrew check, with the tap still private. The formula `release.yml` writes, built
+  from locally built and signed release files, installs from the private tap in the
+  `homebrew/brew` image and passes `brew test` (a token reached the tap for that run only). The
+  tap's write deploy key is the one in `~/.config/starbridge/secrets`, and the workflow's pinned
+  GitHub host key is current. The workflow itself was not dispatched: a run needs the owner's
+  go-ahead. Only the documented install command assumes a public tap; the workflow pushes over
+  SSH with its deploy key either way. Going public flips: (1) the tap, so `brew install
+  T0mSIlver/starbridge/starbridge` clones it without credentials; (2) the main repo, since the
+  formula, `install.sh`, `starbridge update` and the landing page's APK link (#107) all download
+  from its GitHub Releases, and setup's plugin step (`claude plugin marketplace add
+  T0mSIlver/starbridge`) and `starbridge update`'s plugin refresh clone the repo itself. None of
+  them needs a change once it is public.
 
 - 2026-10-05. Privacy policy and terms: plain pages at `/privacy` and `/terms`, linked from the
   web and Android sign-in screens; they also serve the Play Store listing. Each claim follows the
