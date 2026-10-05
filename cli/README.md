@@ -43,10 +43,13 @@ Setup asks before each step, and a rerun repairs only what is missing:
 3. It asks which providers' quotas to upload.
 4. It installs the background service, `starbridge agent`, as a systemd user unit or a launchd
    agent.
-5. It installs the Claude Code plugin at user scope.
+5. It installs Starbridge in each agent it finds: the Claude Code plugin at user scope, the
+   skill in Codex's skills folder (updated when the CLI carries a newer one), and the Starbridge
+   Pi package.
 6. It uploads a first quota snapshot.
 
-`--yes` takes every default. `--no-quota`, `--no-service` and `--no-plugin` skip a step.
+`--yes` takes every default. `--no-quota`, `--no-service` and `--no-plugin` skip a step;
+`--no-plugin` skips every agent.
 `starbridge status` prints the same checks.
 
 ### Update and uninstall

@@ -1,0 +1,3 @@
+#!/bin/sh
+# Stands in for Codex: setup only checks that it is on the PATH.
+echo "codex $*" >>"$FAKE_LOG"
