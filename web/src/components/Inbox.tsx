@@ -83,7 +83,10 @@ export function Inbox() {
   const [picked, setPicked] = useState<string>();
   // Phones and narrow windows show the detail in place of the list once a row is tapped.
   const [opened, setOpened] = useState<string>();
-  const selected = wide ? selectedId(ids, picked) : opened;
+  // What this page answered, which may still be listed as open until the inbox reloads.
+  const answeredHere = useRef(new Set<string>());
+  const firstOpen = needs.find((e) => !answeredHere.current.has(e.id))?.id;
+  const selected = wide ? selectedId(ids, picked, firstOpen) : opened;
   useEffect(() => {
     if (wide && selected && picked !== selected) setPicked(selected);
   }, [wide, selected, picked]);
@@ -113,6 +116,7 @@ export function Inbox() {
 
   const openIds = needs.map((e) => e.id);
   const moveOn = (id: string) => {
+    answeredHere.current.add(id);
     const next = afterAnswer(openIds, id);
     setPicked((cur) => (cur === id ? next : cur));
   };
