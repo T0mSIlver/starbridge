@@ -588,7 +588,7 @@ round caps and joins, no fills. Android uses Material Symbols Rounded tuned to
 Google Sans Flex; a native iOS app, if one comes, would use SF Symbols. Every
 platform has the same icons by job: laptop, desktop, server and cloud (a
 machine's kind), permission prompt, question, run, quota, history, settings,
-devices, open in the agent, waiting, inbox.
+devices, open in the agent, waiting, inbox, send.
 
 ## The mark
 

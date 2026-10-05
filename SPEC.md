@@ -1087,6 +1087,9 @@ How it generalizes is open.
   grouping, then "History · N" with the matching answered items, History open or not. A
   History item also matches by its answer. Matched words show bold on `surface2`, never in
   amber; Escape in the box clears it. Android's search waits for the owner's pick.
+- 2026-10-06. A question's options and Reply (#254, owner). The first option carries no "Default"
+  label: it is already the filled one, so the word restated it. Reply is Material 3's filled text
+  field with its send icon button inside, centred on the field's line, on the web as on Android.
 
 ## Encryption, with existing libraries
 
