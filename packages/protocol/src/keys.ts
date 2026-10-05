@@ -83,13 +83,20 @@ export class RecoveryKeyError extends Error {
   }
 }
 
+/** Runs of 3 letters or more that no letter or digit touches. */
+const letterRuns = (text: string) =>
+  text.match(/(?<![\p{L}\p{N}])\p{L}{3,}(?![\p{L}\p{N}])/gu) ?? [];
+
 /**
  * Words, not a key: a run of 5 to 8 letters that a separator ends (BIP-39 words are 3 to 8
- * letters; a key's groups are 4), or 8 or more runs of 3 letters or more.
+ * letters; a key's groups are 4), or 8 or more letter runs, or 12 or more words all on the list
+ * however they are separated (digits included).
  */
 function looksLikeWords(text: string): boolean {
   if (/(^|[^\p{L}\p{N}])\p{L}{5,8}[^\p{L}\p{N}]/u.test(text)) return true;
-  return (text.match(/(?<![\p{L}\p{N}])\p{L}{3,}(?![\p{L}\p{N}])/gu) ?? []).length >= 8;
+  if (letterRuns(text).length >= 8) return true;
+  const words = splitRecoveryWords(text);
+  return words.length >= 12 && words.every((w) => known.has(w));
 }
 
 /** Any case, with or without dashes and spaces; Crockford's look-alikes (O for 0, I and L for 1). */
@@ -116,8 +123,11 @@ export function readRecoveryKey(text: string, opts: { typing?: boolean } = {}): 
   }
   const chars = keyChars(text);
   const index = [...chars].findIndex((c) => !CROCKFORD.includes(c));
+  // A U in a run of letters may be the start of an older account's words, which only read as
+  // words from the eighth: while typing, it waits.
+  const maybeWords = opts.typing && letterRuns(text).some((run) => /u/i.test(run));
   const problem: RecoveryKeyProblem | null =
-    index >= 0
+    index >= 0 && !(maybeWords && chars[index] === "U")
       ? { kind: "bad-character", index, char: chars[index] as string }
       : opts.typing
         ? null

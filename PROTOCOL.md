@@ -116,8 +116,9 @@ Older accounts were shown BIP-39 words: 24 for a 32-byte seed, which is the Ed25
 or 12 for a 16-byte seed. `readRecoveryKey` takes either. A key is read in any case, with or
 without dashes and spaces, O as 0 and I or L as 1; it names the first character no key holds,
 else a length other than 28, else a failed check. Text reads as words when it holds a run of 5
-to 8 letters ended by a separator, or 8 runs of 3 letters or more; words split on anything that
-is not a letter.
+to 8 letters ended by a separator, 8 runs of 3 letters or more, or 12 or more letter runs all on
+the word list however they are separated; words split on anything that is not a letter. While
+typing, a U inside a run of letters waits, since words only read as words from the eighth.
 
 When every device is lost, a new device turns the key or words into the recovery key pair,
 verifies the chain with that public key (entry 0's `recoverySig` must check against it, which a copied public key cannot
