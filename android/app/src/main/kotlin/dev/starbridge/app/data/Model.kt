@@ -134,6 +134,8 @@ data class QuotaWindow(
     val pace: Pace,
     val alert: Boolean = false,
     val steadyPercent: Int? = null,
+    /** The uploading machine's name, set when more than one machine uploads quotas. */
+    val machine: String? = null,
 )
 
 enum class Kind { Device, Machine }

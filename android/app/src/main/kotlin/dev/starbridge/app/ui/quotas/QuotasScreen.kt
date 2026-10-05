@@ -172,6 +172,7 @@ private fun WindowCard(window: QuotaWindow, now: Instant, modifier: Modifier = M
                     appendInlineContent(DOT)
                     append(window.provider)
                     withStyle(SpanStyle(color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = StarbridgeTheme.type.small.fontWeight)) { append("  ${window.window}") }
+                    window.machine?.let { withStyle(SpanStyle(color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = StarbridgeTheme.type.small.fontWeight)) { append(" · $it") } }
                 },
                 style = StarbridgeTheme.type.action,
                 color = MaterialTheme.colorScheme.onSurface,

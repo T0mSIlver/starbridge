@@ -157,7 +157,8 @@ class ServerStore(
         push.value = push.value.copy(type = saved.pushType, registered = saved.push?.type == saved.pushType)
         decisions.value = saved.decisions.map(::toUi)
         prompts.value = saved.prompts.map(::toUi)
-        windows.value = saved.quotas.flatMap(::toUi)
+        val named = saved.quotas.map { it.from }.distinct().size > 1
+        windows.value = saved.quotas.flatMap { toUi(it, named) }
         runs.value = saved.runs.map(::toUi)
         members.value = directory?.let(::toUi).orEmpty()
     }
@@ -1180,7 +1181,7 @@ class ServerStore(
         )
     }
 
-    private fun toUi(q: SavedQuota): List<QuotaWindow> = q.body.providers.flatMap { p ->
+    private fun toUi(q: SavedQuota, named: Boolean): List<QuotaWindow> = q.body.providers.flatMap { p ->
         p.windows.map { w ->
             val alerts = q.body.alerts.filter { it.provider == p.provider && it.window == w.id }
             val pace = w.pace
@@ -1194,6 +1195,7 @@ class ServerStore(
                 pace = paceOf(pace, unused),
                 alert = alerts.isNotEmpty(),
                 steadyPercent = pace?.expectedUsedPercent?.roundToInt()?.coerceIn(0, 100),
+                machine = if (named) directory?.members?.get(q.from)?.member?.name ?: q.from else null,
             )
         }
     }
