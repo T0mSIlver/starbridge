@@ -43,6 +43,7 @@ export function sample(now = Date.now()) {
       context,
       options,
       recommended: options[0],
+      ...(options.length > 0 ? { replies: true } : {}),
       source: src,
       ...extra,
     }) as unknown as InboxItem["decision"];

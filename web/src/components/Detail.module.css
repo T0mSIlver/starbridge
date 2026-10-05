@@ -100,3 +100,8 @@
     transition: none;
   }
 }
+
+.reply {
+  justify-self: start;
+  text-decoration: none;
+}
