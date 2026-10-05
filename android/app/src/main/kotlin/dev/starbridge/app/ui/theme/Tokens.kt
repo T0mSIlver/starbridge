@@ -268,7 +268,9 @@ val DarkProviders: Map<String, Color> = mapOf(
 
 object Spacing {
     val s1 = 4.dp
+    val s1h = 6.dp
     val s2 = 8.dp
+    val s2h = 10.dp
     val s3 = 12.dp
     val s4 = 16.dp
     val s5 = 20.dp
@@ -279,6 +281,7 @@ object Spacing {
 
 object Radius {
     val xs = 4.dp
+    val dense = 6.dp
     val sm = 8.dp
     val md = 12.dp
     val lg = 16.dp
@@ -289,7 +292,12 @@ object Radius {
 object Sizes {
     val tap = 48.dp
     val bar = 80.dp
+    val barWeb = 64.dp
+    val topWeb = 56.dp
     val rail = 240.dp
+    val list = 420.dp
+    val aside = 320.dp
+    val paneHead = 48.dp
     val content = 720.dp
     val track = 10.dp
     val trackDense = 6.dp
@@ -450,6 +458,13 @@ class StarbridgeType(sans: FontFamily, mono: FontFamily) {
         fontSize = 18.sp,
         fontWeight = FontWeight(400),
         lineHeight = 28.sp,
+        letterSpacing = 0.em,
+    )
+    val snippet = TextStyle(
+        fontFamily = mono,
+        fontSize = 13.sp,
+        fontWeight = FontWeight(400),
+        lineHeight = 20.sp,
         letterSpacing = 0.em,
     )
 }

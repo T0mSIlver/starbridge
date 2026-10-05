@@ -164,6 +164,14 @@
   font-weight: 400;
 }
 
+.t-snippet {
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 20px;
+  letter-spacing: 0em;
+  font-weight: 400;
+}
+
 @media (max-width: 599px) {
   .t-hero {
     font-size: 40px;

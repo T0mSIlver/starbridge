@@ -15,7 +15,7 @@ import type { InboxItem, PromptItem, PromptReply, Reply } from "@/lib/types";
 // The protocol code and libsodium load here, after the first paint.
 const load = () => import("@/lib/device");
 
-type Store = {
+export type Store = {
   boot: Boot | { state: "loading" } | { state: "error"; error: string };
   inbox: Inbox;
   quotas?: Quotas;
@@ -39,7 +39,8 @@ type Store = {
   deviceName: (id: string) => string;
 };
 
-const Ctx_ = createContext<Store | null>(null);
+export const StoreContext = createContext<Store | null>(null);
+const Ctx_ = StoreContext;
 
 const POLL_MS = 20_000;
 /** While a prompt waits, it leaves within a second or two of being settled elsewhere. */

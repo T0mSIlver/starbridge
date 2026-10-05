@@ -1,62 +1,65 @@
-// A quota window's state and words, as on Android (QuotasScreen.kt): a window whose reset
-// passed is over until the next upload, and a run-out time that passed reads "Ran out".
+// A quota window's state, as words (DESIGN.md, "Rules"): the status word carries the state in
+// its colour, and the time it is about. A window whose reset passed is over until the next
+// upload, and a run-out time that passed reads "Ran out".
 import { relative } from "./format";
-import type { QuotaAlert, QuotaWindow } from "./types";
+import { clock, type QuotaSettings } from "./quotaSettings";
+import type { QuotaAlert, QuotaCardData, QuotaWindow } from "./types";
 
-/** The CSS class of the state's colour; "unknown" is grey. */
-export type State = "ok" | "unused" | "out" | "unknown";
+/** The colour of the word: grey on pace, amber with headroom unused, red when it runs out. */
+export type State = "ok" | "unused" | "out" | "ran-out" | "unknown";
 
-export type Status = { state: State; word: string; detail?: string; resets: string };
+export type Status = { state: State; word: string; reset: string };
 
-/** `at` writes a time: relative ("in 2 h") by default, or a clock time (quotaSettings.ts). */
+/** "38 min", "1 h 50 min", "2 d 4 h": how long until `iso`. */
+export function span(iso: string, now: Date): string {
+  const m = Math.max(0, Math.round((Date.parse(iso) - now.getTime()) / 60_000));
+  if (m < 60) return `${m} min`;
+  if (m < 24 * 60) return m % 60 ? `${Math.floor(m / 60)} h ${m % 60} min` : `${m / 60} h`;
+  const d = Math.floor(m / (24 * 60));
+  const h = Math.round((m % (24 * 60)) / 60);
+  return h && h < 24 ? `${d} d ${h} h` : `${h === 24 ? d + 1 : d} d`;
+}
+
+/** "1 h 50 min" or "14:20": when the window resets. */
+function when(iso: string, s: Pick<QuotaSettings, "absoluteResets">, now: Date): string {
+  return s.absoluteResets ? clock(iso, now) : span(iso, now);
+}
+
 export function status(
   w: QuotaWindow,
   alert: QuotaAlert | undefined,
+  s: Pick<QuotaSettings, "absoluteResets">,
   now = new Date(),
-  at: (iso: string) => string = (iso) => relative(iso, now),
 ): Status {
   if (w.resetsAt && Date.parse(w.resetsAt) <= now.getTime())
-    return {
-      state: "unknown",
-      word: "Window reset",
-      detail: `Ended at ${Math.round(w.usedPercent)}% used; waiting for the next upload.`,
-      resets: `Reset ${at(w.resetsAt)}`,
-    };
-  const resets = w.resetsAt ? `Resets ${at(w.resetsAt)}` : "Reset time unknown";
+    return { state: "unknown", word: "Window reset", reset: "" };
+  const reset = w.resetsAt ? when(w.resetsAt, s, now) : "";
   if (!w.pace || w.pace.stage === "unknown")
-    return { state: "unknown", word: "Too early to tell", resets };
+    return { state: "unknown", word: "Too early to tell", reset };
   if (!w.pace.willLastToReset) {
-    const ranOut =
-      w.pace.runsOutAt !== undefined &&
-      w.pace.runsOutAt !== null &&
-      Date.parse(w.pace.runsOutAt) <= now.getTime();
-    if (ranOut)
-      return {
-        state: "out",
-        word: "Ran out",
-        detail: w.resetsAt ? `Back at the reset, ${at(w.resetsAt)}.` : "Back at the reset.",
-        resets,
-      };
-    return {
-      state: "out",
-      word: "Will run out",
-      detail: alert?.kind === "runs-out" ? runsOut(alert, at) : undefined,
-      resets,
-    };
+    const at = w.pace.runsOutAt;
+    if (at && Date.parse(at) <= now.getTime())
+      return { state: "ran-out", word: `Ran out at ${clock(at, now)}`, reset };
+    if (!at) return { state: "out", word: "Will run out", reset };
+    const by = s.absoluteResets ? `at ${clock(at, now)}` : relative(at, now);
+    return { state: "out", word: `Will run out ${by}`, reset };
   }
-  if (alert?.kind === "unused-headroom")
-    return {
-      state: "unused",
-      word: "Headroom unused",
-      detail: `Resets ${at(alert.resetsAt)} with ${Math.round(alert.unusedPercent)}% unused.`,
-      resets,
-    };
-  return { state: "ok", word: "On pace", resets };
+  if (alert?.kind === "unused-headroom") return { state: "unused", word: "Headroom unused", reset };
+  return { state: "ok", word: "On pace", reset };
 }
 
-function runsOut(
-  a: Extract<QuotaAlert, { kind: "runs-out" }>,
-  at: (iso: string) => string,
-): string {
-  return `Runs out ${at(a.runsOutAt)} at this pace; resets ${at(a.resetsAt)}.`;
+/** Windows that will run out or ran out lead on every screen; the rest keep their order. */
+export function runningOutFirst(
+  cards: QuotaCardData[],
+  s: Pick<QuotaSettings, "absoluteResets">,
+  now = new Date(),
+): QuotaCardData[] {
+  const out = (c: QuotaCardData) => {
+    const st = status(c.window, c.alert, s, now).state;
+    return st === "out" || st === "ran-out" ? 0 : 1;
+  };
+  return cards
+    .map((c, i) => ({ c, i, o: out(c) }))
+    .sort((a, b) => a.o - b.o || a.i - b.i)
+    .map(({ c }) => c);
 }

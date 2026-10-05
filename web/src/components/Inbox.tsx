@@ -1,20 +1,33 @@
 "use client";
 
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { origin, relative } from "@/lib/format";
-import { closedAt, outcomeText } from "@/lib/outcome";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import {
+  byMachine,
+  closedToday,
+  type Entry,
+  history,
+  needsYou,
+  type Past,
+  promptOpen,
+  running,
+} from "@/lib/feed";
+import { matches, useFind } from "@/lib/find";
+import { closedByPhrase, promptOutcome } from "@/lib/outcome";
+import { usePref } from "@/lib/prefs";
 import { afterAnswer, selectedId, step } from "@/lib/selection";
-import type { InboxItem, Reply } from "@/lib/types";
+import type { InboxItem, PromptItem } from "@/lib/types";
 import { useApp } from "./AppProvider";
-import { Thumb } from "./Attachments";
-import { AnsweredDecision, AnsweredLine, OpenDecision, ordered } from "./DecisionCard";
+import { PromptDetail, QuestionDetail } from "./Detail";
+import { HistoryHead, machineIcon, NeedRow, PastRow, RunRow, useNow } from "./Feed";
 import s from "./Inbox.module.css";
-import { Prompts } from "./Prompts";
+import { Icon } from "./icons";
+import { ordered } from "./options";
+import { PhoneBar } from "./PhoneBar";
 import { PushBanner } from "./PushBanner";
-import { Runs } from "./Runs";
+import { QuotaAside } from "./QuotaAside";
 import ui from "./ui.module.css";
 
-// Where the side rail leaves room for a list beside the detail (Shell.module.css).
+// From here the list and the detail sit side by side (Inbox.module.css).
 const WIDE = "(min-width: 1100px)";
 
 function useWide(): boolean {
@@ -25,195 +38,390 @@ function useWide(): boolean {
       return () => m.removeEventListener("change", change);
     },
     () => window.matchMedia(WIDE).matches,
-    () => false,
+    () => true,
   );
 }
+
+const text = (e: Entry) =>
+  e.type === "prompt"
+    ? [e.item.permission.tool, e.item.permission.summary, e.item.permission.source.sessionTitle]
+    : e.type === "question"
+      ? [e.item.decision.question, e.item.decision.context, e.item.decision.source.sessionTitle]
+      : [e.item.run.title, e.item.run.reason];
 
 export function Inbox() {
-  const { inbox, answer } = useApp();
+  const { inbox, prompts, runs, promptLog, loadPromptLog, answer, answerPrompt, deviceName } =
+    useApp();
+  const [grouped, setGrouped] = usePref("groupByMachine");
+  const [historyOpen, setHistoryOpen] = usePref("historyOpen");
+  const find = useFind();
   const wide = useWide();
-  const open = inbox.items
-    .filter((item) => !closedAt(item))
-    .sort((a, b) => b.decision.createdAt.localeCompare(a.decision.createdAt));
-  const answered = inbox.items
-    .filter((item) => closedAt(item))
-    .sort((a, b) => (closedAt(b) ?? "").localeCompare(closedAt(a) ?? ""));
+  const live =
+    prompts.length > 0 || inbox.items.some((i) => i.waitingSince) || !!runs?.items.length;
+  const now = useNow(live);
 
-  return (
-    <>
-      <header className={ui.head}>
-        <h1 className="t-title">Inbox</h1>
-        {open.length > 0 && (
-          <span className={`t-label ${ui.count}`}>
-            <span className={ui.dot} aria-hidden="true" />
-            {open.length} open
-          </span>
-        )}
-      </header>
-      <PushBanner />
-      <Prompts />
-      <Runs />
-      {inbox.rejected.length > 0 && (
-        <p className={ui.error} role="status">
-          {inbox.rejected.length === 1 ? "One decision" : `${inbox.rejected.length} decisions`}{" "}
-          failed verification and are hidden: {inbox.rejected[0]?.error}
-        </p>
-      )}
-      {wide ? (
-        <Panes open={open} answered={answered} answer={answer} />
-      ) : (
-        <>
-          {open.length ? (
-            <ul className={ui.list}>
-              {open.map((item) => (
-                <li key={item.decision.id}>
-                  <OpenDecision d={item.decision} onAnswer={(reply) => answer(item, reply)} />
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className={ui.empty}>Nothing needs you.</p>
-          )}
-          {answered.length > 0 && (
-            <>
-              <h2 className={`t-label ${ui.section}`}>Answered</h2>
-              <ul className={s.log}>
-                {answered.map((item) => (
-                  <li key={item.decision.id}>
-                    <AnsweredLine item={item} />
-                  </li>
-                ))}
-              </ul>
-            </>
-          )}
-        </>
-      )}
-    </>
+  useEffect(() => {
+    if (historyOpen) loadPromptLog().catch(() => {});
+  }, [historyOpen, loadPromptLog]);
+
+  const keep = (e: Entry) => !find || matches(find, [e.machine, e.repo, ...text(e)]);
+  const needs = needsYou(inbox.items, prompts, now).filter(keep);
+  const runEntries = running(runs?.items ?? [], now).filter(keep);
+  const allPrompts = useMemo(() => {
+    const seen = new Map<string, PromptItem>();
+    for (const p of [...(promptLog ?? []), ...prompts]) seen.set(p.permission.id, p);
+    return [...seen.values()];
+  }, [promptLog, prompts]);
+  const past = history(inbox.items, allPrompts, (p) => promptOutcome(p, deviceName), now).filter(
+    (p) => keep(p.entry),
   );
-}
 
-type Answer = ReturnType<typeof useApp>["answer"];
-
-/** Wide screens: the list beside the selected decision, J and K to move, 1 to 4 to answer. */
-function Panes({
-  open,
-  answered,
-  answer,
-}: {
-  open: InboxItem[];
-  answered: InboxItem[];
-  answer: Answer;
-}) {
-  const all = [...open, ...answered];
-  const ids = all.map((item) => item.decision.id);
+  const ids = [...needs, ...(historyOpen ? past.map((p) => p.entry) : [])].map((e) => e.id);
   const [picked, setPicked] = useState<string>();
-  const selectedAt = ids.indexOf(selectedId(ids, picked) ?? "");
-  const selected = all[selectedAt];
-  // Pin what is shown, so a decision arriving on top does not replace it.
+  // Phones and narrow windows show the detail in place of the list once a row is tapped.
+  const [opened, setOpened] = useState<string>();
+  const selected = wide ? selectedId(ids, picked) : opened;
   useEffect(() => {
-    if (selected && picked !== selected.decision.id) setPicked(selected.decision.id);
-  }, [selected, picked]);
-  const answerSelected = async (item: InboxItem, reply: Reply) => {
-    const next = afterAnswer(
-      open.map((o) => o.decision.id),
-      item.decision.id,
-    );
-    await answer(item, reply);
-    // Only when it is still selected: the owner may have moved on while it was sent.
-    setPicked((cur) => (cur === item.decision.id ? next : cur));
-  };
+    if (wide && selected && picked !== selected) setPicked(selected);
+  }, [wide, selected, picked]);
 
-  const latest = useRef({ ids, id: selected?.decision.id });
-  latest.current = { ids, id: selected?.decision.id };
-  const listRef = useRef<HTMLUListElement>(null);
-
+  const latest = useRef({ ids, selected });
+  latest.current = { ids, selected };
+  const listRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
+    if (!wide) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       if ((e.target as HTMLElement).closest("input, textarea, [contenteditable]")) return;
       const by = e.key === "j" || e.key === "J" ? 1 : e.key === "k" || e.key === "K" ? -1 : 0;
       if (!by) return;
-      const next = step(latest.current.ids, latest.current.id, by);
+      const next = step(latest.current.ids, latest.current.selected, by);
       if (next === undefined) return;
       e.preventDefault();
       setPicked(next);
       const list = listRef.current;
       const row = list?.querySelector<HTMLElement>(`[data-id="${CSS.escape(next)}"]`);
-      // Focus follows the selection when it is in the list, so its ring never marks another row.
       if (list?.contains(document.activeElement)) row?.focus();
       row?.scrollIntoView({ block: "nearest" });
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [wide]);
 
-  if (!selected) return <p className={ui.empty}>Nothing needs you.</p>;
-  const options = closedAt(selected) ? [] : ordered(selected.decision);
+  const openIds = needs.map((e) => e.id);
+  const moveOn = (id: string) => {
+    const next = afterAnswer(openIds, id);
+    setPicked((cur) => (cur === id ? next : cur));
+  };
+  const answerQuestion = async (item: InboxItem, reply: Parameters<typeof answer>[1]) => {
+    await answer(item, reply);
+    moveOn(item.decision.id);
+  };
+  const answerOne = async (item: PromptItem, reply: Parameters<typeof answerPrompt>[1]) => {
+    await answerPrompt(item, reply);
+    moveOn(item.permission.id);
+  };
+
+  const pastOf = new Map(past.map((p) => [p.entry.id, p]));
+  const entryOf = new Map(needs.map((e) => [e.id, e]));
+  const detail = (id: string | undefined) => {
+    if (!id) return null;
+    const open = entryOf.get(id);
+    const done = pastOf.get(id);
+    const e = open ?? done?.entry;
+    if (!e || e.type === "run") return null;
+    const closed = done ? closedLine(done) : undefined;
+    return e.type === "prompt" ? (
+      <PromptDetail
+        key={id}
+        item={e.item}
+        now={now}
+        keys={wide}
+        closed={closed}
+        onAnswer={(r) => answerOne(e.item, r)}
+      />
+    ) : (
+      <QuestionDetail
+        key={id}
+        item={e.item}
+        now={now}
+        keys={wide}
+        closed={closed}
+        onAnswer={(r) => answerQuestion(e.item, r)}
+      />
+    );
+  };
+
+  const comfy = !wide;
+  const row = (e: Entry) =>
+    e.type === "run" ? (
+      <RunRow key={e.id} item={e.item} now={now} comfy={comfy} />
+    ) : (
+      <NeedRow
+        key={e.id}
+        entry={e}
+        now={now}
+        comfy={comfy}
+        selected={wide && e.id === selected}
+        onSelect={() => (wide ? setPicked(e.id) : setOpened(e.id))}
+        actions={
+          comfy ? (
+            <RowActions entry={e} onPrompt={answerOne} onQuestion={answerQuestion} />
+          ) : undefined
+        }
+      />
+    );
+  const sub = (label: React.ReactNode) => <div className={`t-caption ${s.sub}`}>{label}</div>;
+
+  const count = needs.length;
+  const list = (
+    <section className={s.list} ref={listRef} aria-label="Inbox">
+      <header className={`t-small ${s.head}`}>
+        <span className={s.headTitle}>
+          Needs you {count > 0 && <span className={s.count}>{count}</span>}
+        </span>
+        <span className={`t-key ${s.keys}`}>
+          <kbd className={ui.kbd}>J</kbd> <kbd className={ui.kbd}>K</kbd>
+        </span>
+        <ViewMenu grouped={grouped} setGrouped={setGrouped} />
+      </header>
+      <PushBanner />
+      {inbox.rejected.length > 0 && (
+        <p className={`t-meta ${s.rejected}`} role="status">
+          {inbox.rejected.length} hidden: failed verification ({inbox.rejected[0]?.error})
+        </p>
+      )}
+      {grouped ? (
+        byMachine(runEntries, needs).map((g) => (
+          <div key={g.machine}>
+            {sub(
+              <>
+                <Icon name={machineIcon(g.kind)} size={13} className={s.subIcon} /> {g.machine}
+              </>,
+            )}
+            {g.entries.map(row)}
+          </div>
+        ))
+      ) : (
+        <>
+          {runEntries.length > 0 && (
+            <>
+              {sub("Running")}
+              {runEntries.map(row)}
+            </>
+          )}
+          {needs.length > 0 && (
+            <>
+              {sub(comfy ? `Needs you · ${count}` : "Needs you")}
+              {needs.map(row)}
+            </>
+          )}
+        </>
+      )}
+      {needs.length === 0 && runEntries.length === 0 && (
+        <p className={`t-small ${s.empty}`}>{find ? "Nothing matches" : "Nothing needs you"}</p>
+      )}
+      <div className={s.gap} />
+      <HistoryHead
+        open={historyOpen}
+        count={closedToday(past, now)}
+        comfy={comfy}
+        onToggle={() => setHistoryOpen(!historyOpen)}
+      />
+      {historyOpen &&
+        past.map((p) => (
+          <PastRow
+            key={p.entry.id}
+            past={p}
+            by={p.entry.type === "question" ? closedByPhrase(p.entry.item) : ""}
+            selected={wide && p.entry.id === selected}
+            onSelect={() => (wide ? setPicked(p.entry.id) : setOpened(p.entry.id))}
+          />
+        ))}
+    </section>
+  );
+
+  if (!wide && opened) {
+    return (
+      <div className={s.single}>
+        <PhoneBar title="Inbox" back={() => setOpened(undefined)} />
+        <div className={s.openDetail}>
+          {detail(opened) ?? <p className={`t-small ${s.empty}`}>Answered</p>}
+        </div>
+      </div>
+    );
+  }
+  if (!wide)
+    return (
+      <div className={s.single}>
+        <PhoneBar
+          title="Inbox"
+          view={<ViewMenu grouped={grouped} setGrouped={setGrouped} icon />}
+        />
+        {list}
+      </div>
+    );
   return (
     <div className={s.panes}>
-      <ul className={s.list} ref={listRef} aria-label="Decisions">
-        {all.map((item) => {
-          const d = item.decision;
-          const on = item === selected;
-          const closed = closedAt(item);
-          return (
-            <li key={d.id}>
-              <button
-                type="button"
-                data-id={d.id}
-                className={`${s.row} ${closed ? s.done : ""}`}
-                aria-current={on ? "true" : undefined}
-                tabIndex={on ? 0 : -1}
-                onClick={() => setPicked(d.id)}
-              >
-                <span className={s.rowQ}>
-                  {closed ? (
-                    <span className={s.spacer} />
-                  ) : (
-                    <span className={`${ui.dot} ${s.rowDot}`} aria-hidden="true" />
-                  )}
-                  <span className={s.rowText}>{d.question}</span>
-                  <Thumb d={d} />
-                </span>
-                <span
-                  className={`t-small ${s.rowSub}`}
-                  title={closed ? undefined : d.source.session || undefined}
-                >
-                  {closed
-                    ? `${outcomeText(item)} · ${relative(closed)}`
-                    : `${origin(d.source)} · ${relative(d.createdAt)}`}
-                </span>
-              </button>
-            </li>
-          );
-        })}
-      </ul>
-      <section className={s.detail} aria-label="Selected decision">
-        {closedAt(selected) ? (
-          <AnsweredDecision item={selected} />
-        ) : (
-          <OpenDecision
-            key={selected.decision.id}
-            d={selected.decision}
-            keys
-            onAnswer={(reply) => answerSelected(selected, reply)}
-          />
-        )}
-        <p className={`t-small ${s.keys}`}>
-          {options.length > 0 && (
-            <span>
-              {options.slice(0, 4).map((_, i) => (
-                // biome-ignore lint/suspicious/noArrayIndexKey: the key number is the identity
-                <kbd key={i}>{i + 1}</kbd>
-              ))}{" "}
-              answer
-            </span>
-          )}
-          <span>
-            <kbd>J</kbd> <kbd>K</kbd> next, previous
-          </span>
-        </p>
+      <h1 className="sr-only">Inbox</h1>
+      {list}
+      <section className={s.detail} aria-label="Selected">
+        {detail(selected)}
       </section>
+      <QuotaAside />
+    </div>
+  );
+}
+
+/** History's second line: "Server first · on this browser · 11:02". */
+function closedLine(p: Past): string {
+  const by = p.entry.type === "question" ? ` · ${closedByPhrase(p.entry.item)}` : "";
+  const at = new Date(p.closed).toLocaleTimeString(undefined, {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  return `${p.outcome}${by} · ${at}`;
+}
+
+/** On a phone's row: Allow and Deny, or the question's options. */
+function RowActions({
+  entry,
+  onPrompt,
+  onQuestion,
+}: {
+  entry: Entry;
+  onPrompt: (
+    p: PromptItem,
+    r: Parameters<ReturnType<typeof useApp>["answerPrompt"]>[1],
+  ) => Promise<void>;
+  onQuestion: (
+    i: InboxItem,
+    r: Parameters<ReturnType<typeof useApp>["answer"]>[1],
+  ) => Promise<void>;
+}) {
+  const [busy, setBusy] = useState(false);
+  const run = (f: () => Promise<void>) => async () => {
+    setBusy(true);
+    try {
+      await f();
+    } catch {
+      // The detail shows errors; the row only retries.
+    } finally {
+      setBusy(false);
+    }
+  };
+  if (entry.type === "prompt") {
+    if (!promptOpen(entry.item, Date.now())) return null;
+    return (
+      <>
+        <button
+          type="button"
+          className={`t-label ${ui.btn} ${ui.rec}`}
+          disabled={busy}
+          onClick={run(() => onPrompt(entry.item, { behavior: "allow", scope: "once" }))}
+        >
+          Allow
+        </button>
+        <button
+          type="button"
+          className={`t-label ${ui.btn}`}
+          disabled={busy}
+          onClick={run(() => onPrompt(entry.item, { behavior: "deny", scope: "once" }))}
+        >
+          Deny
+        </button>
+      </>
+    );
+  }
+  if (entry.type !== "question" || entry.item.decision.answerIn) return null;
+  const d = entry.item.decision;
+  const options = ordered(d);
+  if (options.length === 0) return null;
+  return (
+    <>
+      {options.map((o) => (
+        <button
+          key={o}
+          type="button"
+          className={`t-label ${ui.btn} ${o === d.recommended ? ui.rec : ""}`}
+          disabled={busy}
+          onClick={run(() => onQuestion(entry.item, { choice: o }))}
+        >
+          {o}
+        </button>
+      ))}
+    </>
+  );
+}
+
+/** One feed or Group by machine, remembered on this device. */
+function ViewMenu({
+  grouped,
+  setGrouped,
+  icon = false,
+}: {
+  grouped: boolean;
+  setGrouped: (v: boolean) => void;
+  icon?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent | KeyboardEvent) => {
+      if (
+        e instanceof KeyboardEvent ? e.key === "Escape" : !ref.current?.contains(e.target as Node)
+      )
+        setOpen(false);
+    };
+    document.addEventListener("mousedown", close);
+    document.addEventListener("keydown", close);
+    return () => {
+      document.removeEventListener("mousedown", close);
+      document.removeEventListener("keydown", close);
+    };
+  }, [open]);
+  return (
+    <div className={s.view} ref={ref}>
+      <button
+        type="button"
+        className={icon ? s.iconButton : `t-meta ${ui.btn} ${ui.sm} ${open ? s.viewOpen : ""}`}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label={icon ? "View" : undefined}
+        onClick={() => setOpen(!open)}
+      >
+        <Icon name="view" size={icon ? 22 : 16} />
+        {!icon && "View"}
+      </button>
+      {open && (
+        <div className={`t-small ${s.menu}`} role="menu">
+          {(
+            [
+              ["One feed", false],
+              ["Group by machine", true],
+            ] as const
+          ).map(([label, value]) => (
+            <button
+              key={label}
+              type="button"
+              role="menuitemradio"
+              aria-checked={grouped === value}
+              className={s.menuItem}
+              onClick={() => {
+                setGrouped(value);
+                setOpen(false);
+              }}
+            >
+              <span className={s.check}>
+                {grouped === value && <Icon name="check" size={16} />}
+              </span>
+              {label}
+            </button>
+          ))}
+          <div className={`t-caption ${s.menuNote}`}>Remembered on this device</div>
+        </div>
+      )}
     </div>
   );
 }

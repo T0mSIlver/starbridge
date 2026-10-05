@@ -113,7 +113,9 @@
   --provider-zoommate: #105eff;
 
   --s1: 4px;
+  --s1h: 6px;
   --s2: 8px;
+  --s2h: 10px;
   --s3: 12px;
   --s4: 16px;
   --s5: 20px;
@@ -121,6 +123,7 @@
   --s8: 32px;
   --s10: 40px;
   --radius-xs: 4px;
+  --radius-dense: 6px;
   --radius-sm: 8px;
   --radius-md: 12px;
   --radius-lg: 16px;
@@ -128,7 +131,12 @@
   --radius-pill: 999px;
   --size-tap: 48px;
   --size-bar: 80px;
+  --size-bar-web: 64px;
+  --size-top-web: 56px;
   --size-rail: 240px;
+  --size-list: 420px;
+  --size-aside: 320px;
+  --size-pane-head: 48px;
   --size-content: 720px;
   --size-track: 10px;
   --size-track-dense: 6px;
