@@ -94,6 +94,7 @@ class Fake(private val now: Instant) {
             ),
             createdAt = ago(12),
             agent = "claude-code",
+            links = listOf(Link("https://claude.ai/artifact/4Esy3goyohvLThcPVCKaEf", "merge plan"), Link("https://github.com/T0mSIlver/starbridge/pull/86")),
         ),
         Decision(
             id = "d3",
@@ -190,6 +191,15 @@ class Fake(private val now: Instant) {
             at = secondsAgo(4),
             progress = Run.Progress(34, 120, percent = false),
         ),
+    )
+
+    /**
+     * Runs with no news to show (#190): one that prints no progress, and one killed before its
+     * first heartbeat, lost for 3 min 37 s.
+     */
+    val quietRuns = listOf(
+        Run("r5", "Lost run test", "uses your session and keyboard", devBox, startedAt = secondsAgo(217 + 180), at = secondsAgo(217 + 180)),
+        Run("r6", "Integration suite", "runs the emulator on the dev box", Source("mac mini", "localvoxtral", "suite", machineKind = "desktop"), startedAt = secondsAgo(95), at = secondsAgo(20)),
     )
 
     /** Runs as they end: passed, failed, lost. */

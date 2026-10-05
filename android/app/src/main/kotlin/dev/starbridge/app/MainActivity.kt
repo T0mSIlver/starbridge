@@ -31,8 +31,11 @@ import dev.starbridge.app.data.Colours
 import dev.starbridge.app.data.Phase
 import dev.starbridge.app.data.Prefs
 import dev.starbridge.app.data.Store
+import androidx.navigation3.runtime.NavKey
+import dev.starbridge.app.ui.DecisionKey
 import dev.starbridge.app.ui.LocalClock24
 import dev.starbridge.app.ui.Main
+import dev.starbridge.app.ui.PromptKey
 import dev.starbridge.app.ui.Setup
 import dev.starbridge.app.ui.pairing.JoinActions
 import dev.starbridge.app.ui.pairing.JoinPrompt
@@ -46,8 +49,8 @@ class MainActivity : ComponentActivity() {
     @Inject lateinit var store: Store
     @Inject lateinit var prefs: Prefs
 
-    /** Decisions to open, from a notification tap. */
-    private val openDecision = Channel<String>(Channel.CONFLATED)
+    /** Questions and prompts to open, from a notification tap. */
+    private val opening = Channel<NavKey>(Channel.CONFLATED)
 
     /** The phone's 12/24-hour choice, read again on resume: changing it is no configuration change. */
     private val system24 = mutableStateOf(true)
@@ -85,7 +88,7 @@ class MainActivity : ComponentActivity() {
                     }
                 }
                 if (phase == Phase.Ready) {
-                    Main(decisions, store.notice, store::dismissNotice, openDecision.receiveAsFlow())
+                    Main(decisions, store.notice, store::dismissNotice, opening.receiveAsFlow())
                     val asks by store.joinAsks.collectAsStateWithLifecycle()
                     val comparison by store.comparison.collectAsStateWithLifecycle()
                     JoinPrompt(asks, comparison, JoinActions(store::compareJoin, store::approveJoin, store::refuseJoin, store::closeComparison))
@@ -121,8 +124,12 @@ class MainActivity : ComponentActivity() {
             setIntent(Intent(this, MainActivity::class.java))
         }
         intent?.getStringExtra(EXTRA_DECISION)?.let {
-            openDecision.trySend(it)
+            opening.trySend(DecisionKey(it))
             intent.removeExtra(EXTRA_DECISION)
+        }
+        intent?.getStringExtra(EXTRA_PROMPT)?.let {
+            opening.trySend(PromptKey(it))
+            intent.removeExtra(EXTRA_PROMPT)
         }
     }
 
@@ -138,5 +145,6 @@ class MainActivity : ComponentActivity() {
 
     companion object {
         const val EXTRA_DECISION = "decision"
+        const val EXTRA_PROMPT = "prompt"
     }
 }

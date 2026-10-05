@@ -14,11 +14,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -43,6 +40,8 @@ import dev.starbridge.app.data.Link
 import dev.starbridge.app.data.bitmap
 import dev.starbridge.app.data.label
 import dev.starbridge.app.data.openLink
+import dev.starbridge.app.ui.Sym
+import dev.starbridge.app.ui.Symbol
 import dev.starbridge.app.ui.theme.Radius
 import dev.starbridge.app.ui.theme.Spacing
 import dev.starbridge.app.ui.theme.StarbridgeTheme
@@ -113,21 +112,27 @@ private fun ImageBox(image: Attached, maxHeight: Dp, wide: Boolean, crop: Boolea
     }
 }
 
-/** Pages the agent attached, such as a Claude artifact, as assist chips. */
+/**
+ * Pages the agent wants the owner to see before answering, such as a Claude artifact, as chips
+ * under "Attached by the agent" (#171): "Open" and the page's title, else its label.
+ */
 @Composable
 fun Links(links: List<Link>, modifier: Modifier = Modifier) {
     if (links.isEmpty()) return
     val context = LocalContext.current
     val scheme = MaterialTheme.colorScheme
-    FlowRow(modifier, horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
-        links.forEach { link ->
-            AssistChip(
-                onClick = { openLink(context, link.url) },
-                label = { Text(link.label(), style = StarbridgeTheme.type.label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                leadingIcon = { Icon(Icons.Rounded.Link, contentDescription = null, modifier = Modifier.size(AssistChipDefaults.IconSize)) },
-                colors = AssistChipDefaults.assistChipColors(labelColor = scheme.onSurface, leadingIconContentColor = scheme.onSurfaceVariant),
-                border = AssistChipDefaults.assistChipBorder(enabled = true, borderColor = scheme.outline),
-            )
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(Spacing.s1)) {
+        Text("Attached by the agent", style = StarbridgeTheme.type.caption, color = scheme.onSurfaceVariant)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+            links.forEach { link ->
+                AssistChip(
+                    onClick = { openLink(context, link.url) },
+                    label = { Text(link.title?.let { "Open $it" } ?: link.label(), style = StarbridgeTheme.type.label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                    trailingIcon = { Symbol(Sym.Open, size = AssistChipDefaults.IconSize, tint = scheme.onSurfaceVariant) },
+                    colors = AssistChipDefaults.assistChipColors(labelColor = scheme.onSurface),
+                    border = AssistChipDefaults.assistChipBorder(enabled = true, borderColor = scheme.outline),
+                )
+            }
         }
     }
 }

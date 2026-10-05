@@ -696,6 +696,26 @@ How it generalizes is open.
   by an app from before images (#62) kept bodies without them, so the app reads its open
   decisions again from the server once. The notification puts the agent's Markdown code in mono,
   without backticks.
+- 2026-10-05. Android notifications after the launch test (#182, #183, #184). A permission
+  prompt's notification shows only its command, in mono; the agent's description stays in the
+  app. Questions and prompts turn off Android's own contextual chips ("Open link"), so the only
+  buttons are the answers. With sensitive content hidden, the lock screen shows the public
+  version, so it carries the same buttons: Deny and a question's options answer from there,
+  Allow asks for the unlock first, as decided for #57; the question and the command stay hidden.
+  Tapping a prompt's notification opens that prompt's sheet, as a question's opens its own.
+- 2026-10-05. Runs with no news (#190). A run that reports no progress shows an indeterminate
+  bar while it runs. A lost run (no update for 3 minutes) shows no time in its meta row: a run
+  killed before its first heartbeat has its last news at its start, so the only duration known
+  would read "0 s". Its line "No news for 3 min 37 s" ticks each second, and it shows no progress.
+- 2026-10-05. Android notification channels and order (#196). The channels sit in two groups,
+  "Needs you" (Decisions, Permission prompts, Join requests) and "Activity" (Runs, Quotas), instead
+  of Android's "Other". Each notification carries a sort key, questions and prompts first, then
+  join requests, runs and quotas, because Android orders an app's bundled notifications by sort
+  key before importance. Not yet checked on a device.
+- 2026-10-05. Links on questions, Android (#171, the web session's rule): under "Attached by the
+  agent", each chip reads "Open" and the link's title, else its label, with an open-outside icon.
+  A Claude artifact, as a link or as `answerIn`, opens in the browser, since the Claude app shows
+  it only in its in-app browser; a session link still opens in the Claude app.
 - 2026-10-05. Quota settings and notifications, as built (#115). Settings live on each device
   (web `localStorage`, Android preferences) and sit on a Quota settings page opened from the
   Quotas screen: bars show used or remaining, reset times relative or as a clock time
