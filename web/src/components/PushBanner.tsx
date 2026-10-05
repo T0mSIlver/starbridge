@@ -2,16 +2,18 @@
 
 import { useEffect, useState } from "react";
 import type { PushState } from "@/lib/push";
+import { useApp } from "./AppProvider";
 import ui from "./ui.module.css";
 
 /** Offers Web Push until it is on; says so when the browser blocks it or needs the app installed. */
 export function PushBanner() {
+  const ready = useApp().boot.state === "ready";
   const [state, setState] = useState<PushState>();
   const [error, setError] = useState<string>();
   useEffect(() => {
     import("@/lib/push").then((p) => p.pushState()).then(setState);
   }, []);
-  if (state === undefined || state === "on" || state === "unsupported") return null;
+  if (!ready || state === undefined || state === "on" || state === "unsupported") return null;
   if (state === "install")
     return (
       <p className={ui.notice} style={{ marginBottom: "var(--s4)" }} data-testid="install-hint">

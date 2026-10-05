@@ -9,9 +9,10 @@ import type {
   QuotaWindow,
   Run,
   Settled,
+  Source,
 } from "@starbridge/protocol";
 
-export type { Decision, Permission, QuotaAlert, QuotaWindow, Run, Settled };
+export type { Decision, Permission, QuotaAlert, QuotaWindow, Run, Settled, Source };
 
 /** A tap on an option, or typed text when the decision has none. */
 export type Reply = { choice: string } | { text: string };
@@ -27,6 +28,8 @@ export type InboxItem = {
   reply?: Reply;
   /** How the machine closed it, when its settled notice did rather than an answer. */
   settled?: Settled["outcome"];
+  /** Since when its agent waits on it, having run out of other work (#122). */
+  waitingSince?: string;
 };
 
 /** An answer to a permission prompt: allow for a scope, or deny with a note to the agent. */

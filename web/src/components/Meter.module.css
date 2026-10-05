@@ -1,0 +1,86 @@
+/* A dense quota meter on the web: `size.track-dense` thick, the pace tick and the red cap
+   standing `s1` beyond it (DESIGN.md, frontmatter `size`). `--ground` is what the row sits on,
+   which the workday gaps cut through to. */
+
+.meter {
+  position: relative;
+  height: var(--size-track-dense);
+}
+
+.meter > i {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  display: block;
+}
+
+.track {
+  left: 0;
+  right: 0;
+  background: var(--surface2);
+  border-radius: calc(var(--size-track-dense) / 2);
+}
+
+.fill {
+  left: 0;
+  background: var(--fill);
+  border-radius: calc(var(--size-track-dense) / 2);
+}
+
+/* Stripes `size.tick` wide every `size.hatch`, at -45°. */
+.over {
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--fill) 0 var(--size-tick),
+    transparent var(--size-tick) var(--size-hatch)
+  );
+  border-radius: calc(var(--size-track-dense) / 2);
+}
+
+/* "Left" mode: what is left gets eaten by the projected use. */
+.eaten {
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--ground, var(--bg)) 0 var(--size-tick),
+    transparent var(--size-tick) var(--size-hatch)
+  );
+}
+
+.gap,
+.strong {
+  width: var(--size-tick);
+  margin-left: calc(var(--size-tick) / -2);
+  background: var(--ground, var(--bg));
+}
+
+.strong {
+  background: var(--fg2);
+}
+
+.tick {
+  width: var(--size-tick);
+  margin-left: calc(var(--size-tick) / -2);
+  border-radius: calc(var(--size-tick) / 2);
+  background: var(--fg);
+}
+
+.meter > .cap {
+  width: var(--size-cap);
+  border-radius: calc(var(--size-cap) / 2);
+  background: var(--bad);
+}
+
+.end {
+  right: calc(var(--size-cap) / -2);
+}
+
+.start {
+  left: calc(var(--size-cap) / -2);
+}
+
+/* The tick and the cap stand `s1` beyond the track. */
+.meter > .tick,
+.meter > .cap {
+  top: calc(-1 * var(--s1));
+  bottom: calc(-1 * var(--s1));
+}

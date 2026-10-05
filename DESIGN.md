@@ -281,10 +281,18 @@ typography:
     weight: 400
     lineHeight: 28
     letterSpacing: 0
+  snippet: # a command or a session name in the web's dense rows
+    font: mono
+    size: 13
+    weight: 400
+    lineHeight: 20
+    letterSpacing: 0
 # px on the web, dp on Android.
 spacing:
   s1: 4
+  s1h: 6 # the web's dense rows: gaps inside a meta row
   s2: 8
+  s2h: 10 # the web's dense rows: rail items, inline code
   s3: 12
   s4: 16
   s5: 20
@@ -294,6 +302,7 @@ spacing:
 # The Material 3 shape scale.
 radius:
   xs: 4
+  dense: 6 # the web's rail items, inputs and inline commands
   sm: 8
   md: 12
   lg: 16
@@ -302,7 +311,12 @@ radius:
 size:
   tap: 48
   bar: 80
+  bar-web: 64 # the web's bottom bar under 600 px
+  top-web: 56 # the web's top bar under 600 px
   rail: 240
+  list: 420 # the web inbox's list pane
+  aside: 320 # the web inbox's quota windows
+  pane-head: 48 # the head of each web inbox pane
   content: 720
   # Quota meters. The pace tick and the overrun's red cap stand `s1` beyond
   # the track on each side; the overrun is hatched at -45°, `tick`-wide
@@ -394,7 +408,7 @@ Google Sans Flex sets everything a person reads, numbers included, with
 tabular figures where they line up. It is the face of Google's own apps and
 open source (OFL) since November 2025, so a Material app reads native in it
 where Roboto reads stock. Google Sans Code is for code only: Markdown code in
-a decision's context and a permission prompt's command.
+a decision's context, a permission prompt's command and a session's name.
 
 ## Rules
 
@@ -522,4 +536,4 @@ The product name has no wordmark: it is "Starbridge" in the sans, weight 500.
 | `caption` | body small | group names in a list, footnotes, navigation bar labels |
 | `key` | label small | keyboard hints, counts in badges |
 | `figure` | headline small | a large number, such as used percent |
-| `code`, `command` | | Markdown code; a permission prompt's command, the only mono |
+| `code`, `command`, `snippet` | | Markdown code; a permission prompt's command; a command or session name in a dense row; the only mono |

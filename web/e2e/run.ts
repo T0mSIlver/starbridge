@@ -212,7 +212,7 @@ async function main() {
   const machineHome = join(tmp, "machine");
   const pair = cli("pair", ["pair", "--name", "devbox"], machineHome);
   const code = (await pair.waitFor(/Pairing code: (\S+)/))[1] as string;
-  await page.getByRole("link", { name: "Devices" }).click();
+  await page.getByRole("link", { name: "Settings" }).click();
   await page.getByLabel("Pair a machine or device").fill(code);
   await page.getByRole("button", { name: "Check code" }).click();
   await page.getByRole("button", { name: "Approve" }).click();
@@ -341,15 +341,15 @@ async function main() {
     .waitFor({ timeout: 30_000 });
   await shoot(page, "inbox");
   const opener = page
-    .locator('section[aria-label="Selected decision"]')
-    .getByRole("link", { name: "Open session" });
+    .locator('section[aria-label="Selected"]')
+    .getByRole("link", { name: "Open in Claude" });
   if (
     (await opener.getAttribute("href")) !==
     "https://claude.ai/code/session_01UZCLSHk7GjaUdtNBsLAvvt"
   )
-    throw new Error("the open decision has no Open session link to its Remote Control session");
+    throw new Error("the open decision has no Open in Claude link to its Remote Control session");
   await page.getByText("Merge the server PR (#19)").first().waitFor();
-  const pane = page.locator('section[aria-label="Selected decision"]');
+  const pane = page.locator('section[aria-label="Selected"]');
   const widths = await pane
     .locator("img")
     .evaluateAll((imgs) => imgs.map((i) => (i as HTMLImageElement).naturalWidth));
@@ -362,8 +362,8 @@ async function main() {
     throw new Error("the open decision has no chip for its Claude artifact");
 
   // Desktop: one selection, whether picked by click or by J and K; focus follows it in the list.
-  const row = page.locator('button[aria-current="true"]');
-  const detail = page.locator('section[aria-label="Selected decision"] h2');
+  const row = page.locator('[aria-current="true"]:has(button[data-id])');
+  const detail = page.locator('section[aria-label="Selected"] h2');
   await page.locator("button[data-id]").first().click();
   for (const key of ["j", "j", "k"]) {
     await page.keyboard.press(key);
@@ -372,7 +372,7 @@ async function main() {
       throw new Error(
         `after ${key}, the list selects "${await row.innerText()}" but the detail shows "${question}"`,
       );
-    if (!(await row.evaluate((el) => el === document.activeElement)))
+    if (!(await row.evaluate((el) => el.contains(document.activeElement))))
       throw new Error(`after ${key}, focus is not on the selected row`);
   }
   step("a decision answered in an artifact links it, and `starbridge settle` closes it");
@@ -403,8 +403,14 @@ async function main() {
   await shoot(page, "answer-in");
   const settle = cli("settle", ["settle", pointerId as string], machineHome);
   if ((await settle.exited) !== 0) throw new Error("settle failed");
-  // The settled notice arrives by Web Push, and the page reloads the inbox.
-  await pointerRow.getByText("Answered in the artifact").waitFor({ timeout: 30_000 });
+  // The settled notice arrives by Web Push, the page reloads the inbox, and History lists it.
+  await pointerRow.waitFor({ state: "detached", timeout: 30_000 });
+  await page.getByRole("button", { name: /History/ }).click();
+  await page
+    .locator(`[data-id="${pointerId}"]`)
+    .locator("..")
+    .getByText(/Answered in the artifact/)
+    .waitFor();
 
   await page.getByRole("link", { name: "Quotas" }).click();
   await page.locator("article").first().waitFor();
@@ -477,7 +483,7 @@ async function main() {
       .textContent({ timeout: 10_000 })
   )?.trim();
   if (!codeB) throw new Error("no pairing code on the second browser");
-  await page.getByRole("link", { name: "Devices" }).click();
+  await page.getByRole("link", { name: "Settings" }).click();
   await page.getByLabel("Pair a machine or device").fill(codeB);
   await page.getByRole("button", { name: "Check code" }).click();
   await page.getByText(/read and answer as a device/).waitFor();

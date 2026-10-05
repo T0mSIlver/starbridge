@@ -51,6 +51,7 @@ import {
   sealAsync,
   toB64,
   verifyDirectory,
+  type Waiting,
 } from "@starbridge/protocol";
 import { ApiError, api, type Stored } from "./api";
 import { generateDeviceKeys, sealOpener, signer } from "./crypto/keys";
@@ -722,6 +723,8 @@ export interface Inbox {
    * read. They are tried again on the next load, after the directory is read again.
    */
   retry?: Stored[];
+  /** The latest waiting state each machine posted, by `<machine>/<decision id>` (#122). */
+  waits?: Record<string, Pick<Waiting, "state" | "at">>;
 }
 
 /** The server picks what it lists: an item of another kind is refused before it is opened. */
@@ -791,7 +794,19 @@ export async function loadInbox(ctx: Ctx, inbox: Inbox = { items: [], rejected: 
   const retry: Stored[] = [];
   // A settled notice lists before the decision it closed, which moved past it.
   const closings: Closings = new Map();
+  const waits = { ...inbox.waits };
   const take = async (s: Stored, again: boolean) => {
+    if (s.item.kind === "waiting") {
+      // Only tells whether the agent waits: one that fails to open costs that and nothing else.
+      try {
+        const { signer, body } = await openAsync(expectKind(s.item, "waiting"), me(ctx), ctx.dir);
+        const w = body as Waiting;
+        const key = `${signer.id}/${w.decisionId}`;
+        const had = waits[key];
+        if (!had || had.at < w.at) waits[key] = { state: w.state, at: w.at };
+      } catch {}
+      return;
+    }
     if (s.item.kind === "settled") {
       // Only tells how a decision closed: one that fails to open costs that and nothing else.
       try {
@@ -817,12 +832,18 @@ export async function loadInbox(ctx: Ctx, inbox: Inbox = { items: [], rejected: 
   for (const s of inbox.retry ?? []) await take(s, true);
   let cursor = inbox.cursor;
   for (;;) {
-    const page = await api.items("decision,settled", cursor);
+    const page = await api.items("decision,settled,waiting", cursor);
     for (const s of page.items) await take(s, false);
     cursor = page.cursor;
     if (page.items.length < 100) break;
   }
-  return { items: [...byId.values()], cursor, rejected, retry } satisfies Inbox;
+  // Only the machine that asked can say its agent waits on the question.
+  const items = [...byId.values()].map((i) => {
+    const w = waits[`${i.machine.id}/${i.decision.id}`];
+    const { waitingSince: _, ...rest } = i;
+    return w?.state === "waiting" ? { ...rest, waitingSince: w.at } : rest;
+  });
+  return { items, cursor, rejected, retry, waits } satisfies Inbox;
 }
 
 /** Signs the answer and seals it to the machine that asked, which must still be active. */
@@ -882,6 +903,12 @@ const stripTime = ({ answeredAt: _, ...reply }: PromptReply & { answeredAt: stri
 export async function openPushedPermission(ctx: Ctx, item: SealedItem): Promise<PromptItem> {
   const sent = (await store.get("promptAnswers", ctx.account)) ?? {};
   return openPermission(ctx, { item, cursor: "", receivedAt: "" }, sent);
+}
+
+/** Opens a waiting notice, with the machine that signed it. */
+export async function openWaiting(ctx: Ctx, item: SealedItem) {
+  const { signer, body } = await openAsync(expectKind(item, "waiting"), me(ctx), ctx.dir);
+  return { machine: signer.id, waiting: body as Waiting };
 }
 
 /** Opens a settled notice, with the machine that signed it. */
