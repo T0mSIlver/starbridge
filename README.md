@@ -5,7 +5,8 @@ Your agents ask. You answer from anywhere.
 When a coding agent needs a decision from you, Starbridge puts the question on your phone and in
 your browser. You answer with one tap, and the waiting session carries on with your answer as its
 next prompt. You also follow the runs that affect you, such as a release or heavy work on your
-machine, and see what each AI plan has left before you start the next agent.
+machine. It also shows what's left on each AI plan, read from CodexBar, with an optional alert
+before a window runs out.
 
 Your phone, browsers and machines encrypt everything they send each other, so the server stores
 only ciphertext. Use the free server at [starbridge.run](https://starbridge.run), or host your
