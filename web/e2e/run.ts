@@ -629,7 +629,8 @@ async function main() {
   await page.getByRole("dialog").getByRole("button", { name: "Revoke" }).click();
   await page.getByRole("dialog").waitFor({ state: "detached" });
   await pageB.reload();
-  await pageB.getByRole("link", { name: SIGN_IN }).waitFor();
+  // A browser whose device was revoked is a visitor again: the landing page, not sign-in.
+  await pageB.getByRole("heading", { name: /Your agents ask/ }).waitFor();
   await page.emulateMedia({ colorScheme: "light" });
   await shoot(page, "devices");
 
@@ -647,6 +648,8 @@ async function main() {
   step("sign in again: the session binds to the existing device without pairing");
   await a.clearCookies();
   await page.goto(ORIGIN);
+  await page.getByRole("heading", { name: "Sign in to Starbridge" }).waitFor();
+  await shoot(page, "sign-in");
   await page.getByRole("link", { name: SIGN_IN }).click();
   await page.getByRole("heading", { name: "Inbox" }).waitFor({ timeout: 30_000 });
   await page.getByText("Merge #19 (server) before the web PR rebases?").first().waitFor();
