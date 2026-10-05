@@ -300,11 +300,16 @@ async function interactiveTurn(
   }
   spawnSync("tmux", ["kill-session", "-t", tmux]);
   const es = entries();
+  // Turned away: denied (an older hook), or answered by the hook with the Starbridge instruction.
   const results = new Map<string, boolean>();
   for (const e of es)
     if (e.type === "user" && Array.isArray(e.message?.content))
       for (const b of e.message.content)
-        if (b.type === "tool_result") results.set(b.tool_use_id, !!b.is_error);
+        if (b.type === "tool_result")
+          results.set(
+            b.tool_use_id,
+            !!b.is_error || JSON.stringify(b.content ?? "").includes("ask through Starbridge"),
+          );
   const commands: string[] = [];
   const askUser: { denied: boolean }[] = [];
   let final = "";
