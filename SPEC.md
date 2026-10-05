@@ -974,48 +974,52 @@ goes in git.
   of the push button. Chrome prefixes the app name to an installed window's
   title unless the title starts with it, so titles read "Starbridge · Quotas".
 - 2026-10-05: hooks and mods in Remote Control and cloud sessions (#57),
-  Claude Code 2.1.289. Remote Control: a probe server (`claude
-  remote-control --spawn same-dir --permission-mode auto`, the owner's login,
-  a scratch folder with logging hooks in its `.claude/settings.json`; a
-  throwaway `CLAUDE_CONFIG_DIR` was refused by the auto-mode classifier,
-  since it needs a copy of the login). Each session is a child `claude
-  --print --sdk-url … --input-format stream-json --permission-mode auto`.
-  Its debug log shows the user's plugins (`localvoxtral-remote`, from
-  `installed_plugins.json`) and mods (`orchestrator-cache` from
-  `CLAUDE_CODE_PLUGIN_DIRS`, `prompt-cache-control` from `~/.claude/skills`)
-  loading, and project hooks fire. `CLAUDE_CODE_PLUGIN_DIRS` in project
-  settings is ignored with a warning, so a mod loads only from user or
-  managed settings or an installed plugin. An `ask` rule still prompts in
-  auto mode: the `PermissionRequest` hook fired (`permission_mode: "auto"`,
-  no `tool_use_id`, as in the terminal) while the prompt went to the app,
-  despite `--print`. Classifier blocks were seen in a cloud session in auto
-  mode (below): each blocked call fired `PreToolUse` then `PermissionDenied`
-  and no `PermissionRequest`, as the docs say ("It doesn't fire in auto mode,
-  where Claude Code denies disallowed calls without prompting",
-  code.claude.com/docs/en/hooks). So in auto mode Starbridge sees only the
-  calls that still prompt (`ask` rules, the classifier pausing after 3 blocks
-  in a row or 20 in total); a block reaches it only as `PermissionDenied`,
-  after the fact, which it could post as a notice but cannot answer.
-  Cloud: one real session (Default environment, branch `probe/cloud-hooks`
-  with logging hooks, an `ask` rule and `enabledPlugins` for the starbridge
-  marketplace, since deleted). It runs as root in `/home/user/starbridge`,
-  with `CLAUDE_CODE_REMOTE=true`. The repo's `SessionStart`, `PreToolUse`
-  and `PermissionDenied` hooks fired; `~/.claude/plugins/installed_plugins.json`
-  was empty, so repo-enabled plugins and their mods do not install, as the
-  docs say (code.claude.com/docs/en/cloud-environments). The user's
-  `~/.claude` (plugins, mods, CLAUDE.md, skills) is not there. The classifier
-  blocked listing environment variable names and probing
-  `starbridge.run/install.sh` with curl. So Starbridge in a cloud session
-  means repo hooks calling a `starbridge` binary the environment installs.
-  Setup scripts run as root before Claude Code starts, cached for about 7
-  days; reaching `starbridge.run` needs network access Full or Custom with
-  that host. Environment variables are plain `.env` text that "anyone who
-  uses the environment can read", so a machine key there is readable by
-  every session and by the agent itself; there is no secret store for setup
-  scripts (the Pro/Max "API credentials" proxy covers model API keys only).
-  Owner's steps for a cloud machine: claude.ai/code, the environment name
-  above the message box, Cloud, "Add cloud environment": network Custom with
-  `starbridge.run` (plus defaults), the machine key as an environment
-  variable, and a setup script that runs the install script and `starbridge`
-  pairing. Whether to give cloud sessions a machine at all is open, since the
-  agent can read its key.
+  Claude Code 2.1.289. The Remote Control probe ran a second server
+  (`claude remote-control --spawn same-dir --permission-mode auto`) on the
+  owner's login, in a scratch folder whose `.claude/settings.json` held
+  logging hooks. A throwaway `CLAUDE_CONFIG_DIR` was not possible, because
+  the auto-mode classifier refused copying the login into it. The server
+  starts each session as a child `claude --print --sdk-url …
+  --input-format stream-json --permission-mode auto`. The child's debug log
+  shows the user's plugin (`localvoxtral-remote`) and mods
+  (`orchestrator-cache` from `CLAUDE_CODE_PLUGIN_DIRS`,
+  `prompt-cache-control` from `~/.claude/skills`) loading, and the project
+  hooks fired. Claude Code ignores `CLAUDE_CODE_PLUGIN_DIRS` in project
+  settings and logs a warning, so a mod loads only from user or managed
+  settings or an installed plugin. An `ask` rule still prompts in auto mode.
+  For it the `PermissionRequest` hook fired, with `permission_mode: "auto"`
+  and no `tool_use_id` as in the terminal, and the prompt also went to the
+  Claude app, `--print` notwithstanding. Classifier blocks were seen in the
+  cloud probe below, also in auto mode. Each blocked call fired `PreToolUse`
+  then `PermissionDenied`, and no `PermissionRequest`. The hooks docs say
+  the same: "It doesn't fire in auto mode, where Claude Code denies
+  disallowed calls without prompting." So in auto mode Starbridge sees only
+  the calls that still prompt. Those are `ask` rules and, per the docs, every
+  call once the classifier pauses after 3 blocks in a row or 20 in total. A
+  block reaches Starbridge only as a `PermissionDenied` after the fact, which
+  it could show as a notice but cannot answer.
+  The cloud probe was one real session in the Default environment, on a
+  throwaway branch (since deleted) whose `.claude/settings.json` held
+  logging hooks, an `ask` rule and `enabledPlugins` for the starbridge
+  marketplace. It ran as root in `/home/user/starbridge` with
+  `CLAUDE_CODE_REMOTE=true`. The repo's `SessionStart`, `PreToolUse` and
+  `PermissionDenied` hooks fired. `~/.claude/plugins/installed_plugins.json`
+  was empty, so the repo's plugins and their mods were not installed, as
+  the cloud-environments docs say. Nothing from the owner's `~/.claude` is
+  there. The classifier blocked listing environment variable names and a
+  curl to `starbridge.run/install.sh`. So in a cloud session Starbridge can
+  only be repo hooks that call a `starbridge` binary the environment
+  installs. Per the docs, a setup script runs as root before Claude Code
+  starts and its result is cached for about 7 days. Reaching
+  `starbridge.run` needs network access Full, or Custom with that host.
+  Environment variables are plain `.env` text that "anyone who uses the
+  environment can read", and the agent can read them too, so a machine key
+  there is not secret. Setup scripts get no secret store; the Pro and Max
+  "API credentials" proxy covers model API keys only. To give a cloud
+  environment a machine, the owner opens claude.ai/code, clicks the
+  environment name above the message box, then Cloud, then "Add cloud
+  environment", and sets network access to Custom with `starbridge.run`
+  plus the defaults, the machine key as an environment variable, and a
+  setup script that runs the install script and pairs. Whether cloud
+  sessions should get a machine at all is open, since the agent can read
+  its key.
