@@ -215,7 +215,10 @@ async function main() {
   const machineHome = join(tmp, "machine");
   const pair = cli("pair", ["pair", "--name", "devbox"], machineHome);
   const code = (await pair.waitFor(/Pairing code: (\S+)/))[1] as string;
-  await page.getByRole("link", { name: "Settings" }).click();
+  await page
+    .getByRole("navigation", { name: "Main" })
+    .getByRole("link", { name: "Settings" })
+    .click();
   await page.getByRole("link", { name: "Add a device" }).click();
   await page.getByLabel("Pair a machine or device").fill(code);
   await page.getByRole("button", { name: "Check code" }).click();
@@ -421,10 +424,13 @@ async function main() {
   await shoot(page, "quotas");
 
   step("quota settings: remaining, clock times, workdays");
-  await page.getByRole("link", { name: "Settings" }).click();
+  await page
+    .getByRole("navigation", { name: "Main" })
+    .getByRole("link", { name: "Settings" })
+    .click();
   await page.getByRole("heading", { name: "Settings" }).waitFor();
+  // Each radio hides inside its segment, which takes the click.
   for (const label of ["Left", "Resets 14:20", "5", "High contrast"])
-    // Each radio hides inside its segment, which takes the click.
     await page.getByLabel(label, { exact: true }).check({ force: true });
   await shoot(page, "settings");
   await page.getByRole("link", { name: "Quotas" }).click();
@@ -456,7 +462,10 @@ async function main() {
     machineHome,
   );
   if ((await alertPush.exited) !== 0) throw new Error("quota push failed");
-  await page.getByRole("link", { name: "Settings" }).click();
+  await page
+    .getByRole("navigation", { name: "Main" })
+    .getByRole("link", { name: "Settings" })
+    .click();
   await page.getByLabel("Notify about e2e").check();
   await page.getByRole("link", { name: "Quotas" }).click();
   await page.waitForFunction(
@@ -487,7 +496,10 @@ async function main() {
       .textContent({ timeout: 10_000 })
   )?.trim();
   if (!codeB) throw new Error("no pairing code on the second browser");
-  await page.getByRole("link", { name: "Settings" }).click();
+  await page
+    .getByRole("navigation", { name: "Main" })
+    .getByRole("link", { name: "Settings" })
+    .click();
   await page.getByRole("link", { name: "Add a device" }).click();
   await page.getByLabel("Pair a machine or device").fill(codeB);
   await page.getByRole("button", { name: "Check code" }).click();
@@ -505,7 +517,10 @@ async function main() {
   await pageC.getByRole("heading", { name: "Inbox" }).waitFor({ timeout: 30_000 });
 
   step("revoke the second browser");
-  await page.getByRole("link", { name: "Settings" }).click();
+  await page
+    .getByRole("navigation", { name: "Main" })
+    .getByRole("link", { name: "Settings" })
+    .click();
   const devices = page.getByRole("region", { name: "Devices" });
   await devices.getByText("Device · this browser").waitFor();
   // Devices list this browser, then the others by when they joined: the second browser first.
