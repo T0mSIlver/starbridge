@@ -63,7 +63,7 @@ import javax.inject.Inject
 class QuotasViewModel @Inject constructor(private val store: Store, private val prefs: Prefs) : ViewModel() {
     val windows = store.windows
     val settings = prefs.quota
-    fun refresh() = store.refresh()
+    fun refresh() = store.refreshQuotas()
 }
 
 /** One card per provider, its windows inside, in the settings' order (SPEC.md, "Quota order"). */

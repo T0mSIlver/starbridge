@@ -128,9 +128,9 @@ const HELP = `starbridge: post decisions to your devices, report runs, upload qu
       to leave the prompt to the keyboard.
 
   starbridge hook ask-user
-      For Claude Code's PreToolUse hook on AskUserQuestion: denies the call and tells the
-      agent to use \`starbridge ask\`; prints nothing, which lets it through, when this
-      machine is not paired or the server does not answer.
+      For Claude Code's PreToolUse hook on AskUserQuestion: hook JSON on stdin; answers each
+      question by telling the agent to use \`starbridge ask\`; prints nothing, which lets it
+      through, when this machine is not paired or the server does not answer.
 
   starbridge update
       Install the latest release once its signature checks out (brew and npm installs: use
@@ -387,7 +387,7 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
         });
         if (sub === "permission") return await hookPermission(ctx, readText("-"), values);
         if (sub === "settle") return await hookSettle(ctx, readText("-"), values);
-        if (sub === "ask-user") return await hookAskUser(ctx);
+        if (sub === "ask-user") return await hookAskUser(ctx, readText("-"));
         throw new UsageError(
           "usage: starbridge hook permission|settle --agent claude-code, or starbridge hook ask-user",
         );

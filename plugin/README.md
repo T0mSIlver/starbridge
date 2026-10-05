@@ -9,7 +9,7 @@ such as which commands to report or which merges to ask about, put lines in
 their own instruction files: `docs/tell-your-agents.md` says where.
 
 A `PreToolUse` hook on `AskUserQuestion` runs `starbridge hook ask-user`, which
-turns the question away and tells the agent to post it with `starbridge ask`.
+answers the question with an instruction to post it with `starbridge ask`.
 When the machine is not paired or the server does not answer, it lets the
 question through.
 

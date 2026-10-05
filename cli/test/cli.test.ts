@@ -94,6 +94,15 @@ test("pair uses the hosted server unless --server or STARBRIDGE_SERVER names ano
   expect(asked).toEqual(["https://starbridge.run/v1/pairings", "https://self.example/v1/pairings"]);
 });
 
+test("a machine the owner removed says so and how to pair it again", async () => {
+  const ctx = await paired(server);
+  await server.revoke(ctx.store.machine()?.id as string);
+  expect(await run(ASK, ctx)).toBe(1);
+  expect(ctx.errors.at(-1)).toBe(
+    "starbridge: this machine was removed from your Starbridge account: run `starbridge pair --force` to add it again",
+  );
+});
+
 test("ask seals a decision the phone can open, recommended first", async () => {
   const ctx = await paired(server);
   expect(await run([...ASK, "--session", "s1"], ctx)).toBe(0);
@@ -181,9 +190,9 @@ test("ask attaches images scaled to fit the server's cap, and links", async () =
   const [d] = await server.opened("decision");
   expect(d?.links).toEqual([{ url: artifact }]);
   const [scaled, kept] = d?.images ?? [];
-  // The large one became a JPEG no larger than a screen, with its aspect ratio.
+  // The large one became a JPEG, with its aspect ratio.
   expect(scaled?.type).toBe("image/jpeg");
-  expect(scaled?.width).toBeLessThanOrEqual(1600);
+  expect(scaled?.width).toBeLessThanOrEqual(2400);
   expect(Math.abs((scaled?.width ?? 0) / (scaled?.height ?? 1) - 1.6)).toBeLessThan(0.02);
   // The small one already fit, so it went as is.
   expect(kept).toMatchObject({ type: "image/png", width: 4, height: 2 });
@@ -293,11 +302,11 @@ test("waiting and working flip a decision's state; only a flip to waiting pushes
   expect(ctx.errors.at(-1)).toContain("already answered");
 });
 
-test("ask --waiting posts it waiting without a second push", async () => {
+test("ask --waiting pushes once, through its waiting state, so the notification says waiting", async () => {
   const ctx = await paired(server);
   await run([...ASK, "--waiting"], ctx);
   expect((await server.opened("waiting")).map((w) => w.state)).toEqual(["waiting"]);
-  expect(server.pushed).toEqual(["decision"]);
+  expect(server.pushed).toEqual(["waiting"]);
 });
 
 test("a decision names its agent and the machine's kind, which config sets", async () => {

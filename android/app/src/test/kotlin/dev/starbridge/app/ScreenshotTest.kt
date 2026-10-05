@@ -41,6 +41,9 @@ import dev.starbridge.app.ui.inbox.DecisionSheet
 import dev.starbridge.app.data.Colours
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.onNodeWithContentDescription
 import dev.starbridge.app.ui.quotas.QuotasScreen
 import dev.starbridge.app.ui.setup.SetupActions
@@ -125,6 +128,9 @@ class ScreenshotTest(private val dark: Boolean) {
     // Runs as they end, and text at 200%.
     @Test fun inboxEnded() = capture("inbox-ended") { Phone(Tab.Inbox, 0) { InboxScreen(emptyList(), now, decisionActions, runs = fake.endedRuns) } }
 
+    // The indeterminate bar never settles: stop the clock mid-sweep.
+    @Test fun inboxQuietRuns() = capture("inbox-quiet-runs", before = { compose.mainClock.autoAdvance = false; repeat(70) { compose.mainClock.advanceTimeByFrame() } }) { Phone(Tab.Inbox, 0) { InboxScreen(emptyList(), now, decisionActions, runs = fake.quietRuns) } }
+
     @Test fun inboxLargeText() = capture("inbox-large-text") {
         CompositionLocalProvider(LocalDensity provides Density(LocalDensity.current.density, fontScale = 2f)) { Phone(Tab.Inbox, 4) { Inbox() } }
     }
@@ -192,6 +198,13 @@ class ScreenshotTest(private val dark: Boolean) {
 
     @Test fun addDevice() = capture("add-device") { Phone(null, 0) { AddDeviceScreen(Approval.Idle, deviceActions) } }
 
+    @Test fun addDeviceJoined() = capture("add-device-joined") { Phone(null, 0) { AddDeviceScreen(Approval.Done("Chrome on Mac"), deviceActions) } }
+
+    @Test fun setupRecover() = capture("setup-recover", before = {
+        compose.onNodeWithText("Use the recovery words").performClick()
+        compose.onNode(hasSetTextAction()).performTextInput("1. animal\n2. embark\n3. drastik\n4. bamboo ")
+    }) { Phone(null, 0) { SetupScreen(Phase.NoDevice(accountExists = true), "https://starbridge.run", false, setupActions, {}) } }
+
     @Test fun addDeviceFound() = capture("add-device-found") { Phone(null, 0) { AddDeviceScreen(fake.approval, deviceActions) } }
 
     @Test fun setupSignIn() = capture("setup-sign-in") { Phone(null, 0) { SetupScreen(Phase.SignedOut, "https://starbridge.run", false, setupActions, {}) } }
@@ -210,6 +223,10 @@ class ScreenshotTest(private val dark: Boolean) {
 
     @Test fun addDeviceQr() = capture("add-device-qr") {
         Phone(null, 0) { AddDeviceScreen(Approval.Showing("7KQ2-M9XD-4TPV-HB3N-R8CE-WY6F", "https://starbridge.run/pair#7KQ2-M9XD-4TPV-HB3N-R8CE-WY6F"), deviceActions) }
+    }
+
+    @Test fun joinDone() = capture("join-done") {
+        JoinPrompt(emptyList(), Comparison.Done("Chrome on Mac joined."), JoinActions({}, {}, {}, {}))
     }
 
     @Test fun joinDigits() = capture("join-digits") {

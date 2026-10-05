@@ -56,7 +56,10 @@ export interface AskInput {
 }
 
 /** What the server stores at most for one decision, all boxes together (PROTOCOL.md, Limits). */
-export const ITEM_BYTES = 256 * 1024;
+export const ITEM_BYTES = 2 * 1024 * 1024;
+
+/** One image's file at most: the schema's 512 KB of base64url (`DecisionImage.data`). */
+const IMAGE_BYTES = 384 * 1024;
 
 /** Exit code when nobody answered before `--timeout`. */
 export const EXIT_TIMEOUT = 2;
@@ -174,7 +177,10 @@ function sealWithPictures(
   if (pictures.length === 0) return { decision: base, item: sealed(base) };
   if (pictures.length > 4) throw new UsageError("--image: at most 4 images");
   const perBox = boxBytes(sealed(base)) / to.length;
-  let share = Math.floor(((ITEM_BYTES / to.length - perBox) * 9) / 16 / pictures.length);
+  let share = Math.min(
+    IMAGE_BYTES,
+    Math.floor(((ITEM_BYTES / to.length - perBox) * 9) / 16 / pictures.length),
+  );
   for (let tries = 0; tries < 5; tries++) {
     if (share < 1024) break;
     const decision = checked({ ...base, images: pictures.map((p) => fitPicture(p, share)) });
@@ -212,7 +218,8 @@ export async function postDecision(ctx: Ctx, s: Session, input: AskInput): Promi
   );
   // A wait for this decision starts at the cursor known now, so it never misses its answer.
   const cursor = ctx.store.state().cursor;
-  await s.api.postItem(item);
+  // Asked already waiting, its waiting state pushes instead, so the notification says so.
+  await s.api.postItem(input.waiting ? { ...item, quiet: true } : item);
   ctx.store.updateState((st) => {
     st.asked[decision.id] = {
       question: decision.question,
@@ -223,9 +230,7 @@ export async function postDecision(ctx: Ctx, s: Session, input: AskInput): Promi
       ...(decision.answerIn ? { answerIn: true } : {}),
     };
   });
-  // Its own push already notified, so this state goes quietly.
-  if (input.waiting)
-    await markWaiting(ctx, () => postWaiting(ctx, s, decision.id, "waiting", true));
+  if (input.waiting) await markWaiting(ctx, () => postWaiting(ctx, s, decision.id, "waiting"));
   return decision;
 }
 
@@ -244,7 +249,7 @@ export async function ask(
 
 /**
  * Posts decision `id`'s waiting state under the one id it keeps. Only a flip to `waiting`
- * pushes, unless `quiet`; posting the state it already has does nothing. Returns whether it
+ * pushes; posting the state it already has does nothing. Returns whether it
  * posted. A decision answered meanwhile throws a UsageError saying so.
  */
 export async function postWaiting(
@@ -252,7 +257,6 @@ export async function postWaiting(
   s: Session,
   id: string,
   state: Waiting["state"],
-  quiet = false,
 ): Promise<boolean> {
   const asked = ctx.store.state().asked[id];
   if (!asked) throw new UsageError(`${id} is not a decision this machine asked`);
@@ -278,7 +282,7 @@ export async function postWaiting(
   } satisfies Waiting;
   const item = seal("waiting", body, { id: s.machine.id, signKey: s.keys.sign.privateKey }, to);
   try {
-    await s.api.postItem(quiet || state === "working" ? { ...item, quiet: true } : item);
+    await s.api.postItem(state === "working" ? { ...item, quiet: true } : item);
   } catch (e) {
     if (e instanceof ApiError && e.code === "already-answered")
       throw new UsageError(`${id} is already answered`);
@@ -387,10 +391,28 @@ function printAnswer(ctx: Ctx, a: Answer, question: string | undefined, json?: b
 export async function poll(
   ctx: Ctx,
   s: Session,
-  opts: { cursor?: string; seconds: number; shared: boolean; directory?: Directory },
-): Promise<{ cursor?: string; directory: Directory }> {
+  opts: {
+    cursor?: string;
+    seconds: number;
+    shared: boolean;
+    directory?: Directory;
+    /**
+     * The agent's poll also returns when a device joins or asks for quotas (PROTOCOL.md,
+     * "Answers for machines"); `quotaAsked` is the last ask the server reported.
+     */
+    watch?: { quotaAsked?: string };
+  },
+): Promise<{ cursor?: string; directory: Directory; quotaAsked?: string }> {
   let directory = opts.directory ?? (await refreshDirectory(ctx, s));
-  const page = await s.api.answers(opts.cursor, opts.seconds, ctx.signal);
+  const page = await s.api.answers(
+    opts.cursor,
+    opts.seconds,
+    ctx.signal,
+    opts.watch && { directory: directory.length, ...opts.watch },
+  );
+  const quotaAsked = page.quotaAsked !== undefined ? { quotaAsked: page.quotaAsked } : {};
+  if (page.items.length === 0 && (page.directory ?? 0) > directory.length)
+    directory = await refreshDirectory(ctx, s);
   if (page.items.length > 0) {
     // A new device may have answered since the directory was read.
     directory = await refreshDirectory(ctx, s);
@@ -415,7 +437,7 @@ export async function poll(
         st.cursor = page.cursor;
     });
   }
-  return { cursor: page.cursor ?? opts.cursor, directory };
+  return { cursor: page.cursor ?? opts.cursor, directory, ...quotaAsked };
 }
 
 /**

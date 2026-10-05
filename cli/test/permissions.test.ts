@@ -395,23 +395,33 @@ test("an unreachable server, bad input or another agent never blocks the hook", 
   expect(ctx.lines).toEqual([]);
 });
 
-test("hook ask-user turns AskUserQuestion away while the server answers, and lets it through otherwise", async () => {
+test("hook ask-user answers AskUserQuestion with Starbridge while the server answers, and lets it through otherwise", async () => {
+  const questions = [{ question: "Tabs or spaces?", header: "Indent", options: [] }];
+  const hook = JSON.stringify({ tool_name: "AskUserQuestion", tool_input: { questions } });
   const unpaired = testCtx();
-  expect(await hookAskUser(unpaired)).toBe(0);
+  expect(await hookAskUser(unpaired, hook)).toBe(0);
   expect(unpaired.lines).toEqual([]);
 
+  // Answered rather than denied: Claude Code shows a denied call as a red hook error.
   const machine = await paired(server);
-  expect(await hookAskUser(machine)).toBe(0);
+  expect(await hookAskUser(machine, hook)).toBe(0);
   expect(JSON.parse(machine.lines[0] as string)).toEqual({
     hookSpecificOutput: {
       hookEventName: "PreToolUse",
-      permissionDecision: "deny",
-      permissionDecisionReason: ASK_USER_REASON,
+      permissionDecision: "allow",
+      updatedInput: { questions, answers: { "Tabs or spaces?": ASK_USER_REASON } },
     },
   });
 
   machine.lines.length = 0;
+  expect(await hookAskUser(machine, "{}")).toBe(0);
+  expect(JSON.parse(machine.lines[0] as string).hookSpecificOutput).toMatchObject({
+    permissionDecision: "deny",
+    permissionDecisionReason: ASK_USER_REASON,
+  });
+
+  machine.lines.length = 0;
   server.failures.push("/healthz");
-  expect(await hookAskUser(machine)).toBe(0);
+  expect(await hookAskUser(machine, hook)).toBe(0);
   expect(machine.lines).toEqual([]);
 });

@@ -96,6 +96,8 @@ private fun now(): Instant = produceState(Instant.now()) {
     }
 }.value
 
+private val LIVE_RUNS = setOf(Run.State.Running, Run.State.Lost)
+
 /** A clock that ticks each second while [live], for a run's time elapsed; else [slow]. */
 @Composable
 private fun seconds(live: Boolean, slow: Instant): Instant {
@@ -151,7 +153,7 @@ private fun suiteType(): NavigationSuiteType {
  */
 @OptIn(ExperimentalMaterial3AdaptiveApi::class)
 @Composable
-fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> Unit, openDecision: Flow<String>) {
+fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> Unit, opening: Flow<NavKey>) {
     val backStack = rememberNavBackStack(InboxKey)
     val now = now()
     // An answer-in decision stops waiting at its default time, so count against the ticking clock.
@@ -161,11 +163,12 @@ fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> U
     val host = Notices(notice, dismiss)
     val sheets = remember { BottomSheetSceneStrategy<NavKey>() }
     val colors = StarbridgeTheme.colors
-    LaunchedEffect(openDecision) {
-        openDecision.collect { id ->
+    // A notification's tap: its question's or prompt's sheet, over the inbox.
+    LaunchedEffect(opening) {
+        opening.collect { key ->
             backStack.clear()
             backStack.add(InboxKey)
-            backStack.add(DecisionKey(id))
+            backStack.add(key)
         }
     }
     val current = backStack.lastOrNull()
@@ -229,7 +232,8 @@ fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> U
                         val view by vm.view.collectAsStateWithLifecycle()
                         InboxScreen(
                             decisions,
-                            seconds(runs.any { it.state(Instant.now()) == Run.State.Running }, now),
+                            // A running run's timer and a lost run's "No news for" tick each second.
+                            seconds(Run.shown(runs, Instant.now()).any { it.state(Instant.now()) in LIVE_RUNS }, now),
                             DecisionActions(answer = vm::answer, open = { open(DecisionKey(it)) }),
                             refresh = refresh(vm::refresh),
                             replies = Replies(drafts, sending),
@@ -286,7 +290,7 @@ fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> U
                     entry<DevicesKey> {
                         val vm: DevicesViewModel = hiltViewModel()
                         val members by vm.members.collectAsStateWithLifecycle()
-                        DevicesScreen(members, now, vm.actions, onBack = { backStack.removeAt(backStack.lastIndex) }, onAdd = { backStack.add(AddDeviceKey) })
+                        DevicesScreen(members, now, vm.actions, onBack = { backStack.removeAt(backStack.lastIndex) }, onAdd = { backStack.add(AddDeviceKey) }, onScan = { vm.actions.lookUp(it); backStack.add(AddDeviceKey) }, pollDirectory = vm::refreshDirectory)
                     }
                     entry<AddDeviceKey> {
                         val vm: DevicesViewModel = hiltViewModel()

@@ -2,7 +2,8 @@ package dev.starbridge.app.protocol
 
 import java.security.MessageDigest
 
-// The recovery seed as 24 BIP-39 English words, as @scure/bip39 encodes it in packages/protocol.
+// The recovery seed as BIP-39 English words, as @scure/bip39 encodes it in packages/protocol: 16 bytes
+// as 12 words, or 32 bytes as 24 for accounts made before 2026-10-05.
 // The wordlist is BIP-39's english.txt (SHA-256 2f5eed53…dbda).
 
 object Bip39 {
@@ -32,4 +33,30 @@ object Bip39 {
         }
         return entropy
     }
+
+    /** The words in typed text, lowercased: anything that is not a letter separates them. */
+    fun split(text: String): List<String> = text.lowercase().split(Regex("[^\\p{L}]+")).filter { it.isNotEmpty() }
+
+    /** What is wrong with [words]: the first unknown word, else a count other than 12 or 24, else the checksum. */
+    fun problem(words: List<String>): String? {
+        val unknown = words.indexOfFirst { it !in index }
+        if (unknown >= 0) return "Word ${unknown + 1}, \"${words[unknown]}\", is not a recovery word."
+        if (words.size != 12 && words.size != 24) return "A recovery key has 12 words, or 24 for an older account; this has ${words.size}."
+        return try {
+            mnemonicToEntropy(words.joinToString(" "))
+            null
+        } catch (e: IllegalArgumentException) {
+            "One word is wrong, or two are swapped. Check each word and the order."
+        }
+    }
+}
+
+/**
+ * The Ed25519 seed of the recovery key: a 32-byte recovery seed is it, a 16-byte one is stretched
+ * with BLAKE2b-256 of "starbridge/v1/recovery-seed", NUL, the seed (`recoveryKeyPair`).
+ */
+fun recoverySignSeed(seed: ByteArray, sodium: Sodium): ByteArray = when (seed.size) {
+    32 -> seed
+    16 -> sodium.hash("starbridge/v1/recovery-seed".toByteArray() + byteArrayOf(0) + seed)
+    else -> throw IllegalArgumentException("a recovery seed is 16 or 32 bytes")
 }

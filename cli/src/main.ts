@@ -10,11 +10,27 @@ process.on("SIGINT", () => {
 });
 // systemd and launchd stop the agent with SIGTERM: it removes its socket on the way out.
 process.on("SIGTERM", () => controller.abort());
+/**
+ * A reader that closed the pipe, such as `| head -1`, wants no more output: exit quietly with
+ * the status SIGPIPE gives Unix tools (128 + 13). Bun throws EPIPE from the write, or emits it.
+ */
+function closedPipe(e: unknown): never {
+  if ((e as { code?: unknown } | null)?.code === "EPIPE") process.exit(141);
+  throw e;
+}
+for (const stream of [process.stdout, process.stderr]) stream.on("error", closedPipe);
+const write = (stream: NodeJS.WriteStream, line: string) => {
+  try {
+    stream.write(`${line}\n`);
+  } catch (e) {
+    closedPipe(e);
+  }
+};
 const ctx: Ctx = {
   env: process.env,
   store: new Store(configDir(process.env)),
-  out: (l) => process.stdout.write(`${l}\n`),
-  err: (l) => process.stderr.write(`${l}\n`),
+  out: (l) => write(process.stdout, l),
+  err: (l) => write(process.stderr, l),
   now: () => new Date(),
   sleep: (ms) =>
     new Promise((r) => {

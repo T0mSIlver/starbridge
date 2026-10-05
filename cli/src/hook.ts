@@ -199,20 +199,22 @@ export async function hookSettle(
   return 0;
 }
 
-/** What an agent reads when its `AskUserQuestion` is turned away. */
+/** The answer an agent reads to each question of an `AskUserQuestion` turned away. */
 export const ASK_USER_REASON =
-  "The user is away from this terminal: ask through Starbridge instead. Run `starbridge ask` with the question, the context they need to answer it cold, the options and what each one changes, your recommendation first, as the `starbridge` skill says. Then keep working on what does not depend on the answer.";
+  "Not answered here: the user is away from this terminal, so ask through Starbridge instead. Run `starbridge ask` with the question, the context they need to answer it cold, the options and what each one changes, your recommendation first, as the `starbridge` skill says. Then keep working on what does not depend on the answer.";
 
 /** How long the server may take to answer before the hook lets `AskUserQuestion` through. */
 const REACH_MS = 3_000;
 
 /**
- * `starbridge hook ask-user`, on `PreToolUse` for `AskUserQuestion`: denies the call, so the
- * agent asks through `starbridge ask`, which reaches the owner away from the terminal. When the
- * machine is not paired or its server does not answer, it prints nothing and Claude Code asks
- * as usual, so an agent always has a way to ask.
+ * `starbridge hook ask-user`, on `PreToolUse` for `AskUserQuestion`: answers each question with
+ * `ASK_USER_REASON`, so the agent asks through `starbridge ask`, which reaches the owner away
+ * from the terminal. Claude Code shows that as an answered question; a deny would show as a red
+ * hook error. Input it cannot read is denied instead. When the machine is not paired or its
+ * server does not answer, it prints nothing and Claude Code asks as usual, so an agent always
+ * has a way to ask.
  */
-export async function hookAskUser(ctx: Ctx): Promise<number> {
+export async function hookAskUser(ctx: Ctx, stdin: string): Promise<number> {
   try {
     const machine = ctx.store.machine();
     if (!machine) return 0;
@@ -223,14 +225,31 @@ export async function hookAskUser(ctx: Ctx): Promise<number> {
   } catch {
     return 0;
   }
-  ctx.out(
-    JSON.stringify({
-      hookSpecificOutput: {
+  let input: { questions: { question: string }[] } | undefined;
+  try {
+    const parsed = JSON.parse(stdin) as { tool_input?: { questions?: unknown } };
+    const questions = parsed.tool_input?.questions;
+    if (
+      Array.isArray(questions) &&
+      questions.length > 0 &&
+      questions.every((q) => typeof (q as { question?: unknown })?.question === "string")
+    )
+      input = parsed.tool_input as typeof input;
+  } catch {}
+  const hookSpecificOutput = input
+    ? {
+        hookEventName: "PreToolUse",
+        permissionDecision: "allow",
+        updatedInput: {
+          ...input,
+          answers: Object.fromEntries(input.questions.map((q) => [q.question, ASK_USER_REASON])),
+        },
+      }
+    : {
         hookEventName: "PreToolUse",
         permissionDecision: "deny",
         permissionDecisionReason: ASK_USER_REASON,
-      },
-    }),
-  );
+      };
+  ctx.out(JSON.stringify({ hookSpecificOutput }));
   return 0;
 }
