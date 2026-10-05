@@ -1084,7 +1084,7 @@ How it generalizes is open.
   (name, meter, figure, state, reset); narrower screens keep a card per provider. Settings puts
   each section's name in a 220 px column beside its box, whose rows stay 720 px. Providers
   reorder live on the Quotas table and in Settings: the row follows the pointer (mouse, pen or
-  touch), the others slide aside, and the order is saved on release; the arrow keys, Home and
+  touch), the others slide aside, and the order is saved once it lands; the arrow keys, Home and
   End move a focused handle, and a polite live region says where it went. On the Quotas table a
   provider leading under "Running out first" keeps its place, and the others take the places
   they held among themselves; narrow screens reorder in Settings. The web gets Sign out under

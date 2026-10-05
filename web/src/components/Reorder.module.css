@@ -1,5 +1,6 @@
 /* A list reordered live (Reorder.tsx). The dragged item follows the pointer with no transition;
-   the others slide aside at `motion.state`; on release it settles at `motion.fast`. Reduced
+   the others slide aside at `motion.state`; on release it settles at `motion.state` too, so it
+   lands with them. Reduced
    motion turns the slides off in globals.css, and the order still changes. */
 
 .active .item {
@@ -15,7 +16,7 @@
 }
 
 .settling {
-  transition: transform var(--t-fast) var(--ease);
+  transition: transform var(--t-state) var(--ease);
 }
 
 /* The handle takes the pointer whole, so a touch drags the item rather than the page. */

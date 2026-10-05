@@ -88,3 +88,17 @@
     border-top: 1px solid var(--line);
   }
 }
+
+/* Keeps a provider's later machines' names in line with its first, which has the handle. */
+.handleSpace {
+  display: none;
+  flex: none;
+  width: var(--s5);
+  margin-left: calc(-1 * var(--s1));
+}
+
+@media (min-width: 900px) {
+  .handleSpace {
+    display: block;
+  }
+}

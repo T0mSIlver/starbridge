@@ -1,6 +1,13 @@
 "use client";
 
-import { type CSSProperties, useCallback, useLayoutEffect, useRef, useState } from "react";
+import {
+  type CSSProperties,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import s from "./Reorder.module.css";
 
 type Drag = {
@@ -31,21 +38,24 @@ const reduced = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
 /**
  * A list reordered by its handles, live: the dragged item follows the pointer (mouse, pen or
  * touch) and the items it passes slide aside at `motion.state`; on release it settles into its
- * place at `motion.fast`, then `onMove` commits the order. A focused handle moves its item with
+ * place at the same `motion.state`, so it lands as the others do, then `onMove` commits the order. A focused handle moves its item with
  * the arrow keys, Home and End, and a live region says where it went. Escape cancels a drag.
  * Items before `first` stay put and take no drop (the quota windows that lead while running
- * out). DESIGN.md, "Motion and states".
+ * out); `locked` items keep their handle off but let others pass. A drag still on when the list
+ * unmounts is torn down. DESIGN.md, "Motion and states".
  */
 export function useReorder({
   ids,
   name,
   onMove,
   first = 0,
+  locked,
 }: {
   ids: string[];
   name: (id: string) => string;
   onMove: (id: string, to: number) => void;
   first?: number;
+  locked?: (id: string) => boolean;
 }) {
   const [drag, setDrag] = useState<Drag>();
   const [said, setSaid] = useState("");
@@ -53,7 +63,10 @@ export function useReorder({
   const handles = useRef(new Map<string, HTMLElement>());
   const live = useRef<Drag | undefined>(undefined);
   const refocus = useRef<string | undefined>(undefined);
+  // Ends the drag in progress: its frame loop, listeners and settling timer.
+  const stop = useRef<(() => void) | undefined>(undefined);
   live.current = drag;
+  useEffect(() => () => stop.current?.(), []);
 
   // The moved item's handle keeps focus across the reorder, which moves its DOM node.
   useLayoutEffect(() => {
@@ -76,7 +89,7 @@ export function useReorder({
   const start = (id: string, e: React.PointerEvent<HTMLElement>) => {
     if (e.button !== 0 || live.current) return;
     const from = ids.indexOf(id);
-    if (from < first) return;
+    if (from < first || locked?.(id)) return;
     e.preventDefault();
     const handle = e.currentTarget;
     handle.setPointerCapture(e.pointerId);
@@ -130,6 +143,7 @@ export function useReorder({
       handle.removeEventListener("pointerup", up);
       handle.removeEventListener("pointercancel", cancelled);
       window.removeEventListener("keydown", key);
+      stop.current = undefined;
       const cur = live.current;
       if (!cur) return;
       if (cancel || cur.to === cur.from || reduced()) {
@@ -143,7 +157,12 @@ export function useReorder({
           ? (tops[to] ?? 0) + (heights[to] ?? 0) - (tops[from] ?? 0) - (heights[from] ?? 0)
           : (tops[to] ?? 0) - (tops[from] ?? 0);
       setDrag({ ...cur, dy: at, settling: true });
-      setTimeout(() => commit(cur.id, to, from), duration("--t-fast"));
+      // The rows it passed may still be sliding: land with them, then commit.
+      const timer = setTimeout(() => {
+        stop.current = undefined;
+        commit(cur.id, to, from);
+      }, duration("--t-state"));
+      stop.current = () => clearTimeout(timer);
     };
     const move = (m: PointerEvent) => {
       y = m.clientY;
@@ -160,6 +179,13 @@ export function useReorder({
     handle.addEventListener("pointerup", up);
     handle.addEventListener("pointercancel", cancelled);
     window.addEventListener("keydown", key);
+    stop.current = () => {
+      cancelAnimationFrame(frame);
+      handle.removeEventListener("pointermove", move);
+      handle.removeEventListener("pointerup", up);
+      handle.removeEventListener("pointercancel", cancelled);
+      window.removeEventListener("keydown", key);
+    };
   };
 
   const keyMove = (id: string, e: React.KeyboardEvent) => {
@@ -177,7 +203,7 @@ export function useReorder({
               : undefined;
     if (to === undefined) return;
     e.preventDefault();
-    if (live.current || from < first) return;
+    if (live.current || from < first || locked?.(id)) return;
     commit(id, Math.max(first, Math.min(last, to)), from);
   };
 
@@ -208,7 +234,7 @@ export function useReorder({
       };
     },
     handle: (id: string) => {
-      const fixed = ids.indexOf(id) < first;
+      const fixed = ids.indexOf(id) < first || !!locked?.(id);
       return {
         ref: (el: HTMLElement | null) => {
           if (el) handles.current.set(id, el);

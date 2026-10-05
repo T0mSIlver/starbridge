@@ -531,7 +531,7 @@ and Android move alike.
 | A status line ("Pixel joined.", "Refused …") | fades in at `state`, stays until the next action |
 | Pressing a button | its fill steps one tone darker while pressed; no scale, no ripple |
 | A switch | the knob slides at `fast` |
-| Dragging a row by its handle (the Quotas table's providers, Settings' providers) | the row follows the pointer, mouse, pen or touch, with no transition; the rows it passes slide aside at `state`; on release it settles into its place at `fast`; Escape puts it back. The arrow keys, Home and End on a focused handle move it at once |
+| Dragging a row by its handle (the Quotas table's providers, Settings' providers) | the row follows the pointer, mouse, pen or touch, with no transition; the rows it passes slide aside at `state`; on release it settles into its place at `state`, landing with the rows it passed; Escape puts it back. The arrow keys, Home and End on a focused handle move it at once |
 | The theme changing | at once: transitions are off for that frame, so nothing fades at its own pace |
 
 Never animated: page and tab changes, moving the selection (J, K or a click),
