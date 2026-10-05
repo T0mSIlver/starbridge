@@ -29,3 +29,7 @@ healthy() {
 }
 healthy http://127.0.0.1:8080/healthz server
 healthy http://127.0.0.1:3000/ web
+
+# /healthz/backup fails until a first backup ran; run one now rather than wait for the night.
+[ -e "$(docker volume inspect -f '{{.Mountpoint}}' starbridge_data)/last-backup" ] ||
+  systemctl start starbridge-backup.service

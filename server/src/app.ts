@@ -1,3 +1,5 @@
+import { stat } from "node:fs/promises";
+import { dirname, join } from "node:path";
 import { ready } from "@starbridge/protocol";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
@@ -18,6 +20,9 @@ import { joinRoutes, sweepJoins } from "./routes/joins";
 import { pairingRoutes, sweepPairings } from "./routes/pairings";
 import { pushRoutes } from "./routes/push";
 import { Waiters } from "./waiters";
+
+/** /healthz/backup fails past this; deploy/host/backup.sh runs nightly. */
+const BACKUP_MAX_AGE_MS = 26 * 3_600_000;
 
 export async function createApp(config: Config, fetchFn: typeof fetch = fetch) {
   await ready;
@@ -70,6 +75,16 @@ export async function createApp(config: Config, fetchFn: typeof fetch = fetch) {
     }),
   );
   app.get("/healthz", (c) => c.text("ok"));
+  // deploy/host/backup.sh touches this file beside the database after each good backup. The
+  // answer says only whether it is fresh, for the uptime check (.github/workflows/uptime.yml).
+  const backupStamp = join(dirname(config.dbPath), "last-backup");
+  app.get("/healthz/backup", async (c) => {
+    const at = await stat(backupStamp).then(
+      (s) => s.mtimeMs,
+      () => 0,
+    );
+    return Date.now() - at < BACKUP_MAX_AGE_MS ? c.text("ok") : c.text("backup stale", 503);
+  });
   app.route("/v1", v1);
   app.notFound((c) => c.json({ error: "not-found" }, 404));
   app.onError((e, c) => {
