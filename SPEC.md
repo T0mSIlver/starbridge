@@ -1072,6 +1072,12 @@ How it generalizes is open.
   Below that it keeps today's 720 px column. Thumbnails on a row shrink with a narrowed list
   rather than running past its edge. The View button is an icon with the tooltip "View", and
   its menu drops "Remembered on this device", since the inbox's head is dense.
+- 2026-10-06. Find on the web searches History too (owner picked option 1 of
+  https://claude.ai/artifact/9ddJ2PwPrBc7KmQdeDVqDN). The rail's Find box and its `/` key stay;
+  while it holds a query, the list shows the matching open items in one feed, whatever the
+  grouping, then "History · N" with the matching answered items, History open or not. A
+  History item also matches by its answer. Matched words show bold on `surface2`, never in
+  amber; Escape in the box clears it. Android's search waits for the owner's pick.
 
 ## Encryption, with existing libraries
 
