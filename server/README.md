@@ -14,9 +14,11 @@ them. Its routes are in `PROTOCOL.md`.
 
 ## Set it up
 
-1. Build the two images from a checkout of this repository:
+1. With Docker installed, clone this repository and build the two images:
 
    ```bash
+   git clone https://github.com/T0mSIlver/starbridge
+   cd starbridge
    docker build -f server/Dockerfile -t starbridge-server .
    docker build -f web/Dockerfile -t starbridge-web .
    ```
@@ -29,6 +31,7 @@ them. Its routes are in `PROTOCOL.md`.
      -e OWNER_TOKEN=change-me \
      -e PUBLIC_URL=https://starbridge.example \
      -e RELAY_URL=https://starbridge.run \
+     -e TRUST_PROXY=1 \
      starbridge-server
    ```
 
@@ -92,9 +95,9 @@ Web Push also goes through the relay unless you set your own VAPID keys.
 
 <dl>
 <dt><code>OWNER_TOKEN</code></dt>
-<dd>Signs you in to the server's one account. Unset by default.</dd>
+<dd>Signs you in to the server's one owner account. Set it, GitHub sign-in, or both. Unset by default.</dd>
 <dt><code>GITHUB_CLIENT_ID</code>, <code>GITHUB_CLIENT_SECRET</code></dt>
-<dd>GitHub sign-in, from a GitHub OAuth app whose callback is <code>$PUBLIC_URL/v1/auth/github/callback</code>. Unset by default.</dd>
+<dd>GitHub sign-in, where each GitHub user gets their own account, from a GitHub OAuth app whose callback is <code>$PUBLIC_URL/v1/auth/github/callback</code>. Unset by default.</dd>
 <dt><code>APP_REDIRECT_URI</code></dt>
 <dd>Where GitHub sign-in sends the Android app. Default: <code>starbridge://auth</code>.</dd>
 </dl>
@@ -105,7 +108,7 @@ Web Push also goes through the relay unless you set your own VAPID keys.
 <dt><code>RELAY_URL</code></dt>
 <dd>The relay's origin, such as <code>https://starbridge.run</code>. Without it, and without your own Firebase or VAPID keys, Android and Web Push notifications don't go out. Unset by default.</dd>
 <dt><code>FCM_PROJECT_ID</code>, <code>FCM_CLIENT_EMAIL</code>, <code>FCM_PRIVATE_KEY</code></dt>
-<dd>A Firebase service account, to send Android notifications without the relay. Only the app's own Firebase project can use them. Unset by default.</dd>
+<dd>A service account of the Android app's own Firebase project, which only starbridge.run holds. Self-hosters use the relay or UnifiedPush instead. Unset by default.</dd>
 <dt><code>VAPID_PUBLIC_KEY</code>, <code>VAPID_PRIVATE_KEY</code>, <code>VAPID_SUBJECT</code></dt>
 <dd>Web Push keys, to send browser notifications without the relay. Make them with <code>bunx web-push generate-vapid-keys</code>. Unset by default.</dd>
 <dt><code>ALLOW_PRIVATE_PUSH_ENDPOINTS</code></dt>
@@ -128,6 +131,12 @@ Web Push also goes through the relay unless you set your own VAPID keys.
 </dl>
 
 ## Run from source
+
+The server alone, for development; `web/README.md` adds the web app.
+
+```bash
+pnpm install
+```
 
 ```bash
 OWNER_TOKEN=change-me PORT=8080 bun run server/src/main.ts

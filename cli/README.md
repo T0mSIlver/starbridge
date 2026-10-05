@@ -41,7 +41,8 @@ Setup asks before each step, and a rerun repairs only what is missing:
 2. It finds CodexBar, or installs it (with Homebrew if you have it, else from the release
    tarball, checked against pinned hashes, into `~/.local/opt/codexbar`).
 3. It asks which providers' quotas to upload.
-4. It installs the agent as a systemd user unit or a launchd agent.
+4. It installs the background service, `starbridge agent`, as a systemd user unit or a launchd
+   agent.
 5. It installs the Claude Code plugin at user scope.
 6. It uploads a first quota snapshot.
 
@@ -100,12 +101,13 @@ starbridge ask --question "Merge #12 now?" \
 `ask` prints the question's id and how the answer will come back:
 
 - In Claude Code, the answer arrives as the session's next prompt.
-- In an interactive Codex session, the agent service queues it into the session.
+- In an interactive Codex session (Codex CLI 0.160 or later), the background service queues it
+  into the session.
 - Anywhere else, the agent waits for it with `starbridge wait <id> --timeout 5m`, which exits
   with code 2 when the time runs out.
 
 When the agent runs out of other work, `starbridge waiting <id>` shows "Waiting for you" on
-every device and notifies you once more. `starbridge working <id>` reverts it.
+every device and notifies you once more. `starbridge working <id>` clears it; the question stays open.
 
 ### Runs
 
@@ -124,13 +126,13 @@ signal n ended it. Progress comes from what the output prints: an OSC 9;4 sequen
 `42%`. The output goes through a pipe, so tools that print progress only to a terminal show none.
 If the machine is not paired or the server is down, `run` warns once and runs the command anyway.
 
-Agents wrap, unasked, any command that blocks you or needs you at the machine. To hear about
+The Starbridge skill has agents wrap, unasked, any command that blocks you or needs you at the machine. To hear about
 other commands, such as local inference, say so in their instruction files
 ([Tell your agents](../docs/tell-your-agents.md)).
 
 ### Quotas
 
-The agent service runs `codexbar usage --format json` for each provider you picked and uploads a
+The background service runs `codexbar usage --format json` for each provider you picked and uploads a
 snapshot every 5 minutes. A provider that fails is sent as an error and never stops the others.
 Your devices notify you before a window resets with headroom unused, or when it runs low.
 
@@ -155,7 +157,7 @@ If you use the Claude app, turn off its "Code updates" notifications, which fire
 every turn. Keep "Code permission requests" on, unless you turned on Starbridge's permission
 prompts, so that one prompt doesn't notify you twice.
 
-### The agent service
+### The background service
 
 `starbridge agent` runs once per machine, as a user service. It holds the keys and the server
 connection, uploads quota snapshots and hands each session its answers. The other commands go

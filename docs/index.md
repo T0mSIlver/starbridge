@@ -11,7 +11,8 @@ only ciphertext. Use the free server at starbridge.run, or [host your own](../se
 ## Start
 
 1. **Sign in** with GitHub on the web at [starbridge.run](https://starbridge.run) or in the
-   Android app. The first device you sign in on creates your account's keys.
+   Android app. The first device you sign in on creates your account's keys, and you approve each later
+   device from one you already have.
 
 2. **Install the CLI** on each machine that runs agents:
 
@@ -34,10 +35,11 @@ only ciphertext. Use the free server at starbridge.run, or [host your own](../se
   help you decide. Your tap reaches its session as the next prompt.
 - **Runs.** A build, a release, an eval or heavy work on your machine shows its progress on your
   devices until it passes or fails.
-- **Quotas.** Every window CodexBar reads, with the pace you are on, and a notification before a
-  window resets with headroom unused or runs low.
-- **Permission prompts.** Allow or deny Claude Code's prompts from your phone. Off until you turn
-  them on.
+- **Quotas.** Each plan's limits, such as a 5-hour and a weekly window, read from
+  [CodexBar](https://github.com/steipete/CodexBar). A notification comes before a window resets
+  with headroom unused, or when it runs low.
+- **Permission prompts.** Allow or deny, from your phone, the commands Claude Code asks
+  permission to run. Off until you turn them on.
 
 Starbridge works with Claude Code and Codex; Pi support is coming.
 [Tell your agents](tell-your-agents.md#what-each-agent-supports) lists what each one supports.
