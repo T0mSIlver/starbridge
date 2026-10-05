@@ -1,19 +1,26 @@
 import { expect, test } from "bun:test";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   type Answer,
   addEntry,
   claimHash,
   type Decision,
   generateMemberKeys,
+  hashInput,
   newPairingCode,
+  type Permission,
   pairingRequest,
   publicKeys,
   type QuotaSnapshot,
   RECOVERY,
   type SealedItem,
+  type Settled,
   seal,
   toB64,
 } from "@starbridge/protocol";
+import { nextSeq, openDb } from "../src/db";
 import { DEFAULT_LIMITS, type Limits } from "../src/limits";
 import { RateLimiter } from "../src/ratelimit";
 import { sweepStorage } from "../src/retention";
@@ -109,9 +116,56 @@ test("a full account refuses new decisions but still takes answers and replaced 
   expect((await post(s, devbox, quota(devbox, phone))).status).toBe(201);
 });
 
+function permission(from: Actor, to: Actor): SealedItem {
+  const input = '{"command":"ls"}';
+  const body: Permission = {
+    v: 1,
+    id: `p${++n}`,
+    to: [to.id],
+    createdAt: at,
+    agent: "claude-code",
+    tool: "Bash",
+    summary: "ls",
+    input,
+    inputHash: hashInput(input),
+    suggestions: [],
+    expiresAt: "2026-10-04T12:09:30Z",
+    source: { machine: from.id, project: "starbridge", session: "s1" },
+  };
+  return seal("permission", body, { id: from.id, signKey: from.keys.sign.privateKey }, [to.member]);
+}
+
+test("permission prompts are capped per account like decisions", async () => {
+  const { s, phone, devbox } = await setup({ permissions: 2 });
+  expect((await post(s, devbox, permission(devbox, phone))).status).toBe(201);
+  expect((await post(s, devbox, permission(devbox, phone))).status).toBe(201);
+  const r = await post(s, devbox, permission(devbox, phone));
+  expect(r.status).toBe(409);
+  expect(r.json.error).toBe("too-many-items");
+});
+
+test("each stored item is charged its rows as well as its boxes", async () => {
+  const { s, phone, devbox } = await setup();
+  const small = permission(devbox, phone);
+  const boxes = small.boxes.reduce((n, b) => n + b.box.length, 0);
+  const rows = 2 * DEFAULT_LIMITS.rowBytes;
+  // Room for three prompts' boxes, but for only two prompts' rows.
+  s.deps.config.limits = {
+    ...DEFAULT_LIMITS,
+    storedBytes: 3 * boxes + 2 * rows + DEFAULT_LIMITS.answerReserve,
+  };
+  expect((await post(s, devbox, small)).status).toBe(201);
+  expect((await post(s, devbox, permission(devbox, phone))).status).toBe(201);
+  const r = await post(s, devbox, permission(devbox, phone));
+  expect(r.status).toBe(409);
+  expect(r.json.error).toBe("too-many-items");
+});
+
 test("stored bytes are capped per account, keeping room for answers, and per item", async () => {
   const { s, phone, devbox } = await setup();
-  const bytes = (item: SealedItem) => item.boxes.reduce((n, b) => n + b.box.length, 0);
+  const boxes = (item: SealedItem) => item.boxes.reduce((n, b) => n + b.box.length, 0);
+  const bytes = (item: SealedItem) =>
+    boxes(item) + DEFAULT_LIMITS.rowBytes * (1 + item.boxes.length);
   const d = decision(devbox, phone);
   const later = decision(devbox, phone);
   expect((await post(s, devbox, d)).status).toBe(201);
@@ -132,7 +186,7 @@ test("stored bytes are capped per account, keeping room for answers, and per ite
   expect(r.json.error).toBe("too-many-items");
   expect((await post(s, phone, a)).status).toBe(201);
 
-  s.deps.config.limits = { ...DEFAULT_LIMITS, itemBytes: bytes(q) - 1, answerBytes: bytes(a) - 1 };
+  s.deps.config.limits = { ...DEFAULT_LIMITS, itemBytes: boxes(q) - 1, answerBytes: boxes(a) - 1 };
   const big = await post(s, devbox, quota(devbox, phone));
   expect(big.status).toBe(413);
   expect(big.json.error).toBe("too-large");
@@ -327,4 +381,73 @@ test("a short window's sweep leaves a longer window's count alone", () => {
   t = 240_000;
   limiter.allow("trigger", 1, 60_000);
   expect(limiter.allow("hourly", 1, 3_600_000)).toBe(false);
+});
+
+test("posting and answering an item never scans the account's items or boxes", async () => {
+  const { s, phone, devbox } = await setup();
+  const db = s.deps.db;
+  const seen = new Set<string>();
+  const query = db.query.bind(db);
+  db.query = ((sql: string) => {
+    seen.add(sql);
+    return query(sql);
+  }) as typeof db.query;
+  const p = permission(devbox, phone);
+  await post(s, devbox, p);
+  const notice: Settled = {
+    v: 1,
+    id: `st${++n}`,
+    itemId: p.id,
+    to: [phone.id],
+    outcome: "keyboard",
+    at,
+  };
+  const key = { id: devbox.id, signKey: devbox.keys.sign.privateKey };
+  expect((await post(s, devbox, seal("settled", notice, key, [phone.member]))).status).toBe(201);
+  await post(s, devbox, quota(devbox, phone));
+  await post(s, devbox, quota(devbox, phone));
+  const d = decision(devbox, phone);
+  await post(s, devbox, d);
+  await post(s, phone, answer(d, phone, devbox));
+  db.query = query;
+  const scans = [...seen].flatMap((sql) => {
+    const plan = db
+      .prepare(`EXPLAIN QUERY PLAN ${sql}`)
+      .all(...Array(db.prepare(sql).paramsCount).fill(null)) as { detail: string }[];
+    return (
+      plan
+        .map((r) => r.detail)
+        // A search on the account id alone reads every one of the account's rows.
+        .filter((d) => /^(SCAN|SEARCH) (items|boxes)\b/.test(d) && !/AND/.test(d))
+        .map((d) => `${d}: ${sql.replace(/\s+/g, " ")}`)
+    );
+  });
+  expect(scans).toEqual([]);
+});
+
+test("a database from before the item totals counts what it holds once, then keeps count", () => {
+  const dir = mkdtempSync(join(tmpdir(), "sb-totals-"));
+  const path = join(dir, "db.sqlite");
+  let db = openDb(path);
+  db.run("INSERT INTO accounts (id, created_at) VALUES ('a', '')");
+  const add = (id: string, size: number) =>
+    db
+      .query(
+        "INSERT INTO items (seq, account_id, id, kind, from_id, received_at, size) VALUES (?, 'a', ?, 'permission', 'm', '', ?)",
+      )
+      .run(nextSeq(db), id, size);
+  add("p1", 100);
+  add("p2", 200);
+  db.run("DROP TRIGGER item_totals_add");
+  db.run("DROP TRIGGER item_totals_drop");
+  db.run("DROP TABLE item_totals");
+  db.close();
+  db = openDb(path);
+  add("p3", 300);
+  db.run("DELETE FROM items WHERE id = 'p1'");
+  db.close();
+  db = openDb(path);
+  expect(db.query("SELECT kind, n, bytes FROM item_totals").all()).toEqual([
+    { kind: "permission", n: 2, bytes: 500 },
+  ]);
 });

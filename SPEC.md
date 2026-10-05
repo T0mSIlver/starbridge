@@ -1046,6 +1046,14 @@ so the mod is the first path.
   whose agent waits), and "When you can" with its count in `fg2`. Runs stay above the groups,
   as in the one feed, and the order inside each group is the feed's. Items look the same in
   every grouping. A saved "Group by machine" carries over.
+- 2026-10-06. Permission prompts are capped like decisions, and storage counts rows (#260, audit
+  finding). Prompts had no count cap and were charged only their ciphertext, so at the post
+  rate an account could keep about 1.2 million in a week for 1.2 MB of quota. Now an account
+  holds at most 10000 prompts, and each item is charged its boxes plus 512 bytes for its row
+  and for each box's row. The other kinds need no cap of their own: each answers, notes or
+  settles one capped item, or replaces the last snapshot. A post reads the account's counts
+  from a totals table that triggers keep, and indexes on `re`, on kind and sender, and on a
+  box's item mean no post reads all of an account's items or boxes.
 - 2026-10-06. The directory cap stops adds, never revocations or recovery (#260, audit finding).
   A chain of 200 entries refused every append, so a lost machine's token could no longer be
   revoked, and an owner who lost every device could not recover. From entry 200 on, the server

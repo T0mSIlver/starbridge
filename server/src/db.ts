@@ -110,10 +110,30 @@ CREATE TABLE IF NOT EXISTS items (
   re TEXT,
   received_at TEXT NOT NULL,
   answered_at TEXT,
-  -- Bytes of the item's boxes, counted against the account's storage.
+  -- Bytes counted against the account's storage: its boxes, plus a charge per stored row.
   size INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (account_id, id)
 );
+CREATE INDEX IF NOT EXISTS items_re ON items (account_id, re);
+CREATE INDEX IF NOT EXISTS items_from ON items (account_id, kind, from_id);
+
+-- Each account's item count and stored bytes per kind, kept by the triggers below so a post
+-- checks the account's caps without reading its items.
+CREATE TABLE IF NOT EXISTS item_totals (
+  account_id TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  n INTEGER NOT NULL,
+  bytes INTEGER NOT NULL,
+  PRIMARY KEY (account_id, kind)
+);
+CREATE TRIGGER IF NOT EXISTS item_totals_add AFTER INSERT ON items BEGIN
+  INSERT INTO item_totals (account_id, kind, n, bytes) VALUES (new.account_id, new.kind, 1, new.size)
+  ON CONFLICT (account_id, kind) DO UPDATE SET n = n + 1, bytes = bytes + excluded.bytes;
+END;
+CREATE TRIGGER IF NOT EXISTS item_totals_drop AFTER DELETE ON items BEGIN
+  UPDATE item_totals SET n = n - 1, bytes = bytes - old.size
+  WHERE account_id = old.account_id AND kind = old.kind;
+END;
 
 -- Never decreases, so a cursor never meets a reused seq after pruning.
 CREATE TABLE IF NOT EXISTS item_seq (n INTEGER NOT NULL);
@@ -127,6 +147,8 @@ CREATE TABLE IF NOT EXISTS boxes (
   PRIMARY KEY (account_id, to_id, item_id),
   FOREIGN KEY (account_id, item_id) REFERENCES items(account_id, id) ON DELETE CASCADE
 );
+-- For the cascade from items, and for an item's recipients.
+CREATE INDEX IF NOT EXISTS boxes_item ON boxes (account_id, item_id, to_id);
 
 CREATE TABLE IF NOT EXISTS push_subscriptions (
   id TEXT PRIMARY KEY,
@@ -164,11 +186,20 @@ export function openDb(path: string): Database {
   db.run("PRAGMA journal_mode = WAL");
   db.run("PRAGMA foreign_keys = ON");
   db.run("PRAGMA busy_timeout = 5000");
-  db.run(SCHEMA);
-  // Databases made before items had a size; their old items count as empty until swept.
-  const columns = db.query("PRAGMA table_info(items)").all() as { name: string }[];
-  if (!columns.some((col) => col.name === "size"))
-    db.run("ALTER TABLE items ADD COLUMN size INTEGER NOT NULL DEFAULT 0");
+  db.transaction(() => {
+    const totals = db.query("SELECT 1 FROM sqlite_master WHERE name = 'item_totals'").get();
+    db.run(SCHEMA);
+    // Databases made before items had a size; their old items count as empty until swept.
+    const columns = db.query("PRAGMA table_info(items)").all() as { name: string }[];
+    if (!columns.some((col) => col.name === "size"))
+      db.run("ALTER TABLE items ADD COLUMN size INTEGER NOT NULL DEFAULT 0");
+    // Databases made before item_totals: count what they hold, once.
+    if (!totals)
+      db.run(
+        `INSERT INTO item_totals (account_id, kind, n, bytes)
+         SELECT account_id, kind, COUNT(*), SUM(size) FROM items GROUP BY account_id, kind`,
+      );
+  })();
   return db;
 }
 
