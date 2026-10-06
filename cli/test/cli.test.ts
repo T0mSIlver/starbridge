@@ -273,6 +273,16 @@ test("ask --answer-in posts a pointer decision, and settle closes it", async () 
   expect(await run(["settle", "d_unknown"], ctx)).toBe(1);
 });
 
+test("settle leaves a decision whose answer reached the agent answered, not withdrawn", async () => {
+  const ctx = await paired(server);
+  expect(await run(ASK, ctx)).toBe(0);
+  const id = ctx.lines.at(-1) as string;
+  await server.answer(id, { choice: "Merge" });
+  expect(await run(["wait", id, "--timeout", "5s"], ctx)).toBe(0);
+  expect(await run(["settle", id], ctx)).toBe(0);
+  expect(await server.opened("settled")).toEqual([]);
+});
+
 test("ask refuses a decision that would not stand alone", async () => {
   const ctx = await paired(server);
   expect(await run(["ask", "--question", "Q?", "--option", "Only"], ctx)).toBe(1);

@@ -386,6 +386,8 @@ export async function settle(ctx: Ctx, opts: { id?: string; outcome?: string }):
   if (!id) throw new UsageError("settle needs a decision id");
   const asked = ctx.store.state().asked[id];
   if (!asked) throw new UsageError(`${id} is not a decision this machine asked`);
+  // Its answer reached the agent: it is closed, and a withdrawal would contradict the answer.
+  if (ctx.store.state().answers[id]?.seen) return 0;
   const outcome = opts.outcome ?? (asked.answerIn ? "elsewhere" : "withdrawn");
   if (outcome !== "elsewhere" && outcome !== "withdrawn")
     throw new UsageError("--outcome is elsewhere or withdrawn");

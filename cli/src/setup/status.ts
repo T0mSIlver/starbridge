@@ -1,6 +1,7 @@
 /** `starbridge status`: setup's checks, at any time. */
 import type { Status } from "../agent/api";
 import { AgentClient } from "../agent/client";
+import { REMOVED } from "../api";
 import { VERSION } from "../version";
 import { findCodexbar, listProviders, probe } from "./codexbar";
 import { codexSkill, hasCodex, hasOpencode, hasPi, opencodeState, piPackage } from "./harnesses";
@@ -36,9 +37,12 @@ export async function status(sys: Sys): Promise<number> {
   else {
     out(`Agent: ${agent.version}, pid ${agent.pid}, since ${agent.startedAt}, on ${agent.socket}`);
     const s = agent.server;
-    out(
-      `Server: ${s.reachable ? "reachable" : "not reachable"}${s.lastOkAt ? `, last answered ${s.lastOkAt}` : ""}${s.lastError ? `, last error: ${s.lastError}` : ""}`,
-    );
+    // The server answered, refusing this machine's token.
+    if (s.lastError === REMOVED) out(`Server: reachable, but ${REMOVED}`);
+    else
+      out(
+        `Server: ${s.reachable ? "reachable" : "not reachable"}${s.lastOkAt ? `, last answered ${s.lastOkAt}` : ""}${s.lastError ? `, last error: ${s.lastError}` : ""}`,
+      );
     const q = agent.quota;
     out(
       q.providers.length > 0
