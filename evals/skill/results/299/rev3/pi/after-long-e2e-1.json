@@ -1,0 +1,31 @@
+{
+  "agent": "pi",
+  "model": "zai/glm-5.3-flash",
+  "arm": "after",
+  "scenario": "long-e2e",
+  "rep": 1,
+  "turns": [
+    {
+      "commands": [],
+      "final": "(error) 429: {\"code\":\"1302\",\"message\":\"Rate limit reached for requests\"}",
+      "session": "01a110d3-02f9-74c7-88e3-acdb343e3ccb",
+      "tokens": 0,
+      "costUsd": 0,
+      "exit": 0,
+      "seconds": 17.489
+    }
+  ],
+  "decisions": [],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "judge": {
+    "cold": null,
+    "consequences": null,
+    "terminal": false,
+    "links": null,
+    "plain": null,
+    "notes": "The agent hit a rate-limit error and never ran the suite, wrapped or not; no card was posted, which is correct here, but the task was not completed."
+  },
+  "error": "(error) 429: {\"code\":\"1302\",\"message\":\"Rate limit reached for requests\"}"
+}

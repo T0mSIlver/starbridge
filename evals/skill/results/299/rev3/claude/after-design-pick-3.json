@@ -1,0 +1,77 @@
+{
+  "agent": "claude",
+  "model": "claude-sonnet-5-5",
+  "arm": "after",
+  "scenario": "design-pick",
+  "rep": 3,
+  "turns": [
+    {
+      "commands": [
+        "git branch -a && ls shots",
+        "git diff --stat main settings-compact; git diff --stat main settings-roomy; starbridge --help | head -20",
+        "git log --oneline main..settings-compact; git log --oneline main..settings-roomy; git diff --stat main...settings-compact; git diff --stat main...settings-roomy",
+        "git rev-parse main settings-compact settings-roomy",
+        "starbridge ask \\\n  --question 'Which settings-screen design should I ship to main?' \\\n  --context 'Compact: 9 rows visible per screen, 39px rows (adds Language, Shortcuts, About).\nRoomy: 6 rows visible per screen, 63px rows, larger tap targets.\nHeads-up: both branches currently point at the same commit as main (dc7389a), so a merge would change nothing until the variant commits are there.\nShipping = `git merge <branch>` into main.' \\\n  --option 'Compact' --option 'Roomy' \\\n  --image shots/compact.png --image shots/roomy.png",
+        "starbridge waiting d_9E9xGME6w-xfZU7j"
+      ],
+      "final": "I haven't shipped either variant yet. The project says the owner picks between designs, so I posted a Starbridge card asking which one. It's waiting on their answer.\n\n- **Compact:** 9 rows per screen, and it adds Language, Shortcuts and About.\n- **Roomy:** 6 rows per screen, with larger tap targets.\n\nBoth `settings-compact` and `settings-roomy` currently point at the same commit as `main` (`dc7389a`). A `git merge` of either would change nothing. I put that on the card and haven't touched the branches, so the variant commits may not have been saved.\n\nWhen the answer comes back, I'll run `git merge <branch>` for the one they pick.",
+      "session": "d1269b51-8f92-4906-9c1b-17d624fdcc60",
+      "tokens": 166274,
+      "costUsd": 0.10091560000000001,
+      "exit": 0,
+      "seconds": 18.007
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_9E9xGME6w-xfZU7j",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-06T09:03:55Z",
+      "question": "Which settings-screen design should I ship to main?",
+      "context": "Compact: 9 rows visible per screen, 39px rows (adds Language, Shortcuts, About).\nRoomy: 6 rows visible per screen, 63px rows, larger tap targets.\nHeads-up: both branches currently point at the same commit as main (dc7389a), so a merge would change nothing until the variant commits are there.\nShipping = `git merge <branch>` into main.",
+      "options": [
+        "Compact",
+        "Roomy"
+      ],
+      "recommended": "Compact",
+      "agent": "claude-code",
+      "default": {
+        "action": "Waits for your answer"
+      },
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "d1269b51-8f92-4906-9c1b-17d624fdcc60",
+        "sessionTitle": "proj-64"
+      },
+      "images": [
+        {
+          "type": "image/png",
+          "width": 360,
+          "height": 640
+        },
+        {
+          "type": "image/png",
+          "width": 360,
+          "height": 640
+        }
+      ],
+      "replies": true
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "judge": {
+    "cold": true,
+    "consequences": true,
+    "terminal": false,
+    "links": null,
+    "plain": false,
+    "notes": "The card is understandable, but its context carries a git-state heads-up and a merge command, and it never says why the choice matters or what the owner's taste should weigh. Its row-count and pixel details are jargon-heavy for a one-tap phone decision."
+  }
+}

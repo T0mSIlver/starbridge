@@ -1,0 +1,75 @@
+{
+  "agent": "codex",
+  "model": "default",
+  "arm": "after",
+  "scenario": "design-pick",
+  "rep": 2,
+  "turns": [
+    {
+      "commands": [
+        "/usr/bin/zsh -lc 'cat /var/tmp/skill-eval-osxkMr/after-design-pick-2/cfg/skills/starbridge/SKILL.md'",
+        "/usr/bin/zsh -lc 'git status --short; git branch --list; rg --files shots'",
+        "/usr/bin/zsh -lc 'git log --oneline --all -5; git diff --stat main..settings-compact; git diff --stat main..settings-roomy'",
+        "/usr/bin/zsh -lc \"starbridge ask --question 'Which settings-screen design should I ship into main?' --context 'Both variants are done and pass the tests.\nCompact: 9 settings visible, with rows about 39 px tall.\nRoomy: 6 settings visible, with rows about 63 px tall.\nYour pick will be merged into main.' --option 'Compact' --option 'Roomy' --image shots/compact.png --image shots/roomy.png --waiting\"",
+        "/usr/bin/zsh -lc \"git show-ref --heads; rg --files -g '\"'!shots/**'\"' -g '\"'! .git/**'\"'\"",
+        "/usr/bin/zsh -lc 'starbridge wait d_8FqmWsB8pkltIubt --timeout 5m'",
+        "/usr/bin/zsh -lc 'starbridge wait d_8FqmWsB8pkltIubt --timeout 5m'"
+      ],
+      "final": "Starbridge’s second wait timed out with no answer. I’ve continued waiting on the same card.",
+      "session": "01a1107b-296e-7432-9c67-99b19b64a620",
+      "exit": 143,
+      "seconds": 720.187
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_8FqmWsB8pkltIubt",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-06T09:11:26Z",
+      "question": "Which settings-screen design should I ship into main?",
+      "context": "Both variants are done and pass the tests.\nCompact: 9 settings visible, with rows about 39 px tall.\nRoomy: 6 settings visible, with rows about 63 px tall.\nYour pick will be merged into main.",
+      "options": [
+        "Compact",
+        "Roomy"
+      ],
+      "recommended": "Compact",
+      "agent": "codex",
+      "default": {
+        "action": "Waits for your answer"
+      },
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "01a1107b-296e-7432-9c67-99b19b64a620"
+      },
+      "images": [
+        {
+          "type": "image/png",
+          "width": 360,
+          "height": 640
+        },
+        {
+          "type": "image/png",
+          "width": 360,
+          "height": 640
+        }
+      ],
+      "replies": true
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "judge": {
+    "cold": true,
+    "consequences": false,
+    "terminal": false,
+    "links": null,
+    "plain": true,
+    "notes": "The card gives the row heights and how many settings show, but doesn't say what each choice means for users or why the recommended option (Compact) was picked."
+  }
+}

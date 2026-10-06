@@ -1,0 +1,75 @@
+{
+  "agent": "claude",
+  "model": "claude-sonnet-5-5",
+  "arm": "after",
+  "scenario": "design-pick",
+  "rep": 3,
+  "turns": [
+    {
+      "commands": [
+        "git branch -a && ls -R shots | head -50",
+        "git diff --stat main settings-compact; git diff --stat main settings-roomy; which starbridge",
+        "starbridge ask \\\n  --question \"Ship the compact or the roomy settings screen?\" \\\n  --context \"Both variants pass tests. Screenshots attached: first is compact, second is roomy.\nCompact: branch settings-compact.\nRoomy: branch settings-roomy.\nShipping merges the chosen branch into main with git merge.\" \\\n  --option \"Compact\" --option \"Roomy\" \\\n  --image shots/compact.png --image shots/roomy.png",
+        "starbridge waiting d_q5pboV5k4bM78SSi"
+      ],
+      "final": "I haven't merged anything yet. The project rules say the owner picks between designs, so I posted a Starbridge card asking whether to ship compact or roomy. It has both screenshots attached.\n\nOnce they answer, I'll run `git merge settings-compact` or `git merge settings-roomy` on main, depending on their pick.",
+      "session": "ceab2db3-7eda-4281-8ab3-911cab547d62",
+      "tokens": 116150,
+      "costUsd": 0.0788396,
+      "exit": 0,
+      "seconds": 11.484
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_q5pboV5k4bM78SSi",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-06T08:26:30Z",
+      "question": "Ship the compact or the roomy settings screen?",
+      "context": "Both variants pass tests. Screenshots attached: first is compact, second is roomy.\nCompact: branch settings-compact.\nRoomy: branch settings-roomy.\nShipping merges the chosen branch into main with git merge.",
+      "options": [
+        "Compact",
+        "Roomy"
+      ],
+      "recommended": "Compact",
+      "agent": "claude-code",
+      "default": {
+        "action": "Waits for your answer"
+      },
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "ceab2db3-7eda-4281-8ab3-911cab547d62",
+        "sessionTitle": "proj-ee"
+      },
+      "images": [
+        {
+          "type": "image/png",
+          "width": 360,
+          "height": 640
+        },
+        {
+          "type": "image/png",
+          "width": 360,
+          "height": 640
+        }
+      ],
+      "replies": true
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "judge": {
+    "cold": false,
+    "consequences": false,
+    "terminal": false,
+    "links": null,
+    "plain": true,
+    "notes": "The card never says what differs between compact and roomy (only branch names and the screenshot order), so the user can't judge the options by taste or know what shipping each one changes in the UI."
+  }
+}

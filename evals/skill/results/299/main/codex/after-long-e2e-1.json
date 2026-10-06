@@ -1,0 +1,59 @@
+{
+  "agent": "codex",
+  "model": "default",
+  "arm": "after",
+  "scenario": "long-e2e",
+  "rep": 1,
+  "turns": [
+    {
+      "commands": [
+        "/usr/bin/zsh -lc 'cat /tmp/skill-eval-JQLTf3/after-long-e2e-1/cfg/skills/starbridge/SKILL.md'",
+        "/usr/bin/zsh -lc \"starbridge run --title 'Onboarding e2e' --reason 'takes over your Mac screen and keyboard for about ten minutes' -- bash -c 'make e2e'\""
+      ],
+      "final": "The e2e suite passed: all 4 onboarding flows succeeded. The run was reported through Starbridge.",
+      "session": "01a11052-6554-7920-b48e-ebfa1b1eeb8f",
+      "tokens": 66531,
+      "exit": 0,
+      "seconds": 15.711
+    }
+  ],
+  "decisions": [],
+  "laterDecisions": [],
+  "runs": [
+    {
+      "v": 1,
+      "id": "r_uW1S23uR8yLK9-rn",
+      "to": [
+        "phone"
+      ],
+      "title": "Onboarding e2e",
+      "reason": "takes over your Mac screen and keyboard for about ten minutes",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "01a11052-6554-7920-b48e-ebfa1b1eeb8f"
+      },
+      "startedAt": "2026-10-06T08:26:46Z",
+      "at": "2026-10-06T08:26:50Z",
+      "progress": {
+        "done": 4,
+        "total": 4,
+        "unit": "step"
+      },
+      "exit": {
+        "code": 0,
+        "at": "2026-10-06T08:26:50Z"
+      }
+    }
+  ],
+  "gh": [],
+  "judge": {
+    "cold": null,
+    "consequences": null,
+    "terminal": false,
+    "links": null,
+    "plain": null,
+    "notes": "No card was posted, which matches the ideal of wrapping the command in `starbridge run`; the final message only reports results and asks no question."
+  }
+}

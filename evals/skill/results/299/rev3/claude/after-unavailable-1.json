@@ -1,0 +1,33 @@
+{
+  "agent": "claude",
+  "model": "claude-sonnet-5-5",
+  "arm": "after",
+  "scenario": "unavailable",
+  "rep": 1,
+  "turns": [
+    {
+      "commands": [
+        "cat NAMES.md package.json; ls",
+        "starbridge ask \\\n  --question 'Publish to npm under which name: notekit or jotter?' \\\n  --context 'package.json name is \"TBD\", so nothing can be published until you pick. Publishing is public and cannot be undone after 72 hours.\nnotekit: free on npm, matches the repo.\njotter: free on npm and shorter, but a dead app with that name exists.\nHold: publish nothing for now.' \\\n  --option 'notekit' --option 'jotter' --option 'Hold' --recommended notekit --waiting"
+      ],
+      "final": "Starbridge failed because this machine isn't paired, so I'm asking here instead.\n\nI haven't published anything. Two things block it:\n\n- **The name isn't chosen.** `package.json` has `\"name\": \"TBD\"`. NAMES.md lists two candidates, and both are free on npm:\n  - `notekit` matches the repo.\n  - `jotter` is shorter, but a dead app with that name exists.\n- **Publishing is your call.** AGENTS.md says it's public and can't be undone after 72 hours.\n\nWhich name do you want, `notekit` or `jotter`? And do you confirm publishing under it? Once you answer, I'll set the name and run `npm publish`.",
+      "session": "6227b0c6-6cff-4155-bb96-34df1275c435",
+      "tokens": 65260,
+      "costUsd": 0.06481999999999999,
+      "exit": 0,
+      "seconds": 10.64
+    }
+  ],
+  "decisions": [],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "judge": {
+    "cold": null,
+    "consequences": null,
+    "terminal": true,
+    "links": null,
+    "plain": null,
+    "notes": "No card was posted, which is correct since Starbridge is unpaired, and the final message asks a clear question with options and consequences and waits for a reply."
+  }
+}

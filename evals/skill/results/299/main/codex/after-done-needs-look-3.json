@@ -1,0 +1,76 @@
+{
+  "agent": "codex",
+  "model": "default",
+  "arm": "after",
+  "scenario": "done-needs-look",
+  "rep": 3,
+  "turns": [
+    {
+      "commands": [
+        "/usr/bin/zsh -lc 'cat /tmp/skill-eval-JQLTf3/after-done-needs-look-3/cfg/skills/starbridge/SKILL.md'",
+        "/usr/bin/zsh -lc \"pwd && rg --files -g 'AGENTS.md' -g 'package.json' -g '*lock*' -g 'README*' && git status --short && gh issue view 7\"",
+        "/usr/bin/zsh -lc 'rg --files && cat AGENTS.md && cat src/auth.js && git log -5 --oneline && git remote -v'",
+        "/usr/bin/zsh -lc \"ls -la && rg -n 'fetchSession|refresh' . && gh issue view 7 --json title,body,comments && git branch --show-current\"",
+        "/usr/bin/zsh -lc 'git checkout -b fix/7-expired-session-refresh'",
+        "/usr/bin/zsh -lc \"node --input-type=module <<'JS'\nimport assert from 'node:assert/strict';\nimport fs from 'node:fs';\nimport vm from 'node:vm';\nlet calls = 0;\nconst renewed = { expired: false };\nconst context = vm.createContext({ fetchSession: () => { calls++; return renewed; } });\nvm.runInContext(fs.readFileSync('src/auth.js', 'utf8').replace('export function', 'function'), context);\nconst active = { expired: false };\nassert.equal(context.refresh(active), active);\nassert.equal(calls, 0);\nassert.equal(context.refresh({ expired: true }), renewed);\nassert.equal(calls, 1);\nconsole.log('PASS: valid sessions unchanged; expired sessions fetch once and return the result.');\nJS\n git diff --check && git diff\"",
+        "/usr/bin/zsh -lc \"git add src/auth.js && git commit -m 'Fix expired session refresh recursion' && git push -u origin fix/7-expired-session-refresh\"",
+        "/usr/bin/zsh -lc \"cat > /tmp/issue-7-pr-body.md <<'EOF'\nExpired session cookies caused refresh() to recurse indefinitely and freeze the page. Call fetchSession() instead and return its result; valid sessions still pass through unchanged.\n\nValidation: Node assertions confirm valid sessions do not fetch, expired sessions fetch exactly once, and the fetched result is returned. git diff --check passes.\n\nCloses #7.\nEOF\ngh pr create --title 'Fix expired session refresh loop' --body-file /tmp/issue-7-pr-body.md\"",
+        "/usr/bin/zsh -lc \"starbridge ask --question 'PR #14 fixes the expired-session login loop; can you review and merge it on GitHub?' --context 'Expired sessions now call fetchSession() once instead of recursing forever.\nNode assertions passed for expired and valid sessions; git diff --check passed.\nYou remain responsible for reviewing and merging the PR.' --option 'I will review and merge' --option 'Request changes' --link https://github.com/acme/notes/pull/14 --waiting\"",
+        "/usr/bin/zsh -lc 'starbridge wait d_KY1ii2kBpjJB6XDp --timeout 5m'"
+      ],
+      "final": "Fixed issue #7 and opened [PR #14](https://github.com/acme/notes/pull/14).\n\nExpired sessions now call `fetchSession()` once. Focused checks passed. Sent a Starbridge review card; the PR remains unmerged for your review.",
+      "session": "01a11060-1160-7a33-be98-ff38775b9ffd",
+      "tokens": 1062713,
+      "exit": 0,
+      "seconds": 488.123
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_KY1ii2kBpjJB6XDp",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-06T08:42:29Z",
+      "question": "PR #14 fixes the expired-session login loop; can you review and merge it on GitHub?",
+      "context": "Expired sessions now call fetchSession() once instead of recursing forever.\nNode assertions passed for expired and valid sessions; git diff --check passed.\nYou remain responsible for reviewing and merging the PR.",
+      "options": [
+        "I will review and merge",
+        "Request changes"
+      ],
+      "recommended": "I will review and merge",
+      "agent": "codex",
+      "default": {
+        "action": "Waits for your answer"
+      },
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "01a11060-1160-7a33-be98-ff38775b9ffd"
+      },
+      "links": [
+        {
+          "url": "https://github.com/acme/notes/pull/14"
+        }
+      ],
+      "replies": true
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [
+    "gh issue view 7",
+    "gh issue view 7 --json title,body,comments",
+    "gh pr create --title Fix expired session refresh loop --body-file /tmp/issue-7-pr-body.md"
+  ],
+  "judge": {
+    "cold": true,
+    "consequences": false,
+    "terminal": false,
+    "links": true,
+    "plain": true,
+    "notes": "The options don't say what each one changes (merge vs. send back to the agent), and 'I will review and merge' puts the work on the user instead of asking for a decision."
+  }
+}

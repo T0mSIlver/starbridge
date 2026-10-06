@@ -1,0 +1,60 @@
+{
+  "agent": "claude",
+  "model": "claude-sonnet-5-5",
+  "arm": "after",
+  "scenario": "answer-in",
+  "rep": 3,
+  "turns": [
+    {
+      "commands": [
+        "ls -la . src && git log --stat | head -20",
+        "starbridge ask --question 'Which set of tier names should the pricing page use?' --context 'Pricing page (src/pricing.html) is done except the three tier names ($0, $8, $20).\nCompare the three sets in the artifact and tap Pick on your choice; I will fill them in.' --answer-in https://claude.ai/artifact/7c1e9a52-0d3b-4f6e-9a21-5b8c3d2e1f00",
+        "starbridge waiting d_9k4OptJVSANcLRMK"
+      ],
+      "final": "`src/pricing.html` is still unfinished. The three tier names are the only thing missing, and the choice is the owner's.\n\nI couldn't open last session's comparison artifact, because the docs read tool wasn't permitted. So I haven't seen the three name sets.\n\nI posted a Starbridge card asking which set to use, with the artifact linked. The owner's Pick will come back into this session as a prompt. Once it does, I'll replace `TIER_1`, `TIER_2` and `TIER_3` (the $0, $8 and $20 tiers) and remove the TODO comment.",
+      "session": "87f119b9-73b5-44ca-ab05-54db59cb6ad8",
+      "tokens": 160338,
+      "costUsd": 0.09356740000000001,
+      "exit": 0,
+      "seconds": 17.394
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_9k4OptJVSANcLRMK",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-06T09:04:42Z",
+      "question": "Which set of tier names should the pricing page use?",
+      "context": "Pricing page (src/pricing.html) is done except the three tier names ($0, $8, $20).\nCompare the three sets in the artifact and tap Pick on your choice; I will fill them in.",
+      "options": [],
+      "agent": "claude-code",
+      "default": {
+        "action": "Waits for your answer"
+      },
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "87f119b9-73b5-44ca-ab05-54db59cb6ad8",
+        "sessionTitle": "proj-20"
+      },
+      "answerIn": {
+        "url": "https://claude.ai/artifact/7c1e9a52-0d3b-4f6e-9a21-5b8c3d2e1f00"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "judge": {
+    "cold": true,
+    "consequences": true,
+    "terminal": false,
+    "links": null,
+    "plain": true,
+    "notes": "The card is solid, but it doesn't name the three tier name sets or say which tier each name goes on, so the user must open the artifact to see the options."
+  }
+}

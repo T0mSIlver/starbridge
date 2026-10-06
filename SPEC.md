@@ -2180,6 +2180,66 @@ goes in git.
   receives it twice. Only a connection that drops once the reply's
   headers are in reaches the app as a failure, and that is what
   `RecoveryRetryTest` scripts (MockWebServer's `onResponseBody`).
+- 2026-10-06: the agent surface on Sonnet (#299). The skill eval (`evals/skill`)
+  ran Claude Code on claude-sonnet-5-5, Codex on its default model, and Pi
+  and opencode on GLM 5.3 Flash, 3 runs per situation. A Claude
+  subscription used from Pi is billed as extra usage, so Pi runs on GLM.
+  The judge is now Claude Sonnet. Revision 3 is the skill and rule below
+  without the last two edits; Claude Code and Codex were not rerun after
+  it (the Claude login broke, below; Codex's window was spent). The
+  eleven record checks were 99–100% on main for these three, and 100%
+  on revision 3.
+
+  | All checks, judged | main | revision 3 |
+  |---|---:|---:|
+  | Claude Code | 95% | 98% |
+  | Codex | 96% | 98% |
+  | Pi | 94% | 98% |
+
+  | Checks | Claude Code | Codex | Pi |
+  |---|---:|---:|---:|
+  | Answerable cold, from the card alone | 86% → 95% | 89% → 100% | 100% → 100% |
+  | Says what each option changes | 52% → 95% | 67% → 83% | 56% → 89% |
+  | Did not do what was the owner's to decide | 100% → 100% | 92% → 100% | 92% → 100% |
+  | Every other check | 95–100%, no drop | 94–100%, no drop | 85–100% → 92–100% |
+
+  What moved them: the card's context gives one line per option, starting
+  with its label, saying what picking it does; designs are told apart by
+  numbers; "no answer is never a yes" sits where the agent waits (on main,
+  Codex waited with 45-second timeouts, withdrew its card and force-pushed
+  a shared main); card text goes in single quotes, as `$0` in double
+  quotes had blanked part of a Codex card. Cut with no change in results:
+  the "Never" list, which repeated the sections above it, the bad example,
+  the per-agent compatibility notes and `--json`.
+
+  The last two edits were checked on GLM only, with the record checks
+  (the eleven that need no judge). The rule regains "or a failure only I
+  can fix". A hint to pass context with an apostrophe through
+  `--context-file - <<'EOF'` made both GLM agents put `--option` after the
+  heredoc, so cards lost their options (record checks: Pi 96%, opencode
+  94%, against 99% and 95% on main); "write apostrophes as ’" replaced it
+  and every card in the red-CI and force-push situations kept its options
+  (3 runs each; Pi 89%, opencode 97%, the misses being the force-pushes
+  below).
+  A line saying no options asks for a typed answer made Pi post option-less
+  cards too, and went. On GLM 5.3 Flash a force-push without asking still
+  happens in about one run in six to nine, on main's text as on this one.
+
+  Injected tokens, Claude's tokenizer (`evals/skill/tokens.ts`): the
+  SessionStart rule 233 → 179 and the skill's list entry 210 → 151, so
+  443 → 330 in every session; the skill file, read when the agent uses it,
+  2887 → 1939. Main and revision 2 are measured; the final text is
+  revision 2's count scaled by length.
+
+  The eval copied `~/.claude/.credentials.json` into every run; the copies
+  refreshed on their own and signed the original out. Claude runs now take
+  a `claude setup-token` token, and Codex runs an API key (#424). Grading
+  false failures fixed: `starbridge waiting` counted as waiting, and a
+  command named in a card or read with `--help` counted as run. Since #327
+  a `claude -p` session waits for its answer, and the eval answers it while
+  it waits. Permission prompts reach Starbridge through the plugin's
+  `PermissionRequest` hook, not text, so this eval does not cover them.
+  Records: `evals/skill/results/299`.
 - 2026-10-06: screenshot audit (#305), Firefox 1543 through Playwright 1.63, every e2e screen at
   320, 360, 390, 430, 768, 1024, 1280, 1440 and 1920 px in both themes and at 200% text. Broken
   and fixed: a long machine name pushed the time off inbox rows and ran under the repo name;

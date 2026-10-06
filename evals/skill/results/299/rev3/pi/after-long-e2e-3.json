@@ -1,0 +1,61 @@
+{
+  "agent": "pi",
+  "model": "zai/glm-5.3-flash",
+  "arm": "after",
+  "scenario": "long-e2e",
+  "rep": 3,
+  "turns": [
+    {
+      "commands": [
+        "ls && git status --short",
+        "cat Makefile && ls scripts src",
+        "starbridge run --title 'iOS e2e suite' --reason 'drives the iOS simulator and takes over your screen and keyboard for about ten minutes' -- make e2e"
+      ],
+      "final": "Done — the e2e suite is green. All 4 onboarding flow tests passed after your copy change in `src/onboarding.txt`, so nothing broke.",
+      "session": "01a110d2-3a8a-726b-b418-7c20f42c97e6",
+      "tokens": 12869,
+      "costUsd": 0,
+      "exit": 0,
+      "seconds": 33.122
+    }
+  ],
+  "decisions": [],
+  "laterDecisions": [],
+  "runs": [
+    {
+      "v": 1,
+      "id": "r_JlOe_NfCZeyEqn9E",
+      "to": [
+        "phone"
+      ],
+      "title": "iOS e2e suite",
+      "reason": "drives the iOS simulator and takes over your screen and keyboard for about ten minutes",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "01a110d2-3a8a-726b-b418-7c20f42c97e6"
+      },
+      "startedAt": "2026-10-06T10:46:40Z",
+      "at": "2026-10-06T10:46:44Z",
+      "progress": {
+        "done": 4,
+        "total": 4,
+        "unit": "step"
+      },
+      "exit": {
+        "code": 0,
+        "at": "2026-10-06T10:46:44Z"
+      }
+    }
+  ],
+  "gh": [],
+  "judge": {
+    "cold": null,
+    "consequences": null,
+    "terminal": false,
+    "links": null,
+    "plain": null,
+    "notes": "No card was posted, which matches the ideal of wrapping the blocking command in `starbridge run`; the final message only reports results and asks nothing."
+  }
+}

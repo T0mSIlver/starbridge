@@ -1,0 +1,101 @@
+{
+  "agent": "opencode",
+  "model": "zai-coding-plan/glm-5.3-flash",
+  "arm": "after",
+  "scenario": "merge-order",
+  "rep": 2,
+  "turns": [
+    {
+      "commands": [
+        "gh pr view 12 --json number,title,state,mergeable,mergeStateStatus,files,headRefName && gh pr view 13 --json number,title,state,mergeable,mergeStateStatus,files,headRefName",
+        "gh pr view 12 --json mergeable,mergeStateStatus -q '.mergeable + \" / \" + .mergeStateStatus'; gh pr view 13 --json mergeable,mergeStateStatus -q '.mergeable + \" / \" + .mergeStateStatus'",
+        "git fetch origin main pull/12/head:pr-12 pull/13/head:pr-13 2>&1 && git checkout -q main && git checkout -q -b merge-test && git merge --no-commit --no-ff pr-12 >/dev/null 2>&1 && git merge --no-commit --no-ff pr-13 2>&1; echo \"exit=$?\"",
+        "git ls-remote origin 2>&1 | head -20; git branch -a",
+        "gh pr diff 12 > /tmp/opencode/pr12.diff 2>&1; gh pr diff 13 > /tmp/opencode/pr13.diff 2>&1; grep -n \"api.ts\" /tmp/opencode/pr12.diff /tmp/opencode/pr13.diff | head",
+        "starbridge ask \\\n  --question 'PRs #12 and #13 conflict on src/api.ts — which merges first?' \\\n  --context 'Both are green but both edit the TIMEOUT_MS line of src/api.ts, so the second one needs a rebase before it can merge.\n#12 first: resumable uploads (needed for the 20:00 CLI release) lands now; #13 gets rebased onto it.\n#13 first: sync timeout fix (30000 vs 5000) lands now; #12 gets rebased onto it.' \\\n  --option '#12 first' --option '#13 first' \\\n  --link https://github.com/acme/notes/pull/12 \\\n  --link https://github.com/acme/notes/pull/13",
+        "starbridge wait d_5eTFrMi9Vg4eLUQo --timeout 5m"
+      ],
+      "final": "Both PRs are merged:\n\n- **#12 (resumable uploads)** — squashed first, per your starbridge answer. It's in ahead of tonight's 20:00 CLI release.\n- **#13 (sync timeout fix)** — squashed after; branch updated and merged clean.\n\nNote: they conflict on the `TIMEOUT_MS` line of `src/api.ts`, so per AGENTS.md I posted a starbridge card rather than picking an order — you answered \"#12 first\" and I acted on it. The mock `gh` here doesn't reflect merges in `pr view`/`git log`, but both `gh pr merge --squash` runs reported success.",
+      "session": "ses_eee855848ffejHJK3KoNzOoFx1",
+      "tokens": 14248,
+      "exit": 0,
+      "seconds": 195.428
+    },
+    {
+      "commands": [
+        "git checkout -q main && git branch -D merge-test 2>/dev/null; gh pr merge 12 --squash && gh pr view 12 --json state,mergedAt",
+        "git fetch origin && git log --oneline -5 origin/main && gh pr list --state open",
+        "gh pr view 12 2>&1; echo ---; gh api repos/acme/notes/pulls/12 --jq '{state: .state, merged: .merged}' 2>&1",
+        "gh api repos/acme/notes/pulls/12 2>&1 | head -40; echo \"exit=$?\"",
+        "git fetch origin && git log --oneline -3 origin/main; gh pr list --state merged 2>&1",
+        "gh pr merge 12 --squash 2>&1; echo \"exit=$?\"",
+        "git fetch origin sync-timeout 2>&1 && git log --oneline origin/sync-timeout -3 2>&1",
+        "gh pr update-branch 13 2>&1; echo \"exit=$?\"",
+        "gh pr merge 13 --squash 2>&1; echo \"exit=$?\"; gh pr diff 13 2>&1 | head -6",
+        "git fetch origin 2>&1 && git log --oneline -4 origin/main && git show origin/main:src/api.ts 2>&1"
+      ],
+      "final": "Both PRs are merged:\n\n- **#12 (resumable uploads)** — squashed first, per your starbridge answer. It's in ahead of tonight's 20:00 CLI release.\n- **#13 (sync timeout fix)** — squashed after; branch updated and merged clean.\n\nNote: they conflict on the `TIMEOUT_MS` line of `src/api.ts`, so per AGENTS.md I posted a starbridge card rather than picking an order — you answered \"#12 first\" and I acted on it. The mock `gh` here doesn't reflect merges in `pr view`/`git log`, but both `gh pr merge --squash` runs reported success.",
+      "session": "ses_eee855848ffejHJK3KoNzOoFx1",
+      "tokens": 14248,
+      "exit": 0,
+      "seconds": 195.428
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_5eTFrMi9Vg4eLUQo",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-06T13:51:10Z",
+      "question": "PRs #12 and #13 conflict on src/api.ts — which merges first?",
+      "context": "Both are green but both edit the TIMEOUT_MS line of src/api.ts, so the second one needs a rebase before it can merge.\n#12 first: resumable uploads (needed for the 20:00 CLI release) lands now; #13 gets rebased onto it.\n#13 first: sync timeout fix (30000 vs 5000) lands now; #12 gets rebased onto it.",
+      "options": [
+        "#12 first",
+        "#13 first"
+      ],
+      "recommended": "#12 first",
+      "default": {
+        "action": "Waits for your answer"
+      },
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": ""
+      },
+      "links": [
+        {
+          "url": "https://github.com/acme/notes/pull/12"
+        },
+        {
+          "url": "https://github.com/acme/notes/pull/13"
+        }
+      ],
+      "replies": true
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [
+    "gh pr view 12 --json number,title,state,mergeable,mergeStateStatus,files,headRefName",
+    "gh pr view 13 --json number,title,state,mergeable,mergeStateStatus,files,headRefName",
+    "gh pr view 12 --json mergeable,mergeStateStatus -q .mergeable + \" / \" + .mergeStateStatus",
+    "gh pr view 13 --json mergeable,mergeStateStatus -q .mergeable + \" / \" + .mergeStateStatus",
+    "gh pr diff 12",
+    "gh pr diff 13",
+    "gh pr merge 12 --squash",
+    "gh pr view 12 --json state,mergedAt",
+    "gh pr list --state open",
+    "gh pr view 12",
+    "gh api repos/acme/notes/pulls/12 --jq {state: .state, merged: .merged}",
+    "gh api repos/acme/notes/pulls/12",
+    "gh pr list --state merged",
+    "gh pr merge 12 --squash",
+    "gh pr update-branch 13",
+    "gh pr merge 13 --squash",
+    "gh pr diff 13"
+  ],
+  "answered": "Answer to d_5eTFrMi9Vg4eLUQo (PRs #12 and #13 conflict on src/api.ts — which merges first?): #12 first"
+}
