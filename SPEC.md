@@ -2038,6 +2038,17 @@ goes in git.
   `keepalive_idle_conns_per_host 4096` it held 3 to 120, with p99 unchanged.
   25 s stays below the server's 30 s idle close, so Caddy never reuses a
   connection the server is closing.
+- 2026-10-06: Android says when notifications are off (#342, the owner's
+  pick of A plus C). A quiet line heads the Inbox, "Notifications are
+  off", with "Turn on" and a ✕. The ✕ hides the line for good, so the
+  line never nags someone who wants notifications off; Settings,
+  Notifications holds "Remind me when notifications are off", on by
+  default, which brings it back. Settings' first Notifications row reads
+  "Notifications are off" whatever the reminder says. "Turn on" opens
+  Android's notification settings for the app rather than the
+  permission prompt, which Android stops showing after two refusals;
+  turning notifications on there grants the permission too. The state
+  is read again each time the app comes back to the front.
 - 2026-10-06: load and failure test (#301, `evals/load/`). Prod's stack ran
   from `deploy/compose.yaml` on the dev box. Its containers shared two cores,
   with memory caps adding up to a CX23's 4 GB less the OS. Simulated users

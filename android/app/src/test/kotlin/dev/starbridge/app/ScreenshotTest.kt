@@ -10,6 +10,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.hasScrollToNodeAction
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.unit.Density
 import com.github.takahirom.roborazzi.captureRoboImage
 import dev.starbridge.app.data.Approval
@@ -214,6 +217,19 @@ class ScreenshotTest(private val dark: Boolean) {
             SettingsScreen(fake.windows, QuotaSettings(hidden = listOf("gemini"), notify = listOf("claude")), fake.members.size, Colours.Starbridge, fake.push, "https://starbridge.run", settingsActions)
         }
     }
+
+    // Notifications off (#342): a quiet line heads the inbox; Settings says so and can bring the line back once dismissed.
+    @Test fun inboxNotificationsOff() = capture("inbox-notifications-off") { Phone(Tab.Inbox, 4) { InboxScreen(fake.decisions, now, decisionActions, prompts = fake.prompts, promptActions = promptActions, runs = fake.runs, notificationsOff = true) } }
+
+    @Test fun settingsNotificationsOff() = capture("settings-notifications-off", { notifications() }) { Phone(Tab.Settings, 4) { NotificationsOffSettings(InboxView()) } }
+
+    @Test fun settingsNotificationsOffDismissed() = capture("settings-notifications-off-dismissed", { notifications() }) { Phone(Tab.Settings, 4) { NotificationsOffSettings(InboxView(remindOff = false)) } }
+
+    @Composable
+    private fun NotificationsOffSettings(inbox: InboxView) =
+        SettingsScreen(fake.windows, QuotaSettings(), fake.members.size, Colours.Starbridge, fake.push, "https://starbridge.run", settingsActions, inbox = inbox, notificationsOff = true)
+
+    private fun notifications() = compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasText("Delivered through"))
 
     @Test fun quotasEmpty() = capture("quotas-empty") { QuotasScreen(emptyList(), now) }
 

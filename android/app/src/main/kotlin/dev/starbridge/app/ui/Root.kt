@@ -177,6 +177,7 @@ fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> U
     val drafts = rememberDrafts()
     val host = Notices(notice, dismiss)
     val sheets = remember { BottomSheetSceneStrategy<NavKey>() }
+    val notificationsOff = !rememberNotificationsOn()
     val colors = StarbridgeTheme.colors
     // A notification's tap: its question's or prompt's sheet, over the inbox.
     LaunchedEffect(opening) {
@@ -265,6 +266,7 @@ fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> U
                             view = view,
                             onView = vm::setView,
                             onFind = { backStack.add(FindKey) },
+                            notificationsOff = notificationsOff,
                         )
                     }
                     entry<FindKey> {
@@ -321,6 +323,7 @@ fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> U
                             SettingsActions(vm::setQuota, vm::setColours, vm::setPush, vm::signOut, devices = { backStack.add(DevicesKey) }, addDevice = { backStack.add(AddDeviceKey) }, inbox = vm::setInbox, clock = vm::setClock),
                             inbox = inbox,
                             clock = clock,
+                            notificationsOff = notificationsOff,
                         )
                     }
                     entry<DevicesKey> {

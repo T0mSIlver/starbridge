@@ -2,8 +2,6 @@ package dev.starbridge.app.ui.settings
 
 import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.text.style.TextOverflow
-import android.content.Intent
-import android.provider.Settings
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
@@ -71,6 +69,7 @@ import dev.starbridge.app.data.Store
 import dev.starbridge.app.ui.Page
 import dev.starbridge.app.ui.Section
 import dev.starbridge.app.ui.Sym
+import dev.starbridge.app.ui.openNotificationSettings
 import dev.starbridge.app.ui.Symbol
 import dev.starbridge.app.ui.devices.Confirm
 import dev.starbridge.app.ui.rowShape
@@ -121,6 +120,7 @@ fun SettingsScreen(
     modifier: Modifier = Modifier,
     inbox: InboxView = InboxView(),
     clock: Clock = Clock.System,
+    notificationsOff: Boolean = false,
 ) {
     val context = LocalContext.current
     var signingOut by rememberSaveable { mutableStateOf(false) }
@@ -190,14 +190,16 @@ fun SettingsScreen(
 
         item { Section("Notifications") }
         item {
-            LinkRow(0, 2, "Notification settings", null, Sym.Chevron) {
-                runCatching {
-                    context.startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName))
-                }
-            }
+            LinkRow(
+                0, 3,
+                if (notificationsOff) "Notifications are off" else "Notification settings",
+                if (notificationsOff) "Questions only show in the app. Turn notifications on in Android's settings." else null,
+                Sym.Chevron,
+            ) { openNotificationSettings(context) }
         }
+        item { SwitchRow(1, 3, "Remind me when notifications are off", inbox.remindOff) { actions.inbox(inbox.copy(remindOff = it)) } }
         item {
-            ChoiceRow(1, 2, "Delivered through", push(push)) {
+            ChoiceRow(2, 3, "Delivered through", push(push)) {
                 Segments(listOf("fcm" to "Google", "unifiedpush" to "UnifiedPush"), push.type, actions.push)
             }
         }
