@@ -1,5 +1,6 @@
 package dev.starbridge.app.ui.settings
 
+import androidx.compose.ui.text.style.TextOverflow
 import android.content.Intent
 import android.provider.Settings
 import androidx.compose.foundation.clickable
@@ -382,7 +383,7 @@ fun <T> Segments(choices: List<Pair<T, String>>, selected: T, onSelect: (T) -> U
                     checkedContentColor = MaterialTheme.colorScheme.onPrimary,
                 ),
                 contentPadding = PaddingValues(horizontal = 14.dp),
-            ) { Text(label, style = StarbridgeTheme.type.label, maxLines = 1) }
+            ) { Text(label, style = StarbridgeTheme.type.label, maxLines = 1, overflow = TextOverflow.Ellipsis) }
         }
     }
 }

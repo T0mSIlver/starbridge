@@ -49,7 +49,6 @@ export async function uninstall(sys: Sys, opts: UninstallOpts): Promise<number> 
       question: `Revoke ${machine.name}? It was uninstalled.`,
       context: `\`starbridge uninstall\` ran on ${machine.name}. A machine cannot revoke itself: revoke it under Devices so its keys no longer receive your decisions and quotas.`,
       options: ["I revoked it", "Keep it"],
-      default: "Keep it",
       project: "starbridge",
       session: "",
     };

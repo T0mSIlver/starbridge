@@ -9,6 +9,7 @@ import androidx.core.app.RemoteInput
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 import dev.starbridge.app.data.ApiException
+import dev.starbridge.app.data.Sent
 import dev.starbridge.app.di.app
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -30,16 +31,18 @@ class AnswerReceiver : BroadcastReceiver() {
         app.scope().launch {
             val decision = app.store().decisions.value.find { it.id == id }
             try {
-                withTimeout(9_000) { app.store().sendFromNotification(id, choice, text) }
-                decision?.let { app.notifier().answered(it, choice ?: text!!) }
+                when (val sent = withTimeout(9_000) { app.store().sendFromNotification(id, choice, text) }) {
+                    is Sent.Answered -> decision?.let { app.notifier().answered(it, sent.answer) }
+                    is Sent.Queued -> decision?.let { app.notifier().queued(it, sent.answer) }
+                    Sent.Elsewhere -> app.notifier().cancel(id)
+                    is Sent.Failed -> decision?.let { app.notifier().failed(it, sent.why) }
+                }
             } catch (e: Exception) {
                 Log.w("Starbridge", "answer from notification failed", e)
-                val why = when {
-                    e is ApiException && e.error == "already-answered" -> "already answered elsewhere"
-                    else -> e.message ?: "no connection"
-                }
-                if (e is ApiException && e.error == "already-answered") app.notifier().cancel(id)
-                else decision?.let { app.notifier().failed(it, why) }
+                // Out of time mid-request: the answer stays queued and goes out later.
+                val queued = app.store().queued(id)
+                if (queued != null) decision?.let { app.notifier().queued(it, queued) }
+                else decision?.let { app.notifier().failed(it, e.message ?: "no connection") }
             } finally {
                 pending.finish()
             }
