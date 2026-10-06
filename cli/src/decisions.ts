@@ -475,7 +475,8 @@ export function noteHead(
   } catch {
     return undefined;
   }
-  keepHead((st.heads ??= {}), opened.signer.id, opened.body.dir, entries);
+  st.heads ??= {};
+  keepHead(st.heads, opened.signer.id, opened.body.dir, entries);
   return opened.signer.id;
 }
 
