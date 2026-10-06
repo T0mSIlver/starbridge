@@ -384,8 +384,11 @@ async function pluginStep(sys: Sys) {
       true,
     ))
   ) {
-    addAllowRules(sys);
-    ctx.out(`Allowed ${ALLOW_RULES.join(", ")} in ${settingsPath(sys)}.`);
+    ctx.out(
+      addAllowRules(sys)
+        ? `Allowed ${ALLOW_RULES.join(", ")} in ${settingsPath(sys)}.`
+        : `${settingsPath(sys)} is not valid JSON, so it stays as it is; add ${ALLOW_RULES.join(", ")} to permissions.allow there.`,
+    );
   }
   for (const old of legacyInstalls(sys)) {
     if (await prompt.confirm(`Remove ${old.what}? The plugins replace it.`, true)) {

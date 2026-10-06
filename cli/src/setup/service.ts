@@ -48,10 +48,18 @@ export function servicePathVar(sys: Sys): string {
   return [...new Set(dirs)].join(delimiter);
 }
 
-/** Environment the agent needs to find the same config directory and socket as the CLI. */
+/**
+ * Environment the agent needs to find the same config directory and socket as the CLI, and the
+ * Codex home whose skill it keeps current.
+ */
 function serviceEnv(sys: Sys): Record<string, string> {
   const env: Record<string, string> = { PATH: servicePathVar(sys) };
-  for (const k of ["STARBRIDGE_CONFIG_DIR", "XDG_CONFIG_HOME", "STARBRIDGE_AGENT_SOCKET"]) {
+  for (const k of [
+    "STARBRIDGE_CONFIG_DIR",
+    "XDG_CONFIG_HOME",
+    "STARBRIDGE_AGENT_SOCKET",
+    "CODEX_HOME",
+  ]) {
     const v = sys.ctx.env[k];
     if (v) env[k] = v;
   }

@@ -158,8 +158,11 @@ export function missingAllowRules(sys: Sys): string[] {
   return ALLOW_RULES.filter((r) => !have.has(r));
 }
 
-export function addAllowRules(sys: Sys) {
-  const s: Settings = readSettings(sys) ?? {};
+/** False, writing nothing, when settings.json exists but does not parse. */
+export function addAllowRules(sys: Sys): boolean {
+  const read = readSettings(sys);
+  if (!read && existsSync(settingsPath(sys))) return false;
+  const s: Settings = read ?? {};
   const allow = allowList(s);
   s.permissions = {
     ...s.permissions,
@@ -167,6 +170,7 @@ export function addAllowRules(sys: Sys) {
   };
   mkdirSync(claudeDir(sys), { recursive: true });
   writeSettings(sys, s);
+  return true;
 }
 
 /** Removes ALLOW_RULES from user settings. False when none was there. */

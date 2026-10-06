@@ -38,8 +38,12 @@ export async function runAgent(ctx: Ctx, opts: AgentOpts): Promise<number> {
   // `starbridge update` restarts the agent, so a new binary brings Codex its skill here.
   const home = { ctx, home: ctx.env.HOME ?? homedir() };
   if (codexSkill(home) === "outdated") {
-    installCodexSkill(home);
-    agent.log(`updated the Codex skill in ${codexSkillDir(home)}`);
+    try {
+      installCodexSkill(home);
+      agent.log(`updated the Codex skill in ${codexSkillDir(home)}`);
+    } catch (e) {
+      agent.log(`could not update the Codex skill: ${(e as Error).message}`);
+    }
   }
   await new Promise<void>((resolve) => {
     if (!ctx.signal || ctx.signal.aborted) return resolve();
