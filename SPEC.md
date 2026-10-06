@@ -353,7 +353,9 @@ provider plugins add providers, not panels.
 - **The pairing link** `https://starbridge.run/pair#CODE`, which `pair` prints and shows as a QR
   code, is also an App Link (#611): setup says to scan it with the camera, and a phone's camera
   hands links to apps, not to a browser that would first ask to become a device itself. The app
-  opens Add a device with the code looked up, once the phone is in the account. Without the app,
+  opens Add a device with the code looked up, once the phone is in the account; a phone signed in
+  but not in the account yet joins with it instead, as another device's "Scan with the new phone"
+  code asks. Without the app,
   or on a self-hosted server, which the APK cannot claim, the link opens the web page as before;
   where both the installed web app and the app claim it, Android opens the verified app.
 - **Setup** (`cli/src/setup/`; #68, #239, #245) installs CodexBar's latest release, taking the

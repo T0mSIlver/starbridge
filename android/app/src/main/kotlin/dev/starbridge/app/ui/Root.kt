@@ -82,8 +82,11 @@ import java.time.Instant
 @Serializable data object SettingsKey : NavKey
 @Serializable data object DevicesKey : NavKey
 @Serializable data object AddDeviceKey : NavKey
-/** Add a device with a machine's pairing link, which the camera opened in the app (#611). */
-@Serializable data class PairLinkKey(val link: String) : NavKey
+/**
+ * Add a device with a pairing link, which the camera opened in the app (#611); [at] tells a link
+ * scanned again from the one already open, so it is looked up again.
+ */
+@Serializable data class PairLinkKey(val link: String, val at: Long) : NavKey
 @Serializable data object RecoveryKeyKey : NavKey
 
 private val Tab.key: NavKey get() = when (this) {
