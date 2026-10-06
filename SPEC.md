@@ -1307,6 +1307,14 @@ so the mod is the first path.
   expired."; a code already approved, a removed browser and an expired sign-in have their own
   sentence; any other error reads as the server's sentence, capitalised, without its code.
 
+- 2026-10-06. Pi's `path` and `external_directory` asks stay at the keyboard (#288).
+  pi-permission-system 39.1.0 caps every authorizer link's allow on those surface families to
+  defer (its delegation envelope, `src/authority/delegation-envelope.ts`, ADR 0007), so the
+  second gate of a read outside the project, `external_directory_read`, opened its dialog even
+  after a device allowed it. The Starbridge link now defers such asks at once, by the gate's
+  surface, instead of sending the devices a prompt whose Allow is dropped. Letting a link allow
+  them needs pi-permission-system to make the excluded families configurable (its #620).
+
 ## Encryption, with existing libraries
 
 - libsodium sealed boxes (`crypto_box_seal`, X25519 + XSalsa20-Poly1305): an

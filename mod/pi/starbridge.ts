@@ -27,6 +27,7 @@ import {
   type AskDetails,
   authorize,
   hookInput,
+  keyboardOnly,
   LINK,
   permissionsService,
   STOP_MS,
@@ -223,7 +224,7 @@ export default function starbridge(pi: PiApi) {
       id,
       service.registerAuthorizer(LINK, (details: AskDetails) => {
         const ctx = current;
-        if (!ctx) return Promise.resolve({ kind: "defer" });
+        if (!ctx || keyboardOnly(details)) return Promise.resolve({ kind: "defer" });
         const file = ctx.sessionManager.getSessionFile();
         const stdin = JSON.stringify(
           hookInput(details, ctx.sessionManager.getSessionId(), ctx.cwd),

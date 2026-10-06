@@ -23,6 +23,10 @@ export interface AskDetails {
   /** pi-permission-system's own one-line rendering of the call's input. */
   toolInputPreview?: string;
   payload?: { request?: { surface?: string; toolName?: string; value?: string } };
+  /** The gate's surface, such as `read` or `external_directory_read`, when it overrides it. */
+  surface?: string | null;
+  /** What the gate checked; its surface is the one pi-permission-system caps grants on. */
+  accessIntent?: { surface?: string };
 }
 
 /** pi-permission-system's `AuthorizerVerdict`. */
@@ -46,6 +50,20 @@ export function permissionsService(id: string): PermissionsService | undefined {
   const map = (globalThis as Record<symbol, unknown>)[SERVICES];
   const service = map instanceof Map ? map.get(id) : undefined;
   return typeof service?.registerAuthorizer === "function" ? service : undefined;
+}
+
+/**
+ * Whether only the keyboard can allow this ask. pi-permission-system turns a link's allow on the
+ * `path` and `external_directory` surface families into defer (its delegation envelope, ADR
+ * 0007), so a device's Allow there would be dropped and its own dialog open anyway. The link
+ * defers these at once rather than ask the devices for nothing (#288).
+ */
+export function keyboardOnly(details: AskDetails): boolean {
+  const surface =
+    details.accessIntent?.surface ?? details.surface ?? details.payload?.request?.surface;
+  return (
+    surface !== undefined && surface !== null && /^(path|external_directory)(_|$)/.test(surface)
+  );
 }
 
 /** The hook input `starbridge hook permission` reads, in Claude Code's shape. */

@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { authorize, hookInput } from "../pi/permissions.ts";
+import { authorize, hookInput, keyboardOnly } from "../pi/permissions.ts";
 
 const ALLOW = JSON.stringify({
   hookSpecificOutput: { hookEventName: "PermissionRequest", decision: { behavior: "allow" } },
@@ -141,4 +141,16 @@ test("a CLI stuck on a stalled server is stopped: the link defers and the keyboa
   });
   expect(v).toEqual({ kind: "defer" });
   expect(Date.now() - started).toBeLessThan(1_000);
+});
+
+test("asks whose allow pi-permission-system drops from a link stay at the keyboard (#288)", () => {
+  const read = { toolName: "read", path: "/etc/hostname" };
+  expect(keyboardOnly({ ...read, accessIntent: { surface: "read" } })).toBe(false);
+  expect(keyboardOnly({ ...read, accessIntent: { surface: "external_directory_read" } })).toBe(
+    true,
+  );
+  expect(keyboardOnly({ ...read, payload: { request: { surface: "path_write" } } })).toBe(true);
+  expect(keyboardOnly({ toolName: "bash", command: "ls" })).toBe(false);
+  // A tool merely named like a family is not in it.
+  expect(keyboardOnly({ ...read, accessIntent: { surface: "pathfinder" } })).toBe(false);
 });
