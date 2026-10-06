@@ -5,6 +5,8 @@ import { useEffect, useRef, useState } from "react";
 import type { MachineKind } from "@/lib/feed";
 import { AnsweredFirst, answeredFirstText, answerPlace } from "@/lib/outcome";
 import { fullInput } from "@/lib/permissionInput";
+import { usePref } from "@/lib/prefs";
+import { isSnoozed, snoozeTime } from "@/lib/snooze";
 import type { InboxItem, PromptItem, PromptReply, Reply } from "@/lib/types";
 import { Images, Links } from "./Attachments";
 import { Context } from "./Context";
@@ -12,6 +14,7 @@ import s from "./Detail.module.css";
 import { KindTile, MetaRow, SessionLine, slotTime } from "./Feed";
 import { Icon } from "./icons";
 import { ordered } from "./options";
+import { SnoozeMenu } from "./Snooze";
 import ui from "./ui.module.css";
 
 const kindOf = (source: object) => (source as { machineKind?: MachineKind }).machineKind;
@@ -157,6 +160,7 @@ export function QuestionDetail({
   keys,
   closed,
   onAnswer,
+  onSnooze,
 }: {
   item: InboxItem;
   now: number;
@@ -165,10 +169,17 @@ export function QuestionDetail({
   /** "Server first · on this browser · 11:02", once answered. */
   closed?: string;
   onAnswer: (reply: Reply) => Promise<void>;
+  /** Puts it off until a time (#571); a time already passed brings it back. */
+  onSnooze: (until: Date) => Promise<void>;
 }) {
   const d = item.decision;
   const { send, sending, error, lost } = useSend(onAnswer);
+  const snoozeSend = useSend(onSnooze);
+  const [clock] = usePref("clock");
   const [replying, setReplying] = useState(false);
+  const snoozed = !closed && isSnoozed(item, now);
+  // While snoozed, nothing is amber, even when its agent waits: the owner said not now.
+  const since = closed || snoozed ? undefined : item.waitingSince;
   const options = closed || d.answerIn ? [] : ordered(d);
   useKeys(keys && options.length > 0, (key) => {
     const choice = /^[1-4]$/.test(key) ? options[Number(key) - 1] : undefined;
@@ -178,16 +189,22 @@ export function QuestionDetail({
 
   return (
     <article className={s.detail} aria-label="Selected item">
-      <Head since={closed ? undefined : item.waitingSince}>
+      <Head since={since}>
         <MetaRow
           machine={d.source.machine}
           kind={kindOf(d.source)}
           repo={d.source.project}
-          time={slotTime(d.createdAt, closed ? undefined : item.waitingSince, now)}
-          waiting={!closed && !!item.waitingSince}
+          time={slotTime(d.createdAt, since, now)}
+          waiting={!!since}
           size="comfy"
         />
         <h2 className="t-heading">{d.question}</h2>
+        {snoozed && (
+          <p className={`t-small ${s.snoozed}`}>
+            <Icon name="snooze" size={16} />
+            Snoozed until {snoozeTime(new Date(item.snoozedUntil as string), new Date(now), clock)}
+          </p>
+        )}
       </Head>
       <Context text={d.context} className={`t-reading ${s.context}`} />
       <Images d={d} />
@@ -195,22 +212,9 @@ export function QuestionDetail({
       {closed ? (
         <p className={`t-small ${s.closed}`}>{closed}</p>
       ) : d.answerIn ? (
-        <>
-          <div className={s.actions}>
-            <AnswerElsewhere page={d.answerIn} />
-          </div>
-          {d.done && (
-            // Quiet, as Reply: the page stays the answer, Done only says it was given there.
-            <button
-              type="button"
-              className={`t-small ${s.link} ${s.reply}`}
-              disabled={sending}
-              onClick={() => send({ done: true })}
-            >
-              Done
-            </button>
-          )}
-        </>
+        <div className={s.actions}>
+          <AnswerElsewhere page={d.answerIn} />
+        </div>
       ) : options.length > 0 ? (
         <fieldset className={`${s.actions} ${s.options}`}>
           <legend className="sr-only">Answer</legend>
@@ -233,22 +237,53 @@ export function QuestionDetail({
       ) : (
         <FreeText id={d.id} sending={sending} onSend={(t) => send({ text: t })} />
       )}
-      {!closed &&
-        d.replies &&
-        options.length > 0 &&
-        !d.answerIn &&
-        // A typed reply in place of the options (#201): quiet, so the options stay the answer.
-        (replying ? (
-          <FreeText id={d.id} sending={sending} focus onSend={(t) => send({ text: t })} />
-        ) : (
-          <button
-            type="button"
+      {replying && <FreeText id={d.id} sending={sending} focus onSend={(t) => send({ text: t })} />}
+      {!closed && (
+        // Quiet, so the options stay the answer: a typed reply in place of them (#201), Done for
+        // a page's answer (#539), and putting it off (#571).
+        <div className={s.quiet}>
+          {d.replies && options.length > 0 && !replying && (
+            <button
+              type="button"
+              className={`t-small ${s.link} ${s.reply}`}
+              onClick={() => setReplying(true)}
+            >
+              Reply
+            </button>
+          )}
+          {d.answerIn && d.done && (
+            <button
+              type="button"
+              className={`t-small ${s.link} ${s.reply}`}
+              disabled={sending}
+              onClick={() => send({ done: true })}
+            >
+              Done
+            </button>
+          )}
+          <SnoozeMenu
+            label={snoozed ? "Snooze again" : "Snooze"}
             className={`t-small ${s.link} ${s.reply}`}
-            onClick={() => setReplying(true)}
-          >
-            Reply
-          </button>
-        ))}
+            disabled={snoozeSend.sending}
+            onSnooze={(until) => snoozeSend.send(until)}
+          />
+          {snoozed && (
+            <button
+              type="button"
+              className={`t-small ${s.link} ${s.reply}`}
+              disabled={snoozeSend.sending}
+              onClick={() => snoozeSend.send(new Date())}
+            >
+              Back now
+            </button>
+          )}
+        </div>
+      )}
+      {snoozeSend.error && (
+        <p className={ui.error} role="alert">
+          Not snoozed: {snoozeSend.error}
+        </p>
+      )}
       {lost && (
         <p className={ui.error} role="alert">
           {answeredFirstText(item)}

@@ -35,6 +35,8 @@ export type InboxItem = {
   answeredBy?: { device: string; reply: Reply };
   /** Since when its agent waits on it, having run out of other work (#122). */
   waitingSince?: string;
+  /** Until when the owner put it off (#571), from the latest snooze any device sent. */
+  snoozedUntil?: string;
 };
 
 /** An answer to a permission prompt: allow for a scope, or deny with a note to the agent. */

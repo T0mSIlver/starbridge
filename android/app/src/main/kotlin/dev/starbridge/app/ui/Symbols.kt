@@ -35,6 +35,7 @@ enum class Sym(val code: Char) {
     Open(''), Waiting(''), Send(''), Link(''), Expand(''),
     Up(''), Down(''), CheckCircle(''), Computer(''), Close(''),
     Error(''), Copy(''), Visibility(''), Logout(''), Add(''), Pin(''), Search(''), BellOff(''),
+    Snooze(''),
 }
 
 /**

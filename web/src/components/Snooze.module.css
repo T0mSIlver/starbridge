@@ -1,0 +1,70 @@
+/* Snooze's menu of times (#571), drawn as the inbox's View menu. */
+
+.snooze {
+  position: relative;
+}
+
+.menu {
+  position: absolute;
+  left: 0;
+  top: calc(100% + var(--s1));
+  z-index: 3;
+  width: 260px;
+  max-width: calc(100vw - 2 * var(--s4));
+  padding: var(--s1h);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  box-shadow: 0 12px 32px var(--scrim);
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  width: 100%;
+  height: var(--s8);
+  padding: 0 var(--s2);
+  border: 0;
+  border-radius: var(--radius-xs);
+  background: none;
+  color: var(--fg);
+  text-align: left;
+}
+
+.item:hover,
+.item:focus-visible {
+  background: var(--surface2);
+}
+
+.when {
+  margin-left: auto;
+  color: var(--fg2);
+}
+
+.pick {
+  display: grid;
+  gap: var(--s2);
+  padding: var(--s2);
+}
+
+.input {
+  min-height: var(--s10);
+  padding: var(--s2);
+  resize: none;
+  color-scheme: light dark;
+}
+
+.go {
+  justify-self: end;
+}
+
+@media (max-width: 599px) {
+  .item {
+    height: var(--size-tap);
+  }
+
+  .go {
+    height: var(--size-tap);
+  }
+}

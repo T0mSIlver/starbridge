@@ -62,6 +62,8 @@ data class Decision(
     val replies: Boolean = false,
     /** With [answerIn]: the machine takes Done, the owner saying they answered there (#539). */
     val takesDone: Boolean = false,
+    /** Until when the owner put it off (#571), from the latest snooze any device sent. */
+    val snoozedUntil: Instant? = null,
 ) {
     /** Waiting for the owner. */
     val isOpen: Boolean get() = answeredAt == null && answer == null

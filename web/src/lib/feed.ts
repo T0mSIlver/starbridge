@@ -2,6 +2,7 @@
 // Pure, so the order has tests.
 import { closedAt, closedByPhrase, outcomeText } from "./outcome";
 import { shownRuns } from "./runs";
+import { isSnoozed } from "./snooze";
 import type { InboxItem, PromptItem, RunItem, Source } from "./types";
 
 /** What a machine is, for its icon; items from older CLIs have none in `source`. */
@@ -51,16 +52,24 @@ export const promptOpen = (p: PromptItem, now: number) =>
 
 /**
  * What holds an agent up comes first: prompts, then questions their agent waits on, then
- * questions it works around. Within each, the one waiting longest leads.
+ * questions it works around. Within each, the one waiting longest leads. Snoozed questions
+ * are left out: they list under Snoozed (#571).
  */
 export function needsYou(inbox: InboxItem[], prompts: PromptItem[], now: number): Entry[] {
   const rank = (e: Entry) =>
     e.type === "prompt" ? 0 : e.type === "question" && e.item.waitingSince ? 1 : 2;
   return [
     ...prompts.filter((p) => promptOpen(p, now)).map(promptEntry),
-    ...inbox.filter((i) => !closedAt(i)).map(questionEntry),
+    ...inbox.filter((i) => !closedAt(i) && !isSnoozed(i, now)).map(questionEntry),
   ].sort((a, b) => rank(a) - rank(b) || a.at.localeCompare(b.at));
 }
+
+/** Open questions the owner put off, the soonest back first. */
+export const snoozedEntries = (inbox: InboxItem[], now: number): Entry[] =>
+  inbox
+    .filter((i) => !closedAt(i) && isSnoozed(i, now))
+    .sort((a, b) => (a.snoozedUntil as string).localeCompare(b.snoozedUntil as string))
+    .map(questionEntry);
 
 export const running = (runs: RunItem[], now: number): Entry[] =>
   shownRuns(runs, now).map(runEntry);

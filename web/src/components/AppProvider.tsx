@@ -49,6 +49,8 @@ export type Store = {
   /** Runs boot again, after sign-in, setup, pairing or recovery. */
   reload: () => Promise<void>;
   answer: (item: InboxItem, reply: Reply) => Promise<void>;
+  /** Puts the question off until `until` (#571), or brings it back now with the current time. */
+  snooze: (item: InboxItem, until: string) => Promise<void>;
   /** Replaces the context after a directory write (approve, revoke). */
   update: (ctx: Ctx) => void;
   refreshQuotas: () => Promise<void>;
@@ -459,6 +461,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     [ctx],
   );
 
+  // TODO(#571): seal and post the snooze item once the protocol has it.
+  const snooze = useCallback(async (_item: InboxItem, _until: string) => {
+    throw new Error("Snoozing needs a newer Starbridge");
+  }, []);
   const answer = useCallback(
     async (item: InboxItem, reply: Reply) => {
       if (!ctx) return;
@@ -497,6 +503,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         runs,
         reload,
         answer,
+        snooze,
         update,
         refreshQuotas,
         askQuotas,
