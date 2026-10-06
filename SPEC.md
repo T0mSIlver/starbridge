@@ -1571,6 +1571,8 @@ so the mod is the first path.
   not retried, and a run for every provider that fails as a whole posts no
   snapshot, so the last one stays. The run timeout went from 90 to 120 s,
   above CodexBar's own worst case for Claude.
+- 2026-10-06. A permission whose input has two keys that read alike once redacted or escaped stays
+  at the keyboard (#410, #357): devices would see one value for both keys.
 
 ## Encryption, with existing libraries
 
