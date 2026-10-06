@@ -56,7 +56,7 @@ import {
   verifyDirectory,
   type Waiting,
 } from "@starbridge/protocol";
-import { ApiError, api, type Stored } from "./api";
+import { ApiError, api, backoff, type Stored } from "./api";
 import { generateDeviceKeys, sealOpener, signer } from "./crypto/keys";
 import * as store from "./store";
 import type {
@@ -88,7 +88,8 @@ export type Boot =
    * server's reason for ending the session, unsigned, so the keys stay until the chain agrees.
    */
   | { state: "signed-out"; known: boolean; refused?: string }
-  | { state: "first-device"; account: string }
+  /** `unsaved`: the name of a first device whose page closed before its recovery key was saved. */
+  | { state: "first-device"; account: string; unsaved?: string }
   /** The account has devices and this browser is not one of them (or lost its binding). */
   | { state: "join"; account: string; stale: boolean }
   | { state: "revoked"; account: string; name: string }
@@ -196,9 +197,10 @@ export async function boot(): Promise<Boot> {
     // A browser that pinned a chain never accepts an empty one: that would be a rollback.
     if (await store.get("pin", account))
       return { state: "broken", account, error: "rollback: the server sent an empty directory" };
-    // Keys saved before a genesis that never reached the server.
+    // Keys saved before a genesis that never reached the server: the page closed before the
+    // owner saved the recovery key, so that key was never used (#328).
     if (device) await store.del("device", account);
-    return { state: "first-device", account };
+    return { state: "first-device", account, ...(device ? { unsaved: device.name } : {}) };
   }
   let verified: { dir: Directory; entries: SignedEnvelope[] };
   try {
@@ -291,7 +293,7 @@ async function newDevice(account: string, name: string) {
   return { record, member };
 }
 
-/** A first device whose keys, genesis entry and recovery words exist, not yet on the server. */
+/** A first device whose keys, genesis entry and recovery key exist, not yet on the server. */
 export interface FirstDevice {
   recoveryKey: string;
   /** Posts the genesis; safe to call again after a failure, with the same keys and entry. */
@@ -300,8 +302,9 @@ export interface FirstDevice {
 
 /**
  * Makes this browser's keys and the account's genesis entry. The recovery seed is dropped once
- * the words exist, so the caller keeps this object until `commit` succeeds and the words are
- * shown; a retry reuses it rather than making new keys.
+ * the key exists, so the key is shown before `commit`, which runs once the owner says it is
+ * saved: a page closed before that posts no genesis, and boot offers a new key (#328). A retry
+ * of `commit` reuses this object rather than making new keys.
  */
 export async function prepareFirstDevice(account: string, name: string): Promise<FirstDevice> {
   await ready;
@@ -326,6 +329,11 @@ export async function prepareFirstDevice(account: string, name: string): Promise
   const dir = verifyDirectory([entry], { account });
   await store.put("device", record, account);
   const commit = async () => {
+    // Another tab's boot drops these keys as never used, or its setup replaces them: posting
+    // now would make an account whose device keys no browser holds.
+    const held = await store.get("device", account);
+    if (held?.id !== record.id || held.signPk !== record.signPk)
+      throw new Error("Another tab started the setup over, so this key was never used. Reload.");
     try {
       await api.append(entry);
     } catch (e) {
@@ -457,7 +465,6 @@ export async function startJoin(account: string, name: string): Promise<Join> {
   return { code: formatPairingCode(code), done, cancel: () => abort.abort() };
 }
 
-/** A join approved: its keys become this browser's device for the account. */
 /** New keys become this browser's device; notifications the older keys read go (#311). */
 async function adopt(account: string, record: store.DeviceRecord): Promise<void> {
   await store.put("device", record, account);
@@ -607,7 +614,8 @@ export async function watchJoins(signal: AbortSignal, onChange: (asks: JoinAsk[]
       onChange(page.joins.flatMap((v) => toAsk(v) ?? []));
     } catch {
       if (signal.aborted) return;
-      await new Promise((r) => setTimeout(r, 5_000));
+      // At most every 5 s, and not before the server's backoff ends (#332).
+      await new Promise((r) => setTimeout(r, Math.max(5_000, backoff.until - Date.now())));
     }
   }
 }

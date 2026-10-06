@@ -14,10 +14,25 @@ export function Setup({
 }: {
   device: string;
   recoveryKey: string;
-  onContinue: () => void;
+  /** Posts the account's first entry: until it succeeds, a reload shows a new key. */
+  onContinue: () => Promise<void>;
 }) {
   const [saved, setSaved] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
+
+  const proceed = async () => {
+    setBusy(true);
+    setError(undefined);
+    try {
+      await onContinue();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const copy = async () => {
     try {
@@ -51,11 +66,16 @@ export function Setup({
       <button
         type="button"
         className={`t-label ${ui.btn} ${ui.lg} ${ui.fill} ${s.go}`}
-        disabled={!saved}
-        onClick={onContinue}
+        disabled={!saved || busy}
+        onClick={proceed}
       >
-        Continue
+        {busy ? "Creating the account…" : error ? "Try again" : "Continue"}
       </button>
+      {error && (
+        <p className={`t-small ${s.error}`} role="alert">
+          {error}
+        </p>
+      )}
     </FirstRunPage>
   );
 }

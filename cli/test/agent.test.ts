@@ -142,8 +142,9 @@ test("several CLI clients at once: ask, wait, answers and quota push all go thro
   expect(new Set(ids).size).toBe(5);
   expect(await server.opened("decision")).toHaveLength(5);
 
-  // A wait for one decision, a wait for any, and the mod's `answers --wait`, all at once.
+  // A wait for one decision, a wait for any of session s1's, and the mod's `answers --wait`.
   const [w1, wAny, mod] = [client(socket), client(socket), client(socket)];
+  wAny.env.CLAUDE_CODE_SESSION_ID = "s1";
   const waiting = [
     run(["wait", ids[0] as string], w1),
     run(["wait", "--timeout", "20s"], wAny),
@@ -152,13 +153,15 @@ test("several CLI clients at once: ask, wait, answers and quota push all go thro
   await Bun.sleep(200);
   await server.answer(ids[0] as string, { choice: "Merge" });
   await server.answer(ids[2] as string, { choice: "Wait" });
+  await server.answer(ids[1] as string, { choice: "Merge" });
   expect(await Promise.all(waiting)).toEqual([0, 0, 0]);
   expect(w1.lines).toEqual([`Answer to ${ids[0]} (Merge #12 now?): Merge`]);
   // The wait for one decision marked it waiting.
   expect((await server.opened("waiting")).map((w) => [w.decisionId, w.state])).toEqual([
     [ids[0] as string, "waiting"],
   ]);
-  expect(wAny.lines).toHaveLength(1);
+  // Not s0's or s2's, which their own wait and mod are due.
+  expect(wAny.lines).toEqual([`Answer to ${ids[1]} (Merge #12 now?): Merge`]);
   expect(JSON.parse(mod.lines[0] as string)).toEqual({
     decisionId: ids[2],
     ack: ids[2],
@@ -383,8 +386,14 @@ async function codexHome(fail = false) {
     `#!/bin/sh\necho "$CODEX_HOME $*" >> ${log}\n${fail ? "echo 'no active session' >&2; exit 1" : ""}\n`,
     { mode: 0o755 },
   );
-  // Started from a Claude Code shell, Codex inherits its session id too.
-  const env = { CODEX_THREAD_ID: "t1", CLAUDE_CODE_SESSION_ID: "c1", CODEX_HOME: home, PATH: bin };
+  // Started from a Claude Code shell, Codex inherits its variables too: Codex still asks.
+  const env = {
+    CODEX_THREAD_ID: "t1",
+    CLAUDECODE: "1",
+    CLAUDE_CODE_SESSION_ID: "c1",
+    CODEX_HOME: home,
+    PATH: bin,
+  };
   return { env, log, close: () => new Promise<void>((r) => daemon.close(() => r())) };
 }
 

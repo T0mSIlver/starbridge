@@ -113,6 +113,22 @@ async function browser() {
   });
 }
 
+/** Content-Security-Policy violations on any page; the run fails on any (#312). */
+const violations: string[] = [];
+
+async function watchCsp(ctx: BrowserContext) {
+  await ctx.exposeBinding("cspViolation", ({ page }, v: string) => {
+    violations.push(`${page.url()}: ${v}`);
+  });
+  await ctx.addInitScript(() =>
+    document.addEventListener("securitypolicyviolation", (e) =>
+      (window as unknown as { cspViolation: (v: string) => void }).cspViolation(
+        `${e.violatedDirective} ${e.blockedURI}`,
+      ),
+    ),
+  );
+}
+
 /** The landing page's link, or the sign-in screen's. */
 const SIGN_IN = /^(Sign in|Continue) with GitHub$/;
 
@@ -217,9 +233,13 @@ async function main() {
     ...(MOTION_VIDEO ? { recordVideo: { dir: join(tmp, "video"), size: DESKTOP } } : {}),
   });
 
+  await watchCsp(a);
+
   step("a browser with no device lands on the landing page");
   const visitor = await a.newPage();
-  await visitor.goto(ORIGIN);
+  const landing = await visitor.goto(ORIGIN);
+  const policy = landing?.headers()["content-security-policy"] ?? "";
+  if (!policy.includes("'nonce-")) throw new Error(`expected a CSP with a nonce, got: ${policy}`);
   await visitor.getByRole("heading", { name: /Your agents ask/ }).waitFor();
   await shoot(visitor, "landing");
   for (const [path, name] of [
@@ -230,6 +250,8 @@ async function main() {
     await visitor.goto(ORIGIN + path);
     await shoot(visitor, name);
   }
+  for (const path of ["/docs", "/docs/cli", "/docs/tell-your-agents", "/docs/self-host", "/sample"])
+    await visitor.goto(ORIGIN + path, { waitUntil: "networkidle" });
   await visitor.close();
 
   step("sign in with GitHub (stub) and set up the first device");
@@ -237,7 +259,15 @@ async function main() {
   failPage = page;
   await page.getByRole("button", { name: "Create the keys" }).click();
   await page.getByRole("heading", { name: "Save your recovery key" }).waitFor();
+  const unsaved = ((await page.getByTestId("recovery-key").textContent()) ?? "").trim();
+
+  step("a reload before the key is saved offers a new key, not the inbox (#328)");
+  await page.reload();
+  await page.getByText(/so that key was never used/).waitFor();
+  await page.getByRole("button", { name: "Create the keys" }).click();
+  await page.getByRole("heading", { name: "Save your recovery key" }).waitFor();
   const key = ((await page.getByTestId("recovery-key").textContent()) ?? "").trim();
+  if (key === unsaved) throw new Error("expected a new recovery key after the reload");
   if (!/^([0-9A-Z]{4}){7}$/.test(key)) throw new Error(`expected a recovery key, got: ${key}`);
   await noWordsAsked(page);
   await shoot(page, "setup");
@@ -817,6 +847,7 @@ async function main() {
 
   step("add a second browser by pairing code");
   const b = await ff.newContext();
+  await watchCsp(b);
   const pageB = await signIn(b);
   await pageB.getByTestId("pairing-code").waitFor({ timeout: 10_000 });
   await shoot(pageB, "join-browser");
@@ -863,6 +894,7 @@ async function main() {
 
   step("recover a third browser with the recovery key");
   const c = await ff.newContext();
+  await watchCsp(c);
   const pageC = await signIn(c);
   await pageC.getByRole("button", { name: "Use the recovery key" }).click();
   const entry = pageC.getByLabel("Your recovery key");
@@ -954,6 +986,7 @@ async function main() {
     throw new Error("signing out left notifications on screen");
 
   await ff.close();
+  if (violations.length) throw new Error(`CSP violations:\n${violations.join("\n")}`);
   console.log("\nE2E PASSED");
 }
 

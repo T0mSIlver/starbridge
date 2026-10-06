@@ -1292,15 +1292,103 @@ so the mod is the first path.
   since `codex queue` (0.160) takes the message only as an argument and other local users can
   read process arguments; `wait <id>` prints a delivered answer from local state. The npm bundle
   runs under Node, so the CLI uses no Bun global without a guard; a test runs it there.
+- 2026-10-06. Harness integrations audit (#298), each finding reproduced in a throwaway HOME
+  with Claude Code 2.1.289, Codex CLI 0.160.0 and Pi 1.0.4 with pi-permission-system 39.1.0.
+  Fixed here: an agent passes its variables to the agents it starts, and a `codex exec` run
+  from a Claude Code shell posted as that Claude session, whose mod then got the answer (#319).
+  So `ask` takes Codex or Pi over Claude Code when both are set, unless Claude Code runs as
+  `claude -p`, the only way Codex and Pi, which run commands without a terminal, can start it. A Codex sub-agent asks under its
+  root thread, read from its rollout's `session_id`, since `codex queue` refuses sub-agent
+  threads (#320). `claude -p` (`CLAUDE_CODE_SESSION_ATTENDED=0`) is told to `wait`, since the
+  mod runs only in interactive sessions (#321). Filed post-launch: Pi needs allow rules for the
+  `starbridge` commands under pi-permission-system (#322), uninstall leaves `starbridge` in its
+  `authorizerChain` (#323), a bare `wait` takes any session's answer (#324). Checked and fine:
+  setup run twice changes nothing; Claude Code `--resume` and Pi `/new` then `/resume` get an
+  answer given meanwhile; Pi `/reload` keeps the permission link; `codex queue` starts the
+  daemon itself, so an answer given after a reboot still reaches the session. After the TUI
+  quits, Codex's daemon keeps running and runs the queued answer as a turn nobody watches,
+  which `codex resume` then shows.
 
 - 2026-10-06. The agent binds its socket under a 077 umask and restores the process's after
   (#95). Under the usual umask the socket took other users' connections between the bind and the
   chmod to 0600, and a connection accepted then stayed open.
+
 - 2026-10-06. Recovery with the words keeps its new keys under `pending` until the directory
   append lands, as a join does (#283, after #274). A failed append leaves the stored device's
   keys alone; one that landed with its reply lost counts once the directory lists the entry. Boot
   adopts a pending record the directory lists as active even when an older device is stored, so a
   recovery or join cut off after it landed is not lost to the older keys.
+- 2026-10-06. Waiting pairings are capped per address, not only server-wide (#309, after
+  #302). `POST /pairings` needs no account, and 500 IPv6 /64s, a sliver of one free /48, kept
+  the server's 5000 full so nobody could pair. Each address may now hold 20 unapproved
+  pairings, an IPv6 client counting as its /48 on this route; approved ones do not count, so an
+  office behind one NAT pairs everyone, 20 waiting at once on top of the 10-a-minute rate
+  limit. The server-wide cap, now 20000 (about 80 MB of 4 KB requests), stays as the disk
+  bound, and filling it takes a thousand addresses or /48s. The cost: subscribers of a mobile
+  carrier that hands out /64s from one /48 share its 20, so one of them can block pairing there
+  for 10 minutes, a far smaller blast radius than the whole server. Approving one's own
+  pairings frees the slots, but each approval needs a directory entry, 200 per account.
+
+- 2026-10-06. Add a device on the web says a failed pairing in the app's words, as Android does,
+  not the API's code (#289): an expired or unknown code reads "No pairing with this code, or it
+  expired."; a code already approved, a removed browser and an expired sign-in have their own
+  sentence; any other error reads as the server's sentence, capitalised, without its code.
+
+- 2026-10-06. Devices tells apart rows that share a name (#287). `pair --force` adds a new machine
+  and leaves the old one active, and every machine defaults to the hostname, so Devices listed
+  identical rows. A row whose name another shares now adds the time it was added ("added Oct 6,
+  10:32") on web and Android, and `pair --force` names the old pairing as the earlier row, with
+  its time and zone, instead of by an id no client shows. Revoking the old machine in the approval itself (a `replaces` field in the
+  pairing request) would remove the twin but changes the protocol; not done.
+- 2026-10-06. Pi's `path` and `external_directory` asks stay at the keyboard (#288).
+  pi-permission-system 39.1.0 caps every authorizer link's allow on those surface families to
+  defer (its delegation envelope, `src/authority/delegation-envelope.ts`, ADR 0007), so the
+  second gate of a read outside the project, `external_directory_read`, opened its dialog even
+  after a device allowed it. The Starbridge link now defers such asks at once, by the gate's
+  surface, instead of sending the devices a prompt whose Allow is dropped. Letting a link allow
+  them needs pi-permission-system to make the excluded families configurable (its #620).
+- 2026-10-06. The web backs off together while the server is unreachable (#332). Each poller's
+  call retried on its own every 250 ms to 4 s, so an offline page sent about two requests a
+  second, and every open tab did the same to a server coming back up. Now every call in a page
+  shares one backoff: 250 ms doubling to 30 s, with jitter between 50 and 100% of the step, ended
+  by any answer and by the browser's online event. Pollers skip their turn during a wait, while
+  every other call's first try goes out, since an answer, a push or a sign-in may be the one that
+  finds the server back; only retries wait. A call that
+  gets no answer throws "You're offline." or "Can't reach the Starbridge server." instead of
+  the browser's "Failed to fetch". An offline banner waits for the owner's ruling on the mockup.
+- 2026-10-06. Security headers (#312, after #302). Next sets the page's Content-Security-Policy
+  in `web/src/proxy.ts`, because only it can put a fresh nonce on each request and on its own
+  scripts: scripts need the nonce or `'strict-dynamic'` (so Umami's tracker, which Next's
+  bundle loads, passes), `'wasm-unsafe-eval'` lets libsodium's WebAssembly compile without
+  allowing JavaScript eval, and an inline script sets Zod's `jitless` before it builds its schemas,
+  since its `new Function` probe counts as a violation even when caught. Styles stay `'unsafe-inline'` since React writes style attributes,
+  images allow `data:` and `blob:` for questions, `worker-src 'self'` keeps the service worker,
+  and `frame-ancestors 'none'` refuses framing. Fonts are self-hosted, so nothing else is
+  allowed. A nonce needs a render per request, so every page is dynamic now, and the docs
+  read their Markdown at runtime from files the image ships (`outputFileTracingIncludes`).
+  Caddy sets what applies to every response, the API's included: HSTS for a year,
+  `nosniff` and `Referrer-Policy: same-origin`; the self-host example does the same. Next
+  stops sending `X-Powered-By`.
+- 2026-10-06. The web posts the account's first entry only once the owner confirms the recovery
+  key is saved (#328). The seed is dropped as soon as the key exists, so a page closed on "Save
+  your recovery key" had already posted an account whose key nobody saw, and could never show it
+  again. Now a reload before Continue finds an empty directory, says that key was never used,
+  and makes a new one; the key is never stored, in IndexedDB or elsewhere. Replacing the key
+  later needs a new directory entry kind, since entry 0 fixes the recovery public key; it waits
+  for the owner's ruling on the mockup.
+
+- 2026-10-06. Pi gets the allow rules Claude Code and Codex have (#322, #323, #324, from the #298
+  audit). With pi-permission-system installed, setup offers to add `"starbridge ask *"`,
+  `waiting`, `working`, `wait` and `settle` as `"allow"` to `permission.bash` in its config,
+  after the owner's own patterns since the last match wins. A plain level there (`"bash":
+  "ask"`) stays, and setup prints the lines to add instead: as `{"*": "ask"}` it would merge
+  with a project's bash map rather than give way to it. Before it, Pi stopped every `starbridge ask` at a
+  permission dialog. Uninstall takes out exactly those patterns and the `starbridge` link in
+  `authorizerChain`, which otherwise made pi-permission-system warn at every prompt, and
+  deletes the file when nothing else is left in it. A `wait` without an id, run in an agent's
+  session, takes only answers to that session's decisions, so it cannot take one that another
+  session's mod or `wait` is due; outside an agent's session it still takes any. Checked with Pi 1.0.4 and pi-permission-system 39.1.0: `starbridge ask` ran
+  without a dialog while `touch` still asked, and uninstall left no config behind.
 - 2026-10-06. Only the verified directory revokes a browser (#310, as Android decides). A 401
   `revoked` is unsigned, so the page keeps its keys and shows the refusal on the sign-in screen;
   after sign-in, boot reads the chain and shows "was revoked" only if the chain says so.
