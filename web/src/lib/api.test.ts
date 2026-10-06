@@ -47,7 +47,7 @@ test("a pairing error reads as a sentence, without the API's code (#289)", () =>
     "No pairing with this code, or it expired.",
   );
   expect(pairingError(new ApiError(409, "already-approved"))).toBe(
-    "Another device already approved this code.",
+    "This code was already approved.",
   );
   expect(pairingError(new ApiError(429, "busy", "too many pairings waiting; retry later"))).toBe(
     "Too many pairings waiting; retry later.",

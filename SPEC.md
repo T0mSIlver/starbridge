@@ -1304,7 +1304,8 @@ so the mod is the first path.
 
 - 2026-10-06. Add a device on the web says a failed pairing in the app's words, as Android does,
   not the API's code (#289): an expired or unknown code reads "No pairing with this code, or it
-  expired."; another error reads as the server's sentence, capitalised, without its code.
+  expired."; a code already approved, a removed browser and an expired sign-in have their own
+  sentence; any other error reads as the server's sentence, capitalised, without its code.
 
 ## Encryption, with existing libraries
 
