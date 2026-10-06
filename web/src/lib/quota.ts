@@ -1,8 +1,8 @@
 // A quota window's state, as words (DESIGN.md, "Rules"): the status word carries the state in
 // its colour, and the time it is about. A window whose reset passed is over until the next
-// upload, and a run-out time that passed reads "Ran out".
+// upload, which says when it reset, and a run-out time that passed reads "Ran out".
 import { relative } from "./format";
-import { clock, type QuotaSettings } from "./quotaSettings";
+import { clock, clockAt, type QuotaSettings } from "./quotaSettings";
 import type { QuotaAlert, QuotaWindow } from "./types";
 
 /** The colour of the word: grey on pace, amber with headroom unused, red when it runs out. */
@@ -32,22 +32,22 @@ export function status(
   now = new Date(),
 ): Status {
   if (w.resetsAt && Date.parse(w.resetsAt) <= now.getTime())
-    return { state: "unknown", word: "Window reset", reset: "" };
+    return {
+      state: "unknown",
+      word: "Window reset",
+      // Always "12 min ago": a bare clock time would read as the next reset.
+      reset: relative(w.resetsAt, now),
+    };
   const reset = w.resetsAt ? when(w.resetsAt, s, now) : "";
   if (!w.pace || w.pace.stage === "unknown")
     return { state: "unknown", word: "Too early to tell", reset };
   if (!w.pace.willLastToReset) {
     const at = w.pace.runsOutAt;
     if (at && Date.parse(at) <= now.getTime())
-      return { state: "ran-out", word: `Ran out at ${clock(at, now)}`, reset };
+      return { state: "ran-out", word: `Ran out ${clockAt(at, now)}`, reset };
     if (!at) return { state: "out", word: "Will run out", reset };
-    const time = clock(at, now);
-    // "at 14:20", "at Oct 7, 14:20", but "tomorrow 07:20".
-    const by = !s.absoluteResets
-      ? relative(at, now)
-      : time.startsWith("tomorrow")
-        ? time
-        : `at ${time}`;
+    // "in 50 min", or "at 14:20", "tomorrow at 07:20", "on Oct 8 at 10:15".
+    const by = s.absoluteResets ? clockAt(at, now) : relative(at, now);
     return { state: "out", word: `Will run out ${by}`, reset };
   }
   if (alert?.kind === "unused-headroom") return { state: "unused", word: "Headroom unused", reset };

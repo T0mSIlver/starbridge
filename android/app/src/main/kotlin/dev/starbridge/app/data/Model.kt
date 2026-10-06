@@ -1,6 +1,10 @@
 package dev.starbridge.app.data
 
 import dev.starbridge.app.protocol.RUN_STALE_MS
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import java.time.Duration
 import java.time.Instant
 
@@ -98,6 +102,42 @@ data class Prompt(
     val endedAt: Instant? = null,
 ) {
     fun waiting(now: Instant) = ended == null && now.isBefore(expiresAt)
+
+    /**
+     * The input as the owner reads it before allowing, as on the web (#276): a command's full
+     * text, then its other fields but the description as indented JSON; any other input as
+     * indented JSON. [summary] is capped at 200 characters, so a command's tail can hide past it.
+     */
+    val fullInput: String by lazy { visible(readable(input).ifEmpty { summary }) }
+
+    /** Whether the whole input fits one line of a card or a notification, so it may carry Allow (#356). */
+    val fitsRow: Boolean get() = fullInput.length <= ROW_INPUT_MAX && '\n' !in fullInput
+}
+
+/** The longest input a card or a notification shows whole, and so the longest it may carry Allow for. */
+const val ROW_INPUT_MAX = 200
+
+private val pretty = Json { prettyPrint = true }
+
+/** JSON [input] indented, a command first in its own words; other input as it came. */
+fun readable(input: String): String {
+    val parsed = runCatching { Json.parseToJsonElement(input) }.getOrElse { return input }
+    val command = ((parsed as? JsonObject)?.get("command") as? JsonPrimitive)?.takeIf { it.isString }?.content
+    if (command == null) return pretty.encodeToString(JsonElement.serializer(), parsed)
+    val rest = JsonObject((parsed as JsonObject) - "command" - "description")
+    return if (rest.isEmpty()) command else "$command\n\n${pretty.encodeToString(JsonElement.serializer(), rest)}"
+}
+
+/** Control and format characters but newline and tab: bidi overrides, isolates, zero-widths. */
+private val INVISIBLE = Regex("[\\p{Cc}\\p{Cf}\\u2028\\u2029&&[^\\n\\t]]")
+
+/**
+ * [text] with each control or format character shown as its escape (`\u202E`), so a prompt reads
+ * in the order it runs: a bidi override cannot reorder what the owner allows (#357).
+ */
+fun visible(text: String): String = INVISIBLE.replace(text) {
+    val c = it.value.codePointAt(0)
+    if (c > 0xFFFF) "\\u{%X}".format(c) else "\\u%04X".format(c)
 }
 
 /**
@@ -176,8 +216,10 @@ data class QuotaWindow(
     /** The uploading machine's name, set when more than one machine uploads quotas. */
     val machine: String? = null,
     val windowMinutes: Int? = null,
-    /** When the uploader took the snapshot this window comes from. */
+    /** When the uploader read this window: its snapshot's time, or earlier when it is stale. */
     val takenAt: Instant? = null,
+    /** Why CodexBar failed for the provider; the window is then the last one it read (#397). */
+    val error: String? = null,
 )
 
 enum class Kind { Device, Machine }
@@ -211,8 +253,11 @@ sealed interface Phase {
     data class NoDevice(val accountExists: Boolean) : Phase
     /** Waiting for another device to approve this one; it shows [code], or [scanned] it. */
     data class Joining(val code: String, val scanned: Boolean = false) : Phase
-    /** Asked the account's devices to approve this one; [digits] once one of them took it. */
-    data class JoiningByDigits(val digits: String?) : Phase
+    /**
+     * Asked the account's devices to approve this one; [digits] once one of them took it, and
+     * [matched] once the owner said that device shows the same digits.
+     */
+    data class JoiningByDigits(val digits: String?, val matched: Boolean = false) : Phase
     /** The first device shows the recovery key once. */
     /** [shown]: a recovery key, or an older account's words. */
     data class RecoveryKey(val shown: String) : Phase
@@ -233,4 +278,20 @@ sealed interface Comparison {
     data class Digits(val ask: JoinAsk, val digits: String, val approving: Boolean = false, val error: String? = null) : Comparison
     data class Done(val message: String) : Comparison
     data class Failed(val message: String) : Comparison
+}
+
+/**
+ * The recovery key as Devices and the notices show it (#348): when it was set and on which
+ * device ("this phone" when here), and a replacement made on another device since this phone
+ * joined, shown once.
+ */
+data class RecoveryUi(val setAt: Instant, val setBy: String, val replaced: Boolean, val notice: RecoveryNotice? = null)
+
+data class RecoveryNotice(val seq: Int, val at: Instant, val by: String)
+
+/** This phone replacing the recovery key: the new key stays in memory, shown, until saved. */
+sealed interface Replacing {
+    data object Idle : Replacing
+    data class Shown(val key: String, val saving: Boolean = false) : Replacing
+    data object Done : Replacing
 }

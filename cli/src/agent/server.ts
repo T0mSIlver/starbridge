@@ -178,10 +178,17 @@ export class Agent implements Hub {
     // Held requests last up to MAX_HOLD_SECONDS; Node's default timeouts would cut them.
     server.requestTimeout = 0;
     server.headersTimeout = 10_000;
-    await new Promise<void>((resolve, reject) => {
-      server.once("error", reject);
-      server.listen(this.socket, () => resolve());
-    });
+    // Bound under a 077 umask: a socket made under the usual one takes other users'
+    // connections until the chmod below, and those stay accepted (#95).
+    const umask = process.umask(0o077);
+    try {
+      await new Promise<void>((resolve, reject) => {
+        server.once("error", reject);
+        server.listen(this.socket, () => resolve());
+      });
+    } finally {
+      process.umask(umask);
+    }
     chmodSync(this.socket, 0o600);
     this.server = server;
     this.loops = this.features.flatMap((f) => (f.run ? [f.run(this.stopping.signal)] : []));

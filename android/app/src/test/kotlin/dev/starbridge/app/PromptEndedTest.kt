@@ -11,7 +11,7 @@ class PromptEndedTest {
         promptEnded(answer, settled, answeredAt, "devbox", "d_me") { if (it == "d_pixel") "Pixel" else null }
 
     private fun byDevice(device: String, behavior: String? = null) =
-        Settled(1, "st_1", "perm_1", listOf("d_me"), "2026-10-06T10:00:00Z", "device", device, behavior)
+        Settled(1, "st_1", "perm_1", listOf("d_me"), "2026-10-06T10:00:00Z", "device", device, behavior = behavior)
 
     @Test
     fun whatThenWhere() {

@@ -7,27 +7,95 @@ export class ApiError extends Error {
   constructor(
     readonly status: number,
     readonly code: string,
-    detail?: string,
+    readonly detail?: string,
   ) {
     super(detail ? `${code}: ${detail}` : code);
   }
 }
 
 /**
- * A deploy restarts the server in a few seconds (#150), so a 502 or 503 from Caddy, or a refused
- * connection, is retried quietly for this long before the caller hears of it (#250).
+ * What a failed pairing says on Add a device: a sentence in the app's words, Android's where it
+ * has them, rather than the API's code (#289).
  */
-const RETRY_FOR_MS = 20_000;
+export function pairingError(e: unknown): string {
+  if (!(e instanceof ApiError)) return e instanceof Error ? e.message : String(e);
+  if (e.status === 404) return "No pairing with this code, or it expired.";
+  switch (e.code) {
+    case "already-approved":
+      return "This code was already approved.";
+    case "already-paired":
+      return "That device is already paired.";
+    case "revoked":
+      return "This browser was removed from the account.";
+    case "unauthenticated":
+      return "Sign-in expired. Sign in again.";
+    case "machine-cap":
+      return "This account already has its maximum number of machines. Revoke one first.";
+    case "rate-limited":
+      return "Too many tries. Wait a minute.";
+  }
+  const said = e.detail ?? e.code;
+  return `${said.charAt(0).toUpperCase()}${said.slice(1)}${/[.!?]$/.test(said) ? "" : "."}`;
+}
 
-/** Resolves after `ms`, or rejects at once when `signal` aborts. */
+/** Why a call never got an answer: the browser is offline, or the server is away. */
+export class Unreachable extends Error {
+  constructor(readonly offline: boolean) {
+    super(offline ? "You're offline." : "Can't reach the Starbridge server.");
+  }
+}
+
+const offline = () => typeof navigator !== "undefined" && navigator.onLine === false;
+
+/**
+ * One backoff for every call in this page (or the service worker) while the server does not
+ * answer, so they wait together instead of each retrying twice a second (#332). The wait doubles
+ * from 250 ms to 30 s, with jitter so open tabs spread out, and ends on any answer and on the
+ * browser's online event. A deploy restarts the server in a few seconds (#150), so a call retries
+ * quietly on this backoff for `retryForMs` before the caller hears of it (#250). Each call's first
+ * try always goes out, since an answer, a push or a sign-in may be the one that finds the server
+ * back; pollers skip their turn while `backingOff()` instead.
+ */
+export const backoff = { failures: 0, until: 0, retryForMs: 20_000 };
+const wakers = new Set<() => void>();
+
+/** Whether calls are waiting for the server: a poller skips its turn meanwhile. */
+export const backingOff = () => Date.now() < backoff.until;
+
+function answered() {
+  backoff.failures = 0;
+  backoff.until = 0;
+  for (const wake of wakers) wake();
+}
+
+function unanswered() {
+  const now = Date.now();
+  // Calls in flight together fail together: count them once.
+  if (now < backoff.until) return;
+  backoff.failures++;
+  const ceiling = Math.min(30_000, 250 * 2 ** (backoff.failures - 1));
+  backoff.until = now + ceiling * (0.5 + Math.random() / 2);
+}
+
+globalThis.addEventListener?.("online", answered);
+
+/** Resolves after `ms` or once the server answers another call; rejects when `signal` aborts. */
 function pause(ms: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
     if (signal?.aborted) return reject(signal.reason);
-    const t = setTimeout(resolve, ms);
+    const done = () => {
+      clearTimeout(t);
+      wakers.delete(done);
+      signal?.removeEventListener("abort", abort);
+      resolve();
+    };
     const abort = () => {
       clearTimeout(t);
+      wakers.delete(done);
       reject(signal?.reason);
     };
+    const t = setTimeout(done, ms);
+    wakers.add(done);
     signal?.addEventListener("abort", abort, { once: true });
   });
 }
@@ -39,8 +107,12 @@ async function call<T>(
 ): Promise<T> {
   const started = Date.now();
   let res: Response;
-  for (let wait = 250; ; wait = Math.min(wait * 2, 4_000)) {
-    const retry = Date.now() - started + wait <= RETRY_FOR_MS;
+  for (let first = true; ; first = false) {
+    if (!first) {
+      const wait = Math.max(0, backoff.until - Date.now());
+      if (Date.now() - started + wait > backoff.retryForMs) throw new Unreachable(offline());
+      await pause(wait, opts.signal);
+    }
     try {
       res = await fetch(`/v1${path}`, {
         method,
@@ -53,16 +125,18 @@ async function call<T>(
         signal: opts.signal,
       });
     } catch (e) {
+      if (opts.signal?.aborted) throw e;
+      unanswered();
       // fetch tells a refused connection from one cut after the request left by nothing, so
       // only a read, which is safe to repeat, retries on it.
-      if (opts.signal?.aborted || method !== "GET" || !retry) throw e;
-      await pause(wait, opts.signal);
+      if (method !== "GET") throw new Unreachable(offline());
       continue;
     }
-    if ((res.status !== 502 && res.status !== 503) || !retry) break;
+    if (res.status !== 502 && res.status !== 503) break;
     await res.body?.cancel();
-    await pause(wait, opts.signal);
+    unanswered();
   }
+  answered();
   const text = await res.text();
   let json: unknown;
   try {
@@ -162,6 +236,9 @@ export const api = {
     ),
   item: (id: string) => call<Stored>("GET", `/items/${encodeURIComponent(id)}`),
   quota: async () => (await call<{ items: Stored[] }>("GET", "/quota")).items,
+  /** Asks every machine for a fresh snapshot; holds up to `wait` seconds for them. */
+  askQuota: (wait: number) =>
+    call<{ askedAt: string; behind: number }>("POST", `/quota/ask?wait=${wait}`),
   post: (item: SealedItem) => call<{ cursor: string }>("POST", "/items", { body: item }),
 
   vapid: async () => (await call<{ publicKey: string }>("GET", "/push/vapid")).publicKey,

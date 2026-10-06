@@ -14,6 +14,7 @@ import { type Ctx, UsageError } from "../context";
 import { type AskInput, ask } from "../decisions";
 import { DEFAULT_SERVER, pair } from "../pair";
 import { permissionsEnabled } from "../permissions";
+import { allowPiCommands, PI_ALLOW, piAllow } from "../pi";
 import { pushOnce } from "../quota";
 import { offerPiChain, rememberMachineKind, setPermissions } from "../settings";
 import { VERSION } from "../version";
@@ -33,10 +34,14 @@ import {
   codexSkillDir,
   hasCodex,
   hasCodexRule,
+  hasOpencode,
   hasPi,
   installCodexRule,
   installCodexSkill,
+  installOpencode,
   installPiPackage,
+  opencodeDir,
+  opencodeState,
   PI_PACKAGE,
   piPackage,
 } from "./harnesses";
@@ -135,6 +140,7 @@ export async function setup(sys: Sys, opts: SetupOpts): Promise<number> {
     await pluginStep(sys);
     await codexStep(sys);
     await piStep(sys);
+    await opencodeStep(sys);
   }
   await permissionStep(sys);
 
@@ -442,9 +448,15 @@ async function codexStep(sys: Sys) {
 
 /** The Starbridge Pi package: the skill, the rules and answers into the session. */
 async function piStep(sys: Sys) {
-  const { ctx, prompt } = sys;
+  const { ctx } = sys;
   if (!hasPi(sys)) return;
   section(ctx, "Pi");
+  await piPackageStep(sys);
+  await piAllowStep(sys);
+}
+
+async function piPackageStep(sys: Sys) {
+  const { ctx, prompt } = sys;
   if (piPackage(sys)) {
     ctx.out("The Starbridge Pi package is installed.");
     return;
@@ -464,6 +476,66 @@ async function piStep(sys: Sys) {
   } else ctx.out(`Skipped: \`pi install ${PI_PACKAGE}\` installs it later.`);
 }
 
+/** With pi-permission-system, lets the starbridge commands run, as Codex's rule does. */
+async function piAllowStep(sys: Sys) {
+  const { ctx, prompt } = sys;
+  const { state, file } = piAllow(ctx.env);
+  if (state === "absent") return;
+  const lines = PI_ALLOW.map((p) => `"${p}": "allow"`).join(", ");
+  if (state === "allowed")
+    ctx.out(`pi-permission-system lets the starbridge commands run (${file}).`);
+  else if (state === "unreadable")
+    ctx.out(
+      `To let the starbridge commands run without a prompt, add ${lines} to "permission.bash" in ${file}.`,
+    );
+  else if (
+    await prompt.confirm(
+      `Let \`starbridge ask\`, \`waiting\`, \`working\`, \`wait\` and \`settle\` run without a pi-permission-system prompt? This adds them to "permission.bash" in ${file}.`,
+      true,
+    )
+  ) {
+    try {
+      allowPiCommands(file);
+      ctx.out(`Allowed them in ${file}.`);
+    } catch (e) {
+      ctx.out(`Could not write ${file}: ${(e as Error).message}`);
+    }
+  } else
+    ctx.out(
+      "pi-permission-system will ask before each `starbridge ask`: rerun setup to allow them.",
+    );
+}
+
+/** The skill and the plugin in opencode's config folder, updated when this CLI has others. */
+async function opencodeStep(sys: Sys) {
+  const { ctx, prompt } = sys;
+  if (!hasOpencode(sys)) return;
+  section(ctx, "opencode");
+  const dir = opencodeDir(sys);
+  const state = opencodeState(sys);
+  if (state === "current") {
+    ctx.out(`The starbridge skill and plugin are in ${dir}.`);
+    return;
+  }
+  const verb = state === "missing" ? "Install" : "Update";
+  if (
+    await prompt.confirm(
+      `${verb} the Starbridge skill and plugin for opencode in ${dir}? The plugin puts answers into the session.`,
+      true,
+    )
+  ) {
+    try {
+      const kept = installOpencode(sys);
+      ctx.out(
+        `${verb === "Install" ? "Installed" : "Updated"}. opencode loads them when it next starts.`,
+      );
+      for (const path of kept) ctx.out(`Kept ${path}: setup did not write it.`);
+    } catch (e) {
+      ctx.out(`Could not write them: ${(e as Error).message}`);
+    }
+  } else ctx.out("opencode sessions won't know Starbridge: rerun setup to install it.");
+}
+
 /** Off unless asked: the Claude app already answers prompts for Remote Control sessions. */
 async function permissionStep(sys: Sys) {
   const { ctx, prompt } = sys;
@@ -474,7 +546,7 @@ async function permissionStep(sys: Sys) {
     return;
   }
   const on = await prompt.confirm(
-    "Also send permission prompts (Claude Code's, and Pi's through pi-permission-system) to your devices? The Claude app already shows Claude Code's for Remote Control sessions.",
+    "Also send permission prompts (Claude Code's, opencode's, and Pi's through pi-permission-system) to your devices? The Claude app already shows Claude Code's for Remote Control sessions.",
     false,
   );
   if (on) setPermissions(ctx, true);

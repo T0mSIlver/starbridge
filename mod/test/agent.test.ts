@@ -118,7 +118,7 @@ function session(id: string) {
 
 async function ask(question: string, sessionId: string): Promise<string> {
   const args = ["ask", "--question", question, "--option", "Yes", "--option", "No"];
-  expect(await run([...args, "--default", "Yes", "--session", sessionId], cli)).toBe(0);
+  expect(await run([...args, "--session", sessionId], cli)).toBe(0);
   return cli.lines.at(-1) as string;
 }
 

@@ -4,3 +4,4 @@ packages:
   - cli
   - mod
   - web
+  - demo

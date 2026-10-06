@@ -1,10 +1,18 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="22 22 64 64">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="18 18 72 72">
   <title>Starbridge</title>
-  <clipPath id="t"><rect x="22" y="22" width="64" height="64" rx="14"/></clipPath>
-  <g clip-path="url(#t)">
-    <rect width="108" height="108" fill="#0B0E14"/>
-    <path fill="#E8EBF2" d="M0,88.97 A80,80 0 0 1 108,88.97 V108 H0 Z"/>
-    <path fill="#E8EBF2" d="M51.75,0 H56.25 V72 H51.75 Z"/>
-    <path fill="#F5A83B" d="M48.5,39.5 A5.5,5.5 0 0 1 59.5,39.5 V48.5 A5.5,5.5 0 0 1 48.5,48.5 Z"/>
+  <!-- The mark as the page draws it (Mark in components/icons.tsx), in `fg` and `accent` of the
+       system's scheme. A thin halo in the other scheme's `fg` keeps it legible on a tab strip that
+       does not follow the system, such as a dark browser theme on a light system. -->
+  <style>
+    g { stroke: #f1f1f1; stroke-width: 5; paint-order: stroke }
+    .fg { fill: #121212 } .accent { fill: #965700 }
+    @media (prefers-color-scheme: dark) {
+      g { stroke: #121212 } .fg { fill: #f1f1f1 } .accent { fill: #f5a83b }
+    }
+  </style>
+  <g>
+    <circle class="fg" cx="54" cy="148" r="80"/>
+    <rect class="fg" x="51.75" y="18" width="4.5" height="52"/>
+    <rect class="accent" x="48.5" y="34" width="11" height="20" rx="5.5"/>
   </g>
 </svg>

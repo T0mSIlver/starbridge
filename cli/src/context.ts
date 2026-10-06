@@ -1,12 +1,14 @@
 import {
   activeMembers,
   type Directory,
+  type DirectoryHead,
+  headToSign,
   type MachineKind,
   type Member,
   type MemberKeys,
   verifyDirectory,
 } from "@starbridge/protocol";
-import { Api } from "./api";
+import { Api, REMOVED } from "./api";
 import { decodeKeys, type Machine, type Store } from "./config";
 
 /** Everything a command touches outside its arguments, so tests can run commands in-process. */
@@ -77,11 +79,16 @@ export async function refreshDirectory(
     return ours;
   });
   const me = dir.members.get(s.machine.id);
-  if (!me?.active)
-    throw new UsageError(
-      "this machine was removed from your Starbridge account: run `starbridge pair --force` to add it again",
-    );
+  if (!me?.active) throw new UsageError(REMOVED);
   return dir;
+}
+
+/**
+ * The head this machine signs into its items: the longest it knows, its own or one a device
+ * signed that its chain lacks, so the devices it posts to see what the server holds back (#362).
+ */
+export function signedHead(ctx: Ctx, dir: Directory): DirectoryHead {
+  return headToSign(ctx.store.state().heads ?? {}, dir, ctx.store.directory());
 }
 
 export function devices(dir: Directory): Member[] {

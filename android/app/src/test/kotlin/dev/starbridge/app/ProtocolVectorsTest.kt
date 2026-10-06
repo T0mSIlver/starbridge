@@ -85,6 +85,7 @@ class ProtocolVectorsTest {
             val ids = { active: Boolean -> dir.members.values.filter { it.active == active }.map { it.member.id } }
             assertEquals(name, expect.getValue("active").jsonArray.map { it.str }, ids(true))
             assertEquals(name, expect.getValue("revoked").jsonArray.map { it.str }, ids(false))
+            assertEquals(name, expect.str("recoveryPk"), dir.recoveryPk)
         }
     }
 
