@@ -477,7 +477,11 @@ server whose disk is full answers writes 503 `storage-full` with `Retry-After`; 
 | Directory entries | from entry 200 on, a device's `add`: 409 `directory-full`; revocations and confirmations always pass, the recovery key may add 20 more devices, and devices may propose 20 more recovery keys; 8 KB per entry: 413 `too-large` |
 | Sessions | 50 per account; signing in past that ends the oldest, unpaired ones first |
 | `GET /auth/github/callback` and `POST /auth/app/session` | 20 a minute per address, together |
+| `POST /auth/owner` | 10 a minute per address |
+| `GET /auth/challenge` | 20 a minute per account |
 | `POST /pairings` | 10 a minute per address; 20 unapproved pairings per address, an IPv6 client counting as its /48: 429 `too-many-pairings` |
+| `GET /pairings/:rendezvous` | 30 a minute per account |
+| `GET /pairings/:rendezvous/result` | 60 a minute per address |
 | Pairing messages | 4 KB each: 400 `bad-schema` |
 | `GET /pairings/:rendezvous/result` and `GET /pairings/:rendezvous?wait=` waiting | 4 per pairing: 429 `too-many-waits` |
 | `POST /joins` | 10 a minute per account; request text 4 KB: 400 `bad-schema` |
@@ -485,6 +489,7 @@ server whose disk is full answers writes 503 `storage-full` with `Retry-After`; 
 | `GET /answers` waiting | 32 per machine: 429 `too-many-waits` |
 | `POST /quota/ask` | 6 a minute per account |
 | `POST /push/subscriptions` | 30 a minute per account, on top of the subscription caps |
+| `POST /relay`, on a relay server | 120 a minute per address |
 
 The directory cap stops the chain growing, since every client replays all of it, without
 locking the owner out: revoking a lost member stays possible, and each member is revoked once,

@@ -79,7 +79,7 @@ pushRoutes.get("/push/vapid", async (c) => {
 pushRoutes.post("/relay", async (c) => {
   const { config, push } = c.var;
   if (!config.relayMode) fail(404, "not-found");
-  rateLimit(c, `relay:${ipKey(c)}`, [120, 60_000]);
+  rateLimit(c, `relay:${ipKey(c)}`, config.limits.relayPosts);
   const body = await json(c, PushTarget.extend({ payload: z.string().max(4000) }));
   if (body.type === "unifiedpush")
     fail(400, "bad-request", "UnifiedPush goes direct, not through the relay");
