@@ -1926,3 +1926,62 @@ goes in git.
   `keepalive_idle_conns_per_host 4096` it held 3 to 120, with p99 unchanged.
   25 s stays below the server's 30 s idle close, so Caddy never reuses a
   connection the server is closing.
+- 2026-10-06: load and failure test (#301, `evals/load/`). Prod's stack ran
+  from `deploy/compose.yaml` on the dev box. Its containers shared two cores,
+  with memory caps adding up to a CX23's 4 GB less the OS. Simulated users
+  went through Caddy, each with a machine on the answers long-poll, a phone,
+  and an open web page (its polls and the join long-poll), plus 6 decisions,
+  4 runs of 6 updates and 12 quota snapshots an hour; pushes went to fakes.
+  The launch week expects a few hundred users, so 3000 is ten times that.
+
+  | Users | Requests/s | p99 | Answer reaches machine, p99 | Server | Caddy |
+  |---|---|---|---|---|---|
+  | 300 | 102 | 29 ms | 93 ms | 67 MB, 5% CPU | 102 MB, 4% CPU |
+  | 1000 | 344 | 23 ms | 32 ms | 76 MB, 11% | 275 MB, 10% |
+  | 2000 | 684 | 194 ms | 176 ms | 133 MB, 18% | 571 MB, 18% |
+  | 3000 | 1024 | 0.1–0.7 s; 6.2 s with a 45 s stall | 8.3 s (stall) | 180 MB, 27% | 857 MB, 35% |
+
+  CPU is a share of one core. The stall came from the dev box, not the
+  stack: emulators and builds of other sessions shared the two cores (load
+  average up to 60 on 10 cores), and Caddy spent 126 s of that run waiting
+  for a core. Prod's disk syncs a write in about 1 ms, where the dev box's
+  took up to 176 ms, so SQLite's commits, which block the server's event
+  loop, cost little there. No run lost or duplicated an answer or a decision; answers
+  the server took but no machine got within the run's end were all stored,
+  only late.
+  Each held long-poll costs about 96 KB in Caddy and 13 KB in the server, and
+  a user about 285 KB and 35 KB. By extrapolation, Caddy's memory runs out
+  first on a CX23, near 8000 users (about 2.8 GB free beside Umami and the
+  OS). CPU follows near 10,000, where the server's one thread fills a core.
+  Bun's fetch runs at most 256 requests at once by default
+  (`BUN_CONFIG_MAX_HTTP_REQUESTS`), which first throttled the load script, not
+  the server.
+  What broke: the VPS's disk was 84% full of Docker build cache, about 0.9 GB
+  per deploy (pruned by hand; #326 prunes after each deploy). A full disk
+  answered every write 500 with a stack trace while `/healthz` stayed green;
+  writes now get 503 `storage-full` with `Retry-After`, logged once a minute.
+  Usage counts and housekeeping skip while the disk is full, so a stored item
+  still gets its 201 and its push, a caller's first read of the day still
+  answers, and a sweep cannot crash the server. The uptime check calls
+  `/healthz/disk`, which fails under 2 GB free.
+  Caddy closed most connections to the server after each request, and their
+  TIME-WAIT sockets used up the shared machine's ports at 3000 users (#376
+  keeps them open).
+  Failures, at 1000 users: killing the server brought it back in 2 s. The
+  940 answer long-polls open at the time got 502 and reconnected on the
+  agent's 2 s backoff, and a probe loading `/` and `/healthz` every 100 ms
+  saw no failure (slowest 2.9 s). A deploy swapped the web copies and
+  restarted the server with no failed probe (slowest 2.6 s). Two POSTs got a
+  502, sent on a connection the old server closed. Writes on a full disk were
+  refused and went through once space was freed; nothing was lost.
+  Twenty users behind one address meet no per-address limit in use. Setting
+  up within the same minute, 15 of 20 met `POST /pairings`' 10 a minute or
+  the GitHub callback's 20 a minute, and the slowest waited 165 s; over ten
+  minutes, 2 waited up to 29 s. The CLI and the web page show that 429 as an
+  error rather than waiting it out. The office's page views past 30 a minute
+  are dropped as designed (Umami only). The server holds at most 5000
+  pairings from the last 10 minutes, approved ones included, so past 500
+  pairings a minute new ones get 429 `busy`.
+  Restore drill: the 2026-10-06 backup, copied read-only from the VPS and
+  restored as `deploy/README.md` says, passed `integrity_check`, started and
+  served. Umami's dump restored too. The copies were deleted afterwards.
