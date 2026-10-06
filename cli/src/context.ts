@@ -6,7 +6,7 @@ import {
   type MemberKeys,
   verifyDirectory,
 } from "@starbridge/protocol";
-import { Api } from "./api";
+import { Api, REMOVED } from "./api";
 import { decodeKeys, type Machine, type Store } from "./config";
 
 /** Everything a command touches outside its arguments, so tests can run commands in-process. */
@@ -77,10 +77,7 @@ export async function refreshDirectory(
     return ours;
   });
   const me = dir.members.get(s.machine.id);
-  if (!me?.active)
-    throw new UsageError(
-      "this machine was removed from your Starbridge account: run `starbridge pair --force` to add it again",
-    );
+  if (!me?.active) throw new UsageError(REMOVED);
   return dir;
 }
 

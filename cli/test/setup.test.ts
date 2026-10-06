@@ -13,12 +13,13 @@ import { dirname, join } from "node:path";
 import { LiveServer } from "@starbridge/server/test-support";
 import { makeAgent } from "../src/agent/main";
 import type { Agent } from "../src/agent/server";
+import { REMOVED } from "../src/api";
 import { installTarball, linkIntoLocalBin } from "../src/setup/codexbar";
 import { setup } from "../src/setup/setup";
 import { status } from "../src/setup/status";
 import { defaults, failure, type Sys } from "../src/setup/sys";
 import { uninstall } from "../src/setup/uninstall";
-import { paired, type TestCtx, testCtx } from "./helpers";
+import { paired, type TestCtx, testCtx, until } from "./helpers";
 
 setDefaultTimeout(30_000);
 
@@ -209,6 +210,24 @@ test("status reports the agent, the service and the plugins", async () => {
   expect(out).toContain("Codex skill: installed");
   expect(out).toContain("Pi package: installed");
   expect(out).not.toContain("Manual install left");
+});
+
+test("status says at once that the owner removed this machine, and how to pair it again", async () => {
+  const m = await machine();
+  await startAgent(m.ctx);
+  await until(async () => {
+    m.ctx.lines.length = 0;
+    await status(m.sys);
+    return m.ctx.lines.join("\n").includes("Server: reachable");
+  });
+  await server.revoke(m.ctx.store.machine()?.id as string);
+  // Within the agent's first backoff, long before its 60 s poll would have ended.
+  await until(async () => {
+    m.ctx.lines.length = 0;
+    await status(m.sys);
+    return m.ctx.lines.join("\n").includes(REMOVED);
+  }, 3_000);
+  expect(m.ctx.lines).toContain(`Server: reachable, but ${REMOVED}`);
 });
 
 test("uninstall removes the service and plugins, asks the devices to revoke, keeps the keys", async () => {

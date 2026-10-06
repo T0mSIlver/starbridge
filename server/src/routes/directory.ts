@@ -90,10 +90,13 @@ function syncMembers(db: Database, account: string, dir: Directory): void {
   }
 }
 
-/** Wakes every active machine's answer long-polls: the account changed in a way they watch. */
+/**
+ * Wakes every machine's answer long-polls: the account changed in a way they watch. A machine
+ * the change just revoked is woken too, so it learns at once.
+ */
 export function wakeMachines(c: Context<Env>, account: string) {
   const rows = c.var.db
-    .query("SELECT id FROM members WHERE account_id = ? AND role = 'machine' AND active = 1")
+    .query("SELECT id FROM members WHERE account_id = ? AND role = 'machine'")
     .all(account) as { id: string }[];
   for (const r of rows) c.var.answers.wake(`${account}/${r.id}`);
 }
