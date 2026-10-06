@@ -18,6 +18,10 @@ export interface AskDetails {
   toolName?: string;
   command?: string;
   path?: string;
+  /** What a non-bash, non-path ask is about, such as the file a `read` gate checks. */
+  target?: string;
+  /** pi-permission-system's own one-line rendering of the call's input. */
+  toolInputPreview?: string;
   payload?: { request?: { surface?: string; toolName?: string; value?: string } };
 }
 
@@ -53,7 +57,11 @@ export function hookInput(details: AskDetails, session: string, cwd: string) {
       ? { command: details.command }
       : details.path !== undefined
         ? { path: details.path }
-        : { value: req?.value ?? "" };
+        : details.target !== undefined
+          ? { path: details.target }
+          : details.toolInputPreview !== undefined
+            ? { preview: details.toolInputPreview }
+            : { value: req?.value ?? "" };
   return { session_id: session, cwd, tool_name: tool, tool_input: input };
 }
 
