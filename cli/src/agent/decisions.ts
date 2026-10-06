@@ -152,6 +152,7 @@ export class Decisions implements Feature {
    */
   private async deliverCodex() {
     const now = Date.now();
+    if (this.ctx.store.state().behind) return;
     for (const [id, a] of Object.entries(this.ctx.store.state().answers)) {
       const asked = this.ctx.store.state().asked[id];
       if (a.seen || !asked?.codex || !asked.session) continue;

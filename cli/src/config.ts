@@ -76,6 +76,10 @@ export interface State {
    * Directory) and no answer counts.
    */
   heads?: Record<string, Pin>;
+  /** Set while it does: why. No answer is accepted or delivered meanwhile. */
+  behind?: string;
+  /** Signed answers that came while the directory was behind, checked again once it is not. */
+  held?: unknown[];
   /** Permission prompts this machine posted (#57), by id, until a day after they expire. */
   permissions?: Record<string, PendingPermission>;
   /** Quota alerts already raised, by `alertKey`: the reset of the cycle they were raised in. */

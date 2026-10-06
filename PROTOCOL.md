@@ -57,8 +57,11 @@ revocation, and serve a shorter chain that still extends the pin. Devices theref
 head they hold, `dir: {length, head}`, into each answer and permission answer. A machine keeps
 the longest head each device signed, and refuses every device's answer while a device active in
 its chain has signed a head that chain does not hold (`holdsHead`): the server is withholding
-entries, or serving that device another chain. The refusal lifts once the server serves the
-missing entries, or once the machine's chain revokes that device.
+entries, or serving that device another chain. It reads every answer's head in a reply before it
+accepts any, never lets a shorter head replace a longer one, and while refusing delivers nothing it
+accepted earlier either. It keeps the refused answers, since their devices count them sent, and
+checks them again once the server serves the missing entries, or once the machine's chain revokes
+that device.
 
 This bounds the attack rather than ending it. A server that withholds a phone's revocation from a
 machine can relay that phone's answers only until any other device answers that machine; from

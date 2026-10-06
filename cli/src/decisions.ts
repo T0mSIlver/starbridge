@@ -407,39 +407,56 @@ export function checkAnswer(
   return body;
 }
 
+/** Answers held at most while the directory is behind. */
+const HELD_MAX = 100;
+
 /**
- * Records the directory head a device signed into answer `raw`, then refuses it while any device
- * active in `dir` has signed a head the machine's chain `entries` lacks: the server is holding
- * back entries, perhaps the revocation of the device that signed this answer.
+ * Records the directory head a device signed into answer `raw`. A shorter head never replaces a
+ * longer one the chain lacks, so replaying an older answer cannot lift a refusal. Returns whether
+ * `raw` is an answer an active device signed.
  */
-export function checkCurrent(
+export function noteHead(
   raw: unknown,
   s: Session,
   dir: Directory,
   entries: unknown[],
   st: State,
-) {
+): boolean {
   const item = SealedItem.safeParse(raw);
   const kind = item.success ? item.data.kind : undefined;
-  if (item.success && (kind === "answer" || kind === "permission-answer")) {
-    const { body, signer } = open(
+  if (!item.success || (kind !== "answer" && kind !== "permission-answer")) return false;
+  let opened: ReturnType<typeof open<"answer" | "permission-answer">>;
+  try {
+    opened = open(
       item.data as SealedItem & { kind: "answer" | "permission-answer" },
       { id: s.machine.id, box: s.keys.box },
       dir,
     );
-    const head = body.dir;
-    const known = st.heads?.[signer.id];
-    if (head && (!known || head.length > known.length || !holdsHead(entries, head))) {
-      st.heads ??= {};
-      st.heads[signer.id] = head;
-    }
+  } catch {
+    return false;
   }
+  const head = opened.body.dir;
+  const known = st.heads?.[opened.signer.id];
+  const replace =
+    !known ||
+    (head && head.length > known.length) ||
+    (head && holdsHead(entries, known) && !holdsHead(entries, head));
+  if (head && replace) {
+    st.heads ??= {};
+    st.heads[opened.signer.id] = head;
+  }
+  return true;
+}
+
+/**
+ * Why no answer counts now: a device active in `dir` signed a head the machine's chain `entries`
+ * lacks, so the server is holding back entries, perhaps the revocation of a device that answers.
+ */
+export function behindBy(st: State, dir: Directory, entries: unknown[]): string | undefined {
   for (const [id, head] of Object.entries(st.heads ?? {}))
     if (dir.members.get(id)?.active && !holdsHead(entries, head))
-      throw new ProtocolError(
-        "rollback",
-        `the server is holding back directory entries ${id} has seen (${head.length}, this machine has ${dir.length}): no answer counts until it serves them`,
-      );
+      return `the server is holding back directory entries ${id} has seen (${head.length}, this machine has ${dir.length}): no answer counts until it serves them`;
+  return undefined;
 }
 
 /**
@@ -506,26 +523,39 @@ export async function poll(
   const quotaAsked = page.quotaAsked !== undefined ? { quotaAsked: page.quotaAsked } : {};
   if (page.items.length === 0 && (page.directory ?? 0) > directory.length)
     directory = await refreshDirectory(ctx, s);
-  if (page.items.length > 0) {
+  const before = ctx.store.state();
+  if (page.items.length > 0 || before.held?.length || before.behind) {
     // A new device may have answered since the directory was read.
     directory = await refreshDirectory(ctx, s);
     const dir = directory;
     const entries = ctx.store.directory();
     ctx.store.updateState((st) => {
-      for (const raw of page.items) {
-        try {
-          checkCurrent(raw, s, dir, entries, st);
-          // Machines' inboxes hold answers to decisions and to permission prompts (#57).
-          if ((raw as { kind?: unknown } | null)?.kind === "permission-answer") {
-            const { answer, device } = acceptPermissionAnswer(raw, s, dir, st, Date.now());
-            const p = st.permissions?.[answer.permissionId];
-            if (p) p.answer = { ...answer, device };
-            continue;
+      const items = [...(st.held ?? []), ...page.items];
+      delete st.held;
+      // Every head first: a withheld entry any answer names holds back the whole page.
+      const answers = items.filter((raw) => noteHead(raw, s, dir, entries, st));
+      const behind = behindBy(st, dir, entries);
+      if (behind) {
+        // Kept, not dropped: the device's client counts them sent, and the server takes no other.
+        st.behind = behind;
+        st.held = answers.slice(-HELD_MAX);
+        ctx.err(`starbridge: holding ${st.held.length} answers: ${behind}`);
+      } else {
+        delete st.behind;
+        for (const raw of items) {
+          try {
+            // Machines' inboxes hold answers to decisions and to permission prompts (#57).
+            if ((raw as { kind?: unknown } | null)?.kind === "permission-answer") {
+              const { answer, device } = acceptPermissionAnswer(raw, s, dir, st, Date.now());
+              const p = st.permissions?.[answer.permissionId];
+              if (p) p.answer = { ...answer, device };
+              continue;
+            }
+            const a = checkAnswer(raw, s, dir, st.asked);
+            st.answers[a.decisionId] ??= { answer: a, seen: false };
+          } catch (e) {
+            ctx.err(`starbridge: ignored an answer: ${(e as Error).message}`);
           }
-          const a = checkAnswer(raw, s, dir, st.asked);
-          st.answers[a.decisionId] ??= { answer: a, seen: false };
-        } catch (e) {
-          ctx.err(`starbridge: ignored an answer: ${(e as Error).message}`);
         }
       }
       if (opts.shared && st.cursor === opts.cursor && page.cursor !== undefined)
@@ -544,7 +574,7 @@ export function takeAnswer(
   id: string | undefined,
 ): { answer: Answer; question?: string } | undefined {
   const found = (st: State) =>
-    id ? st.answers[id] : Object.values(st.answers).find((a) => !a.seen);
+    st.behind ? undefined : id ? st.answers[id] : Object.values(st.answers).find((a) => !a.seen);
   if (!found(store.state())) return undefined;
   let taken: { answer: Answer; question?: string } | undefined;
   store.updateState((st) => {
@@ -640,6 +670,8 @@ export interface SessionLine {
 /** The answers to decisions session `session` asked that no `wait` printed nor the mod confirmed. */
 export function sessionLines(st: State, session: string): SessionLine[] {
   const lines: SessionLine[] = [];
+  // Accepted before the machine knew it was behind: held back with the rest.
+  if (st.behind) return lines;
   for (const [id, a] of Object.entries(st.answers)) {
     const asked = st.asked[id];
     if (!asked || a.seen || asked.session !== session) continue;
