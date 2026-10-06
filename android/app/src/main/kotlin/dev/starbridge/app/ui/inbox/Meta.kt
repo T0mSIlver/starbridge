@@ -4,7 +4,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.MaterialTheme
@@ -49,7 +49,7 @@ fun machineSym(kind: String?) = when (kind) {
 fun MetaRow(source: Source, time: String, modifier: Modifier = Modifier, clock: Boolean = false, words: List<String> = emptyList()) {
     val color = MaterialTheme.colorScheme.onSurfaceVariant
     val style = StarbridgeTheme.type.machine
-    Row(modifier.height(20.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(modifier.heightIn(min = 20.dp), verticalAlignment = Alignment.CenterVertically) {
         Symbol(machineSym(source.machineKind), size = 17.dp, tint = color)
         Spacer(Modifier.width(6.dp))
         Text(
@@ -143,7 +143,7 @@ fun SessionLine(source: Source, agent: String?, modifier: Modifier = Modifier) {
             },
             style = StarbridgeTheme.type.small,
             color = scheme.onSurfaceVariant,
-            maxLines = 1,
+            maxLines = 1, overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
         if (link != null && app != null) {
