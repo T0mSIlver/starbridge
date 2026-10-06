@@ -1,8 +1,11 @@
 import {
   appendFileSync,
+  closeSync,
   existsSync,
   mkdirSync,
+  openSync,
   readFileSync,
+  readSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
