@@ -1,5 +1,7 @@
 package dev.starbridge.app.protocol
 
+import kotlinx.serialization.KSerializer
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -95,19 +97,25 @@ class Envelopes(private val sodium: Sodium) {
     }
 }
 
+/** Decodes a body, refusing the nulls zod refuses ([refuseNulls]). */
+private fun <T> decodeBody(serializer: KSerializer<T>, json: JsonElement): T {
+    refuseNulls(json, serializer.descriptor)
+    return parseJson(serializer, json)
+}
+
 /** Parses a body whose signature was already checked, as a reader ([readable]). */
 fun parseBody(kind: String, text: String): Any {
     val json = readable(kind, parseJsonText(text))
     return when (kind) {
-        "directory" -> parseJson(DirectoryEntry.serializer(), json).also { it.check() }
-        "decision" -> parseJson(Decision.serializer(), json).also { it.check() }
-        "answer" -> parseJson(Answer.serializer(), json).also { it.check() }
-        "quota" -> parseJson(QuotaSnapshot.serializer(), json).also { it.check() }
-        "permission" -> parseJson(Permission.serializer(), json).also { it.check() }
-        "permission-answer" -> parseJson(PermissionAnswer.serializer(), json).also { it.check() }
-        "settled" -> parseJson(Settled.serializer(), json).also { it.check() }
-        "waiting" -> parseJson(Waiting.serializer(), json).also { it.check() }
-        "run" -> parseJson(Run.serializer(), json).also { it.check() }
+        "directory" -> decodeBody(DirectoryEntry.serializer(), json).also { it.check() }
+        "decision" -> decodeBody(Decision.serializer(), json).also { it.check() }
+        "answer" -> decodeBody(Answer.serializer(), json).also { it.check() }
+        "quota" -> decodeBody(QuotaSnapshot.serializer(), json).also { it.check() }
+        "permission" -> decodeBody(Permission.serializer(), json).also { it.check() }
+        "permission-answer" -> decodeBody(PermissionAnswer.serializer(), json).also { it.check() }
+        "settled" -> decodeBody(Settled.serializer(), json).also { it.check() }
+        "waiting" -> decodeBody(Waiting.serializer(), json).also { it.check() }
+        "run" -> decodeBody(Run.serializer(), json).also { it.check() }
         else -> throw ProtocolException("wrong-kind", kind)
     }
 }
