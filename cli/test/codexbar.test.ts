@@ -111,6 +111,7 @@ test("devices get a provider's error short; the log keeps it whole", async () =>
   expect(rows.map((r) => r.error)).toEqual(["Mistral's usage API failed (500)"]);
   expect(log.at(-1)).toBe(`codexbar mistral: ${raw}`);
   expect(shortError("Claude usage probe timed out.")).toBe("Claude usage probe timed out.");
+  expect(shortError("timed out (<30s)")).toBe("timed out (<30s)");
   expect(shortError("unexpected reply: <html><body>Bad gateway</body></html>")).toBe(
     "unexpected reply",
   );

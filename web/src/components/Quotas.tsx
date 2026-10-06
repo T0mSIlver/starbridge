@@ -68,7 +68,7 @@ export function Quotas() {
         ) : null}
         {quotas === undefined ? null : cards.length === 0 &&
           failed.length === 0 &&
-          quotas.cards.length > 0 ? (
+          quotas.cards.length + quotas.errors.length > 0 ? (
           <p className={`t-small ${s.empty}`}>
             Every provider is hidden. <Link href="/settings">Settings</Link>
           </p>

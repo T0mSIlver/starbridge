@@ -982,14 +982,14 @@ async function main() {
   if ((await failedPush.exited) !== 0) throw new Error("quota push failed");
   await page.getByRole("link", { name: "Settings" }).first().click();
   await page.getByRole("link", { name: "Quotas" }).click();
-  const group = page.getByRole("region", { name: "e2e" });
+  const group = page.getByRole("region", { name: "e2e", exact: true });
   await group.getByText("Claude usage probe timed out.").waitFor();
   await group.getByText(/^Updated /).waitFor();
   if ((await group.getByRole("article").count()) === 0)
     throw new Error("the failed provider lost its windows");
   if ((await page.getByText(/^e2e2? on /).count()) > 0)
     throw new Error("the failure shows as a line above the table");
-  const empty = page.getByRole("region", { name: "e2e2" });
+  const empty = page.getByRole("region", { name: "e2e2", exact: true });
   await empty.getByText("Mistral's usage API failed (500)").waitFor();
   if ((await page.getByText("Internal server error").count()) > 0)
     throw new Error("the provider's raw error reached the page");

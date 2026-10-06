@@ -178,7 +178,7 @@ export function shortError(error: string): string {
   if (named) return `${named[1]}'s usage API failed (${named[2]})`;
   const status = /\bHTTP (\d{3})\b/.exec(error);
   if (status) return `The usage API failed (${status[1]})`;
-  const body = error.search(/[{<]/);
+  const body = error.search(/:\s*[{<]/);
   const head = (body < 0 ? error : error.slice(0, body)).replace(/[\s:;,-]+$/, "");
   return head ? clip(head, 200) : "CodexBar's error was unreadable";
 }
