@@ -139,10 +139,10 @@ export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
     <div className={s.page}>
       <Analytics />
       <header className={`t-small ${s.top}`}>
-        <span className={`t-subtitle ${s.brand}`}>
+        <a href="/" className={`t-subtitle ${s.brand}`}>
           <Mark size={22} />
           Starbridge
-        </span>
+        </a>
         <nav className={s.nav} aria-label="Site">
           <a href="#features">Features</a>
           <a href="/docs">Docs</a>

@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { setFind, useFind } from "@/lib/find";
 import { Icon, Mark } from "./icons";
@@ -22,6 +24,8 @@ export function PhoneBar({
 }) {
   const q = useFind();
   const [finding, setFinding] = useState(false);
+  // /sample mirrors the app in development (app/sample).
+  const home = usePathname().startsWith("/sample") ? "/sample" : "/";
   return (
     <header className={`${s.bar} ${always ? s.always : ""}`}>
       {back ? (
@@ -29,7 +33,9 @@ export function PhoneBar({
           <Icon name="back" size={22} />
         </button>
       ) : (
-        <Mark size={20} />
+        <Link href={home} className={s.home} aria-label="Starbridge, Inbox">
+          <Mark size={20} />
+        </Link>
       )}
       {finding ? (
         <input

@@ -53,6 +53,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
   // /sample mirrors the app in development (app/sample).
   const at = path.replace(/^\/sample(?=\/|$)/, "") || "/";
+  const home = path.startsWith("/sample") ? "/sample" : "/";
   const tabs = TABS.map(({ href, label, icon }) => {
     const active = href === "/" ? at === "/" : at.startsWith(href);
     const count = href === "/" && open > 0 ? open : 0;
@@ -62,10 +63,10 @@ export function Shell({ children }: { children: React.ReactNode }) {
   return (
     <div className={s.frame}>
       <nav className={s.rail} aria-label="Main">
-        <div className={`t-action ${s.brand}`}>
+        <Link href={home} className={`t-action ${s.brand}`} aria-label="Starbridge, Inbox">
           <Mark size={20} />
           Starbridge
-        </div>
+        </Link>
         <label className={`t-meta ${s.find}`}>
           <Icon name="search" size={16} />
           <input
