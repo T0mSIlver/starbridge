@@ -42,13 +42,19 @@ test("of two processes showing a session, only the first to claim an answer subm
   const dir = mkdtempSync(join(tmpdir(), "sb-claims-"));
   const line = "Answer to d_1 (Merge?): Yes";
   const both = await Promise.all([claim(dir, "ses_a", line), claim(dir, "ses_a", line)]);
-  expect(both.sort()).toEqual([false, true]);
-  expect(await claim(dir, "ses_b", line)).toBe(true);
-  expect(await claim(dir, "ses_a", "Answer to d_2 (Push?): No")).toBe(true);
-  // A claim never marked submitted, left by a process that died, is taken over after a minute.
-  expect(await claim(dir, "ses_a", line, Date.now() + 61_000)).toBe(true);
+  expect(both.map((c) => c.state).sort()).toEqual(["held", "mine"]);
+  expect((await claim(dir, "ses_b", line)).state).toBe("mine");
+  expect((await claim(dir, "ses_a", "Answer to d_2 (Push?): No")).state).toBe("mine");
+  // A claim never marked sent, left by a process that died, goes to one taker after a minute.
+  const later = Date.now() + 61_000;
+  const takers = await Promise.all([
+    claim(dir, "ses_a", line, later),
+    claim(dir, "ses_a", line, later),
+  ]);
+  expect(takers.map((c) => c.state).sort()).toEqual(["held", "mine"]);
+  // Once sent, any process may confirm it, and nobody takes it over.
   await submitted(dir, "ses_a", line);
-  expect(await claim(dir, "ses_a", line, Date.now() + 61_000)).toBe(false);
+  expect((await claim(dir, "ses_a", line, later)).state).toBe("sent");
   rmSync(dir, { recursive: true, force: true });
 });
 

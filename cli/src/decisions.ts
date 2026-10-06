@@ -852,9 +852,10 @@ async function reseal(ctx: Ctx, s: Session, known: Directory): Promise<void> {
       x.sealedTo ??= x.permission.to;
       x.permission.to = [...new Set([...x.permission.to, ...ids])];
     });
+    // Closed: answered or gone on the server, so no device needs it any more.
     if (
-      (await post(() => ({ ...seal("permission", permission, signer, to), reseal: true }))) !==
-      "posted"
+      (await post(() => ({ ...seal("permission", permission, signer, to), reseal: true }))) ===
+      undefined
     )
       continue;
     ctx.store.updateState((st) => {
