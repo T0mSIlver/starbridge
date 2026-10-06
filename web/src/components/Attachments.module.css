@@ -9,6 +9,7 @@
 }
 
 .image {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -28,14 +29,17 @@
   object-fit: contain;
 }
 
-.thumb {
-  flex: none;
-  align-self: flex-start;
-  width: var(--s10);
-  height: var(--s10);
-  border-radius: var(--radius-sm);
-  object-fit: cover;
-  background: var(--surface2);
+.expand {
+  position: absolute;
+  right: var(--s2);
+  bottom: var(--s2);
+  display: grid;
+  place-items: center;
+  width: var(--s8);
+  height: var(--s8);
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--surface) 72%, transparent);
+  color: var(--fg);
 }
 
 .links {

@@ -25,6 +25,10 @@ export function Images({ d }: { d: Decision }) {
         >
           {/* biome-ignore lint/performance/noImgElement: decrypted data, nothing for next/image to fetch */}
           <img src={imageSrc(img)} alt={img.alt ?? ""} width={img.width} height={img.height} />
+          {/* Says the image opens full screen; touch screens show no zoom cursor (#170). */}
+          <span className={s.expand}>
+            <Icon name="expand" size={20} />
+          </span>
         </button>
       ))}
       {open !== undefined && (
@@ -32,14 +36,6 @@ export function Images({ d }: { d: Decision }) {
       )}
     </div>
   );
-}
-
-/** The first image, small, beside a decision in the list. */
-export function Thumb({ d }: { d: Decision }) {
-  const img = d.images?.[0];
-  if (!img) return null;
-  // biome-ignore lint/performance/noImgElement: decrypted data, nothing for next/image to fetch
-  return <img className={s.thumb} src={imageSrc(img)} alt="" width={40} height={40} />;
 }
 
 /**
