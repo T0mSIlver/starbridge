@@ -18,7 +18,10 @@ export function snapshot(providers: ProviderQuota[], to: string[], now: Date): Q
     to,
     takenAt: iso(now),
     providers,
-    alerts: providers.flatMap((p) => p.windows.flatMap((w) => alertsFor(p.provider, w, now))),
+    // Stale windows raise nothing: their pace is from when they were read.
+    alerts: providers.flatMap((p) =>
+      p.updatedAt ? [] : p.windows.flatMap((w) => alertsFor(p.provider, w, now)),
+    ),
   };
 }
 
@@ -57,8 +60,9 @@ export function raise(
 }
 
 /**
- * Gives a provider CodexBar failed for its last windows read without an error, marked with when
- * they were read, so a failed round keeps them on screen as stale instead of dropping them.
+ * Gives a provider CodexBar failed for its last windows read without an error whose reset has not
+ * passed, marked with when they were read, so a failed round keeps them on screen as stale
+ * instead of dropping them.
  * Returns the providers and the last windows to keep.
  */
 export function keepLast(
@@ -79,10 +83,18 @@ export function keepLast(
     }
     const before = kept[p.provider];
     if (p.windows.length > 0 || !before) return p;
+    // A window whose reset passed says nothing about the one running now.
+    const windows = before.windows.filter(
+      (w) => !w.resetsAt || Date.parse(w.resetsAt) > now.getTime(),
+    );
+    if (windows.length === 0) {
+      delete kept[p.provider];
+      return p;
+    }
     return {
       ...p,
       ...(before.account && !p.account ? { account: before.account } : {}),
-      windows: before.windows,
+      windows,
       updatedAt: before.at,
     };
   });

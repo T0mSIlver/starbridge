@@ -76,7 +76,14 @@ test("a provider that fails is asked once more before its failure counts", async
     return replies.shift() as RunResult;
   };
   const log: string[] = [];
-  const round = () => collect("codexbar", ["claude"], () => NOW, (l) => log.push(l), run);
+  const round = () =>
+    collect(
+      "codexbar",
+      ["claude"],
+      () => NOW,
+      (l) => log.push(l),
+      run,
+    );
   const first = await round();
   expect(first.map((r) => [r.windows.length, r.error])).toEqual([[1, undefined]]);
   expect(log).toEqual(["codexbar claude: Claude usage probe timed out.; retrying"]);
@@ -84,4 +91,36 @@ test("a provider that fails is asked once more before its failure counts", async
   expect(second.map((r) => r.error)).toEqual(["Claude usage probe timed out."]);
   expect(log.at(-1)).toBe("codexbar claude: Claude usage probe timed out.");
   expect(calls).toEqual(["claude", "claude", "claude", "claude"]);
+});
+
+test("a run that hung is not asked again, and a run for every provider that fails posts nothing", async () => {
+  const replies: RunResult[] = [
+    { code: null, stdout: "", stderr: "" },
+    { code: 2, stdout: "", stderr: "boom" },
+    { code: 2, stdout: "", stderr: "boom" },
+  ];
+  let calls = 0;
+  const run = async () => {
+    calls++;
+    return replies.shift() as RunResult;
+  };
+  const hung = await collect(
+    "codexbar",
+    ["claude"],
+    () => NOW,
+    () => {},
+    run,
+  );
+  expect(hung.map((r) => r.error)).toEqual(["exited on a signal"]);
+  expect(calls).toBe(1);
+  await expect(
+    collect(
+      "codexbar",
+      [],
+      () => NOW,
+      () => {},
+      run,
+    ),
+  ).rejects.toThrow("codexbar: exited 2: boom");
+  expect(calls).toBe(3);
 });

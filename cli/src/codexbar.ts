@@ -133,7 +133,9 @@ function tryParse(stdout: string, provider: string | undefined, now: Date): Prov
 /**
  * Every provider asked for, with an `error` entry for each that failed or was missing. A provider
  * that fails is asked once more before its failure counts: CodexBar's Claude probe drives the
- * `claude` TUI and times out now and then on a busy machine (#397).
+ * `claude` TUI and times out now and then on a busy machine (#397). A run that hung until
+ * RUN_TIMEOUT_MS is not asked again. Throws when a run for every provider fails as a whole, so
+ * no snapshot replaces the last one.
  */
 export async function collect(
   bin: string,
@@ -144,15 +146,23 @@ export async function collect(
 ): Promise<ProviderQuota[]> {
   const out: ProviderQuota[] = [];
   for (const p of providers.length > 0 ? providers : [undefined]) {
-    for (const row of await once(bin, p, now, log, run)) {
-      if (!row.error) {
+    let first = await once(bin, p, now, run);
+    if ("failed" in first && first.retry) {
+      log(`codexbar all: ${first.failed}; retrying`);
+      first = await once(bin, p, now, run);
+    }
+    if ("failed" in first) throw new Error(`codexbar: ${first.failed}`);
+    for (const row of first.rows) {
+      if (!row.error || !first.retry) {
+        if (row.error) log(`codexbar ${row.provider}: ${row.error}`);
         out.push(row);
         continue;
       }
       log(`codexbar ${row.provider}: ${row.error}; retrying`);
-      const again = await once(bin, row.provider, now, log, run);
-      for (const x of again) if (x.error) log(`codexbar ${x.provider}: ${x.error}`);
-      out.push(...again);
+      const again = await once(bin, row.provider, now, run);
+      const rows = "rows" in again ? again.rows : [];
+      for (const x of rows) if (x.error) log(`codexbar ${x.provider}: ${x.error}`);
+      out.push(...rows);
     }
   }
   return out;
@@ -160,25 +170,24 @@ export async function collect(
 
 /**
  * One run for `p`, or every enabled provider. A run that fails without rows gives an error row for
- * `p`, or nothing but a log line for every provider.
+ * `p`, or `failed` for every provider; `retry` is false when it hung until the timeout.
  */
 async function once(
   bin: string,
   p: string | undefined,
   now: () => Date,
-  log: (line: string) => void,
   run: typeof runCodexbar,
-): Promise<ProviderQuota[]> {
+): Promise<({ rows: ProviderQuota[] } | { failed: string }) & { retry: boolean }> {
   const r = await run(bin, p);
-  const failure = (error: string): ProviderQuota[] => {
-    if (p) return [{ provider: p, windows: [], error: clip(error, 1000) }];
-    log(`codexbar all: ${error}`);
-    return [];
-  };
+  const retry = r.code !== null;
+  const failure = (error: string) =>
+    p
+      ? { rows: [{ provider: p, windows: [], error: clip(error, 1000) }], retry }
+      : { failed: error, retry };
   if (r.code !== 0) {
     // A provider that cannot fetch exits 1 with its reason in its JSON row, beside the others.
     const rows = r.code === null ? [] : tryParse(r.stdout, p, now());
-    if (rows.length > 0 && rows.some((x) => x.error)) return rows;
+    if (rows.length > 0 && rows.some((x) => x.error)) return { rows, retry };
     const last = r.stderr.trim().split("\n").pop() ?? "";
     return failure(`exited ${r.code ?? "on a signal"}${last ? `: ${last}` : ""}`);
   }
@@ -189,5 +198,5 @@ async function once(
     return failure(`unreadable output: ${(e as Error).message}`);
   }
   if (rows.length === 0 && p) return failure("missing from codexbar's output");
-  return rows;
+  return { rows, retry };
 }

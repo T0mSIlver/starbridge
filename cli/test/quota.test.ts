@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import type { QuotaSnapshot } from "@starbridge/protocol";
-import { keepLast, raise } from "../src/quota";
+import { keepLast, raise, snapshot } from "../src/quota";
 
 const snap = (alerts: QuotaSnapshot["alerts"]): QuotaSnapshot => ({
   v: 1,
@@ -80,6 +80,26 @@ test("a failed probe keeps the provider's last windows, marked with when they we
   const three = keepLast(failed, two.last, at("2026-10-05T12:10:00Z"));
   expect(three.providers[0]?.updatedAt).toBe("2026-10-05T12:00:00Z");
   expect(keepLast(read, three.last, at("2026-10-05T12:15:00Z")).providers).toEqual(read);
+  // Once their reset passed, the kept windows go, and the failure goes out alone.
+  const gone = keepLast(failed, two.last, at("2026-10-05T13:00:00Z"));
+  expect(gone.providers).toEqual(failed);
+  expect(gone.last).toEqual({});
   // With nothing read before, the failure goes out alone.
   expect(keepLast(failed, {}, at("2026-10-05T12:00:00Z")).providers).toEqual(failed);
+});
+
+test("stale windows raise no alert", () => {
+  const read = snap([]).providers;
+  const stale = [
+    {
+      ...read[0],
+      provider: "zai",
+      windows: read[0]?.windows ?? [],
+      updatedAt: "2026-10-05T12:00:00Z",
+    },
+  ];
+  const running = (p: QuotaSnapshot["providers"]) =>
+    snapshot(p, ["phone"], at("2026-10-05T12:59:00Z")).alerts.length;
+  expect(running(read)).toBeGreaterThan(0);
+  expect(running(stale)).toBe(0);
 });

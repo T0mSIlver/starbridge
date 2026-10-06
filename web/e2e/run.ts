@@ -635,7 +635,8 @@ async function main() {
   step("a group pinned by running out first says why on a click (#296)");
   await page.setViewportSize(DESKTOP);
   await page.getByRole("button", { name: "Why codex is first" }).click();
-  const why = page.getByText("First because it runs out soonest.");
+  // Each pinned group has its popover; real quotas can pin more than one.
+  const why = page.getByText("First because it runs out soonest.").filter({ visible: true });
   await why.waitFor();
   for (const scheme of ["light", "dark"] as const) {
     await page.emulateMedia({ colorScheme: scheme });

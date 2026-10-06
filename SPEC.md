@@ -1299,8 +1299,11 @@ so the mod is the first path.
   were read; the server keeps one snapshot per machine, so only the uploader
   can. The web and Android show the failure and "Updated 12 min ago" under the
   provider's name, on its group; only a provider with nothing to show yet keeps
-  the line above the table. The run timeout went from 90 to 120 s, above
-  CodexBar's own worst case for Claude.
+  the line above the table. Kept windows raise no alerts, since their pace is
+  old, and go once their reset passes. A run that hung until the timeout is
+  not retried, and a run for every provider that fails as a whole posts no
+  snapshot, so the last one stays. The run timeout went from 90 to 120 s,
+  above CodexBar's own worst case for Claude.
 
 ## Encryption, with existing libraries
 
