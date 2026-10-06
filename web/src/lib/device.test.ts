@@ -424,6 +424,7 @@ test("a head from an entry made elsewhere since the last read refreshes rather t
   await post(addEntry(await live.directory(), phone, tablet, at));
   const full = await live.directory();
   const { id, name, boxPk, signPk } = stale.device;
+  const recipient = [{ id, role: "device" as const, name, boxPk, signPk }];
   const item = seal(
     "decision",
     {
@@ -439,7 +440,7 @@ test("a head from an entry made elsewhere since the last read refreshes rather t
       dir: { length: full.length, head: full.head },
     },
     { id: machine.id, signKey: keys.sign.privateKey },
-    [{ id, role: "device", name, boxPk, signPk }],
+    recipient,
   );
   const served = globalThis.fetch;
   globalThis.fetch = (async (input: string, init?: RequestInit) =>
