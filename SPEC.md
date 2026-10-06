@@ -289,7 +289,9 @@ provider plugins add providers, not panels.
 
 - FCM goes through the relay, since its credentials belong to the app's Firebase project. Web Push
   goes through the relay only when a server has no VAPID keys; UnifiedPush always goes direct. The
-  relay is open, rate-limited per IP, and pushes only ciphertext or ids. A push carries the
+  relay is open, rate-limited per IP and in all (600 a minute in Caddy; 16 Web Pushes in flight
+  in the server, 4 per address), so nobody can aim it at a host or burn the VAPID key (#577). It
+  pushes only ciphertext or ids. A push carries the
   device's ciphertext when it fits FCM's 4 KB, else the item id.
 - Quota snapshots and runs skip Web Push: browsers drop subscriptions whose pushes show no
   notification (Firefox after 16). The web page polls them instead.
@@ -345,15 +347,35 @@ provider plugins add providers, not panels.
   was sealed to, only while it is open, and for an `answerIn` question only a Done, when it asked
   for one (#539). A settled question's
   answer is never delivered, since a server could hold an answer back until the agent moved on.
+- **Following every answer** (#629). `answers --all --follow` gives an orchestrator the owner's
+  answers to every session's questions, so it no longer depends on each session relaying them or
+  reads the state file. It is an observer: it marks no answer seen and no decision waiting, so
+  each answer still reaches its session. The machine keeps each decision's project and session
+  title, like its question, after the answer drops its body. `decisions --open` lists the
+  questions still open, so one question has one asker: the orchestrator checks it before
+  asking, since the owner once got the same question from it and from a session.
 - **Pairing a machine.** `pair` uses starbridge.run unless `--server` or `STARBRIDGE_SERVER` says
   otherwise (#154). `pair --force` keeps the machine's server and name (#245) and leaves the old
   pairing active, so Devices shows the added time on rows that share a name (#287). `pair` and
   `setup` guess `machineKind` (cloud, laptop with a battery, server with no display, else desktop);
   `config machine-kind` corrects it.
+- **The pairing link** `https://starbridge.run/pair#CODE`, which `pair` prints and shows as a QR
+  code, is also an App Link (#611): setup says to scan it with the camera, and a phone's camera
+  hands links to apps, not to a browser that would first ask to become a device itself. The app
+  opens Add a device with the code looked up, once the phone is in the account; a phone signed in
+  but not in the account yet joins with it instead, as another device's "Scan with the new phone"
+  code asks. Without the app,
+  or on a self-hosted server, which the APK cannot claim, the link opens the web page as before;
+  where both the installed web app and the app claim it, Android opens the verified app.
 - **Setup** (`cli/src/setup/`; #68, #239, #245) installs CodexBar's latest release, taking the
   static musl build where the glibc one would not start. Only the repository is pinned, since
   CodexBar ships almost daily (#530): the tarball must match the `.sha256` of the same release,
   as Homebrew checks it, and `starbridge update` moves that install to the latest release too.
+  The latest version comes from where `releases/latest` redirects, not GitHub's API, which allows
+  60 unauthenticated requests an hour per address, few behind a shared NAT on launch day; the
+  download says its size and how far it got every 5 s, since the Linux tarball is 170 MB (#618).
+  `update` goes on to CodexBar when its own download fails, offline say, but not when a release
+  does not check out (#617).
   `update --codexbar <version>` installs one release, for when the latest breaks; a broken
   CodexBar already shows as each provider's quota error, so there is no other rollback. A daily
   workflow installs the latest release and reads its output without credentials, and opens an
@@ -365,6 +387,15 @@ provider plugins add providers, not panels.
   and offers, each after asking, Codex's skill, the Pi package and opencode's plugin and skill,
   from copies the CLI carries so versions match. The local agent rewrites outdated copies when
   it starts.
+- **The CLI's path** (#612). Hooks and plugins start the CLI from an agent whose PATH may lack
+  the install folder: on macOS `~/.local/bin` is not on the default PATH, and Claude Code opened
+  from the Dock has no shell profile. So setup and `update` record the binary's absolute path in
+  the config folder (`cli-path`); the Claude Code hooks (`plugin/hooks/cli.sh`), the mod, and the
+  Pi and opencode plugins start that one, else `starbridge` on the PATH, and `cli.sh` then tries
+  the installers' folders. When the binary's folder is not on the PATH, setup offers to add it to
+  the shell's startup file (`--yes` adds it), and its last lines say to open a new terminal or what to add, since
+  install.sh's own hint scrolls away under setup. Windows gets the folder on the PATH from
+  install.ps1.
 - **Files setup writes into other tools** (#474) start with one marker line, ``Written by
   starbridge <version>; `starbridge uninstall` removes it.``, in the file's comment syntax: the
   systemd unit, the launchd plist, the Codex rule, the opencode entry and the copied skills (a YAML
@@ -763,9 +794,15 @@ Tokens, type and components: `DESIGN.md`.
 
 - **Stack** (`deploy/`): Docker Compose with Caddy on the host network, so rate limits see real
   client addresses. Caddy keeps connections to the server open (`keepalive 25s`, below the
-  server's 30 s idle close) so TIME-WAIT sockets don't use up ports (#376). Caddy compresses every
+  server's 30 s idle close) so TIME-WAIT sockets don't use up ports (#376). A client has 10 s for
+  its TLS handshake and its HTTP/1.1 request headers, since every open connection costs Caddy
+  memory, the VPS's first limit (#587). Caddy compresses every
   response and the web app none: Next's gzip ran on its one thread and filled it near 18 landing
   page visitors a second (#593). Nightly SQLite backups, kept 14 days.
+- **Per-address reads** (#582). Caddy counts every `/v1` request per address, 3000 a minute
+  (IPv6 per /64): most reads count against no account, so this keeps a looping client or script
+  to about 2% of a core. A visible page with a prompt waiting and a run live makes about 200 a
+  minute and a heavy user about 600, so five heavy users can share an office's address.
 - **Capacity** (#301). A load test of the production stack on two cores held 2000 simulated users
   at a 194 ms p99. On the production VPS, Caddy's memory runs out first, near 8000 users (each held
   long-poll costs about 96 KB in Caddy and 13 KB in the server); CPU near 10,000.
@@ -787,7 +824,9 @@ Tokens, type and components: `DESIGN.md`.
   `/privacy` says so.
   It sees machines and answers from any device, so a pairing or answer made on the phone counts
   once this browser sees them. Owner's view: an Umami share link on `stats.starbridge.run`,
-  where Caddy passes only GET requests and blocks the login.
+  where Caddy passes only GET requests and blocks the login. A password (user `tom`) guards the
+  whole host, since the link alone would open it to whoever saw it; bcrypt cost 10 and a limit of
+  300 requests a minute per address keep its checks from spending the box's CPU (#595).
 - **Demo server** (#423). Play reviewers cannot pass GitHub's new-device check and cannot be given
   a recovery key, so `demo.starbridge.run` is a self-hosted server with an owner token, and
   `demo/` is its first device and machine. It approves every join by digits without comparing,

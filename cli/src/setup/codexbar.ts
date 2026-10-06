@@ -4,9 +4,11 @@
  */
 import { createHash } from "node:crypto";
 import {
+  closeSync,
   existsSync,
   lstatSync,
   mkdirSync,
+  openSync,
   readdirSync,
   readFileSync,
   realpathSync,
@@ -14,7 +16,7 @@ import {
   rmSync,
   symlinkSync,
   unlinkSync,
-  writeFileSync,
+  writeSync,
 } from "node:fs";
 import { dirname, join } from "node:path";
 import { parseUsage, runCodexbar } from "../codexbar";
@@ -24,10 +26,10 @@ import { failure, run, type Sys, which } from "./sys";
  * Only the source repository is pinned: setup and `starbridge update` install its latest release,
  * or the one named, checked against the `.sha256` that release publishes beside each tarball.
  */
-const REPO = "steipete/CodexBar";
-const API = `https://api.github.com/repos/${REPO}/releases`;
-const DOWNLOADS = `https://github.com/${REPO}/releases/download`;
+const RELEASES = "https://github.com/steipete/CodexBar/releases";
 const PROBE_TIMEOUT_MS = 20_000;
+/** How often a download says how far it got. */
+const PROGRESS_MS = 5_000;
 
 const APP_HELPERS = (home: string) => [
   "/Applications/CodexBar.app/Contents/Helpers/CodexBarCLI",
@@ -115,17 +117,46 @@ export function releaseVersion(v: string): string {
   return m[1] as string;
 }
 
-/** The version of CodexBar's latest release, from the GitHub API. */
-export async function latestCodexbar(sys: Sys): Promise<string> {
-  const api = sys.ctx.env.STARBRIDGE_CODEXBAR_API ?? API;
-  const res = await fetch(`${api}/latest`, {
-    headers: { accept: "application/vnd.github+json" },
-    signal: AbortSignal.timeout(60_000),
-  });
-  if (!res.ok) throw new Error(`finding CodexBar's latest release: ${res.status}`);
-  const tag = ((await res.json()) as { tag_name?: unknown }).tag_name;
-  return releaseVersion(typeof tag === "string" ? tag : "");
+/**
+ * Fetches a CodexBar release URL, with a sentence for what goes wrong: no network, or GitHub
+ * limiting this address, which a campus or carrier NAT shares with many others (#618).
+ */
+async function fetchRelease(url: string, init: RequestInit, what: string): Promise<Response> {
+  let res: Response;
+  try {
+    res = await fetch(url, init);
+  } catch (e) {
+    throw new Error(`${what}: cannot reach ${new URL(url).host} (${(e as Error).message})`);
+  }
+  if (
+    res.status === 429 ||
+    (res.status === 403 && res.headers.get("x-ratelimit-remaining") === "0")
+  )
+    throw new Error(
+      `${what}: GitHub is limiting requests from this address (${res.status}); try again in an hour`,
+    );
+  return res;
 }
+
+/**
+ * The version of CodexBar's latest release, from where GitHub redirects `releases/latest`: the
+ * API would allow only 60 unauthenticated requests an hour per address (#618).
+ */
+export async function latestCodexbar(sys: Sys): Promise<string> {
+  const releases = sys.ctx.env.STARBRIDGE_CODEXBAR_RELEASES ?? RELEASES;
+  const what = "finding CodexBar's latest release";
+  const res = await fetchRelease(
+    `${releases}/latest`,
+    { redirect: "manual", signal: AbortSignal.timeout(60_000) },
+    what,
+  );
+  const tag = /\/tag\/([^/?#]+)$/.exec(res.headers.get("location") ?? "")?.[1];
+  if (!tag) throw new Error(`${what}: ${res.status}, no release tag`);
+  return releaseVersion(decodeURIComponent(tag));
+}
+
+const size = (bytes: number) =>
+  bytes >= 1e6 ? `${Math.round(bytes / 1e6)} MB` : `${Math.max(1, Math.round(bytes / 1e3))} kB`;
 
 /** The version a tarball install says it is, from the `VERSION` file its tarball carries. */
 export function installedVersion(sys: Sys): string | undefined {
@@ -148,19 +179,16 @@ export class NoChecksum extends Error {}
  * Installs nothing when the checksum is missing or differs. Returns the `codexbar` inside.
  */
 export async function installTarball(sys: Sys, key: string, version: string): Promise<string> {
-  const base = sys.ctx.env.STARBRIDGE_CODEXBAR_RELEASES ?? DOWNLOADS;
+  const base = `${sys.ctx.env.STARBRIDGE_CODEXBAR_RELEASES ?? RELEASES}/download`;
   const name = `CodexBarCLI-v${version}-${key}.tar.gz`;
   const url = `${base}/v${version}/${name}`;
   const signal = AbortSignal.timeout(10 * 60_000);
-  const sums = await fetch(`${url}.sha256`, { signal });
+  const sums = await fetchRelease(`${url}.sha256`, { signal }, `downloading ${name}.sha256`);
   if (!sums.ok) throw new NoChecksum(`no checksum for ${name} (${sums.status}): not installed`);
   const want = /^[0-9a-f]{64}\b/i.exec((await sums.text()).trim())?.[0].toLowerCase();
   if (!want) throw new Error(`${name}.sha256 holds no SHA-256: not installed`);
-  const res = await fetch(url, { signal });
-  if (!res.ok) throw new Error(`downloading ${name}: ${res.status}`);
-  const bytes = new Uint8Array(await res.arrayBuffer());
-  const got = createHash("sha256").update(bytes).digest("hex");
-  if (got !== want) throw new Error(`${name} has SHA-256 ${got}, expected ${want}: not installed`);
+  const res = await fetchRelease(url, { signal }, `downloading ${name}`);
+  if (!res.ok || !res.body) throw new Error(`downloading ${name}: ${res.status}`);
   const dest = optDir(sys);
   const opt = dirname(dest);
   const fresh = join(opt, `.codexbar.${process.pid}`);
@@ -168,9 +196,10 @@ export async function installTarball(sys: Sys, key: string, version: string): Pr
   const old = `${fresh}.old`;
   mkdirSync(fresh, { recursive: true });
   try {
-    writeFileSync(file, bytes);
+    await download(sys, res, file, want, name, `CodexBar ${version} (${key})`);
     const r = await run(sys, "tar", ["-xzf", file, "-C", fresh]);
-    if (r?.code !== 0) throw new Error(`unpacking ${name}: ${failure(r)}`);
+    if (r?.code !== 0)
+      throw new Error(`could not unpack ${name} into ${opt}; is the disk full? (${failure(r)})`);
     // Renames rather than deletes first, so `codexbar` is missing only between two renames.
     if (existsSync(dest)) renameSync(dest, old);
     renameSync(fresh, dest);
@@ -182,12 +211,49 @@ export async function installTarball(sys: Sys, key: string, version: string): Pr
   return join(dest, "codexbar");
 }
 
+/**
+ * Streams `res`, the tarball `name` of `label`, into `file`, saying its size first and then how far it got every few seconds,
+ * since a tarball of 170 MB takes a minute or more (#618). Throws unless its SHA-256 is `want`.
+ */
+async function download(
+  sys: Sys,
+  res: Response,
+  file: string,
+  want: string,
+  name: string,
+  label: string,
+) {
+  const total = Number(res.headers.get("content-length")) || undefined;
+  sys.ctx.out(`Downloading ${label}${total ? `, ${size(total)}` : ""}`);
+  const hash = createHash("sha256");
+  const fd = openSync(file, "w");
+  let got = 0;
+  let said = sys.ctx.now().getTime();
+  try {
+    for await (const chunk of res.body as unknown as AsyncIterable<Uint8Array>) {
+      writeSync(fd, chunk);
+      hash.update(chunk);
+      got += chunk.length;
+      const now = sys.ctx.now().getTime();
+      if (now - said >= PROGRESS_MS) {
+        said = now;
+        sys.ctx.out(`  ${size(got)}${total ? ` of ${size(total)}` : ""}`);
+      }
+    }
+  } catch (e) {
+    throw new Error(`downloading ${name}: ${(e as Error).message}`);
+  } finally {
+    closeSync(fd);
+  }
+  const sha = hash.digest("hex");
+  if (sha !== want) throw new Error(`${name} has SHA-256 ${sha}, expected ${want}: not installed`);
+}
+
 /** Installs `version`, else the latest release, from its tarball; logs what it did. */
 export async function installRelease(sys: Sys, version?: string): Promise<string> {
   const key = tarballKey(sys);
   if (!key) throw new Error(`no CodexBar build for ${sys.platform} ${sys.arch}`);
   const v = version ? releaseVersion(version) : await latestCodexbar(sys);
-  sys.ctx.out(`Downloading CodexBar ${v} (${key})`);
   const path = await installTarball(sys, key, v);
   const link = linkIntoLocalBin(sys, path);
   sys.ctx.out(`Installed CodexBar ${v} to ${optDir(sys)}${link ? `, linked as ${link}` : ""}.`);

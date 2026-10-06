@@ -46,6 +46,7 @@ import {
   refreshFiles,
 } from "./harnesses";
 import { ours } from "./marker";
+import { pathStep, recordSelf } from "./path";
 import {
   ALLOW_RULES,
   addAllowRules,
@@ -107,6 +108,7 @@ async function checkServer(server: string): Promise<void> {
  * binary (`setup --refresh`). Returns what it did, one line each.
  */
 export async function refresh(sys: Sys): Promise<string[]> {
+  recordSelf(sys);
   const done = refreshFiles(sys);
   const { path, text } = installedService(sys) ?? {};
   if (path && text !== undefined && ours(text))
@@ -128,6 +130,7 @@ function section(ctx: Ctx, title: string) {
 
 export async function setup(sys: Sys, opts: SetupOpts): Promise<number> {
   const { ctx, prompt } = sys;
+  recordSelf(sys);
 
   section(ctx, "Pairing");
   let machine = ctx.store.machine();
@@ -139,7 +142,11 @@ export async function setup(sys: Sys, opts: SetupOpts): Promise<number> {
       ctx.env.STARBRIDGE_SERVER ??
       (await prompt.text("Starbridge server:", DEFAULT_SERVER));
     await checkServer(server);
-    const code = await pair(ctx, { server, ...(opts.name ? { name: opts.name } : {}) });
+    const code = await pair(ctx, {
+      server,
+      again: "starbridge setup",
+      ...(opts.name ? { name: opts.name } : {}),
+    });
     if (code !== 0) return code;
     machine = ctx.store.machine();
   }
@@ -166,6 +173,7 @@ export async function setup(sys: Sys, opts: SetupOpts): Promise<number> {
     await opencodeStep(sys);
   }
   await permissionStep(sys);
+  const last = await pathStep(sys);
 
   section(ctx, "Check");
   if (machine && quota && quota.providers.length > 0) await firstUpload(ctx, quota);
@@ -174,6 +182,8 @@ export async function setup(sys: Sys, opts: SetupOpts): Promise<number> {
 
   ctx.out("");
   ctx.out("Setup is done. `starbridge status` shows the same checks at any time.");
+  if (last.length > 0) ctx.out("");
+  for (const line of last) ctx.out(line);
   return 0;
 }
 

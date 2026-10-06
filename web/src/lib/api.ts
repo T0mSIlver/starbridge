@@ -37,7 +37,7 @@ export function pairingError(e: unknown): string {
     case "unauthenticated":
       return "Sign-in expired. Sign in again.";
     case "machine-cap":
-      return "This account already has its maximum number of machines. Revoke one first.";
+      return "This account already has its maximum number of machines; phones and browsers don't count. Revoke one first.";
     case "rate-limited":
       return "Too many tries. Wait a minute.";
   }
