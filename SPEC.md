@@ -261,12 +261,18 @@ provider plugins add providers, not panels.
   and offers, each after asking, Codex's skill, the Pi package and opencode's plugin and skill,
   from copies the CLI carries so versions match. The local agent rewrites outdated copies when
   it starts.
-- **Allow rules** (#245, #322, #443). So a new user's first question needs no prompt and no sandbox
-  flag, setup allows `starbridge ask`, `waiting`, `working`, `wait` and `settle`: Claude Code allow
-  rules, a Codex execpolicy file (`~/.codex/rules/starbridge.rules`) that runs them outside the
-  sandbox, and pi-permission-system patterns, after the owner's own since the last match wins, plus
-  its `skill` and `read` gates for the Starbridge skill. `starbridge run` is left out, since the
-  command it wraps is the agent's own. Uninstall removes exactly what setup added.
+- **Allow rules** (#245, #322, #443, #488). So a new user's first question needs no prompt and no
+  sandbox flag, setup allows `starbridge ask`, `waiting`, `working`, `wait` and `settle`: Claude
+  Code allow rules, a Codex execpolicy file (`~/.codex/rules/starbridge.rules`) that runs them
+  outside the sandbox, and for Pi the Starbridge link in pi-permission-system's `authorizerChain`
+  plus its `skill` and `read` gates for the Starbridge skill, after the owner's own patterns since
+  the last match wins. Pi gets no bash pattern, since none is safe there (Platform facts): the link
+  allows a bash ask itself when the whole typed line, from the ask's "full command" evidence, is
+  one of those commands with only words, flags, quoted strings and line-joining backslashes; an ask
+  without evidence, or from a shell tool under another name, goes to the owner. The local agent
+  removes the bash patterns older setups added, except a level other than `allow` the owner set,
+  and reports them when the config has comments it cannot rewrite. `starbridge run` is left out,
+  since the command it wraps is the agent's own. Uninstall removes exactly what setup added.
 - **Docs** (#211) at `/docs` are the repository's Markdown files listed in `web/src/lib/docs.ts`,
   rendered by the web page. Links between them become `/docs` links; other relative links go to
   GitHub.
@@ -354,8 +360,9 @@ Codex prompts are not supported.
 - **Pi** (#232, #288), through pi-permission-system's authorizer chain: the link `starbridge`,
   once the owner names it in `authorizerChain`. A link cannot allow for the session, so devices
   offer Allow and Deny. Asks on the `path` and `external_directory` families stay at the keyboard,
-  since pi-permission-system drops a link's allow there. While the devices hold the prompt Pi shows
-  "Answer here", which takes it back.
+  since pi-permission-system drops a link's allow there. The devices see the whole command line
+  an Allow runs, not only the command of it that asked (#488). While the devices hold the prompt
+  Pi shows "Answer here", which takes it back.
 - **opencode** (#300): every prompt publishes `permission.asked`, and the plugin answers through
   `POST /permission/{id}/reply`. The first answer wins. `opencode run` rejects every prompt itself.
   The devices see what an Allow approves (#489): an `edit`, which its edit, write and apply_patch
@@ -635,7 +642,11 @@ What the code relies on, with the versions checked.
 - **Pi** (0.87.1, 1.0.4): `pi.sendUserMessage(..., { deliverAs: "followUp" })` behaves like
   `codex queue`. Commands get `PI_SESSION_ID`. pi-permission-system (33 to 40) caps every
   authorizer link's allow on `path` and `external_directory` to defer (its ADR 0007; making it
-  configurable is its #620). Its dialog appears after 1 s, and a dialog opened over another
+  configurable is its #620). A bash allow pattern is never safe there (#488): before 9.0.1 it
+  matched the whole line, so `starbridge ask *` passed `starbridge ask x; curl … | sh`; from 9.0.1
+  it matches each command of the line but takes a `VAR=…` prefix off first, so it passed
+  `NODE_OPTIONS=--import=data:… starbridge ask`. A bash ask names only the command that asked in
+  `command`, the line in its "full command" evidence (26.0.0 on), and a link's allow runs the line. Its dialog appears after 1 s, and a dialog opened over another
   strands it.
 - **opencode** (1.18.31): the `permission.ask` hook is declared but never called; prompts publish
   `permission.asked` and take `POST /permission/{id}/reply`. `question.asked` and `POST
