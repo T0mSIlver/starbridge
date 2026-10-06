@@ -3,6 +3,7 @@
 import "fake-indexeddb/auto";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import {
+  addEntry,
   checkJoined,
   generateMemberKeys,
   joinCommitment,
@@ -13,6 +14,7 @@ import {
   openJoinApproval,
   publicKeys,
   recoveryKey,
+  seal,
   toB64,
   verifyDirectory,
 } from "@starbridge/protocol";
@@ -183,4 +185,87 @@ test("a recovery that landed but was cut off before adopting its keys resumes ov
   expect(b.state).toBe("ready");
   expect(await store.get("device", ctx.account)).toEqual(recovered);
   expect(await store.get("pending", ctx.account)).toBeUndefined();
+});
+
+test("a machine's settled notice closes only that machine's decisions (#362)", async () => {
+  // Two machines; the second, say revoked but its revocation withheld, closes the first's decision.
+  const at = "2026-10-06T12:00:00Z";
+  const machines = ["m_asks", "m_closes"].map((id) => {
+    const keys = generateMemberKeys();
+    return { keys, member: { id, role: "machine" as const, name: id, ...publicKeys(keys) } };
+  });
+  for (const m of machines) {
+    const entry = addEntry(
+      await live.directory(),
+      { id: "phone", signKey: live.owner.device.keys.sign.privateKey },
+      m.member,
+      at,
+    );
+    const r = await realFetch(`${live.url}/v1/directory`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${live.owner.device.token}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ entry }),
+    });
+    expect(r.status).toBe(201);
+  }
+  const fresh = (await device.deviceContext(ctx.account)) as device.Ctx;
+  const [asks, closes] = machines as [(typeof machines)[0], (typeof machines)[0]];
+  const to = [fresh.device.id];
+  const { id, name, boxPk, signPk } = fresh.device;
+  const recipient = [{ id, role: "device" as const, name, boxPk, signPk }];
+  const decision = seal(
+    "decision",
+    {
+      v: 1,
+      id: "d_asked",
+      to,
+      createdAt: at,
+      question: "Deploy?",
+      context: "",
+      options: ["Yes", "No"],
+      recommended: "Yes",
+      source: { machine: "asks", project: "p", session: "s" },
+    },
+    { id: asks.member.id, signKey: asks.keys.sign.privateKey },
+    recipient,
+  );
+  const settled = seal(
+    "settled",
+    { v: 1, id: "s_forged", itemId: "d_asked", to, at, outcome: "withdrawn" },
+    { id: closes.member.id, signKey: closes.keys.sign.privateKey },
+    recipient,
+  );
+  const items = [
+    { item: settled, cursor: "1", receivedAt: at },
+    { item: decision, cursor: "2", receivedAt: at, answeredAt: at },
+  ];
+  const served = globalThis.fetch;
+  globalThis.fetch = (async (input: string, init?: RequestInit) =>
+    input.startsWith("/v1/items?kind=decision")
+      ? Response.json({ items, cursor: "2" })
+      : served(input, init)) as typeof fetch;
+  try {
+    const inbox = await device.loadInbox(fresh);
+    const asked = inbox.items.find((i) => i.decision.id === "d_asked");
+    expect(asked?.machine.id).toBe(asks.member.id);
+    expect(asked?.settled).toBeUndefined();
+    // The asking machine's own notice still closes it.
+    items[0] = {
+      item: seal(
+        "settled",
+        { v: 1, id: "s_own", itemId: "d_asked", to, at, outcome: "withdrawn" },
+        { id: asks.member.id, signKey: asks.keys.sign.privateKey },
+        recipient,
+      ),
+      cursor: "1",
+      receivedAt: at,
+    };
+    const own = await device.loadInbox(fresh);
+    expect(own.items.find((i) => i.decision.id === "d_asked")?.settled).toBe("withdrawn");
+  } finally {
+    globalThis.fetch = served;
+  }
 });
