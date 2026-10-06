@@ -591,6 +591,40 @@ test("open decisions reach a device that joins later, which can answer them", as
   expect(Object.values(ctx.store.state().asked).map((a) => a.body)).toEqual([undefined, undefined]);
 });
 
+test("an undelivered answer from a device revoked since never reaches a session (#491)", async () => {
+  const ctx = await paired(server);
+  const laptop = await server.addDevice("laptop");
+  await run([...ASK, "--session", "s"], ctx);
+  const id = ctx.lines.at(-1) as string;
+  const machine = ctx.store.machine()?.id as string;
+  const answer: Answer = {
+    v: 1,
+    id: `a_${crypto.randomUUID()}`,
+    decisionId: id,
+    to: machine,
+    answeredAt: `${new Date().toISOString().slice(0, 19)}Z`,
+    choice: "Merge",
+  };
+  const member = (await server.directory()).members.get(machine)?.member;
+  const sealed = seal("answer", answer, { id: laptop.id, signKey: laptop.keys.sign.privateKey }, [
+    member as NonNullable<typeof member>,
+  ]);
+  const posted = await fetch(`${server.url}/v1/items`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${laptop.token}`, "content-type": "application/json" },
+    body: JSON.stringify(sealed),
+  });
+  expect(posted.status).toBe(201);
+  const s = session(ctx);
+  const polled = await poll(ctx, s, { seconds: 0, shared: true });
+  // Accepted, and not yet taken by the session: its agent was closed.
+  expect(ctx.store.state().answers[id]?.seen).toBe(false);
+  // The owner revokes the stolen laptop; the next poll sees only the longer directory.
+  await server.revoke("laptop");
+  await poll(ctx, s, { cursor: polled.cursor, seconds: 0, shared: true });
+  expect(ctx.store.state().answers[id]).toBeUndefined();
+});
+
 test("wait with no id returns each answer once, then times out with exit 2", async () => {
   const ctx = await paired(server);
   await run(ASK, ctx);

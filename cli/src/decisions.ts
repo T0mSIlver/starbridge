@@ -609,14 +609,7 @@ export async function poll(
         ctx.err(`starbridge: holding ${st.held.length} answers: ${behind}`);
       } else {
         delete st.behind;
-        // Answers accepted but not yet delivered may be from a device the chain since revoked,
-        // such as one accepted while the server withheld that revocation.
-        const revoked = (device: string | undefined) =>
-          device !== undefined && !dir.members.get(device)?.active;
-        for (const [id, a] of Object.entries(st.answers))
-          if (!a.seen && revoked(a.device)) delete st.answers[id];
-        for (const p of Object.values(st.permissions ?? {}))
-          if (p.answer && !p.settled && revoked(p.answer.device)) delete p.answer;
+        dropRevoked(st, dir);
         for (const raw of items) {
           try {
             // Machines' inboxes hold answers to decisions and to permission prompts (#57).
@@ -643,6 +636,11 @@ export async function poll(
       if (opts.shared && st.cursor === opts.cursor && page.cursor !== undefined)
         st.cursor = page.cursor;
     });
+  } else {
+    // A revocation brings no answer, but voids those still waiting for their session (#491).
+    // `before` is a fresh read, so trying on it costs no write when nothing is dropped.
+    const dir = directory;
+    if (dropRevoked(before, dir)) ctx.store.updateState((st) => dropRevoked(st, dir));
   }
   await announce(ctx, s, directory);
   // A device that joined since reads nothing this machine sealed before: re-seal it.
@@ -701,6 +699,28 @@ async function announce(ctx: Ctx, s: Session, dir: Directory): Promise<void> {
 }
 
 /** Drops a closed decision's body, so its plaintext does not stay on disk. */
+/**
+ * Drops the answers accepted but not yet delivered whose device the chain now revokes, such as
+ * one accepted while the server withheld that revocation, or before the owner revoked a stolen
+ * device: a revoked device's answer never reaches a session.
+ */
+function dropRevoked(st: State, dir: Directory): boolean {
+  const revoked = (device: string | undefined) =>
+    device !== undefined && !dir.members.get(device)?.active;
+  let dropped = false;
+  for (const [id, a] of Object.entries(st.answers))
+    if (!a.seen && revoked(a.device)) {
+      delete st.answers[id];
+      dropped = true;
+    }
+  for (const p of Object.values(st.permissions ?? {}))
+    if (p.answer && !p.settled && revoked(p.answer.device)) {
+      delete p.answer;
+      dropped = true;
+    }
+  return dropped;
+}
+
 function forget(a: State["asked"][string]) {
   delete a.body;
   delete a.images;
