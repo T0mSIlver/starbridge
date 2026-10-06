@@ -33,7 +33,8 @@ Or with npm:
 npm install -g starbridge
 ```
 
-The script runs `starbridge setup`, which pairs the machine and installs the Claude Code plugin.
+The script runs `starbridge setup`, which pairs the machine and installs Starbridge in each agent
+it finds.
 After Homebrew or npm, run `starbridge setup` yourself.
 
 ## What each agent supports
@@ -56,7 +57,8 @@ its turn.
 
 ³ With pi-permission-system, once its `authorizerChain` names `starbridge`: your devices allow a
 call once or deny it. Asks from its `path` and `external_directory` rules stay at the keyboard,
-since it lets no link allow those.
+since it lets no link allow those. Setup and `starbridge config permissions on` offer allow rules,
+so that reading the Starbridge skill and running its commands don't ask.
 
 ⁴ In the TUI and `opencode serve`, with the Starbridge plugin that `starbridge setup` installs. In
 `opencode run`, the agent waits for the answer before it ends its turn.

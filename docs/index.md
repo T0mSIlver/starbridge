@@ -11,8 +11,8 @@ only ciphertext. Use the free server at starbridge.run, or [host your own](../se
 ## Start
 
 1. **Sign in** with GitHub on the web at [starbridge.run](https://starbridge.run) or in the
-   Android app. The first device you sign in on creates your account's keys, and you approve each later
-   device from one you already have.
+   Android app. The first device you sign in on creates your account's keys and shows your
+   [recovery key](#recovery-key) once. You approve each later device from one you already have.
 
 2. **Install the CLI** on each machine that runs agents:
 
@@ -20,14 +20,16 @@ only ciphertext. Use the free server at starbridge.run, or [host your own](../se
    curl -fsSL https://starbridge.run/install.sh | sh
    ```
 
-   The script then runs `starbridge setup`, which pairs the machine: type the code it prints
-   under Devices on your phone or in the web app. Setup also installs the Claude Code plugin and
-   the service that uploads your quotas. Homebrew and npm work too; see
+   The script then runs `starbridge setup`, which pairs the machine. Open the link it prints in a
+   browser where you are signed in, or type the code it prints in Settings → Devices → Add a
+   device, on your phone or in the web app. Setup also installs Starbridge in each agent it finds
+   and the service that uploads your quotas. Homebrew and npm work too; see
    [The CLI](../cli/README.md#install).
 
 3. **Tell your agents** when to reach you. With the plugin, Claude Code asks you for decisions
-   that are yours and reports the commands that block you. Codex needs the Starbridge skill
-   copied in. [Tell your agents](tell-your-agents.md) covers both, and how to add your own rules.
+   that are yours and reports the commands that block you. Pi and opencode get the same rules from
+   their Starbridge package and plugin. Codex gets the skill only, so add your own rules there.
+   [Tell your agents](tell-your-agents.md) covers each agent, and how to add your own rules.
 
 ## What you get
 
@@ -38,8 +40,26 @@ only ciphertext. Use the free server at starbridge.run, or [host your own](../se
 - **Quotas.** What's left on each AI plan, read from
   [CodexBar](https://github.com/steipete/CodexBar), with an optional alert before a window runs
   out.
-- **Permission prompts.** Allow or deny, from your phone, the commands Claude Code asks
-  permission to run. Off until you turn them on.
+- **Permission prompts.** Allow or deny, from your phone, the calls Claude Code, opencode and Pi
+  ask permission for. Off until you turn them on.
 
-Starbridge works with Claude Code, Codex and Pi.
+Starbridge works with Claude Code, Codex, Pi and opencode.
 [Tell your agents](tell-your-agents.md#what-each-agent-supports) lists what each one supports.
+
+## Recovery key
+
+The recovery key adds a new device to your account when you have lost every device. The first
+device you sign in on shows it once. Store it somewhere safe, away from your devices, such as a
+password manager or paper. A lost key can't be replaced, but you keep using the devices you have.
+
+To replace the key, pick Replace next to Recovery key: on the web under Settings → Devices, in the
+app under Settings → Devices and machines. Replacing asks for the current key, and the old key
+stops working.
+
+To recover, sign in on a new phone or browser and pick "Use the recovery key". Recovering removes
+every other device and machine from the account. Add your phones and browsers again from
+Settings → Devices → Add a device, and pair each machine again:
+
+```bash
+starbridge pair --force
+```

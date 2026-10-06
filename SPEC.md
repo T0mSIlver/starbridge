@@ -1470,6 +1470,20 @@ so the mod is the first path.
   session, takes only answers to that session's decisions, so it cannot take one that another
   session's mod or `wait` is due; outside an agent's session it still takes any. Checked with Pi 1.0.4 and pi-permission-system 39.1.0: `starbridge ask` ran
   without a dialog while `touch` still asked, and uninstall left no config behind.
+- 2026-10-06. Pi's allow rules also come with `starbridge config permissions on`, and cover the
+  Starbridge skill (#443, found in the #427 fresh-user run). Setup offered them only when
+  pi-permission-system was already installed, but setup's own hint installs it afterwards, so a
+  new user's config held only `authorizerChain` and Pi asked four times before one question.
+  Reproduced with Pi 1.0.4 and pi-permission-system 40.0.0: the skill's file is gated twice, as
+  the `starbridge` skill (surface `skill`) and as a `read` that falls back to `"*": "ask"`; the
+  `external_directory` gate auto-allows Pi's own package folder. So setup and `config permissions
+  on` now offer `skill: {"starbridge": "allow"}` and `read: {"<agent dir>/git/github.com/T0mSIlver/
+  starbridge/plugin/skills/starbridge/*": "allow"}` beside the bash patterns, each last in its map
+  and skipped where the surface is a plain `"allow"`. An unmatched pattern falls back to `"*"`, so
+  a map holding only these never tightens anything. After the fix the same run sent only the
+  question; a read of the package's README, `touch` and `true` still asked. The second prompt was
+  a `read` tool ask, which a link may allow, not a path ask: an `external_directory_read` ask
+  still stayed at the keyboard, so the docs now say tool-rule asks reach the devices.
 - 2026-10-06. Only the verified directory revokes a browser (#310, as Android decides). A 401
   `revoked` is unsigned, so the page keeps its keys and shows the refusal on the sign-in screen;
   after sign-in, boot reads the chain and shows "was revoked" only if the chain says so.
