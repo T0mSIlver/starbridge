@@ -1756,6 +1756,11 @@ so the mod is the first path.
   front, and until a push has reached it since it started, it syncs every 10 s, without the
   pull-to-refresh indicator or a notice on failure; it stops in the background. The server
   cannot say whether its pushes arrive, so a push arriving is the sign. The web already polls.
+- 2026-10-06. GitHub links on questions (#171, the owner's pick on the question display page:
+  links stay as built, plus this). A GitHub pull request or issue link with no title reads
+  "owner/repo#123" instead of its host and path, and its chip leads with the GitHub mark, on the
+  web and Android; "Answer in" uses the same label. Every other link is unchanged. Android's
+  untitled chips now start with "Open" too, as the web's and the #171 entry above do.
 
 ## Encryption, with existing libraries
 

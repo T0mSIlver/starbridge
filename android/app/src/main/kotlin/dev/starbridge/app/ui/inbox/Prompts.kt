@@ -64,6 +64,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dev.starbridge.app.data.Decision
 import dev.starbridge.app.data.Prompt
 import dev.starbridge.app.data.visible
 import dev.starbridge.app.ui.Sym
@@ -93,7 +94,19 @@ const val CLOSING_MS = 3_000L
 /** The prompts to show in the feed: waiting ones, and ones that ended a moment ago. */
 fun shownPrompts(prompts: List<Prompt>, now: Instant): List<Prompt> = prompts
     .filter { it.waiting(now) || (it.endedAt != null && now.toEpochMilli() - it.endedAt.toEpochMilli() < CLOSING_MS) }
-    .sortedByDescending { it.createdAt }
+    .sortedBy { it.createdAt }
+
+/**
+ * "Group by machine", as on the web: each machine's runs, then its needs, the machines in the
+ * order of their most pressing need, and machines with only runs last.
+ */
+fun <T> byMachine(runs: List<T>, needs: List<T>, machine: (T) -> String): List<List<T>> =
+    (needs.map(machine) + runs.map(machine)).distinct().map { m -> runs.filter { machine(it) == m } + needs.filter { machine(it) == m } }
+
+/** Open questions as the feed lists them (SPEC, Design v2 inbox): those whose agent waits first, each oldest first. */
+fun openQuestions(decisions: List<Decision>, now: Instant): List<Decision> = decisions
+    .filter { it.isOpen(now) }
+    .sortedWith(compareByDescending<Decision> { it.waiting }.thenBy { it.createdAt })
 
 private val pretty = Json { prettyPrint = true }
 

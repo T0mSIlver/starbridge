@@ -1770,18 +1770,7 @@ class ServerStore(
     }
 
     /** How a prompt ended, in words, from this device's answer or the machine's notice. */
-    private fun ended(p: SavedPrompt): String? {
-        p.answer?.let { return if (it.startsWith("allow")) "Allowed here" else "Denied here" }
-        val s = p.settled
-        return when {
-            s?.outcome == "keyboard" -> "Answered on ${p.body.source.machine}"
-            s?.outcome == "timeout" -> "Timed out: left to the keyboard"
-            s?.outcome == "device" && s.device == me.id -> "Answered here"
-            s?.outcome == "device" -> "Answered from ${directory?.members?.get(s.device)?.member?.name ?: "another device"}"
-            p.answeredAt != null -> "Answered on another device"
-            else -> null
-        }
-    }
+    private fun ended(p: SavedPrompt) = promptEnded(p.answer, p.settled, p.answeredAt, p.body.source.machine, me.id) { directory?.members?.get(it)?.member?.name }
 
     private fun toUi(p: SavedPrompt): Prompt {
         val b = p.body
@@ -1865,4 +1854,23 @@ internal fun paceOf(pace: dev.starbridge.app.protocol.Pace?, unusedAlert: Double
         pace.runsOutAt?.let { runCatching { OffsetDateTime.parse(it).toInstant() }.getOrNull() }?.let { Pace.RunsOut(it) } ?: Pace.Unknown
     unusedAlert != null -> Pace.Unused(unusedAlert.roundToInt())
     else -> Pace.Even
+}
+
+/**
+ * How a prompt ended and where, as the web's History puts it (#349): "Denied · on Pixel",
+ * "Allowed for this session · on this phone"; null while it waits.
+ */
+internal fun promptEnded(answer: String?, s: Settled?, answeredAt: String?, machine: String, me: String, name: (String) -> String?): String? {
+    val allowed = mapOf("once" to "Allowed once", "session" to "Allowed for this session", "project" to "Always allowed")
+    answer?.let { return "${if (it == "deny") "Denied" else allowed[it.removePrefix("allow:")] ?: "Allowed"} · on this phone" }
+    return when {
+        s?.outcome == "keyboard" -> "Answered · on $machine"
+        s?.outcome == "timeout" -> "Timed out: left to the keyboard"
+        s?.outcome == "device" && s.device != null -> {
+            val what = when (s.behavior) { "allow" -> "Allowed"; "deny" -> "Denied"; else -> "Answered" }
+            "$what · on ${if (s.device == me) "this phone" else name(s.device) ?: "another device"}"
+        }
+        answeredAt != null -> "Answered · on another device"
+        else -> null
+    }
 }
