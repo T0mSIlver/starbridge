@@ -1419,6 +1419,11 @@ so the mod is the first path.
   an agent that passed one believed the owner saw it. Like `--default-at`, it is accepted and
   ignored with a warning, so older commands still post; the CLI always sends "Waits for your
   answer" for clients from before 2026-10-05. `ask --help` now lists `--timeout`.
+- 2026-10-06. A permission's `inputHash` is keyed under the machine's signing key (#359). Devices
+  only echo it, and the machine matches calls by it locally, so nothing else changes; unkeyed, a
+  device holding the redacted input could test guesses for a short redacted password. The
+  summary and description are cut from the input after `redactValue`, so secrets under a key's
+  name stay out of MCP and Task summaries too (#358).
 
 ## Encryption, with existing libraries
 

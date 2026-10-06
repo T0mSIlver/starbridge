@@ -10,6 +10,7 @@ import {
   type Directory,
   hashInput,
   type MachineKind,
+  type MemberKeys,
   open,
   PERMISSION_TTL_MS,
   type Permission,
@@ -207,7 +208,10 @@ const oneLine = (s: string, max: number) => {
 /** Claude Code's shell tool, or Pi's. */
 const isShell = (tool: string) => tool === "Bash" || tool === "bash";
 
-/** One line: the Bash command, the edited path, the URL; else the tool and its input. */
+/**
+ * One line: the Bash command, the edited path, the URL; else the tool and its input. `input` is
+ * redacted already (`redactValue`).
+ */
 export function summarize(tool: string, input: unknown): string {
   const o = (input && typeof input === "object" ? input : {}) as Record<string, unknown>;
   const pick = (...keys: string[]) =>
@@ -216,7 +220,7 @@ export function summarize(tool: string, input: unknown): string {
     ? pick("command")
     : (pick("file_path", "notebook_path", "path", "url", "query", "pattern", "preview") ??
       `${tool} ${JSON.stringify(input) ?? ""}`);
-  return oneLine(redactText(main ?? tool), SUMMARY_MAX) || tool;
+  return oneLine(main ?? tool, SUMMARY_MAX) || tool;
 }
 
 /**
@@ -271,6 +275,11 @@ export function updatesFor(
   return updates.map((u) => ({ ...u, destination: DESTINATION[scope] }));
 }
 
+/** The `inputHash` of a call's input, keyed under the machine's signing key. */
+export function inputHashOf(keys: MemberKeys, input: unknown): string {
+  return hashInput(JSON.stringify(input), keys.sign.privateKey);
+}
+
 export function buildPermission(
   hook: PermissionHookInput,
   opts: {
@@ -278,6 +287,7 @@ export function buildPermission(
     source: PermissionSourceInput;
     machine: string;
     machineKind?: MachineKind;
+    keys: MemberKeys;
     to: string[];
     now: Date;
     waitMs: number;
@@ -292,7 +302,10 @@ export function buildPermission(
   const updates = usableUpdates(hook.permission_suggestions);
   const rule = ruleText(updates);
   const project = opts.source.project;
-  const description = (raw as { description?: unknown }).description;
+  // The summary and description come from the redacted input too: key-name redaction is
+  // `redactValue`'s alone.
+  const safe = redactValue(raw);
+  const description = (safe as { description?: unknown }).description;
   const ttl = Math.min(PERMISSION_TTL_MS, Math.max(1000, opts.waitMs));
   const permission = {
     v: 1 as const,
@@ -301,12 +314,12 @@ export function buildPermission(
     createdAt: iso(opts.now),
     agent: opts.agent,
     tool: tool.slice(0, 100),
-    summary: summarize(tool, raw),
+    summary: summarize(tool, safe),
     ...(typeof description === "string" && description.trim()
-      ? { description: oneLine(redactText(description), DESCRIPTION_MAX) }
+      ? { description: oneLine(description, DESCRIPTION_MAX) }
       : {}),
-    input: fitJson(redactValue(raw)),
-    inputHash: hashInput(JSON.stringify(raw)),
+    input: fitJson(safe),
+    inputHash: inputHashOf(opts.keys, raw),
     suggestions: rule
       ? [
           { label: "Allow for this session", rule, scope: "session" as const },
@@ -379,6 +392,7 @@ export async function postPermission(
     ...opts,
     machine: s.machine.name,
     ...machineKind(ctx),
+    keys: s.keys,
     to: to.map((d) => d.id),
     now: ctx.now(),
   });

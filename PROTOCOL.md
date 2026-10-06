@@ -383,7 +383,7 @@ first answer wins.
 - `permission` `{v, id, to, createdAt, agent, tool, summary, description?, input, inputHash,
   suggestions, expiresAt, source}`: `input` is the tool input as JSON text, redacted on the
   machine (provider token patterns, PEM private keys, `Authorization` headers, URL passwords, and
-  `*_KEY`, `*_TOKEN` or `*_PASSWORD` values) and at most 8000 characters; `inputHash` is `hashInput` of the input before redaction (BLAKE2b-256); `expiresAt`
+  `*_KEY`, `*_TOKEN` or `*_PASSWORD` values) and at most 8000 characters; `inputHash` is `hashInput` of the input before redaction (BLAKE2b-256), keyed under the machine's signing key so a device cannot test guesses for a redacted value; `expiresAt`
   is at most 10 minutes after `createdAt`. Each of the at most 2 `suggestions`
   `{label, rule, scope: "session" | "project"}` shows the exact rule a wider allow would add.
 - `permission-answer` `{v, id, permissionId, to, answeredAt, behavior: "allow" | "deny", scope:
