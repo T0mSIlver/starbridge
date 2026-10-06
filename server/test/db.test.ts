@@ -35,21 +35,31 @@ test("a server refuses a database newer than its schema", () => {
   expect(() => openDb(path)).toThrow(`schema ${at + 1}, newer`);
 });
 
-test("a database at schema 3, as the hosted one is before #571, gains the snooze columns", () => {
+test("a database at schema 3, as the hosted one is before #571, gains the snooze columns and the sweep's indexes", () => {
   const path = join(mkdtempSync(join(tmpdir(), "sb-db-")), "db.sqlite");
   const old = openDb(path);
-  old.run("DROP INDEX items_wake_due");
+  for (const index of [
+    "items_kind_received",
+    "items_kind_answered",
+    "items_account_seq",
+    "usage_events_day_metric",
+    "items_wake_due",
+  ])
+    old.run(`DROP INDEX ${index}`);
   old.run("ALTER TABLE items DROP COLUMN wake_due");
   old.run("ALTER TABLE items DROP COLUMN wake_at");
   old.run("PRAGMA user_version = 3");
   old.close();
   const db = openDb(path);
-  expect(version(db)).toBe(4);
+  expect(version(db)).toBe(5);
   const columns = (db.query("PRAGMA table_info(items)").all() as { name: string }[]).map(
     (c) => c.name,
   );
   expect(columns).toContain("wake_at");
   expect(columns).toContain("wake_due");
+  expect(
+    db.query("SELECT name FROM sqlite_master WHERE name = 'items_account_seq'").get(),
+  ).not.toBeNull();
 });
 
 test("a write that reads first waits for another connection's write lock", async () => {

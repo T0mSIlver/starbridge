@@ -211,7 +211,19 @@ ALTER TABLE items ADD COLUMN wake_due TEXT;
 CREATE INDEX items_wake_due ON items (wake_due) WHERE wake_due IS NOT NULL;
 `;
 
-const MIGRATIONS = [V1, V2, V3, V4];
+/**
+ * Indexes for what the hourly sweep scans: items by kind and age, usage events by day and
+ * metric. And a device's list with no cursor reads its own account's items in order, not every
+ * account's (#585).
+ */
+const V5 = `
+CREATE INDEX items_kind_received ON items (kind, received_at);
+CREATE INDEX items_kind_answered ON items (kind, answered_at);
+CREATE INDEX items_account_seq ON items (account_id, seq);
+CREATE INDEX usage_events_day_metric ON usage_events (day, metric);
+`;
+
+const MIGRATIONS = [V1, V2, V3, V4, V5];
 
 export function openDb(path: string): Database {
   if (path !== ":memory:") mkdirSync(dirname(path), { recursive: true });

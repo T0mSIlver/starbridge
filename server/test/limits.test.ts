@@ -20,6 +20,7 @@ import {
   seal,
   toB64,
 } from "@starbridge/protocol";
+import { openDb } from "../src/db";
 import { DEFAULT_LIMITS, type Limits } from "../src/limits";
 import { RateLimiter } from "../src/ratelimit";
 import { sweepStorage } from "../src/retention";
@@ -247,21 +248,61 @@ test("the sweep drops answered decisions after a week and the rest after 30 days
     (s.deps.db.query("SELECT COUNT(*) AS n FROM sessions").get() as { n: number }).n;
   expect(sessions()).toBe(2);
 
-  sweepStorage(s.deps.db, DEFAULT_LIMITS);
+  await sweepStorage(s.deps.db, DEFAULT_LIMITS);
   expect(await exists(s, phone, gone.id)).toBe(false); // its machine was revoked
   expect(await exists(s, phone, answered.id)).toBe(true);
   expect(sessions()).toBe(1);
   expect((await s.call("GET", "/v1/me", { token: expired })).status).toBe(401);
 
-  sweepStorage(s.deps.db, DEFAULT_LIMITS, Date.now() + 8 * DAY);
+  // A batch of one: each delete loops until the aged items are gone.
+  await sweepStorage(s.deps.db, DEFAULT_LIMITS, Date.now() + 8 * DAY, 1);
   expect(await exists(s, phone, answered.id)).toBe(false);
   expect(await exists(s, devbox, reply.id)).toBe(false);
   expect(await exists(s, phone, open.id)).toBe(true);
   expect(await exists(s, phone, kept.id)).toBe(true);
 
-  sweepStorage(s.deps.db, DEFAULT_LIMITS, Date.now() + 31 * DAY);
+  await sweepStorage(s.deps.db, DEFAULT_LIMITS, Date.now() + 31 * DAY, 1);
   expect(await exists(s, phone, open.id)).toBe(false);
   expect(await exists(s, phone, kept.id)).toBe(false);
+});
+
+test("the sweep checks each kept waiting item once, walking past it by rowid (#654)", async () => {
+  const db = openDb(":memory:");
+  const now = new Date().toISOString();
+  db.query("INSERT INTO accounts (id, created_at) VALUES ('a', ?)").run(now);
+  const add = db.query(
+    "INSERT INTO items (seq, account_id, id, kind, from_id, re, received_at) VALUES (?, 'a', ?, ?, 'm', ?, ?)",
+  );
+  add.run(1, "d", "decision", null, now);
+  for (let i = 0; i < 5; i++) add.run(10 + i, `kept${i}`, "waiting", "d", now);
+  for (let i = 0; i < 3; i++) add.run(20 + i, `orphan${i}`, "waiting", "gone", now);
+  // Records the sweep's statements, to read how SQLite runs its rowid walks.
+  const walks: string[] = [];
+  const watched = new Proxy(db, {
+    get(target, key) {
+      const value = Reflect.get(target, key, target);
+      if (key !== "query") return typeof value === "function" ? value.bind(target) : value;
+      return (sql: string) => {
+        if (sql.includes("rowid > ?") && sql.startsWith("SELECT")) walks.push(sql);
+        return target.query(sql);
+      };
+    },
+  });
+  await sweepStorage(watched, DEFAULT_LIMITS, Date.now(), 1);
+  const ids = (db.query("SELECT id FROM items ORDER BY rowid").all() as { id: string }[]).map(
+    (r) => r.id,
+  );
+  expect(ids).toEqual(["d", "kept0", "kept1", "kept2", "kept3", "kept4"]);
+  // A walk that went through an index would start each batch over the kept rows.
+  expect(walks.length).toBe(2);
+  for (const sql of walks) {
+    const plan = db
+      .query(`EXPLAIN QUERY PLAN ${sql}`)
+      .all(0, ...Array(sql.split("?").length - 2).fill("")) as {
+      detail: string;
+    }[];
+    expect(plan[0]?.detail).toContain("INTEGER PRIMARY KEY (rowid>?)");
+  }
 });
 
 test("a full directory refuses device-signed adds but takes revocations and recoveries", async () => {

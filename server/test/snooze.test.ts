@@ -226,6 +226,6 @@ test("a snooze goes with its decision", async () => {
   const d = decision();
   await post(devbox, d);
   await post(phone, snooze(d, inHours(2)));
-  sweepStorage(s.deps.db, DEFAULT_LIMITS, Date.now() + 31 * 86_400_000);
+  await sweepStorage(s.deps.db, DEFAULT_LIMITS, Date.now() + 31 * 86_400_000);
   expect(await list(phone, "kind=snooze")).toEqual([]);
 });

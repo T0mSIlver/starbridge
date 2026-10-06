@@ -62,10 +62,13 @@ export async function createApp(config: Config, fetchFn: typeof fetch = fetch) {
     deps.pairingClients.sweep(Date.now());
     sweepJoins(db);
   });
-  const hourly = housekeep(() => {
-    sweepStorage(db, config.limits);
-    closeDays(db);
-  });
+  // The sweep deletes in batches and lets requests in between (#585).
+  const hourly = () =>
+    sweepStorage(db, config.limits)
+      .then(() => closeDays(db))
+      .catch((e) => {
+        if (!diskFull(e)) throw e;
+      });
   setInterval(minutely, 60_000).unref();
   // Snoozed decisions come back within this much of their time (#571).
   const snoozes = housekeep(() => wakeSnoozes(db, deps.push, config.pushInlineLimit));

@@ -116,8 +116,8 @@ test("a waiting state goes with its decision", async () => {
   const d = decision();
   await post(devbox, d);
   await post(devbox, waiting(d, "waiting"));
-  sweepStorage(s.deps.db, DEFAULT_LIMITS, Date.now() + 29 * 86_400_000);
+  await sweepStorage(s.deps.db, DEFAULT_LIMITS, Date.now() + 29 * 86_400_000);
   expect((await list("waiting")).items).toHaveLength(1);
-  sweepStorage(s.deps.db, DEFAULT_LIMITS, Date.now() + 31 * 86_400_000);
+  await sweepStorage(s.deps.db, DEFAULT_LIMITS, Date.now() + 31 * 86_400_000);
   expect((await list("waiting")).items).toHaveLength(0);
 });
