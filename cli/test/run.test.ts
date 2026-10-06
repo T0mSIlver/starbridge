@@ -154,6 +154,51 @@ test("with an agent running, the run goes through it", async () => {
   expect(posted).toMatchObject({ exit: { code: 0 }, progress: { done: 1, total: 1 } });
 });
 
+test("a run killed with -9 posts no exit and nothing after, so devices see it lost (#249)", async () => {
+  const machine = await paired(server);
+  const socket = join(machine.store.dir, "agent.sock");
+  const agent = makeAgent(machine, { socket, noQuota: true });
+  await agent.start();
+  agents.push(agent);
+  // The real binary through the agent, as an agent's session runs it. The orphaned sleep ends
+  // on its own.
+  const p = Bun.spawn(
+    [
+      process.execPath,
+      join(import.meta.dir, "../src/main.ts"),
+      "run",
+      "--title",
+      "Lost run",
+      "--reason",
+      "r",
+      "--",
+      "sleep",
+      "20",
+    ],
+    {
+      env: {
+        ...process.env,
+        STARBRIDGE_AGENT_SOCKET: socket,
+        STARBRIDGE_CONFIG_DIR: testCtx().store.dir,
+      },
+      stdout: "ignore",
+      stderr: "ignore",
+    },
+  );
+  await until(async () => (await server.opened("run")).length === 1, 10_000);
+  const [start] = (await server.opened("run")) as Run[];
+  p.kill("SIGKILL");
+  await p.exited;
+  await Bun.sleep(1_500);
+  const runs = (await server.opened("run")) as Run[];
+  expect(runs).toHaveLength(1);
+  const [last] = runs;
+  expect(last?.exit).toBeUndefined();
+  // Nothing re-posts it (no heartbeat from the agent), so its last news stays its start: past
+  // RUN_STALE_MS, the clients' state rule (web/src/lib/runs.ts, Run.state on Android) says lost.
+  expect(last?.at).toBe(start?.at);
+});
+
 test("the reporter posts the start at once, then progress throttled, a heartbeat, and the exit", async () => {
   const posts: RunInput[] = [];
   const ctx = testCtx();

@@ -235,7 +235,7 @@ fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> U
                         val view by vm.view.collectAsStateWithLifecycle()
                         InboxScreen(
                             decisions,
-                            // A running run's timer, a lost run's "No news for" and the clock of
+                            // A running run's timer, a lost run's "no news for" and the clock of
                             // an item an agent waits on tick each second.
                             seconds(
                                 Run.shown(runs, Instant.now()).any { it.state(Instant.now()) in LIVE_RUNS } ||

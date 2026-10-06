@@ -685,7 +685,8 @@ so the mod is the first path.
 - 2026-10-05. Runs with no news (#190). A run that reports no progress shows an indeterminate
   bar while it runs. A lost run (no update for 3 minutes) shows no time in its meta row: a run
   killed before its first heartbeat has its last news at its start, so the only duration known
-  would read "0 s". Its line "No news for 3 min 37 s" ticks each second, and it shows no progress.
+  would read "0 s". Its line "Lost, no news for 3 min 37 s" ticks each second, and it shows no
+  progress (the word "Lost" since #249).
 - 2026-10-05. Android notification channels and order (#196). The channels sit in two groups,
   "Needs you" (Decisions, Permission prompts, Join requests) and "Activity" (Runs, Quotas), instead
   of Android's "Other". Each notification carries a sort key, questions and prompts first, then
@@ -1003,6 +1004,13 @@ so the mod is the first path.
   Each asks first, `--yes` takes the defaults (install), and `--no-plugin` skips all three.
   `status` reports both, and `uninstall` removes the skill folder (only when it holds the
   Starbridge skill) and the Pi package. The docs drop the curl step for Codex.
+- 2026-10-06. A lost run says so (#249). The run killed with -9 in the fix check of #59 was lost
+  on the phone already: its card had no time and no bar, as #190 decided, but its only line,
+  "No news for 12 min 59 s", read as a quiet live run. Both clients now write "Lost, no news for
+  12 min 59 s". Nothing keeps a dead run alive: a run's heartbeat lives in the `starbridge run`
+  process, so after a kill the server keeps its last update, without an exit, and each client
+  turns it lost 3 minutes after that update with no server-side expiry, since the server cannot
+  read a sealed run.
 - 2026-10-06. Deploys without downtime (#150, owner ruling of 2026-10-05). Caddy holds a request
   for up to 30 s (`lb_try_duration`) while its upstream is down, retrying every 250 ms, and
   checks each upstream's health every second. The page runs as two copies, `web-a` on 3010 and
@@ -1147,6 +1155,20 @@ so the mod is the first path.
   server must drop all of the owner's other devices' answers to it. Closing the gap fully needs a
   channel the server does not carry. Answers without `dir`, from clients before this, are still
   accepted.
+- 2026-10-06. Quotas and Settings on wide screens (owner, from
+  https://claude.ai/artifact/9ddJ2PwPrBc7KmQdeDVqDN). Once the page is 840 px wide (a window
+  about 1210 px wide, with the rail) the Quotas page is one table up
+  to 1200 px wide, as dense as the inbox: the provider in a first column, then a line per window
+  (name, meter, figure, state, reset); narrower screens keep a card per provider. Settings puts
+  each section's name in a 220 px column beside its box, whose rows stay 720 px. Providers
+  reorder live on the Quotas table and in Settings: the row follows the pointer (mouse, pen or
+  touch), the others slide aside, and the order is saved once it lands; the arrow keys, Home and
+  End move a focused handle, and a polite live region says where it went. On the Quotas table a
+  provider leading under "Running out first" keeps its place, one with a leading row on another
+  machine is a barrier the others don't cross, and the others take the places
+  they held among themselves; narrow screens reorder in Settings. The web gets Sign out under
+  Settings, Account, as Android has: the browser leaves the account's devices unless it is the
+  last one, ends its session, drops its push subscription and forgets its keys and answers.
 - 2026-10-06. A prompt sheet's full input opens in place (#265): "Full input" is a full-width
   row with a chevron at the end of the sheet, and the JSON expands under it, as Material's
   expandable sections do. Nothing above the row moves, so Allow and Deny stay where they were.
