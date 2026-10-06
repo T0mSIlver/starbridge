@@ -17,6 +17,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -105,6 +106,7 @@ import dev.starbridge.app.ui.fieldColors
 import dev.starbridge.app.ui.groupGap
 import dev.starbridge.app.ui.groupShape
 import dev.starbridge.app.ui.theme.Radius
+import dev.starbridge.app.ui.theme.Sizes
 import dev.starbridge.app.ui.theme.Spacing
 import dev.starbridge.app.ui.theme.StarbridgeTheme
 import kotlinx.coroutines.delay
@@ -541,27 +543,40 @@ fun DecisionSheet(decision: Decision, now: Instant, onAnswer: (String, String?, 
     }
 }
 
-/** "Pick a result": each image over the option it stands for; picking one answers. */
+/**
+ * "Pick a result": each image over the option it stands for; picking one answers. Both slots in a
+ * row take the taller image's height, each image centred on the inset colour, so the buttons line
+ * up and a phone screenshot beside a desktop one does not grow the row.
+ */
 @Composable
 private fun Picks(decision: Decision, sending: String?, answer: (String?, String?) -> Unit) {
     val colors = StarbridgeTheme.colors
-    decision.images.zip(decision.options).chunked(2).forEach { row ->
-        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
-            row.forEach { (image, option) ->
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
-                    Images(listOf(image), maxHeight = 240.dp)
-                    val recommended = option == decision.proposal
-                    Button(
-                        onClick = { if (sending == null) answer(option, null) },
-                        colors = if (recommended) ButtonDefaults.buttonColors(containerColor = colors.accent, contentColor = colors.onAccent)
-                        else ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHighest, contentColor = MaterialTheme.colorScheme.onSurface),
-                        modifier = Modifier.fillMaxWidth().height(48.dp).semantics { if (recommended) stateDescription = "Default" },
-                    ) { Text(option, style = StarbridgeTheme.type.action, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+    val maxHeight = Sizes.pick
+    var viewing by remember { mutableStateOf<Int?>(null) }
+    BoxWithConstraints {
+        val column = (maxWidth - Spacing.s2) / 2
+        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            decision.images.zip(decision.options).chunked(2).forEachIndexed { r, row ->
+                val slot = minOf(maxHeight, row.maxOf { (image, _) -> column * image.height / image.width })
+                Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+                    row.forEachIndexed { c, (image, option) ->
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+                            ImageBox(image, maxHeight, wide = true, crop = false, Modifier.fillMaxWidth(), slot) { viewing = r * 2 + c }
+                            val recommended = option == decision.proposal
+                            Button(
+                                onClick = { if (sending == null) answer(option, null) },
+                                colors = if (recommended) ButtonDefaults.buttonColors(containerColor = colors.accent, contentColor = colors.onAccent)
+                                else ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHighest, contentColor = MaterialTheme.colorScheme.onSurface),
+                                modifier = Modifier.fillMaxWidth().height(48.dp).semantics { if (recommended) stateDescription = "Default" },
+                            ) { Text(option, style = StarbridgeTheme.type.action, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                        }
+                    }
+                    if (row.size == 1) Spacer(Modifier.weight(1f))
                 }
             }
-            if (row.size == 1) Spacer(Modifier.weight(1f))
         }
     }
+    viewing?.let { ImageViewer(decision.images, it) { viewing = null } }
 }
 
 /**

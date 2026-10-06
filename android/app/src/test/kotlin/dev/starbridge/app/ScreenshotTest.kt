@@ -176,6 +176,8 @@ class ScreenshotTest(private val dark: Boolean) {
 
     @Test fun sheetPick() = capture("sheet-pick") { QuestionSheet(showcase.pick) }
 
+    @Test fun sheetPickShapes() = capture("sheet-pick-shapes") { QuestionSheet(fake.layouts) }
+
     @Test fun sheetScreenshot() = capture("sheet-screenshot") { QuestionSheet(fake.screenshot) }
 
     // Full screen, opened from the sheet's image (#170).

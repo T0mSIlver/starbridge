@@ -82,10 +82,11 @@ fun Images(images: List<Attached>, maxHeight: Dp, modifier: Modifier = Modifier,
 
 /**
  * One image, at most [maxHeight] tall: its own shape from the start, or [wide] across its column,
- * where [crop] fills it from the top and else the inset colour bands it.
+ * where [crop] fills it from the top and else the inset colour bands it. A [slot] height, wide,
+ * centres it in a frame of that height.
  */
 @Composable
-private fun ImageBox(image: Attached, maxHeight: Dp, wide: Boolean, crop: Boolean, modifier: Modifier, onOpen: () -> Unit) {
+fun ImageBox(image: Attached, maxHeight: Dp, wide: Boolean, crop: Boolean, modifier: Modifier, slot: Dp? = null, onOpen: () -> Unit) {
     val edge = with(LocalDensity.current) { maxHeight.roundToPx() * 2 }
     // Decoded off the main thread, so a list of image decisions scrolls smoothly; the inset
     // colour shows until it lands.
@@ -94,7 +95,7 @@ private fun ImageBox(image: Attached, maxHeight: Dp, wide: Boolean, crop: Boolea
     }
     BoxWithConstraints(modifier) {
         val natural = maxWidth * image.height / image.width
-        val height = minOf(maxHeight, natural)
+        val height = slot ?: minOf(maxHeight, natural)
         val width = if (wide) maxWidth else minOf(maxWidth, height * image.width / image.height)
         Box(
             Modifier
