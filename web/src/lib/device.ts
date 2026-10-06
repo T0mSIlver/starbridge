@@ -899,7 +899,25 @@ export async function prepareRecoveryKey(ctx: Ctx, currentKey: string): Promise<
   const shown = recoveryKey(fresh);
   fresh.fill(0);
   const nextPk = toB64(next.publicKey);
+  // A save in flight still signs with both keys: leaving the page then wipes them when it ends.
+  let saving = false;
+  let dropped = false;
+  const wipe = () => {
+    next.privateKey.fill(0);
+    current.privateKey.fill(0);
+  };
   const replace = async () => {
+    saving = true;
+    try {
+      const latest = await save();
+      wipe();
+      return latest;
+    } finally {
+      saving = false;
+      if (dropped) wipe();
+    }
+  };
+  const save = async () => {
     let latest = await refresh(ctx);
     // Another device replaced the key since it was typed: the confirmation could never verify.
     if (latest.dir.recoveryPk !== nextPk && latest.dir.recoveryPk !== toB64(current.publicKey))
@@ -915,12 +933,11 @@ export async function prepareRecoveryKey(ctx: Ctx, currentKey: string): Promise<
         recoveryConfirmEntry(dir, current.privateKey, nextPk, now()),
       );
     }
-    discard();
     return latest;
   };
   const discard = () => {
-    next.privateKey.fill(0);
-    current.privateKey.fill(0);
+    if (saving) dropped = true;
+    else wipe();
   };
   return { recoveryKey: shown, replace, discard };
 }
