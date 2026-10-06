@@ -5,6 +5,7 @@
  */
 import {
   type Answer,
+  type Snooze,
   addEntry,
   type Directory,
   open,
@@ -175,6 +176,27 @@ export class LiveServer {
   /** The phone answers a decision through `POST /items`. */
   async answer(decisionId: string, reply: { choice?: string; text?: string; done?: true }) {
     await this.phone("POST", "/items", await this.sealAnswer(decisionId, reply));
+  }
+
+  /** The phone snoozes a decision until `until` (#571), sealed to its machine and the phone. */
+  async snooze(decisionId: string, until: Date) {
+    const { item } = (await this.phone("GET", `/items/${decisionId}`)) as Stored;
+    const machine = (await this.directory()).members.get(item.from);
+    if (!machine) throw new Error(`no member ${item.from}`);
+    const phone = this.owner.device.member;
+    const body: Snooze = {
+      v: 1,
+      id: `z_${crypto.randomUUID()}`,
+      decisionId,
+      to: [machine.member.id, phone.id],
+      until: until.toISOString(),
+      at: new Date().toISOString(),
+    };
+    const sealed = seal("snooze", body, { id: "phone", signKey: this.owner.device.keys.sign.privateKey }, [
+      machine.member,
+      phone,
+    ]);
+    await this.phone("POST", "/items", sealed);
   }
 
   /**

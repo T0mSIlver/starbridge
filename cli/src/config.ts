@@ -88,6 +88,11 @@ export interface State {
       images?: (string | { path: string; alt?: string })[];
       /** The decision's waiting state as last posted, under the one id it keeps. */
       waiting?: { id: string; state: Waiting["state"] };
+      /**
+       * The owner's latest snooze (#571): no answer before `until`. `told` once `wait` said so;
+       * a newer snooze is told again.
+       */
+      snooze?: { until: string; at: string; told?: boolean };
       cursor?: string;
       /** The Claude Code session that asked; the mod delivers the answer there only. */
       session?: string;

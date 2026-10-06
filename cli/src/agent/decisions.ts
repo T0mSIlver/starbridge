@@ -17,7 +17,9 @@ import {
   postDecision,
   postWaiting,
   sessionLines,
+  snoozedUntil,
   takeAnswer,
+  takeSnooze,
 } from "../decisions";
 import type { SessionEvent, Status } from "./api";
 import { type Feature, HttpError, type Hub, holdSeconds, pause } from "./server";
@@ -87,7 +89,9 @@ export class Decisions implements Feature {
             "unknown-decision",
             `${id} is not a decision this machine asked`,
           );
-        return { posted: await postWaiting(this.ctx, session(this.ctx), id, state) };
+        const posted = await postWaiting(this.ctx, session(this.ctx), id, state);
+        const until = snoozedUntil(this.ctx.store.state(), id, this.ctx.now());
+        return { posted, ...(until ? { snoozedUntil: until } : {}) };
       },
     },
     {
@@ -108,15 +112,22 @@ export class Decisions implements Feature {
         const wait = holdSeconds(b.wait === undefined ? undefined : String(b.wait));
         const end = Date.now() + wait * 1000;
         await this.beforeEvents();
+        // Without an answer, a decision's snooze, once per snooze (#571).
+        const snoozed = () => {
+          const until = id ? takeSnooze(this.ctx.store, id, this.ctx.now()) : undefined;
+          return until ? { snoozedUntil: until, question: asked?.question } : undefined;
+        };
         let found = takeAnswer(this.ctx.store, id, from);
-        while (!found && Date.now() < end) {
+        let off = found ? undefined : snoozed();
+        while (!found && !off && Date.now() < end) {
           await this.hub.changed(end - Date.now(), req.signal);
           // Taking marks the answer seen: a client that hung up, as on a restart (#548), would
           // never print it, and its next wait would skip it.
           if (req.signal.aborted) return {};
           found = takeAnswer(this.ctx.store, id, from);
+          if (!found) off = snoozed();
         }
-        return found ?? {};
+        return found ?? off ?? {};
       },
     },
   ];

@@ -379,6 +379,78 @@ test("waiting and working flip a decision's state, and each flip pushes", async 
   expect(ctx.errors.at(-1)).toContain("already answered");
 });
 
+/** The phone snoozes `id` until 18:00 tomorrow in this machine's zone (#571). */
+async function snoozed(ctx: Awaited<ReturnType<typeof paired>>, id: string) {
+  const until = new Date();
+  until.setDate(until.getDate() + 1);
+  until.setHours(18, 0, 0, 0);
+  await server.snooze(id, until);
+  // The machine reads it on its next poll.
+  await poll(ctx, session(ctx), {
+    cursor: ctx.store.state().asked[id]?.cursor,
+    seconds: 0,
+    shared: false,
+  });
+  return until;
+}
+
+test("waiting says when the owner snoozed the question, and wait says it once with exit 3", async () => {
+  const ctx = await paired(server);
+  await run(ASK, ctx);
+  const id = ctx.lines[0] as string;
+  await snoozed(ctx, id);
+  const line = `Snoozed ${id} (Merge #12 now?) until tomorrow 18:00: no answer before then.`;
+  expect(await run(["waiting", id], ctx)).toBe(0);
+  expect(ctx.lines.at(-1)).toBe(line);
+  expect(await run(["wait", id, "--timeout", "5s"], ctx)).toBe(3);
+  expect(ctx.lines.at(-1)).toBe(line);
+  // Told once: the next wait waits on, and an answer still comes.
+  const next = run(["wait", id, "--timeout", "20s"], ctx);
+  await server.answer(id, { choice: "Merge" });
+  expect(await next).toBe(0);
+  expect(ctx.lines.at(-1)).toBe(`Answer to ${id} (Merge #12 now?): Merge`);
+});
+
+test("through the local agent, waiting and wait say the snooze too, and --json prints its time", async () => {
+  const ctx = await paired(server);
+  const agent = makeAgent(ctx, { socket: join(ctx.store.dir, "agent.sock"), noQuota: true });
+  await agent.start();
+  try {
+    await run(ASK, ctx);
+    const id = ctx.lines.at(-1) as string;
+    const back = new Date();
+    back.setDate(back.getDate() + 1);
+    back.setHours(18, 0, 0, 0);
+    await server.snooze(id, back);
+    await until(() => !!ctx.store.state().asked[id]?.snooze);
+    expect(await run(["waiting", id], ctx)).toBe(0);
+    expect(ctx.lines.at(-1)).toBe(
+      `Snoozed ${id} (Merge #12 now?) until tomorrow 18:00: no answer before then.`,
+    );
+    expect(await run(["wait", id, "--json", "--timeout", "5s"], ctx)).toBe(3);
+    expect(JSON.parse(ctx.lines.at(-1) as string)).toEqual({
+      decisionId: id,
+      snoozedUntil: back.toISOString(),
+    });
+    expect(await run(["wait", id, "--timeout", "2s"], ctx)).toBe(2);
+  } finally {
+    await agent.stop();
+  }
+});
+
+test("back now: a snooze already over says nothing", async () => {
+  const ctx = await paired(server);
+  await run(ASK, ctx);
+  const id = ctx.lines[0] as string;
+  await server.snooze(id, new Date(Date.now() - 1000));
+  await poll(ctx, session(ctx), {
+    cursor: ctx.store.state().asked[id]?.cursor,
+    seconds: 0,
+    shared: false,
+  });
+  expect(await run(["wait", id, "--timeout", "2s"], ctx)).toBe(2);
+});
+
 test("ask --waiting pushes once, through its waiting state, so the notification says waiting", async () => {
   const ctx = await paired(server);
   await run([...ASK, "--waiting"], ctx);
