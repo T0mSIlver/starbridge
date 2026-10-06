@@ -177,6 +177,11 @@ provider plugins add providers, not panels.
   quota snapshots 30. Per account: 10000 questions, 10000 permission prompts, 128 MB, each item
   charged its boxes plus 512 bytes per row. The numbers live in `server/src/limits.ts` and
   PROTOCOL.md, "Limits". A post reads counts from a totals table kept by triggers.
+- **Retention comes from `ITEM_KINDS`** (#477). Each kind names its `keep`: a day, a week or a
+  month after it was received, answered or left unanswered; `withRe` (it goes with the item it
+  refers to); `fromActive` (it goes when its machine is revoked). The hourly sweep builds its
+  deletes from that table, and a kind without `keep` fails typecheck, so no kind is stored and
+  never dropped. The periods are server limits, so tests and self-hosters set their length.
 - **Sizes** (#170). A question's boxes may hold 2 MB together and one image's base64url 512 KB; the
   request body limit is 3 MB. Each box carries the whole body, so the cap must fit every device's
   copy.
@@ -532,6 +537,15 @@ Tokens, type and components: `DESIGN.md`.
   step skips without `NPM_TOKEN` (#480). versionCode is `MAJOR*1000000 + MINOR*10000 + PATCH*100`
   plus the rc number or 99, so release candidates sort first. Play App Signing keeps the release
   key, so Play and GitHub builds share one signature (#148).
+- **One version everywhere** (#471). `bun cli/scripts/version.ts <version>` stamps the version
+  into `cli/package.json`, `web/package.json`, both `plugin.json`, the mod's `VERSION`, Android's
+  default `versionName` and the marketplace's two `ref`s, in a PR; the merged commit is tagged,
+  and the release workflow refuses a tag that disagrees (`--check`, also a test on every PR). The
+  marketplace lists both plugins as `git-subdir` sources at that tag, over https so no SSH key is
+  needed, so a hook merged on main never reaches users before the CLI that supports it. A release
+  candidate moves every version but the marketplace refs. Setup and `starbridge update` install
+  the Pi package at the CLI's own tag. The mod keeps its own copy of the agent API revision, since
+  Claude Code installs only `mod/`.
 - **Deploys** (#26, #150, #260). A merge to main deploys from Actions once CI passes, over SSH to a
   forced command that deploys only main's head or a commit on main containing the deployed one;
   the box fetches it itself. Rollbacks are manual (`deploy/deploy.sh`). The deploy fails unless the
