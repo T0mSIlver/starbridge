@@ -630,19 +630,22 @@ The mark is a space elevator on a 108-unit canvas (the Android adaptive
 icon grid; the visible area is the central 72): a planet's edge (a circle at
 54,148, radius 80) and a tether (x 51.75 to 56.25, from the top edge down
 into the planet) in `fg` dark, and one amber climber, a capsule 11 wide and
-20 tall at 48.5,34, in `accent` dark. The ground is `bg` dark in both
-schemes, and the climber is the only amber. Single-colour uses (themed icon,
+20 tall at 48.5,34, in `accent` dark. Where the mark has a ground, it is `bg`
+dark in both schemes, and the climber is the only amber. Single-colour uses (themed icon,
 notification icon) draw all three shapes in one colour.
 
 | Where | File |
 |---|---|
 | Android launcher | `res/mipmap-anydpi/ic_launcher*.xml`, layers in `res/drawable/ic_launcher_*.xml` |
 | Android notification | `res/drawable/ic_notification.xml` (white, 24 dp) |
-| Web favicon | `web/src/app/icon.svg`, `favicon.ico` (16, 32, 48 px) |
-| Web install icons | `web/src/app/apple-icon.png` (180 px), `web/public/icon-*.png`, `manifest.ts` |
+| Web tab icon | `web/src/app/icon.svg` |
+| Web favicon and install icons | `web/src/app/favicon.ico` (16, 32, 48 px), `apple-icon.png` (180 px), `web/public/icon-*.png`, `manifest.ts` |
 
-The PNG and ICO files are rendered from the SVG; redraw them when the mark
-changes.
+The tab icon is the mark as the page's rail draws it, with no ground, in
+`fg` and `accent` of the browser's scheme, so the tab matches the page on a
+light or a dark tab strip. The other web icons stand on the launcher's ground,
+since a home screen, or a browser that skips the SVG, shows them on any
+colour; `node web/scripts/icons.ts` renders them.
 
 The product name has no wordmark: it is "Starbridge" in the sans, weight 500. Beside the mark,
 the name stands on the mark's ground: its baseline sits on the mark's bottom
