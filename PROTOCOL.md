@@ -278,16 +278,15 @@ request without the header, or with one the server cannot read, is served.
   NUL member NUL nonce.
 - **App sign-in** follows PKCE (RFC 7636, S256), because any app can claim the `starbridge://`
   scheme. The app keeps a random verifier and sends only its challenge,
-  base64url(SHA-256(verifier)), which is also the state sent to GitHub. GitHub redirects to
-  `/v1/auth/github/callback/app`, which the Android app claims as an App Link on starbridge.run;
-  `/.well-known/assetlinks.json` binds it to the app's signing keys. An app that catches the
-  redirect trades GitHub's code, the state and the verifier at `POST /auth/app/github`.
-  Otherwise the browser finishes the sign-in, and the server redirects to `APP_REDIRECT_URI` with
-  a single-use code, never the session, which the app trades with the verifier at
-  `POST /auth/app/session`; any trade attempt burns the code. `APP_REDIRECT_URI` is
-  `starbridge://auth` by default and `https://starbridge.run/app/auth` on starbridge.run, another
-  App Link, whose page has an "Open Starbridge" button to `starbridge://auth?code=<code>` for
-  when the app does not catch it.
+  base64url(SHA-256(verifier)), which the server passes to GitHub as `code_challenge` and as the
+  state. GitHub binds its code to the challenge, and the app trades code and verifier for the
+  session over HTTPS; the app ignores a redirect whose state is not its challenge. GitHub
+  redirects to `/v1/auth/github/callback/app`, which the Android app claims as an App Link on
+  starbridge.run (`/.well-known/assetlinks.json` binds it to the app's signing keys). When the
+  browser gets the redirect instead, the server hands code and state on to `APP_REDIRECT_URI`:
+  `starbridge://auth` by default, and on starbridge.run the App Link
+  `https://starbridge.run/app/auth`, whose page has an "Open Starbridge" button to
+  `starbridge://auth`.
 - **Machines** send `Authorization: Bearer <machine token>`, issued when their pairing is
   approved. The server stores a hash of it and drops it when the directory revokes the machine.
 - Pairing requests are unauthenticated and rate-limited per IP.
@@ -300,9 +299,8 @@ request without the header, or with one the server cannot read, is served.
 |---|---|---|
 | `GET /auth/github` | anyone | start GitHub sign-in; the app adds `?app=1&challenge=<S256 challenge>` |
 | `GET /auth/github/callback` | anyone | finish it, set the session |
-| `GET /auth/github/callback/app` | anyone | finish the app's sign-in in the browser: redirect to `<APP_REDIRECT_URI>?code=<code>` |
-| `POST /auth/app/github` | the app | `{code, state, verifier}`: GitHub's code from the redirect the app caught → `{session}`; 400 `bad-state` when the state is not the verifier's S256 challenge; shares the callback's rate limit |
-| `POST /auth/app/session` | the app | `{code, verifier}` → `{session}`; 400 `bad-code` when the code is unknown, used, older than 60 s or the verifier does not match; rate-limited per IP |
+| `GET /auth/github/callback/app` | anyone | the browser got the app's sign-in: redirect to `<APP_REDIRECT_URI>?code=<code>&state=<state>`; 400 `bad-state` without them |
+| `POST /auth/app/session` | the app | `{code, verifier}`: GitHub's code → `{session}`; 400 `bad-code` when GitHub refuses the code: unknown, used, expired or not this verifier's |
 | `POST /auth/owner` | anyone | self-hosted: `{token}` against `OWNER_TOKEN`; sets the session and returns `{session}` |
 | `POST /auth/logout` | device | end the session |
 | `GET /auth/challenge` | device | `{nonce, expiresInSeconds}`: one nonce per session, single use, 5 minutes; asking again returns the outstanding one |
@@ -453,7 +451,7 @@ server whose disk is full answers writes 503 `storage-full` with `Retry-After`; 
 | `POST /directory` | 30 an hour per account |
 | Directory entries | from entry 200 on, a device's `add`: 409 `directory-full`; revocations and confirmations always pass, the recovery key may add 20 more devices, and devices may propose 20 more recovery keys; 8 KB per entry: 413 `too-large` |
 | Sessions | 50 per account; signing in past that ends the oldest, unpaired ones first |
-| `GET /auth/github/callback`, `GET /auth/github/callback/app` and `POST /auth/app/github` | 20 a minute per address, together |
+| `GET /auth/github/callback` and `POST /auth/app/session` | 20 a minute per address, together |
 | `POST /pairings` | 10 a minute per address; 20 unapproved pairings per address, an IPv6 client counting as its /48: 429 `too-many-pairings` |
 | Pairing messages | 4 KB each: 400 `bad-schema` |
 | `GET /pairings/:rendezvous/result` and `GET /pairings/:rendezvous?wait=` waiting | 4 per pairing: 429 `too-many-waits` |

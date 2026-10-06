@@ -6,17 +6,17 @@ import ui from "@/components/ui.module.css";
 export const metadata: Metadata = { title: "Sign in", robots: { index: false } };
 
 /**
- * Where GitHub sign-in ends for the Android app on starbridge.run: an App Link that the verified
- * app opens without this page (PROTOCOL.md, "Auth"). Where it can't, a tap here hands the
- * one-time code to the app; Chrome asks before following starbridge:// without one. No analytics
- * here: the URL holds the code.
+ * Where the browser hands GitHub sign-in on to the Android app on starbridge.run: an App Link
+ * that the verified app opens without this page (PROTOCOL.md, "Auth"). Where it can't, a tap here
+ * passes GitHub's code to the app; Chrome asks before following starbridge:// without one. The
+ * code is worthless without the app's verifier, but no analytics here all the same.
  */
 export default async function AppSignIn({
   searchParams,
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const { code } = await searchParams;
+  const { code, state } = await searchParams;
   return (
     <FirstRunPage>
       {typeof code === "string" && code ? (
@@ -24,7 +24,7 @@ export default async function AppSignIn({
           <h1 className="t-heading">Back to the app</h1>
           <p className={`t-small ${s.lede}`}>You signed in with GitHub. Finish in the app.</p>
           <a
-            href={`starbridge://auth?code=${encodeURIComponent(code)}`}
+            href={`starbridge://auth?${new URLSearchParams({ code, ...(typeof state === "string" && { state }) })}`}
             className={`t-label ${ui.btn} ${ui.lg} ${ui.fill}`}
           >
             Open Starbridge

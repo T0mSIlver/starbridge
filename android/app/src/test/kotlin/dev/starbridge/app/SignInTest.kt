@@ -9,12 +9,11 @@ import org.junit.Test
 // The links that end GitHub sign-in (PROTOCOL.md, "Auth", #527).
 class SignInTest {
     @Test fun readsEachLinkThatEndsASignIn() {
-        assertEquals(Redirect.Code("sbc_a1"), SignIn.redirect("starbridge://auth?code=sbc_a1"))
-        assertEquals(Redirect.Code("sbc_a1"), SignIn.redirect("https://starbridge.run/app/auth?state=x&code=sbc_a1"))
-        assertEquals(
-            Redirect.GitHub("9f2c", "Xy_z"),
-            SignIn.redirect("https://starbridge.run/v1/auth/github/callback/app?code=9f2c&state=Xy_z"),
-        )
+        assertEquals(Redirect.Code("sbc_a1", null), SignIn.redirect("starbridge://auth?code=sbc_a1"))
+        assertEquals(Redirect.Code("9f2c", "Xy_z"), SignIn.redirect("starbridge://auth?code=9f2c&state=Xy_z"))
+        assertEquals(Redirect.Code("9f2c", "Xy_z"), SignIn.redirect("https://starbridge.run/app/auth?state=Xy_z&code=9f2c"))
+        assertEquals(Redirect.Code("9f2c", "Xy_z"), SignIn.redirect("https://starbridge.run/v1/auth/github/callback/app?code=9f2c&state=Xy_z"))
+        assertEquals(Redirect.Denied, SignIn.redirect("https://starbridge.run/v1/auth/github/callback/app?error=access_denied&state=Xy_z"))
     }
 
     @Test fun ignoresOtherLinks() {
@@ -25,7 +24,6 @@ class SignInTest {
             "https://starbridge.run/app/auth/more?code=sbc_a1",
             "https://starbridge.run/v1/auth/github/callback?code=9f2c&state=Xy_z",
             "https://starbridge.run/v1/auth/github/callback/app?code=9f2c",
-            "https://starbridge.run/v1/auth/github/callback/app?error=access_denied&state=Xy_z",
             "starbridge://other?code=sbc_a1",
             "https://starbridge.run/app/auth",
             "https://starbridge.run/app/auth?code=",

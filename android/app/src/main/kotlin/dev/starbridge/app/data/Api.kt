@@ -142,13 +142,9 @@ class Api(private val http: OkHttpClient, private val server: String, private va
     suspend fun ownerSignIn(token: String): String =
         call("POST", "/auth/owner", buildJsonObject { put("token", token) }).second!!.jsonObject.getValue("session").jsonPrimitive.content
 
-    /** Trades the sign-in redirect's one-time code and the PKCE verifier for a session. */
+    /** Trades the sign-in redirect's code and the PKCE verifier for a session. */
     suspend fun appSession(code: String, verifier: String): String =
         call("POST", "/auth/app/session", buildJsonObject { put("code", code); put("verifier", verifier) }).second!!.jsonObject.getValue("session").jsonPrimitive.content
-
-    /** Trades GitHub's code from a redirect this app caught, its state and the PKCE verifier for a session. */
-    suspend fun appGitHubSession(code: String, state: String, verifier: String): String =
-        call("POST", "/auth/app/github", buildJsonObject { put("code", code); put("state", state); put("verifier", verifier) }).second!!.jsonObject.getValue("session").jsonPrimitive.content
 
     /** A single-use nonce to sign for [bind]. */
     suspend fun challenge(): String = call("GET", "/auth/challenge").second!!.jsonObject.getValue("nonce").jsonPrimitive.content

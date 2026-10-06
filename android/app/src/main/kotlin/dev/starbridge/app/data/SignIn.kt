@@ -6,9 +6,9 @@ import java.security.MessageDigest
 import java.security.SecureRandom
 
 /**
- * GitHub sign-in for the app, with PKCE (RFC 7636, PROTOCOL.md "Auth"). Whatever comes back, any
- * app claiming starbridge://auth could catch it; trading it for a session needs the verifier,
- * which never leaves this phone.
+ * GitHub sign-in for the app, with PKCE (RFC 7636, PROTOCOL.md "Auth"). GitHub binds its code to
+ * the challenge, so whoever catches the redirect, trading the code for a session needs the
+ * verifier, which never leaves this phone.
  */
 object SignIn {
     /** 32 random bytes, base64url without padding: 43 characters. */
@@ -20,30 +20,31 @@ object SignIn {
 
     /** What ends a sign-in. */
     sealed interface Redirect {
-        /** The server's one-time code, after the browser finished the sign-in. */
-        data class Code(val code: String) : Redirect
+        /** The code to trade, and the sign-in's state: its challenge. A server before #527 sends no state. */
+        data class Code(val code: String, val state: String?) : Redirect
 
-        /** GitHub's own redirect, which this app caught on starbridge.run (#527). */
-        data class GitHub(val code: String, val state: String) : Redirect
+        /** The owner turned GitHub down, or GitHub failed. */
+        data object Denied : Redirect
     }
 
     /**
-     * The sign-in a link ends, else null: GitHub's redirect to
-     * https://starbridge.run/v1/auth/github/callback/app?code=…&state=…, or the server's
-     * starbridge://auth?code=… (a self-hosted server) or https://starbridge.run/app/auth?code=…
-     * (starbridge.run, when the browser finished the sign-in).
+     * The sign-in a link ends, else null: GitHub's redirect, which this app catches on
+     * starbridge.run at /v1/auth/github/callback/app, or the server's, when the browser got
+     * GitHub's: https://starbridge.run/app/auth on starbridge.run, starbridge://auth elsewhere.
      */
     fun redirect(link: String): Redirect? {
         val uri = runCatching { URI(link) }.getOrNull() ?: return null
+        val hosted = uri.scheme == "https" && uri.host == "starbridge.run"
+        val gitHub = hosted && uri.path == "/v1/auth/github/callback/app"
+        val ours = gitHub || (hosted && uri.path == "/app/auth") || (uri.scheme == "starbridge" && uri.host == "auth")
+        if (!ours) return null
         val query = uri.rawQuery?.split('&')?.mapNotNull { part ->
             part.split('=', limit = 2).takeIf { it.size == 2 && it[1].isNotBlank() }?.let { it[0] to it[1] }
         }?.toMap().orEmpty()
-        val code = query["code"] ?: return null
-        val hosted = uri.scheme == "https" && uri.host == "starbridge.run"
+        val code = query["code"]
         return when {
-            hosted && uri.path == "/v1/auth/github/callback/app" -> query["state"]?.let { Redirect.GitHub(code, it) }
-            hosted && uri.path == "/app/auth" -> Redirect.Code(code)
-            uri.scheme == "starbridge" && uri.host == "auth" -> Redirect.Code(code)
+            code != null && (!gitHub || query["state"] != null) -> Redirect.Code(code, query["state"])
+            gitHub && query["error"] != null -> Redirect.Denied
             else -> null
         }
     }

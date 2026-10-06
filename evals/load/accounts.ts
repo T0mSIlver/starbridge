@@ -73,14 +73,16 @@ export async function makeUser(n: number, via: Via): Promise<User> {
     if (!ok.includes(r.status)) throw new Error(`${what}: ${r.status} ${JSON.stringify(r.json)}`);
   }
 
-  /** GitHub sign-in; `app` signs in as the Android app does, trading a code for the session. */
+  /** GitHub sign-in; `app` signs in as the Android app does, trading GitHub's code for the session. */
   async function signIn(github: number, app: boolean): Promise<string> {
     const verifier = toB64(crypto.getRandomValues(new Uint8Array(32)));
     const challenge = new Bun.CryptoHasher("sha256").update(verifier).digest("base64url");
     const start = await call("GET", `/auth/github${app ? `?app=1&challenge=${challenge}` : ""}`);
     const state = new URL(start.headers.get("location") ?? "").searchParams.get("state");
     const cookie = (start.headers.get("set-cookie") ?? "").split(";")[0];
-    const cb = await call("GET", `/auth/github/callback?code=${github}&state=${state}`, { cookie });
+    // The app's sign-in comes back to its own path, which hands GitHub's code on to the app.
+    const back = app ? "/auth/github/callback/app" : "/auth/github/callback";
+    const cb = await call("GET", `${back}?code=${github}&state=${state}`, { cookie });
     must(cb, "callback", [302]);
     if (app) {
       const code = new URL(cb.headers.get("location") ?? "").searchParams.get("code");
