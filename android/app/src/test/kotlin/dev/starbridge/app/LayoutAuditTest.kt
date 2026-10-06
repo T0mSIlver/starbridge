@@ -11,7 +11,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.WideNavigationRailDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.adaptive.currentWindowAdaptiveInfo
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteDefaults
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteItem
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
@@ -43,7 +42,6 @@ import androidx.compose.ui.unit.dp
 import androidx.core.graphics.Insets
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
-import androidx.window.core.layout.WindowSizeClass
 import com.github.takahirom.roborazzi.RoborazziOptions
 import com.github.takahirom.roborazzi.RoborazziTaskType
 import com.github.takahirom.roborazzi.captureScreenRoboImage
@@ -62,6 +60,8 @@ import dev.starbridge.app.ui.SheetHandle
 import dev.starbridge.app.ui.SheetShape
 import dev.starbridge.app.ui.Symbol
 import dev.starbridge.app.ui.Tab
+import dev.starbridge.app.ui.suiteType
+import dev.starbridge.app.ui.TabLabel
 import dev.starbridge.app.ui.devices.AddDeviceScreen
 import dev.starbridge.app.ui.devices.DeviceActions
 import dev.starbridge.app.ui.devices.DevicesScreen
@@ -145,24 +145,6 @@ class LayoutAuditTest(private val shot: String, private val look: Look) {
             "settings", "devices", "devices-revoke", "add-device", "add-device-found", "add-device-qr", "join-digits",
         )
 
-        /** What the audit found that is a design question for the owner (#306), not a bug: allowed until decided. */
-        private val KNOWN = listOf(
-            // Controls the design sizes under 48 dp: the sheet's 36 dp handle, 40 dp buttons and
-            // toggles, underlined text links.
-            Regex("""^tap target \d{3}x36 dp: ""$"""),
-            Regex("""^tap target \d+x40 dp: "(More answers|Used|Left|Resets.*|Off|7 days|\d)"$"""),
-            // Allow and Deny: 40 dp, taller as the font grows.
-            Regex("""^tap target \d+x4[0-7] dp: "(Allow|Deny)"$"""),
-            Regex("""^tap target \d+x4[1-4] dp: "Open in (Claude|Codex)"$"""),
-            Regex("""^tap target \d+x(28|35|45) dp: "(Sign out|Back|Use the recovery key|Use starbridge\.run|Can't scan\? Compare digits)"$"""),
-            // A page title beside its trailing text: the title gives way at 2x on a small phone.
-            Regex("""^lines cut off: "(Quotas|Settings|Inbox)" \((4\d|[5-9]\d) sp\)$"""),
-            // A quota's pace beside its reset time: the reset time takes the row at 2x on a small phone.
-            Regex("""^wider than its box: "(On pace|Will run out.*|Headroom unused|Ran out.*|Too early to tell)"$"""),
-            // The rail's badge on the Inbox symbol reaches its label at large font sizes.
-            Regex("""^text over text: "12" and "Inbox"$"""),
-        )
-
         private val REFERENCES = setOf(
             "inbox 320x640@2.0x", "quotas 320x640@2.0x", "settings 320x640@2.0x", "setup-join-digits 320x640@2.0x",
             "sheet-question 320x640@2.0x", "inbox 915x412@1.3x", "sheet-prompt 915x412@1.3x",
@@ -225,7 +207,7 @@ class LayoutAuditTest(private val shot: String, private val look: Look) {
         "inbox-prompt-menu" to Shot(Tab.Inbox, before = { compose.onAllNodes(SemanticsMatcher.expectValue(SemanticsProperties.ContentDescription, listOf("More answers")))[0].performScrollTo().performClick() }) {
             InboxScreen(emptyList(), now, decisionActions, prompts = worst.prompts, promptActions = promptActions)
         },
-        "find" to Shot(Tab.Inbox, bar = false) { FindScreen(worst.decisions, worst.prompts, now, {}, {}, {}, initial = "rebase") },
+        "find" to Shot(Tab.Inbox, bar = false, before = { compose.onNode(hasSetTextAction()).performTextInput("rebase") }) { Entry { FindScreen(worst.decisions, worst.prompts, now, {}, {}, {}) } },
         "sheet-question" to sheet { DecisionSheet(worst.decisions[0], now, { _, _, _ -> }, Replies(rememberDrafts(), emptyMap())) },
         "sheet-reply" to sheet(before = { compose.onNodeWithText("Reply").performClick() }) { DecisionSheet(worst.decisions[1], now, { _, _, _ -> }, Replies(rememberDrafts(), emptyMap())) },
         "sheet-prompt" to sheet { PromptSheet(worst.prompts[0], now, promptActions) },
@@ -278,12 +260,7 @@ class LayoutAuditTest(private val shot: String, private val look: Look) {
             Scaffold { padding -> androidx.compose.foundation.layout.Box(Modifier.fillMaxSize().padding(padding)) { shot.content() } }
             return
         }
-        val width = currentWindowAdaptiveInfo().windowSizeClass
-        val suite = when {
-            width.isWidthAtLeastBreakpoint(WindowSizeClass.WIDTH_DP_EXPANDED_LOWER_BOUND) -> NavigationSuiteType.WideNavigationRailExpanded
-            width.isWidthAtLeastBreakpoint(WindowSizeClass.WIDTH_DP_MEDIUM_LOWER_BOUND) -> NavigationSuiteType.WideNavigationRailCollapsed
-            else -> NavigationSuiteType.None
-        }
+        val suite = suiteType()
         val colors = StarbridgeTheme.colors
         NavigationSuiteScaffold(
             navigationSuiteType = suite,
@@ -299,7 +276,7 @@ class LayoutAuditTest(private val shot: String, private val look: Look) {
                         selected = shot.tab == tab,
                         onClick = {},
                         icon = { BadgedBox(badge = { if (tab == Tab.Inbox) Badge(containerColor = colors.accent, contentColor = colors.onAccent) { Text("12") } }) { Symbol(tab.sym, filled = shot.tab == tab) } },
-                        label = { Text(tab.label) },
+                        label = { TabLabel(tab) },
                     )
                 }
             },
@@ -339,8 +316,7 @@ class LayoutAuditTest(private val shot: String, private val look: Look) {
         }
         // The worst cases as reference shots, which `verifyRoborazziDebug` holds to.
         if (audit == null && "${this.shot} $look" in REFERENCES) captureScreenRoboImage("screenshots/audit/${this.shot}-$look.png")
-        val unknown = problems.filterNot { p -> KNOWN.any { it.containsMatchIn(p) } }
-        if (audit == null) assertTrue("${this.shot} $look:\n" + unknown.joinToString("\n"), unknown.isEmpty())
+        if (audit == null) assertTrue("${this.shot} $look:\n" + problems.joinToString("\n"), problems.isEmpty())
     }
 
     /** Status and gesture bars, and in landscape the camera cutout on the left, as a Pixel has them. */
@@ -420,6 +396,9 @@ class LayoutAuditTest(private val shot: String, private val look: Look) {
             val widest = (0 until l.lineCount).maxOfOrNull { l.getLineRight(it) - l.getLineLeft(it) } ?: 0f
             if (widest > l.size.width + 2) out += "wider than its box: $name"
             val ellipsized = (0 until l.lineCount).any { l.isLineEllipsized(it) }
+            // A short word split across lines ("Setting" over "s"); long names and commands may break anywhere.
+            val text = l.layoutInput.text.text
+            if (text.length <= 15 && ' ' !in text && l.lineCount > 1) out += "word broken: $name"
             // The size tells a page title from a tab label with the same words.
             if (l.multiParagraph.didExceedMaxLines && !ellipsized) out += "lines cut off: $name (${l.layoutInput.style.fontSize.value.toInt()} sp)"
             else if (l.lineCount > 0) {
@@ -440,18 +419,76 @@ class LayoutAuditTest(private val shot: String, private val look: Look) {
             val small = minOf(a.boundsInRoot.height, b.boundsInRoot.height)
             if (o.width > 2 && o.height > small / 3) out += "text over text: \"${label(a).take(40)}\" and \"${label(b).take(40)}\""
         }
-        val min = 48 * density - 1
-        for (n in nodes(SemanticsMatcher.keyIsDefined(SemanticsActions.OnClick), unmerged = false)) {
-            if (n.boundsInRoot.isEmpty) continue
-            // Material pads a control to its touch target outside the click: the layout node's size.
-            val w = maxOf(n.size.width, n.layoutInfo.width)
-            val h = maxOf(n.size.height, n.layoutInfo.height)
-            if (w < min || h < min) {
+        out += tapTargets()
+        return out.distinct()
+    }
+
+    /**
+     * Tap areas under 48 dp. Compose widens a control's touch area to 48 dp where nothing else is
+     * (`ViewConfiguration.minimumTouchTargetSize`), and Material pads some controls to 48 dp in
+     * layout. So a control's area is its box grown to 48 dp each way, stopped at the window's edge,
+     * at the card around it, at a neighbour's box, and halfway to a neighbour that grows towards it
+     * too. A control over another (a sheet's handle over the scrim) grows only within what lies
+     * over that one, the sheet: past it, a direct hit on the one under wins.
+     */
+    private fun tapTargets(): List<String> {
+        val min = 48 * density
+        // Controls cut by a scrolling list's end are judged where they show in full.
+        val clicks = nodes(SemanticsMatcher.keyIsDefined(SemanticsActions.OnClick), unmerged = false)
+            .filter { it.layoutInfo.isPlaced && !it.boundsInRoot.isEmpty && it.boundsInRoot == it.unclipped() }
+        fun box(n: SemanticsNode): Rect {
+            val u = n.unclipped()
+            val dx = maxOf(0f, n.layoutInfo.width - u.width) / 2
+            val dy = maxOf(0f, n.layoutInfo.height - u.height) / 2
+            return Rect(u.left - dx, u.top - dy, u.right + dx, u.bottom + dy)
+        }
+        fun grow(size: Float) = maxOf(0f, (min - size) / 2)
+        val out = mutableListOf<String>()
+        for (n in clicks) {
+            val b = box(n)
+            var root = n
+            while (root.parent != null) root = root.parent!!
+            var bounds = Rect(0f, 0f, root.size.width.toFloat(), root.size.height.toFloat())
+            if (b.intersect(bounds) != b) continue
+            // A card (a clickable surface) clips what it holds, touch included.
+            var p = n.parent
+            var layer = n
+            while (p != null) {
+                if (p.config.contains(SemanticsActions.OnClick)) bounds = bounds.intersect(p.unclipped())
+                if (p.parent != null) layer = p
+                p = p.parent
+            }
+            val grown = Rect(b.left - grow(b.width), b.top - grow(b.height), b.right + grow(b.width), b.bottom + grow(b.height))
+            var left = maxOf(bounds.left, grown.left)
+            var right = minOf(bounds.right, grown.right)
+            var top = maxOf(bounds.top, grown.top)
+            var bottom = minOf(bounds.bottom, grown.bottom)
+            for (m in clicks) {
+                if (m === n || m.root !== n.root || m.isAncestorOf(n) || n.isAncestorOf(m)) continue
+                val o = box(m)
+                if (o.overlaps(b)) {
+                    val over = layer.boundsInRoot
+                    left = maxOf(left, over.left)
+                    right = minOf(right, over.right)
+                    top = maxOf(top, over.top)
+                    bottom = minOf(bottom, over.bottom)
+                    continue
+                }
+                if (o.left < grown.right && o.right > grown.left) {
+                    if (o.top >= b.bottom) bottom = minOf(bottom, o.top, maxOf((b.bottom + o.top) / 2, o.top - grow(o.height)))
+                    if (o.bottom <= b.top) top = maxOf(top, o.bottom, minOf((b.top + o.bottom) / 2, o.bottom + grow(o.height)))
+                }
+                if (o.top < grown.bottom && o.bottom > grown.top) {
+                    if (o.left >= b.right) right = minOf(right, o.left, maxOf((b.right + o.left) / 2, o.left - grow(o.width)))
+                    if (o.right <= b.left) left = maxOf(left, o.right, minOf((b.left + o.right) / 2, o.right + grow(o.width)))
+                }
+            }
+            if (right - left < min - 1 || bottom - top < min - 1) {
                 val what = label(n).ifBlank { n.config.getOrNull(SemanticsProperties.ContentDescription)?.joinToString().orEmpty() }
-                out += "tap target ${(w / density).toInt()}x${(h / density).toInt()} dp: \"${what.take(50)}\""
+                out += "tap target ${((right - left) / density).toInt()}x${((bottom - top) / density).toInt()} dp: \"${what.take(50)}\""
             }
         }
-        return out.distinct()
+        return out
     }
 
     /** For a person to judge: ellipsized text, and text whose contrast reads under WCAG AA. */

@@ -1,5 +1,8 @@
 package dev.starbridge.app.ui
 
+import androidx.compose.ui.unit.sp
+import androidx.compose.material3.LocalTextStyle
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -137,13 +140,23 @@ fun Setup(phase: Phase, notice: StateFlow<String?>, dismiss: () -> Unit, openUrl
     }
 }
 
-/** The navigation suite for the window: none on phones, which get [BottomBar]; the wide rail beside wider content. */
+/**
+ * A tab's label in the rail, on one line: in the narrow rail a large font shrinks it rather than
+ * break it. The floor scales with the font too, so at 2x 8 sp still reads larger than the default.
+ */
 @Composable
-private fun suiteType(): NavigationSuiteType {
-    val width = currentWindowAdaptiveInfo().windowSizeClass
+internal fun TabLabel(tab: Tab) = Text(tab.label, maxLines = 1, autoSize = TextAutoSize.StepBased(minFontSize = 8.sp, maxFontSize = LocalTextStyle.current.fontSize))
+
+/**
+ * The navigation suite for the window: none on phones, which get [BottomBar]; the wide rail beside
+ * wider content, collapsed on a phone in landscape, where its labels would crowd the badge.
+ */
+@Composable
+internal fun suiteType(): NavigationSuiteType {
+    val size = currentWindowAdaptiveInfo().windowSizeClass
     return when {
-        width.isWidthAtLeastBreakpoint(WindowSizeClass.WIDTH_DP_EXPANDED_LOWER_BOUND) -> NavigationSuiteType.WideNavigationRailExpanded
-        width.isWidthAtLeastBreakpoint(WindowSizeClass.WIDTH_DP_MEDIUM_LOWER_BOUND) -> NavigationSuiteType.WideNavigationRailCollapsed
+        size.isWidthAtLeastBreakpoint(WindowSizeClass.WIDTH_DP_EXPANDED_LOWER_BOUND) && size.isHeightAtLeastBreakpoint(WindowSizeClass.HEIGHT_DP_MEDIUM_LOWER_BOUND) -> NavigationSuiteType.WideNavigationRailExpanded
+        size.isWidthAtLeastBreakpoint(WindowSizeClass.WIDTH_DP_MEDIUM_LOWER_BOUND) -> NavigationSuiteType.WideNavigationRailCollapsed
         else -> NavigationSuiteType.None
     }
 }
@@ -204,7 +217,7 @@ fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> U
                             Symbol(tab.sym, filled = selected)
                         }
                     },
-                    label = { Text(tab.label) },
+                    label = { TabLabel(tab) },
                     modifier = Modifier.semantics { if (tab == Tab.Inbox && openDecisions > 0) stateDescription = "$openDecisions need you" },
                 )
             }

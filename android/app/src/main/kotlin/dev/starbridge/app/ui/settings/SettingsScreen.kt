@@ -1,5 +1,6 @@
 package dev.starbridge.app.ui.settings
 
+import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.text.style.TextOverflow
 import android.content.Intent
 import android.provider.Settings
@@ -26,6 +27,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.ToggleButton
 import androidx.compose.material3.ToggleButtonDefaults
+import androidx.compose.material3.ToggleButtonShapes
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -360,20 +362,33 @@ private fun ProviderRow(
 
 /**
  * Connected choices (Material 3 Expressive's button group), each as wide as its label: the picked
- * one filled in `fg`, the others on the highest container.
+ * one filled in `fg`, the others on the highest container. When the labels don't fit side by side,
+ * the choices stack, each the full width.
  */
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun <T> Segments(choices: List<Pair<T, String>>, selected: T, onSelect: (T) -> Unit) {
-    Row(horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)) {
+    SubcomposeLayout { c ->
+        val row = subcompose("row") { SegmentButtons(choices, selected, onSelect, stacked = false) }.first()
+        val fits = row.maxIntrinsicWidth(c.maxHeight) <= c.maxWidth
+        val shown = if (fits) row else subcompose("stack") { SegmentButtons(choices, selected, onSelect, stacked = true) }.first()
+        val placeable = shown.measure(c.copy(minWidth = 0, minHeight = 0))
+        layout(maxOf(placeable.width, c.minWidth), maxOf(placeable.height, c.minHeight)) { placeable.place(0, 0) }
+    }
+}
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun <T> SegmentButtons(choices: List<Pair<T, String>>, selected: T, onSelect: (T) -> Unit, stacked: Boolean) {
+    val buttons = @Composable {
         choices.forEachIndexed { i, (value, label) ->
             ToggleButton(
                 checked = value == selected,
                 onCheckedChange = { onSelect(value) },
-                modifier = Modifier.height(40.dp).semantics { role = Role.RadioButton },
-                shapes = when (i) {
-                    0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
-                    choices.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
+                modifier = Modifier.height(40.dp).then(if (stacked) Modifier.fillMaxWidth() else Modifier).semantics { role = Role.RadioButton },
+                shapes = when {
+                    stacked -> ToggleButtonShapes(ToggleButtonDefaults.shape, ToggleButtonDefaults.pressedShape, ToggleButtonDefaults.checkedShape)
+                    i == 0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
+                    i == choices.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
                     else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
                 },
                 colors = ToggleButtonDefaults.colors(
@@ -386,4 +401,6 @@ fun <T> Segments(choices: List<Pair<T, String>>, selected: T, onSelect: (T) -> U
             ) { Text(label, style = StarbridgeTheme.type.label, maxLines = 1, overflow = TextOverflow.Ellipsis) }
         }
     }
+    // Stacked 40 dp choices sit 8 dp apart, so each keeps a 48 dp tap area.
+    if (stacked) Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) { buttons() } else Row(horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)) { buttons() }
 }
