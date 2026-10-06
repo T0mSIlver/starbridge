@@ -22,6 +22,7 @@ import {
   SealedItem,
   type Settled,
   seal,
+  visible,
 } from "@starbridge/protocol";
 import { claudeSession } from "./claude";
 import type { PendingPermission, PermissionUpdate, State } from "./config";
@@ -144,12 +145,22 @@ export function redactText(text: string): string {
     .replace(ASSIGNMENT, (_, name: string, sep: string) => `${name}${sep}${REDACTED}`);
 }
 
+/**
+ * An object from `entries` whose keys were rewritten (redacted, escaped). Throws when two keys now
+ * read alike: devices would see one value for both, while the hash covers the input as received.
+ */
+function uniqueKeys(entries: (readonly [string, unknown])[]): Record<string, unknown> {
+  if (new Set(entries.map(([k]) => k)).size < entries.length)
+    throw new UsageError("the input has keys that read alike: it stays at the keyboard");
+  return Object.fromEntries(entries);
+}
+
 /** Redacts every string in a JSON value, keys included, and a token under a secret's name. */
 export function redactValue(value: unknown): unknown {
   if (typeof value === "string") return redactText(value);
   if (Array.isArray(value)) return value.map(redactValue);
   if (value && typeof value === "object")
-    return Object.fromEntries(
+    return uniqueKeys(
       Object.entries(value).map(([k, v]) => [
         redactText(k),
         SECRET_NAME.test(k) && typeof v === "string" && new RegExp(`^${TOKEN}+$`).test(v)
@@ -162,7 +173,7 @@ export function redactValue(value: unknown): unknown {
 
 /** JSON text of `value` within `max` characters: the longest strings are cut until it fits. */
 export function fitJson(value: unknown, max = INPUT_MAX): string {
-  let v = value;
+  let v = visibleValue(value);
   let text = JSON.stringify(v) ?? "null";
   for (let round = 0; text.length > max && round < 64; round++) {
     const over = text.length - max;
@@ -192,6 +203,20 @@ export function fitJson(value: unknown, max = INPUT_MAX): string {
   return out;
 }
 
+/**
+ * Every string in a JSON value, keys included, through `visible`. Throws when two keys read alike
+ * once escaped (`x` + U+202E and `x\\u202E`).
+ */
+function visibleValue(value: unknown): unknown {
+  if (typeof value === "string") return visible(value);
+  if (Array.isArray(value)) return value.map(visibleValue);
+  if (value && typeof value === "object")
+    return uniqueKeys(
+      Object.entries(value).map(([k, v]) => [visible(k), visibleValue(v)] as const),
+    );
+  return value;
+}
+
 function setAt(v: unknown, path: (string | number)[], f: (s: string) => string): unknown {
   if (path.length === 0) return f(v as string);
   const [head, ...rest] = path as [string | number, ...(string | number)[]];
@@ -203,7 +228,7 @@ function setAt(v: unknown, path: (string | number)[], f: (s: string) => string):
 // --- Building the prompt ------------------------------------------------------
 
 const oneLine = (s: string, max: number) => {
-  const flat = s.replace(/\s+/g, " ").trim();
+  const flat = visible(s.replace(/\s+/g, " ").trim());
   return flat.length <= max ? flat : `${flat.slice(0, max - 1)}…`;
 };
 
@@ -261,7 +286,7 @@ export function ruleText(updates: PermissionUpdate[]): string {
       ? (u.rules ?? []).map((r) => (r.ruleContent ? `${r.toolName}(${r.ruleContent})` : r.toolName))
       : (u.directories ?? []).map((d) => `access to ${d}`),
   );
-  const text = parts.join(", ").replace(/\s+/g, " ").trim();
+  const text = visible(parts.join(", ").replace(/\s+/g, " ").trim());
   return text.length <= RULE_MAX && redactText(text) === text ? text : "";
 }
 

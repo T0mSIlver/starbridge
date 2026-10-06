@@ -29,6 +29,7 @@ import { ordered } from "./options";
 import { PhoneBar } from "./PhoneBar";
 import { PushBanner } from "./PushBanner";
 import { QuotaAside } from "./QuotaAside";
+import { RecoveryBanner } from "./RecoveryBanner";
 import { Resizer } from "./Resizer";
 import ui from "./ui.module.css";
 
@@ -287,6 +288,7 @@ export function Inbox() {
         </span>
         <ViewMenu grouping={grouping} setGrouping={setGrouping} />
       </header>
+      <RecoveryBanner />
       <PushBanner />
       {inbox.rejected.length > 0 && (
         <p className={`t-meta ${s.rejected}`} role="status">
