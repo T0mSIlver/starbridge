@@ -1,0 +1,316 @@
+cat /home/dev/work/starbridge/.scratch/launch/proof/cc-terminal.clean; sleep 1000
+dev in 🌐 sandbox in mystifying-galileo-1c4264 on  launch/pi-web via  v24.18.0 
+⬢ [Systemd] ❯ cat /home/dev/work/starbridge/.scratch/launch/proof/cc-terminal.clean; sleep 1000
+Script started on 2026-10-06 00:50:03+02:00 [COMMAND="bash --norc" TERM="tmux-256color" TTY="/dev/pts/7" COLUMNS="160" LINES="50"]
+bash-5.2$ export PS1='newuser$ '; cd ~
+newuser$ curl -fsSL http://127.0.0.1:8395/releases/download/v0.9.0/install.sh | STARBRIDGE_VERSION=0.9.0 sh
+Installed starbridge 0.9.0 to /home/dev/work/starbridge/.scratch/launch/home-cc/.local/bin/starbridge
+Pairing
+Starbridge server: [https://starbridge.run] http://127.0.0.1:3790
+Pairing code: D8TQ-W0X5-93B5-7A48-B77H-P53S
+Scan this with the Starbridge app or your phone's camera, or open http://127.0.0.1:3790/pair#D8TQ-W0X5-93B5-7A48-B77H-P53S
+  █▀▀▀▀▀█ ▄█ ▄▄  ▀▀ █ ██▄   █▀▀▀▀▀█  
+  █ ███ █ ▄█▀█  ▀ █▄▄▀█▀ ▀█ █ ███ █  
+  █ ▀▀▀ █ ▄ █ ▀███▄  ▀▄▄▀▀█ █ ▀▀▀ █  
+  ▀▀▀▀▀▀▀ ▀ ▀ █▄▀▄▀ █ █▄▀▄█ ▀▀▀▀▀▀▀  
+  ▀▀██▀ ▀▀██▀ ▀ ▀█▄█▀█ ██▄ █▄█ ▀ █▄  
+  ▄▀▀▀ █▀▄▀█▄█▀ ▄ ▄ █ ██▀ ▄▄ ▀█ ▄    
+  █▀▀█ ▀▀  █▄▀▄▄▄▄ ██▄▀███▀▄▄█▀▄ ▄▄  
+  ▀ ▄█▄█▀▄█▀▄ ▄█▀▀▀  ▄ █▄ ▄ ██ ▀▄▀   
+  ██▀█▄█▀▀ ▄▀ ▀ ▀██ ▄ ▄  ▄▀▄▄▄▀▄ █▄  
+   █▀ ▀ ▀█▄█▀█▀ ▄▀▀▀█▄▀██ █▄▄▀█▀▄▀   
+  ▄█▀███▀ ▄▄ ▀▄▄▄▀▀▀▀▄▀██▄ ▄▄█▀▀▄█▄  
+  █ █  ▀▀  ▀  ▄█▀██▀  ▀▄█▄ █▄█ ▀█▀   
+  ▀ ▀ ▀▀▀▀▄▄▀ ▀ ▀▀▀▀▀█▀▄▄▀█▀▀▀█▀▄ █  
+  █▀▀▀▀▀█ ▀█ █▀ ▄█ ▀  ██ ▀█ ▀ █ ▄▀   
+  █ ███ █ ███▀▄▄▄██▄▄█ ▀█ █▀▀▀██▄▄█  
+  █ ▀▀▀ █ ██▄ ▄█▀██ █ ██ ▄▀▀██▄▀▄    
+  ▀▀▀▀▀▀▀ ▀   ▀ ▀  ▀▀ ▀   ▀▀  ▀  ▀   
+Or type the code under Devices in the Starbridge app or web page. It expires in 10 minutes.
+Paired "sandbox" (m_7VV0r4Mb4QRM). Keys are in /home/dev/work/starbridge/.scratch/launch/home-cc/.config/starbridge.
+Shown as a server (`starbridge config machine-kind` changes it).
+CodexBar
+CodexBar reads your plan quotas and is not installed. Install the CodexBar CLI? [Y/n] n
+No quotas without CodexBar; decisions work without it. Rerun setup once it is installed.
+Agent
+Started /home/dev/work/starbridge/.scratch/launch/home-cc/.config/systemd/user/starbridge-agent.service.
+Agent 0.9.0 runs (pid 3581013).
+Claude Code
+Install the Starbridge plugins for Claude Code (the skill and the mod)? [Y/n] y
+Added the starbridge marketplace.
+Installed the starbridge@starbridge plugin.
+Installed the starbridge-mod@starbridge plugin.
+Claude Code sessions load them when they next start.
+Let Claude Code update the Starbridge plugins by itself? [Y/n] y
+Auto-update is on.
+Permission prompts
+Also send Claude Code permission prompts to your devices? The Claude app already shows them for Remote Control sessions. [y/N] y
+Sent to your devices (`starbridge config permissions off` stops it).
+Check
+Send a test decision to your phone? [Y/n] y
+Answer it on your phone or the web page (Ctrl-C skips):
+d_RD9skQfXUD7hdpSt
+Answer to d_RD9skQfXUD7hdpSt (Does Starbridge reach you from sandbox?): Yes
+Setup is done. `starbridge status` shows the same checks at any time.
+newuser$ clear; starbridge status
+starbridge 0.9.0 (/home/dev/work/starbridge/.scratch/launch/home-cc/.local/bin/starbridge)
+Paired: "sandbox" (m_7VV0r4Mb4QRM) on http://127.0.0.1:3790
+Agent: 0.9.0, pid 3581013, since 2026-10-05T22:50:46Z, on /home/dev/work/starbridge/.scratch/launch/home-cc/run/starbridge/agent.sock
+Server: reachable, last answered 2026-10-05T22:52:38Z
+Quota: no providers
+Sessions: 0
+Service: active, enabled
+CodexBar: not found
+Claude Code marketplace: added, auto-update on
+  starbridge@starbridge: 0.2.0
+  starbridge-mod@starbridge: 0.2.0
+newuser$ clear; starbridge pair
+starbridge: this machine is already paired; pass --force to pair it again
+newuser$ clear; starbridge pair --force
+Pairing code: XBJF-QMN8-WAJ6-HG34-A231-GWAD
+Scan this with the Starbridge app or your phone's camera, or open https://starbridge.run/pair#XBJF-QMN8-WAJ6-HG34-A231-GWAD
+  █▀▀▀▀▀█ ▄▀ ▄██▄▄▀█▀ ▄ ██▀ █▀▀▀▀▀█  
+  █ ███ █ ▀███▀█▄▄▀██ ▀▄▄▄█ █ ███ █  
+  █ ▀▀▀ █ █▄ ▄ ██ ▀▄█▄██▀▀▄ █ ▀▀▀ █  
+  ▀▀▀▀▀▀▀ █▄▀ █ █ ▀▄█▄█▄█▄▀ ▀▀▀▀▀▀▀  
+  █▀▄▀ ▄▀▀▄ █▄  ▄█▀▄█ ▀▄  █▄█▀▀▄▀▀▄  
+  ▄█▀█▀▀▀▀█▀▀   ▄▄▄▀█▀██   ▄██▄▀ ▄█  
+   ▄▀▀▄▀▀█  ▄▄█  ▄▀██▀█ ▄ █▀█ ▄█▄▄█  
+   ████ ▀  █  █▄▄▄ █ ▄▀█▀█▀▀▄▄ █ █   
+  ▀  ▄▀█▀█▀ ▄▀ ▀▀▄▄█▀█▀▄▀▄▄▄▀▀▀▄▄ ▀  
+  ██ ▄█▀▀▀▀▀█▄ █   ▄▄▄▄█▄ ▄█▀▄▄█ ▀▀  
+  ▀█  ▀ ▀█ ▄▀██▄▀▄▄█ ▄█▀▀ ▀▄▄  ▀▄▀▄  
+  ▀█▄▄█ ▀▀▄ ▄███▀ █ ██ ▄█▄█▄ ▄▀█ ▄█  
+  ▀ ▀▀▀ ▀ ▄▄ █ ▄█▄▀███▀▄ ██▀▀▀██  ▄  
+  █▀▀▀▀▀█ ▀█▀█ ▀▀▄▄▄▀▄ ▄█ █ ▀ █  ▀   
+  █ ███ █ ▄▀█ ██▄▀ ▀█ ▄ ▀▄▀▀█▀██ ▀   
+  █ ▀▀▀ █ ▄▀▄▀█ █▄▄██▄█▄ ▀█▀ ▀█ ▀ ▀  
+  ▀▀▀▀▀▀▀ ▀▀▀       ▀▀    ▀ ▀ ▀▀ ▀   
+Or type the code under Devices in the Starbridge app or web page. It expires in 10 minutes.
+^Cclear; curl -fsSL http://127.0.0.1:8395/releases/download/v0.9.0/install.sh | STARBRIDGE_VERSION=0.9.0 STARBRIDGE_NO_SETUP=1 sh && starbridge pair
+starbridge pair --force
+starbridge: the pairing code expired; run `starbridge pair` again
+newuser$ clear; curl -fsSL http://127.0.0.1:8395/releases/download/v0.9.0/install.sh | STARBRIDGE_VERSION=0.9.0 STARBRIDGE_NO_SETUP=1 sh && starbridge pair
+Installed starbridge 0.9.0 to /home/dev/work/starbridge/.scratch/launch/home-cc/.local/bin/starbridge
+starbridge: this machine is already paired as "sandbox" on http://127.0.0.1:3790; `starbridge pair --force` pairs it again with new keys
+newuser$ starbridge pair --force
+Pairing code: SAPK-Z59A-VVNG-ZDW0-WVDP-R52R
+Scan this with the Starbridge app or your phone's camera, or open http://127.0.0.1:3790/pair#SAPK-Z59A-VVNG-ZDW0-WVDP-R52R
+  █▀▀▀▀▀█ █▀▀█ ▀▀█ ▀█▀ █ ▀▄ █▀▀▀▀▀█  
+  █ ███ █  ▀ ▄▄▀ ▄▄▀█▄█▀▄ ▀ █ ███ █  
+  █ ▀▀▀ █ █▄▄▀█▄▄▀██▄▀▄▀▀ ▀ █ ▀▀▀ █  
+  ▀▀▀▀▀▀▀ █▄▀ ▀▄▀ ▀ █ █ █▄▀ ▀▀▀▀▀▀▀  
+  ██▀▄▄█▀▄█▀ ▀█▀ ▀█ █▄▀▀▄█▄██▀▀ ▄██  
+  ██ ▀██▀▀█▀█▄█▀█▄█▀▀█▄▀▀▀ █▀█▄▀ ▀▀  
+   ██ █ ▀▀███  ██ ▀▄▀▀██ ▄███▀ █▄██  
+  █▀▀ ██▀▄▀▄▀▀ ▄ █▀▀▄██ █▀ ▀▄▀▀   ▀  
+   ▄██▄▀▀▀▀▄█▀█▀ ▀▄▀▄ █▄▀████  █▄▄█  
+  ▀▄███▀▀ ▀█▄▄█▀██▀ ▄██▀▄▀▀███▄   ▀  
+  ▀▀  █▄▀▄ ▄▄  ███ ▀▄▀▄█▄█▄██▀   ▄█  
+  ▀▀▄▀█▄▀▄▀██▀ ▄ ▀▄  ██ ▀█▄▄█▀▀ ▀ ▀  
+  ▀▀▀  ▀▀▀█ ▄▀█▀ █ ▀ ▀▄ █ █▀▀▀█  ▀▄  
+  █▀▀▀▀▀█ ▄▄▀▄█▀██▀▀ ▀▄▀▄ █ ▀ █▀  ▀  
+  █ ███ █  ▄▀  ██▀▄▀▄▄▀▄█▀▀▀▀██▄ █▄  
+  █ ▀▀▀ █ █  ▀ ▄ ▀▄▀▀▀ ▀███ ▄▀█  ▀▀  
+  ▀▀▀▀▀▀▀ ▀▀ ▀▀▀  ▀ ▀▀▀▀ ▀▀ ▀  ▀  ▀  
+Or type the code under Devices in the Starbridge app or web page. It expires in 10 minutes.
+Paired "sandbox" (m_NddSg9xTs29y). Keys are in /home/dev/work/starbridge/.scratch/launch/home-cc/.config/starbridge.
+The old pairing (m_7VV0r4Mb4QRM) stays under Devices until you revoke it there.
+newuser$ clear; starbridge status; tail -5 ~/.fakesd/starbridge-agent.service.log
+starbridge 0.9.0 (/home/dev/work/starbridge/.scratch/launch/home-cc/.local/bin/starbridge)
+Paired: "sandbox" (m_NddSg9xTs29y) on http://127.0.0.1:3790
+Agent: 0.9.0, pid 3581013, since 2026-10-05T22:50:46Z, on /home/dev/work/starbridge/.scratch/launch/home-cc/run/starbridge/agent.sock
+Server: reachable, last answered 2026-10-05T22:54:30Z
+Quota: no providers
+Sessions: 0
+Service: active, enabled
+CodexBar: not found
+Claude Code marketplace: added, auto-update on
+  starbridge@starbridge: 0.2.0
+  starbridge-mod@starbridge: 0.2.0
+2026-10-05T22:50:46Z quota uploads off: no providers configured
+2026-10-05T22:50:46Z starbridge agent 0.9.0 listening on /home/dev/work/starbridge/.scratch/launch/home-cc/run/starbridge/agent.sock
+newuser$ clear; starbridge ask --question 'After re-pair: does this arrive?' --option Yes --option No
+d_VVAOzClB-QZh9geU
+Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_VVAOzClB-QZh9geU --timeout 5m` (again on exit 2).
+newuser$ clear; mkdir -p ~/proj && cd ~/proj && git init -q && echo '# demo' > README.md && git add . && git commit -qm init && claude
+Welcome to Claude Code v2.1.289
+..........................................................
+     *                                       █████▓▓░
+                                 *         ███▓░     ░░
+            ░░░░░░                        ███▓░
+    ░░░   ░░░░░░░░░░                      ███▓░
+   ░░░░░░░░░░░░░░░░░░░    *                ██▓░░      ▓
+                                             ░▓▓███▓▓░
+ *                                 ░░░░
+                                 ░░░░░░░░
+                               ░░░░░░░░░░░░░░░░
+       █████████                                        *
+      ██▄█████▄██                        *
+       █████████      *
+.......█ █   █ █..........................................
+ Browser didn't open? Use the url below to sign in (c to copy)
+https://claude.com/cai/oauth/authorize?code=true&client_id=9d1c250a-e61b-44d9-88ed-5944d1962f5e&response_type=code&redirect_uri=https%3A%2F%2Fplatform.claude.co
+m%2Foauth%2Fcode%2Fcallback&scope=org%3Acreate_api_key+user%3Aprofile+user%3Ainference+user%3Asessions%3Aclaude_code+user%3Amcp_servers+user%3Afile_upload+user%
+3Aplugins&code_challenge=G-52JloWV6KQvhby04-xlPnfS3Ewlmw3WQq0qx3foXw&code_challenge_method=S256&state=aReddtsQVVmul3VedNrC7ulDwPmjbdE4ZXQ7bQls6Eg
+ Paste code here if prompted > **************************************************************************
+newuser$ clear
+● The README now says spaces-only indentation. It's committed on master but not pushed,                                                                         
+  because the repo has no remote. todo.md is in the same state.                                                                                               ✕ 
+  I made two mistakes:                                                                                                                                          
+  - Wrong card text: the card said there was no README yet, but one already existed (#                                                                          
+    demo). I hadn't checked.                                                                                                                                    
+  - Overwrote the README: my first write replaced the # demo title with # proj and added                                                                        
+    an example. I restored # demo before committing, so the commit only adds the                                                                                    indentation line.                                                                                                                                           
+  The README is now:                                                                                                                                            
+  # demo                                                                                                                                                        
+  Indentation in this repo uses spaces, never tabs.                                                                                                             
+✻ Baked for 15s · done 1:04 AM                                                                                                                                  
+❯ Ask me through Starbridge whether todo.md should be renamed to TODO.md; don't wait,                                                                           
+  end your turn.                                                                                                                                                
+  Ran 1 shell command                                                                                                                                           
+● I posted the card on Starbridge asking whether to rename todo.md to TODO.md. It's                             No changes this session                         
+  d_yWj6lL51vqYHupvV, and I'm not waiting on it. I'll apply your answer when it arrives.                                                                        
+  Until then todo.md keeps its name.                                                                                                                            
+  Everything is committed on master and nothing is pushed, because the repo has no                                                                              
+  remote.                                                                                                                                                       
+✻ Sautéed for 5s · done 1:05 AM                                                                                                                                 
+› Prompt from the starbridge-mod plugin                                                                                                                         
+❯ The starbridge-mod plugin sent a message:                                                                                                                     
+  Answer to d_yWj6lL51vqYHupvV (Rename todo.md to TODO.md?): Rename to TODO.md                                                                                  
+  This is how Claude Code surfaces a prompt a plugin submits between turns — it starts                                                                          
+  this turn in the user's place. Address the message above.                                                                                                     
+  Ran 1 shell command                                                                                                                                           
+● todo.md is now TODO.md. The rename is committed on master and not pushed, because the                                                                         
+  repo has no remote. README.md and the earlier commits are in the same state.                                                                                  
+  /exit                         Exit the CLI                                                                                                                    
+  /context                      Visualize current context usage as a colored grid
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ /exit                                                                                             
+Resume this session with:───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+claude --resume 4be5cd57-5f76-4858-a3fc-2fe878698b5a                    
+newuser$ clear; claude --permission-mode default
+  Your phone shows this run as failed too.                                              │                                                                     ✕ 
+                                                                                        │                                                                       
+  The command is deterministic, since it always exits 3, so a third run won't change    │2 files changed                                      source: Current ▾ 
+  anything. I haven't looked into why.                                                  │                                                                       
+                                                                                        │hello.txt                                                              
+  Still local and uncommitted: hello.txt, a1.txt, a2.txt, offline.txt and the empty     │offline.txt                                                            
+  directory d3. Nothing is pushed.                                                      │                                                                       
+                                                                                        │────────────────────────────────────────────────────────────────────── 
+✻ Sautéed for 24s · done 1:13 AM                                                        │hello.txt (untracked)                                                  
+                                                                                        │────────────────────────────────────────────────────────────────────── 
+❯ Ask me through Starbridge whether to delete a1.txt and a2.txt. End your turn after    │New file not yet staged.                                               
+  asking.                                                                               │Run `git add :/hello.txt` to see line counts.                          
+                                                                                        │                                                                       
+  Ran 2 shell commands                                                                  │────────────────────────────────────────────────────────────────────── 
+  ⎿  Allowed by PermissionRequest hook                                                  │offline.txt (untracked)                                                
+                                                                                        │────────────────────────────────────────────────────────────────────── 
+● I posted the card asking whether to delete a1.txt and a2.txt, recommending Delete. I'm│New file not yet staged.                                               
+  waiting on your answer, which will come back into this session as a new prompt.       │Run `git add :/offline.txt` to see line counts.                        
+                                                                                        │                                                                       
+  Nothing is deleted yet. Still local and uncommitted: hello.txt, a1.txt, a2.txt,       o                                          .                            
+  offline.txt and the empty directory d3. Nothing is pushed.                            │                                                                       
+                                                                                        │                                                                       
+✻ Worked for 5s · done 1:17 AM                                                          │                                                                       
+                                                                                        │                                                                       
+› Prompt from the starbridge-mod plugin                                                 │                                                                       
+❯ The starbridge-mod plugin sent a message:                                             │                                                                       
+  Answer to d_Zwn2Rs-nMjsAYJhr (Delete a1.txt and a2.txt from the proj repo?): Delete   │                                                                       
+                                                                                        │                                                                       
+  This is how Claude Code surfaces a prompt a plugin submits between turns — it starts  │                                                                       
+  this turn in the user's place. Address the message above.                             │                                                                       
+                                                                                        │                                                                       
+  Ran 1 shell command                                                                   │                                                                       
+  ⎿  Allowed by PermissionRequest hook                                                  │                                                                       
+                                                                                        │                                                                       
+● a1.txt and a2.txt are deleted, as you answered on the card.                           │                                                                       
+                                                                                        │                                                                       
+  Still local and uncommitted: hello.txt, offline.txt and the empty directory d3.       │                                                                       
+  Nothing is pushed.                                                                    │                                                                       
+                                                                                        │                                                                       
+✻ Brewed for 2s · done 1:18 AM                                                          │                                                                       
+                                                                                        │                                                                       
+❯ /exit                                                                                 │                                                                       
+                                                                                        │                                                                       
+✽ Herding…                                                                              │                                                                       
+  ⎿  Tip: Did you know you can drag and drop image files into your terminal?            │                                                                       
+                                                                                        │                                                                       
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯                                                                                                                                                               
+Resume this session with:───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+claude --resume bba2f87a-4e70-4e47-891c-287ec9e03dc8                                                                                                            
+newuser$ clear; cd ~; curl -fsSL http://127.0.0.1:8395/releases/download/v0.9.0/install.sh | STARBRIDGE_VERSION=0.9.0 sh
+Installed starbridge 0.9.0 to /home/dev/work/starbridge/.scratch/launch/home-cc/.local/bin/starbridge
+Pairing
+Paired as "sandbox" (m_NddSg9xTs29y) on http://127.0.0.1:3791.
+Shown as a server (`starbridge config machine-kind` changes it).
+CodexBar
+CodexBar reads your plan quotas and is not installed. Install the CodexBar CLI? [Y/n] y
+Downloading CodexBar 0.72.0 (linux-x86_64)
+Installed CodexBar to /home/dev/work/starbridge/.scratch/launch/home-cc/.local/opt/codexbar, linked as /home/dev/work/starbridge/.scratch/launch/home-cc/.local/bin/codexbar.
+CodexBar: /home/dev/work/starbridge/.scratch/launch/home-cc/.local/opt/codexbar/codexbar
+  codex    works (2 windows)
+  zai      works (2 windows)
+  mistral  works (2 windows)
+  claude   needs sign-in: no answer within 20 s
+Providers to upload, comma-separated (none for no quotas): [codex,zai,mistral] 
+The agent uploads codex, zai, mistral every 5m.
+Agent
+Started /home/dev/work/starbridge/.scratch/launch/home-cc/.config/systemd/user/starbridge-agent.service.
+Agent 0.9.0 runs (pid 3806584).
+Claude Code
+The starbridge@starbridge and starbridge-mod@starbridge plugins are installed.
+Let Claude Code run `starbridge ask`, `waiting`, `wait` and `settle` without a permission prompt? They post questions to your devices and read your answers. [Y/n] y
+Allowed Bash(starbridge ask:*), Bash(starbridge waiting:*), Bash(starbridge working:*), Bash(starbridge wait:*), Bash(starbridge settle:*) in /home/dev/work/starbridge/.scratch/launch/home-cc/.claude/settings.json.
+Codex
+Install the Starbridge skill for Codex in /home/dev/work/starbridge/.scratch/launch/home-cc/.codex/skills/starbridge? [Y/n] y
+Installed /home/dev/work/starbridge/.scratch/launch/home-cc/.codex/skills/starbridge/SKILL.md.
+Pi
+Install the Starbridge Pi package (the skill, and answers into the session)? This runs `pi install git:github.com/T0mSIlver/starbridge`. [Y/n] n
+Skipped: `pi install git:github.com/T0mSIlver/starbridge` installs it later.
+Permission prompts
+Sent to your devices (`starbridge config permissions off` stops it).
+Check
+Uploaded a first quota snapshot: 3 providers, 6 windows.
+Send a test decision to your phone? [Y/n] n
+Setup is done. `starbridge status` shows the same checks at any time.
+newuser$ clear; starbridge pair --force 2>&1 | grep -v '[█▀▄]'
+Pairing code: RZ4M-2Z3H-ZD7C-3X4S-MQYH-7YQF
+Scan this with the Starbridge app or your phone's camera, or open http://127.0.0.1:3791/pair#RZ4M-2Z3H-ZD7C-3X4S-MQYH-7YQF
+Or type the code under Devices in the Starbridge app or web page. It expires in 10 minutes.
+Paired "sandbox" (m_82Nb48tPcx8j). Keys are in /home/dev/work/starbridge/.scratch/launch/home-cc/.config/starbridge.
+The old pairing (m_NddSg9xTs29y) stays under Devices until you revoke it there.
+newuser$ clear; starbridge update; starbridge --version; starbridge status | sed -n 1,3p
+Updated starbridge 0.9.0 to 0.9.1.
+Could not restart the agent: fake systemctl: ['--user', 'try-restart', 'starbridge-agent.service']
+Updated the starbridge@starbridge plugin.
+Updated the starbridge-mod@starbridge plugin.
+starbridge 0.9.1
+starbridge 0.9.1 (/home/dev/work/starbridge/.scratch/launch/home-cc/.local/bin/starbridge)
+Paired: "sandbox" (m_82Nb48tPcx8j) on http://127.0.0.1:3791
+Agent: 0.9.0, pid 3806584, since 2026-10-05T23:21:16Z, on /home/dev/work/starbridge/.scratch/launch/home-cc/run/starbridge/agent.sock
+newuser$ clear; curl -fsSL http://127.0.0.1:8395/releases/download/v0.9.0/install.sh | STARBRIDGE_VERSION=0.9.0 STARBRIDGE_NO_SETUP=1 sh; starbridge update; sleep 2; starbridge status | sed -n 3p
+Installed starbridge 0.9.0 to /home/dev/work/starbridge/.scratch/launch/home-cc/.local/bin/starbridge
+Updated starbridge 0.9.0 to 0.9.1.
+Restarted the starbridge agent.
+Updated the starbridge@starbridge plugin.
+Updated the starbridge-mod@starbridge plugin.
+Agent: 0.9.1, pid 3932079, since 2026-10-05T23:37:01Z, on /home/dev/work/starbridge/.scratch/launch/home-cc/run/starbridge/agent.sock
+newuser$ clear; curl -fsSL http://127.0.0.1:8395/releases/download/v0.9.1/install.sh | STARBRIDGE_NO_SETUP=1 sh; starbridge uninstall
+Installed starbridge 0.9.1 to /home/dev/work/starbridge/.scratch/launch/home-cc/.local/bin/starbridge
+d_8y20B8icCGq7hO5o
+Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_8y20B8icCGq7hO5o --timeout 5m` (again on exit 2).
+Asked your devices to revoke "sandbox" (the id above).
+Stopped and removed the agent service.
+Uninstalled the starbridge@starbridge plugin.
+Uninstalled the starbridge-mod@starbridge plugin.
+Removed the starbridge marketplace.
+Removed the starbridge allow rules from /home/dev/work/starbridge/.scratch/launch/home-cc/.claude/settings.json.
+Removed /home/dev/work/starbridge/.scratch/launch/home-cc/.codex/skills/starbridge.
+Delete /home/dev/work/starbridge/.scratch/launch/home-cc/.config/starbridge (this machine's keys and state)? [y/N] n
+Kept /home/dev/work/starbridge/.scratch/launch/home-cc/.config/starbridge: `starbridge setup` reuses it.
+Revoke "sandbox" under Devices in the Starbridge app or web page.
+CodexBar stays installed (/home/dev/work/starbridge/.scratch/launch/home-cc/.local/bin/codexbar); remove it with rm -rf /home/dev/work/starbridge/.scratch/launch/home-cc/.local/opt/codexbar /home/dev/work/starbridge/.scratch/launch/home-cc/.local/bin/codexbar.
+Removed /home/dev/work/starbridge/.scratch/launch/home-cc/.local/bin/starbridge.
+newuser$ 
