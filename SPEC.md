@@ -1437,6 +1437,9 @@ so the mod is the first path.
   its ports from below 32768 until each server starts, so runners on one machine do not
   collide, and closing outgoing connections, which share the range above, do not block them. `AUDIT=<folder>` shoots every size from
   320 to 1920 px in both themes, plus 200% text at 390, and lists what the checks find.
+- 2026-10-06. Android samples an image by its real size, read with `inJustDecodeBounds`, not the
+  size the machine declares, drops one larger than declared or than 8192 px a side, and holds
+  at most 4096² pixels in any decode (#360).
 - 2026-10-06. Workflows pin every action by commit SHA, with its version in a comment (#361). A
   moved tag could otherwise run code in the release job before it writes the minisign key.
   Dependabot proposes the updates in one grouped PR a month.
