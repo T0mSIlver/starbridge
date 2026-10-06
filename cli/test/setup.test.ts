@@ -7,6 +7,7 @@ import {
   readdirSync,
   readFileSync,
   readlinkSync,
+  rmSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -15,6 +16,7 @@ import { LiveServer } from "@starbridge/server/test-support";
 import { makeAgent } from "../src/agent/main";
 import type { Agent } from "../src/agent/server";
 import { installTarball, linkIntoLocalBin } from "../src/setup/codexbar";
+import { installOpencode, opencodeState, removeOpencode } from "../src/setup/harnesses";
 import opencodeFiles from "../src/setup/opencode-files.js";
 import { setup } from "../src/setup/setup";
 import { status } from "../src/setup/status";
@@ -364,4 +366,30 @@ test("setup ships every file the opencode plugin imports", () => {
   };
   walk("mod/opencode/starbridge.ts");
   expect([...need].sort()).toEqual(Object.keys(opencodeFiles).sort());
+});
+
+test("opencode files someone else wrote stay, and so does the code a changed entry loads", () => {
+  const home = mkdtempSync(join(tmpdir(), "starbridge-oc-"));
+  const sys = { ctx: testCtx({ HOME: home }), home };
+  const oc = join(home, ".config/opencode");
+  mkdirSync(join(oc, "plugins"), { recursive: true });
+  writeFileSync(join(oc, "plugins/starbridge.ts"), "// mine\n");
+  // The skill installs; the foreign entry and the code it would load do not.
+  expect(installOpencode(sys)).toEqual([join(oc, "plugins/starbridge.ts")]);
+  expect(readFileSync(join(oc, "plugins/starbridge.ts"), "utf8")).toBe("// mine\n");
+  expect(existsSync(join(oc, "starbridge"))).toBe(false);
+  expect(existsSync(join(oc, "skills/starbridge/SKILL.md"))).toBe(true);
+  // The agent's update leaves them alone too.
+  expect(opencodeState(sys)).toBe("outdated");
+  installOpencode(sys, true);
+  expect(readFileSync(join(oc, "plugins/starbridge.ts"), "utf8")).toBe("// mine\n");
+
+  // An entry setup wrote and the owner edited keeps its code at uninstall.
+  rmSync(join(oc, "plugins/starbridge.ts"));
+  installOpencode(sys);
+  const entry = readFileSync(join(oc, "plugins/starbridge.ts"), "utf8");
+  writeFileSync(join(oc, "plugins/starbridge.ts"), `${entry}// tweaked\n`);
+  removeOpencode(sys);
+  expect(existsSync(join(oc, "starbridge/mod/opencode/starbridge.ts"))).toBe(true);
+  expect(existsSync(join(oc, "skills/starbridge"))).toBe(false);
 });

@@ -5,7 +5,7 @@
  * (#300). The skill and the opencode plugin ship inside this binary, so setup needs no download
  * and installs the version that matches the CLI.
  */
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import rule from "../../../plugin/hooks/rule.md" with { type: "text" };
 import skill from "../../../plugin/skills/starbridge/SKILL.md" with { type: "text" };
@@ -173,41 +173,62 @@ export function opencodeState(sys: Home): "missing" | "current" | "outdated" {
   return same.every((s) => s === true) ? "current" : "outdated";
 }
 
+const SKILL_FILE = "skills/starbridge/SKILL.md";
+const ENTRY_FILE = "plugins/starbridge.ts";
+
+function readIn(dir: string, path: string): string | undefined {
+  try {
+    return readFileSync(join(dir, path), "utf8");
+  } catch {
+    return undefined;
+  }
+}
+
 /**
- * Writes the skill and the plugin; with `present`, only the ones still there (the plugin counts
- * as there while its entry file is), so an update never brings back one the owner removed.
+ * Writes the skill and the plugin, each only where the file there is Starbridge's or missing:
+ * a skill named otherwise, or a `plugins/starbridge.ts` setup did not write, stays as it is.
+ * With `present`, only the ones still there, so an update never brings back one the owner
+ * removed. Returns the files it left alone because they are someone else's.
  */
-export function installOpencode(sys: Home, present = false) {
+export function installOpencode(sys: Home, present = false): string[] {
   const dir = opencodeDir(sys);
-  const there = (path: string) =>
-    existsSync(join(dir, path.startsWith("skills/") ? path : "plugins/starbridge.ts"));
+  const skillText = readIn(dir, SKILL_FILE);
+  const entryText = readIn(dir, ENTRY_FILE);
+  const skillOk = skillText === undefined ? !present : /^name: starbridge$/m.test(skillText);
+  const pluginOk =
+    entryText === undefined
+      ? !present
+      : entryText.startsWith(OPENCODE_ENTRY.split("\n")[0] as string);
+  const foreign = [
+    ...(skillText !== undefined && !skillOk ? [join(dir, SKILL_FILE)] : []),
+    ...(entryText !== undefined && !pluginOk ? [join(dir, ENTRY_FILE)] : []),
+  ];
   for (const [path, body] of Object.entries(opencodeFiles())) {
-    if (present && !there(path)) continue;
+    if (!(path === SKILL_FILE ? skillOk : pluginOk)) continue;
     mkdirSync(dirname(join(dir, path)), { recursive: true });
     writeFileSync(join(dir, path), body);
   }
+  return foreign;
 }
 
 /** Removes what setup wrote, only the files that are Starbridge's. Returns what it removed. */
 export function removeOpencode(sys: Home): string[] {
   const dir = opencodeDir(sys);
   const done: string[] = [];
-  const read = (path: string) => {
-    try {
-      return readFileSync(join(dir, path), "utf8");
-    } catch {
-      return undefined;
-    }
-  };
-  if (/^name: starbridge$/m.test(read("skills/starbridge/SKILL.md") ?? "")) {
+  const read = (path: string) => readIn(dir, path);
+  if (/^name: starbridge$/m.test(read(SKILL_FILE) ?? "")) {
     rmSync(join(dir, "skills/starbridge"), { recursive: true, force: true });
     done.push(join(dir, "skills/starbridge"));
   }
-  if (read("plugins/starbridge.ts") === OPENCODE_ENTRY) {
-    rmSync(join(dir, "plugins/starbridge.ts"), { force: true });
-    done.push(join(dir, "plugins/starbridge.ts"));
+  if (read(ENTRY_FILE) === OPENCODE_ENTRY) {
+    rmSync(join(dir, ENTRY_FILE), { force: true });
+    done.push(join(dir, ENTRY_FILE));
   }
-  if (read("starbridge/mod/opencode/starbridge.ts") !== undefined) {
+  // An entry the owner changed stays, and so does the code it loads.
+  if (
+    read(ENTRY_FILE) === undefined &&
+    read("starbridge/mod/opencode/starbridge.ts") !== undefined
+  ) {
     rmSync(join(dir, "starbridge"), { recursive: true, force: true });
     done.push(join(dir, "starbridge"));
   }

@@ -71,6 +71,8 @@ type Event =
 const SESSION_ENV = "STARBRIDGE_OPENCODE_SESSION";
 const TITLE_ENV = "STARBRIDGE_OPENCODE_TITLE";
 const ANSWERS_ENV = "STARBRIDGE_OPENCODE_ANSWERS";
+/** What Claude Code, Codex and Pi give their commands (cli/src/decisions.ts, `agentOf`). */
+const INHERITED = ["CLAUDECODE", "CODEX_THREAD_ID", "PI_SESSION_ID"];
 
 /**
  * How long a prompt waits for the CLI at most: its own wait (570 s) plus slack. A CLI stuck on
@@ -136,10 +138,18 @@ async function server({ client, directory }: Input) {
   const loop = (id: string) => {
     if (!answers || loops.has(id)) return;
     const sessionId = async () => id;
+    // The loop confirms an answer once submitted, so a refused submit is tried again a few
+    // times; the answer also stays in the CLI's state, where `starbridge wait` finds it.
     const submit = (line: string) => {
-      void client.session
-        .promptAsync({ path: { id }, body: { parts: [{ type: "text", text: line }] } })
-        .catch(() => {});
+      void (async () => {
+        for (let i = 0; i < 4; i++) {
+          const r = await client.session
+            .promptAsync({ path: { id }, body: { parts: [{ type: "text", text: line }] } })
+            .catch((e: unknown) => ({ error: e }));
+          if (!r.error) return;
+          await sleep(5_000 * 2 ** i);
+        }
+      })();
     };
     loops.set(
       id,
@@ -222,6 +232,9 @@ async function server({ client, directory }: Input) {
       // The owner's own terminal (PTY) has no session.
       if (!id) return;
       output.env[SESSION_ENV] = id;
+      // An opencode started from Claude Code, Codex or Pi inherits their markers, which `ask`
+      // would take for the agent asking.
+      for (const name of INHERITED) output.env[name] = "";
       const session = await info(id);
       if (session?.title) output.env[TITLE_ENV] = session.title;
       // A subagent's session ends with its task, so an answer submitted there reaches nobody:

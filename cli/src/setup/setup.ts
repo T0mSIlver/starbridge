@@ -488,10 +488,11 @@ async function opencodeStep(sys: Sys) {
     )
   ) {
     try {
-      installOpencode(sys);
+      const kept = installOpencode(sys);
       ctx.out(
         `${verb === "Install" ? "Installed" : "Updated"}. opencode loads them when it next starts.`,
       );
+      for (const path of kept) ctx.out(`Kept ${path}: setup did not write it.`);
     } catch (e) {
       ctx.out(`Could not write them: ${(e as Error).message}`);
     }
