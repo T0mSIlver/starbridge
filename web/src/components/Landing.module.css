@@ -82,6 +82,41 @@
   margin: var(--s10) 0 var(--s5);
 }
 
+/* "Get the app" is the third choice, not a third equal one: no border, dimmer text. */
+.actions .quiet {
+  color: var(--fg2);
+}
+
+.apps {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: var(--s8);
+  width: min(100%, calc(var(--s40) * 5));
+  margin-top: var(--s5);
+  text-align: left;
+}
+
+.app {
+  padding-top: var(--s5);
+  border-top: 1px solid var(--line);
+}
+
+.app h3 {
+  font-weight: 500;
+}
+
+.app p {
+  margin-top: var(--s1h);
+}
+
+.appLinks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s4);
+  margin-top: var(--s3);
+}
+
 /* The web inbox in a browser window, the Android inbox overlapping it on the right. */
 .page > .showcase {
   position: relative;
@@ -411,6 +446,11 @@
 
   .lead {
     margin-top: var(--s4);
+  }
+
+  .apps {
+    grid-auto-flow: row;
+    gap: var(--s6);
   }
 
   .actions {
