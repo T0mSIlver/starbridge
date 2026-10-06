@@ -5,6 +5,7 @@ import {
   DEFAULT_SETTINGS,
   groups,
   type QuotaSettings,
+  reorder,
   toNotify,
   workdayExpected,
 } from "./quotaSettings";
@@ -140,6 +141,18 @@ test("groups: one per provider, in the order of its first window", () => {
     "codex: Weekly",
     "zai: 5-hour",
     "gemini: Daily",
+  ]);
+});
+
+test("reorder: the dragged providers swap among their own places; hidden and leading ones stay", () => {
+  // claude leads (running out) and zai is hidden; the owner drags mistral above codex.
+  const order = ["claude", "codex", "zai", "gemini", "mistral"];
+  expect(reorder(order, ["mistral", "codex", "gemini"])).toEqual([
+    "claude",
+    "mistral",
+    "zai",
+    "codex",
+    "gemini",
   ]);
 });
 

@@ -157,6 +157,10 @@ starbridge config permissions on
 Then each prompt also goes to your devices, where you allow or deny it. The prompt stays open at
 the keyboard, and the first answer wins.
 
+Pi's prompts come from pi-permission-system. With the Starbridge Pi package installed, the same
+command offers to add `starbridge` to its `authorizerChain`, which it needs as well. Your devices then allow a call
+once or deny it, and "Answer here" in Pi brings back pi-permission-system's own prompt.
+
 If you use the Claude app, turn off its "Code updates" notifications, which fire at the end of
 every turn. Keep "Code permission requests" on, unless you turned on Starbridge's permission
 prompts, so that one prompt doesn't notify you twice.
@@ -184,5 +188,4 @@ the machine is not paired or the server doesn't answer, it lets the question thr
 `bun run build:bin` builds the standalone binaries (Linux and macOS, x64 and arm64). A `v*` tag
 runs `.github/workflows/release.yml`, which attaches them, `install.sh` and the signed
 `SHA256SUMS` to a GitHub Release, commits the formula to `T0mSIlver/homebrew-starbridge` and
-publishes to npm. The signing key lives in `~/.config/starbridge/secrets/minisign.key` on the
-dev box and in the `MINISIGN_SECRET_KEY` Actions secret.
+publishes to npm. The signing key lives in the `MINISIGN_SECRET_KEY` Actions secret and, offline, with the maintainer.

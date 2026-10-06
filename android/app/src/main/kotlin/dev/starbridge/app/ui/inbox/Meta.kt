@@ -46,14 +46,14 @@ fun machineSym(kind: String?) = when (kind) {
  * as the time slot is the only place that state shows (#191).
  */
 @Composable
-fun MetaRow(source: Source, time: String, modifier: Modifier = Modifier, clock: Boolean = false) {
+fun MetaRow(source: Source, time: String, modifier: Modifier = Modifier, clock: Boolean = false, words: List<String> = emptyList()) {
     val color = MaterialTheme.colorScheme.onSurfaceVariant
     val style = StarbridgeTheme.type.machine
     Row(modifier.height(20.dp), verticalAlignment = Alignment.CenterVertically) {
         Symbol(machineSym(source.machineKind), size = 17.dp, tint = color)
         Spacer(Modifier.width(6.dp))
         Text(
-            listOf(source.machine, source.project).filter { it.isNotBlank() }.joinToString(" · "),
+            highlight(listOf(source.machine, source.project).filter { it.isNotBlank() }.joinToString(" · "), words, hitStyle()),
             style = style,
             color = color,
             maxLines = 1,

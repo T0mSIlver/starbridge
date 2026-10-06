@@ -529,7 +529,7 @@ async function main() {
   }
 
   step("a decision answered in an artifact links it, and `starbridge settle` closes it");
-  const artifact = "https://claude.ai/artifact/2ig2MyNRD484b7oZea5vkZ";
+  const artifact = "https://claude.ai/artifact/Xq7pLm2VnR4tBz9KcW1sYd";
   const pointer = cli(
     "pointer",
     [
@@ -781,6 +781,16 @@ async function main() {
   await page.goto(`${ORIGIN}/settings/devices/add`);
   await page.getByTestId("shown-code").waitFor();
   await shoot(page, "add-device");
+
+  step("sign out the recovered browser: it leaves the devices and forgets its keys");
+  await pageC
+    .getByRole("navigation", { name: "Main" })
+    .getByRole("link", { name: "Settings" })
+    .click();
+  await pageC.getByRole("button", { name: "Sign out" }).click();
+  await pageC.getByRole("dialog").getByRole("button", { name: "Sign out" }).click();
+  // With no keys left, the browser is a visitor: the landing page, not "Sign in to Starbridge".
+  await pageC.getByRole("heading", { name: /Your agents ask/ }).waitFor({ timeout: 30_000 });
 
   await ff.close();
   console.log("\nE2E PASSED");

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fromB64 } from "@starbridge/protocol";
@@ -9,6 +9,7 @@ import jsQR from "jsqr";
 import { PNG } from "pngjs";
 import { run } from "../src/cli";
 import { NO_DEFAULT } from "../src/decisions";
+import { offerPiChain } from "../src/settings";
 import { FAKE_CODEXBAR, paired, testCtx, until } from "./helpers";
 
 let server: LiveServer;
@@ -238,7 +239,7 @@ test("ask turns a sideways phone photo upright", async () => {
 
 test("ask --answer-in posts a pointer decision, and settle closes it", async () => {
   const ctx = await paired(server);
-  const page = "https://claude.ai/artifact/2ig2MyNRD484b7oZea5vkZ";
+  const page = "https://claude.ai/artifact/Xq7pLm2VnR4tBz9KcW1sYd";
   const pointer = [
     ...["ask", "--question", "Pick a layout?", "--default", "Roomy"],
     ...["--default-at", "1s", "--session", "s"],
@@ -329,6 +330,40 @@ test("config turns permission prompts on and off", async () => {
   expect(await run(["config", "permissions", "on"], ctx)).toBe(0);
   expect(ctx.lines.at(-2)).toBe("permissions   on");
   expect(await run(["config", "permissions", "maybe"], ctx)).toBe(1);
+});
+
+test("permissions on offers to name the Starbridge link in pi-permission-system's chain", async () => {
+  const ctx = await paired(server);
+  const home = mkdtempSync(join(tmpdir(), "starbridge-pi-home-"));
+  const dir = join(home, ".pi", "agent", "extensions", "pi-permission-system");
+  mkdirSync(dir, { recursive: true });
+  const file = join(dir, "config.json");
+  writeFileSync(file, JSON.stringify({ permission: { bash: "ask" }, authorizerChain: ["judge"] }));
+  ctx.env.HOME = home;
+  // No terminal: it says what to add and touches nothing.
+  expect(await run(["config", "permissions", "on"], ctx)).toBe(0);
+  expect(ctx.lines).toContain(
+    `Pi: to send pi-permission-system's prompts too, add "starbridge" to "authorizerChain" in ${file}.`,
+  );
+  expect(JSON.parse(readFileSync(file, "utf8")).authorizerChain).toEqual(["judge"]);
+
+  const no = { confirm: async () => false, text: async (_q: string, d: string) => d };
+  await offerPiChain(ctx, no);
+  expect(JSON.parse(readFileSync(file, "utf8")).authorizerChain).toEqual(["judge"]);
+  await offerPiChain(ctx, { ...no, confirm: async () => true });
+  expect(JSON.parse(readFileSync(file, "utf8"))).toEqual({
+    permission: { bash: "ask" },
+    authorizerChain: ["judge", "starbridge"],
+  });
+  // Named already: nothing to ask.
+  const before = ctx.lines.length;
+  await offerPiChain(ctx, {
+    ...no,
+    confirm: async () => {
+      throw new Error("asked");
+    },
+  });
+  expect(ctx.lines.length).toBe(before);
 });
 
 test("ask --wait prints the answer the phone sends", async () => {
