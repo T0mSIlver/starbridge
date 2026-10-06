@@ -8,7 +8,7 @@ import s from "./QuotaRow.module.css";
 /**
  * One provider's windows under its name, and the machine that sent them when there are several.
  * When CodexBar failed for it, its last windows stay, and the name says when they were read and
- * why they were not read again.
+ * why they were not read again. A provider with no windows to keep shows only why (#450).
  */
 export function QuotaGroup({
   g,
@@ -25,7 +25,10 @@ export function QuotaGroup({
   handle?: React.ReactNode;
 }) {
   return (
-    <section className={`${s.group} ${comfy ? s.groupComfy : ""}`} aria-label={g.provider}>
+    <section
+      className={`${s.group} ${comfy ? s.groupComfy : ""} ${g.cards.length === 0 ? s.empty : ""}`}
+      aria-label={g.provider}
+    >
       <div className={s.lead}>
         <h2 className={`${comfy ? "t-action" : "t-label"} ${s.head}`}>
           {handle}
@@ -34,7 +37,7 @@ export function QuotaGroup({
         </h2>
         {g.stale && (
           <p className={`t-meta ${s.stale}`}>
-            <span>Updated {relative(g.stale.updatedAt, now)}</span>
+            {g.stale.updatedAt && <span>Updated {relative(g.stale.updatedAt, now)}</span>}
             <span>{g.stale.error}</span>
           </p>
         )}

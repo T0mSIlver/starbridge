@@ -113,7 +113,8 @@ export type QuotaGroup = {
   provider: string;
   machine?: string;
   cards: QuotaCardData[];
-  stale?: QuotaCardData["stale"];
+  /** Why CodexBar failed for the provider; `updatedAt` is when its kept windows were read. */
+  stale?: { updatedAt?: string; error: string };
 };
 
 /**

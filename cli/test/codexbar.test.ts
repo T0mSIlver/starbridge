@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { collect, parseUsage, type RunResult } from "../src/codexbar";
+import { collect, parseUsage, type RunResult, shortError } from "../src/codexbar";
 import { snapshot } from "../src/quota";
 
 // The fixtures were recorded on the dev box at 19:09 UTC.
@@ -91,6 +91,52 @@ test("a provider that fails is asked once more before its failure counts", async
   expect(second.map((r) => r.error)).toEqual(["Claude usage probe timed out."]);
   expect(log.at(-1)).toBe("codexbar claude: Claude usage probe timed out.");
   expect(calls).toEqual(["claude", "claude", "claude", "claude"]);
+});
+
+test("providers are read at once, and their rows keep the order asked", async () => {
+  let open = 0;
+  let most = 0;
+  const run = async (_bin: string, p: string | undefined): Promise<RunResult> => {
+    open++;
+    most = Math.max(most, open);
+    await new Promise((r) => setTimeout(r, p === "claude" ? 30 : 10));
+    open--;
+    const row = { provider: p, usage: { primary: { usedPercent: 10 } } };
+    return { code: 0, stdout: JSON.stringify([row]), stderr: "" };
+  };
+  const rows = await collect(
+    "codexbar",
+    ["claude", "codex", "zai"],
+    () => NOW,
+    () => {},
+    run,
+  );
+  expect(most).toBe(3);
+  expect(rows.map((r) => r.provider)).toEqual(["claude", "codex", "zai"]);
+});
+
+test("devices get a provider's error short; the log keeps it whole", async () => {
+  const raw = 'Mistral API error: HTTP 500: {"detail":"Internal server error"}';
+  const failed: RunResult = {
+    code: 1,
+    stdout: JSON.stringify([{ provider: "mistral", error: { message: raw } }]),
+    stderr: "",
+  };
+  const log: string[] = [];
+  const rows = await collect(
+    "codexbar",
+    ["mistral"],
+    () => NOW,
+    (l) => log.push(l),
+    async () => failed,
+  );
+  expect(rows.map((r) => r.error)).toEqual(["Mistral's usage API failed (500)"]);
+  expect(log.at(-1)).toBe(`codexbar mistral: ${raw}`);
+  expect(shortError("Claude usage probe timed out.")).toBe("Claude usage probe timed out.");
+  expect(shortError("timed out (<30s)")).toBe("timed out (<30s)");
+  expect(shortError("unexpected reply: <html><body>Bad gateway</body></html>")).toBe(
+    "unexpected reply",
+  );
 });
 
 test("a run that hung is not asked again, and a run for every provider that fails posts nothing", async () => {

@@ -827,9 +827,9 @@ async function main() {
   const asked = page.waitForRequest((r) => r.method() === "POST" && r.url().includes("/quota/ask"));
   await refresh.click();
   await asked;
-  // No agent runs in this test, so the server holds the ask its 15 s before it answers.
+  // No agent runs in this test, so the server holds the ask its 25 s before it answers.
   await page.waitForSelector('button[aria-label="Refresh quotas"][aria-busy="false"]:visible', {
-    timeout: 30_000,
+    timeout: 40_000,
   });
 
   step("quota settings: remaining, clock times, workdays");
@@ -965,26 +965,37 @@ async function main() {
   if (again.output().includes("(new)"))
     throw new Error("the second snapshot raised its alerts again");
 
-  step("a failed probe keeps the provider's last windows, stale, with its failure (#397)");
+  step(
+    "a failed probe keeps the last windows, stale; with none to keep, a short error (#397, #450)",
+  );
   const timedOut = [
     { provider: "e2e", source: "auto", error: { message: "Claude usage probe timed out." } },
+    {
+      provider: "e2e2",
+      source: "web",
+      error: { message: 'Mistral API error: HTTP 500: {"detail":"Internal server error"}' },
+    },
   ];
   writeFileSync(fakeBar, `#!/bin/sh\ncat <<'EOF'\n${JSON.stringify(timedOut)}\nEOF\nexit 1\n`);
   const failedPush = cli(
     "quota-failed",
-    ["quota", "push", "--once", "--codexbar", fakeBar, "--provider", "e2e"],
+    ["quota", "push", "--once", "--codexbar", fakeBar, "--provider", "e2e", "--provider", "e2e2"],
     machineHome,
   );
   if ((await failedPush.exited) !== 0) throw new Error("quota push failed");
   await page.getByRole("link", { name: "Settings" }).first().click();
   await page.getByRole("link", { name: "Quotas" }).click();
-  const group = page.getByRole("region", { name: "e2e" });
+  const group = page.getByRole("region", { name: "e2e", exact: true });
   await group.getByText("Claude usage probe timed out.").waitFor();
   await group.getByText(/^Updated /).waitFor();
   if ((await group.getByRole("article").count()) === 0)
     throw new Error("the failed provider lost its windows");
-  if ((await page.getByText("e2e on ").count()) > 0)
+  if ((await page.getByText(/^e2e2? on /).count()) > 0)
     throw new Error("the failure shows as a line above the table");
+  const empty = page.getByRole("region", { name: "e2e2", exact: true });
+  await empty.getByText("Mistral's usage API failed (500)").waitFor();
+  if ((await page.getByText("Internal server error").count()) > 0)
+    throw new Error("the provider's raw error reached the page");
   await shoot(page, "quotas-failed");
 
   step("the Quotas table fits its longest reset times, phone to desktop (#294)");

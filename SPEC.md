@@ -1765,6 +1765,21 @@ so the mod is the first path.
   0 and posts nothing, since devices would hold both the answer and a withdrawal. An answer
   accepted but not yet delivered can still be withdrawn. The skill says only `--answer-in` cards
   need `settle`.
+- 2026-10-06. A provider with no windows to keep (#450). #406 keeps a failed provider's last
+  windows, but one that fails before any good read, or whose kept windows have all reset, has
+  none. It used to be a line above the Quotas table on the web, and nothing on Android. Both
+  now show its group with only the error: on the web table in the windows' column, after the
+  other providers. The CLI logs CodexBar's error whole and sends devices a short one: an HTTP
+  failure reads "Mistral's usage API failed (500)", and a quoted JSON or HTML body is cut off.
+  The loose Mistral line the owner saw came from the dev box's CLI, built before #406, which had
+  saved no windows.
+- 2026-10-06. A Quotas refresh that changed nothing (#450). The owner's pull to refresh on
+  Android spun about 15 s and "Updated" stayed. The dev box's CLI predated machines answering
+  asks (#178), so no snapshot came. Even with it, the CLI read providers one after another:
+  claude 9.9 s, codex 1.0 s, zai 0.8 s and mistral 2.8 s on the dev box, about 14.5 s against a
+  15 s hold. The CLI now reads them at once, so a snapshot takes as long as the slowest, and a
+  refresh holds up to 25 s on Android and the web. It still ends as soon as every machine posted,
+  and stays under the 30 s at which proxies cut long polls.
 - 2026-10-06. Settings labels (#449). The link to `/docs/tell-your-agents` reads "Agent
   instructions" in Settings (web and Android), the docs and the landing footer: two words that
   name what the page holds, the rules agents get and what to add to their instruction files.

@@ -103,7 +103,7 @@ sealed interface Sent {
 }
 
 /** How long pull to refresh on Quotas waits for the machines' fresh snapshots. */
-private const val QUOTA_ASK_SECONDS = 15
+private const val QUOTA_ASK_SECONDS = 25
 
 /**
  * The app's state against the server. Everything it shows was verified here first: the
@@ -150,6 +150,7 @@ class ServerStore(
     override val decisions = MutableStateFlow<List<Decision>>(emptyList())
     override val prompts = MutableStateFlow<List<Prompt>>(emptyList())
     override val windows = MutableStateFlow<List<QuotaWindow>>(emptyList())
+    override val quotaFailures = MutableStateFlow<List<QuotaFailure>>(emptyList())
     override val runs = MutableStateFlow<List<Run>>(emptyList())
     override val members = MutableStateFlow<List<Member>>(emptyList())
     override val approval = MutableStateFlow<Approval>(Approval.Idle)
@@ -223,6 +224,7 @@ class ServerStore(
         // As the web: named once the account has more than one active machine.
         val named = (directory?.members?.values?.count { it.active && it.member.role == "machine" } ?: 0) > 1
         windows.value = if (held) emptyList() else saved.quotas.filter { active(it.from) }.flatMap { toUi(it, named) }
+        quotaFailures.value = if (held) emptyList() else saved.quotas.filter { active(it.from) }.flatMap { failures(it, named) }
         runs.value = if (held) emptyList() else saved.runs.filter { active(it.from) }.map(::toUi)
         members.value = directory?.let(::toUi).orEmpty()
         recovery.value = directory?.let(::recoveryUi)
@@ -1825,6 +1827,12 @@ class ServerStore(
         )
     }
 
+    private fun machineName(from: String, named: Boolean) = if (named) directory?.members?.get(from)?.member?.name ?: from else null
+
+    private fun failures(q: SavedQuota, named: Boolean): List<QuotaFailure> = q.body.providers.mapNotNull { p ->
+        p.error?.takeIf { p.windows.isEmpty() }?.let { QuotaFailure(p.provider, it, machineName(q.from, named)) }
+    }
+
     private fun toUi(q: SavedQuota, named: Boolean): List<QuotaWindow> = q.body.providers.flatMap { p ->
         p.windows.map { w ->
             // The card's state follows a pace alert; "low" only notifies.
@@ -1841,7 +1849,7 @@ class ServerStore(
                 alert = alerts.isNotEmpty(),
                 steadyPercent = pace?.expectedUsedPercent?.roundToInt()?.coerceIn(0, 100),
                 windowMinutes = w.windowMinutes,
-                machine = if (named) directory?.members?.get(q.from)?.member?.name ?: q.from else null,
+                machine = machineName(q.from, named),
                 takenAt = instant(p.updatedAt ?: q.body.takenAt),
                 error = p.error,
             )
