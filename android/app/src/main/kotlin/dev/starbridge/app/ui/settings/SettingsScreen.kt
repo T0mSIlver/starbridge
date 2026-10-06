@@ -183,7 +183,7 @@ fun SettingsScreen(
 
         item { Section("Colours") }
         item { RadioRow(0, 2, "Starbridge", colours == Colours.Starbridge) { actions.colours(Colours.Starbridge) } }
-        item { RadioRow(1, 2, "Match wallpaper", colours == Colours.Wallpaper) { actions.colours(Colours.Wallpaper) } }
+        item { RadioRow(1, 2, "Material You", colours == Colours.Wallpaper) { actions.colours(Colours.Wallpaper) } }
 
         item { Section("Clock") }
         item {
@@ -203,14 +203,14 @@ fun SettingsScreen(
         }
         item { SwitchRow(1, 4, "Remind me when notifications are off", inbox.remindOff) { actions.inbox(inbox.copy(remindOff = it)) } }
         item {
-            ChoiceRow(2, 4, "Delivered through", push(push)) {
+            ChoiceRow(2, 4, "Delivered through", pushState(push, server)) {
                 Segments(listOf("fcm" to "Google", "unifiedpush" to "UnifiedPush"), push.type, actions.push)
             }
         }
         item {
             SwitchRow(
-                3, 4, "Allow from notifications without seeing the whole command", allowUnseen,
-                sub = "Unsafe: you may approve commands you haven't read. Off, Allow opens the whole command first.",
+                3, 4, "Quick Allow", allowUnseen,
+                sub = "Allow from a notification without seeing the whole command. Unsafe.",
                 onChange = actions.allowUnseen,
             )
         }
@@ -235,9 +235,9 @@ fun SettingsScreen(
 
 private const val GUIDE = "https://starbridge.run/docs/tell-your-agents"
 
-/** How pushes reach this phone, as a state. */
-private fun push(push: PushSetting) = when {
-    push.registered -> "Registered with your server"
+/** How pushes reach this phone, as a state; registered, it names the server's host. */
+internal fun pushState(push: PushSetting, server: String) = when {
+    push.registered -> "Registered with ${runCatching { java.net.URI(server).host }.getOrNull() ?: server}"
     push.type == "unifiedpush" && push.distributors.isEmpty() -> "No UnifiedPush distributor installed"
     push.type == "fcm" && !push.fcmAvailable -> "This build has no Firebase project"
     else -> "Not registered yet"

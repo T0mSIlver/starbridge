@@ -10,14 +10,14 @@ import com.google.android.material.color.utilities.MaterialDynamicColors
 import com.google.android.material.color.utilities.SchemeTonalSpot
 
 /**
- * Wallpapers that stand in for the phone's under "Match wallpaper": the colour Android would take
+ * Wallpapers that stand in for the phone's under "Material You": the colour Android would take
  * from each, turned into a scheme the way Android does by default (tonal spot).
  */
 enum class Wallpaper(val seed: Int) {
     Warm(0xFFB5562B.toInt()),
     Cool(0xFF2B5D8C.toInt()),
     LowChroma(0xFF8A8478.toInt()),
-    /** The mockups' "Match wallpaper" example. */
+    /** The mockups' "Material You" example. */
     Green(0xFF4E7A3C.toInt()),
     ;
 

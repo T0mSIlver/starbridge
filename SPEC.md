@@ -1567,8 +1567,8 @@ so the mod is the first path.
   lock-screen Allow of #57 and #182). It still asks for the unlock, then opens the prompt's sheet
   with the whole command, Allow one tap away; it no longer sends. Deny still answers from the
   lock screen.
-- 2026-10-06. One opt-in skips both (owner, #390): Settings, Notifications, "Allow from
-  notifications without seeing the whole command", off by default and labelled unsafe. On, a
+- 2026-10-06. One opt-in skips both (owner, #390): Settings, Notifications, "Quick Allow"
+  ("Allow from a notification without seeing the whole command. Unsafe."), off by default. On, a
   notification's Allow sends right after the unlock on the lock screen, and at once from a
   collapsed or heads-up notification whose command does not fit its line.
 - 2026-10-06. Permission text shows control and format characters as escapes (`\u202E`), on the
@@ -1770,6 +1770,10 @@ so the mod is the first path.
   "owner/repo#123" instead of its host and path, and its chip leads with the GitHub mark, on the
   web and Android; "Answer in" uses the same label. Every other link is unchanged. Android's
   untitled chips now start with "Open" too, as the web's and the #171 entry above do.
+- 2026-10-06. Pull to refresh belongs to the screen that was pulled (owner): the store counts
+  every sync the owner asked for, so a pull on Quotas showed the indicator on the Inbox too. Each
+  screen now shows it only for its own pull, until that sync ends. The theme option "Match
+  wallpaper" is now "Material You", the name power users know (owner).
 
 ## Encryption, with existing libraries
 
