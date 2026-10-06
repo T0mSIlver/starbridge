@@ -49,11 +49,15 @@ const older = (a: string, b: string) => {
   return false;
 };
 
-/** Says so when this Claude Code is older than MIN_CLAUDE, with how to update it. */
-export async function claudeTooOld(sys: Sys): Promise<string | undefined> {
+/**
+ * Says so when this Claude Code is older than MIN_CLAUDE, with how to update it; with `unknown`,
+ * also when its version cannot be read.
+ */
+export async function claudeTooOld(sys: Sys, unknown = false): Promise<string | undefined> {
   const v = await claudeVersion(sys);
   if (v && older(v, MIN_CLAUDE))
     return `Claude Code ${v} is older than ${MIN_CLAUDE}, the oldest Starbridge works with: \`claude update\` updates it`;
+  if (!v && unknown) return `Starbridge needs Claude Code ${MIN_CLAUDE} or newer`;
   return undefined;
 }
 
@@ -74,8 +78,10 @@ export async function pluginState(sys: Sys): Promise<PluginState | string> {
     enabled: boolean;
     version?: string;
   }>(sys, "plugin", "list");
-  if (typeof markets === "string" || typeof installed === "string")
-    return `${typeof markets === "string" ? markets : installed}. ${(await claudeTooOld(sys)) ?? `Starbridge needs Claude Code ${MIN_CLAUDE} or newer`}`;
+  if (typeof markets === "string" || typeof installed === "string") {
+    const old = await claudeTooOld(sys, true);
+    return `${typeof markets === "string" ? markets : installed}${old ? `. ${old}` : ""}`;
+  }
   const plugins: PluginState["plugins"] = {};
   for (const id of PLUGINS) {
     const p = installed.find((x) => x.id === id && x.scope === "user");
