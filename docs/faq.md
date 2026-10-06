@@ -56,14 +56,16 @@ the agent doesn't matter. Quotas read your AI plans through CodexBar; with no pl
 
 Claude Code gets the most: a plugin with rules, a skill and hooks, answers into the live
 session, its own `AskUserQuestion` sent to your phone, and permission prompts if you turn them
-on. opencode and Pi get the same through their plugin and package. Codex gets the skill and
-answers into interactive sessions, but no rules and no permission prompts. Any other agent can
+on. opencode gets the same through its plugin, its own `question` tool included. Pi gets the
+rules, the skill and answers into the live session through its package, and permission prompts
+with pi-permission-system. Codex gets the skill and answers into interactive sessions, but no
+rules and no permission prompts. Any other agent can
 run `starbridge ask` and `starbridge wait`.
 [What each agent supports](tell-your-agents.md#what-each-agent-supports) has the details.
 
 ## Do I restart my agents after setup?
 
-Yes: sessions that were running before setup don't have the plugin. Start new ones.
+Yes: sessions that were running before setup don't have Starbridge. Start new ones.
 
 ## Which platforms?
 

@@ -67,16 +67,17 @@ export function renderDoc(doc: Doc): string {
         return `<a href="${attr(to)}"${titled}${external}>${this.parser.parseInline(tokens)}</a>`;
       },
       // An image under web/public, which the site serves from its root. A `-light` one comes with
-      // its `-dark` twin, dark by default as on the landing page (DESIGN.md, "Rules").
+      // its `-dark` twin; the stylesheet shows the one for the page's theme (Docs.module.css).
       image({ href, text }: Tokens.Image) {
         const target = normalize(join(dirname(doc.file), href));
         if (!target.startsWith("web/public/"))
           throw new Error(`${doc.file}: ${href} is not under web/public`);
         const src = target.slice("web/public".length);
         const light = /-light(\.\w+)$/;
-        const img = (s: string) => `<img src="${attr(s)}" alt="${attr(text)}" loading="lazy">`;
+        const img = (s: string, scheme?: string) =>
+          `<img src="${attr(s)}" alt="${attr(text)}" loading="lazy"${scheme ? ` data-scheme="${scheme}"` : ""}>`;
         if (!light.test(src)) return img(src);
-        return `<picture><source media="(prefers-color-scheme: light)" srcset="${attr(src)}">${img(src.replace(light, "-dark$1"))}</picture>`;
+        return img(src.replace(light, "-dark$1"), "dark") + img(src, "light");
       },
     },
   });

@@ -43,7 +43,8 @@ starbridge setup
 
 ### What setup does
 
-Setup asks before each step after pairing, and a rerun repairs only what is missing:
+Setup asks before each step except pairing and the background service, and a rerun repairs only
+what is missing:
 
 1. It pairs the machine with your account (see [Pair](#pair)). It asks for the server only when
    neither `--server` nor `STARBRIDGE_SERVER` names one.
@@ -238,8 +239,9 @@ or nothing if the terminal answers first or the server can't be reached.
 
 ## What agents parse
 
-Agents, the Starbridge skill, the Claude Code plugins, the Pi extension and the opencode plugin
-read the commands below and their output. The plugins update apart from the CLI, so this list is
+If you write a plugin or a script around `starbridge`, these are the commands and output it can
+rely on. Agents, the Starbridge skill, the Claude Code plugins, the Pi extension and the opencode
+plugin read the commands below and their output. The plugins update apart from the CLI, so this list is
 stable from 0.1.0, the first public release: a release may add commands, flags, variables, fields
 and lines, but changes or removes anything here only after a release that deprecates it. `cli/test/contract.test.ts` pins
 the lines; the hook outputs are pinned in `cli/test/permissions.test.ts`.

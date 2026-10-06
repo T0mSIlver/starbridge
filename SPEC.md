@@ -379,7 +379,7 @@ provider plugins add providers, not panels.
 - **Docs** (#211) at `/docs` are the repository's Markdown files listed in `web/src/lib/docs.ts`,
   rendered by the web page. Links between them become `/docs` links; other relative links go to
   GitHub. Images are screenshots under `web/public`, served from the site root, so GitHub shows
-  the same file; a `-light` one comes with its `-dark` twin (#558). The Overview's Start ends at a
+  the same file; a `-light` one comes with its `-dark` twin, shown by the page's theme (#558). The Overview's Start ends at a
   first question answered from an agent, and the FAQ page holds the launch questions (#558).
 - **The CLI's agent-facing contract is stable from 0.1.0** (#475, #551): the commands, flags,
   output lines and exit codes under "What agents parse" in `cli/README.md`, pinned by
