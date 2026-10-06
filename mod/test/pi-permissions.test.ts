@@ -153,4 +153,5 @@ test("asks whose allow pi-permission-system drops from a link stay at the keyboa
   expect(keyboardOnly({ toolName: "bash", command: "ls" })).toBe(false);
   // A tool merely named like a family is not in it.
   expect(keyboardOnly({ ...read, accessIntent: { surface: "pathfinder" } })).toBe(false);
+  expect(keyboardOnly({ ...read, accessIntent: { surface: "path_resolve" } })).toBe(false);
 });

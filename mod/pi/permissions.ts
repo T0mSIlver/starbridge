@@ -62,7 +62,9 @@ export function keyboardOnly(details: AskDetails): boolean {
   const surface =
     details.accessIntent?.surface ?? details.surface ?? details.payload?.request?.surface;
   return (
-    surface !== undefined && surface !== null && /^(path|external_directory)(_|$)/.test(surface)
+    surface !== undefined &&
+    surface !== null &&
+    /^(path|external_directory)(_read|_write)?$/.test(surface)
   );
 }
 

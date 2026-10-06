@@ -31,6 +31,7 @@ import {
   LINK,
   permissionsService,
   STOP_MS,
+  type Verdict,
 } from "./permissions.ts";
 
 interface Ctx {
@@ -224,7 +225,20 @@ export default function starbridge(pi: PiApi) {
       id,
       service.registerAuthorizer(LINK, (details: AskDetails) => {
         const ctx = current;
-        if (!ctx || keyboardOnly(details)) return Promise.resolve({ kind: "defer" });
+        if (!ctx) return Promise.resolve({ kind: "defer" });
+        if (keyboardOnly(details)) {
+          if (!ctx.hasUI) return Promise.resolve({ kind: "defer" });
+          // The defer opens pi-permission-system's dialog, so it waits its turn among the
+          // "Answer here" dialogs and holds it until the ask is decided.
+          const decided = untilDecided(details.requestId, ended.signal);
+          return new Promise<Verdict>((resolve) => {
+            const turn = () => {
+              resolve({ kind: "defer" });
+              return decided;
+            };
+            dialogs = dialogs.then(turn, turn);
+          });
+        }
         const file = ctx.sessionManager.getSessionFile();
         const stdin = JSON.stringify(
           hookInput(details, ctx.sessionManager.getSessionId(), ctx.cwd),
