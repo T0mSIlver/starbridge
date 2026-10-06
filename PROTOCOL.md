@@ -46,7 +46,19 @@ The account's directory is a hash chain of signed entries listing each member's 
 Ed25519 public keys. Entry 0 adds the first device, names the recovery public key, and is signed
 both by that device and by the recovery key (`recoverySig`). Each later entry carries `seq` and `prev` (BLAKE2b-256 of the previous
 entry's body), and is signed by an active device or by the recovery key. Machines sign no
-entries; the recovery key adds only devices. Revoking is an entry too.
+entries. An entry's `op` is one of:
+
+| `op` | Signed by | Does |
+|---|---|---|
+| `add` | an active device | adds a member (older clients also recovered with an `add` signed by the recovery key, which still verifies) |
+| `revoke` | an active device | revokes a member |
+| `recover` | the recovery key | adds a device and revokes every other member, machines included ("Recovery") |
+| `recovery` | an active device | proposes a new recovery key ("Replacing the recovery key") |
+| `recovery-confirm` | the recovery key | makes the proposed key current |
+
+The recovery key signs nothing else; in particular it revokes no one. A verifier refuses a
+chain holding an `op` it does not know, rather than skipping the entry, since a skipped
+`recover` or `recovery-confirm` would leave it trusting a revoked device or a replaced key.
 
 Clients replay the chain with `verifyDirectory` and keep a pin `{length, head}`. A later fetch
 must extend the pin, so the server can neither insert a key, nor roll back a revocation, nor serve
@@ -144,16 +156,19 @@ SAS verification. Code: `packages/protocol/src/join.ts`; vectors: `vectors/join.
    `T = j.pk a.pk R`. The MAC key is `BLAKE2b-256(key = s, "starbridge/v1/join-mac" NUL T)`; the
    digits are the first 4 bytes of `BLAKE2b-256(key = s, "starbridge/v1/join-sas" NUL T)`,
    big-endian, mod 10^6, as 6 digits.
-5. The owner checks that both screens show the same digits and taps Approve. The approver appends
-   the `add` entry for the keys in `R` and posts the approval `{v, join, account, length, head,
-   approver}` with `crypto_auth` under the MAC key, over `"starbridge/v1/join-approval" NUL body`.
-   The joining device checks the MAC, verifies the directory with `{length, head}` as its pin,
-   and checks that it holds its own keys, as after a code.
+5. The owner checks that both screens show the same digits and confirms on both: Approve on the
+   approver, They match on the joining device. The approver appends the `add` entry for the keys
+   in `R` and posts the approval `{v, join, account, length, head, approver}` with `crypto_auth`
+   under the MAC key, over `"starbridge/v1/join-approval" NUL body`. The joining device holds
+   any approval until its owner confirmed, then checks the MAC, verifies the directory with
+   `{length, head}` as its pin, and checks that it holds its own keys, as after a code.
 
 A server in the middle must give the approver a commitment of its own before it sees `a.pk`, and
 must send the joining device an approver key before it learns `j.pk`, so it cannot pick keys that
 make the two screens agree: each attempt matches with probability 10^-6, and each needs the owner
-to tap Compare digits. Without the approval's MAC the joining device trusts no directory.
+to tap Compare digits. The MAC proves only that whoever sent the approver key approved, which
+in that attack is the server, so the joining device counts it only once its own owner has seen
+the digits match. Without the approval's MAC the joining device trusts no directory.
 
 ## Recovery
 
@@ -173,8 +188,42 @@ typing, a U in a word from the list, or the start of one, waits, since words onl
 words from the eighth.
 
 When every device is lost, a new device turns the key or words into the recovery key pair,
-verifies the chain with that public key (entry 0's `recoverySig` must check against it, which a copied public key cannot
-fake), and signs its own `add` entry with it.
+verifies the chain with that public key (it must be the chain's current recovery key, whose
+`recoverySig` checks against it, which a copied public key cannot fake), and signs a `recover`
+entry with it, which adds the new device and revokes every other member, machines included. A
+recovering device holds no pin unless it was a device of the account before, so the server can
+serve it a chain cut short of a revocation; since `recover` revokes every earlier member, a fork
+made that way cannot bring a revoked one back. The owner pairs the devices and machines they
+still have again from the recovered device, through pairings or joins that pin its chain.
+
+### Replacing the recovery key
+
+An owner who thinks someone saw the key replaces it from one of their devices, with the current
+key, in two entries:
+
+1. `{op: "recovery", recoveryPk}` proposes a new key. An active device signs it, and the
+   envelope's `recoverySig` is the new key's signature over the same body, as signer "recovery",
+   as on entry 0. Its `recoveryPk` is no member's key and no recovery key the chain named before,
+   current, proposed or retired. A later proposal replaces a pending one, and revoking the
+   proposing device drops its proposal.
+2. `{op: "recovery-confirm", proposal, recoveryPk}` names the pending proposal's `seq` and key,
+   and makes that key the chain's recovery key. The current recovery key signs it. Naming the key
+   means a proposal slipped in after the owner's, by a stolen device not yet revoked, cannot be
+   the one confirmed.
+
+Both keys sign, so neither a stolen device nor a leaked key can replace the key alone: the key is
+what gets the owner back after a theft, so a thief must not be able to take it over. An owner who
+lost the key cannot replace it; their devices keep working, and the app says so.
+
+From the confirming entry on, the old key signs nothing on any chain that holds the
+confirmation. A device that holds no pin can still be served a chain cut short of it, where the
+old key still recovers; the owner's devices, which pin their chain, refuse such a fork, and
+recovering with the new key on it fails with `wrong-recovery-key`. A member whose pin
+predates the confirmation, offline or served a withheld tail, accepts such a fork as an
+extension, but it is revoked there like every member: the fork reveals nothing and costs a
+re-pairing, which a malicious server can force anyway. Every other device shows the
+replacement once, as "Recovery key replaced on <proposing device>, <time of the confirming
+entry>".
 
 ## HTTP API
 
@@ -217,7 +266,7 @@ errors use the codes in `packages/protocol/src/sodium.ts`.
 | Route | Who | What |
 |---|---|---|
 | `GET /directory?from=<seq>` | device, machine | `{entries}` from `seq` on |
-| `POST /directory` | device | append `{entry}`; 409 unless its `seq` is the next one; 403 `machine-cap` past the account's machine limit (5 on the hosted server); 409 `directory-full` for an add past 200 entries ("Limits") |
+| `POST /directory` | device | append `{entry}`; 409 unless its `seq` is the next one; 403 `machine-cap` past the account's machine limit (5 on the hosted server); 409 `directory-full` for an add or a recovery proposal past 200 entries, beyond their budgets ("Limits") |
 
 The server runs `verifyDirectory` before it accepts an entry, to refuse garbage early. Clients
 never rely on that check.
@@ -354,7 +403,7 @@ server whose disk is full answers writes 503 `storage-full` with `Retry-After`; 
 | Stored runs | 500 per account: 409 `too-many-items` for a new run; updates still pass |
 | Stored items | 128 MB per account, counting each item's boxes plus 512 bytes for the item and for each box, of which machine-signed items may fill all but the last 8 MB: 409 `too-many-items`; 2 MB per machine-signed item (all its boxes), 32 KB per run update and 32 KB per answer or permission answer: 413 `too-large` |
 | `POST /directory` | 30 an hour per account |
-| Directory entries | from entry 200 on, a device's `add`: 409 `directory-full`; revocations always pass, and the recovery key may add 20 more devices; 8 KB per entry: 413 `too-large` |
+| Directory entries | from entry 200 on, a device's `add`: 409 `directory-full`; revocations and confirmations always pass, the recovery key may add 20 more devices, and devices may propose 20 more recovery keys; 8 KB per entry: 413 `too-large` |
 | Sessions | 50 per account; signing in past that ends the oldest, unpaired ones first |
 | `GET /auth/github/callback` | 20 a minute per address |
 | `POST /pairings` | 10 a minute per address; 20 unapproved pairings per address, an IPv6 client counting as its /48: 429 `too-many-pairings` |
@@ -521,7 +570,7 @@ for an unknown route or decision, 502 when the server refused or failed (`detail
 | `GET /sessions/:id/events?wait=<s>` | `{events: [{type, ack, line, decisionId?}]}`: what the session has not confirmed, held up to `wait` while there is nothing |
 | `POST /sessions/:id/ack` | `{acks}`: confirm events by their `ack`; others' tokens do nothing |
 | `POST /permissions` | `{hook, agent, source: {project, session, sessionTitle?, links?}, waitMs}`: post a permission prompt from the hook's input → `{id}`; 403 `disabled` until `starbridge config permissions on` |
-| `POST /permissions/:id/wait` | `{wait}`: `{output}` once an accepted answer is in, the hook's stdout, handed out once; `{settled}` when the prompt ended another way; `{}` when `wait` passed |
+| `POST /permissions/:id/wait` | `{wait}`: `{output}` once an accepted answer is in, the hook's stdout, handed out once; `{settled}` when the prompt ended another way; `{}` when `wait` passed; a hook that hangs up mid-hold and holds no more within 5 s is gone, and the prompt settles as `keyboard` |
 | `POST /permissions/:id/settle` | `{outcome: "keyboard" \| "timeout"}` → `{settled}`: the hook's wait ended without an answer |
 | `POST /sessions/:id/permissions/settle` | `{inputHash?}` → `{settled: [ids]}`: the keyboard answered the session's waiting prompt for that input, or all of them without `inputHash` |
 

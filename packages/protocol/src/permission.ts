@@ -12,6 +12,21 @@ export function hashInput(inputJson: string, secret?: Uint8Array): string {
   return toB64(sodium.crypto_generichash(32, utf8(inputJson), key));
 }
 
+/** Control and format characters but newline and tab: bidi overrides, isolates, zero-widths. */
+const INVISIBLE = /[\p{Cc}\p{Cf}\u2028\u2029]/gu;
+
+/**
+ * `text` with each control or format character shown as its escape (`\u202E`), so a permission
+ * reads in the order it runs: a bidi override cannot reorder what the owner allows (#357).
+ */
+export function visible(text: string): string {
+  return text.replace(INVISIBLE, (c) => {
+    if (c === "\n" || c === "\t") return c;
+    const hex = (c.codePointAt(0) ?? 0).toString(16).toUpperCase();
+    return hex.length > 4 ? `\\u{${hex}}` : `\\u${hex.padStart(4, "0")}`;
+  });
+}
+
 /**
  * The machine's checks on an answer that `open` already verified as signed by `device`, an active
  * device: it answers this permission, comes from a device the permission was sealed to, repeats

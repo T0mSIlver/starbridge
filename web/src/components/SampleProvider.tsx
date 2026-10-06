@@ -36,6 +36,7 @@ export function SampleProvider({
       answer: noop,
       update: () => {},
       refreshQuotas: noop,
+      askQuotas: () => new Promise((done) => setTimeout(done, 1500)),
       quotaSettings,
       setQuotaSettings,
       answerPrompt: noop,

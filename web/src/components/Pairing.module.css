@@ -124,6 +124,12 @@
   .codeRow {
     flex-direction: column;
   }
+
+  /* In the column, flex: 1 shrank the field to its text (22 px); it is a full tap target. */
+  .input {
+    flex: none;
+    height: var(--size-tap);
+  }
 }
 
 /* Join requests float over any page while one is open, so neither column moves: bottom right

@@ -172,6 +172,8 @@ function Join({ account, stale }: { account: string; stale: boolean }) {
   const [mode, setMode] = useState<"code" | "digits" | "key">("code");
   const [code, setCode] = useState<string>();
   const [digits, setDigits] = useState<string>();
+  const [matched, setMatched] = useState(false);
+  const confirm = useRef<() => void>(undefined);
   const [typedKey, setTypedKey] = useState("");
   const [typed, setTyped] = useState<RecoveryEntry>({ complete: false, status: "" });
   const cancel = useRef<() => void>(undefined);
@@ -220,12 +222,20 @@ function Join({ account, stale }: { account: string; stale: boolean }) {
     cancel.current?.();
     setCode(undefined);
     setDigits(undefined);
+    setMatched(false);
+    confirm.current = undefined;
     setMode(next);
     if (next === "digits")
       run(async () => {
         const join = await begin(async () => (await load()).startDigitJoin(account, name.trim()));
         if (!join) return;
-        join.digits.then(setDigits, () => {});
+        confirm.current = join.confirm;
+        // A join the owner moved on from shows no digits, so they confirm only this one's.
+        const mine = started.current;
+        join.digits.then(
+          (d) => mine === started.current && setDigits(d),
+          () => {},
+        );
         await join.done;
         await reload();
       });
@@ -273,9 +283,11 @@ function Join({ account, stale }: { account: string; stale: boolean }) {
       {mode === "digits" && (
         <>
           <p className={`t-small ${s.lede}`}>
-            {digits
-              ? `Approve ${name.trim()} on your other device if the digits match.`
-              : `Open Starbridge on a signed-in device: it asks whether to let ${name.trim()} join.`}
+            {matched
+              ? `Approve ${name.trim()} on your other device.`
+              : digits
+                ? "Does your other device show the same digits?"
+                : `Open Starbridge on a signed-in device: it asks whether to let ${name.trim()} join.`}
           </p>
           {digits && (
             <div className={`t-heading ${s.digits}`} data-testid="join-digits">
@@ -287,12 +299,25 @@ function Join({ account, stale }: { account: string; stale: boolean }) {
               ))}
             </div>
           )}
+          {digits && !matched && (
+            <button
+              type="button"
+              className={`t-label ${ui.btn} ${ui.fill}`}
+              onClick={() => {
+                confirm.current?.();
+                setMatched(true);
+              }}
+            >
+              They match
+            </button>
+          )}
           <button
             type="button"
             className={`t-label ${ui.btn}`}
             onClick={() => {
               started.current++;
               cancel.current?.();
+              confirm.current = undefined;
               setMode("code");
             }}
           >
@@ -312,6 +337,10 @@ function Join({ account, stale }: { account: string; stale: boolean }) {
           }}
         >
           <NameField value={name} onChange={setName} />
+          <p className={`t-small ${s.lede}`}>
+            Recovering removes every other device and machine from the account. Pair the ones you
+            still have again from this browser afterwards.
+          </p>
           <label className={`t-meta ${s.dim}`} htmlFor="recovery-key">
             Your recovery key
           </label>

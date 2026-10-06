@@ -106,6 +106,8 @@ data class Saved(
     val pendingGenesis: JsonElement? = null,
     /** While recovering: the member whose keys this phone made, until the chain holds it. */
     val recovering: Member? = null,
+    /** The last replacement of the recovery key whose notice this phone dismissed (its seq). */
+    val recoverySeen: Int = -1,
 )
 
 /**
@@ -113,7 +115,7 @@ data class Saved(
  * it saw. The digits commit to that key, so this phone never answers a second one.
  */
 @Serializable
-data class SavedDigitJoin(val id: String, val request: String, val approverKey: String? = null, val digits: String? = null)
+data class SavedDigitJoin(val id: String, val request: String, val approverKey: String? = null, val digits: String? = null, val matched: Boolean = false)
 
 /** Private keys and tokens. */
 @Serializable

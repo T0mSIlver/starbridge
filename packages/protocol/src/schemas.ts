@@ -45,7 +45,40 @@ export const RevokeEntry = z.object({
   id: Id,
 });
 
-export const DirectoryEntry = z.discriminatedUnion("op", [AddEntry, RevokeEntry]);
+/**
+ * Recovery, when every device is lost: signed by the recovery key, it adds `member`, a device,
+ * and revokes every other member, machines included, so a chain a server cut short of a
+ * revocation cannot bring a revoked one back (#363).
+ */
+export const RecoverEntry = z.object({
+  ...EntryBase,
+  op: z.literal("recover"),
+  member: Member,
+});
+
+/** Proposes a new recovery key: signed by an active device, and by the new key (`recoverySig`). */
+export const RecoveryEntry = z.object({
+  ...EntryBase,
+  op: z.literal("recovery"),
+  recoveryPk: B64,
+});
+
+/** Makes the pending proposal's key the recovery key: signed by the current recovery key. */
+export const RecoveryConfirmEntry = z.object({
+  ...EntryBase,
+  op: z.literal("recovery-confirm"),
+  /** The proposal's `seq`, and the key it proposed, so a confirmation names what it approves. */
+  proposal: z.number().int().nonnegative(),
+  recoveryPk: B64,
+});
+
+export const DirectoryEntry = z.discriminatedUnion("op", [
+  AddEntry,
+  RevokeEntry,
+  RecoverEntry,
+  RecoveryEntry,
+  RecoveryConfirmEntry,
+]);
 export type DirectoryEntry = z.infer<typeof DirectoryEntry>;
 
 // --- Signed and sealed envelopes ---------------------------------------------
@@ -109,9 +142,9 @@ export const SignedEnvelope = z.object({
   body: z.string(),
   sig: B64,
   /**
-   * Directory entry 0 only: the recovery key's signature over the same body, as signer
-   * "recovery". It ties the genesis to the recovery key, so a server that copies the public
-   * recovery key into a genesis of its own cannot pass it off during recovery.
+   * Directory entry 0 and `recovery` entries only: the signature of the recovery key they name
+   * over the same body, as signer "recovery". It ties the entry to that key, so a server that
+   * copies a public recovery key into an entry of its own cannot pass it off during recovery.
    */
   recoverySig: B64.optional(),
 });
@@ -549,6 +582,11 @@ export const QuotaSnapshot = z.object({
       windows: z.array(QuotaWindow),
       /** Set when CodexBar failed for this provider. */
       error: z.string().max(1000).optional(),
+      /**
+       * With `error`: when `windows` were read, the last time CodexBar did not fail. The windows
+       * are stale then; without it, they were read at `takenAt`.
+       */
+      updatedAt: Time.optional(),
     }),
   ),
   alerts: z.array(QuotaAlert),

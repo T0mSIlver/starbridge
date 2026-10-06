@@ -35,6 +35,19 @@
   place-items: center;
 }
 
+/* Before a row's title, as on Android: as tall as the title's first line, so a title that wraps
+   hangs under its own first word, not under the glyph. */
+.tileInline {
+  height: 1lh;
+}
+
+.titled {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s2);
+  min-width: 0;
+}
+
 /* The glyph sits on its card: amber while an agent waits on the item, else `fg2` (#248). */
 .tileFilled {
   color: var(--accent);
@@ -143,18 +156,16 @@
   margin: 0 var(--s3) var(--s2);
 }
 
-/* A row: its icon, then the meta row and the content. A button covers it to select it; the
-   actions on a phone's row sit above that button. */
+/* A row: the meta row and the content, its kind icon inline before the title (#305). A button
+   covers it to select it; the actions on a phone's row sit above that button. */
 .row {
   position: relative;
   display: grid;
-  grid-template-columns: 32px minmax(0, 1fr);
-  gap: var(--s3);
+  grid-template-columns: minmax(0, 1fr);
   padding: var(--s3) var(--s4);
 }
 
 .row.comfy {
-  grid-template-columns: 36px minmax(0, 1fr);
   padding: var(--s4);
 }
 
@@ -238,6 +249,7 @@
 }
 
 .pastText {
+  min-width: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -257,6 +269,8 @@
   max-width: 100%;
   height: auto;
   min-height: var(--s10);
+  /* Round enough to read as a box when it wraps, still a pill on one line (#305). */
+  border-radius: var(--radius-xl);
   padding-block: var(--s2);
   white-space: normal;
   text-align: center;
@@ -411,4 +425,10 @@
 .seg > * + *,
 .seg > div > .past + .past {
   border-top: 1px solid var(--line);
+}
+
+@media (max-width: 599px) {
+  .actions > [class] {
+    min-height: var(--size-tap);
+  }
 }

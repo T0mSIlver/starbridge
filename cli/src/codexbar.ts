@@ -8,7 +8,11 @@ import { computePace, type QuotaSnapshot, type QuotaWindow } from "@starbridge/p
 
 export type ProviderQuota = QuotaSnapshot["providers"][number];
 
-const RUN_TIMEOUT_MS = 90_000;
+/**
+ * Above CodexBar's own worst case, so its retries run out before this does: Claude's probe gives
+ * `claude` 12 s, then 60 s, each followed by up to 8 s for `claude /usage` (#397).
+ */
+const RUN_TIMEOUT_MS = 120_000;
 
 export interface RunResult {
   code: number | null;
@@ -126,7 +130,13 @@ function tryParse(stdout: string, provider: string | undefined, now: Date): Prov
   }
 }
 
-/** Every provider asked for, with an `error` entry for each that failed or was missing. */
+/**
+ * Every provider asked for, with an `error` entry for each that failed or was missing. A provider
+ * that fails is asked once more before its failure counts: CodexBar's Claude probe drives the
+ * `claude` TUI and times out now and then on a busy machine (#397). A run that hung until
+ * RUN_TIMEOUT_MS is not asked again. Throws when a run for every provider fails as a whole, so
+ * no snapshot replaces the last one.
+ */
 export async function collect(
   bin: string,
   providers: string[],
@@ -136,36 +146,57 @@ export async function collect(
 ): Promise<ProviderQuota[]> {
   const out: ProviderQuota[] = [];
   for (const p of providers.length > 0 ? providers : [undefined]) {
-    const name = p ?? "all";
-    const r = await run(bin, p);
-    const failure = (error: string) => {
-      log(`codexbar ${name}: ${error}`);
-      if (p) out.push({ provider: p, windows: [], error: clip(error, 1000) });
-    };
-    if (r.code !== 0) {
-      // A provider that cannot fetch exits 1 with its reason in the JSON row.
-      const rows = r.code === null ? [] : tryParse(r.stdout, p, now());
-      if (rows.length > 0 && rows.every((x) => x.error)) {
-        for (const x of rows) log(`codexbar ${x.provider}: ${x.error}`);
-        out.push(...rows);
+    let first = await once(bin, p, now, run);
+    if ("failed" in first && first.retry) {
+      log(`codexbar all: ${first.failed}; retrying`);
+      first = await once(bin, p, now, run);
+    }
+    if ("failed" in first) throw new Error(`codexbar: ${first.failed}`);
+    for (const row of first.rows) {
+      if (!row.error || !first.retry) {
+        if (row.error) log(`codexbar ${row.provider}: ${row.error}`);
+        out.push(row);
         continue;
       }
-      const last = r.stderr.trim().split("\n").pop() ?? "";
-      failure(`exited ${r.code ?? "on a signal"}${last ? `: ${last}` : ""}`);
-      continue;
+      log(`codexbar ${row.provider}: ${row.error}; retrying`);
+      const again = await once(bin, row.provider, now, run);
+      const rows = "rows" in again ? again.rows : [];
+      for (const x of rows) if (x.error) log(`codexbar ${x.provider}: ${x.error}`);
+      out.push(...rows);
     }
-    let rows: ProviderQuota[];
-    try {
-      rows = parseUsage(r.stdout, p, now());
-    } catch (e) {
-      failure(`unreadable output: ${(e as Error).message}`);
-      continue;
-    }
-    if (rows.length === 0 && p) {
-      failure("missing from codexbar's output");
-      continue;
-    }
-    out.push(...rows);
   }
   return out;
+}
+
+/**
+ * One run for `p`, or every enabled provider. A run that fails without rows gives an error row for
+ * `p`, or `failed` for every provider; `retry` is false when it hung until the timeout.
+ */
+async function once(
+  bin: string,
+  p: string | undefined,
+  now: () => Date,
+  run: typeof runCodexbar,
+): Promise<({ rows: ProviderQuota[] } | { failed: string }) & { retry: boolean }> {
+  const r = await run(bin, p);
+  const retry = r.code !== null;
+  const failure = (error: string) =>
+    p
+      ? { rows: [{ provider: p, windows: [], error: clip(error, 1000) }], retry }
+      : { failed: error, retry };
+  if (r.code !== 0) {
+    // A provider that cannot fetch exits 1 with its reason in its JSON row, beside the others.
+    const rows = r.code === null ? [] : tryParse(r.stdout, p, now());
+    if (rows.length > 0 && rows.some((x) => x.error)) return { rows, retry };
+    const last = r.stderr.trim().split("\n").pop() ?? "";
+    return failure(`exited ${r.code ?? "on a signal"}${last ? `: ${last}` : ""}`);
+  }
+  let rows: ProviderQuota[];
+  try {
+    rows = parseUsage(r.stdout, p, now());
+  } catch (e) {
+    return failure(`unreadable output: ${(e as Error).message}`);
+  }
+  if (rows.length === 0 && p) return failure("missing from codexbar's output");
+  return { rows, retry };
 }

@@ -59,7 +59,10 @@ data class Member(val id: String, val role: String, val name: String, val boxPk:
     }
 }
 
-/** An add or revoke entry: `member` and `recoveryPk` on add, `id` on revoke. */
+/**
+ * A directory entry: `member` (and `recoveryPk` on entry 0) on add and recover, `id` on revoke,
+ * `recoveryPk` on a recovery proposal, `proposal` on its confirmation.
+ */
 @Serializable
 data class DirectoryEntry(
     val v: Int,
@@ -71,6 +74,7 @@ data class DirectoryEntry(
     val member: Member? = null,
     val recoveryPk: String? = null,
     val id: String? = null,
+    val proposal: Int? = null,
 ) {
     fun check() {
         schema(v == 1, "v")
@@ -84,10 +88,25 @@ data class DirectoryEntry(
                 member!!.check()
                 recoveryPk?.let { b64(it, "recoveryPk") }
             }
+            "recover" -> {
+                schema(member != null, "member")
+                member!!.check()
+            }
             "revoke" -> {
                 schema(id != null, "id")
                 id(id!!, "id")
             }
+            "recovery" -> {
+                schema(recoveryPk != null, "recoveryPk")
+                b64(recoveryPk!!, "recoveryPk")
+            }
+            "recovery-confirm" -> {
+                schema(proposal != null && proposal >= 0, "proposal")
+                schema(recoveryPk != null, "recoveryPk")
+                b64(recoveryPk!!, "recoveryPk")
+            }
+            // An op this client does not know: refused, since skipping a recovery confirmation
+            // would keep a replaced key trusted (PROTOCOL.md, "Directory").
             else -> schema(false, "op")
         }
     }
@@ -589,6 +608,8 @@ data class QuotaProvider(
     val account: String? = null,
     val windows: List<QuotaWindow>,
     val error: String? = null,
+    /** With `error`: when `windows` were read, the last time CodexBar did not fail. */
+    val updatedAt: String? = null,
 )
 
 @Serializable
