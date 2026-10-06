@@ -136,7 +136,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (step === "second-device") return active("device") > 1;
       if (step !== "first-answer") return false;
       // Answered by a device, not closed by its machine (a timeout, the keyboard).
-      const item = inbox.items.find((i) => i.answeredAt && !i.settled);
+      const item = inbox.items
+        .filter((i) => i.answeredAt && !i.settled)
+        .sort((x, y) => (x.answeredAt ?? "").localeCompare(y.answeredAt ?? ""))[0];
       if (!item) return false;
       // Another device's answer shows here only once its machine took it: until then, no kind.
       const reply = item.reply ?? item.answeredBy?.reply;
@@ -145,7 +147,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     });
   }, [ctx, inbox]);
 
-  // Installed as an app from any page, signed in or not (#590).
+  // Installed as an app from the landing page or the app, signed in or not (#590).
   useEffect(() => {
     const installed = () => send("pwa-install");
     window.addEventListener("appinstalled", installed);
