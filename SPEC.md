@@ -382,8 +382,9 @@ so the mod is the first path.
   RSA 4096 PKCS12 keystore, alias `starbridge`, kept in `~/.config/starbridge/secrets/` and in
   Actions secrets; losing it means a new app id, so it needs a copy off the dev box. A merge to
   main deploys from Actions once CI passes, over SSH with its own key, whose forced command can
-  only deploy a commit that is on GitHub's main: the box fetches that commit itself with a
-  read-only GitHub deploy key. `deploy/deploy.sh` stays for rollbacks and other refs. The
+  only deploy a commit that is on GitHub's main (since 2026-10-06, main's head or one newer
+  than the deployed one): the box fetches that commit itself with a read-only GitHub deploy
+  key. `deploy/deploy.sh` stays for rollbacks and other refs. The
   `cli-v*` workflow folded into the release one.
 - 2026-10-05. Per-account bounds before hosted signups (#65): every route that stores
   something has a cap or a retention rule, and the writes that grow it a rate limit, sized for an
@@ -684,7 +685,8 @@ so the mod is the first path.
 - 2026-10-05. Runs with no news (#190). A run that reports no progress shows an indeterminate
   bar while it runs. A lost run (no update for 3 minutes) shows no time in its meta row: a run
   killed before its first heartbeat has its last news at its start, so the only duration known
-  would read "0 s". Its line "No news for 3 min 37 s" ticks each second, and it shows no progress.
+  would read "0 s". Its line "Lost, no news for 3 min 37 s" ticks each second, and it shows no
+  progress (the word "Lost" since #249).
 - 2026-10-05. Android notification channels and order (#196). The channels sit in two groups,
   "Needs you" (Decisions, Permission prompts, Join requests) and "Activity" (Runs, Quotas), instead
   of Android's "Other". Each notification carries a sort key, questions and prompts first, then
@@ -1010,6 +1012,13 @@ so the mod is the first path.
   two apart, so its writes retry on 502 and 503 only). Long-polls ride on the same calls, so they
   reconnect without a notice. With #150 Caddy already holds requests during a restart; this
   covers what slips through, and self-hosted servers without that Caddy setup.
+- 2026-10-06. A lost run says so (#249). The run killed with -9 in the fix check of #59 was lost
+  on the phone already: its card had no time and no bar, as #190 decided, but its only line,
+  "No news for 12 min 59 s", read as a quiet live run. Both clients now write "Lost, no news for
+  12 min 59 s". Nothing keeps a dead run alive: a run's heartbeat lives in the `starbridge run`
+  process, so after a kill the server keeps its last update, without an exit, and each client
+  turns it lost 3 minutes after that update with no server-side expiry, since the server cannot
+  read a sealed run.
 - 2026-10-06. Deploys without downtime (#150, owner ruling of 2026-10-05). Caddy holds a request
   for up to 30 s (`lb_try_duration`) while its upstream is down, retrying every 250 ms, and
   checks each upstream's health every second. The page runs as two copies, `web-a` on 3010 and
@@ -1061,10 +1070,9 @@ so the mod is the first path.
   never answer for the owner (#122), and nothing happens when the owner does not answer, so a
   default has no timer; it is the agent's proposal. The skill tells agents to list their
   default first (`--recommended` still names it when it is not). Clients show it first, as the
-  one filled amber button; the web detail and the Android sheet add "Default" inside that
-  button, after the label, at weight 400, like the web's key hints. Rows, cards and
-  notification buttons show it first and filled only, for room. Screen readers hear "Default"
-  (Android's `stateDescription` "Recommended" becomes "Default"). The protocol is unchanged:
+  one filled amber button, first; the Android sheet adds a check (#254 dropped the "Default"
+  label both clients showed after it, since place, check and amber already say it). Screen
+  readers hear "Default" (Android's `stateDescription` "Recommended" becomes "Default"). The protocol is unchanged:
   `recommended` names the default, and `default` stays what older clients need.
 - 2026-10-05. Group by waiting (owner, #191). The inbox's view menu offers three groupings,
   remembered on the device: none (one feed), "Group by machine", and "Group by waiting", which
@@ -1094,6 +1102,17 @@ so the mod is the first path.
   `GET /answers`, `POST /quota/ask`, `GET /pairings/:rendezvous`) identifies its caller again
   after the wait and answers 401 if the session or token was revoked meanwhile. Usage counts
   key machines and devices by account and member id, since member ids repeat across accounts.
+- 2026-10-06. Bounds on anonymous analytics, and no rollback from Actions (#260, audit findings).
+  `/stats/api/send` is open to anyone and Umami stores every event, so its Postgres volume
+  could fill the VPS disk. Caddy, now built with `caddy-ratelimit`, takes 30 events a minute
+  per address (IPv6 per /64) and 300 in all, 8 KB each, and answers 429 past that; an hourly
+  timer keeps each Umami table to 180 days and a million rows. Umami's data is worth little,
+  so dropping events beats filling the disk. The Actions deploy key could deploy any ancestor
+  of main, including releases without today's limits; `starbridge-deploy` now deploys only
+  main's head or a commit on main that contains the deployed one. Rollbacks stay with the
+  owner, through `deploy/deploy.sh`. Caddy's image pins its version, since a new image
+  recreates Caddy and drops every open connection: that happens only when
+  `deploy/caddy.Dockerfile` changes, and is the one deploy step that is not zero-downtime.
 - 2026-10-05. A typed reply on every question (#201, owner). A question with options also takes
   a typed reply, as a side option: a neutral text button "Reply" after the options in the web
   detail and the Android sheet opens a text field with Send. Rows, cards and notifications do
@@ -1134,6 +1153,11 @@ so the mod is the first path.
   grouping, then "History · N" with the matching answered items, History open or not. A
   History item also matches by its answer. Matched words show bold on `surface2`, never in
   amber; Escape in the box clears it. Android's search waits for the owner's pick.
+- 2026-10-06. A prompt sheet's full input opens in place (#265): "Full input" is a full-width
+  row with a chevron at the end of the sheet, and the JSON expands under it, as Material's
+  expandable sections do. Nothing above the row moves, so Allow and Deny stay where they were.
+  A full-screen view was the other option; it hides the command and the buttons while the
+  owner reads, for an input that is rarely long.
 - 2026-10-06. One card system for the inbox (#248, owner's pick from
   https://claude.ai/artifact/2eJzH4btTJsQ77CByvBQsB). This revises #191's "filled and hollow": a
   question its agent works around was an outline with no fill, so it read as another component
@@ -1162,6 +1186,16 @@ so the mod is the first path.
   on screen. A phone row keeps Allow only when the whole input fits on one line of 200
   characters, shown whole. Session and project grants show their exact rule beside their
   label instead of in a tooltip, which touch screens never show.
+- 2026-10-06. A browser's keys and its notifications' account (#274, web client 3 and 4). Signing
+  in binds the session to the stored device; a failure that is not a refusal (network, 5xx,
+  rate limit) now retries after 0.5, 2 and 5 s and then shows the boot error with its retry,
+  instead of sending a browser with valid keys to pair again. A join keeps its new keys under
+  `pending` and makes them the device only once a device approves it, so a join started for any
+  reason never overwrites an active device's keys; a
+  join approved but cut off before that step resumes at the next boot, once the directory lists
+  its keys. A decision's notification stores the account
+  it was shown for, and its actions answer for that account only; one from before carries none
+  and opens the page instead of answering.
 
 ## Encryption, with existing libraries
 
