@@ -1,5 +1,6 @@
 package dev.starbridge.app.ui
 
+import androidx.compose.ui.unit.sp
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.animation.ContentTransform
@@ -139,9 +140,12 @@ fun Setup(phase: Phase, notice: StateFlow<String?>, dismiss: () -> Unit, openUrl
     }
 }
 
-/** A tab's label in the rail, on one line: in the narrow rail a large font shrinks it rather than break it. */
+/**
+ * A tab's label in the rail, on one line: in the narrow rail a large font shrinks it rather than
+ * break it. The floor scales with the font too, so at 2x 8 sp still reads larger than the default.
+ */
 @Composable
-internal fun TabLabel(tab: Tab) = Text(tab.label, maxLines = 1, autoSize = TextAutoSize.StepBased(maxFontSize = LocalTextStyle.current.fontSize))
+internal fun TabLabel(tab: Tab) = Text(tab.label, maxLines = 1, autoSize = TextAutoSize.StepBased(minFontSize = 8.sp, maxFontSize = LocalTextStyle.current.fontSize))
 
 /**
  * The navigation suite for the window: none on phones, which get [BottomBar]; the wide rail beside
