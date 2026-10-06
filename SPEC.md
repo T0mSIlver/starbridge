@@ -411,7 +411,9 @@ provider plugins add providers, not panels.
 
 An agent posts a question, keeps working and ends its turn; the answer arrives as a new prompt.
 Where nothing can deliver a prompt, the agent runs `starbridge wait <id> --timeout 5m` before
-ending its turn. `ask` prints which of the two applies (#203). A `wait` without an id, run in an
+ending its turn. `ask` prints which of the two applies (#203). `wait <id>` marks the decision
+waiting, which notifies the owner once more; `wait --no-mark` collects the answer to a question
+that blocks nothing yet, such as one for tomorrow, without that (#603). A `wait` without an id, run in an
 agent's session, takes only that session's answers (#324).
 
 | Harness | Delivery |

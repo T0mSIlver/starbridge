@@ -152,6 +152,8 @@ starbridge ask --question "Does this reach my phone?" --option Yes --option No -
 
 When the agent runs out of other work, `starbridge waiting <id>` shows "Waiting for you" on
 every device and notifies you once more. `starbridge working <id>` clears it; the question stays open.
+`starbridge wait <id>` marks the question waiting the same way; with `--no-mark` it only collects
+the answer, for a question that blocks nothing yet.
 
 ### Runs
 

@@ -930,7 +930,7 @@ export function takeAnswer(
  */
 export async function wait(
   ctx: Ctx,
-  opts: { id?: string; session?: string; timeout?: string; json?: boolean },
+  opts: { id?: string; session?: string; timeout?: string; json?: boolean; "no-mark"?: boolean },
   s: Session = session(ctx),
   dir?: Directory,
 ): Promise<number> {
@@ -950,7 +950,8 @@ export async function wait(
   if (shut) throw shut;
   const already = takeAnswer(ctx.store, target, opts.session);
   if (already) return report(already);
-  if (target) await markWaiting(ctx, () => postWaiting(ctx, s, target, "waiting"));
+  if (target && !opts["no-mark"])
+    await markWaiting(ctx, () => postWaiting(ctx, s, target, "waiting"));
 
   let deadline = Number.POSITIVE_INFINITY;
   if (opts.timeout) deadline = ctx.now().getTime() + parseDuration(opts.timeout);
