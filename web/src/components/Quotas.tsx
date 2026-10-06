@@ -14,7 +14,7 @@ import {
   runsOutSoonest,
 } from "@/lib/quotaSettings";
 import type { QuotaCardData } from "@/lib/types";
-import { useApp } from "./AppProvider";
+import { type Store, useApp } from "./AppProvider";
 import { useNow } from "./Feed";
 import { Icon } from "./icons";
 import { PhoneBar } from "./PhoneBar";
@@ -23,7 +23,9 @@ import s from "./Quotas.module.css";
 import { useReorder } from "./Reorder";
 
 export function Quotas() {
-  const { quotas, refreshQuotas, askQuotas, quotaSettings: settings, setQuotaSettings } = useApp();
+  const app = useApp();
+  const { quotas, refreshQuotas, askQuotas, quotaSettings: settings, setQuotaSettings } = app;
+  const machines = machineNames(app);
   useEffect(() => {
     refreshQuotas().catch(() => {});
   }, [refreshQuotas]);
@@ -36,6 +38,17 @@ export function Quotas() {
       .catch(() => {})
       .finally(() => setBusy(false));
   };
+  // A device that just joined has no snapshot sealed to it yet: ask the machines once, as the
+  // refresh button does, instead of waiting for their next upload (#661).
+  const none = quotas !== undefined && quotas.cards.length + quotas.errors.length === 0;
+  const asked = useRef(false);
+  const ask = none && machines !== undefined && machines.length > 0;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: once per visit, when it applies.
+  useEffect(() => {
+    if (!ask || asked.current) return;
+    asked.current = true;
+    refresh();
+  }, [ask]);
   const cards = arrange(quotas?.cards ?? [], settings, now);
   // Providers with no windows to show come after the others, under their name with why.
   const failed: Group[] = (quotas?.errors ?? [])
@@ -73,10 +86,7 @@ export function Quotas() {
             Every provider is hidden. <Link href="/settings">Settings</Link>
           </p>
         ) : cards.length === 0 && failed.length === 0 ? (
-          <p className={`t-small ${s.empty}`}>
-            No quota windows yet: run <code className="t-snippet">starbridge setup</code> on a
-            machine with CodexBar.
-          </p>
+          <NoQuotas machines={machines} asking={busy || (ask && !asked.current)} />
         ) : (
           <Groups
             all={quotas.cards}
@@ -89,6 +99,49 @@ export function Quotas() {
         )}
       </div>
     </>
+  );
+}
+
+/** The account's machines by name; undefined until the directory has loaded. */
+function machineNames({ boot, sampleDevices }: Store): string[] | undefined {
+  if (sampleDevices)
+    return sampleDevices
+      .filter((d) => d.role === "machine" && d.status === "active")
+      .map((d) => d.name);
+  if (boot.state !== "ready") return undefined;
+  return [...boot.ctx.dir.members.values()]
+    .filter((m) => m.member.role === "machine" && m.active)
+    .map((m) => m.member.name);
+}
+
+/** "devbox", "devbox and laptop", "devbox, laptop and pi". */
+export function names(machines: string[]): string {
+  if (machines.length < 2) return machines[0] ?? "";
+  return `${machines.slice(0, -1).join(", ")} and ${machines.at(-1)}`;
+}
+
+/** No snapshot yet: whose quotas are on the way, or why none come. */
+function NoQuotas({ machines, asking }: { machines?: string[]; asking: boolean }) {
+  if (machines === undefined) return <p className={`t-small ${s.empty}`}>No quotas yet</p>;
+  if (machines.length === 0)
+    return (
+      <p className={`t-small ${s.empty}`}>
+        No machine yet. Quotas come from the machines that run your agents: add one from the{" "}
+        <Link href="/">Inbox</Link>.
+      </p>
+    );
+  if (asking)
+    return (
+      <p className={`t-small ${s.empty}`} role="status">
+        Loading quotas from {names(machines)}…
+      </p>
+    );
+  return (
+    <p className={`t-small ${s.empty}`} role="status">
+      No quotas from {names(machines)}. A machine uploads quotas once CodexBar reads an AI plan
+      there: run <code className="t-snippet">starbridge setup</code> on it and say yes to quotas.{" "}
+      <a href="/docs/cli">How to set it up</a>
+    </p>
   );
 }
 

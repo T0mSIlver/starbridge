@@ -60,12 +60,18 @@ import dev.starbridge.app.ui.theme.Spacing
 import dev.starbridge.app.ui.theme.StarbridgeTheme
 import java.time.Instant
 import javax.inject.Inject
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 
 @HiltViewModel
 class QuotasViewModel @Inject constructor(private val store: Store, private val prefs: Prefs) : ViewModel() {
     val windows = store.windows
     val failures = store.quotaFailures
     val settings = prefs.quota
+    val members = store.members
     fun refresh() = store.refreshQuotas()
 }
 
@@ -78,7 +84,20 @@ fun QuotasScreen(
     settings: QuotaSettings = QuotaSettings(),
     refresh: Refresh? = null,
     failures: List<QuotaFailure> = emptyList(),
+    /** The account's machines by name; null until the directory has loaded. */
+    machines: List<String>? = null,
 ) {
+    val none = windows.isEmpty() && failures.isEmpty()
+    // A device that just joined has no snapshot sealed to it yet, and quota items send no push:
+    // ask the machines once, as a pull does, instead of waiting for their next upload (#661).
+    var asked by rememberSaveable { mutableStateOf(false) }
+    val ask = none && !machines.isNullOrEmpty() && refresh != null
+    LaunchedEffect(ask) {
+        if (ask && !asked) {
+            asked = true
+            refresh?.run?.invoke()
+        }
+    }
     val shown = settings.arrange(windows, now)
     val groups = settings.groups(shown)
     val failed = failures.filter { it.provider !in settings.hidden }
@@ -99,7 +118,7 @@ fun QuotasScreen(
             }
         },
     ) {
-        if (windows.isEmpty() && failures.isEmpty()) item { NoQuotas() }
+        if (none) item { NoQuotas(machines, asking = refresh?.busy == true || (ask && !asked)) }
         else if (cards == 0) item {
             Text(
                 "Every provider is hidden",
@@ -121,10 +140,13 @@ fun QuotasScreen(
 
 private const val QUOTA_DOCS = "https://starbridge.run/docs/cli"
 
-/** Nothing uploaded yet: what sends quotas, and how to start it. */
+/**
+ * No snapshot yet: whose quotas are on the way, or why none come. [machines] null: the directory
+ * has not loaded.
+ */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-private fun NoQuotas() {
+private fun NoQuotas(machines: List<String>?, asking: Boolean) {
     val context = LocalContext.current
     Column(
         Modifier.fillMaxWidth().padding(horizontal = Spacing.s4, vertical = Spacing.s10),
@@ -134,15 +156,38 @@ private fun NoQuotas() {
         Box(Modifier.size(160.dp).background(MaterialTheme.colorScheme.surfaceContainerHighest, MaterialShapes.Cookie9Sided.toShape()), contentAlignment = Alignment.Center) {
             Symbol(Sym.Speed, size = 56.dp, tint = MaterialTheme.colorScheme.onSurface)
         }
-        Text("No quotas yet", style = StarbridgeTheme.type.heading, color = MaterialTheme.colorScheme.onSurface, textAlign = TextAlign.Center)
-        Surface(shape = RoundedCornerShape(Radius.lg), color = MaterialTheme.colorScheme.surfaceContainerHighest, modifier = Modifier.fillMaxWidth()) {
-            Text("starbridge quota push", style = StarbridgeTheme.type.code, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(Spacing.s4))
+        val heading = when {
+            machines == null -> "No quotas yet"
+            machines.isEmpty() -> "No machine yet"
+            asking -> "Loading quotas from ${names(machines)}…"
+            else -> "No quotas from ${names(machines)}"
         }
-        OutlinedButton(
-            onClick = { runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(QUOTA_DOCS))) } },
-            modifier = Modifier.heightIn(min = Sizes.tap),
-        ) { Text("How to set it up", style = StarbridgeTheme.type.action) }
+        Text(heading, style = StarbridgeTheme.type.heading, color = MaterialTheme.colorScheme.onSurface, textAlign = TextAlign.Center)
+        if (machines != null && machines.isEmpty()) {
+            Text("Quotas come from the machines that run your agents. Add one from the Inbox.", style = StarbridgeTheme.type.body, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
+        } else if (machines != null && !asking) {
+            Text(
+                "A machine uploads quotas once CodexBar reads an AI plan there. Run setup on it and say yes to quotas:",
+                style = StarbridgeTheme.type.body,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+            )
+            Surface(shape = RoundedCornerShape(Radius.lg), color = MaterialTheme.colorScheme.surfaceContainerHighest, modifier = Modifier.fillMaxWidth()) {
+                Text("starbridge setup", style = StarbridgeTheme.type.code, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(Spacing.s4))
+            }
+            OutlinedButton(
+                onClick = { runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(QUOTA_DOCS))) } },
+                modifier = Modifier.heightIn(min = Sizes.tap),
+            ) { Text("How to set it up", style = StarbridgeTheme.type.action) }
+        }
     }
+}
+
+/** "devbox", "devbox and laptop", "devbox, laptop and pi". */
+internal fun names(machines: List<String>) = when (machines.size) {
+    0 -> ""
+    1 -> machines[0]
+    else -> machines.dropLast(1).joinToString(", ") + " and " + machines.last()
 }
 
 /**

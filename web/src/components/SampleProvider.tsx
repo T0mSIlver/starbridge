@@ -15,9 +15,12 @@ const noop = async () => {};
  */
 export function SampleProvider({
   landing = false,
+  noQuotas = false,
   children,
 }: {
   landing?: boolean;
+  /** No snapshot yet, as on a device that just joined (#661). */
+  noQuotas?: boolean;
   children: React.ReactNode;
 }) {
   const [quotaSettings, setQuotaSettings] = useState(DEFAULT_SETTINGS);
@@ -31,6 +34,7 @@ export function SampleProvider({
         prompts: [],
         runs: { ...s.runs, items: s.runs.items.filter((i) => i.run.id !== "r3") },
       }),
+      ...(noQuotas && { quotas: { cards: [], errors: [], rejected: [] } }),
       sampleDevices: devices,
       reload: noop,
       answer: noop,
@@ -43,6 +47,6 @@ export function SampleProvider({
       loadPromptLog: noop,
       deviceName: (id) => id,
     };
-  }, [landing, quotaSettings]);
+  }, [landing, noQuotas, quotaSettings]);
   return <StoreContext.Provider value={store}>{children}</StoreContext.Provider>;
 }

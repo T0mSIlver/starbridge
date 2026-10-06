@@ -628,6 +628,11 @@ Codex prompts are not supported.
   with the error and when they were read. Kept windows raise no alerts and go once their reset
   passes. A provider with nothing to keep shows only its error. Devices get a short error; the CLI
   logs CodexBar's whole. The run timeout is 120 s.
+- **No snapshot yet** (#661). A snapshot is sealed to the devices active when it is taken, so a
+  device that just joined reads none until the next upload, and quota items send no push. The
+  agent posts one when it sees a device join; the Quotas screen with nothing to show also asks
+  the machines once, as a pull does, and says "Loading quotas from <machines>…" meanwhile. Only
+  when nothing comes back does it give the setup line, and with no machine it says to add one.
 
 ### Quota settings follow CodexBar
 

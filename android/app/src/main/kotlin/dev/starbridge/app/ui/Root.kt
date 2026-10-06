@@ -45,6 +45,7 @@ import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
+import dev.starbridge.app.data.Kind
 import dev.starbridge.app.data.Decision
 import dev.starbridge.app.data.Phase
 import dev.starbridge.app.data.Run
@@ -316,12 +317,15 @@ fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> U
                         val windows by vm.windows.collectAsStateWithLifecycle()
                         val failures by vm.failures.collectAsStateWithLifecycle()
                         val settings by vm.settings.collectAsStateWithLifecycle()
+                        val members by vm.members.collectAsStateWithLifecycle()
                         QuotasScreen(
                             windows,
                             now,
                             settings = settings,
                             refresh = refresh(vm::refresh),
                             failures = failures,
+                            // Members load with the directory, which always holds this phone.
+                            machines = members.takeIf { it.isNotEmpty() }?.filter { it.kind == Kind.Machine }?.map { it.name },
                         )
                     }
                     entry<SettingsKey> {

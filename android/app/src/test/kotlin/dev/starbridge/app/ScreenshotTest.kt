@@ -1,5 +1,6 @@
 package dev.starbridge.app
 
+import dev.starbridge.app.ui.Refresh
 import dev.starbridge.app.ui.devices.RecoveryKeyScreen
 import dev.starbridge.app.ui.devices.RecoveryActions
 import dev.starbridge.app.data.Replacing
@@ -247,6 +248,11 @@ class ScreenshotTest(private val dark: Boolean) {
     private fun notifications() = compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasText("Delivered through"))
 
     @Test fun quotasEmpty() = capture("quotas-empty") { QuotasScreen(emptyList(), now) }
+
+    // A device that just joined (#661): the ask in flight, nothing came back, and no machine at all.
+    @Test fun quotasLoading() = capture("quotas-loading") { QuotasScreen(emptyList(), now, refresh = Refresh(busy = true) {}, machines = listOf("devbox")) }
+    @Test fun quotasNone() = capture("quotas-none") { QuotasScreen(emptyList(), now, machines = listOf("devbox", "laptop")) }
+    @Test fun quotasNoMachine() = capture("quotas-no-machine") { QuotasScreen(emptyList(), now, machines = emptyList()) }
 
     @Test fun quotasStale() = capture("quotas-stale") { QuotasScreen(fake.staleWindows, now) }
     @Test fun quotasFailed() = capture("quotas-failed") { QuotasScreen(fake.failedWindows, now, failures = fake.failures) }
