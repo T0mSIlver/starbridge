@@ -62,6 +62,10 @@ export class DemoDevice {
   private keys!: MemberKeys;
   private session = "";
   account = "";
+  /** The demo machine, once paired. */
+  machine?: string;
+  /** Directory appends, one at a time: two at once would both name the same next entry. */
+  private appends: Promise<unknown> = Promise.resolve();
 
   constructor(
     readonly server: string,
@@ -83,9 +87,12 @@ export class DemoDevice {
     if (res.ok) return json as T;
     const code = (json as { error?: string } | undefined)?.error ?? "";
     if (res.status === 401 && code === "revoked") throw new Broken("the demo device was revoked");
-    // Sessions expire, and an account keeps 50: reviewers' sign-ins push the oldest out.
+    // Sessions expire, and an account keeps 50: reviewers' sign-ins push the oldest out. A
+    // revoked device's long-poll also ends in a plain 401, and then binding fails.
     if (res.status === 401 && retry && this.account) {
-      await this.signInAgain();
+      await this.signInAgain().catch((e) => {
+        throw e instanceof Broken ? e : new Broken(`signing in again failed: ${e.message}`);
+      });
       return this.call(method, path, body, false);
     }
     throw new HttpError(res.status, code, `${method} ${path}`);
@@ -101,7 +108,7 @@ export class DemoDevice {
   private async signIn(): Promise<void> {
     this.session = "";
     this.session = (
-      await this.call<{ session: string }>("POST", "/auth/owner", { token: this.ownerToken })
+      await this.call<{ session: string }>("POST", "/auth/owner", { token: this.ownerToken }, false)
     ).session;
   }
 
@@ -146,12 +153,35 @@ export class DemoDevice {
     return verifyDirectory(entries, { account: this.account });
   }
 
-  /** Adds a member; a full directory means the demo starts over. */
-  private async add(member: Member): Promise<{ length: number; head: string }> {
+  /**
+   * Adds a member; a full directory means the demo starts over. Retries when a reviewer's
+   * device appended an entry (a revocation) in between.
+   */
+  private add(member: Member): Promise<{ length: number; head: string }> {
+    const next = this.appends.then(async () => {
+      for (let attempt = 0; ; attempt++) {
+        const dir = await this.directory();
+        if (dir.length >= FULL_DIRECTORY)
+          throw new Broken(`the directory holds ${dir.length} entries`);
+        const signer = { id: this.id, signKey: this.keys.sign.privateKey };
+        try {
+          return await this.call<{ length: number; head: string }>("POST", "/directory", {
+            entry: addEntry(dir, signer, member, now()),
+          });
+        } catch (e) {
+          if (!(e instanceof HttpError && e.status === 409 && attempt < 3)) throw e;
+        }
+      }
+    });
+    this.appends = next.catch(() => {});
+    return next;
+  }
+
+  /** Throws Broken once a reviewer revoked this device or the demo machine. */
+  async check(): Promise<void> {
     const dir = await this.directory();
-    if (dir.length >= FULL_DIRECTORY) throw new Broken(`the directory holds ${dir.length} entries`);
-    const signer = { id: this.id, signKey: this.keys.sign.privateKey };
-    return this.call("POST", "/directory", { entry: addEntry(dir, signer, member, now()) });
+    for (const id of [this.id, this.machine])
+      if (id && !dir.members.get(id)?.active) throw new Broken(`${id} was revoked`);
   }
 
   /** What the owner does after typing the machine's code. */
@@ -162,6 +192,7 @@ export class DemoDevice {
       `/pairings/${code.rendezvous}?wait=25`,
     );
     const req = openPairingRequest(request, code);
+    this.machine = req.id;
     const { length, head } = await this.add({
       id: req.id,
       role: req.role,
@@ -180,14 +211,20 @@ export class DemoDevice {
   async approveJoins(signal: AbortSignal): Promise<void> {
     let cursor = "0";
     let broken: Broken | undefined;
+    // An account holds 16 join long-polls; reviewers' apps can take them all.
+    let wait = 25;
     const busy = new Set<string>();
     while (!signal.aborted) {
       if (broken) throw broken;
       let page: { joins: JoinView[]; cursor: string };
       try {
-        page = await this.call("GET", `/joins?after=${cursor}&wait=25`);
+        // Each pass, at most every 25 s: the machine's CLI retries a revoked token forever.
+        await this.check();
+        page = await this.call("GET", `/joins?after=${cursor}&wait=${wait}`);
+        wait = 25;
       } catch (e) {
         if (e instanceof Broken) throw e;
+        if (e instanceof HttpError && e.status === 429) wait = 0;
         this.log(`joins: ${(e as Error).message}`);
         await Bun.sleep(3000);
         continue;

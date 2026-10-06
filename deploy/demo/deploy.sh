@@ -25,12 +25,16 @@ printf "OWNER_TOKEN='%s'\n" "$(tr -d '\n' < "$token")" | ssh -i "$key" "$host" "
   cat > /etc/starbridge-demo/demo.env
 '"
 git archive --format=tar "$rev" | ssh -i "$key" "$host" "sudo sh -euc '
+  # Shares prod deploys' lock, so the two image builds never compete for the disk.
+  exec 9>/run/starbridge-deploy.lock
+  flock 9
   rm -rf /opt/starbridge-demo.new
   mkdir /opt/starbridge-demo.new
   tar -x -C /opt/starbridge-demo.new
   rm -rf /opt/starbridge-demo
   mv /opt/starbridge-demo.new /opt/starbridge-demo
   docker compose -p starbridge-demo -f /opt/starbridge-demo/deploy/demo/compose.yaml up -d --build --force-recreate
+  docker image prune -f >/dev/null
 '"
 curl -fsS --retry 20 --retry-delay 3 --retry-all-errors https://demo.starbridge.run/v1/demo >/dev/null
 echo "demo deployed $rev"

@@ -13,13 +13,14 @@ import {
   open,
   openJoinApproval,
   publicKeys,
+  revokeEntry,
   type SealedItem,
   seal,
   toB64,
   verifyDirectory,
 } from "@starbridge/protocol";
 import { makeServer } from "@starbridge/server/test-support";
-import { DemoDevice } from "../src/device";
+import { Broken, DemoDevice } from "../src/device";
 import { DemoMachine, QUESTIONS } from "../src/machine";
 
 const TOKEN = "owner-secret";
@@ -45,7 +46,7 @@ test("refuses a server without DEMO=1", async () => {
 });
 
 /** A phone that signs in with the owner token and joins by digits, as a reviewer's does. */
-async function joinByDigits(url: string) {
+async function joinByDigits(url: string, phoneId = "pixel") {
   const call = async (method: string, path: string, session: string, body?: unknown) => {
     const res = await fetch(`${url}/v1${path}`, {
       method,
@@ -65,8 +66,8 @@ async function joinByDigits(url: string) {
     v: 1,
     join: id,
     account,
-    id: "pixel",
-    name: "Pixel",
+    id: phoneId,
+    name: phoneId,
     ...publicKeys(keys),
     at,
   });
@@ -88,7 +89,7 @@ async function joinByDigits(url: string) {
       break;
     }
   }
-  const me = { id: "pixel", box: keys.box };
+  const me = { id: phoneId, box: keys.box };
   const directory = async () => verifyDirectory((await call("GET", "/directory", session)).entries);
   return {
     /** The open questions this phone can read. */
@@ -120,8 +121,19 @@ async function joinByDigits(url: string) {
         "POST",
         "/items",
         session,
-        seal("answer", body, { id: "pixel", signKey: keys.sign.privateKey }, [machine]),
+        seal("answer", body, { id: phoneId, signKey: keys.sign.privateKey }, [machine]),
       );
+    },
+    /** What a reviewer does who removes a member in the app. */
+    async revoke(id: string) {
+      const signer = { id: phoneId, signKey: keys.sign.privateKey };
+      const entry = revokeEntry(
+        await directory(),
+        signer,
+        id,
+        `${new Date().toISOString().slice(0, 19)}Z`,
+      );
+      await call("POST", "/directory", session, { entry });
     },
   };
 }
@@ -136,7 +148,8 @@ async function until<T>(get: () => Promise<T | undefined>, ms: number): Promise<
   }
 }
 
-test("a phone joins by digits, sees the open question, answers it and gets the next", async () => {
+/** A demo server with the demo device and its paired machine; nothing runs yet. */
+async function demo() {
   const s = await serve(true);
   cleanup.push(s.stop);
   const device = new DemoDevice(s.url, TOKEN, () => {});
@@ -148,7 +161,6 @@ test("a phone joins by digits, sees the open question, answers it and gets the n
       dir: mkdtempSync(join(tmpdir(), "starbridge-demo-")),
       codexbar: join(ROOT, "demo/src/codexbar.ts"),
       nextQuestionAfter: 0,
-      runCommand: ["sleep", "60"],
       log: () => {},
     },
     device,
@@ -157,13 +169,19 @@ test("a phone joins by digits, sees the open question, answers it and gets the n
   await machine.pair();
   const stop = new AbortController();
   cleanup.push(() => stop.abort());
-  device.approveJoins(stop.signal).catch(() => {});
+  const joins = device.approveJoins(stop.signal);
+  joins.catch(() => {});
+  return { url: s.url, device, machine, stop, joins };
+}
+
+test("a phone joins by digits, sees the open question, answers it and gets the next", async () => {
+  const { url, device, machine, stop } = await demo();
   machine.agent().catch(() => {});
   machine.questions(stop.signal).catch(() => {});
 
   // The question is asked before the phone joins: the machine re-seals it to the phone.
   await until(async () => ((await device.directory()).length >= 2 ? true : undefined), 20_000);
-  const phone = await joinByDigits(s.url);
+  const phone = await joinByDigits(url);
   const first = await until(async () => (await phone.questions())[0], 40_000);
   expect(first.question).toBe(QUESTIONS[0]?.question as string);
   await phone.answer(first, first.options?.[0] as string);
@@ -173,3 +191,19 @@ test("a phone joins by digits, sees the open question, answers it and gets the n
   );
   expect(next.question).toBe(QUESTIONS[1]?.question as string);
 }, 120_000);
+
+test("two phones joining at once both get in", async () => {
+  const { url, device } = await demo();
+  await Promise.all([joinByDigits(url, "pixel"), joinByDigits(url, "tablet")]);
+  const dir = await device.directory();
+  expect(dir.members.get("pixel")?.active).toBe(true);
+  expect(dir.members.get("tablet")?.active).toBe(true);
+}, 60_000);
+
+for (const revoked of ["demo-owner", "machine"])
+  test(`stops, for a fresh account, once a reviewer revokes the ${revoked}`, async () => {
+    const { url, device, joins } = await demo();
+    const phone = await joinByDigits(url);
+    await phone.revoke(revoked === "machine" ? (device.machine as string) : device.id);
+    await expect(joins).rejects.toBeInstanceOf(Broken);
+  }, 60_000);
