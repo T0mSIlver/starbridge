@@ -148,6 +148,19 @@
     padding-left: calc(var(--s4) + var(--s5) - var(--s1) + var(--s2));
   }
 
+  /* A provider with no windows to keep: its failure where its windows would be (#450). */
+  .groupComfy.empty .lead {
+    display: contents;
+  }
+
+  .groupComfy.empty .stale {
+    grid-column: 2;
+    grid-row: 1;
+    align-self: center;
+    margin: 0;
+    padding: var(--s3) var(--s4);
+  }
+
   .groupComfy .head > button {
     display: grid;
     width: var(--s5);

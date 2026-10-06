@@ -25,7 +25,10 @@ export function QuotaGroup({
   handle?: React.ReactNode;
 }) {
   return (
-    <section className={`${s.group} ${comfy ? s.groupComfy : ""}`} aria-label={g.provider}>
+    <section
+      className={`${s.group} ${comfy ? s.groupComfy : ""} ${g.cards.length === 0 ? s.empty : ""}`}
+      aria-label={g.provider}
+    >
       <div className={s.lead}>
         <h2 className={`${comfy ? "t-action" : "t-label"} ${s.head}`}>
           {handle}
