@@ -7,15 +7,15 @@ seconds=$1
 shift
 setsid "$@" &
 pid=$!
-# A cancelled job stops the group too.
-trap 'kill -TERM -- "-$pid" 2>/dev/null' INT TERM
+# By parent, not by group: Playwright starts Firefox in a session of its own.
+tree() { echo "$1"; for c in $(ps -o pid= --ppid "$1"); do tree "$c"; done; }
+# A cancelled job stops them too.
+trap 'kill -TERM $(tree "$pid") 2>/dev/null' INT TERM
 for _ in $(seq "$seconds"); do
   kill -0 "$pid" 2>/dev/null || break
   sleep 1
 done
 if kill -0 "$pid" 2>/dev/null; then
-  # By parent, not by group: Playwright starts Firefox in a session of its own.
-  tree() { echo "$1"; for c in $(ps -o pid= --ppid "$1"); do tree "$c"; done; }
   pids=$(tree "$pid")
   echo "::error::$* still running after ${seconds}s; its processes and sockets follow"
   # wchan: the kernel function a sleeping process waits in.
