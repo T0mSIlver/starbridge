@@ -1,0 +1,98 @@
+{
+  "agent": "claude",
+  "model": "claude-sonnet-5-5",
+  "arm": "after",
+  "scenario": "later-question",
+  "rep": 1,
+  "turns": [
+    {
+      "commands": [
+        "node scripts/lint.js",
+        "node scripts/lint.js && echo ok; starbridge ask --question 'What should next week’s release be called?' --context 'The name goes in RELEASE.md before Monday; no rush.\nReply with the name you want (type it in the reply box).' --option 'I will type a name' 2>&1",
+        "starbridge ask --question 'What should next week’s release be called?' --context 'The name goes in RELEASE.md before Monday; no rush.\nReply with the name you want.' 2>&1",
+        "starbridge wait d_ehNp6fQH6HqE8ef5 --timeout 5m --no-mark 2>&1; echo exit $?",
+        "starbridge wait d_ehNp6fQH6HqE8ef5 --timeout 5m --no-mark 2>&1; echo exit $?"
+      ],
+      "final": "(exit 143) ",
+      "exit": 143,
+      "seconds": 720.127,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_ehNp6fQH6HqE8ef5 --timeout 5m` (again on exit 2).",
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_vEgLbW0npmpwaAyK --timeout 5m` (again on exit 2)."
+      ]
+    },
+    {
+      "commands": [
+        "starbridge settle d_ehNp6fQH6HqE8ef5 --outcome withdrawn 2>&1; starbridge ask --question 'What should next week’s release be called?' --context 'The name goes in RELEASE.md before Monday; no rush.\nType the name as a reply to this card.\nDecide later: I leave RELEASE.md unchanged until you send a name.\nSkip release: I leave RELEASE.md alone for good.' --option 'Decide later' --option 'Skip release' 2>&1",
+        "starbridge wait d_vEgLbW0npmpwaAyK --timeout 5m --no-mark 2>&1; echo exit $?"
+      ],
+      "final": "(exit 143) ",
+      "exit": 143,
+      "seconds": 720.127,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_ehNp6fQH6HqE8ef5 --timeout 5m` (again on exit 2).",
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_vEgLbW0npmpwaAyK --timeout 5m` (again on exit 2)."
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_ehNp6fQH6HqE8ef5",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-06T21:59:34Z",
+      "question": "What should next week’s release be called?",
+      "context": "The name goes in RELEASE.md before Monday; no rush.\nReply with the name you want.",
+      "options": [],
+      "agent": "claude-code",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "f39d4014-fa7f-466a-9fe5-37584b49156b",
+        "sessionTitle": "proj-d9"
+      },
+      "dir": {
+        "length": 2,
+        "head": "Gbr30sjmFLt_WWX7uwbFsjPNqR6XtvsGHPpaW4zHIeM"
+      }
+    }
+  ],
+  "laterDecisions": [
+    {
+      "v": 1,
+      "id": "d_vEgLbW0npmpwaAyK",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-06T22:09:44Z",
+      "question": "What should next week’s release be called?",
+      "context": "The name goes in RELEASE.md before Monday; no rush.\nType the name as a reply to this card.\nDecide later: I leave RELEASE.md unchanged until you send a name.\nSkip release: I leave RELEASE.md alone for good.",
+      "options": [
+        "Decide later",
+        "Skip release"
+      ],
+      "recommended": "Decide later",
+      "agent": "claude-code",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "f39d4014-fa7f-466a-9fe5-37584b49156b",
+        "sessionTitle": "proj-d9"
+      },
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "Gbr30sjmFLt_WWX7uwbFsjPNqR6XtvsGHPpaW4zHIeM"
+      }
+    }
+  ],
+  "runs": [],
+  "gh": [],
+  "answered": "Answer to d_ehNp6fQH6HqE8ef5 (What should next week’s release be called?): Go ahead",
+  "waiting": [],
+  "permissions": []
+}

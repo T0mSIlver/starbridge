@@ -1,0 +1,89 @@
+{
+  "agent": "claude",
+  "model": "claude-sonnet-5-5",
+  "arm": "after",
+  "scenario": "done-on-page",
+  "rep": 2,
+  "turns": [
+    {
+      "commands": [
+        "sh scripts/read-artifact.sh",
+        "starbridge ask --question 'Which set of tier names should the pricing page use?' --context 'src/pricing.html has three tiers ($0, $8, $20) with placeholder names. No pick has been made yet.\nOpen the comparison artifact and tap Pick on the set you want; the page is otherwise finished once names are in.' --answer-in 'https://claude.ai/artifact/7c1e9a52-0d3b-4f6e-9a21-5b8c3d2e1f00' --waiting",
+        "starbridge wait d_wSwJoU3q0ZV3BjJC --timeout 5m"
+      ],
+      "final": "The pricing page now uses the owner's pick: Starter ($0), Plus ($8) and Studio ($20). I also removed the TODO comment from `src/pricing.html`. I didn't open the page in a browser.\n\nThe page had no pick when I first checked, so I posted a card on Starbridge. The owner tapped Done, and I read the pick from the artifact page. Nothing is committed.",
+      "session": "7e4da526-265c-43ef-943b-2ad3731d9def",
+      "tokens": 189795,
+      "costUsd": 0.0918174,
+      "exit": 0,
+      "seconds": 32.49,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_wSwJoU3q0ZV3BjJC --timeout 5m` (again on exit 2)."
+      ]
+    },
+    {
+      "commands": [
+        "sh scripts/read-artifact.sh"
+      ],
+      "final": "The pricing page now uses the owner's pick: Starter ($0), Plus ($8) and Studio ($20). I also removed the TODO comment from `src/pricing.html`. I didn't open the page in a browser.\n\nThe page had no pick when I first checked, so I posted a card on Starbridge. The owner tapped Done, and I read the pick from the artifact page. Nothing is committed.",
+      "session": "7e4da526-265c-43ef-943b-2ad3731d9def",
+      "tokens": 189795,
+      "costUsd": 0.0918174,
+      "exit": 0,
+      "seconds": 32.49,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_wSwJoU3q0ZV3BjJC --timeout 5m` (again on exit 2)."
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_wSwJoU3q0ZV3BjJC",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-06T22:02:38Z",
+      "question": "Which set of tier names should the pricing page use?",
+      "context": "src/pricing.html has three tiers ($0, $8, $20) with placeholder names. No pick has been made yet.\nOpen the comparison artifact and tap Pick on the set you want; the page is otherwise finished once names are in.",
+      "options": [],
+      "agent": "claude-code",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "7e4da526-265c-43ef-943b-2ad3731d9def",
+        "sessionTitle": "proj-e7"
+      },
+      "answerIn": {
+        "url": "https://claude.ai/artifact/7c1e9a52-0d3b-4f6e-9a21-5b8c3d2e1f00"
+      },
+      "done": true,
+      "dir": {
+        "length": 2,
+        "head": "Hb4VvY0lb2LUjOpzEC8HkHZshvwKS9E7m_09Iopph5s"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "answered": "Answer to d_wSwJoU3q0ZV3BjJC (Which set of tier names should the pricing page use?): answered on its page; read the answer there",
+  "waiting": [
+    {
+      "v": 1,
+      "id": "w_XgKKACCJqZr8VQqj",
+      "decisionId": "d_wSwJoU3q0ZV3BjJC",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-06T22:02:38Z",
+      "state": "waiting",
+      "dir": {
+        "length": 2,
+        "head": "Hb4VvY0lb2LUjOpzEC8HkHZshvwKS9E7m_09Iopph5s"
+      }
+    }
+  ],
+  "permissions": []
+}

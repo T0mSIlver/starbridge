@@ -1,0 +1,73 @@
+{
+  "agent": "opencode",
+  "model": "zai-coding-plan/glm-5.3-flash",
+  "arm": "after",
+  "scenario": "option-order",
+  "rep": 3,
+  "turns": [
+    {
+      "commands": [
+        "starbridge ask \\\n  --question 'How long should deleted notes stay in the trash before auto-purge?' \\\n  --context 'Storage: each month of trash kept costs about $20/month, so 7d ≈ $5, 30d ≈ $20, 90d ≈ $60.\nSupport: 85% of restore requests come within 3 weeks of the delete; 7 days would block most restores.\n30 days covers that window with a week of margin; 90 days triple-quadruples storage cost for the tail.' \\\n  --option '30 days' --option '7 days' --option '90 days' \\\n  --recommended",
+        "starbridge ask \\\n  --question 'How long should deleted notes stay in the trash before auto-purge?' \\\n  --context 'Storage: each month of trash kept costs about $20/month, so 7d ≈ $5, 30d ≈ $20, 90d ≈ $60.\nSupport: 85% of restore requests come within 3 weeks of the delete; 7 days would block most restores.\n30 days covers that window with a week of margin; 90 days triples storage cost for the restore tail.' \\\n  --option '30 days' --option '7 days' --option '90 days' \\\n  --recommended '30 days'",
+        "node --input-type=module -e \"\nimport { trash, remove, purgeTrash, startAutoPurge } from './src/trash.js';\nconst now = Date.now();\ntrash.push({ note: 'old', deletedAt: now - 40*24*3600*1000 });\ntrash.push({ note: 'recent', deletedAt: now - 2*24*3600*1000 });\npurgeTrash(30);\nconsole.log('after purge(30):', trash.map(e => e.note));\nconst stop = startAutoPurge(7);\nconsole.log('auto purge ran:', trash.map(e => e.note));\nstop();\n\"",
+        "starbridge wait d_wntGXVnhsOHr80ms --timeout 5m"
+      ],
+      "final": "Done. Trash now auto-purges at **30 days**, your pick on the card:\n\n- `src/trash.js` — `purgeTrash()` deletes entries older than the retention (default `TRASH_RETENTION_DAYS = 30`); `startAutoPurge()` runs it immediately and daily, returning a stop function.\n- Verified: a 31-day-old note is purged, a 29-day-old one kept; at $20/month per month of trash, this caps the storage cost at ~$20/month while covering the 3-week window where 85% of restore requests land.",
+      "session": "ses_eeca2cc0cffe4uzQ0KeMQCovaP",
+      "tokens": 20103,
+      "exit": 0,
+      "seconds": 111.349,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_wntGXVnhsOHr80ms --timeout 5m` (again on exit 2)."
+      ]
+    },
+    {
+      "commands": [
+        "node --input-type=module -e \"\nimport { trash, purgeTrash } from './src/trash.js';\nconst now = Date.now();\ntrash.push({ note: 'old', deletedAt: now - 31*24*3600*1000 });\ntrash.push({ note: 'edge', deletedAt: now - 29*24*3600*1000 });\npurgeTrash();\nconsole.log('default purge:', trash.map(e => e.note));\n\""
+      ],
+      "final": "Done. Trash now auto-purges at **30 days**, your pick on the card:\n\n- `src/trash.js` — `purgeTrash()` deletes entries older than the retention (default `TRASH_RETENTION_DAYS = 30`); `startAutoPurge()` runs it immediately and daily, returning a stop function.\n- Verified: a 31-day-old note is purged, a 29-day-old one kept; at $20/month per month of trash, this caps the storage cost at ~$20/month while covering the 3-week window where 85% of restore requests land.",
+      "session": "ses_eeca2cc0cffe4uzQ0KeMQCovaP",
+      "tokens": 20103,
+      "exit": 0,
+      "seconds": 111.349,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_wntGXVnhsOHr80ms --timeout 5m` (again on exit 2)."
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_wntGXVnhsOHr80ms",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-06T22:37:58Z",
+      "question": "How long should deleted notes stay in the trash before auto-purge?",
+      "context": "Storage: each month of trash kept costs about $20/month, so 7d ≈ $5, 30d ≈ $20, 90d ≈ $60.\nSupport: 85% of restore requests come within 3 weeks of the delete; 7 days would block most restores.\n30 days covers that window with a week of margin; 90 days triples storage cost for the restore tail.",
+      "options": [
+        "30 days",
+        "7 days",
+        "90 days"
+      ],
+      "recommended": "30 days",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": ""
+      },
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "JdXgK8-QkVBGO5Lu5zyhL1t21jqM6Hb5E7iIN8fkoZg"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "answered": "Answer to d_wntGXVnhsOHr80ms (How long should deleted notes stay in the trash before auto-purge?): 30 days",
+  "waiting": [],
+  "permissions": []
+}
