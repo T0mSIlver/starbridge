@@ -34,6 +34,7 @@ import {
   type Session,
   UsageError,
 } from "./context";
+import { OPENCODE_TITLE } from "./opencode";
 import { piSessionTitle } from "./pi";
 
 /**
@@ -348,8 +349,9 @@ export function buildPermission(
 }
 
 /**
- * Where the prompt comes from, from the hook input and Claude Code's record of the session, or
- * the name in Pi's session file (`PI_SESSION_FILE`, which the Pi extension passes).
+ * Where the prompt comes from, from the hook input and Claude Code's record of the session, the
+ * name in Pi's session file (`PI_SESSION_FILE`, which the Pi extension passes), or the title the
+ * opencode plugin passes.
  */
 export function permissionSource(
   hook: PermissionHookInput,
@@ -357,7 +359,8 @@ export function permissionSource(
 ): PermissionSourceInput {
   const session = typeof hook.session_id === "string" ? hook.session_id : "";
   const claude = session ? claudeSession(env, session) : undefined;
-  const title = claude?.title ?? piSessionTitle(env);
+  const title =
+    claude?.title ?? piSessionTitle(env) ?? (env[OPENCODE_TITLE]?.slice(0, 200) || undefined);
   return {
     project: basename(typeof hook.cwd === "string" && hook.cwd ? hook.cwd : process.cwd()),
     session,
