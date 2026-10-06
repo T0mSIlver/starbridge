@@ -7,7 +7,7 @@ import {
   Decision,
   type DecisionLink,
   type Directory,
-  holdsHead,
+  noteHead as keepHead,
   open,
   ProtocolError,
   parseWith,
@@ -16,6 +16,7 @@ import {
   type Settled,
   seal,
   type Waiting,
+  withheldBy,
 } from "@starbridge/protocol";
 import { ApiError } from "./api";
 import { claudeSession } from "./claude";
@@ -30,6 +31,7 @@ import {
   refreshDirectory,
   type Session,
   session,
+  signedHead,
   UsageError,
 } from "./context";
 import { fitPicture, loadPicture, type Picture } from "./images";
@@ -259,12 +261,15 @@ export async function postDecision(ctx: Ctx, s: Session, input: AskInput): Promi
     typeof i === "string" ? loadPicture(i) : loadPicture(i.path, i.alt),
   );
   const to = devices(dir);
-  const base = buildDecision(
-    input,
-    ctx,
-    s.machine.name,
-    to.map((d) => d.id),
-  );
+  const base = {
+    ...buildDecision(
+      input,
+      ctx,
+      s.machine.name,
+      to.map((d) => d.id),
+    ),
+    dir: signedHead(ctx, dir),
+  };
   const { decision, item } = sealWithPictures(
     base,
     pictures,
@@ -334,7 +339,8 @@ export async function postWaiting(
     a.waiting ??= { id: `w_${randomBytes(12).toString("base64url")}`, state: "working" };
     waitingId = a.waiting.id;
   });
-  const to = devices(await refreshDirectory(ctx, s));
+  const dir = await refreshDirectory(ctx, s);
+  const to = devices(dir);
   const body = {
     v: 1 as const,
     id: waitingId,
@@ -342,6 +348,7 @@ export async function postWaiting(
     to: to.map((d) => d.id),
     at: iso(ctx.now()),
     state,
+    dir: signedHead(ctx, dir),
   } satisfies Waiting;
   const item = seal("waiting", body, { id: s.machine.id, signKey: s.keys.sign.privateKey }, to);
   try {
@@ -391,7 +398,8 @@ export async function settle(ctx: Ctx, opts: { id?: string; outcome?: string }):
       forget(a);
     }
   });
-  const to = devices(await refreshDirectory(ctx, s));
+  const dir = await refreshDirectory(ctx, s);
+  const to = devices(dir);
   const body = {
     v: 1 as const,
     id: `s_${randomBytes(12).toString("base64url")}`,
@@ -399,6 +407,7 @@ export async function settle(ctx: Ctx, opts: { id?: string; outcome?: string }):
     to: to.map((d) => d.id),
     at: iso(ctx.now()),
     outcome,
+    dir: signedHead(ctx, dir),
   } satisfies Settled;
   try {
     await s.api.postItem(
@@ -488,16 +497,10 @@ export function noteHead(
   } catch {
     return undefined;
   }
-  const head = opened.body.dir;
-  const known = st.heads?.[opened.signer.id];
-  const replace =
-    !known ||
-    (head && head.length > known.length) ||
-    (head && holdsHead(entries, known) && !holdsHead(entries, head));
-  if (head && replace) {
-    st.heads ??= {};
-    st.heads[opened.signer.id] = head;
-  }
+  // A device vouches for its own head only: a `by` in an answer would add a key per id it names.
+  const head = opened.body.dir && { length: opened.body.dir.length, head: opened.body.dir.head };
+  st.heads ??= {};
+  keepHead(st.heads, opened.signer.id, head, entries);
   return opened.signer.id;
 }
 
@@ -506,9 +509,9 @@ export function noteHead(
  * lacks, so the server is holding back entries, perhaps the revocation of a device that answers.
  */
 export function behindBy(st: State, dir: Directory, entries: unknown[]): string | undefined {
-  for (const [id, head] of Object.entries(st.heads ?? {}))
-    if (dir.members.get(id)?.active && !holdsHead(entries, head))
-      return `the server is holding back directory entries ${id} has seen (${head.length}, this machine has ${dir.length}): no answer counts until it serves them`;
+  const held = withheldBy(st.heads ?? {}, dir, entries);
+  if (held)
+    return `the server is holding back directory entries ${held.id} has seen (${held.head.length}, this machine has ${dir.length}): no answer counts until it serves them`;
   return undefined;
 }
 
@@ -709,7 +712,8 @@ async function reseal(ctx: Ctx, s: Session, known: Directory): Promise<void> {
       }
     });
     const posted = await post(() => ({
-      ...sealWithPictures({ ...body, to: ids }, pictures, signer, to).item,
+      ...sealWithPictures({ ...body, to: ids, dir: signedHead(ctx, dir) }, pictures, signer, to)
+        .item,
       reseal: true,
     }));
     if (posted === "closed")
@@ -727,6 +731,7 @@ async function reseal(ctx: Ctx, s: Session, known: Directory): Promise<void> {
         to: ids,
         at: iso(ctx.now()),
         state: a.waiting.state,
+        dir: signedHead(ctx, dir),
       } satisfies Waiting;
       if (!(await post(() => ({ ...seal("waiting", w, signer, to), quiet: true })))) continue;
     }
@@ -737,7 +742,7 @@ async function reseal(ctx: Ctx, s: Session, known: Directory): Promise<void> {
   }
   for (const p of prompts) {
     if (!lacking(p.sealedTo ?? p.permission.to, dir)) continue;
-    const permission = { ...p.permission, to: ids };
+    const permission = { ...p.permission, to: ids, dir: signedHead(ctx, dir) };
     // As for decisions: answers count from the new devices before the post.
     ctx.store.updateState((st) => {
       const x = st.permissions?.[permission.id];

@@ -33,6 +33,7 @@ import {
   machineKind,
   refreshDirectory,
   type Session,
+  signedHead,
   UsageError,
 } from "./context";
 import { OPENCODE_TITLE } from "./opencode";
@@ -426,7 +427,7 @@ export async function postPermission(
   });
   const item = seal(
     "permission",
-    permission,
+    { ...permission, dir: signedHead(ctx, dir) },
     { id: s.machine.id, signKey: s.keys.sign.privateKey },
     to,
   );
@@ -550,7 +551,8 @@ export async function postSettled(
   how: { outcome: Settled["outcome"]; device?: string },
   signal?: AbortSignal,
 ): Promise<void> {
-  const to = devices(await refreshDirectory(ctx, s, signal));
+  const dir = await refreshDirectory(ctx, s, signal);
+  const to = devices(dir);
   const body: Settled = {
     v: 1,
     id: `st_${randomBytes(12).toString("base64url")}`,
@@ -559,6 +561,7 @@ export async function postSettled(
     outcome: how.outcome,
     ...(how.device ? { device: how.device } : {}),
     at: iso(ctx.now()),
+    dir: signedHead(ctx, dir),
   };
   await s.api.postItem(
     seal("settled", body, { id: s.machine.id, signKey: s.keys.sign.privateKey }, to),
