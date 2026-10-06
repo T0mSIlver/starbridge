@@ -65,6 +65,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.remember
+import kotlinx.coroutines.delay
 
 @HiltViewModel
 class QuotasViewModel @Inject constructor(private val store: Store, private val prefs: Prefs) : ViewModel() {
@@ -92,10 +94,25 @@ fun QuotasScreen(
     // ask the machines once, as a pull does, instead of waiting for their next upload (#661).
     var asked by rememberSaveable { mutableStateOf(false) }
     val ask = none && !machines.isNullOrEmpty() && refresh != null
+    // The store raises busy a moment after the ask starts: until it has risen and fallen, the ask
+    // counts as in flight, so "No quotas from" never flashes first.
+    var pending by remember { mutableStateOf(false) }
+    var rose by remember { mutableStateOf(false) }
+    val busy = refresh?.busy == true
     LaunchedEffect(ask) {
         if (ask && !asked) {
             asked = true
+            pending = true
             refresh?.run?.invoke()
+        }
+    }
+    LaunchedEffect(pending, busy) {
+        if (!pending) return@LaunchedEffect
+        if (busy) rose = true
+        else if (rose) pending = false
+        else {
+            delay(2_000)
+            pending = false
         }
     }
     val shown = settings.arrange(windows, now)
@@ -118,7 +135,7 @@ fun QuotasScreen(
             }
         },
     ) {
-        if (none) item { NoQuotas(machines, asking = refresh?.busy == true || (ask && !asked)) }
+        if (none) item { NoQuotas(machines?.distinct(), asking = busy || pending || (ask && !asked)) }
         else if (cards == 0) item {
             Text(
                 "Every provider is hidden",

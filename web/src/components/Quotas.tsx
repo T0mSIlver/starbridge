@@ -109,9 +109,10 @@ function machineNames({ boot, sampleDevices }: Store): string[] | undefined {
       .filter((d) => d.role === "machine" && d.status === "active")
       .map((d) => d.name);
   if (boot.state !== "ready") return undefined;
-  return [...boot.ctx.dir.members.values()]
+  const names = [...boot.ctx.dir.members.values()]
     .filter((m) => m.member.role === "machine" && m.active)
     .map((m) => m.member.name);
+  return [...new Set(names)];
 }
 
 /** "devbox", "devbox and laptop", "devbox, laptop and pi". */
