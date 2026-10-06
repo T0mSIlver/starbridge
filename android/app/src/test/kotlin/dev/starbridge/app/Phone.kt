@@ -62,8 +62,8 @@ fun Sheet(behind: @Composable () -> Unit, sheet: @Composable () -> Unit) {
     }
 }
 
-/** [content] as an entry of the app's NavDisplay, which hands it the full height as a minimum (#341). */
+/** [content] as an entry of the app's NavDisplay, which fills the screen and so hands it the full height as a minimum (#341). */
 @Composable
 fun Entry(content: @Composable () -> Unit) {
-    NavDisplay(listOf(Unit), entryProvider = entryProvider { entry<Unit> { content() } })
+    NavDisplay(listOf(Unit), Modifier.fillMaxSize(), entryProvider = entryProvider { entry<Unit> { content() } })
 }

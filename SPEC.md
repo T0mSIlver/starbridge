@@ -1816,11 +1816,12 @@ goes in git.
   the meta row cut its text. No text measured under 3:1 in either theme. The 200% text is
   emulated by scaling each element's computed font size and line height, since the page sets
   type in px; a browser that zooms the whole page instead is not covered.
-- 2026-10-06: why Android's Find showed no results (#341). NavDisplay
-  hands each entry its full height as a minimum, and Material 3's
+- 2026-10-06: why Android's Find showed no results (#341). The app's
+  NavDisplay fills the screen and passes that size on to its entry as a
+  minimum height, and Material 3's
   (1.5.0-alpha29) expanded `SearchBar` passes that minimum on to its
   input field. The field filled the screen, its text centred, and the
   results sat below the bottom edge. Find now stands in a `Box`, which
   drops the minimum. The screenshots had hidden it, since they drew Find
   in a plain `Box`; Find's shots and `FindScreenTest` now draw it inside
-  a NavDisplay, as the app does.
+  a screen-filling NavDisplay, as the app does.
