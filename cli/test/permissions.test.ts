@@ -108,6 +108,22 @@ for (const viaAgent of [true, false]) {
   });
 }
 
+test("a prompt reaches a device that joins while it waits, which can answer it", async () => {
+  const ctx = await machine();
+  const { out, permission } = await ask(ctx);
+  const laptop = await server.addDevice("laptop");
+  // The directory append wakes the agent's answer poll, which re-seals the prompt.
+  const to = () => ctx.store.state().permissions?.[permission.id]?.permission.to;
+  await until(() => !!to()?.includes(laptop.id));
+  await server.answerPermission(
+    permission.id,
+    { behavior: "allow", scope: "once" },
+    { by: laptop },
+  );
+  expect(await out).toBe(0);
+  expect(decision(ctx).hookSpecificOutput.decision).toEqual({ behavior: "allow" });
+});
+
 test("a deny carries its message to the agent", async () => {
   const ctx = await machine();
   const { out, permission } = await ask(ctx);
