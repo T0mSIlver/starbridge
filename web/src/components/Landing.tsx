@@ -52,9 +52,9 @@ function Phone({ name, alt }: { name: string; alt: string }) {
   );
 }
 
-// Turn on once the Play closed test's opt-in link works (Google's review has passed), and give
-// README.md's Google Play line the testers group and opt-in links at the same time (#576).
-const PLAY_TEST_OPEN = false;
+// On since Google's review of the closed test passed; README.md's Google Play line carries the
+// same two links (#576).
+const PLAY_TEST_OPEN = true;
 
 const OBTAINIUM = `https://apps.obtainium.imranr.dev/redirect?r=obtainium://add/${REPO}`;
 
