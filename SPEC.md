@@ -167,17 +167,23 @@ provider plugins add providers, not panels.
 ## Sign-in
 
 - The hosted server signs in with GitHub; a self-hosted server with `OWNER_TOKEN`.
-- Android (#34): GitHub sign-in ends with a redirect carrying a single-use code bound to a PKCE
-  S256 challenge, which the app trades at `POST /v1/auth/app/session`. Known gap: a hostile app
-  can start its own sign-in, and if GitHub skips the consent screen it gets a session.
-- The hosted server redirects to the App Link `https://starbridge.run/app/auth` (#527): Chrome
-  asks "Continue to Starbridge?" before following a `starbridge://` redirect that no tap started,
-  and only the app signed with a key in starbridge.run's `assetlinks.json` receives the link.
-  That file lists the release key, which Play App Signing also uses, and the dev box's debug key,
-  so dogfood builds verify too; that key never leaves the dev box, and a stolen code is useless
-  without the verifier anyway. Where verification failed, the link opens a page with an "Open
-  Starbridge" button to `starbridge://auth`: a tap, so Chrome does not ask. Self-hosted servers
-  keep `starbridge://auth`, since the APK can bind only starbridge.run.
+- Android (#34): every code that ends a sign-in is bound to a PKCE S256 challenge, so only the
+  app holding the verifier can trade it. Known gap: a hostile app can start its own sign-in, and
+  if GitHub skips the consent screen it gets a session.
+- On starbridge.run, GitHub redirects the app's sign-in to `/v1/auth/github/callback/app`, an
+  App Link that the app catches and trades itself (#527). The installed web app's scope is the
+  whole origin, so Chrome handed it the page's callback when that was the only app claiming it;
+  where both claim a URL, Chrome opens the verified app. The page's sign-ins keep
+  `/v1/auth/github/callback`, which the app does not claim, so they stay in the web app.
+- When the browser finishes an app sign-in (app missing, verification failed, or an older app),
+  the server redirects to `APP_REDIRECT_URI`: on starbridge.run the App Link
+  `https://starbridge.run/app/auth`, whose page has an "Open Starbridge" button to
+  `starbridge://auth`. Chrome asks "Continue to Starbridge?" before following a `starbridge://`
+  redirect that no tap started; after a tap it does not. Self-hosted servers keep
+  `starbridge://auth`, since the APK can bind only starbridge.run.
+- `assetlinks.json` lists the release key, which Play App Signing also uses, and the dev box's
+  debug key, so dogfood builds verify too. That key never leaves the dev box, and a caught link
+  is useless without the verifier anyway.
 
 ## Server
 

@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { type Context, Hono } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { z } from "zod";
 import {
@@ -37,16 +37,33 @@ function setSessionCookie(c: Parameters<typeof setCookie>[0], token: string, sec
   });
 }
 
+/**
+ * Where GitHub sends a sign-in back. The app's sign-ins come back to their own path, which the
+ * Android app claims as an App Link on starbridge.run: the installed web app's scope covers the
+ * page's path, and Chrome would hand it the redirect (#527). GitHub accepts any path under the
+ * OAuth app's callback URL.
+ */
+function callbackUrl(publicUrl: string, app: boolean): string {
+  return `${publicUrl}/v1/auth/github/callback${app ? "/app" : ""}`;
+}
+
+/** base64url(SHA-256(verifier)): RFC 7636's S256 challenge. */
+function s256(verifier: string): string {
+  return new Bun.CryptoHasher("sha256").update(verifier).digest("base64url");
+}
+
 authRoutes.get("/auth/github", (c) => {
   const { github, publicUrl, secureCookies } = c.var.config;
   if (!github) fail(404, "not-configured", "GitHub sign-in is off on this server");
-  const state = randomToken("");
-  // The app sends the S256 challenge of a verifier it keeps, so only it can redeem the code that
-  // the redirect carries (RFC 7636); any app can claim the redirect's custom scheme.
+  // The app sends the S256 challenge of a verifier it keeps, so only it can redeem what the
+  // redirect carries (RFC 7636); any app can claim the redirect's custom scheme. The challenge is
+  // the app's state too: unguessable, and checked against the verifier when the app trades
+  // GitHub's code itself.
   const app = c.req.query("app") === "1";
   const challenge = c.req.query("challenge") ?? "";
   if (app && !CHALLENGE.test(challenge))
     fail(400, "bad-request", "app sign-in needs challenge, the S256 PKCE challenge");
+  const state = app ? challenge : randomToken("");
   setCookie(c, STATE_COOKIE, `${state}.${app ? 1 : 0}.${app ? challenge : ""}`, {
     httpOnly: true,
     secure: secureCookies,
@@ -56,22 +73,16 @@ authRoutes.get("/auth/github", (c) => {
   });
   const url = new URL(github.authorizeUrl);
   url.searchParams.set("client_id", github.clientId);
-  url.searchParams.set("redirect_uri", `${publicUrl}/v1/auth/github/callback`);
+  url.searchParams.set("redirect_uri", callbackUrl(publicUrl, app));
   url.searchParams.set("state", state);
   url.searchParams.set("allow_signup", "true");
   return c.redirect(url.toString());
 });
 
-authRoutes.get("/auth/github/callback", async (c) => {
-  const { github, publicUrl, secureCookies, appRedirectUri } = c.var.config;
+/** Trades GitHub's code for the user's id, and returns their account, made on first sign-in. */
+async function gitHubAccount(c: Context<Env>, code: string, app: boolean): Promise<string> {
+  const { github, publicUrl } = c.var.config;
   if (!github) fail(404, "not-configured", "GitHub sign-in is off on this server");
-  rateLimit(c, `github:${ipKey(c)}`, c.var.config.limits.githubCallbacks);
-  const [state, app, challenge] = (getCookie(c, STATE_COOKIE) ?? "").split(".");
-  deleteCookie(c, STATE_COOKIE, { path: "/v1/auth/github" });
-  const code = c.req.query("code");
-  if (!state || !code || !safeEqual(state, c.req.query("state") ?? ""))
-    fail(400, "bad-state", "sign-in expired or came from elsewhere; start again");
-
   const tokenRes = await fetch(github.tokenUrl, {
     method: "POST",
     headers: { accept: "application/json", "content-type": "application/json" },
@@ -79,7 +90,7 @@ authRoutes.get("/auth/github/callback", async (c) => {
       client_id: github.clientId,
       client_secret: github.clientSecret,
       code,
-      redirect_uri: `${publicUrl}/v1/auth/github/callback`,
+      redirect_uri: callbackUrl(publicUrl, app),
     }),
   });
   const { access_token } = (await tokenRes.json().catch(() => ({}))) as { access_token?: string };
@@ -105,6 +116,22 @@ authRoutes.get("/auth/github/callback", async (c) => {
       user.id,
       new Date().toISOString(),
     );
+  return account;
+}
+
+/** The browser finishes a sign-in: the page's, or the app's when the app did not catch it. */
+async function finishGitHubSignIn(c: Context<Env>) {
+  const { github, secureCookies, appRedirectUri } = c.var.config;
+  if (!github) fail(404, "not-configured", "GitHub sign-in is off on this server");
+  rateLimit(c, `github:${ipKey(c)}`, c.var.config.limits.githubCallbacks);
+  const [state, app, challenge] = (getCookie(c, STATE_COOKIE) ?? "").split(".");
+  deleteCookie(c, STATE_COOKIE, { path: "/v1/auth/github" });
+  const code = c.req.query("code");
+  if (!state || !code || !safeEqual(state, c.req.query("state") ?? ""))
+    fail(400, "bad-state", "sign-in expired or came from elsewhere; start again");
+
+  const account = await gitHubAccount(c, code, app === "1");
+  const db = c.var.db;
   if (app === "1" && challenge) {
     const code = randomToken("sbc_");
     const now = Date.now();
@@ -117,6 +144,30 @@ authRoutes.get("/auth/github/callback", async (c) => {
   const token = createSession(db, account, c.var.config.limits.sessions);
   setSessionCookie(c, token, secureCookies);
   return c.redirect("/");
+}
+
+authRoutes.get("/auth/github/callback", finishGitHubSignIn);
+authRoutes.get("/auth/github/callback/app", finishGitHubSignIn);
+
+/**
+ * The app caught GitHub's redirect itself, through its App Link, and trades GitHub's code, the
+ * state and the verifier whose S256 challenge is that state. Only the app that started the
+ * sign-in knows the verifier, and GitHub's code works once.
+ */
+authRoutes.post("/auth/app/github", async (c) => {
+  rateLimit(c, `github:${ipKey(c)}`, c.var.config.limits.githubCallbacks);
+  const { code, state, verifier } = await json(
+    c,
+    z.object({
+      code: z.string().min(1).max(100),
+      state: z.string().regex(CHALLENGE),
+      verifier: z.string().regex(VERIFIER),
+    }),
+  );
+  if (!safeEqual(s256(verifier), state))
+    fail(400, "bad-state", "sign-in came from elsewhere; start again");
+  const account = await gitHubAccount(c, code, true);
+  return c.json({ session: createSession(c.var.db, account, c.var.config.limits.sessions) });
 });
 
 /**
@@ -133,8 +184,7 @@ authRoutes.post("/auth/app/session", async (c) => {
   const row = db
     .query("DELETE FROM app_codes WHERE code_hash = ? RETURNING account_id, challenge, expires_at")
     .get(hashToken(code)) as { account_id: string; challenge: string; expires_at: number } | null;
-  const challenge = new Bun.CryptoHasher("sha256").update(verifier).digest("base64url");
-  if (!row || row.expires_at < Date.now() || !safeEqual(challenge, row.challenge))
+  if (!row || row.expires_at < Date.now() || !safeEqual(s256(verifier), row.challenge))
     fail(400, "bad-code", "sign-in code unknown, used, expired or not yours; sign in again");
   return c.json({ session: createSession(db, row.account_id, c.var.config.limits.sessions) });
 });

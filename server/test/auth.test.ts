@@ -3,6 +3,8 @@ import { makeServer, signIn } from "../test-support/app";
 
 // A stand-in for GitHub's OAuth endpoints and user API.
 let github: ReturnType<typeof Bun.serve>;
+/** The redirect_uri of the last code exchange: GitHub requires the authorize request's. */
+let exchangedFor = "";
 const githubUrl = () => `http://localhost:${github.port}`;
 
 beforeAll(() => {
@@ -11,7 +13,12 @@ beforeAll(() => {
     async fetch(req) {
       const url = new URL(req.url);
       if (url.pathname === "/login/oauth/access_token") {
-        const body = (await req.json()) as { code: string; client_secret: string };
+        const body = (await req.json()) as {
+          code: string;
+          client_secret: string;
+          redirect_uri: string;
+        };
+        exchangedFor = body.redirect_uri;
         if (body.client_secret !== "gh-secret" || !body.code.startsWith("code-"))
           return Response.json({ error: "bad_verification_code" });
         return Response.json({ access_token: `tok-${body.code.slice(5)}` });
@@ -52,7 +59,8 @@ async function githubSignIn(
   expect(authorize.searchParams.get("client_id")).toBe("gh-client");
   const cookie = (start.headers.get("set-cookie") ?? "").split(";")[0] ?? "";
   const state = opts.state ?? authorize.searchParams.get("state");
-  return s.app.request(`/v1/auth/github/callback?code=code-${user}&state=${state}`, {
+  const back = new URL(authorize.searchParams.get("redirect_uri") ?? "");
+  return s.app.request(`${back.pathname}?code=code-${user}&state=${state}`, {
     headers: { cookie },
   });
 }
@@ -103,6 +111,40 @@ test("GitHub sign-in for the app redirects with a code, never the session", asyn
   expect(location.href).not.toContain("sbs_");
   expect(code).toStartWith("sbc_");
   expect((await s.call("GET", "/v1/me", { token: code })).status).toBe(401);
+});
+
+test("the app's sign-ins come back to their own path, with the challenge as state", async () => {
+  const s = await makeServer(githubConfig());
+  const { challenge } = pkce();
+  const start = await s.app.request(`/v1/auth/github?app=1&challenge=${challenge}`);
+  const authorize = new URL(start.headers.get("location") ?? "");
+  expect(authorize.searchParams.get("redirect_uri")).toEndWith("/v1/auth/github/callback/app");
+  expect(authorize.searchParams.get("state")).toBe(challenge);
+  const page = new URL((await s.app.request("/v1/auth/github")).headers.get("location") ?? "");
+  expect(page.searchParams.get("redirect_uri")).toEndWith("/v1/auth/github/callback");
+});
+
+test("the app that caught GitHub's redirect trades its code with the verifier", async () => {
+  const s = await makeServer(githubConfig());
+  const { verifier, challenge } = pkce();
+  const r = await s.call("POST", "/v1/auth/app/github", {
+    body: { code: "code-42", state: challenge, verifier },
+  });
+  expect(r.status).toBe(200);
+  expect(exchangedFor).toEndWith("/v1/auth/github/callback/app");
+  const me = await s.call("GET", "/v1/me", { token: r.json.session });
+  const web = await s.call("GET", "/v1/me", { token: sessionCookie(await githubSignIn(s, 42)) });
+  expect(me.json.account).toBe(web.json.account);
+});
+
+test("GitHub's code is worthless to the app without the verifier behind the state", async () => {
+  const s = await makeServer(githubConfig());
+  const { challenge } = pkce();
+  const r = await s.call("POST", "/v1/auth/app/github", {
+    body: { code: "code-42", state: challenge, verifier: pkce().verifier },
+  });
+  expect(r.status).toBe(400);
+  expect(r.json.error).toBe("bad-state");
 });
 
 test("the app trades its code and verifier for a session, once", async () => {

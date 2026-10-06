@@ -120,7 +120,7 @@ class MainActivity : ComponentActivity() {
 
     private fun handle(intent: Intent?) {
         val data = intent?.data
-        if (data != null && SignIn.code(data.toString()) != null) {
+        if (data != null && SignIn.redirect(data.toString()) != null) {
             store.receiveSignIn(data.toString())
             setIntent(Intent(this, MainActivity::class.java))
         }

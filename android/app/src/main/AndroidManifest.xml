@@ -24,13 +24,16 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- GitHub sign-in ends at starbridge://auth?code=<code> on a self-hosted server and at
-                 this App Link on starbridge.run (PROTOCOL.md, "Auth"). -->
+            <!-- GitHub sign-in ends at these App Links on starbridge.run: GitHub's redirect, or the
+                 server's after the browser finished it. A self-hosted server ends it at
+                 starbridge://auth?code=<code> (PROTOCOL.md, "Auth"). -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="https" android:host="starbridge.run" android:path="/app/auth" />
+                <data android:scheme="https" android:host="starbridge.run" />
+                <data android:path="/v1/auth/github/callback/app" />
+                <data android:path="/app/auth" />
             </intent-filter>
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />

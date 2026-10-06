@@ -336,11 +336,18 @@ class ServerStore(
      */
     override fun receiveSignIn(redirect: String) = run {
         if (phase.value != Phase.SignedOut) return@run
-        val code = SignIn.code(redirect) ?: return@run
+        val link = SignIn.redirect(redirect) ?: return@run
         val verifier = secrets.signInVerifier ?: return@run
+        // GitHub's redirect carries the state this sign-in sent, the challenge: one from another
+        // sign-in is not this phone's, and leaves the pending one alone.
+        if (link is SignIn.Redirect.GitHub && link.state != SignIn.challenge(verifier)) return@run
         persist(newSecrets = secrets.copy(signInVerifier = null))
+        val api = Api(http, saved.server, null)
         val session = try {
-            Api(http, saved.server, null).appSession(code, verifier)
+            when (link) {
+                is SignIn.Redirect.Code -> api.appSession(link.code, verifier)
+                is SignIn.Redirect.GitHub -> api.appGitHubSession(link.code, link.state, verifier)
+            }
         } catch (e: ApiException) {
             throw IllegalStateException(if (e.error == "bad-code") "Sign-in expired. Sign in again." else describe(e))
         }
