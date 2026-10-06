@@ -86,7 +86,8 @@ services:
     logging: *logging
 
   caddy:
-    # Caddy with the rate_limit module (caddy.Dockerfile).
+    # Caddy with the rate_limit module (caddy.Dockerfile). apply.sh builds it only when no image
+    # is tagged with a hash of that file: every input of the build stays in it.
     build:
       context: .
       dockerfile: caddy.Dockerfile

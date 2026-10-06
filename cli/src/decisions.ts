@@ -844,14 +844,18 @@ async function reseal(ctx: Ctx, s: Session, known: Directory): Promise<void> {
   for (const p of prompts) {
     if (!lacking(p.sealedTo ?? p.permission.to, dir)) continue;
     const permission = { ...p.permission, to: ids, dir: signedHead(ctx, dir) };
-    // As for decisions: answers count from the new devices before the post.
+    // As for decisions: answers count from the new devices before the post. `sealedTo` keeps the
+    // devices that hold it, so a failed post is tried again on the next poll.
     ctx.store.updateState((st) => {
       const x = st.permissions?.[permission.id];
-      if (x) x.permission.to = [...new Set([...x.permission.to, ...ids])];
+      if (!x) return;
+      x.sealedTo ??= x.permission.to;
+      x.permission.to = [...new Set([...x.permission.to, ...ids])];
     });
+    // Closed: answered or gone on the server, so no device needs it any more.
     if (
-      (await post(() => ({ ...seal("permission", permission, signer, to), reseal: true }))) !==
-      "posted"
+      (await post(() => ({ ...seal("permission", permission, signer, to), reseal: true }))) ===
+      undefined
     )
       continue;
     ctx.store.updateState((st) => {
