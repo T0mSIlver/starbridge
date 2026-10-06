@@ -386,18 +386,6 @@ async function main() {
     "/sample",
   ])
     await visitor.goto(ORIGIN + path, { waitUntil: "networkidle" });
-  for (const [size, viewport] of [
-    ["desktop", DESKTOP],
-    ["phone", { width: 390, height: 844 }],
-  ] as const) {
-    await visitor.setViewportSize(viewport);
-    await visitor.goto(`${ORIGIN}/sample`, { waitUntil: "networkidle" });
-    // The question whose session is "Ship checkout v2", cut as "Ship" and " checkout v2".
-    await visitor
-      .getByRole("button", { name: /Merge the API change before the checkout PR/ })
-      .click();
-    await keepsSessionSpace(visitor, `/sample, ${size}`);
-  }
   await visitor.close();
 
   step("sign in with GitHub (stub) and set up the first device");
@@ -954,6 +942,8 @@ async function main() {
     throw new Error("the decision does not link the artifact it is answered in");
   if ((await pane.locator("fieldset, textarea").count()) > 0)
     throw new Error("a decision answered in an artifact also offers an answer here");
+  // "Settings screen (#88)" is cut as "Settings " and "screen (#88)".
+  await keepsSessionSpace(page, "the artifact decision");
   await shoot(page, "answer-in");
   const settle = cli("settle", ["settle", pointerId as string], machineHome);
   if ((await settle.exited) !== 0) throw new Error("settle failed");
