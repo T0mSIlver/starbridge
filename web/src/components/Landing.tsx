@@ -67,16 +67,17 @@ const FEATURES = [
   ["Permission prompts", "Allow or deny a command away from the keyboard. Off by default."],
 ] as const;
 
+/** Label, command, and the method the copy event reports, kept as first named. */
 const INSTALL = [
-  ["Script", "curl -fsSL https://starbridge.run/install.sh | sh"],
-  ["Homebrew", "brew install T0mSIlver/starbridge/starbridge"],
-  ["npm", "npm i -g starbridge"],
+  ["macOS / Linux", "curl -fsSL https://starbridge.run/install.sh | sh", "Script"],
+  ["Homebrew", "brew install T0mSIlver/starbridge/starbridge", "Homebrew"],
+  ["npm", "npm i -g starbridge", "npm"],
 ] as const;
 
 function Install() {
   const [at, setAt] = useState(0);
   const [copied, setCopied] = useState(false);
-  const [method, cmd] = INSTALL[at] ?? ["", ""];
+  const [, cmd, method] = INSTALL[at] ?? ["", "", ""];
   const onCopied = () => track("copy-install", { method });
   return (
     <div className={s.install}>
