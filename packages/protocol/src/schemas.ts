@@ -90,8 +90,7 @@ export type DirectoryEntry = z.infer<typeof DirectoryEntry>;
  * item's possible kinds. The item's `re` hint repeats that field, and the server marks the
  * referred item answered, unless the kind is `open` (it describes the item, closing nothing).
  * A kind with `updates` is re-posted under the same id as it changes, and the server keeps
- * only the latest. A kind with `latest` is posted under a new id each time, by any device, and
- * the server keeps only the latest for the item it refers to. A `toDevices` kind is sealed to
+ * only the latest. A `toDevices` kind is sealed to
  * every active device as well as to the machine it refers to. A kind with `wake` carries that
  * body field, a time, as the item's `wakeAt` hint: the server pushes every device once then.
  *
@@ -130,7 +129,6 @@ export const ITEM_KINDS = {
   snooze: {
     signer: "device",
     re: { field: "decisionId", kinds: ["decision"], open: true },
-    latest: true,
     toDevices: true,
     wake: "until",
     keep: { withRe: true },
@@ -141,7 +139,6 @@ export const ITEM_KINDS = {
     signer: "device" | "machine";
     re?: { field: string; kinds: readonly string[]; open?: true };
     updates?: true;
-    latest?: true;
     toDevices?: true;
     wake?: string;
     keep: Keep;

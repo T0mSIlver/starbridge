@@ -529,14 +529,18 @@ nothing.
 
 - `snooze` `{v, id, decisionId, to, until, at, dir?}`: a device signs it, under a new id each
   time, and seals it to the machine that asked and to every active device, so each one hides the
-  decision. The latest `at`, compared as instants, wins, whichever device sent it, and the server
-  keeps only the latest per decision. `until` at or before `at` brings the decision back now.
+  decision. The latest `at`, compared as instants, wins, whichever device sent it. `until` at or
+  before `at` brings the decision back now. The server cannot read `at`, so it keeps each snooze
+  (at most 50 per decision), and a replayed id is 409 `duplicate-id`.
 - The item's `wakeAt` hint repeats `until`, so the server learns that some decision was put off
-  until then, and nothing else. At `wakeAt` it pushes the snooze once more to every device, which
-  shows the decision's notification again, once. Until then it pushes no `waiting` item of that
-  decision: the agent's flips are silent. An answer, Done or a settled notice cancels the push.
+  until then, and nothing else. At each snooze's `wakeAt` it pushes that snooze once more to
+  every device; a device shows the decision's notification again, once, only when that snooze is
+  the latest it knows. While the snooze that came last is pending, the server pushes no `waiting`
+  item of that decision: the agent's flips are silent. An answer, Done or a settled notice
+  cancels every pending push, and a stopping server sends the pushes it queued first.
 - The server refuses a snooze once its decision is answered or settled (409 `already-answered`),
-  and one whose `wakeAt` is more than 7 days ahead.
+  one whose `wakeAt` is more than 7 days ahead, and one whose `wakeAt` comes after the sweep
+  drops an unanswered decision (30 days after it arrived; 400 `bad-schema`).
 - Devices list `snooze` with the machine-signed kinds. A device that does not know the kind never
   lists it and ignores its push, so it shows the decision as open; a machine reads it only when
   it asks for it in `GET /answers?kinds=`.
