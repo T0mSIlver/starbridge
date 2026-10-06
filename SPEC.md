@@ -1765,6 +1765,11 @@ so the mod is the first path.
   0 and posts nothing, since devices would hold both the answer and a withdrawal. An answer
   accepted but not yet delivered can still be withdrawn. The skill says only `--answer-in` cards
   need `settle`.
+- 2026-10-06. The Android app in front polls while no push reaches it (#445). A server without
+  a relay or UnifiedPush sends no push, and the open Inbox never changed. While the app is in
+  front, and until a push has reached it since it started, it syncs every 10 s, without the
+  pull-to-refresh indicator or a notice on failure; it stops in the background. The server
+  cannot say whether its pushes arrive, so a push arriving is the sign. The web already polls.
 - 2026-10-06. GitHub links on questions (#171, the owner's pick on the question display page:
   links stay as built, plus this). A GitHub pull request or issue link with no title reads
   "owner/repo#123" instead of its host and path, and its chip leads with the GitHub mark, on the

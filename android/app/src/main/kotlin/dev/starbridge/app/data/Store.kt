@@ -64,6 +64,9 @@ interface Store {
     /** Shows a QR code for a new phone to scan, and waits for its request. */
     fun showCode()
 
+    /** Polls the items while the app is in front and no push has arrived ([on] false stops it). */
+    fun foreground(on: Boolean)
+
     /** Keeps [joinAsks] current while the app is in front. */
     fun watchJoins(on: Boolean)
     fun compareJoin(id: String)
