@@ -244,11 +244,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (e.data.kind !== "quota" && e.data.kind !== "permission") refreshInbox().catch(() => {});
     };
     document.addEventListener("visibilitychange", tick);
+    // Back online: read at once rather than at the next tick (lib/api.ts ends its backoff too).
+    window.addEventListener("online", tick);
     navigator.serviceWorker?.addEventListener("message", onMessage);
     unlockSound();
     return () => {
       clearInterval(timer);
       document.removeEventListener("visibilitychange", tick);
+      window.removeEventListener("online", tick);
       navigator.serviceWorker?.removeEventListener("message", onMessage);
     };
   }, [ctx, refreshInbox, refreshQuotas, refreshPrompts]);

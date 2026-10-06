@@ -38,21 +38,61 @@ export function pairingError(e: unknown): string {
   return `${said.charAt(0).toUpperCase()}${said.slice(1)}${/[.!?]$/.test(said) ? "" : "."}`;
 }
 
-/**
- * A deploy restarts the server in a few seconds (#150), so a 502 or 503 from Caddy, or a refused
- * connection, is retried quietly for this long before the caller hears of it (#250).
- */
-const RETRY_FOR_MS = 20_000;
+/** Why a call never got an answer: the browser is offline, or the server is away. */
+export class Unreachable extends Error {
+  constructor(readonly offline: boolean) {
+    super(offline ? "You're offline." : "Can't reach the Starbridge server.");
+  }
+}
 
-/** Resolves after `ms`, or rejects at once when `signal` aborts. */
+const offline = () => typeof navigator !== "undefined" && navigator.onLine === false;
+
+/**
+ * One backoff for every call in this page (or the service worker) while the server does not
+ * answer, so its pollers wait together instead of each retrying twice a second (#332). The wait
+ * doubles from 250 ms to 30 s, with jitter so open tabs spread out, and ends on any answer and on
+ * the browser's online event. A deploy restarts the server in a few seconds (#150), so a call
+ * meanwhile retries quietly for `retryForMs` before the caller hears of it (#250); a read that
+ * starts during a wait fails at once without a request, while a write, which the owner just asked
+ * for, always tries once.
+ */
+export const backoff = { failures: 0, until: 0, retryForMs: 20_000 };
+const wakers = new Set<() => void>();
+
+function answered() {
+  backoff.failures = 0;
+  backoff.until = 0;
+  for (const wake of wakers) wake();
+}
+
+function unanswered() {
+  const now = Date.now();
+  // Calls in flight together fail together: count them once.
+  if (now < backoff.until) return;
+  backoff.failures++;
+  const ceiling = Math.min(30_000, 250 * 2 ** (backoff.failures - 1));
+  backoff.until = now + ceiling * (0.5 + Math.random() / 2);
+}
+
+globalThis.addEventListener?.("online", answered);
+
+/** Resolves after `ms` or once the server answers another call; rejects when `signal` aborts. */
 function pause(ms: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
     if (signal?.aborted) return reject(signal.reason);
-    const t = setTimeout(resolve, ms);
+    const done = () => {
+      clearTimeout(t);
+      wakers.delete(done);
+      signal?.removeEventListener("abort", abort);
+      resolve();
+    };
     const abort = () => {
       clearTimeout(t);
+      wakers.delete(done);
       reject(signal?.reason);
     };
+    const t = setTimeout(done, ms);
+    wakers.add(done);
     signal?.addEventListener("abort", abort, { once: true });
   });
 }
@@ -64,8 +104,13 @@ async function call<T>(
 ): Promise<T> {
   const started = Date.now();
   let res: Response;
-  for (let wait = 250; ; wait = Math.min(wait * 2, 4_000)) {
-    const retry = Date.now() - started + wait <= RETRY_FOR_MS;
+  for (let first = true; ; first = false) {
+    const wait = backoff.until - Date.now();
+    if (wait > 0 && !(first && method !== "GET")) {
+      if (first || Date.now() - started + wait > backoff.retryForMs)
+        throw new Unreachable(offline());
+      await pause(wait, opts.signal);
+    }
     try {
       res = await fetch(`/v1${path}`, {
         method,
@@ -78,16 +123,18 @@ async function call<T>(
         signal: opts.signal,
       });
     } catch (e) {
+      if (opts.signal?.aborted) throw e;
+      unanswered();
       // fetch tells a refused connection from one cut after the request left by nothing, so
       // only a read, which is safe to repeat, retries on it.
-      if (opts.signal?.aborted || method !== "GET" || !retry) throw e;
-      await pause(wait, opts.signal);
+      if (method !== "GET") throw new Unreachable(offline());
       continue;
     }
-    if ((res.status !== 502 && res.status !== 503) || !retry) break;
+    if (res.status !== 502 && res.status !== 503) break;
     await res.body?.cancel();
-    await pause(wait, opts.signal);
+    unanswered();
   }
+  answered();
   const text = await res.text();
   let json: unknown;
   try {

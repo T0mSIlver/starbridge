@@ -1,9 +1,11 @@
 import { afterEach, expect, test } from "bun:test";
-import { ApiError, api, pairingError } from "./api";
+import { ApiError, api, backoff, pairingError, Unreachable } from "./api";
 
 const real = globalThis.fetch;
 afterEach(() => {
   globalThis.fetch = real;
+  globalThis.dispatchEvent(new Event("online"));
+  backoff.retryForMs = 20_000;
 });
 
 /** Answers each call with the next of `replies`: a status, or an Error to throw as fetch does. */
@@ -26,8 +28,42 @@ test("a deploy's 502, 503 and refused connection are retried quietly until the s
 
 test("a write is not repeated after a failure that may have reached the server", async () => {
   const calls = serve(new TypeError("Failed to fetch"));
-  await expect(api.logout()).rejects.toThrow("Failed to fetch");
+  await expect(api.logout()).rejects.toThrow("Can't reach the Starbridge server.");
   expect(calls).toEqual(["POST"]);
+});
+
+test("while the server is down, pollers share one backoff instead of each retrying (#332)", async () => {
+  backoff.retryForMs = 1_500;
+  const calls = serve(...Array.from({ length: 100 }, () => new TypeError("Failed to fetch")));
+  // A read every 50 ms for two seconds, as the inbox, prompts, runs and joins pollers add up to.
+  const reads: Promise<unknown>[] = [];
+  for (let i = 0; i < 40; i++) {
+    reads.push(api.challenge().catch((e) => e));
+    await new Promise((r) => setTimeout(r, 50));
+  }
+  const errors = await Promise.all(reads);
+  expect(errors.every((e) => e instanceof Unreachable)).toBe(true);
+  expect(errors[0]).toHaveProperty("message", "Can't reach the Starbridge server.");
+  // The first read retries at 125–250 ms, 250–500 ms and so on; reads started meanwhile wait.
+  expect(calls.length).toBeLessThan(10);
+});
+
+test("any answer ends the backoff, and a write always tries (#332)", async () => {
+  const calls = serve(new TypeError("Failed to fetch"), 204, 200);
+  await expect(api.logout()).rejects.toBeInstanceOf(Unreachable);
+  await expect(api.challenge()).rejects.toBeInstanceOf(Unreachable);
+  expect(calls).toEqual(["POST"]);
+  await api.logout();
+  expect(await api.challenge()).toBe("n");
+  expect(calls).toEqual(["POST", "POST", "GET"]);
+});
+
+test("the browser's online event ends the backoff (#332)", async () => {
+  const calls = serve(new TypeError("Failed to fetch"), 200);
+  await expect(api.logout()).rejects.toBeInstanceOf(Unreachable);
+  globalThis.dispatchEvent(new Event("online"));
+  expect(await api.challenge()).toBe("n");
+  expect(calls).toEqual(["POST", "GET"]);
 });
 
 test("a write is retried on a 502 or 503, which Caddy sends when the server is away", async () => {
