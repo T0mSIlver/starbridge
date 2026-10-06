@@ -329,10 +329,7 @@ provider plugins add providers, not panels.
   call, never a pid read from the file. A task carries no environment of its own, so the agent
   reads the user's: `STARBRIDGE_CONFIG_DIR` and `CODEX_HOME` reach it only as user environment
   variables. Windows has no SIGTERM: a stopped hook dies without settling its prompt, and the
-  next `Stop` hook settles it. Claude Code on Windows runs the plugin's hooks in Git Bash, where
-  `session-start.sh` and `settle.sh` run as elsewhere; without Git for Windows it falls back to
-  PowerShell, which has no `sh`, so the session rule and the keyboard settle are missing there
-  while the hooks that call `starbridge` itself still run.
+  next `Stop` hook settles it.
 - **Answers on the machine** (#260). A machine accepts an answer only from a device the question
   was sealed to, only while it is open, and for an `answerIn` question only a Done, when it asked
   for one (#539). A settled question's
@@ -390,12 +387,7 @@ provider plugins add providers, not panels.
   `--input <path>`.
 - **Install and update.** `https://starbridge.run/install.sh` is `cli/install.sh`, prerendered by
   the web page, so each deploy serves its own revision's script. It checks `SHA256SUMS` with
-  minisign, or OpenSSL 3 when minisign is missing. `install.ps1` is the same for Windows (#552),
-  run as `irm … | iex`: Windows has no Ed25519 check, so it downloads minisign 0.12's official
-  Windows build pinned by its SHA-256, checked once against minisign's own key. It runs inside a
-  script block that throws, since `iex` would keep its settings in the caller's session and
-  `exit` would close the caller's window, and adds its folder to the user's PATH in the registry,
-  unexpanded, so other `%VARIABLES%` survive. `starbridge update` replaces script installs
+  minisign, or OpenSSL 3 when minisign is missing. `starbridge update` replaces script installs
   and points Homebrew and npm installs at their manager. Windows refuses to replace or delete a
   running `.exe` but lets it be renamed, so `update` moves it aside to `starbridge.exe.old` and
   the next update removes that; `uninstall` deletes the binary from a detached cmd.exe two seconds
