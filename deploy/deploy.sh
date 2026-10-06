@@ -21,11 +21,14 @@ git archive --format=tar "$rev" | ssh -i "$key" "$host" "sudo sh -euc '
   rm -rf /opt/starbridge.new /opt/starbridge.old
   mkdir /opt/starbridge.new
   tar -x -C /opt/starbridge.new
-  echo $rev > /opt/starbridge.new/REVISION
   if [ -d /opt/starbridge ]; then mv /opt/starbridge /opt/starbridge.old; fi
   mv /opt/starbridge.new /opt/starbridge
-  /opt/starbridge/deploy/host/apply.sh
+  REVISION=$rev /opt/starbridge/deploy/host/apply.sh
+  # Only once it is up and healthy: starbridge-deploy refuses revisions older than this one.
+  echo $rev > /opt/starbridge/REVISION
 '"
-# The first deploy waits for Caddy's certificate.
-curl -fsS --retry 20 --retry-delay 3 --retry-all-errors https://starbridge.run/healthz >/dev/null
+# The first deploy waits for Caddy's certificate. The server names the commit it was built from.
+got=$(curl -fsS --retry 20 --retry-delay 3 --retry-all-errors -D - -o /dev/null https://starbridge.run/healthz |
+  tr -d '\r' | awk -F': ' 'tolower($1) == "x-starbridge-revision" { print $2 }')
+[ "$got" = "$rev" ] || { echo "starbridge.run runs ${got:-an unknown revision}, not $rev" >&2; exit 1; }
 echo "deployed $rev"

@@ -1667,9 +1667,14 @@ so the mod is the first path.
   allow. Reviewers cannot pass GitHub's new-device email check, so they need a demo server
   that signs in with an owner token and a demo machine that posts after their phone joins
   (#423, below).
-- 2026-10-06. The images install pnpm with `npm install -g` at package.json's
-  `packageManager` version, not corepack: the node:24-slim the VPS pulled on 2026-10-06 ships
-  no corepack, and every deploy from c836266a on failed at `corepack enable`.
+- 2026-10-06. Deploys that fail say so (#430). Every deploy after #418 bumped the images to
+  node:25-slim failed at `corepack enable`, since Node 25 ships no corepack, yet the box's
+  `REVISION` named the new commit and the health check passed against the old containers.
+  Now the images install pnpm with `npm install -g` at package.json's `packageManager` version;
+  every `FROM` is pinned by digest, so only a Dependabot PR, which CI builds, changes a base
+  image; `REVISION` is written only after `apply.sh` succeeds; and the server image carries its
+  commit, which `/healthz` returns in `x-starbridge-revision`. The deploy workflow fails unless
+  the live server runs that commit, or a later commit of main's.
 - 2026-10-06. Demo server for Play reviewers (#423). A reviewer has no GitHub account we can
   give them (GitHub mails a new-device code) and no recovery key we can give them (recovering
   revokes every other member, #363). So `https://demo.starbridge.run` is a self-hosted server
