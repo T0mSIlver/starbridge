@@ -2,11 +2,11 @@
 
 Prod's stack (`deploy/compose.yaml`) on a dev machine, capped to the Hetzner CX23 that runs
 starbridge.run (2 vCPU, 4 GB), with clients that behave like the agent, the phone and the web
-page. Results and their dates are in `SPEC.md`, "Research log". Nothing here talks to
+page. Results are in `SPEC.md`, "The hosted instance". Nothing here talks to
 starbridge.run.
 
 Needs Docker with Compose 2.24 or later, Bun, `jq` and `openssl`. Scratch files go to
-`$LOAD_DIR` (default `~/work/starbridge/.scratch/load`).
+`$LOAD_DIR` (default `.scratch/load` in the repository, which git ignores).
 
 ## Run
 

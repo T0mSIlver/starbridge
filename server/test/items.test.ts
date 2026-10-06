@@ -45,7 +45,6 @@ function decision(to: Actor[] = [phone, laptop], extra: Partial<Decision> = {}) 
     context: "",
     options: ["yes", "no"],
     recommended: "yes",
-    default: { action: "ship" },
     source: { machine: "devbox", project: "starbridge", session: "s1" },
     ...extra,
   };

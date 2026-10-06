@@ -33,15 +33,15 @@
   "digits": "867375",
   "approval": {
     "message": {
-      "body": "{\"v\":1,\"join\":\"04106105\",\"account\":\"acct_tom\",\"length\":5,\"head\":\"mJX3hMUjQ_4Fhn7arYF7dnD9qfjt43mE6WD9UwxYTSU\",\"approver\":\"phone\"}",
-      "mac": "2vW6LyLmnQCx3TCSsaE9zDN0I-int33ts3NQD91QDlg"
+      "body": "{\"v\":1,\"join\":\"04106105\",\"account\":\"acct_tom\",\"length\":5,\"head\":\"TdBZayVVAsmhRVyZ4dlv3NyKOX4Hlges_zqxc_sALrc\",\"approver\":\"phone\"}",
+      "mac": "yneffbxTAKiVPEyM_rrqvJ_Smc0q6mMUy93Jt6UaLyA"
     },
     "body": {
       "v": 1,
       "join": "04106105",
       "account": "acct_tom",
       "length": 5,
-      "head": "mJX3hMUjQ_4Fhn7arYF7dnD9qfjt43mE6WD9UwxYTSU",
+      "head": "TdBZayVVAsmhRVyZ4dlv3NyKOX4Hlges_zqxc_sALrc",
       "approver": "phone"
     }
   },
@@ -87,8 +87,8 @@
       "name": "approval made under the server's key",
       "side": "approval",
       "message": {
-        "body": "{\"v\":1,\"join\":\"04106105\",\"account\":\"acct_tom\",\"length\":5,\"head\":\"mJX3hMUjQ_4Fhn7arYF7dnD9qfjt43mE6WD9UwxYTSU\",\"approver\":\"phone\"}",
-        "mac": "jzqwXdarYaipQcnvEEsQAnGq50YPnWzfPUoIb6P-j6s"
+        "body": "{\"v\":1,\"join\":\"04106105\",\"account\":\"acct_tom\",\"length\":5,\"head\":\"TdBZayVVAsmhRVyZ4dlv3NyKOX4Hlges_zqxc_sALrc\",\"approver\":\"phone\"}",
+        "mac": "C7HwjQHfwAkIVO1TNdMmBIs7FF6SuoS7yo23kkPOdv8"
       },
       "expect": "bad-mac"
     },
@@ -96,8 +96,8 @@
       "name": "approval for the server's own directory",
       "side": "approval",
       "message": {
-        "body": "{\"v\":1,\"join\":\"04106105\",\"account\":\"acct_tom\",\"length\":5,\"head\":\"fKkaTH-zl4d6_AUxOqN6W03-hmwI0oZZsFxgmyy7hvQ\",\"approver\":\"phone\"}",
-        "mac": "2vW6LyLmnQCx3TCSsaE9zDN0I-int33ts3NQD91QDlg"
+        "body": "{\"v\":1,\"join\":\"04106105\",\"account\":\"acct_tom\",\"length\":5,\"head\":\"shZVxPsBapSgnZafeWSGI5A0i_OfdDOtt8uoafwxTgo\",\"approver\":\"phone\"}",
+        "mac": "yneffbxTAKiVPEyM_rrqvJ_Smc0q6mMUy93Jt6UaLyA"
       },
       "expect": "bad-mac"
     },
@@ -105,8 +105,8 @@
       "name": "approval for another join",
       "side": "approval",
       "message": {
-        "body": "{\"v\":1,\"join\":\"ZZZZZZZZ\",\"account\":\"acct_tom\",\"length\":5,\"head\":\"mJX3hMUjQ_4Fhn7arYF7dnD9qfjt43mE6WD9UwxYTSU\",\"approver\":\"phone\"}",
-        "mac": "AaJLSBTxxv3VltveNFuscv08xOX0mngOkezyoRw9z0E"
+        "body": "{\"v\":1,\"join\":\"ZZZZZZZZ\",\"account\":\"acct_tom\",\"length\":5,\"head\":\"TdBZayVVAsmhRVyZ4dlv3NyKOX4Hlges_zqxc_sALrc\",\"approver\":\"phone\"}",
+        "mac": "vYy8H69qithRuj5DTr7BXsRUoLQdfKx_yRn8f0dOMCY"
       },
       "expect": "id-mismatch"
     }

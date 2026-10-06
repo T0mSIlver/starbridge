@@ -22,9 +22,10 @@ import {
   publicKeys,
   RECOVERY,
   ready,
+  recoverEntry,
+  recoveryKey,
   recoveryKeyPair,
-  recoverySeedFromWords,
-  recoveryWords,
+  recoverySeedFromKey,
   type SignedEnvelope,
   seal,
   toB64,
@@ -51,7 +52,7 @@ beforeAll(async () => {
   phoneKeys = generateMemberKeys();
   phone = { id: "phone", role: "device", name: "Pixel", ...publicKeys(phoneKeys) };
   const seed = generateRecoverySeed();
-  recoveryText = recoveryWords(seed);
+  recoveryText = recoveryKey(seed);
   chain = [
     genesisEntry({
       account: "acct",
@@ -124,7 +125,6 @@ test("pair a machine, ask, answer", () => {
       context: "",
       options: ["Yes", "No"],
       recommended: "Yes",
-      default: { action: "Wait" },
       source: { machine: "dev box", project: "starbridge", session: "s1" },
     },
     { id: "devbox", signKey: machineKeys.sign.privateKey },
@@ -175,24 +175,24 @@ test("a server that answers the pairing itself is caught", () => {
   expect(code(() => openPairingRequest(swapped, shown))).toBe("bad-mac");
 });
 
-test("recover with the words after losing every device", () => {
-  const seed = recoverySeedFromWords(recoveryText.toUpperCase().replace(/ /g, "  "));
+test("recover with the key after losing every device", () => {
+  const seed = recoverySeedFromKey(recoveryText.toLowerCase().replace(/-/g, " "));
   const recovery = recoveryKeyPair(seed);
   const dir = verifyDirectory(chain, { recoveryPk: toB64(recovery.publicKey) });
-  const newKeys = generateMemberKeys();
-  const entries = [
+  const replacement: Member = {
+    id: "phone3",
+    role: "device",
+    name: "Replacement",
+    ...publicKeys(generateMemberKeys()),
+  };
+  const recovered = [...chain, recoverEntry(dir, recovery.privateKey, replacement, at)];
+  expect(verifyDirectory(recovered).members.get("phone3")?.active).toBe(true);
+  // A plain add signed by the recovery key is refused: recovery is `recover`.
+  const added = [
     ...chain,
-    addEntry(
-      dir,
-      { id: RECOVERY, signKey: recovery.privateKey },
-      { id: "phone3", role: "device", name: "Replacement", ...publicKeys(newKeys) },
-      at,
-    ),
+    addEntry(dir, { id: RECOVERY, signKey: recovery.privateKey }, replacement, at),
   ];
-  expect(verifyDirectory(entries).members.get("phone3")?.active).toBe(true);
-  expect(() =>
-    recoverySeedFromWords(`notaword ${recoveryText.split(" ").slice(1).join(" ")}`),
-  ).toThrow();
+  expect(code(() => verifyDirectory(added))).toBe("signer-not-allowed");
 });
 
 test("a chain holds the heads of its prefixes only", () => {

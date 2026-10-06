@@ -18,7 +18,7 @@ android {
         minSdk = 31
         targetSdk = 36
         // Release builds pass -PversionName from the tag (v1.2.3 or v1.2.3-rc.4).
-        val release = providers.gradleProperty("versionName").orNull ?: "0.1.0"
+        val release = providers.gradleProperty("versionName").orNull ?: "1.0.0"
         versionName = release
         versionCode = versionCodeOf(release)
         // The hosted server; self-hosters change it on the sign-in screen.

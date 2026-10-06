@@ -7,7 +7,7 @@ import { runAgent } from "./agent/main";
 import { ApiError, sandboxHint, Unreachable } from "./api";
 import { type Ctx, UsageError } from "./context";
 import { type AskInput, answers, ask, resolveSource, settle, setWaiting, wait } from "./decisions";
-import { hookAskUser, hookPermission, hookSettle } from "./hook";
+import { hookAskUser, hookPermission, hookQuestion, hookSettle } from "./hook";
 import { pair } from "./pair";
 import { pushOnce, quotaPush } from "./quota";
 import { installKind, ReleaseError } from "./release";
@@ -136,6 +136,12 @@ const HELP = `starbridge: post decisions to your devices, report runs, upload qu
       For Claude Code's PreToolUse hook on AskUserQuestion: hook JSON on stdin; answers each
       question by telling the agent to use \`starbridge ask\`; prints nothing, which lets it
       through, when this machine is not paired or the server does not answer.
+
+  starbridge hook question --agent opencode
+      For the Starbridge opencode plugin, on each call of opencode's question tool: posts each
+      question to your devices, already waiting, and once all are answered prints
+      {"answers": [[label], ...]} for opencode; prints nothing on any error. SIGTERM (the
+      terminal answered) settles the questions still open.
 
   starbridge update
       Install the latest release once its signature checks out (brew and npm installs: use
@@ -417,8 +423,9 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
         if (sub === "permission") return await hookPermission(ctx, readText("-"), values);
         if (sub === "settle") return await hookSettle(ctx, readText("-"), values);
         if (sub === "ask-user") return await hookAskUser(ctx, readText("-"));
+        if (sub === "question") return await hookQuestion(ctx, readText("-"), values);
         throw new UsageError(
-          "usage: starbridge hook permission|settle --agent claude-code, or starbridge hook ask-user",
+          "usage: starbridge hook permission|settle --agent claude-code, starbridge hook ask-user, or starbridge hook question --agent opencode",
         );
       }
       case "update":

@@ -16,7 +16,7 @@ type RateWindow = readonly [calls: number, ms: number];
  * PROTOCOL.md lists them; keep the two in step.
  */
 export const DEFAULT_LIMITS = {
-  /** Item posts per account: an orchestrator asks a few hundred decisions a day. */
+  /** Item posts per account: a machine running many agents posts a few hundred decisions a day. */
   items: [120, MINUTE] as RateWindow,
   /** Stored decisions per account, open or answered. */
   decisions: 10_000,

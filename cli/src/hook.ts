@@ -5,14 +5,16 @@
  * Claude app answered, so the waiting prompt is settled and its hook lets go.
  *
  * Neither ever allows anything by itself: on any error, timeout or lost network they print
- * nothing and exit 0, and Claude Code's own dialog decides.
+ * nothing and exit 0, and Claude Code's own dialog decides. `hook ask-user` and `hook question`
+ * do the same for questions asked in the terminal, Claude Code's and opencode's.
  */
-import type { Permission } from "@starbridge/protocol";
+import { basename } from "node:path";
+import type { Answer, Permission } from "@starbridge/protocol";
 import { MAX_HOLD_SECONDS } from "./agent/api";
 import { type AgentClient, Interrupted, withAgent } from "./agent/client";
 import type { PermissionWait } from "./agent/permissions";
 import { type Ctx, parseDuration, session, UsageError } from "./context";
-import { poll } from "./decisions";
+import { type AskInput, ask, poll, settle } from "./decisions";
 import {
   DEFAULT_WAIT_MS,
   hookDecision,
@@ -43,7 +45,7 @@ function agentName(text: string | undefined): Permission["agent"] {
   // Pi asks through the Starbridge Pi extension's link in pi-permission-system (#232), opencode
   // through the Starbridge opencode plugin (#300).
   if (text === "claude-code" || text === "pi" || text === "opencode") return text;
-  // Codex's hook races its TUI in ways not probed yet (#57, P3).
+  // Not Codex: its hook races its TUI in ways not yet worked out (#57).
   throw new UsageError(`--agent: claude-code, pi or opencode (got ${text ?? "nothing"})`);
 }
 
@@ -309,5 +311,153 @@ export async function hookAskUser(ctx: Ctx, stdin: string): Promise<number> {
         permissionDecisionReason: ASK_USER_REASON,
       };
   ctx.out(JSON.stringify({ hookSpecificOutput }));
+  return 0;
+}
+
+/** One question of opencode's `question` tool, as its `question.asked` event carries it. */
+export interface OpencodeQuestion {
+  question: string;
+  header?: string;
+  options?: { label: string; description?: string }[];
+  multiple?: boolean;
+  custom?: boolean;
+}
+
+/** What the plugin hands `hook question` on stdin. */
+export interface QuestionHookInput {
+  session_id: string;
+  cwd: string;
+  questions: OpencodeQuestion[];
+}
+
+/** Limits of a decision (PROTOCOL.md): its question, context, options and each option. */
+const QUESTION_CHARS = 300;
+const CONTEXT_CHARS = 8000;
+const MAX_OPTIONS = 4;
+const OPTION_CHARS = 100;
+
+const clip = (text: string, max: number) =>
+  text.length > max ? `${text.slice(0, max - 1)}…` : text;
+
+/**
+ * The decision for one question. Its labels become the options, so a tap answers with the label
+ * opencode expects; the agent marks its pick "(Recommended)" and puts it first. A question a
+ * decision cannot offer as taps (more than 4 options, a label too long, one option) lists them
+ * in the context and takes a typed reply.
+ */
+export function questionInput(q: OpencodeQuestion): AskInput {
+  const labels = (q.options ?? []).map((o) => o.label);
+  const taps =
+    labels.length >= 2 &&
+    labels.length <= MAX_OPTIONS &&
+    new Set(labels).size === labels.length &&
+    labels.every((l) => l.length > 0 && l.length <= OPTION_CHARS);
+  const lines = [
+    ...(q.question.length > QUESTION_CHARS ? [q.question, ""] : []),
+    ...(q.options ?? []).map((o) =>
+      o.description ? `- ${o.label}: ${o.description}` : `- ${o.label}`,
+    ),
+    ...(q.multiple ? ["", "More than one can apply: reply with each one you pick."] : []),
+  ];
+  const recommended = labels.find((l) => /\(recommended\)\s*$/i.test(l));
+  return {
+    question: clip(q.question, QUESTION_CHARS),
+    context: clip(lines.join("\n").trim(), CONTEXT_CHARS),
+    ...(taps ? { options: labels, ...(recommended ? { recommended } : {}) } : {}),
+  };
+}
+
+/**
+ * opencode's answer to one question: the label tapped, or the owner's own words. For a question
+ * that takes several, a reply that names only its labels, split on commas or lines, is those.
+ */
+export function opencodeAnswer(a: Answer, q: OpencodeQuestion): string[] {
+  if (a.choice !== undefined) return [a.choice];
+  const text = a.text ?? "";
+  const labels = new Set((q.options ?? []).map((o) => o.label));
+  const parts = text
+    .split(/[,\n]/)
+    .map((p) => p.trim())
+    .filter((p) => p.length > 0);
+  return q.multiple && parts.length > 0 && parts.every((p) => labels.has(p)) ? parts : [text];
+}
+
+/**
+ * `starbridge hook question --agent opencode`, the plugin's input on stdin: posts each question
+ * of one `question` tool call as a decision, already waiting, and once all are answered prints
+ * `{"answers": [[label], ...]}` for opencode's reply route. Nothing else gets those answers: they
+ * are `held`, recorded without the session, whose answer loop would submit them as a prompt; so
+ * it goes to the server itself, since an agent older than `held` would record the session.
+ * SIGTERM means the terminal answered or dismissed the call: the questions still open are
+ * settled as answered elsewhere. Any error prints nothing, and the terminal's dialog decides.
+ */
+export async function hookQuestion(
+  outer: Ctx,
+  stdin: string,
+  opts: { agent?: string },
+): Promise<number> {
+  // opencode killed outright never sends SIGTERM: the questions would wait for nobody.
+  const watch = untilOrphaned(outer.signal);
+  const ctx = { ...outer, signal: watch.signal };
+  try {
+    if (opts.agent !== "opencode")
+      throw new UsageError(`--agent: opencode (got ${opts.agent ?? "nothing"})`);
+    const hook = JSON.parse(stdin) as QuestionHookInput;
+    if (!Array.isArray(hook?.questions) || hook.questions.length === 0 || !hook.session_id)
+      throw new UsageError("the hook input needs session_id and questions");
+    session(ctx);
+    // One question that cannot be asked stops the others: opencode takes all answers or none.
+    const failed = new AbortController();
+    const signal = ctx.signal ? AbortSignal.any([ctx.signal, failed.signal]) : failed.signal;
+    const ids: (string | undefined)[] = [];
+    const results = await Promise.allSettled(
+      hook.questions.map(async (q, i) => {
+        const lines: string[] = [];
+        const sub: Ctx = { ...ctx, signal, out: (l) => lines.push(l), err: () => {} };
+        const input: AskInput = {
+          ...questionInput(q),
+          agent: "opencode",
+          session: hook.session_id,
+          project: basename(hook.cwd || process.cwd()),
+          held: true,
+        };
+        const how = { wait: true, json: true };
+        try {
+          const code = await ask(sub, input, how);
+          ids[i] = lines[0];
+          return code === 0 && lines[1]
+            ? opencodeAnswer(JSON.parse(lines[1]) as Answer, q)
+            : undefined;
+        } catch (e) {
+          ids[i] = lines[0];
+          failed.abort();
+          throw e;
+        }
+      }),
+    );
+    const picked = results.map((r) => (r.status === "fulfilled" ? r.value : undefined));
+    const error = results.find((r) => r.status === "rejected");
+    if (error) ctx.err(`starbridge: question not sent: ${(error.reason as Error).message}`);
+    if (picked.every((p) => p !== undefined) && !signal.aborted) {
+      ctx.out(JSON.stringify({ answers: picked }));
+      return 0;
+    }
+    // Answered or dismissed at the terminal, or a question could not be asked: the ones still
+    // open are moot. A settle of one answered meanwhile does nothing.
+    const outcome = outer.signal?.aborted ? "elsewhere" : "withdrawn";
+    await Promise.all(
+      ids.map((id) =>
+        id
+          ? settle({ ...ctx, signal: undefined }, { id, outcome }).catch((e) =>
+              ctx.err(`starbridge: could not settle ${id}: ${(e as Error).message}`),
+            )
+          : undefined,
+      ),
+    );
+  } catch (e) {
+    ctx.err(`starbridge: question not sent: ${(e as Error).message}`);
+  } finally {
+    watch.stop();
+  }
   return 0;
 }
