@@ -623,12 +623,20 @@ first window, so a provider with a window running out leads.
 - **Answer buttons** (#138, #166): "Answer buttons on questions", Always (default), When the agent
   waits, or Never, applies under 1100 px. More than two options, or a label over 18 characters,
   stack. `answerIn` and typed-only questions have no buttons.
+- **Typed answers** (#562): Enter sends, Shift+Enter starts a new line, on the web and with an
+  Android hardware keyboard. An Enter that ends an input method's composition only commits it.
 - **Context** renders line breaks and code, inline and fenced. Other Markdown shows as typed; the
   skill says so rather than the clients growing a renderer.
 - **Revoked machines.** Their items leave the Inbox and their notifications close (#344).
 - **Clock** (#161): System, 12-hour or 24-hour, per device. UI words stay English.
 - **Images** open a full-screen viewer (zoom, pan, swipe or arrow keys between images) and carry
   an expand badge, since nothing else tells a touch screen they open (#170).
+- **Image rows** (#536). A question's images go two to a row, both at one height and each as wide
+  as its shape asks, together filling the row (at most `size.media` tall): no grey bands, no
+  crop, no frame. With one image per option, two or more, each image sits over its option's
+  button in equal columns, in the agent's order: its own shape, no wider than the button and at
+  most `size.pick` tall, the row's images centred on one midline so the buttons line up. The owner
+  chose both from mockups. "Reply" sits under them, as under plain options.
 - **Signed out.** A browser that holds no device of the account it last signed in to gets the
   landing page at `/`, as does a revoked browser (#209); one with a device gets sign-in.
 - **Restarts go unnoticed** (#250). Clients retry a 502, 503 or refused connection quietly for
