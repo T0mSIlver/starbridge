@@ -405,7 +405,9 @@ Codex prompts are not supported.
 - **Allow covers what the owner saw** (#274, #356). A prompt's `summary` is capped at 200
   characters, so a command could hide a tail past it. The detail and sheet show the whole redacted
   input and enable Allow once its end has been on screen. A row, card or notification allows
-  directly only when the whole input fits its one line; otherwise Allow opens the sheet.
+  directly only when the whole input fits its one line; otherwise Allow opens the sheet. A
+  notification's line counts at most 400 dp, a phone's in portrait: on a tablet, a foldable or in
+  landscape the shade is a fixed-width panel or a split column, narrower than the display (#490).
 - **Lock screen** (#389). Deny answers from there. Allow asks for the unlock, then opens the
   prompt's sheet. "Quick Allow" in Settings (off, labelled unsafe) sends at once instead (#390).
 - **Escapes** (#357, #410). Control and format characters show as escapes (`‮`), on the
