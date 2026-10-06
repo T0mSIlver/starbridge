@@ -111,10 +111,8 @@ export async function createApp(config: Config, fetchFn: typeof fetch = fetch) {
   // The uptime check calls this too: a filling disk opens an issue before writes fail (#301).
   app.get("/healthz/disk", async (c) => {
     const { bavail, bsize } = await statfs(dirname(config.dbPath));
-    const free = bavail * bsize;
-    return free >= DISK_MIN_FREE
-      ? c.text("ok")
-      : c.text(`disk low: ${Math.round(free / 1024 ** 2)} MB free`, 503);
+    // No figure: anyone can call it, and the headroom left is the operator's to know.
+    return bavail * bsize >= DISK_MIN_FREE ? c.text("ok") : c.text("disk low", 503);
   });
   app.route("/v1", v1);
   app.notFound((c) => c.json({ error: "not-found" }, 404));
