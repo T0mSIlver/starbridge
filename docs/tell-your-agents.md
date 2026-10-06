@@ -71,9 +71,10 @@ asks before each one:
   git:github.com/T0mSIlver/starbridge@v<version>`, at your CLI's version), which brings the skill, the rules and
   the extension that puts each answer into the session. With
   pi-permission-system, setup and `starbridge config permissions on` also offer
-  allow rules, so that Pi loads the `starbridge` skill, reads the files in its
-  folder and runs `starbridge ask`, `waiting`, `working`, `wait` and `settle`
-  without a prompt. Other reads and commands still ask.
+  allow rules, so that Pi loads the `starbridge` skill and reads the files in its
+  folder without a prompt, and the Starbridge link in its `authorizerChain`, which
+  runs `starbridge ask`, `waiting`, `working`, `wait` and `settle` without one
+  when the command is only that. Other reads and commands still ask.
 - opencode: the skill, in `~/.config/opencode/skills/starbridge`, and the
   Starbridge plugin, in `~/.config/opencode/plugins/starbridge.ts` with its code
   in `~/.config/opencode/starbridge/`. The plugin brings the rules, puts each

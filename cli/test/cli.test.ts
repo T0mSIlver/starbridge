@@ -310,12 +310,12 @@ test("ask refuses a decision that would not stand alone", async () => {
   expect(await server.opened("decision")).toEqual([]);
 });
 
-test("ask refuses a default, as a flag or in --json: agents never answer for the owner", async () => {
+test("ask refuses a default, as a flag or in --input: agents never answer for the owner", async () => {
   const ctx = await paired(server);
   expect(await run([...ASK, "--default", "A"], ctx)).toBe(1);
   const file = join(mkdtempSync(join(tmpdir(), "starbridge-ask-")), "ask.json");
   writeFileSync(file, JSON.stringify({ question: "Q?", options: ["A", "B"], default: "A" }));
-  expect(await run(["ask", "--json", file], ctx)).toBe(1);
+  expect(await run(["ask", "--input", file], ctx)).toBe(1);
   expect(ctx.errors.at(-1)).toContain("no default");
   expect(await server.opened("decision")).toEqual([]);
 });
@@ -431,7 +431,7 @@ test("permissions on after installing pi-permission-system lets Starbridge's own
   expect(await configCommand(ctx, ["permissions", "on"], yes)).toBe(0);
   const config = JSON.parse(readFileSync(piPermissionConfig(ctx.env), "utf8"));
   expect(config.authorizerChain).toEqual(["starbridge"]);
-  expect(Object.keys(config.permission)).toEqual(["bash", "skill", "read"]);
+  expect(Object.keys(config.permission)).toEqual(["skill", "read"]);
   expect(piAllow(ctx.env).state).toBe("allowed");
 });
 
@@ -592,6 +592,52 @@ test("open decisions reach a device that joins later, which can answer them", as
   expect(Object.values(ctx.store.state().asked).map((a) => a.body)).toEqual([undefined, undefined]);
 });
 
+/** A laptop's answer the machine accepted, not yet taken by its session, then the laptop revoked. */
+async function revokedAnswer() {
+  const ctx = await paired(server);
+  const laptop = await server.addDevice("laptop");
+  await run([...ASK, "--session", "s"], ctx);
+  const id = ctx.lines.at(-1) as string;
+  const machine = ctx.store.machine()?.id as string;
+  const answer: Answer = {
+    v: 1,
+    id: `a_${crypto.randomUUID()}`,
+    decisionId: id,
+    to: machine,
+    answeredAt: `${new Date().toISOString().slice(0, 19)}Z`,
+    choice: "Merge",
+  };
+  const member = (await server.directory()).members.get(machine)?.member;
+  const sealed = seal("answer", answer, { id: laptop.id, signKey: laptop.keys.sign.privateKey }, [
+    member as NonNullable<typeof member>,
+  ]);
+  const posted = await fetch(`${server.url}/v1/items`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${laptop.token}`, "content-type": "application/json" },
+    body: JSON.stringify(sealed),
+  });
+  expect(posted.status).toBe(201);
+  const { cursor } = await poll(ctx, session(ctx), { seconds: 0, shared: true });
+  // Accepted while the session's agent was closed.
+  expect(ctx.store.state().answers[id]?.seen).toBe(false);
+  await server.revoke("laptop");
+  return { ctx, id, cursor };
+}
+
+test("a revoked device's undelivered answer is not handed to its session (#491)", async () => {
+  const { ctx, id } = await revokedAnswer();
+  // `answers` hands out what is saved before it polls, as `wait` does.
+  expect(await run(["answers", "--session", "s", "--wait", "0"], ctx)).toBe(0);
+  expect(ctx.lines.join("\n")).not.toContain("Merge");
+  expect(ctx.store.state().answers[id]).toBeUndefined();
+});
+
+test("a poll that brings no answer drops a revoked device's undelivered one (#491)", async () => {
+  const { ctx, id, cursor } = await revokedAnswer();
+  await poll(ctx, session(ctx), { cursor, seconds: 0, shared: true });
+  expect(ctx.store.state().answers[id]).toBeUndefined();
+});
+
 test("wait with no id returns each answer once, then times out with exit 2", async () => {
   const ctx = await paired(server);
   await run(ASK, ctx);
@@ -684,13 +730,14 @@ test("answers hands each session only its own answers, until it confirms them", 
   expect(await run(["answers", "--session", "s1"], ctx)).toBe(0);
   expect(ctx.lines).toHaveLength(2);
 
-  // s2's answer was stored by s1's poll; s2 takes it without touching the server.
+  // s2's answer was stored by s1's poll; s2 takes it with no poll, only a read of the directory
+  // to check the device still counts (#491).
   const polls = server.log.length;
   expect(await run(["answers", "--session", "s2"], ctx)).toBe(0);
   expect(JSON.parse(ctx.lines[2] as string).line).toBe(
     `Answer to ${theirs} (Name the branch?): multi\nline`,
   );
-  expect(server.log.length).toBe(polls);
+  expect(server.log.slice(polls)).toEqual(["GET /directory"]);
   expect(await run(["answers", "--session", "s3"], ctx)).toBe(0);
   expect(ctx.lines).toHaveLength(3);
 });
