@@ -99,6 +99,7 @@ import dev.starbridge.app.ui.Lockup
 import dev.starbridge.app.ui.Page
 import dev.starbridge.app.ui.Refresh
 import dev.starbridge.app.ui.Sym
+import dev.starbridge.app.ui.openNotificationSettings
 import dev.starbridge.app.ui.Symbol
 import dev.starbridge.app.ui.fieldColors
 import dev.starbridge.app.ui.groupGap
@@ -196,6 +197,7 @@ fun InboxScreen(
     /** A replacement of the recovery key made on another device (#348), and how to dismiss it. */
     recovery: RecoveryUi? = null,
     dismissRecovery: (Int) -> Unit = {},
+    notificationsOff: Boolean = false,
 ) {
     // While a prompt is on screen, read prompts every 1.5 s, so one settled elsewhere leaves
     // at once; the clock ticks with it for the 3 s a closed prompt stays.
@@ -235,6 +237,7 @@ fun InboxScreen(
         margin = Spacing.s4,
     ) {
         recoveryBanner(recovery, dismissRecovery)
+        if (notificationsOff && view.remindOff) item(key = "notifications-off") { NotificationsOff { onView(view.copy(remindOff = false)) } }
         if (feed.isEmpty()) {
             item(key = "empty") { Empty() }
         } else {
@@ -266,6 +269,22 @@ fun InboxScreen(
 }
 
 private const val PROMPT_POLL_MS = 1_500L
+
+/**
+ * Notifications are off (#342): a quiet line, since the owner may want them off. "Turn on" opens
+ * Android's settings; the ✕ hides the line for good, until Settings' "Remind me" brings it back.
+ */
+@Composable
+private fun NotificationsOff(dismiss: () -> Unit) {
+    val context = LocalContext.current
+    val dim = MaterialTheme.colorScheme.onSurfaceVariant
+    Row(Modifier.fillMaxWidth().padding(start = Spacing.s1), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+        Symbol(Sym.BellOff, size = 18.dp, tint = dim)
+        Text("Notifications are off", style = StarbridgeTheme.type.small, color = dim, modifier = Modifier.weight(1f))
+        TextButton(onClick = { openNotificationSettings(context) }) { Text("Turn on") }
+        IconButton(onClick = dismiss) { Symbol(Sym.Close, size = 18.dp, tint = dim, contentDescription = "Don't remind me") }
+    }
+}
 
 /**
  * The inbox's cards (#248), Material 3's filled card with extra-large corners. In One feed each

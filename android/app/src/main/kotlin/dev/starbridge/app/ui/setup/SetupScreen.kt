@@ -252,7 +252,8 @@ private fun Join(busy: Boolean, actions: SetupActions, modifier: Modifier) {
         bottom = {
             Primary("Scan a QR code", busy, icon = { Symbol(Sym.Qr, size = 20.dp) }, onClick = scan)
             Link("Can't scan? Compare digits", actions.askDevices)
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.s6, Alignment.CenterHorizontally)) {
+            // 24 dp under the link above, so each keeps a 48 dp tap area at every font size.
+            FlowRow(Modifier.padding(top = Spacing.s3), horizontalArrangement = Arrangement.spacedBy(Spacing.s6, Alignment.CenterHorizontally), verticalArrangement = Arrangement.spacedBy(Spacing.s6)) {
                 Link("Use the recovery key") { recovering = true }
                 Link("Sign out", actions.signOut)
             }
@@ -304,7 +305,8 @@ private fun Recover(busy: Boolean, actions: SetupActions, modifier: Modifier, on
                     supportingText = { Text(reading.problem ?: reading.status) },
                     isError = reading.problem != null,
                     textStyle = StarbridgeTheme.type.machine,
-                    colors = fieldColors(),
+                    // The default label reads at 4.4:1 on the field; this one clears 4.5:1.
+                    colors = fieldColors().copy(unfocusedLabelColor = MaterialTheme.colorScheme.onSurface),
                     // Masked as a password, with the eye to check what was typed (#274).
                     visualTransformation = if (shown) VisualTransformation.None else PasswordVisualTransformation(),
                     trailingIcon = {

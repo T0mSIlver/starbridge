@@ -2066,6 +2066,17 @@ goes in git.
   `keepalive_idle_conns_per_host 4096` it held 3 to 120, with p99 unchanged.
   25 s stays below the server's 30 s idle close, so Caddy never reuses a
   connection the server is closing.
+- 2026-10-06: Android says when notifications are off (#342, the owner's
+  pick of A plus C). A quiet line heads the Inbox, "Notifications are
+  off", with "Turn on" and a ✕. The ✕ hides the line for good, so the
+  line never nags someone who wants notifications off; Settings,
+  Notifications holds "Remind me when notifications are off", on by
+  default, which brings it back. Settings' first Notifications row reads
+  "Notifications are off" whatever the reminder says. "Turn on" opens
+  Android's notification settings for the app rather than the
+  permission prompt, which Android stops showing after two refusals;
+  turning notifications on there grants the permission too. The state
+  is read again each time the app comes back to the front.
 - 2026-10-06: load and failure test (#301, `evals/load/`). Prod's stack ran
   from `deploy/compose.yaml` on the dev box. Its containers shared two cores,
   with memory caps adding up to a CX23's 4 GB less the OS. Simulated users
@@ -2125,3 +2136,12 @@ goes in git.
   Restore drill: the 2026-10-06 backup, copied read-only from the VPS and
   restored as `deploy/README.md` says, passed `integrity_check`, started and
   served. Umami's dump restored too. The copies were deleted afterwards.
+- 2026-10-06: why Android's Find showed no results (#341). The app's
+  NavDisplay fills the screen and passes that size on to its entry as a
+  minimum height, and Material 3's
+  (1.5.0-alpha29) expanded `SearchBar` passes that minimum on to its
+  input field. The field filled the screen, its text centred, and the
+  results sat below the bottom edge. Find now stands in a `Box`, which
+  drops the minimum. The screenshots had hidden it, since they drew Find
+  in a plain `Box`; Find's shots and `FindScreenTest` now draw it inside
+  a screen-filling NavDisplay, as the app does.
