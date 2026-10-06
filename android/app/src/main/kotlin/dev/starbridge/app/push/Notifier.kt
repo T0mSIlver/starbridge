@@ -354,7 +354,7 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
         return paint.measureText(p.fullInput) <= width
     }
 
-    private fun promptBase(p: Prompt, actions: List<NotificationCompat.Action> = emptyList()): NotificationCompat.Builder {
+    private fun promptBase(p: Prompt, actions: List<NotificationCompat.Action> = emptyList(), locked: List<NotificationCompat.Action> = actions): NotificationCompat.Builder {
         // A prompt always blocks: its ticking header says so, the title is the tool alone (#191).
         val title = p.tool
         val open = openPrompt(p)
@@ -384,7 +384,7 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
                     .setShowWhen(true)
                     .setUsesChronometer(true)
                     .setContentIntent(open)
-                    .apply { actions.forEach(::addAction) }
+                    .apply { locked.forEach(::addAction) }
                     .build(),
             )
             .setContentIntent(open)
@@ -398,23 +398,23 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
     /**
      * Allow and Deny, as in the inbox. Deny works from the lock screen; Allow asks for the unlock
      * first (the owner's choice, SPEC.md). It sends at once only when the whole input fits the
-     * collapsed line; else it opens the prompt's sheet, which shows it whole (#356). The wider
-     * grants need the app.
+     * collapsed line; else, and always on the lock screen, which hides the command, it opens the
+     * prompt's sheet, which shows it whole (#356). The wider grants need the app.
      */
     override fun prompt(prompt: Prompt) = postPrompt(prompt, null)
 
     private fun postPrompt(prompt: Prompt, note: String?) {
         if (!allowed()) return
         val tag = promptTag(prompt)
-        val actions = listOf(
-            NotificationCompat.Action.Builder(0, "Allow", if (fitsLine(prompt)) promptIntent(prompt, true, "once", tag * 31) else openPrompt(prompt))
+        val allow = { sends: Boolean ->
+            NotificationCompat.Action.Builder(0, "Allow", if (sends) promptIntent(prompt, true, "once", tag * 31) else openPrompt(prompt))
                 .setAuthenticationRequired(true)
-                .build(),
-            NotificationCompat.Action.Builder(0, "Deny", promptIntent(prompt, false, "once", tag * 31 + 2))
-                .setAuthenticationRequired(false)
-                .build(),
-        )
-        val b = promptBase(prompt, actions)
+                .build()
+        }
+        val deny = NotificationCompat.Action.Builder(0, "Deny", promptIntent(prompt, false, "once", tag * 31 + 2))
+            .setAuthenticationRequired(false)
+            .build()
+        val b = promptBase(prompt, listOf(allow(fitsLine(prompt)), deny), locked = listOf(allow(false), deny))
         // The note goes above the command, so Allow still shows what it covers.
         if (note != null) b.setContentText(note).setStyle(NotificationCompat.BigTextStyle().bigText(TextUtils.concat(note, "\n", command(prompt)))).setSilent(true)
         shown[tag] = prompt.id

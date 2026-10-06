@@ -58,11 +58,12 @@ class NotifierTest {
             notifier.clearAll()
             notifier.prompt(p)
             val n = posted()
-            for (allow in listOf(n.actions.first(), n.publicVersion.actions.first())) {
+            // The lock screen hides the command: there Allow, after the unlock, always opens the sheet.
+            for ((allow, sent) in listOf(n.actions.first() to sends, n.publicVersion.actions.first() to false)) {
                 assertEquals("Allow", allow.title.toString())
                 val intent = shadowOf(allow.actionIntent)
-                assertEquals(p.id, sends, intent.isBroadcastIntent)
-                if (!sends) assertEquals(p.id, intent.savedIntent.getStringExtra(MainActivity.EXTRA_PROMPT))
+                assertEquals(p.id, sent, intent.isBroadcastIntent)
+                if (!sent) assertEquals(p.id, intent.savedIntent.getStringExtra(MainActivity.EXTRA_PROMPT))
             }
         }
     }
