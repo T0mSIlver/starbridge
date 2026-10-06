@@ -1292,6 +1292,11 @@ so the mod is the first path.
   since `codex queue` (0.160) takes the message only as an argument and other local users can
   read process arguments; `wait <id>` prints a delivered answer from local state. The npm bundle
   runs under Node, so the CLI uses no Bun global without a guard; a test runs it there.
+- 2026-10-06. Tests clean up their temp dirs (#313): a day of sessions left about 13,000 in the dev
+  box's 4 GB RAM-backed /tmp. Each package's `bun test` preloads `test-tmp.ts`, which points
+  `TMPDIR` at one dir per run and removes it after the last test, failed or not, and on exit or a
+  signal. Android's store tests use JUnit's `TemporaryFolder`. The
+  skill eval removes its homes on exit, after a throw or a signal too, and the judge its scratch dir.
 
 - 2026-10-06. A revoked browser stops showing its data (#343). Any 401 while the page runs sends
   it back through boot, which drops the inbox, prompts, quotas and runs from memory; an unsigned
