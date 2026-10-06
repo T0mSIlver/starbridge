@@ -120,6 +120,13 @@ opencode's dialog stays up meanwhile: the devices' answer is sent through
 opencode's reply route, and an answer at the keyboard stops the CLI, which
 settles the prompt on the devices.
 
+Each `question.asked` event (a call of opencode's `question` tool) runs
+`starbridge hook question --agent opencode`, which posts each question with its
+labels as options and prints the answers once all are in. The plugin sends them
+through `POST /question/{id}/reply`. An answer or Esc at the keyboard
+(`question.replied` or `question.rejected`) stops the CLI, which settles the
+questions on the devices.
+
 ## Develop
 
 ```bash
