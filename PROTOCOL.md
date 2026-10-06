@@ -331,7 +331,7 @@ request without the header, or with one the server cannot read, is served.
 | Route | Who | What |
 |---|---|---|
 | `GET /directory?from=<seq>` | device, machine | `{entries}` from `seq` on |
-| `POST /directory` | device | append `{entry}`; 409 unless its `seq` is the next one; 403 `machine-cap` past the account's machine limit (5 on the hosted server); 409 `directory-full` for an add or a recovery proposal past 200 entries, beyond their budgets ("Limits") |
+| `POST /directory` | device | append `{entry}`; 409 unless its `seq` is the next one; 403 `machine-cap` past the account's machine limit (3 on the hosted server; devices don't count); 409 `directory-full` for an add or a recovery proposal past 200 entries, beyond their budgets ("Limits") |
 
 The server runs `verifyDirectory` before it accepts an entry, to refuse garbage early. Clients
 never rely on that check.
@@ -340,7 +340,7 @@ never rely on that check.
 
 | Route | Who | What |
 |---|---|---|
-| `POST /pairings` | new member | `{request, claimHash}`: the request message and BLAKE2b-256 of a random claim secret's text (`claimHash`); 409 if the rendezvous id is taken; 429 `too-many-pairings` when the caller's address holds 20 unapproved pairings, 429 `busy` when the server holds 20000 pairings |
+| `POST /pairings` | new member | `{request, claimHash}`: the request message and BLAKE2b-256 of a random claim secret's text (`claimHash`); 409 if the rendezvous id is taken; 429 `too-many-pairings` when the caller's address holds 50 unapproved pairings, 429 `busy` when the server holds 20000 pairings |
 | `GET /pairings/:rendezvous?wait=<s>` | device | `{request}`; with `wait`, holds until the new member posts and answers 204 if `wait` passes first |
 | `POST /pairings/:rendezvous/approve` | device | `{approval}`; the directory must already hold the new member's entry; 409 `already-paired` when that member already holds a session or token |
 | `GET /pairings/:rendezvous/result?wait=<s>` | new member, with `X-Claim: <secret>` | long-poll: `{approval, token?}` once approved, `token` for machines only; 204 when `wait` passes; 403 `machine-cap` once the server refused the new machine's directory entry for the machine limit |
@@ -467,19 +467,19 @@ server whose disk is full answers writes 503 `storage-full` with `Retry-After`; 
 
 | What | Limit |
 |---|---|
-| `POST /items` | 120 a minute per account, and 16 MB of machines' boxes a minute, items that replace earlier ones included |
+| `POST /items` | from machines: 90 a minute per machine and 120 per account, and 16 MB of machines' boxes a minute per account, items that replace earlier ones included; from devices: 60 a minute per device |
 | Stored decisions, open or answered | 10000 per account: 409 `too-many-items` |
 | Stored permission prompts, open or settled | 10000 per account: 409 `too-many-items` |
 | Stored runs | 500 per account: 409 `too-many-items` for a new run; updates still pass |
 | A snooze | until at most 7 days after it is posted (`SNOOZE_MAX_MS`), since an unanswered decision drops after 30: 400 `bad-schema` |
-| Stored items | 128 MB per account, counting each item's boxes plus 512 bytes for the item and for each box, of which machine-signed items may fill all but the last 8 MB: 409 `too-many-items`; 2 MB per machine-signed item (all its boxes), 1 MB per quota snapshot, 32 KB per run update and 32 KB per answer or permission answer: 413 `too-large` |
+| Stored items | 128 MB per account, counting each item's boxes plus 512 bytes for the item and for each box, of which machine-signed items may fill all but the last 8 MB: 409 `too-many-items`; 2 MB per machine-signed item (all its boxes), 1 MB per quota snapshot, 32 KB per run update for each device it is sealed to, and 32 KB per answer or permission answer: 413 `too-large` |
 | `POST /directory` | 30 an hour per account |
 | Directory entries | from entry 200 on, a device's `add`: 409 `directory-full`; revocations and confirmations always pass, the recovery key may add 20 more devices, and devices may propose 20 more recovery keys; 8 KB per entry: 413 `too-large` |
 | Sessions | 50 per account; signing in past that ends the oldest, unpaired ones first |
-| `GET /auth/github/callback` and `POST /auth/app/session` | 20 a minute per address, together |
+| `GET /auth/github/callback` and `POST /auth/app/session` | 60 a minute per address, together |
 | `POST /auth/owner` | 10 a minute per address |
 | `GET /auth/challenge` | 20 a minute per account |
-| `POST /pairings` | 10 a minute per address; 20 unapproved pairings per address, an IPv6 client counting as its /48: 429 `too-many-pairings` |
+| `POST /pairings` | 30 a minute per address; 50 unapproved pairings per address, an IPv6 client counting as its /48: 429 `too-many-pairings` |
 | `GET /pairings/:rendezvous` | 30 a minute per account |
 | `GET /pairings/:rendezvous/result` | 60 a minute per address |
 | Pairing messages | 4 KB each: 400 `bad-schema` |

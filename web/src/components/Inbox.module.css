@@ -113,6 +113,20 @@
   text-align: center;
 }
 
+.noMachine {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s4);
+  max-width: var(--size-content);
+  margin: 0 auto;
+  padding: var(--s12) var(--s4);
+  text-align: center;
+}
+
+.noMachineText {
+  color: var(--fg2);
+}
+
 .rejected {
   padding: var(--s2) var(--s4);
   color: var(--bad);

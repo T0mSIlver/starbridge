@@ -16,8 +16,20 @@ type RateWindow = readonly [calls: number, ms: number];
  * PROTOCOL.md lists them; keep the two in step.
  */
 export const DEFAULT_LIMITS = {
-  /** Item posts per account: a machine running many agents posts a few hundred decisions a day. */
+  /**
+   * Item posts per account from its machines: a machine running many agents posts a few
+   * hundred decisions a day. Each machine also has its own window, so one looping agent leaves
+   * the other machines room, and devices have theirs, so the owner's answers always pass (#583).
+   */
   items: [120, MINUTE] as RateWindow,
+  /**
+   * Item posts per machine, within the account's items. A live run posts 6 a minute, so ten
+   * runs at once and the machine's own questions fit (#583). It counts before the account's
+   * window, so a looping machine's refused posts never spend the other machines' share.
+   */
+  machineItems: [90, MINUTE] as RateWindow,
+  /** Item posts per device (answers, settles), apart from the machines' window. */
+  deviceItems: [60, MINUTE] as RateWindow,
   /** Stored decisions per account, open or answered. */
   decisions: 10_000,
   /** Sealed boxes stored per account, in bytes. */
@@ -50,7 +62,10 @@ export const DEFAULT_LIMITS = {
   rowBytes: 512,
   /** Stored runs per account; each lives runRetention after its last update. */
   runs: 500,
-  /** Sealed boxes of one run update, in bytes. */
+  /**
+   * Sealed boxes of one run update, in bytes for each device it is sealed to. Each box holds the
+   * whole update, recipients included, so a fixed total stopped runs past about 23 devices (#658).
+   */
   runBytes: 32 * 1024,
   /** Runs are dropped this long after their last update. */
   runRetention: DAY,
@@ -75,30 +90,34 @@ export const DEFAULT_LIMITS = {
 
   /** Sessions per account; signing in past this ends the oldest, unpaired ones first. */
   sessions: 50,
-  /** GitHub sign-ins finished per address. */
-  githubCallbacks: [20, MINUTE] as RateWindow,
+  /**
+   * GitHub sign-ins finished per address. An office or a carrier's NAT shares one IPv4 address,
+   * and a launch brings many people at once; one a second is far below what the server held in
+   * the load test (#619).
+   */
+  githubCallbacks: [60, MINUTE] as RateWindow,
   /** Owner-token sign-ins per address, so the token cannot be guessed fast. */
   ownerSignIns: [10, MINUTE] as RateWindow,
   /** Sign-in challenges per account, which a device signs to bind a new session. */
   challenges: [20, MINUTE] as RateWindow,
 
-  /** Pairing requests posted per address. */
-  pairingPosts: [10, MINUTE] as RateWindow,
+  /** Pairing requests posted per address: a person's setup posts one per machine or page (#619). */
+  pairingPosts: [30, MINUTE] as RateWindow,
   /** Pairing requests read per account, by the device approving the pairing. */
   pairingReads: [30, MINUTE] as RateWindow,
   /** Pairing results read per address, by the member that posted the request. */
   pairingResults: [60, MINUTE] as RateWindow,
 
   /**
-   * Pairings stored on the whole server, about 4 KB each: the disk bound. Filling it takes a
-   * thousand addresses at pairingsPerClient.
+   * Pairings stored on the whole server, about 4 KB each: the disk bound. Filling it takes 400
+   * addresses at pairingsPerClient.
    */
   pendingPairings: 20_000,
   /**
    * Unapproved pairings per address, an IPv6 client counting as its /48. Approved ones do not
-   * count, so an office behind one NAT pairs as many members as it likes, 20 waiting at a time.
+   * count, so an office behind one NAT pairs as many members as it likes, 50 waiting at a time.
    */
-  pairingsPerClient: 20,
+  pairingsPerClient: 50,
 
   /**
    * Relayed Web Pushes in flight on the whole server (RELAY_MODE), and per address. Each may

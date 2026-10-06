@@ -31,7 +31,7 @@ import {
   type SessionInfo,
   type Status,
 } from "./api";
-import { AgentClient, AgentError, NoAgent } from "./client";
+import { AgentClient, AgentError, NoAgent, tooLong } from "./client";
 
 export interface Request {
   params: Record<string, string>;
@@ -195,6 +195,8 @@ export class Agent implements Hub {
     this.server = server;
     this.loops = this.features.flatMap((f) => (f.run ? [f.run(this.stopping.signal)] : []));
     this.log(`starbridge agent ${VERSION} listening on ${this.socket}`);
+    if (!isPortFile(this.socket) && tooLong(this.socket))
+      this.log(`${tooLong(this.socket)}: the starbridge commands cannot reach this agent`);
   }
 
   private async listenUnix(server: Server) {
@@ -209,6 +211,9 @@ export class Agent implements Hub {
         server.once("error", reject);
         server.listen(this.socket, () => resolve());
       });
+    } catch (e) {
+      const why = tooLong(this.socket);
+      throw why ? new UsageError(why) : e;
     } finally {
       process.umask(umask);
     }

@@ -11,14 +11,17 @@ const noop = async () => {};
  * The app's store filled with the sample data (lib/sample.ts), for product shots: answers go
  * nowhere, and quota settings last for the page.
  * `landing` leaves out the permission prompt, which would top the list, and the run killed before
- * its first update: the landing page leads with questions.
+ * its first update: the landing page leads with questions. `empty` is a new account: no machine,
+ * nothing open.
  */
 export function SampleProvider({
   landing = false,
+  empty = false,
   quiet = false,
   children,
 }: {
   landing?: boolean;
+  empty?: boolean;
   /** Nothing open, History only: the quiet inbox (#662). */
   quiet?: boolean;
   children: React.ReactNode;
@@ -34,12 +37,18 @@ export function SampleProvider({
         prompts: [],
         runs: { ...s.runs, items: s.runs.items.filter((i) => i.run.id !== "r3") },
       }),
+      ...(empty && {
+        inbox: { items: [], rejected: [] },
+        prompts: [],
+        runs: { items: [], rejected: [] },
+        quotas: undefined,
+      }),
       ...(quiet && {
         inbox: { ...s.inbox, items: s.inbox.items.filter((i) => i.answeredAt) },
         prompts: [],
         runs: { ...s.runs, items: [] },
       }),
-      sampleDevices: devices,
+      sampleDevices: empty ? devices.filter((d) => d.role !== "machine") : devices,
       reload: noop,
       answer: noop,
       update: () => {},
@@ -51,6 +60,6 @@ export function SampleProvider({
       loadPromptLog: noop,
       deviceName: (id) => id,
     };
-  }, [landing, quiet, quotaSettings]);
+  }, [landing, empty, quiet, quotaSettings]);
   return <StoreContext.Provider value={store}>{children}</StoreContext.Provider>;
 }

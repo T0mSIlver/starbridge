@@ -283,6 +283,25 @@ test("status reports the agent, the service and the plugins", async () => {
   expect(out).toContain("opencode skill and plugin: installed");
 });
 
+test("status lists every starbridge on the PATH, and how to remove the others (#621)", async () => {
+  const m = await machine();
+  const dirs = ["a", "b"].map((d) => join(m.home, d));
+  for (const [i, d] of dirs.entries()) {
+    mkdirSync(d);
+    writeFileSync(join(d, "starbridge"), `#!/bin/sh\necho "starbridge 0.${i + 1}.0"\n`, {
+      mode: 0o755,
+    });
+  }
+  m.ctx.env.PATH = `${dirs.join(":")}:${m.ctx.env.PATH}`;
+  await status({ ...m.sys, self: [join(dirs[0] as string, "starbridge")] });
+  expect(m.ctx.lines.slice(1, 5)).toEqual([
+    "2 copies of starbridge are on the PATH; a terminal runs the first:",
+    `  ${dirs[0]}/starbridge: 0.1.0, this one`,
+    `  ${dirs[1]}/starbridge: 0.2.0, delete the file to remove it`,
+    "Keep one: `starbridge update` updates only the copy it runs from.",
+  ]);
+});
+
 test("status says at once that the owner removed this machine, and how to pair it again", async () => {
   const m = await machine();
   await startAgent(m.ctx);
@@ -361,6 +380,50 @@ test("setup without a user systemd keeps going and says how to run the agent", a
   expect(existsSync(join(m.units, "starbridge-agent.service"))).toBe(false);
   // No agent: the first upload goes to the server directly.
   expect((await server.opened("quota")).length).toBe(1);
+});
+
+test("a failed service start says how to run the agent and that setup retries (#614)", async () => {
+  const m = await machine();
+  m.ctx.env.PATH = `${join(m.home, "bin")}:${m.ctx.env.PATH}`;
+  mkdirSync(join(m.home, "bin"));
+  writeFileSync(
+    join(m.home, "bin/systemctl"),
+    '#!/bin/sh\n[ "$2" = enable ] && { echo "Access denied" >&2; exit 1; }\nexit 0\n',
+    { mode: 0o755 },
+  );
+  expect(await setup(m.sys, { yes: true, noPlugin: true, readyTimeoutMs: 500 })).toBe(0);
+  const out = m.ctx.lines.join("\n");
+  expect(out).toContain("Could not start the agent service");
+  expect(out).toContain("Run `starbridge agent` yourself");
+  expect(out).toContain("`starbridge setup` again");
+});
+
+test("an old Claude Code: setup says what failed and to update it (#620)", async () => {
+  const m = await machine();
+  Object.assign(m.ctx.env, { FAKE_CLAUDE_VERSION: "2.1.200", FAKE_NO_JSON: "1" });
+  expect(await setup(m.sys, { yes: true, noQuota: true, noService: true })).toBe(0);
+  expect(m.ctx.lines.join("\n")).toContain(
+    "`claude plugin marketplace list --json` failed (error: unknown option '--json'). Claude Code 2.1.200 is older than 2.1.287, the oldest Starbridge works with: `claude update` updates it. Skipped",
+  );
+});
+
+test("Ctrl-C at the test decision withdraws it from the devices (#613)", async () => {
+  const m = await machine();
+  const stop = new AbortController();
+  m.ctx.signal = stop.signal;
+  const sys: Sys = {
+    ...m.sys,
+    prompt: { ...m.sys.prompt, confirm: async (q) => q.startsWith("Send a test decision") },
+  };
+  const done = setup(sys, { noQuota: true, noPlugin: true, noService: true });
+  await until(async () => (await server.opened("decision")).length === 1);
+  stop.abort();
+  expect(await done).toBe(0);
+  expect(m.ctx.lines).toContain("Skipped.");
+  const [decision] = await server.opened("decision");
+  const [settled] = await server.opened("settled");
+  expect(settled?.itemId).toBe(decision?.id);
+  expect(settled?.outcome).toBe("withdrawn");
 });
 
 /**

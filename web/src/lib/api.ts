@@ -131,9 +131,11 @@ async function call<T>(
   const started = Date.now();
   let res: Response;
   for (let first = true; ; first = false) {
-    if (!first) {
+    // A retry waits until the backoff ends, which another call's failure may push back meanwhile.
+    while (!first) {
       const wait = Math.max(0, backoff.until - Date.now());
       if (Date.now() - started + wait > backoff.retryForMs) throw new Unreachable(offline());
+      if (wait === 0) break;
       await pause(wait, opts.signal);
     }
     try {
