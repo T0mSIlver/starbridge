@@ -9,7 +9,7 @@
  * phone or a Play emulator). The machines' homes are <dir>/workstation and <dir>/build-server;
  * scenario.ts runs the CLI in them.
  */
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { DemoDevice } from "../src/device";
 
@@ -19,15 +19,27 @@ export const OWNER_TOKEN = "demo-video";
 
 export function cli(dir: string, home: keyof typeof MACHINES, args: string[], cwd?: string) {
   const machineHome = join(dir, home);
+  const env: Record<string, string | undefined> = {
+    ...process.env,
+    HOME: machineHome,
+    XDG_RUNTIME_DIR: join(machineHome, "run"),
+    STARBRIDGE_CONFIG_DIR: join(machineHome, "starbridge"),
+  };
+  // Whatever runs this script may hold the owner's real agent, server and session: none reach here.
+  for (const name of [
+    "STARBRIDGE_AGENT_SOCKET",
+    "STARBRIDGE_SERVER",
+    "CLAUDECODE",
+    "CLAUDE_CODE_SESSION_ID",
+    "CODEX_THREAD_ID",
+    "PI_SESSION_ID",
+    "PI_SESSION_FILE",
+    "STARBRIDGE_OPENCODE_SESSION",
+  ])
+    delete env[name];
   return Bun.spawn(["bun", join(ROOT, "cli/src/main.ts"), ...args], {
     cwd: cwd ?? machineHome,
-    env: {
-      ...process.env,
-      HOME: machineHome,
-      XDG_RUNTIME_DIR: join(machineHome, "run"),
-      STARBRIDGE_CONFIG_DIR: join(machineHome, "starbridge"),
-      CLAUDE_CODE_SESSION_ID: "",
-    },
+    env,
     stdout: "pipe",
     stderr: "inherit",
   });
@@ -39,6 +51,9 @@ if (import.meta.main) {
   const server = `http://127.0.0.1:${port}`;
   process.on("SIGTERM", () => process.exit(0));
   process.on("SIGINT", () => process.exit(0));
+  // Starts over only in an earlier stack's directory, never in one that holds anything else.
+  if (existsSync(dir) && readdirSync(dir).length > 0 && !existsSync(join(dir, "ready")))
+    throw new Error(`${dir} is not empty and holds no earlier stack`);
   rmSync(dir, { recursive: true, force: true });
   mkdirSync(dir, { recursive: true });
 

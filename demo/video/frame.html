@@ -1,8 +1,8 @@
 <!doctype html>
 <!--
   One frame of the demo video at 1920×1080: the agent's terminal on the left, a hole on the right
-  where compose.ts lays the phone recording, a caption, and the end card. compose.ts sets
-  window.TAKE (a take's events.json) and calls render(t) for each frame.
+  where compose.ts lays the phone recording, a caption, and the end card. compose.ts calls
+  render(t, take) for each frame, take being a take's events.json.
 -->
 <meta charset="utf-8" />
 <style>
@@ -108,31 +108,31 @@
     const out = [];
     const at = (time, html) => { if (t >= time) out.push(html); };
     const typed = (time, text, cps = 90) => esc(text.slice(0, Math.max(0, Math.floor((t - time) * cps))));
-    at(0, `<div class="l user">&gt; <b>Retire the legacy tiers and run the migration on staging.</b></div>`);
+    at(0, `<div class="l user">&gt; <b>Retire the legacy pricing tiers in billing-api.</b></div>`);
     at(0, `<div class="gap"></div>`);
-    at(0, `<div class="l"><span class="dot tool">⏺</span> <span class="tool"><b>Write</b>(migrations/0042_retire_legacy_tier.sql)</span></div>`);
-    at(0, `<div class="l sub">⎿  Wrote 6 lines</div>`);
+    at(0, `<div class="l"><span class="dot tool">⏺</span> <span class="tool"><b>Read</b>(src/plans/tiers.ts)</span></div>`);
+    at(0, `<div class="l sub">⎿  Read 84 lines</div>`);
     at(0.6, `<div class="gap"></div>`);
-    at(0.6, `<div class="l"><span class="dot">⏺</span> ${typed(0.6, "0042 drops plans.legacy_tier, and 1,284 staging plans still use it. That's your call, so I'm asking.")}</div>`);
+    at(0.6, `<div class="l"><span class="dot">⏺</span> ${typed(0.6, "1,284 plans are still on the two legacy tiers. Where they go is a pricing call, so I'm asking.")}</div>`);
     const askAt = e.ask - 0.4;
     at(askAt, `<div class="gap"></div>`);
-    at(askAt, `<div class="l"><span class="dot tool">⏺</span> <span class="tool"><b>Bash</b>(<span class="cmd">starbridge ask --question "${esc(q.question)}" --image 0042.png ${q.options.map((o) => `--option "${esc(o)}"`).join(" ")} --waiting --wait</span>)</span></div>`);
+    at(askAt, `<div class="l"><span class="dot tool">⏺</span> <span class="tool"><b>Bash</b>(<span class="cmd">starbridge ask --question "${esc(q.question)}" --image tiers.png ${q.options.map((o) => `--option "${esc(o)}"`).join(" ")} --waiting --wait</span>)</span></div>`);
     if (t >= askAt && t < e.answered) {
       const s = SPINNER[Math.floor(t * 8) % SPINNER.length];
       out.push(`<div class="l sub"><span class="answer">${s}</span> Waiting for your answer… ${Math.floor(t - askAt)}s</div>`);
     }
-    // The CLI prints the decision's id, then the answer; the last line, its choice in amber.
+    // The CLI's answer line, its choice in amber.
     const said = take.answer.split("\n").at(-1);
     const cut = said.lastIndexOf(": ") + 2;
     at(e.answered, `<div class="l sub">⎿  ${esc(said.slice(0, cut))}<span class="answer">${esc(said.slice(cut))}</span></div>`);
     at(e.answered + 0.5, `<div class="gap"></div>`);
-    at(e.answered + 0.5, `<div class="l"><span class="dot">⏺</span> ${typed(e.answered + 0.5, "Backing up plans first, then migrating.")}</div>`);
+    at(e.answered + 0.5, `<div class="l"><span class="dot">⏺</span> ${typed(e.answered + 0.5, "Mapping both legacy tiers to Standard, then running the tests.")}</div>`);
     at(e.run, `<div class="gap"></div>`);
-    at(e.run, `<div class="l"><span class="dot tool">⏺</span> <span class="tool"><b>Bash</b>(<span class="cmd">starbridge run --title "${esc(take.run.title)}" --reason "${esc(take.run.reason)}" -- ./migrate.sh</span>)</span></div>`);
+    at(e.run, `<div class="l"><span class="dot tool">⏺</span> <span class="tool"><b>Bash</b>(<span class="cmd">starbridge run --title "${esc(take.run.title)}" --reason "${esc(take.run.reason)}" -- pnpm test</span>)</span></div>`);
     for (const [i, line] of take.lines.entries())
       at(line.t, `<div class="l sub">${i === 0 ? "⎿  " : "   "}${esc(line.text)}</div>`);
     at(e.ran + 0.6, `<div class="gap"></div>`);
-    at(e.ran + 0.6, `<div class="l"><span class="dot">⏺</span> ${typed(e.ran + 0.6, "Done. Backup in backups/plans-0042.sql; 0042 is applied on staging.")}</div>`);
+    at(e.ran + 0.6, `<div class="l"><span class="dot">⏺</span> ${typed(e.ran + 0.6, "Done. Legacy tiers map to Standard at the same price; all 4 suites pass.")}</div>`);
     return out.join("");
   }
 

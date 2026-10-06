@@ -25,6 +25,7 @@ Needs bun, ffmpeg, adb and an Android phone or emulator with the Starbridge app.
    `TAP_ANSWER` to "x,y" of the notification's arrow and of "Back up first".
 
    ```bash
+   bunx playwright install chromium
    bun demo/video/compose.ts image .scratch/demo/take
    bun demo/video/scenario.ts .scratch/demo/stack .scratch/demo/take
    ```

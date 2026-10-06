@@ -1,30 +1,33 @@
 <!doctype html>
-<!-- The image the demo's question carries: the migration it asks about. 1200×480. -->
+<!-- The image the demo's question carries: the legacy tiers and what each option costs. 1200×400. -->
 <meta charset="utf-8" />
 <style>
   @font-face {
-    font-family: "Google Sans Code";
-    src: url("../../web/src/fonts/google-sans-code-latin-wght-normal.woff2");
+    font-family: "Google Sans Flex";
+    src: url("../../web/src/fonts/google-sans-flex-latin-wght-normal.woff2");
+    font-weight: 100 1000;
   }
   body {
     margin: 0;
     width: 1200px;
-    height: 480px;
+    height: 400px;
     background: #171717;
     color: #f1f1f1;
-    font: 40px/1.55 "Google Sans Code", monospace;
+    font: 40px/1.3 "Google Sans Flex", sans-serif;
     box-sizing: border-box;
     padding: 40px 56px;
+    font-variant-numeric: tabular-nums;
   }
-  .file { color: #a3a3a3; font-size: 32px; margin-bottom: 20px; }
-  .del { background: #b8322a33; color: #ffb4ab; margin: 0 -56px; padding: 0 56px; }
-  .dim { color: #6a6a6a; }
-  .k { color: #f5a83b; }
-  .note { margin-top: 28px; color: #a3a3a3; font-size: 34px; }
-  .note b { color: #f1f1f1; font-weight: 600; }
+  table { width: 100%; border-collapse: collapse; }
+  th { color: #a3a3a3; font-weight: 500; font-size: 32px; text-align: right; padding: 0 0 18px; }
+  td { text-align: right; padding: 18px 0; border-top: 2px solid #2a2a2a; }
+  th:first-child, td:first-child { text-align: left; }
+  .std { color: #f5a83b; font-weight: 600; }
+  .note { margin-top: 26px; color: #a3a3a3; font-size: 32px; }
 </style>
-<div class="file">migrations/0042_retire_legacy_tier.sql</div>
-<div><span class="k">UPDATE</span> plans <span class="k">SET</span> tier = <span class="dim">'standard'</span></div>
-<div>&nbsp;&nbsp;<span class="k">WHERE</span> legacy_tier <span class="k">IS NOT NULL</span>;</div>
-<div class="del"><span class="k">ALTER TABLE</span> plans <span class="k">DROP</span> legacy_tier;</div>
-<div class="note">staging: <b>1,284 plans</b> still have legacy_tier set</div>
+<table>
+  <tr><th>Legacy tier</th><th>Plans</th><th>Now</th><th>Standard</th><th>Pro</th></tr>
+  <tr><td>Starter 2019</td><td>812</td><td>$9</td><td class="std">$9</td><td>$13</td></tr>
+  <tr><td>Team 2020</td><td>472</td><td>$29</td><td class="std">$29</td><td>$33</td></tr>
+</table>
+<div class="note">Per month. Pro's first 3 months free.</div>

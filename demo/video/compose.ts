@@ -32,7 +32,7 @@ const mb = (path: string) => `${(statSync(path).size / 1e6).toFixed(1)} MB`;
 
 async function image(dir: string) {
   const browser = await chromium.launch();
-  const page = await browser.newPage({ viewport: { width: 1200, height: 480 } });
+  const page = await browser.newPage({ viewport: { width: 1200, height: 400 } });
   await page.goto(`file://${join(import.meta.dir, "question.html")}`);
   await page.evaluate(() => document.fonts.ready);
   await page.screenshot({ path: join(dir, "question.png") });
@@ -67,7 +67,8 @@ async function video(take: string) {
   const mp4 = join(take, "demo.mp4");
   const phone =
     `[1]fps=${FPS},trim=start=${offset},setpts=PTS-STARTPTS,` +
-    `crop=1080:${2400 - STATUS_BAR}:0:${STATUS_BAR},scale=${PHONE.w}:${PHONE.h}:flags=lanczos[p]`;
+    `crop=iw:ih-${STATUS_BAR}:0:${STATUS_BAR},` +
+    `scale=${PHONE.w}:${PHONE.h}:flags=lanczos:force_original_aspect_ratio=increase,crop=${PHONE.w}:${PHONE.h}[p]`;
   const layers = `[0][p]overlay=${PHONE.x}:${PHONE.y}:eof_action=repeat[b];[b][2]overlay,format=yuv420p[v]`;
   await ffmpeg(
     ...["-f", "lavfi", "-i", `color=c=0x0c0c0c:s=1920x1080:r=${FPS}:d=${duration}`],
