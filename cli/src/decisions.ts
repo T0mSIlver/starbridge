@@ -643,7 +643,10 @@ async function reseal(ctx: Ctx, s: Session, known: Directory): Promise<void> {
   );
   const lacking = (to: string[], dir: Directory) =>
     activeMembers(dir, "device").some((d) => !to.includes(d.id));
-  const all = [...decisions.map((d) => d.body.to), ...prompts.map((p) => p.permission.to)];
+  const all = [
+    ...decisions.map((d) => d.body.to),
+    ...prompts.map((p) => p.sealedTo ?? p.permission.to),
+  ];
   if (st.behind || !all.some((to) => lacking(to, known))) return;
   const dir = await refreshDirectory(ctx, s, ctx.signal);
   const to = activeMembers(dir, "device");
@@ -682,25 +685,37 @@ async function reseal(ctx: Ctx, s: Session, known: Directory): Promise<void> {
       ...sealWithPictures({ ...body, to: ids }, pictures, signer, to).item,
       reseal: true,
     }));
+    if (posted === "closed")
+      ctx.store.updateState((st) => {
+        const x = st.asked[id];
+        if (x) forget(x);
+      });
+    if (posted !== "posted") continue;
+    // Done once its waiting state went too; else the next poll re-sends both.
+    if (a.waiting?.state === "waiting") {
+      const w = {
+        v: 1 as const,
+        id: a.waiting.id,
+        decisionId: id,
+        to: ids,
+        at: iso(ctx.now()),
+        state: a.waiting.state,
+      } satisfies Waiting;
+      if (!(await post(() => ({ ...seal("waiting", w, signer, to), quiet: true })))) continue;
+    }
     ctx.store.updateState((st) => {
       const x = st.asked[id];
-      if (posted === "posted" && x?.body) x.body.to = ids;
-      if (posted === "closed" && x) forget(x);
+      if (x?.body) x.body.to = ids;
     });
-    if (posted !== "posted" || a.waiting?.state !== "waiting") continue;
-    const w = {
-      v: 1 as const,
-      id: a.waiting.id,
-      decisionId: id,
-      to: ids,
-      at: iso(ctx.now()),
-      state: a.waiting.state,
-    } satisfies Waiting;
-    await post(() => ({ ...seal("waiting", w, signer, to), quiet: true }));
   }
   for (const p of prompts) {
-    if (!lacking(p.permission.to, dir)) continue;
+    if (!lacking(p.sealedTo ?? p.permission.to, dir)) continue;
     const permission = { ...p.permission, to: ids };
+    // As for decisions: answers count from the new devices before the post.
+    ctx.store.updateState((st) => {
+      const x = st.permissions?.[permission.id];
+      if (x) x.permission.to = [...new Set([...x.permission.to, ...ids])];
+    });
     if (
       (await post(() => ({ ...seal("permission", permission, signer, to), reseal: true }))) !==
       "posted"
@@ -708,7 +723,7 @@ async function reseal(ctx: Ctx, s: Session, known: Directory): Promise<void> {
       continue;
     ctx.store.updateState((st) => {
       const x = st.permissions?.[permission.id];
-      if (x) x.permission = permission;
+      if (x) x.sealedTo = ids;
     });
   }
 }

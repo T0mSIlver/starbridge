@@ -113,7 +113,7 @@ test("a prompt reaches a device that joins while it waits, which can answer it",
   const { out, permission } = await ask(ctx);
   const laptop = await server.addDevice("laptop");
   // The directory append wakes the agent's answer poll, which re-seals the prompt.
-  const to = () => ctx.store.state().permissions?.[permission.id]?.permission.to;
+  const to = () => ctx.store.state().permissions?.[permission.id]?.sealedTo;
   await until(() => !!to()?.includes(laptop.id));
   await server.answerPermission(
     permission.id,

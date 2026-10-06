@@ -107,8 +107,10 @@ export interface PermissionUpdate {
 
 /** A permission prompt as the machine keeps it while a hook waits on it. */
 export interface PendingPermission {
-  /** The body as signed and posted. */
+  /** The body as signed and posted; `to` also names devices it was re-sealed to (#340). */
   permission: Permission;
+  /** The devices of its last re-seal the server took; until one, `permission.to`. */
+  sealedTo?: string[];
   /** The Claude Code session that asked. */
   session: string;
   /** The updates behind the offered scopes; an allow for a wider scope writes these. */
