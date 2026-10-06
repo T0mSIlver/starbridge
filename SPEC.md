@@ -1292,6 +1292,21 @@ so the mod is the first path.
   since `codex queue` (0.160) takes the message only as an argument and other local users can
   read process arguments; `wait <id>` prints a delivered answer from local state. The npm bundle
   runs under Node, so the CLI uses no Bun global without a guard; a test runs it there.
+- 2026-10-06. Harness integrations audit (#298), each finding reproduced in a throwaway HOME
+  with Claude Code 2.1.289, Codex CLI 0.160.0 and Pi 1.0.4 with pi-permission-system 39.1.0.
+  Fixed here: `ask` takes Codex or Pi over Claude Code when both are set, since an agent passes
+  its variables to the agents it starts and a `codex exec` run from a Claude Code shell posted
+  as that Claude session, whose mod then got the answer (#319). A Codex sub-agent asks under its
+  root thread, read from its rollout's `session_id`, since `codex queue` refuses sub-agent
+  threads (#320). `claude -p` (`CLAUDE_CODE_SESSION_ATTENDED=0`) is told to `wait`, since the
+  mod runs only in interactive sessions (#321). Filed post-launch: Pi needs allow rules for the
+  `starbridge` commands under pi-permission-system (#322), uninstall leaves `starbridge` in its
+  `authorizerChain` (#323), a bare `wait` takes any session's answer (#324). Checked and fine:
+  setup run twice changes nothing; Claude Code `--resume` and Pi `/new` then `/resume` get an
+  answer given meanwhile; Pi `/reload` keeps the permission link; `codex queue` starts the
+  daemon itself, so an answer given after a reboot still reaches the session. After the TUI
+  quits, Codex's daemon keeps running and runs the queued answer as a turn nobody watches,
+  which `codex resume` then shows.
 
 - 2026-10-06. The agent binds its socket under a 077 umask and restores the process's after
   (#95). Under the usual umask the socket took other users' connections between the bind and the
