@@ -22,7 +22,8 @@ export interface Script {
   /** The image's file name as the terminal shows it; question.html renders it. */
   image?: string;
   next: string;
-  run?: { title: string; reason: string; command: string; steps: string[] };
+  /** Prints `steps` one per `every` seconds, the first at once. */
+  run?: { title: string; reason: string; command: string; every: number; steps: string[] };
   done: string;
 }
 
@@ -47,11 +48,15 @@ export const EVAL: Script = {
     title: "Eval: ranking prompt, 2,000 prompts",
     reason: "rents 4 H100s, about $14",
     command: "./eval.sh --model large",
+    // One step per 10 s: the CLI sends progress at most that often, and the video speeds it up.
+    every: 10.5,
     steps: [
-      "[500/2000] score 0.87 · $3.41",
-      "[1000/2000] score 0.86 · $6.85",
-      "[1500/2000] score 0.86 · $10.24",
-      "[2000/2000] score 0.86 · $13.62",
+      "[0/5] renting 4 H100s",
+      "[1/5] 400 of 2,000 prompts · score 0.87 · $2.71",
+      "[2/5] 800 of 2,000 prompts · score 0.86 · $5.46",
+      "[3/5] 1,200 of 2,000 prompts · score 0.86 · $8.19",
+      "[4/5] 1,600 of 2,000 prompts · score 0.86 · $10.90",
+      "[5/5] 2,000 of 2,000 prompts · score 0.86 · $13.62",
     ],
   },
   done: "Done. 0.86 on 2,000 prompts against 0.79 in prod, for $13.62. Ready to ship.",
@@ -134,10 +139,21 @@ export class Agent {
 
   /** Waits for the answer; past `seconds`, the take failed. */
   async wait(seconds: number): Promise<void> {
-    const missed = Bun.sleep(seconds * 1000).then(() => {
-      throw new Error(`no answer to "${this.script.question.question}" within ${seconds} s`);
-    });
-    this.answer = await Promise.race([output(this.cli(["wait", this.id])), missed]);
+    const wait = this.cli(["wait", this.id]);
+    let late = false;
+    const timer = setTimeout(() => {
+      late = true;
+      wait.kill();
+    }, seconds * 1000);
+    try {
+      this.answer = await output(wait);
+    } catch (e) {
+      if (late)
+        throw new Error(`no answer to "${this.script.question.question}" within ${seconds} s`);
+      throw e;
+    } finally {
+      clearTimeout(timer);
+    }
     this.answered = this.clock();
   }
 
@@ -147,7 +163,7 @@ export class Agent {
     if (!run) return;
     this.running = this.clock();
     const quote = (text: string) => `'${text.replaceAll("'", "'\\''")}'`;
-    const sh = run.steps.map((step) => `sleep 1.6; echo ${quote(step)}`).join("; ");
+    const sh = run.steps.map((step) => `echo ${quote(step)}`).join(`; sleep ${run.every}; `);
     const p = this.cli(["run", "--title", run.title, "--reason", run.reason, "--", "sh", "-c", sh]);
     let pending = "";
     for await (const chunk of p.stdout) {

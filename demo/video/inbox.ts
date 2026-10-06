@@ -90,10 +90,11 @@ async function signIn(dir: string) {
 async function take(dir: string, out: string) {
   mkdirSync(out, { recursive: true });
   const raw = join(out, "video");
-  const started = performance.now();
   const ctx = await context(dir, raw);
   await ctx.addInitScript(POINTER);
   const page = ctx.pages()[0] ?? (await ctx.newPage());
+  // The recording begins with the page.
+  const started = performance.now();
   await page.goto(WEB);
   await page.getByText("Nothing needs you").waitFor({ timeout: 30_000 });
   const t0 = performance.now();
@@ -111,7 +112,7 @@ async function take(dir: string, out: string) {
     await ctx.close();
   };
   for (const signal of ["SIGINT", "SIGTERM"] as const)
-    process.on(signal, () => stop().finally(() => process.exit(130)));
+    process.on(signal, () => stop().finally(() => process.exit(signal === "SIGINT" ? 130 : 143)));
   try {
     await Bun.sleep(2500);
     await first.ask(join(out, "question.png"));
@@ -125,8 +126,11 @@ async function take(dir: string, out: string) {
     await press(page, EVAL.answer);
     mark("first");
     await first.wait(15);
+    // After the agent's own line, as in the terminal; a failed take's stop() makes it reject.
+    await Bun.sleep(1200);
     const running = first.run();
-    await Bun.sleep(3000);
+    running.catch(() => {});
+    await Bun.sleep(2000);
     await press(page, PRICING.answer);
     mark("second");
     await second.wait(15);
@@ -139,6 +143,7 @@ async function take(dir: string, out: string) {
   const [file] = readdirSync(raw);
   if (!file) throw new Error("the browser left no recording");
   renameSync(join(raw, file), join(out, "browser.webm"));
+  const settled = (second.answered ?? 0) + 1.5;
   const take = {
     layout: "inbox",
     end: events.end,
@@ -148,8 +153,11 @@ async function take(dir: string, out: string) {
     captions: [
       [0, events.both, "Two agents on two machines, each with a question."],
       [events.both, events.first, "Every question lands in one inbox, on the web too."],
-      [events.first, events.end, "Each answer goes back to the session that asked."],
+      [events.first, settled, "Each answer goes back to the session that asked."],
+      [settled, events.end, "Runs report their progress there too (sped up 6×)."],
     ],
+    // The run takes a minute; once both are answered, its middle plays at 6×.
+    fast: [{ from: settled, to: (first.ran ?? 0) - 0.5, rate: 6 }],
     panes: [first, second],
   };
   writeFileSync(join(out, "events.json"), `${JSON.stringify(take, null, 2)}\n`);

@@ -8,7 +8,7 @@
  *
  * Env: OFFSET (seconds the recording lags the take's clock; default 0.3 for a phone, 0 else).
  */
-import { mkdirSync, readFileSync, rmSync, statSync } from "node:fs";
+import { mkdirSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { chromium } from "playwright";
 
@@ -72,10 +72,28 @@ async function image(dir: string) {
   await browser.close();
 }
 
+/** A stretch of the take played faster, such as a long run. */
+interface Fast {
+  from: number;
+  to: number;
+  rate: number;
+}
+
+/** The take's time at each output frame: its own pace, faster through `fast`, then the end card. */
+export function timeline(end: number, fast: Fast[] = []): number[] {
+  const times: number[] = [];
+  for (let t = 0; t < end + END_CARD; ) {
+    times.push(t);
+    t += (fast.find((f) => t >= f.from && t < f.to)?.rate ?? 1) / FPS;
+  }
+  return times;
+}
+
 async function video(take: string) {
   const data = JSON.parse(readFileSync(join(take, "events.json"), "utf8"));
   const l = LAYOUTS[data.layout as Layout];
-  const duration = data.end + END_CARD;
+  const times = timeline(data.end, data.fast);
+  const duration = times.length / FPS;
   const frames = join(take, "frames");
   rmSync(frames, { recursive: true, force: true });
   mkdirSync(frames);
@@ -85,34 +103,47 @@ async function video(take: string) {
   await page.goto(`file://${join(import.meta.dir, "frame.html")}`);
   await page.evaluate(() => document.fonts.ready);
   await page.evaluate((l) => (window as unknown as Frame).layout(l), l);
-  const count = Math.round(duration * FPS);
-  for (let i = 0; i < count; i++) {
-    await page.evaluate(([t, d]) => (window as unknown as Frame).render(t, d), [
-      i / FPS,
-      data,
-    ] as const);
+  for (const [i, t] of times.entries()) {
+    await page.evaluate(([t, d]) => (window as unknown as Frame).render(t, d), [t, data] as const);
     const path = join(frames, `${String(i).padStart(5, "0")}.png`);
     await page.screenshot({ path, omitBackground: true });
   }
   await browser.close();
 
-  // Trimmed after fps, which fills the still screen between a phone recording's sparse frames.
+  // The recording as frames on the take's clock: trimmed after fps, which fills the still screen
+  // between a phone recording's sparse frames; then picked again at each output frame's time.
   const offset = Number(process.env.OFFSET ?? data.offset ?? l.offset);
   const { hole, statusBar } = l;
+  const shot = join(take, "recording");
+  rmSync(shot, { recursive: true, force: true });
+  mkdirSync(join(shot, "picked"), { recursive: true });
+  await ffmpeg(
+    ...["-i", join(take, l.recording), "-vf"],
+    `fps=${FPS},trim=start=${offset},setpts=PTS-STARTPTS,crop=iw:ih*${1 - statusBar}:0:ih*${statusBar},` +
+      `scale=${hole.w}:${hole.h}:flags=lanczos:force_original_aspect_ratio=increase,crop=${hole.w}:${hole.h}`,
+    ...["-q:v", "2", "-start_number", "0", join(shot, "%05d.jpg")],
+  );
+  const recorded = readdirSync(shot).filter((f) => f.endsWith(".jpg")).length;
+  for (const [i, t] of times.entries()) {
+    const from = Math.min(Math.round(t * FPS), recorded - 1);
+    symlinkSync(
+      join(shot, `${String(from).padStart(5, "0")}.jpg`),
+      join(shot, "picked", `${String(i).padStart(5, "0")}.jpg`),
+    );
+  }
+
   const mp4 = join(take, "demo.mp4");
-  const recording =
-    `[1]fps=${FPS},trim=start=${offset},setpts=PTS-STARTPTS,` +
-    `crop=iw:ih*${1 - statusBar}:0:ih*${statusBar},` +
-    `scale=${hole.w}:${hole.h}:flags=lanczos:force_original_aspect_ratio=increase,crop=${hole.w}:${hole.h}[p]`;
-  const layers = `[0][p]overlay=${hole.x}:${hole.y}:eof_action=repeat[b];[b][2]overlay,format=yuv420p[v]`;
   await ffmpeg(
     ...["-f", "lavfi", "-i", `color=c=0x0c0c0c:s=1920x1080:r=${FPS}:d=${duration}`],
-    ...["-i", join(take, l.recording)],
+    ...["-framerate", String(FPS), "-i", join(shot, "picked", "%05d.jpg")],
     ...["-framerate", String(FPS), "-i", join(frames, "%05d.png")],
-    ...["-filter_complex", `${recording};${layers}`, "-map", "[v]", "-t", String(duration), "-an"],
+    "-filter_complex",
+    `[0][1]overlay=${hole.x}:${hole.y}:eof_action=repeat[b];[b][2]overlay,format=yuv420p[v]`,
+    ...["-map", "[v]", "-t", String(duration), "-an"],
     ..."-c:v libx264 -preset slow -crf 24 -movflags +faststart".split(" "),
     mp4,
   );
+  rmSync(shot, { recursive: true, force: true });
   const gif = join(take, "demo.gif");
   const palette =
     "fps=12,scale=960:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=96:stats_mode=diff[p];" +

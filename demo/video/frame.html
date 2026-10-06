@@ -62,7 +62,8 @@
     position: absolute; inset: 0; background: var(--bg); display: flex; flex-direction: column;
     align-items: center; justify-content: center; gap: 26px;
   }
-  .end .name { display: flex; align-items: center; gap: 28px; font-size: 96px; font-weight: 600; letter-spacing: -2px; }
+  /* The lockup (DESIGN.md): the name's baseline on the mark's bottom edge, a gap of 0.4 × the mark. */
+  .end .name { display: flex; align-items: baseline; gap: 44px; font-size: 96px; font-weight: 500; }
   .end .url { font-size: 40px; color: var(--fg); }
   .end .gh { font: 30px "Google Sans Code", monospace; color: var(--fg2); }
   .end .agents { font-size: 28px; color: var(--fg3); }
@@ -73,7 +74,7 @@
 <div class="caption" id="caption"></div>
 <div class="end" id="end">
   <div class="name">
-    <svg width="120" height="120" viewBox="18 18 72 72" aria-hidden="true">
+    <svg width="110" height="110" viewBox="18 18 72 72" aria-hidden="true">
       <circle fill="#f1f1f1" cx="54" cy="148" r="80" />
       <rect fill="#f1f1f1" x="51.75" y="18" width="4.5" height="52" />
       <rect fill="#f5a83b" x="48.5" y="34" width="11" height="20" rx="5.5" />

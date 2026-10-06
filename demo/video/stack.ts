@@ -36,6 +36,8 @@ export function cli(dir: string, home: keyof typeof MACHINES, args: string[], cw
     "PI_SESSION_ID",
     "PI_SESSION_FILE",
     "STARBRIDGE_OPENCODE_SESSION",
+    "CODEX_HOME",
+    "STARBRIDGE_CODEXBAR_API",
   ])
     delete env[name];
   return Bun.spawn(["bun", join(ROOT, "cli/src/main.ts"), ...args], {
@@ -114,6 +116,8 @@ if (import.meta.main) {
           decompress: false,
           body: req.body,
           redirect: "manual",
+          // A long-poll the browser drops ends upstream too.
+          signal: req.signal,
         });
       },
     });
@@ -149,6 +153,7 @@ if (import.meta.main) {
     const agent = cli(dir, home, ["agent", ...quota, "--interval", "1m"]);
     process.on("exit", () => agent.kill());
   }
-  console.log(`demo stack: server ${server}, web ${web}, owner token ${OWNER_TOKEN}`);
+  const served = existsSync(join(standalone, "server.js")) ? `web ${web}` : "web app not built";
+  console.log(`demo stack: server ${server}, ${served}, owner token ${OWNER_TOKEN}`);
   await device.approveJoins(new AbortController().signal);
 }

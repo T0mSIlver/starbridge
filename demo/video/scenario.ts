@@ -101,7 +101,7 @@ if (import.meta.main) {
     await record.exited;
   };
   for (const signal of ["SIGINT", "SIGTERM"] as const)
-    process.on(signal, () => stop().finally(() => process.exit(130)));
+    process.on(signal, () => stop().finally(() => process.exit(signal === "SIGINT" ? 130 : 143)));
   try {
     const { question } = EVAL.question;
     // A notification left by an earlier take would be found at once, and the taps land early.
@@ -144,8 +144,10 @@ if (import.meta.main) {
       [0, e.notified, "Your agent needs a decision. You're away from your desk."],
       [e.notified, e.tapped, "It asks on your phone."],
       [e.tapped, e.running, "One tap. The answer goes back into the session."],
-      [e.running, e.end, "Runs show their progress there too."],
+      [e.running, e.end, "Runs show their progress there too (sped up 6×)."],
     ],
+    // The run takes a minute; its middle plays at 6×.
+    fast: [{ from: (agent.running ?? 0) + 1, to: (agent.ran ?? 0) - 0.5, rate: 6 }],
     panes: [agent],
   };
   writeFileSync(join(out, "events.json"), `${JSON.stringify(take, null, 2)}\n`);
