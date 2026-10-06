@@ -201,7 +201,17 @@ const V3 = "ALTER TABLE pairings ADD COLUMN refused TEXT;";
  * it runs well within the 30 s Caddy holds requests while the server restarts; a backfill runs in
  * the hourly sweep instead.
  */
-const MIGRATIONS = [V1, V2, V3];
+/**
+ * Snoozes (#571): `wake_at` keeps an item's `wakeAt` hint as sent, which clients check against
+ * its body; `wake_due` is the same time in UTC while its push is still to come.
+ */
+const V4 = `
+ALTER TABLE items ADD COLUMN wake_at TEXT;
+ALTER TABLE items ADD COLUMN wake_due TEXT;
+CREATE INDEX items_wake_due ON items (wake_due) WHERE wake_due IS NOT NULL;
+`;
+
+const MIGRATIONS = [V1, V2, V3, V4];
 
 export function openDb(path: string): Database {
   if (path !== ":memory:") mkdirSync(dirname(path), { recursive: true });

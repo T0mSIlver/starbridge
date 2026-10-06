@@ -41,5 +41,7 @@ console.log(
 process.on("SIGTERM", async () => {
   for (const w of Object.values(deps)) if (w instanceof Waiters) w.close();
   await server.stop();
+  // Pushes already queued go out first: a snoozed question's return is pushed once (#571).
+  await Promise.race([deps.push.idle(), Bun.sleep(10_000)]);
   process.exit(0);
 });

@@ -1,5 +1,11 @@
 import type { Database } from "bun:sqlite";
-import { ITEM_KINDS, ItemKind, PERMISSION_TTL_MS, SealedItem } from "@starbridge/protocol";
+import {
+  ITEM_KINDS,
+  ItemKind,
+  PERMISSION_TTL_MS,
+  SealedItem,
+  SNOOZE_MAX_MS,
+} from "@starbridge/protocol";
 import { type Context, Hono } from "hono";
 import { fail, memberOf, recheck, requireCaller } from "../auth";
 import { nextSeq } from "../db";
@@ -14,7 +20,14 @@ type KindRule = {
   signer: "device" | "machine";
   re?: { field: string; kinds: readonly ItemKind[]; open?: true };
   updates?: true;
+  toDevices?: true;
+  wake?: string;
 };
+
+/** How far a device's clock may run ahead of the server's when it names a time. */
+const CLOCK_SKEW_MS = 5 * 60_000;
+/** Snoozes the server keeps per decision; each owner tap adds one (#571). */
+const SNOOZES_PER_DECISION = 50;
 
 /** How long after it arrives an item can still be answered; unlisted kinds have no limit. */
 const ANSWERABLE_FOR: Partial<Record<ItemKind, number>> = { permission: PERMISSION_TTL_MS };
@@ -30,10 +43,16 @@ const ANSWERABLE = ItemKind.options.flatMap((k) => {
   const rule: KindRule = ITEM_KINDS[k];
   return rule.signer === "device" && rule.re ? [...rule.re.kinds] : [];
 });
-/** Kinds devices list: what machines sign. */
+/** Kinds devices list: what machines sign, by default, and what devices seal to each other. */
 const DEVICE_KINDS = ItemKind.options.filter((k) => ITEM_KINDS[k].signer === "machine");
+const DEVICE_LISTABLE = [
+  ...DEVICE_KINDS,
+  ...ItemKind.options.filter((k) => (ITEM_KINDS[k] as KindRule).toDevices),
+];
 /** Kinds a machine's inbox (`/answers`) holds: what devices sign. */
 const MACHINE_KINDS = ItemKind.options.filter((k) => ITEM_KINDS[k].signer === "device");
+/** What a machine reads when it names no kinds: the kinds there were before snoozes (#571). */
+const MACHINE_DEFAULT: ItemKind[] = ["answer", "permission-answer"];
 
 interface Row {
   seq: number;
@@ -41,6 +60,7 @@ interface Row {
   kind: SealedItem["kind"];
   from_id: string;
   re: string | null;
+  wake_at: string | null;
   received_at: string;
   answered_at: string | null;
   to_id: string;
@@ -64,6 +84,7 @@ function stored(r: Row): Stored {
       id: r.id,
       from: r.from_id,
       ...(r.re ? { re: r.re } : {}),
+      ...(r.wake_at ? { wakeAt: r.wake_at } : {}),
       boxes: [{ to: r.to_id, box: r.box }],
     },
     cursor: String(r.seq),
@@ -72,7 +93,7 @@ function stored(r: Row): Stored {
   };
 }
 
-const SELECT = `SELECT i.seq, i.id, i.kind, i.from_id, i.re, i.received_at, i.answered_at, b.to_id, b.box
+const SELECT = `SELECT i.seq, i.id, i.kind, i.from_id, i.re, i.wake_at, i.received_at, i.answered_at, b.to_id, b.box
   FROM items i JOIN boxes b ON b.account_id = i.account_id AND b.item_id = i.id`;
 
 function after(raw: string | undefined): number {
@@ -128,13 +149,14 @@ function watched(c: Context<Env>, account: string) {
 }
 
 /** What a push carries: the recipient's own box when it fits, else the id to fetch. */
-function pushPayload(item: SealedItem, to: string, limit: number): string {
+export function pushPayload(item: SealedItem, to: string, limit: number): string {
   const head = {
     v: 1,
     kind: item.kind,
     id: item.id,
     from: item.from,
     ...(item.re ? { re: item.re } : {}),
+    ...(item.wakeAt ? { wakeAt: item.wakeAt } : {}),
   };
   const box = item.boxes.find((b) => b.to === to)?.box;
   const full = JSON.stringify({ ...head, box });
@@ -175,6 +197,16 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
         ? limits.quotaBytes
         : limits.itemBytes;
   if (size > most) fail(413, "too-large", `a ${item.kind}'s boxes hold at most ${most} bytes`);
+  // A snooze names when the server pushes it again (#571): within 7 days of now.
+  let wakeDue: string | null = null;
+  if (rule.wake) {
+    if (item.wakeAt === undefined) fail(400, "bad-schema", `a ${item.kind} needs wakeAt`);
+    const due = Date.parse(item.wakeAt);
+    if (due > Date.now() + SNOOZE_MAX_MS + CLOCK_SKEW_MS)
+      fail(400, "bad-schema", `wakeAt is at most ${SNOOZE_MAX_MS / 86_400_000} days ahead`);
+    if (due > Date.now()) wakeDue = new Date(due).toISOString();
+  } else if (item.wakeAt !== undefined)
+    fail(400, "bad-schema", `${item.kind} items carry no wakeAt`);
   // Answers are small and the owner's; only machines' items spend the byte budget, so a looping
   // machine never blocks an answer. A post is refused once the budget is spent, and only a
   // stored one spends it.
@@ -187,13 +219,28 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
   let answered: { kind: ItemKind; receivedAt: string } | undefined;
   // Devices to push to: all of them, or for a re-sealed item those it was not sealed to yet.
   let pushTo = to;
+  // The machine a device's item goes to.
+  let machine = "";
+  // A waiting flip on a snoozed decision pushes nothing: the owner said not now (#571).
+  let snoozed = false;
   const seq = db.transaction(() => {
     recheck(c);
     const now = new Date();
     if (fromDevice) {
-      const machine = to[0] as string;
-      if (to.length !== 1 || !activeMember(db, caller.account, machine, "machine"))
-        fail(400, "unknown-recipient", `a ${item.kind} goes to the one machine that asked`);
+      // To the one machine that asked; a `toDevices` kind to every active device as well.
+      const machines = to.filter((id) => activeMember(db, caller.account, id, "machine"));
+      const devices = rule.toDevices
+        ? to.filter((id) => activeMember(db, caller.account, id, "device"))
+        : [];
+      if (machines.length !== 1 || machines.length + devices.length !== to.length)
+        fail(
+          400,
+          "unknown-recipient",
+          rule.toDevices
+            ? `a ${item.kind} goes to the machine that asked and to active devices`
+            : `a ${item.kind} goes to the one machine that asked`,
+        );
+      machine = machines[0] as string;
     } else {
       for (const id of to)
         if (!activeMember(db, caller.account, id, "device"))
@@ -218,18 +265,31 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
         const mine = db
           .query("SELECT 1 FROM boxes WHERE account_id = ? AND item_id = ? AND to_id = ?")
           .get(caller.account, item.re, me);
-        if (!target || target.from_id !== to[0] || !mine)
+        if (!target || target.from_id !== machine || !mine)
           fail(404, "not-found", `no such ${rule.re.kinds.join(" or ")} for this device`);
         if (target.answered_at) fail(409, "already-answered");
-        const ttl = ANSWERABLE_FOR[target.kind];
-        if (ttl !== undefined && now.getTime() > Date.parse(target.received_at) + ttl)
-          fail(409, "expired", `a ${target.kind} can be answered for ${ttl / 60_000} minutes`);
-        answered = { kind: target.kind, receivedAt: target.received_at };
-        answeredDevices = (
-          db
-            .query("SELECT to_id FROM boxes WHERE account_id = ? AND item_id = ?")
-            .all(caller.account, item.re) as { to_id: string }[]
-        ).map((r) => r.to_id);
+        if (rule.wake && item.wakeAt !== undefined) {
+          // Its return must come before the sweep drops the question it brings back.
+          const drops = Date.parse(target.received_at) + c.var.config.limits.staleRetention;
+          if (Date.parse(item.wakeAt) >= drops)
+            fail(400, "bad-schema", "the question is dropped before wakeAt");
+          const { n } = db
+            .query("SELECT COUNT(*) AS n FROM items WHERE account_id = ? AND kind = ? AND re = ?")
+            .get(caller.account, item.kind, item.re) as { n: number };
+          if (n >= SNOOZES_PER_DECISION)
+            fail(409, "too-many-items", `a decision keeps at most ${SNOOZES_PER_DECISION} snoozes`);
+        }
+        if (!rule.re.open) {
+          const ttl = ANSWERABLE_FOR[target.kind];
+          if (ttl !== undefined && now.getTime() > Date.parse(target.received_at) + ttl)
+            fail(409, "expired", `a ${target.kind} can be answered for ${ttl / 60_000} minutes`);
+          answered = { kind: target.kind, receivedAt: target.received_at };
+          answeredDevices = (
+            db
+              .query("SELECT to_id FROM boxes WHERE account_id = ? AND item_id = ?")
+              .all(caller.account, item.re) as { to_id: string }[]
+          ).map((r) => r.to_id);
+        }
       } else {
         if (!target || target.from_id !== me)
           fail(404, "not-found", `no such ${rule.re.kinds.join(" or ")} from this machine`);
@@ -241,6 +301,14 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
           // item, re-posted under its id, until the item is answered.
           if (target.answered_at) fail(409, "already-answered");
           if (other) fail(409, "duplicate-id", `${item.re} has a ${item.kind} under another id`);
+          // By the snooze that came last; the devices order them by their signed `at`.
+          const last = db
+            .query(
+              `SELECT wake_due FROM items WHERE account_id = ? AND kind = 'snooze' AND re = ?
+               ORDER BY seq DESC LIMIT 1`,
+            )
+            .get(caller.account, item.re) as { wake_due: string | null } | null;
+          snoozed = !!last?.wake_due;
         } else if (other) {
           // A machine's notice that one of its own items is over (a settled prompt, a withdrawn
           // decision): one each.
@@ -307,17 +375,34 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
     const iso = now.toISOString();
     const seq = nextSeq(db);
     db.query(
-      "INSERT INTO items (seq, account_id, id, kind, from_id, re, received_at, size) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-    ).run(seq, caller.account, item.id, item.kind, me, item.re ?? null, receivedAt, charged);
+      `INSERT INTO items (seq, account_id, id, kind, from_id, re, wake_at, wake_due, received_at, size)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      seq,
+      caller.account,
+      item.id,
+      item.kind,
+      me,
+      item.re ?? null,
+      item.wakeAt ?? null,
+      wakeDue,
+      receivedAt,
+      charged,
+    );
     const box = db.query("INSERT INTO boxes (account_id, item_id, to_id, box) VALUES (?, ?, ?, ?)");
     for (const b of item.boxes) box.run(caller.account, item.id, b.to, b.box);
     // Marks the referred item answered and moves it past every cursor, so devices listing after
     // their cursor see it again, answered. A settled notice after a device's answer changes
     // nothing: the prompt was already answered. An open kind's note closes nothing.
-    if (item.re !== undefined && !rule.re?.open)
+    if (item.re !== undefined && !rule.re?.open) {
       db.query(
         "UPDATE items SET answered_at = ?, seq = ? WHERE account_id = ? AND id = ? AND answered_at IS NULL",
       ).run(iso, nextSeq(db), caller.account, item.re);
+      // Answered or settled, a snoozed decision does not come back.
+      db.query(
+        "UPDATE items SET wake_due = NULL WHERE account_id = ? AND kind = 'snooze' AND re = ?",
+      ).run(caller.account, item.re);
+    }
     return seq;
   })();
   if (!fromDevice) c.var.limiter.retryAfter(budget, ...limits.postedBytes, size);
@@ -330,10 +415,18 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
   }
   if (item.kind === "quota") c.var.quotas.wake(caller.account);
   if (fromDevice) {
-    c.var.answers.wake(`${caller.account}/${to[0]}`);
-    const payload = JSON.stringify({ v: 1, kind: "answered", id: item.re });
-    c.var.push.notify(caller.account, answeredDevices, () => payload);
-  } else if (!item.quiet) {
+    c.var.answers.wake(`${caller.account}/${machine}`);
+    if (rule.re?.open) {
+      // A note for every device (a snooze): the others hide the decision, or show it again.
+      const devices = to.filter((id) => id !== machine && id !== me);
+      c.var.push.notify(caller.account, devices, (device) =>
+        pushPayload(item, device, config.pushInlineLimit),
+      );
+    } else {
+      const payload = JSON.stringify({ v: 1, kind: "answered", id: item.re });
+      c.var.push.notify(caller.account, answeredDevices, () => payload);
+    }
+  } else if (!item.quiet && !snoozed) {
     // Browsers expect each Web Push to show a notification and drop subscriptions that keep
     // showing none, so quota snapshots and runs, which show none there, skip Web Push; pages
     // fetch them instead.
@@ -350,8 +443,8 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
 itemRoutes.get("/items", requireCaller("paired-device"), (c) => {
   const raw = c.req.query("kind");
   const kinds = raw === undefined ? DEVICE_KINDS : raw.split(",");
-  if (kinds.some((k) => !(DEVICE_KINDS as string[]).includes(k)))
-    fail(400, "bad-request", `kind is a comma-separated list of ${DEVICE_KINDS.join(", ")}`);
+  if (kinds.some((k) => !(DEVICE_LISTABLE as string[]).includes(k)))
+    fail(400, "bad-request", `kind is a comma-separated list of ${DEVICE_LISTABLE.join(", ")}`);
   const from = after(c.req.query("after"));
   const caller = c.var.caller;
   const open = c.req.query("open") === "1";
@@ -386,7 +479,11 @@ itemRoutes.get("/answers", requireCaller("machine"), async (c) => {
   const caller = c.var.caller;
   const me = memberOf(caller);
   const from = after(c.req.query("after"));
-  const fetch = () => list(c.var.db, caller.account, me, MACHINE_KINDS, from);
+  const raw = c.req.query("kinds");
+  const kinds = raw === undefined ? MACHINE_DEFAULT : raw.split(",");
+  if (kinds.some((k) => !(MACHINE_KINDS as string[]).includes(k)))
+    fail(400, "bad-request", `kinds is a comma-separated list of ${MACHINE_KINDS.join(", ")}`);
+  const fetch = () => list(c.var.db, caller.account, me, kinds, from);
   // A machine that passes what it knows hears at once when the directory grew past it or a
   // device asked for fresh quotas since.
   const known = c.req.query("directory");
