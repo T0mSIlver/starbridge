@@ -588,12 +588,14 @@ fun DecisionSheet(decision: Decision, now: Instant, onAnswer: (String, String?, 
                     }
                 }
             }
-            if (open) {
+            val reply = decision.replies && decision.options.isNotEmpty() && decision.answerIn == null && !paired && !replying
+            val done = decision.answerIn != null && decision.takesDone
+            if (open && (reply || done || onSnooze != null)) {
                 // Quiet, so the options stay the answer: a typed reply (#201), Done for a page's
                 // answer (#539), and putting it off (#571).
                 Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s1), verticalAlignment = Alignment.CenterVertically) {
-                    if (decision.replies && decision.options.isNotEmpty() && decision.answerIn == null && !paired && !replying) Quiet("Reply") { replying = true }
-                    if (decision.answerIn != null && decision.takesDone) Done(sending != null) { send(null, null) }
+                    if (reply) Quiet("Reply") { replying = true }
+                    if (done) Done(sending != null) { send(null, null) }
                     if (onSnooze != null) Quiet(if (until != null) "Snooze again" else "Snooze", sending == null) { snoozing = !snoozing }
                     if (onSnooze != null && until != null) Quiet("Back now", sending == null) { onSnooze(Instant.now()) }
                 }

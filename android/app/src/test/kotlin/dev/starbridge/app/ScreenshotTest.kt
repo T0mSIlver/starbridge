@@ -178,7 +178,8 @@ class ScreenshotTest(private val dark: Boolean) {
     // Sheets open over whatever page is up; the mockups show them over Quotas.
     @Composable
     private fun QuestionSheet(d: Decision) {
-        Sheet({ QuotasScreen(fake.windows, now) }) { DecisionSheet(d, now, { _, _, _ -> }, Replies(rememberDrafts(), emptyMap())) }
+        // As the app shows it: Snooze beside Reply on an open question (#571).
+        Sheet({ QuotasScreen(fake.windows, now) }) { DecisionSheet(d, now, { _, _, _ -> }, Replies(rememberDrafts(), emptyMap()), onSnooze = {}) }
     }
 
     @Test fun sheetQuestion() = capture("sheet-question") { QuestionSheet(fake.decisions.first { it.id == "d1" }) }

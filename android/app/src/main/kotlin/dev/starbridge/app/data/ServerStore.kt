@@ -1183,6 +1183,9 @@ class ServerStore(
         run(showBusy = false) {
             withheld()?.let { notice.value = "Not snoozed: $it"; return@run }
             val d = saved.decisions.find { it.body.id == id } ?: return@run
+            // Fresh, as the server checks the recipients against its own: a device removed
+            // elsewhere since the last read would make it refuse the snooze.
+            syncDirectory()
             val dir = directory ?: return@run
             val machine = dir.members[d.from]?.takeIf { it.active }?.member
             if (machine == null) {
