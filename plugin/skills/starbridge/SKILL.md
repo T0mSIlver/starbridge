@@ -60,8 +60,7 @@ Now: checkouts fail for those 4 minutes, at peak hour.' \
 
 Quote text in single quotes, since double quotes expand `$` and backticks,
 and write apostrophes as ’. Other flags: `--image` (up to 4 PNG or JPEG),
-`--link` (up to 4 HTTPS URLs), `--waiting`, `--answer-in`. Never set `--default`: with no
-answer, the card waits. `ask` prints the decision id (`d_Xk3…`) and how the
+`--link` (up to 4 HTTPS URLs), `--waiting`, `--answer-in`. `ask` prints the decision id (`d_Xk3…`) and how the
 answer comes back.
 
 ## After you post

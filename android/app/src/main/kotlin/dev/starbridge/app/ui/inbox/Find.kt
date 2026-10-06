@@ -121,13 +121,13 @@ fun FindScreen(
     val needs = remember(words, decisions, prompts, now) {
         if (words.isEmpty()) emptyList()
         else prompts.filter { it.waiting(now) && matches(words, it.texts()) } +
-            openQuestions(decisions, now).filter { matches(words, it.texts()) }
+            openQuestions(decisions).filter { matches(words, it.texts()) }
     }
     val past = remember(words, decisions, prompts, now) {
         if (words.isEmpty()) emptyList()
-        else History(decisions.filterNot { it.isOpen(now) }, prompts.filterNot { it.waiting(now) }, now).rows.filter { (at, it) ->
+        else History(decisions.filterNot { it.isOpen }, prompts.filterNot { it.waiting(now) }, now).rows.filter { (at, it) ->
             when (it) {
-                is Decision -> matches(words, it.texts() + outcome(it, at))
+                is Decision -> matches(words, it.texts() + outcome(it))
                 else -> matches(words, (it as Prompt).texts() + closedHow(it))
             }
         }
@@ -192,7 +192,7 @@ private fun LazyListScope.results(key: String, name: String, countColor: Color, 
         val closed = key == "history"
         when (it) {
             is Decision -> HistoryRow(
-                it.source, it.question, false, if (closed) closedHow(it, at) else "", shape, words,
+                it.source, it.question, false, if (closed) closedHow(it) else "", shape, words,
                 ground = if (!closed && it.waiting) promptGround() else MaterialTheme.colorScheme.surfaceContainer,
                 time = if (closed) "" else timeSlot(it.waitingSince, it.createdAt, now),
                 clock = !closed && it.waiting,

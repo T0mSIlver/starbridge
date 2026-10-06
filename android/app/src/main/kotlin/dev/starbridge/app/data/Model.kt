@@ -30,8 +30,7 @@ data class Image(val data: String, val width: Int, val height: Int, val alt: Str
 data class Link(val url: String, val title: String? = null)
 
 /**
- * A question an agent needs the owner to answer. [options] is empty for a free-text answer;
- * [default] says what the agent does if nobody answers, by [defaultAt] when set.
+ * A question an agent needs the owner to answer. [options] is empty for a free-text answer.
  */
 data class Decision(
     val id: String,
@@ -39,8 +38,6 @@ data class Decision(
     val context: String,
     val options: List<String>,
     val recommended: String?,
-    val default: String?,
-    val defaultAt: Instant?,
     val source: Source,
     val createdAt: Instant,
     /** claude-code or codex, when the machine says. */
@@ -64,11 +61,8 @@ data class Decision(
     /** The machine takes a typed reply in place of an option (#201). */
     val replies: Boolean = false,
 ) {
-    /**
-     * Waiting for the owner. A decision answered on another page also stops waiting at its default
-     * time: no answer reaches Starbridge, and the agent applies its default then.
-     */
-    fun isOpen(now: Instant) = answeredAt == null && answer == null && !lapsed(now)
+    /** Waiting for the owner. */
+    val isOpen: Boolean get() = answeredAt == null && answer == null
 
     /**
      * The agent's proposal, shown as "Default": the option it named, else its first (#191). Never
@@ -78,9 +72,6 @@ data class Decision(
 
     /** The options, the proposal first. */
     val ordered: List<String> get() = options.sortedByDescending { it == proposal }
-
-    /** Answered elsewhere, and its default time passed before the agent settled it. */
-    fun lapsed(now: Instant) = answerIn != null && answeredAt == null && defaultAt?.let { !it.isAfter(now) } == true
 }
 
 /** A wider allow a prompt offers: "session" or "project", its label and the exact rule it adds. */
@@ -265,7 +256,6 @@ sealed interface Phase {
      */
     data class JoiningByDigits(val digits: String?, val matched: Boolean = false) : Phase
     /** The first device shows the recovery key once. */
-    /** [shown]: a recovery key, or an older account's words. */
     data class RecoveryKey(val shown: String) : Phase
     data object Ready : Phase
 }

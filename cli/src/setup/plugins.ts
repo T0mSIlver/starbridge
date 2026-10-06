@@ -1,8 +1,5 @@
-/**
- * Setup's Claude Code step: the Starbridge marketplace and its two plugins, at user scope, and
- * the manual installs they replace (a copied mod, a copied skill, the CLAUDE.md rule).
- */
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+/** Setup's Claude Code step: the Starbridge marketplace and its two plugins, at user scope. */
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { failure, run, type Sys, which } from "./sys";
 
@@ -219,72 +216,4 @@ export function removeAllowRules(sys: Sys): boolean {
   s.permissions.allow = allow.filter((r) => !ALLOW_RULES.includes(r));
   writeSettings(sys, s);
   return true;
-}
-
-/** A Starbridge install made by hand that the plugins replace. */
-export interface Legacy {
-  what: string;
-  remove: () => void;
-}
-
-const RULE = /use the `starbridge` skill/;
-
-/** Whether `dir` holds the Starbridge mod (its manifest names it `starbridge`). */
-function isStarbridgeMod(dir: string): boolean {
-  try {
-    const m = JSON.parse(readFileSync(join(dir, ".claude-plugin/plugin.json"), "utf8")) as {
-      name?: string;
-    };
-    return m.name === "starbridge" || m.name === "starbridge-mod";
-  } catch {
-    return false;
-  }
-}
-
-export function legacyInstalls(sys: Sys): Legacy[] {
-  const found: Legacy[] = [];
-  const dir = claudeDir(sys);
-  const settings = readSettings(sys);
-  const dirs = settings?.env?.CLAUDE_CODE_PLUGIN_DIRS;
-  if (dirs) {
-    const all = dirs.split(":");
-    const ours = all.filter(isStarbridgeMod);
-    if (ours.length > 0)
-      found.push({
-        what: `${ours.join(", ")} in CLAUDE_CODE_PLUGIN_DIRS (${settingsPath(sys)})`,
-        remove: () => {
-          const s = readSettings(sys);
-          if (!s?.env?.CLAUDE_CODE_PLUGIN_DIRS) return;
-          const rest = s.env.CLAUDE_CODE_PLUGIN_DIRS.split(":").filter((d) => !ours.includes(d));
-          if (rest.length > 0) s.env.CLAUDE_CODE_PLUGIN_DIRS = rest.join(":");
-          else delete s.env.CLAUDE_CODE_PLUGIN_DIRS;
-          writeSettings(sys, s);
-        },
-      });
-  }
-  const mod = join(dir, "mods/starbridge");
-  if (existsSync(mod) && isStarbridgeMod(mod))
-    found.push({
-      what: `the copied mod in ${mod}`,
-      remove: () => rmSync(mod, { recursive: true, force: true }),
-    });
-  const skill = join(dir, "skills/starbridge");
-  if (existsSync(join(skill, "SKILL.md")))
-    found.push({
-      what: `the copied skill in ${skill}`,
-      remove: () => rmSync(skill, { recursive: true, force: true }),
-    });
-  const md = join(dir, "CLAUDE.md");
-  try {
-    const text = readFileSync(md, "utf8");
-    if (text.split("\n").some((l) => RULE.test(l)))
-      found.push({
-        what: `the starbridge skill rule in ${md}`,
-        remove: () => {
-          const lines = readFileSync(md, "utf8").split("\n");
-          writeFileSync(md, lines.filter((l) => !RULE.test(l)).join("\n"));
-        },
-      });
-  } catch {}
-  return found;
 }

@@ -200,10 +200,6 @@ data class SealedItem(
 
 // --- Decisions and answers ---------------------------------------------------
 
-/** A decision's optional default (schemas.ts); `at` comes only from machines before 2026-10-05. */
-@Serializable
-data class DecisionDefault(val action: String, val at: String? = null)
-
 val MACHINE_KINDS = setOf("server", "desktop", "laptop", "cloud")
 /**
  * An agent as items carry it (AgentName in schemas.ts): a known one or one a newer machine sends,
@@ -290,7 +286,6 @@ data class Decision(
     val context: String,
     val options: List<String>,
     val recommended: String? = null,
-    @SerialName("default") val fallback: DecisionDefault? = null,
     /** claude-code, codex, pi, or a newer agent; older machines omit it. */
     val agent: String? = null,
     val source: Source,
@@ -315,7 +310,6 @@ data class Decision(
         len(context, 0, 8000, "context")
         schema(options.size <= 4, "options")
         options.forEach { len(it, 1, 100, "option") }
-        fallback?.let { len(it.action, 1, 300, "default.action") }
         agent?.let { schema(AGENT_NAME.matches(it), "agent") }
         source.check()
         images?.let { schema(it.size <= 4, "images"); it.forEach(DecisionImage::check) }

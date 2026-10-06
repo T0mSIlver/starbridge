@@ -1,8 +1,5 @@
-/**
- * The agent's user service: a systemd user unit on Linux, a launchd agent on macOS. Also finds
- * the hand-written `starbridge quota push` units that the agent replaces.
- */
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+/** The agent's user service: a systemd user unit on Linux, a launchd agent on macOS. */
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { delimiter, dirname, join } from "node:path";
 import { failure, run, type Sys } from "./sys";
 
@@ -258,56 +255,4 @@ export async function lingering(sys: Sys): Promise<boolean | undefined> {
 export async function enableLinger(sys: Sys): Promise<string | undefined> {
   const r = await run(sys, "loginctl", ["enable-linger"], { timeoutMs: 30_000 });
   return r?.code === 0 ? undefined : failure(r);
-}
-
-/** A unit someone wrote by hand to run `starbridge quota push`, which the agent replaces. */
-export interface LegacyUnit {
-  name: string;
-  path: string;
-  providers: string[];
-  interval?: string;
-  codexbar?: string;
-}
-
-export function legacyUnits(sys: Sys): LegacyUnit[] {
-  if (kind(sys) !== "systemd") return [];
-  const dir = unitDir(sys);
-  let files: string[];
-  try {
-    files = readdirSync(dir).filter((f) => f.endsWith(".service") && f !== UNIT);
-  } catch {
-    return [];
-  }
-  return files.flatMap((name) => {
-    const path = join(dir, name);
-    let text: string;
-    try {
-      text = readFileSync(path, "utf8");
-    } catch {
-      return [];
-    }
-    const exec = /^ExecStart=(.*)$/m.exec(text)?.[1];
-    if (!exec || !/starbridge(\.js)?\s+quota\s+push/.test(exec)) return [];
-    const words = exec.split(/\s+/);
-    const flag = (f: string) =>
-      words.flatMap((w, i) => (w === f && words[i + 1] ? [words[i + 1] as string] : []));
-    const interval = flag("--interval")[0];
-    const codexbar = flag("--codexbar")[0];
-    return [
-      {
-        name,
-        path,
-        providers: flag("--provider"),
-        ...(interval ? { interval } : {}),
-        ...(codexbar ? { codexbar: codexbar.replace(/^%h/, sys.home) } : {}),
-      },
-    ];
-  });
-}
-
-/** Stops, disables and removes a legacy unit. */
-export async function removeLegacy(sys: Sys, unit: LegacyUnit): Promise<void> {
-  await stopUnit(sys, unit.name);
-  rmSync(unit.path, { force: true });
-  await systemctl(sys, "daemon-reload");
 }

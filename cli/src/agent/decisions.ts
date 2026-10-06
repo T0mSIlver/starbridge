@@ -95,7 +95,7 @@ export class Decisions implements Feature {
       handle: async (req: { body: unknown; signal: AbortSignal }) => {
         const b = (req.body ?? {}) as { id?: unknown; session?: unknown; wait?: unknown };
         const id = typeof b.id === "string" ? b.id : undefined;
-        // Clients from before `session` take any session's answer, as they did.
+        // Without `session`, any session's answer.
         const from = typeof b.session === "string" ? b.session : undefined;
         const asked = id ? this.ctx.store.state().asked[id] : undefined;
         if (id && !asked)

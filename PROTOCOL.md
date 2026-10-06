@@ -243,6 +243,13 @@ releases in use, and keeps a minimum release per client name: below it, any rout
 `{error: "client-too-old", detail, client, minimum}`, and the client asks its owner to update. A
 request without the header, or with one the server cannot read, is served.
 
+Every request names its client and release in `starbridge-client: <name>/<version>`, `name`
+one of `cli`, `android`, `web` and `mod`, `version` MAJOR.MINOR.PATCH with an optional
+pre-release, which comes before its release (`cli/1.0.0`, `android/1.2.0-rc.1`). The server counts the
+releases in use, and keeps a minimum release per client name: below it, any route answers 426
+`{error: "client-too-old", detail, client, minimum}`, and the client asks its owner to update. A
+request without the header, or with one the server cannot read, is served.
+
 ### Auth
 
 - **Devices** sign in with GitHub (hosted) or the owner token from the server's environment

@@ -147,7 +147,7 @@ class ScreenshotTest(private val dark: Boolean) {
         Phone(Tab.Inbox, 2) { InboxScreen(listOf(fake.screenshot) + fake.decisions.filter { it.id == "d3" }, now, decisionActions) }
     }
 
-    @Test fun inboxEmpty() = capture("inbox-empty") { Phone(Tab.Inbox, 0) { InboxScreen(fake.decisions.filterNot { it.isOpen(now) }, now, decisionActions, promptActions = promptActions) } }
+    @Test fun inboxEmpty() = capture("inbox-empty") { Phone(Tab.Inbox, 0) { InboxScreen(fake.decisions.filterNot { it.isOpen }, now, decisionActions, promptActions = promptActions) } }
 
     // Runs as they end, and text at 200%.
     @Test fun inboxEnded() = capture("inbox-ended") { Phone(Tab.Inbox, 0) { InboxScreen(emptyList(), now, decisionActions, runs = fake.endedRuns) } }

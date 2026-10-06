@@ -67,9 +67,7 @@ class Prefs @Inject constructor(@ApplicationContext context: Context) {
 
     private val _inbox = MutableStateFlow(
         InboxView(
-            // "Group by machine" was a switch before grouping by waiting; it carries over.
-            Grouping.entries.find { it.name == prefs.getString(GROUPING, null) }
-                ?: if (prefs.getBoolean(BY_MACHINE, false)) Grouping.Machine else Grouping.None,
+            Grouping.entries.find { it.name == prefs.getString(GROUPING, null) } ?: Grouping.None,
             prefs.getBoolean(HISTORY_OPEN, false),
             CardButtons.entries.find { it.name == prefs.getString(BUTTONS, null) } ?: CardButtons.Always,
             prefs.getBoolean(REMIND_OFF, true),
@@ -78,7 +76,7 @@ class Prefs @Inject constructor(@ApplicationContext context: Context) {
     val inbox: StateFlow<InboxView> = _inbox
 
     fun setInbox(value: InboxView) {
-        prefs.edit().putString(GROUPING, value.grouping.name).remove(BY_MACHINE).putBoolean(HISTORY_OPEN, value.historyOpen).putString(BUTTONS, value.buttons.name).putBoolean(REMIND_OFF, value.remindOff).apply()
+        prefs.edit().putString(GROUPING, value.grouping.name).putBoolean(HISTORY_OPEN, value.historyOpen).putString(BUTTONS, value.buttons.name).putBoolean(REMIND_OFF, value.remindOff).apply()
         _inbox.value = value
     }
 
@@ -106,7 +104,6 @@ class Prefs @Inject constructor(@ApplicationContext context: Context) {
         const val CLOCK = "clock"
         const val QUOTA = "quota"
         const val QUOTA_SHOWN = "quota-shown"
-        const val BY_MACHINE = "inbox-by-machine"
         const val GROUPING = "inbox-grouping"
         const val HISTORY_OPEN = "inbox-history-open"
         const val BUTTONS = "inbox-card-buttons"

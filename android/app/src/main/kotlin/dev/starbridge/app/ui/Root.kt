@@ -173,8 +173,7 @@ internal fun suiteType(): NavigationSuiteType {
 fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> Unit, opening: Flow<NavKey>) {
     val backStack = rememberNavBackStack(InboxKey)
     val now = now()
-    // An answer-in decision stops waiting at its default time, so count against the ticking clock.
-    val openDecisions = decisions.count { it.isOpen(now) }
+    val openDecisions = decisions.count { it.isOpen }
     // Shared by a decision's card and its detail, which are separate entries.
     val drafts = rememberDrafts()
     val host = Notices(notice, dismiss)
@@ -256,7 +255,7 @@ fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> U
                             // an item an agent waits on tick each second.
                             seconds(
                                 Run.shown(runs, Instant.now()).any { it.state(Instant.now()) in LIVE_RUNS } ||
-                                    decisions.any { it.waiting && it.isOpen(Instant.now()) } || prompts.any { it.waiting(Instant.now()) },
+                                    decisions.any { it.waiting && it.isOpen } || prompts.any { it.waiting(Instant.now()) },
                                 now,
                             ),
                             DecisionActions(answer = vm::answer, open = { open(DecisionKey(it)) }),
@@ -282,7 +281,7 @@ fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> U
                             decisions,
                             prompts,
                             // As in the inbox: an item an agent waits on ticks each second.
-                            seconds(decisions.any { it.waiting && it.isOpen(Instant.now()) } || prompts.any { it.waiting(Instant.now()) }, now),
+                            seconds(decisions.any { it.waiting && it.isOpen } || prompts.any { it.waiting(Instant.now()) }, now),
                             openDecision = { open(DecisionKey(it)) },
                             openPrompt = { open(PromptKey(it)) },
                             onBack = { backStack.removeAt(backStack.lastIndex) },

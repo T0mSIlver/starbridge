@@ -103,9 +103,9 @@ fun shownPrompts(prompts: List<Prompt>, now: Instant): List<Prompt> = prompts
 fun <T> byMachine(runs: List<T>, needs: List<T>, machine: (T) -> String): List<List<T>> =
     (needs.map(machine) + runs.map(machine)).distinct().map { m -> runs.filter { machine(it) == m } + needs.filter { machine(it) == m } }
 
-/** Open questions as the feed lists them (SPEC, Design v2 inbox): those whose agent waits first, each oldest first. */
-fun openQuestions(decisions: List<Decision>, now: Instant): List<Decision> = decisions
-    .filter { it.isOpen(now) }
+/** Open questions as the feed lists them (SPEC, Clients): those whose agent waits first, each oldest first. */
+fun openQuestions(decisions: List<Decision>): List<Decision> = decisions
+    .filter { it.isOpen }
     .sortedWith(compareByDescending<Decision> { it.waiting }.thenBy { it.createdAt })
 
 private val pretty = Json { prettyPrint = true }
