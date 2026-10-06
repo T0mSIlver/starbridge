@@ -1607,6 +1607,21 @@ so the mod is the first path.
   survives the agent.
 - 2026-10-06. A permission whose input has two keys that read alike once redacted or escaped stays
   at the keyboard (#410, #357): devices would see one value for both keys.
+- 2026-10-06. Play Store listing and closed test (#421). The release workflow runs on the
+  self-hosted runners like the others, since GitHub stopped starting hosted-runner jobs on this
+  repo for billing. The first Play build is a dry-run `1.0.0-rc.1` bundle (versionCode 1000001,
+  below 1.0.0's 1000099), so the closed test's 14 days start without waiting for a tag. The
+  listing sells questions and runs, as the launch positioning says; its phone screenshots are
+  Roborazzi renders of the real screens on neutral data, at 1215 by 2160 (9:16), since the
+  suite's 1236 by 2676 shots exceed Play's 2:1 limit. The icon is the launcher's layers cropped
+  to the area the launcher shows; the feature graphic is the DESIGN.md lockup on the dark
+  ground. Category Productivity, contact privacy@starbridge.run, ages 18 and over, no ads.
+  Data safety declares the GitHub numeric id (User IDs), push tokens, Firebase installation ids
+  and device ids (Device or other IDs), and item metadata with the usage rows (App
+  interactions), none shared; content is exempt as end-to-end encrypted, which Play's rules
+  allow. Reviewers cannot pass GitHub's new-device email check, so they need a demo server
+  that signs in with an owner token and a demo machine that posts after their phone joins
+  (open).
 
 ## Encryption, with existing libraries
 
