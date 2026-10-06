@@ -13,6 +13,7 @@ import {
   toB64,
   verifyDirectory,
 } from "@starbridge/protocol";
+import { DEFAULT_LIMITS } from "../src/limits";
 import {
   type Account,
   append,
@@ -248,9 +249,10 @@ test("an approval naming another account is refused", async () => {
 test("pairing requests are rate-limited per IP", async () => {
   const s = await makeServer();
   const statuses: number[] = [];
-  for (let i = 0; i < 11; i++) statuses.push((await request(s, `m${i}`)).r.status);
-  expect(statuses.slice(0, 10).every((x) => x === 201)).toBe(true);
-  expect(statuses[10]).toBe(429);
+  const [n] = DEFAULT_LIMITS.pairingPosts;
+  for (let i = 0; i <= n; i++) statuses.push((await request(s, `m${i}`)).r.status);
+  expect(statuses.slice(0, n).every((x) => x === 201)).toBe(true);
+  expect(statuses[n]).toBe(429);
 });
 
 test("a second device pairs with its own session, which then belongs to it", async () => {

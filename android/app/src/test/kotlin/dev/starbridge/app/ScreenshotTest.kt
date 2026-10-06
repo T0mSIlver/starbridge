@@ -152,6 +152,9 @@ class ScreenshotTest(private val dark: Boolean) {
 
     @Test fun inboxEmpty() = capture("inbox-empty") { Phone(Tab.Inbox, 0) { InboxScreen(fake.decisions.filterNot { it.isOpen }, now, decisionActions, promptActions = promptActions) } }
 
+    // A new account before its first machine (#610).
+    @Test fun inboxNoMachine() = capture("inbox-no-machine") { Phone(Tab.Inbox, 0) { InboxScreen(emptyList(), now, decisionActions, noMachine = true) } }
+
     // Runs as they end, and text at 200%.
     @Test fun inboxEnded() = capture("inbox-ended") { Phone(Tab.Inbox, 0) { InboxScreen(emptyList(), now, decisionActions, runs = fake.endedRuns) } }
 

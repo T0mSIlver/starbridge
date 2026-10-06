@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { LiveServer } from "@starbridge/server/test-support";
 import { PNG } from "pngjs";
 import { proof, type SessionEvent, type Status } from "../src/agent/api";
-import { AgentClient, AgentError, Interrupted } from "../src/agent/client";
+import { AgentClient, AgentError, Interrupted, NoAgent } from "../src/agent/client";
 import { makeAgent } from "../src/agent/main";
 import type { Agent } from "../src/agent/server";
 import { run } from "../src/cli";
@@ -734,4 +734,12 @@ test("through the agent, wait --no-mark leaves the decision as it was (#603)", a
   expect(await server.opened("waiting")).toEqual([]);
   expect(await run(["wait", id, "--timeout", "1s"], c)).toBe(2);
   expect((await server.opened("waiting")).map((w) => w.state)).toEqual(["waiting"]);
+});
+
+test("a socket path too long for a unix socket: clients fall back and say why (#622)", async () => {
+  const ctx = await paired(server);
+  const socket = join(ctx.store.dir, "x".repeat(120), "agent.sock");
+  const call = new AgentClient(socket).call("GET", "/v1/status");
+  await expect(call).rejects.toBeInstanceOf(NoAgent);
+  await expect(call).rejects.toThrow("too long for a unix socket");
 });

@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
 import { track } from "@/lib/analytics";
 import { AGENTS_GUIDE, REPO, SELF_HOST } from "@/lib/links";
 import { Analytics } from "./Analytics";
+import { InstallBox } from "./InstallBox";
 import { Icon, Mark } from "./icons";
 import s from "./Landing.module.css";
 import ui from "./ui.module.css";
@@ -68,95 +68,8 @@ const FEATURES = [
   ["Permission prompts", "Allow or deny a command away from the keyboard. Off by default."],
 ] as const;
 
-/**
- * Each platform's ways to install: label, command, and the method the copy event reports, kept
- * as first named. npm is the same package on both.
- */
-const INSTALL = [
-  {
-    platform: "macOS / Linux",
-    methods: [
-      ["Script", "curl -fsSL https://starbridge.run/install.sh | sh", "Script"],
-      ["Homebrew", "brew install T0mSIlver/starbridge/starbridge", "Homebrew"],
-      ["npm", "npm i -g starbridge", "npm"],
-    ],
-  },
-  {
-    platform: "Windows",
-    methods: [
-      ["PowerShell", "irm https://starbridge.run/install.ps1 | iex", "Windows"],
-      ["npm", "npm i -g starbridge", "npm"],
-    ],
-  },
-] as const;
-
 /** Docs opened from the landing page; the docs pages count their own views. */
 const openDocs = (page: string) => () => track("open-docs", { page });
-
-function Install() {
-  const [at, setAt] = useState(0);
-  const [way, setWay] = useState(0);
-  const [copied, setCopied] = useState(false);
-  const platform = INSTALL[at] ?? INSTALL[0];
-  const [, cmd, method] = platform.methods[way] ?? platform.methods[0];
-  const onCopied = () => track("copy-install", { method });
-  return (
-    <div className={s.install}>
-      <div className={`t-meta ${s.tabs}`} role="tablist" aria-label="Install on">
-        {INSTALL.map(({ platform: label }, i) => (
-          <button
-            key={label}
-            type="button"
-            role="tab"
-            aria-selected={i === at}
-            className={s.tab}
-            onClick={() => {
-              setAt(i);
-              setWay(0);
-              setCopied(false);
-            }}
-          >
-            {label}
-          </button>
-        ))}
-        <button
-          type="button"
-          className={s.copy}
-          aria-label={copied ? "Copied" : "Copy"}
-          onClick={async () => {
-            try {
-              await navigator.clipboard.writeText(cmd);
-              setCopied(true);
-              onCopied();
-            } catch {}
-          }}
-        >
-          <Icon name={copied ? "check" : "copy"} size={16} />
-        </button>
-      </div>
-      <div className={`t-meta ${s.methods}`} role="tablist" aria-label="Install with">
-        {platform.methods.map(([label], i) => (
-          <button
-            key={label}
-            type="button"
-            role="tab"
-            aria-selected={i === way}
-            className={s.method}
-            onClick={() => {
-              setWay(i);
-              setCopied(false);
-            }}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-      <pre className={`t-code ${s.cmd}`} role="tabpanel" onCopy={onCopied}>
-        {cmd}
-      </pre>
-    </div>
-  );
-}
 
 function Section({
   title,
@@ -295,7 +208,7 @@ export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
           After Homebrew or npm, run <code className={s.inlineCode}>starbridge setup</code> to pair
           the machine and install the Claude Code plugin. The scripts run it for you.
         </p>
-        <Install />
+        <InstallBox counted />
         <p className={`t-meta ${s.faint}`}>
           Works best with Claude Code. Codex, Pi and opencode are supported.
         </p>

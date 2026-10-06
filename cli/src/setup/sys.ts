@@ -3,7 +3,7 @@ import { realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { createInterface } from "node:readline/promises";
 import type { Ctx } from "../context";
-import { inBunfs, killTree, resolveCommand, spawnable, which } from "../platform";
+import { inBunfs, killTree, resolveCommand, spawnable, which, whichAll } from "../platform";
 
 export { which };
 
@@ -165,4 +165,36 @@ export function failure(r: RunOut | null): string {
       .map((l) => l.trim())
       .filter(Boolean);
   return lines(r.stderr)[0] ?? lines(r.stdout).pop() ?? `exited ${r.code ?? "on a signal"}`;
+}
+
+/** How to remove the copy at `target`, a resolved path, by what installed it. */
+function removal(target: string): string {
+  const t = target.replaceAll("\\", "/");
+  if (t.includes("/Cellar/")) return "`brew uninstall starbridge` removes it";
+  if (t.includes("/.bun/")) return "`bun remove -g starbridge` removes it";
+  // npm links the package on Unix, and writes a `.cmd` shim into its prefix folder on Windows.
+  if (t.includes("/node_modules/") || /\/npm\/starbridge(\.cmd)?$/i.test(t))
+    return "`npm rm -g starbridge` removes it";
+  return "delete the file to remove it";
+}
+
+/**
+ * When more than one `starbridge` is on the PATH, such as an npm or Homebrew copy and the
+ * install script's, the lines that list them with their versions and how to remove each: the
+ * other copy goes stale, since `starbridge update` updates only the one it runs from (#621).
+ * Empty with one copy.
+ */
+export async function otherCopies(sys: Sys): Promise<string[]> {
+  const all = whichAll(sys.ctx.env, "starbridge");
+  if (all.length < 2) return [];
+  const self = real(sys.self.at(-1) as string);
+  const lines = [`${all.length} copies of starbridge are on the PATH; a terminal runs the first:`];
+  for (const path of all) {
+    const r = await run(sys, path, ["--version"], { timeoutMs: 10_000 });
+    const version = r?.code === 0 ? r.stdout.trim().replace(/^starbridge /, "") : "version unknown";
+    const target = real(path);
+    lines.push(`  ${path}: ${version}, ${target === self ? "this one" : removal(target)}`);
+  }
+  lines.push("Keep one: `starbridge update` updates only the copy it runs from.");
+  return lines;
 }

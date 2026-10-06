@@ -251,11 +251,15 @@ provider plugins add providers, not panels.
   500 per account, for a day after the last update.
 - **Permission answers** are refused 10 minutes after the prompt arrived, since the server cannot
   read its `expiresAt`.
-- **Pairings** (#309). Each address may hold 20 unapproved pairings (IPv6 counted per /48 on this
-  route), on top of 10 a minute; the server-wide cap of 20000 is the disk bound. Mobile carriers
-  that hand out /64s from one /48 share 20, a smaller blast radius than the whole server.
-  The server counts them in memory, as every per-address limit, so no address reaches the
-  database, and a restart resets the counts (#575).
+- **Pairings** (#309, #619). Each address may hold 50 unapproved pairings (IPv6 counted per /48
+  on this route), on top of 30 a minute; the server-wide cap of 20000 is the disk bound. Mobile
+  carriers that hand out /64s from one /48 share 50, a smaller blast radius than the whole
+  server. The server counts them in memory, as every per-address limit, so no address reaches
+  the database, and a restart resets the counts (#575).
+- **Per-address sign-up limits** (#619). An office or carrier NAT puts many people behind one
+  IPv4 address, so the pairing limits above and the 60 GitHub sign-ins a minute leave room for a
+  launch-day crowd behind it; at one a second they stay far below the 10 sign-ups and visitors a
+  second the load test held.
 - **Long-polls** identify their caller again after the wait and answer 401 if the session or token
   was revoked meanwhile (#260). A directory append ends every machine's answer long-poll, and the
   reply carries the directory's length (#158). On SIGTERM the server ends every long-poll as if
@@ -808,9 +812,21 @@ Tokens, type and components: `DESIGN.md`.
   (IPv6 per /64): most reads count against no account, so this keeps a looping client or script
   to about 2% of a core. A visible page with a prompt waiting and a run live makes about 200 a
   minute and a heavy user about 600, so five heavy users can share an office's address.
-- **Capacity** (#301). A load test of the production stack on two cores held 2000 simulated users
-  at a 194 ms p99. On the production VPS, Caddy's memory runs out first, near 8000 users (each held
-  long-poll costs about 96 KB in Caddy and 13 KB in the server); CPU near 10,000.
+- **Capacity** (#301, #625). On the production stack capped to the VPS's two cores and 4 GB,
+  memory runs out first: each signed-in user with a machine and an open page holds two
+  long-polls, which cost about 300 KB in Caddy, 60 KB in the server and 55 KB in docker-proxy
+  (Caddy's hop to the server's published port), so about 5000 such users fit; CPU stays under
+  one core. A new visitor to the landing page costs about 50 ms of CPU across Next and Caddy
+  once Caddy compresses (#593), so the VPS serves 15 to 20 a second.
+- **Machines** (#658). A hosted account takes 3 machines, the computers that run agents, and any
+  number of phones and browsers; self-hosting sets its own (`MAX_MACHINES`, default 5). Each
+  machine holds a long-poll, about 200 KB on the VPS, and 3 covers a laptop, a desktop and a
+  server. Raising it later is a setting nobody notices; lowering it would strand accounts above
+  it. Devices need no cap of their own: the directory holds at most 200 entries, an account's
+  pages hold at most 16 join-list long-polls, and Caddy limits each address's requests (#582).
+  Every item is sealed once per device, so its size grows with their number: a run update is
+  capped per device for that reason, and a question with 8000 characters of context fits up to
+  about 140 devices in its 2 MB, pictures shrinking to fit.
 - **Privacy and terms** (`/privacy`, `/terms`). Each claim follows the code: stored columns in
   `server/src/db.ts`, retention in `server/src/limits.ts`, logs and backups in `deploy/`. A change
   to what is stored changes the page, and the Play data-safety form. Contact is
@@ -848,6 +864,9 @@ What the code relies on, with the versions checked.
   must not await it. Remote Control shows a submitted prompt on the phone. A hot reload aborts the
   mod's requests. `/resume` fires `session.end` with reason `resume` and no `session.start`. Mods
   load only from user or managed settings or an installed plugin, not project settings.
+  Starbridge states 2.1.287, the oldest the mod works with, as its minimum, and setup says when
+  `claude --version` is older, since an older one may lack mods or `claude plugin list --json`
+  (#620).
 - **Claude Code sessions**: `~/.claude/sessions/<pid>.json` holds `sessionId`, `name` (the title)
   and, under Remote Control, `bridgeSessionId`; the Remote Control URL is
   `https://claude.ai/code/<bridgeSessionId>`. Records are rewritten in place without truncation,

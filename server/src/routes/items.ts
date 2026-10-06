@@ -145,7 +145,14 @@ export const itemRoutes = new Hono<Env>();
 
 itemRoutes.post("/items", requireCaller("paired"), async (c) => {
   const limits = c.var.config.limits;
-  rateLimit(c, `items:${c.var.caller.account}`, limits.items);
+  const { account } = c.var.caller;
+  const poster = memberOf(c.var.caller);
+  if (c.var.caller.role === "device")
+    rateLimit(c, `items:${account}:${poster}`, limits.deviceItems);
+  else {
+    rateLimit(c, `items:${account}:${poster}`, limits.machineItems);
+    rateLimit(c, `items:${account}`, limits.items);
+  }
   const item = await json(c, SealedItem);
   const caller = c.var.caller;
   const me = memberOf(caller);
@@ -163,7 +170,7 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
   const most = fromDevice
     ? limits.answerBytes
     : item.kind === "run"
-      ? limits.runBytes
+      ? limits.runBytes * item.boxes.length
       : item.kind === "quota"
         ? limits.quotaBytes
         : limits.itemBytes;
