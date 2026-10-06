@@ -102,13 +102,14 @@ fun promptGround(): Color = StarbridgeTheme.colors.accentSoft.compositeOver(Mate
 
 /** The exact command, in mono, on [color]. */
 @Composable
-private fun Command(text: String, style: TextStyle, color: Color, shape: Shape, padding: PaddingValues, maxLines: Int = Int.MAX_VALUE, modifier: Modifier = Modifier) {
+private fun Command(text: String, style: TextStyle, color: Color, shape: Shape, padding: PaddingValues, maxLines: Int = Int.MAX_VALUE, modifier: Modifier = Modifier, onCut: (Boolean) -> Unit = {}) {
     Text(
         text,
         style = style,
         color = MaterialTheme.colorScheme.onSurface,
         maxLines = maxLines,
         overflow = TextOverflow.Ellipsis,
+        onTextLayout = { onCut(it.hasVisualOverflow) },
         modifier = modifier.fillMaxWidth().background(color, shape).padding(padding),
     )
 }
@@ -172,8 +173,9 @@ fun PromptCard(prompt: Prompt, now: Instant, actions: PromptActions, shape: Shap
     val scheme = MaterialTheme.colorScheme
     val (sent, send) = rememberSend(prompt, actions)
     var menu by remember { mutableStateOf(false) }
-    // The card shows the summary, so an allow covers it only when it is the whole input (#356).
-    val allow = { scope: String -> if (prompt.fitsRow) send(true, scope, null) else actions.open(prompt.id) }
+    // An allow from the card covers only an input it shows whole, uncut; else the sheet takes it (#356).
+    var cut by remember(prompt.id) { mutableStateOf(true) }
+    val allow = { scope: String -> if (prompt.fitsRow && !cut) send(true, scope, null) else actions.open(prompt.id) }
     Surface(
         modifier.fillMaxWidth().clickable(onClickLabel = "Open the prompt") { actions.open(prompt.id) }.semantics { stateDescription = waitingLabel(prompt.createdAt, now) },
         shape = shape,
@@ -182,7 +184,7 @@ fun PromptCard(prompt: Prompt, now: Instant, actions: PromptActions, shape: Shap
         Column(Modifier.padding(Spacing.s5), verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
             MetaRow(prompt.source, waited(prompt.createdAt, now), clock = true)
             ToolLine(prompt, StarbridgeTheme.type.action.copy(lineHeight = 22.sp), 20.dp)
-            Command(prompt.summary, StarbridgeTheme.type.code.copy(fontSize = 15.sp, lineHeight = 22.sp), scheme.surfaceContainer, RoundedCornerShape(12.dp), PaddingValues(horizontal = 14.dp, vertical = Spacing.s3), maxLines = 3)
+            Command(if (prompt.fitsRow) prompt.fullInput else prompt.summary, StarbridgeTheme.type.code.copy(fontSize = 15.sp, lineHeight = 22.sp), scheme.surfaceContainer, RoundedCornerShape(12.dp), PaddingValues(horizontal = 14.dp, vertical = Spacing.s3), maxLines = 3, onCut = { cut = it })
             Box(Modifier.padding(top = Spacing.s1)) {
                 AllowDeny(40.dp, !sent, scheme.surfaceContainer, onAllow = { allow("once") }, onDeny = { send(false, "once", null) }) {
                     Button(

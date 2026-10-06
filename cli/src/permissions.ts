@@ -192,12 +192,19 @@ export function fitJson(value: unknown, max = INPUT_MAX): string {
   return out;
 }
 
-/** Every string in a JSON value, keys included, through `visible`. */
+/**
+ * Every string in a JSON value, keys included, through `visible`. Throws when two keys read alike
+ * once escaped (`x` + U+202E and `x\\u202E`): one would hide the other's value.
+ */
 function visibleValue(value: unknown): unknown {
   if (typeof value === "string") return visible(value);
   if (Array.isArray(value)) return value.map(visibleValue);
-  if (value && typeof value === "object")
-    return Object.fromEntries(Object.entries(value).map(([k, v]) => [visible(k), visibleValue(v)]));
+  if (value && typeof value === "object") {
+    const entries = Object.entries(value).map(([k, v]) => [visible(k), visibleValue(v)] as const);
+    if (new Set(entries.map(([k]) => k)).size < entries.length)
+      throw new UsageError("the input has keys that read alike: it stays at the keyboard");
+    return Object.fromEntries(entries);
+  }
   return value;
 }
 

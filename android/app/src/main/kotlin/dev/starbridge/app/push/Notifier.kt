@@ -11,6 +11,7 @@ import dev.starbridge.app.data.Source
 import android.text.SpannableString
 import android.text.SpannableStringBuilder
 import android.text.Spanned
+import android.text.TextUtils
 import android.text.style.TypefaceSpan
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -241,7 +242,8 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
         if (!allowed()) return
         val b = base(decision, actions(decision))
         if (silent) b.setSilent(true)
-        if (note != null) b.setContentText(note).setStyle(NotificationCompat.BigTextStyle().bigText(note)).setSilent(true)
+        // The note goes above the command, so Allow still shows what it covers.
+        if (note != null) b.setContentText(note).setStyle(NotificationCompat.BigTextStyle().bigText(TextUtils.concat(note, "\n", command(prompt)))).setSilent(true)
         @Suppress("MissingPermission")
         manager.notify(tag(decision.id), b.build())
     }
