@@ -91,7 +91,9 @@ in your final message.
 When you built a claude.ai artifact whose buttons send the pick to this
 session, post with `--answer-in <url>` and no options; when its message
 arrives, run `starbridge settle <id>`, then act; a card answered in Starbridge
-needs no settle. An artifact only to look at goes in `--link`, with options.
+needs no settle. When the owner taps Done on the card instead, you get
+`Answer to <id> (…): answered on its page; read the answer there`: the card is
+closed, so read the pick on the page and act, with no settle. An artifact only to look at goes in `--link`, with options.
 `starbridge settle <id> --outcome withdrawn` takes back a card you no longer
 need.
 

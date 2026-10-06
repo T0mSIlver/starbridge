@@ -1332,6 +1332,41 @@ async function main() {
   await pageB.getByText(/^Answered on .+: Later$/).waitFor({ timeout: 30_000 });
   await pageB.getByText(/^Later · on /).waitFor();
 
+  step(
+    "Done on one browser closes a question answered in an artifact on the other, and tells the agent (#539)",
+  );
+  const doneAsk = cli(
+    "done",
+    [
+      ...["ask", "--question", "Done probe: which layout?", "--answer-in", artifact],
+      ...["--project", "starbridge", "--session", "e2e"],
+    ],
+    machineHome,
+  );
+  const [doneId] = await doneAsk.waitFor(/d_[\w-]+/);
+  if ((await doneAsk.exited) !== 0) throw new Error("ask --answer-in failed");
+  const doneWait = cli("done-wait", ["wait", doneId as string, "--timeout", "60s"], machineHome);
+  await page.goto(ORIGIN);
+  await pageB.reload();
+  await pageB.locator(`button[data-id="${doneId}"]`).click({ timeout: 30_000 });
+  await selected(pageB).getByRole("button", { name: "Done", exact: true }).click();
+  await doneWait.waitFor(
+    /Answer to d_\S+ \(Done probe: which layout\?\): answered on its page; read the answer there/,
+  );
+  if ((await doneWait.exited) !== 0) throw new Error("wait for the Done failed");
+  // The first browser lists it answered, and the machine's notice names the second. Reloaded:
+  // its reads that overlap the pushes can land out of order.
+  await page.reload();
+  // History lists only closed questions, and stays open once opened.
+  const historyHead = page.getByRole("button", { name: /History/ });
+  await historyHead.waitFor();
+  if ((await historyHead.getAttribute("aria-expanded")) !== "true") await historyHead.click();
+  await page
+    .locator(`[data-id="${doneId}"]`)
+    .locator("..")
+    .getByText(/Answered in the artifact · on /)
+    .waitFor({ timeout: 30_000 });
+
   step("replace the recovery key with the current one; the second browser says so once (#348)");
   await page.goto(`${ORIGIN}/settings`);
   const recoveryRow = page.getByRole("region", { name: "Devices" });

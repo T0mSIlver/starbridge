@@ -71,6 +71,8 @@ export interface State {
       askedAt: string;
       /** Answered on its `answerIn` page instead of Starbridge. */
       answerIn?: boolean;
+      /** With `answerIn`: takes a Done answer from a device (#539). */
+      done?: boolean;
       /** Closed with `settle`, or by `revoked`: no answer will follow. */
       settled?: boolean;
       /**

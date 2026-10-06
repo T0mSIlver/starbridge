@@ -1149,7 +1149,7 @@ async function openDecision(
   const reply = sent[body.id];
   const closing = closings.get(`${machine.id}/${body.id}`);
   const notice = closing?.notice;
-  const answeredBy = notice && wonBy(ctx, notice);
+  const answeredBy = notice && wonBy(ctx, notice, body as Decision);
   // Any other notice that closed it arrived in the same write, so it carries the same time; a
   // later one, after a device's answer, closed nothing.
   const settled =
@@ -1162,9 +1162,7 @@ async function openDecision(
     ...(s.answeredAt ? { answeredAt: s.answeredAt } : {}),
     ...(settled ? { settled } : {}),
     ...(answeredBy ? { answeredBy } : {}),
-    ...(reply
-      ? { reply: "choice" in reply ? { choice: reply.choice } : { text: reply.text } }
-      : {}),
+    ...(reply ? { reply: replyOf(reply) } : {}),
   };
 }
 
@@ -1172,16 +1170,27 @@ async function openDecision(
  * Another device's answer the asking machine took, from its settled notice (#330): undefined for
  * any other notice, or one naming this browser.
  */
-function wonBy(ctx: Ctx, notice: Settled): InboxItem["answeredBy"] {
+function wonBy(ctx: Ctx, notice: Settled, d: Decision): InboxItem["answeredBy"] {
   const by = notice.outcome === "device" ? notice.device : undefined;
   if (!by || by === ctx.device.id) return undefined;
-  const reply =
+  // A device's notice with neither choice nor text applied a Done, on a decision that takes one
+  // (#539).
+  const reply: Reply | undefined =
     notice.choice !== undefined
       ? { choice: notice.choice }
       : notice.text !== undefined
         ? { text: notice.text }
-        : undefined;
+        : d.answerIn
+          ? { done: true }
+          : undefined;
   return reply && { device: ctx.dir.members.get(by)?.member.name ?? by, reply };
+}
+
+/** The reply alone, without the time a sent answer is stored with. */
+function replyOf(r: Reply): Reply {
+  if ("choice" in r) return { choice: r.choice };
+  if ("text" in r) return { text: r.text };
+  return { done: true };
 }
 
 /** Opens a decision a push carried (or named, when it did not fit). */
@@ -1263,7 +1272,7 @@ export async function loadInbox(ctx: Ctx, inbox: Inbox = { items: [], rejected: 
   // decision, which an earlier read already holds.
   for (const [key, { notice }] of closings) {
     const item = byId.get(notice.itemId);
-    const answeredBy = wonBy(ctx, notice);
+    const answeredBy = item && wonBy(ctx, notice, item.decision);
     if (item && answeredBy && !item.reply && key === `${item.machine.id}/${notice.itemId}`)
       byId.set(notice.itemId, { ...item, answeredBy });
   }

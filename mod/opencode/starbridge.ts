@@ -209,13 +209,14 @@ export function waitingSessions(state: unknown, now: number): string[] {
         extensionAnswers?: boolean;
         settled?: boolean;
         answerIn?: boolean;
+        done?: boolean;
       }
     >;
     answers?: Record<string, { seen?: boolean }>;
   };
   const ids = new Set<string>();
   for (const [id, a] of Object.entries(st?.asked ?? {})) {
-    if (!a.session || !a.extensionAnswers || a.settled || a.answerIn) continue;
+    if (!a.session || !a.extensionAnswers || a.settled || (a.answerIn && !a.done)) continue;
     if (st.answers?.[id]?.seen || !(now - Date.parse(a.askedAt ?? "") < CLAIM_MS)) continue;
     ids.add(a.session);
   }

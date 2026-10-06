@@ -8,6 +8,7 @@ import dev.starbridge.app.protocol.Directory
 import dev.starbridge.app.protocol.DirectoryEntry
 import dev.starbridge.app.protocol.Envelopes
 import dev.starbridge.app.protocol.DirectoryHead
+import dev.starbridge.app.protocol.DecisionLink
 import dev.starbridge.app.protocol.Heads
 import dev.starbridge.app.protocol.ItemBody
 import dev.starbridge.app.protocol.JoinApprovalBody
@@ -962,14 +963,19 @@ class ServerStore(
      * the notice is not the asking machine's, names this phone, or carries no answer (#330).
      */
     private fun won(d: SavedDecision, from: String, n: Settled): SavedDecision? {
-        val answer = n.choice ?: n.text ?: return null
+        // A device's notice with neither choice nor text applied a Done (#539).
+        val answer = n.choice ?: n.text ?: d.body.answerIn?.let(::doneText) ?: return null
         if (d.from != from || n.device == null || n.device == me.id || d.answer != null) return null
-        if (lost.remove(d.body.id)) notice.value = answeredFirst(answer, n.device)
+        if (lost.remove(d.body.id)) notice.value = if ((n.choice ?: n.text) == null) markedBy(n.device) else answeredFirst(answer, n.device)
         return d.copy(answeredAt = d.answeredAt ?: now(), theirAnswer = answer, answeredBy = n.device)
     }
 
-    private fun answeredFirst(answer: String, device: String) =
-        "Answered on ${directory?.members?.get(device)?.member?.name ?: device}: $answer"
+    private fun answeredFirst(answer: String, device: String) = "Answered on ${deviceName(device)}: $answer"
+
+    /** This phone's answer lost to another device's Done (#539). */
+    private fun markedBy(device: String) = "Marked answered on ${deviceName(device)}."
+
+    private fun deviceName(device: String) = directory?.members?.get(device)?.member?.name ?: device
 
     /** Keeps a week of prompts, the log's span, as the server does. */
     private fun keepPrompts(byId: Map<String, SavedPrompt>, cursor: String = saved.promptCursor) {
@@ -1121,12 +1127,12 @@ class ServerStore(
         run(showBusy = false) {
             try {
                 when (val sent = send(id, choice, text)) {
-                    is Sent.Queued -> notice.value = "No connection. ${sent.answer} will be sent when the phone is back online."
+                    is Sent.Queued -> notice.value = "No connection. ${if (choice == null && text == null) "Done" else sent.answer} will be sent when the phone is back online."
                     Sent.Elsewhere -> {
                         val d = saved.decisions.find { it.body.id == id }
                         val by = d?.answeredBy
                         val theirs = d?.theirAnswer
-                        if (by != null && theirs != null) notice.value = answeredFirst(theirs, by)
+                        if (by != null && theirs != null) notice.value = if (d?.body?.answerIn?.let { theirs == doneText(it) } == true) markedBy(by) else answeredFirst(theirs, by)
                         else {
                             lost += id
                             notice.value = "Already answered on another device."
@@ -1156,6 +1162,10 @@ class ServerStore(
         d.answer?.let { return Sent.Answered(it) }
         if (d.answeredAt != null) return Sent.Elsewhere
         if (choice != null && choice !in d.body.options) throw IllegalArgumentException("Not one of the options.")
+        // Neither choice nor text is Done (#539), for a decision answered on its own page that takes it.
+        val page = d.body.answerIn?.takeIf { d.body.done == true }
+        val done = choice == null && text == null
+        if (done && page == null) throw IllegalArgumentException("Done is only for a question answered on its own page.")
         val machine = directory?.members?.get(d.from)?.takeIf { it.active }?.member
             ?: throw IllegalStateException("The machine that asked is no longer in your directory.")
         val answerId = newId("a_")
@@ -1167,10 +1177,11 @@ class ServerStore(
             put("answeredAt", now())
             choice?.let { put("choice", it) }
             text?.let { put("text", it) }
+            if (done) put("done", true)
             // Lets the machine notice a server holding back entries, such as a revocation.
             directory?.let { d -> putJsonObject("dir") { put("length", d.length); put("head", d.head) } }
         }
-        val queued = QueuedAnswer(id, choice ?: text!!, envelopes.seal("answer", body, me.id, signKey, listOf(machine)))
+        val queued = QueuedAnswer(id, choice ?: text ?: doneText(page!!), envelopes.seal("answer", body, me.id, signKey, listOf(machine)))
         persist(saved.copy(outbox = saved.outbox + queued))
         return post(queued)
     }
@@ -1825,6 +1836,7 @@ class ServerStore(
             theirAnswer = d.theirAnswer,
             answeredOn = d.answeredBy?.let { directory?.members?.get(it)?.member?.name ?: it },
             replies = b.replies == true,
+            takesDone = b.answerIn != null && b.done == true,
         )
     }
 
@@ -1939,3 +1951,6 @@ internal fun promptEnded(answer: String?, s: Settled?, answeredAt: String?, mach
         else -> null
     }
 }
+
+/** What a Done reads as, in History and on the device it lost on: where the owner answered. */
+internal fun doneText(page: DecisionLink) = "Answered in ${Link(page.url, page.title).place()}"

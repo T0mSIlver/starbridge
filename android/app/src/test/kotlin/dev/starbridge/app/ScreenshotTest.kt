@@ -183,6 +183,11 @@ class ScreenshotTest(private val dark: Boolean) {
 
     @Test fun sheetAnswerIn() = capture("sheet-answer-in") { QuestionSheet(fake.answerIn) }
 
+    // A question answered on its own page: the link and Done on its card (#539).
+    @Test fun inboxAnswerIn() = capture("inbox-answer-in") {
+        Phone(Tab.Inbox, 2) { InboxScreen(listOf(fake.answerIn, fake.answerIn.copy(id = "d6w", waiting = true, waitingSince = now.minusSeconds(95))), now, decisionActions) }
+    }
+
     @Test fun sheetFreeText() = capture("sheet-free-text") { QuestionSheet(fake.freeText) }
 
     @Test fun sheetAnswered() = capture("sheet-answered") { QuestionSheet(fake.decisions.first { it.id == "d4" }) }

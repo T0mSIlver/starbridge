@@ -417,6 +417,12 @@ private fun DecisionCard(decision: Decision, now: Instant, actions: DecisionActi
                 Text(decision.question, style = StarbridgeTheme.type.subtitle.weight(waiting), color = scheme.onSurface)
             }
             Images(decision.images, maxHeight = 160.dp, crop = true, modifier = Modifier.padding(vertical = Spacing.s1))
+            val page = decision.answerIn
+            if (page != null && decision.takesDone && cardButtons(decision, buttons)) {
+                Spacer(Modifier.height(Spacing.s1))
+                val send = answer(decision, actions.answer)
+                PageAndDone(page, replies.sending[decision.id] != null, other = if (waiting) scheme.surfaceContainer else scheme.surfaceContainerHighest) { send(null, null) }
+            }
             if (cardOptions(decision, buttons)) {
                 Spacer(Modifier.height(Spacing.s1))
                 Options(decision, replies.sending[decision.id], height = 40.dp, other = if (waiting) scheme.surfaceContainer else scheme.surfaceContainerHighest, answer = answer(decision, actions.answer))
@@ -432,7 +438,10 @@ internal fun TextStyle.weight(waiting: Boolean) = if (waiting) this else copy(fo
  * Whether a card carries the question's options: the setting decides, for every question with
  * options. One answered on another page, or in free text, opens its sheet instead.
  */
-internal fun cardOptions(d: Decision, buttons: CardButtons) = d.answerIn == null && d.options.isNotEmpty() && when (buttons) {
+internal fun cardOptions(d: Decision, buttons: CardButtons) = d.answerIn == null && d.options.isNotEmpty() && cardButtons(d, buttons)
+
+/** Whether the Answer buttons setting puts buttons on [d]'s card. */
+internal fun cardButtons(d: Decision, buttons: CardButtons) = when (buttons) {
     CardButtons.Always -> true
     CardButtons.WhenWaiting -> d.waiting
     CardButtons.Never -> false
@@ -528,7 +537,10 @@ fun DecisionSheet(decision: Decision, now: Instant, onAnswer: (String, String?, 
                     Images(decision.images, maxHeight = 360.dp)
                     val page = decision.answerIn
                     when {
-                        page != null -> AnswerElsewhere(page)
+                        page != null -> {
+                            AnswerElsewhere(page)
+                            if (decision.takesDone) Done(sending != null) { send(null, null) }
+                        }
                         decision.options.isEmpty() -> FreeText(replies.drafts[decision.id].orEmpty(), { replies.drafts[decision.id] = it }, sending != null) { send(null, it) }
                         else -> {
                             Options(decision, sending, height = 56.dp, other = scheme.surfaceContainerHighest, answer = send, check = true)
@@ -615,6 +627,45 @@ private fun AnswerElsewhere(page: Link) {
         Symbol(Sym.Open, size = 20.dp)
         Spacer(Modifier.width(Spacing.s2))
         Text("Answer in ${page.place()}", style = StarbridgeTheme.type.action, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+/**
+ * Done under the page's link in the sheet (#539): quiet, as Reply, since the page holds the
+ * answer and Done only says it was given there.
+ */
+@Composable
+private fun Done(sending: Boolean, onDone: () -> Unit) {
+    TextButton(onClick = { if (!sending) onDone() }, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurfaceVariant)) {
+        Text("Done", style = StarbridgeTheme.type.label)
+    }
+}
+
+/** On a card: the page's link, amber, joined to a tonal Done (#539). */
+@Composable
+private fun PageAndDone(page: Link, sending: Boolean, other: Color, onDone: () -> Unit) {
+    val context = LocalContext.current
+    val colors = StarbridgeTheme.colors
+    val end = 20.dp
+    Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+        Button(
+            onClick = { openLink(context, page.url) },
+            shape = RoundedCornerShape(topStart = end, bottomStart = end, topEnd = 8.dp, bottomEnd = 8.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = colors.accent, contentColor = colors.onAccent),
+            contentPadding = PaddingValues(horizontal = Spacing.s4),
+            modifier = Modifier.weight(1f).heightIn(min = 40.dp),
+        ) {
+            Symbol(Sym.Open, size = 18.dp)
+            Spacer(Modifier.width(Spacing.s2))
+            Text("Answer in ${page.place()}", style = StarbridgeTheme.type.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        Button(
+            onClick = { if (!sending) onDone() },
+            shape = RoundedCornerShape(topStart = 8.dp, bottomStart = 8.dp, topEnd = end, bottomEnd = end),
+            colors = ButtonDefaults.buttonColors(containerColor = other, contentColor = MaterialTheme.colorScheme.onSurface),
+            contentPadding = PaddingValues(horizontal = Spacing.s4),
+            modifier = Modifier.heightIn(min = 40.dp),
+        ) { Text("Done", style = StarbridgeTheme.type.label, maxLines = 1) }
     }
 }
 

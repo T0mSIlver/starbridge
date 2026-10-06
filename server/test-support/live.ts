@@ -152,7 +152,7 @@ export class LiveServer {
 
   private async sealAnswer(
     decisionId: string,
-    reply: { choice?: string; text?: string },
+    reply: { choice?: string; text?: string; done?: true },
     tamper?: Partial<Answer>,
   ): Promise<SealedItem> {
     const { item } = (await this.phone("GET", `/items/${decisionId}`)) as Stored;
@@ -173,7 +173,7 @@ export class LiveServer {
   }
 
   /** The phone answers a decision through `POST /items`. */
-  async answer(decisionId: string, reply: { choice?: string; text?: string }) {
+  async answer(decisionId: string, reply: { choice?: string; text?: string; done?: true }) {
     await this.phone("POST", "/items", await this.sealAnswer(decisionId, reply));
   }
 
@@ -183,7 +183,7 @@ export class LiveServer {
    * answered. `tamper` changes the signed body.
    */
   async forge(
-    ...answers: { decisionId: string; reply: { choice?: string; text?: string }; tamper?: Partial<Answer> }[]
+    ...answers: { decisionId: string; reply: { choice?: string; text?: string; done?: true }; tamper?: Partial<Answer> }[]
   ) {
     const items = await Promise.all(
       answers.map((a) => this.sealAnswer(a.decisionId, a.reply, a.tamper)),

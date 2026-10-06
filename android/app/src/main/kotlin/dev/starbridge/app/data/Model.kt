@@ -60,6 +60,8 @@ data class Decision(
     val answeredOn: String? = null,
     /** The machine takes a typed reply in place of an option (#201). */
     val replies: Boolean = false,
+    /** With [answerIn]: the machine takes Done, the owner saying they answered there (#539). */
+    val takesDone: Boolean = false,
 ) {
     /** Waiting for the owner. */
     val isOpen: Boolean get() = answeredAt == null && answer == null

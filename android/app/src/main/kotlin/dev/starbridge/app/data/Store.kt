@@ -57,6 +57,7 @@ interface Store {
     fun refresh(shown: Boolean = true)
     /** Asks the machines for fresh quota snapshots, waits for them, then refreshes. */
     fun refreshQuotas()
+    /** Answers [id] with [choice] or [text]; with neither, Done: answered on its own page (#539). */
     fun answer(id: String, choice: String?, text: String?)
     /** Allows prompt [id] for [scope] ("once", "session", "project"), or denies it with [message]. */
     fun answerPrompt(id: String, allow: Boolean, scope: String, message: String?)

@@ -10,7 +10,7 @@ import { PNG } from "pngjs";
 import { makeAgent } from "../src/agent/main";
 import { run } from "../src/cli";
 import { session } from "../src/context";
-import { poll } from "../src/decisions";
+import { DONE_LINE, poll } from "../src/decisions";
 import { piAllow, piPermissionConfig } from "../src/pi";
 import { configCommand, offerPiChain } from "../src/settings";
 import { FAKE_CODEXBAR, paired, testCtx, until } from "./helpers";
@@ -292,6 +292,28 @@ test("ask --answer-in posts a pointer decision, and settle closes it", async () 
   expect(await run(["settle", "d_unknown"], ctx)).toBe(1);
 });
 
+test("Done on an --answer-in decision reaches the agent, and every device hears of it (#539)", async () => {
+  const ctx = await paired(server);
+  const page = "https://claude.ai/artifact/Xq7pLm2VnR4tBz9KcW1sYd";
+  expect(await run(["ask", "--question", "Pick a layout?", "--answer-in", page], ctx)).toBe(0);
+  const id = ctx.lines.at(-1) as string;
+  expect((await server.opened("decision"))[0]).toMatchObject({
+    answerIn: { url: page },
+    done: true,
+  });
+  await server.answer(id, { done: true });
+  ctx.lines.length = 0;
+  expect(await run(["wait", id, "--timeout", "5s"], ctx)).toBe(0);
+  expect(ctx.lines).toEqual([`Answer to ${id} (Pick a layout?): ${DONE_LINE}`]);
+  const [notice] = await server.opened("settled");
+  expect(notice).toMatchObject({ itemId: id, outcome: "device" });
+  expect(notice?.choice).toBeUndefined();
+  expect(notice?.text).toBeUndefined();
+  // Answered already: settle posts nothing more.
+  expect(await run(["settle", id], ctx)).toBe(0);
+  expect(await server.opened("settled")).toHaveLength(1);
+});
+
 test("the machine tells every device which answer it took, once (#330)", async () => {
   const ctx = await paired(server);
   expect(await run(ASK, ctx)).toBe(0);
@@ -493,7 +515,7 @@ test("wait ignores forged or foreign answers and keeps the good one", async () =
   expect(ctx.errors.filter((e) => e.includes("retrying"))).toHaveLength(2);
 });
 
-test("an answer to a withdrawn or answerIn decision is neither accepted nor delivered", async () => {
+test("an answer to a withdrawn or answerIn decision, or a Done to another, is neither accepted nor delivered", async () => {
   const ctx = await paired(server);
   await run([...ASK, "--session", "s"], ctx);
   const late = ctx.lines.at(-1) as string;
@@ -502,6 +524,8 @@ test("an answer to a withdrawn or answerIn decision is neither accepted nor deli
   const page = "https://claude.ai/artifact/2ig2MyNRD484b7oZea5vkZ";
   await run(["ask", "--question", "Pick?", "--answer-in", page, "--session", "s"], ctx);
   const pointer = ctx.lines.at(-1) as string;
+  await run([...ASK, "--session", "s"], ctx);
+  const open = ctx.lines.at(-1) as string;
   // Accepted before the agent withdrew it, still unread: it is never delivered.
   await server.answer(early, { choice: "Merge" });
   await poll(ctx, session(ctx), { cursor: ctx.store.state().cursor, seconds: 1, shared: true });
@@ -512,13 +536,16 @@ test("an answer to a withdrawn or answerIn decision is neither accepted nor deli
   await server.forge(
     { decisionId: late, reply: { choice: "Merge" } },
     { decisionId: pointer, reply: { text: "Roomy" } },
+    // Done answers only a decision asked on its own page.
+    { decisionId: open, reply: { done: true } },
   );
   ctx.lines.length = 0;
   expect(await run(["answers", "--session", "s", "--wait", "1"], ctx)).toBe(0);
   expect(ctx.lines).toEqual([]);
   expect(ctx.store.state().answers[late]).toBeUndefined();
   expect(ctx.store.state().answers[pointer]).toBeUndefined();
-  expect(ctx.errors.filter((e) => e.includes("ignored an answer"))).toHaveLength(2);
+  expect(ctx.store.state().answers[open]).toBeUndefined();
+  expect(ctx.errors.filter((e) => e.includes("ignored an answer"))).toHaveLength(3);
   expect(await run(["wait", "--timeout", "1s"], ctx)).toBe(2);
   expect(await run(["wait", early, "--timeout", "1s"], ctx)).toBe(1);
 });
