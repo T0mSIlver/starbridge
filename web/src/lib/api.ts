@@ -7,10 +7,35 @@ export class ApiError extends Error {
   constructor(
     readonly status: number,
     readonly code: string,
-    detail?: string,
+    readonly detail?: string,
   ) {
     super(detail ? `${code}: ${detail}` : code);
   }
+}
+
+/**
+ * What a failed pairing says on Add a device: a sentence in the app's words, Android's where it
+ * has them, rather than the API's code (#289).
+ */
+export function pairingError(e: unknown): string {
+  if (!(e instanceof ApiError)) return e instanceof Error ? e.message : String(e);
+  if (e.status === 404) return "No pairing with this code, or it expired.";
+  switch (e.code) {
+    case "already-approved":
+      return "This code was already approved.";
+    case "already-paired":
+      return "That device is already paired.";
+    case "revoked":
+      return "This browser was removed from the account.";
+    case "unauthenticated":
+      return "Sign-in expired. Sign in again.";
+    case "machine-cap":
+      return "This account already has its maximum number of machines. Revoke one first.";
+    case "rate-limited":
+      return "Too many tries. Wait a minute.";
+  }
+  const said = e.detail ?? e.code;
+  return `${said.charAt(0).toUpperCase()}${said.slice(1)}${/[.!?]$/.test(said) ? "" : "."}`;
 }
 
 /**
