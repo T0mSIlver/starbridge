@@ -62,7 +62,7 @@ export class Decisions implements Feature {
       handle: async (req: { body: unknown }) => {
         const input = (req.body as { input?: unknown } | undefined)?.input;
         if (typeof input !== "object" || input === null)
-          throw new HttpError(400, "bad-request", "post {input: {question, default, ...}}");
+          throw new HttpError(400, "bad-request", "post {input: {question, ...}}");
         const ask = input as AskInput;
         // The asking process knows its directory; the agent's would name the wrong project.
         if (typeof ask.project !== "string")

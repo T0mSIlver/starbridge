@@ -254,6 +254,9 @@ test("ask --answer-in posts a pointer decision, and settle closes it", async () 
   expect(await run(["settle", id], ctx)).toBe(0);
   const listed = (await server.listed("decision"))[0];
   expect(listed?.answeredAt).toBeDefined();
+  ctx.lines.length = 0;
+  expect(await run(["answers", "--session", "s"], ctx)).toBe(0);
+  expect(ctx.lines).toEqual([]);
   // A second settle finds it closed already, which is fine.
   expect(await run(["settle", id], ctx)).toBe(0);
   expect(await run(["settle", "d_unknown"], ctx)).toBe(1);

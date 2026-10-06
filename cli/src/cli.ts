@@ -203,7 +203,9 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
             timeout: { type: "string" },
           },
         });
-        const fromJson: AskInput = v.json ? (JSON.parse(readText(v.json)) as AskInput) : {};
+        const { default: jsonDefault, ...fromJson }: AskInput & { default?: unknown } = v.json
+          ? JSON.parse(readText(v.json))
+          : {};
         const input: AskInput = {
           ...fromJson,
           ...(v.question !== undefined ? { question: v.question } : {}),
@@ -224,8 +226,12 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
           ...(v["answer-in"] !== undefined ? { answerIn: v["answer-in"] } : {}),
         };
         // Accepted so older commands still post: decisions have no default (#122, #352).
-        if (v.default !== undefined || v["default-at"] !== undefined)
-          ctx.err("starbridge: --default is ignored: agents never answer for the owner");
+        for (const [flag, given] of [
+          ["--default", v.default ?? jsonDefault],
+          ["--default-at", v["default-at"]],
+        ] as const)
+          if (given !== undefined)
+            ctx.err(`starbridge: ${flag} is ignored: agents never answer for the owner`);
         if (v.wait && input.answerIn !== undefined)
           throw new UsageError("--answer-in takes no --wait: the answer comes from that page");
         const opts = { wait: v.wait, timeout: v.timeout };
