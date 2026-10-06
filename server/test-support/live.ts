@@ -5,6 +5,7 @@
  */
 import {
   type Answer,
+  type Snooze,
   addEntry,
   type Directory,
   open,
@@ -177,6 +178,27 @@ export class LiveServer {
     await this.phone("POST", "/items", await this.sealAnswer(decisionId, reply));
   }
 
+  /** The phone snoozes a decision until `until` (#571), sealed to its machine and the phone. */
+  async snooze(decisionId: string, until: Date, at = new Date()) {
+    const { item } = (await this.phone("GET", `/items/${decisionId}`)) as Stored;
+    const machine = (await this.directory()).members.get(item.from);
+    if (!machine) throw new Error(`no member ${item.from}`);
+    const phone = this.owner.device.member;
+    const body: Snooze = {
+      v: 1,
+      id: `z_${crypto.randomUUID()}`,
+      decisionId,
+      to: [machine.member.id, phone.id],
+      until: until.toISOString(),
+      at: at.toISOString(),
+    };
+    const sealed = seal("snooze", body, { id: "phone", signKey: this.owner.device.keys.sign.privateKey }, [
+      machine.member,
+      phone,
+    ]);
+    await this.phone("POST", "/items", sealed);
+  }
+
   /**
    * Stores answers the way a compromised server would: past the checks `POST /items` makes
    * (one answer per decision, `re` naming a decision), and without marking the decision
@@ -271,8 +293,8 @@ export class LiveServer {
     const account = this.owner.id;
     db.transaction(() => {
       db.query(
-        "INSERT INTO items (seq, account_id, id, kind, from_id, re, received_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-      ).run(nextSeq(db), account, item.id, item.kind, item.from, item.re ?? null, new Date().toISOString());
+        "INSERT INTO items (seq, account_id, id, kind, from_id, re, wake_at, received_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+      ).run(nextSeq(db), account, item.id, item.kind, item.from, item.re ?? null, item.wakeAt ?? null, new Date().toISOString());
       for (const b of item.boxes)
         db.query("INSERT INTO boxes (account_id, item_id, to_id, box) VALUES (?, ?, ?, ?)").run(
           account,

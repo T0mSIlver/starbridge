@@ -10,10 +10,13 @@ import {
   closedError,
   type Delivery,
   deliveryLine,
+  EXIT_SNOOZED,
   EXIT_TIMEOUT,
   markWaiting,
   type ObservedAnswer,
+  printSnooze,
   resolveSource,
+  snoozeLine,
   waitSeconds,
 } from "../decisions";
 import { MAX_HOLD_SECONDS, type SessionEvent } from "./api";
@@ -58,15 +61,22 @@ export async function askVia(
   return waitVia(ctx, agent, { id, timeout: opts.timeout, json: opts.json });
 }
 
-/** `waiting` and `working` through the agent. */
+/** `waiting` and `working` through the agent; `waiting` says when the owner snoozed it. */
 export async function waitingVia(
   agent: AgentClient,
   opts: { id?: string; state: "working" | "waiting" },
+  ctx?: Ctx,
 ): Promise<number> {
   if (!opts.id) throw new UsageError(`${opts.state} needs a decision id`);
-  await agent.call("POST", `/v1/decisions/${encodeURIComponent(opts.id)}/waiting`, {
-    state: opts.state,
-  });
+  const r = await agent.call<{ snoozedUntil?: string }>(
+    "POST",
+    `/v1/decisions/${encodeURIComponent(opts.id)}/waiting`,
+    { state: opts.state },
+  );
+  if (ctx && r.snoozedUntil && opts.state === "waiting")
+    ctx.out(
+      snoozeLine(opts.id, ctx.store.state().asked[opts.id]?.question, r.snoozedUntil, ctx.now()),
+    );
   return 0;
 }
 
@@ -92,7 +102,7 @@ export async function waitVia(
     let wait = hold;
     for (;;) {
       try {
-        return await agent.call<{ answer?: Answer; question?: string }>(
+        return await agent.call<{ answer?: Answer; question?: string; snoozedUntil?: string }>(
           "POST",
           "/v1/answers/next",
           {
@@ -129,7 +139,15 @@ export async function waitVia(
   closed();
   if (!r.answer && id && !opts["no-mark"])
     await markWaiting(ctx, () => waitingVia(agent, { id, state: "waiting" }));
+  // Snoozed: said once, so a polling agent stops; the next `wait` waits on (#571).
+  const snoozed = () => {
+    if (!id || r.answer || !r.snoozedUntil) return undefined;
+    printSnooze(ctx, id, r.question, r.snoozedUntil, opts.json);
+    return EXIT_SNOOZED;
+  };
   while (!r.answer) {
+    const off = snoozed();
+    if (off !== undefined) return off;
     if (ctx.signal?.aborted) return EXIT_INTERRUPTED;
     const left = deadline - ctx.now().getTime();
     if (left <= 0) {

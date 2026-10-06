@@ -61,6 +61,7 @@ const CHECKS: { id: string; label: string; judge?: true }[] = [
   { id: "short", label: "Context under 600 characters" },
   { id: "run", label: "Blocking command wrapped whole, with a reason" },
   { id: "after", label: "Acted on the answer at once, posted nothing new" },
+  { id: "snoozed", label: "Snoozed: stopped polling, said what waits, posted nothing new" },
   { id: "recommended", label: "Names its pick with --recommended" },
   { id: "order", label: "Options in their natural order" },
   { id: "flags", label: "Only current ask flags (no --default, no --json)" },
@@ -227,6 +228,13 @@ function score(r: Rec, s: Scenario): Record<string, boolean | null> {
       ? !!r.answered &&
         !!r.turns[1]?.commands.some((c) => s.followUp?.acted.test(c)) &&
         r.laterDecisions.length === 0
+      : null,
+    // Told by `wait` (exit 3), a good agent stops: the snooze comes while its first wait runs.
+    snoozed: s.snooze
+      ? !!r.snoozed &&
+        all.filter((c) => /starbridge\s+wait\b/.test(c)).length <= 1 &&
+        cards.length === 1 &&
+        /starbridge wait|tomorrow|09:00|9:00|snooze/i.test(r.turns.at(-1)?.final ?? "")
       : null,
     recommended: hasCard && cards.some((c) => c.options.length > 1)
       ? cards.filter((c) => c.options.length > 1).every((c) => !!c.recommended && c.options.includes(c.recommended))

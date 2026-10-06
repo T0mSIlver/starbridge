@@ -155,6 +155,8 @@ When the agent runs out of other work, `starbridge waiting <id>` shows "Waiting 
 every device and notifies you once more. `starbridge working <id>` clears it; the question stays open.
 `starbridge wait <id>` marks the question waiting the same way; with `--no-mark` it only collects
 the answer, for a question that blocks nothing yet.
+When you snooze a question, `waiting` and `wait` tell the agent no answer comes before then, and
+`wait` exits 3; nothing wakes an agent that is not asking.
 
 ### Follow every answer
 

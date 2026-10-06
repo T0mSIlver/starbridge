@@ -164,6 +164,8 @@ export interface RunRecord {
   prompted?: boolean;
   gh: string[];
   answered?: string;
+  /** When the owner snoozed the first card until (#571), for snooze situations. */
+  snoozed?: string;
   error?: string;
 }
 
@@ -825,7 +827,14 @@ async function one(s: Scenario, arm: string, rep: number): Promise<RunRecord> {
     // The owner's reply: the recommended option, or Done on an `--answer-in` card, after the
     // page took the pick (#539).
     const reply = async (c: Card) => {
-      if (s.done) {
+      if (s.snooze) {
+        // The owner puts it off until tomorrow morning instead of answering (#571).
+        const until = new Date();
+        until.setDate(until.getDate() + 1);
+        until.setHours(9, 0, 0, 0);
+        await live.snooze(c.id, until);
+        rec.snoozed = until.toISOString();
+      } else if (s.done) {
         writeFileSync(join(root, "page-pick"), "Picked: Starter, Plus, Studio\n");
         await live.answer(c.id, { done: true });
         rec.answered = `Answer to ${c.id} (${c.question}): answered on its page; read the answer there`;
