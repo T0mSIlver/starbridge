@@ -76,7 +76,8 @@ then open `http://localhost:3001` and log in as `admin` with the password in
 `deploy/umami-setup.sh` once: it sets that password and adds the website, the launch funnel and
 a share link on `stats.starbridge.run`, which it prints. That host serves only the share page
 (`Caddyfile`); its DNS records point at the box like the main domain's. It asks for a password
-too, user `tom`: the password is in `~/.config/starbridge/secrets/stats-password` and its bcrypt
+too, user `tom`, then sets a cookie that the page's API calls carry instead (Umami's page replaces
+the browser's saved password with its own header): the password is in `~/.config/starbridge/secrets/stats-password` and its bcrypt
 hash in `stats-password-hash` beside it. To change it, write a new password there, hash it with
 `caddy hash-password --bcrypt-cost 10` into `stats-password-hash` (a higher cost lets anyone
 spend the box's CPU), run `deploy/push-secrets.sh stats-password-hash` and deploy. Until a deploy
