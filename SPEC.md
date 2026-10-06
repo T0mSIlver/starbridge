@@ -172,6 +172,19 @@ provider plugins add providers, not panels.
   one fails to open. Two checks stay that are not about old clients: Android re-reads open
   questions when it learns a new question field (`DECISION_FIELDS`), until clients store the
   signed body text (#476), and re-checks Allow when a notification's button is tapped.
+- **Nulls** (#505). A `null` in a field the schema does not make nullable refuses the item on every
+  client, as zod does. Android, whose classes read null as absent, checks each declared field
+  after `readable()` and ignores fields it does not declare, as zod strips them.
+- **Local state carries its format** (#473), and a file a client cannot read is kept, never
+  silently replaced. The CLI writes `v: 1` into `machine.json`, `directory.json` (`{v, entries}`),
+  `agent.json` and `state.json`; a file without `v` is format 1, and one that is not JSON, not an
+  object or newer stops the command with its path and what to do. Android writes `v` into
+  `state.bin` and `secrets.bin` and a format byte ahead of the Keystore blob; the two describe one
+  device, so when either cannot be read both move to `<name>.unreadable-<time>` and the app starts
+  signed out and says so. Quota settings write their defaults, so a later default never changes a
+  saved choice. The web writes `v` into its localStorage values and leaves a newer format alone; a
+  damaged one is replaced at the next change, since it holds only display choices. IndexedDB's own
+  version is the records' format, and sign-out removes every record kind of the account.
 - **Old clients** (#468). Every client names its release in `starbridge-client:
   <name>/<version>` (`cli`, `android`, `web`, `mod`; MAJOR.MINOR.PATCH). The server refuses
   releases below `MINIMUM_RELEASES` in `server/src/clients.ts` (empty at launch; a pre-release
@@ -287,6 +300,15 @@ provider plugins add providers, not panels.
   and offers, each after asking, Codex's skill, the Pi package and opencode's plugin and skill,
   from copies the CLI carries so versions match. The local agent rewrites outdated copies when
   it starts.
+- **Files setup writes into other tools** (#474) start with one marker line, `Written by
+  starbridge <version>; \`starbridge uninstall\` removes it.`, in the file's comment syntax: the
+  systemd unit, the launchd plist, the Codex rule, the opencode entry and the copied skills (a YAML
+  comment first in the front matter). A file is Starbridge's when it has the marker (a skill also
+  when its front matter names it `starbridge`); setup replaces it when it differs from this
+  release's, uninstall removes it, and any other file at those paths is left alone. An owner who
+  deletes the line keeps the file. `starbridge update` runs the new binary's `setup --refresh`,
+  which rewrites the marked files that differ and restarts the local agent; Homebrew and npm users
+  run it after upgrading, and the local agent refreshes the skills and rule when it starts.
 - **Allow rules** (#245, #322, #443, #488). So a new user's first question needs no prompt and no
   sandbox flag, setup allows `starbridge ask`, `waiting`, `working`, `wait` and `settle`: Claude
   Code allow rules, a Codex execpolicy file (`~/.codex/rules/starbridge.rules`) that runs them
