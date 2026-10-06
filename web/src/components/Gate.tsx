@@ -61,8 +61,8 @@ function NameField({ value, onChange }: { value: string; onChange: (v: string) =
   );
 }
 
-function useDefaultName(): [string, (v: string) => void] {
-  const [name, setName] = useState("");
+function useDefaultName(initial = ""): [string, (v: string) => void] {
+  const [name, setName] = useState(initial);
   useEffect(() => {
     load().then((d) => setName((n) => n || d.defaultName()));
   }, []);
@@ -119,29 +119,40 @@ export function SignIn({ ownServer = false }: { ownServer?: boolean }) {
 }
 
 /** Shown only when the account has no device yet: this browser makes its keys. */
-function FirstDevice({ account }: { account: string }) {
+function FirstDevice({ account, unsaved }: { account: string; unsaved?: string }) {
   const { reload } = useApp();
-  const [name, setName] = useDefaultName();
-  const [recoveryKey, setRecoveryKey] = useState<string>();
-  // Kept across a failed attempt, so a retry posts the same keys and entry.
-  const pending = useRef<PreparedDevice>(undefined);
+  const [name, setName] = useDefaultName(unsaved);
+  const [prepared, setPrepared] = useState<PreparedDevice>();
   const { busy, error, run } = useAction();
-  if (recoveryKey) return <Setup device={name} recoveryKey={recoveryKey} onContinue={reload} />;
+  if (prepared)
+    return (
+      <Setup
+        device={name}
+        recoveryKey={prepared.recoveryKey}
+        // The genesis goes to the server only now, so a reload before this shows a new key.
+        onContinue={async () => {
+          await prepared.commit();
+          await reload();
+        }}
+      />
+    );
   return (
     <FirstRunPage>
       <h1 className="t-heading">Set up your account</h1>
-      <p className={`t-small ${s.lede}`}>This browser creates your account&apos;s keys.</p>
+      <p className={`t-small ${s.lede}`}>
+        {unsaved
+          ? "The page closed before you saved the recovery key, so that key was never used. Create the keys again for a new one."
+          : "This browser creates your account's keys."}
+      </p>
       <NameField value={name} onChange={setName} />
       <button
         type="button"
         className={`t-label ${ui.btn} ${ui.lg} ${ui.fill} ${s.go}`}
         disabled={busy || !name.trim()}
         onClick={() =>
-          run(async () => {
-            pending.current ??= await (await load()).prepareFirstDevice(account, name.trim());
-            await pending.current.commit();
-            setRecoveryKey(pending.current.recoveryKey);
-          })
+          run(async () =>
+            setPrepared(await (await load()).prepareFirstDevice(account, name.trim())),
+          )
         }
       >
         {busy ? "Creating the keys…" : error ? "Try again" : "Create the keys"}
@@ -410,7 +421,7 @@ export function Gate({ children }: { children: React.ReactNode }) {
         return <Landing onOwnerToken={() => setOwnServer(true)} />;
       return <SignIn ownServer={ownServer} />;
     case "first-device":
-      return <FirstDevice account={boot.account} />;
+      return <FirstDevice account={boot.account} unsaved={boot.unsaved} />;
     case "join":
       return <Join account={boot.account} stale={boot.stale} />;
     case "revoked":

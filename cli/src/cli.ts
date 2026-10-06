@@ -6,7 +6,7 @@ import { answersVia, askVia, quotaVia, waitingVia, waitVia } from "./agent/comma
 import { runAgent } from "./agent/main";
 import { ApiError, sandboxHint, Unreachable } from "./api";
 import { type Ctx, UsageError } from "./context";
-import { type AskInput, answers, ask, settle, setWaiting, wait } from "./decisions";
+import { type AskInput, answers, ask, resolveSource, settle, setWaiting, wait } from "./decisions";
 import { hookAskUser, hookPermission, hookSettle } from "./hook";
 import { pair } from "./pair";
 import { pushOnce, quotaPush } from "./quota";
@@ -84,7 +84,8 @@ const HELP = `starbridge: post decisions to your devices, report runs, upload qu
       out of the inbox.
 
   starbridge wait [<decision id>] [--timeout <duration>] [--json]
-      Print the answer, or with no id the next answer to any decision from this machine.
+      Print the answer, or with no id the next answer to a decision this session asked (any
+      decision from this machine, outside an agent's session).
       With an id, marks the decision waiting first. Waits until --timeout, else forever;
       exits 2 when --timeout passed.
 
@@ -262,7 +263,13 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
           allowPositionals: true,
           options: { timeout: { type: "string" }, json: { type: "boolean" } },
         });
-        const opts = { id: positionals[0], ...values };
+        const id = positionals[0];
+        // Without an id, in an agent's session, only that session's answers: the others are due
+        // to their own sessions. A script or terminal outside one still takes any.
+        const session = id
+          ? undefined
+          : resolveSource({}, ctx.env, process.cwd()).session || undefined;
+        const opts = { id, ...(session !== undefined ? { session } : {}), ...values };
         return await withAgent(
           ctx,
           (agent) => waitVia(ctx, agent, opts),

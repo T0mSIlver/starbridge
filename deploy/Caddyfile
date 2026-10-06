@@ -14,6 +14,15 @@
 # One origin keeps the SameSite=Lax session cookie and the server's cross-site check working.
 starbridge.run {
 	encode zstd gzip
+	# Every response's security headers. The page's Content-Security-Policy is not here: Next
+	# sets it with a nonce made per request (web/src/proxy.ts). `defer` replaces any copy an
+	# upstream sent.
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+		Referrer-Policy same-origin
+		defer
+	}
 	@server path /v1/* /healthz /healthz/*
 	# A deploy restarts the server (#150): while it is down, Caddy holds each request and retries
 	# it for up to 30 s, so clients see a pause instead of a 502.
