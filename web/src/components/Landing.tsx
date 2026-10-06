@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { track } from "@/lib/analytics";
 import { AGENTS_GUIDE, REPO, SELF_HOST } from "@/lib/links";
 import { Analytics } from "./Analytics";
@@ -208,7 +207,7 @@ export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
           After Homebrew or npm, run <code className={s.inlineCode}>starbridge setup</code> to pair
           the machine and install the Claude Code plugin. The script runs it for you.
         </p>
-        <InstallBox />
+        <InstallBox counted />
         <p className={`t-meta ${s.faint}`}>
           Works best with Claude Code. Codex, Pi and opencode are supported.
         </p>

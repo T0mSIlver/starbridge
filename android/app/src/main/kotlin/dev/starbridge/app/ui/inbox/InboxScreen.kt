@@ -127,6 +127,8 @@ import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
+import android.os.Build
+import android.widget.Toast
 
 @HiltViewModel
 class InboxViewModel @Inject constructor(private val store: Store, private val prefs: Prefs) : ViewModel() {
@@ -418,7 +420,7 @@ private fun NoMachine() {
         Box(Modifier.size(160.dp).background(MaterialTheme.colorScheme.surfaceContainerHighest, MaterialShapes.Cookie9Sided.toShape()), contentAlignment = Alignment.Center) {
             Symbol(Sym.Computer, size = 56.dp, tint = MaterialTheme.colorScheme.onSurface)
         }
-        Text("Add a machine", style = StarbridgeTheme.type.heading, color = MaterialTheme.colorScheme.onSurface, textAlign = TextAlign.Center)
+        Text("Add a machine", style = StarbridgeTheme.type.heading, color = MaterialTheme.colorScheme.onSurface, textAlign = TextAlign.Center, modifier = Modifier.semantics { heading() })
         Text(
             "Install Starbridge on each machine that runs your agents. Its setup shows a code to approve here; then its agents’ questions arrive in this inbox.",
             style = StarbridgeTheme.type.body,
@@ -429,7 +431,11 @@ private fun NoMachine() {
             Text(INSTALL, style = StarbridgeTheme.type.code, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(Spacing.s4))
         }
         Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
-            FilledTonalButton(onClick = { scope.launch { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("Install command", INSTALL))) } }, modifier = Modifier.heightIn(min = Sizes.tap)) {
+            FilledTonalButton(onClick = {
+                scope.launch { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("Install command", INSTALL))) }
+                // Android 13 and later confirm a copy themselves.
+                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) Toast.makeText(context, "Copied", Toast.LENGTH_SHORT).show()
+            }, modifier = Modifier.heightIn(min = Sizes.tap)) {
                 Symbol(Sym.Copy, size = 18.dp)
                 Spacer(Modifier.width(Spacing.s2))
                 Text("Copy", style = StarbridgeTheme.type.action)

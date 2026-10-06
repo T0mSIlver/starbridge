@@ -12,11 +12,17 @@ const INSTALL = [
   ["npm", "npm i -g starbridge", "npm"],
 ] as const;
 
-export function InstallBox() {
+/**
+ * The install commands by method, with a copy button. `counted`: copies go to analytics, which
+ * only the landing page loads (lib/analytics.ts); the signed-in inbox shows the box too (#610).
+ */
+export function InstallBox({ counted = false }: { counted?: boolean }) {
   const [at, setAt] = useState(0);
   const [copied, setCopied] = useState(false);
   const [, cmd, method] = INSTALL[at] ?? ["", "", ""];
-  const onCopied = () => track("copy-install", { method });
+  const onCopied = () => {
+    if (counted) track("copy-install", { method });
+  };
   return (
     <div className={s.install}>
       <div className={`t-meta ${s.tabs}`} role="tablist" aria-label="Install with">
@@ -38,7 +44,7 @@ export function InstallBox() {
         <button
           type="button"
           className={s.copy}
-          aria-label={copied ? "Copied" : "Copy"}
+          aria-label={copied ? "Copied" : "Copy the install command"}
           onClick={async () => {
             try {
               await navigator.clipboard.writeText(cmd);
@@ -49,6 +55,9 @@ export function InstallBox() {
         >
           <Icon name={copied ? "check" : "copy"} size={16} />
         </button>
+        <span className="sr-only" role="status">
+          {copied ? "Copied" : ""}
+        </span>
       </div>
       <pre className={`t-code ${s.cmd}`} role="tabpanel" onCopy={onCopied}>
         {cmd}
