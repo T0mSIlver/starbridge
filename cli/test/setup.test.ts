@@ -80,6 +80,8 @@ async function startAgent(ctx: TestCtx) {
   const agent = makeAgent(ctx);
   await agent.start();
   agents.push(agent);
+  // An earlier setup's providers, which setup checks again; the agent started without them.
+  ctx.store.saveAgentConfig({ quota: { providers: ["codex", "zai"], interval: "5m" } });
 }
 
 test("setup --yes installs the agent, the plugins and the skills, and uploads a first snapshot", async () => {
@@ -146,7 +148,6 @@ test("setup --yes installs the agent, the plugins and the skills, and uploads a 
 test("a second setup changes nothing", async () => {
   const m = await machine();
   await startAgent(m.ctx);
-  m.ctx.store.saveAgentConfig({ quota: { providers: ["codex", "zai"], interval: "5m" } });
   await setup(m.sys, { yes: true, readyTimeoutMs: 2_000 });
   const unit = readFileSync(join(m.units, "starbridge-agent.service"), "utf8");
   const before = m.calls().length;
