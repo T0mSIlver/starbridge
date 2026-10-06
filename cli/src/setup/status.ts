@@ -2,6 +2,7 @@
 import type { Status } from "../agent/api";
 import { AgentClient } from "../agent/client";
 import { REMOVED } from "../api";
+import { deliverable } from "../decisions";
 import { VERSION } from "../version";
 import { findCodexbar, listProviders, probe } from "./codexbar";
 import {
@@ -40,6 +41,20 @@ export async function status(sys: Sys): Promise<number> {
       ? `Paired: "${machine.name}" (${machine.id}) on ${machine.server}`
       : "Paired: no (run `starbridge setup`)",
   );
+
+  // An answer whose session's `wait` died sits unseen: no session that is not waiting notices
+  // it (#557).
+  const st = ctx.store.state();
+  const unseen = Object.entries(st.answers).filter(
+    ([id, a]) => !a.seen && !st.asked[id]?.held && deliverable(st, id),
+  );
+  if (unseen.length > 0) out(`Answers no session has taken: ${unseen.length}`);
+  for (const [id] of unseen) {
+    const a = st.asked[id];
+    out(
+      `  ${id} (${a?.question ?? ""})${a?.session ? ` from session ${a.session}` : ""}: \`starbridge wait ${id}\` prints it`,
+    );
+  }
 
   const agent = await agentStatus(sys);
   if (typeof agent === "string") out(`Agent: ${agent}`);

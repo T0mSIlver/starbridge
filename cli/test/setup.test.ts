@@ -17,6 +17,9 @@ import { LiveServer } from "@starbridge/server/test-support";
 import { makeAgent } from "../src/agent/main";
 import type { Agent } from "../src/agent/server";
 import { REMOVED } from "../src/api";
+import { run } from "../src/cli";
+import { session } from "../src/context";
+import { poll } from "../src/decisions";
 import { installTarball, updateCodexbar } from "../src/setup/codexbar";
 import {
   CODEX_RULE,
@@ -281,6 +284,26 @@ test("status reports the agent, the service and the plugins", async () => {
   expect(out).toContain("Codex skill: installed");
   expect(out).toContain("Pi package: installed");
   expect(out).toContain("opencode skill and plugin: installed");
+});
+
+test("status lists the answers no session has taken, until a wait prints them (#557)", async () => {
+  const m = await machine();
+  const ask = ["ask", "--question", "Merge #12?", "--option", "Merge", "--option", "Wait"];
+  expect(await run([...ask, "--session", "s1"], m.ctx)).toBe(0);
+  const id = m.ctx.lines.at(-1) as string;
+  await server.answer(id, { choice: "Merge" });
+  // The agent's poll stores the answer; the session's wait had died.
+  await poll(m.ctx, session(m.ctx), { cursor: m.ctx.store.state().cursor, seconds: 0, shared: true });
+  m.ctx.lines.length = 0;
+  await status(m.sys);
+  expect(m.ctx.lines).toContain("Answers no session has taken: 1");
+  expect(m.ctx.lines).toContain(
+    `  ${id} (Merge #12?) from session s1: \`starbridge wait ${id}\` prints it`,
+  );
+  expect(await run(["wait", id, "--timeout", "5s"], m.ctx)).toBe(0);
+  m.ctx.lines.length = 0;
+  await status(m.sys);
+  expect(m.ctx.lines.join("\n")).not.toContain("no session has taken");
 });
 
 test("status lists every starbridge on the PATH, and how to remove the others (#621)", async () => {
