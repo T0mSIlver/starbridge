@@ -1328,7 +1328,7 @@ so the mod is the first path.
   in `web/src/proxy.ts`, because only it can put a fresh nonce on each request and on its own
   scripts: scripts need the nonce or `'strict-dynamic'` (so Umami's tracker, which Next's
   bundle loads, passes), `'wasm-unsafe-eval'` lets libsodium's WebAssembly compile without
-  allowing JavaScript eval, and an inline script sets Zod's `jitless` before the bundles load,
+  allowing JavaScript eval, and an inline script sets Zod's `jitless` before it builds its schemas,
   since its `new Function` probe counts as a violation even when caught. Styles stay `'unsafe-inline'` since React writes style attributes,
   images allow `data:` and `blob:` for questions, `worker-src 'self'` keeps the service worker,
   and `frame-ancestors 'none'` refuses framing. Fonts are self-hosted, so nothing else is

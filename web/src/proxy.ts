@@ -37,8 +37,6 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  // Pages only: the API, Next's static files and the files under public/ need no policy.
-  matcher: [
-    "/((?!v1/|stats/|_next/static/|_next/image|sw\\.js|favicon\\.ico|icon|apple-icon|landing/|install/).*)",
-  ],
+  // Pages only: the API, Next's static files, the service worker and images need no policy.
+  matcher: ["/((?!v1/|_next/static/|_next/image|sw\\.js|.*\\.(?:png|webp|svg|ico)).*)"],
 };
