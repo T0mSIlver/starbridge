@@ -157,12 +157,17 @@ provider plugins add providers, not panels.
   locked, so lock-screen buttons can sign. Signing out revokes the phone unless it is the last
   device.
 - **Versions** (#468, #469, #478). 1.0.0 is the compatibility floor. Later compatibility branches
-  name the minimum client release that retires them (`// until min cli >= 1.2`). Clients are to
-  name themselves in `starbridge-client: <name>/<version>` (`cli`, `android`, `web`, `mod`;
-  MAJOR.MINOR.PATCH), defined in `packages/protocol/src/client.ts` and not yet sent (#468); a
-  request without it stays served. An algorithm changes only with a new protocol version
+  name the minimum client release that retires them (`// until min cli >= 1.2`). An algorithm changes only with a new protocol version
   (`v: 2`, `starbridge/v2/...`, `/v2` routes) and members re-pair; keys change only by revoke and
   add.
+- **Old clients** (#468). Every client names its release in `starbridge-client:
+  <name>/<version>` (`cli`, `android`, `web`, `mod`; MAJOR.MINOR.PATCH). The server refuses
+  releases below `MINIMUM_RELEASES` in `server/src/clients.ts` (empty at launch; a pre-release
+  counts below its release) with 426 `client-too-old`, and serves a request without the header,
+  so curl and scripts keep working. The CLI then says to run `starbridge update` and exits 1; the
+  web shows one "Starbridge was updated" screen with Reload; Android shows an error that names
+  Google Play. Usage counts each member's first release of the day once
+  (`active.clients.<name>.<major>.<minor>`), so made-up versions add one row a day.
 
 ## Sign-in
 
@@ -278,6 +283,12 @@ provider plugins add providers, not panels.
 - **Docs** (#211) at `/docs` are the repository's Markdown files listed in `web/src/lib/docs.ts`,
   rendered by the web page. Links between them become `/docs` links; other relative links go to
   GitHub.
+- **The CLI's agent-facing contract is frozen for 1.x** (#475): the commands, flags, output lines
+  and exit codes under "What agents parse" in `cli/README.md`, pinned by
+  `cli/test/contract.test.ts`. A 1.x release may add to it; changing or removing anything listed
+  takes a major version, since the plugins, the Pi extension and agents' instructions update apart
+  from the CLI. `--json` always means an output format (`wait --json`); `ask` reads its input with
+  `--input <path>`.
 - **Install and update.** `https://starbridge.run/install.sh` is `cli/install.sh`, prerendered by
   the web page, so each deploy serves its own revision's script. It checks `SHA256SUMS` with
   minisign, or OpenSSL 3 when minisign is missing. `starbridge update` replaces script installs
