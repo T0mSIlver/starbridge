@@ -124,14 +124,17 @@ directoryRoutes.post("/directory", requireCaller("device"), async (c) => {
     // stops devices adding members and proposing recovery keys; revoking stays possible, and each
     // member is revoked once, so revocations never outnumber adds, nor confirmations proposals.
     // Recovery may still add a few devices, so an owner who lost every device gets back in.
-    const { directoryEntries: cap, recoveryAdds } = c.var.config.limits;
+    const { directoryEntries: cap, recoveryAdds, recoveryProposals } = c.var.config.limits;
     const op = entryOp(entry);
-    if (entries.length >= cap && op === "recovery")
-      fail(
-        409,
-        "directory-full",
-        `a directory proposes recovery keys in its first ${cap} entries only`,
-      );
+    if (entries.length >= cap && op === "recovery") {
+      const proposed = entries.slice(cap).filter((e) => entryOp(e) === "recovery");
+      if (proposed.length >= recoveryProposals)
+        fail(
+          409,
+          "directory-full",
+          `a full directory takes ${recoveryProposals} recovery proposals`,
+        );
+    }
     // A recovery adds with `recover` (older clients with `add`, signed by the recovery key).
     const adds = (o: unknown) => o === "add" || o === "recover";
     if (entries.length >= cap && adds(op)) {

@@ -241,7 +241,7 @@ test("the sweep drops answered decisions after a week and the rest after 30 days
 });
 
 test("a full directory refuses device-signed adds but takes revocations and recovery adds", async () => {
-  const { s, acct } = await setup({ directoryEntries: 2, recoveryAdds: 1 });
+  const { s, acct } = await setup({ directoryEntries: 2, recoveryAdds: 1, recoveryProposals: 1 });
   const add = async (signer: { id: string; signKey: Uint8Array }, id: string) => {
     const keys = generateMemberKeys();
     const member = { id, role: "device" as const, name: id, ...publicKeys(keys) };
@@ -269,9 +269,18 @@ test("a full directory refuses device-signed adds but takes revocations and reco
     recoveryKeyPair(generateRecoverySeed()),
     at,
   );
-  const proposed = await append(s, acct.device.token, proposal);
-  expect(proposed.status).toBe(409);
-  expect(proposed.json.error).toBe("directory-full");
+  // A full directory still takes a few proposals, so a thief who filled it cannot stop the
+  // owner replacing the key (Fable review of #368).
+  expect((await append(s, acct.device.token, proposal)).status).toBe(201);
+  const again = recoveryEntry(
+    await directory(s, acct.device.token),
+    phoneSigner,
+    recoveryKeyPair(generateRecoverySeed()),
+    at,
+  );
+  const refused = await append(s, acct.device.token, again);
+  expect(refused.status).toBe(409);
+  expect(refused.json.error).toBe("directory-full");
 });
 
 test("the directory caps its append rate", async () => {
