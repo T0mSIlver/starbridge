@@ -27,8 +27,12 @@ export function noteHead(
   const by = head.by && head.by !== signer ? head.by : undefined;
   const key = !by ? signer : dir && !dir.members.has(by) ? `${signer}/?` : `${signer}/${by}`;
   const known = heads[key];
+  // A head passed on from a member the chain now revokes counts no more: any head replaces it,
+  // or a forged long one would keep a real shorter one out of its slot for good.
+  const dropped = !!known?.by && dir?.members.get(known.by)?.active === false;
   const replace =
     !known ||
+    dropped ||
     head.length > known.length ||
     (holdsHead(entries, known) && !holdsHead(entries, head));
   if (replace) heads[key] = head;

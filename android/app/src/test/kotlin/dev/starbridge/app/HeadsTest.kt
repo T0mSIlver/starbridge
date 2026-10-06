@@ -63,5 +63,11 @@ class HeadsTest {
         heads.note(unknown, "m2", DirectoryHead(98, "B".repeat(43), by = "d"), seenByA, mine)
         assertEquals(setOf("m2/?"), unknown.keys)
         assertEquals("c", heads.withheldBy(unknown, mine, seenByA)?.by)
+        // Once the chain revokes the device a kept head names, any head from that machine replaces it.
+        val withD = seenByA + envelopeJson(directories.addEntry(mine, "a", sign.getValue("a").secret, Member("c", "device", "c", toB64(sodium.boxKeyPair().public), toB64(sodium.signKeyPair().public)), at))
+        val revokedC = withD + envelopeJson(directories.revokeEntry(directories.verify(withD), "a", sign.getValue("a").secret, "c", at))
+        val afterC = directories.verify(revokedC)
+        assertTrue(heads.note(unknown, "m2", DirectoryHead(7, "C".repeat(43), by = "e"), revokedC, afterC))
+        assertEquals("e", heads.withheldBy(unknown, afterC, revokedC)?.by)
     }
 }
