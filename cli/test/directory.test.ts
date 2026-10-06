@@ -4,10 +4,15 @@ import {
   addEntry,
   type Directory,
   generateMemberKeys,
+  generateRecoverySeed,
   publicKeys,
+  recoveryConfirmEntry,
+  recoveryEntry,
+  recoveryKeyPair,
   revokeEntry,
   type SignedEnvelope,
   seal,
+  toB64,
   verifyDirectory,
 } from "@starbridge/protocol";
 import { LiveServer } from "@starbridge/server/test-support";
@@ -225,4 +230,17 @@ test("replaying a device's older answer does not lift the refusal", async () => 
   } finally {
     serve(undefined);
   }
+});
+
+test("a machine follows a recovery key replacement and still seals to the devices (#348)", async () => {
+  const a = await paired(server);
+  const fresh = recoveryKeyPair(generateRecoverySeed());
+  await phoneAppends((dir, signer) => recoveryEntry(dir, signer, fresh, now()));
+  await phoneAppends((dir) =>
+    recoveryConfirmEntry(dir, server.owner.recovery.privateKey, toB64(fresh.publicKey), now()),
+  );
+  const dir = await refreshDirectory(a, session(a));
+  expect(dir.recoveryPk).toBe(toB64(fresh.publicKey));
+  expect(dir.recoverySet.by).toBe("phone");
+  expect(dir.members.get("phone")?.active).toBe(true);
 });

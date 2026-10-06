@@ -84,8 +84,8 @@ fun JoinPrompt(asks: List<JoinAsk>, comparison: Comparison, actions: JoinActions
             text = {
                 // Scrolls when a long name and a large font leave the digits no room.
                 Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(Spacing.s3)) {
-                    Text("Approve only if ${comparison.ask.name} shows these same digits.", style = StarbridgeTheme.type.body)
                     Text(formatDigits(comparison.digits), style = StarbridgeTheme.type.figure, color = MaterialTheme.colorScheme.onSurface, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                    Text("Approve only if ${comparison.ask.name} shows these same digits.", style = StarbridgeTheme.type.body)
                     comparison.error?.let { Text(it, style = StarbridgeTheme.type.body, color = colors.bad) }
                 }
             },

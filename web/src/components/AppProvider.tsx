@@ -2,7 +2,7 @@
 
 import type { Settled } from "@starbridge/protocol";
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
-import { backingOff } from "@/lib/api";
+import { api, backingOff } from "@/lib/api";
 import type { Boot, Ctx, Inbox, Quotas, Runs } from "@/lib/device";
 import {
   DEFAULT_SETTINGS,
@@ -50,6 +50,8 @@ export type Store = {
   /** Replaces the context after a directory write (approve, revoke). */
   update: (ctx: Ctx) => void;
   refreshQuotas: () => Promise<void>;
+  /** Asks every machine to read CodexBar again, then loads quotas: Android's pull to refresh. */
+  askQuotas: () => Promise<void>;
   /** This browser's quota settings (lib/quotaSettings.ts). */
   quotaSettings: QuotaSettings;
   setQuotaSettings: (s: QuotaSettings) => void;
@@ -85,6 +87,8 @@ const QUOTA_POLL_MS = 60_000;
  */
 const QUOTA_JOIN_POLL_MS = 3_000;
 const QUOTA_JOIN_MS = 30_000;
+/** How long a refresh holds for the machines' new snapshots, as Android's QUOTA_ASK_SECONDS. */
+const QUOTA_ASK_SECONDS = 15;
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [boot, setBoot] = useState<Store["boot"]>({ state: "loading" });
@@ -199,6 +203,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return next;
   }, [current]);
   const refreshQuotas = useCallback(async () => {
+    await fetchQuotas();
+  }, [fetchQuotas]);
+  const askQuotas = useCallback(async () => {
+    // Asked too often, offline, or a server without asks: the load shows what the server holds.
+    await api.askQuota(QUOTA_ASK_SECONDS).catch(() => {});
     await fetchQuotas();
   }, [fetchQuotas]);
 
@@ -365,6 +374,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         answer,
         update,
         refreshQuotas,
+        askQuotas,
         quotaSettings,
         setQuotaSettings,
         prompts,

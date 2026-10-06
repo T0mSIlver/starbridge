@@ -1,5 +1,10 @@
 package dev.starbridge.app.ui.inbox
 
+import dev.starbridge.app.ui.Panel
+import dev.starbridge.app.ui.clock
+import dev.starbridge.app.ui.day
+import dev.starbridge.app.ui.LocalClock24
+import dev.starbridge.app.data.RecoveryUi
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.text.TextStyle
@@ -94,6 +99,7 @@ import dev.starbridge.app.ui.Lockup
 import dev.starbridge.app.ui.Page
 import dev.starbridge.app.ui.Refresh
 import dev.starbridge.app.ui.Sym
+import dev.starbridge.app.ui.openNotificationSettings
 import dev.starbridge.app.ui.Symbol
 import dev.starbridge.app.ui.fieldColors
 import dev.starbridge.app.ui.groupGap
@@ -118,6 +124,8 @@ class InboxViewModel @Inject constructor(private val store: Store, private val p
     fun refreshPrompts() = store.refreshPrompts()
     fun answer(id: String, choice: String?, text: String?) = store.answer(id, choice, text)
     fun refresh() = store.refresh()
+    val recovery = store.recovery
+    fun dismissRecovery(seq: Int) = store.dismissRecoveryNotice(seq)
 }
 
 /** What a question can do: be answered with an option or text, or open in its sheet. */
@@ -186,6 +194,10 @@ fun InboxScreen(
     view: InboxView = InboxView(),
     onView: (InboxView) -> Unit = {},
     onFind: () -> Unit = {},
+    /** A replacement of the recovery key made on another device (#348), and how to dismiss it. */
+    recovery: RecoveryUi? = null,
+    dismissRecovery: (Int) -> Unit = {},
+    notificationsOff: Boolean = false,
 ) {
     // While a prompt is on screen, read prompts every 1.5 s, so one settled elsewhere leaves
     // at once; the clock ticks with it for the 3 s a closed prompt stays.
@@ -224,6 +236,8 @@ fun InboxScreen(
         gap = groupGap,
         margin = Spacing.s4,
     ) {
+        recoveryBanner(recovery, dismissRecovery)
+        if (notificationsOff && view.remindOff) item(key = "notifications-off") { NotificationsOff { onView(view.copy(remindOff = false)) } }
         if (feed.isEmpty()) {
             item(key = "empty") { Empty() }
         } else {
@@ -255,6 +269,22 @@ fun InboxScreen(
 }
 
 private const val PROMPT_POLL_MS = 1_500L
+
+/**
+ * Notifications are off (#342): a quiet line, since the owner may want them off. "Turn on" opens
+ * Android's settings; the ✕ hides the line for good, until Settings' "Remind me" brings it back.
+ */
+@Composable
+private fun NotificationsOff(dismiss: () -> Unit) {
+    val context = LocalContext.current
+    val dim = MaterialTheme.colorScheme.onSurfaceVariant
+    Row(Modifier.fillMaxWidth().padding(start = Spacing.s1), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+        Symbol(Sym.BellOff, size = 18.dp, tint = dim)
+        Text("Notifications are off", style = StarbridgeTheme.type.small, color = dim, modifier = Modifier.weight(1f))
+        TextButton(onClick = { openNotificationSettings(context) }) { Text("Turn on") }
+        IconButton(onClick = dismiss) { Symbol(Sym.Close, size = 18.dp, tint = dim, contentDescription = "Don't remind me") }
+    }
+}
 
 /**
  * The inbox's cards (#248), Material 3's filled card with extra-large corners. In One feed each
@@ -720,6 +750,28 @@ internal fun HistoryRow(
             MetaRow(source, time, clock = clock, words = words)
             Text(highlight(text, words, hit), style = if (prompt) StarbridgeTheme.type.code.copy(fontSize = 13.sp) else StarbridgeTheme.type.small, color = scheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (how.isNotEmpty()) Text(highlight(how, words, hit), style = StarbridgeTheme.type.meta, color = scheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}
+
+/** A replacement of the recovery key made on another device (#348), said once. */
+private fun LazyListScope.recoveryBanner(recovery: RecoveryUi?, dismiss: (Int) -> Unit) {
+    val notice = recovery?.notice ?: return
+    item(key = "recovery") {
+        val scheme = MaterialTheme.colorScheme
+        val h24 = LocalClock24.current
+        Panel(Modifier.fillMaxWidth(), color = scheme.surfaceContainerHighest) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "Recovery key replaced on ${notice.by}, ${day(notice.at)}, ${clock(notice.at, h24)}.",
+                    style = StarbridgeTheme.type.body,
+                    color = scheme.onSurface,
+                    modifier = Modifier.weight(1f),
+                )
+                TextButton(onClick = { dismiss(notice.seq) }, colors = ButtonDefaults.textButtonColors(contentColor = scheme.onSurface)) {
+                    Text("OK", style = StarbridgeTheme.type.label)
+                }
+            }
         }
     }
 }

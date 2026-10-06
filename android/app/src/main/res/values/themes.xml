@@ -6,7 +6,9 @@
         <item name="android:windowNoTitle">true</item>
         <item name="android:windowBackground">@color/ground</item>
     </style>
-    <style name="Theme.Starbridge.Starting" parent="Theme.SplashScreen">
+    <!-- The icon sits on its own dark ground, as on the launcher: the mark is drawn for it.
+         Only the IconBackground parent hands that colour to Android 12 and later. -->
+    <style name="Theme.Starbridge.Starting" parent="Theme.SplashScreen.IconBackground">
         <item name="windowSplashScreenBackground">@color/ground</item>
         <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
         <item name="windowSplashScreenIconBackgroundColor">@color/icon_ground</item>

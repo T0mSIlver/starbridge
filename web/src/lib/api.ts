@@ -236,6 +236,9 @@ export const api = {
     ),
   item: (id: string) => call<Stored>("GET", `/items/${encodeURIComponent(id)}`),
   quota: async () => (await call<{ items: Stored[] }>("GET", "/quota")).items,
+  /** Asks every machine for a fresh snapshot; holds up to `wait` seconds for them. */
+  askQuota: (wait: number) =>
+    call<{ askedAt: string; behind: number }>("POST", `/quota/ask?wait=${wait}`),
   post: (item: SealedItem) => call<{ cursor: string }>("POST", "/items", { body: item }),
 
   vapid: async () => (await call<{ publicKey: string }>("GET", "/push/vapid")).publicKey,

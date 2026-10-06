@@ -45,10 +45,13 @@ import dev.starbridge.app.ui.theme.StarbridgeTheme
 /** The sheet's top corners, as Material's bottom sheet. */
 val SheetShape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
 
-/** The drag handle: 32 by 4 dp in a 36 dp band, on the [ground] of the head under it. */
+/**
+ * The drag handle: 32 by 4 dp in a 48 dp band, on the [ground] of the head under it. The band is a
+ * full tap target: above it is the scrim, which takes the taps there.
+ */
 @Composable
 fun SheetHandle(ground: Color = Color.Transparent) {
-    Box(Modifier.fillMaxWidth().height(36.dp).background(ground), contentAlignment = Alignment.Center) {
+    Box(Modifier.fillMaxWidth().height(48.dp).background(ground), contentAlignment = Alignment.Center) {
         Box(Modifier.size(32.dp, 4.dp).background(StarbridgeTheme.colors.fg3, RoundedCornerShape(2.dp)))
     }
 }

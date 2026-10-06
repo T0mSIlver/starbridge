@@ -244,6 +244,11 @@ class Fake(private val now: Instant) {
         QuotaWindow("claude-week", "claude", "Weekly", 97, ago(5), Pace.Even, steadyPercent = 100),
     )
 
+    /** CodexBar failed for claude 12 minutes ago: its last windows, with the failure. */
+    val failedWindows = windows.map {
+        if (it.provider == "claude") it.copy(takenAt = ago(12), error = "Claude usage probe timed out.") else it
+    }
+
     val members = listOf(
         Member("m1", "Pixel 11 Pro", Kind.Device, ago(60 * 24 * 23), current = true),
         Member("m2", "Pixel 9", Kind.Device, ago(60 * 24 * 22)),

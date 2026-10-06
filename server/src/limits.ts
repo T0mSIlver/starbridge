@@ -52,6 +52,11 @@ export const DEFAULT_LIMITS = {
   directoryEntries: 200,
   /** Devices the recovery key may still add past directoryEntries. */
   recoveryAdds: 20,
+  /**
+   * Recovery keys devices may still propose past directoryEntries, so a chain a stolen device
+   * filled still lets the owner replace the key; confirmations never outnumber proposals.
+   */
+  recoveryProposals: 20,
   /** One directory entry's JSON, in bytes. */
   entryBytes: 8 * 1024,
 

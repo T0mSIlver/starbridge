@@ -1,5 +1,6 @@
 package dev.starbridge.app.ui
 
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -142,22 +143,48 @@ private fun PageTitle(title: String, subtitle: (@Composable () -> Unit)?, traili
                 Symbol(Sym.Back, size = 22.dp, tint = scheme.onSurface, contentDescription = "Back")
             }
         }
-        Row(
+        val style = if (onBack != null) StarbridgeTheme.type.title else StarbridgeTheme.type.display
+        TitleRow(
             Modifier.padding(start = Spacing.s1, top = if (onBack != null) Spacing.s2 else if (header != null) Spacing.s4 else Spacing.s6, bottom = bottom),
-            verticalAlignment = Alignment.Bottom,
-        ) {
-            Column(Modifier.weight(1f)) {
-                val style = if (onBack != null) StarbridgeTheme.type.title else StarbridgeTheme.type.display
+            title = {
                 // One line, as tall as its line height: the face's own height is more at this size,
                 // and CSS lets the glyphs overflow the line where Compose would grow the box.
                 val line = with(LocalDensity.current) { style.lineHeight.toDp() }
                 Text(title, style = style, color = scheme.onSurface, maxLines = 1, modifier = Modifier.height(line).wrapContentHeight(unbounded = true))
-                if (subtitle != null) {
-                    Spacer(Modifier.height(2.dp))
-                    CompositionLocalProvider(LocalContentColor provides scheme.onSurfaceVariant, LocalTextStyle provides StarbridgeTheme.type.body) { subtitle() }
+            },
+            subtitle = subtitle?.let {
+                {
+                    Column {
+                        Spacer(Modifier.height(2.dp))
+                        CompositionLocalProvider(LocalContentColor provides scheme.onSurfaceVariant, LocalTextStyle provides StarbridgeTheme.type.body) { it() }
+                    }
                 }
-            }
-            trailing?.invoke()
+            },
+            trailing = trailing?.let { { Row(verticalAlignment = Alignment.Bottom) { it() } } },
+        )
+    }
+}
+
+/**
+ * The title and the subtitle under it, with [trailing] at their end, bottom-aligned. When the
+ * title's one line and [trailing] don't fit side by side, [trailing] takes a line of its own under
+ * them, at the end.
+ */
+@Composable
+private fun TitleRow(modifier: Modifier, title: @Composable () -> Unit, subtitle: (@Composable () -> Unit)?, trailing: (@Composable () -> Unit)?) {
+    Layout(listOf(title, subtitle ?: {}, trailing ?: {}), modifier) { (t, s, e), c ->
+        val end = e.firstOrNull()?.measure(c.copy(minWidth = 0, minHeight = 0))
+        val beside = end == null || t.first().maxIntrinsicWidth(c.maxHeight) + end.width <= c.maxWidth
+        val width = if (beside) c.maxWidth - (end?.width ?: 0) else c.maxWidth
+        val inner = c.copy(minWidth = 0, maxWidth = width, minHeight = 0)
+        val head = t.first().measure(inner)
+        val sub = s.firstOrNull()?.measure(inner)
+        val text = head.height + (sub?.height ?: 0)
+        val height = if (beside) maxOf(text, end?.height ?: 0) else text + (end?.height ?: 0)
+        layout(c.maxWidth, height) {
+            head.place(0, if (beside) height - text else 0)
+            sub?.place(0, (if (beside) height - text else 0) + head.height)
+            end?.place(c.maxWidth - end.width, height - end.height)
         }
     }
 }

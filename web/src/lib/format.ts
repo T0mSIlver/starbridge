@@ -46,6 +46,12 @@ export function clockTime(d: Date, clock: Prefs["clock"] = getPref("clock")): st
   });
 }
 
+/** "Oct 7, 14:20": the day, and the time in the Clock setting. */
+export function dayAndTime(iso: string, clock: Prefs["clock"] = getPref("clock")): string {
+  const at = new Date(iso);
+  return `${at.toLocaleDateString(undefined, { day: "numeric", month: "short" })}, ${clockTime(at, clock)}`;
+}
+
 /**
  * "added Oct 6" for each row, keyed by id; a row whose name another shares, such as a machine
  * paired again, adds the time so the two read apart (#287).

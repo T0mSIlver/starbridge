@@ -11,6 +11,7 @@ import androidx.test.core.app.ApplicationProvider
 import dev.starbridge.app.data.Prefs
 import dev.starbridge.app.data.visible
 import dev.starbridge.app.push.Notifier
+import dev.starbridge.app.push.PromptReceiver
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -76,6 +77,42 @@ class NotifierTest {
         assertEquals("a\tb\nc\\u000D", visible("a\tb\nc\r"))
         val p = fake.prompts.first().copy(input = """{"command":"ls #\u202E hs"}""")
         assertEquals("ls #\\u202E hs", p.fullInput)
+    }
+
+    // With "Allow from notifications without seeing the whole command" on, both Allows send (#390).
+    @Test
+    fun theUnsafeSettingSendsFromTheShadeAndTheLockScreen() {
+        val prefs = Prefs(context)
+        val notifier = Notifier(context, prefs)
+        for ((on, shade, locked) in listOf(Triple(false, false, false), Triple(true, true, true))) {
+            prefs.setAllowUnseen(on)
+            notifier.clearAll()
+            notifier.prompt(fake.longPrompt)
+            val n = posted()
+            assertEquals(shade, shadowOf(n.actions.first().actionIntent).isBroadcastIntent)
+            assertEquals(locked, shadowOf(n.publicVersion.actions.first().actionIntent).isBroadcastIntent)
+            assertTrue(n.publicVersion.actions.first().isAuthenticationRequired)
+        }
+        prefs.setAllowUnseen(false)
+    }
+
+    // A lock-screen Allow posted while the setting was on carries its own mark, so the receiver
+    // refuses it once the setting is off, even for a command the shade line shows whole.
+    @Test
+    fun theLockScreenAllowIsMarkedForTheReceiver() {
+        val prefs = Prefs(context)
+        val notifier = Notifier(context, prefs)
+        val p = fake.prompts.first()
+        prefs.setAllowUnseen(true)
+        notifier.prompt(p)
+        val n = posted()
+        val shade = shadowOf(n.actions.first().actionIntent).savedIntent
+        val locked = shadowOf(n.publicVersion.actions.first().actionIntent).savedIntent
+        assertFalse(shade.getBooleanExtra(PromptReceiver.EXTRA_LOCKED, true))
+        assertTrue(locked.getBooleanExtra(PromptReceiver.EXTRA_LOCKED, false))
+        prefs.setAllowUnseen(false)
+        assertTrue(notifier.allowSends(p, locked = false))
+        assertFalse(notifier.allowSends(p, locked = true))
     }
 
     @Test

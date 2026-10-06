@@ -1,5 +1,10 @@
 package dev.starbridge.app
 
+import dev.starbridge.app.ui.devices.RecoveryKeyScreen
+import dev.starbridge.app.ui.devices.RecoveryActions
+import dev.starbridge.app.data.Replacing
+import dev.starbridge.app.data.RecoveryNotice
+import dev.starbridge.app.data.RecoveryUi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -10,6 +15,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.hasScrollToNodeAction
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.unit.Density
 import com.github.takahirom.roborazzi.captureRoboImage
 import dev.starbridge.app.data.Approval
@@ -109,9 +117,11 @@ class ScreenshotTest(private val dark: Boolean) {
     @Test fun inbox() = capture("inbox") { Phone(Tab.Inbox, 4) { Inbox() } }
 
     // Find over the inbox: open matches under "Needs you", answered ones under "History", the words marked.
-    @Test fun find() = capture("find") { Phone(null, 0) { FindScreen(fake.decisions, fake.prompts, now, {}, {}, {}, initial = "starbridge") } }
+    @Test fun find() = capture("find", { find("starbridge") }) { Phone(null, 0) { Entry { FindScreen(fake.decisions, fake.prompts, now, {}, {}, {}) } } }
 
-    @Test fun findNothing() = capture("find-nothing") { Phone(null, 0) { FindScreen(fake.decisions, fake.prompts, now, {}, {}, {}, initial = "kubernetes") } }
+    @Test fun findNothing() = capture("find-nothing", { find("kubernetes") }) { Phone(null, 0) { Entry { FindScreen(fake.decisions, fake.prompts, now, {}, {}, {}) } } }
+
+    private fun find(query: String) = compose.onNode(hasSetTextAction()).performTextInput(query)
 
     // The landing page's hero phone: no prompt, so the question with images shows (#210).
     @Test fun inboxLanding() = capture("inbox-landing") { Phone(Tab.Inbox, 3) { InboxScreen(fake.decisions, now, decisionActions, runs = fake.runs) } }
@@ -213,11 +223,44 @@ class ScreenshotTest(private val dark: Boolean) {
         }
     }
 
+    // Notifications off (#342): a quiet line heads the inbox; Settings says so and can bring the line back once dismissed.
+    @Test fun inboxNotificationsOff() = capture("inbox-notifications-off") { Phone(Tab.Inbox, 4) { InboxScreen(fake.decisions, now, decisionActions, prompts = fake.prompts, promptActions = promptActions, runs = fake.runs, notificationsOff = true) } }
+
+    @Test fun settingsNotificationsOff() = capture("settings-notifications-off", { notifications() }) { Phone(Tab.Settings, 4) { NotificationsOffSettings(InboxView()) } }
+
+    @Test fun settingsNotificationsOffDismissed() = capture("settings-notifications-off-dismissed", { notifications() }) { Phone(Tab.Settings, 4) { NotificationsOffSettings(InboxView(remindOff = false)) } }
+
+    @Composable
+    private fun NotificationsOffSettings(inbox: InboxView) =
+        SettingsScreen(fake.windows, QuotaSettings(), fake.members.size, Colours.Starbridge, fake.push, "https://starbridge.run", settingsActions, inbox = inbox, notificationsOff = true)
+
+    private fun notifications() = compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasText("Delivered through"))
+
     @Test fun quotasEmpty() = capture("quotas-empty") { QuotasScreen(emptyList(), now) }
 
     @Test fun quotasStale() = capture("quotas-stale") { QuotasScreen(fake.staleWindows, now) }
+    @Test fun quotasFailed() = capture("quotas-failed") { QuotasScreen(fake.failedWindows, now) }
 
     @Test fun devices() = capture("devices") { Phone(null, 0) { DevicesScreen(fake.members, now, deviceActions) } }
+
+    // The recovery key under the members (#348): when and where it was set, with Replace.
+    private val recovery = RecoveryUi(now.minusSeconds(86_400 * 2), "this phone", replaced = false)
+    @Test fun devicesRecovery() = capture("devices-recovery") { Phone(null, 0) { DevicesScreen(fake.members, now, deviceActions, recovery = recovery) } }
+
+    private val recoveryActions = RecoveryActions({}, {}, {})
+    @Test fun recoveryKeyAsk() = capture("recovery-key-ask") { Phone(null, 0) { RecoveryKeyScreen(Replacing.Idle, busy = false, actions = recoveryActions) } }
+    @Test fun recoveryKeyShown() = capture("recovery-key-shown") {
+        Phone(null, 0) { RecoveryKeyScreen(Replacing.Shown("7K2M-QX9D-T4HR-8VNC-W3JP-F6BZ-0E5A"), busy = false, actions = recoveryActions) }
+    }
+    @Test fun recoveryKeyDone() = capture("recovery-key-done") { Phone(null, 0) { RecoveryKeyScreen(Replacing.Done, busy = false, actions = recoveryActions) } }
+
+    // Every other device says once that the key was replaced.
+    @Test fun inboxRecoveryNotice() = capture("inbox-recovery-notice") {
+        Phone(Tab.Inbox, 4) {
+            InboxScreen(fake.decisions, now, decisionActions, prompts = fake.prompts, promptActions = promptActions, runs = fake.runs,
+                recovery = recovery.copy(replaced = true, setBy = "Firefox on Linux", notice = RecoveryNotice(9, now.minusSeconds(600), "Firefox on Linux")))
+        }
+    }
 
     @Test fun devicesRevoke() = capture("devices-revoke", before = { compose.onAllNodesWithText("Revoke")[0].performClick() }) {
         Phone(null, 0) { DevicesScreen(fake.members, now, deviceActions) }

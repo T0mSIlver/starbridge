@@ -818,6 +818,17 @@ async function main() {
   await page.locator("article").first().waitFor();
   await shoot(page, "quotas");
 
+  step("the refresh button asks the machines for fresh quotas, as Android's pull to refresh");
+  await page.setViewportSize(DESKTOP);
+  const refresh = page.getByRole("button", { name: "Refresh quotas" }).filter({ visible: true });
+  const asked = page.waitForRequest((r) => r.method() === "POST" && r.url().includes("/quota/ask"));
+  await refresh.click();
+  await asked;
+  // No agent runs in this test, so the server holds the ask its 15 s before it answers.
+  await page.waitForSelector('button[aria-label="Refresh quotas"][aria-busy="false"]:visible', {
+    timeout: 30_000,
+  });
+
   step("quota settings: remaining, clock times, workdays");
   await page
     .getByRole("navigation", { name: "Main" })
@@ -889,7 +900,7 @@ async function main() {
     .getByRole("navigation", { name: "Main" })
     .getByRole("link", { name: "Settings" })
     .click();
-  // 12-hour times are the longest: "Will run out at Oct 12, 12:02 AM".
+  // 12-hour times are the longest: "Will run out on Oct 12 at 12:02 AM".
   await page.getByLabel("12-hour", { exact: true }).check({ force: true });
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.getByRole("link", { name: "Inbox" }).click();
@@ -952,6 +963,28 @@ async function main() {
   if ((await again.exited) !== 0) throw new Error("quota push failed");
   if (again.output().includes("(new)"))
     throw new Error("the second snapshot raised its alerts again");
+
+  step("a failed probe keeps the provider's last windows, stale, with its failure (#397)");
+  const timedOut = [
+    { provider: "e2e", source: "auto", error: { message: "Claude usage probe timed out." } },
+  ];
+  writeFileSync(fakeBar, `#!/bin/sh\ncat <<'EOF'\n${JSON.stringify(timedOut)}\nEOF\nexit 1\n`);
+  const failedPush = cli(
+    "quota-failed",
+    ["quota", "push", "--once", "--codexbar", fakeBar, "--provider", "e2e"],
+    machineHome,
+  );
+  if ((await failedPush.exited) !== 0) throw new Error("quota push failed");
+  await page.getByRole("link", { name: "Settings" }).first().click();
+  await page.getByRole("link", { name: "Quotas" }).click();
+  const group = page.getByRole("region", { name: "e2e" });
+  await group.getByText("Claude usage probe timed out.").waitFor();
+  await group.getByText(/^Updated /).waitFor();
+  if ((await group.getByRole("article").count()) === 0)
+    throw new Error("the failed provider lost its windows");
+  if ((await page.getByText("e2e on ").count()) > 0)
+    throw new Error("the failure shows as a line above the table");
+  await shoot(page, "quotas-failed");
 
   step("the Quotas table fits its longest reset times, phone to desktop (#294)");
   // Local clock times: "tomorrow 21:59", "tomorrow 12:59 PM" and a date five days out.
@@ -1255,21 +1288,36 @@ async function main() {
   await shoot(pageB, "inbox-banner");
   // The new device sees decisions sealed after it joined; the open one predates it.
 
-  step("recover a third browser with the recovery key");
-  const c = await ff.newContext({ permissions: ["notifications"] });
-  await watchCsp(c);
-  const pageC = await signIn(c);
-  await pageC.getByRole("button", { name: "Use the recovery key" }).click();
-  const entry = pageC.getByLabel("Your recovery key");
-  await noWordsAsked(pageC);
-  await entry.fill(`${key.slice(0, 9)}U`);
-  await pageC.getByText('Character 10, "U", is not in a recovery key.').waitFor();
-  await shoot(pageC, "recovery-typo");
-  // Lower case, in groups split by spaces: the key reads all the same.
-  await entry.fill(key.toLowerCase().match(/.{4}/g)?.join(" ") ?? "");
-  await pageC.getByText("28 of 28 characters").waitFor();
-  await pageC.getByRole("button", { name: "Recover" }).click();
-  await pageC.getByRole("heading", { name: "Inbox" }).waitFor({ timeout: 30_000 });
+  step("replace the recovery key with the current one; the second browser says so once (#348)");
+  await page.goto(`${ORIGIN}/settings`);
+  const recoveryRow = page.getByRole("region", { name: "Devices" });
+  await recoveryRow.getByText(/^Set .* on this browser$/).waitFor();
+  await recoveryRow.getByRole("link", { name: "Replace" }).click();
+  await page.getByRole("heading", { name: "Replace the recovery key" }).waitFor();
+  await page
+    .getByText("Lost it? Without the current key it can't be replaced.", { exact: false })
+    .waitFor();
+  await page.getByLabel("Your current recovery key").fill(key);
+  await page.getByText("28 of 28 characters").waitFor();
+  await shoot(page, "recovery-key-replace");
+  await page.getByRole("button", { name: "Make a new key" }).click();
+  await page.getByRole("heading", { name: "Save your new recovery key" }).waitFor();
+  const newKey = ((await page.getByTestId("new-recovery-key").textContent()) ?? "").trim();
+  if (newKey === key || !/^([0-9A-Z]{4}){7}$/.test(newKey))
+    throw new Error(`expected a new recovery key, got: ${newKey}`);
+  await shoot(page, "recovery-key-new");
+  await page.getByLabel(/I wrote this key down/).check();
+  await page.getByRole("button", { name: "Save the new key" }).click();
+  await page.getByRole("heading", { name: "Recovery key replaced" }).waitFor();
+  await pageB.goto(ORIGIN);
+  await pageB.getByText(/^Recovery key replaced on .+, .+\.$/).waitFor({ timeout: 30_000 });
+  await shoot(pageB, "inbox-recovery-notice");
+  await pageB.getByRole("button", { name: "OK" }).click();
+  await pageB.getByText(/^Recovery key replaced on /).waitFor({ state: "detached" });
+
+  await page.goto(`${ORIGIN}/settings`);
+  await recoveryRow.getByText(/^Replaced .* on this browser$/).waitFor();
+  await shoot(page, "devices-recovery");
 
   step("revoke the second browser");
   await page
@@ -1279,8 +1327,6 @@ async function main() {
   const devices = page.getByRole("region", { name: "Devices" });
   await devices.getByText("Device · this browser").waitFor();
   // Devices list this browser, then the others by when they joined: the second browser first.
-  // The list may still gain the recovered browser, so the second browser's sign-out below,
-  // not a count, proves the revocation.
   await devices.getByRole("button", { name: "Revoke" }).first().click();
   await page.getByRole("dialog").getByRole("button", { name: "Revoke" }).click();
   await page.getByRole("dialog").waitFor({ state: "detached" });
@@ -1345,6 +1391,34 @@ async function main() {
   await page.goto(`${ORIGIN}/settings/devices/add`);
   await page.getByTestId("shown-code").waitFor();
   await shoot(page, "add-device");
+
+  step(
+    "recover a third browser with the new key: the old one is refused, every other member goes (#348, #363)",
+  );
+  const c = await ff.newContext({ permissions: ["notifications"] });
+  await watchCsp(c);
+  const pageC = await signIn(c);
+  await pageC.getByRole("button", { name: "Use the recovery key" }).click();
+  const entry = pageC.getByLabel("Your recovery key");
+  await noWordsAsked(pageC);
+  await entry.fill(`${key.slice(0, 9)}U`);
+  await pageC.getByText('Character 10, "U", is not in a recovery key.').waitFor();
+  await shoot(pageC, "recovery-typo");
+  // The key replaced above: a recovery key, but no longer this account's.
+  await entry.fill(key);
+  await pageC.getByRole("button", { name: "Recover" }).click();
+  await pageC.getByText("This is a recovery key, but not this account's current one.").waitFor();
+  // Lower case, in groups split by spaces: the key reads all the same.
+  await entry.fill(newKey.toLowerCase().match(/.{4}/g)?.join(" ") ?? "");
+  await pageC.getByText("28 of 28 characters").waitFor();
+  await pageC.getByRole("button", { name: "Recover" }).click();
+  await pageC.getByRole("heading", { name: "Inbox" }).waitFor({ timeout: 30_000 });
+  // Recovery keeps no earlier device. The server's 401 is unsigned, so the first browser keeps
+  // its keys and shows the refusal; signed in, the device list confirms it (#310).
+  await page.goto(ORIGIN);
+  await page.getByText("The server says this browser was revoked.").waitFor({ timeout: 30_000 });
+  await page.getByRole("link", { name: SIGN_IN }).click();
+  await page.getByRole("heading", { name: /was revoked$/ }).waitFor({ timeout: 30_000 });
 
   step("sign out the recovered browser: it leaves the devices and forgets its keys");
   await pageC

@@ -53,7 +53,8 @@
         ],
         "revoked": [
           "browser"
-        ]
+        ],
+        "recoveryPk": "6kpsY-KcUgq-9VB7Ey7F-ZVHdq6-vnuSQh7qaRRG0iw"
       }
     },
     {
@@ -113,7 +114,8 @@
         ],
         "revoked": [
           "browser"
-        ]
+        ],
+        "recoveryPk": "6kpsY-KcUgq-9VB7Ey7F-ZVHdq6-vnuSQh7qaRRG0iw"
       }
     },
     {
@@ -453,7 +455,7 @@
         "recoveryPk": "6kpsY-KcUgq-9VB7Ey7F-ZVHdq6-vnuSQh7qaRRG0iw"
       },
       "expect": {
-        "error": "bad-genesis"
+        "error": "wrong-recovery-key"
       }
     },
     {
@@ -1016,6 +1018,1479 @@
       },
       "expect": {
         "error": "wrong-account"
+      }
+    },
+    {
+      "name": "recovery key replaced with the old key",
+      "entries": [
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":0,\"prev\":null,\"at\":\"2026-10-04T09:00:00Z\",\"op\":\"add\",\"member\":{\"id\":\"phone\",\"role\":\"device\",\"name\":\"Pixel\",\"boxPk\":\"GxtY3VDqFLYNoXt5DNAnVNlwybq4ZOuzwPMBb-UdP1c\",\"signPk\":\"1i8Bah79Hk_feT60LNhEceG6nwzwTRKHtcxx9hYofLg\"},\"recoveryPk\":\"6kpsY-KcUgq-9VB7Ey7F-ZVHdq6-vnuSQh7qaRRG0iw\"}",
+          "sig": "XB355Sx3UVDHcQroBfYCkvBBt86Feva-wPpdt38lM3VJUZ0Iv5RlDEKln6tTF2a_YhQyGwUhdosu73mYGXyoCA",
+          "recoverySig": "6kxBKTB2pHB5WECOk7Sg3sJJTP1d_R3sqgInjHMiiopk0c3OkLVto46USPeSraTmC08ayZEKyRCrpXdldNTRAQ"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":1,\"prev\":\"_r28NJU5QECe884gP8hTtjZ1Gye-7epm7X4W6yQ_PHo\",\"at\":\"2026-10-04T09:05:00Z\",\"op\":\"add\",\"member\":{\"id\":\"browser\",\"role\":\"device\",\"name\":\"Firefox on the Mac\",\"boxPk\":\"YDRufJEaX2uhVBKRdMr-dbKUrDu9VUljL0jOxiZvhBA\",\"signPk\":\"NLTZBDFWy23PC-sKKUm3VZyUDSvLbb6MU6mzAnjjp0Y\"}}",
+          "sig": "1ZPZbyi29vcgGucK_jC48wESYogtfL4hQGzf8bbfkGnWwXGAf_7eorna9nQbHm-cjFuWi8BehdFoCOIA0Y0PAg"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":2,\"prev\":\"foEXSX4wWj63zP06zPcoPl34JEBywOuIJ-9gsEA9nOU\",\"at\":\"2026-10-04T09:10:00Z\",\"op\":\"add\",\"member\":{\"id\":\"devbox\",\"role\":\"machine\",\"name\":\"dev box\",\"boxPk\":\"deJw3ylSxXuoNnuoYYwXj5_lDbJ5nTBOdOkY2YVoYUY\",\"signPk\":\"EqQVksi3wX1AWeeym2Ho_5bHQV8vgDNI8vAX4Fueodo\"}}",
+          "sig": "4JkzuT3alCMZS4Yg-gOGDWV2WDoV_3w3fWTcmWJ3qufgoguwiHTJcvOg-h7Hon57Nzt97GKNxOjeiYcYW_YAAQ"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":3,\"prev\":\"MzdNtWB_p8ApTKowCNVtDIJ-bgpLzG-SG3ZIbl6O02o\",\"at\":\"2026-10-04T09:15:00Z\",\"op\":\"revoke\",\"id\":\"browser\"}",
+          "sig": "gVbjnsWe6gjLS4TYVkyLgZD5nGngWNb96Bc4PeZUAi-bRxXQsU304gL-XHFNpvevUqYtiQL1S-2Z4kpbVfuFBw"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "recovery",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":4,\"prev\":\"ChYVBenH4n_dei7ykNMH9QcGs-cn4i1FruNLU9lKkcE\",\"at\":\"2026-10-04T09:20:00Z\",\"op\":\"add\",\"member\":{\"id\":\"phone2\",\"role\":\"device\",\"name\":\"New Pixel\",\"boxPk\":\"7dA8regNKd5uoxOnSrNp9HMuyzZkkGa3i1st1mTLBBc\",\"signPk\":\"VLDYHQ-n0A5KfWAN-rpvKyIDWyL-M14X7fX5qluwUHQ\"}}",
+          "sig": "rOahki-se0kTzlRYeM7d1uQkZw8Qf5QOQ_NT9LGrTqQ25Ze9hgNog91P51kNi_vnNuVWpb2mobMEzfKSV6FVBw"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":5,\"prev\":\"mJX3hMUjQ_4Fhn7arYF7dnD9qfjt43mE6WD9UwxYTSU\",\"at\":\"2026-10-04T10:00:00Z\",\"op\":\"recovery\",\"recoveryPk\":\"rNsOKXQ_DMuGhtChBMuW4Fq-_sFTh2XnWVhp99yMSao\"}",
+          "sig": "RozGT7opkssNcWRkygCSFyu5wre2BZRshxLENWcNqkI4NvoCXEtcC2IDtddP-D9zbcS2kNSPdkQ5I-0ZNm5yDQ",
+          "recoverySig": "80nOZC1Bdyo74HetzVUJyFucdMiXaAju_4OYfHELe7ZSsHJoVSzTk5JyLApk5ZVw37ujTWmtfv5y0qBBTLI9Aw"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "recovery",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":6,\"prev\":\"HNRn0tYxYvUS3RySpvW9CWLdYpwYkazsjwTAeVf-JVk\",\"at\":\"2026-10-04T10:01:00Z\",\"op\":\"recovery-confirm\",\"proposal\":5,\"recoveryPk\":\"rNsOKXQ_DMuGhtChBMuW4Fq-_sFTh2XnWVhp99yMSao\"}",
+          "sig": "xy1sI5yxYrvefaaWjor7G_SAvuwIrS1ao3EB0pzcmUCDpnQ48wRvNpZ_RZcFqwJDcCYaR1mUShZFALimMhMiBw"
+        }
+      ],
+      "expect": {
+        "ok": true,
+        "length": 7,
+        "head": "0Zz5Xj8ONcd-CBoPx_4_0VUnsNGUQrgSdnOcjcPtg1Q",
+        "active": [
+          "phone",
+          "devbox",
+          "phone2"
+        ],
+        "revoked": [
+          "browser"
+        ],
+        "recoveryPk": "rNsOKXQ_DMuGhtChBMuW4Fq-_sFTh2XnWVhp99yMSao"
+      }
+    },
+    {
+      "name": "a pending proposal leaves the recovery key as it was",
+      "entries": [
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":0,\"prev\":null,\"at\":\"2026-10-04T09:00:00Z\",\"op\":\"add\",\"member\":{\"id\":\"phone\",\"role\":\"device\",\"name\":\"Pixel\",\"boxPk\":\"GxtY3VDqFLYNoXt5DNAnVNlwybq4ZOuzwPMBb-UdP1c\",\"signPk\":\"1i8Bah79Hk_feT60LNhEceG6nwzwTRKHtcxx9hYofLg\"},\"recoveryPk\":\"6kpsY-KcUgq-9VB7Ey7F-ZVHdq6-vnuSQh7qaRRG0iw\"}",
+          "sig": "XB355Sx3UVDHcQroBfYCkvBBt86Feva-wPpdt38lM3VJUZ0Iv5RlDEKln6tTF2a_YhQyGwUhdosu73mYGXyoCA",
+          "recoverySig": "6kxBKTB2pHB5WECOk7Sg3sJJTP1d_R3sqgInjHMiiopk0c3OkLVto46USPeSraTmC08ayZEKyRCrpXdldNTRAQ"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":1,\"prev\":\"_r28NJU5QECe884gP8hTtjZ1Gye-7epm7X4W6yQ_PHo\",\"at\":\"2026-10-04T09:05:00Z\",\"op\":\"add\",\"member\":{\"id\":\"browser\",\"role\":\"device\",\"name\":\"Firefox on the Mac\",\"boxPk\":\"YDRufJEaX2uhVBKRdMr-dbKUrDu9VUljL0jOxiZvhBA\",\"signPk\":\"NLTZBDFWy23PC-sKKUm3VZyUDSvLbb6MU6mzAnjjp0Y\"}}",
+          "sig": "1ZPZbyi29vcgGucK_jC48wESYogtfL4hQGzf8bbfkGnWwXGAf_7eorna9nQbHm-cjFuWi8BehdFoCOIA0Y0PAg"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":2,\"prev\":\"foEXSX4wWj63zP06zPcoPl34JEBywOuIJ-9gsEA9nOU\",\"at\":\"2026-10-04T09:10:00Z\",\"op\":\"add\",\"member\":{\"id\":\"devbox\",\"role\":\"machine\",\"name\":\"dev box\",\"boxPk\":\"deJw3ylSxXuoNnuoYYwXj5_lDbJ5nTBOdOkY2YVoYUY\",\"signPk\":\"EqQVksi3wX1AWeeym2Ho_5bHQV8vgDNI8vAX4Fueodo\"}}",
+          "sig": "4JkzuT3alCMZS4Yg-gOGDWV2WDoV_3w3fWTcmWJ3qufgoguwiHTJcvOg-h7Hon57Nzt97GKNxOjeiYcYW_YAAQ"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":3,\"prev\":\"MzdNtWB_p8ApTKowCNVtDIJ-bgpLzG-SG3ZIbl6O02o\",\"at\":\"2026-10-04T09:15:00Z\",\"op\":\"revoke\",\"id\":\"browser\"}",
+          "sig": "gVbjnsWe6gjLS4TYVkyLgZD5nGngWNb96Bc4PeZUAi-bRxXQsU304gL-XHFNpvevUqYtiQL1S-2Z4kpbVfuFBw"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "recovery",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":4,\"prev\":\"ChYVBenH4n_dei7ykNMH9QcGs-cn4i1FruNLU9lKkcE\",\"at\":\"2026-10-04T09:20:00Z\",\"op\":\"add\",\"member\":{\"id\":\"phone2\",\"role\":\"device\",\"name\":\"New Pixel\",\"boxPk\":\"7dA8regNKd5uoxOnSrNp9HMuyzZkkGa3i1st1mTLBBc\",\"signPk\":\"VLDYHQ-n0A5KfWAN-rpvKyIDWyL-M14X7fX5qluwUHQ\"}}",
+          "sig": "rOahki-se0kTzlRYeM7d1uQkZw8Qf5QOQ_NT9LGrTqQ25Ze9hgNog91P51kNi_vnNuVWpb2mobMEzfKSV6FVBw"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":5,\"prev\":\"mJX3hMUjQ_4Fhn7arYF7dnD9qfjt43mE6WD9UwxYTSU\",\"at\":\"2026-10-04T10:00:00Z\",\"op\":\"recovery\",\"recoveryPk\":\"rNsOKXQ_DMuGhtChBMuW4Fq-_sFTh2XnWVhp99yMSao\"}",
+          "sig": "RozGT7opkssNcWRkygCSFyu5wre2BZRshxLENWcNqkI4NvoCXEtcC2IDtddP-D9zbcS2kNSPdkQ5I-0ZNm5yDQ",
+          "recoverySig": "80nOZC1Bdyo74HetzVUJyFucdMiXaAju_4OYfHELe7ZSsHJoVSzTk5JyLApk5ZVw37ujTWmtfv5y0qBBTLI9Aw"
+        }
+      ],
+      "expect": {
+        "ok": true,
+        "length": 6,
+        "head": "HNRn0tYxYvUS3RySpvW9CWLdYpwYkazsjwTAeVf-JVk",
+        "active": [
+          "phone",
+          "devbox",
+          "phone2"
+        ],
+        "revoked": [
+          "browser"
+        ],
+        "recoveryPk": "6kpsY-KcUgq-9VB7Ey7F-ZVHdq6-vnuSQh7qaRRG0iw"
+      }
+    },
+    {
+      "name": "replaced chain against the new recovery key",
+      "entries": [
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":0,\"prev\":null,\"at\":\"2026-10-04T09:00:00Z\",\"op\":\"add\",\"member\":{\"id\":\"phone\",\"role\":\"device\",\"name\":\"Pixel\",\"boxPk\":\"GxtY3VDqFLYNoXt5DNAnVNlwybq4ZOuzwPMBb-UdP1c\",\"signPk\":\"1i8Bah79Hk_feT60LNhEceG6nwzwTRKHtcxx9hYofLg\"},\"recoveryPk\":\"6kpsY-KcUgq-9VB7Ey7F-ZVHdq6-vnuSQh7qaRRG0iw\"}",
+          "sig": "XB355Sx3UVDHcQroBfYCkvBBt86Feva-wPpdt38lM3VJUZ0Iv5RlDEKln6tTF2a_YhQyGwUhdosu73mYGXyoCA",
+          "recoverySig": "6kxBKTB2pHB5WECOk7Sg3sJJTP1d_R3sqgInjHMiiopk0c3OkLVto46USPeSraTmC08ayZEKyRCrpXdldNTRAQ"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":1,\"prev\":\"_r28NJU5QECe884gP8hTtjZ1Gye-7epm7X4W6yQ_PHo\",\"at\":\"2026-10-04T09:05:00Z\",\"op\":\"add\",\"member\":{\"id\":\"browser\",\"role\":\"device\",\"name\":\"Firefox on the Mac\",\"boxPk\":\"YDRufJEaX2uhVBKRdMr-dbKUrDu9VUljL0jOxiZvhBA\",\"signPk\":\"NLTZBDFWy23PC-sKKUm3VZyUDSvLbb6MU6mzAnjjp0Y\"}}",
+          "sig": "1ZPZbyi29vcgGucK_jC48wESYogtfL4hQGzf8bbfkGnWwXGAf_7eorna9nQbHm-cjFuWi8BehdFoCOIA0Y0PAg"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":2,\"prev\":\"foEXSX4wWj63zP06zPcoPl34JEBywOuIJ-9gsEA9nOU\",\"at\":\"2026-10-04T09:10:00Z\",\"op\":\"add\",\"member\":{\"id\":\"devbox\",\"role\":\"machine\",\"name\":\"dev box\",\"boxPk\":\"deJw3ylSxXuoNnuoYYwXj5_lDbJ5nTBOdOkY2YVoYUY\",\"signPk\":\"EqQVksi3wX1AWeeym2Ho_5bHQV8vgDNI8vAX4Fueodo\"}}",
+          "sig": "4JkzuT3alCMZS4Yg-gOGDWV2WDoV_3w3fWTcmWJ3qufgoguwiHTJcvOg-h7Hon57Nzt97GKNxOjeiYcYW_YAAQ"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":3,\"prev\":\"MzdNtWB_p8ApTKowCNVtDIJ-bgpLzG-SG3ZIbl6O02o\",\"at\":\"2026-10-04T09:15:00Z\",\"op\":\"revoke\",\"id\":\"browser\"}",
+          "sig": "gVbjnsWe6gjLS4TYVkyLgZD5nGngWNb96Bc4PeZUAi-bRxXQsU304gL-XHFNpvevUqYtiQL1S-2Z4kpbVfuFBw"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "recovery",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":4,\"prev\":\"ChYVBenH4n_dei7ykNMH9QcGs-cn4i1FruNLU9lKkcE\",\"at\":\"2026-10-04T09:20:00Z\",\"op\":\"add\",\"member\":{\"id\":\"phone2\",\"role\":\"device\",\"name\":\"New Pixel\",\"boxPk\":\"7dA8regNKd5uoxOnSrNp9HMuyzZkkGa3i1st1mTLBBc\",\"signPk\":\"VLDYHQ-n0A5KfWAN-rpvKyIDWyL-M14X7fX5qluwUHQ\"}}",
+          "sig": "rOahki-se0kTzlRYeM7d1uQkZw8Qf5QOQ_NT9LGrTqQ25Ze9hgNog91P51kNi_vnNuVWpb2mobMEzfKSV6FVBw"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":5,\"prev\":\"mJX3hMUjQ_4Fhn7arYF7dnD9qfjt43mE6WD9UwxYTSU\",\"at\":\"2026-10-04T10:00:00Z\",\"op\":\"recovery\",\"recoveryPk\":\"rNsOKXQ_DMuGhtChBMuW4Fq-_sFTh2XnWVhp99yMSao\"}",
+          "sig": "RozGT7opkssNcWRkygCSFyu5wre2BZRshxLENWcNqkI4NvoCXEtcC2IDtddP-D9zbcS2kNSPdkQ5I-0ZNm5yDQ",
+          "recoverySig": "80nOZC1Bdyo74HetzVUJyFucdMiXaAju_4OYfHELe7ZSsHJoVSzTk5JyLApk5ZVw37ujTWmtfv5y0qBBTLI9Aw"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "recovery",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":6,\"prev\":\"HNRn0tYxYvUS3RySpvW9CWLdYpwYkazsjwTAeVf-JVk\",\"at\":\"2026-10-04T10:01:00Z\",\"op\":\"recovery-confirm\",\"proposal\":5,\"recoveryPk\":\"rNsOKXQ_DMuGhtChBMuW4Fq-_sFTh2XnWVhp99yMSao\"}",
+          "sig": "xy1sI5yxYrvefaaWjor7G_SAvuwIrS1ao3EB0pzcmUCDpnQ48wRvNpZ_RZcFqwJDcCYaR1mUShZFALimMhMiBw"
+        }
+      ],
+      "options": {
+        "recoveryPk": "rNsOKXQ_DMuGhtChBMuW4Fq-_sFTh2XnWVhp99yMSao"
+      },
+      "expect": {
+        "ok": true,
+        "length": 7,
+        "head": "0Zz5Xj8ONcd-CBoPx_4_0VUnsNGUQrgSdnOcjcPtg1Q",
+        "active": [
+          "phone",
+          "devbox",
+          "phone2"
+        ],
+        "revoked": [
+          "browser"
+        ],
+        "recoveryPk": "rNsOKXQ_DMuGhtChBMuW4Fq-_sFTh2XnWVhp99yMSao"
+      }
+    },
+    {
+      "name": "replaced chain against the old recovery key",
+      "entries": [
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":0,\"prev\":null,\"at\":\"2026-10-04T09:00:00Z\",\"op\":\"add\",\"member\":{\"id\":\"phone\",\"role\":\"device\",\"name\":\"Pixel\",\"boxPk\":\"GxtY3VDqFLYNoXt5DNAnVNlwybq4ZOuzwPMBb-UdP1c\",\"signPk\":\"1i8Bah79Hk_feT60LNhEceG6nwzwTRKHtcxx9hYofLg\"},\"recoveryPk\":\"6kpsY-KcUgq-9VB7Ey7F-ZVHdq6-vnuSQh7qaRRG0iw\"}",
+          "sig": "XB355Sx3UVDHcQroBfYCkvBBt86Feva-wPpdt38lM3VJUZ0Iv5RlDEKln6tTF2a_YhQyGwUhdosu73mYGXyoCA",
+          "recoverySig": "6kxBKTB2pHB5WECOk7Sg3sJJTP1d_R3sqgInjHMiiopk0c3OkLVto46USPeSraTmC08ayZEKyRCrpXdldNTRAQ"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":1,\"prev\":\"_r28NJU5QECe884gP8hTtjZ1Gye-7epm7X4W6yQ_PHo\",\"at\":\"2026-10-04T09:05:00Z\",\"op\":\"add\",\"member\":{\"id\":\"browser\",\"role\":\"device\",\"name\":\"Firefox on the Mac\",\"boxPk\":\"YDRufJEaX2uhVBKRdMr-dbKUrDu9VUljL0jOxiZvhBA\",\"signPk\":\"NLTZBDFWy23PC-sKKUm3VZyUDSvLbb6MU6mzAnjjp0Y\"}}",
+          "sig": "1ZPZbyi29vcgGucK_jC48wESYogtfL4hQGzf8bbfkGnWwXGAf_7eorna9nQbHm-cjFuWi8BehdFoCOIA0Y0PAg"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":2,\"prev\":\"foEXSX4wWj63zP06zPcoPl34JEBywOuIJ-9gsEA9nOU\",\"at\":\"2026-10-04T09:10:00Z\",\"op\":\"add\",\"member\":{\"id\":\"devbox\",\"role\":\"machine\",\"name\":\"dev box\",\"boxPk\":\"deJw3ylSxXuoNnuoYYwXj5_lDbJ5nTBOdOkY2YVoYUY\",\"signPk\":\"EqQVksi3wX1AWeeym2Ho_5bHQV8vgDNI8vAX4Fueodo\"}}",
+          "sig": "4JkzuT3alCMZS4Yg-gOGDWV2WDoV_3w3fWTcmWJ3qufgoguwiHTJcvOg-h7Hon57Nzt97GKNxOjeiYcYW_YAAQ"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":3,\"prev\":\"MzdNtWB_p8ApTKowCNVtDIJ-bgpLzG-SG3ZIbl6O02o\",\"at\":\"2026-10-04T09:15:00Z\",\"op\":\"revoke\",\"id\":\"browser\"}",
+          "sig": "gVbjnsWe6gjLS4TYVkyLgZD5nGngWNb96Bc4PeZUAi-bRxXQsU304gL-XHFNpvevUqYtiQL1S-2Z4kpbVfuFBw"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "recovery",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":4,\"prev\":\"ChYVBenH4n_dei7ykNMH9QcGs-cn4i1FruNLU9lKkcE\",\"at\":\"2026-10-04T09:20:00Z\",\"op\":\"add\",\"member\":{\"id\":\"phone2\",\"role\":\"device\",\"name\":\"New Pixel\",\"boxPk\":\"7dA8regNKd5uoxOnSrNp9HMuyzZkkGa3i1st1mTLBBc\",\"signPk\":\"VLDYHQ-n0A5KfWAN-rpvKyIDWyL-M14X7fX5qluwUHQ\"}}",
+          "sig": "rOahki-se0kTzlRYeM7d1uQkZw8Qf5QOQ_NT9LGrTqQ25Ze9hgNog91P51kNi_vnNuVWpb2mobMEzfKSV6FVBw"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":5,\"prev\":\"mJX3hMUjQ_4Fhn7arYF7dnD9qfjt43mE6WD9UwxYTSU\",\"at\":\"2026-10-04T10:00:00Z\",\"op\":\"recovery\",\"recoveryPk\":\"rNsOKXQ_DMuGhtChBMuW4Fq-_sFTh2XnWVhp99yMSao\"}",
+          "sig": "RozGT7opkssNcWRkygCSFyu5wre2BZRshxLENWcNqkI4NvoCXEtcC2IDtddP-D9zbcS2kNSPdkQ5I-0ZNm5yDQ",
+          "recoverySig": "80nOZC1Bdyo74HetzVUJyFucdMiXaAju_4OYfHELe7ZSsHJoVSzTk5JyLApk5ZVw37ujTWmtfv5y0qBBTLI9Aw"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "recovery",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":6,\"prev\":\"HNRn0tYxYvUS3RySpvW9CWLdYpwYkazsjwTAeVf-JVk\",\"at\":\"2026-10-04T10:01:00Z\",\"op\":\"recovery-confirm\",\"proposal\":5,\"recoveryPk\":\"rNsOKXQ_DMuGhtChBMuW4Fq-_sFTh2XnWVhp99yMSao\"}",
+          "sig": "xy1sI5yxYrvefaaWjor7G_SAvuwIrS1ao3EB0pzcmUCDpnQ48wRvNpZ_RZcFqwJDcCYaR1mUShZFALimMhMiBw"
+        }
+      ],
+      "options": {
+        "recoveryPk": "6kpsY-KcUgq-9VB7Ey7F-ZVHdq6-vnuSQh7qaRRG0iw"
+      },
+      "expect": {
+        "error": "wrong-recovery-key"
+      }
+    },
+    {
+      "name": "old recovery key recovers after its replacement",
+      "entries": [
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":0,\"prev\":null,\"at\":\"2026-10-04T09:00:00Z\",\"op\":\"add\",\"member\":{\"id\":\"phone\",\"role\":\"device\",\"name\":\"Pixel\",\"boxPk\":\"GxtY3VDqFLYNoXt5DNAnVNlwybq4ZOuzwPMBb-UdP1c\",\"signPk\":\"1i8Bah79Hk_feT60LNhEceG6nwzwTRKHtcxx9hYofLg\"},\"recoveryPk\":\"6kpsY-KcUgq-9VB7Ey7F-ZVHdq6-vnuSQh7qaRRG0iw\"}",
+          "sig": "XB355Sx3UVDHcQroBfYCkvBBt86Feva-wPpdt38lM3VJUZ0Iv5RlDEKln6tTF2a_YhQyGwUhdosu73mYGXyoCA",
+          "recoverySig": "6kxBKTB2pHB5WECOk7Sg3sJJTP1d_R3sqgInjHMiiopk0c3OkLVto46USPeSraTmC08ayZEKyRCrpXdldNTRAQ"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":1,\"prev\":\"_r28NJU5QECe884gP8hTtjZ1Gye-7epm7X4W6yQ_PHo\",\"at\":\"2026-10-04T09:05:00Z\",\"op\":\"add\",\"member\":{\"id\":\"browser\",\"role\":\"device\",\"name\":\"Firefox on the Mac\",\"boxPk\":\"YDRufJEaX2uhVBKRdMr-dbKUrDu9VUljL0jOxiZvhBA\",\"signPk\":\"NLTZBDFWy23PC-sKKUm3VZyUDSvLbb6MU6mzAnjjp0Y\"}}",
+          "sig": "1ZPZbyi29vcgGucK_jC48wESYogtfL4hQGzf8bbfkGnWwXGAf_7eorna9nQbHm-cjFuWi8BehdFoCOIA0Y0PAg"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":2,\"prev\":\"foEXSX4wWj63zP06zPcoPl34JEBywOuIJ-9gsEA9nOU\",\"at\":\"2026-10-04T09:10:00Z\",\"op\":\"add\",\"member\":{\"id\":\"devbox\",\"role\":\"machine\",\"name\":\"dev box\",\"boxPk\":\"deJw3ylSxXuoNnuoYYwXj5_lDbJ5nTBOdOkY2YVoYUY\",\"signPk\":\"EqQVksi3wX1AWeeym2Ho_5bHQV8vgDNI8vAX4Fueodo\"}}",
+          "sig": "4JkzuT3alCMZS4Yg-gOGDWV2WDoV_3w3fWTcmWJ3qufgoguwiHTJcvOg-h7Hon57Nzt97GKNxOjeiYcYW_YAAQ"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":3,\"prev\":\"MzdNtWB_p8ApTKowCNVtDIJ-bgpLzG-SG3ZIbl6O02o\",\"at\":\"2026-10-04T09:15:00Z\",\"op\":\"revoke\",\"id\":\"browser\"}",
+          "sig": "gVbjnsWe6gjLS4TYVkyLgZD5nGngWNb96Bc4PeZUAi-bRxXQsU304gL-XHFNpvevUqYtiQL1S-2Z4kpbVfuFBw"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "recovery",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":4,\"prev\":\"ChYVBenH4n_dei7ykNMH9QcGs-cn4i1FruNLU9lKkcE\",\"at\":\"2026-10-04T09:20:00Z\",\"op\":\"add\",\"member\":{\"id\":\"phone2\",\"role\":\"device\",\"name\":\"New Pixel\",\"boxPk\":\"7dA8regNKd5uoxOnSrNp9HMuyzZkkGa3i1st1mTLBBc\",\"signPk\":\"VLDYHQ-n0A5KfWAN-rpvKyIDWyL-M14X7fX5qluwUHQ\"}}",
+          "sig": "rOahki-se0kTzlRYeM7d1uQkZw8Qf5QOQ_NT9LGrTqQ25Ze9hgNog91P51kNi_vnNuVWpb2mobMEzfKSV6FVBw"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":5,\"prev\":\"mJX3hMUjQ_4Fhn7arYF7dnD9qfjt43mE6WD9UwxYTSU\",\"at\":\"2026-10-04T10:00:00Z\",\"op\":\"recovery\",\"recoveryPk\":\"rNsOKXQ_DMuGhtChBMuW4Fq-_sFTh2XnWVhp99yMSao\"}",
+          "sig": "RozGT7opkssNcWRkygCSFyu5wre2BZRshxLENWcNqkI4NvoCXEtcC2IDtddP-D9zbcS2kNSPdkQ5I-0ZNm5yDQ",
+          "recoverySig": "80nOZC1Bdyo74HetzVUJyFucdMiXaAju_4OYfHELe7ZSsHJoVSzTk5JyLApk5ZVw37ujTWmtfv5y0qBBTLI9Aw"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "recovery",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":6,\"prev\":\"HNRn0tYxYvUS3RySpvW9CWLdYpwYkazsjwTAeVf-JVk\",\"at\":\"2026-10-04T10:01:00Z\",\"op\":\"recovery-confirm\",\"proposal\":5,\"recoveryPk\":\"rNsOKXQ_DMuGhtChBMuW4Fq-_sFTh2XnWVhp99yMSao\"}",
+          "sig": "xy1sI5yxYrvefaaWjor7G_SAvuwIrS1ao3EB0pzcmUCDpnQ48wRvNpZ_RZcFqwJDcCYaR1mUShZFALimMhMiBw"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "recovery",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":7,\"prev\":\"0Zz5Xj8ONcd-CBoPx_4_0VUnsNGUQrgSdnOcjcPtg1Q\",\"at\":\"2026-10-04T10:02:00Z\",\"op\":\"recover\",\"member\":{\"id\":\"evil\",\"role\":\"device\",\"name\":\"Injected\",\"boxPk\":\"xE5CklF3Hsdhl8eh-OoomhjKPden4QK6fMhN9rVcvho\",\"signPk\":\"4006AbYRLhQp6tYWaEBfTvS-T4hTq-5QedKKxsE__dA\"}}",
+          "sig": "IdspbIQ2UuzN9X5oW7ocKgIE2vVQxctGVBguuk-AobcliGFEtRBq0sxaanjecIz82uVqIlIdy1e49YtJvKLjBA"
+        }
+      ],
+      "expect": {
+        "error": "bad-signature"
+      }
+    },
+    {
+      "name": "new recovery key recovers",
+      "entries": [
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":0,\"prev\":null,\"at\":\"2026-10-04T09:00:00Z\",\"op\":\"add\",\"member\":{\"id\":\"phone\",\"role\":\"device\",\"name\":\"Pixel\",\"boxPk\":\"GxtY3VDqFLYNoXt5DNAnVNlwybq4ZOuzwPMBb-UdP1c\",\"signPk\":\"1i8Bah79Hk_feT60LNhEceG6nwzwTRKHtcxx9hYofLg\"},\"recoveryPk\":\"6kpsY-KcUgq-9VB7Ey7F-ZVHdq6-vnuSQh7qaRRG0iw\"}",
+          "sig": "XB355Sx3UVDHcQroBfYCkvBBt86Feva-wPpdt38lM3VJUZ0Iv5RlDEKln6tTF2a_YhQyGwUhdosu73mYGXyoCA",
+          "recoverySig": "6kxBKTB2pHB5WECOk7Sg3sJJTP1d_R3sqgInjHMiiopk0c3OkLVto46USPeSraTmC08ayZEKyRCrpXdldNTRAQ"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":1,\"prev\":\"_r28NJU5QECe884gP8hTtjZ1Gye-7epm7X4W6yQ_PHo\",\"at\":\"2026-10-04T09:05:00Z\",\"op\":\"add\",\"member\":{\"id\":\"browser\",\"role\":\"device\",\"name\":\"Firefox on the Mac\",\"boxPk\":\"YDRufJEaX2uhVBKRdMr-dbKUrDu9VUljL0jOxiZvhBA\",\"signPk\":\"NLTZBDFWy23PC-sKKUm3VZyUDSvLbb6MU6mzAnjjp0Y\"}}",
+          "sig": "1ZPZbyi29vcgGucK_jC48wESYogtfL4hQGzf8bbfkGnWwXGAf_7eorna9nQbHm-cjFuWi8BehdFoCOIA0Y0PAg"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":2,\"prev\":\"foEXSX4wWj63zP06zPcoPl34JEBywOuIJ-9gsEA9nOU\",\"at\":\"2026-10-04T09:10:00Z\",\"op\":\"add\",\"member\":{\"id\":\"devbox\",\"role\":\"machine\",\"name\":\"dev box\",\"boxPk\":\"deJw3ylSxXuoNnuoYYwXj5_lDbJ5nTBOdOkY2YVoYUY\",\"signPk\":\"EqQVksi3wX1AWeeym2Ho_5bHQV8vgDNI8vAX4Fueodo\"}}",
+          "sig": "4JkzuT3alCMZS4Yg-gOGDWV2WDoV_3w3fWTcmWJ3qufgoguwiHTJcvOg-h7Hon57Nzt97GKNxOjeiYcYW_YAAQ"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":3,\"prev\":\"MzdNtWB_p8ApTKowCNVtDIJ-bgpLzG-SG3ZIbl6O02o\",\"at\":\"2026-10-04T09:15:00Z\",\"op\":\"revoke\",\"id\":\"browser\"}",
+          "sig": "gVbjnsWe6gjLS4TYVkyLgZD5nGngWNb96Bc4PeZUAi-bRxXQsU304gL-XHFNpvevUqYtiQL1S-2Z4kpbVfuFBw"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "recovery",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":4,\"prev\":\"ChYVBenH4n_dei7ykNMH9QcGs-cn4i1FruNLU9lKkcE\",\"at\":\"2026-10-04T09:20:00Z\",\"op\":\"add\",\"member\":{\"id\":\"phone2\",\"role\":\"device\",\"name\":\"New Pixel\",\"boxPk\":\"7dA8regNKd5uoxOnSrNp9HMuyzZkkGa3i1st1mTLBBc\",\"signPk\":\"VLDYHQ-n0A5KfWAN-rpvKyIDWyL-M14X7fX5qluwUHQ\"}}",
+          "sig": "rOahki-se0kTzlRYeM7d1uQkZw8Qf5QOQ_NT9LGrTqQ25Ze9hgNog91P51kNi_vnNuVWpb2mobMEzfKSV6FVBw"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":5,\"prev\":\"mJX3hMUjQ_4Fhn7arYF7dnD9qfjt43mE6WD9UwxYTSU\",\"at\":\"2026-10-04T10:00:00Z\",\"op\":\"recovery\",\"recoveryPk\":\"rNsOKXQ_DMuGhtChBMuW4Fq-_sFTh2XnWVhp99yMSao\"}",
+          "sig": "RozGT7opkssNcWRkygCSFyu5wre2BZRshxLENWcNqkI4NvoCXEtcC2IDtddP-D9zbcS2kNSPdkQ5I-0ZNm5yDQ",
+          "recoverySig": "80nOZC1Bdyo74HetzVUJyFucdMiXaAju_4OYfHELe7ZSsHJoVSzTk5JyLApk5ZVw37ujTWmtfv5y0qBBTLI9Aw"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "recovery",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":6,\"prev\":\"HNRn0tYxYvUS3RySpvW9CWLdYpwYkazsjwTAeVf-JVk\",\"at\":\"2026-10-04T10:01:00Z\",\"op\":\"recovery-confirm\",\"proposal\":5,\"recoveryPk\":\"rNsOKXQ_DMuGhtChBMuW4Fq-_sFTh2XnWVhp99yMSao\"}",
+          "sig": "xy1sI5yxYrvefaaWjor7G_SAvuwIrS1ao3EB0pzcmUCDpnQ48wRvNpZ_RZcFqwJDcCYaR1mUShZFALimMhMiBw"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "recovery",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":7,\"prev\":\"0Zz5Xj8ONcd-CBoPx_4_0VUnsNGUQrgSdnOcjcPtg1Q\",\"at\":\"2026-10-04T10:02:00Z\",\"op\":\"recover\",\"member\":{\"id\":\"evil\",\"role\":\"device\",\"name\":\"Injected\",\"boxPk\":\"xE5CklF3Hsdhl8eh-OoomhjKPden4QK6fMhN9rVcvho\",\"signPk\":\"4006AbYRLhQp6tYWaEBfTvS-T4hTq-5QedKKxsE__dA\"}}",
+          "sig": "gIdySrVSXt2aZzI6zmwao6pbigLcCHkGp_ZV-Bo3HzCkFWi9X20_YJypw2M1MjrI3x5bocFGW35bOQGq9uSLCQ"
+        }
+      ],
+      "expect": {
+        "ok": true,
+        "length": 8,
+        "head": "Tb2wF6BqIEkVGl_DUk_9uO4rwhdKhcCZ-cE3mMPejw4",
+        "active": [
+          "evil"
+        ],
+        "revoked": [
+          "phone",
+          "browser",
+          "devbox",
+          "phone2"
+        ],
+        "recoveryPk": "rNsOKXQ_DMuGhtChBMuW4Fq-_sFTh2XnWVhp99yMSao"
+      }
+    },
+    {
+      "name": "a device confirms a proposal",
+      "entries": [
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":0,\"prev\":null,\"at\":\"2026-10-04T09:00:00Z\",\"op\":\"add\",\"member\":{\"id\":\"phone\",\"role\":\"device\",\"name\":\"Pixel\",\"boxPk\":\"GxtY3VDqFLYNoXt5DNAnVNlwybq4ZOuzwPMBb-UdP1c\",\"signPk\":\"1i8Bah79Hk_feT60LNhEceG6nwzwTRKHtcxx9hYofLg\"},\"recoveryPk\":\"6kpsY-KcUgq-9VB7Ey7F-ZVHdq6-vnuSQh7qaRRG0iw\"}",
+          "sig": "XB355Sx3UVDHcQroBfYCkvBBt86Feva-wPpdt38lM3VJUZ0Iv5RlDEKln6tTF2a_YhQyGwUhdosu73mYGXyoCA",
+          "recoverySig": "6kxBKTB2pHB5WECOk7Sg3sJJTP1d_R3sqgInjHMiiopk0c3OkLVto46USPeSraTmC08ayZEKyRCrpXdldNTRAQ"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":1,\"prev\":\"_r28NJU5QECe884gP8hTtjZ1Gye-7epm7X4W6yQ_PHo\",\"at\":\"2026-10-04T09:05:00Z\",\"op\":\"add\",\"member\":{\"id\":\"browser\",\"role\":\"device\",\"name\":\"Firefox on the Mac\",\"boxPk\":\"YDRufJEaX2uhVBKRdMr-dbKUrDu9VUljL0jOxiZvhBA\",\"signPk\":\"NLTZBDFWy23PC-sKKUm3VZyUDSvLbb6MU6mzAnjjp0Y\"}}",
+          "sig": "1ZPZbyi29vcgGucK_jC48wESYogtfL4hQGzf8bbfkGnWwXGAf_7eorna9nQbHm-cjFuWi8BehdFoCOIA0Y0PAg"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":2,\"prev\":\"foEXSX4wWj63zP06zPcoPl34JEBywOuIJ-9gsEA9nOU\",\"at\":\"2026-10-04T09:10:00Z\",\"op\":\"add\",\"member\":{\"id\":\"devbox\",\"role\":\"machine\",\"name\":\"dev box\",\"boxPk\":\"deJw3ylSxXuoNnuoYYwXj5_lDbJ5nTBOdOkY2YVoYUY\",\"signPk\":\"EqQVksi3wX1AWeeym2Ho_5bHQV8vgDNI8vAX4Fueodo\"}}",
+          "sig": "4JkzuT3alCMZS4Yg-gOGDWV2WDoV_3w3fWTcmWJ3qufgoguwiHTJcvOg-h7Hon57Nzt97GKNxOjeiYcYW_YAAQ"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":3,\"prev\":\"MzdNtWB_p8ApTKowCNVtDIJ-bgpLzG-SG3ZIbl6O02o\",\"at\":\"2026-10-04T09:15:00Z\",\"op\":\"revoke\",\"id\":\"browser\"}",
+          "sig": "gVbjnsWe6gjLS4TYVkyLgZD5nGngWNb96Bc4PeZUAi-bRxXQsU304gL-XHFNpvevUqYtiQL1S-2Z4kpbVfuFBw"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "recovery",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":4,\"prev\":\"ChYVBenH4n_dei7ykNMH9QcGs-cn4i1FruNLU9lKkcE\",\"at\":\"2026-10-04T09:20:00Z\",\"op\":\"add\",\"member\":{\"id\":\"phone2\",\"role\":\"device\",\"name\":\"New Pixel\",\"boxPk\":\"7dA8regNKd5uoxOnSrNp9HMuyzZkkGa3i1st1mTLBBc\",\"signPk\":\"VLDYHQ-n0A5KfWAN-rpvKyIDWyL-M14X7fX5qluwUHQ\"}}",
+          "sig": "rOahki-se0kTzlRYeM7d1uQkZw8Qf5QOQ_NT9LGrTqQ25Ze9hgNog91P51kNi_vnNuVWpb2mobMEzfKSV6FVBw"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":5,\"prev\":\"mJX3hMUjQ_4Fhn7arYF7dnD9qfjt43mE6WD9UwxYTSU\",\"at\":\"2026-10-04T10:00:00Z\",\"op\":\"recovery\",\"recoveryPk\":\"rNsOKXQ_DMuGhtChBMuW4Fq-_sFTh2XnWVhp99yMSao\"}",
+          "sig": "RozGT7opkssNcWRkygCSFyu5wre2BZRshxLENWcNqkI4NvoCXEtcC2IDtddP-D9zbcS2kNSPdkQ5I-0ZNm5yDQ",
+          "recoverySig": "80nOZC1Bdyo74HetzVUJyFucdMiXaAju_4OYfHELe7ZSsHJoVSzTk5JyLApk5ZVw37ujTWmtfv5y0qBBTLI9Aw"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone2",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":6,\"prev\":\"HNRn0tYxYvUS3RySpvW9CWLdYpwYkazsjwTAeVf-JVk\",\"at\":\"2026-10-04T10:00:00Z\",\"op\":\"recovery-confirm\",\"proposal\":5,\"recoveryPk\":\"rNsOKXQ_DMuGhtChBMuW4Fq-_sFTh2XnWVhp99yMSao\"}",
+          "sig": "QQjCiEvDbhnc8IFtLw4_-zDB84AXAIj8Oxjdto7Oqa_pKL_SWsx3Jl77XHE1tf0KXY0EjfkVkGPukStpC6_iDg"
+        }
+      ],
+      "expect": {
+        "error": "signer-not-allowed"
+      }
+    },
+    {
+      "name": "proposing device confirms its own proposal",
+      "entries": [
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":0,\"prev\":null,\"at\":\"2026-10-04T09:00:00Z\",\"op\":\"add\",\"member\":{\"id\":\"phone\",\"role\":\"device\",\"name\":\"Pixel\",\"boxPk\":\"GxtY3VDqFLYNoXt5DNAnVNlwybq4ZOuzwPMBb-UdP1c\",\"signPk\":\"1i8Bah79Hk_feT60LNhEceG6nwzwTRKHtcxx9hYofLg\"},\"recoveryPk\":\"6kpsY-KcUgq-9VB7Ey7F-ZVHdq6-vnuSQh7qaRRG0iw\"}",
+          "sig": "XB355Sx3UVDHcQroBfYCkvBBt86Feva-wPpdt38lM3VJUZ0Iv5RlDEKln6tTF2a_YhQyGwUhdosu73mYGXyoCA",
+          "recoverySig": "6kxBKTB2pHB5WECOk7Sg3sJJTP1d_R3sqgInjHMiiopk0c3OkLVto46USPeSraTmC08ayZEKyRCrpXdldNTRAQ"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":1,\"prev\":\"_r28NJU5QECe884gP8hTtjZ1Gye-7epm7X4W6yQ_PHo\",\"at\":\"2026-10-04T09:05:00Z\",\"op\":\"add\",\"member\":{\"id\":\"browser\",\"role\":\"device\",\"name\":\"Firefox on the Mac\",\"boxPk\":\"YDRufJEaX2uhVBKRdMr-dbKUrDu9VUljL0jOxiZvhBA\",\"signPk\":\"NLTZBDFWy23PC-sKKUm3VZyUDSvLbb6MU6mzAnjjp0Y\"}}",
+          "sig": "1ZPZbyi29vcgGucK_jC48wESYogtfL4hQGzf8bbfkGnWwXGAf_7eorna9nQbHm-cjFuWi8BehdFoCOIA0Y0PAg"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":2,\"prev\":\"foEXSX4wWj63zP06zPcoPl34JEBywOuIJ-9gsEA9nOU\",\"at\":\"2026-10-04T09:10:00Z\",\"op\":\"add\",\"member\":{\"id\":\"devbox\",\"role\":\"machine\",\"name\":\"dev box\",\"boxPk\":\"deJw3ylSxXuoNnuoYYwXj5_lDbJ5nTBOdOkY2YVoYUY\",\"signPk\":\"EqQVksi3wX1AWeeym2Ho_5bHQV8vgDNI8vAX4Fueodo\"}}",
+          "sig": "4JkzuT3alCMZS4Yg-gOGDWV2WDoV_3w3fWTcmWJ3qufgoguwiHTJcvOg-h7Hon57Nzt97GKNxOjeiYcYW_YAAQ"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":3,\"prev\":\"MzdNtWB_p8ApTKowCNVtDIJ-bgpLzG-SG3ZIbl6O02o\",\"at\":\"2026-10-04T09:15:00Z\",\"op\":\"revoke\",\"id\":\"browser\"}",
+          "sig": "gVbjnsWe6gjLS4TYVkyLgZD5nGngWNb96Bc4PeZUAi-bRxXQsU304gL-XHFNpvevUqYtiQL1S-2Z4kpbVfuFBw"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "recovery",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":4,\"prev\":\"ChYVBenH4n_dei7ykNMH9QcGs-cn4i1FruNLU9lKkcE\",\"at\":\"2026-10-04T09:20:00Z\",\"op\":\"add\",\"member\":{\"id\":\"phone2\",\"role\":\"device\",\"name\":\"New Pixel\",\"boxPk\":\"7dA8regNKd5uoxOnSrNp9HMuyzZkkGa3i1st1mTLBBc\",\"signPk\":\"VLDYHQ-n0A5KfWAN-rpvKyIDWyL-M14X7fX5qluwUHQ\"}}",
+          "sig": "rOahki-se0kTzlRYeM7d1uQkZw8Qf5QOQ_NT9LGrTqQ25Ze9hgNog91P51kNi_vnNuVWpb2mobMEzfKSV6FVBw"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":5,\"prev\":\"mJX3hMUjQ_4Fhn7arYF7dnD9qfjt43mE6WD9UwxYTSU\",\"at\":\"2026-10-04T10:00:00Z\",\"op\":\"recovery\",\"recoveryPk\":\"rNsOKXQ_DMuGhtChBMuW4Fq-_sFTh2XnWVhp99yMSao\"}",
+          "sig": "RozGT7opkssNcWRkygCSFyu5wre2BZRshxLENWcNqkI4NvoCXEtcC2IDtddP-D9zbcS2kNSPdkQ5I-0ZNm5yDQ",
+          "recoverySig": "80nOZC1Bdyo74HetzVUJyFucdMiXaAju_4OYfHELe7ZSsHJoVSzTk5JyLApk5ZVw37ujTWmtfv5y0qBBTLI9Aw"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":6,\"prev\":\"HNRn0tYxYvUS3RySpvW9CWLdYpwYkazsjwTAeVf-JVk\",\"at\":\"2026-10-04T10:00:00Z\",\"op\":\"recovery-confirm\",\"proposal\":5,\"recoveryPk\":\"rNsOKXQ_DMuGhtChBMuW4Fq-_sFTh2XnWVhp99yMSao\"}",
+          "sig": "BpNmhB1zTKgLudJV5UUcW_Nnx8iAmAUOtiRwR9pzPnxnJJl_drKE1gSn-K0rFxYsoGyWdY-nRML4CfKaNChEBw"
+        }
+      ],
+      "expect": {
+        "error": "signer-not-allowed"
+      }
+    },
+    {
+      "name": "revoked device proposes a recovery key",
+      "entries": [
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":0,\"prev\":null,\"at\":\"2026-10-04T09:00:00Z\",\"op\":\"add\",\"member\":{\"id\":\"phone\",\"role\":\"device\",\"name\":\"Pixel\",\"boxPk\":\"GxtY3VDqFLYNoXt5DNAnVNlwybq4ZOuzwPMBb-UdP1c\",\"signPk\":\"1i8Bah79Hk_feT60LNhEceG6nwzwTRKHtcxx9hYofLg\"},\"recoveryPk\":\"6kpsY-KcUgq-9VB7Ey7F-ZVHdq6-vnuSQh7qaRRG0iw\"}",
+          "sig": "XB355Sx3UVDHcQroBfYCkvBBt86Feva-wPpdt38lM3VJUZ0Iv5RlDEKln6tTF2a_YhQyGwUhdosu73mYGXyoCA",
+          "recoverySig": "6kxBKTB2pHB5WECOk7Sg3sJJTP1d_R3sqgInjHMiiopk0c3OkLVto46USPeSraTmC08ayZEKyRCrpXdldNTRAQ"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":1,\"prev\":\"_r28NJU5QECe884gP8hTtjZ1Gye-7epm7X4W6yQ_PHo\",\"at\":\"2026-10-04T09:05:00Z\",\"op\":\"add\",\"member\":{\"id\":\"browser\",\"role\":\"device\",\"name\":\"Firefox on the Mac\",\"boxPk\":\"YDRufJEaX2uhVBKRdMr-dbKUrDu9VUljL0jOxiZvhBA\",\"signPk\":\"NLTZBDFWy23PC-sKKUm3VZyUDSvLbb6MU6mzAnjjp0Y\"}}",
+          "sig": "1ZPZbyi29vcgGucK_jC48wESYogtfL4hQGzf8bbfkGnWwXGAf_7eorna9nQbHm-cjFuWi8BehdFoCOIA0Y0PAg"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":2,\"prev\":\"foEXSX4wWj63zP06zPcoPl34JEBywOuIJ-9gsEA9nOU\",\"at\":\"2026-10-04T09:10:00Z\",\"op\":\"add\",\"member\":{\"id\":\"devbox\",\"role\":\"machine\",\"name\":\"dev box\",\"boxPk\":\"deJw3ylSxXuoNnuoYYwXj5_lDbJ5nTBOdOkY2YVoYUY\",\"signPk\":\"EqQVksi3wX1AWeeym2Ho_5bHQV8vgDNI8vAX4Fueodo\"}}",
+          "sig": "4JkzuT3alCMZS4Yg-gOGDWV2WDoV_3w3fWTcmWJ3qufgoguwiHTJcvOg-h7Hon57Nzt97GKNxOjeiYcYW_YAAQ"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":3,\"prev\":\"MzdNtWB_p8ApTKowCNVtDIJ-bgpLzG-SG3ZIbl6O02o\",\"at\":\"2026-10-04T09:15:00Z\",\"op\":\"revoke\",\"id\":\"browser\"}",
+          "sig": "gVbjnsWe6gjLS4TYVkyLgZD5nGngWNb96Bc4PeZUAi-bRxXQsU304gL-XHFNpvevUqYtiQL1S-2Z4kpbVfuFBw"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "recovery",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":4,\"prev\":\"ChYVBenH4n_dei7ykNMH9QcGs-cn4i1FruNLU9lKkcE\",\"at\":\"2026-10-04T09:20:00Z\",\"op\":\"add\",\"member\":{\"id\":\"phone2\",\"role\":\"device\",\"name\":\"New Pixel\",\"boxPk\":\"7dA8regNKd5uoxOnSrNp9HMuyzZkkGa3i1st1mTLBBc\",\"signPk\":\"VLDYHQ-n0A5KfWAN-rpvKyIDWyL-M14X7fX5qluwUHQ\"}}",
+          "sig": "rOahki-se0kTzlRYeM7d1uQkZw8Qf5QOQ_NT9LGrTqQ25Ze9hgNog91P51kNi_vnNuVWpb2mobMEzfKSV6FVBw"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "browser",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":5,\"prev\":\"mJX3hMUjQ_4Fhn7arYF7dnD9qfjt43mE6WD9UwxYTSU\",\"at\":\"2026-10-04T10:00:00Z\",\"op\":\"recovery\",\"recoveryPk\":\"rNsOKXQ_DMuGhtChBMuW4Fq-_sFTh2XnWVhp99yMSao\"}",
+          "sig": "HkKgbTNbstzedyrstVZOGsmtigg8Uzbh5wcoDGIrEGQW7lFJQQRF0WlM6tb2OB6sy75dlLH5YV14W8OgGaSgCQ",
+          "recoverySig": "80nOZC1Bdyo74HetzVUJyFucdMiXaAju_4OYfHELe7ZSsHJoVSzTk5JyLApk5ZVw37ujTWmtfv5y0qBBTLI9Aw"
+        }
+      ],
+      "expect": {
+        "error": "revoked-signer"
+      }
+    },
+    {
+      "name": "a proposal dies with its revoked proposer",
+      "entries": [
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":0,\"prev\":null,\"at\":\"2026-10-04T09:00:00Z\",\"op\":\"add\",\"member\":{\"id\":\"phone\",\"role\":\"device\",\"name\":\"Pixel\",\"boxPk\":\"GxtY3VDqFLYNoXt5DNAnVNlwybq4ZOuzwPMBb-UdP1c\",\"signPk\":\"1i8Bah79Hk_feT60LNhEceG6nwzwTRKHtcxx9hYofLg\"},\"recoveryPk\":\"6kpsY-KcUgq-9VB7Ey7F-ZVHdq6-vnuSQh7qaRRG0iw\"}",
+          "sig": "XB355Sx3UVDHcQroBfYCkvBBt86Feva-wPpdt38lM3VJUZ0Iv5RlDEKln6tTF2a_YhQyGwUhdosu73mYGXyoCA",
+          "recoverySig": "6kxBKTB2pHB5WECOk7Sg3sJJTP1d_R3sqgInjHMiiopk0c3OkLVto46USPeSraTmC08ayZEKyRCrpXdldNTRAQ"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":1,\"prev\":\"_r28NJU5QECe884gP8hTtjZ1Gye-7epm7X4W6yQ_PHo\",\"at\":\"2026-10-04T09:05:00Z\",\"op\":\"add\",\"member\":{\"id\":\"browser\",\"role\":\"device\",\"name\":\"Firefox on the Mac\",\"boxPk\":\"YDRufJEaX2uhVBKRdMr-dbKUrDu9VUljL0jOxiZvhBA\",\"signPk\":\"NLTZBDFWy23PC-sKKUm3VZyUDSvLbb6MU6mzAnjjp0Y\"}}",
+          "sig": "1ZPZbyi29vcgGucK_jC48wESYogtfL4hQGzf8bbfkGnWwXGAf_7eorna9nQbHm-cjFuWi8BehdFoCOIA0Y0PAg"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":2,\"prev\":\"foEXSX4wWj63zP06zPcoPl34JEBywOuIJ-9gsEA9nOU\",\"at\":\"2026-10-04T09:10:00Z\",\"op\":\"add\",\"member\":{\"id\":\"devbox\",\"role\":\"machine\",\"name\":\"dev box\",\"boxPk\":\"deJw3ylSxXuoNnuoYYwXj5_lDbJ5nTBOdOkY2YVoYUY\",\"signPk\":\"EqQVksi3wX1AWeeym2Ho_5bHQV8vgDNI8vAX4Fueodo\"}}",
+          "sig": "4JkzuT3alCMZS4Yg-gOGDWV2WDoV_3w3fWTcmWJ3qufgoguwiHTJcvOg-h7Hon57Nzt97GKNxOjeiYcYW_YAAQ"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":3,\"prev\":\"MzdNtWB_p8ApTKowCNVtDIJ-bgpLzG-SG3ZIbl6O02o\",\"at\":\"2026-10-04T09:15:00Z\",\"op\":\"revoke\",\"id\":\"browser\"}",
+          "sig": "gVbjnsWe6gjLS4TYVkyLgZD5nGngWNb96Bc4PeZUAi-bRxXQsU304gL-XHFNpvevUqYtiQL1S-2Z4kpbVfuFBw"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "recovery",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":4,\"prev\":\"ChYVBenH4n_dei7ykNMH9QcGs-cn4i1FruNLU9lKkcE\",\"at\":\"2026-10-04T09:20:00Z\",\"op\":\"add\",\"member\":{\"id\":\"phone2\",\"role\":\"device\",\"name\":\"New Pixel\",\"boxPk\":\"7dA8regNKd5uoxOnSrNp9HMuyzZkkGa3i1st1mTLBBc\",\"signPk\":\"VLDYHQ-n0A5KfWAN-rpvKyIDWyL-M14X7fX5qluwUHQ\"}}",
+          "sig": "rOahki-se0kTzlRYeM7d1uQkZw8Qf5QOQ_NT9LGrTqQ25Ze9hgNog91P51kNi_vnNuVWpb2mobMEzfKSV6FVBw"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone2",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":5,\"prev\":\"mJX3hMUjQ_4Fhn7arYF7dnD9qfjt43mE6WD9UwxYTSU\",\"at\":\"2026-10-04T10:00:00Z\",\"op\":\"recovery\",\"recoveryPk\":\"rNsOKXQ_DMuGhtChBMuW4Fq-_sFTh2XnWVhp99yMSao\"}",
+          "sig": "vu4GYMsq0pchGlrFdnWnBRK2JamzkGsA-bpqFdXymbeo1iwnlggFZKoG7OFWnDQ2Kx4d5vS0RBPK2vuCjj61AQ",
+          "recoverySig": "80nOZC1Bdyo74HetzVUJyFucdMiXaAju_4OYfHELe7ZSsHJoVSzTk5JyLApk5ZVw37ujTWmtfv5y0qBBTLI9Aw"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":6,\"prev\":\"HNRn0tYxYvUS3RySpvW9CWLdYpwYkazsjwTAeVf-JVk\",\"at\":\"2026-10-04T10:01:00Z\",\"op\":\"revoke\",\"id\":\"phone2\"}",
+          "sig": "PJmoUVzA_7Xd439dwHfm11XF_q4aPeX6lJLzLdiNcfvws6icVPxSX8hn-KpDeJkvagaUu8WBQ9uQAzsnYw5rBQ"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "recovery",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":7,\"prev\":\"MegCGxUBSvX9Q0l4mODGEyiSpcnFBKfRBdr-TnKb_No\",\"at\":\"2026-10-04T10:00:00Z\",\"op\":\"recovery-confirm\",\"proposal\":5,\"recoveryPk\":\"rNsOKXQ_DMuGhtChBMuW4Fq-_sFTh2XnWVhp99yMSao\"}",
+          "sig": "kXi3JZwF7csxfVOiCSviUKIpdLiu5GdZNE3gS--FteHYM_mxDQw2xNqVJtNcNCduxvcr9xuoAeYJKzmVu3TPBg"
+        }
+      ],
+      "expect": {
+        "error": "bad-recovery"
+      }
+    },
+    {
+      "name": "a later proposal replaces a pending one",
+      "entries": [
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":0,\"prev\":null,\"at\":\"2026-10-04T09:00:00Z\",\"op\":\"add\",\"member\":{\"id\":\"phone\",\"role\":\"device\",\"name\":\"Pixel\",\"boxPk\":\"GxtY3VDqFLYNoXt5DNAnVNlwybq4ZOuzwPMBb-UdP1c\",\"signPk\":\"1i8Bah79Hk_feT60LNhEceG6nwzwTRKHtcxx9hYofLg\"},\"recoveryPk\":\"6kpsY-KcUgq-9VB7Ey7F-ZVHdq6-vnuSQh7qaRRG0iw\"}",
+          "sig": "XB355Sx3UVDHcQroBfYCkvBBt86Feva-wPpdt38lM3VJUZ0Iv5RlDEKln6tTF2a_YhQyGwUhdosu73mYGXyoCA",
+          "recoverySig": "6kxBKTB2pHB5WECOk7Sg3sJJTP1d_R3sqgInjHMiiopk0c3OkLVto46USPeSraTmC08ayZEKyRCrpXdldNTRAQ"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":1,\"prev\":\"_r28NJU5QECe884gP8hTtjZ1Gye-7epm7X4W6yQ_PHo\",\"at\":\"2026-10-04T09:05:00Z\",\"op\":\"add\",\"member\":{\"id\":\"browser\",\"role\":\"device\",\"name\":\"Firefox on the Mac\",\"boxPk\":\"YDRufJEaX2uhVBKRdMr-dbKUrDu9VUljL0jOxiZvhBA\",\"signPk\":\"NLTZBDFWy23PC-sKKUm3VZyUDSvLbb6MU6mzAnjjp0Y\"}}",
+          "sig": "1ZPZbyi29vcgGucK_jC48wESYogtfL4hQGzf8bbfkGnWwXGAf_7eorna9nQbHm-cjFuWi8BehdFoCOIA0Y0PAg"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":2,\"prev\":\"foEXSX4wWj63zP06zPcoPl34JEBywOuIJ-9gsEA9nOU\",\"at\":\"2026-10-04T09:10:00Z\",\"op\":\"add\",\"member\":{\"id\":\"devbox\",\"role\":\"machine\",\"name\":\"dev box\",\"boxPk\":\"deJw3ylSxXuoNnuoYYwXj5_lDbJ5nTBOdOkY2YVoYUY\",\"signPk\":\"EqQVksi3wX1AWeeym2Ho_5bHQV8vgDNI8vAX4Fueodo\"}}",
+          "sig": "4JkzuT3alCMZS4Yg-gOGDWV2WDoV_3w3fWTcmWJ3qufgoguwiHTJcvOg-h7Hon57Nzt97GKNxOjeiYcYW_YAAQ"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":3,\"prev\":\"MzdNtWB_p8ApTKowCNVtDIJ-bgpLzG-SG3ZIbl6O02o\",\"at\":\"2026-10-04T09:15:00Z\",\"op\":\"revoke\",\"id\":\"browser\"}",
+          "sig": "gVbjnsWe6gjLS4TYVkyLgZD5nGngWNb96Bc4PeZUAi-bRxXQsU304gL-XHFNpvevUqYtiQL1S-2Z4kpbVfuFBw"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "recovery",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":4,\"prev\":\"ChYVBenH4n_dei7ykNMH9QcGs-cn4i1FruNLU9lKkcE\",\"at\":\"2026-10-04T09:20:00Z\",\"op\":\"add\",\"member\":{\"id\":\"phone2\",\"role\":\"device\",\"name\":\"New Pixel\",\"boxPk\":\"7dA8regNKd5uoxOnSrNp9HMuyzZkkGa3i1st1mTLBBc\",\"signPk\":\"VLDYHQ-n0A5KfWAN-rpvKyIDWyL-M14X7fX5qluwUHQ\"}}",
+          "sig": "rOahki-se0kTzlRYeM7d1uQkZw8Qf5QOQ_NT9LGrTqQ25Ze9hgNog91P51kNi_vnNuVWpb2mobMEzfKSV6FVBw"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":5,\"prev\":\"mJX3hMUjQ_4Fhn7arYF7dnD9qfjt43mE6WD9UwxYTSU\",\"at\":\"2026-10-04T10:00:00Z\",\"op\":\"recovery\",\"recoveryPk\":\"rNsOKXQ_DMuGhtChBMuW4Fq-_sFTh2XnWVhp99yMSao\"}",
+          "sig": "RozGT7opkssNcWRkygCSFyu5wre2BZRshxLENWcNqkI4NvoCXEtcC2IDtddP-D9zbcS2kNSPdkQ5I-0ZNm5yDQ",
+          "recoverySig": "80nOZC1Bdyo74HetzVUJyFucdMiXaAju_4OYfHELe7ZSsHJoVSzTk5JyLApk5ZVw37ujTWmtfv5y0qBBTLI9Aw"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone2",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":6,\"prev\":\"HNRn0tYxYvUS3RySpvW9CWLdYpwYkazsjwTAeVf-JVk\",\"at\":\"2026-10-04T10:01:00Z\",\"op\":\"recovery\",\"recoveryPk\":\"QwRr_kCSs-lJlOraFdzCDYqqB7ZY_TlU644O-4vcpd4\"}",
+          "sig": "eWGRO_0NvbR7L7kJUigfLdfNvIM3ojkU9CGJNmb5wDTezJqBAqHCHF0OVA_sdxOOlEsz2Q1Pp6RLbAUR4m28DA",
+          "recoverySig": "q12hYld0_KHfVb4LgkYAF-ue4Y0O9HkqGglZSGUYsKOtOdf4dvY2-I5jduaGSvSivHNeW8DoF-LgtUkhbFLtDw"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "recovery",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":7,\"prev\":\"ipoKY1HfSxHtqVjGXWWYJPv18yWkPLZhTNoclUwi2hs\",\"at\":\"2026-10-04T10:00:00Z\",\"op\":\"recovery-confirm\",\"proposal\":5,\"recoveryPk\":\"rNsOKXQ_DMuGhtChBMuW4Fq-_sFTh2XnWVhp99yMSao\"}",
+          "sig": "BXi7tGEeIFf9SS-YbO-XRleGBEh6eYQme4n3755J-8B7f4EanrWUnMUU-8zKpEJ0-X7QGtKMKPj-BtXaTIFhCA"
+        }
+      ],
+      "expect": {
+        "error": "bad-recovery"
+      }
+    },
+    {
+      "name": "proposal without the new key's signature",
+      "entries": [
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":0,\"prev\":null,\"at\":\"2026-10-04T09:00:00Z\",\"op\":\"add\",\"member\":{\"id\":\"phone\",\"role\":\"device\",\"name\":\"Pixel\",\"boxPk\":\"GxtY3VDqFLYNoXt5DNAnVNlwybq4ZOuzwPMBb-UdP1c\",\"signPk\":\"1i8Bah79Hk_feT60LNhEceG6nwzwTRKHtcxx9hYofLg\"},\"recoveryPk\":\"6kpsY-KcUgq-9VB7Ey7F-ZVHdq6-vnuSQh7qaRRG0iw\"}",
+          "sig": "XB355Sx3UVDHcQroBfYCkvBBt86Feva-wPpdt38lM3VJUZ0Iv5RlDEKln6tTF2a_YhQyGwUhdosu73mYGXyoCA",
+          "recoverySig": "6kxBKTB2pHB5WECOk7Sg3sJJTP1d_R3sqgInjHMiiopk0c3OkLVto46USPeSraTmC08ayZEKyRCrpXdldNTRAQ"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":1,\"prev\":\"_r28NJU5QECe884gP8hTtjZ1Gye-7epm7X4W6yQ_PHo\",\"at\":\"2026-10-04T09:05:00Z\",\"op\":\"add\",\"member\":{\"id\":\"browser\",\"role\":\"device\",\"name\":\"Firefox on the Mac\",\"boxPk\":\"YDRufJEaX2uhVBKRdMr-dbKUrDu9VUljL0jOxiZvhBA\",\"signPk\":\"NLTZBDFWy23PC-sKKUm3VZyUDSvLbb6MU6mzAnjjp0Y\"}}",
+          "sig": "1ZPZbyi29vcgGucK_jC48wESYogtfL4hQGzf8bbfkGnWwXGAf_7eorna9nQbHm-cjFuWi8BehdFoCOIA0Y0PAg"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":2,\"prev\":\"foEXSX4wWj63zP06zPcoPl34JEBywOuIJ-9gsEA9nOU\",\"at\":\"2026-10-04T09:10:00Z\",\"op\":\"add\",\"member\":{\"id\":\"devbox\",\"role\":\"machine\",\"name\":\"dev box\",\"boxPk\":\"deJw3ylSxXuoNnuoYYwXj5_lDbJ5nTBOdOkY2YVoYUY\",\"signPk\":\"EqQVksi3wX1AWeeym2Ho_5bHQV8vgDNI8vAX4Fueodo\"}}",
+          "sig": "4JkzuT3alCMZS4Yg-gOGDWV2WDoV_3w3fWTcmWJ3qufgoguwiHTJcvOg-h7Hon57Nzt97GKNxOjeiYcYW_YAAQ"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":3,\"prev\":\"MzdNtWB_p8ApTKowCNVtDIJ-bgpLzG-SG3ZIbl6O02o\",\"at\":\"2026-10-04T09:15:00Z\",\"op\":\"revoke\",\"id\":\"browser\"}",
+          "sig": "gVbjnsWe6gjLS4TYVkyLgZD5nGngWNb96Bc4PeZUAi-bRxXQsU304gL-XHFNpvevUqYtiQL1S-2Z4kpbVfuFBw"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "recovery",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":4,\"prev\":\"ChYVBenH4n_dei7ykNMH9QcGs-cn4i1FruNLU9lKkcE\",\"at\":\"2026-10-04T09:20:00Z\",\"op\":\"add\",\"member\":{\"id\":\"phone2\",\"role\":\"device\",\"name\":\"New Pixel\",\"boxPk\":\"7dA8regNKd5uoxOnSrNp9HMuyzZkkGa3i1st1mTLBBc\",\"signPk\":\"VLDYHQ-n0A5KfWAN-rpvKyIDWyL-M14X7fX5qluwUHQ\"}}",
+          "sig": "rOahki-se0kTzlRYeM7d1uQkZw8Qf5QOQ_NT9LGrTqQ25Ze9hgNog91P51kNi_vnNuVWpb2mobMEzfKSV6FVBw"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":5,\"prev\":\"mJX3hMUjQ_4Fhn7arYF7dnD9qfjt43mE6WD9UwxYTSU\",\"at\":\"2026-10-04T10:00:00Z\",\"op\":\"recovery\",\"recoveryPk\":\"rNsOKXQ_DMuGhtChBMuW4Fq-_sFTh2XnWVhp99yMSao\"}",
+          "sig": "RozGT7opkssNcWRkygCSFyu5wre2BZRshxLENWcNqkI4NvoCXEtcC2IDtddP-D9zbcS2kNSPdkQ5I-0ZNm5yDQ"
+        }
+      ],
+      "expect": {
+        "error": "bad-recovery"
+      }
+    },
+    {
+      "name": "proposal naming a key it holds no signature of",
+      "entries": [
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":0,\"prev\":null,\"at\":\"2026-10-04T09:00:00Z\",\"op\":\"add\",\"member\":{\"id\":\"phone\",\"role\":\"device\",\"name\":\"Pixel\",\"boxPk\":\"GxtY3VDqFLYNoXt5DNAnVNlwybq4ZOuzwPMBb-UdP1c\",\"signPk\":\"1i8Bah79Hk_feT60LNhEceG6nwzwTRKHtcxx9hYofLg\"},\"recoveryPk\":\"6kpsY-KcUgq-9VB7Ey7F-ZVHdq6-vnuSQh7qaRRG0iw\"}",
+          "sig": "XB355Sx3UVDHcQroBfYCkvBBt86Feva-wPpdt38lM3VJUZ0Iv5RlDEKln6tTF2a_YhQyGwUhdosu73mYGXyoCA",
+          "recoverySig": "6kxBKTB2pHB5WECOk7Sg3sJJTP1d_R3sqgInjHMiiopk0c3OkLVto46USPeSraTmC08ayZEKyRCrpXdldNTRAQ"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":1,\"prev\":\"_r28NJU5QECe884gP8hTtjZ1Gye-7epm7X4W6yQ_PHo\",\"at\":\"2026-10-04T09:05:00Z\",\"op\":\"add\",\"member\":{\"id\":\"browser\",\"role\":\"device\",\"name\":\"Firefox on the Mac\",\"boxPk\":\"YDRufJEaX2uhVBKRdMr-dbKUrDu9VUljL0jOxiZvhBA\",\"signPk\":\"NLTZBDFWy23PC-sKKUm3VZyUDSvLbb6MU6mzAnjjp0Y\"}}",
+          "sig": "1ZPZbyi29vcgGucK_jC48wESYogtfL4hQGzf8bbfkGnWwXGAf_7eorna9nQbHm-cjFuWi8BehdFoCOIA0Y0PAg"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":2,\"prev\":\"foEXSX4wWj63zP06zPcoPl34JEBywOuIJ-9gsEA9nOU\",\"at\":\"2026-10-04T09:10:00Z\",\"op\":\"add\",\"member\":{\"id\":\"devbox\",\"role\":\"machine\",\"name\":\"dev box\",\"boxPk\":\"deJw3ylSxXuoNnuoYYwXj5_lDbJ5nTBOdOkY2YVoYUY\",\"signPk\":\"EqQVksi3wX1AWeeym2Ho_5bHQV8vgDNI8vAX4Fueodo\"}}",
+          "sig": "4JkzuT3alCMZS4Yg-gOGDWV2WDoV_3w3fWTcmWJ3qufgoguwiHTJcvOg-h7Hon57Nzt97GKNxOjeiYcYW_YAAQ"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":3,\"prev\":\"MzdNtWB_p8ApTKowCNVtDIJ-bgpLzG-SG3ZIbl6O02o\",\"at\":\"2026-10-04T09:15:00Z\",\"op\":\"revoke\",\"id\":\"browser\"}",
+          "sig": "gVbjnsWe6gjLS4TYVkyLgZD5nGngWNb96Bc4PeZUAi-bRxXQsU304gL-XHFNpvevUqYtiQL1S-2Z4kpbVfuFBw"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "recovery",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":4,\"prev\":\"ChYVBenH4n_dei7ykNMH9QcGs-cn4i1FruNLU9lKkcE\",\"at\":\"2026-10-04T09:20:00Z\",\"op\":\"add\",\"member\":{\"id\":\"phone2\",\"role\":\"device\",\"name\":\"New Pixel\",\"boxPk\":\"7dA8regNKd5uoxOnSrNp9HMuyzZkkGa3i1st1mTLBBc\",\"signPk\":\"VLDYHQ-n0A5KfWAN-rpvKyIDWyL-M14X7fX5qluwUHQ\"}}",
+          "sig": "rOahki-se0kTzlRYeM7d1uQkZw8Qf5QOQ_NT9LGrTqQ25Ze9hgNog91P51kNi_vnNuVWpb2mobMEzfKSV6FVBw"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":5,\"prev\":\"mJX3hMUjQ_4Fhn7arYF7dnD9qfjt43mE6WD9UwxYTSU\",\"at\":\"2026-10-04T10:00:00Z\",\"op\":\"recovery\",\"recoveryPk\":\"rNsOKXQ_DMuGhtChBMuW4Fq-_sFTh2XnWVhp99yMSao\"}",
+          "sig": "RozGT7opkssNcWRkygCSFyu5wre2BZRshxLENWcNqkI4NvoCXEtcC2IDtddP-D9zbcS2kNSPdkQ5I-0ZNm5yDQ",
+          "recoverySig": "etGxeIfKRb3TVG7xTlZlxbmzmLo_FDOka0qBRKgY6iy0Vk_mmg0Hfy646z7G5-WmOu_9KJptYzI0FKe40cnrBg"
+        }
+      ],
+      "expect": {
+        "error": "bad-signature"
+      }
+    },
+    {
+      "name": "proposal naming a member's key",
+      "entries": [
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":0,\"prev\":null,\"at\":\"2026-10-04T09:00:00Z\",\"op\":\"add\",\"member\":{\"id\":\"phone\",\"role\":\"device\",\"name\":\"Pixel\",\"boxPk\":\"GxtY3VDqFLYNoXt5DNAnVNlwybq4ZOuzwPMBb-UdP1c\",\"signPk\":\"1i8Bah79Hk_feT60LNhEceG6nwzwTRKHtcxx9hYofLg\"},\"recoveryPk\":\"6kpsY-KcUgq-9VB7Ey7F-ZVHdq6-vnuSQh7qaRRG0iw\"}",
+          "sig": "XB355Sx3UVDHcQroBfYCkvBBt86Feva-wPpdt38lM3VJUZ0Iv5RlDEKln6tTF2a_YhQyGwUhdosu73mYGXyoCA",
+          "recoverySig": "6kxBKTB2pHB5WECOk7Sg3sJJTP1d_R3sqgInjHMiiopk0c3OkLVto46USPeSraTmC08ayZEKyRCrpXdldNTRAQ"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":1,\"prev\":\"_r28NJU5QECe884gP8hTtjZ1Gye-7epm7X4W6yQ_PHo\",\"at\":\"2026-10-04T09:05:00Z\",\"op\":\"add\",\"member\":{\"id\":\"browser\",\"role\":\"device\",\"name\":\"Firefox on the Mac\",\"boxPk\":\"YDRufJEaX2uhVBKRdMr-dbKUrDu9VUljL0jOxiZvhBA\",\"signPk\":\"NLTZBDFWy23PC-sKKUm3VZyUDSvLbb6MU6mzAnjjp0Y\"}}",
+          "sig": "1ZPZbyi29vcgGucK_jC48wESYogtfL4hQGzf8bbfkGnWwXGAf_7eorna9nQbHm-cjFuWi8BehdFoCOIA0Y0PAg"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":2,\"prev\":\"foEXSX4wWj63zP06zPcoPl34JEBywOuIJ-9gsEA9nOU\",\"at\":\"2026-10-04T09:10:00Z\",\"op\":\"add\",\"member\":{\"id\":\"devbox\",\"role\":\"machine\",\"name\":\"dev box\",\"boxPk\":\"deJw3ylSxXuoNnuoYYwXj5_lDbJ5nTBOdOkY2YVoYUY\",\"signPk\":\"EqQVksi3wX1AWeeym2Ho_5bHQV8vgDNI8vAX4Fueodo\"}}",
+          "sig": "4JkzuT3alCMZS4Yg-gOGDWV2WDoV_3w3fWTcmWJ3qufgoguwiHTJcvOg-h7Hon57Nzt97GKNxOjeiYcYW_YAAQ"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":3,\"prev\":\"MzdNtWB_p8ApTKowCNVtDIJ-bgpLzG-SG3ZIbl6O02o\",\"at\":\"2026-10-04T09:15:00Z\",\"op\":\"revoke\",\"id\":\"browser\"}",
+          "sig": "gVbjnsWe6gjLS4TYVkyLgZD5nGngWNb96Bc4PeZUAi-bRxXQsU304gL-XHFNpvevUqYtiQL1S-2Z4kpbVfuFBw"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "recovery",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":4,\"prev\":\"ChYVBenH4n_dei7ykNMH9QcGs-cn4i1FruNLU9lKkcE\",\"at\":\"2026-10-04T09:20:00Z\",\"op\":\"add\",\"member\":{\"id\":\"phone2\",\"role\":\"device\",\"name\":\"New Pixel\",\"boxPk\":\"7dA8regNKd5uoxOnSrNp9HMuyzZkkGa3i1st1mTLBBc\",\"signPk\":\"VLDYHQ-n0A5KfWAN-rpvKyIDWyL-M14X7fX5qluwUHQ\"}}",
+          "sig": "rOahki-se0kTzlRYeM7d1uQkZw8Qf5QOQ_NT9LGrTqQ25Ze9hgNog91P51kNi_vnNuVWpb2mobMEzfKSV6FVBw"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":5,\"prev\":\"mJX3hMUjQ_4Fhn7arYF7dnD9qfjt43mE6WD9UwxYTSU\",\"at\":\"2026-10-04T10:00:00Z\",\"op\":\"recovery\",\"recoveryPk\":\"VLDYHQ-n0A5KfWAN-rpvKyIDWyL-M14X7fX5qluwUHQ\"}",
+          "sig": "LyTchRUDHne6UxTaFlVUkoP8NxwNtiOajddPgS7q6d1Y4WYNO_tlIYRzTUMJ0X4YGndhzzao6BYdZ4iAhl08Bg",
+          "recoverySig": "XIhdjsn-JUCW0JkJBE4gOw-saXy_GidX5GK86L8wW6FaoNrnM8R4iFYfFXv_hdDiOrBuztwI1H3QScNp6ZVtAw"
+        }
+      ],
+      "expect": {
+        "error": "bad-recovery"
+      }
+    },
+    {
+      "name": "proposal bringing back a retired recovery key",
+      "entries": [
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":0,\"prev\":null,\"at\":\"2026-10-04T09:00:00Z\",\"op\":\"add\",\"member\":{\"id\":\"phone\",\"role\":\"device\",\"name\":\"Pixel\",\"boxPk\":\"GxtY3VDqFLYNoXt5DNAnVNlwybq4ZOuzwPMBb-UdP1c\",\"signPk\":\"1i8Bah79Hk_feT60LNhEceG6nwzwTRKHtcxx9hYofLg\"},\"recoveryPk\":\"6kpsY-KcUgq-9VB7Ey7F-ZVHdq6-vnuSQh7qaRRG0iw\"}",
+          "sig": "XB355Sx3UVDHcQroBfYCkvBBt86Feva-wPpdt38lM3VJUZ0Iv5RlDEKln6tTF2a_YhQyGwUhdosu73mYGXyoCA",
+          "recoverySig": "6kxBKTB2pHB5WECOk7Sg3sJJTP1d_R3sqgInjHMiiopk0c3OkLVto46USPeSraTmC08ayZEKyRCrpXdldNTRAQ"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":1,\"prev\":\"_r28NJU5QECe884gP8hTtjZ1Gye-7epm7X4W6yQ_PHo\",\"at\":\"2026-10-04T09:05:00Z\",\"op\":\"add\",\"member\":{\"id\":\"browser\",\"role\":\"device\",\"name\":\"Firefox on the Mac\",\"boxPk\":\"YDRufJEaX2uhVBKRdMr-dbKUrDu9VUljL0jOxiZvhBA\",\"signPk\":\"NLTZBDFWy23PC-sKKUm3VZyUDSvLbb6MU6mzAnjjp0Y\"}}",
+          "sig": "1ZPZbyi29vcgGucK_jC48wESYogtfL4hQGzf8bbfkGnWwXGAf_7eorna9nQbHm-cjFuWi8BehdFoCOIA0Y0PAg"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":2,\"prev\":\"foEXSX4wWj63zP06zPcoPl34JEBywOuIJ-9gsEA9nOU\",\"at\":\"2026-10-04T09:10:00Z\",\"op\":\"add\",\"member\":{\"id\":\"devbox\",\"role\":\"machine\",\"name\":\"dev box\",\"boxPk\":\"deJw3ylSxXuoNnuoYYwXj5_lDbJ5nTBOdOkY2YVoYUY\",\"signPk\":\"EqQVksi3wX1AWeeym2Ho_5bHQV8vgDNI8vAX4Fueodo\"}}",
+          "sig": "4JkzuT3alCMZS4Yg-gOGDWV2WDoV_3w3fWTcmWJ3qufgoguwiHTJcvOg-h7Hon57Nzt97GKNxOjeiYcYW_YAAQ"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":3,\"prev\":\"MzdNtWB_p8ApTKowCNVtDIJ-bgpLzG-SG3ZIbl6O02o\",\"at\":\"2026-10-04T09:15:00Z\",\"op\":\"revoke\",\"id\":\"browser\"}",
+          "sig": "gVbjnsWe6gjLS4TYVkyLgZD5nGngWNb96Bc4PeZUAi-bRxXQsU304gL-XHFNpvevUqYtiQL1S-2Z4kpbVfuFBw"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "recovery",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":4,\"prev\":\"ChYVBenH4n_dei7ykNMH9QcGs-cn4i1FruNLU9lKkcE\",\"at\":\"2026-10-04T09:20:00Z\",\"op\":\"add\",\"member\":{\"id\":\"phone2\",\"role\":\"device\",\"name\":\"New Pixel\",\"boxPk\":\"7dA8regNKd5uoxOnSrNp9HMuyzZkkGa3i1st1mTLBBc\",\"signPk\":\"VLDYHQ-n0A5KfWAN-rpvKyIDWyL-M14X7fX5qluwUHQ\"}}",
+          "sig": "rOahki-se0kTzlRYeM7d1uQkZw8Qf5QOQ_NT9LGrTqQ25Ze9hgNog91P51kNi_vnNuVWpb2mobMEzfKSV6FVBw"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":5,\"prev\":\"mJX3hMUjQ_4Fhn7arYF7dnD9qfjt43mE6WD9UwxYTSU\",\"at\":\"2026-10-04T10:00:00Z\",\"op\":\"recovery\",\"recoveryPk\":\"rNsOKXQ_DMuGhtChBMuW4Fq-_sFTh2XnWVhp99yMSao\"}",
+          "sig": "RozGT7opkssNcWRkygCSFyu5wre2BZRshxLENWcNqkI4NvoCXEtcC2IDtddP-D9zbcS2kNSPdkQ5I-0ZNm5yDQ",
+          "recoverySig": "80nOZC1Bdyo74HetzVUJyFucdMiXaAju_4OYfHELe7ZSsHJoVSzTk5JyLApk5ZVw37ujTWmtfv5y0qBBTLI9Aw"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "recovery",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":6,\"prev\":\"HNRn0tYxYvUS3RySpvW9CWLdYpwYkazsjwTAeVf-JVk\",\"at\":\"2026-10-04T10:01:00Z\",\"op\":\"recovery-confirm\",\"proposal\":5,\"recoveryPk\":\"rNsOKXQ_DMuGhtChBMuW4Fq-_sFTh2XnWVhp99yMSao\"}",
+          "sig": "xy1sI5yxYrvefaaWjor7G_SAvuwIrS1ao3EB0pzcmUCDpnQ48wRvNpZ_RZcFqwJDcCYaR1mUShZFALimMhMiBw"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":7,\"prev\":\"0Zz5Xj8ONcd-CBoPx_4_0VUnsNGUQrgSdnOcjcPtg1Q\",\"at\":\"2026-10-04T10:02:00Z\",\"op\":\"recovery\",\"recoveryPk\":\"6kpsY-KcUgq-9VB7Ey7F-ZVHdq6-vnuSQh7qaRRG0iw\"}",
+          "sig": "sx7ZJUkgsX3F3iNb22oPT3mlZor6OX5tM2Z1-IyaX1ZVDeD8KmgTvnwIDn_0d9khlrs_sPJeRddQT4VFNvuhAQ",
+          "recoverySig": "d2JFKpzRFSsaoy6iJb9lnNV0RsqTiEnrcQLp7kisHQPnuCXvFmf3FouVtVbN3uuLLQ73NLfnRI2YHPXjMj_JAA"
+        }
+      ],
+      "expect": {
+        "error": "bad-recovery"
+      }
+    },
+    {
+      "name": "recovery key proposes its successor",
+      "entries": [
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":0,\"prev\":null,\"at\":\"2026-10-04T09:00:00Z\",\"op\":\"add\",\"member\":{\"id\":\"phone\",\"role\":\"device\",\"name\":\"Pixel\",\"boxPk\":\"GxtY3VDqFLYNoXt5DNAnVNlwybq4ZOuzwPMBb-UdP1c\",\"signPk\":\"1i8Bah79Hk_feT60LNhEceG6nwzwTRKHtcxx9hYofLg\"},\"recoveryPk\":\"6kpsY-KcUgq-9VB7Ey7F-ZVHdq6-vnuSQh7qaRRG0iw\"}",
+          "sig": "XB355Sx3UVDHcQroBfYCkvBBt86Feva-wPpdt38lM3VJUZ0Iv5RlDEKln6tTF2a_YhQyGwUhdosu73mYGXyoCA",
+          "recoverySig": "6kxBKTB2pHB5WECOk7Sg3sJJTP1d_R3sqgInjHMiiopk0c3OkLVto46USPeSraTmC08ayZEKyRCrpXdldNTRAQ"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":1,\"prev\":\"_r28NJU5QECe884gP8hTtjZ1Gye-7epm7X4W6yQ_PHo\",\"at\":\"2026-10-04T09:05:00Z\",\"op\":\"add\",\"member\":{\"id\":\"browser\",\"role\":\"device\",\"name\":\"Firefox on the Mac\",\"boxPk\":\"YDRufJEaX2uhVBKRdMr-dbKUrDu9VUljL0jOxiZvhBA\",\"signPk\":\"NLTZBDFWy23PC-sKKUm3VZyUDSvLbb6MU6mzAnjjp0Y\"}}",
+          "sig": "1ZPZbyi29vcgGucK_jC48wESYogtfL4hQGzf8bbfkGnWwXGAf_7eorna9nQbHm-cjFuWi8BehdFoCOIA0Y0PAg"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":2,\"prev\":\"foEXSX4wWj63zP06zPcoPl34JEBywOuIJ-9gsEA9nOU\",\"at\":\"2026-10-04T09:10:00Z\",\"op\":\"add\",\"member\":{\"id\":\"devbox\",\"role\":\"machine\",\"name\":\"dev box\",\"boxPk\":\"deJw3ylSxXuoNnuoYYwXj5_lDbJ5nTBOdOkY2YVoYUY\",\"signPk\":\"EqQVksi3wX1AWeeym2Ho_5bHQV8vgDNI8vAX4Fueodo\"}}",
+          "sig": "4JkzuT3alCMZS4Yg-gOGDWV2WDoV_3w3fWTcmWJ3qufgoguwiHTJcvOg-h7Hon57Nzt97GKNxOjeiYcYW_YAAQ"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":3,\"prev\":\"MzdNtWB_p8ApTKowCNVtDIJ-bgpLzG-SG3ZIbl6O02o\",\"at\":\"2026-10-04T09:15:00Z\",\"op\":\"revoke\",\"id\":\"browser\"}",
+          "sig": "gVbjnsWe6gjLS4TYVkyLgZD5nGngWNb96Bc4PeZUAi-bRxXQsU304gL-XHFNpvevUqYtiQL1S-2Z4kpbVfuFBw"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "recovery",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":4,\"prev\":\"ChYVBenH4n_dei7ykNMH9QcGs-cn4i1FruNLU9lKkcE\",\"at\":\"2026-10-04T09:20:00Z\",\"op\":\"add\",\"member\":{\"id\":\"phone2\",\"role\":\"device\",\"name\":\"New Pixel\",\"boxPk\":\"7dA8regNKd5uoxOnSrNp9HMuyzZkkGa3i1st1mTLBBc\",\"signPk\":\"VLDYHQ-n0A5KfWAN-rpvKyIDWyL-M14X7fX5qluwUHQ\"}}",
+          "sig": "rOahki-se0kTzlRYeM7d1uQkZw8Qf5QOQ_NT9LGrTqQ25Ze9hgNog91P51kNi_vnNuVWpb2mobMEzfKSV6FVBw"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "recovery",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":5,\"prev\":\"mJX3hMUjQ_4Fhn7arYF7dnD9qfjt43mE6WD9UwxYTSU\",\"at\":\"2026-10-04T10:00:00Z\",\"op\":\"recovery\",\"recoveryPk\":\"rNsOKXQ_DMuGhtChBMuW4Fq-_sFTh2XnWVhp99yMSao\"}",
+          "sig": "xY1lzjjq3nMZs44oUG_a3n38GP2TfqtnWken7JyZyY-yEsxNE-V-pBU0a9TARifdr5Nj7MThR1HyTMHo-oLDBA",
+          "recoverySig": "80nOZC1Bdyo74HetzVUJyFucdMiXaAju_4OYfHELe7ZSsHJoVSzTk5JyLApk5ZVw37ujTWmtfv5y0qBBTLI9Aw"
+        }
+      ],
+      "expect": {
+        "error": "signer-not-allowed"
+      }
+    },
+    {
+      "name": "machine confirms a proposal",
+      "entries": [
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":0,\"prev\":null,\"at\":\"2026-10-04T09:00:00Z\",\"op\":\"add\",\"member\":{\"id\":\"phone\",\"role\":\"device\",\"name\":\"Pixel\",\"boxPk\":\"GxtY3VDqFLYNoXt5DNAnVNlwybq4ZOuzwPMBb-UdP1c\",\"signPk\":\"1i8Bah79Hk_feT60LNhEceG6nwzwTRKHtcxx9hYofLg\"},\"recoveryPk\":\"6kpsY-KcUgq-9VB7Ey7F-ZVHdq6-vnuSQh7qaRRG0iw\"}",
+          "sig": "XB355Sx3UVDHcQroBfYCkvBBt86Feva-wPpdt38lM3VJUZ0Iv5RlDEKln6tTF2a_YhQyGwUhdosu73mYGXyoCA",
+          "recoverySig": "6kxBKTB2pHB5WECOk7Sg3sJJTP1d_R3sqgInjHMiiopk0c3OkLVto46USPeSraTmC08ayZEKyRCrpXdldNTRAQ"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":1,\"prev\":\"_r28NJU5QECe884gP8hTtjZ1Gye-7epm7X4W6yQ_PHo\",\"at\":\"2026-10-04T09:05:00Z\",\"op\":\"add\",\"member\":{\"id\":\"browser\",\"role\":\"device\",\"name\":\"Firefox on the Mac\",\"boxPk\":\"YDRufJEaX2uhVBKRdMr-dbKUrDu9VUljL0jOxiZvhBA\",\"signPk\":\"NLTZBDFWy23PC-sKKUm3VZyUDSvLbb6MU6mzAnjjp0Y\"}}",
+          "sig": "1ZPZbyi29vcgGucK_jC48wESYogtfL4hQGzf8bbfkGnWwXGAf_7eorna9nQbHm-cjFuWi8BehdFoCOIA0Y0PAg"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":2,\"prev\":\"foEXSX4wWj63zP06zPcoPl34JEBywOuIJ-9gsEA9nOU\",\"at\":\"2026-10-04T09:10:00Z\",\"op\":\"add\",\"member\":{\"id\":\"devbox\",\"role\":\"machine\",\"name\":\"dev box\",\"boxPk\":\"deJw3ylSxXuoNnuoYYwXj5_lDbJ5nTBOdOkY2YVoYUY\",\"signPk\":\"EqQVksi3wX1AWeeym2Ho_5bHQV8vgDNI8vAX4Fueodo\"}}",
+          "sig": "4JkzuT3alCMZS4Yg-gOGDWV2WDoV_3w3fWTcmWJ3qufgoguwiHTJcvOg-h7Hon57Nzt97GKNxOjeiYcYW_YAAQ"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":3,\"prev\":\"MzdNtWB_p8ApTKowCNVtDIJ-bgpLzG-SG3ZIbl6O02o\",\"at\":\"2026-10-04T09:15:00Z\",\"op\":\"revoke\",\"id\":\"browser\"}",
+          "sig": "gVbjnsWe6gjLS4TYVkyLgZD5nGngWNb96Bc4PeZUAi-bRxXQsU304gL-XHFNpvevUqYtiQL1S-2Z4kpbVfuFBw"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "recovery",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":4,\"prev\":\"ChYVBenH4n_dei7ykNMH9QcGs-cn4i1FruNLU9lKkcE\",\"at\":\"2026-10-04T09:20:00Z\",\"op\":\"add\",\"member\":{\"id\":\"phone2\",\"role\":\"device\",\"name\":\"New Pixel\",\"boxPk\":\"7dA8regNKd5uoxOnSrNp9HMuyzZkkGa3i1st1mTLBBc\",\"signPk\":\"VLDYHQ-n0A5KfWAN-rpvKyIDWyL-M14X7fX5qluwUHQ\"}}",
+          "sig": "rOahki-se0kTzlRYeM7d1uQkZw8Qf5QOQ_NT9LGrTqQ25Ze9hgNog91P51kNi_vnNuVWpb2mobMEzfKSV6FVBw"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":5,\"prev\":\"mJX3hMUjQ_4Fhn7arYF7dnD9qfjt43mE6WD9UwxYTSU\",\"at\":\"2026-10-04T10:00:00Z\",\"op\":\"recovery\",\"recoveryPk\":\"rNsOKXQ_DMuGhtChBMuW4Fq-_sFTh2XnWVhp99yMSao\"}",
+          "sig": "RozGT7opkssNcWRkygCSFyu5wre2BZRshxLENWcNqkI4NvoCXEtcC2IDtddP-D9zbcS2kNSPdkQ5I-0ZNm5yDQ",
+          "recoverySig": "80nOZC1Bdyo74HetzVUJyFucdMiXaAju_4OYfHELe7ZSsHJoVSzTk5JyLApk5ZVw37ujTWmtfv5y0qBBTLI9Aw"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "devbox",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":6,\"prev\":\"HNRn0tYxYvUS3RySpvW9CWLdYpwYkazsjwTAeVf-JVk\",\"at\":\"2026-10-04T10:00:00Z\",\"op\":\"recovery-confirm\",\"proposal\":5,\"recoveryPk\":\"rNsOKXQ_DMuGhtChBMuW4Fq-_sFTh2XnWVhp99yMSao\"}",
+          "sig": "cbieMdWJFRw_ZIx53xV-xTuqynNbyh-mskB9KKcXVXOMNgAsXXpfxj2TohZjr1Ogc1velW1-oY_of6jqLJyMDw"
+        }
+      ],
+      "expect": {
+        "error": "signer-not-allowed"
+      }
+    },
+    {
+      "name": "confirmation naming another key than the pending proposal",
+      "entries": [
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":0,\"prev\":null,\"at\":\"2026-10-04T09:00:00Z\",\"op\":\"add\",\"member\":{\"id\":\"phone\",\"role\":\"device\",\"name\":\"Pixel\",\"boxPk\":\"GxtY3VDqFLYNoXt5DNAnVNlwybq4ZOuzwPMBb-UdP1c\",\"signPk\":\"1i8Bah79Hk_feT60LNhEceG6nwzwTRKHtcxx9hYofLg\"},\"recoveryPk\":\"6kpsY-KcUgq-9VB7Ey7F-ZVHdq6-vnuSQh7qaRRG0iw\"}",
+          "sig": "XB355Sx3UVDHcQroBfYCkvBBt86Feva-wPpdt38lM3VJUZ0Iv5RlDEKln6tTF2a_YhQyGwUhdosu73mYGXyoCA",
+          "recoverySig": "6kxBKTB2pHB5WECOk7Sg3sJJTP1d_R3sqgInjHMiiopk0c3OkLVto46USPeSraTmC08ayZEKyRCrpXdldNTRAQ"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":1,\"prev\":\"_r28NJU5QECe884gP8hTtjZ1Gye-7epm7X4W6yQ_PHo\",\"at\":\"2026-10-04T09:05:00Z\",\"op\":\"add\",\"member\":{\"id\":\"browser\",\"role\":\"device\",\"name\":\"Firefox on the Mac\",\"boxPk\":\"YDRufJEaX2uhVBKRdMr-dbKUrDu9VUljL0jOxiZvhBA\",\"signPk\":\"NLTZBDFWy23PC-sKKUm3VZyUDSvLbb6MU6mzAnjjp0Y\"}}",
+          "sig": "1ZPZbyi29vcgGucK_jC48wESYogtfL4hQGzf8bbfkGnWwXGAf_7eorna9nQbHm-cjFuWi8BehdFoCOIA0Y0PAg"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":2,\"prev\":\"foEXSX4wWj63zP06zPcoPl34JEBywOuIJ-9gsEA9nOU\",\"at\":\"2026-10-04T09:10:00Z\",\"op\":\"add\",\"member\":{\"id\":\"devbox\",\"role\":\"machine\",\"name\":\"dev box\",\"boxPk\":\"deJw3ylSxXuoNnuoYYwXj5_lDbJ5nTBOdOkY2YVoYUY\",\"signPk\":\"EqQVksi3wX1AWeeym2Ho_5bHQV8vgDNI8vAX4Fueodo\"}}",
+          "sig": "4JkzuT3alCMZS4Yg-gOGDWV2WDoV_3w3fWTcmWJ3qufgoguwiHTJcvOg-h7Hon57Nzt97GKNxOjeiYcYW_YAAQ"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":3,\"prev\":\"MzdNtWB_p8ApTKowCNVtDIJ-bgpLzG-SG3ZIbl6O02o\",\"at\":\"2026-10-04T09:15:00Z\",\"op\":\"revoke\",\"id\":\"browser\"}",
+          "sig": "gVbjnsWe6gjLS4TYVkyLgZD5nGngWNb96Bc4PeZUAi-bRxXQsU304gL-XHFNpvevUqYtiQL1S-2Z4kpbVfuFBw"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "recovery",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":4,\"prev\":\"ChYVBenH4n_dei7ykNMH9QcGs-cn4i1FruNLU9lKkcE\",\"at\":\"2026-10-04T09:20:00Z\",\"op\":\"add\",\"member\":{\"id\":\"phone2\",\"role\":\"device\",\"name\":\"New Pixel\",\"boxPk\":\"7dA8regNKd5uoxOnSrNp9HMuyzZkkGa3i1st1mTLBBc\",\"signPk\":\"VLDYHQ-n0A5KfWAN-rpvKyIDWyL-M14X7fX5qluwUHQ\"}}",
+          "sig": "rOahki-se0kTzlRYeM7d1uQkZw8Qf5QOQ_NT9LGrTqQ25Ze9hgNog91P51kNi_vnNuVWpb2mobMEzfKSV6FVBw"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":5,\"prev\":\"mJX3hMUjQ_4Fhn7arYF7dnD9qfjt43mE6WD9UwxYTSU\",\"at\":\"2026-10-04T10:00:00Z\",\"op\":\"recovery\",\"recoveryPk\":\"rNsOKXQ_DMuGhtChBMuW4Fq-_sFTh2XnWVhp99yMSao\"}",
+          "sig": "RozGT7opkssNcWRkygCSFyu5wre2BZRshxLENWcNqkI4NvoCXEtcC2IDtddP-D9zbcS2kNSPdkQ5I-0ZNm5yDQ",
+          "recoverySig": "80nOZC1Bdyo74HetzVUJyFucdMiXaAju_4OYfHELe7ZSsHJoVSzTk5JyLApk5ZVw37ujTWmtfv5y0qBBTLI9Aw"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "recovery",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":6,\"prev\":\"HNRn0tYxYvUS3RySpvW9CWLdYpwYkazsjwTAeVf-JVk\",\"at\":\"2026-10-04T10:00:00Z\",\"op\":\"recovery-confirm\",\"proposal\":5,\"recoveryPk\":\"QwRr_kCSs-lJlOraFdzCDYqqB7ZY_TlU644O-4vcpd4\"}",
+          "sig": "1W1bFQzg1_LDCFEerj71KA6Jl9Xwteu45p7gJnhvYDM3JZ-IcyE4iPcMdx8dv2Py88k5-lolCmP2olsrRlAWCg"
+        }
+      ],
+      "expect": {
+        "error": "bad-recovery"
+      }
+    },
+    {
+      "name": "confirmation with no proposal",
+      "entries": [
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":0,\"prev\":null,\"at\":\"2026-10-04T09:00:00Z\",\"op\":\"add\",\"member\":{\"id\":\"phone\",\"role\":\"device\",\"name\":\"Pixel\",\"boxPk\":\"GxtY3VDqFLYNoXt5DNAnVNlwybq4ZOuzwPMBb-UdP1c\",\"signPk\":\"1i8Bah79Hk_feT60LNhEceG6nwzwTRKHtcxx9hYofLg\"},\"recoveryPk\":\"6kpsY-KcUgq-9VB7Ey7F-ZVHdq6-vnuSQh7qaRRG0iw\"}",
+          "sig": "XB355Sx3UVDHcQroBfYCkvBBt86Feva-wPpdt38lM3VJUZ0Iv5RlDEKln6tTF2a_YhQyGwUhdosu73mYGXyoCA",
+          "recoverySig": "6kxBKTB2pHB5WECOk7Sg3sJJTP1d_R3sqgInjHMiiopk0c3OkLVto46USPeSraTmC08ayZEKyRCrpXdldNTRAQ"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":1,\"prev\":\"_r28NJU5QECe884gP8hTtjZ1Gye-7epm7X4W6yQ_PHo\",\"at\":\"2026-10-04T09:05:00Z\",\"op\":\"add\",\"member\":{\"id\":\"browser\",\"role\":\"device\",\"name\":\"Firefox on the Mac\",\"boxPk\":\"YDRufJEaX2uhVBKRdMr-dbKUrDu9VUljL0jOxiZvhBA\",\"signPk\":\"NLTZBDFWy23PC-sKKUm3VZyUDSvLbb6MU6mzAnjjp0Y\"}}",
+          "sig": "1ZPZbyi29vcgGucK_jC48wESYogtfL4hQGzf8bbfkGnWwXGAf_7eorna9nQbHm-cjFuWi8BehdFoCOIA0Y0PAg"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":2,\"prev\":\"foEXSX4wWj63zP06zPcoPl34JEBywOuIJ-9gsEA9nOU\",\"at\":\"2026-10-04T09:10:00Z\",\"op\":\"add\",\"member\":{\"id\":\"devbox\",\"role\":\"machine\",\"name\":\"dev box\",\"boxPk\":\"deJw3ylSxXuoNnuoYYwXj5_lDbJ5nTBOdOkY2YVoYUY\",\"signPk\":\"EqQVksi3wX1AWeeym2Ho_5bHQV8vgDNI8vAX4Fueodo\"}}",
+          "sig": "4JkzuT3alCMZS4Yg-gOGDWV2WDoV_3w3fWTcmWJ3qufgoguwiHTJcvOg-h7Hon57Nzt97GKNxOjeiYcYW_YAAQ"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":3,\"prev\":\"MzdNtWB_p8ApTKowCNVtDIJ-bgpLzG-SG3ZIbl6O02o\",\"at\":\"2026-10-04T09:15:00Z\",\"op\":\"revoke\",\"id\":\"browser\"}",
+          "sig": "gVbjnsWe6gjLS4TYVkyLgZD5nGngWNb96Bc4PeZUAi-bRxXQsU304gL-XHFNpvevUqYtiQL1S-2Z4kpbVfuFBw"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "recovery",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":4,\"prev\":\"ChYVBenH4n_dei7ykNMH9QcGs-cn4i1FruNLU9lKkcE\",\"at\":\"2026-10-04T09:20:00Z\",\"op\":\"add\",\"member\":{\"id\":\"phone2\",\"role\":\"device\",\"name\":\"New Pixel\",\"boxPk\":\"7dA8regNKd5uoxOnSrNp9HMuyzZkkGa3i1st1mTLBBc\",\"signPk\":\"VLDYHQ-n0A5KfWAN-rpvKyIDWyL-M14X7fX5qluwUHQ\"}}",
+          "sig": "rOahki-se0kTzlRYeM7d1uQkZw8Qf5QOQ_NT9LGrTqQ25Ze9hgNog91P51kNi_vnNuVWpb2mobMEzfKSV6FVBw"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "recovery",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":5,\"prev\":\"mJX3hMUjQ_4Fhn7arYF7dnD9qfjt43mE6WD9UwxYTSU\",\"at\":\"2026-10-04T10:00:00Z\",\"op\":\"recovery-confirm\",\"proposal\":1,\"recoveryPk\":\"rNsOKXQ_DMuGhtChBMuW4Fq-_sFTh2XnWVhp99yMSao\"}",
+          "sig": "ds8pTS1wZR2OPVElcnbg_Kkt94O6eJPH68q6oN46j5cneSTPN5uO5tY5IosbJGrnsHoH1cIBItBNTnirgbbhBQ"
+        }
+      ],
+      "expect": {
+        "error": "bad-recovery"
+      }
+    },
+    {
+      "name": "recovery revokes every other member, machines too",
+      "entries": [
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":0,\"prev\":null,\"at\":\"2026-10-04T09:00:00Z\",\"op\":\"add\",\"member\":{\"id\":\"phone\",\"role\":\"device\",\"name\":\"Pixel\",\"boxPk\":\"GxtY3VDqFLYNoXt5DNAnVNlwybq4ZOuzwPMBb-UdP1c\",\"signPk\":\"1i8Bah79Hk_feT60LNhEceG6nwzwTRKHtcxx9hYofLg\"},\"recoveryPk\":\"6kpsY-KcUgq-9VB7Ey7F-ZVHdq6-vnuSQh7qaRRG0iw\"}",
+          "sig": "XB355Sx3UVDHcQroBfYCkvBBt86Feva-wPpdt38lM3VJUZ0Iv5RlDEKln6tTF2a_YhQyGwUhdosu73mYGXyoCA",
+          "recoverySig": "6kxBKTB2pHB5WECOk7Sg3sJJTP1d_R3sqgInjHMiiopk0c3OkLVto46USPeSraTmC08ayZEKyRCrpXdldNTRAQ"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":1,\"prev\":\"_r28NJU5QECe884gP8hTtjZ1Gye-7epm7X4W6yQ_PHo\",\"at\":\"2026-10-04T09:05:00Z\",\"op\":\"add\",\"member\":{\"id\":\"browser\",\"role\":\"device\",\"name\":\"Firefox on the Mac\",\"boxPk\":\"YDRufJEaX2uhVBKRdMr-dbKUrDu9VUljL0jOxiZvhBA\",\"signPk\":\"NLTZBDFWy23PC-sKKUm3VZyUDSvLbb6MU6mzAnjjp0Y\"}}",
+          "sig": "1ZPZbyi29vcgGucK_jC48wESYogtfL4hQGzf8bbfkGnWwXGAf_7eorna9nQbHm-cjFuWi8BehdFoCOIA0Y0PAg"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":2,\"prev\":\"foEXSX4wWj63zP06zPcoPl34JEBywOuIJ-9gsEA9nOU\",\"at\":\"2026-10-04T09:10:00Z\",\"op\":\"add\",\"member\":{\"id\":\"devbox\",\"role\":\"machine\",\"name\":\"dev box\",\"boxPk\":\"deJw3ylSxXuoNnuoYYwXj5_lDbJ5nTBOdOkY2YVoYUY\",\"signPk\":\"EqQVksi3wX1AWeeym2Ho_5bHQV8vgDNI8vAX4Fueodo\"}}",
+          "sig": "4JkzuT3alCMZS4Yg-gOGDWV2WDoV_3w3fWTcmWJ3qufgoguwiHTJcvOg-h7Hon57Nzt97GKNxOjeiYcYW_YAAQ"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":3,\"prev\":\"MzdNtWB_p8ApTKowCNVtDIJ-bgpLzG-SG3ZIbl6O02o\",\"at\":\"2026-10-04T09:15:00Z\",\"op\":\"revoke\",\"id\":\"browser\"}",
+          "sig": "gVbjnsWe6gjLS4TYVkyLgZD5nGngWNb96Bc4PeZUAi-bRxXQsU304gL-XHFNpvevUqYtiQL1S-2Z4kpbVfuFBw"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "recovery",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":4,\"prev\":\"ChYVBenH4n_dei7ykNMH9QcGs-cn4i1FruNLU9lKkcE\",\"at\":\"2026-10-04T09:20:00Z\",\"op\":\"add\",\"member\":{\"id\":\"phone2\",\"role\":\"device\",\"name\":\"New Pixel\",\"boxPk\":\"7dA8regNKd5uoxOnSrNp9HMuyzZkkGa3i1st1mTLBBc\",\"signPk\":\"VLDYHQ-n0A5KfWAN-rpvKyIDWyL-M14X7fX5qluwUHQ\"}}",
+          "sig": "rOahki-se0kTzlRYeM7d1uQkZw8Qf5QOQ_NT9LGrTqQ25Ze9hgNog91P51kNi_vnNuVWpb2mobMEzfKSV6FVBw"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "recovery",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":5,\"prev\":\"mJX3hMUjQ_4Fhn7arYF7dnD9qfjt43mE6WD9UwxYTSU\",\"at\":\"2026-10-04T10:00:00Z\",\"op\":\"recover\",\"member\":{\"id\":\"evil\",\"role\":\"device\",\"name\":\"Injected\",\"boxPk\":\"xE5CklF3Hsdhl8eh-OoomhjKPden4QK6fMhN9rVcvho\",\"signPk\":\"4006AbYRLhQp6tYWaEBfTvS-T4hTq-5QedKKxsE__dA\"}}",
+          "sig": "DmPJolx3c73xKZyX1Inyi3B8O65gXmTm-RucSa2Bv_Qkr3m6jViY-Sx5fWlszzvDkdQXRSLuJQq33CJvqUqPAA"
+        }
+      ],
+      "expect": {
+        "ok": true,
+        "length": 6,
+        "head": "587iojjBiCbaETqZAi9i33c4ckXo_pboxnsqPYXFCec",
+        "active": [
+          "evil"
+        ],
+        "revoked": [
+          "phone",
+          "browser",
+          "devbox",
+          "phone2"
+        ],
+        "recoveryPk": "6kpsY-KcUgq-9VB7Ey7F-ZVHdq6-vnuSQh7qaRRG0iw"
+      }
+    },
+    {
+      "name": "recovery onto a chain cut short of a revocation keeps that member revoked",
+      "entries": [
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":0,\"prev\":null,\"at\":\"2026-10-04T09:00:00Z\",\"op\":\"add\",\"member\":{\"id\":\"phone\",\"role\":\"device\",\"name\":\"Pixel\",\"boxPk\":\"GxtY3VDqFLYNoXt5DNAnVNlwybq4ZOuzwPMBb-UdP1c\",\"signPk\":\"1i8Bah79Hk_feT60LNhEceG6nwzwTRKHtcxx9hYofLg\"},\"recoveryPk\":\"6kpsY-KcUgq-9VB7Ey7F-ZVHdq6-vnuSQh7qaRRG0iw\"}",
+          "sig": "XB355Sx3UVDHcQroBfYCkvBBt86Feva-wPpdt38lM3VJUZ0Iv5RlDEKln6tTF2a_YhQyGwUhdosu73mYGXyoCA",
+          "recoverySig": "6kxBKTB2pHB5WECOk7Sg3sJJTP1d_R3sqgInjHMiiopk0c3OkLVto46USPeSraTmC08ayZEKyRCrpXdldNTRAQ"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":1,\"prev\":\"_r28NJU5QECe884gP8hTtjZ1Gye-7epm7X4W6yQ_PHo\",\"at\":\"2026-10-04T09:05:00Z\",\"op\":\"add\",\"member\":{\"id\":\"browser\",\"role\":\"device\",\"name\":\"Firefox on the Mac\",\"boxPk\":\"YDRufJEaX2uhVBKRdMr-dbKUrDu9VUljL0jOxiZvhBA\",\"signPk\":\"NLTZBDFWy23PC-sKKUm3VZyUDSvLbb6MU6mzAnjjp0Y\"}}",
+          "sig": "1ZPZbyi29vcgGucK_jC48wESYogtfL4hQGzf8bbfkGnWwXGAf_7eorna9nQbHm-cjFuWi8BehdFoCOIA0Y0PAg"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":2,\"prev\":\"foEXSX4wWj63zP06zPcoPl34JEBywOuIJ-9gsEA9nOU\",\"at\":\"2026-10-04T09:10:00Z\",\"op\":\"add\",\"member\":{\"id\":\"devbox\",\"role\":\"machine\",\"name\":\"dev box\",\"boxPk\":\"deJw3ylSxXuoNnuoYYwXj5_lDbJ5nTBOdOkY2YVoYUY\",\"signPk\":\"EqQVksi3wX1AWeeym2Ho_5bHQV8vgDNI8vAX4Fueodo\"}}",
+          "sig": "4JkzuT3alCMZS4Yg-gOGDWV2WDoV_3w3fWTcmWJ3qufgoguwiHTJcvOg-h7Hon57Nzt97GKNxOjeiYcYW_YAAQ"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "recovery",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":3,\"prev\":\"MzdNtWB_p8ApTKowCNVtDIJ-bgpLzG-SG3ZIbl6O02o\",\"at\":\"2026-10-04T10:00:00Z\",\"op\":\"recover\",\"member\":{\"id\":\"evil\",\"role\":\"device\",\"name\":\"Injected\",\"boxPk\":\"xE5CklF3Hsdhl8eh-OoomhjKPden4QK6fMhN9rVcvho\",\"signPk\":\"4006AbYRLhQp6tYWaEBfTvS-T4hTq-5QedKKxsE__dA\"}}",
+          "sig": "YAqlOflfsETT7m9C5O4DKJVApMHH-_BBIuUy5cvFa045g6nCaH6BR3XwMvYhSK_nCA59xo4usrRmvBjlGfuwCQ"
+        }
+      ],
+      "expect": {
+        "ok": true,
+        "length": 4,
+        "head": "tiZpBVYV4kD5BpixNlEUua5ezxlBZXazTg80nF47CTk",
+        "active": [
+          "evil"
+        ],
+        "revoked": [
+          "phone",
+          "browser",
+          "devbox"
+        ],
+        "recoveryPk": "6kpsY-KcUgq-9VB7Ey7F-ZVHdq6-vnuSQh7qaRRG0iw"
+      }
+    },
+    {
+      "name": "a device signs a recovery",
+      "entries": [
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":0,\"prev\":null,\"at\":\"2026-10-04T09:00:00Z\",\"op\":\"add\",\"member\":{\"id\":\"phone\",\"role\":\"device\",\"name\":\"Pixel\",\"boxPk\":\"GxtY3VDqFLYNoXt5DNAnVNlwybq4ZOuzwPMBb-UdP1c\",\"signPk\":\"1i8Bah79Hk_feT60LNhEceG6nwzwTRKHtcxx9hYofLg\"},\"recoveryPk\":\"6kpsY-KcUgq-9VB7Ey7F-ZVHdq6-vnuSQh7qaRRG0iw\"}",
+          "sig": "XB355Sx3UVDHcQroBfYCkvBBt86Feva-wPpdt38lM3VJUZ0Iv5RlDEKln6tTF2a_YhQyGwUhdosu73mYGXyoCA",
+          "recoverySig": "6kxBKTB2pHB5WECOk7Sg3sJJTP1d_R3sqgInjHMiiopk0c3OkLVto46USPeSraTmC08ayZEKyRCrpXdldNTRAQ"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":1,\"prev\":\"_r28NJU5QECe884gP8hTtjZ1Gye-7epm7X4W6yQ_PHo\",\"at\":\"2026-10-04T09:05:00Z\",\"op\":\"add\",\"member\":{\"id\":\"browser\",\"role\":\"device\",\"name\":\"Firefox on the Mac\",\"boxPk\":\"YDRufJEaX2uhVBKRdMr-dbKUrDu9VUljL0jOxiZvhBA\",\"signPk\":\"NLTZBDFWy23PC-sKKUm3VZyUDSvLbb6MU6mzAnjjp0Y\"}}",
+          "sig": "1ZPZbyi29vcgGucK_jC48wESYogtfL4hQGzf8bbfkGnWwXGAf_7eorna9nQbHm-cjFuWi8BehdFoCOIA0Y0PAg"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":2,\"prev\":\"foEXSX4wWj63zP06zPcoPl34JEBywOuIJ-9gsEA9nOU\",\"at\":\"2026-10-04T09:10:00Z\",\"op\":\"add\",\"member\":{\"id\":\"devbox\",\"role\":\"machine\",\"name\":\"dev box\",\"boxPk\":\"deJw3ylSxXuoNnuoYYwXj5_lDbJ5nTBOdOkY2YVoYUY\",\"signPk\":\"EqQVksi3wX1AWeeym2Ho_5bHQV8vgDNI8vAX4Fueodo\"}}",
+          "sig": "4JkzuT3alCMZS4Yg-gOGDWV2WDoV_3w3fWTcmWJ3qufgoguwiHTJcvOg-h7Hon57Nzt97GKNxOjeiYcYW_YAAQ"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":3,\"prev\":\"MzdNtWB_p8ApTKowCNVtDIJ-bgpLzG-SG3ZIbl6O02o\",\"at\":\"2026-10-04T09:15:00Z\",\"op\":\"revoke\",\"id\":\"browser\"}",
+          "sig": "gVbjnsWe6gjLS4TYVkyLgZD5nGngWNb96Bc4PeZUAi-bRxXQsU304gL-XHFNpvevUqYtiQL1S-2Z4kpbVfuFBw"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "recovery",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":4,\"prev\":\"ChYVBenH4n_dei7ykNMH9QcGs-cn4i1FruNLU9lKkcE\",\"at\":\"2026-10-04T09:20:00Z\",\"op\":\"add\",\"member\":{\"id\":\"phone2\",\"role\":\"device\",\"name\":\"New Pixel\",\"boxPk\":\"7dA8regNKd5uoxOnSrNp9HMuyzZkkGa3i1st1mTLBBc\",\"signPk\":\"VLDYHQ-n0A5KfWAN-rpvKyIDWyL-M14X7fX5qluwUHQ\"}}",
+          "sig": "rOahki-se0kTzlRYeM7d1uQkZw8Qf5QOQ_NT9LGrTqQ25Ze9hgNog91P51kNi_vnNuVWpb2mobMEzfKSV6FVBw"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":5,\"prev\":\"mJX3hMUjQ_4Fhn7arYF7dnD9qfjt43mE6WD9UwxYTSU\",\"at\":\"2026-10-04T10:00:00Z\",\"op\":\"recover\",\"member\":{\"id\":\"evil\",\"role\":\"device\",\"name\":\"Injected\",\"boxPk\":\"xE5CklF3Hsdhl8eh-OoomhjKPden4QK6fMhN9rVcvho\",\"signPk\":\"4006AbYRLhQp6tYWaEBfTvS-T4hTq-5QedKKxsE__dA\"}}",
+          "sig": "q6gMWXKM5EphtsS6nXL0Fn_Idw3BIjg1X2EDpZA8oDKVv--ieXuRDuvuxG5UPWQUI3MEREu8UJ3cfCD8B8NEDw"
+        }
+      ],
+      "expect": {
+        "error": "signer-not-allowed"
+      }
+    },
+    {
+      "name": "recovery adds a machine",
+      "entries": [
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":0,\"prev\":null,\"at\":\"2026-10-04T09:00:00Z\",\"op\":\"add\",\"member\":{\"id\":\"phone\",\"role\":\"device\",\"name\":\"Pixel\",\"boxPk\":\"GxtY3VDqFLYNoXt5DNAnVNlwybq4ZOuzwPMBb-UdP1c\",\"signPk\":\"1i8Bah79Hk_feT60LNhEceG6nwzwTRKHtcxx9hYofLg\"},\"recoveryPk\":\"6kpsY-KcUgq-9VB7Ey7F-ZVHdq6-vnuSQh7qaRRG0iw\"}",
+          "sig": "XB355Sx3UVDHcQroBfYCkvBBt86Feva-wPpdt38lM3VJUZ0Iv5RlDEKln6tTF2a_YhQyGwUhdosu73mYGXyoCA",
+          "recoverySig": "6kxBKTB2pHB5WECOk7Sg3sJJTP1d_R3sqgInjHMiiopk0c3OkLVto46USPeSraTmC08ayZEKyRCrpXdldNTRAQ"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":1,\"prev\":\"_r28NJU5QECe884gP8hTtjZ1Gye-7epm7X4W6yQ_PHo\",\"at\":\"2026-10-04T09:05:00Z\",\"op\":\"add\",\"member\":{\"id\":\"browser\",\"role\":\"device\",\"name\":\"Firefox on the Mac\",\"boxPk\":\"YDRufJEaX2uhVBKRdMr-dbKUrDu9VUljL0jOxiZvhBA\",\"signPk\":\"NLTZBDFWy23PC-sKKUm3VZyUDSvLbb6MU6mzAnjjp0Y\"}}",
+          "sig": "1ZPZbyi29vcgGucK_jC48wESYogtfL4hQGzf8bbfkGnWwXGAf_7eorna9nQbHm-cjFuWi8BehdFoCOIA0Y0PAg"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":2,\"prev\":\"foEXSX4wWj63zP06zPcoPl34JEBywOuIJ-9gsEA9nOU\",\"at\":\"2026-10-04T09:10:00Z\",\"op\":\"add\",\"member\":{\"id\":\"devbox\",\"role\":\"machine\",\"name\":\"dev box\",\"boxPk\":\"deJw3ylSxXuoNnuoYYwXj5_lDbJ5nTBOdOkY2YVoYUY\",\"signPk\":\"EqQVksi3wX1AWeeym2Ho_5bHQV8vgDNI8vAX4Fueodo\"}}",
+          "sig": "4JkzuT3alCMZS4Yg-gOGDWV2WDoV_3w3fWTcmWJ3qufgoguwiHTJcvOg-h7Hon57Nzt97GKNxOjeiYcYW_YAAQ"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":3,\"prev\":\"MzdNtWB_p8ApTKowCNVtDIJ-bgpLzG-SG3ZIbl6O02o\",\"at\":\"2026-10-04T09:15:00Z\",\"op\":\"revoke\",\"id\":\"browser\"}",
+          "sig": "gVbjnsWe6gjLS4TYVkyLgZD5nGngWNb96Bc4PeZUAi-bRxXQsU304gL-XHFNpvevUqYtiQL1S-2Z4kpbVfuFBw"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "recovery",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":4,\"prev\":\"ChYVBenH4n_dei7ykNMH9QcGs-cn4i1FruNLU9lKkcE\",\"at\":\"2026-10-04T09:20:00Z\",\"op\":\"add\",\"member\":{\"id\":\"phone2\",\"role\":\"device\",\"name\":\"New Pixel\",\"boxPk\":\"7dA8regNKd5uoxOnSrNp9HMuyzZkkGa3i1st1mTLBBc\",\"signPk\":\"VLDYHQ-n0A5KfWAN-rpvKyIDWyL-M14X7fX5qluwUHQ\"}}",
+          "sig": "rOahki-se0kTzlRYeM7d1uQkZw8Qf5QOQ_NT9LGrTqQ25Ze9hgNog91P51kNi_vnNuVWpb2mobMEzfKSV6FVBw"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "recovery",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":5,\"prev\":\"mJX3hMUjQ_4Fhn7arYF7dnD9qfjt43mE6WD9UwxYTSU\",\"at\":\"2026-10-04T10:00:00Z\",\"op\":\"recover\",\"member\":{\"id\":\"evilbox\",\"role\":\"machine\",\"name\":\"Injected machine\",\"boxPk\":\"kOaL6HjHyuJgI08k-XRXlNFgXVoTwO7JcWleRFV7WAA\",\"signPk\":\"dQgmwoGk9pGkH_sD7xtCh1aOv8UuxcyonZU-WgCTq9U\"}}",
+          "sig": "YzVNXqVIQvd__qZvw5NgdniWXea9W-hFdrhZHt5HenQJjHl9GdAEa-55aPwJh6WvUsgo1Rrv1kHtB4jweJmrBg"
+        }
+      ],
+      "expect": {
+        "error": "signer-not-allowed"
+      }
+    },
+    {
+      "name": "recovery key revokes a member",
+      "entries": [
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":0,\"prev\":null,\"at\":\"2026-10-04T09:00:00Z\",\"op\":\"add\",\"member\":{\"id\":\"phone\",\"role\":\"device\",\"name\":\"Pixel\",\"boxPk\":\"GxtY3VDqFLYNoXt5DNAnVNlwybq4ZOuzwPMBb-UdP1c\",\"signPk\":\"1i8Bah79Hk_feT60LNhEceG6nwzwTRKHtcxx9hYofLg\"},\"recoveryPk\":\"6kpsY-KcUgq-9VB7Ey7F-ZVHdq6-vnuSQh7qaRRG0iw\"}",
+          "sig": "XB355Sx3UVDHcQroBfYCkvBBt86Feva-wPpdt38lM3VJUZ0Iv5RlDEKln6tTF2a_YhQyGwUhdosu73mYGXyoCA",
+          "recoverySig": "6kxBKTB2pHB5WECOk7Sg3sJJTP1d_R3sqgInjHMiiopk0c3OkLVto46USPeSraTmC08ayZEKyRCrpXdldNTRAQ"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":1,\"prev\":\"_r28NJU5QECe884gP8hTtjZ1Gye-7epm7X4W6yQ_PHo\",\"at\":\"2026-10-04T09:05:00Z\",\"op\":\"add\",\"member\":{\"id\":\"browser\",\"role\":\"device\",\"name\":\"Firefox on the Mac\",\"boxPk\":\"YDRufJEaX2uhVBKRdMr-dbKUrDu9VUljL0jOxiZvhBA\",\"signPk\":\"NLTZBDFWy23PC-sKKUm3VZyUDSvLbb6MU6mzAnjjp0Y\"}}",
+          "sig": "1ZPZbyi29vcgGucK_jC48wESYogtfL4hQGzf8bbfkGnWwXGAf_7eorna9nQbHm-cjFuWi8BehdFoCOIA0Y0PAg"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":2,\"prev\":\"foEXSX4wWj63zP06zPcoPl34JEBywOuIJ-9gsEA9nOU\",\"at\":\"2026-10-04T09:10:00Z\",\"op\":\"add\",\"member\":{\"id\":\"devbox\",\"role\":\"machine\",\"name\":\"dev box\",\"boxPk\":\"deJw3ylSxXuoNnuoYYwXj5_lDbJ5nTBOdOkY2YVoYUY\",\"signPk\":\"EqQVksi3wX1AWeeym2Ho_5bHQV8vgDNI8vAX4Fueodo\"}}",
+          "sig": "4JkzuT3alCMZS4Yg-gOGDWV2WDoV_3w3fWTcmWJ3qufgoguwiHTJcvOg-h7Hon57Nzt97GKNxOjeiYcYW_YAAQ"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":3,\"prev\":\"MzdNtWB_p8ApTKowCNVtDIJ-bgpLzG-SG3ZIbl6O02o\",\"at\":\"2026-10-04T09:15:00Z\",\"op\":\"revoke\",\"id\":\"browser\"}",
+          "sig": "gVbjnsWe6gjLS4TYVkyLgZD5nGngWNb96Bc4PeZUAi-bRxXQsU304gL-XHFNpvevUqYtiQL1S-2Z4kpbVfuFBw"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "recovery",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":4,\"prev\":\"ChYVBenH4n_dei7ykNMH9QcGs-cn4i1FruNLU9lKkcE\",\"at\":\"2026-10-04T09:20:00Z\",\"op\":\"add\",\"member\":{\"id\":\"phone2\",\"role\":\"device\",\"name\":\"New Pixel\",\"boxPk\":\"7dA8regNKd5uoxOnSrNp9HMuyzZkkGa3i1st1mTLBBc\",\"signPk\":\"VLDYHQ-n0A5KfWAN-rpvKyIDWyL-M14X7fX5qluwUHQ\"}}",
+          "sig": "rOahki-se0kTzlRYeM7d1uQkZw8Qf5QOQ_NT9LGrTqQ25Ze9hgNog91P51kNi_vnNuVWpb2mobMEzfKSV6FVBw"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "recovery",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":5,\"prev\":\"mJX3hMUjQ_4Fhn7arYF7dnD9qfjt43mE6WD9UwxYTSU\",\"at\":\"2026-10-04T10:00:00Z\",\"op\":\"revoke\",\"id\":\"phone2\"}",
+          "sig": "nK2DEgFoHRbicnPPnTV-kpyj0uT5iM1hCqq_rEpTBi9Fazm5N8Evidvw4RQv6KSIvHwoWiK41MhKPe-ljeVjCA"
+        }
+      ],
+      "expect": {
+        "error": "signer-not-allowed"
+      }
+    },
+    {
+      "name": "entry of an op the verifier does not know",
+      "entries": [
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":0,\"prev\":null,\"at\":\"2026-10-04T09:00:00Z\",\"op\":\"add\",\"member\":{\"id\":\"phone\",\"role\":\"device\",\"name\":\"Pixel\",\"boxPk\":\"GxtY3VDqFLYNoXt5DNAnVNlwybq4ZOuzwPMBb-UdP1c\",\"signPk\":\"1i8Bah79Hk_feT60LNhEceG6nwzwTRKHtcxx9hYofLg\"},\"recoveryPk\":\"6kpsY-KcUgq-9VB7Ey7F-ZVHdq6-vnuSQh7qaRRG0iw\"}",
+          "sig": "XB355Sx3UVDHcQroBfYCkvBBt86Feva-wPpdt38lM3VJUZ0Iv5RlDEKln6tTF2a_YhQyGwUhdosu73mYGXyoCA",
+          "recoverySig": "6kxBKTB2pHB5WECOk7Sg3sJJTP1d_R3sqgInjHMiiopk0c3OkLVto46USPeSraTmC08ayZEKyRCrpXdldNTRAQ"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":1,\"prev\":\"_r28NJU5QECe884gP8hTtjZ1Gye-7epm7X4W6yQ_PHo\",\"at\":\"2026-10-04T09:05:00Z\",\"op\":\"add\",\"member\":{\"id\":\"browser\",\"role\":\"device\",\"name\":\"Firefox on the Mac\",\"boxPk\":\"YDRufJEaX2uhVBKRdMr-dbKUrDu9VUljL0jOxiZvhBA\",\"signPk\":\"NLTZBDFWy23PC-sKKUm3VZyUDSvLbb6MU6mzAnjjp0Y\"}}",
+          "sig": "1ZPZbyi29vcgGucK_jC48wESYogtfL4hQGzf8bbfkGnWwXGAf_7eorna9nQbHm-cjFuWi8BehdFoCOIA0Y0PAg"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":2,\"prev\":\"foEXSX4wWj63zP06zPcoPl34JEBywOuIJ-9gsEA9nOU\",\"at\":\"2026-10-04T09:10:00Z\",\"op\":\"add\",\"member\":{\"id\":\"devbox\",\"role\":\"machine\",\"name\":\"dev box\",\"boxPk\":\"deJw3ylSxXuoNnuoYYwXj5_lDbJ5nTBOdOkY2YVoYUY\",\"signPk\":\"EqQVksi3wX1AWeeym2Ho_5bHQV8vgDNI8vAX4Fueodo\"}}",
+          "sig": "4JkzuT3alCMZS4Yg-gOGDWV2WDoV_3w3fWTcmWJ3qufgoguwiHTJcvOg-h7Hon57Nzt97GKNxOjeiYcYW_YAAQ"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":3,\"prev\":\"MzdNtWB_p8ApTKowCNVtDIJ-bgpLzG-SG3ZIbl6O02o\",\"at\":\"2026-10-04T09:15:00Z\",\"op\":\"revoke\",\"id\":\"browser\"}",
+          "sig": "gVbjnsWe6gjLS4TYVkyLgZD5nGngWNb96Bc4PeZUAi-bRxXQsU304gL-XHFNpvevUqYtiQL1S-2Z4kpbVfuFBw"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "recovery",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":4,\"prev\":\"ChYVBenH4n_dei7ykNMH9QcGs-cn4i1FruNLU9lKkcE\",\"at\":\"2026-10-04T09:20:00Z\",\"op\":\"add\",\"member\":{\"id\":\"phone2\",\"role\":\"device\",\"name\":\"New Pixel\",\"boxPk\":\"7dA8regNKd5uoxOnSrNp9HMuyzZkkGa3i1st1mTLBBc\",\"signPk\":\"VLDYHQ-n0A5KfWAN-rpvKyIDWyL-M14X7fX5qluwUHQ\"}}",
+          "sig": "rOahki-se0kTzlRYeM7d1uQkZw8Qf5QOQ_NT9LGrTqQ25Ze9hgNog91P51kNi_vnNuVWpb2mobMEzfKSV6FVBw"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":5,\"prev\":\"mJX3hMUjQ_4Fhn7arYF7dnD9qfjt43mE6WD9UwxYTSU\",\"at\":\"2026-10-04T10:00:00Z\",\"op\":\"rotate\",\"recoveryPk\":\"rNsOKXQ_DMuGhtChBMuW4Fq-_sFTh2XnWVhp99yMSao\"}",
+          "sig": "RTKrKjxuF1CwOeJNlrTJaIgEmz45EnF__AGdO1RtMQWGLUSD0d6_hbQQOpxTCA1YAtu97t-26IltRQFR8820DA"
+        }
+      ],
+      "expect": {
+        "error": "bad-schema"
       }
     }
   ]
