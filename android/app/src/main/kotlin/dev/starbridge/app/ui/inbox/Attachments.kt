@@ -12,7 +12,9 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
@@ -32,6 +34,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
@@ -107,6 +110,19 @@ private fun ImageBox(image: Attached, maxHeight: Dp, wide: Boolean, crop: Boolea
                     alignment = if (crop) Alignment.TopCenter else Alignment.Center,
                     modifier = Modifier.fillMaxSize(),
                 )
+            }
+            // Says the image opens full screen, since nothing else on a touch screen does (#170).
+            Box(
+                Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(Spacing.s2)
+                    .size(Spacing.s8)
+                    .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.72f), CircleShape)
+                    // The glyph is text; keep it out of the image's label.
+                    .clearAndSetSemantics {},
+                contentAlignment = Alignment.Center,
+            ) {
+                Symbol(Sym.Expand, size = Spacing.s5, tint = MaterialTheme.colorScheme.onSurface)
             }
         }
     }

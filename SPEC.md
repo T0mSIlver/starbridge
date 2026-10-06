@@ -1292,7 +1292,18 @@ so the mod is the first path.
   since `codex queue` (0.160) takes the message only as an argument and other local users can
   read process arguments; `wait <id>` prints a delivered answer from local state. The npm bundle
   runs under Node, so the CLI uses no Bun global without a guard; a test runs it there.
+- 2026-10-06. Tests clean up their temp dirs (#313): a day of sessions left about 13,000 in the dev
+  box's 4 GB RAM-backed /tmp. Each package's `bun test` preloads `test-tmp.ts`, which points
+  `TMPDIR` at one dir per run and removes it after the last test, failed or not, and on exit or a
+  signal. Android's store tests use JUnit's `TemporaryFolder`. The
+  skill eval removes its homes on exit, after a throw or a signal too, and the judge its scratch dir.
 
+- 2026-10-06. A revoked browser stops showing its data (#343). Any 401 while the page runs sends
+  it back through boot, which drops the inbox, prompts, quotas and runs from memory; an unsigned
+  401 still only shows the refusal and keeps the keys (#310). Once the verified chain shows the
+  browser revoked, it deletes its keys, sent answers and push subscription, keeps the pin, and
+  says "This browser was removed from your account by <device>" (or "by your recovery key"), as
+  Tom worded it.
 - 2026-10-06. Android shows nothing from a machine its directory revokes (#344), as the web
   already did: its questions, prompts, quotas and runs leave the Inbox, and the notifications of
   its questions and prompts close, whether this phone or another device revoked it. They stay
@@ -1676,6 +1687,11 @@ so the mod is the first path.
 - 2026-10-06. The images install pnpm with `npm install -g` at package.json's
   `packageManager` version, not corepack (#430): #418 moved them to node:25-slim, which ships
   no corepack, and every deploy after it failed at `corepack enable`.
+- 2026-10-06. A deploy that does not go live fails (#423 follow-up). Every `FROM` is pinned
+  by digest, so a base image changes only in a Dependabot PR. `REVISION` is written only after
+  `apply.sh` succeeds. The server image carries its commit, which `/healthz` returns in
+  `x-starbridge-revision`, and the deploy workflow fails unless the live server runs that commit
+  or a later one of main's. CI builds the images on pull requests that can change them (#435).
 - 2026-10-06. Demo server for Play reviewers (#423). A reviewer has no GitHub account we can
   give them (GitHub mails a new-device code) and no recovery key we can give them (recovering
   revokes every other member, #363). So `https://demo.starbridge.run` is a self-hosted server
@@ -1704,6 +1720,12 @@ so the mod is the first path.
     API routes only, no web page. It pushes through prod's relay (`RELAY_URL`), as any
     self-hosted server does: the app shows a new item on a push, or on resume and pull to
     refresh, and does not poll while open.
+- 2026-10-06. Images say they open full screen (#170, owner's pick of option B on the question
+  display page). On a touch screen nothing showed that a tap on an image opens the viewer, as the
+  zoom cursor needs a mouse. Every image that opens the viewer (Android's cards and sheet, the
+  web's detail) now carries an expand badge in its bottom right corner: a `s8` circle of
+  `surface` at 72% with the expand icon in `fg`. The web list's thumbnails open the question, not
+  the viewer, so they have none.
 
 - 2026-10-06. A revoked machine learns at once (#353). A directory append wakes every machine's
   long-poll, revoked ones included, so the revoked machine's next request gets 401 instead of

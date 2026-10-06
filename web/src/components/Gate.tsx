@@ -394,24 +394,20 @@ function Join({ account, stale }: { account: string; stale: boolean }) {
   );
 }
 
-function Revoked({ account, name }: { account: string; name: string }) {
+function Revoked({ by }: { by: string }) {
   const { reload } = useApp();
   const { busy, error, run } = useAction();
   return (
     <FirstRunPage>
-      <h1 className="t-heading">{name} was revoked</h1>
-      <p className={`t-small ${s.lede}`}>It can no longer read or answer anything.</p>
+      <h1 className="t-heading">This browser was removed from your account by {by}</h1>
+      <p className={`t-small ${s.lede}`}>
+        Its keys and saved answers are deleted from this browser.
+      </p>
       <button
         type="button"
         className={`t-label ${ui.btn} ${ui.lg} ${ui.fill} ${s.go}`}
         disabled={busy}
-        onClick={() =>
-          run(async () => {
-            const store = await import("@/lib/store");
-            await store.del("device", account);
-            await reload();
-          })
-        }
+        onClick={() => run(reload)}
       >
         Add it again
       </button>
@@ -467,7 +463,7 @@ export function Gate({ children }: { children: React.ReactNode }) {
     case "join":
       return <Join account={boot.account} stale={boot.stale} />;
     case "revoked":
-      return <Revoked account={boot.account} name={boot.name} />;
+      return <Revoked by={boot.by} />;
     case "broken":
       return (
         <Problem

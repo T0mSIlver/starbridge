@@ -1343,9 +1343,11 @@ async function main() {
   );
   if (!(await pageB.evaluate(NOTIFICATIONS)).some((n) => n.tag === "e2e-left"))
     throw new Error("the left-over notification did not show");
-  await pageB.reload();
-  // The server's 401 alone is unsigned: the browser keeps its keys and shows the refusal (#310).
-  await pageB.getByText("The server says this browser was revoked.").waitFor();
+  // Without a reload: the page's next poll gets the 401 and drops what it showed (#343). The
+  // server's 401 alone is unsigned: the browser keeps its keys and shows the refusal (#310).
+  await pageB.getByText("The server says this browser was revoked.").waitFor({ timeout: 25_000 });
+  if ((await pageB.getByRole("heading", { name: "Inbox" }).count()) > 0)
+    throw new Error("the revoked browser still shows its inbox");
   if ((await pageB.evaluate(NOTIFICATIONS)).length > 0)
     throw new Error("the refusal left notifications on screen");
   // Another one, so the device list's verdict, not the refusal, has to close it.
@@ -1361,7 +1363,9 @@ async function main() {
   );
   await pageB.getByRole("link", { name: SIGN_IN }).click();
   // Signed in, the device list confirms the revocation.
-  await pageB.getByRole("heading", { name: /was revoked$/ }).waitFor({ timeout: 30_000 });
+  await pageB
+    .getByRole("heading", { name: /^This browser was removed from your account by / })
+    .waitFor({ timeout: 30_000 });
   if ((await pageB.evaluate(NOTIFICATIONS)).length > 0)
     throw new Error("a revoked browser still shows notifications");
   await page.emulateMedia({ colorScheme: "light" });
@@ -1418,7 +1422,11 @@ async function main() {
   await page.goto(ORIGIN);
   await page.getByText("The server says this browser was revoked.").waitFor({ timeout: 30_000 });
   await page.getByRole("link", { name: SIGN_IN }).click();
-  await page.getByRole("heading", { name: /was revoked$/ }).waitFor({ timeout: 30_000 });
+  await page
+    .getByRole("heading", {
+      name: "This browser was removed from your account by your recovery key",
+    })
+    .waitFor({ timeout: 30_000 });
 
   step("sign out the recovered browser: it leaves the devices and forgets its keys");
   await pageC

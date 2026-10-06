@@ -40,11 +40,12 @@ import mockwebserver3.SocketEffect
 import okhttp3.OkHttpClient
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
-import java.nio.file.Files
 
 /**
  * Recovery against a scripted server that commits the first append but loses its reply (#274):
@@ -53,6 +54,8 @@ import java.nio.file.Files
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [36])
 class RecoveryRetryTest {
+    // Removed after each test, failed or not (#313).
+    @get:Rule val tmp = TemporaryFolder()
     private val sodium = Sodium(LazySodiumJava(SodiumJava()))
     private val envelopes = Envelopes(sodium)
     private val directories = Directories(sodium, envelopes)
@@ -107,7 +110,7 @@ class RecoveryRetryTest {
             override fun wrap(plain: ByteArray) = plain
             override fun unwrap(wrapped: ByteArray) = wrapped
         }
-        val disk = Disk(Files.createTempDirectory("starbridge").toFile(), identity)
+        val disk = Disk(tmp.newFolder(), identity)
         val server = http.url("/").toString().trimEnd('/')
         disk.save(Saved(server, account = account, accountExists = true))
         disk.save(Secrets(session = "s"))
