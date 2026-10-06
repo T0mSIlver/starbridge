@@ -12,6 +12,7 @@ import {
   RELEASE_KEY,
   RELEASES_URL,
 } from "./release";
+import { piPackage, piSource } from "./setup/harnesses";
 import { VERSION } from "./version";
 
 const MANAGED = {
@@ -58,9 +59,21 @@ function updatePlugins(ctx: Ctx) {
   }
 }
 
+/** Moves an installed Starbridge Pi package to `version`'s tag, as setup does for its own. */
+function movePiPackage(ctx: Ctx, version: string) {
+  if (!piPackage({ ctx, home: ctx.env.HOME ?? homedir() })) return;
+  const r = sh(ctx, "pi", ["install", piSource(version)]);
+  if (r === null) return;
+  ctx.out(
+    r.ok
+      ? `Moved the Starbridge Pi package to v${version}.`
+      : `Could not move the Starbridge Pi package to v${version}: ${r.out}`,
+  );
+}
+
 /**
  * `starbridge update`: replaces a script-installed binary with the latest release once its
- * signature and hash check out, then restarts the agent and updates the plugins.
+ * signature and hash check out, then restarts the agent and updates the plugins and the Pi package.
  */
 export async function update(
   ctx: Ctx,
@@ -86,6 +99,7 @@ export async function update(
   ctx.out(`Updated starbridge ${VERSION} to ${latest}.`);
   restartAgent(ctx);
   updatePlugins(ctx);
+  movePiPackage(ctx, latest);
   return 0;
 }
 

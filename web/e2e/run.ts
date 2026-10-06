@@ -1186,10 +1186,10 @@ async function main() {
   prompt.stdin?.end(
     JSON.stringify({
       session_id: "worst-case-prompt",
-      cwd: `/home/dev/work/${PROJECT}`,
+      cwd: `/home/me/work/${PROJECT}`,
       tool_name: "Bash",
       tool_input: {
-        command: `git push --force-with-lease origin ${BRANCH} && gh pr edit 305 --body-file /home/dev/work/${PROJECT}/.scratch/pr-body-with-a-long-name.md`,
+        command: `git push --force-with-lease origin ${BRANCH} && gh pr edit 305 --body-file /home/me/work/${PROJECT}/.scratch/pr-body-with-a-long-name.md`,
       },
     }),
   );
@@ -1370,11 +1370,8 @@ async function main() {
     .click();
   const devices = page.getByRole("region", { name: "Devices" });
   await devices.getByText("Device · this browser").waitFor();
-  // Devices list this browser, then the others by when they joined: the second browser first.
-  await devices.getByRole("button", { name: "Revoke" }).first().click();
-  await page.getByRole("dialog").getByRole("button", { name: "Revoke" }).click();
-  await page.getByRole("dialog").waitFor({ state: "detached" });
-  // A notification left from before: the server's refusal closes it.
+  // A notification left from before: the server's refusal closes it. Shown before the revoke,
+  // since the directory append wakes the second browser's poll, which can be refused at once.
   await pageB.evaluate(() =>
     Promise.race([
       navigator.serviceWorker.ready.then((r) =>
@@ -1387,13 +1384,24 @@ async function main() {
   );
   if (!(await pageB.evaluate(NOTIFICATIONS)).some((n) => n.tag === "e2e-left"))
     throw new Error("the left-over notification did not show");
+  // Devices list this browser, then the others by when they joined: the second browser first.
+  await devices.getByRole("button", { name: "Revoke" }).first().click();
+  await page.getByRole("dialog").getByRole("button", { name: "Revoke" }).click();
+  await page.getByRole("dialog").waitFor({ state: "detached" });
   // Without a reload: the page's next poll gets the 401 and drops what it showed (#343). The
   // server's 401 alone is unsigned: the browser keeps its keys and shows the refusal (#310).
   await pageB.getByText("The server says this browser was revoked.").waitFor({ timeout: 25_000 });
   if ((await pageB.getByRole("heading", { name: "Inbox" }).count()) > 0)
     throw new Error("the revoked browser still shows its inbox");
-  if ((await pageB.evaluate(NOTIFICATIONS)).length > 0)
-    throw new Error("the refusal left notifications on screen");
+  await pageB
+    .waitForFunction(
+      () => navigator.serviceWorker.ready.then((r) => r.getNotifications()).then((n) => !n.length),
+      undefined,
+      { timeout: 5_000 },
+    )
+    .catch(() => {
+      throw new Error("the refusal left notifications on screen");
+    });
   // Another one, so the device list's verdict, not the refusal, has to close it.
   await pageB.evaluate(() =>
     Promise.race([

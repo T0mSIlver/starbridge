@@ -3,8 +3,8 @@
 set -eu
 cd /opt/starbridge/deploy
 compose="docker compose -p starbridge -f compose.yaml"
-# The commit, built into the server for /healthz. A starbridge-deploy installed before #423's
-# follow-up passes none and wrote REVISION before this ran.
+# The commit, built into the server for /healthz. An older starbridge-deploy on the host passes
+# none and writes REVISION before this runs.
 export REVISION=${REVISION:-$(cat /opt/starbridge/REVISION 2>/dev/null || echo unknown)}
 
 install -m 644 host/starbridge-backup.service host/starbridge-backup.timer \
