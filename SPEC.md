@@ -154,8 +154,8 @@ provider plugins add providers, not panels.
   sessions have not taken yet, on every poll and before `answers` or `wait` hands one out, against
   a fresh directory or, out of reach of the server, the saved one (#491). The server holds that
   decision answered, so the machine closes it: `wait` says its answer came from a device removed
-  since, and `settle` posts nothing (#515). The asking session gets no line; its agent learns it
-  from `wait`, or asks again.
+  since, and `settle` posts nothing (#515). The asking session gets no line, so an agent told its
+  answer comes back as a prompt is not told.
 - **Android keys** (#9) sit in files wrapped by a Keystore AES key usable while the screen is
   locked, so lock-screen buttons can sign. Signing out revokes the phone unless it is the last
   device.
