@@ -48,8 +48,8 @@ After Homebrew or npm, run `starbridge setup` yourself.
 | Permission prompts | Opt-in | No | Opt-in | Opt-in |
 | The agent's own ask tool | ✓ | n/a | n/a | ✓ |
 
-Some of these need a recent agent version, an interactive session or an extra plugin; the
-[agent instructions](docs/tell-your-agents.md#what-each-agent-supports) give the conditions.
+[What each agent supports](https://starbridge.run/docs/tell-your-agents#what-each-agent-supports)
+lists the version and setup each one needs.
 
 ## Docs
 

@@ -36,6 +36,9 @@ rm -f "$headers"
 # Commits before the header existed name none.
 if [ -z "$got" ]; then
   echo "starbridge.run names no revision; check it runs $rev" >&2
+elif case $got in *[!0-9a-f]*) true ;; *) [ ${#got} -ne 40 ] ;; esac; then
+  echo "starbridge.run names no commit id" >&2
+  exit 1
 elif [ "$got" != "$rev" ]; then
   echo "starbridge.run runs $got, not $rev" >&2
   exit 1

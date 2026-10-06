@@ -1,4 +1,5 @@
 import type { Database } from "bun:sqlite";
+import type { ClientVersion } from "@starbridge/protocol";
 import type { Server } from "bun";
 import type { Caller } from "./auth";
 import type { Config } from "./config";
@@ -27,5 +28,6 @@ export interface Deps {
 
 export interface Env {
   Bindings: { server?: Server<undefined> };
-  Variables: Deps & { caller: Caller };
+  /** `client` is the `starbridge-client` header, read for every /v1 request. */
+  Variables: Deps & { caller: Caller; client: ClientVersion | null };
 }
