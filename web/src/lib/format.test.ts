@@ -23,7 +23,7 @@ test("rows that share a name show the time they were added, so a machine paired 
     ],
     "24",
   );
-  expect(labels.get("m_old")).toBe("added Oct 6, 09:32");
-  expect(labels.get("m_new")).toBe("added Oct 6, 10:32");
-  expect(labels.get("m_mac")).toBe("added Oct 6");
+  expect(labels.get("m_old")).toBe("added Oct\u00a06, 09:32");
+  expect(labels.get("m_new")).toBe("added Oct\u00a06, 10:32");
+  expect(labels.get("m_mac")).toBe("added Oct\u00a06");
 });

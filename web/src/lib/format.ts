@@ -65,7 +65,10 @@ export function addedLabels(
   return new Map(
     rows.map((r) => {
       const at = new Date(r.addedAt);
-      const day = at.toLocaleDateString(undefined, { day: "numeric", month: "short" });
+      // One unit on the row: "Oct 6" never leaves its day alone on the next line.
+      const day = at
+        .toLocaleDateString(undefined, { day: "numeric", month: "short" })
+        .replaceAll(" ", "\u00a0");
       const twin = (named.get(r.name) ?? 0) > 1;
       return [r.id, `added ${day}${twin ? `, ${clockTime(at, clock)}` : ""}`];
     }),

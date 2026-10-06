@@ -72,6 +72,12 @@ class PromptReceiver : BroadcastReceiver() {
             app.store().prompts.value.find { it.id == id }?.let { app.notifier().promptFailed(it, "unlock the phone to allow") }
             return
         }
+        // A notification posted before #356 may carry Allow for an input it showed only in part.
+        val shown = app.store().prompts.value.find { it.id == id }
+        if (allow && shown != null && !app.notifier().fitsLine(shown)) {
+            app.notifier().promptFailed(shown, "open it to read the whole command")
+            return
+        }
         val pending = goAsync()
         app.scope().launch {
             val prompt = app.store().prompts.value.find { it.id == id }

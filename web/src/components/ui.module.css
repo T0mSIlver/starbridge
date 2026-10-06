@@ -202,3 +202,11 @@ textarea.field {
   border-radius: var(--radius-md);
   padding: var(--s3) var(--s4);
 }
+
+/* On a phone every button is a full tap target, `size.tap` tall (DESIGN.md, "Rules"). */
+@media (max-width: 599px) {
+  .btn,
+  .sm {
+    height: var(--size-tap);
+  }
+}
