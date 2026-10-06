@@ -146,7 +146,6 @@ export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
         <nav className={s.nav} aria-label="Site">
           <a href="#features">Features</a>
           <a href="/docs">Docs</a>
-          <a href={SELF_HOST}>Self-host</a>
           <a href={REPO}>GitHub</a>
         </nav>
         <a href="/v1/auth/github" className={`t-label ${ui.btn} ${ui.fill} ${s.signIn}`}>
@@ -236,12 +235,12 @@ export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
 
       <section id="install" className={s.installSection}>
         <h2 className="t-title">Install on each machine that runs agents</h2>
-        <p className={`t-prose ${s.dim} ${s.wideOnly}`}>
-          <code>starbridge setup</code> pairs the machine and installs the Claude Code plugin. The
-          script runs it; after Homebrew or npm, run it yourself.
+        <p className={`t-small ${s.dim} ${s.wideOnly}`}>
+          After Homebrew or npm, run <code className={s.inlineCode}>starbridge setup</code> to pair
+          the machine and install the Claude Code plugin. The script runs it for you.
         </p>
         <Install />
-        <p className={`t-meta ${s.faint}`}>Works best with Claude Code; Codex and Pi supported.</p>
+        <p className={`t-meta ${s.faint}`}>Works best with Claude Code. Codex, Pi and opencode are supported.</p>
       </section>
 
       <footer className={`t-small ${s.foot}`}>

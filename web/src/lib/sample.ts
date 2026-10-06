@@ -48,41 +48,41 @@ export function sample(now = Date.now()) {
       ...extra,
     }) as unknown as InboxItem["decision"];
 
-  const devbox = (s: string) => source("dev box", "server", "starbridge", s);
+  // The Play Store screenshots' machines and projects (#421), so the landing and the listing match.
+  const workstation = (s: string) => source("workstation", "desktop", "billing-api", s);
+  const buildServer = (s: string) => source("build server", "server", "web-app", s);
+  const laptop = (s: string) => source("laptop", "laptop", "web-app", s);
   const items: InboxItem[] = [
     {
       decision: decision(
         "d1",
         12 * min,
-        {
-          ...devbox("orchestrate-merges-server-before-cli"),
-          sessionTitle: "Orchestrate the merges: server PR first, then the CLI",
-        },
-        "Merge the server PR before the CLI PR?",
-        "Both touch `packages/protocol`. Merging the server first lets the CLI rebase onto the final routes:\n```\ngit rebase origin/main\npnpm test\n```\nThe CLI PR then needs one more review.",
-        ["Server first", "CLI first"],
+        { ...buildServer("ship-checkout-v2"), sessionTitle: "Ship checkout v2" },
+        "Merge the API change before the checkout PR?",
+        "Both touch `api/orders.ts`. Merging the API first lets the checkout PR rebase onto the final routes:\n```\ngit rebase origin/main\nnpm test\n```\nThe checkout PR then needs one more review.",
+        ["API first", "Checkout first"],
       ),
-      machine: member("dev box"),
+      machine: member("build server"),
     },
     {
       decision: decision(
         "d2",
         3 * min,
-        source("mac mini", "desktop", "localvoxtral", "eval-runner-whisper-large-v3-nightly"),
-        "Run speech inference on the Mac while you're away?",
-        "The eval needs the Mac's GPU for about 40 minutes.",
-        ["Run it now", "Wait until tonight"],
-        { agent: "codex" },
+        workstation("rename-user-id-column"),
+        "Rename the user_id column now, or after Friday's release?",
+        "Renaming now touches 14 queries and needs a migration. After the release, nothing else is in flight.",
+        ["Now", "After the release"],
+        { agent: "codex", recommended: "After the release" },
       ),
-      machine: member("mac mini"),
+      machine: member("workstation"),
       waitingSince: at(2 * min + 10_000),
     },
     {
       decision: decision(
         "d3",
         8 * min,
-        source("MacBook", "laptop", "starbridge", "landing-hero-two-variants"),
-        "Which landing hero should I keep?",
+        laptop("checkout-layouts"),
+        "Which checkout layout should I keep?",
         "Both are built on their own branches.",
         ["Keep A", "Keep B"],
         {
@@ -91,36 +91,36 @@ export function sample(now = Date.now()) {
             width: 368,
             height: 228,
             data: shots[v],
-            alt: `Hero ${v}`,
+            alt: `Layout ${v}`,
           })),
           links: [{ url: "https://claude.ai/artifact/Xq7pLm2VnR4tBz9KcW1sYd" }],
         },
       ),
-      machine: member("MacBook"),
+      machine: member("laptop"),
     },
     {
       decision: decision(
         "h1",
         3 * 60 * min,
-        devbox("decision-sheet"),
-        "Ship the light or dark decision sheet first?",
+        source("cloud", "cloud", "web-app", "node-version"),
+        "Bump the Node version in CI?",
         "",
-        ["Dark", "Light"],
+        ["Yes", "No"],
       ),
-      machine: member("dev box"),
+      machine: member("cloud"),
       answeredAt: at(2 * 60 * min),
-      reply: { choice: "Dark" },
+      reply: { choice: "Yes" },
     },
     {
       decision: decision(
         "h2",
         4 * 60 * min,
-        source("cloud", "cloud", "starbridge", "supervisor-flaky"),
-        "Retry the flaky supervisor test once more?",
+        workstation("flaky-payment-test"),
+        "Retry the flaky payment test once more?",
         "",
         ["Yes", "No"],
       ),
-      machine: member("cloud"),
+      machine: member("workstation"),
       answeredAt: at(3 * 60 * min),
     },
   ];
@@ -134,59 +134,59 @@ export function sample(now = Date.now()) {
         createdAt: at(72_000),
         agent: "claude-code",
         tool: "Bash",
-        summary: "git push origin t/57-hook",
-        description: "Push the permission hook branch.",
-        input: '{"command":"git push origin t/57-hook"}',
+        summary: "git push origin feature/retry-queue",
+        description: "Push the retry queue branch.",
+        input: '{"command":"git push origin feature/retry-queue"}',
         inputHash: "",
         suggestions: [
           { scope: "session", label: "Allow for this session", rule: "Bash(git push:*)" },
-          { scope: "project", label: "Always allow in starbridge", rule: "Bash(git push:*)" },
+          { scope: "project", label: "Always allow in billing-api", rule: "Bash(git push:*)" },
         ],
         expiresAt: new Date(now + 9 * min).toISOString(),
-        source: devbox("permission-hook-t57-implementation"),
+        source: source("laptop", "laptop", "billing-api", "retry-queue"),
       } as PromptItem["permission"],
-      machine: member("dev box"),
+      machine: member("laptop"),
       receivedAt: at(72_000),
     },
   ];
 
   const runs: RunItem[] = [
     {
-      machine: "mac mini",
+      machine: "build server",
       run: {
         v: 1,
         id: "r1",
         to: ["d_self"],
-        title: "Mac e2e",
-        reason: "Uses your session and keyboard",
-        source: source("mac mini", "desktop", "localvoxtral", "e2e-dictation-suite"),
+        title: "Integration tests",
+        reason: "Uses the shared staging database",
+        source: source("build server", "server", "billing-api", "integration"),
         startedAt: at(6 * min + 12_000),
         at: at(5_000),
         progress: { done: 34, total: 120, unit: "step" },
       } as RunItem["run"],
     },
     {
-      machine: "dev box",
+      machine: "workstation",
       run: {
         v: 1,
         id: "r2",
         to: ["d_self"],
-        title: "Build the APK",
-        reason: "The release needs it signed",
-        source: source("dev box", "server", "starbridge", "release-apk"),
+        title: "Build the release",
+        reason: "The deploy waits for it",
+        source: source("workstation", "desktop", "web-app", "release-build"),
         startedAt: at(40_000),
         at: at(5_000),
       } as RunItem["run"],
     },
     {
-      machine: "dev box",
+      machine: "build server",
       run: {
         v: 1,
         id: "r3",
         to: ["d_self"],
-        title: "Lost run test",
+        title: "Load test",
         reason: "Killed before its first update",
-        source: source("dev box", "server", "starbridge", "lost-run"),
+        source: buildServer("load-test"),
         // Killed before its first heartbeat: its only news is its start (#190).
         startedAt: at(6 * min + 37_000),
         at: at(6 * min + 37_000),
@@ -272,11 +272,11 @@ export function sample(now = Date.now()) {
       self,
     }) as Device;
   const devices = [
-    device("d_self", "Firefox on the MacBook", "device", 3, true),
-    device("d_px11", "Pixel 11 Pro", "device", 20),
+    device("d_self", "Chrome on laptop", "device", 2, true),
     device("d_px9", "Pixel 9", "device", 23),
-    device("m_devbox", "dev box", "machine", 30),
-    device("m_mini", "mac mini", "machine", 30),
+    device("m_workstation", "workstation", "machine", 23),
+    device("m_buildserver", "build server", "machine", 20),
+    device("m_laptop", "laptop", "machine", 9),
   ];
   return {
     devices,
