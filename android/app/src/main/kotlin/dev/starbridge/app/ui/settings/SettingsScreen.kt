@@ -237,7 +237,7 @@ private const val GUIDE = "https://starbridge.run/docs/tell-your-agents"
 
 /** How pushes reach this phone, as a state; registered, it names the server's host. */
 internal fun pushState(push: PushSetting, server: String) = when {
-    push.registered -> "Registered with ${runCatching { java.net.URI(server).host }.getOrNull() ?: server}"
+    push.registered -> "Registered with ${android.net.Uri.parse(server).host ?: server}"
     push.type == "unifiedpush" && push.distributors.isEmpty() -> "No UnifiedPush distributor installed"
     push.type == "fcm" && !push.fcmAvailable -> "This build has no Firebase project"
     else -> "Not registered yet"
