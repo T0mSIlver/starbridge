@@ -74,12 +74,17 @@ since the server is its only channel; the revoked device's key can sign any stal
 Devices run the same check on machines (#362). A machine signs into every item it posts the
 longest head it knows, `dir: {length, head, by?}`: its own, or a longer one an active device
 signed into an answer that its chain lacks, naming that device as `by` (`headToSign`). A device
-keeps the longest head each machine signed, apart for each `by` (`noteHead`). While a head its
+keeps the longest head each machine signed, apart for each `by` it lists, and in one slot per
+machine for any `by` it does not list (`noteHead`), so storage stays bounded. While a head its
 chain does not hold counts, it refuses every machine's items and says the server is holding back
-directory entries; a head counts while its machine, and its `by` if any, are active in the
-device's chain (`withheldBy`). The device reads the items again once the server serves those
-entries, or once its chain revokes either. Reading the directory and revoking keep working
-meanwhile.
+directory entries; a head counts while its machine is active in the device's chain and its `by`,
+if any, is not revoked there (`withheldBy`). A `by` the chain does not list counts: its `add` may
+be what the server holds back, as when the owner revokes from a new phone. Before holding, a
+device reads the directory once more, since a machine may simply have signed an entry made
+elsewhere since its last read. It reads the items again once the server serves those entries,
+or once its chain revokes the machine or the `by`. Reading the directory and revoking keep
+working meanwhile. The device names both members, and says to revoke the machine first: a
+compromised machine can name any `by`, such as the owner's own phone.
 
 So one machine that holds a withheld revocation, or has seen the head of the device that made it,
 exposes it to every device whose items from that machine the server delivers. A server that

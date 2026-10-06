@@ -137,7 +137,7 @@ test("a forged head a machine passed on ends with its forger's revocation", () =
   expect(relayed).toEqual({ ...forged, by: "b" });
   const heads: Heads = {};
   noteHead(heads, "m2", relayed, seenByA);
-  expect(withheldBy(heads, mine, seenByA)?.id).toBe("b");
+  expect(withheldBy(heads, mine, seenByA)).toMatchObject({ id: "m2", by: "b" });
   // The owner revokes B: the head it vouched for counts no more, and M2's own head holds.
   const chain = [
     ...seenByA,
@@ -147,4 +147,44 @@ test("a forged head a machine passed on ends with its forger's revocation", () =
   expect(withheldBy(heads, after, chain)).toBeUndefined();
   noteHead(heads, "m2", head(after), chain);
   expect(withheldBy(heads, after, chain)).toBeUndefined();
+});
+
+test("a head passed on from a device the chain does not list yet counts, in one slot per machine", () => {
+  // The server stops serving A at M2's add; the owner adds phone C, which revokes M. M2 is served
+  // C's add, not the revocation, and passes on the head C signed into an answer.
+  const chain = seenByA;
+  const c = { id: "c", role: "device" as const, name: "c", ...publicKeys(generateMemberKeys()) };
+  const withC = [
+    ...chain,
+    addEntry(verifyDirectory(chain), { id: "a", signKey: keys.a.sign.privateKey }, c, at),
+  ];
+  const truthC = [
+    ...withC,
+    revokeEntry(verifyDirectory(withC), { id: "b", signKey: keys.b.sign.privateKey }, "m", at),
+  ];
+  const relayed = headToSign({ c: head(verifyDirectory(truthC)) }, verifyDirectory(withC), withC);
+  expect(relayed.by).toBe("c");
+  const mine = verifyDirectory(chain);
+  const heads: Heads = {};
+  noteHead(heads, "m2", relayed, chain, mine);
+  expect(Object.keys(heads)).toEqual(["m2/?"]);
+  expect(withheldBy(heads, mine, chain)).toMatchObject({ id: "m2", by: "c" });
+  // Another unknown id takes the same slot, so a machine cannot fill storage with invented ones.
+  noteHead(heads, "m2", { length: 99, head: "A".repeat(43), by: "nobody" }, chain, mine);
+  expect(Object.keys(heads)).toEqual(["m2/?"]);
+  // Once the chain lists the forger as revoked, its head counts no more.
+  const forger = [
+    ...chain,
+    addEntry(mine, { id: "a", signKey: keys.a.sign.privateKey }, { ...c, id: "nobody" }, at),
+  ];
+  const revoked = [
+    ...forger,
+    revokeEntry(
+      verifyDirectory(forger),
+      { id: "a", signKey: keys.a.sign.privateKey },
+      "nobody",
+      at,
+    ),
+  ];
+  expect(withheldBy(heads, verifyDirectory(revoked), revoked)).toBeUndefined();
 });

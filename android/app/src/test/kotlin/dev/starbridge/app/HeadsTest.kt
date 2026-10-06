@@ -40,21 +40,28 @@ class HeadsTest {
         assertFalse(heads.holds(seenByA, fullHead))
         val known = mutableMapOf<String, DirectoryHead>()
         assertTrue(heads.note(known, "m2", fullHead, seenByA))
-        assertEquals("m2" to fullHead, heads.withheldBy(known, mine, seenByA))
+        assertEquals("m2", heads.withheldBy(known, mine, seenByA)?.id)
         // An older item with a shorter head, replayed, does not lift the hold.
         assertFalse(heads.note(known, "m2", DirectoryHead(mine.length, mine.head), seenByA))
-        assertEquals("m2", heads.withheldBy(known, mine, seenByA)?.first)
+        assertEquals("m2", heads.withheldBy(known, mine, seenByA)?.id)
         assertNull(heads.withheldBy(known, full, truth))
         // A head counts only while the member that signed it is active.
         val revoked = mapOf("m" to DirectoryHead(full.length + 5, "A".repeat(43)))
         assertNull(heads.withheldBy(revoked, full, truth))
-        assertEquals("m", heads.withheldBy(revoked, mine, seenByA)?.first)
+        assertEquals("m", heads.withheldBy(revoked, mine, seenByA)?.id)
 
         // A forged head an honest machine passed on from device b ends with b's revocation.
         val relayed = mutableMapOf<String, DirectoryHead>()
         heads.note(relayed, "m2", DirectoryHead(99, "A".repeat(43), by = "b"), seenByA)
-        assertEquals("b", heads.withheldBy(relayed, mine, seenByA)?.first)
+        assertEquals("b", heads.withheldBy(relayed, mine, seenByA)?.by)
         val withoutB = seenByA + envelopeJson(directories.revokeEntry(mine, "a", sign.getValue("a").secret, "b", at))
         assertNull(heads.withheldBy(relayed, directories.verify(withoutB), withoutB))
+
+        // A head passed on from a device this chain does not list yet counts, in one slot per machine.
+        val unknown = mutableMapOf<String, DirectoryHead>()
+        heads.note(unknown, "m2", DirectoryHead(99, "A".repeat(43), by = "c"), seenByA, mine)
+        heads.note(unknown, "m2", DirectoryHead(98, "B".repeat(43), by = "d"), seenByA, mine)
+        assertEquals(setOf("m2/?"), unknown.keys)
+        assertEquals("c", heads.withheldBy(unknown, mine, seenByA)?.by)
     }
 }

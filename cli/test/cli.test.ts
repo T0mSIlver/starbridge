@@ -526,6 +526,9 @@ test("open decisions reach a device that joins later, which can answer them", as
     id,
     ctx.store.state().asked[id]?.waiting?.id as string,
   ]);
+  // Signed with the head the machine holds now, which lists the laptop (#362).
+  const now = await server.directory();
+  for (const b of await opened()) expect(b.dir).toEqual({ length: now.length, head: now.head });
   // The phone, which had it, still holds one copy.
   expect((await server.opened("decision", "&open=1")).map((d) => d.id)).toEqual([id]);
   const answer: Answer = {
