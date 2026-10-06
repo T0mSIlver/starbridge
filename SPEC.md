@@ -1292,6 +1292,12 @@ so the mod is the first path.
   since `codex queue` (0.160) takes the message only as an argument and other local users can
   read process arguments; `wait <id>` prints a delivered answer from local state. The npm bundle
   runs under Node, so the CLI uses no Bun global without a guard; a test runs it there.
+- 2026-10-06. Dragging a question's sheet by its image stuttered on Android (#246). In a
+  Robolectric test, a drag from the image moves the sheet exactly as one from the text. The one
+  difference: a finger that rests over 100 ms before it drags counts as a press on the image, so
+  its ripple starts, then cancels while the sheet moves. Images, in the sheet and on inbox cards,
+  now have no ripple; a tap still opens the viewer, which is feedback enough. Only a real phone
+  can confirm the stutter is gone, as the emulator renders in software.
 - 2026-10-06. Android posts the account's first directory entry only once the recovery key is
   confirmed (#370), as the web does since #337. "Create the keys" writes the keys, the seed and
   the signed entry to the app's encrypted store; "I wrote this key down" posts the entry, then
@@ -1668,6 +1674,36 @@ so the mod is the first path.
   new phone. The hold names the machine and that device, and says to revoke the machine first:
   a compromised machine can name the owner's own phone. Re-sealed items carry the current head,
   and switching account clears the phone's heads.
+- 2026-10-06. opencode's `question` tool asks on the devices (#345; opencode 1.18.31). Each call
+  publishes `question.asked` (`id`, `sessionID`, `questions` of `{question, header, options:
+  [{label, description}], multiple?, custom?}`), waits for `POST /question/{id}/reply` with
+  `{answers: string[][]}` (one array of labels per question) or `POST /question/{id}/reject`,
+  and publishes `question.replied` or `question.rejected` either way; the tool returns
+  `"question"="label"` pairs to the model, and a typed answer is any string. Read from the
+  `@opencode-ai/sdk` v2 types and the binary's strings, and checked live. So the plugin runs
+  `starbridge hook question --agent opencode` on each call, which posts one decision per
+  question, already waiting, and prints all the answers once every question has one; the plugin
+  replies with them. The terminal's dialog stays up, and the first answer wins: `replied` or
+  `rejected` from the keyboard stops the CLI, which settles the questions still open as
+  `elsewhere`. The labels are the options, so a tap returns the label opencode expects; the one
+  ending in "(Recommended)", which opencode's tool description asks for, is the recommendation,
+  else the first. A question a decision cannot offer as taps (more than 4 options, a label over
+  100 characters, one option) lists the options in the context and takes a typed reply, which
+  goes back as one answer. A `multiple` question keeps its taps for one pick, and its context
+  says to reply with each one picked. This goes further than Claude Code's
+  `AskUserQuestion` hook, which tells the agent to use `starbridge ask` instead: opencode's
+  reply route takes any answer, so the question's own call gets it. A `multiple` question's
+  reply that names only its labels, split on commas or lines, goes back as those labels. These
+  decisions are `held` in the CLI's state, recorded without their session, so the session's
+  answer loop never submits the answer as a prompt too, and `starbridge wait` without an id
+  skips them. The hook posts and waits on the server itself rather than through the agent, since
+  an agent older than `held` would record the session. It stops when opencode dies, as the
+  permission hook does, and a question that could not be posted settles the others as
+  `withdrawn`. The skill and
+  rule still tell agents to ask through `starbridge ask`. Checked in a throwaway HOME with the
+  opencode TUI on glm-5.3-flash, the local server and `starbridge agent`: a device's "French"
+  resolved the call and the model wrote "bonjour", with no duplicate prompt in `opencode
+  export`; an answer at the keyboard, and Esc, each settled the card as `elsewhere`.
 - 2026-10-06. opencode integration audit (#298), reproduced with opencode 1.18.31 on
   glm-5.3-flash in a throwaway HOME. A session's loop started only at its first command, so after
   opencode restarted, a session waiting for its answer never got it (#398). The plugin now starts
@@ -1818,6 +1854,20 @@ so the mod is the first path.
   answered on another device."). The machine keeps the notice due until the server takes it,
   skips it while behind on the directory, and stops at `already-settled` (withdrawn meanwhile).
   Older clients ignore the two new fields.
+- 2026-10-06. Landing page after the owner's review (#448). Its product shots use the Play Store
+  screenshots' neutral data (machines workstation, build server and laptop; projects billing-api
+  and web-app): `lib/sample.ts` on the web, `Showcase.kt` for the Roborazzi shots `inbox-landing`
+  and `sheet-pick`, and the round 4 mockup's lock screen with the same items. The install
+  section's inline command is set in Google Sans Code on a chip, as in the docs; the browser's
+  default monospace left a wide gap before "setup". Self-host leaves the top bar for the footer
+  and the docs, since the hosted instance is the one to start with.
+- 2026-10-06. The landing page's hero (#448, the owner's pick from two rounds of options): "Know
+  the moment your agent is stuck", then "When a coding agent stops for a question or a
+  permission, your phone tells you. Answer with one tap and it gets back to work." It sells the
+  pain the owner named: you don't notice that an agent is blocked. The shots below it still show
+  the web app beside the phone, so the page keeps saying both clients do the same.
+- 2026-10-06. The release's npm publish step keeps its `env.NODE_AUTH_TOKEN != ''` gate (#480).
+  The audit suspected it never skips; it does skip without `NPM_TOKEN`. See the research log.
 
 ## Encryption, with existing libraries
 
@@ -2430,3 +2480,12 @@ goes in git.
   drops the minimum. The screenshots had hidden it, since they drew Find
   in a plain `Box`; Find's shots and `FindScreenTest` now draw it inside
   a screen-filling NavDisplay, as the app does.
+- 2026-10-06: the npm publish gate in `release.yml` (#480). Two facts make
+  `env.NODE_AUTH_TOKEN` empty in that step's `if` when `NPM_TOKEN` is unset.
+  actions/setup-node v7.0.0 (the pinned `8207627`) exports `NODE_AUTH_TOKEN`
+  only when the caller set it (`src/authutil.ts:49-52`); the
+  `XXXXX-XXXXX-XXXXX-XXXXX` placeholder was removed in setup-node#1558. And
+  actions/runner merges the step's own `env` into the `env` context
+  (`src/Runner.Worker/StepsRunner.cs:106-129`, main at `67f01c2`) before it
+  evaluates the step's `if` (`:200-221`), so the step's empty value would
+  override a job-level placeholder anyway.

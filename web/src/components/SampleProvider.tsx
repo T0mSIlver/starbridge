@@ -8,10 +8,10 @@ import { type Store, StoreContext } from "./AppProvider";
 const noop = async () => {};
 
 /**
- * The app's store filled with the mockups' data, for product shots: answers go nowhere, and quota
- * settings last for the page.
- * `landing` leaves out the permission prompt, which would top the list, and the lost run: the
- * landing page leads with questions.
+ * The app's store filled with the sample data (lib/sample.ts), for product shots: answers go
+ * nowhere, and quota settings last for the page.
+ * `landing` leaves out the permission prompt, which would top the list, and the run killed before
+ * its first update: the landing page leads with questions.
  */
 export function SampleProvider({
   landing = false,
