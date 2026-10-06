@@ -671,7 +671,9 @@ class ServerStore(
      * head an active machine signed is missing from this phone's chain (#362).
      */
     private fun open(item: SealedItem): Pair<String, Any>? = try {
-        val opened = envelopes.open(item, me.id, box, directory!!)
+        // Null once a directory read found this phone removed (wipe).
+        val dir = directory ?: throw ProtocolException("no-directory", "")
+        val opened = envelopes.open(item, me.id, box, dir)
         keepHead(item.from, (opened.body as? ItemBody)?.dir)
         if (withheld() != null) null else item.from to opened.body
     } catch (e: ProtocolException) {
@@ -708,6 +710,8 @@ class ServerStore(
     private suspend fun confirmHold(): Boolean {
         if (withheld() == null) return false
         syncDirectory()
+        // Removed from the devices: the wipe said why, and nothing more opens.
+        if (phase.value != Phase.Ready) return true
         val why = withheld() ?: return false
         notice.value = why
         shownHold = why

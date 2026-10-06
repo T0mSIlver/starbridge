@@ -1136,14 +1136,12 @@ export async function openPushedPermission(ctx: Ctx, item: SealedItem): Promise<
 /** Opens a waiting notice, with the machine that signed it. */
 export async function openWaiting(ctx: Ctx, item: SealedItem) {
   const { signer, body } = await openMachine(ctx, item, "waiting");
-  await hold(ctx);
   return { machine: signer.id, waiting: body as Waiting };
 }
 
 /** Opens a settled notice, with the machine that signed it. */
 export async function openSettled(ctx: Ctx, item: SealedItem) {
   const { signer, body } = await openMachine(ctx, item, "settled");
-  await hold(ctx);
   return { machine: signer.id, settled: body as Settled };
 }
 
