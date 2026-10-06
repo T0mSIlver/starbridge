@@ -17,11 +17,14 @@ const noop = async () => {};
 export function SampleProvider({
   landing = false,
   empty = false,
+  noQuotas = false,
   quiet = false,
   children,
 }: {
   landing?: boolean;
   empty?: boolean;
+  /** No snapshot yet, as on a device that just joined (#661). */
+  noQuotas?: boolean;
   /** Nothing open, History only: the quiet inbox (#662). */
   quiet?: boolean;
   children: React.ReactNode;
@@ -43,6 +46,7 @@ export function SampleProvider({
         runs: { items: [], rejected: [] },
         quotas: undefined,
       }),
+      ...(noQuotas && { quotas: { cards: [], errors: [], rejected: [] } }),
       ...(quiet && {
         inbox: { ...s.inbox, items: s.inbox.items.filter((i) => i.answeredAt) },
         prompts: [],
@@ -60,6 +64,6 @@ export function SampleProvider({
       loadPromptLog: noop,
       deviceName: (id) => id,
     };
-  }, [landing, empty, quiet, quotaSettings]);
+  }, [landing, empty, noQuotas, quiet, quotaSettings]);
   return <StoreContext.Provider value={store}>{children}</StoreContext.Provider>;
 }
