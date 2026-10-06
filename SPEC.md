@@ -1682,8 +1682,9 @@ so the mod is the first path.
   `elsewhere`. The labels are the options, so a tap returns the label opencode expects; the one
   ending in "(Recommended)", which opencode's tool description asks for, is the recommendation,
   else the first. A question a decision cannot offer as taps (more than 4 options, a label over
-  100 characters, one option) lists the options in the context and takes a typed reply, as does
-  `multiple`; the reply goes back as one answer. This goes further than Claude Code's
+  100 characters, one option) lists the options in the context and takes a typed reply, which
+  goes back as one answer. A `multiple` question keeps its taps for one pick, and its context
+  says to reply with each one picked. This goes further than Claude Code's
   `AskUserQuestion` hook, which tells the agent to use `starbridge ask` instead: opencode's
   reply route takes any answer, so the question's own call gets it. A `multiple` question's
   reply that names only its labels, split on commas or lines, goes back as those labels. These

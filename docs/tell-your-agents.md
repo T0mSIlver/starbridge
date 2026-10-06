@@ -51,7 +51,8 @@ rejects every prompt at once, so none reaches your devices.
 options as one-tap answers, and your answer goes back into the waiting call.
 The question stays open in the terminal, and the first answer wins; answering
 or dismissing it there closes it on your devices. A question with more than 4
-options, or that takes several, lists them and takes a typed reply.
+options lists them and takes a typed reply; to pick several where the agent
+allows it, reply with their names.
 
 `starbridge setup` offers to install Starbridge in each agent it finds, and
 asks before each one:
