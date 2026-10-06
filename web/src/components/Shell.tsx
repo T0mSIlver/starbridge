@@ -53,7 +53,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
   // /sample mirrors the app in development (app/sample).
   const at = path.replace(/^\/sample(?=\/|$)/, "") || "/";
-  const home = path.startsWith("/sample") ? "/sample" : "/";
+  const home = /^\/sample(?=\/|$)/.test(path) ? "/sample" : "/";
   const tabs = TABS.map(({ href, label, icon }) => {
     const active = href === "/" ? at === "/" : at.startsWith(href);
     const count = href === "/" && open > 0 ? open : 0;

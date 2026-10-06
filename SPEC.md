@@ -1720,6 +1720,10 @@ so the mod is the first path.
   0 and posts nothing, since devices would hold both the answer and a withdrawal. An answer
   accepted but not yet delivered can still be withdrawn. The skill says only `--answer-in` cards
   need `settle`.
+- 2026-10-06. The lockup links home (#439, owner). In the signed-in web app the Starbridge mark
+  and name (the rail's top, the phone top bar's mark) link to the Inbox, named "Starbridge,
+  Inbox" for screen readers; on the public pages (landing, docs, privacy, terms) and first run
+  the lockup links to `/`. Nothing changes at rest but the pointer and the focus ring.
 
 ## Encryption, with existing libraries
 

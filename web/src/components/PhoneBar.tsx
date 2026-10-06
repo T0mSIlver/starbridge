@@ -25,7 +25,7 @@ export function PhoneBar({
   const q = useFind();
   const [finding, setFinding] = useState(false);
   // /sample mirrors the app in development (app/sample).
-  const home = usePathname().startsWith("/sample") ? "/sample" : "/";
+  const home = /^\/sample(?=\/|$)/.test(usePathname()) ? "/sample" : "/";
   return (
     <header className={`${s.bar} ${always ? s.always : ""}`}>
       {back ? (
