@@ -69,7 +69,7 @@ secrets() {
   chmod 644 "$LOAD_DIR/Caddyfile"
   # The stats host's password block, with prod's fallback hash: nobody holds its password.
   mkdir -p "$LOAD_DIR/caddy"
-  printf 'basic_auth {\n\ttom %s\n}\n' \
+  printf 'import stats_gate %s none\n' \
     "$(sed -n "s/^hash='\(.*\)'\$/\1/p" "$repo/deploy/host/caddy-auth.sh")" > "$LOAD_DIR/caddy/stats-auth"
 }
 

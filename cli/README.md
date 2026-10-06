@@ -155,6 +155,21 @@ every device and notifies you once more. `starbridge working <id>` clears it; th
 `starbridge wait <id>` marks the question waiting the same way; with `--no-mark` it only collects
 the answer, for a question that blocks nothing yet.
 
+### Follow every answer
+
+An orchestrator that supervises other sessions can follow your answers to all of them:
+
+```bash
+starbridge answers --all --follow
+```
+
+It prints one JSON line per answer, with the question, the session and the project that asked,
+then each new one until interrupted. `--since 2h` or `--since 2026-10-06T21:00Z` skips older ones.
+It only reads: each answer still comes back into the session that asked.
+
+`starbridge decisions --open` lists the questions still open, in the same form, so an orchestrator
+can check that no session already asked what it is about to ask.
+
 ### Runs
 
 `starbridge run` wraps a command you want to follow: a build, a release, an eval, heavy work on

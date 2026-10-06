@@ -31,6 +31,9 @@ import dev.starbridge.app.ui.theme.StarbridgeTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -79,6 +82,11 @@ import java.time.Instant
 @Serializable data object SettingsKey : NavKey
 @Serializable data object DevicesKey : NavKey
 @Serializable data object AddDeviceKey : NavKey
+/**
+ * Add a device with a pairing link, which the camera opened in the app (#611); [at] tells a link
+ * scanned again from the one already open, so it is looked up again.
+ */
+@Serializable data class PairLinkKey(val link: String, val at: Long) : NavKey
 @Serializable data object RecoveryKeyKey : NavKey
 
 private val Tab.key: NavKey get() = when (this) {
@@ -90,7 +98,7 @@ private val Tab.key: NavKey get() = when (this) {
 /** The tab a page belongs to. */
 private fun tabOf(key: NavKey?) = when (key) {
     QuotasKey -> Tab.Quotas
-    SettingsKey, DevicesKey, AddDeviceKey, RecoveryKeyKey -> Tab.Settings
+    SettingsKey, DevicesKey, AddDeviceKey, is PairLinkKey, RecoveryKeyKey -> Tab.Settings
     else -> Tab.Inbox
 }
 
@@ -180,11 +188,13 @@ fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> U
     val sheets = remember { BottomSheetSceneStrategy<NavKey>() }
     val notificationsOff = !rememberNotificationsOn()
     val colors = StarbridgeTheme.colors
-    // A notification's tap: its question's or prompt's sheet, over the inbox.
+    // A notification's tap: its question's or prompt's sheet, over the inbox. A pairing link:
+    // Add a device, over Devices.
     LaunchedEffect(opening) {
         opening.collect { key ->
             backStack.clear()
             backStack.add(InboxKey)
+            if (key is PairLinkKey) backStack.addAll(listOf(SettingsKey, DevicesKey))
             backStack.add(key)
         }
     }
@@ -362,6 +372,13 @@ fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> U
                     entry<AddDeviceKey> {
                         val vm: DevicesViewModel = hiltViewModel()
                         val approval by vm.approval.collectAsStateWithLifecycle()
+                        AddDeviceScreen(approval, vm.actions, onBack = { backStack.removeAt(backStack.lastIndex) })
+                    }
+                    entry<PairLinkKey> { key ->
+                        val vm: DevicesViewModel = hiltViewModel()
+                        val approval by vm.approval.collectAsStateWithLifecycle()
+                        var looked by rememberSaveable { mutableStateOf(false) }
+                        LaunchedEffect(Unit) { if (!looked) { looked = true; vm.actions.lookUp(key.link) } }
                         AddDeviceScreen(approval, vm.actions, onBack = { backStack.removeAt(backStack.lastIndex) })
                     }
                 },

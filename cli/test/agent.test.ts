@@ -649,6 +649,42 @@ test("on loopback TCP (Windows), only a call that proves the port file's token g
   await expect(new AgentClient(socket).call("GET", "/v1/status")).rejects.toThrow("no agent");
 });
 
+test("answers --all through the agent follows every session's answers and takes none", async () => {
+  const { socket } = await machine();
+  const c = client(socket);
+  const s1 = session(socket, "s1");
+  await s1.hello();
+  const first = await ask(c, "--project", "p", "--session", "s1");
+  await server.answer(first, { choice: "Merge" });
+  await until(async () => (await s1.events()).length === 1);
+
+  const controller = new AbortController();
+  const observer = { ...client(socket), signal: controller.signal };
+  const following = run(["answers", "--all", "--follow"], observer);
+  await until(() => observer.lines.length === 1);
+  expect(JSON.parse(observer.lines[0] as string)).toMatchObject({
+    decisionId: first,
+    question: "Merge #12 now?",
+    choice: "Merge",
+    session: "s1",
+    project: "p",
+  });
+  const second = await ask(c, "--project", "q", "--session", "s2");
+  await server.answer(second, { choice: "Wait" });
+  await until(() => observer.lines.length === 2);
+  expect(JSON.parse(observer.lines[1] as string)).toMatchObject({
+    decisionId: second,
+    project: "q",
+  });
+  controller.abort();
+  expect(await following).toBe(130);
+
+  // Still each session's to take, and nothing went waiting.
+  expect((await s1.events()).map((e) => e.decisionId)).toEqual([first]);
+  expect(await run(["wait", second, "--timeout", "1s"], c)).toBe(0);
+  expect(await server.opened("waiting")).toEqual([]);
+});
+
 test("ask promises a prompt only once the agent has seen this session's mod (#537)", async () => {
   const { socket } = await machine();
   const c = client(socket);
