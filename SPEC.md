@@ -1443,6 +1443,13 @@ so the mod is the first path.
 - 2026-10-06. Workflows pin every action by commit SHA, with its version in a comment (#361). A
   moved tag could otherwise run code in the release job before it writes the minisign key.
   Dependabot proposes the updates in one grouped PR a month.
+- 2026-10-06. Both screens confirm a join by digits (#355, from the #366 audit). Only the
+  approver's owner compared the digits; the joining device acted on the first approval it got.
+  A server in the middle that sends the joiner its own approver key derives the same MAC key and
+  forges an approval naming a chain of its own. Now the joining browser and phone show They match
+  under the digits and hold any approval until the owner taps it, as Matrix SAS confirms on both
+  sides. The CLI never joins by digits. On Android, a restarted wait no longer drops the join:
+  its cancellation was caught as an `IllegalStateException`.
 - 2026-10-06. A browser trusts a served directory only against its pin (#354, from the #366
   audit). On reload, the web adopted a join's or recovery's pending keys from whatever chain the
   server served, and a browser with no pin accepts any chain, so a server could enrol it into a
