@@ -55,6 +55,9 @@ $compose stop $live
 # drops the single `web` of releases before two copies.
 $compose up -d --remove-orphans server umami umami-db caddy
 docker image prune -f >/dev/null
+# Each build leaves about 0.9 GB of cache; unpruned, a day of deploys left 27 GB of it on the
+# 38 GB disk (#301). The newest 3 GB keep the next build fast.
+docker builder prune -f --keep-storage 3GB >/dev/null
 
 healthy http://127.0.0.1:8080/healthz server
 # Umami migrates its database on its first start.
