@@ -52,6 +52,8 @@ function input(extra: string): number {
   return u.input_tokens + u.cache_creation_input_tokens + u.cache_read_input_tokens;
 }
 
+// The first call in a fresh config dir carries more context than the ones after it.
+input("");
 const base = input("");
 console.log(`| Piece (${opt.ref ?? "this checkout"}) | Tokens |`, "\n|---|---:|");
 let always = 0;

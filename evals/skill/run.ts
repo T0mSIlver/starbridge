@@ -503,7 +503,7 @@ async function one(s: Scenario, arm: string, rep: number): Promise<RunRecord> {
       const before = rec.answered ? (answeredFirst ?? []) : opened;
       rec.decisions = strip(before);
       rec.laterDecisions = strip(opened.filter((d) => !before.some((o) => o.id === d.id)));
-      const i = first.commands.findLastIndex((c) => /starbridge wait/.test(c));
+      const i = first.commands.findLastIndex((c) => /starbridge wait\b/.test(c));
       if (rec.answered && i >= 0)
         rec.turns = [
           { ...first, commands: first.commands.slice(0, i + 1) },
