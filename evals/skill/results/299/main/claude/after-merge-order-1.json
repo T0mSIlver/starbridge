@@ -1,0 +1,88 @@
+{
+  "agent": "claude",
+  "model": "claude-sonnet-5-5",
+  "arm": "after",
+  "scenario": "merge-order",
+  "rep": 1,
+  "turns": [
+    {
+      "commands": [
+        "gh pr view 12 --json title,mergeable,files,headRefName; gh pr view 13 --json title,mergeable,files,headRefName",
+        "starbridge ask \\\n  --question \"Which PR merges first: #12 (CLI resumable uploads) or #13 (server sync timeout)?\" \\\n  --context \"Both are green and both edit src/api.ts, so the second one will likely need a rebase.\n#12 is needed for tonight's 20:00 CLI release (cut from main).\n#13 fixes lost edits on slow links (3 reports this week).\nI won't pick the order myself.\" \\\n  --option \"#12 first\" --option \"#13 first\" --recommended \"#12 first\" \\\n  --link https://github.com/acme/notes/pull/12 --link https://github.com/acme/notes/pull/13 --waiting"
+      ],
+      "final": "I haven't merged either PR yet. #12 and #13 both change `src/api.ts`, so the second one to merge will probably need a rebase. Your project rules say the owner picks the merge order when PRs conflict, so I've asked you on Starbridge (card `d_b9y713KCRFYUtu6s`).\n\n- **#12:** resumable CLI uploads, needed for tonight's 20:00 CLI release.\n- **#13:** raises the sync timeout, because users on slow links are losing edits (3 reports this week).\n\nI marked \"#12 first\" as my suggestion on the card, but it's your decision. Once you answer, I'll merge in that order with `gh pr merge <n> --squash` and handle any rebase the second PR needs.",
+      "session": "6699e0a8-bbef-4c4b-82bb-445b7ada3f38",
+      "tokens": 87957,
+      "costUsd": 0.07118940000000001,
+      "exit": 0,
+      "seconds": 14.156
+    },
+    {
+      "commands": [
+        "gh pr merge 12 --squash && gh pr view 13 --json mergeable,mergeStateStatus",
+        "gh pr merge 13 --squash"
+      ],
+      "final": "I merged both PRs with `gh pr merge --squash`, #12 first and then #13, as you chose. #13 merged without a conflict, so no rebase was needed.\n\nBoth are now on main, so tonight's 20:00 CLI release will include the sync timeout change from #13 as well as the resumable uploads from #12. I didn't re-run the checks on main after the second merge.",
+      "session": "6699e0a8-bbef-4c4b-82bb-445b7ada3f38",
+      "tokens": 74354,
+      "costUsd": 0.09145500000000001,
+      "exit": 0,
+      "seconds": 10.363
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_b9y713KCRFYUtu6s",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-06T08:25:56Z",
+      "question": "Which PR merges first: #12 (CLI resumable uploads) or #13 (server sync timeout)?",
+      "context": "Both are green and both edit src/api.ts, so the second one will likely need a rebase.\n#12 is needed for tonight's 20:00 CLI release (cut from main).\n#13 fixes lost edits on slow links (3 reports this week).\nI won't pick the order myself.",
+      "options": [
+        "#12 first",
+        "#13 first"
+      ],
+      "recommended": "#12 first",
+      "agent": "claude-code",
+      "default": {
+        "action": "Waits for your answer"
+      },
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "6699e0a8-bbef-4c4b-82bb-445b7ada3f38",
+        "sessionTitle": "proj-41"
+      },
+      "links": [
+        {
+          "url": "https://github.com/acme/notes/pull/12"
+        },
+        {
+          "url": "https://github.com/acme/notes/pull/13"
+        }
+      ],
+      "replies": true
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [
+    "gh pr view 12 --json title,mergeable,files,headRefName",
+    "gh pr view 13 --json title,mergeable,files,headRefName",
+    "gh pr merge 12 --squash",
+    "gh pr view 13 --json mergeable,mergeStateStatus",
+    "gh pr merge 13 --squash"
+  ],
+  "answered": "Answer to d_b9y713KCRFYUtu6s (Which PR merges first: #12 (CLI resumable uploads) or #13 (server sync timeout)?): #12 first",
+  "judge": {
+    "cold": true,
+    "consequences": false,
+    "terminal": false,
+    "links": true,
+    "plain": true,
+    "notes": "The card says both PRs edit src/api.ts and what each PR is for, but it doesn't say what each order costs: which PR gets the rebase, or that choosing #13 first would delay or miss tonight's 20:00 release."
+  }
+}

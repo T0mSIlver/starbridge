@@ -10,13 +10,13 @@ import { REPO } from "./links";
 export const DOCS = [
   { slug: "", file: "docs/index.md", title: "Overview" },
   { slug: "cli", file: "cli/README.md", title: "The CLI" },
-  { slug: "tell-your-agents", file: "docs/tell-your-agents.md", title: "Tell your agents" },
+  { slug: "tell-your-agents", file: "docs/tell-your-agents.md", title: "Agent instructions" },
   { slug: "self-host", file: "server/README.md", title: "Self-host" },
 ] as const;
 
 export type Doc = (typeof DOCS)[number];
 
-// Read at build time only, so the deploy image traces none of these files.
+// The deploy image holds these files through outputFileTracingIncludes (next.config.ts).
 const ROOT = join(/* turbopackIgnore: true */ process.cwd(), "..");
 
 /** `/docs` or `/docs/<slug>`. */
@@ -36,7 +36,7 @@ function rewrite(file: string, href: string): string {
 const attr = (s: string) =>
   s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c] ?? c);
 
-/** Reads a doc at build time, as HTML without its first heading. */
+/** Reads a doc, as HTML without its first heading. */
 export function renderDoc(doc: Doc): string {
   const source = readFileSync(join(ROOT, doc.file), "utf8");
   const body = source.replace(/^# .*\n/, "");

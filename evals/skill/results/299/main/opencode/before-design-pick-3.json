@@ -1,0 +1,65 @@
+{
+  "agent": "opencode",
+  "model": "zai-coding-plan/glm-5.3-flash",
+  "arm": "before",
+  "scenario": "design-pick",
+  "rep": 3,
+  "turns": [
+    {
+      "commands": [
+        "ls shots/",
+        "git status && git branch -a && git log --oneline -5 main",
+        "starbridge ask \\\n  --question \"Which settings-screen variant should I ship (merge into main)?\" \\\n  --context \"Both branches are green and the screenshots are attached.\nCompact: all 9 rows (through About 2.3.1) fit on one screen.\nRoomy: taller rows, only 6 fit — you scroll to reach Language/Shortcuts/About.\nShip = merge the branch into main.\" \\\n  --option \"Compact\" --option \"Roomy\" \\\n  --image shots/compact.png --image shots/roomy.png",
+        "starbridge wait d_wPOeGByOpkSi0Q2E --timeout 5m",
+        "starbridge wait d_wPOeGByOpkSi0Q2E --timeout 5m"
+      ],
+      "final": "No answer yet — waiting again as the skill directs.",
+      "session": "ses_eeea4d5cfffeRB3UHwsXYcwvLB",
+      "tokens": 25101,
+      "exit": 143,
+      "seconds": 720.134
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_wPOeGByOpkSi0Q2E",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-06T13:16:27Z",
+      "question": "Which settings-screen variant should I ship (merge into main)?",
+      "context": "Both branches are green and the screenshots are attached.\nCompact: all 9 rows (through About 2.3.1) fit on one screen.\nRoomy: taller rows, only 6 fit — you scroll to reach Language/Shortcuts/About.\nShip = merge the branch into main.",
+      "options": [
+        "Compact",
+        "Roomy"
+      ],
+      "recommended": "Compact",
+      "default": {
+        "action": "Waits for your answer"
+      },
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": ""
+      },
+      "images": [
+        {
+          "type": "image/png",
+          "width": 360,
+          "height": 640
+        },
+        {
+          "type": "image/png",
+          "width": 360,
+          "height": 640
+        }
+      ],
+      "replies": true
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": []
+}

@@ -33,19 +33,20 @@ Or with npm:
 npm install -g starbridge
 ```
 
-The script runs `starbridge setup`, which pairs the machine and installs the Claude Code plugin.
+The script runs `starbridge setup`, which pairs the machine and installs Starbridge in each agent
+it finds.
 After Homebrew or npm, run `starbridge setup` yourself.
 
 ## What each agent supports
 
-| | Claude Code | Codex | Pi |
-|---|---|---|---|
-| Questions | ✓ | ✓ | ✓ |
-| Answers into the live session | ✓ | ✓¹ | ✓² |
-| "Waiting for you" | ✓ | ✓ | ✓ |
-| Runs | ✓ | ✓ | ✓ |
-| Permission prompts | Opt-in | No | Opt-in³ |
-| `AskUserQuestion` hook | ✓ | n/a | n/a |
+| | Claude Code | Codex | Pi | opencode |
+|---|---|---|---|---|
+| Questions | ✓ | ✓ | ✓ | ✓ |
+| Answers into the live session | ✓ | ✓¹ | ✓² | ✓⁴ |
+| "Waiting for you" | ✓ | ✓ | ✓ | ✓ |
+| Runs | ✓ | ✓ | ✓ | ✓ |
+| Permission prompts | Opt-in | No | Opt-in³ | Opt-in |
+| `AskUserQuestion` hook | ✓ | n/a | n/a | No⁵ |
 
 ¹ In interactive sessions (Codex CLI 0.160 or later) while `starbridge agent` runs. In `codex exec`, the agent waits for the
 answer before it ends its turn.
@@ -55,7 +56,15 @@ git:github.com/T0mSIlver/starbridge`). In `pi -p`, the agent waits for the answe
 its turn.
 
 ³ With pi-permission-system, once its `authorizerChain` names `starbridge`: your devices allow a
-call once or deny it.
+call once or deny it. Asks from its `path` and `external_directory` rules stay at the keyboard,
+since it lets no link allow those. Setup and `starbridge config permissions on` offer allow rules,
+so that reading the Starbridge skill and running its commands don't ask.
+
+⁴ In the TUI and `opencode serve`, with the Starbridge plugin that `starbridge setup` installs. In
+`opencode run`, the agent waits for the answer before it ends its turn.
+
+⁵ opencode's `question` tool still asks in the terminal; the skill tells the agent to use
+`starbridge ask` instead.
 
 ## Docs
 

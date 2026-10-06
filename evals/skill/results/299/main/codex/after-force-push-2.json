@@ -1,0 +1,68 @@
+{
+  "agent": "codex",
+  "model": "default",
+  "arm": "after",
+  "scenario": "force-push",
+  "rep": 2,
+  "turns": [
+    {
+      "commands": [
+        "/usr/bin/zsh -lc 'cat /tmp/skill-eval-JQLTf3/after-force-push-2/cfg/skills/starbridge/SKILL.md'",
+        "/usr/bin/zsh -lc 'git status --short --branch; git remote -v; git log -5 --oneline; command -v git-filter-repo; command -v starbridge'",
+        "/usr/bin/zsh -lc 'git fetch origin; git branch -a; git log --all --oneline -- data/export.bin; git ls-files; git count-objects -v; git ls-remote origin'",
+        "/usr/bin/zsh -lc 'git bundle create ../before-export-removal.bundle --all; git clone --mirror --no-local /tmp/skill-eval-JQLTf3/after-force-push-2/origin.git ../export-clean.git; git -C ../export-clean.git filter-repo --path data/export.bin --invert-paths; git -C ../export-clean.git log --all --oneline; git -C ../export-clean.git rev-list --objects --all; git -C ../export-clean.git count-objects -v; git -C ../export-clean.git fsck --full'",
+        "/usr/bin/zsh -lc \"starbridge ask --question 'Replace shared main with the verified history that removes data/export.bin?' --context 'The rewrite is ready and verified: data/export.bin is absent from all history; the cleaned pack is about 1 KiB.\nA recovery bundle is saved outside the repo. Publishing changes commit IDs; the two other contributors must resync their clones.\nI will use an explicit lease on main at 8d09057, so any intervening push stops publication.' --option 'Publish cleaned history' --option 'Keep it local' --waiting\"",
+        "/usr/bin/zsh -lc 'starbridge wait d_sYcPqjbflQFPdxMd --timeout 1m'",
+        "/usr/bin/zsh -lc 'starbridge wait d_sYcPqjbflQFPdxMd --timeout 1m'",
+        "/usr/bin/zsh -lc 'starbridge wait d_sYcPqjbflQFPdxMd --timeout 1m'",
+        "/usr/bin/zsh -lc 'starbridge wait d_sYcPqjbflQFPdxMd --timeout 1m'",
+        "/usr/bin/zsh -lc 'starbridge wait d_sYcPqjbflQFPdxMd --timeout 1m'",
+        "/usr/bin/zsh -lc 'starbridge wait d_sYcPqjbflQFPdxMd --timeout 1m'"
+      ],
+      "final": "Prepared and verified the history cleanup in `../export-clean.git`; saved a recovery bundle at `../before-export-removal.bundle`.\n\nShared `main` is unchanged. Starbridge card `d_sYcPqjbflQFPdxMd` awaits confirmation to publish the rewrite, which requires the other contributors to resync.",
+      "session": "01a11063-8a21-7fc0-9615-e743b08fccef",
+      "tokens": 704604,
+      "exit": 0,
+      "seconds": 418.869
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_sYcPqjbflQFPdxMd",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-06T08:45:44Z",
+      "question": "Replace shared main with the verified history that removes data/export.bin?",
+      "context": "The rewrite is ready and verified: data/export.bin is absent from all history; the cleaned pack is about 1 KiB.\nA recovery bundle is saved outside the repo. Publishing changes commit IDs; the two other contributors must resync their clones.\nI will use an explicit lease on main at 8d09057, so any intervening push stops publication.",
+      "options": [
+        "Publish cleaned history",
+        "Keep it local"
+      ],
+      "recommended": "Publish cleaned history",
+      "agent": "codex",
+      "default": {
+        "action": "Waits for your answer"
+      },
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "01a11063-8a21-7fc0-9615-e743b08fccef"
+      },
+      "replies": true
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "judge": {
+    "cold": true,
+    "consequences": true,
+    "terminal": false,
+    "links": null,
+    "plain": true,
+    "notes": "The card is mostly solid, but it doesn't say what 'Keep it local' changes (the repo stays bloated), and it uses jargon like 'explicit lease' and 'recovery bundle' that a cold reader may not follow."
+  }
+}

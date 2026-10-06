@@ -45,6 +45,13 @@ them. Its routes are in `PROTOCOL.md`.
 
    ```caddyfile
    starbridge.example {
+     # The web image sets the page's Content-Security-Policy; the proxy sets the rest.
+     header {
+       Strict-Transport-Security "max-age=31536000"
+       X-Content-Type-Options nosniff
+       Referrer-Policy same-origin
+       defer
+     }
      @server path /v1/* /healthz /healthz/*
      handle @server {
        reverse_proxy localhost:8080
@@ -76,6 +83,12 @@ the server pushes to it directly.
 
 Web Push also goes through the relay unless you set your own VAPID keys.
 
+Without the relay or UnifiedPush, the Android app gets no pushes, so while it is open it doesn't
+show new questions or permission prompts. Close and reopen it to see them. The web page still
+updates on its own. For live updates on Android, set `RELAY_URL`, or install a UnifiedPush
+distributor such as ntfy and pick UnifiedPush in the app under Settings → Notifications →
+Delivered through.
+
 ## Environment
 
 ### Basics
@@ -106,7 +119,7 @@ Web Push also goes through the relay unless you set your own VAPID keys.
 
 <dl>
 <dt><code>RELAY_URL</code></dt>
-<dd>The relay's origin, such as <code>https://starbridge.run</code>. Without it, and without your own Firebase or VAPID keys, Android and Web Push notifications don't go out. Unset by default.</dd>
+<dd>The relay's origin, such as <code>https://starbridge.run</code>. Without it, and without your own Firebase or VAPID keys, Android and Web Push notifications don't go out: the open app and web page still update, the app every 10 s, but nothing reaches a phone whose app is closed. UnifiedPush works without it. Unset by default.</dd>
 <dt><code>FCM_PROJECT_ID</code>, <code>FCM_CLIENT_EMAIL</code>, <code>FCM_PRIVATE_KEY</code></dt>
 <dd>A service account of the Android app's own Firebase project, which only starbridge.run holds. Self-hosters use the relay or UnifiedPush instead. Unset by default.</dd>
 <dt><code>VAPID_PUBLIC_KEY</code>, <code>VAPID_PRIVATE_KEY</code>, <code>VAPID_SUBJECT</code></dt>

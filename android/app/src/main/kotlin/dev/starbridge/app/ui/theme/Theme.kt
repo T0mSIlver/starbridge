@@ -91,8 +91,8 @@ private val LocalProviders = staticCompositionLocalOf { DarkProviders }
 
 /**
  * DESIGN.md's tokens. Screens read these for what the design fixes (amber, the quota and device
- * states, `fg3`, the lab colours of quota bars) and Material's roles for everything else, so that "Match
- * wallpaper" reaches every surface, container and component.
+ * states, `fg3`, the lab colours of quota bars) and Material's roles for everything else, so that "Material
+ * You" reaches every surface, container and component.
  */
 object StarbridgeTheme {
     val colors: StarbridgeColors
@@ -152,7 +152,7 @@ private fun scheme(c: StarbridgeColors, dark: Boolean): ColorScheme {
 }
 
 /**
- * "Match wallpaper": Material You builds the scheme, and the neutral tokens and `info` follow it;
+ * "Material You": the system builds the scheme, and the neutral tokens and `info` follow it;
  * the amber and the quota states stay DESIGN.md's, so amber still means "needs you". `fg3` has no
  * Material role: it is `onSurfaceVariant` faded towards the ground.
  */
@@ -208,7 +208,7 @@ private val shapes = Shapes(
 
 /**
  * [colours] defaults to DESIGN.md's palette, which screenshots use so they stay stable. Under
- * "Match wallpaper", [dynamic] stands in for the system's scheme; tests pass one built from a seed.
+ * "Material You", [dynamic] stands in for the system's scheme; tests pass one built from a seed.
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable

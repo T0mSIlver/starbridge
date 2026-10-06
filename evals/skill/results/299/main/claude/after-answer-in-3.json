@@ -1,0 +1,58 @@
+{
+  "agent": "claude",
+  "model": "claude-sonnet-5-5",
+  "arm": "after",
+  "scenario": "answer-in",
+  "rep": 3,
+  "turns": [
+    {
+      "commands": [
+        "starbridge ask --question \"Which tier names should the pricing page use?\" --context \"src/pricing.html has placeholders TIER_1 (\\$0), TIER_2 (\\$8), TIER_3 (\\$20).\nPick one of the three name sets in the artifact; its Pick button sends the choice back to me.\" --answer-in https://claude.ai/artifact/7c1e9a52-0d3b-4f6e-9a21-5b8c3d2e1f00 --waiting"
+      ],
+      "final": "The pricing page isn't finished. `src/pricing.html` still has the `TIER_1`, `TIER_2` and `TIER_3` placeholders and the TODO comment, because the tier names are the owner's call.\n\nI couldn't open the comparison artifact (the docs read permission wasn't granted), so I don't know the three name sets. I posted a Starbridge card (`d_RtqUK1AJTboEeMYw`) pointing at the artifact, where the Pick buttons send the owner's choice back to this session.\n\nWhen the pick arrives, I'll replace the placeholders (`$0`, `$8`, `$20`), remove the TODO and settle the card.",
+      "session": "c174ae87-1ef7-4b53-85ba-a0564e1f0f45",
+      "tokens": 160500,
+      "costUsd": 0.0953538,
+      "exit": 0,
+      "seconds": 24.383
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_RtqUK1AJTboEeMYw",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-06T08:27:41Z",
+      "question": "Which tier names should the pricing page use?",
+      "context": "src/pricing.html has placeholders TIER_1 ($0), TIER_2 ($8), TIER_3 ($20).\nPick one of the three name sets in the artifact; its Pick button sends the choice back to me.",
+      "options": [],
+      "agent": "claude-code",
+      "default": {
+        "action": "Waits for your answer"
+      },
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "c174ae87-1ef7-4b53-85ba-a0564e1f0f45",
+        "sessionTitle": "proj-69"
+      },
+      "answerIn": {
+        "url": "https://claude.ai/artifact/7c1e9a52-0d3b-4f6e-9a21-5b8c3d2e1f00"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "judge": {
+    "cold": true,
+    "consequences": true,
+    "terminal": false,
+    "links": null,
+    "plain": true,
+    "notes": "The card is solid, but it never lists the three name sets, so the user has to open the artifact to decide, though that is the intended flow."
+  }
+}

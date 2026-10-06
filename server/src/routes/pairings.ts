@@ -82,16 +82,22 @@ pairingRoutes.post("/pairings", async (c) => {
   const body = parseBody(PairingRequestBody, request.body);
   if (!RENDEZVOUS.test(body.rendezvous)) fail(400, "bad-schema", "rendezvous");
   const db = c.var.db;
+  const { limits } = c.var.config;
+  const client = ipKey(c, 48);
   const created = db.transaction(() => {
     sweepPairings(db);
     const taken = db.query("SELECT 1 FROM pairings WHERE rendezvous = ?").get(body.rendezvous);
     if (taken) return false;
     const { n } = db.query("SELECT COUNT(*) AS n FROM pairings").get() as { n: number };
-    if (n >= c.var.config.limits.pendingPairings)
-      fail(429, "busy", "too many pairings waiting; retry later");
+    if (n >= limits.pendingPairings) fail(429, "busy", "too many pairings waiting; retry later");
+    const mine = db
+      .query("SELECT COUNT(*) AS n FROM pairings WHERE client = ? AND approval IS NULL")
+      .get(client) as { n: number };
+    if (mine.n >= limits.pairingsPerClient)
+      fail(429, "too-many-pairings", "this address has too many pairings waiting; retry later");
     db.query(
-      `INSERT INTO pairings (rendezvous, request, role, member_id, box_pk, sign_pk, claim_hash, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO pairings (rendezvous, request, role, member_id, box_pk, sign_pk, claim_hash, created_at, client)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       body.rendezvous,
       JSON.stringify(request),
@@ -101,6 +107,7 @@ pairingRoutes.post("/pairings", async (c) => {
       body.signPk,
       claim,
       Date.now(),
+      client,
     );
     return true;
   })();

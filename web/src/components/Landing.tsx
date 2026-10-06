@@ -139,10 +139,10 @@ export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
     <div className={s.page}>
       <Analytics />
       <header className={`t-small ${s.top}`}>
-        <span className={`t-subtitle ${s.brand}`}>
+        <a href="/" className={`t-subtitle ${s.brand}`}>
           <Mark size={22} />
           Starbridge
-        </span>
+        </a>
         <nav className={s.nav} aria-label="Site">
           <a href="#features">Features</a>
           <a href="/docs">Docs</a>
@@ -241,7 +241,9 @@ export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
           script runs it; after Homebrew or npm, run it yourself.
         </p>
         <Install />
-        <p className={`t-meta ${s.faint}`}>Works best with Claude Code; Codex and Pi supported.</p>
+        <p className={`t-meta ${s.faint}`}>
+          Works best with Claude Code; Codex, Pi and opencode supported.
+        </p>
       </section>
 
       <footer className={`t-small ${s.foot}`}>
@@ -269,7 +271,7 @@ export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
           <button type="button" className={s.textButton} onClick={onOwnerToken}>
             Use your own server
           </button>
-          <a href={AGENTS_GUIDE}>How to tell your agents</a>
+          <a href={AGENTS_GUIDE}>Agent instructions</a>
           <a href={`${REPO}/releases`}>Changelog</a>
         </div>
         <div className={s.footCol}>
@@ -280,7 +282,7 @@ export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
         <nav className={s.footInline} aria-label="Links">
           <a href={REPO}>GitHub</a>
           <a href={SELF_HOST}>Self-host</a>
-          <a href={AGENTS_GUIDE}>How to tell your agents</a>
+          <a href={AGENTS_GUIDE}>Agent instructions</a>
           <a href="/privacy">Privacy</a>
           <a href="/terms">Terms</a>
         </nav>

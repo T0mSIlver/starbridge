@@ -41,11 +41,12 @@ import okhttp3.OkHttpClient
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
-import java.nio.file.Files
 
 /**
  * The phone approves a join by digits against a scripted server whose first approval post
@@ -54,6 +55,8 @@ import java.nio.file.Files
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [36])
 class JoinApprovalTest {
+    // Removed after each test, failed or not (#313).
+    @get:Rule val tmp = TemporaryFolder()
     private val sodium = Sodium(LazySodiumJava(SodiumJava()))
     private val envelopes = Envelopes(sodium)
     private val directories = Directories(sodium, envelopes)
@@ -140,7 +143,7 @@ class JoinApprovalTest {
             override fun wrap(plain: ByteArray) = plain
             override fun unwrap(wrapped: ByteArray) = wrapped
         }
-        val disk = Disk(Files.createTempDirectory("starbridge").toFile(), identity)
+        val disk = Disk(tmp.newFolder(), identity)
         val server = http.url("/").toString().trimEnd('/')
         disk.save(Saved(server, account = account, accountExists = true, me = phone, pin = Pin(first.length, first.head), entries = entries.toList()))
         disk.save(Secrets(session = "s", boxPk = toB64(boxKeys.public), boxSk = toB64(boxKeys.secret), signPk = toB64(signKeys.public), signSk = toB64(signKeys.secret)))

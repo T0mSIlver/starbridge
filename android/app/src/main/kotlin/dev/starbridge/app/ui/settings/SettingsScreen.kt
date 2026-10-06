@@ -1,7 +1,7 @@
 package dev.starbridge.app.ui.settings
 
-import android.content.Intent
-import android.provider.Settings
+import androidx.compose.ui.layout.SubcomposeLayout
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
@@ -25,6 +25,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.ToggleButton
 import androidx.compose.material3.ToggleButtonDefaults
+import androidx.compose.material3.ToggleButtonShapes
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -68,6 +69,7 @@ import dev.starbridge.app.data.Store
 import dev.starbridge.app.ui.Page
 import dev.starbridge.app.ui.Section
 import dev.starbridge.app.ui.Sym
+import dev.starbridge.app.ui.openNotificationSettings
 import dev.starbridge.app.ui.Symbol
 import dev.starbridge.app.ui.devices.Confirm
 import dev.starbridge.app.ui.rowShape
@@ -85,6 +87,8 @@ class SettingsViewModel @Inject constructor(private val store: Store, private va
     val colours = prefs.colours
     val inbox = prefs.inbox
     fun setInbox(value: InboxView) = prefs.setInbox(value)
+    val allowUnseen = prefs.allowUnseen
+    fun setAllowUnseen(value: Boolean) = prefs.setAllowUnseen(value)
     fun setQuota(value: QuotaSettings) = prefs.setQuota(value)
     fun setColours(value: Colours) = prefs.setColours(value)
     val clock = prefs.clock
@@ -103,6 +107,7 @@ class SettingsActions(
     val addDevice: () -> Unit,
     val inbox: (InboxView) -> Unit = {},
     val clock: (Clock) -> Unit = {},
+    val allowUnseen: (Boolean) -> Unit = {},
 )
 
 /** Everything this phone keeps for itself, and the account's devices. The settings stay on the phone. */
@@ -118,6 +123,8 @@ fun SettingsScreen(
     modifier: Modifier = Modifier,
     inbox: InboxView = InboxView(),
     clock: Clock = Clock.System,
+    allowUnseen: Boolean = false,
+    notificationsOff: Boolean = false,
 ) {
     val context = LocalContext.current
     var signingOut by rememberSaveable { mutableStateOf(false) }
@@ -176,7 +183,7 @@ fun SettingsScreen(
 
         item { Section("Colours") }
         item { RadioRow(0, 2, "Starbridge", colours == Colours.Starbridge) { actions.colours(Colours.Starbridge) } }
-        item { RadioRow(1, 2, "Match wallpaper", colours == Colours.Wallpaper) { actions.colours(Colours.Wallpaper) } }
+        item { RadioRow(1, 2, "Material You", colours == Colours.Wallpaper) { actions.colours(Colours.Wallpaper) } }
 
         item { Section("Clock") }
         item {
@@ -187,20 +194,29 @@ fun SettingsScreen(
 
         item { Section("Notifications") }
         item {
-            LinkRow(0, 2, "Notification settings", null, Sym.Chevron) {
-                runCatching {
-                    context.startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName))
-                }
-            }
+            LinkRow(
+                0, 4,
+                if (notificationsOff) "Notifications are off" else "Notification settings",
+                if (notificationsOff) "Questions only show in the app. Turn notifications on in Android's settings." else null,
+                Sym.Chevron,
+            ) { openNotificationSettings(context) }
         }
+        item { SwitchRow(1, 4, "Remind me when notifications are off", inbox.remindOff) { actions.inbox(inbox.copy(remindOff = it)) } }
         item {
-            ChoiceRow(1, 2, "Delivered through", push(push)) {
+            ChoiceRow(2, 4, "Delivered through", pushState(push, server)) {
                 Segments(listOf("fcm" to "Google", "unifiedpush" to "UnifiedPush"), push.type, actions.push)
             }
         }
+        item {
+            SwitchRow(
+                3, 4, "Quick Allow", allowUnseen,
+                sub = "Allow from a notification without seeing the whole command. Unsafe.",
+                onChange = actions.allowUnseen,
+            )
+        }
 
         item { Section("Agents") }
-        item { LinkRow(0, 1, "How to tell your agents", null, Sym.Open) { openLink(context, GUIDE) } }
+        item { LinkRow(0, 1, "Agent instructions", null, Sym.Open) { openLink(context, GUIDE) } }
 
         item { Section("Account") }
         item { LinkRow(0, 2, "Server", server, null) {} }
@@ -219,9 +235,9 @@ fun SettingsScreen(
 
 private const val GUIDE = "https://starbridge.run/docs/tell-your-agents"
 
-/** How pushes reach this phone, as a state. */
-private fun push(push: PushSetting) = when {
-    push.registered -> "Registered with your server"
+/** How pushes reach this phone, as a state; registered, it names the server's host. */
+internal fun pushState(push: PushSetting, server: String) = when {
+    push.registered -> "Registered with ${android.net.Uri.parse(server).host ?: server}"
     push.type == "unifiedpush" && push.distributors.isEmpty() -> "No UnifiedPush distributor installed"
     push.type == "fcm" && !push.fcmAvailable -> "This build has no Firebase project"
     else -> "Not registered yet"
@@ -253,9 +269,9 @@ private fun ChoiceRow(index: Int, count: Int, title: String, sub: String? = null
 }
 
 @Composable
-private fun SwitchRow(index: Int, count: Int, title: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+private fun SwitchRow(index: Int, count: Int, title: String, checked: Boolean, sub: String? = null, onChange: (Boolean) -> Unit) {
     Shell(index, count, Modifier.toggleable(checked, role = Role.Switch, onValueChange = onChange)) {
-        Line { Texts(title, null, Modifier.weight(1f)); Switch(checked = checked, onCheckedChange = null) }
+        Line { Texts(title, sub, Modifier.weight(1f)); Switch(checked = checked, onCheckedChange = null) }
     }
 }
 
@@ -359,20 +375,33 @@ private fun ProviderRow(
 
 /**
  * Connected choices (Material 3 Expressive's button group), each as wide as its label: the picked
- * one filled in `fg`, the others on the highest container.
+ * one filled in `fg`, the others on the highest container. When the labels don't fit side by side,
+ * the choices stack, each the full width.
  */
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun <T> Segments(choices: List<Pair<T, String>>, selected: T, onSelect: (T) -> Unit) {
-    Row(horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)) {
+    SubcomposeLayout { c ->
+        val row = subcompose("row") { SegmentButtons(choices, selected, onSelect, stacked = false) }.first()
+        val fits = row.maxIntrinsicWidth(c.maxHeight) <= c.maxWidth
+        val shown = if (fits) row else subcompose("stack") { SegmentButtons(choices, selected, onSelect, stacked = true) }.first()
+        val placeable = shown.measure(c.copy(minWidth = 0, minHeight = 0))
+        layout(maxOf(placeable.width, c.minWidth), maxOf(placeable.height, c.minHeight)) { placeable.place(0, 0) }
+    }
+}
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun <T> SegmentButtons(choices: List<Pair<T, String>>, selected: T, onSelect: (T) -> Unit, stacked: Boolean) {
+    val buttons = @Composable {
         choices.forEachIndexed { i, (value, label) ->
             ToggleButton(
                 checked = value == selected,
                 onCheckedChange = { onSelect(value) },
-                modifier = Modifier.height(40.dp).semantics { role = Role.RadioButton },
-                shapes = when (i) {
-                    0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
-                    choices.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
+                modifier = Modifier.height(40.dp).then(if (stacked) Modifier.fillMaxWidth() else Modifier).semantics { role = Role.RadioButton },
+                shapes = when {
+                    stacked -> ToggleButtonShapes(ToggleButtonDefaults.shape, ToggleButtonDefaults.pressedShape, ToggleButtonDefaults.checkedShape)
+                    i == 0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
+                    i == choices.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
                     else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
                 },
                 colors = ToggleButtonDefaults.colors(
@@ -382,7 +411,9 @@ fun <T> Segments(choices: List<Pair<T, String>>, selected: T, onSelect: (T) -> U
                     checkedContentColor = MaterialTheme.colorScheme.onPrimary,
                 ),
                 contentPadding = PaddingValues(horizontal = 14.dp),
-            ) { Text(label, style = StarbridgeTheme.type.label, maxLines = 1) }
+            ) { Text(label, style = StarbridgeTheme.type.label, maxLines = 1, overflow = TextOverflow.Ellipsis) }
         }
     }
+    // Stacked 40 dp choices sit 8 dp apart, so each keeps a 48 dp tap area.
+    if (stacked) Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) { buttons() } else Row(horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)) { buttons() }
 }

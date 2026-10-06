@@ -39,6 +39,7 @@ export function testConfig(over: Partial<Config> = {}): Config {
     allowPrivatePushEndpoints: true,
     pushTimeoutMs: 2000,
     relayMode: false,
+    demo: false,
     limits: DEFAULT_LIMITS,
     ...over,
   };
@@ -78,6 +79,8 @@ export interface Account {
   id: string;
   device: Actor;
   recovery: KeyPair;
+  /** The seed the recovery words encode, for clients that recover with them. */
+  recoverySeed: Uint8Array;
 }
 
 export async function signIn(s: Server): Promise<string> {
@@ -96,7 +99,8 @@ export async function setupAccount(s: Server, deviceId = "phone"): Promise<Accou
   const session = await signIn(s);
   const me = await s.call("GET", "/v1/me", { token: session });
   const { keys, member } = newMember(deviceId, "device");
-  const recovery = recoveryKeyPair(generateRecoverySeed());
+  const recoverySeed = generateRecoverySeed();
+  const recovery = recoveryKeyPair(recoverySeed);
   const entry = genesisEntry({
     account: me.json.account,
     device: member,
@@ -106,7 +110,7 @@ export async function setupAccount(s: Server, deviceId = "phone"): Promise<Accou
   });
   const r = await s.call("POST", "/v1/directory", { token: session, body: { entry } });
   if (r.status !== 201) throw new Error(`genesis: ${r.status} ${JSON.stringify(r.json)}`);
-  return { id: me.json.account, device: { id: deviceId, keys, member, token: session }, recovery };
+  return { id: me.json.account, device: { id: deviceId, keys, member, token: session }, recovery, recoverySeed };
 }
 
 export async function directory(s: Server, token: string): Promise<Directory> {

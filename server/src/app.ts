@@ -1,4 +1,4 @@
-import { stat } from "node:fs/promises";
+import { stat, statfs } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { ready } from "@starbridge/protocol";
 import { Hono } from "hono";
@@ -19,11 +19,13 @@ import { itemRoutes } from "./routes/items";
 import { joinRoutes, sweepJoins } from "./routes/joins";
 import { pairingRoutes, sweepPairings } from "./routes/pairings";
 import { pushRoutes } from "./routes/push";
-import { closeDays, Usage } from "./usage";
+import { closeDays, diskFull, Usage } from "./usage";
 import { Waiters } from "./waiters";
 
 /** /healthz/backup fails past this; deploy/host/backup.sh runs nightly. */
 const BACKUP_MAX_AGE_MS = 26 * 3_600_000;
+/** /healthz/disk fails below this much free space beside the database. */
+const DISK_MIN_FREE = 2 * 1024 ** 3;
 
 export async function createApp(config: Config, fetchFn: typeof fetch = fetch) {
   await ready;
@@ -43,16 +45,26 @@ export async function createApp(config: Config, fetchFn: typeof fetch = fetch) {
   };
   deps.push.onSent = (type, result) => usage.record(`push.${type}.${result}`);
 
-  setInterval(() => {
+  // Housekeeping deletes, and a delete needs room in the WAL: on a full disk it waits for the
+  // next round rather than crash the server, at start included.
+  const housekeep = (job: () => void) => () => {
+    try {
+      job();
+    } catch (e) {
+      if (!diskFull(e)) throw e;
+    }
+  };
+  const minutely = housekeep(() => {
     sweepPairings(db);
     sweepJoins(db);
-  }, 60_000).unref();
-  sweepStorage(db, config.limits);
-  closeDays(db);
-  setInterval(() => {
+  });
+  const hourly = housekeep(() => {
     sweepStorage(db, config.limits);
     closeDays(db);
-  }, 3_600_000).unref();
+  });
+  setInterval(minutely, 60_000).unref();
+  hourly();
+  setInterval(hourly, 3_600_000).unref();
 
   const v1 = new Hono<Env>()
     .route("/", authRoutes)
@@ -85,7 +97,11 @@ export async function createApp(config: Config, fetchFn: typeof fetch = fetch) {
       onError: (c) => c.json({ error: "too-large" }, 413),
     }),
   );
-  app.get("/healthz", (c) => c.text("ok"));
+  // The deploy checks that the server it reaches runs the commit it deployed.
+  app.get("/healthz", (c) => {
+    if (config.revision) c.header("x-starbridge-revision", config.revision);
+    return c.text("ok");
+  });
   // deploy/host/backup.sh touches this file beside the database after each good backup. The
   // answer says only whether it is fresh, for the uptime check (.github/workflows/uptime.yml).
   const backupStamp = join(dirname(config.dbPath), "last-backup");
@@ -96,10 +112,32 @@ export async function createApp(config: Config, fetchFn: typeof fetch = fetch) {
     );
     return Date.now() - at < BACKUP_MAX_AGE_MS ? c.text("ok") : c.text("backup stale", 503);
   });
+  // The uptime check calls this too: a filling disk opens an issue before writes fail (#301).
+  app.get("/healthz/disk", async (c) => {
+    const { bavail, bsize } = await statfs(dirname(config.dbPath));
+    // No figure: anyone can call it, and the headroom left is the operator's to know.
+    return bavail * bsize >= DISK_MIN_FREE ? c.text("ok") : c.text("disk low", 503);
+  });
+  // The demo program (demo/) runs only against a server that answers this.
+  if (config.demo) app.get("/v1/demo", (c) => c.json({ demo: true }));
   app.route("/v1", v1);
   app.notFound((c) => c.json({ error: "not-found" }, 404));
+  let fullLoggedAt = 0;
   app.onError((e, c) => {
     if (e instanceof HTTPException) return e.getResponse();
+    // A full disk refuses writes while reads go on. Clients retry a 503; one line a minute
+    // stands for the stack each refused write would print.
+    if (diskFull(e)) {
+      if (Date.now() - fullLoggedAt > 60_000) {
+        fullLoggedAt = Date.now();
+        console.error("disk full: refusing writes");
+      }
+      return c.json(
+        { error: "storage-full", detail: "the server's disk is full; retry later" },
+        503,
+        { "retry-after": "60" },
+      );
+    }
     console.error(e);
     return c.json({ error: "internal" }, 500);
   });

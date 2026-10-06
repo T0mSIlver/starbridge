@@ -5,28 +5,199 @@ on:
     branches: [main]
   pull_request:
 
-# A new push to a pull request cancels its older run; main runs every commit, for deploys.
+# A new push to a pull request cancels its older run. Main runs one at a time and never cancels
+# the running one; a newer merge replaces the one waiting, so only main's head waits. deploy.yml
+# deploys each run that passes, and the box refuses a revision older than the one it runs.
 concurrency:
-  group: ci-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
-  cancel-in-progress: true
+  group: ci-${{ github.event_name == 'pull_request' && github.ref || 'main' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+# pull-requests: the changed-files step reads a pull request's files from the API.
+permissions:
+  contents: read
+  pull-requests: read
 
 # Jobs run on the maintainer's self-hosted runners while the repository variable RUNNER is set
 # (deploy/setup-runners.sh); delete the variable to go back to GitHub's runners.
+#
+# A pull request runs only the jobs its files can affect. A job that cannot be affected still
+# starts and passes in seconds, so its check reports success, which a skipped workflow would
+# not. Main runs everything: deploy.yml deploys once all of CI passes.
 jobs:
   # One job, so the workspace installs once instead of three times.
   checks:
     name: test, typecheck, lint
     runs-on: ${{ vars.RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v5
-      - uses: pnpm/action-setup@v4
+      - id: changes
+        if: github.event_name == 'pull_request'
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        with:
+          predicate-quantifier: some-with-excludes
+          filters: |
+            run:
+              - '**'
+              - '!android/**'
+              - '!.github/workflows/android.yml'
+            # web's tests check it against DESIGN.md (web/scripts/tokens.ts).
+            tokens:
+              - 'android/app/src/main/kotlin/dev/starbridge/app/ui/theme/Tokens.kt'
+      - id: scope
+        run: echo "run=${{ github.event_name != 'pull_request' || steps.changes.outputs.run == 'true' || steps.changes.outputs.tokens == 'true' }}" >> "$GITHUB_OUTPUT"
+      - if: steps.scope.outputs.run == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - if: steps.scope.outputs.run == 'true'
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
         with:
           # Per job: runners on one machine would share ~/setup-pnpm and clobber each other.
           dest: ${{ runner.temp }}/setup-pnpm
-      - uses: oven-sh/setup-bun@v2
+      - if: steps.scope.outputs.run == 'true'
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: 1.4.2
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm lint
-      - run: pnpm typecheck
-      - run: pnpm test
+      - if: steps.scope.outputs.run == 'true'
+        run: pnpm install --frozen-lockfile
+        timeout-minutes: 5
+        # A store that stays on the runner between jobs. Its default, under the job's temp
+        # folder, is emptied after each job, so every install downloaded every package.
+        env:
+          pnpm_config_store_dir: ${{ runner.tool_cache }}/pnpm-store
+      - if: steps.scope.outputs.run == 'true'
+        run: pnpm lint
+      - if: steps.scope.outputs.run == 'true'
+        run: pnpm typecheck
+      - if: steps.scope.outputs.run == 'true'
+        run: pnpm test
+
+  # The whole product on one machine (web/e2e/run.ts). Each screenshot also fails on layout
+  # breakage: a page wider than the window, clipped, spilled or overlapping text (web/e2e/layout.ts).
+  e2e:
+    name: end to end
+    runs-on: ${{ vars.RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 15
+    steps:
+      # Not affected: the Android app, the evals, and Markdown no page renders. /docs renders
+      # docs/*.md, cli/README.md and server/README.md (web/src/lib/docs.ts).
+      - id: changes
+        if: github.event_name == 'pull_request'
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        with:
+          predicate-quantifier: some-with-excludes
+          filters: |
+            code:
+              - '**'
+              - '!android/**'
+              - '!.github/workflows/android.yml'
+              - '!evals/**'
+              - '!**/*.md'
+            pages:
+              - 'docs/*.md'
+              - 'cli/README.md'
+              - 'server/README.md'
+      - id: scope
+        run: echo "run=${{ github.event_name != 'pull_request' || steps.changes.outputs.code == 'true' || steps.changes.outputs.pages == 'true' }}" >> "$GITHUB_OUTPUT"
+      - if: steps.scope.outputs.run == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - if: steps.scope.outputs.run == 'true'
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          dest: ${{ runner.temp }}/setup-pnpm
+      - if: steps.scope.outputs.run == 'true'
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.2
+      # No package-manager-cache: it uploaded the pnpm store to GitHub's cache after every run,
+      # ~50 s of the job, while the store already stays on the runner.
+      - if: steps.scope.outputs.run == 'true'
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - if: steps.scope.outputs.run == 'true'
+        run: pnpm install --frozen-lockfile
+        timeout-minutes: 5
+        env:
+          pnpm_config_store_dir: ${{ runner.tool_cache }}/pnpm-store
+      - if: steps.scope.outputs.run == 'true'
+        run: pnpm --filter @starbridge/web exec playwright install ${{ runner.environment == 'github-hosted' && '--with-deps' || '' }} firefox
+        timeout-minutes: 5
+      # Next's build cache (compiled modules, TypeScript's build info) stays on the runner, which
+      # takes ~25 s off the build. The checkout deletes web/.next, not the folder it links to.
+      - if: steps.scope.outputs.run == 'true' && runner.environment == 'self-hosted'
+        run: |
+          cache=$RUNNER_TOOL_CACHE/next-cache
+          if [ -d "$cache" ] && [ "$(du -sm "$cache" | cut -f1)" -gt 2048 ]; then rm -rf "$cache"; fi
+          mkdir -p "$cache" web/.next
+          ln -sfn "$cache" web/.next/cache
+      # A run takes ~5 min. At 10 the watchdog prints what is still running and stops it.
+      - if: steps.scope.outputs.run == 'true'
+        run: .github/watchdog.sh 600 xvfb-run -a node web/e2e/run.ts
+        timeout-minutes: 11
+        env:
+          TMPDIR: ${{ runner.temp }}
+      - if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: e2e-failure
+          path: ${{ runner.temp }}/starbridge-e2e-failure.png
+          if-no-files-found: ignore
+
+  # Builds the deployed images, without pushing them, when a pull request can change their base
+  # images or dependencies: a change that breaks a build fails here, not at the deploy (#430).
+  # Source changes outside these paths that a Dockerfile copies (docs/ for web, cli/ for the demo)
+  # are not covered. On a push, main's deploy builds them on the box. Only the dev box's runners
+  # (label `docker`) have Docker; a gate on the usual runners picks one only when there is
+  # something to build, so main's CI never waits on them.
+  images-scope:
+    name: images scope
+    runs-on: ${{ vars.RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 5
+    outputs:
+      build: ${{ steps.changes.outputs.images == 'true' }}
+    steps:
+      - id: changes
+        if: github.event_name == 'pull_request'
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        with:
+          filters: |
+            images:
+              - '**/Dockerfile'
+              - '**/*.Dockerfile'
+              - '.dockerignore'
+              - '**/package.json'
+              - 'pnpm-lock.yaml'
+              - 'pnpm-workspace.yaml'
+              - 'deploy/compose.yaml'
+              - 'deploy/demo/**'
+              - '.github/workflows/ci.yml'
+
+  images:
+    name: images
+    needs: images-scope
+    runs-on: ${{ needs.images-scope.outputs.build == 'true' && vars.DOCKER_RUNNER || vars.RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 30
+    env:
+      BUILD: ${{ needs.images-scope.outputs.build }}
+      # Tagged per run, so runs on one host never share a tag; removed after.
+      TAG: ci-${{ github.run_id }}
+    steps:
+      - if: env.BUILD == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # One step each, so one broken image does not hide another. --pull as the deploy does, so a
+      # stale local copy of a base image cannot pass here and fail there; Caddy's is not pulled
+      # there either.
+      - if: env.BUILD == 'true' && !cancelled()
+        run: docker build --pull -f server/Dockerfile -t starbridge-server:$TAG .
+      - if: env.BUILD == 'true' && !cancelled()
+        run: docker build --pull -f web/Dockerfile -t starbridge-web:$TAG .
+      - if: env.BUILD == 'true' && !cancelled()
+        run: docker build --pull -f deploy/demo/Dockerfile -t starbridge-demo:$TAG .
+      - if: env.BUILD == 'true' && !cancelled()
+        run: docker build -f deploy/caddy.Dockerfile -t starbridge-caddy:$TAG deploy
+      # The dev box's disk is shared with every session on it: keep the build cache to 3 GB, as
+      # deploy/host/apply.sh does on the server. BuildKit keeps records a running build uses.
+      - if: always() && env.BUILD == 'true'
+        run: |
+          docker image rm -f starbridge-server:$TAG starbridge-web:$TAG starbridge-demo:$TAG starbridge-caddy:$TAG >/dev/null 2>&1 || true
+          docker builder prune -f --keep-storage 3GB >/dev/null || true

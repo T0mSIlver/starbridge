@@ -1,0 +1,68 @@
+{
+  "agent": "claude",
+  "model": "claude-sonnet-5-5",
+  "arm": "after",
+  "scenario": "native-ask",
+  "rep": 2,
+  "turns": [
+    {
+      "commands": [
+        "starbridge ask \\\n  --question 'Which error tracking service should we wire into the acme notes web app?' \\\n  --context 'Sentry has no maintenance but costs money past 5k errors a month; GlitchTip is free but costs us upkeep.\nSentry: free up to 5k errors/month, then $26/month. Session replay included. Hosted, nothing to maintain.\nGlitchTip: free, self-hosted on our VPS. We patch and back it up ourselves (about 1 hour/month). No session replay listed.' \\\n  --option 'Sentry' --option 'GlitchTip' --recommended 'Sentry'",
+        "starbridge waiting d_FUM0SmvpMqLaRHY-"
+      ],
+      "askUser": [
+        {
+          "denied": true
+        }
+      ],
+      "final": "I haven't wired anything in yet. The service choice is still open.\n\nI called AskUserQuestion as you asked, but it came back unanswered. The session hook says you're away from the terminal, so I posted the question through Starbridge instead (card `d_FUM0SmvpMqLaRHY-`). It lists Sentry and GlitchTip with their trade-offs from NOTES.md, and I marked Sentry as my recommendation.\n\nI've marked the card as waiting. Your answer should arrive in this session as a new prompt, and I'll integrate whichever service you pick.",
+      "session": "a991afc9-0e4e-41b6-bbf1-8df36ce22b58",
+      "exit": 0,
+      "seconds": 36.144
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_FUM0SmvpMqLaRHY-",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-06T09:05:05Z",
+      "question": "Which error tracking service should we wire into the acme notes web app?",
+      "context": "Sentry has no maintenance but costs money past 5k errors a month; GlitchTip is free but costs us upkeep.\nSentry: free up to 5k errors/month, then $26/month. Session replay included. Hosted, nothing to maintain.\nGlitchTip: free, self-hosted on our VPS. We patch and back it up ourselves (about 1 hour/month). No session replay listed.",
+      "options": [
+        "Sentry",
+        "GlitchTip"
+      ],
+      "recommended": "Sentry",
+      "agent": "claude-code",
+      "default": {
+        "action": "Waits for your answer"
+      },
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "a991afc9-0e4e-41b6-bbf1-8df36ce22b58",
+        "sessionTitle": "proj-14"
+      },
+      "replies": true
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [
+    "gh auth token",
+    "gh auth token",
+    "gh issue list -R anthropics/claude-code --author @me --state closed --search closed:>2026-09-06 --json number,title,closedAt,stateReason --limit 30"
+  ],
+  "judge": {
+    "cold": true,
+    "consequences": true,
+    "terminal": false,
+    "links": true,
+    "plain": true,
+    "notes": "The card's summary line is slightly muddled (\"Sentry has no maintenance but costs money\") and it omits that the 5k-error threshold's relevance to the app's actual volume is unknown, but it is otherwise self-contained."
+  }
+}

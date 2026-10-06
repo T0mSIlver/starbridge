@@ -3,10 +3,11 @@ import { basename, resolve } from "node:path";
 import {
   type Agent,
   type Answer,
+  activeMembers,
   Decision,
   type DecisionLink,
   type Directory,
-  holdsHead,
+  noteHead as keepHead,
   open,
   ProtocolError,
   parseWith,
@@ -15,10 +16,11 @@ import {
   type Settled,
   seal,
   type Waiting,
+  withheldBy,
 } from "@starbridge/protocol";
 import { ApiError } from "./api";
 import { claudeSession } from "./claude";
-import { type CodexSession, codexSession } from "./codex";
+import { type CodexSession, codexAsker, codexSession } from "./codex";
 import type { State } from "./config";
 import {
   type Ctx,
@@ -29,9 +31,11 @@ import {
   refreshDirectory,
   type Session,
   session,
+  signedHead,
   UsageError,
 } from "./context";
 import { fitPicture, loadPicture, type Picture } from "./images";
+import { OPENCODE_ANSWERS, OPENCODE_SESSION, OPENCODE_TITLE } from "./opencode";
 import { acceptPermissionAnswer } from "./permissions";
 import { PI_ANSWERS, piSessionTitle } from "./pi";
 
@@ -40,16 +44,16 @@ export interface AskInput {
   context?: string;
   options?: string[];
   recommended?: string;
-  /** What the agent does meanwhile; clients from before 2026-10-05 require one. */
-  default?: string;
   /** Post it already `waiting`: the agent has nothing else to do. */
   waiting?: boolean;
-  /** The coding agent asking; default: Claude Code, Codex or Pi when it runs the command. */
+  /** The coding agent asking; default: Claude Code, Codex, Pi or opencode when it runs the command. */
   agent?: Agent;
   /** Where a Codex session runs: its `CODEX_HOME` and the `codex` that answers reach it with. */
   codex?: CodexSession;
-  /** A Pi session whose Starbridge extension submits answers into it. */
-  piAnswers?: boolean;
+  /** A Pi or opencode session whose Starbridge extension or plugin submits answers into it. */
+  extensionAnswers?: boolean;
+  /** A `claude -p` session: the mod runs only in interactive ones, so nothing submits answers. */
+  headless?: boolean;
   project?: string;
   session?: string;
   sessionTitle?: string;
@@ -95,29 +99,42 @@ export function resolveSource(
   const session =
     input.session ??
     (agent === "codex"
-      ? env.CODEX_THREAD_ID
+      ? codexAsker(env)
       : agent === "pi"
         ? env.PI_SESSION_ID
-        : env.CLAUDE_CODE_SESSION_ID) ??
+        : agent === "opencode"
+          ? env[OPENCODE_SESSION]
+          : env.CLAUDE_CODE_SESSION_ID) ??
     "";
   const codex = agent === "codex" ? (input.codex ?? codexSession(env)) : undefined;
-  const piAnswers =
-    agent === "pi" && (input.piAnswers ?? (!!session && env[PI_ANSWERS] === session));
+  const answersEnv = agent === "pi" ? PI_ANSWERS : agent === "opencode" ? OPENCODE_ANSWERS : "";
+  const extensionAnswers =
+    !!answersEnv && (input.extensionAnswers ?? (!!session && env[answersEnv] === session));
+  const headless =
+    agent === "claude-code" && (input.headless ?? env.CLAUDE_CODE_SESSION_ATTENDED === "0");
   const claude =
     session &&
     agent !== "codex" &&
     agent !== "pi" &&
+    agent !== "opencode" &&
     (input.sessionTitle === undefined || input.sessionLinks === undefined)
       ? claudeSession(env, session)
       : undefined;
   const title =
-    input.sessionTitle ?? (agent === "pi" ? piSessionTitle(env) : undefined) ?? claude?.title;
+    input.sessionTitle ??
+    (agent === "pi"
+      ? piSessionTitle(env)
+      : agent === "opencode"
+        ? env[OPENCODE_TITLE]?.slice(0, 200) || undefined
+        : undefined) ??
+    claude?.title;
   const at = (path: string) => resolve(cwd, path);
   return {
     ...input,
     ...(agent ? { agent } : {}),
     ...(codex ? { codex } : {}),
-    ...(piAnswers ? { piAnswers } : {}),
+    ...(extensionAnswers ? { extensionAnswers } : {}),
+    ...(headless ? { headless } : {}),
     project: input.project ?? basename(cwd),
     session,
     ...(title !== undefined ? { sessionTitle: title } : {}),
@@ -163,7 +180,7 @@ export function buildDecision(input: AskInput, ctx: Ctx, machine: string, to: st
     context: input.context ?? "",
     options,
     ...(options.length > 0 ? { recommended: input.recommended ?? options[0] } : {}),
-    default: { action: input.default || NO_DEFAULT },
+    default: { action: NO_DEFAULT },
     ...agentOf(input, ctx.env),
     source: sourceFor(input, ctx, machine),
     ...(links.length > 0 ? { links } : {}),
@@ -174,14 +191,22 @@ export function buildDecision(input: AskInput, ctx: Ctx, machine: string, to: st
 }
 
 /**
- * `--agent`, else Claude Code, Codex or Pi when it runs this command: Claude Code sets
- * CLAUDECODE=1, Codex gives every command its session id in CODEX_THREAD_ID, Pi in PI_SESSION_ID.
+ * `--agent`, else the agent that runs this command: Claude Code sets CLAUDECODE=1, Codex gives
+ * every command its session id in CODEX_THREAD_ID, Pi in PI_SESSION_ID, and the Starbridge
+ * opencode plugin STARBRIDGE_OPENCODE_SESSION (clearing the others it inherited). An agent
+ * passes these on to the agents it starts, so two can be set. Codex, Pi and opencode run
+ * commands without a terminal, so a Claude Code they started runs as `claude -p`
+ * (CLAUDE_CODE_SESSION_ATTENDED=0); otherwise Codex, Pi or opencode was started from a Claude
+ * Code session (a `codex exec` review, a script) and asks.
  */
 function agentOf(input: AskInput, env: Ctx["env"]): { agent?: Agent } {
   if (input.agent !== undefined) return { agent: input.agent };
-  if (env.CLAUDECODE === "1") return { agent: "claude-code" };
+  const claude = env.CLAUDECODE === "1";
+  if (claude && env.CLAUDE_CODE_SESSION_ATTENDED === "0") return { agent: "claude-code" };
   if (env.CODEX_THREAD_ID) return { agent: "codex" };
-  return env.PI_SESSION_ID ? { agent: "pi" } : {};
+  if (env.PI_SESSION_ID) return { agent: "pi" };
+  if (env[OPENCODE_SESSION]) return { agent: "opencode" };
+  return claude ? { agent: "claude-code" } : {};
 }
 
 function checked(decision: unknown): Decision {
@@ -236,12 +261,15 @@ export async function postDecision(ctx: Ctx, s: Session, input: AskInput): Promi
     typeof i === "string" ? loadPicture(i) : loadPicture(i.path, i.alt),
   );
   const to = devices(dir);
-  const base = buildDecision(
-    input,
-    ctx,
-    s.machine.name,
-    to.map((d) => d.id),
-  );
+  const base = {
+    ...buildDecision(
+      input,
+      ctx,
+      s.machine.name,
+      to.map((d) => d.id),
+    ),
+    dir: signedHead(ctx, dir),
+  };
   const { decision, item } = sealWithPictures(
     base,
     pictures,
@@ -252,16 +280,20 @@ export async function postDecision(ctx: Ctx, s: Session, input: AskInput): Promi
   const cursor = ctx.store.state().cursor;
   // Asked already waiting, its waiting state pushes instead, so the notification says so.
   await s.api.postItem(input.waiting ? { ...item, quiet: true } : item);
+  const { images: _, ...body } = decision;
   ctx.store.updateState((st) => {
     st.asked[decision.id] = {
       question: decision.question,
       options: decision.options,
       askedAt: decision.createdAt,
       to: decision.to,
+      body,
+      ...(input.images ? { images: input.images } : {}),
       ...(cursor !== undefined ? { cursor } : {}),
       ...(decision.source.session ? { session: decision.source.session } : {}),
       ...(decision.answerIn ? { answerIn: true } : {}),
       ...(input.codex && decision.source.session ? { codex: input.codex } : {}),
+      ...(input.extensionAnswers && decision.source.session ? { extensionAnswers: true } : {}),
     };
   });
   if (input.waiting) await markWaiting(ctx, () => postWaiting(ctx, s, decision.id, "waiting"));
@@ -307,7 +339,8 @@ export async function postWaiting(
     a.waiting ??= { id: `w_${randomBytes(12).toString("base64url")}`, state: "working" };
     waitingId = a.waiting.id;
   });
-  const to = devices(await refreshDirectory(ctx, s));
+  const dir = await refreshDirectory(ctx, s);
+  const to = devices(dir);
   const body = {
     v: 1 as const,
     id: waitingId,
@@ -315,6 +348,7 @@ export async function postWaiting(
     to: to.map((d) => d.id),
     at: iso(ctx.now()),
     state,
+    dir: signedHead(ctx, dir),
   } satisfies Waiting;
   const item = seal("waiting", body, { id: s.machine.id, signKey: s.keys.sign.privateKey }, to);
   try {
@@ -357,11 +391,20 @@ export async function settle(ctx: Ctx, opts: { id?: string; outcome?: string }):
     throw new UsageError("--outcome is elsewhere or withdrawn");
   const s = session(ctx);
   // Closed here first: from now on no answer to it is accepted or delivered, even if the post fails.
+  // An answer that already reached the agent closed it, and a withdrawal would contradict it;
+  // checked in the same update, so a delivery in another process cannot slip in between.
+  let delivered = false;
   ctx.store.updateState((st) => {
+    delivered = !!st.answers[id]?.seen;
     const a = st.asked[id];
-    if (a) a.settled = true;
+    if (a && !delivered) {
+      a.settled = true;
+      forget(a);
+    }
   });
-  const to = devices(await refreshDirectory(ctx, s));
+  if (delivered) return 0;
+  const dir = await refreshDirectory(ctx, s);
+  const to = devices(dir);
   const body = {
     v: 1 as const,
     id: `s_${randomBytes(12).toString("base64url")}`,
@@ -369,6 +412,7 @@ export async function settle(ctx: Ctx, opts: { id?: string; outcome?: string }):
     to: to.map((d) => d.id),
     at: iso(ctx.now()),
     outcome,
+    dir: signedHead(ctx, dir),
   } satisfies Settled;
   try {
     await s.api.postItem(
@@ -458,16 +502,10 @@ export function noteHead(
   } catch {
     return undefined;
   }
-  const head = opened.body.dir;
-  const known = st.heads?.[opened.signer.id];
-  const replace =
-    !known ||
-    (head && head.length > known.length) ||
-    (head && holdsHead(entries, known) && !holdsHead(entries, head));
-  if (head && replace) {
-    st.heads ??= {};
-    st.heads[opened.signer.id] = head;
-  }
+  // A device vouches for its own head only: a `by` in an answer would add a key per id it names.
+  const head = opened.body.dir && { length: opened.body.dir.length, head: opened.body.dir.head };
+  st.heads ??= {};
+  keepHead(st.heads, opened.signer.id, head, entries);
   return opened.signer.id;
 }
 
@@ -476,26 +514,30 @@ export function noteHead(
  * lacks, so the server is holding back entries, perhaps the revocation of a device that answers.
  */
 export function behindBy(st: State, dir: Directory, entries: unknown[]): string | undefined {
-  for (const [id, head] of Object.entries(st.heads ?? {}))
-    if (dir.members.get(id)?.active && !holdsHead(entries, head))
-      return `the server is holding back directory entries ${id} has seen (${head.length}, this machine has ${dir.length}): no answer counts until it serves them`;
+  const held = withheldBy(st.heads ?? {}, dir, entries);
+  if (held)
+    return `the server is holding back directory entries ${held.id} has seen (${held.head.length}, this machine has ${dir.length}): no answer counts until it serves them`;
   return undefined;
 }
 
 /**
- * How an answer comes back into the session that asked: as a prompt, which Claude Code's mod and
- * the Pi extension submit and the agent queues into a Codex session it can reach, or only
- * through `wait`.
+ * How an answer comes back into the session that asked: as a prompt, which Claude Code's mod,
+ * the Pi extension and the opencode plugin submit and the agent queues into a Codex session it
+ * can reach, or only through `wait`.
  */
 export type Delivery = "prompt" | "wait";
 
-/** With no agent running, Codex gets nothing back; the mod and the Pi extension poll by themselves. */
+/**
+ * With no agent running, Codex gets nothing back; the mod, the Pi extension and the opencode
+ * plugin poll by themselves.
+ */
 export function delivery(
-  input: Pick<AskInput, "agent" | "piAnswers">,
+  input: Pick<AskInput, "agent" | "extensionAnswers" | "headless">,
   codexReachable: boolean,
 ): Delivery {
-  if (input.agent === "claude-code") return "prompt";
-  if (input.agent === "pi") return input.piAnswers ? "prompt" : "wait";
+  if (input.agent === "claude-code") return input.headless ? "wait" : "prompt";
+  if (input.agent === "pi" || input.agent === "opencode")
+    return input.extensionAnswers ? "prompt" : "wait";
   return input.agent === "codex" && codexReachable ? "prompt" : "wait";
 }
 
@@ -586,7 +628,13 @@ export async function poll(
             }
             const a = checkAnswer(raw, s, dir, st.asked);
             const device = signers.get(raw);
-            st.answers[a.decisionId] ??= { answer: a, seen: false, ...(device ? { device } : {}) };
+            st.answers[a.decisionId] ??= {
+              answer: a,
+              seen: false,
+              ...(device ? { device, announce: true } : {}),
+            };
+            const asked = st.asked[a.decisionId];
+            if (asked) forget(asked);
           } catch (e) {
             ctx.err(`starbridge: ignored an answer: ${(e as Error).message}`);
           }
@@ -596,23 +644,200 @@ export async function poll(
         st.cursor = page.cursor;
     });
   }
+  await announce(ctx, s, directory);
+  // A device that joined since reads nothing this machine sealed before: re-seal it.
+  await reseal(ctx, s, directory).catch((e) =>
+    ctx.err(`starbridge: could not re-send open questions: ${(e as Error).message}`),
+  );
   return { cursor: page.cursor ?? opts.cursor, directory, ...quotaAsked };
 }
 
 /**
- * The answer to decision `id`, or without `id` the first answer no `wait` printed yet, marked
- * printed. Undefined when there is none yet.
+ * Tells every device which answer this machine accepted, in a settled notice: the answer itself
+ * is sealed only to this machine, so a device that lost a race to it could not know (#330).
+ * Left to the next poll when the post fails.
+ */
+async function announce(ctx: Ctx, s: Session, dir: Directory): Promise<void> {
+  const st = ctx.store.state();
+  // Behind on the directory, it would seal to a device the server knows revoked: later.
+  if (st.behind) return;
+  const due = Object.entries(st.answers).filter(([, a]) => a.announce && a.device);
+  if (due.length === 0) return;
+  // No active device left: nobody to tell.
+  const to = activeMembers(dir, "device");
+  for (const [id, { answer, device }] of due) {
+    const body = {
+      v: 1 as const,
+      id: `s_${randomBytes(12).toString("base64url")}`,
+      itemId: id,
+      to: to.map((d) => d.id),
+      at: iso(ctx.now()),
+      outcome: "device" as const,
+      device: device as string,
+      ...(answer.choice !== undefined ? { choice: answer.choice } : { text: answer.text }),
+      dir: signedHead(ctx, dir),
+    } satisfies Settled;
+    try {
+      if (to.length > 0)
+        await s.api.postItem(
+          seal("settled", body, { id: s.machine.id, signKey: s.keys.sign.privateKey }, to),
+          ctx.signal,
+        );
+    } catch (e) {
+      // Settled already (withdrawn meanwhile, say) or gone: nothing left to tell.
+      const done = e instanceof ApiError && (e.code === "already-settled" || e.status === 404);
+      if (!done) {
+        ctx.err(`starbridge: could not tell the devices which answer won: ${(e as Error).message}`);
+        // Offline or cut off by a deadline: the rest would fail the same way.
+        if (!(e instanceof ApiError)) return;
+        continue;
+      }
+    }
+    ctx.store.updateState((st) => {
+      const a = st.answers[id];
+      if (a) delete a.announce;
+    });
+  }
+}
+
+/** Drops a closed decision's body, so its plaintext does not stay on disk. */
+function forget(a: State["asked"][string]) {
+  delete a.body;
+  delete a.images;
+}
+
+/** The server drops an unanswered decision after 30 days; one re-sealed later would come back. */
+const RESEAL_MS = 29 * 24 * 3600_000;
+
+/**
+ * Re-seals this machine's open decisions, with their waiting state, and permission prompts to
+ * the active devices of the verified directory when one of those was not among their
+ * recipients. They keep their ids, so a device that had them sees no second copy, and the server
+ * pushes only the new devices. Revoked devices get nothing, and nothing is re-sealed while the
+ * server may be withholding directory entries.
+ */
+async function reseal(ctx: Ctx, s: Session, known: Directory): Promise<void> {
+  const st = ctx.store.state();
+  const now = ctx.now().getTime();
+  // A decision's recipients are those of its body as last posted; `to`, whose answers count, may
+  // hold more: a post whose reply was lost could have reached the server.
+  const decisions = Object.entries(st.asked).flatMap(([id, a]) =>
+    a.body && a.to && !a.settled && !st.answers[id] && now - Date.parse(a.askedAt) < RESEAL_MS
+      ? [{ id, a, body: a.body }]
+      : [],
+  );
+  const prompts = Object.values(st.permissions ?? {}).filter(
+    (p) => !p.settled && !p.answer && Date.parse(p.permission.expiresAt) > now,
+  );
+  const lacking = (to: string[], dir: Directory) =>
+    activeMembers(dir, "device").some((d) => !to.includes(d.id));
+  const all = [
+    ...decisions.map((d) => d.body.to),
+    ...prompts.map((p) => p.sealedTo ?? p.permission.to),
+  ];
+  if (st.behind || !all.some((to) => lacking(to, known))) return;
+  const dir = await refreshDirectory(ctx, s, ctx.signal);
+  const to = activeMembers(dir, "device");
+  const ids = to.map((d) => d.id);
+  const signer = { id: s.machine.id, signKey: s.keys.sign.privateKey };
+  /**
+   * Posts a re-sealed item: "posted", "closed" when the server holds it answered or no longer
+   * holds it, or undefined after an error, which the next poll tries again.
+   */
+  const post = async (item: () => SealedItem) => {
+    let sealed: SealedItem | undefined;
+    try {
+      sealed = item();
+      await s.api.postItem(sealed);
+      return "posted";
+    } catch (e) {
+      if (e instanceof ApiError && ["already-answered", "not-found"].includes(e.code))
+        return "closed";
+      ctx.err(`starbridge: could not re-send ${sealed?.id ?? ""}: ${(e as Error).message}`);
+    }
+  };
+  for (const { id, a, body } of decisions) {
+    if (!lacking(body.to, dir)) continue;
+    ctx.store.updateState((st) => {
+      const x = st.asked[id];
+      if (x) x.to = [...new Set([...(x.to ?? []), ...ids])];
+    });
+    const pictures = (a.images ?? []).flatMap((i) => {
+      try {
+        return [typeof i === "string" ? loadPicture(i) : loadPicture(i.path, i.alt)];
+      } catch {
+        return []; // Moved or deleted since: the re-sealed copy goes without it.
+      }
+    });
+    const posted = await post(() => ({
+      ...sealWithPictures({ ...body, to: ids, dir: signedHead(ctx, dir) }, pictures, signer, to)
+        .item,
+      reseal: true,
+    }));
+    if (posted === "closed")
+      ctx.store.updateState((st) => {
+        const x = st.asked[id];
+        if (x) forget(x);
+      });
+    if (posted !== "posted") continue;
+    // Done once its waiting state went too; else the next poll re-sends both.
+    if (a.waiting?.state === "waiting") {
+      const w = {
+        v: 1 as const,
+        id: a.waiting.id,
+        decisionId: id,
+        to: ids,
+        at: iso(ctx.now()),
+        state: a.waiting.state,
+        dir: signedHead(ctx, dir),
+      } satisfies Waiting;
+      if (!(await post(() => ({ ...seal("waiting", w, signer, to), quiet: true })))) continue;
+    }
+    ctx.store.updateState((st) => {
+      const x = st.asked[id];
+      if (x?.body) x.body.to = ids;
+    });
+  }
+  for (const p of prompts) {
+    if (!lacking(p.sealedTo ?? p.permission.to, dir)) continue;
+    const permission = { ...p.permission, to: ids, dir: signedHead(ctx, dir) };
+    // As for decisions: answers count from the new devices before the post.
+    ctx.store.updateState((st) => {
+      const x = st.permissions?.[permission.id];
+      if (x) x.permission.to = [...new Set([...x.permission.to, ...ids])];
+    });
+    if (
+      (await post(() => ({ ...seal("permission", permission, signer, to), reseal: true }))) !==
+      "posted"
+    )
+      continue;
+    ctx.store.updateState((st) => {
+      const x = st.permissions?.[permission.id];
+      if (x) x.sealedTo = ids;
+    });
+  }
+}
+
+/**
+ * The answer to decision `id`, or without `id` the first answer no `wait` printed yet to a
+ * decision session `session` asked (any session's when undefined), marked printed. Undefined
+ * when there is none yet.
  */
 export function takeAnswer(
   store: Ctx["store"],
   id: string | undefined,
+  session?: string,
 ): { answer: Answer; question?: string } | undefined {
+  const mine = (st: State, d: string) =>
+    session === undefined || (st.asked[d]?.session ?? "") === session;
   const found = (st: State) =>
     id
       ? deliverable(st, id)
         ? st.answers[id]
         : undefined
-      : Object.values(st.answers).find((a) => !a.seen && deliverable(st, a.answer.decisionId));
+      : Object.values(st.answers).find(
+          (a) => !a.seen && deliverable(st, a.answer.decisionId) && mine(st, a.answer.decisionId),
+        );
   if (!found(store.state())) return undefined;
   let taken: { answer: Answer; question?: string } | undefined;
   store.updateState((st) => {
@@ -632,7 +857,7 @@ export function takeAnswer(
  */
 export async function wait(
   ctx: Ctx,
-  opts: { id?: string; timeout?: string; json?: boolean },
+  opts: { id?: string; session?: string; timeout?: string; json?: boolean },
   s: Session = session(ctx),
   dir?: Directory,
 ): Promise<number> {
@@ -648,7 +873,7 @@ export async function wait(
     return 0;
   };
 
-  const already = takeAnswer(ctx.store, target);
+  const already = takeAnswer(ctx.store, target, opts.session);
   if (already) return report(already);
   if (target) await markWaiting(ctx, () => postWaiting(ctx, s, target, "waiting"));
 
@@ -681,7 +906,7 @@ export async function wait(
       await ctx.sleep(Math.min(RETRY_MS, Math.max(0, left)));
       continue;
     }
-    const found = takeAnswer(ctx.store, target);
+    const found = takeAnswer(ctx.store, target, opts.session);
     if (found) return report(found);
   }
 }

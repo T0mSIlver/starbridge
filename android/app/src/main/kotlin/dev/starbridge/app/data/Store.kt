@@ -9,6 +9,8 @@ interface Store {
     /** Permission prompts of the last week, waiting ones included (#57). */
     val prompts: StateFlow<List<Prompt>>
     val windows: StateFlow<List<QuotaWindow>>
+    /** Providers CodexBar failed for with no windows to keep (#450). */
+    val quotaFailures: StateFlow<List<QuotaFailure>>
     /** Runs the server still holds: the latest update of each, for a day. */
     val runs: StateFlow<List<Run>>
     val members: StateFlow<List<Member>>
@@ -22,8 +24,11 @@ interface Store {
     val busy: StateFlow<Boolean>
     /** The last thing that went wrong, in words for the owner. */
     val notice: StateFlow<String?>
-    /** Answers going out, by decision id: the choice or the text, until the server replies. */
+    /** Answers going out or waiting for a connection, by decision id: the choice or the text, until the server takes them. */
     val sending: StateFlow<Map<String, String>>
+    /** The recovery key's state, once the directory is known (#348). */
+    val recovery: StateFlow<RecoveryUi?>
+    val replacing: StateFlow<Replacing>
 
     /** The URL that starts GitHub sign-in; it ends at starbridge://auth?code=… */
     fun gitHubSignInUrl(server: String): String
@@ -38,10 +43,13 @@ interface Store {
     fun joinWithCode(text: String)
     /** Asks the account's devices to approve this phone by comparing digits. */
     fun askDevices()
+    /** The owner saw the same digits on the device comparing them: its approval may count. */
+    fun confirmDigits()
     fun cancelJoin()
     fun recover(words: String)
 
-    fun refresh()
+    /** Syncs everything; [shown] false keeps [busy] down, for syncs the owner didn't ask for. */
+    fun refresh(shown: Boolean = true)
     /** Asks the machines for fresh quota snapshots, waits for them, then refreshes. */
     fun refreshQuotas()
     fun answer(id: String, choice: String?, text: String?)
@@ -58,6 +66,9 @@ interface Store {
     /** Shows a QR code for a new phone to scan, and waits for its request. */
     fun showCode()
 
+    /** Polls the items while the app is in front and no push has arrived ([on] false stops it). */
+    fun foreground(on: Boolean)
+
     /** Keeps [joinAsks] current while the app is in front. */
     fun watchJoins(on: Boolean)
     fun compareJoin(id: String)
@@ -65,6 +76,13 @@ interface Store {
     fun refuseJoin(id: String)
     fun closeComparison()
     fun revoke(memberId: String)
+
+    /** Makes a new recovery key to show, once [currentKey] proves to be the chain's. */
+    fun newRecoveryKey(currentKey: String)
+    /** Proposes the new key and confirms it with the current one. */
+    fun saveRecoveryKey()
+    fun closeRecoveryKey()
+    fun dismissRecoveryNotice(seq: Int)
 
     fun setPushType(type: String)
     fun signOut()

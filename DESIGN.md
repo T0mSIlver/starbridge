@@ -392,13 +392,13 @@ side on wide screens. Stock components take their colours from these tokens
 through the theme.
 
 Colours on Android are a setting, "Colours": "Starbridge" (the default) uses
-these tokens; "Match wallpaper" uses Material You dynamic colour. Screens
+these tokens; "Material You" uses dynamic colour from the wallpaper. Screens
 draw neutrals and components from Material's roles, not from the tokens, and
 the "Starbridge" scheme maps the tokens onto those roles (`bg` is `surface`,
 `surface` is `surfaceContainer`, `surface2` is `surfaceContainerHighest` and
 `secondaryContainer`, `fg` is `onSurface` and `primary`, `fg2` is
 `onSurfaceVariant` and `secondary`, `line` and `line-strong` are
-`outlineVariant` and `outline`). So under "Match wallpaper" every role
+`outlineVariant` and `outline`). So under "Material You" every role
 follows the wallpaper: grounds, cards, the navigation bar and rail, top app
 bars, buttons and button groups, text fields, the selected decision,
 progress tracks and loading indicators, dialogs, snackbars, the window behind
@@ -495,11 +495,18 @@ a decision's context, a permission prompt's command and a session's name.
   kind icon and name, the repo, and the time right-aligned. The agent's own
   words come below it. Details end with the session name, truncated in the
   middle, and "Open in Claude" or "Open in Codex" as text, with no logos.
+- Links the agent attaches sit under "Attached by the agent", each a chip with
+  "Open", the page's title (else its label) and an open-outside icon. A GitHub
+  pull request or issue reads "owner/repo#123" when it has no title and leads
+  with the GitHub mark.
 - An answered item goes to History, collapsed by default, as one line: the
   answer, the question, which device answered and when.
 - Find (the web rail's box) lists the matching open items, then "History · N"
   with the matching answered ones, answers included. A matched word is bold
   on `surface2`, never amber.
+- An image on a question opens the full-screen viewer, and says so: an expand
+  badge in its bottom right corner, `s2` in, a `s8` circle of `surface` at 72%
+  with the expand icon (`s5`) in `fg`. Touch screens show no zoom cursor.
 - Destructive actions are neutral text buttons on the row; only the confirm
   button in their dialog is red (`bad`).
 - Copy inside the UI is labels and states only, never a sentence explaining
@@ -622,7 +629,8 @@ round caps and joins, no fills. Android uses Material Symbols Rounded tuned to
 Google Sans Flex; a native iOS app, if one comes, would use SF Symbols. Every
 platform has the same icons by job: laptop, desktop, server and cloud (a
 machine's kind), permission prompt, question, run, quota, history, settings,
-devices, open in the agent, waiting, inbox, send.
+devices, open in the agent, waiting, inbox, send, expand (an image opens full
+screen).
 
 ## The mark
 
@@ -630,19 +638,23 @@ The mark is a space elevator on a 108-unit canvas (the Android adaptive
 icon grid; the visible area is the central 72): a planet's edge (a circle at
 54,148, radius 80) and a tether (x 51.75 to 56.25, from the top edge down
 into the planet) in `fg` dark, and one amber climber, a capsule 11 wide and
-20 tall at 48.5,34, in `accent` dark. The ground is `bg` dark in both
-schemes, and the climber is the only amber. Single-colour uses (themed icon,
+20 tall at 48.5,34, in `accent` dark. Where the mark has a ground, it is `bg`
+dark in both schemes, and the climber is the only amber. Single-colour uses (themed icon,
 notification icon) draw all three shapes in one colour.
 
 | Where | File |
 |---|---|
 | Android launcher | `res/mipmap-anydpi/ic_launcher*.xml`, layers in `res/drawable/ic_launcher_*.xml` |
 | Android notification | `res/drawable/ic_notification.xml` (white, 24 dp) |
-| Web favicon | `web/src/app/icon.svg`, `favicon.ico` (16, 32, 48 px) |
-| Web install icons | `web/src/app/apple-icon.png` (180 px), `web/public/icon-*.png`, `manifest.ts` |
+| Web tab icon | `web/src/app/icon.svg` |
+| Web favicon and install icons | `web/src/app/favicon.ico` (16, 32, 48 px), `apple-icon.png` (180 px), `web/public/icon-*.png`, `manifest.ts` |
 
-The PNG and ICO files are rendered from the SVG; redraw them when the mark
-changes.
+The tab icon is the mark as the page's rail draws it, with no ground, in
+`fg` and `accent` of the system's scheme, with a thin halo in the other
+scheme's `fg` so it stays legible on a tab strip that does not follow the
+system. The other web icons stand on the launcher's ground,
+since a home screen, or a browser that skips the SVG, shows them on any
+colour; `node web/scripts/icons.ts` renders them.
 
 The product name has no wordmark: it is "Starbridge" in the sans, weight 500. Beside the mark,
 the name stands on the mark's ground: its baseline sits on the mark's bottom

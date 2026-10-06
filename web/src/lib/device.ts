@@ -3,7 +3,6 @@
 // first paint. Every read of the directory replays the chain against the pin kept in IndexedDB.
 import {
   activeMembers,
-  addEntry,
   addEntryAsync,
   approverKeys,
   bindMessage,
@@ -12,9 +11,11 @@ import {
   type Decision,
   type Directory,
   DirectoryEntry,
+  type DirectoryHead,
   entryHash,
   formatPairingCode,
   fromB64,
+  generateRecoverySeed,
   genesisEntryAsync,
   claimHash as hashClaim,
   type JoinKeys,
@@ -27,6 +28,7 @@ import {
   newJoinId,
   newJoinKeyPair,
   newPairingCode,
+  noteHead,
   openAsync,
   openJoinApproval,
   openJoinRequest,
@@ -39,11 +41,13 @@ import {
   pairingLink,
   pairingRequest,
   parsePairingCode,
-  RECOVERY,
   RecoveryKeyError,
   type RecoveryKeyReading,
   readRecoveryKey,
   ready,
+  recoverEntry,
+  recoveryConfirmEntry,
+  recoveryEntryAsync,
   recoveryKey,
   recoveryKeyPair,
   recoverySeedFromKey,
@@ -54,9 +58,11 @@ import {
   sealAsync,
   toB64,
   verifyDirectory,
+  visible,
   type Waiting,
+  withheldBy,
 } from "@starbridge/protocol";
-import { ApiError, api, type Stored } from "./api";
+import { ApiError, api, backoff, type Stored } from "./api";
 import { generateDeviceKeys, sealOpener, signer } from "./crypto/keys";
 import * as store from "./store";
 import type {
@@ -83,12 +89,17 @@ export interface Ctx {
 }
 
 export type Boot =
-  /** `known`: this browser holds a device of the account it last signed in to. */
-  | { state: "signed-out"; known: boolean }
-  | { state: "first-device"; account: string }
+  /**
+   * `known`: this browser holds a device of the account it last signed in to. `refused`: the
+   * server's reason for ending the session, unsigned, so the keys stay until the chain agrees.
+   */
+  | { state: "signed-out"; known: boolean; refused?: string }
+  /** `unsaved`: the name of a first device whose page closed before its recovery key was saved. */
+  | { state: "first-device"; account: string; unsaved?: string }
   /** The account has devices and this browser is not one of them (or lost its binding). */
   | { state: "join"; account: string; stale: boolean }
-  | { state: "revoked"; account: string; name: string }
+  /** `by`: the device that revoked this one, or the recovery key. */
+  | { state: "revoked"; account: string; name: string; by: string }
   /** The directory failed verification: the server, or someone holding it, broke the chain. */
   | { state: "broken"; account: string; error: string }
   | { state: "ready"; ctx: Ctx };
@@ -133,11 +144,20 @@ function pinTo(account: string, entries: SignedEnvelope[], dir: Directory): Prom
   });
 }
 
-/** Fetches the chain, replays it against the pin, and moves the pin forward. */
+/** A browser with no pin was served a chain that nothing it holds anchors. */
+class Unanchored extends Error {}
+
+/**
+ * Fetches the chain, replays it against the pin, and moves the pin forward. Without a pin, only
+ * a genesis this browser's device signed anchors the chain (a first device cut off before it
+ * pinned): any other the server could have made, listing keys it relayed (#354).
+ */
 async function trusted(account: string): Promise<{ dir: Directory; entries: SignedEnvelope[] }> {
   for (let attempt = 0; ; attempt++) {
     const entries = await api.directory();
     const pin = await store.get("pin", account);
+    if (!pin && !signedGenesis(account, entries[0], await store.get("device", account)))
+      throw new Unanchored("no pin anchors this directory");
     const dir = verifyDirectory(entries, { account, ...(pin ? { pin } : {}) });
     try {
       await pinTo(account, entries, dir);
@@ -150,6 +170,38 @@ async function trusted(account: string): Promise<{ dir: Directory; entries: Sign
   }
 }
 
+function registration() {
+  return (
+    navigator.serviceWorker?.getRegistration("/").catch(() => undefined) ??
+    Promise.resolve(undefined)
+  );
+}
+
+/**
+ * Closes every notification the service worker shows. They stay up until dismissed and carry
+ * decrypted questions, so they go when this browser stops being the device that read them (#311).
+ */
+async function closeNotifications(): Promise<void> {
+  const reg = await registration();
+  for (const n of (await reg?.getNotifications().catch(() => [])) ?? []) n.close();
+}
+
+/** Whether `entry`, once verified as entry 0, is a genesis this browser's own device signed. */
+function signedGenesis(
+  account: string,
+  entry: SignedEnvelope | undefined,
+  device?: store.DeviceRecord,
+): boolean {
+  if (!device || entry?.signer !== device.id) return false;
+  try {
+    return (
+      verifyDirectory([entry], { account }).members.get(device.id)?.member.signPk === device.signPk
+    );
+  } catch {
+    return false;
+  }
+}
+
 export async function boot(): Promise<Boot> {
   let me: Awaited<ReturnType<typeof api.me>>;
   try {
@@ -157,9 +209,14 @@ export async function boot(): Promise<Boot> {
   } catch (e) {
     if (e instanceof ApiError && e.status === 401) {
       const last = await store.get("current");
-      // Its device was revoked: this browser is a visitor again, not a device signing back in.
-      if (last && e.code === "revoked") await store.del("device", last);
-      return { state: "signed-out", known: !!last && !!(await store.get("device", last)) };
+      // A "revoked" here is the server's word only: the keys stay, and the next sign-in reads
+      // the chain, which alone revokes a device (#310). Closing notifications loses nothing.
+      if (e.code === "revoked") await closeNotifications();
+      return {
+        state: "signed-out",
+        known: !!last && !!(await store.get("device", last)),
+        ...(e.code === "revoked" ? { refused: e.code } : {}),
+      };
     }
     throw e;
   }
@@ -172,44 +229,75 @@ export async function boot(): Promise<Boot> {
     // A browser that pinned a chain never accepts an empty one: that would be a rollback.
     if (await store.get("pin", account))
       return { state: "broken", account, error: "rollback: the server sent an empty directory" };
-    // Keys saved before a genesis that never reached the server.
+    // Keys saved before a genesis that never reached the server: the page closed before the
+    // owner saved the recovery key, so that key was never used (#328). Once the genesis may
+    // have gone out, only the server could make the directory empty: the keys stay (#371).
+    if (device?.posted)
+      return { state: "broken", account, error: "the server sent an empty directory" };
     if (device) await store.del("device", account);
-    return { state: "first-device", account };
+    return { state: "first-device", account, ...(device ? { unsaved: device.name } : {}) };
   }
   let verified: { dir: Directory; entries: SignedEnvelope[] };
   try {
     verified = await trusted(account);
   } catch (e) {
+    // A join or recovery cut off before it pinned starts over (#354).
+    if (e instanceof Unanchored) {
+      await store.del("pending", account);
+      return { state: "join", account, stale: false };
+    }
     return { state: "broken", account, error: e instanceof Error ? e.message : String(e) };
   }
-  if (!device) {
-    // A join a device approved, cut off before its keys became the device: the directory
-    // already lists them, so they are, as they would have been had it finished (#274).
-    const pending = await store.get("pending", account);
-    const held = pending && verified.dir.members.get(pending.id);
-    if (
-      !pending ||
-      !held?.active ||
-      held.member.boxPk !== pending.boxPk ||
-      held.member.signPk !== pending.signPk
-    )
-      return { state: "join", account, stale: false };
+  // A join a device approved, or a recovery whose append landed, cut off before its keys became
+  // the device: the directory already lists them, so they are, as they would have been had it
+  // finished, even over an older device's (#274, #283).
+  const pending = await store.get("pending", account);
+  const held = pending && verified.dir.members.get(pending.id);
+  if (
+    pending &&
+    held?.active &&
+    held.member.boxPk === pending.boxPk &&
+    held.member.signPk === pending.signPk
+  ) {
     await adopt(account, pending);
     device = pending;
   }
+  if (!device) return { state: "join", account, stale: false };
   const entry = verified.dir.members.get(device.id);
   if (!entry || entry.member.boxPk !== device.boxPk || entry.member.signPk !== device.signPk) {
     // Saved before a pairing or recovery that never completed.
     await store.del("device", account);
     return { state: "join", account, stale: false };
   }
-  if (!entry.active) return { state: "revoked", account, name: device.name };
+  if (!entry.active) {
+    // The chain says so, unlike a 401: this browser's keys and what it answered go, as Android's
+    // wipe does. The pin stays, so the server still cannot roll the chain back.
+    const reg = await registration();
+    await (await reg?.pushManager.getSubscription())?.unsubscribe().catch(() => {});
+    for (const kind of ["device", "answers", "promptAnswers"] as const)
+      await store.del(kind, account);
+    await closeNotifications();
+    return { state: "revoked", account, name: device.name, by: removedBy(verified, device.id) };
+  }
   if (me.member === null && !(await bind(account, device))) {
     return { state: "join", account, stale: true };
   } else if (me.member !== null && me.member !== device.id) {
     return { state: "join", account, stale: true };
   }
   return { state: "ready", ctx: { account, device, ...verified } };
+}
+
+/** Who removed member `id`: the device that signed its revocation, or the recovery key. */
+function removedBy(chain: { dir: Directory; entries: SignedEnvelope[] }, id: string): string {
+  let added = false;
+  for (const env of chain.entries) {
+    const body = JSON.parse(env.body) as { op: string; id?: string; member?: { id: string } };
+    if (body.member?.id === id) added = true;
+    else if (added && body.op === "recover") return "your recovery key";
+    else if (added && body.op === "revoke" && body.id === id)
+      return chain.dir.members.get(env.signer)?.member.name ?? env.signer;
+  }
+  return "another device";
 }
 
 /**
@@ -264,7 +352,7 @@ async function newDevice(account: string, name: string) {
   return { record, member };
 }
 
-/** A first device whose keys, genesis entry and recovery words exist, not yet on the server. */
+/** A first device whose keys, genesis entry and recovery key exist, not yet on the server. */
 export interface FirstDevice {
   recoveryKey: string;
   /** Posts the genesis; safe to call again after a failure, with the same keys and entry. */
@@ -273,8 +361,9 @@ export interface FirstDevice {
 
 /**
  * Makes this browser's keys and the account's genesis entry. The recovery seed is dropped once
- * the words exist, so the caller keeps this object until `commit` succeeds and the words are
- * shown; a retry reuses it rather than making new keys.
+ * the key exists, so the key is shown before `commit`, which runs once the owner says it is
+ * saved: a page closed before that posts no genesis, and boot offers a new key (#328). A retry
+ * of `commit` reuses this object rather than making new keys.
  */
 export async function prepareFirstDevice(account: string, name: string): Promise<FirstDevice> {
   await ready;
@@ -297,8 +386,17 @@ export async function prepareFirstDevice(account: string, name: string): Promise
     recovery.privateKey.fill(0);
   }
   const dir = verifyDirectory([entry], { account });
+  // Another tab posted its genesis since this page offered a key: its keys are the account's.
+  if ((await store.get("device", account))?.posted)
+    throw new Error("Another tab set up this account. Reload.");
   await store.put("device", record, account);
   const commit = async () => {
+    // Another tab's boot drops these keys as never used, or its setup replaces them: posting
+    // now would make an account whose device keys no browser holds.
+    const held = await store.get("device", account);
+    if (held?.id !== record.id || held.signPk !== record.signPk)
+      throw new Error("Another tab started the setup over, so this key was never used. Reload.");
+    await store.put("device", { ...record, posted: true }, account);
     try {
       await api.append(entry);
     } catch (e) {
@@ -340,15 +438,25 @@ export async function recover(account: string, name: string, typed: string): Pro
         ...(pin ? { pin } : {}),
       });
     } catch (e) {
-      if (e instanceof ProtocolError && e.message === "bad-genesis: recovery key differs")
-        throw new Error("This is a recovery key, but not this account's.");
+      // Another account's key, or this account's from before a replacement (#348).
+      if (e instanceof ProtocolError && e.code === "wrong-recovery-key")
+        throw new Error("This is a recovery key, but not this account's current one.");
       throw e;
     }
-    const entry = addEntry(dir, { id: RECOVERY, signKey: recovery.privateKey }, member, now());
+    // Revokes every other member: recovery means they are lost, or in someone else's hands (#363).
+    const entry = recoverEntry(dir, recovery.privateKey, member, now());
     const next = verifyDirectory([...entries, entry], { account });
-    await store.put("device", record, account);
-    await api.append(entry);
+    // Pending until the append lands: a failed one must not replace keys that still work (#283).
+    await store.put("pending", record, account);
+    try {
+      await api.append(entry);
+    } catch (e) {
+      // It may have landed with its response lost: it did if the directory holds it.
+      const landed = await api.directory().catch(() => []);
+      if (!landed.some((x) => x.sig === entry.sig)) throw e;
+    }
     await pinTo(account, [...entries, entry], next);
+    await adopt(account, record);
   } finally {
     seed.fill(0);
     recovery.privateKey.fill(0);
@@ -422,10 +530,11 @@ export async function startJoin(account: string, name: string): Promise<Join> {
   return { code: formatPairingCode(code), done, cancel: () => abort.abort() };
 }
 
-/** A join approved: its keys become this browser's device for the account. */
+/** New keys become this browser's device; notifications the older keys read go (#311). */
 async function adopt(account: string, record: store.DeviceRecord): Promise<void> {
   await store.put("device", record, account);
   await store.del("pending", account);
+  await closeNotifications();
 }
 
 async function finishJoin(
@@ -441,16 +550,19 @@ async function finishJoin(
   // The approval's length and head, under the code's MAC, pin a directory the server cannot fake.
   const dir = verifyDirectory(entries, { account, pin: { length: body.length, head: body.head } });
   checkJoined(dir, member);
-  await adopt(account, record);
   await pinTo(account, entries, dir);
+  await adopt(account, record);
 }
 
 /** Joining by digits: no code to type; the owner compares 6 digits on both devices. */
 export interface DigitJoin {
   /** Resolves once a device took the request: the digits it shows too. */
   digits: Promise<string>;
-  /** Resolves once that device approved and the directory holds this browser's keys. */
+  /** Resolves once that device approved, this browser's owner confirmed the digits match, and
+   * the directory holds this browser's keys. */
   done: Promise<void>;
+  /** This browser's owner saw the same digits on the other device. */
+  confirm: () => void;
   cancel: () => void;
 }
 
@@ -464,6 +576,12 @@ export async function startDigitJoin(account: string, name: string): Promise<Dig
   await store.put("pending", record, account);
   const { expiresAt } = (await api.postJoin(request, joinCommitment(eph.publicKey, request))).join;
   const abort = new AbortController();
+  let confirm: () => void = () => {};
+  const confirmed = new Promise<void>((resolve, reject) => {
+    confirm = resolve;
+    abort.signal.addEventListener("abort", () => reject(new Error("cancelled")));
+  });
+  confirmed.catch(() => {});
   let shown: (digits: string) => void = () => {};
   const digits = new Promise<string>((resolve) => {
     shown = resolve;
@@ -490,10 +608,15 @@ export async function startDigitJoin(account: string, name: string): Promise<Dig
               if (!(e instanceof ApiError && e.code === "already-revealed")) throw e;
             }),
           );
+          if (abort.signal.aborted) throw new Error("cancelled");
           shown(derived.digits);
         }
         if (derived && join.approval !== undefined) {
           const body = openJoinApproval(join.approval, derived, id);
+          // The approval's MAC proves only that whoever sent the approver key approved, which
+          // may be the server: it counts once this browser's owner has seen the digits match
+          // (#355).
+          await confirmed;
           if (body.account !== account) throw new ProtocolError("wrong-account", body.account);
           const entries = await api.directory();
           const dir = verifyDirectory(entries, {
@@ -501,8 +624,8 @@ export async function startDigitJoin(account: string, name: string): Promise<Dig
             pin: { length: body.length, head: body.head },
           });
           checkJoined(dir, member);
-          await adopt(account, record);
           await pinTo(account, entries, dir);
+          await adopt(account, record);
           return;
         }
       }
@@ -513,6 +636,7 @@ export async function startDigitJoin(account: string, name: string): Promise<Dig
   return {
     digits,
     done,
+    confirm,
     cancel: () => {
       abort.abort();
       api.cancelJoin(id).catch(() => {});
@@ -570,7 +694,8 @@ export async function watchJoins(signal: AbortSignal, onChange: (asks: JoinAsk[]
       onChange(page.joins.flatMap((v) => toAsk(v) ?? []));
     } catch {
       if (signal.aborted) return;
-      await new Promise((r) => setTimeout(r, 5_000));
+      // At most every 5 s, and not before the server's backoff ends (#332).
+      await new Promise((r) => setTimeout(r, Math.max(5_000, backoff.until - Date.now())));
     }
   }
 }
@@ -750,7 +875,7 @@ export function devices(ctx: Ctx): Device[] {
   const addedAt = new Map<string, string>();
   for (const env of ctx.entries) {
     const body = DirectoryEntry.parse(JSON.parse(env.body));
-    if (body.op === "add") addedAt.set(body.member.id, body.at);
+    if (body.op === "add" || body.op === "recover") addedAt.set(body.member.id, body.at);
   }
   return [...ctx.dir.members.values()].map(({ member, active }) => ({
     ...member,
@@ -810,6 +935,126 @@ export function revoke(ctx: Ctx, id: string): Promise<Ctx> {
   return append(ctx, (dir) => revokeEntryAsync(dir, me(ctx), id, now()));
 }
 
+// --- Replacing the recovery key (#348) ---------------------------------------------------
+
+/** The recovery key as Settings and the notices show it; device names, not ids. */
+export interface RecoveryState {
+  /** When the current key was set, on which device, and whether it replaced an earlier one. */
+  set: { at: string; by: string; replaced: boolean };
+  /** A replacement made on another device since this browser joined, to show once. */
+  notice?: { seq: number; at: string; by: string };
+}
+
+export async function recoveryState(ctx: Ctx): Promise<RecoveryState> {
+  const name = (id: string) =>
+    id === ctx.device.id ? "this browser" : (ctx.dir.members.get(id)?.member.name ?? id);
+  const set = ctx.dir.recoverySet;
+  const joined = ctx.entries.findIndex((env) => {
+    const body = DirectoryEntry.parse(JSON.parse(env.body));
+    return (body.op === "add" || body.op === "recover") && body.member.id === ctx.device.id;
+  });
+  const seen = (await store.get("recoverySeen", ctx.account)) ?? -1;
+  const fresh = set.seq > 0 && set.seq > joined && set.seq > seen && set.by !== ctx.device.id;
+  return {
+    set: { at: set.at, by: name(set.by), replaced: set.seq > 0 },
+    ...(fresh ? { notice: { seq: set.seq, at: set.at, by: name(set.by) } } : {}),
+  };
+}
+
+/** Hides the notice of the replacement at `seq` on this browser. */
+export function dismissRecoveryNotice(ctx: Ctx, seq: number): Promise<void> {
+  return store.put("recoverySeen", seq, ctx.account);
+}
+
+/** A new recovery key, shown before anything is posted. */
+export interface NewRecoveryKey {
+  recoveryKey: string;
+  /**
+   * Proposes the key and confirms it with the current one. Safe to call again after a failure:
+   * it picks up where it stopped.
+   */
+  replace: () => Promise<Ctx>;
+  /** Wipes both private keys, when the page closes without saving. */
+  discard: () => void;
+}
+
+/**
+ * Makes a new recovery key to show, once the owner typed the current one: both sign, so neither
+ * a stolen device nor a leaked key replaces it alone. Like the first device's key (#328), the
+ * new one reaches the directory only once the owner says it is saved.
+ */
+export async function prepareRecoveryKey(ctx: Ctx, currentKey: string): Promise<NewRecoveryKey> {
+  await ready;
+  let seed: Uint8Array;
+  try {
+    seed = recoverySeedFromKey(currentKey);
+  } catch (e) {
+    throw e instanceof RecoveryKeyError ? new Error(problemText(e.reading) ?? e.message) : e;
+  }
+  const current = recoveryKeyPair(seed);
+  seed.fill(0);
+  // Against the chain as it is now: another device may have replaced the key since boot.
+  if (toB64(current.publicKey) !== (await refresh(ctx)).dir.recoveryPk) {
+    current.privateKey.fill(0);
+    throw new Error("This isn't the account's current recovery key.");
+  }
+  const fresh = generateRecoverySeed();
+  const next = recoveryKeyPair(fresh);
+  const shown = recoveryKey(fresh);
+  fresh.fill(0);
+  const nextPk = toB64(next.publicKey);
+  // A save in flight still signs with both keys: leaving the page then wipes them when it ends.
+  let saving = false;
+  let dropped = false;
+  const wipe = () => {
+    next.privateKey.fill(0);
+    current.privateKey.fill(0);
+  };
+  const replace = async () => {
+    saving = true;
+    try {
+      const latest = await save();
+      wipe();
+      return latest;
+    } finally {
+      saving = false;
+      if (dropped) wipe();
+    }
+  };
+  const save = async () => {
+    let latest: Ctx;
+    try {
+      latest = await refresh(ctx);
+    } catch (e) {
+      if (e instanceof ApiError && e.code === "revoked") throw removed();
+      throw e;
+    }
+    // A recovery or a revocation dropped this browser, and its proposal with it.
+    if (!latest.dir.members.get(ctx.device.id)?.active) throw removed();
+    // Another device replaced the key since it was typed: the confirmation could never verify.
+    if (latest.dir.recoveryPk !== nextPk && latest.dir.recoveryPk !== toB64(current.publicKey))
+      throw new Error("Another device replaced the recovery key meanwhile. Start again.");
+    if (latest.dir.recoveryPk !== nextPk) {
+      // A retry after the proposal landed confirms it rather than proposing the same key again;
+      // one another proposal replaced meanwhile can never be posted again.
+      if (latest.dir.pendingRecovery?.recoveryPk !== nextPk && latest.dir.recoveryPks.has(nextPk))
+        throw new Error("Another device proposed a new key meanwhile. Start again.");
+      if (latest.dir.pendingRecovery?.recoveryPk !== nextPk)
+        latest = await append(latest, (dir) => recoveryEntryAsync(dir, me(latest), next, now()));
+      latest = await append(latest, async (dir) =>
+        recoveryConfirmEntry(dir, current.privateKey, nextPk, now()),
+      );
+    }
+    return latest;
+  };
+  const discard = () => {
+    if (saving) dropped = true;
+    else wipe();
+  };
+  const removed = () => new Error("This browser was removed from the account.");
+  return { recoveryKey: shown, replace, discard };
+}
+
 /**
  * Signs this browser out, as Android's Sign out does: it leaves the account's devices unless it
  * is the last one (which would leave only the recovery key), ends its session, drops its push
@@ -824,11 +1069,13 @@ export async function signOut(stale: Ctx): Promise<void> {
   );
   if (ctx && others.length > 0) await revoke(ctx, ctx.device.id).catch(() => {});
   await api.logout().catch(() => {});
-  const reg = await navigator.serviceWorker?.getRegistration("/").catch(() => undefined);
+  const reg = await registration();
   await (await reg?.pushManager.getSubscription())?.unsubscribe().catch(() => {});
   for (const kind of ["device", "pin", "answers", "promptAnswers"] as const)
     await store.del(kind, stale.account);
   await store.del("current");
+  // Last: a push the service worker was still opening finds no keys now.
+  await closeNotifications();
 }
 
 // --- Decisions ------------------------------------------------------------------------------
@@ -854,8 +1101,58 @@ function expectKind<K extends SealedItem["kind"]>(item: SealedItem, kind: K) {
   return item as SealedItem & { kind: K };
 }
 
+/** The server holds back directory entries a machine has seen: no machine's item counts (#362). */
+export class Withheld extends Error {}
+
+/**
+ * Opens a machine's item and keeps the directory head it signed, the longest per machine and per
+ * device it names as `by` (one slot per machine for a `by` this browser's chain does not list).
+ */
+async function openMachine<K extends SealedItem["kind"]>(
+  ctx: Ctx,
+  item: SealedItem,
+  kind: K,
+): ReturnType<typeof openAsync<K>> {
+  const opened = await openAsync(expectKind(item, kind), me(ctx), ctx.dir);
+  const head = (opened.body as { dir?: DirectoryHead }).dir;
+  if (head)
+    await store.update("heads", ctx.account, (old) => {
+      const heads = { ...old };
+      noteHead(heads, opened.signer.id, head, ctx.entries, ctx.dir);
+      return heads;
+    });
+  return opened;
+}
+
+/**
+ * Throws `Withheld` while a head a machine active in this browser's chain signed is missing
+ * from it. Loaders call it once they kept the heads of what they opened, so the item that shows
+ * the gap holds back the others it came with. It reads the directory once more first: a machine
+ * may only have signed an entry made on another device since this page read it.
+ */
+async function hold(ctx: Ctx): Promise<void> {
+  const heads = (await store.get("heads", ctx.account)) ?? {};
+  if (!withheldBy(heads, ctx.dir, ctx.entries)) return;
+  const fresh = await refresh(ctx);
+  const held = withheldBy(heads, fresh.dir, fresh.entries);
+  if (held) throw new Withheld(heldText(fresh.dir, held));
+}
+
+/**
+ * Names the machine and, for a head it passed on, the device: a compromised machine can name any
+ * device, the owner's own phone included, so the machine is the one to revoke first.
+ */
+export function heldText(dir: Directory, held: { id: string; by?: string }): string {
+  const name = (id: string) => dir.members.get(id)?.member.name ?? id;
+  const machine = name(held.id);
+  const seen = held.by
+    ? `${machine} says ${name(held.by)} has seen changes to your devices that the server is holding back.`
+    : `The server is holding back changes to your devices that ${machine} has seen.`;
+  return `${seen} Nothing from your machines shows until it sends them. If this does not clear, revoke ${machine} first.`;
+}
+
 /** How each item a settled notice closed was closed, by item id, with the time it closed. */
-type Closings = Map<string, { outcome: Settled["outcome"]; at: string }>;
+type Closings = Map<string, { notice: Settled; at: string }>;
 
 async function openDecision(
   ctx: Ctx,
@@ -863,32 +1160,51 @@ async function openDecision(
   sent: store.SentAnswers,
   closings: Closings = new Map(),
 ): Promise<InboxItem> {
-  expectKind(s.item, "decision");
-  const { signer: machine, body } = await openAsync(
-    s.item as SealedItem & { kind: "decision" },
-    me(ctx),
-    ctx.dir,
-  );
+  const { signer: machine, body } = await openMachine(ctx, s.item, "decision");
   const reply = sent[body.id];
-  // The notice that closed it arrived in the same write, so it carries the same time; a later
-  // one, after a device's answer, closed nothing.
-  const closing = closings.get(body.id);
-  const settled = closing && closing.at === s.answeredAt ? closing.outcome : undefined;
+  const closing = closings.get(`${machine.id}/${body.id}`);
+  const notice = closing?.notice;
+  const answeredBy = notice && wonBy(ctx, notice);
+  // Any other notice that closed it arrived in the same write, so it carries the same time; a
+  // later one, after a device's answer, closed nothing.
+  const settled =
+    notice && notice.outcome !== "device" && closing.at === s.answeredAt
+      ? notice.outcome
+      : undefined;
   return {
     decision: body as Decision,
     machine,
     ...(s.answeredAt ? { answeredAt: s.answeredAt } : {}),
     ...(settled ? { settled } : {}),
+    ...(answeredBy ? { answeredBy } : {}),
     ...(reply
       ? { reply: "choice" in reply ? { choice: reply.choice } : { text: reply.text } }
       : {}),
   };
 }
 
+/**
+ * Another device's answer the asking machine took, from its settled notice (#330): undefined for
+ * any other notice, or one naming this browser.
+ */
+function wonBy(ctx: Ctx, notice: Settled): InboxItem["answeredBy"] {
+  const by = notice.outcome === "device" ? notice.device : undefined;
+  if (!by || by === ctx.device.id) return undefined;
+  const reply =
+    notice.choice !== undefined
+      ? { choice: notice.choice }
+      : notice.text !== undefined
+        ? { text: notice.text }
+        : undefined;
+  return reply && { device: ctx.dir.members.get(by)?.member.name ?? by, reply };
+}
+
 /** Opens a decision a push carried (or named, when it did not fit). */
 export async function openPushedDecision(ctx: Ctx, item: SealedItem): Promise<InboxItem> {
   const sent = (await store.get("answers", ctx.account)) ?? {};
-  return openDecision(ctx, { item, cursor: "", receivedAt: "" }, sent);
+  const opened = await openDecision(ctx, { item, cursor: "", receivedAt: "" }, sent);
+  await hold(ctx);
+  return opened;
 }
 
 /**
@@ -919,7 +1235,7 @@ export async function loadInbox(ctx: Ctx, inbox: Inbox = { items: [], rejected: 
     if (s.item.kind === "waiting") {
       // Only tells whether the agent waits: one that fails to open costs that and nothing else.
       try {
-        const { signer, body } = await openAsync(expectKind(s.item, "waiting"), me(ctx), ctx.dir);
+        const { signer, body } = await openMachine(ctx, s.item, "waiting");
         const w = body as Waiting;
         const key = `${signer.id}/${w.decisionId}`;
         const had = waits[key];
@@ -930,8 +1246,9 @@ export async function loadInbox(ctx: Ctx, inbox: Inbox = { items: [], rejected: 
     if (s.item.kind === "settled") {
       // Only tells how a decision closed: one that fails to open costs that and nothing else.
       try {
-        const { body } = await openAsync(expectKind(s.item, "settled"), me(ctx), ctx.dir);
-        closings.set(body.itemId, { outcome: body.outcome, at: s.receivedAt });
+        const { signer, body } = await openMachine(ctx, s.item, "settled");
+        // Keyed by machine: a notice closes only the machine's own items (#362).
+        closings.set(`${signer.id}/${body.itemId}`, { notice: body, at: s.receivedAt });
       } catch {}
       return;
     }
@@ -957,18 +1274,28 @@ export async function loadInbox(ctx: Ctx, inbox: Inbox = { items: [], rejected: 
     cursor = page.cursor;
     if (page.items.length < 100) break;
   }
+  // The machine names the winner after the answer, so its notice often lists without the
+  // decision, which an earlier read already holds.
+  for (const [key, { notice }] of closings) {
+    const item = byId.get(notice.itemId);
+    const answeredBy = wonBy(ctx, notice);
+    if (item && answeredBy && !item.reply && key === `${item.machine.id}/${notice.itemId}`)
+      byId.set(notice.itemId, { ...item, answeredBy });
+  }
   // Only the machine that asked can say its agent waits on the question.
   const items = [...byId.values()].map((i) => {
     const w = waits[`${i.machine.id}/${i.decision.id}`];
     const { waitingSince: _, ...rest } = i;
     return w?.state === "waiting" ? { ...rest, waitingSince: w.at } : rest;
   });
+  await hold(ctx);
   return { items, cursor, rejected, retry, waits } satisfies Inbox;
 }
 
 /** Signs the answer and seals it to the machine that asked, which must still be active. */
 export async function answer(ctx: Ctx, item: InboxItem, reply: Reply): Promise<string> {
   const fresh = await refresh(ctx);
+  await hold(fresh);
   const machine = fresh.dir.members.get(item.machine.id);
   if (!machine?.active) throw new Error(`${item.machine.name} was revoked`);
   const answeredAt = now();
@@ -1003,14 +1330,17 @@ async function openPermission(
   s: Stored,
   sent: Record<string, PromptReply & { answeredAt: string }>,
 ): Promise<PromptItem> {
-  const { signer: machine, body } = await openAsync(
-    expectKind(s.item, "permission"),
-    me(ctx),
-    ctx.dir,
-  );
+  const { signer: machine, body } = await openMachine(ctx, s.item, "permission");
   const reply = sent[body.id];
+  const p = body as Permission;
   return {
-    permission: body as Permission,
+    // What the owner reads shows bidi and invisible characters as escapes (#357).
+    permission: {
+      ...p,
+      summary: visible(p.summary),
+      ...(p.description !== undefined ? { description: visible(p.description) } : {}),
+      suggestions: p.suggestions.map((g) => ({ ...g, rule: visible(g.rule) })),
+    },
     machine,
     receivedAt: s.receivedAt,
     ...(s.answeredAt ? { answeredAt: s.answeredAt } : {}),
@@ -1024,18 +1354,20 @@ const stripTime = ({ answeredAt: _, ...reply }: PromptReply & { answeredAt: stri
 /** Opens a permission prompt a push carried (or named). */
 export async function openPushedPermission(ctx: Ctx, item: SealedItem): Promise<PromptItem> {
   const sent = (await store.get("promptAnswers", ctx.account)) ?? {};
-  return openPermission(ctx, { item, cursor: "", receivedAt: "" }, sent);
+  const opened = await openPermission(ctx, { item, cursor: "", receivedAt: "" }, sent);
+  await hold(ctx);
+  return opened;
 }
 
 /** Opens a waiting notice, with the machine that signed it. */
 export async function openWaiting(ctx: Ctx, item: SealedItem) {
-  const { signer, body } = await openAsync(expectKind(item, "waiting"), me(ctx), ctx.dir);
+  const { signer, body } = await openMachine(ctx, item, "waiting");
   return { machine: signer.id, waiting: body as Waiting };
 }
 
 /** Opens a settled notice, with the machine that signed it. */
 export async function openSettled(ctx: Ctx, item: SealedItem) {
-  const { signer, body } = await openAsync(expectKind(item, "settled"), me(ctx), ctx.dir);
+  const { signer, body } = await openMachine(ctx, item, "settled");
   return { machine: signer.id, settled: body as Settled };
 }
 
@@ -1052,7 +1384,10 @@ export async function loadSettled(ctx: Ctx, cursor?: string) {
       } catch {}
     }
     at = page.cursor;
-    if (page.items.length < 100) return { settled: out, cursor: at };
+    if (page.items.length < 100) {
+      await hold(ctx);
+      return { settled: out, cursor: at };
+    }
   }
 }
 
@@ -1081,18 +1416,19 @@ async function readAll<T>(
 /** The prompts waiting now, whose answer window is still open. */
 export async function loadPrompts(ctx: Ctx): Promise<PromptItem[]> {
   const sent = (await store.get("promptAnswers", ctx.account)) ?? {};
-  return readAll("permission", { open: true }, (s) => openPermission(ctx, s, sent));
+  const open = await readAll("permission", { open: true }, (s) => openPermission(ctx, s, sent));
+  await hold(ctx);
+  return open;
 }
 
 /** The last 7 days of prompts, with how each ended (the server keeps a week). */
 export async function loadPromptLog(ctx: Ctx): Promise<PromptItem[]> {
   const sent = (await store.get("promptAnswers", ctx.account)) ?? {};
   const permissions = await readAll("permission", {}, (s) => openPermission(ctx, s, sent));
-  const settled = await readAll("settled", {}, (s) =>
-    openAsync(expectKind(s.item, "settled"), me(ctx), ctx.dir),
-  );
+  const settled = await readAll("settled", {}, (s) => openMachine(ctx, s.item, "settled"));
   // A notice counts only from the machine that asked.
   const byId = new Map(settled.map((x) => [`${x.signer.id}/${x.body.itemId}`, x.body]));
+  await hold(ctx);
   return permissions.map((p) => {
     const st = byId.get(`${p.machine.id}/${p.permission.id}`);
     return st ? { ...p, settled: st as Settled } : p;
@@ -1109,6 +1445,7 @@ export async function answerPermission(
   reply: PromptReply,
 ): Promise<string> {
   const fresh = await refresh(ctx);
+  await hold(fresh);
   const machine = fresh.dir.members.get(item.machine.id);
   if (!machine?.active) throw new Error(`${item.machine.name} was revoked`);
   const answeredAt = now();
@@ -1141,7 +1478,8 @@ export async function answerPermission(
 export interface Quotas {
   cards: QuotaCardData[];
   takenAt?: string;
-  errors: { provider: string; machine: string; error: string }[];
+  /** Providers CodexBar failed for with no windows to keep (#450). */
+  errors: { provider: string; machine?: string; error: string }[];
   rejected: { id: string; error: string }[];
 }
 
@@ -1152,7 +1490,7 @@ export async function loadQuotas(ctx: Ctx): Promise<Quotas> {
   for (const s of stored) {
     let opened: Awaited<ReturnType<typeof openAsync<"quota">>>;
     try {
-      opened = await openAsync(expectKind(s.item, "quota"), me(ctx), ctx.dir);
+      opened = await openMachine(ctx, s.item, "quota");
     } catch (e) {
       out.rejected.push({ id: s.item.id, error: e instanceof Error ? e.message : String(e) });
       continue;
@@ -1160,7 +1498,17 @@ export async function loadQuotas(ctx: Ctx): Promise<Quotas> {
     const { signer: machine, body } = opened;
     if (!out.takenAt || body.takenAt > out.takenAt) out.takenAt = body.takenAt;
     for (const p of body.providers) {
-      if (p.error) out.errors.push({ provider: p.provider, machine: machine.name, error: p.error });
+      // A failure with windows is said on their group; one with nothing to show, on a group of
+      // its own.
+      if (p.error && p.windows.length === 0)
+        out.errors.push({
+          provider: p.provider,
+          ...(machines > 1 ? { machine: machine.name } : {}),
+          error: p.error,
+        });
+      const stale = p.error
+        ? { updatedAt: p.updatedAt ?? body.takenAt, error: p.error }
+        : undefined;
       for (const w of p.windows) {
         const alerts = body.alerts.filter((a) => a.provider === p.provider && a.window === w.id);
         // The card's state follows the pace alert; "low" only notifies.
@@ -1172,10 +1520,12 @@ export async function loadQuotas(ctx: Ctx): Promise<Quotas> {
           ...(alert ? { alert } : {}),
           alerts,
           snapshot: body.id,
+          ...(stale ? { stale } : {}),
         });
       }
     }
   }
+  await hold(ctx);
   return out;
 }
 
@@ -1194,7 +1544,7 @@ export async function loadRuns(ctx: Ctx): Promise<Runs> {
     const page = await api.items("run", cursor);
     for (const s of page.items) {
       try {
-        const { signer, body } = await openAsync(expectKind(s.item, "run"), me(ctx), ctx.dir);
+        const { signer, body } = await openMachine(ctx, s.item, "run");
         out.items.push({ run: body, machine: signer.name });
       } catch (e) {
         if (e instanceof ProtocolError && e.code === "revoked-signer") continue;
@@ -1204,5 +1554,6 @@ export async function loadRuns(ctx: Ctx): Promise<Runs> {
     cursor = page.cursor;
     if (page.items.length < 100) break;
   }
+  await hold(ctx);
   return out;
 }

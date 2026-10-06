@@ -7,7 +7,7 @@ export type Prefs = {
   grouping: "none" | "machine" | "waiting";
   historyOpen: boolean;
   theme: "system" | "light" | "dark";
-  /** When a question's row carries its answer buttons on a phone (#138). */
+  /** When a question's row carries its answer buttons on narrow screens (#138). */
   rowAnswers: "always" | "waiting" | "never";
   /** 12- or 24-hour times; "system" follows the browser's language (#161). */
   clock: "system" | "12" | "24";

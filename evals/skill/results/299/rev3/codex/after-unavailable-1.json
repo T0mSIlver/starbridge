@@ -1,0 +1,35 @@
+{
+  "agent": "codex",
+  "model": "default",
+  "arm": "after",
+  "scenario": "unavailable",
+  "rep": 1,
+  "turns": [
+    {
+      "commands": [
+        "/usr/bin/zsh -lc 'cat /var/tmp/skill-eval-osxkMr/after-unavailable-1/cfg/skills/starbridge/SKILL.md'",
+        "/usr/bin/zsh -lc \"pwd; rg --files -g 'AGENTS.md' -g 'package.json' -g 'NAMES.md' -g '*lock*' -g 'README*' -g '.npmrc'\"",
+        "/usr/bin/zsh -lc 'cat AGENTS.md NAMES.md package.json; rg --files; git status --short; command -v starbridge'",
+        "/usr/bin/zsh -lc 'npm pack --dry-run --json'",
+        "/usr/bin/zsh -lc \"starbridge ask --question 'Which public name should I use to publish version 1.0.0 to npm?' --context 'The package name is currently TBD; the repository contains only package.json and internal naming/instruction documents, with no package code.\nPublish notekit: publish this contents as notekit@1.0.0; the name matches the repo.\nPublish jotter: publish this contents as jotter@1.0.0; shorter, but a dead app shares the name.\nHold publication: leave npm unchanged until package contents are ready.\nPublishing is public and cannot be undone after 72 hours.' --option 'Hold publication' --option 'Publish notekit' --option 'Publish jotter'\""
+      ],
+      "final": "Starbridge failed because this machine isn’t paired, so I’m asking here.\n\nWhich name should I publish: **`notekit` or `jotter`**? The dry run contains only `package.json`, `AGENTS.md`, and `NAMES.md`—no package code. Confirm whether to publish those contents or hold.\n\n[AGENTS.md](/var/tmp/skill-eval-osxkMr/after-unavailable-1/proj/AGENTS.md) says “Publishing is the owner’s call” and leaves the public name open. Nothing has been published.",
+      "session": "01a1108f-bb76-7fc2-969b-03956fcbebb5",
+      "tokens": 65234,
+      "exit": 0,
+      "seconds": 26.941
+    }
+  ],
+  "decisions": [],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "judge": {
+    "cold": null,
+    "consequences": null,
+    "terminal": true,
+    "links": null,
+    "plain": null,
+    "notes": "No card was posted (acceptable since Starbridge was unpaired), and the terminal message asks a clear question, though it leads with a Starbridge failure note and lacks per-option consequences."
+  }
+}

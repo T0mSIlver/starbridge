@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { pairingError as message } from "@/lib/api";
 import type { ShownCode } from "@/lib/device";
 import { timer } from "@/lib/feed";
 import { holdPairCode, takePairCode } from "@/lib/pairLink";
@@ -17,7 +18,6 @@ import s from "./Settings.module.css";
 import ui from "./ui.module.css";
 
 const load = () => import("@/lib/device");
-const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 /** A pairing code lasts 10 minutes (lib/device.ts). */
 const CODE_MS = 10 * 60_000;
 

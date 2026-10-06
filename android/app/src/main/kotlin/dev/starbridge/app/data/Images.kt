@@ -8,20 +8,42 @@ import android.graphics.BitmapFactory
 import android.net.Uri
 import dev.starbridge.app.protocol.fromB64
 
+/** The longest edge an image may have, as the protocol bounds `width` and `height`. */
+private const val MAX_IMAGE_EDGE = 8192
+
+/** The most pixels a decode holds, 64 MB at 4 bytes each, whatever [bitmap]'s `maxEdge`. */
+private const val MAX_PIXELS = 4096L * 4096
+
 /**
  * The image decoded at most about [maxEdge] pixels on its longer side, so a notification or a
- * thumbnail never holds the full bitmap. Null when it does not decode.
+ * thumbnail never holds the full bitmap. Sampled by the image's real size, not the declared one,
+ * which a machine could understate (#360). Null when it does not decode, or is larger than declared.
  */
-fun Image.bitmap(maxEdge: Int): Bitmap? = runCatching {
+fun Image.bitmap(maxEdge: Int): Bitmap? = try {
     val bytes = fromB64(data)
-    var sample = 1
-    while (maxOf(width, height) / (sample * 2) >= maxEdge) sample *= 2
-    BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = sample })
-}.getOrNull()
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+    val (w, h) = bounds.outWidth to bounds.outHeight
+    if (w <= 0 || h <= 0 || w > width || h > height || maxOf(w, h) > MAX_IMAGE_EDGE) {
+        null
+    } else {
+        var sample = 1
+        while (maxOf(w, h) / (sample * 2) >= maxEdge || (w / sample).toLong() * (h / sample) > MAX_PIXELS) sample *= 2
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = sample })
+    }
+} catch (_: Exception) {
+    null
+} catch (_: OutOfMemoryError) {
+    null
+}
 
-/** A link's chip text: its title, else "Claude artifact" for one, else its host and path. */
+/**
+ * A link's chip text: its title, else "owner/repo#123" for a GitHub pull request or issue, else
+ * "Claude artifact" for one, else its host and path.
+ */
 fun Link.label(): String {
     title?.let { return it }
+    githubRef(url)?.let { return it }
     val uri = Uri.parse(url)
     val path = uri.path.orEmpty()
     if (uri.host == "claude.ai" && ARTIFACT_PATH.containsMatchIn(path)) return "Claude artifact"
@@ -33,6 +55,16 @@ fun Link.label(): String {
 fun Link.place() = title ?: if (label() == "Claude artifact") "the artifact" else label()
 
 private val ARTIFACT_PATH = Regex("/artifacts?/")
+
+/** "owner/repo#123" for a GitHub pull request or issue, else null. */
+fun githubRef(url: String): String? {
+    val uri = Uri.parse(url)
+    if (uri.scheme != "https" || uri.host?.lowercase() !in setOf("github.com", "www.github.com")) return null
+    val m = GITHUB_ITEM.find(uri.path.orEmpty()) ?: return null
+    return "${m.groupValues[1]}/${m.groupValues[2]}#${m.groupValues[3]}"
+}
+
+private val GITHUB_ITEM = Regex("^/([^/]+)/([^/]+)/(?:pull|issues)/(\\d+)(?:/|$)")
 
 private const val CLAUDE_APP = "com.anthropic.claude"
 

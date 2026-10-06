@@ -15,6 +15,10 @@
   padding: 0 0 calc(var(--size-bar-web) + env(safe-area-inset-bottom));
 }
 
+.withheld {
+  margin: var(--s3) var(--s4) 0;
+}
+
 .bottom {
   position: fixed;
   z-index: 10;
@@ -96,7 +100,12 @@
   /* The name stands on the mark's ground: its baseline on the mark's bottom edge (DESIGN.md). */
   align-items: baseline;
   gap: var(--s2);
-  padding: 0 var(--s2h) var(--s3);
+  /* Hugs the lockup, so its focus ring does too. */
+  justify-self: start;
+  margin-bottom: var(--s3);
+  padding: 0 var(--s2h);
+  border-radius: var(--radius-dense);
+  text-decoration: none;
 }
 
 .find {

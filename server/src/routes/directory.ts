@@ -90,10 +90,13 @@ function syncMembers(db: Database, account: string, dir: Directory): void {
   }
 }
 
-/** Wakes every active machine's answer long-polls: the account changed in a way they watch. */
+/**
+ * Wakes every machine's answer long-polls: the account changed in a way they watch. A machine
+ * the change just revoked is woken too, so it learns at once.
+ */
 export function wakeMachines(c: Context<Env>, account: string) {
   const rows = c.var.db
-    .query("SELECT id FROM members WHERE account_id = ? AND role = 'machine' AND active = 1")
+    .query("SELECT id FROM members WHERE account_id = ? AND role = 'machine'")
     .all(account) as { id: string }[];
   for (const r of rows) c.var.answers.wake(`${account}/${r.id}`);
 }
@@ -121,14 +124,24 @@ directoryRoutes.post("/directory", requireCaller("device"), async (c) => {
     if (seqOf(entry) !== entries.length)
       fail(409, "not-next", `the next entry has seq ${entries.length}`);
     // Every append and every client replays the whole chain, so its length is capped. The cap
-    // stops devices adding members; revoking stays possible, and each member is revoked once, so
-    // revocations never outnumber adds. Recovery may still add a few devices, so an owner who
-    // lost every device gets back in.
-    const { directoryEntries: cap, recoveryAdds } = c.var.config.limits;
-    if (entries.length >= cap && entryOp(entry) === "add") {
-      const recovered = entries
-        .slice(cap)
-        .filter((e) => e.signer === RECOVERY && entryOp(e) === "add");
+    // stops devices adding members and proposing recovery keys; revoking stays possible, and each
+    // member is revoked once, so revocations never outnumber adds, nor confirmations proposals.
+    // Recovery may still add a few devices, so an owner who lost every device gets back in.
+    const { directoryEntries: cap, recoveryAdds, recoveryProposals } = c.var.config.limits;
+    const op = entryOp(entry);
+    if (entries.length >= cap && op === "recovery") {
+      const proposed = entries.slice(cap).filter((e) => entryOp(e) === "recovery");
+      if (proposed.length >= recoveryProposals)
+        fail(
+          409,
+          "directory-full",
+          `a full directory takes ${recoveryProposals} recovery proposals`,
+        );
+    }
+    // A recovery adds with `recover` (older clients with `add`, signed by the recovery key).
+    const adds = (o: unknown) => o === "add" || o === "recover";
+    if (entries.length >= cap && adds(op)) {
+      const recovered = entries.slice(cap).filter((e) => e.signer === RECOVERY && adds(entryOp(e)));
       if (entry.signer !== RECOVERY || recovered.length >= recoveryAdds)
         fail(409, "directory-full", `a directory adds members in its first ${cap} entries only`);
     }

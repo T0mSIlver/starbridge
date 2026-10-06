@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -114,15 +115,13 @@ fun FindScreen(
     openPrompt: (String) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
-    initial: String = "",
 ) {
-    var query by rememberSaveable { mutableStateOf(initial) }
+    var query by rememberSaveable { mutableStateOf("") }
     val words = findWords(query)
     val needs = remember(words, decisions, prompts, now) {
         if (words.isEmpty()) emptyList()
         else prompts.filter { it.waiting(now) && matches(words, it.texts()) } +
-            decisions.filter { it.isOpen(now) && matches(words, it.texts()) }
-                .sortedWith(compareByDescending<Decision> { it.waiting }.thenByDescending { it.createdAt })
+            openQuestions(decisions, now).filter { matches(words, it.texts()) }
     }
     val past = remember(words, decisions, prompts, now) {
         if (words.isEmpty()) emptyList()
@@ -138,45 +137,49 @@ fun FindScreen(
     val focusManager = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
     LaunchedEffect(Unit) { focus.requestFocus() }
-    SearchBar(
-        inputField = {
-            SearchBarDefaults.InputField(
-                query = query,
-                onQueryChange = { query = it },
-                onSearch = { (needs.firstOrNull() ?: past.firstOrNull()?.second)?.let { keyboard?.hide(); open(it) } },
-                expanded = true,
-                onExpandedChange = { if (!it) onBack() },
-                placeholder = { Text("Find") },
-                leadingIcon = { IconButton(onClick = onBack) { Symbol(Sym.Back, size = 22.dp, contentDescription = "Back") } },
-                trailingIcon = {
-                    if (query.isNotEmpty()) IconButton(onClick = { query = ""; focus.requestFocus() }) { Symbol(Sym.Close, size = 22.dp, contentDescription = "Clear") }
-                },
-                modifier = Modifier.focusRequester(focus).onPreviewKeyEvent {
-                    if (it.type == KeyEventType.KeyDown && it.key == Key.DirectionDown && (needs.isNotEmpty() || past.isNotEmpty())) {
-                        focusManager.moveFocus(FocusDirection.Down)
-                    } else false
-                },
-            )
-        },
-        expanded = true,
-        onExpandedChange = { if (!it) onBack() },
-        // The scaffold under it already keeps clear of the system bars.
-        windowInsets = WindowInsets(0),
-        modifier = modifier.onPreviewKeyEvent {
-            if (it.type != KeyEventType.KeyDown || it.key != Key.Escape) return@onPreviewKeyEvent false
-            if (query.isEmpty()) onBack() else { query = ""; focus.requestFocus() }
-            true
-        },
-    ) {
-        val accent = StarbridgeTheme.colors.accent
-        val dim = MaterialTheme.colorScheme.onSurfaceVariant
-        LazyColumn(
-            contentPadding = PaddingValues(start = Spacing.s3, end = Spacing.s3, top = Spacing.s2, bottom = Spacing.s6),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
+    // NavDisplay hands its entries its full height as a minimum, which SearchBar passes on to its
+    // field: the field then fills the screen and pushes the results below it (#341).
+    Box(modifier.fillMaxSize()) {
+        SearchBar(
+            inputField = {
+                SearchBarDefaults.InputField(
+                    query = query,
+                    onQueryChange = { query = it },
+                    onSearch = { (needs.firstOrNull() ?: past.firstOrNull()?.second)?.let { keyboard?.hide(); open(it) } },
+                    expanded = true,
+                    onExpandedChange = { if (!it) onBack() },
+                    placeholder = { Text("Find") },
+                    leadingIcon = { IconButton(onClick = onBack) { Symbol(Sym.Back, size = 22.dp, contentDescription = "Back") } },
+                    trailingIcon = {
+                        if (query.isNotEmpty()) IconButton(onClick = { query = ""; focus.requestFocus() }) { Symbol(Sym.Close, size = 22.dp, contentDescription = "Clear") }
+                    },
+                    modifier = Modifier.focusRequester(focus).onPreviewKeyEvent {
+                        if (it.type == KeyEventType.KeyDown && it.key == Key.DirectionDown && (needs.isNotEmpty() || past.isNotEmpty())) {
+                            focusManager.moveFocus(FocusDirection.Down)
+                        } else false
+                    },
+                )
+            },
+            expanded = true,
+            onExpandedChange = { if (!it) onBack() },
+            // The scaffold under it already keeps clear of the system bars.
+            windowInsets = WindowInsets(0),
+            modifier = Modifier.onPreviewKeyEvent {
+                if (it.type != KeyEventType.KeyDown || it.key != Key.Escape) return@onPreviewKeyEvent false
+                if (query.isEmpty()) onBack() else { query = ""; focus.requestFocus() }
+                true
+            },
         ) {
-            if (words.isNotEmpty() && needs.isEmpty() && past.isEmpty()) item(key = "none") { NothingMatches() }
-            results("needs", "Needs you", accent, needs.map { now to it }, words, now, open)
-            results("history", "History", dim, past, words, now, open)
+            val accent = StarbridgeTheme.colors.accent
+            val dim = MaterialTheme.colorScheme.onSurfaceVariant
+            LazyColumn(
+                contentPadding = PaddingValues(start = Spacing.s3, end = Spacing.s3, top = Spacing.s2, bottom = Spacing.s6),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                if (words.isNotEmpty() && needs.isEmpty() && past.isEmpty()) item(key = "none") { NothingMatches() }
+                results("needs", "Needs you", accent, needs.map { now to it }, words, now, open)
+                results("history", "History", dim, past, words, now, open)
+            }
         }
     }
 }

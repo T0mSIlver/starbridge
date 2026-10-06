@@ -28,6 +28,8 @@ export type InboxItem = {
   reply?: Reply;
   /** How the machine closed it, when its settled notice did rather than an answer. */
   settled?: Settled["outcome"];
+  /** Another device's answer the machine took, and that device's name, from its settled notice. */
+  answeredBy?: { device: string; reply: Reply };
   /** Since when its agent waits on it, having run out of other work (#122). */
   waitingSince?: string;
 };
@@ -65,6 +67,8 @@ export type QuotaCardData = {
   alerts: QuotaAlert[];
   /** The snapshot's id. */
   snapshot: string;
+  /** Set when CodexBar failed for the provider: the window is the last one read, at `updatedAt`. */
+  stale?: { updatedAt: string; error: string };
 };
 
 /** An opened and verified run, and the name of the machine that signed it. */

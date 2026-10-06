@@ -1,0 +1,75 @@
+{
+  "agent": "pi",
+  "model": "zai/glm-5.3-flash",
+  "arm": "before",
+  "scenario": "design-pick",
+  "rep": 3,
+  "turns": [
+    {
+      "commands": [
+        "git branch -a && git status && ls shots/",
+        "starbridge ask \\\n  --question \"Which settings-screen variant should I ship (merge into main)?\" \\\n  --context \"Both variants are done and pass all tests.\nShip = merging the variant's branch into main.\nFirst image is compact (branch settings-compact), second is roomy (branch settings-roomy).\" \\\n  --option \"Compact\" --option \"Roomy\" \\\n  --image shots/compact.png --image shots/roomy.png",
+        "starbridge wait d_D3TrC5cOr-fLTxJW --timeout 5m",
+        "starbridge wait d_D3TrC5cOr-fLTxJW --timeout 5m",
+        "starbridge wait d_D3TrC5cOr-fLTxJW --timeout 5m"
+      ],
+      "final": "Card posted (`d_D3TrC5cOr-fLTxJW`) with both screenshots. Since only this answer unblocks the merge, I'll wait for it.",
+      "session": "01a11064-d8d0-7615-9450-cf6b89563bef",
+      "tokens": 28077,
+      "costUsd": 0,
+      "exit": 143,
+      "seconds": 720.083
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_D3TrC5cOr-fLTxJW",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-06T08:47:10Z",
+      "question": "Which settings-screen variant should I ship (merge into main)?",
+      "context": "Both variants are done and pass all tests.\nShip = merging the variant's branch into main.\nFirst image is compact (branch settings-compact), second is roomy (branch settings-roomy).",
+      "options": [
+        "Compact",
+        "Roomy"
+      ],
+      "recommended": "Compact",
+      "agent": "pi",
+      "default": {
+        "action": "Waits for your answer"
+      },
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "01a11064-d8d0-7615-9450-cf6b89563bef"
+      },
+      "images": [
+        {
+          "type": "image/png",
+          "width": 360,
+          "height": 640
+        },
+        {
+          "type": "image/png",
+          "width": 360,
+          "height": 640
+        }
+      ],
+      "replies": true
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "judge": {
+    "cold": true,
+    "consequences": false,
+    "terminal": false,
+    "links": null,
+    "plain": true,
+    "notes": "The card says what shipping means (merging into main) but not how Compact and Roomy differ or what each choice changes, and it doesn't say why Compact is recommended, so the user has to judge from the screenshots alone."
+  }
+}

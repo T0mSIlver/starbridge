@@ -1,0 +1,68 @@
+{
+  "agent": "opencode",
+  "model": "zai-coding-plan/glm-5.3-flash",
+  "arm": "after",
+  "scenario": "design-pick",
+  "rep": 3,
+  "turns": [
+    {
+      "commands": [
+        "git status && git branch -a",
+        "ls -la shots/",
+        "git log --oneline main..settings-compact; echo ---; git log --oneline main..settings-roomy",
+        "git diff --stat main...settings-compact; echo ---; git diff --stat main...settings-roomy",
+        "git log --oneline --all --graph | head -30; echo ---; git rev-parse main settings-compact settings-roomy",
+        "git status; ls",
+        "starbridge ask \\\n  --question 'Which settings-screen variant should I merge into main?' \\\n  --context 'Both variants are done and pass the tests; shipping means merging the picked branch into main.\nRoomy (first image): 6 rows per screen, same spacing as the inbox - the other 3 settings need scrolling.\nCompact (second image): 9 rows per screen, tighter rows - all 9 settings fit without scrolling.' \\\n  --option 'Roomy (6 rows)' --option 'Compact (9 rows)' \\\n  --image shots/roomy.png --image shots/compact.png \\\n  --waiting",
+        "starbridge wait d_kvQEdrEFEjBC8VtR --timeout 5m"
+      ],
+      "final": "No answer yet — I'll keep waiting.",
+      "session": "ses_eee6a385affeufhy5o7cdp7Xwz",
+      "tokens": 31535,
+      "exit": 143,
+      "seconds": 720.108
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_kvQEdrEFEjBC8VtR",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-06T14:21:41Z",
+      "question": "Which settings-screen variant should I merge into main?",
+      "context": "Both variants are done and pass the tests; shipping means merging the picked branch into main.\nRoomy (first image): 6 rows per screen, same spacing as the inbox - the other 3 settings need scrolling.\nCompact (second image): 9 rows per screen, tighter rows - all 9 settings fit without scrolling.",
+      "options": [
+        "Roomy (6 rows)",
+        "Compact (9 rows)"
+      ],
+      "recommended": "Roomy (6 rows)",
+      "default": {
+        "action": "Waits for your answer"
+      },
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": ""
+      },
+      "images": [
+        {
+          "type": "image/png",
+          "width": 360,
+          "height": 640
+        },
+        {
+          "type": "image/png",
+          "width": 360,
+          "height": 640
+        }
+      ],
+      "replies": true
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": []
+}

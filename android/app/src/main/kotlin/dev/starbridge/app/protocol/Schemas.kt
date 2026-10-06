@@ -59,7 +59,10 @@ data class Member(val id: String, val role: String, val name: String, val boxPk:
     }
 }
 
-/** An add or revoke entry: `member` and `recoveryPk` on add, `id` on revoke. */
+/**
+ * A directory entry: `member` (and `recoveryPk` on entry 0) on add and recover, `id` on revoke,
+ * `recoveryPk` on a recovery proposal, `proposal` on its confirmation.
+ */
 @Serializable
 data class DirectoryEntry(
     val v: Int,
@@ -71,6 +74,7 @@ data class DirectoryEntry(
     val member: Member? = null,
     val recoveryPk: String? = null,
     val id: String? = null,
+    val proposal: Int? = null,
 ) {
     fun check() {
         schema(v == 1, "v")
@@ -84,10 +88,25 @@ data class DirectoryEntry(
                 member!!.check()
                 recoveryPk?.let { b64(it, "recoveryPk") }
             }
+            "recover" -> {
+                schema(member != null, "member")
+                member!!.check()
+            }
             "revoke" -> {
                 schema(id != null, "id")
                 id(id!!, "id")
             }
+            "recovery" -> {
+                schema(recoveryPk != null, "recoveryPk")
+                b64(recoveryPk!!, "recoveryPk")
+            }
+            "recovery-confirm" -> {
+                schema(proposal != null && proposal >= 0, "proposal")
+                schema(recoveryPk != null, "recoveryPk")
+                b64(recoveryPk!!, "recoveryPk")
+            }
+            // An op this client does not know: refused, since skipping a recovery confirmation
+            // would keep a replaced key trusted (PROTOCOL.md, "Directory").
             else -> schema(false, "op")
         }
     }
@@ -109,11 +128,28 @@ val SIGNER_ROLE = mapOf(
 val ITEM_KINDS = SIGNER_ROLE.keys
 val KINDS = setOf("directory") + ITEM_KINDS
 
+/**
+ * A directory its signer vouches for (DirectoryHead in schemas.ts): machines sign the longest
+ * they know into every item, and devices hold items while one an active machine signed is
+ * missing from their chain.
+ */
+@Serializable
+data class DirectoryHead(val length: Int, val head: String, val by: String? = null) {
+    fun check() {
+        schema(length in 1..100_000, "dir.length")
+        b64(head, "dir.head")
+        schema(head.length == 43, "dir.head")
+        by?.let { id(it, "dir.by") }
+    }
+}
+
 /** A sealed item's body: its id, the item its `re` hint names, and the members it is sealed to. */
 interface ItemBody {
     val id: String
     val re: String? get() = null
     val recipients: List<String>
+    /** The directory head a machine signed into it; devices sign theirs elsewhere. */
+    val dir: DirectoryHead? get() = null
 }
 
 /** `body` is the JSON text exactly as signed; verifiers check the signature before parsing it. */
@@ -264,10 +300,12 @@ data class Decision(
     val answerIn: DecisionLink? = null,
     /** The machine takes a typed reply in place of an option (#201); older machines omit it. */
     val replies: Boolean? = null,
+    override val dir: DirectoryHead? = null,
 ) : ItemBody {
     override val recipients get() = to
 
     fun check() {
+        dir?.check()
         schema(v == 1, "v")
         id(id, "id")
         schema(to.isNotEmpty(), "to")
@@ -355,10 +393,12 @@ data class Permission(
     val suggestions: List<PermissionSuggestion>,
     val expiresAt: String,
     val source: Source,
+    override val dir: DirectoryHead? = null,
 ) : ItemBody {
     override val recipients get() = to
 
     fun check() {
+        dir?.check()
         schema(v == 1, "v")
         id(id, "id")
         schema(to.isNotEmpty(), "to")
@@ -423,11 +463,18 @@ data class Settled(
     val at: String,
     val outcome: String? = null,
     val device: String? = null,
+    /** With outcome "device" on a decision: the answer the machine took (#330). */
+    val choice: String? = null,
+    val text: String? = null,
+    override val dir: DirectoryHead? = null,
+    /** With outcome "device" on a permission: what that device answered (#349). */
+    val behavior: String? = null,
 ) : ItemBody {
     override val re get() = itemId
     override val recipients get() = to
 
     fun check() {
+        dir?.check()
         schema(v == 1, "v")
         id(id, "id")
         id(itemId, "itemId")
@@ -437,6 +484,10 @@ data class Settled(
         device?.let { id(it, "device") }
         time(at, "at")
         schema((outcome == "device") == (device != null), "device is set exactly when outcome is device")
+        choice?.let { len(it, 0, 100, "choice") }
+        text?.let { len(it, 0, 4000, "text") }
+        schema(device != null || (choice == null && text == null), "choice and text come only with a device's outcome")
+        schema(choice == null || text == null, "at most one of choice and text")
     }
 }
 
@@ -452,11 +503,13 @@ data class Waiting(
     val to: List<String>,
     val at: String,
     val state: String,
+    override val dir: DirectoryHead? = null,
 ) : ItemBody {
     override val re get() = decisionId
     override val recipients get() = to
 
     fun check() {
+        dir?.check()
         schema(v == 1, "v")
         id(id, "id")
         id(decisionId, "decisionId")
@@ -492,10 +545,12 @@ data class Run(
     val at: String,
     val progress: RunProgress? = null,
     val exit: RunExit? = null,
+    override val dir: DirectoryHead? = null,
 ) : ItemBody {
     override val recipients get() = to
 
     fun check() {
+        dir?.check()
         schema(v == 1, "v")
         id(id, "id")
         schema(to.isNotEmpty(), "to")
@@ -562,6 +617,8 @@ data class QuotaProvider(
     val account: String? = null,
     val windows: List<QuotaWindow>,
     val error: String? = null,
+    /** With `error`: when `windows` were read, the last time CodexBar did not fail. */
+    val updatedAt: String? = null,
 )
 
 @Serializable
@@ -572,10 +629,12 @@ data class QuotaSnapshot(
     val takenAt: String,
     val providers: List<QuotaProvider>,
     val alerts: List<QuotaAlert>,
+    override val dir: DirectoryHead? = null,
 ) : ItemBody {
     override val recipients get() = to
 
     fun check() {
+        dir?.check()
         schema(v == 1, "v")
         id(id, "id")
         schema(to.isNotEmpty(), "to")
