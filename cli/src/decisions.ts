@@ -77,6 +77,8 @@ const IMAGE_BYTES = 384 * 1024;
 
 /** Exit code when nobody answered before `--timeout`. */
 export const EXIT_TIMEOUT = 2;
+/** `wait <id>`'s exit code when the owner snoozed the decision (#571): no answer before then. */
+export const EXIT_SNOOZED = 3;
 /** Exit code on Ctrl-C, as a shell reports SIGINT. */
 export const EXIT_INTERRUPTED = 130;
 /** The server holds a long-poll at most this long (PROTOCOL.md). */
@@ -379,7 +381,21 @@ export async function setWaiting(
   opts: { id?: string; state: Waiting["state"] },
 ): Promise<number> {
   if (!opts.id) throw new UsageError(`${opts.state} needs a decision id`);
-  await postWaiting(ctx, session(ctx), opts.id, opts.state);
+  const s = session(ctx);
+  await postWaiting(ctx, s, opts.id, opts.state);
+  // Without the agent nothing polls meanwhile: read every page since the question was asked,
+  // so the owner's latest snooze is among them.
+  if (opts.state === "waiting") {
+    let cursor = ctx.store.state().asked[opts.id]?.cursor;
+    for (let page = 0; page < 100; page++) {
+      const next = (await poll(ctx, s, { cursor, seconds: 0, shared: false })).cursor;
+      if (next === cursor) break;
+      cursor = next;
+    }
+  }
+  const until = snoozedUntil(ctx.store.state(), opts.id, ctx.now());
+  if (until && opts.state === "waiting")
+    ctx.out(snoozeLine(opts.id, ctx.store.state().asked[opts.id]?.question, until, ctx.now()));
   return 0;
 }
 
@@ -482,6 +498,71 @@ export function checkAnswer(
 }
 
 /**
+ * Keeps the owner's snooze of a decision this machine asked (#571), when a device it was sealed
+ * to signed it and it is newer than the one kept. A snooze is not an answer: it only tells `wait`
+ * and `waiting` that none comes before its time.
+ */
+export function acceptSnooze(raw: unknown, s: Session, dir: Directory, st: State): void {
+  const item = parseWith(SealedItem, raw);
+  if (item.kind !== "snooze") throw new ProtocolError("wrong-kind", item.kind);
+  const { body, signer } = open(
+    item as SealedItem & { kind: "snooze" },
+    { id: s.machine.id, box: s.keys.box },
+    dir,
+  );
+  const decision = st.asked[body.decisionId];
+  if (!decision?.to?.includes(signer.id)) return;
+  const kept = decision.snooze;
+  if (kept && Date.parse(kept.at) >= Date.parse(body.at)) return;
+  decision.snooze = { until: body.until, at: body.at };
+}
+
+/** Until when the owner snoozed decision `id`, while that time is still to come and no answer is. */
+export function snoozedUntil(st: State, id: string, now: Date): string | undefined {
+  const a = st.asked[id];
+  const until = a?.snooze?.until;
+  // Held while the directory is behind, as answers are: a newer word may be among the held.
+  if (!until || a.settled || st.answers[id] || st.behind) return undefined;
+  // Back now ends at its own time, read before this machine's clock: the device's may run ahead.
+  if (Date.parse(until) <= Date.parse(a.snooze?.at ?? "")) return undefined;
+  if (Date.parse(until) <= now.getTime()) return undefined;
+  return until;
+}
+
+/** Decision `id`'s snooze, once per snooze: `wait` says it and exits, then waits on. */
+export function takeSnooze(store: Ctx["store"], id: string, now: Date): string | undefined {
+  const st = store.state();
+  if (!snoozedUntil(st, id, now) || st.asked[id]?.snooze?.told) return undefined;
+  let until: string | undefined;
+  store.updateState((st) => {
+    const s = st.asked[id]?.snooze;
+    if (!s || s.told || !snoozedUntil(st, id, now)) return;
+    s.told = true;
+    until = s.until;
+  });
+  return until;
+}
+
+/**
+ * "18:00", "tomorrow 09:00", "Fri 09:00": when a snooze ends, in this machine's zone and 24-hour
+ * time, as an agent reads it.
+ */
+export function snoozeTime(until: Date, now: Date): string {
+  const time = until.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+  const day = (d: Date) => d.toDateString();
+  if (day(until) === day(now)) return time;
+  const tomorrow = new Date(now);
+  tomorrow.setDate(now.getDate() + 1);
+  if (day(until) === day(tomorrow)) return `tomorrow ${time}`;
+  return `${until.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })} ${time}`;
+}
+
+/** The line `wait` and `waiting` print for a snoozed decision; the skill tells agents what it means. */
+export function snoozeLine(id: string, question: string | undefined, until: string, now: Date) {
+  return `Snoozed ${id}${question ? ` (${question})` : ""} until ${snoozeTime(new Date(until), now)}: no answer before then.`;
+}
+
+/**
  * Whether decision `id`'s answer may reach its session: not settled, taking answers (a Done for
  * one answered on its own page), and the machine not behind on the directory.
  */
@@ -507,11 +588,13 @@ export function noteHead(
 ): string | undefined {
   const item = SealedItem.safeParse(raw);
   const kind = item.success ? item.data.kind : undefined;
-  if (!item.success || (kind !== "answer" && kind !== "permission-answer")) return undefined;
-  let opened: ReturnType<typeof open<"answer" | "permission-answer">>;
+  // A snooze is a device's word too, with the head it signed (#571).
+  if (!item.success || (kind !== "answer" && kind !== "permission-answer" && kind !== "snooze"))
+    return undefined;
+  let opened: ReturnType<typeof open<"answer" | "permission-answer" | "snooze">>;
   try {
     opened = open(
-      item.data as SealedItem & { kind: "answer" | "permission-answer" },
+      item.data as SealedItem & { kind: "answer" | "permission-answer" | "snooze" },
       { id: s.machine.id, box: s.keys.box },
       dir,
     );
@@ -636,7 +719,11 @@ export async function poll(
       delete st.held;
       // Every head first: a withheld entry any answer names holds back the whole page.
       const signers = new Map(items.map((raw) => [raw, noteHead(raw, s, dir, entries, st)]));
-      const answers = items.filter((raw) => signers.get(raw) !== undefined);
+      // Snoozes wait with the answers (#571): a device's word, to read once nothing is withheld.
+      const answers = items.filter(
+        (raw) =>
+          signers.get(raw) !== undefined || (raw as { kind?: unknown } | null)?.kind === "snooze",
+      );
       const behind = behindBy(st, dir, entries);
       if (behind) {
         // Kept, not dropped: the device's client counts them sent, and the server takes no other.
@@ -648,7 +735,12 @@ export async function poll(
         dropRevoked(st, dir);
         for (const raw of items) {
           try {
-            // Machines' inboxes hold answers to decisions and to permission prompts (#57).
+            // Machines' inboxes hold answers to decisions and to permission prompts (#57), and
+            // the owner's snoozes (#571).
+            if ((raw as { kind?: unknown } | null)?.kind === "snooze") {
+              acceptSnooze(raw, s, dir, st);
+              continue;
+            }
             if ((raw as { kind?: unknown } | null)?.kind === "permission-answer") {
               const { answer, device } = acceptPermissionAnswer(raw, s, dir, st, Date.now());
               const p = st.permissions?.[answer.permissionId];
@@ -978,6 +1070,13 @@ export async function wait(
     printAnswer(ctx, found.answer, found.question, opts.json);
     return 0;
   };
+  // Snoozed: said once, so a polling agent stops; the next `wait` waits on (#571).
+  const snoozed = () => {
+    const until = target ? takeSnooze(ctx.store, target, ctx.now()) : undefined;
+    if (!until || !target) return undefined;
+    printSnooze(ctx, target, ctx.store.state().asked[target]?.question, until, opts.json);
+    return EXIT_SNOOZED;
+  };
 
   await dropRevokedNow(ctx);
   const shut = closed();
@@ -986,6 +1085,7 @@ export async function wait(
   if (already) return report(already);
   if (target && !opts["no-mark"])
     await markWaiting(ctx, () => postWaiting(ctx, s, target, "waiting"));
+  // A snooze is told only after a poll: the one cached may be over, or answered since.
 
   let deadline = Number.POSITIVE_INFINITY;
   if (opts.timeout) deadline = ctx.now().getTime() + parseDuration(opts.timeout);
@@ -1020,7 +1120,24 @@ export async function wait(
     if (found) return report(found);
     const ended = closed();
     if (ended) throw ended;
+    const off = snoozed();
+    if (off !== undefined) return off;
   }
+}
+
+/** A snooze as `wait` prints it: the line, or `{decisionId, snoozedUntil}` with `--json`. */
+export function printSnooze(
+  ctx: Ctx,
+  id: string,
+  question: string | undefined,
+  until: string,
+  json?: boolean,
+) {
+  ctx.out(
+    json
+      ? JSON.stringify({ decisionId: id, snoozedUntil: until })
+      : snoozeLine(id, question, until, ctx.now()),
+  );
 }
 
 /** Why no answer to decision `id` will come, for `wait`: settled, answered elsewhere, or revoked. */

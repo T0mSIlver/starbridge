@@ -314,7 +314,7 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
         const opts = { id: positionals[0], state: command };
         return await withAgent(
           ctx,
-          (agent) => waitingVia(agent, opts),
+          (agent) => waitingVia(agent, opts, ctx),
           () => setWaiting(ctx, opts),
         );
       }
