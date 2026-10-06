@@ -883,7 +883,7 @@ async function main() {
     .getByRole("navigation", { name: "Main" })
     .getByRole("link", { name: "Settings" })
     .click();
-  // 12-hour times are the longest: "Will run out at Oct 12, 12:02 AM".
+  // 12-hour times are the longest: "Will run out on Oct 12 at 12:02 AM".
   await page.getByLabel("12-hour", { exact: true }).check({ force: true });
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.getByRole("link", { name: "Inbox" }).click();

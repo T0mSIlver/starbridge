@@ -51,8 +51,7 @@ import dev.starbridge.app.ui.Sym
 import dev.starbridge.app.ui.Symbol
 import dev.starbridge.app.ui.ago
 import dev.starbridge.app.ui.cardShape
-import dev.starbridge.app.ui.clock
-import dev.starbridge.app.ui.resetClock
+import dev.starbridge.app.ui.clockAt
 import dev.starbridge.app.ui.span
 import dev.starbridge.app.ui.theme.Radius
 import dev.starbridge.app.ui.theme.Sizes
@@ -151,14 +150,21 @@ private fun QuotaWindow.course(now: Instant): Course = when (val p = pace) {
 private class Tone(val color: Color, val word: String)
 
 @Composable
-private fun tone(window: QuotaWindow, now: Instant): Tone {
+private fun tone(window: QuotaWindow, now: Instant, absolute: Boolean): Tone {
     val c = StarbridgeTheme.colors
     val neutral = MaterialTheme.colorScheme.onSurfaceVariant
     val h24 = LocalClock24.current
     if (window.ended(now)) return Tone(neutral, "Window reset")
     return when (val pace = window.pace) {
         Pace.Even -> Tone(c.ok, "On pace")
-        is Pace.RunsOut -> Tone(c.bad, if (pace.at.isAfter(now)) "Will run out in ${span(now, pace.at)}" else "Ran out at ${clock(pace.at, h24)}")
+        is Pace.RunsOut -> Tone(
+            c.bad,
+            when {
+                !pace.at.isAfter(now) -> "Ran out ${clockAt(pace.at, now, h24)}"
+                absolute -> "Will run out ${clockAt(pace.at, now, h24)}"
+                else -> "Will run out in ${span(now, pace.at)}"
+            },
+        )
         is Pace.Unused -> Tone(c.warn, "Headroom unused")
         Pace.Unknown -> Tone(neutral, "Too early to tell")
     }
@@ -187,7 +193,7 @@ private fun ProviderCard(windows: List<QuotaWindow>, now: Instant, settings: Quo
 private fun WindowRow(window: QuotaWindow, now: Instant, settings: QuotaSettings, modifier: Modifier = Modifier) {
     val scheme = MaterialTheme.colorScheme
     val type = StarbridgeTheme.type
-    val tone = tone(window, now)
+    val tone = tone(window, now, settings.absoluteResets)
     val ended = window.ended(now)
     val course = window.course(now)
     val bar = settings.bar(window, now)
@@ -220,7 +226,7 @@ private fun WindowRow(window: QuotaWindow, now: Instant, settings: QuotaSettings
             Text(tone.word, style = type.metaStrong, color = tone.color, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
             Spacer(Modifier.width(Spacing.s2))
             Text(
-                window.resetsAt?.let { if (ended) "Reset ${ago(now, it)}" else if (settings.absoluteResets) "Resets ${resetClock(it, now, h24)}" else "Resets in ${span(now, it)}" } ?: "Reset time unknown",
+                window.resetsAt?.let { if (ended) "Reset ${ago(now, it)}" else if (settings.absoluteResets) "Resets ${clockAt(it, now, h24)}" else "Resets in ${span(now, it)}" } ?: "Reset time unknown",
                 style = type.meta,
                 color = scheme.onSurfaceVariant,
                 maxLines = 1,

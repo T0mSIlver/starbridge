@@ -176,6 +176,24 @@ export function clock(iso: string, now = new Date()): string {
   return `${d.toLocaleDateString(undefined, { month: "short", day: "numeric" })}, ${time}`;
 }
 
+/**
+ * A clock time in a sentence: "at 15:55" today, "tomorrow at 10:15", "yesterday at 10:15", else
+ * "on Oct 8 at 10:15".
+ */
+export function clockAt(iso: string, now = new Date(), hours?: "12" | "24"): string {
+  const d = new Date(iso);
+  const time = clockTime(d, hours);
+  const day = (offset: number) => {
+    const x = new Date(now);
+    x.setDate(now.getDate() + offset);
+    return sameDay(d, x);
+  };
+  if (day(0)) return `at ${time}`;
+  if (day(1)) return `tomorrow at ${time}`;
+  if (day(-1)) return `yesterday at ${time}`;
+  return `on ${d.toLocaleDateString(undefined, { month: "short", day: "numeric" })} at ${time}`;
+}
+
 /** A reset time in the chosen style: "in 2 h", "2 h ago", or a clock time. */
 export function resetTime(iso: string, s: QuotaSettings, now = new Date()): string {
   return s.absoluteResets ? clock(iso, now) : relative(iso, now);
