@@ -82,7 +82,7 @@ function inspect(phone: boolean): Problem[] {
   // nothing; they are left out of what a box holds, though not out of the page's width above.
   const noTapAreas = new CSSStyleSheet();
   noTapAreas.replaceSync(
-    ":where(a[href], button, summary, label:has(input)):not([data-copy])::after { display: none !important; }",
+    ":where(a[href], button, summary, label:has(input)):not(:where(p a, dd a, td a, h2 a, h3 a, [data-copy]))::after { display: none !important; }",
   );
   document.adoptedStyleSheets = [...document.adoptedStyleSheets, noTapAreas];
 

@@ -289,6 +289,8 @@
     margin: -15px -8px;
     border: solid transparent;
     border-width: 15px 8px;
+    /* The track's own 9 px ends: the radius less the border on each axis. */
+    border-radius: 17px / 24px;
   }
 
   /* Repeated for the checked state, whose `background` shorthand resets the clip. */
