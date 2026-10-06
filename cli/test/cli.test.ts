@@ -402,6 +402,11 @@ test("a decision names its agent and the machine's kind, which config sets", asy
 test("a claude -p session is told to wait, since no mod brings its answer back", async () => {
   const ctx = await paired(server);
   ctx.env.CLAUDECODE = "1";
+  // A mod polls through the CLI: it holds the lease.
+  writeFileSync(
+    join(ctx.store.dir, "mod-poller.json"),
+    JSON.stringify({ session: "s", until: Date.now() + 60_000 }),
+  );
   await run(ASK, ctx);
   expect(ctx.errors.at(-1)).toBe("The answer will come back into this session as a new prompt.");
   ctx.env.CLAUDE_CODE_SESSION_ATTENDED = "0";

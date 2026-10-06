@@ -42,6 +42,14 @@ test("ask --input reads the fields from a file; ask prints the id, then how the 
   expect(JSON.parse(ctx.lines[1] as string)).toMatchObject({ decisionId: id, choice: "Merge" });
 
   const prompt = "The answer will come back into this session as a new prompt.";
+  // Claude Code's plugin without a mod polling: nothing would submit the answer (#537).
+  ctx.env = { CLAUDECODE: "1" };
+  expect(await run(["ask", "--question", "Ship?"], ctx)).toBe(0);
+  expect(ctx.errors.at(-1)).toContain("run `starbridge wait");
+  writeFileSync(
+    join(ctx.store.dir, "mod-poller.json"),
+    JSON.stringify({ session: "s", until: Date.now() + 60_000 }),
+  );
   for (const env of [
     { CLAUDECODE: "1" },
     { PI_SESSION_ID: "p1", STARBRIDGE_PI_ANSWERS: "p1" },

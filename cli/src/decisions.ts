@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
-import { basename, resolve } from "node:path";
+import { readFileSync } from "node:fs";
+import { basename, join, resolve } from "node:path";
 import {
   type Agent,
   type Answer,
@@ -313,7 +314,7 @@ export async function ask(
   const resolved = resolveSource(input, ctx.env, process.cwd());
   const decision = await postDecision(ctx, s, { ...resolved, waiting: input.waiting || opts.wait });
   ctx.out(decision.id);
-  if (!opts.wait) ctx.err(deliveryLine(decision.id, delivery(resolved, false)));
+  if (!opts.wait) ctx.err(deliveryLine(decision.id, delivery(resolved, false, modPolling(ctx))));
   if (!opts.wait) return 0;
   return wait(ctx, { id: decision.id, timeout: opts.timeout, json: opts.json }, s);
 }
@@ -540,17 +541,42 @@ export function behindBy(st: State, dir: Directory, entries: unknown[]): string 
 export type Delivery = "prompt" | "wait";
 
 /**
- * With no agent running, Codex gets nothing back; the mod, the Pi extension and the opencode
- * plugin poll by themselves.
+ * A prompt only when something will submit it (#537): for Claude Code, a mod seen polling for
+ * this session (`modSeen`), which an installed plugin alone does not mean; for Pi and opencode,
+ * their extension, which says so itself; for Codex, its reachable app-server. With no agent
+ * running, Codex gets nothing back.
  */
 export function delivery(
   input: Pick<AskInput, "agent" | "extensionAnswers" | "headless">,
   codexReachable: boolean,
+  modSeen: boolean,
 ): Delivery {
-  if (input.agent === "claude-code") return input.headless ? "wait" : "prompt";
+  if (input.agent === "claude-code") return !input.headless && modSeen ? "prompt" : "wait";
   if (input.agent === "pi" || input.agent === "opencode")
     return input.extensionAnswers ? "prompt" : "wait";
   return input.agent === "codex" && codexReachable ? "prompt" : "wait";
+}
+
+/**
+ * How long after its last call the agent still counts a session's mod as there. The mod holds
+ * each events call up to 25 s and backs off at most 60 s after errors.
+ */
+export const MOD_SEEN_MS = 90_000;
+
+/**
+ * With no agent, whether a mod polls through the CLI: one session's mod holds a live lease in
+ * `mod-poller.json` while every session's mod delivers (mod/hooks/poller.ts). The CLI cannot
+ * tell which sessions run one; Claude Code's plugin runs in every session or none.
+ */
+export function modPolling(ctx: Ctx): boolean {
+  try {
+    const lease = JSON.parse(readFileSync(join(ctx.store.dir, "mod-poller.json"), "utf8")) as {
+      until?: unknown;
+    };
+    return typeof lease.until === "number" && lease.until > ctx.now().getTime();
+  } catch {
+    return false;
+  }
 }
 
 /** What `ask` prints after the id, on stderr, so the asking agent knows what to do next. */

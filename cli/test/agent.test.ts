@@ -648,3 +648,24 @@ test("on loopback TCP (Windows), only a call that proves the port file's token g
   writeFileSync(socket, JSON.stringify({ ...file, pid: 2 ** 22 + 1 }));
   await expect(new AgentClient(socket).call("GET", "/v1/status")).rejects.toThrow("no agent");
 });
+
+test("ask promises a prompt only once the agent has seen this session's mod (#537)", async () => {
+  const { socket } = await machine();
+  const c = client(socket);
+  c.env.CLAUDECODE = "1";
+  const prompt = "The answer will come back into this session as a new prompt.";
+  await ask(c, "--session", "s-mod");
+  expect(c.errors.at(-1)).toContain("run `starbridge wait");
+
+  const s = session(socket, "s-mod");
+  await s.events();
+  await ask(c, "--session", "s-mod");
+  expect(c.errors.at(-1)).toBe(prompt);
+  // Another session's mod is no promise for this one.
+  await ask(c, "--session", "s-other");
+  expect(c.errors.at(-1)).toContain("run `starbridge wait");
+
+  await s.bye();
+  await ask(c, "--session", "s-mod");
+  expect(c.errors.at(-1)).toContain("run `starbridge wait");
+});

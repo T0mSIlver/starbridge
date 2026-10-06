@@ -84,6 +84,8 @@ export interface Hub {
   /** Resolves on the next `notify`, after `ms`, or when `signal` aborts. */
   changed(ms: number, signal: AbortSignal): Promise<void>;
   log(line: string): void;
+  /** Whether session `id`'s client called within `ms`: its mod is there to take a prompt. */
+  seen(id: string, ms: number): boolean;
 }
 
 const SESSION_ID = /^[A-Za-z0-9_.:-]{1,200}$/;
@@ -374,6 +376,11 @@ export class Agent implements Hub {
     };
     this.sessions.set(id, info);
     return info;
+  }
+
+  seen(id: string, ms: number): boolean {
+    const at = this.sessions.get(id)?.lastSeenAt;
+    return at !== undefined && this.ctx.now().getTime() - Date.parse(at) <= ms;
   }
 
   private async hello(req: Request) {
