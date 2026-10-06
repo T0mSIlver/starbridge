@@ -40,6 +40,20 @@ arm64). A `v*` tag runs `.github/workflows/release.yml`, which attaches them, th
 App Bundle, `install.sh`, `install.ps1` and the signed `SHA256SUMS` to a GitHub Release,
 commits the formula to `T0mSIlver/homebrew-starbridge` and publishes to npm. The signing key lives in the `MINISIGN_SECRET_KEY` Actions secret and, offline, with the maintainer.
 
+The maintainer's dogfood APKs are debug builds signed with the Android release key, so that
+starbridge.run's App Links, which list only that key, open them. To build one, add this line to
+`android/local.properties`, which git ignores:
+
+```properties
+starbridge.dogfoodSigning=true
+```
+
+The build then reads `~/.config/starbridge/secrets/release.jks` and the password in
+`release-keystore-password` beside it, and fails where `CI` is set. Without the line, debug builds
+sign with the debug key. A phone with a debug-signed build must uninstall it once before it takes a
+release-signed one, since Android refuses an update signed with another key. Keep release-signed
+APKs out of folders that CI runners can read.
+
 ## Pull requests
 
 The rules for branches, PRs, tests and where decisions are written down are in

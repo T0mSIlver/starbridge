@@ -379,6 +379,22 @@ test("waiting and working flip a decision's state, and each flip pushes", async 
   expect(ctx.errors.at(-1)).toContain("already answered");
 });
 
+test("wait --no-mark collects an answer without marking it waiting, which would notify again (#603)", async () => {
+  const ctx = await paired(server);
+  await run(ASK, ctx);
+  const id = ctx.lines[0] as string;
+  expect(await run(["wait", id, "--no-mark", "--timeout", "1s"], ctx)).toBe(2);
+  expect(await server.opened("waiting")).toEqual([]);
+  expect(server.pushed).toEqual(["decision"]);
+  // Without it, the first wait marks it waiting once; the next pushes nothing more.
+  expect(await run(["wait", id, "--timeout", "1s"], ctx)).toBe(2);
+  expect(await run(["wait", id, "--timeout", "1s"], ctx)).toBe(2);
+  expect(server.pushed).toEqual(["decision", "waiting"]);
+  await server.answer(id, { choice: "Merge" });
+  expect(await run(["wait", id, "--no-mark"], ctx)).toBe(0);
+  expect(ctx.lines.at(-1)).toBe(`Answer to ${id} (Merge #12 now?): Merge`);
+});
+
 test("ask --waiting pushes once, through its waiting state, so the notification says waiting", async () => {
   const ctx = await paired(server);
   await run([...ASK, "--waiting"], ctx);
@@ -402,8 +418,6 @@ test("a decision names its agent and the machine's kind, which config sets", asy
 test("a claude -p session is told to wait, since no mod brings its answer back", async () => {
   const ctx = await paired(server);
   ctx.env.CLAUDECODE = "1";
-  await run(ASK, ctx);
-  expect(ctx.errors.at(-1)).toBe("The answer will come back into this session as a new prompt.");
   ctx.env.CLAUDE_CODE_SESSION_ATTENDED = "0";
   await run(ASK, ctx);
   expect(ctx.errors.at(-1)).toContain("run `starbridge wait");
@@ -413,7 +427,6 @@ test("a claude -p session is told to wait, since no mod brings its answer back",
   await run(ASK, ctx);
   expect(ctx.errors.at(-1)).toContain("run `starbridge wait");
   expect((await server.opened("decision")).map((d) => d.agent)).toEqual([
-    "claude-code",
     "claude-code",
     "claude-code",
   ]);

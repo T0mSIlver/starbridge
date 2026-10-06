@@ -74,7 +74,7 @@ export async function waitingVia(
 export async function waitVia(
   ctx: Ctx,
   agent: AgentClient,
-  opts: { id?: string; session?: string; timeout?: string; json?: boolean },
+  opts: { id?: string; session?: string; timeout?: string; json?: boolean; "no-mark"?: boolean },
 ): Promise<number> {
   let deadline = Number.POSITIVE_INFINITY;
   if (opts.timeout) deadline = ctx.now().getTime() + parseDuration(opts.timeout);
@@ -127,7 +127,8 @@ export async function waitVia(
     if (e) throw e;
   };
   closed();
-  if (!r.answer && id) await markWaiting(ctx, () => waitingVia(agent, { id, state: "waiting" }));
+  if (!r.answer && id && !opts["no-mark"])
+    await markWaiting(ctx, () => waitingVia(agent, { id, state: "waiting" }));
   while (!r.answer) {
     if (ctx.signal?.aborted) return EXIT_INTERRUPTED;
     const left = deadline - ctx.now().getTime();

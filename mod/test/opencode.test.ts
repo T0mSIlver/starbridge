@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readdirSync, rmSync, utimesSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -52,13 +52,14 @@ test("of two processes showing a session, only the first to claim an answer subm
   expect(both.map((c) => c.state).sort()).toEqual(["held", "mine"]);
   expect((await claim(dir, "ses_b", line)).state).toBe("mine");
   expect((await claim(dir, "ses_a", "Answer to d_2 (Push?): No")).state).toBe("mine");
-  // A claim never marked sent, left by a process that died, goes to one taker after a minute.
-  const later = Date.now() + 61_000;
-  const takers = await Promise.all([
-    claim(dir, "ses_a", line, later),
-    claim(dir, "ses_a", line, later),
-  ]);
+  // A claim never marked sent, left by a process that died, goes to one taker after a minute:
+  // aged on disk, so the taker's own fresh claim is not stale to the other.
+  const claims = join(dir, "opencode-claims");
+  const past = new Date(Date.now() - 61_000);
+  for (const f of readdirSync(claims)) utimesSync(join(claims, f), past, past);
+  const takers = await Promise.all([claim(dir, "ses_a", line), claim(dir, "ses_a", line)]);
   expect(takers.map((c) => c.state).sort()).toEqual(["held", "mine"]);
+  const later = Date.now() + 61_000;
   // Once sent, any process may confirm it, and nobody takes it over.
   await submitted(dir, "ses_a", line);
   expect((await claim(dir, "ses_a", line, later)).state).toBe("sent");

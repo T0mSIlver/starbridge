@@ -90,7 +90,10 @@ export type DirectoryEntry = z.infer<typeof DirectoryEntry>;
  * item's possible kinds. The item's `re` hint repeats that field, and the server marks the
  * referred item answered, unless the kind is `open` (it describes the item, closing nothing).
  * A kind with `updates` is re-posted under the same id as it changes, and the server keeps
- * only the latest.
+ * only the latest. A kind with `latest` is posted under a new id each time, by any device, and
+ * the server keeps only the latest for the item it refers to. A `toDevices` kind is sealed to
+ * every active device as well as to the machine it refers to. A kind with `wake` carries that
+ * body field, a time, as the item's `wakeAt` hint: the server pushes every device once then.
  *
  * `keep` is how long the server stores the kind's items (`server/src/retention.ts`), so no kind
  * is stored and never dropped: for a `received` period after its last post, an `answered` one
@@ -124,12 +127,23 @@ export const ITEM_KINDS = {
     updates: true,
     keep: { withRe: true },
   },
+  snooze: {
+    signer: "device",
+    re: { field: "decisionId", kinds: ["decision"], open: true },
+    latest: true,
+    toDevices: true,
+    wake: "until",
+    keep: { withRe: true },
+  },
 } as const satisfies Record<
   string,
   {
     signer: "device" | "machine";
     re?: { field: string; kinds: readonly string[]; open?: true };
     updates?: true;
+    latest?: true;
+    toDevices?: true;
+    wake?: string;
     keep: Keep;
   }
 >;
@@ -155,6 +169,13 @@ export function reOf(kind: ItemKind, body: object): string | undefined {
   const rule = ITEM_KINDS[kind];
   if (!("re" in rule)) return undefined;
   return (body as Record<string, unknown>)[rule.re.field] as string;
+}
+
+/** The time an item of a `wake` kind names in its `wakeAt` hint, if the kind has one. */
+export function wakeOf(kind: ItemKind, body: object): string | undefined {
+  const rule = ITEM_KINDS[kind];
+  if (!("wake" in rule)) return undefined;
+  return (body as Record<string, unknown>)[rule.wake] as string;
 }
 
 /** The signer's member id, or "recovery" for a directory entry signed by the recovery key. */
@@ -197,6 +218,8 @@ export const SealedItem = z.object({
   quiet: z.literal(true).optional(),
   /** A machine re-posts its open decision or permission under its id, to more devices. */
   reseal: z.literal(true).optional(),
+  /** A `wake` kind's time (ITEM_KINDS): the server pushes every device once then. */
+  wakeAt: Time.optional(),
   boxes: z
     .array(z.object({ to: Id, box: B64 }))
     .min(1)
@@ -506,6 +529,26 @@ export const Waiting = z.object({
 });
 export type Waiting = z.infer<typeof Waiting>;
 
+/** The latest a snooze may run: an unanswered decision drops 30 days after it arrives. */
+export const SNOOZE_MAX_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
+ * The owner put a decision off until `until` (#571): not an answer, so it closes nothing. A
+ * device seals it to the machine that asked and to every active device; the latest `at` wins,
+ * whichever device sent it. `until` at or before `at` brings the decision back now.
+ */
+export const Snooze = z.object({
+  v: z.literal(1),
+  id: Id,
+  decisionId: Id,
+  /** The machine that asked, and every active device. */
+  to: z.array(Id).min(1),
+  until: Time,
+  at: Time,
+  dir: DirectoryHead.optional(),
+});
+export type Snooze = z.infer<typeof Snooze>;
+
 // --- Runs --------------------------------------------------------------------
 
 /** A machine re-posts a running run at least this often, progress or not. */
@@ -651,6 +694,7 @@ export const BODY_SCHEMAS = {
   settled: Settled,
   run: Run,
   waiting: Waiting,
+  snooze: Snooze,
 } as const satisfies Record<Kind, z.ZodType>;
 
 export type BodyOf<K extends Kind> = z.infer<(typeof BODY_SCHEMAS)[K]>;

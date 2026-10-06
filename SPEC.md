@@ -225,9 +225,11 @@ provider plugins add providers, not panels.
   `starbridge://auth`. Chrome asks "Continue to Starbridge?" before following a `starbridge://`
   redirect that no tap started; after a tap it does not. Self-hosted servers keep
   `starbridge://auth`, since the APK can bind only starbridge.run.
-- `assetlinks.json` lists the release key, which Play App Signing also uses, and the dev box's
-  debug key, so dogfood builds verify too. That key never leaves the dev box, and a caught code is
-  useless without the verifier.
+- `assetlinks.json` lists only the release key, which Play App Signing also uses. A debug
+  keystore's password is public, and an app signed with it would verify as the App Link handler
+  (#569). Dogfood builds sign with the release key instead, opted into by a gitignored
+  `local.properties` line on the maintainer's machine and refused under CI; other debug builds keep
+  the debug key, and their sign-in falls back to the `starbridge://auth` button.
 
 ## Server
 
@@ -252,6 +254,8 @@ provider plugins add providers, not panels.
 - **Pairings** (#309). Each address may hold 20 unapproved pairings (IPv6 counted per /48 on this
   route), on top of 10 a minute; the server-wide cap of 20000 is the disk bound. Mobile carriers
   that hand out /64s from one /48 share 20, a smaller blast radius than the whole server.
+  The server counts them in memory, as every per-address limit, so no address reaches the
+  database, and a restart resets the counts (#575).
 - **Long-polls** identify their caller again after the wait and answer 401 if the session or token
   was revoked meanwhile (#260). A directory append ends every machine's answer long-poll, and the
   reply carries the directory's length (#158). On SIGTERM the server ends every long-poll as if
@@ -416,8 +420,15 @@ provider plugins add providers, not panels.
 
 An agent posts a question, keeps working and ends its turn; the answer arrives as a new prompt.
 Where nothing can deliver a prompt, the agent runs `starbridge wait <id> --timeout 5m` before
-ending its turn. `ask` prints which of the two applies (#203). A `wait` without an id, run in an
-agent's session, takes only that session's answers (#324).
+ending its turn. `ask` prints which of the two applies (#203). `wait <id>` marks the decision
+waiting, which notifies the owner once more; `wait --no-mark` collects the answer to a question
+that blocks nothing yet, such as one for tomorrow, without that (#603). A `wait` without an id, run in an
+agent's session, takes only that session's answers (#324). `ask` promises a prompt in Claude Code
+only when that session's mod called the local agent within the last 45 s (#537); after `/clear` the mod's
+hello under the new id names the old one (`replaces`), which then no longer counts. An installed plugin is no proof,
+since a session started before it, or one whose mod failed to load, has none; without an agent,
+the poller's lease says only that some session runs a mod. When unsure, `ask` prints the `wait`
+line, the safe side: at worst a prompt repeats an answer the agent already read.
 
 | Harness | Delivery |
 |---|---|
@@ -759,8 +770,9 @@ Tokens, type and components: `DESIGN.md`.
 
 - **Stack** (`deploy/`): Docker Compose with Caddy on the host network, so rate limits see real
   client addresses. Caddy keeps connections to the server open (`keepalive 25s`, below the
-  server's 30 s idle close) so TIME-WAIT sockets don't use up ports (#376). Nightly SQLite backups,
-  kept 14 days.
+  server's 30 s idle close) so TIME-WAIT sockets don't use up ports (#376). Caddy compresses every
+  response and the web app none: Next's gzip ran on its one thread and filled it near 18 landing
+  page visitors a second (#593). Nightly SQLite backups, kept 14 days.
 - **Capacity** (#301). A load test of the production stack on two cores held 2000 simulated users
   at a 194 ms p99. On the production VPS, Caddy's memory runs out first, near 8000 users (each held
   long-poll costs about 96 KB in Caddy and 13 KB in the server); CPU near 10,000.
@@ -770,17 +782,19 @@ Tokens, type and components: `DESIGN.md`.
   privacy@starbridge.run; abuse@ appears only in `/terms`.
 - **Analytics** (#141). Umami, self-hosted, on the landing page, the docs, `/privacy` and `/terms`
   only. No cookie, no stored IP, a daily salt, Do Not Track honoured, so no consent banner. The
-  Android app has none (Play data safety form).
-- **Launch funnel** (#559). Landing view, a sign-in click, first sign-in, first machine, first
-  answer. The signed-in app loads no tracker: the browser that created an account posts those
-  three events itself, once each, with `/` as the page and nothing about the account
+  Android app has none (Play data safety form). Caddy rate-limits its open endpoint, and an hourly
+  timer keeps each table to 180 days and a million rows, so it cannot fill the disk (#574).
+- **Launch funnel** (#559, #590). Landing view, a sign-in click, first sign-in, recovery key
+  saved, first machine, first answer (with its kind: choice, text or Done); a second device is
+  counted beside it. The signed-in app loads no tracker: the browser that created an account posts
+  those events itself, once each, with `/` as the page and nothing about the account
   (`web/src/lib/funnel.ts`); Umami joins them to the landing visit by address, browser and day.
+  For every signed-in user it sends only which error screen showed and an install as an app.
   The first sign-in's time matches the account's creation, so the operator could link the two;
   `/privacy` says so.
   It sees machines and answers from any device, so a pairing or answer made on the phone counts
   once this browser sees them. Owner's view: an Umami share link on `stats.starbridge.run`,
   where Caddy passes only GET requests and blocks the login.
-  Caddy rate-limits its open endpoint, and a timer caps its tables, so it cannot fill the disk.
 - **Demo server** (#423). Play reviewers cannot pass GitHub's new-device check and cannot be given
   a recovery key, so `demo.starbridge.run` is a self-hosted server with an owner token, and
   `demo/` is its first device and machine. It approves every join by digits without comparing,

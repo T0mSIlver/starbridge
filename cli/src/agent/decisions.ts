@@ -13,6 +13,7 @@ import {
   deliverable,
   delivery,
   dropRevokedNow,
+  MOD_SEEN_MS,
   observedAnswers,
   poll,
   postDecision,
@@ -71,7 +72,8 @@ export class Decisions implements Feature {
           throw new HttpError(400, "bad-request", "input.project is required");
         const decision = await postDecision(this.ctx, session(this.ctx), ask);
         const reachable = ask.codex ? await codexReachable(ask.codex) : false;
-        return { id: decision.id, delivery: delivery(ask, reachable) };
+        const mod = !!ask.session && this.hub.seen(ask.session, MOD_SEEN_MS);
+        return { id: decision.id, delivery: delivery(ask, reachable, mod) };
       },
     },
     {

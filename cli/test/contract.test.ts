@@ -42,8 +42,11 @@ test("ask --input reads the fields from a file; ask prints the id, then how the 
   expect(JSON.parse(ctx.lines[1] as string)).toMatchObject({ decisionId: id, choice: "Merge" });
 
   const prompt = "The answer will come back into this session as a new prompt.";
+  // Claude Code with no agent to see its mod: nothing promises the answer comes back (#537).
+  ctx.env = { CLAUDECODE: "1" };
+  expect(await run(["ask", "--question", "Ship?"], ctx)).toBe(0);
+  expect(ctx.errors.at(-1)).toContain("run `starbridge wait");
   for (const env of [
-    { CLAUDECODE: "1" },
     { PI_SESSION_ID: "p1", STARBRIDGE_PI_ANSWERS: "p1" },
     { STARBRIDGE_OPENCODE_SESSION: "o1", STARBRIDGE_OPENCODE_ANSWERS: "o1" },
   ]) {

@@ -315,7 +315,9 @@ export async function ask(
   const resolved = resolveSource(input, ctx.env, process.cwd());
   const decision = await postDecision(ctx, s, { ...resolved, waiting: input.waiting || opts.wait });
   ctx.out(decision.id);
-  if (!opts.wait) ctx.err(deliveryLine(decision.id, delivery(resolved, false)));
+  // With no agent, nothing tells which sessions run a mod: the poller's lease says only that one
+  // does (#537).
+  if (!opts.wait) ctx.err(deliveryLine(decision.id, delivery(resolved, false, false)));
   if (!opts.wait) return 0;
   return wait(ctx, { id: decision.id, timeout: opts.timeout, json: opts.json }, s);
 }
@@ -542,18 +544,27 @@ export function behindBy(st: State, dir: Directory, entries: unknown[]): string 
 export type Delivery = "prompt" | "wait";
 
 /**
- * With no agent running, Codex gets nothing back; the mod, the Pi extension and the opencode
- * plugin poll by themselves.
+ * A prompt only when something will submit it (#537): for Claude Code, a mod seen polling for
+ * this session (`modSeen`), which an installed plugin alone does not mean; for Pi and opencode,
+ * their extension, which says so itself; for Codex, its reachable app-server. With no agent
+ * running, Codex gets nothing back.
  */
 export function delivery(
   input: Pick<AskInput, "agent" | "extensionAnswers" | "headless">,
   codexReachable: boolean,
+  modSeen: boolean,
 ): Delivery {
-  if (input.agent === "claude-code") return input.headless ? "wait" : "prompt";
+  if (input.agent === "claude-code") return !input.headless && modSeen ? "prompt" : "wait";
   if (input.agent === "pi" || input.agent === "opencode")
     return input.extensionAnswers ? "prompt" : "wait";
   return input.agent === "codex" && codexReachable ? "prompt" : "wait";
 }
+
+/**
+ * How long after its last call the agent still counts a session's mod as there: one events call
+ * held 25 s, and the next one.
+ */
+export const MOD_SEEN_MS = 45_000;
 
 /** What `ask` prints after the id, on stderr, so the asking agent knows what to do next. */
 export function deliveryLine(id: string, d: Delivery): string {
@@ -940,7 +951,7 @@ export function takeAnswer(
  */
 export async function wait(
   ctx: Ctx,
-  opts: { id?: string; session?: string; timeout?: string; json?: boolean },
+  opts: { id?: string; session?: string; timeout?: string; json?: boolean; "no-mark"?: boolean },
   s: Session = session(ctx),
   dir?: Directory,
 ): Promise<number> {
@@ -960,7 +971,8 @@ export async function wait(
   if (shut) throw shut;
   const already = takeAnswer(ctx.store, target, opts.session);
   if (already) return report(already);
-  if (target) await markWaiting(ctx, () => postWaiting(ctx, s, target, "waiting"));
+  if (target && !opts["no-mark"])
+    await markWaiting(ctx, () => postWaiting(ctx, s, target, "waiting"));
 
   let deadline = Number.POSITIVE_INFINITY;
   if (opts.timeout) deadline = ctx.now().getTime() + parseDuration(opts.timeout);

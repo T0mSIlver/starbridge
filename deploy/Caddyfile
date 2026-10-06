@@ -114,10 +114,23 @@ stats.starbridge.run {
 		# One visit's records (city, device, pages), which the share token would also open.
 		not path_regexp (?i)^/api/websites/[^/]+/sessions/[0-9a-f-]{36}
 	}
-	handle @share {
-		reverse_proxy 127.0.0.1:3001
-	}
-	handle {
+	# `route` keeps the order as written: the limit, then the password, then the share page.
+	route {
+		# Each request checks the password's bcrypt hash, about 60 ms of CPU: the limit keeps one
+		# address from spending the box's. The share page makes about 30 requests per view.
+		rate_limit {
+			disable_metrics
+			zone stats_viewer {
+				key {http.request.remote.host}
+				ipv6_prefix 64
+				events 300
+				window 1m
+			}
+		}
+		# The share link alone would open it; the password keeps it to the owner. basic_auth, user
+		# tom, written by deploy/host/caddy-auth.sh.
+		import /etc/caddy/secrets/stats-auth
+		reverse_proxy @share 127.0.0.1:3001
 		respond 404
 	}
 }

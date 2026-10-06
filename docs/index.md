@@ -6,7 +6,10 @@ that asked. You also follow the runs that affect you, such as a release or heavy
 machine.
 
 Your phone, browsers and machines encrypt everything they send each other, so the server stores
-only ciphertext. Use the free server at starbridge.run, or [host your own](../server/README.md).
+your content only as ciphertext; it still sees who sent each item, to which
+devices, its kind, size and times.
+[What the server sees](faq.md#what-does-the-server-see) has the details and the limits. Use the
+free server at starbridge.run, or [host your own](../server/README.md).
 
 ## Start
 

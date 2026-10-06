@@ -106,11 +106,12 @@ const HELP = `starbridge: post decisions to your devices, report runs, upload qu
       (elsewhere, the default for those) or no longer needed (withdrawn). Devices move it
       out of the inbox.
 
-  starbridge wait [<decision id>] [--timeout <duration>] [--json]
+  starbridge wait [<decision id>] [--timeout <duration>] [--json] [--no-mark]
       Print the answer, or with no id the next answer to a decision this session asked (any
       decision from this machine, outside an agent's session).
-      With an id, marks the decision waiting first. Waits until --timeout, else forever;
-      exits 2 when --timeout passed.
+      With an id, marks the decision waiting first, which notifies the owner once more;
+      --no-mark collects an answer that is not blocking anything yet without it. Waits until
+      --timeout, else forever; exits 2 when --timeout passed.
 
   starbridge answers --session <id> [--wait <seconds>]
       For the Claude Code mod: print, as JSON lines, the unconfirmed answers to decisions that
@@ -323,7 +324,11 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
         const { values, positionals } = parseArgs({
           args: rest,
           allowPositionals: true,
-          options: { timeout: { type: "string" }, json: { type: "boolean" } },
+          options: {
+            timeout: { type: "string" },
+            json: { type: "boolean" },
+            "no-mark": { type: "boolean" },
+          },
         });
         const id = positionals[0];
         // Without an id, in an agent's session, only that session's answers: the others are due

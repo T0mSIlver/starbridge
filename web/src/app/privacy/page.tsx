@@ -51,7 +51,8 @@ export default function Privacy() {
       <p>
         Your account, device list and push targets stay until you delete them (see Deletion). A
         nightly copy of the database is kept on the server for 14 days, and Hetzner keeps its own
-        backups of the server, so deleted data can remain in backups for up to 14 days.
+        backups of the server, with those copies, for 7 more, so deleted data can remain in backups
+        for up to 3 weeks.
       </p>
 
       <h2 className="t-heading">Logs</h2>
@@ -128,17 +129,19 @@ export default function Privacy() {
         the referring site, your browser, operating system, device type, screen size and language,
         and the country, region and city it looks up from your IP address. On the landing page,
         clicking a sign-in button, a docs link or a way to get the app, or copying an install
-        command, records which one. The signed-in app counts no views. Only in a browser that just
-        created an account does it record, once each, three steps: the first sign-in, the first
-        machine paired and the first answer sent, with nothing about the account, its machines or
-        its content; the app (not Umami) keeps a note of the steps left in that browser for two
-        days. Since the server knows when each account was created, the operator could match that
-        first sign-in to your account, and so to the visit Umami recorded. Umami sets no cookie,
-        stores nothing in your browser and does not store your IP address: it tells visitors apart
-        by a hash of the IP address, the browser and a salt that changes every day, so a visit
-        cannot be traced back to you or linked to your visits on other days. A browser that sends Do
-        Not Track is not counted. The records stay until the operator deletes them, and the nightly
-        backups keep them for 14 days more.
+        command, records which one. The signed-in app counts no views. It records which error screen
+        it showed, if any, and when it is installed as an app. Only in a browser that just created
+        an account does it also record, once each, these steps: the first sign-in, the recovery key
+        saved, the first machine paired, a second device added and the first answer sent, with
+        whether that answer was a choice, a typed reply or Done. Nothing about the account, its
+        machines or its content goes with them; the app (not Umami) keeps a note of the steps left
+        in that browser for two days. Since the server knows when each account was created, the
+        operator could match that first sign-in to your account, and so to the visit Umami recorded.
+        Umami sets no cookie, stores nothing in your browser and does not store your IP address: it
+        tells visitors apart by a hash of the IP address, the browser and a salt that changes every
+        day, so a visit cannot be traced back to you or linked to your visits on other days. A
+        browser that sends Do Not Track is not counted. Umami keeps its records for 180 days at
+        most, and the nightly backups keep them for up to 3 weeks more.
       </p>
 
       <h2 className="t-heading">Deletion</h2>
@@ -148,7 +151,7 @@ export default function Privacy() {
         account, email <a href="mailto:privacy@starbridge.run">privacy@starbridge.run</a> with your
         GitHub login. To show the account is yours, you post a code the operator sends you in a
         public gist on that GitHub account. The operator deletes the account within 30 days of that,
-        and backups age out within 14 days after.
+        and backups age out within 3 weeks after.
       </p>
 
       <h2 className="t-heading">Your rights</h2>
