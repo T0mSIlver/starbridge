@@ -23,10 +23,12 @@ const { values: opt } = parseArgs({
 });
 
 const repo = join(import.meta.dir, "..", "..");
-const read = (path: string) =>
-  opt.ref
-    ? spawnSync("git", ["-C", repo, "show", `${opt.ref}:${path}`], { encoding: "utf8" }).stdout
-    : readFileSync(join(repo, path), "utf8");
+function read(path: string): string {
+  if (!opt.ref) return readFileSync(join(repo, path), "utf8");
+  const r = spawnSync("git", ["-C", repo, "show", `${opt.ref}:${path}`], { encoding: "utf8" });
+  if (r.status !== 0) throw new Error(`git show ${opt.ref}:${path}: ${r.stderr}`);
+  return r.stdout;
+}
 
 const skill = read("plugin/skills/starbridge/SKILL.md");
 const front = /^---\n([\s\S]*?)\n---\n/.exec(skill);
@@ -36,7 +38,7 @@ const pieces: Record<string, string> = {
     .split("\n")
     .filter((l) => /^(name|description):/.test(l))
     .join("\n"),
-  "Skill body (SKILL.md)": skill,
+  "Skill file, when read (SKILL.md)": skill,
 };
 
 const dir = mkdtempSync(join(tmpdir(), "tokens-"));
@@ -57,20 +59,25 @@ function input(extra: string): number {
 // the prompt) that agree; counts below zero or over half the characters are thrown away. The
 // median of three remains.
 function cost(text: string): number {
+  if (!text) throw new Error("an empty piece: is the skill's front matter there?");
   const counts: number[] = [];
-  while (counts.length < 3) {
+  for (let tries = 0; counts.length < 3; tries++) {
+    if (tries === 15) throw new Error("no steady count in 15 tries");
     const before = input(".");
     const n = input(text) - before;
     if (Math.abs(input(".") - before) <= 5 && n > 0 && n < text.length / 2) counts.push(n);
   }
   return counts.sort((a, b) => a - b)[1] as number;
 }
-console.log(`| Piece (${opt.ref ?? "this checkout"}) | Tokens |`, "\n|---|---:|");
-let always = 0;
-for (const [name, text] of Object.entries(pieces)) {
-  const n = cost(text);
-  if (!name.startsWith("Skill body")) always += n;
-  console.log(`| ${name} | ${n} |`);
+try {
+  console.log(`| Piece (${opt.ref ?? "this checkout"}) | Tokens |`, "\n|---|---:|");
+  let always = 0;
+  for (const [name, text] of Object.entries(pieces)) {
+    const n = cost(text);
+    if (!name.startsWith("Skill file")) always += n;
+    console.log(`| ${name} | ${n} |`);
+  }
+  console.log(`| In every session (rule and list entry) | ${always} |`);
+} finally {
+  rmSync(dir, { recursive: true, force: true });
 }
-console.log(`| In every session (rule and list entry) | ${always} |`);
-rmSync(dir, { recursive: true, force: true });

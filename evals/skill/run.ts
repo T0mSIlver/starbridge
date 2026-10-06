@@ -58,7 +58,9 @@ const out = opt.out ?? join(import.meta.dir, "results", agent);
 mkdirSync(out, { recursive: true });
 // Never under the owner's home: Claude Code walks up from the project and would load
 // ~/.claude/CLAUDE.md as an ancestor's. Not in the scratchpad either: a path naming Starbridge
-// would hint the agent. Set TMPDIR to put it off a small /tmp. Each run's folder goes once its record is written (a Codex home is 60 MB).
+// would hint the agent. Set TMPDIR to put it off a small /tmp. Each run's folder goes once its
+// record is written (a Codex home is 60 MB).
+if (`${tmpdir()}/`.startsWith(`${homedir()}/`)) throw new Error("TMPDIR must be outside your home");
 const work = mkdtempSync(join(tmpdir(), "skill-eval-"));
 const bun = process.execPath;
 const which = (cmd: string) => {
@@ -68,20 +70,22 @@ const which = (cmd: string) => {
 };
 const agentBin = which(agent);
 
-// The two versions under test, `plugin` and `mod` (the Pi extension) at `--before` and this
-// checkout's.
+// The two versions under test, `plugin` (and `mod`, the Pi extension, for Pi) at `--before` and
+// this checkout's.
+const parts = agent === "pi" ? ["plugin", "mod"] : ["plugin"];
 const arms: Record<string, string> = {};
 for (const arm of (opt.arms as string).split(",")) {
   const dir = join(work, "arms", arm);
   mkdirSync(dir, { recursive: true });
   if (arm === "after")
-    for (const d of ["plugin", "mod"]) cpSync(join(repo, d), join(dir, d), { recursive: true });
+    for (const d of parts) cpSync(join(repo, d), join(dir, d), { recursive: true });
   else {
-    const tar = spawnSync("git", ["-C", repo, "archive", opt.before as string, "plugin", "mod"], {
+    const tar = spawnSync("git", ["-C", repo, "archive", opt.before as string, ...parts], {
       maxBuffer: 1 << 26,
     });
     if (tar.status !== 0) throw new Error(`git archive ${opt.before}: ${tar.stderr}`);
-    spawnSync("tar", ["-x", "-C", dir], { input: tar.stdout });
+    if (spawnSync("tar", ["-x", "-C", dir], { input: tar.stdout }).status !== 0)
+      throw new Error(`tar -x of ${opt.before}`);
   }
   arms[arm] = dir;
 }
@@ -236,6 +240,8 @@ async function turn(
       if (e.type === "session") session = e.id;
       const m = e.message;
       if (e.type === "message_end" && m?.role === "assistant") {
+        // A provider error Pi retried past is not the run's outcome.
+        if (final.startsWith("(error) ")) final = "";
         for (const b of m.content ?? []) {
           if (b.type === "toolCall" && b.name === "bash") commands.push(b.arguments?.command ?? "");
           if (b.type === "text" && b.text) final = b.text;
@@ -471,6 +477,7 @@ async function one(s: Scenario, arm: string, rep: number): Promise<RunRecord> {
         ? (async () => {
             while (!answeredFirst) {
               await Bun.sleep(2_000);
+              if (answeredFirst) break;
               const now = (await live.opened("decision")) as Record<string, unknown>[];
               const c = now[0] as Card | undefined;
               if (!c) continue;
@@ -480,7 +487,7 @@ async function one(s: Scenario, arm: string, rep: number): Promise<RunRecord> {
               rec.answered = `Answer to ${c.id} (${c.question}): ${choiceFor(c)}`;
               answeredFirst = now;
             }
-          })()
+          })().catch(() => {}) // the turn ended and the server stopped first
         : undefined;
     const first = s.interactive
       ? await interactiveTurn(proj, env, s.prompt, armDir, cfg)
@@ -491,12 +498,15 @@ async function one(s: Scenario, arm: string, rep: number): Promise<RunRecord> {
     if (first.final.startsWith("(error) ")) throw new Error(first.final);
     const opened = s.unpaired ? [] : ((await live.opened("decision")) as Record<string, unknown>[]);
     if (answering) {
-      // Split the turn where the agent got the answer: what it ran after its last wait is what
-      // a second turn would hold.
+      // Split the turn where the agent got the answer: what it ran after its last wait on the
+      // answered card is what a second turn would hold.
       const before = rec.answered ? (answeredFirst ?? []) : opened;
       rec.decisions = strip(before);
       rec.laterDecisions = strip(opened.filter((d) => !before.some((o) => o.id === d.id)));
-      const i = first.commands.findLastIndex((c) => /starbridge wait\b/.test(c));
+      const id = /^Answer to (\S+)/.exec(rec.answered ?? "")?.[1] ?? "";
+      const cmds = first.commands.map((c) => c.replace(/\\\n\s*/g, " "));
+      let i = cmds.findLastIndex((c) => /starbridge\s+wait\b/.test(c) && c.includes(id));
+      if (i < 0) i = cmds.findLastIndex((c) => /starbridge\s+(wait\b|ask\b[\s\S]*--wait\b)/.test(c));
       if (rec.answered && i >= 0)
         rec.turns = [
           { ...first, commands: first.commands.slice(0, i + 1) },

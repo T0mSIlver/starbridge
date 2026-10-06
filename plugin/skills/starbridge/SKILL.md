@@ -40,7 +40,8 @@ They decide from the card alone, without opening this session.
   of 6"), even with images. Leave out what the card already shows and your
   own process. Line breaks and `code` render; other Markdown shows as typed.
 - **Options:** two to four short labels that differ at a glance; the one you
-  would pick first, or named with `--recommended`.
+  would pick first, or named with `--recommended`. None asks for a typed
+  answer, when no list fits.
 - **Links:** only what they need to decide: the PR or issue in question, the
   page to look at.
 - **Images**, when seeing beats reading (variants, a broken screen, a chart):
@@ -59,8 +60,9 @@ Now: checkouts fail for those 4 minutes, at peak hour.' \
 ```
 
 Quote text in single quotes: in double quotes the shell expands `$` and
-backticks. Other flags: `--image` (up to 4 PNG or JPEG), `--link` (up to 4
-HTTPS URLs), `--context-file`, `--waiting`, `--answer-in`. Never set `--default`: with no
+backticks. Context with an apostrophe goes through `--context-file -
+<<'EOF'` instead. Other flags: `--image` (up to 4 PNG or JPEG), `--link` (up
+to 4 HTTPS URLs), `--waiting`, `--answer-in`. Never set `--default`: with no
 answer, the card waits. `ask` prints the decision id (`d_Xk3…`) and how the
 answer comes back.
 

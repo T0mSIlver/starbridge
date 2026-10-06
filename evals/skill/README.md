@@ -18,7 +18,10 @@ git project with a bare remote, and a `gh` that prints canned output. Nothing to
 `~/.claude`, `~/.codex` or `~/.pi`. Claude Code loads the plugin with `--plugin-dir`; Codex
 gets the skill in `$CODEX_HOME/skills` and the rule in `$CODEX_HOME/AGENTS.md`; Pi loads the
 Starbridge extension and skill with `-e` and `--skill`. Pi uses the providers in `~/.pi/agent`;
-Anthropic bills a Claude subscription used from Pi as extra usage, so Pi runs on another model. Situations with a
+Anthropic bills a Claude subscription used from Pi as extra usage, so Pi runs on another model. Each
+run's copy of a login may refresh its token on its own; a provider that rotates refresh tokens
+could then sign you out of the original. `TMPDIR` must be outside your home, where an ancestor's
+`AGENTS.md` or `CLAUDE.md` would reach the agent. Situations with a
 follow-up answer the card with its recommended option, in the line the mod submits, and check
 that the agent acts on it.
 
