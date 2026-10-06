@@ -33,13 +33,15 @@ async function listJson<T>(sys: Sys, ...args: string[]): Promise<T[] | undefined
 
 export interface PluginState {
   marketplace: boolean;
+  /** Where a marketplace named `starbridge` comes from, when it is not this repository. */
+  foreign?: string;
   /** Installed at user scope, with whether each is enabled. */
   plugins: Record<string, { enabled: boolean; version?: string } | undefined>;
 }
 
 /** Undefined when `claude` is missing or does not answer. */
 export async function pluginState(sys: Sys): Promise<PluginState | undefined> {
-  const markets = await listJson<{ name: string }>(sys, "plugin", "marketplace", "list");
+  const markets = await listJson<Market>(sys, "plugin", "marketplace", "list");
   const installed = await listJson<{
     id: string;
     scope: string;
@@ -54,11 +56,47 @@ export async function pluginState(sys: Sys): Promise<PluginState | undefined> {
       ? { enabled: p.enabled, ...(p.version ? { version: p.version } : {}) }
       : undefined;
   }
-  return { marketplace: markets.some((m) => m.name === MARKETPLACE), plugins };
+  const ours = markets.find((m) => m.name === MARKETPLACE);
+  const from = ours && marketSource(ours);
+  return {
+    marketplace: ours !== undefined,
+    ...(ours && from !== MARKETPLACE_SOURCE.toLowerCase()
+      ? { foreign: from ?? JSON.stringify(ours) }
+      : {}),
+    plugins,
+  };
+}
+
+interface Market {
+  name: string;
+  source?: string;
+  repo?: string;
+  url?: string;
+  path?: string;
+}
+
+/** `owner/repo` for a GitHub marketplace, lowercased; else its URL or path. */
+function marketSource(m: Market): string | undefined {
+  if (m.source === "github" && m.repo) return m.repo.toLowerCase();
+  const gh = /^(?:https:\/\/|git@)github\.com[/:]([^/]+\/[^/]+?)(?:\.git)?\/?$/i.exec(m.url ?? "");
+  if (gh) return (gh[1] as string).toLowerCase();
+  return m.url ?? m.path;
+}
+
+/**
+ * Why setup must not install from the `starbridge` marketplace Claude Code knows: any marketplace
+ * can take that name, and its plugins would run hooks on every session.
+ */
+export function foreignMarketplace(state: PluginState): string | undefined {
+  return state.foreign
+    ? `the marketplace named ${MARKETPLACE} comes from ${state.foreign}, not ${MARKETPLACE_SOURCE}: remove it with \`claude plugin marketplace remove ${MARKETPLACE}\`, then rerun setup`
+    : undefined;
 }
 
 /** Adds the marketplace and installs what is missing. Returns one line per thing done. */
 export async function installPlugins(sys: Sys, state: PluginState): Promise<string[]> {
+  const foreign = foreignMarketplace(state);
+  if (foreign) throw new Error(foreign);
   const done: string[] = [];
   if (!state.marketplace) {
     const r = await claude(sys, "plugin", "marketplace", "add", MARKETPLACE_SOURCE);

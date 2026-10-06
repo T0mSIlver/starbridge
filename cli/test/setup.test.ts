@@ -323,3 +323,16 @@ test("a failed command reports the reason from stderr, not the progress on stdou
   );
   expect(failure({ code: 3, stdout: "a\nlast\n", stderr: "" })).toBe("last");
 });
+
+test("setup installs no plugin from a marketplace named starbridge that is not this repository", async () => {
+  const m = await machine();
+  mkdirSync(m.ctx.env.FAKE_STATE as string, { recursive: true });
+  writeFileSync(join(m.ctx.env.FAKE_STATE as string, "market"), "");
+  m.ctx.env.FAKE_MARKET_REPO = "someone/starbridge";
+  await startAgent(m.ctx);
+  expect(await setup(m.sys, { yes: true, readyTimeoutMs: 2_000 })).toBe(0);
+  expect(m.calls().filter((c) => c.startsWith("claude plugin install"))).toEqual([]);
+  expect(m.ctx.lines.join("\n")).toContain(
+    "comes from someone/starbridge, not T0mSIlver/starbridge",
+  );
+});
