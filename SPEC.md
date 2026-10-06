@@ -1184,6 +1184,13 @@ so the mod is the first path.
   could hold a signed answer back until the agent moved on. `settle` closes the decision locally
   before it posts, and `wait` on a settled decision fails at once. Decisions asked before this
   change have no recipients on record and take no answer; the agent asks again.
+- 2026-10-06. A stalled server never holds a permission prompt (#260, from the Codex audit).
+  The hook's deadline and SIGTERM cut every request it makes, the prompt's post included, on
+  both paths; the agent cuts its post when the hook hangs up or the hook's wait passes. A SIGTERM
+  that lands while the prompt is being posted settles it by its call's input hash, and a post
+  that fails leaves the prompt settled on the machine, so no later answer applies. The Pi link
+  stops the CLI after 600 s and gives a stopped CLI 10 s before it defers and kills it, so "Answer
+  here" always reaches pi-permission-system's dialog.
 - 2026-10-06. Withheld revocations (#260 P1, from the Codex audit). A machine cannot tell a
   current directory from one the server cut short: the pin only stops rollback past what the
   machine saw, and any freshness statement the machine could ask for, the revoked device's own
@@ -1255,6 +1262,22 @@ so the mod is the first path.
   its keys. A decision's notification stores the account
   it was shown for, and its actions answer for that account only; one from before carries none
   and opens the page instead of answering.
+
+- 2026-10-06. A new user's first question needs no prompt and no sandbox flag (#245, launch
+  walk). In Claude Code's default mode `starbridge ask` stopped at a permission prompt before
+  the question existed, and in Codex's default sandbox it had no network. Setup now asks to
+  allow `starbridge ask`, `waiting`, `working`, `wait` and `settle`: Claude Code allow rules in
+  `~/.claude/settings.json`, and a Codex execpolicy file, `~/.codex/rules/starbridge.rules`, whose
+  `allow` runs them outside the sandbox. `starbridge run` stays out of both, since the command
+  it wraps is the agent's own. Uninstall removes both.
+- 2026-10-06. A `codex exec` session gets its answer through `wait` (#245). `codex queue`
+  accepts a message for an exec thread, but nothing runs it once exec returns. The CLI reads the
+  thread's rollout (`$CODEX_HOME/sessions/YYYY/MM/DD`, dated by the UUIDv7 thread id): an
+  `originator` of `codex_exec` or a `source` of `exec` means `ask` says to `wait`.
+- 2026-10-06. `pair --force` stays on the machine's server and name (#245); before, it paired a
+  self-hosted machine with starbridge.run under its hostname. Setup restarts an agent running
+  another version (a brew or npm upgrade), and the agent rewrites an outdated Codex skill when
+  it starts, so `starbridge update` also brings Codex the new skill.
 
 ## Encryption, with existing libraries
 

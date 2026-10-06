@@ -8,7 +8,7 @@ import { MachineKind } from "@starbridge/protocol";
 import { type Ctx, UsageError } from "./context";
 import { permissionsEnabled } from "./permissions";
 import { chainPiLink, PI_LINK, piChain } from "./pi";
-import type { Prompt } from "./setup/sys";
+import { type Prompt, which } from "./setup/sys";
 
 /**
  * A guess at what this machine is: `cloud` in a cloud session or codespace, `laptop` with a
@@ -60,7 +60,14 @@ export function setPermissions(ctx: Ctx, enabled: boolean) {
  */
 export async function offerPiChain(ctx: Ctx, prompt: Prompt | undefined) {
   const { state, file } = piChain(ctx.env);
-  if (state === "absent" || state === "chained") return;
+  if (state === "chained") return;
+  if (state === "absent") {
+    if (which(ctx.env, "pi"))
+      ctx.out(
+        "Pi: its permission prompts reach your devices through pi-permission-system (`pi install npm:@gotgenes/pi-permission-system`), then `starbridge config permissions on`.",
+      );
+    return;
+  }
   const how = `add "${PI_LINK}" to "authorizerChain" in ${file}`;
   if (state === "unreadable" || !prompt) {
     ctx.out(`Pi: to send pi-permission-system's prompts too, ${how}.`);

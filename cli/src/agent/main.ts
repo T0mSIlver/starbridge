@@ -1,4 +1,6 @@
+import { homedir } from "node:os";
 import { type Ctx, parseDuration } from "../context";
+import { codexSkill, codexSkillDir, installCodexSkill } from "../setup/harnesses";
 import { socketPath } from "./api";
 import { Decisions } from "./decisions";
 import { Permissions } from "./permissions";
@@ -33,6 +35,16 @@ export function makeAgent(ctx: Ctx, opts: AgentOpts = {}): Agent {
 export async function runAgent(ctx: Ctx, opts: AgentOpts): Promise<number> {
   const agent = makeAgent(ctx, opts);
   await agent.start();
+  // `starbridge update` restarts the agent, so a new binary brings Codex its skill here.
+  const home = { ctx, home: ctx.env.HOME ?? homedir() };
+  if (codexSkill(home) === "outdated") {
+    try {
+      installCodexSkill(home);
+      agent.log(`updated the Codex skill in ${codexSkillDir(home)}`);
+    } catch (e) {
+      agent.log(`could not update the Codex skill: ${(e as Error).message}`);
+    }
+  }
   await new Promise<void>((resolve) => {
     if (!ctx.signal || ctx.signal.aborted) return resolve();
     ctx.signal.addEventListener("abort", () => resolve(), { once: true });

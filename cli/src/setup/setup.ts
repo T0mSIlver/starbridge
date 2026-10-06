@@ -3,6 +3,7 @@
  * installs the agent's user service and the Claude Code plugins, then uploads a first snapshot.
  * Every step shows what it found, so a rerun changes only what is missing.
  */
+
 import type { QuotaSnapshot } from "@starbridge/protocol";
 import type { Status } from "../agent/api";
 import { AgentClient, withAgent } from "../agent/client";
@@ -15,6 +16,7 @@ import { DEFAULT_SERVER, pair } from "../pair";
 import { permissionsEnabled } from "../permissions";
 import { pushOnce } from "../quota";
 import { offerPiChain, rememberMachineKind, setPermissions } from "../settings";
+import { VERSION } from "../version";
 import {
   type Found,
   findCodexbar,
@@ -26,23 +28,30 @@ import {
   probeSet,
 } from "./codexbar";
 import {
+  codexRulePath,
   codexSkill,
   codexSkillDir,
   hasCodex,
+  hasCodexRule,
   hasPi,
+  installCodexRule,
   installCodexSkill,
   installPiPackage,
   PI_PACKAGE,
   piPackage,
 } from "./harnesses";
 import {
+  ALLOW_RULES,
+  addAllowRules,
   autoUpdate,
   enableAutoUpdate,
   hasClaude,
   installPlugins,
   legacyInstalls,
+  missingAllowRules,
   PLUGINS,
   pluginState,
+  settingsPath,
 } from "./plugins";
 import {
   enableLinger,
@@ -170,7 +179,7 @@ async function codexbarStep(sys: Sys, opts: SetupOpts): Promise<Quota | undefine
     }
     if (!found) {
       ctx.out(
-        "No quotas without CodexBar; decisions work without it. Rerun setup once it is installed.",
+        "No quotas without CodexBar; questions and runs work without it. `starbridge setup` installs it when you rerun it.",
       );
       return undefined;
     }
@@ -271,9 +280,12 @@ async function serviceStep(sys: Sys, opts: SetupOpts, configChanged: boolean) {
       }
     } else ctx.out(`Kept ${unit.name}: it and the agent both upload quotas.`);
   }
+  // After a brew or npm upgrade the agent still runs the old binary.
+  const running = await agentVersion(ctx);
+  const outdated = running !== undefined && running !== VERSION;
   let installed: { path: string; restarted: boolean };
   try {
-    installed = await installService(sys, configChanged);
+    installed = await installService(sys, configChanged || outdated);
   } catch (e) {
     ctx.out(`Could not start the agent service: ${(e as Error).message}`);
     return;
@@ -301,6 +313,17 @@ async function serviceStep(sys: Sys, opts: SetupOpts, configChanged: boolean) {
       const err = await enableLinger(sys);
       ctx.out(err ? `loginctl enable-linger failed: ${err}` : "Lingering is on.");
     } else ctx.out("The agent stops when your last session ends.");
+  }
+}
+
+/** The running agent's version, or undefined when none answers. */
+async function agentVersion(ctx: Ctx): Promise<string | undefined> {
+  const agent = AgentClient.for(ctx);
+  if (!agent) return undefined;
+  try {
+    return (await agent.call<Status>("GET", "/v1/status", undefined, 2_000)).version;
+  } catch {
+    return undefined;
   }
 }
 
@@ -354,6 +377,19 @@ async function pluginStep(sys: Sys) {
     (await prompt.confirm("Let Claude Code update the Starbridge plugins by itself?", true))
   )
     ctx.out(enableAutoUpdate(sys) ? "Auto-update is on." : "Could not turn on auto-update.");
+  if (
+    missingAllowRules(sys).length > 0 &&
+    (await prompt.confirm(
+      "Let Claude Code run `starbridge ask`, `waiting`, `wait` and `settle` without a permission prompt? They post questions to your devices and read your answers.",
+      true,
+    ))
+  ) {
+    ctx.out(
+      addAllowRules(sys)
+        ? `Allowed ${ALLOW_RULES.join(", ")} in ${settingsPath(sys)}.`
+        : `${settingsPath(sys)} is not valid JSON, so it stays as it is; add ${ALLOW_RULES.join(", ")} to permissions.allow there.`,
+    );
+  }
   for (const old of legacyInstalls(sys)) {
     if (await prompt.confirm(`Remove ${old.what}? The plugins replace it.`, true)) {
       old.remove();
@@ -369,19 +405,33 @@ async function codexStep(sys: Sys) {
   section(ctx, "Codex");
   const dir = codexSkillDir(sys);
   const state = codexSkill(sys);
-  if (state === "current") {
-    ctx.out(`The starbridge skill is in ${dir}.`);
-    return;
+  if (state === "current") ctx.out(`The starbridge skill is in ${dir}.`);
+  else {
+    const verb = state === "missing" ? "Install" : "Update";
+    if (await prompt.confirm(`${verb} the Starbridge skill for Codex in ${dir}?`, true)) {
+      try {
+        installCodexSkill(sys);
+        ctx.out(`${verb === "Install" ? "Installed" : "Updated"} ${dir}/SKILL.md.`);
+      } catch (e) {
+        ctx.out(`Could not write the skill: ${(e as Error).message}`);
+      }
+    } else ctx.out("Codex sessions won't know the skill: rerun setup to install it.");
   }
-  const verb = state === "missing" ? "Install" : "Update";
-  if (await prompt.confirm(`${verb} the Starbridge skill for Codex in ${dir}?`, true)) {
+  const rule = codexRulePath(sys);
+  if (hasCodexRule(sys)) ctx.out(`The starbridge rule is in ${rule}.`);
+  else if (
+    await prompt.confirm(
+      "Let `starbridge ask`, `waiting`, `wait` and `settle` run outside Codex's sandbox, which has no network?",
+      true,
+    )
+  ) {
     try {
-      installCodexSkill(sys);
-      ctx.out(`${verb === "Install" ? "Installed" : "Updated"} ${dir}/SKILL.md.`);
+      installCodexRule(sys);
+      ctx.out(`Wrote ${rule}.`);
     } catch (e) {
-      ctx.out(`Could not write the skill: ${(e as Error).message}`);
+      ctx.out(`Could not write the rule: ${(e as Error).message}`);
     }
-  } else ctx.out("Codex sessions won't know the skill: rerun setup to install it.");
+  } else ctx.out("Codex's sandbox will stop `starbridge ask`: rerun setup to add the rule.");
 }
 
 /** The Starbridge Pi package: the skill, the rules and answers into the session. */
@@ -418,7 +468,7 @@ async function permissionStep(sys: Sys) {
     return;
   }
   const on = await prompt.confirm(
-    "Also send Claude Code permission prompts to your devices? The Claude app already shows them for Remote Control sessions.",
+    "Also send permission prompts (Claude Code's, and Pi's through pi-permission-system) to your devices? The Claude app already shows Claude Code's for Remote Control sessions.",
     false,
   );
   if (on) setPermissions(ctx, true);

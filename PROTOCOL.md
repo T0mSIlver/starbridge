@@ -439,7 +439,10 @@ or `deny` with the message, or with one saying the owner denied it when the answ
 only when their rules fit the 500-character `rule` in full; `setMode` and other suggestions stay
 at the keyboard. Before printing, the machine marks the prompt settled, then posts `settled:
 device`; without an agent it gives that post 5 s, and SIGTERM or the deadline during it still end
-the hook with no answer.
+the hook with no answer. Every request the hook makes, the prompt's own post included, ends at SIGTERM or the
+deadline, through the agent or not, so a stalled server never holds the agent's dialog back. The
+Pi extension stops a CLI that ran 600 s, kills one still running 10 s after it was stopped, and
+defers either way.
 
 The keyboard can answer first. Esc or No sends the hook SIGTERM; it posts `settled: keyboard`
 and exits. A keyboard Yes sends no signal, so `starbridge hook settle` runs on `PostToolUse` and
