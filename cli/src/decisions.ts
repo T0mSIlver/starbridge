@@ -18,7 +18,7 @@ import {
 } from "@starbridge/protocol";
 import { ApiError } from "./api";
 import { claudeSession } from "./claude";
-import { type CodexSession, codexSession } from "./codex";
+import { type CodexSession, codexAsker, codexSession } from "./codex";
 import type { State } from "./config";
 import {
   type Ctx,
@@ -50,6 +50,8 @@ export interface AskInput {
   codex?: CodexSession;
   /** A Pi session whose Starbridge extension submits answers into it. */
   piAnswers?: boolean;
+  /** A `claude -p` session: the mod runs only in interactive ones, so nothing submits answers. */
+  headless?: boolean;
   project?: string;
   session?: string;
   sessionTitle?: string;
@@ -95,7 +97,7 @@ export function resolveSource(
   const session =
     input.session ??
     (agent === "codex"
-      ? env.CODEX_THREAD_ID
+      ? codexAsker(env)
       : agent === "pi"
         ? env.PI_SESSION_ID
         : env.CLAUDE_CODE_SESSION_ID) ??
@@ -103,6 +105,8 @@ export function resolveSource(
   const codex = agent === "codex" ? (input.codex ?? codexSession(env)) : undefined;
   const piAnswers =
     agent === "pi" && (input.piAnswers ?? (!!session && env[PI_ANSWERS] === session));
+  const headless =
+    agent === "claude-code" && (input.headless ?? env.CLAUDE_CODE_SESSION_ATTENDED === "0");
   const claude =
     session &&
     agent !== "codex" &&
@@ -118,6 +122,7 @@ export function resolveSource(
     ...(agent ? { agent } : {}),
     ...(codex ? { codex } : {}),
     ...(piAnswers ? { piAnswers } : {}),
+    ...(headless ? { headless } : {}),
     project: input.project ?? basename(cwd),
     session,
     ...(title !== undefined ? { sessionTitle: title } : {}),
@@ -174,14 +179,19 @@ export function buildDecision(input: AskInput, ctx: Ctx, machine: string, to: st
 }
 
 /**
- * `--agent`, else Claude Code, Codex or Pi when it runs this command: Claude Code sets
- * CLAUDECODE=1, Codex gives every command its session id in CODEX_THREAD_ID, Pi in PI_SESSION_ID.
+ * `--agent`, else the agent that runs this command: Claude Code sets CLAUDECODE=1, Codex gives
+ * every command its session id in CODEX_THREAD_ID, Pi in PI_SESSION_ID. An agent passes these
+ * on to the agents it starts, so two can be set. Codex and Pi run commands without a terminal,
+ * so a Claude Code they started runs as `claude -p` (CLAUDE_CODE_SESSION_ATTENDED=0); otherwise
+ * Codex or Pi was started from a Claude Code session (a `codex exec` review, a script) and asks.
  */
 function agentOf(input: AskInput, env: Ctx["env"]): { agent?: Agent } {
   if (input.agent !== undefined) return { agent: input.agent };
-  if (env.CLAUDECODE === "1") return { agent: "claude-code" };
+  const claude = env.CLAUDECODE === "1";
+  if (claude && env.CLAUDE_CODE_SESSION_ATTENDED === "0") return { agent: "claude-code" };
   if (env.CODEX_THREAD_ID) return { agent: "codex" };
-  return env.PI_SESSION_ID ? { agent: "pi" } : {};
+  if (env.PI_SESSION_ID) return { agent: "pi" };
+  return claude ? { agent: "claude-code" } : {};
 }
 
 function checked(decision: unknown): Decision {
@@ -491,10 +501,10 @@ export type Delivery = "prompt" | "wait";
 
 /** With no agent running, Codex gets nothing back; the mod and the Pi extension poll by themselves. */
 export function delivery(
-  input: Pick<AskInput, "agent" | "piAnswers">,
+  input: Pick<AskInput, "agent" | "piAnswers" | "headless">,
   codexReachable: boolean,
 ): Delivery {
-  if (input.agent === "claude-code") return "prompt";
+  if (input.agent === "claude-code") return input.headless ? "wait" : "prompt";
   if (input.agent === "pi") return input.piAnswers ? "prompt" : "wait";
   return input.agent === "codex" && codexReachable ? "prompt" : "wait";
 }

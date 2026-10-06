@@ -324,6 +324,26 @@ test("a decision names its agent and the machine's kind, which config sets", asy
   expect(await run(["config", "machine-kind", "phone"], ctx)).toBe(1);
 });
 
+test("a claude -p session is told to wait, since no mod brings its answer back", async () => {
+  const ctx = await paired(server);
+  ctx.env.CLAUDECODE = "1";
+  await run(ASK, ctx);
+  expect(ctx.errors.at(-1)).toBe("The answer will come back into this session as a new prompt.");
+  ctx.env.CLAUDE_CODE_SESSION_ATTENDED = "0";
+  await run(ASK, ctx);
+  expect(ctx.errors.at(-1)).toContain("run `starbridge wait");
+  // Started from a Pi session, it inherits Pi's variables, and still asks as itself.
+  ctx.env.PI_SESSION_ID = "p1";
+  ctx.env.STARBRIDGE_PI_ANSWERS = "p1";
+  await run(ASK, ctx);
+  expect(ctx.errors.at(-1)).toContain("run `starbridge wait");
+  expect((await server.opened("decision")).map((d) => d.agent)).toEqual([
+    "claude-code",
+    "claude-code",
+    "claude-code",
+  ]);
+});
+
 test("config turns permission prompts on and off", async () => {
   const ctx = await paired(server);
   expect(await run(["config"], ctx)).toBe(0);
