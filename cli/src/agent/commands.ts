@@ -61,13 +61,13 @@ export async function waitingVia(
 export async function waitVia(
   ctx: Ctx,
   agent: AgentClient,
-  opts: { id?: string; timeout?: string; json?: boolean },
+  opts: { id?: string; session?: string; timeout?: string; json?: boolean },
 ): Promise<number> {
   const next = (wait: number) =>
     agent.call<{ answer?: Answer; question?: string }>(
       "POST",
       "/v1/answers/next",
-      { ...(opts.id ? { id: opts.id } : {}), wait },
+      { ...(opts.id ? { id: opts.id } : { session: opts.session ?? "" }), wait },
       wait * 1000 + SLACK_MS,
       ctx.signal,
     );
