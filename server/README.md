@@ -187,7 +187,7 @@ release, restore the copy you made before upgrading.
 
 <dl>
 <dt><code>MAX_MACHINES</code></dt>
-<dd>Machines per account. Default: 5.</dd>
+<dd>Machines per account; phones and browsers don't count. Default: 5. starbridge.run sets 3.</dd>
 <dt><code>MAX_WAIT_SECONDS</code></dt>
 <dd>The longest an answer or pairing long-poll waits. Default: 300.</dd>
 </dl>

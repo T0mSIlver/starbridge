@@ -88,7 +88,8 @@ Your plan credentials stay on the machine, and only the encrypted snapshot goes 
 
 Nothing. starbridge.run is a small VPS the author pays for. The [terms](https://starbridge.run/terms)
 promise 60 days' notice before any price and 30 days' notice before a shutdown. Each account
-takes up to 5 machines. Self-hosting is free, under the MIT licence.
+takes up to 3 machines, the computers that run your agents, and any number of phones and
+browsers. Self-hosting is free, under the MIT licence.
 
 ## What's kept, and for how long?
 

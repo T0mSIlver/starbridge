@@ -768,9 +768,19 @@ Tokens, type and components: `DESIGN.md`.
   server's 30 s idle close) so TIME-WAIT sockets don't use up ports (#376). Caddy compresses every
   response and the web app none: Next's gzip ran on its one thread and filled it near 18 landing
   page visitors a second (#593). Nightly SQLite backups, kept 14 days.
-- **Capacity** (#301). A load test of the production stack on two cores held 2000 simulated users
-  at a 194 ms p99. On the production VPS, Caddy's memory runs out first, near 8000 users (each held
-  long-poll costs about 96 KB in Caddy and 13 KB in the server); CPU near 10,000.
+- **Capacity** (#301, #625). On the production stack capped to the VPS's two cores and 4 GB,
+  memory runs out first: each signed-in user with a machine and an open page holds two
+  long-polls, which cost about 300 KB in Caddy, 60 KB in the server and 55 KB in docker-proxy
+  (Caddy's hop to the server's published port), so about 5000 such users fit; CPU stays under
+  one core. A new visitor to the landing page costs about 50 ms of CPU across Next and Caddy
+  once Caddy compresses (#593), so the VPS serves 15 to 20 a second.
+- **Machines** (#658). A hosted account takes 3 machines, the computers that run agents, and any
+  number of phones and browsers; self-hosting sets its own (`MAX_MACHINES`, default 5). Each
+  machine holds a long-poll, about 200 KB on the VPS, and 3 covers a laptop, a desktop and a
+  server. Raising it later is a setting nobody notices; lowering it would strand accounts above
+  it. Devices need no cap of their own: the directory holds at most 200 entries, an account's
+  pages hold at most 16 join-list long-polls, Caddy limits each address's requests, and every
+  picture sealed to one more device counts against the account's 128 MB.
 - **Privacy and terms** (`/privacy`, `/terms`). Each claim follows the code: stored columns in
   `server/src/db.ts`, retention in `server/src/limits.ts`, logs and backups in `deploy/`. A change
   to what is stored changes the page, and the Play data-safety form. Contact is

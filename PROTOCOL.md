@@ -331,7 +331,7 @@ request without the header, or with one the server cannot read, is served.
 | Route | Who | What |
 |---|---|---|
 | `GET /directory?from=<seq>` | device, machine | `{entries}` from `seq` on |
-| `POST /directory` | device | append `{entry}`; 409 unless its `seq` is the next one; 403 `machine-cap` past the account's machine limit (5 on the hosted server); 409 `directory-full` for an add or a recovery proposal past 200 entries, beyond their budgets ("Limits") |
+| `POST /directory` | device | append `{entry}`; 409 unless its `seq` is the next one; 403 `machine-cap` past the account's machine limit (3 on the hosted server; devices don't count); 409 `directory-full` for an add or a recovery proposal past 200 entries, beyond their budgets ("Limits") |
 
 The server runs `verifyDirectory` before it accepts an entry, to refuse garbage early. Clients
 never rely on that check.
