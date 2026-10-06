@@ -746,9 +746,12 @@ Tokens, type and components: `DESIGN.md`.
   client addresses. Caddy keeps connections to the server open (`keepalive 25s`, below the
   server's 30 s idle close) so TIME-WAIT sockets don't use up ports (#376). Nightly SQLite backups,
   kept 14 days.
-- **Capacity** (#301). A load test of the production stack on two cores held 2000 simulated users
-  at a 194 ms p99. On the production VPS, Caddy's memory runs out first, near 8000 users (each held
-  long-poll costs about 96 KB in Caddy and 13 KB in the server); CPU near 10,000.
+- **Capacity** (#301, #625). On the production stack capped to the VPS's two cores and 4 GB,
+  memory runs out first: each signed-in user with a machine and an open page holds two
+  long-polls, which cost about 300 KB in Caddy, 60 KB in the server and 55 KB in docker-proxy
+  (Caddy's hop to the server's published port), so about 5000 such users fit; CPU stays under
+  one core. A new visitor to the landing page costs about 50 ms of CPU across Next and Caddy
+  once Caddy compresses (#593), so the VPS serves 15 to 20 a second.
 - **Privacy and terms** (`/privacy`, `/terms`). Each claim follows the code: stored columns in
   `server/src/db.ts`, retention in `server/src/limits.ts`, logs and backups in `deploy/`. A change
   to what is stored changes the page, and the Play data-safety form. Contact is
