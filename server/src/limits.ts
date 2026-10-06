@@ -76,6 +76,12 @@ export const DEFAULT_LIMITS = {
    */
   pairingsPerClient: 20,
 
+  /**
+   * Relayed pushes in flight on the whole server (RELAY_MODE). Each may take pushTimeoutMs, so
+   * a slow or hostile push service cannot pile up open requests; past it the relay answers 503.
+   */
+  relaySends: 16,
+
   /** Push subscription writes per account. */
   pushSubscribes: [30, MINUTE] as RateWindow,
 

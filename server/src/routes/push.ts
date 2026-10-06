@@ -72,6 +72,9 @@ pushRoutes.get("/push/vapid", async (c) => {
   return c.json({ publicKey });
 });
 
+/** Relayed pushes in flight, for the relaySends cap. */
+let relaying = 0;
+
 /**
  * Relay mode: forwards another server's push with this server's FCM and VAPID credentials.
  * The payload is already the device's ciphertext or an item id.
@@ -86,7 +89,12 @@ pushRoutes.post("/relay", async (c) => {
   const why = checkTarget(body, config.allowPrivatePushEndpoints);
   if (why) fail(400, "bad-endpoint", why);
   const { payload, ...target } = body;
-  const result = await push.send(target, payload, false);
+  if (relaying >= config.limits.relaySends)
+    return c.json({ error: "busy", detail: "too many pushes in flight; retry later" }, 503, {
+      "retry-after": "5",
+    });
+  relaying++;
+  const result = await push.send(target, payload, false).finally(() => relaying--);
   c.var.usage.record(`relay.${target.type}.${result}`);
   return c.json({ result }, result === "failed" ? 502 : 200);
 });

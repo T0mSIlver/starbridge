@@ -5,6 +5,7 @@ import * as ece from "http_ece";
 import webpush from "web-push";
 import { createApp } from "../src/app";
 import type { Config } from "../src/config";
+import { DEFAULT_LIMITS } from "../src/limits";
 import { checkTarget } from "../src/push";
 import { aggregate, dayOf } from "../src/usage";
 import {
@@ -386,6 +387,26 @@ test("the relay route is off unless RELAY_MODE, refuses UnifiedPush and private 
   expect(
     (await on.call("POST", "/v1/relay", { body: { ...msg, payload: "x".repeat(5000) } })).status,
   ).toBe(400);
+});
+
+test("the relay holds at most relaySends pushes in flight, then answers 503", async () => {
+  const on = await makeServer({
+    ...vapidConfig(),
+    relayMode: true,
+    limits: { ...DEFAULT_LIMITS, relaySends: 1 },
+  });
+  const slow = browserSubscription("x").target;
+  const relay = (path: string) =>
+    on.call("POST", "/v1/relay", {
+      body: { ...slow, endpoint: `${base()}${path}`, payload: "{}" },
+    });
+  const first = relay("/slow/relay");
+  while (!seen.some((x) => x.path === "/slow/relay")) await Bun.sleep(10);
+  const second = await relay("/wp/relay");
+  expect(second.status).toBe(503);
+  expect(second.headers.get("retry-after")).toBe("5");
+  expect((await first).json).toEqual({ result: "ok" });
+  expect((await relay("/wp/relay")).json).toEqual({ result: "ok" });
 });
 
 test("a relay without credentials of its own does not forward onward", async () => {

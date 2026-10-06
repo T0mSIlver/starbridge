@@ -27,19 +27,35 @@ starbridge.run {
 	# A deploy restarts the server (#150): while it is down, Caddy holds each request and retries
 	# it for up to 30 s, so clients see a pause instead of a 502.
 	handle @server {
-		reverse_proxy 127.0.0.1:8080 {
-			lb_try_duration 30s
-			lb_try_interval 250ms
-			health_uri /healthz
-			health_interval 1s
-			# Every open page and machine holds a long-poll, and each that returns frees its
-			# connection at once. Caddy keeps only 32 idle by default and closes the rest, each
-			# close leaving a TIME-WAIT socket on the host's ports (#301). Idle connections are
-			# dropped before the server's own 30 s idle timeout, so Caddy never sends a request on
-			# one the server is closing.
-			transport http {
-				keepalive 25s
-				keepalive_idle_conns_per_host 4096
+		route {
+			# Anyone can ask the relay to push (POST /v1/relay), so its pushes are bounded in all,
+			# not only per address as the server counts them: ten self-hosted servers at their
+			# own full rate. The server also caps pushes in flight (relaySends).
+			rate_limit {
+				disable_metrics
+				zone relay_all {
+					match {
+						path /v1/relay
+					}
+					key relay
+					events 300
+					window 1m
+				}
+			}
+			reverse_proxy 127.0.0.1:8080 {
+				lb_try_duration 30s
+				lb_try_interval 250ms
+				health_uri /healthz
+				health_interval 1s
+				# Every open page and machine holds a long-poll, and each that returns frees its
+				# connection at once. Caddy keeps only 32 idle by default and closes the rest, each
+				# close leaving a TIME-WAIT socket on the host's ports (#301). Idle connections are
+				# dropped before the server's own 30 s idle timeout, so Caddy never sends a request on
+				# one the server is closing.
+				transport http {
+					keepalive 25s
+					keepalive_idle_conns_per_host 4096
+				}
 			}
 		}
 	}
