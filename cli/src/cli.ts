@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { parseArgs } from "node:util";
 import { ProtocolError, ready, type SessionLink } from "@starbridge/protocol";
 import { AgentError, Interrupted, withAgent } from "./agent/client";
-import { answersVia, askVia, quotaVia, waitingVia, waitVia } from "./agent/commands";
+import { AgentGone, answersVia, askVia, quotaVia, waitingVia, waitVia } from "./agent/commands";
 import { runAgent } from "./agent/main";
 import { ApiError, sandboxHint, Unreachable } from "./api";
 import { StateFileError } from "./config";
@@ -188,6 +188,17 @@ function readJson(path: string): unknown {
   }
 }
 
+/** A `wait` whose agent stopped and stayed away goes on at the server (#548). */
+async function orServer(ctx: Ctx, viaAgent: Promise<number>): Promise<number> {
+  try {
+    return await viaAgent;
+  } catch (e) {
+    if (!(e instanceof AgentGone)) throw e;
+    ctx.err(`starbridge: ${e.message}; waiting at the server`);
+    return wait(ctx, e.rest);
+  }
+}
+
 export async function run(argv: string[], ctx: Ctx): Promise<number> {
   const [command, ...rest] = argv;
   try {
@@ -256,7 +267,7 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
         const opts = { wait: v.wait, timeout: v.timeout };
         return await withAgent(
           ctx,
-          (agent) => askVia(ctx, agent, input, opts),
+          (agent) => orServer(ctx, askVia(ctx, agent, input, opts)),
           () => ask(ctx, input, opts),
         );
       }
@@ -295,7 +306,7 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
         const opts = { id, ...(session !== undefined ? { session } : {}), ...values };
         return await withAgent(
           ctx,
-          (agent) => waitVia(ctx, agent, opts),
+          (agent) => orServer(ctx, waitVia(ctx, agent, opts)),
           () => wait(ctx, opts),
         );
       }

@@ -165,8 +165,8 @@ provider plugins add providers, not panels.
 - **Android keys** (#9) sit in files wrapped by a Keystore AES key usable while the screen is
   locked, so lock-screen buttons can sign. Signing out revokes the phone unless it is the last
   device.
-- **Versions** (#468, #469, #478). 1.0.0 is the compatibility floor, so nothing carries code for
-  clients before it: `ask` refuses `--default` and `--default-at` rather than ignoring them, and
+- **Versions** (#468, #469, #478, #551). 0.1.0, the first public release, is the compatibility
+  floor, so nothing carries code for clients before it: `ask` refuses `--default` and `--default-at` rather than ignoring them, and
   clients, setup and the CLI dropped what served earlier releases. Later compatibility branches
   name the minimum client release that retires them (`// until min cli >= 1.2`). An algorithm
   changes only with a new protocol version (`v: 2`, `starbridge/v2/...`, `/v2` routes) and members
@@ -269,7 +269,7 @@ provider plugins add providers, not panels.
 - **Schema migrations** (#470). `PRAGMA user_version` counts the migrations a database has run;
   each runs in one transaction with its version. A server refuses a database newer than it knows,
   so a rollback past a migration fails at start instead of writing rows the newer schema misreads.
-  Version 1 is the 1.0.0 schema with `IF NOT EXISTS`, so it adopts a database made before versions
+  Version 1 is the 0.1.0 schema with `IF NOT EXISTS`, so it adopts a database made before versions
   were counted. A migration changes the schema and never rewrites rows, to stay within the 30 s
   Caddy holds requests; backfills run in the hourly sweep. `apply.sh` backs the database up just
   before the new server starts and keeps the last five.
@@ -301,7 +301,9 @@ provider plugins add providers, not panels.
   keys and the server connection, uploads quotas, and routes answers, prompts and runs to sessions
   over HTTP on a unix socket (PROTOCOL.md, "Local agent API"). Every CLI command asks the local
   agent first and talks to the server itself when none listens or it answers 426; once it has
-  answered it never falls back, so nothing posts twice. Answers stay in the CLI's state file,
+  answered it never falls back, so nothing posts twice. `wait` is the exception (#548): the agent
+  marks an answer seen only for a client still listening, so when it restarts under a wait, the
+  wait asks the new one, and after 30 s with no agent it waits at the server. Answers stay in the CLI's state file,
   so both paths share one store.
 - **Files** in `~/.config/starbridge` (or `$XDG_CONFIG_HOME`, `$STARBRIDGE_CONFIG_DIR`): 0600 in a
   0700 directory. A `.lock` guards every read-modify-write (#33). A directory refresh keeps the
@@ -377,11 +379,11 @@ provider plugins add providers, not panels.
 - **Docs** (#211) at `/docs` are the repository's Markdown files listed in `web/src/lib/docs.ts`,
   rendered by the web page. Links between them become `/docs` links; other relative links go to
   GitHub.
-- **The CLI's agent-facing contract is frozen for 1.x** (#475): the commands, flags, output lines
-  and exit codes under "What agents parse" in `cli/README.md`, pinned by
-  `cli/test/contract.test.ts`. A 1.x release may add to it; changing or removing anything listed
-  takes a major version, since the plugins, the Pi extension and agents' instructions update apart
-  from the CLI. `--json` always means an output format (`wait --json`); `ask` reads its input with
+- **The CLI's agent-facing contract is stable from 0.1.0** (#475, #551): the commands, flags,
+  output lines and exit codes under "What agents parse" in `cli/README.md`, pinned by
+  `cli/test/contract.test.ts`. A release may add to it; changing or removing anything listed comes
+  only after a release that deprecates it, since the plugins, the Pi extension and agents'
+  instructions update apart from the CLI. `--json` always means an output format (`wait --json`); `ask` reads its input with
   `--input <path>`.
 - **Install and update.** `https://starbridge.run/install.sh` is `cli/install.sh`, prerendered by
   the web page, so each deploy serves its own revision's script. It checks `SHA256SUMS` with
@@ -687,8 +689,9 @@ Tokens, type and components: `DESIGN.md`.
   arm64, cross-compiled by Bun on Linux), `SHA256SUMS` signed with minisign in CI (public key in
   `cli/minisign.pub`), `install.sh`, and notes from merged PRs. `-rc` tags are prereleases and go
   to npm under `next`. Non-rc tags commit the formula to `T0mSIlver/homebrew-starbridge`. The npm
-  step skips without `NPM_TOKEN` (#480). versionCode is `MAJOR*1000000 + MINOR*10000 + PATCH*100`
-  plus the rc number or 99, so release candidates sort first. Play App Signing keeps the release
+  step skips without `NPM_TOKEN` (#480). versionCode is `2000000 + MAJOR*1000000 + MINOR*10000 +
+  PATCH*100` plus the rc number or 99, so release candidates sort first; the 2000000 keeps 0.1.0
+  above 1.0.0-rc.1 (1000001), which Play's closed test already had (#551). Play App Signing keeps the release
   key, so Play and GitHub builds share one signature (#148).
 - **One version everywhere** (#471). `bun cli/scripts/version.ts <version>` stamps the version
   into `cli/package.json`, `web/package.json`, both `plugin.json`, the mod's `VERSION`, Android's

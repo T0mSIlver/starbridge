@@ -198,6 +198,58 @@ test("an agent restart loses no unconfirmed answer", async () => {
   expect(await s1.events()).toEqual([]);
 });
 
+test("a wait held at the agent survives an agent restart (#548)", async () => {
+  const { ctx, socket, agent } = await machine();
+  const c = client(socket);
+  const id = await ask(c, "--session", "s1", "--project", "p");
+  const done = run(["wait", id, "--timeout", "1m"], c);
+  await Bun.sleep(300);
+  // A new binary and a service restart: the held request dies with the old agent.
+  await agent.stop();
+  await Bun.sleep(200);
+  const again = makeAgent(ctx, { socket });
+  await again.start();
+  agents.push(again);
+  await server.answer(id, { choice: "Merge" });
+  expect(await done).toBe(0);
+  expect(c.lines.at(-1)).toBe(`Answer to ${id} (Merge #12 now?): Merge`);
+});
+
+test("a wait whose agent stays away goes on at the server (#548)", async () => {
+  const { ctx, agent } = await machine();
+  const id = await ask(ctx, "--session", "s1", "--project", "p");
+  // A clock that runs fast while the agent is away, so its 30 s pass in a moment.
+  let speed = 1;
+  let last = Date.now();
+  let fake = last;
+  ctx.now = () => {
+    const t = Date.now();
+    fake += (t - last) * speed;
+    last = t;
+    return new Date(fake);
+  };
+  const done = run(["wait", id, "--timeout", "10m"], ctx);
+  await Bun.sleep(300);
+  await agent.stop();
+  speed = 1000;
+  await until(() => ctx.errors.some((e) => e.includes("waiting at the server")));
+  speed = 1;
+  await server.answer(id, { choice: "Wait" });
+  expect(await done).toBe(0);
+  expect(ctx.lines.at(-1)).toBe(`Answer to ${id} (Merge #12 now?): Wait`);
+});
+
+test("a wait whose agent stopped still ends at its timeout (#548)", async () => {
+  const { ctx, agent } = await machine();
+  const id = await ask(ctx, "--session", "s1", "--project", "p");
+  const started = Date.now();
+  const done = run(["wait", id, "--timeout", "2s"], ctx);
+  await Bun.sleep(300);
+  await agent.stop();
+  expect(await done).toBe(2);
+  expect(Date.now() - started).toBeLessThan(5_000);
+});
+
 test("the socket is the user's only, and a second agent refuses to start", async () => {
   const { ctx, socket } = await machine();
   expect(statSync(socket).mode & 0o777).toBe(0o600);

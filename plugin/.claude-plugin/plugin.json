@@ -1,6 +1,6 @@
 {
   "name": "starbridge",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "description": "The starbridge skill, and a rule that has every session reach the owner through it: decisions that are theirs, work they must act on, and commands that block them",
   "author": {
     "name": "Tom Vaucourt"

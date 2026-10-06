@@ -218,14 +218,14 @@ or nothing if the terminal answers first or the server can't be reached.
 
 Agents, the Starbridge skill, the Claude Code plugins, the Pi extension and the opencode plugin
 read the commands below and their output. The plugins update apart from the CLI, so this list is
-frozen for every 1.x release: a release may add commands, flags, variables, fields and lines, but
-changing or removing anything here takes a new major version. `cli/test/contract.test.ts` pins
+stable from 0.1.0, the first public release: a release may add commands, flags, variables, fields
+and lines, but changes or removes anything here only after a release that deprecates it. `cli/test/contract.test.ts` pins
 the lines; the hook outputs are pinned in `cli/test/permissions.test.ts`.
 
 | Command | Contract |
 |---|---|
 | `ask` | Flags `--question`, `--context`, `--context-file`, `--option`, `--recommended`, `--waiting`, `--agent`, `--project`, `--session`, `--session-title`, `--session-link`, `--image`, `--link`, `--answer-in`, `--input <path>` (a JSON file with the same fields, `-` for stdin), `--wait`, `--timeout`. Prints the decision id alone on stdout: `d_` and 16 characters from `A-Z a-z 0-9 _ -`. With `--wait`, then what `wait` prints; without it, one line on stderr, either `The answer will come back into this session as a new prompt.` or ``Nothing brings the answer into this session: when only the answer is left, run `starbridge wait <id> --timeout 5m` (again on exit 2).`` |
-| `wait [<id>]` | Flags `--timeout`, `--json`. Prints `Answer to <id> (<question>): <choice or text>`, or for an `--answer-in` question the owner marked Done, `Answer to <id> (<question>): answered on its page; read the answer there`; with `--json`, the answer as one JSON object with `decisionId` and `choice`, `text` or `done: true`. Exits 2 when `--timeout` passed. |
+| `wait [<id>]` | Flags `--timeout`, `--json`. Prints `Answer to <id> (<question>): <choice or text>`, or for an `--answer-in` question the owner marked Done, `Answer to <id> (<question>): answered on its page; read the answer there`; with `--json`, the answer as one JSON object with `decisionId` and `choice`, `text` or `done: true`. Exits 2 when `--timeout` passed. An agent restart does not end it: it asks the new agent, and after 30 s with none it waits at the server. |
 | `waiting <id>`, `working <id>` | No output on success. |
 | `settle <id>` | Flag `--outcome elsewhere\|withdrawn`. |
 | `answers --session <id>` | Flags `--wait <seconds>`, `--ack <ack>`. Prints one JSON object per line: `{"decisionId", "ack", "line"}`, where `line` is the `Answer to` line above. |
