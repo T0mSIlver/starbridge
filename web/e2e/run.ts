@@ -50,7 +50,7 @@ const DESKTOP = { width: 1280, height: 860 };
 const tmp = mkdtempSync(join(tmpdir(), "starbridge-e2e-"));
 const children: ChildProcess[] = [];
 
-/** Two PNGs to attach to a decision: the sample data's pair of landing heroes (lib/sample.ts). */
+/** Two PNGs to attach to a decision: the sample data's pair of layouts (lib/sample.ts). */
 function image(which: "a" | "b"): string {
   const shots = JSON.parse(readFileSync(join(WEB, "src/lib/sample-shots.json"), "utf8"));
   const path = join(tmp, `hero-${which}.png`);
