@@ -292,6 +292,13 @@ provider plugins add providers, not panels.
 - Caps (#27, #36, #37): 10 subscriptions a device, 30 an account; 4 pushes in flight and 200
   waiting per account, 10 s each. A push connects to the exact address that passed the
   private-range check, and is sent only if its subscription and device are still active (#260).
+- A server's VAPID key can change, as when a self-hoster leaves the relay for their own keys
+  (#567). Each page boot compares the browser's subscription key with the server's and subscribes
+  again when they differ. The server drops a Web Push subscription its push service refuses with
+  403, as RFC 8292 has it for a key mismatch; a UnifiedPush 403 is the distributor's access control
+  and keeps the target. The cost: a 403 for another reason, such as a server clock hours off, drops
+  the account's browser subscriptions too, and each comes back only when its page opens. Those
+  pushes were failing anyway.
 - An Android app in front syncs every 10 s until a push has reached it (#445), since a server
   without a relay or UnifiedPush pushes nothing and cannot tell.
 
