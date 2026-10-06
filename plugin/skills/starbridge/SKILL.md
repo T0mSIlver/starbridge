@@ -125,6 +125,9 @@ something else:
 Answer to d_Xk3… (Run the orders migration now, or after tonight's 18:00 backup?): Now
 ```
 
+In Codex the prompt only names the card (`Starbridge has the owner's answer to
+d_Xk3…`): run the `starbridge wait d_Xk3…` it gives, which prints that line.
+
 **"Nothing brings the answer into this session…"** Never end your turn with
 this card open. When you have nothing left to do but the answer, wait for it:
 

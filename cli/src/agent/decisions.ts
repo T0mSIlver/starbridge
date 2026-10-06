@@ -5,12 +5,11 @@
  * session has not confirmed, and the CLI's own path (no agent) reads the same state.
  */
 import { activeMembers, type Directory, ProtocolError } from "@starbridge/protocol";
-import { codexQueue, codexReachable } from "../codex";
+import { codexNotice, codexQueue, codexReachable } from "../codex";
 import { type Ctx, iso, session, UsageError } from "../context";
 import {
   type AskInput,
   ackLines,
-  answerLine,
   deliverable,
   delivery,
   poll,
@@ -162,11 +161,7 @@ export class Decisions implements Feature {
         continue;
       const retry = this.retries.get(id) ?? { tries: 0, at: 0 };
       if (retry.tries >= CODEX_TRIES || retry.at > now) continue;
-      const error = await codexQueue(
-        asked.codex,
-        asked.session,
-        answerLine(a.answer, asked.question),
-      );
+      const error = await codexQueue(asked.codex, asked.session, codexNotice(id));
       if (error === undefined) {
         this.retries.delete(id);
         this.ctx.store.updateState((st) => {

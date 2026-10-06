@@ -5,7 +5,7 @@
  * agent delivers answers to Codex sessions that way, as the Claude Code mod submits them.
  */
 import { spawn } from "node:child_process";
-import { closeSync, openSync, readdirSync, readSync } from "node:fs";
+import { closeSync, openSync, readdirSync, readSync, statSync } from "node:fs";
 import { createConnection } from "node:net";
 import { delimiter, join } from "node:path";
 import type { Ctx } from "./context";
@@ -75,7 +75,9 @@ function which(name: string, path: string | undefined): string | undefined {
   for (const dir of (path ?? "").split(delimiter)) {
     if (!dir) continue;
     const p = join(dir, name);
-    if (Bun.file(p).size > 0) return p;
+    try {
+      if (statSync(p).size > 0) return p;
+    } catch {}
   }
   return undefined;
 }
@@ -99,6 +101,15 @@ export function codexReachable(s: CodexSession): Promise<boolean> {
 }
 
 const QUEUE_MS = 30_000;
+
+/**
+ * What the agent queues into a Codex session for an answer. `codex queue` takes the message
+ * only as an argument, which other local users can read in /proc/<pid>/cmdline, so it names the
+ * decision and the command that prints the answer, never the question or the answer.
+ */
+export function codexNotice(id: string): string {
+  return `Starbridge has the owner's answer to ${id}: run \`starbridge wait ${id}\` to read it.`;
+}
 
 /** Queues `message` into Codex session `thread`; resolves to the error, or undefined. */
 export function codexQueue(

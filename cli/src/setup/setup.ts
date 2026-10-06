@@ -45,6 +45,7 @@ import {
   addAllowRules,
   autoUpdate,
   enableAutoUpdate,
+  foreignMarketplace,
   hasClaude,
   installPlugins,
   legacyInstalls,
@@ -352,6 +353,11 @@ async function pluginStep(sys: Sys) {
   const state = await pluginState(sys);
   if (!state) {
     ctx.out("`claude plugin list` failed: skipped.");
+    return;
+  }
+  const foreign = foreignMarketplace(state);
+  if (foreign) {
+    ctx.out(`Skipped: ${foreign}.`);
     return;
   }
   const missing = !state.marketplace || PLUGINS.some((id) => !state.plugins[id]);

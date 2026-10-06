@@ -8,7 +8,7 @@ mkdir -p "$s"
 shift
 case "$1 $2" in
   "marketplace list")
-    if [ -f "$s/market" ]; then echo '[{"name":"starbridge","source":"github","repo":"T0mSIlver/starbridge"}]'; else echo '[]'; fi ;;
+    if [ -f "$s/market" ]; then echo "[{\"name\":\"starbridge\",\"source\":\"github\",\"repo\":\"${FAKE_MARKET_REPO:-T0mSIlver/starbridge}\"}]"; else echo '[]'; fi ;;
   "marketplace add")
     [ -n "$FAKE_FAIL_ADD" ] && { echo "git clone failed" >&2; exit 1; }
     touch "$s/market"
