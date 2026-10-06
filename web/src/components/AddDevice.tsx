@@ -36,6 +36,8 @@ export function AddDevice() {
   const [error, setError] = useState<string>();
   const [done, setDone] = useState<PairOutcome>();
   const cancelShown = useRef<() => void>(undefined);
+  /** The code of the last pairing link this tab opened. */
+  const latest = useRef<string>(undefined);
   const now = useNow(!!shown);
   useEffect(() => () => cancelShown.current?.(), []);
 
@@ -78,9 +80,18 @@ export function AddDevice() {
       holdPairCode();
       const fromLink = takePairCode();
       if (!fromLink) return false;
+      // The QR code and whatever the page showed belong to the request before this one.
+      cancelShown.current?.();
+      setShown(undefined);
       setDone(undefined);
+      setReq(undefined);
       setCode(fromLink);
-      run(async () => setReq(await (await load()).readPairing(fromLink)));
+      latest.current = fromLink;
+      run(async () => {
+        const r = await (await load()).readPairing(fromLink);
+        // A link opened since then has the page now.
+        if (latest.current === fromLink) setReq(r);
+      });
       return true;
     };
     if (!arrive()) showQr();
