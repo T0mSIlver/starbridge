@@ -369,6 +369,8 @@ async function main() {
   await page.getByLabel(/I wrote this key down/).check();
   await page.getByRole("button", { name: "Continue" }).click();
   await page.getByRole("heading", { name: "Inbox" }).waitFor();
+  // No machine yet: the inbox says how to add one (#610).
+  await page.getByRole("heading", { name: "Add a machine" }).waitFor();
   await shoot(page, "inbox-empty");
 
   step("turn on Web Push");
@@ -392,6 +394,15 @@ async function main() {
   if ((await pair.exited) !== 0) throw new Error("pair failed");
   await page.getByRole("status", { name: "Pairing result" }).getByText("devbox joined").waitFor();
   await shoot(page, "pair-joined");
+  await page.goto(`${ORIGIN}/`);
+  await page.getByText("Nothing needs you").waitFor();
+  if (await page.getByRole("heading", { name: "Add a machine" }).count())
+    throw new Error("the inbox still says to add a machine after one joined");
+  await page
+    .getByRole("navigation", { name: "Main" })
+    .getByRole("link", { name: "Settings" })
+    .click();
+  await page.getByRole("link", { name: "Add a device" }).click();
 
   step("refuse a second pairing");
   const other = cli("pair-refused", ["pair", "--name", "stranger"], join(tmp, "stranger"));
