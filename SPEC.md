@@ -1341,13 +1341,14 @@ so the mod is the first path.
 - 2026-10-06. Pi gets the allow rules Claude Code and Codex have (#322, #323, #324, from the #298
   audit). With pi-permission-system installed, setup offers to add `"starbridge ask *"`,
   `waiting`, `working`, `wait` and `settle` as `"allow"` to `permission.bash` in its config,
-  after the owner's own patterns since the last match wins; a plain level there becomes the
-  `"*"` pattern, which means the same. Before it, Pi stopped every `starbridge ask` at a
+  after the owner's own patterns since the last match wins. A plain level there (`"bash":
+  "ask"`) stays, and setup prints the lines to add instead: as `{"*": "ask"}` it would merge
+  with a project's bash map rather than give way to it. Before it, Pi stopped every `starbridge ask` at a
   permission dialog. Uninstall takes out exactly those patterns and the `starbridge` link in
   `authorizerChain`, which otherwise made pi-permission-system warn at every prompt, and
-  deletes the file when nothing else is left in it. A `wait` without an id takes only answers
-  to the calling session's own decisions, so it cannot take one that another session's mod or
-  `wait` is due. Checked with Pi 1.0.4 and pi-permission-system 39.1.0: `starbridge ask` ran
+  deletes the file when nothing else is left in it. A `wait` without an id, run in an agent's
+  session, takes only answers to that session's decisions, so it cannot take one that another
+  session's mod or `wait` is due; outside an agent's session it still takes any. Checked with Pi 1.0.4 and pi-permission-system 39.1.0: `starbridge ask` ran
   without a dialog while `touch` still asked, and uninstall left no config behind.
 
 ## Encryption, with existing libraries

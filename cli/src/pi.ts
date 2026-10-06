@@ -125,23 +125,27 @@ export function piAllow(env: Ctx["env"]): {
   if (state === "absent" || state === "unreadable") return { state, file };
   const bash = bashRules(readConfig(file));
   if (bash === undefined) return { state: "unreadable", file };
-  const allowed = PI_ALLOW.every((p) => bash[p] === "allow");
+  // Last, since the last match wins: a later pattern of the owner's could shadow them.
+  const tail = Object.entries(bash).slice(-PI_ALLOW.length);
+  const allowed = PI_ALLOW.every((p, i) => tail[i]?.[0] === p && tail[i]?.[1] === "allow");
   return { state: allowed ? "allowed" : "missing", file };
 }
 
-/** `permission.bash` as a pattern map, a plain level `L` read as `{"*": L}`; undefined when odd. */
+/**
+ * `permission.bash` as a pattern map; undefined for any other shape. A plain level is left to
+ * the owner: as `{"*": level}` it would merge with a project's bash map instead of giving way.
+ */
 function bashRules(config: Config | undefined): Config | undefined {
   if (!config) return undefined;
   const permission = config.permission ?? {};
   if (!isObject(permission)) return undefined;
   const bash = permission.bash ?? {};
-  if (typeof bash === "string") return { "*": bash };
   return isObject(bash) ? bash : undefined;
 }
 
 /**
- * Adds PI_ALLOW to `permission.bash`, after the owner's own patterns since the last match wins,
- * keeping the rest of the file. A plain level becomes the `"*"` pattern, which means the same.
+ * Adds PI_ALLOW to `permission.bash`, a pattern map or none, after the owner's own patterns
+ * since the last match wins, keeping the rest of the file.
  */
 export function allowPiCommands(file: string) {
   const config = readConfig(file) ?? {};

@@ -67,7 +67,11 @@ export async function waitVia(
     agent.call<{ answer?: Answer; question?: string }>(
       "POST",
       "/v1/answers/next",
-      { ...(opts.id ? { id: opts.id } : { session: opts.session ?? "" }), wait },
+      {
+        ...(opts.id ? { id: opts.id } : {}),
+        ...(opts.session ? { session: opts.session } : {}),
+        wait,
+      },
       wait * 1000 + SLACK_MS,
       ctx.signal,
     );

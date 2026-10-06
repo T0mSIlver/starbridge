@@ -84,7 +84,8 @@ const HELP = `starbridge: post decisions to your devices, report runs, upload qu
       out of the inbox.
 
   starbridge wait [<decision id>] [--timeout <duration>] [--json]
-      Print the answer, or with no id the next answer to a decision this session asked.
+      Print the answer, or with no id the next answer to a decision this session asked (any
+      decision from this machine, outside an agent's session).
       With an id, marks the decision waiting first. Waits until --timeout, else forever;
       exits 2 when --timeout passed.
 
@@ -263,8 +264,11 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
           options: { timeout: { type: "string" }, json: { type: "boolean" } },
         });
         const id = positionals[0];
-        // Without an id, only this session's answers: the others are for their own sessions.
-        const session = id ? undefined : resolveSource({}, ctx.env, process.cwd()).session;
+        // Without an id, in an agent's session, only that session's answers: the others are due
+        // to their own sessions. A script or terminal outside one still takes any.
+        const session = id
+          ? undefined
+          : resolveSource({}, ctx.env, process.cwd()).session || undefined;
         const opts = { id, ...(session !== undefined ? { session } : {}), ...values };
         return await withAgent(
           ctx,

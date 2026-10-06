@@ -217,7 +217,7 @@ test("uninstall removes the service and plugins, asks the devices to revoke, kee
   // pi-permission-system with the owner's own policy, and the link `config permissions on` adds.
   const pps = join(m.home, ".pi/agent/extensions/pi-permission-system/config.json");
   mkdirSync(dirname(pps), { recursive: true });
-  const own = { permission: { bash: "ask" }, authorizerChain: ["judge", "starbridge"] };
+  const own = { permission: { bash: { "*": "ask" } }, authorizerChain: ["judge", "starbridge"] };
   writeFileSync(pps, JSON.stringify(own));
   await setup(m.sys, { yes: true, readyTimeoutMs: 2_000 });
   // The starbridge commands run without a prompt, after the owner's rules: the last match wins.

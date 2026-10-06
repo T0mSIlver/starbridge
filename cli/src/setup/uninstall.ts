@@ -117,7 +117,11 @@ export async function uninstall(sys: Sys, opts: UninstallOpts): Promise<number> 
     }
 
   const piConfig = piPermissionConfig(ctx.env);
-  if (removePiEntries(ctx.env)) ctx.out(`Removed Starbridge's entries from ${piConfig}.`);
+  try {
+    if (removePiEntries(ctx.env)) ctx.out(`Removed Starbridge's entries from ${piConfig}.`);
+  } catch (e) {
+    ctx.out(`Could not remove Starbridge's entries from ${piConfig}: ${(e as Error).message}`);
+  }
 
   const dir = ctx.store.dir;
   if (!stopped && existsSync(dir)) {
