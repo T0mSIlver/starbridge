@@ -1,9 +1,9 @@
 # Starbridge spec
 
-What Starbridge does and why, by area. Each rule names the issue where it was decided, and the
-issue holds the discussion. `PROTOCOL.md` has the wire format and `DESIGN.md` the look; this file
-covers what they don't. When a change makes or changes a decision, edit its section and replace
-what it supersedes (AGENTS.md).
+What Starbridge does and why, by area. Most rules name the issue where they were decided, which
+holds the discussion. `PROTOCOL.md` has the wire format and `DESIGN.md` the look; this file covers
+what they don't. A change that makes or changes a decision edits its section here and replaces
+what it supersedes.
 
 ## What it is
 
@@ -50,8 +50,8 @@ Copy says "on each machine that runs agents", never "on each machine" alone.
 The web app ships first wherever it can: installed to the home screen on iOS (Web Push works for
 home-screen web apps since iOS 16.4) and as an installed app on desktop browsers. Android is a
 native app. No native iOS app until there is demand and a device to test on. A desktop app, if
-one comes, is Tauri over Electron, to reuse the web code. Not a menu "bar" app, so no name ending
-in "bar".
+one comes, is Tauri over Electron, to reuse the web code; a Mac surface may instead live in
+CodexBar's menu bar, upstream.
 
 ## Architecture
 
@@ -66,11 +66,11 @@ agent sessions --CLI--> starbridge agent (one per machine) --HTTPS--> server <--
 | `packages/protocol` | zod schemas, signing and sealing on libsodium, quota pace and alerts, JSON test vectors the Kotlin client also passes |
 | `server` | Hono on Bun with `bun:sqlite`, one Docker image; `RELAY_MODE` also makes it the push relay |
 | `cli` | the `starbridge` command and `starbridge agent` |
-| `plugin`, `mod` | Claude Code plugins: the skill and hooks; the mod. `mod/pi` and `mod/opencode` hold the Pi extension and opencode plugin |
+| `plugin`, `mod` | Claude Code's two plugins: `starbridge` (skill and hooks) and `starbridge-mod`, split so that builds refusing mods keep the rest. `mod/pi` and `mod/opencode` hold the Pi extension and opencode plugin |
 | `web` | Next.js; decrypts in the browser |
 | `android` | Kotlin and Compose |
 | `deploy` | the hosted instance |
-| `demo` | the Play reviewers' demo machine |
+| `demo` | the program behind the Play reviewers' demo server |
 | `evals` | the skill eval and the load test |
 | `docs` | pages served under `/docs` |
 
@@ -102,8 +102,8 @@ provider plugins add providers, not panels.
   anyone uses a new `op`.
 - **Directory cap** (#260). From entry 200 the server refuses a device-signed `add`
   (`directory-full`) but always takes a revocation and up to 20 recovery entries, so a lost
-  machine can still be revoked and an owner can still recover. The chain stays under about 440
-  entries. No compaction: a checkpoint would need a new trust rule for pins.
+  machine can still be revoked and an owner can still recover. Recovery entries have caps of
+  their own, so the chain stays bounded. No compaction: a checkpoint would need a new trust rule for pins.
 - **Pairing.** A pairing code carries an 80-bit secret the server never sees, which keys an HMAC
   on both pairing messages. A device signed in to the account can instead join by digits (a
   6-digit short authentication string with a commitment, as in ZRTP and Matrix SAS), by scanning a
@@ -116,8 +116,8 @@ provider plugins add providers, not panels.
   BLAKE2b-256 of `"starbridge/v1/recovery-seed" NUL seed` stretches it to an Ed25519 seed. It is not
   shown as words: a new site that shows 12 words and later asks for them back looks like
   seed-phrase phishing, and Chrome flagged starbridge.run for it. No page says "seed" or "phrase".
-- **The first entry is posted only once the owner confirms the key is saved** (#328, #370), and the
-  key is never stored. A browser marks its device posted before it posts the genesis, so an empty
+- **The first entry is posted only once the owner confirms the key is saved** (#328, #370). The web
+  never stores the key; Android keeps the seed in its encrypted store until that confirmation. A browser marks its device posted before it posts the genesis, so an empty
   directory after that is the server's doing, and the keys stay (#371).
 - **Replacing the recovery key** (#348) takes two entries: `recovery` proposes a key, signed by a
   device and the new key; `recovery-confirm` makes it current, signed by the current key and naming
@@ -134,8 +134,9 @@ provider plugins add providers, not panels.
   hold into each answer (`dir`); a machine refuses every device answer while an active device has
   signed a head its chain lacks. Machines sign `dir` into every item; a device re-reads the
   directory, then holds every machine's items (shows none, notifies nothing, sends no answer)
-  while an active machine has signed a head its chain lacks. A head a machine passes on from a
-  device the chain doesn't list counts until that device shows up revoked. The hold names the
+  while an active machine has signed a head its chain lacks. A machine also passes on heads it
+  got from devices. Such a head counts even when the chain doesn't list that device yet, until
+  the chain shows the device revoked. The hold names the
   machine and the device and says to revoke the machine first, since a compromised machine can
   name the owner's own phone. Settings and revoking keep working. Closing the gap fully needs a
   channel the server does not carry.
@@ -154,9 +155,10 @@ provider plugins add providers, not panels.
   locked, so lock-screen buttons can sign. Signing out revokes the phone unless it is the last
   device.
 - **Versions** (#468, #469, #478). 1.0.0 is the compatibility floor. Later compatibility branches
-  name the minimum client release that retires them (`// until min cli >= 1.2`). Clients send
-  `starbridge-client: <name>/<version>` (`cli`, `android`, `web`, `mod`; MAJOR.MINOR.PATCH); a
-  request without it is still served. An algorithm changes only with a new protocol version
+  name the minimum client release that retires them (`// until min cli >= 1.2`). Clients are to
+  name themselves in `starbridge-client: <name>/<version>` (`cli`, `android`, `web`, `mod`;
+  MAJOR.MINOR.PATCH), defined in `packages/protocol/src/client.ts` and not yet sent (#468); a
+  request without it stays served. An algorithm changes only with a new protocol version
   (`v: 2`, `starbridge/v2/...`, `/v2` routes) and members re-pair; keys change only by revoke and
   add.
 
@@ -201,7 +203,7 @@ provider plugins add providers, not panels.
   re-posts them (`reseal`). The server takes a re-post only from the machine that posted the item,
   only while it is open, keeps its arrival time and pushes only the new recipients. Nothing is
   re-sealed while the machine finds the directory behind.
-- **Fresh quotas** (#158, #450). The agent posts a snapshot once its directory holds a new device.
+- **Fresh quotas** (#158, #450). The local agent posts a snapshot once its directory holds a new device.
   `POST /quota/ask` wakes the machines and holds until each posted, up to 25 s, under the 30 s at
   which proxies cut long polls; 6 a minute per account, since each runs CodexBar on every machine.
 - **Full disk** (#301). Writes get 503 `storage-full` with `Retry-After`; usage counts and
@@ -228,17 +230,17 @@ provider plugins add providers, not panels.
 
 ## Machines
 
-- **`starbridge agent`** (#68), one per machine as a user service (systemd or launchd), owns the
+- **The local agent**, `starbridge agent` (#68), one per machine as a user service (systemd or launchd), owns the
   keys and the server connection, uploads quotas, and routes answers, prompts and runs to sessions
-  over HTTP on a unix socket (PROTOCOL.md, "Local agent API"). Every CLI command asks the agent
-  first and talks to the server itself when none listens or the agent answers 426; once the agent
-  has answered it never falls back, so nothing posts twice. Answers stay in the CLI's state file,
+  over HTTP on a unix socket (PROTOCOL.md, "Local agent API"). Every CLI command asks the local
+  agent first and talks to the server itself when none listens or it answers 426; once it has
+  answered it never falls back, so nothing posts twice. Answers stay in the CLI's state file,
   so both paths share one store.
 - **Files** in `~/.config/starbridge` (or `$XDG_CONFIG_HOME`, `$STARBRIDGE_CONFIG_DIR`): 0600 in a
   0700 directory. A `.lock` guards every read-modify-write (#33). A directory refresh keeps the
   longer of the fetched and saved chains, each required to extend the other's pin.
 - **The socket** is bound under a 077 umask (#95). There is no peer uid check, since neither Bun
-  nor Node exposes `SO_PEERCRED`. The agent runs only the CodexBar binary its own config names,
+  nor Node exposes `SO_PEERCRED`. The local agent runs only the CodexBar binary its own config names,
   never a path a client sends.
 - **Answers on the machine** (#260). A machine accepts an answer only from a device the question
   was sealed to, only while it is open, and never for an `answerIn` question. A settled question's
@@ -255,14 +257,17 @@ provider plugins add providers, not panels.
   path survives brew upgrades. Setup turns on plugin auto-update through `extraKnownMarketplaces`,
   installs the Claude Code plugins only from a marketplace whose source is this repository (#274),
   and offers, each after asking, Codex's skill, the Pi package and opencode's plugin and skill,
-  from copies the CLI carries so versions match. The agent rewrites outdated copies when it
-  starts.
+  from copies the CLI carries so versions match. The local agent rewrites outdated copies when
+  it starts.
 - **Allow rules** (#245, #322, #443). So a new user's first question needs no prompt and no sandbox
   flag, setup allows `starbridge ask`, `waiting`, `working`, `wait` and `settle`: Claude Code allow
   rules, a Codex execpolicy file (`~/.codex/rules/starbridge.rules`) that runs them outside the
   sandbox, and pi-permission-system patterns, after the owner's own since the last match wins, plus
   its `skill` and `read` gates for the Starbridge skill. `starbridge run` is left out, since the
   command it wraps is the agent's own. Uninstall removes exactly what setup added.
+- **Docs** (#211) at `/docs` are the repository's Markdown files listed in `web/src/lib/docs.ts`,
+  rendered by the web page. Links between them become `/docs` links; other relative links go to
+  GitHub.
 - **Install and update.** `https://starbridge.run/install.sh` is `cli/install.sh`, prerendered by
   the web page, so each deploy serves its own revision's script. It checks `SHA256SUMS` with
   minisign, or OpenSSL 3 when minisign is missing. `starbridge update` replaces script installs
@@ -273,14 +278,15 @@ provider plugins add providers, not panels.
 ### How an answer comes back
 
 An agent posts a question, keeps working and ends its turn; the answer arrives as a new prompt.
-`ask` prints which applies: a prompt, or `starbridge wait <id> --timeout 5m` before ending the
-turn, where nothing can deliver one (#203).
+Where nothing can deliver a prompt, the agent runs `starbridge wait <id> --timeout 5m` before
+ending its turn. `ask` prints which of the two applies (#203). A `wait` without an id, run in an
+agent's session, takes only that session's answers (#324).
 
 | Harness | Delivery |
 |---|---|
-| Claude Code, interactive | The mod (`mod/`) long-polls the agent's socket in 25 s cycles and submits each answer with `$.prompt.submit` |
+| Claude Code, interactive | The mod (`mod/`) long-polls the local agent's socket in 25 s cycles and submits each answer with `$.prompt.submit` |
 | `claude -p` | `wait`, since mods run only in interactive sessions (#321) |
-| Codex TUI | The agent runs `codex queue --thread <id>`; the message only says to run `starbridge wait <id>`, since other local users can read process arguments (#274). Retried each minute, 30 times |
+| Codex TUI | The local agent runs `codex queue --thread <id>`; the message only says to run `starbridge wait <id>`, since other local users can read process arguments (#274). Retried each minute, 30 times |
 | `codex exec` | `wait`: nothing runs a queued message once exec returns. The thread's rollout tells exec apart (#245) |
 | Pi TUI and RPC | The Pi extension (`mod/pi`) calls `pi.sendUserMessage(text, { deliverAs: "followUp" })` (#232) |
 | opencode TUI and `serve` | The opencode plugin (`mod/opencode`) calls `client.session.promptAsync`, one loop per session (#300) |
@@ -290,10 +296,10 @@ turn, where nothing can deliver one (#203).
   flags and an allowlist. A mod cannot listen on a port and its `$.http.fetch` aborts after 30 s,
   hence the short cycles. The CLI hands an answer again until the mod acks it, and the mod
   re-reads the session id before submitting, so an answer that arrives during `/clear` waits for
-  the session that asked; `/resume` keeps polling under the resumed id. Without an agent the mod
+  the session that asked; `/resume` keeps polling under the resumed id. Without a local agent the mod
   falls back to polling through the CLI, and both paths share the set of submitted lines.
 - **Which harness asked** (#319, #320). Harnesses pass their variables to processes they start, so
-  `ask` takes Codex or Pi over Claude Code when both are set, unless Claude Code runs as `claude
+  `ask` takes Codex, Pi or opencode over Claude Code when both are set, unless Claude Code runs as `claude
   -p`, the only way Codex and Pi start it. A Codex sub-agent asks under its root thread, since
   `codex queue` refuses sub-agent threads.
 - **Pi and opencode** append `plugin/hooks/rule.md` to the system prompt and run the mod's own
@@ -306,11 +312,12 @@ turn, where nothing can deliver one (#203).
 
 - The `starbridge` plugin's `SessionStart` hook adds the rule as context, so setup edits no
   instruction file. Starbridge is how an agent reaches its user: a card for a decision that is
-  theirs, a card before ending a turn on work that waits on them, `starbridge run` around commands
+  theirs, a question before ending a turn on work that waits on them, `starbridge run` around commands
   that block them. Everything else the agent decides. It asks in the terminal only when
   `starbridge` fails (#121).
-- A card answers cold: a question its options answer, one line of context per option saying what
-  it changes, links and images only when they help, one question per card. The first option is
+- A question answers cold: its options answer it, and its context runs two to five lines, the fact
+  that forces the choice, then one line per option saying what it changes. Links and images only
+  when they help; one question per card. The first option is
   the agent's default (#191).
 - Agents also wrap, unasked, any command that blocks the owner or needs them at the machine, and
   always give a reason (#60).
@@ -350,7 +357,7 @@ Codex prompts are not supported.
 - **opencode** (#300): every prompt publishes `permission.asked`, and the plugin answers through
   `POST /permission/{id}/reply`. The first answer wins. `opencode run` rejects every prompt itself.
 - **A stalled server never holds a prompt** (#260): deadlines and SIGTERM cut every request the
-  hook makes. When a hook dies mid-hold, the agent settles its prompt as answered at the keyboard
+  hook makes. When a hook dies mid-hold, the local agent settles its prompt as answered at the keyboard
   (#400).
 
 ## Items
@@ -419,7 +426,7 @@ Codex prompts are not supported.
 
 ### Quotas
 
-- **The uploader** in `starbridge agent` runs CodexBar for every provider at once, every 5 minutes
+- **The uploader** in the local agent runs CodexBar for every provider at once, every 5 minutes
   and on request, and computes pace and alerts (`packages/protocol`), so clients only render.
 - **Alerts** (#115): `low` at CodexBar's defaults (50% and 20% left), and pace: unused headroom of
   30% one hour before the reset for windows of a day or less, one day before for longer ones. Only
@@ -473,6 +480,8 @@ first window, so a provider with a window running out leads.
 - **Clock** (#161): System, 12-hour or 24-hour, per device. UI words stay English.
 - **Images** open a full-screen viewer (zoom, pan, swipe or arrow keys between images) and carry
   an expand badge, since nothing else tells a touch screen they open (#170).
+- **Signed out.** A browser that holds no device of the account it last signed in to gets the
+  landing page at `/`, as does a revoked browser (#209); one with a device gets sign-in.
 - **Restarts go unnoticed** (#250). Clients retry a 502, 503 or refused connection quietly for
   20 s. A write retries only when it cannot have landed; the web's writes retry on 502 and 503
   only, since it cannot tell a refused connection from a cut one.
@@ -558,7 +567,8 @@ Tokens, type and components: `DESIGN.md`.
 - **Pinning** (#361, #423, #426). Actions are pinned by commit SHA and images by digest, so a
   dependency changes only in a Dependabot PR. A workflow writes `pnpm-lock.yaml` into Dependabot's
   security PRs, which update `package.json` alone, then dispatches CI, since a push with
-  `GITHUB_TOKEN` starts no workflow.
+  `GITHUB_TOKEN` starts no workflow. The images install pnpm with `npm install -g` at
+  `packageManager`'s version, since node slim images ship no corepack (#430).
 - **CI** (#380). Main runs one at a time; a newer merge replaces the waiting run, and the head's
   deploy covers the merges in between. A pull request runs only the jobs its files can affect;
   skipped jobs still report success. The e2e runs under `.github/watchdog.sh`. Tests point
@@ -577,7 +587,8 @@ Tokens, type and components: `DESIGN.md`.
   long-poll costs about 96 KB in Caddy and 13 KB in the server); CPU near 10,000.
 - **Privacy and terms** (`/privacy`, `/terms`). Each claim follows the code: stored columns in
   `server/src/db.ts`, retention in `server/src/limits.ts`, logs and backups in `deploy/`. A change
-  to what is stored changes the page.
+  to what is stored changes the page, and the Play data-safety form. Contact is
+  privacy@starbridge.run; abuse@ appears only in `/terms`.
 - **Analytics** (#141). Umami, self-hosted, on the landing page, `/privacy` and `/terms` only, never
   the app. No cookie, no stored IP, a daily salt, Do Not Track honoured, so no consent banner.
   Caddy rate-limits its open endpoint, and a timer caps its tables, so it cannot fill the disk.
