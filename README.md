@@ -38,14 +38,14 @@ After Homebrew or npm, run `starbridge setup` yourself.
 
 ## What each agent supports
 
-| | Claude Code | Codex | Pi |
-|---|---|---|---|
-| Questions | ✓ | ✓ | ✓ |
-| Answers into the live session | ✓ | ✓¹ | ✓² |
-| "Waiting for you" | ✓ | ✓ | ✓ |
-| Runs | ✓ | ✓ | ✓ |
-| Permission prompts | Opt-in | No | Opt-in³ |
-| `AskUserQuestion` hook | ✓ | n/a | n/a |
+| | Claude Code | Codex | Pi | opencode |
+|---|---|---|---|---|
+| Questions | ✓ | ✓ | ✓ | ✓ |
+| Answers into the live session | ✓ | ✓¹ | ✓² | ✓⁴ |
+| "Waiting for you" | ✓ | ✓ | ✓ | ✓ |
+| Runs | ✓ | ✓ | ✓ | ✓ |
+| Permission prompts | Opt-in | No | Opt-in³ | Opt-in |
+| `AskUserQuestion` hook | ✓ | n/a | n/a | No⁵ |
 
 ¹ In interactive sessions (Codex CLI 0.160 or later) while `starbridge agent` runs. In `codex exec`, the agent waits for the
 answer before it ends its turn.
@@ -56,6 +56,12 @@ its turn.
 
 ³ With pi-permission-system, once its `authorizerChain` names `starbridge`: your devices allow a
 call once or deny it.
+
+⁴ In the TUI and `opencode serve`, with the Starbridge plugin that `starbridge setup` installs. In
+`opencode run`, the agent waits for the answer before it ends its turn.
+
+⁵ opencode's `question` tool still asks in the terminal; the skill tells the agent to use
+`starbridge ask` instead.
 
 ## Docs
 
