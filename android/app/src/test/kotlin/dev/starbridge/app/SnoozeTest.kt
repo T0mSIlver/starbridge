@@ -181,7 +181,7 @@ class SnoozeTest {
     }
 
     @Test
-    fun aSnoozeHidesTheQuestionUntilItsTimeThenItNotifiesOnceBack() {
+    fun aSnoozeHidesTheQuestionAndMutesItsFlips() {
         val store = store()
         val now = Instant.now()
         runBlocking { store.onPush(push("z_1", now.plus(Duration.ofHours(3)), now)) }
@@ -192,9 +192,34 @@ class SnoozeTest {
         runBlocking { store.onPush(waitingPush("working")) }
         runBlocking { store.onPush(waitingPush("waiting")) }
         assertEquals(listOf("cancel d_1"), alerted)
-        // At its time the server pushes a snooze again: one that ends now, sent hours ago.
-        runBlocking { store.onPush(push("z_2", now.plusSeconds(30), now.minus(Duration.ofHours(3)))) }
-        assertEquals(listOf("cancel d_1", "back d_1"), alerted)
+    }
+
+    @Test
+    fun atItsTimeItNotifiesOnceBack() {
+        val store = store()
+        val now = Instant.now()
+        // The server pushes the snooze again at its time: it ends now, sent hours ago.
+        runBlocking { store.onPush(push("z_1", now.plusSeconds(30), now.minus(Duration.ofHours(3)))) }
+        assertEquals(listOf("back d_1"), alerted)
+    }
+
+    @Test
+    fun anOlderSnoozesReturnShowsNothingOnceANewerOneIsKnown() {
+        val store = store()
+        val now = Instant.now()
+        runBlocking { store.onPush(push("z_new", now.plus(Duration.ofHours(5)), now)) }
+        runBlocking { store.onPush(push("z_old", now.plusSeconds(30), now.minus(Duration.ofHours(1)))) }
+        assertEquals(listOf("cancel d_1"), alerted)
+        assertNotNull(store.decisions.value.single().snoozedUntil)
+    }
+
+    @Test
+    fun backNowFromAFastClockIsOver() {
+        val store = store()
+        val ahead = Instant.now().plus(Duration.ofMinutes(4))
+        runBlocking { store.onPush(push("z_1", ahead, ahead)) }
+        assertEquals(emptyList<String>(), alerted)
+        assertEquals(null, store.decisions.value.single().snoozedUntil)
     }
 
     @Test

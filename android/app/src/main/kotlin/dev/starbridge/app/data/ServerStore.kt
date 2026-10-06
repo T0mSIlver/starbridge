@@ -914,7 +914,14 @@ class ServerStore(
 
     /** Whether the owner put [d] off and its time has not come. */
     private fun isSnoozed(d: SavedDecision, now: Instant = Instant.now()) =
-        d.answeredAt == null && d.answer == null && instant(d.snoozedUntil)?.isAfter(now) == true
+        d.answeredAt == null && d.answer == null && snoozedUntil(d)?.isAfter(now) == true
+
+    /** Until when [d] is snoozed; none after back now, whose time is its own (#571). */
+    private fun snoozedUntil(d: SavedDecision): Instant? {
+        val until = instant(d.snoozedUntil) ?: return null
+        val at = instant(d.snoozedAt)
+        return until.takeIf { at == null || it.isAfter(at) }
+    }
 
     private fun wait(d: SavedDecision, from: String, w: Waiting): SavedDecision? {
         if (d.from != from) return null
@@ -1452,6 +1459,10 @@ class ServerStore(
                 val (_, body) = open(item) ?: return@withLock
                 body as Snooze
                 val d = saved.decisions.find { it.body.id == body.decisionId } ?: fetchDecision(body.decisionId) ?: return@withLock
+                // A newer snooze of the question, from any device, stands: an older one's return
+                // shows nothing.
+                val sent = instant(body.at) ?: return@withLock
+                if (instant(d.snoozedAt)?.isAfter(sent) == true) return@withLock
                 val updated = snoozed(d, body) ?: d
                 if (updated !== d) persist(saved.copy(decisions = saved.decisions.map { if (it === d) updated else it }))
                 val until = instant(body.until) ?: return@withLock
@@ -1920,7 +1931,7 @@ class ServerStore(
             agent = b.agent,
             waiting = d.waiting == "waiting",
             waitingSince = if (d.waiting == "waiting") instant(d.waitingAt) else null,
-            snoozedUntil = instant(d.snoozedUntil),
+            snoozedUntil = snoozedUntil(d),
             images = b.images.orEmpty().map { Image(it.data, it.width, it.height, it.alt) },
             links = b.links.orEmpty().map { Link(it.url, it.title) },
             answerIn = b.answerIn?.let { Link(it.url, it.title) },
