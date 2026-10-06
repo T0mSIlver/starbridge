@@ -499,6 +499,10 @@ line, the safe side: at worst a prompt repeats an answer the agent already read.
   the agent's default (#191).
 - Agents also wrap, unasked, any command that blocks the owner or needs them at the machine, and
   always give a reason (#60).
+- A card cannot approve an action the agent's own guidelines say needs the owner's yes in the
+  chat (account settings, external messages, purchases, deleting data): its answer reaches the
+  agent as tool output. The agent asks in the chat, or the card says the yes must come there
+  (#680).
 - There is no Starbridge rules file (#126). Users tell agents what else to ask or report in the
   agents' own instruction files; `docs/tell-your-agents.md` says where.
 - `evals/skill` checks the skill with real sessions of each harness on the smallest models.
