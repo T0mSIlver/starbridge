@@ -34,3 +34,20 @@ test("a server refuses a database newer than its schema", () => {
   db.close();
   expect(() => openDb(path)).toThrow(`schema ${at + 1}, newer`);
 });
+
+test("a database at schema 3, as the hosted one is before #571, gains the snooze columns", () => {
+  const path = join(mkdtempSync(join(tmpdir(), "sb-db-")), "db.sqlite");
+  const old = openDb(path);
+  old.run("DROP INDEX items_wake_due");
+  old.run("ALTER TABLE items DROP COLUMN wake_due");
+  old.run("ALTER TABLE items DROP COLUMN wake_at");
+  old.run("PRAGMA user_version = 3");
+  old.close();
+  const db = openDb(path);
+  expect(version(db)).toBe(4);
+  const columns = (db.query("PRAGMA table_info(items)").all() as { name: string }[]).map(
+    (c) => c.name,
+  );
+  expect(columns).toContain("wake_at");
+  expect(columns).toContain("wake_due");
+});

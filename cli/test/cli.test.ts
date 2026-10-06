@@ -424,26 +424,15 @@ test("waiting and working flip a decision's state, and each flip pushes", async 
   expect(ctx.errors.at(-1)).toContain("already answered");
 });
 
-/** The phone snoozes `id` until 18:00 tomorrow in this machine's zone (#571). */
-async function snoozed(ctx: Awaited<ReturnType<typeof paired>>, id: string) {
-  const until = new Date();
-  until.setDate(until.getDate() + 1);
-  until.setHours(18, 0, 0, 0);
-  await server.snooze(id, until);
-  // The machine reads it on its next poll.
-  await poll(ctx, session(ctx), {
-    cursor: ctx.store.state().asked[id]?.cursor,
-    seconds: 0,
-    shared: false,
-  });
-  return until;
-}
-
 test("waiting says when the owner snoozed the question, and wait says it once with exit 3", async () => {
   const ctx = await paired(server);
   await run(ASK, ctx);
   const id = ctx.lines[0] as string;
-  await snoozed(ctx, id);
+  const until = new Date();
+  until.setDate(until.getDate() + 1);
+  until.setHours(18, 0, 0, 0);
+  // Without the agent, `waiting` reads the snooze itself.
+  await server.snooze(id, until);
   const line = `Snoozed ${id} (Merge #12 now?) until tomorrow 18:00: no answer before then.`;
   expect(await run(["waiting", id], ctx)).toBe(0);
   expect(ctx.lines.at(-1)).toBe(line);
@@ -481,6 +470,17 @@ test("through the local agent, waiting and wait say the snooze too, and --json p
   } finally {
     await agent.stop();
   }
+});
+
+test("back now from a device whose clock runs ahead says nothing either", async () => {
+  const ctx = await paired(server);
+  await run(ASK, ctx);
+  const id = ctx.lines[0] as string;
+  const ahead = new Date(Date.now() + 4 * 60_000);
+  await server.snooze(id, ahead, ahead);
+  expect(await run(["waiting", id], ctx)).toBe(0);
+  expect(ctx.lines.at(-1)).toBe(id);
+  expect(await run(["wait", id, "--timeout", "2s"], ctx)).toBe(2);
 });
 
 test("back now: a snooze already over says nothing", async () => {

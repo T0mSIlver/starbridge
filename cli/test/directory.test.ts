@@ -13,6 +13,7 @@ import {
   revokeEntry,
   type SealedItem,
   type SignedEnvelope,
+  type Snooze,
   seal,
   toB64,
   verifyDirectory,
@@ -201,6 +202,35 @@ test("a revocation the server withholds stops counting once another device answe
   expect(await delivered()).toEqual([second]);
   expect(ctx.store.state().answers[first]).toBeUndefined();
   expect(ctx.errors.at(-1)).toContain("revoked");
+});
+
+test("a snooze's signed head shows a withheld revocation too (#571)", async () => {
+  const { ctx, laptop, ids, serve, known } = await withholding();
+  const machine = (await server.directory()).members.get(ctx.store.machine()?.id as string)?.member;
+  if (!machine) throw new Error("no machine");
+  await laptopAppends(laptop, (dir) =>
+    revokeEntry(dir, { id: laptop.id, signKey: laptop.keys.sign.privateKey }, "phone", now()),
+  );
+  const full = await laptopChain(laptop);
+  serve(known);
+  try {
+    const body = {
+      v: 1,
+      id: `z_${crypto.randomUUID()}`,
+      decisionId: ids[0],
+      to: [machine.id],
+      until: new Date(Date.now() + 3_600_000).toISOString(),
+      at: now(),
+      dir: { length: full.length, head: full.head },
+    } satisfies Snooze;
+    server.inject(
+      seal("snooze", body, { id: laptop.id, signKey: laptop.keys.sign.privateKey }, [machine]),
+    );
+    await poll(ctx, session(ctx), { cursor: ctx.store.state().cursor, seconds: 1, shared: true });
+    expect(ctx.errors.at(-1)).toContain("holding back directory entries");
+  } finally {
+    serve(undefined);
+  }
 });
 
 test("the machine signs into its items the longest head it knows, a device's while held back (#362)", async () => {

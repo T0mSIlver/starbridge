@@ -36,6 +36,11 @@ type Records = {
   probe: StoredKeys;
   /** The longest directory head each machine signed into its items (#362). */
   heads: Heads;
+  /**
+   * The signed time of the latest snooze this browser knows of each decision (#571): a return
+   * pushed for an older one shows nothing.
+   */
+  snoozes: Record<string, string>;
 };
 
 /** Every record kind kept per account, so signing out can remove them all. */
@@ -48,6 +53,7 @@ const PER_ACCOUNT: Record<Exclude<keyof Records, "current">, true> = {
   recoverySeen: true,
   probe: true,
   heads: true,
+  snoozes: true,
 };
 export const ACCOUNT_KINDS = Object.keys(PER_ACCOUNT) as Exclude<keyof Records, "current">[];
 

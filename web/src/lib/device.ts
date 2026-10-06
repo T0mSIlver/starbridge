@@ -1298,9 +1298,14 @@ export async function loadInbox(ctx: Ctx, inbox: Inbox = { items: [], rejected: 
     return {
       ...rest,
       ...(w?.state === "waiting" ? { waitingSince: w.at } : {}),
-      ...(z ? { snoozedUntil: z.until } : {}),
+      // Back now ends at its own time, read before this browser's clock, which may run behind.
+      ...(z && Date.parse(z.until) > Date.parse(z.at) ? { snoozedUntil: z.until } : {}),
     };
   });
+  await noteSnoozes(
+    ctx,
+    Object.entries(snoozes).map(([decisionId, z]) => ({ decisionId, at: z.at })),
+  );
   await hold(ctx);
   return { items, cursor, rejected, retry, waits, snoozes } satisfies Inbox;
 }
@@ -1336,6 +1341,27 @@ export async function answer(ctx: Ctx, item: InboxItem, reply: Reply): Promise<s
   return answeredAt;
 }
 
+/**
+ * Keeps the latest snooze time this browser knows per decision, for the service worker (#571).
+ * Returns whether `latest` holds no newer one than each given.
+ */
+export async function noteSnoozes(
+  ctx: Pick<Ctx, "account">,
+  seen: { decisionId: string; at: string }[],
+): Promise<boolean> {
+  let newest = true;
+  await store.update("snoozes", ctx.account, (old) => {
+    const next = { ...old };
+    for (const z of seen) {
+      const had = next[z.decisionId];
+      if (had && Date.parse(had) > Date.parse(z.at)) newest = false;
+      else next[z.decisionId] = z.at;
+    }
+    return next;
+  });
+  return newest;
+}
+
 /** Opens a snooze another device, or this one, sealed to this browser (#571). */
 export async function openSnooze(ctx: Ctx, item: SealedItem): Promise<Snooze> {
   const { body } = await openAsync(expectKind(item, "snooze"), me(ctx), ctx.dir);
@@ -1363,6 +1389,7 @@ export async function snooze(ctx: Ctx, item: InboxItem, until: string): Promise<
     dir: { length: fresh.dir.length, head: fresh.dir.head },
   };
   await api.post(await sealAsync("snooze", body, me(fresh), to));
+  await noteSnoozes(ctx, [body]);
   return body;
 }
 

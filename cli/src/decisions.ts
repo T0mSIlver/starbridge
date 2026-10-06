@@ -381,7 +381,15 @@ export async function setWaiting(
   opts: { id?: string; state: Waiting["state"] },
 ): Promise<number> {
   if (!opts.id) throw new UsageError(`${opts.state} needs a decision id`);
-  await postWaiting(ctx, session(ctx), opts.id, opts.state);
+  const s = session(ctx);
+  await postWaiting(ctx, s, opts.id, opts.state);
+  // Without the agent nothing polls meanwhile: read the owner's latest snooze first.
+  if (opts.state === "waiting")
+    await poll(ctx, s, {
+      cursor: ctx.store.state().asked[opts.id]?.cursor,
+      seconds: 0,
+      shared: false,
+    });
   const until = snoozedUntil(ctx.store.state(), opts.id, ctx.now());
   if (until && opts.state === "waiting")
     ctx.out(snoozeLine(opts.id, ctx.store.state().asked[opts.id]?.question, until, ctx.now()));
@@ -510,7 +518,10 @@ export function acceptSnooze(raw: unknown, s: Session, dir: Directory, st: State
 export function snoozedUntil(st: State, id: string, now: Date): string | undefined {
   const a = st.asked[id];
   const until = a?.snooze?.until;
-  if (!until || a.settled || st.answers[id] || Date.parse(until) <= now.getTime()) return undefined;
+  if (!until || a.settled || st.answers[id]) return undefined;
+  // Back now ends at its own time, read before this machine's clock: the device's may run ahead.
+  if (Date.parse(until) <= Date.parse(a.snooze?.at ?? "")) return undefined;
+  if (Date.parse(until) <= now.getTime()) return undefined;
   return until;
 }
 
@@ -573,11 +584,13 @@ export function noteHead(
 ): string | undefined {
   const item = SealedItem.safeParse(raw);
   const kind = item.success ? item.data.kind : undefined;
-  if (!item.success || (kind !== "answer" && kind !== "permission-answer")) return undefined;
-  let opened: ReturnType<typeof open<"answer" | "permission-answer">>;
+  // A snooze is a device's word too, with the head it signed (#571).
+  if (!item.success || (kind !== "answer" && kind !== "permission-answer" && kind !== "snooze"))
+    return undefined;
+  let opened: ReturnType<typeof open<"answer" | "permission-answer" | "snooze">>;
   try {
     opened = open(
-      item.data as SealedItem & { kind: "answer" | "permission-answer" },
+      item.data as SealedItem & { kind: "answer" | "permission-answer" | "snooze" },
       { id: s.machine.id, box: s.keys.box },
       dir,
     );
