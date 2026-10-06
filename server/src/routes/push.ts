@@ -72,8 +72,11 @@ pushRoutes.get("/push/vapid", async (c) => {
   return c.json({ publicKey });
 });
 
-/** Relayed pushes in flight, for the relaySends cap. */
-let relaying = 0;
+/**
+ * Relayed Web Pushes in flight, per push service (one per app) and per address, for the
+ * relaySends and relaySendsPerClient caps.
+ */
+const relaying = new WeakMap<object, Map<string, number>>();
 
 /**
  * Relay mode: forwards another server's push with this server's FCM and VAPID credentials.
@@ -89,12 +92,26 @@ pushRoutes.post("/relay", async (c) => {
   const why = checkTarget(body, config.allowPrivatePushEndpoints);
   if (why) fail(400, "bad-endpoint", why);
   const { payload, ...target } = body;
-  if (relaying >= config.limits.relaySends)
+  // A Web Push goes to whatever host the caller names, which may hold it for pushTimeoutMs; FCM
+  // goes to Google, so only Web Push counts toward the caps and the self-hosters' Android
+  // pushes always get through.
+  const flights = relaying.get(push) ?? new Map<string, number>();
+  relaying.set(push, flights);
+  const keys = target.type === "webpush" ? ["", ipKey(c)] : [];
+  const full = (k: string) =>
+    (flights.get(k) ?? 0) >= (k ? config.limits.relaySendsPerClient : config.limits.relaySends);
+  if (keys.some(full))
     return c.json({ error: "busy", detail: "too many pushes in flight; retry later" }, 503, {
       "retry-after": "5",
     });
-  relaying++;
-  const result = await push.send(target, payload, false).finally(() => relaying--);
+  for (const k of keys) flights.set(k, (flights.get(k) ?? 0) + 1);
+  const result = await push.send(target, payload, false).finally(() => {
+    for (const k of keys) {
+      const n = (flights.get(k) ?? 1) - 1;
+      if (n) flights.set(k, n);
+      else flights.delete(k);
+    }
+  });
   c.var.usage.record(`relay.${target.type}.${result}`);
   return c.json({ result }, result === "failed" ? 502 : 200);
 });

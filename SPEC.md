@@ -289,9 +289,9 @@ provider plugins add providers, not panels.
 
 - FCM goes through the relay, since its credentials belong to the app's Firebase project. Web Push
   goes through the relay only when a server has no VAPID keys; UnifiedPush always goes direct. The
-  relay is open, rate-limited per IP and in all (300 a minute in Caddy, 16 in flight in the
-  server, so nobody can aim it at a host or burn the VAPID key, #577), and pushes only
-  ciphertext or ids. A push carries the
+  relay is open, rate-limited per IP and in all (600 a minute in Caddy; 16 Web Pushes in flight
+  in the server, 4 per address), so nobody can aim it at a host or burn the VAPID key (#577). It
+  pushes only ciphertext or ids. A push carries the
   device's ciphertext when it fits FCM's 4 KB, else the item id.
 - Quota snapshots and runs skip Web Push: browsers drop subscriptions whose pushes show no
   notification (Firefox after 16). The web page polls them instead.

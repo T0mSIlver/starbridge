@@ -29,8 +29,9 @@ starbridge.run {
 	handle @server {
 		route {
 			# Anyone can ask the relay to push (POST /v1/relay), so its pushes are bounded in all,
-			# not only per address as the server counts them: ten self-hosted servers at their
-			# own full rate. The server also caps pushes in flight (relaySends).
+			# not only per address as the server counts them: five addresses at the server's own
+			# 120 a minute. The budget is shared, so a few addresses can use it up and the relay
+			# fails closed. The server also caps Web Pushes in flight (relaySends).
 			rate_limit {
 				disable_metrics
 				zone relay_all {
@@ -38,7 +39,7 @@ starbridge.run {
 						path /v1/relay
 					}
 					key relay
-					events 300
+					events 600
 					window 1m
 				}
 			}
