@@ -88,11 +88,12 @@ updates on its own.
 
 ### Without the relay
 
-UnifiedPush delivers to the Android app through your own ntfy, and your VAPID keys send browser
-notifications, with nothing through Google's Firebase or starbridge.run.
+UnifiedPush delivers to the Android app through your own ntfy, with nothing through Google's
+Firebase or starbridge.run. Your VAPID keys send browser notifications without starbridge.run;
+each browser's own push service still carries them, encrypted, such as Google's for Chrome.
 
 1. In `server/.env`, remove `RELAY_URL` and add Web Push keys. Make them with
-   `npx web-push generate-vapid-keys`:
+   `bunx web-push generate-vapid-keys`:
 
    ```
    VAPID_PUBLIC_KEY=...
@@ -100,10 +101,12 @@ notifications, with nothing through Google's Firebase or starbridge.run.
    ```
 
    If your ntfy is on a private address or plain HTTP, add `ALLOW_PRIVATE_PUSH_ENDPOINTS=1`. Then
-   restart: `docker compose -f server/compose.yaml up -d`.
+   restart: `docker compose -f server/compose.yaml up -d`. A browser that turned notifications on
+   through the relay keeps the relay's key and gets no more: sign it out, sign in again, and approve
+   it from another device.
 
 2. On an ntfy server with access control, let anyone publish to UnifiedPush topics, which the
-   ntfy app names `up` and a random id:
+   ntfy app names `up` and a random id, and sign the ntfy app in as a user who can read them:
 
    ```bash
    ntfy access everyone 'up*' write-only

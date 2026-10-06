@@ -68,7 +68,7 @@ Starbridge package and plugin. Codex gets the skill only, so paste the
 ## Sessions already running
 
 A session that was running when you installed Starbridge doesn't have it: each agent loads its
-plugins, skills and instructions when a session starts. Quit the session and resume it, which
+plugins, skills and instructions when it starts. Quit the agent and resume the session, which
 keeps its conversation:
 
 | Agent | Resume the last session | Pick one |
