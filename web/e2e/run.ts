@@ -847,11 +847,9 @@ async function main() {
 
   step("a group pinned by running out first says why on a click (#296)");
   await page.setViewportSize(DESKTOP);
-  await page.getByRole("button", { name: "Why codex is first" }).click();
-  // Scoped to codex: depending on the hour, claude's group may be pinned and say so too.
-  const why = page
-    .getByRole("region", { name: "codex" })
-    .getByText("First because it runs out soonest.");
+  await page.getByRole("button", { name: "Why codex is up top" }).click();
+  // Scoped to codex: depending on the hour, claude's group may be pinned too.
+  const why = page.getByRole("region", { name: "codex" }).getByText(/^Up top because it/);
   await why.waitFor();
   if (AUDIT) await shoot(page, "quotas-pinned");
   else
@@ -862,7 +860,7 @@ async function main() {
     }
   await page.keyboard.press("Escape");
   await why.waitFor({ state: "hidden" });
-  await page.getByRole("button", { name: "Why codex is first" }).click();
+  await page.getByRole("button", { name: "Why codex is up top" }).click();
   await why.getByRole("link", { name: "Settings" }).click();
   await page.waitForURL(/\/settings#running-out-first$/);
   await page.getByRole("switch", { name: "Running out first" }).waitFor();

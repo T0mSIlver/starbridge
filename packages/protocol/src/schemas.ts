@@ -437,6 +437,8 @@ export const Settled = z
     /** With outcome "device": the device whose answer the machine applied. */
     device: Id.optional(),
     dir: DirectoryHead.optional(),
+    /** With outcome "device" on a permission: what that device answered (#349). */
+    behavior: z.enum(["allow", "deny"]).optional(),
   })
   .refine((s) => (s.outcome === "device") === (s.device !== undefined), {
     message: "device is set exactly when outcome is device",

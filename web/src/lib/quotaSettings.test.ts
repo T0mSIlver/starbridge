@@ -6,6 +6,7 @@ import {
   groups,
   type QuotaSettings,
   reorder,
+  runsOutSoonest,
   toNotify,
   workdayExpected,
 } from "./quotaSettings";
@@ -168,4 +169,27 @@ test("notifications: only new alerts, of providers this device opted in to, of c
   expect(kinds(DEFAULT_SETTINGS)).toEqual([]);
   expect(kinds(settings({ notify: ["zai"] }))).toEqual(["zai low", "zai runs-out"]);
   expect(kinds(settings({ notify: ["zai"], notifyLow: false }))).toEqual(["zai runs-out"]);
+});
+
+test("runsOutSoonest: the leading group whose window runs out first, wherever it sits (#351)", () => {
+  const out = (provider: string, at: Date): QuotaCardData => {
+    const c = win(provider, "5-hour", "runs-out");
+    const pace = c.window.pace as NonNullable<QuotaWindow["pace"]>;
+    return { ...c, window: { ...c.window, pace: { ...pace, runsOutAt: at.toISOString() } } };
+  };
+  const minutes = (m: number) => new Date(now.getTime() + m * 60_000);
+  const lead = groups(
+    arrange(
+      [out("claude", minutes(2880)), out("codex", minutes(34)), out("zai", minutes(2))],
+      settings({}),
+      now,
+    ),
+  );
+  expect(lead.map((g) => g.provider)).toEqual(["claude", "codex", "zai"]);
+  expect(runsOutSoonest(lead, now)?.provider).toBe("zai");
+  expect(runsOutSoonest([], now)).toBeUndefined();
+  const unknown = win("codex", "Weekly", "runs-out");
+  const pace = unknown.window.pace as NonNullable<QuotaWindow["pace"]>;
+  const noTime = { ...unknown, window: { ...unknown.window, pace: { ...pace, runsOutAt: null } } };
+  expect(runsOutSoonest(groups([noTime]), now)).toBeUndefined();
 });

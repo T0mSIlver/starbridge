@@ -1298,6 +1298,15 @@ so the mod is the first path.
   drops the seed. The seed is stored exactly as long as before, and an app killed in between
   shows the same key again. Data cleared before the confirmation leaves the server empty, so
   signing in again starts the setup over instead of offering only "Add this phone".
+- 2026-10-06. A prompt in History says how and where it was answered, as a question does (#349):
+  "Denied · on Pixel", "Allowed for this session · on this browser", and no separator when nobody
+  answered ("Expired"). Answers are sealed to the asking machine, so other devices learn the
+  allow or deny from the machine's settled notice, which now carries `behavior` beside `device`;
+  a notice from an older machine reads "Answered".
+- 2026-10-06. "Running out first" pins every leading group, in the provider order, so only the
+  group whose window runs out soonest says so (#351): "Up top because it runs out soonest."; the
+  others say "Up top because it's running out.", each followed by "Change in Settings."
+
 - 2026-10-06. Tests clean up their temp dirs (#313): a day of sessions left about 13,000 in the dev
   box's 4 GB RAM-backed /tmp. Each package's `bun test` preloads `test-tmp.ts`, which points
   `TMPDIR` at one dir per run and removes it after the last test, failed or not, and on exit or a
@@ -1726,6 +1735,12 @@ so the mod is the first path.
     API routes only, no web page. It pushes through prod's relay (`RELAY_URL`), as any
     self-hosted server does: the app shows a new item on a push, or on resume and pull to
     refresh, and does not poll while open.
+- 2026-10-06. Images say they open full screen (#170, owner's pick of option B on the question
+  display page). On a touch screen nothing showed that a tap on an image opens the viewer, as the
+  zoom cursor needs a mouse. Every image that opens the viewer (Android's cards and sheet, the
+  web's detail) now carries an expand badge in its bottom right corner: a `s8` circle of
+  `surface` at 72% with the expand icon in `fg`. The web list's thumbnails open the question, not
+  the viewer, so they have none.
 
 - 2026-10-06. A revoked machine learns at once (#353). A directory append wakes every machine's
   long-poll, revoked ones included, so the revoked machine's next request gets 401 instead of
