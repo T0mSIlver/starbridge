@@ -340,7 +340,7 @@ never rely on that check.
 
 | Route | Who | What |
 |---|---|---|
-| `POST /pairings` | new member | `{request, claimHash}`: the request message and BLAKE2b-256 of a random claim secret's text (`claimHash`); 409 if the rendezvous id is taken; 429 `too-many-pairings` when the caller's address holds 20 unapproved pairings, 429 `busy` when the server holds 20000 pairings |
+| `POST /pairings` | new member | `{request, claimHash}`: the request message and BLAKE2b-256 of a random claim secret's text (`claimHash`); 409 if the rendezvous id is taken; 429 `too-many-pairings` when the caller's address holds 50 unapproved pairings, 429 `busy` when the server holds 20000 pairings |
 | `GET /pairings/:rendezvous?wait=<s>` | device | `{request}`; with `wait`, holds until the new member posts and answers 204 if `wait` passes first |
 | `POST /pairings/:rendezvous/approve` | device | `{approval}`; the directory must already hold the new member's entry; 409 `already-paired` when that member already holds a session or token |
 | `GET /pairings/:rendezvous/result?wait=<s>` | new member, with `X-Claim: <secret>` | long-poll: `{approval, token?}` once approved, `token` for machines only; 204 when `wait` passes; 403 `machine-cap` once the server refused the new machine's directory entry for the machine limit |
@@ -476,10 +476,10 @@ server whose disk is full answers writes 503 `storage-full` with `Retry-After`; 
 | `POST /directory` | 30 an hour per account |
 | Directory entries | from entry 200 on, a device's `add`: 409 `directory-full`; revocations and confirmations always pass, the recovery key may add 20 more devices, and devices may propose 20 more recovery keys; 8 KB per entry: 413 `too-large` |
 | Sessions | 50 per account; signing in past that ends the oldest, unpaired ones first |
-| `GET /auth/github/callback` and `POST /auth/app/session` | 20 a minute per address, together |
+| `GET /auth/github/callback` and `POST /auth/app/session` | 60 a minute per address, together |
 | `POST /auth/owner` | 10 a minute per address |
 | `GET /auth/challenge` | 20 a minute per account |
-| `POST /pairings` | 10 a minute per address; 20 unapproved pairings per address, an IPv6 client counting as its /48: 429 `too-many-pairings` |
+| `POST /pairings` | 30 a minute per address; 50 unapproved pairings per address, an IPv6 client counting as its /48: 429 `too-many-pairings` |
 | `GET /pairings/:rendezvous` | 30 a minute per account |
 | `GET /pairings/:rendezvous/result` | 60 a minute per address |
 | Pairing messages | 4 KB each: 400 `bad-schema` |
