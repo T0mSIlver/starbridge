@@ -208,12 +208,14 @@ class ServerStore(
         val held = withheld() != null
         // A hold that ended takes its notice with it; only a confirmed one raises it.
         if (!held && notice.value != null && notice.value == shownHold) notice.value = null
-        decisions.value = if (held) emptyList() else saved.decisions.map(::toUi)
-        prompts.value = if (held) emptyList() else saved.prompts.map(::toUi)
+        // A revoked machine's items leave, as on the web: nothing it asked can be answered (#344).
+        fun active(from: String) = directory?.members?.get(from)?.active != false
+        decisions.value = if (held) emptyList() else saved.decisions.filter { active(it.from) }.map(::toUi)
+        prompts.value = if (held) emptyList() else saved.prompts.filter { active(it.from) }.map(::toUi)
         // As the web: named once the account has more than one active machine.
         val named = (directory?.members?.values?.count { it.active && it.member.role == "machine" } ?: 0) > 1
-        windows.value = if (held) emptyList() else saved.quotas.flatMap { toUi(it, named) }
-        runs.value = if (held) emptyList() else saved.runs.map(::toUi)
+        windows.value = if (held) emptyList() else saved.quotas.filter { active(it.from) }.flatMap { toUi(it, named) }
+        runs.value = if (held) emptyList() else saved.runs.filter { active(it.from) }.map(::toUi)
         members.value = directory?.let(::toUi).orEmpty()
         recovery.value = directory?.let(::recoveryUi)
         showSending()
@@ -693,6 +695,9 @@ class ServerStore(
             wipe("This phone was removed from your devices.")
             return
         }
+        // Their notifications would still offer answers the machine can no longer take.
+        for (d in saved.decisions) if (dir.members[d.from]?.active == false) alerts.cancel(d.body.id)
+        for (p in saved.prompts) if (dir.members[p.from]?.active == false) alerts.cancelPrompt(toUi(p))
         persist(saved.copy(entries = all, pin = Pin(dir.length, dir.head)))
     }
 
