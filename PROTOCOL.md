@@ -8,10 +8,12 @@ code cannot show: the HTTP API and the flows.
 ## The web app trusts its server
 
 A browser runs the page the server sends on each load. A compromised server can therefore send a
-page that reads the browser's keys, opens every item sealed to that browser, and signs answers
-and permission answers as it. The checks in this file hold against a hostile server only for
-members whose code the server doesn't deliver: the Android app and the CLI, which are installed.
-Where that matters, answer permission prompts from the Android app, or host your own server.
+page that uses the browser's keys while it is open: it opens every item sealed to that browser,
+signs answers and permission answers as it, and signs directory entries, since any active device
+may. So it can add a device of its own, which every machine then seals new items to, or revoke
+the owner's other devices. The checks in this file protect an account against a hostile server
+only while no browser is a member; an added device does show in every device list. Where that
+matters, use the Android app without adding a browser, or host your own server.
 
 ## Formats
 
