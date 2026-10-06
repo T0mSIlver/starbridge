@@ -121,8 +121,7 @@ fun FindScreen(
     val needs = remember(words, decisions, prompts, now) {
         if (words.isEmpty()) emptyList()
         else prompts.filter { it.waiting(now) && matches(words, it.texts()) } +
-            decisions.filter { it.isOpen(now) && matches(words, it.texts()) }
-                .sortedWith(compareByDescending<Decision> { it.waiting }.thenByDescending { it.createdAt })
+            openQuestions(decisions, now).filter { matches(words, it.texts()) }
     }
     val past = remember(words, decisions, prompts, now) {
         if (words.isEmpty()) emptyList()

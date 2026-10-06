@@ -205,7 +205,7 @@ fun InboxScreen(
         }
     }
     val shownRuns = Run.shown(runs, now)
-    val open = decisions.filter { it.isOpen(now) }.sortedWith(compareByDescending<Decision> { it.waiting }.thenByDescending { it.createdAt })
+    val open = openQuestions(decisions, now)
     val feed: List<Item> = shownRuns.map(Item::RunItem) + shown.map(Item::PromptItem) + open.map(Item::Question)
     val needYou = open.size + shown.count { it.waiting(at) }
     val running = shownRuns.count { it.state(now) == Run.State.Running }

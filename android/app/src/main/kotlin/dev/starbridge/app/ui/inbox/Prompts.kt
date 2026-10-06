@@ -56,6 +56,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dev.starbridge.app.data.Decision
 import dev.starbridge.app.data.Prompt
 import dev.starbridge.app.ui.Sym
 import dev.starbridge.app.ui.SheetBody
@@ -84,7 +85,12 @@ const val CLOSING_MS = 3_000L
 /** The prompts to show in the feed: waiting ones, and ones that ended a moment ago. */
 fun shownPrompts(prompts: List<Prompt>, now: Instant): List<Prompt> = prompts
     .filter { it.waiting(now) || (it.endedAt != null && now.toEpochMilli() - it.endedAt.toEpochMilli() < CLOSING_MS) }
-    .sortedByDescending { it.createdAt }
+    .sortedBy { it.createdAt }
+
+/** Open questions as the feed lists them (SPEC, Design v2 inbox): those whose agent waits first, each oldest first. */
+fun openQuestions(decisions: List<Decision>, now: Instant): List<Decision> = decisions
+    .filter { it.isOpen(now) }
+    .sortedWith(compareByDescending<Decision> { it.waiting }.thenBy { it.createdAt })
 
 private val pretty = Json { prettyPrint = true }
 
