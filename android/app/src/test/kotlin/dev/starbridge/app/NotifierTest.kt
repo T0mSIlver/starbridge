@@ -78,6 +78,23 @@ class NotifierTest {
         assertEquals("ls #\\u202E hs", p.fullInput)
     }
 
+    // With "Allow from notifications without seeing the whole command" on, both Allows send (#390).
+    @Test
+    fun theUnsafeSettingSendsFromTheShadeAndTheLockScreen() {
+        val prefs = Prefs(context)
+        val notifier = Notifier(context, prefs)
+        for ((on, shade, locked) in listOf(Triple(false, false, false), Triple(true, true, true))) {
+            prefs.setAllowUnseen(on)
+            notifier.clearAll()
+            notifier.prompt(fake.longPrompt)
+            val n = posted()
+            assertEquals(shade, shadowOf(n.actions.first().actionIntent).isBroadcastIntent)
+            assertEquals(locked, shadowOf(n.publicVersion.actions.first().actionIntent).isBroadcastIntent)
+            assertTrue(n.publicVersion.actions.first().isAuthenticationRequired)
+        }
+        prefs.setAllowUnseen(false)
+    }
+
     @Test
     fun everyChannelSitsInAGroup() {
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager

@@ -74,7 +74,7 @@ class PromptReceiver : BroadcastReceiver() {
         }
         // A notification posted before #356 may carry Allow for an input it showed only in part.
         val shown = app.store().prompts.value.find { it.id == id }
-        if (allow && shown != null && !app.notifier().fitsLine(shown)) {
+        if (allow && shown != null && !app.notifier().allowSends(shown)) {
             app.notifier().promptFailed(shown, "open it to read the whole command")
             return
         }
