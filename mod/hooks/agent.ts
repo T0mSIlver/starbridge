@@ -188,7 +188,12 @@ export class AgentLoop {
       return;
     }
     if (this.greeted !== me) {
-      const r = await this.host.fetch("POST", `${path(me)}/hello`, { cwd: await this.host.cwd() });
+      // After a /clear: the old id has no mod any more (#537).
+      const replaces = this.greeted ? { replaces: this.greeted } : {};
+      const r = await this.host.fetch("POST", `${path(me)}/hello`, {
+        cwd: await this.host.cwd(),
+        ...replaces,
+      });
       if (!(await this.ok(r))) return;
       this.greeted = me;
     }

@@ -190,12 +190,18 @@ CREATE TABLE IF NOT EXISTS usage_days (
 const V2 = "ALTER TABLE pairings DROP COLUMN client;";
 
 /**
+ * Why the server refused a pairing's new member, such as `machine-cap`, so the new machine's
+ * result poll ends at once with it instead of at the pairing's expiry (#615).
+ */
+const V3 = "ALTER TABLE pairings ADD COLUMN refused TEXT;";
+
+/**
  * Schema changes, in order; `PRAGMA user_version` counts those a database has run. Append only:
  * a shipped migration never changes. A migration changes the schema and never rewrites rows, so
  * it runs well within the 30 s Caddy holds requests while the server restarts; a backfill runs in
  * the hourly sweep instead.
  */
-const MIGRATIONS = [V1, V2];
+const MIGRATIONS = [V1, V2, V3];
 
 export function openDb(path: string): Database {
   if (path !== ":memory:") mkdirSync(dirname(path), { recursive: true });
