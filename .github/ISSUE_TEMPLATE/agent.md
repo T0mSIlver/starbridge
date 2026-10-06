@@ -18,3 +18,4 @@ went on without your answer.
 - `starbridge --version`:
 - Agent and its version (Claude Code, Codex, Pi, opencode), and how it ran (interactive, `claude -p`, `codex exec`, `pi -p`, `opencode run`):
 - Where you answered (Android app or web) and its version:
+- starbridge.run or your own server:

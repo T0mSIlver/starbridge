@@ -14,4 +14,4 @@ about: Something doesn't work as described
 - Android app version, web, or both:
 - starbridge.run or your own server:
 
-Leave out questions, answers, tokens and recovery keys from your inbox.
+Leave out tokens, recovery keys, and the text of questions and answers.
