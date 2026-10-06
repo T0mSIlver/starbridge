@@ -269,6 +269,8 @@
   max-width: 100%;
   height: auto;
   min-height: var(--s10);
+  /* Round enough to read as a box when it wraps, still a pill on one line (#305). */
+  border-radius: var(--radius-xl);
   padding-block: var(--s2);
   white-space: normal;
   text-align: center;
