@@ -69,7 +69,7 @@ export interface State {
    * Verified answers by decision id; `seen` once a `wait` has printed it or the mod confirmed it
    * submitted it (`answers --ack`).
    */
-  answers: Record<string, { answer: Answer; seen: boolean }>;
+  answers: Record<string, { answer: Answer; seen: boolean; device?: string }>;
   /**
    * The longest directory head each device signed into an answer: while a device active in the
    * machine's chain signed one that chain lacks, the server is withholding entries (PROTOCOL.md,

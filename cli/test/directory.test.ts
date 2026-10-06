@@ -14,6 +14,7 @@ import { LiveServer } from "@starbridge/server/test-support";
 import { run } from "../src/cli";
 import { Store } from "../src/config";
 import { refreshDirectory, session } from "../src/context";
+import { poll } from "../src/decisions";
 import { paired, testCtx, until } from "./helpers";
 
 let server: LiveServer;
@@ -173,20 +174,25 @@ test("a revocation the server withholds stops counting once another device answe
   serve(known);
   try {
     // Until another device answers, nothing tells the machine: the limit PROTOCOL.md states.
+    // This answer is accepted, but no session has taken it yet.
     answer(phone, first, "Yes");
-    expect(await delivered()).toEqual([first]);
+    await poll(ctx, session(ctx), { cursor: ctx.store.state().cursor, seconds: 1, shared: true });
+    expect(ctx.store.state().answers[first]).toBeDefined();
     // The phone answers again, then the laptop, naming the chain it holds, in the same page:
     // the machine sees it is behind and accepts neither.
     answer(phone, third, "Yes");
     answer(laptop, second, "No", { length: full.length, head: full.head });
-    expect(await delivered()).toEqual([]);
+    await poll(ctx, session(ctx), { cursor: ctx.store.state().cursor, seconds: 1, shared: true });
     expect(ctx.errors.at(-1)).toContain("holding back directory entries");
+    // Nothing is delivered, not even the answer accepted before.
     expect(await delivered()).toEqual([]);
   } finally {
     serve(undefined);
   }
-  // Served in full, the chain revokes the phone: the laptop's held answer counts, the phone's not.
+  // Served in full, the chain revokes the phone: the laptop's held answer counts, neither of the
+  // phone's does.
   expect(await delivered()).toEqual([second]);
+  expect(ctx.store.state().answers[first]).toBeUndefined();
   expect(ctx.errors.at(-1)).toContain("revoked");
 });
 

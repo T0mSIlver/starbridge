@@ -412,8 +412,8 @@ const HELD_MAX = 100;
 
 /**
  * Records the directory head a device signed into answer `raw`. A shorter head never replaces a
- * longer one the chain lacks, so replaying an older answer cannot lift a refusal. Returns whether
- * `raw` is an answer an active device signed.
+ * longer one the chain lacks, so replaying an older answer cannot lift a refusal. Returns the
+ * device that signed `raw` when it is an answer an active device signed.
  */
 export function noteHead(
   raw: unknown,
@@ -421,10 +421,10 @@ export function noteHead(
   dir: Directory,
   entries: unknown[],
   st: State,
-): boolean {
+): string | undefined {
   const item = SealedItem.safeParse(raw);
   const kind = item.success ? item.data.kind : undefined;
-  if (!item.success || (kind !== "answer" && kind !== "permission-answer")) return false;
+  if (!item.success || (kind !== "answer" && kind !== "permission-answer")) return undefined;
   let opened: ReturnType<typeof open<"answer" | "permission-answer">>;
   try {
     opened = open(
@@ -433,7 +433,7 @@ export function noteHead(
       dir,
     );
   } catch {
-    return false;
+    return undefined;
   }
   const head = opened.body.dir;
   const known = st.heads?.[opened.signer.id];
@@ -445,7 +445,7 @@ export function noteHead(
     st.heads ??= {};
     st.heads[opened.signer.id] = head;
   }
-  return true;
+  return opened.signer.id;
 }
 
 /**
@@ -533,7 +533,8 @@ export async function poll(
       const items = [...(st.held ?? []), ...page.items];
       delete st.held;
       // Every head first: a withheld entry any answer names holds back the whole page.
-      const answers = items.filter((raw) => noteHead(raw, s, dir, entries, st));
+      const signers = new Map(items.map((raw) => [raw, noteHead(raw, s, dir, entries, st)]));
+      const answers = items.filter((raw) => signers.get(raw) !== undefined);
       const behind = behindBy(st, dir, entries);
       if (behind) {
         // Kept, not dropped: the device's client counts them sent, and the server takes no other.
@@ -542,6 +543,14 @@ export async function poll(
         ctx.err(`starbridge: holding ${st.held.length} answers: ${behind}`);
       } else {
         delete st.behind;
+        // Answers accepted but not yet delivered may be from a device the chain since revoked,
+        // such as one accepted while the server withheld that revocation.
+        const revoked = (device: string | undefined) =>
+          device !== undefined && !dir.members.get(device)?.active;
+        for (const [id, a] of Object.entries(st.answers))
+          if (!a.seen && revoked(a.device)) delete st.answers[id];
+        for (const p of Object.values(st.permissions ?? {}))
+          if (p.answer && !p.settled && revoked(p.answer.device)) delete p.answer;
         for (const raw of items) {
           try {
             // Machines' inboxes hold answers to decisions and to permission prompts (#57).
@@ -552,7 +561,8 @@ export async function poll(
               continue;
             }
             const a = checkAnswer(raw, s, dir, st.asked);
-            st.answers[a.decisionId] ??= { answer: a, seen: false };
+            const device = signers.get(raw);
+            st.answers[a.decisionId] ??= { answer: a, seen: false, ...(device ? { device } : {}) };
           } catch (e) {
             ctx.err(`starbridge: ignored an answer: ${(e as Error).message}`);
           }

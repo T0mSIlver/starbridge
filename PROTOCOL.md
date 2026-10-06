@@ -59,12 +59,14 @@ the longest head each device signed, and refuses every device's answer while a d
 its chain has signed a head that chain does not hold (`holdsHead`): the server is withholding
 entries, or serving that device another chain. It reads every answer's head in a reply before it
 accepts any, never lets a shorter head replace a longer one, and while refusing delivers nothing it
-accepted earlier either. It keeps the refused answers, since their devices count them sent, and
+accepted earlier either; once it stops refusing, it drops undelivered answers whose device the
+chain now revokes. It keeps the refused answers, since their devices count them sent, and
 checks them again once the server serves the missing entries, or once the machine's chain revokes
 that device.
 
 This bounds the attack rather than ending it. A server that withholds a phone's revocation from a
-machine can relay that phone's answers only until any other device answers that machine; from
+machine can relay that phone's answers only until any other device answers that machine (the ones
+a session has not taken by then never reach it); from
 then on it must drop every message from the owner's other devices to it, which the owner sees as
 answers that never arrive. A machine cannot detect a revocation that no device has told it about,
 since the server is its only channel; the revoked device's key can sign any stale head itself.
