@@ -4,6 +4,7 @@ import type { Settled } from "@starbridge/protocol";
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { api, backingOff } from "@/lib/api";
 import type { Boot, Ctx, Inbox, Quotas, Runs } from "@/lib/device";
+import { newestWins } from "@/lib/newest";
 import { AnsweredFirst } from "@/lib/outcome";
 import {
   DEFAULT_SETTINGS,
@@ -120,6 +121,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [runs, setRuns] = useState<Runs>();
   const inboxRef = useRef(inbox);
   inboxRef.current = inbox;
+  // Inbox reads overlap (a load, pushes, polls): only the newest to start may land (#547).
+  const inboxRead = useRef(newestWins());
   const ctx = boot.state === "ready" ? boot.ctx : undefined;
 
   /** Bumped by `forget`: a load started before it keeps nothing it read. */
@@ -130,7 +133,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   /** Drops every machine's item the page holds in memory. */
   const forget = useCallback(() => {
     generation.current++;
-    setInbox({ items: [], rejected: [] });
+    // A read that starts before React renders the empty inbox must not reuse the old cursor.
+    inboxRef.current = { items: [], rejected: [] };
+    setInbox(inboxRef.current);
     setPrompts([]);
     setPromptLog(undefined);
     setQuotas(undefined);
@@ -180,8 +185,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         settledRef.current = { byKey: new Map() };
       }
       if (b.state === "ready") {
-        const loaded = await holding(() => d.loadInbox(b.ctx));
-        if (loaded) setInbox(loaded);
+        let landed = () => false;
+        const loaded = await holding(() => {
+          landed = inboxRead.current();
+          return d.loadInbox(b.ctx);
+        });
+        if (loaded && landed()) {
+          inboxRef.current = loaded;
+          setInbox(loaded);
+        }
         setInboxLoaded(true);
         const push = await import("@/lib/push");
         push.registerWorker();
@@ -252,8 +264,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const fresh = await current();
     if (!fresh) return;
     const d = await load();
-    const loaded = await holding(() => d.loadInbox(fresh, inboxRef.current));
-    if (loaded) setInbox(loaded);
+    // The turn is taken with the base the read starts from, right before it lists.
+    let landed = () => false;
+    const loaded = await holding(() => {
+      landed = inboxRead.current();
+      return d.loadInbox(fresh, inboxRef.current);
+    });
+    if (!loaded || !landed()) return;
+    // The next read starts before React renders this one.
+    inboxRef.current = loaded;
+    setInbox(loaded);
   }, [current, holding]);
 
   /**
@@ -445,6 +465,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const d = await load();
       try {
         const answeredAt = await d.answer(ctx, item, reply);
+        // A read already in flight may list the decision without this reply and move its cursor
+        // past it: it must not land. The next read finds the reply in the sent answers.
+        inboxRead.current()();
         setInbox((all) => ({
           ...all,
           items: all.items.map((i) =>

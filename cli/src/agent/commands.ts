@@ -16,12 +16,24 @@ import {
   waitSeconds,
 } from "../decisions";
 import { MAX_HOLD_SECONDS, type SessionEvent } from "./api";
-import type { AgentClient } from "./client";
+import { type AgentClient, AgentLost, Interrupted, NoAgent } from "./client";
 
 /** Exit code on Ctrl-C, as a shell reports SIGINT. */
 const EXIT_INTERRUPTED = 130;
 /** Slack past a held request's `wait` before the client gives up on the agent. */
 const SLACK_MS = 15_000;
+/** How long `wait` keeps trying an agent that stopped before it waits at the server (#548). */
+export const RESTART_MS = 30_000;
+
+/**
+ * The agent stopped under a `wait` and did not come back: the caller waits at the server itself,
+ * for what is left of the timeout (`rest`).
+ */
+export class AgentGone extends Error {
+  constructor(readonly rest: { id?: string; session?: string; timeout?: string; json?: boolean }) {
+    super("the agent stopped and did not come back");
+  }
+}
 
 export async function askVia(
   ctx: Ctx,
@@ -63,18 +75,49 @@ export async function waitVia(
   agent: AgentClient,
   opts: { id?: string; session?: string; timeout?: string; json?: boolean },
 ): Promise<number> {
-  const next = (wait: number) =>
-    agent.call<{ answer?: Answer; question?: string }>(
-      "POST",
-      "/v1/answers/next",
-      {
-        ...(opts.id ? { id: opts.id } : {}),
-        ...(opts.session ? { session: opts.session } : {}),
-        wait,
-      },
-      wait * 1000 + SLACK_MS,
-      ctx.signal,
-    );
+  let deadline = Number.POSITIVE_INFINITY;
+  if (opts.timeout) deadline = ctx.now().getTime() + parseDuration(opts.timeout);
+  const rest = () => ({
+    ...opts,
+    ...(Number.isFinite(deadline)
+      ? { timeout: `${Math.max(1, Math.ceil((deadline - ctx.now().getTime()) / 1000))}s` }
+      : {}),
+  });
+  // A held request dies with an agent restart (#548). An answer the agent hands out is marked
+  // seen only on the way to a client still listening, so asking the new agent again loses
+  // nothing; one that stays away leaves the wait to the server. Retries keep to the deadline.
+  const next = async (hold: number) => {
+    let lost: number | undefined;
+    let wait = hold;
+    for (;;) {
+      try {
+        return await agent.call<{ answer?: Answer; question?: string }>(
+          "POST",
+          "/v1/answers/next",
+          {
+            ...(opts.id ? { id: opts.id } : {}),
+            ...(opts.session ? { session: opts.session } : {}),
+            wait,
+          },
+          wait * 1000 + SLACK_MS,
+          ctx.signal,
+        );
+      } catch (e) {
+        // No agent before it ever answered: `withAgent` goes to the server at once.
+        const restarted = e instanceof AgentLost || (e instanceof NoAgent && agent.answered);
+        if (!restarted) throw e;
+        const now = ctx.now().getTime();
+        lost ??= now;
+        // Past the deadline: no answer, as a held request that ended empty.
+        if (now >= deadline) return {};
+        if (now - lost >= RESTART_MS) throw new AgentGone(rest());
+        await ctx.sleep(1000);
+        if (ctx.signal?.aborted) throw new Interrupted("interrupted");
+        const left = deadline - ctx.now().getTime();
+        if (wait > 0) wait = Math.max(1, Math.min(wait, Math.ceil(left / 1000)));
+      }
+    }
+  };
   let r = await next(0);
   const id = opts.id;
   // The agent's poll closes a decision a revoked device answered (#515).
@@ -84,8 +127,6 @@ export async function waitVia(
   };
   closed();
   if (!r.answer && id) await markWaiting(ctx, () => waitingVia(agent, { id, state: "waiting" }));
-  let deadline = Number.POSITIVE_INFINITY;
-  if (opts.timeout) deadline = ctx.now().getTime() + parseDuration(opts.timeout);
   while (!r.answer) {
     if (ctx.signal?.aborted) return EXIT_INTERRUPTED;
     const left = deadline - ctx.now().getTime();

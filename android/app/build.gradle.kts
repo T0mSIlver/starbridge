@@ -18,8 +18,9 @@ android {
         minSdk = 31
         targetSdk = 36
         // Release builds pass -PversionName from the tag (v1.2.3 or v1.2.3-rc.4).
-        val release = providers.gradleProperty("versionName").orNull ?: "1.0.0"
+        val release = providers.gradleProperty("versionName").orNull ?: "0.1.0"
         versionName = release
+        // buildSrc/src/main/kotlin/VersionCode.kt.
         versionCode = versionCodeOf(release)
         // The hosted server; self-hosters change it on the sign-in screen.
         buildConfigField("String", "DEFAULT_SERVER", "\"https://starbridge.run\"")
@@ -51,6 +52,9 @@ android {
         buildConfig = true
         resValues = true
     }
+
+    // The versionCode formula is plain Kotlin in buildSrc: VersionCodeTest checks it (#551).
+    sourceSets.getByName("test").kotlin.srcDir(rootProject.file("buildSrc/src/main/kotlin"))
 
     testOptions {
         unitTests.isIncludeAndroidResources = true
@@ -115,15 +119,6 @@ dependencies {
     testImplementation(libs.okhttp.mockwebserver)
     testImplementation(libs.coroutines.test)
     testImplementation(libs.material.components) { isTransitive = false }
-}
-
-/** 1.2.3 → 1_02_03_99 and 1.2.3-rc.4 → 1_02_03_04, so release candidates sort before the release. */
-fun versionCodeOf(name: String): Int {
-    val m = Regex("""(\d+)\.(\d+)\.(\d+)(?:-rc\.(\d+))?""").matchEntire(name)
-        ?: error("versionName must be MAJOR.MINOR.PATCH or MAJOR.MINOR.PATCH-rc.N, got $name")
-    val (major, minor, patch, rc) = m.destructured
-    require(minor.toInt() < 100 && patch.toInt() < 100 && (rc.isEmpty() || rc.toInt() in 1..98)) { "versionName out of range: $name" }
-    return major.toInt() * 1_000_000 + minor.toInt() * 10_000 + patch.toInt() * 100 + (if (rc.isEmpty()) 99 else rc.toInt())
 }
 
 class Keystore(val file: File, val password: String, val alias: String)

@@ -109,8 +109,11 @@ export class Decisions implements Feature {
         const end = Date.now() + wait * 1000;
         await this.beforeEvents();
         let found = takeAnswer(this.ctx.store, id, from);
-        while (!found && !req.signal.aborted && Date.now() < end) {
+        while (!found && Date.now() < end) {
           await this.hub.changed(end - Date.now(), req.signal);
+          // Taking marks the answer seen: a client that hung up, as on a restart (#548), would
+          // never print it, and its next wait would skip it.
+          if (req.signal.aborted) return {};
           found = takeAnswer(this.ctx.store, id, from);
         }
         return found ?? {};

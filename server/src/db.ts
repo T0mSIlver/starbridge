@@ -3,7 +3,7 @@ import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 
 /**
- * The 1.0.0 schema. `IF NOT EXISTS` lets version 1 adopt a database this server made before it
+ * The 0.1.0 schema. `IF NOT EXISTS` lets version 1 adopt a database this server made before it
  * counted versions, which already holds exactly these tables.
  */
 const V1 = `
