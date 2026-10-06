@@ -29,7 +29,6 @@ export function LegalLinks() {
     <nav className={`${s.links} t-meta`} aria-label="Legal">
       <a href="/privacy">Privacy</a>
       <a href="/terms">Terms</a>
-      <a href="mailto:abuse@starbridge.run">abuse@starbridge.run</a>
     </nav>
   );
 }

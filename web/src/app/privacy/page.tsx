@@ -10,11 +10,11 @@ export default function Privacy() {
     <LegalPage title="Privacy">
       <p>
         This covers the hosted service at starbridge.run and the Starbridge Android app. A server
-        you host yourself keeps its data on your own machine. Last updated: 5 October 2026.
+        you host yourself keeps its data on your own machine. Last updated: 6 October 2026.
       </p>
       <p>
         Operator: Tom Vaucourt, an individual in France, running Starbridge as a non-professional.
-        Contact: <a href="mailto:abuse@starbridge.run">abuse@starbridge.run</a>. Host: Hetzner
+        Contact: <a href="mailto:privacy@starbridge.run">privacy@starbridge.run</a>. Host: Hetzner
         Online GmbH, Industriestr. 25, 91710 Gunzenhausen, Germany, +49 9831 505-0.
       </p>
 
@@ -138,7 +138,7 @@ export default function Privacy() {
       <p>
         Removing a device or machine from your account ends its sign-in and deletes its push
         targets; a push target the push service reports as gone is deleted too. To delete your whole
-        account, email <a href="mailto:abuse@starbridge.run">abuse@starbridge.run</a> with your
+        account, email <a href="mailto:privacy@starbridge.run">privacy@starbridge.run</a> with your
         GitHub login. To show the account is yours, you post a code the operator sends you in a
         public gist on that GitHub account. The operator deletes the account within 30 days of that,
         and backups age out within 14 days after.
@@ -149,7 +149,7 @@ export default function Privacy() {
         The GDPR applies. The legal basis for storing your data is running the service you signed up
         for; logs and rate limits rest on the operator&apos;s legitimate interest in keeping it
         working and safe. You can ask to access, correct, delete or export your data, or object to
-        its processing, at <a href="mailto:abuse@starbridge.run">abuse@starbridge.run</a>. Your
+        its processing, at <a href="mailto:privacy@starbridge.run">privacy@starbridge.run</a>. Your
         content is encrypted, so only your devices can export it. You can complain to the CNIL
         (cnil.fr) or your own country&apos;s data protection authority.
       </p>
