@@ -1324,6 +1324,19 @@ so the mod is the first path.
   after a device allowed it. The Starbridge link now defers such asks at once, by the gate's
   surface, instead of sending the devices a prompt whose Allow is dropped. Letting a link allow
   them needs pi-permission-system to make the excluded families configurable (its #620).
+- 2026-10-06. Security headers (#312, after #302). Next sets the page's Content-Security-Policy
+  in `web/src/proxy.ts`, because only it can put a fresh nonce on each request and on its own
+  scripts: scripts need the nonce or `'strict-dynamic'` (so Umami's tracker, which Next's
+  bundle loads, passes), `'wasm-unsafe-eval'` lets libsodium's WebAssembly compile without
+  allowing JavaScript eval, and an inline script sets Zod's `jitless` before it builds its schemas,
+  since its `new Function` probe counts as a violation even when caught. Styles stay `'unsafe-inline'` since React writes style attributes,
+  images allow `data:` and `blob:` for questions, `worker-src 'self'` keeps the service worker,
+  and `frame-ancestors 'none'` refuses framing. Fonts are self-hosted, so nothing else is
+  allowed. A nonce needs a render per request, so every page is dynamic now, and the docs
+  read their Markdown at runtime from files the image ships (`outputFileTracingIncludes`).
+  Caddy sets what applies to every response, the API's included: HSTS for a year,
+  `nosniff` and `Referrer-Policy: same-origin`; the self-host example does the same. Next
+  stops sending `X-Powered-By`.
 
 ## Encryption, with existing libraries
 
