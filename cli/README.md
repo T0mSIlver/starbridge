@@ -218,8 +218,8 @@ or nothing if the terminal answers first or the server can't be reached.
 
 Agents, the Starbridge skill, the Claude Code plugins, the Pi extension and the opencode plugin
 read the commands below and their output. The plugins update apart from the CLI, so this list is
-frozen for every 1.x release: a release may add commands, flags, variables, fields and lines, but
-changing or removing anything here takes a new major version. `cli/test/contract.test.ts` pins
+stable from 0.1.0, the first public release: a release may add commands, flags, variables, fields
+and lines, but changes or removes anything here only after a release that deprecates it. `cli/test/contract.test.ts` pins
 the lines; the hook outputs are pinned in `cli/test/permissions.test.ts`.
 
 | Command | Contract |

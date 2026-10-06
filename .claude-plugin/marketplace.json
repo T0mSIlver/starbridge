@@ -14,7 +14,7 @@
         "source": "git-subdir",
         "url": "https://github.com/T0mSIlver/starbridge.git",
         "path": "plugin",
-        "ref": "v1.0.0"
+        "ref": "v0.1.0"
       },
       "description": "The starbridge skill, and a SessionStart rule that has every session reach the owner through it. Needs the starbridge CLI on PATH, paired."
     },
@@ -24,7 +24,7 @@
         "source": "git-subdir",
         "url": "https://github.com/T0mSIlver/starbridge.git",
         "path": "mod",
-        "ref": "v1.0.0"
+        "ref": "v0.1.0"
       },
       "description": "Submits each answer into the session that asked, through the machine's starbridge agent, or the CLI when no agent runs. A Claude Code mod: install it beside the starbridge plugin; a build that cannot load mods skips it."
     }

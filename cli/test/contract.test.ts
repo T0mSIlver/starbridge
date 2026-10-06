@@ -1,4 +1,4 @@
-// Pins what agents and the plugins parse ("What agents parse" in cli/README.md): frozen for 1.x.
+// Pins what agents and the plugins parse ("What agents parse" in cli/README.md): stable from 0.1.0.
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -67,7 +67,7 @@ test("pair prints its code first; errors start with starbridge:", async () => {
   expect(ctx.errors.at(-1)).toStartWith("starbridge: cannot read /nonexistent.json");
 });
 
-test("ask --json is an unknown flag: --input replaced it before 1.0.0", async () => {
+test("ask --json is an unknown flag: --input replaced it before the first release", async () => {
   const ctx = await paired(server);
   expect(await run(["ask", "--json", "-"], ctx)).toBe(1);
   expect(ctx.errors.at(-1)).toStartWith("starbridge: ");

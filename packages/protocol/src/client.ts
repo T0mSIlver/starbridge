@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 /**
- * Every request to the server names its client and release: `starbridge-client: cli/1.0.0`.
+ * Every request to the server names its client and release: `starbridge-client: cli/0.1.0`.
  * The server counts versions in use and answers a release below its minimum for that client
  * with 426 and `ClientTooOld`.
  */
