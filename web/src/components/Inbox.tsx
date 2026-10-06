@@ -13,7 +13,7 @@ import {
 } from "@/lib/feed";
 import { matches, useFind } from "@/lib/find";
 import { clockTime } from "@/lib/format";
-import { closeItem, forgetItem, openItem, useOpened } from "@/lib/opened";
+import { closeItem, openItem, stackItem, useOpened } from "@/lib/opened";
 import { closedByPhrase, promptOutcome } from "@/lib/outcome";
 import { fitsRow } from "@/lib/permissionInput";
 import { type Prefs, usePref } from "@/lib/prefs";
@@ -55,8 +55,17 @@ const text = (e: Entry) =>
       : [e.item.run.title, e.item.run.reason];
 
 export function Inbox() {
-  const { inbox, prompts, runs, promptLog, loadPromptLog, answer, answerPrompt, deviceName } =
-    useApp();
+  const {
+    inbox,
+    inboxLoaded,
+    prompts,
+    runs,
+    promptLog,
+    loadPromptLog,
+    answer,
+    answerPrompt,
+    deviceName,
+  } = useApp();
   const [grouping, setGrouping] = usePref("grouping");
   const [historyOpen, setHistoryOpen] = usePref("historyOpen");
   // History's rows fade in when the owner opens it, not when the page loads with it open or the
@@ -106,12 +115,6 @@ export function Inbox() {
   useEffect(() => {
     if (wide && selected && picked !== selected) setPicked(selected);
   }, [wide, selected, picked]);
-  // A link or a narrower window opened an item: a wide window selects it beside the list instead.
-  useEffect(() => {
-    if (!wide || !opened) return;
-    setPicked(opened);
-    forgetItem();
-  }, [wide, opened]);
 
   const latest = useRef({ ids, selected });
   latest.current = { ids, selected };
@@ -158,6 +161,26 @@ export function Inbox() {
 
   const pastOf = new Map(past.map((p) => [p.entry.id, p]));
   const entryOf = new Map(needs.map((e) => [e.id, e]));
+  // An item opened by a link or a reload is known once the inbox loaded, or the 7-day prompt
+  // log for a closed prompt.
+  const stillOpen = opened !== undefined && entryOf.has(opened);
+  const known = stillOpen || (opened !== undefined && pastOf.has(opened));
+  const resolved = known || (inboxLoaded && promptLog !== undefined);
+  useEffect(() => {
+    if (opened && inboxLoaded && !known && promptLog === undefined) loadPromptLog().catch(() => {});
+  }, [opened, inboxLoaded, known, promptLog, loadPromptLog]);
+  useEffect(() => {
+    if (opened && !wide) stackItem();
+  }, [opened, wide]);
+  // A wide window selects the item beside the list instead, opening History for a closed one.
+  useEffect(() => {
+    if (!wide || !opened || !resolved) return;
+    if (known) {
+      setPicked(opened);
+      if (!stillOpen) setHistoryOpen(true);
+    }
+    closeItem();
+  }, [wide, opened, resolved, known, stillOpen, setHistoryOpen]);
   const detail = (id: string | undefined) => {
     if (!id) return null;
     const open = entryOf.get(id);
@@ -339,7 +362,7 @@ export function Inbox() {
       <div className={s.single}>
         <PhoneBar title="Inbox" back={closeItem} always />
         <div className={`m-enter ${s.openDetail}`}>
-          {detail(opened) ?? <p className={`t-small ${s.empty}`}>Answered</p>}
+          {detail(opened) ?? (resolved && <p className={`t-small ${s.empty}`}>Answered</p>)}
         </div>
       </div>
     );

@@ -39,27 +39,38 @@ export function useOpened(): string | undefined {
 /** Opens `id` on a new history entry, which Back leaves. */
 export function openItem(id: string) {
   if (inAddress() === id) return;
-  // Next.js keeps its own keys beside this one; the mark tells `closeItem` this entry is ours.
+  // Next.js copies its own keys beside this one; the mark tells `closeItem` this entry is ours.
   history.pushState({ item: id }, "", address(id));
   changed();
 }
 
+const ours = (id: string) => (history.state as { item?: string } | null)?.item === id;
+
 /**
- * Back to the list: through history when this page pushed the entry, so Back after it leaves
- * the inbox instead of reopening the item; in place when a link or a reload opened it.
+ * Gives an item a link or a cold start opened the list's entry behind it, so Back returns to
+ * the list instead of leaving the app.
  */
+export function stackItem() {
+  const id = inAddress();
+  if (id === undefined || ours(id)) return;
+  history.replaceState({ item: undefined }, "", address(undefined));
+  history.pushState({ item: id }, "", address(id));
+}
+
+// Set from `history.back()` until its popstate, so a second tap does not step back twice.
+let leaving = false;
+
+/** Back to the list: a step back through history when the entry is ours, else in place. */
 export function closeItem() {
   const id = inAddress();
-  if (id !== undefined && (history.state as { item?: string } | null)?.item === id) {
+  if (id === undefined || leaving) return;
+  if (ours(id)) {
+    leaving = true;
+    addEventListener("popstate", () => (leaving = false), { once: true });
     history.back();
     return;
   }
-  forgetItem();
-}
-
-/** Drops the item from the address without a history step: a wide window shows it beside the list. */
-export function forgetItem() {
-  if (inAddress() === undefined) return;
-  history.replaceState({ ...history.state, item: undefined }, "", address(undefined));
+  // Without Next.js's keys, its patched replaceState copies them and updates its router too.
+  history.replaceState({ item: undefined }, "", address(undefined));
   changed();
 }
