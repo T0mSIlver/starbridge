@@ -435,8 +435,9 @@ through the operator.
 Answers skip the decision count and may use the last 8 MB, so a full account can still answer. An hourly sweep drops answered
 decisions and their answers 7 days after the answer, permissions, permission answers and settled
 notices 7 days after they arrived, runs a day after their last update, a decision's waiting state with its decision, unanswered decisions and quota snapshots 30
-days after they arrived, quota snapshots of revoked machines, and expired sessions. Clients that
-want a longer history keep their own copy.
+days after they arrived, quota snapshots of revoked machines, and expired sessions. Each kind's
+period is its `keep` in `ITEM_KINDS`, which every new kind must name. Clients that want a longer
+history keep their own copy.
 
 ## Waiting state
 
