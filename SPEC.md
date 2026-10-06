@@ -1680,3 +1680,11 @@ goes in git.
   setup script that runs the install script and pairs. Whether cloud
   sessions should get a machine at all is open, since the agent can read
   its key.
+- 2026-10-06: a lost reply, as Android's tests can script it (#292).
+  Since #270 the app retries a 502 or 503 quietly, so a 503 no longer
+  stands for a reply the phone never got. OkHttp (5.5, the default
+  `retryOnConnectionFailure`) also sends a POST again when the connection
+  drops before the reply starts, so a server that committed the first one
+  receives it twice. Only a connection that drops once the reply's
+  headers are in reaches the app as a failure, and that is what
+  `RecoveryRetryTest` scripts (MockWebServer's `onResponseBody`).
