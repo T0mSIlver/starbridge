@@ -200,6 +200,27 @@ The Claude Code plugin's hooks call `starbridge hook …`. One of them turns Cla
 `AskUserQuestion` into `starbridge ask`, so the question reaches you away from the terminal; if
 the machine is not paired or the server doesn't answer, it lets the question through.
 
+## What agents parse
+
+Agents, the Starbridge skill, the Claude Code plugins, the Pi extension and the opencode plugin
+read the commands below and their output. The plugins update apart from the CLI, so this list is
+frozen for every 1.x release: a release may add commands, flags, fields and lines, but changing or
+removing anything here takes a new major version. `cli/test/contract.test.ts` pins each string.
+
+| Command | Contract |
+|---|---|
+| `ask` | Flags `--question`, `--context`, `--context-file`, `--option`, `--recommended`, `--waiting`, `--agent`, `--project`, `--session`, `--session-title`, `--session-link`, `--image`, `--link`, `--answer-in`, `--input <path>` (a JSON file with the same fields, `-` for stdin), `--wait`, `--timeout`. Prints the decision id alone on stdout: `d_` and 16 characters from `A-Z a-z 0-9 _ -`. With `--wait`, then what `wait` prints; without it, one line on stderr, either `The answer will come back into this session as a new prompt.` or ``Nothing brings the answer into this session: when only the answer is left, run `starbridge wait <id> --timeout 5m` (again on exit 2).`` |
+| `wait [<id>]` | Flags `--timeout`, `--json`. Prints `Answer to <id> (<question>): <choice or text>`, or with `--json` the answer as one JSON object. Exits 2 when `--timeout` passed. |
+| `waiting <id>`, `working <id>` | No output on success. |
+| `settle <id>` | Flag `--outcome elsewhere\|withdrawn`. |
+| `answers --session <id>` | Flags `--wait <seconds>`, `--ack <ack>`. Prints one JSON object per line: `{"decisionId", "ack", "line"}`, where `line` is the `Answer to` line above. |
+| `run` | Flags `--title`, `--reason`, then `--` and the command. Exits with the command's code. |
+| `hook permission`, `hook settle`, `hook ask-user` | Flags `--agent claude-code\|pi\|opencode`, `--wait`. Read the hook's JSON on stdin and print the hook output its harness defines, or nothing. |
+| `pair` | Prints `Pairing code: <code>` first. |
+
+Every command exits 0 on success and 1 on an error, with the error on stderr after
+`starbridge: `.
+
 ## Release
 
 `bun run build:bin` builds the standalone binaries (Linux and macOS, x64 and arm64). A `v*` tag

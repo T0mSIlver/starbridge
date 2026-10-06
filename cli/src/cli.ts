@@ -70,7 +70,7 @@ const HELP = `starbridge: post decisions to your devices, report runs, upload qu
                               where to open the session, up to 3 times; kind is
                               remote-control, desktop or web (default: what Claude
                               Code records for the session: Remote Control, Desktop)
-      --json <path>           read these fields from a JSON file ("-" for stdin)
+      --input <path>          read these fields from a JSON file ("-" for stdin)
       --wait                  then wait for the answer, as \`wait\` does
       --timeout <duration>    with --wait: give up then, as \`wait\` does
 
@@ -200,13 +200,13 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
             image: { type: "string", multiple: true },
             link: { type: "string", multiple: true },
             "answer-in": { type: "string" },
-            json: { type: "string" },
+            input: { type: "string" },
             wait: { type: "boolean" },
             timeout: { type: "string" },
           },
         });
-        const { default: jsonDefault, ...fromJson }: AskInput & { default?: unknown } = v.json
-          ? JSON.parse(readText(v.json))
+        const { default: jsonDefault, ...fromJson }: AskInput & { default?: unknown } = v.input
+          ? JSON.parse(readText(v.input))
           : {};
         const input: AskInput = {
           ...fromJson,

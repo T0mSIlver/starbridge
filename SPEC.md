@@ -1836,6 +1836,13 @@ so the mod is the first path.
   permission, your phone tells you. Answer with one tap and it gets back to work." It sells the
   pain the owner named: you don't notice that an agent is blocked. The shots below it still show
   the web app beside the phone, so the page keeps saying both clients do the same.
+- 2026-10-06. The CLI's agent-facing contract is frozen for 1.x (#475): the commands, flags,
+  stdout and stderr lines and exit codes listed under "What agents parse" in `cli/README.md`
+  (`/docs/cli`), pinned by `cli/test/contract.test.ts`. A 1.x release may add to it; changing or
+  removing anything listed takes a major version, because the plugins, the Pi extension and
+  agents' instructions update apart from the CLI. `ask --json <path>` became `ask --input <path>`,
+  so `--json` means an output format wherever it appears (`wait --json`). No alias: 1.0.0 is the
+  compatibility floor (#469).
 
 ## Encryption, with existing libraries
 
