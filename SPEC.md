@@ -1535,6 +1535,13 @@ so the mod is the first path.
 - 2026-10-06. Workflows pin every action by commit SHA, with its version in a comment (#361). A
   moved tag could otherwise run code in the release job before it writes the minisign key.
   Dependabot proposes the updates in one grouped PR a month.
+- 2026-10-06. A workflow writes `pnpm-lock.yaml` into Dependabot's npm PRs, then starts CI by
+  `workflow_dispatch` (#426). Dependabot updates a pnpm workspace only from its root, as the
+  monthly update does, but a security update runs in the folder of the manifest its alert names
+  (`/web` for next's GHSA-vcvr-r3jv-pc5j), logs "missing lockfile" and changes `package.json`
+  alone. No `dependabot.yml` option moves it: `exclude-paths` skips security updates
+  (dependabot-core#14408). A push with `GITHUB_TOKEN` starts no workflow, a dispatch does, so
+  the fix needs no new credential.
 - 2026-10-06. Both screens confirm a join by digits (#355, from the #366 audit). Only the
   approver's owner compared the digits; the joining device acted on the first approval it got.
   A server in the middle that sends the joiner its own approver key derives the same MAC key and

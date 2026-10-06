@@ -1,0 +1,44 @@
+name: Dependabot lockfile
+
+# Dependabot updates the workspace's npm packages from the root (dependabot.yml), which also
+# updates pnpm-lock.yaml. A security update instead runs in the folder of the manifest its alert
+# names, such as /web, finds no lockfile there and changes package.json alone, so CI's frozen
+# install fails (#426). This job writes the lockfile into such a pull request. Its push, made
+# with GITHUB_TOKEN, starts no workflow, so it starts CI itself.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions: {}
+
+jobs:
+  lockfile:
+    if: github.actor == 'dependabot[bot]' && startsWith(github.head_ref, 'dependabot/npm_and_yarn/')
+    runs-on: ${{ vars.RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 10
+    # A workflow that Dependabot starts gets a read-only token unless it asks for more.
+    permissions:
+      contents: write
+      actions: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.head_ref }}
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          dest: ${{ runner.temp }}/setup-pnpm
+      - run: pnpm install --lockfile-only --no-frozen-lockfile
+        timeout-minutes: 5
+        env:
+          pnpm_config_store_dir: ${{ runner.tool_cache }}/pnpm-store
+      - name: Push the lockfile and start CI
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ github.head_ref }}
+        run: |
+          if git diff --quiet pnpm-lock.yaml; then exit 0; fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898599+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Update pnpm-lock.yaml' pnpm-lock.yaml
+          git push origin "HEAD:$BRANCH"
+          gh workflow run ci.yml --ref "$BRANCH"
