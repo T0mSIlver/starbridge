@@ -225,9 +225,11 @@ provider plugins add providers, not panels.
   `starbridge://auth`. Chrome asks "Continue to Starbridge?" before following a `starbridge://`
   redirect that no tap started; after a tap it does not. Self-hosted servers keep
   `starbridge://auth`, since the APK can bind only starbridge.run.
-- `assetlinks.json` lists the release key, which Play App Signing also uses, and the dev box's
-  debug key, so dogfood builds verify too. That key never leaves the dev box, and a caught code is
-  useless without the verifier.
+- `assetlinks.json` lists only the release key, which Play App Signing also uses. A debug
+  keystore's password is public, and an app signed with it would verify as the App Link handler
+  (#569). Dogfood builds sign with the release key instead, opted into by a gitignored
+  `local.properties` line on the maintainer's machine and refused under CI; other debug builds keep
+  the debug key, and their sign-in falls back to the `starbridge://auth` button.
 
 ## Server
 
