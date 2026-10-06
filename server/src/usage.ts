@@ -1,4 +1,5 @@
 import type { Database } from "bun:sqlite";
+import type { ClientVersion } from "@starbridge/protocol";
 import type { Caller } from "./auth";
 
 /**
@@ -45,13 +46,23 @@ export class Usage {
   }
 
   /**
-   * Marks the caller's account, and its machine or paired device, active today. Member ids are
-   * unique only within an account, so a member's subject names both.
+   * Marks the caller's account, and its machine or paired device, active today, and counts the
+   * release its client named (`active.clients.<name>.<major>.<minor>`) once per member, or per
+   * account before pairing. Member ids are unique only within an account, so a member's subject
+   * names both. Only a subject's first release of the day counts, so a client cycling through
+   * made-up versions adds one row, not one per version.
    */
-  seen(caller: Caller): void {
+  seen(caller: Caller, client: ClientVersion | null = null): void {
+    // First, so a new day clears `seenToday` before the release check below reads it.
     this.record("active.accounts", caller.account);
-    if (caller.member === null) return;
-    const member = `${caller.account}/${caller.member}`;
+    const member = caller.member === null ? null : `${caller.account}/${caller.member}`;
+    const subject = member ?? caller.account;
+    if (client && !this.seenToday.has(`active.clients\n${subject}`)) {
+      this.seenToday.add(`active.clients\n${subject}`);
+      const [major, minor] = client.version;
+      this.record(`active.clients.${client.name}.${major}.${minor}`, subject);
+    }
+    if (member === null) return;
     if (caller.role === "machine") this.record("active.machines", member);
     else this.record(`active.devices.${caller.client}`, member);
   }
