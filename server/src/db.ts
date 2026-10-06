@@ -186,13 +186,16 @@ CREATE TABLE IF NOT EXISTS usage_days (
 );
 `;
 
+/** Pairings no longer keep their poster's address: the per-address cap counts in memory (#575). */
+const V2 = "ALTER TABLE pairings DROP COLUMN client;";
+
 /**
  * Schema changes, in order; `PRAGMA user_version` counts those a database has run. Append only:
  * a shipped migration never changes. A migration changes the schema and never rewrites rows, so
  * it runs well within the 30 s Caddy holds requests while the server restarts; a backfill runs in
  * the hourly sweep instead.
  */
-const MIGRATIONS = [V1];
+const MIGRATIONS = [V1, V2];
 
 export function openDb(path: string): Database {
   if (path !== ":memory:") mkdirSync(dirname(path), { recursive: true });

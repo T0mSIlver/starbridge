@@ -318,6 +318,7 @@ object Sizes {
     val hatch = 6.dp
     val media = 360.dp
     val mediaWide = 560.dp
+    val pick = 240.dp
     val detailWideFrom = 1000.dp
     val detailWide = 1280.dp
     val page = 1200.dp

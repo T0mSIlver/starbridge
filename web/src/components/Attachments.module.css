@@ -1,21 +1,27 @@
 .images {
   display: grid;
   gap: var(--s2);
+  --row-max: var(--size-media);
 }
 
-/* Two or more: two columns, so a pair of mockups sits side by side. */
-.grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+/* Each image grows by its width-to-height ratio from nothing, so the row's images share one height
+   and fill its width; the max width keeps that height under `--row-max`. */
+.row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s2);
+  max-width: calc(var(--row-max) * var(--shape) + var(--s2) * (var(--n) - 1));
 }
 
 .image {
   position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  flex: var(--r) 1 0;
+  min-width: 0;
+  aspect-ratio: var(--r);
   padding: 0;
   border: 0;
   border-radius: var(--radius-lg);
+  /* Shows only until the image has decoded. */
   background: var(--surface2);
   overflow: hidden;
   cursor: zoom-in;
@@ -24,9 +30,8 @@
 .image img {
   display: block;
   width: 100%;
-  height: auto;
-  max-height: var(--size-media);
-  object-fit: contain;
+  height: 100%;
+  object-fit: cover;
 }
 
 .expand {

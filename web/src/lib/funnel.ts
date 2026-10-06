@@ -1,6 +1,6 @@
-// The signed-in end of the launch funnel (#559): a new account's first sign-in, first machine and
-// first answer, each sent once, from the browser that created the account. The app loads no
-// tracker; these three events are all it sends to Umami (SPEC.md, "The hosted instance").
+// What the signed-in app sends to Umami (SPEC.md, "The hosted instance"). It loads no tracker.
+// The launch funnel (#559, #590): a new account's steps, each sent once, from the browser that
+// created the account. Besides those, only which error screen showed and an install as an app.
 import { analyticsOn, WEBSITE_ID } from "./analytics";
 import { readStored, stored } from "./stored";
 
@@ -9,7 +9,9 @@ export const FUNNEL_KEY = "starbridge.funnel";
 /** Past this the steps left are dropped: Umami's daily salt has long split the visit anyway. */
 const KEEP_MS = 2 * 24 * 3600 * 1000;
 
-export type Step = "first-machine" | "first-answer";
+export type Step = "first-keys" | "first-machine" | "second-device" | "first-answer";
+
+const STEPS: Step[] = ["first-keys", "first-machine", "second-device", "first-answer"];
 
 type Left = { account: string; since: number; steps: Step[] };
 
@@ -47,7 +49,7 @@ function optedOut(): boolean {
  * "Starbridge" so nothing of the app's screens leaves the browser. Umami joins it to the
  * landing page's visit by the same address, browser and day.
  */
-export function send(name: string) {
+export function send(name: string, data?: Record<string, string>) {
   if (!analyticsOn() || optedOut()) return;
   const payload = {
     website: WEBSITE_ID,
@@ -57,6 +59,7 @@ export function send(name: string) {
     url: "/",
     title: "Starbridge",
     name,
+    ...(data ? { data } : {}),
   };
   fetch("/stats/api/send", {
     method: "POST",
@@ -71,18 +74,30 @@ export function firstSignIn(account: string, now = Date.now()) {
   if (!analyticsOn()) return;
   const left = read();
   if (left?.account === account && now - left.since < KEEP_MS) return;
-  write({ account, since: now, steps: ["first-machine", "first-answer"] });
+  write({ account, since: now, steps: STEPS });
   send("first-sign-in");
 }
 
-/** Sends each step `reached` of those this browser waits for on `account`, once. */
-export function reach(account: string, reached: (step: Step) => boolean, now = Date.now()) {
+/**
+ * Sends each step `reached` of those this browser waits for on `account`, once; a step reached
+ * with data sends it along.
+ */
+export function reach(
+  account: string,
+  reached: (step: Step) => boolean | Record<string, string>,
+  now = Date.now(),
+) {
   const left = read();
   if (!left) return;
   // Another account signed in here, or the setup was left: the note is spent.
   if (left.account !== account || now - left.since >= KEEP_MS) return write(null);
-  const done = left.steps.filter(reached);
+  const done: Step[] = [];
+  for (const step of left.steps) {
+    const r = reached(step);
+    if (!r) continue;
+    send(step, r === true ? undefined : r);
+    done.push(step);
+  }
   if (!done.length) return;
-  for (const step of done) send(step);
   write({ ...left, steps: left.steps.filter((s) => !done.includes(s)) });
 }
