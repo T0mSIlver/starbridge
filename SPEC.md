@@ -1868,6 +1868,10 @@ so the mod is the first path.
   the web app beside the phone, so the page keeps saying both clients do the same.
 - 2026-10-06. The release's npm publish step keeps its `env.NODE_AUTH_TOKEN != ''` gate (#480).
   The audit suspected it never skips; it does skip without `NPM_TOKEN`. See the research log.
+- 2026-10-06. The live revision starbridge.run names in `x-starbridge-revision` is refused unless
+  it is 40 lowercase hex characters (#467), as `starbridge-deploy` refuses its argument: the deploy
+  workflow puts it in a `gh api` path, and `deploy/deploy.sh` now fails instead of comparing or
+  printing anything else. An empty header still only warns there, for commits from before it.
 
 ## Encryption, with existing libraries
 
