@@ -142,11 +142,11 @@ fun Setup(phase: Phase, notice: StateFlow<String?>, dismiss: () -> Unit, openUrl
  * wider content, collapsed on a phone in landscape, where its labels would crowd the badge.
  */
 @Composable
-fun suiteType(): NavigationSuiteType {
-    val width = currentWindowAdaptiveInfo().windowSizeClass
+internal fun suiteType(): NavigationSuiteType {
+    val size = currentWindowAdaptiveInfo().windowSizeClass
     return when {
-        width.isWidthAtLeastBreakpoint(WindowSizeClass.WIDTH_DP_EXPANDED_LOWER_BOUND) && width.isHeightAtLeastBreakpoint(WindowSizeClass.HEIGHT_DP_MEDIUM_LOWER_BOUND) -> NavigationSuiteType.WideNavigationRailExpanded
-        width.isWidthAtLeastBreakpoint(WindowSizeClass.WIDTH_DP_MEDIUM_LOWER_BOUND) -> NavigationSuiteType.WideNavigationRailCollapsed
+        size.isWidthAtLeastBreakpoint(WindowSizeClass.WIDTH_DP_EXPANDED_LOWER_BOUND) && size.isHeightAtLeastBreakpoint(WindowSizeClass.HEIGHT_DP_MEDIUM_LOWER_BOUND) -> NavigationSuiteType.WideNavigationRailExpanded
+        size.isWidthAtLeastBreakpoint(WindowSizeClass.WIDTH_DP_MEDIUM_LOWER_BOUND) -> NavigationSuiteType.WideNavigationRailCollapsed
         else -> NavigationSuiteType.None
     }
 }

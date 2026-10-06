@@ -368,11 +368,11 @@ private fun ProviderRow(
 @Composable
 fun <T> Segments(choices: List<Pair<T, String>>, selected: T, onSelect: (T) -> Unit) {
     SubcomposeLayout { c ->
-        val row = subcompose(false) { SegmentButtons(choices, selected, onSelect, stacked = false) }.first()
+        val row = subcompose("row") { SegmentButtons(choices, selected, onSelect, stacked = false) }.first()
         val fits = row.maxIntrinsicWidth(c.maxHeight) <= c.maxWidth
-        val shown = if (fits) row else subcompose(true) { SegmentButtons(choices, selected, onSelect, stacked = true) }.first()
+        val shown = if (fits) row else subcompose("stack") { SegmentButtons(choices, selected, onSelect, stacked = true) }.first()
         val placeable = shown.measure(c.copy(minWidth = 0, minHeight = 0))
-        layout(placeable.width, placeable.height) { placeable.place(0, 0) }
+        layout(maxOf(placeable.width, c.minWidth), maxOf(placeable.height, c.minHeight)) { placeable.place(0, 0) }
     }
 }
 

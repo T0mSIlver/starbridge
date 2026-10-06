@@ -423,12 +423,15 @@ class LayoutAuditTest(private val shot: String, private val look: Look) {
      * Tap areas under 48 dp. Compose widens a control's touch area to 48 dp where nothing else is
      * (`ViewConfiguration.minimumTouchTargetSize`), and Material pads some controls to 48 dp in
      * layout. So a control's area is its box grown to 48 dp each way, stopped at the window's edge,
-     * at a neighbour's box, and halfway to a neighbour that grows towards it too.
+     * at the card around it, at a neighbour's box, and halfway to a neighbour that grows towards it
+     * too. A control over another (a sheet's handle over the scrim) grows only within what lies
+     * over that one, the sheet: past it, a direct hit on the one under wins.
      */
     private fun tapTargets(): List<String> {
         val min = 48 * density
         // Controls cut by a scrolling list's end are judged where they show in full.
-        val clicks = nodes(SemanticsMatcher.keyIsDefined(SemanticsActions.OnClick), unmerged = false).filter { it.boundsInRoot == it.unclipped() }
+        val clicks = nodes(SemanticsMatcher.keyIsDefined(SemanticsActions.OnClick), unmerged = false)
+            .filter { it.layoutInfo.isPlaced && !it.boundsInRoot.isEmpty && it.boundsInRoot == it.unclipped() }
         fun box(n: SemanticsNode): Rect {
             val u = n.unclipped()
             val dx = maxOf(0f, n.layoutInfo.width - u.width) / 2
@@ -441,21 +444,37 @@ class LayoutAuditTest(private val shot: String, private val look: Look) {
             val b = box(n)
             var root = n
             while (root.parent != null) root = root.parent!!
-            val window = Rect(0f, 0f, root.size.width.toFloat(), root.size.height.toFloat())
-            if (b.intersect(window) != b) continue
-            var left = maxOf(window.left, b.left - grow(b.width))
-            var right = minOf(window.right, b.right + grow(b.width))
-            var top = maxOf(window.top, b.top - grow(b.height))
-            var bottom = minOf(window.bottom, b.bottom + grow(b.height))
+            var bounds = Rect(0f, 0f, root.size.width.toFloat(), root.size.height.toFloat())
+            if (b.intersect(bounds) != b) continue
+            // A card (a clickable surface) clips what it holds, touch included.
+            var p = n.parent
+            var layer = n
+            while (p != null) {
+                if (p.config.contains(SemanticsActions.OnClick)) bounds = bounds.intersect(p.unclipped())
+                if (p.parent != null) layer = p
+                p = p.parent
+            }
+            val grown = Rect(b.left - grow(b.width), b.top - grow(b.height), b.right + grow(b.width), b.bottom + grow(b.height))
+            var left = maxOf(bounds.left, grown.left)
+            var right = minOf(bounds.right, grown.right)
+            var top = maxOf(bounds.top, grown.top)
+            var bottom = minOf(bounds.bottom, grown.bottom)
             for (m in clicks) {
                 if (m === n || m.root !== n.root || m.isAncestorOf(n) || n.isAncestorOf(m)) continue
                 val o = box(m)
-                if (o.overlaps(b)) continue
-                if (o.left < right && o.right > left) {
+                if (o.overlaps(b)) {
+                    val over = layer.boundsInRoot
+                    left = maxOf(left, over.left)
+                    right = minOf(right, over.right)
+                    top = maxOf(top, over.top)
+                    bottom = minOf(bottom, over.bottom)
+                    continue
+                }
+                if (o.left < grown.right && o.right > grown.left) {
                     if (o.top >= b.bottom) bottom = minOf(bottom, o.top, maxOf((b.bottom + o.top) / 2, o.top - grow(o.height)))
                     if (o.bottom <= b.top) top = maxOf(top, o.bottom, minOf((b.top + o.bottom) / 2, o.bottom + grow(o.height)))
                 }
-                if (o.top < bottom && o.bottom > top) {
+                if (o.top < grown.bottom && o.bottom > grown.top) {
                     if (o.left >= b.right) right = minOf(right, o.left, maxOf((b.right + o.left) / 2, o.left - grow(o.width)))
                     if (o.right <= b.left) left = maxOf(left, o.right, minOf((b.left + o.right) / 2, o.right + grow(o.width)))
                 }
