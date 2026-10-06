@@ -224,6 +224,30 @@ test("without an agent, SIGTERM or the deadline during the settled report still 
   }
 });
 
+for (const viaAgent of [true, false]) {
+  const how = viaAgent ? "through the agent" : "without an agent";
+
+  test(`${how}: a stalled server never holds the hook past its deadline or SIGTERM`, async () => {
+    for (const path of ["/directory", "/items"])
+      for (const cancel of ["sigterm", "deadline"] as const) {
+        const ctx = await machine(viaAgent);
+        const abort = new AbortController();
+        ctx.signal = abort.signal;
+        server.stalls.push(path);
+        const started = Date.now();
+        const out = hookPermission(ctx, request(), {
+          agent: "claude-code",
+          ...(cancel === "deadline" ? { wait: "2s" } : {}),
+        });
+        await until(() => !server.stalls.includes(path));
+        if (cancel === "sigterm") abort.abort();
+        expect(await out).toBe(0);
+        expect(ctx.lines).toEqual([]);
+        expect(Date.now() - started).toBeLessThan(cancel === "deadline" ? 4_000 : 1_500);
+      }
+  });
+}
+
 test("without an agent, Stop settles every waiting prompt of the session even when a report fails", async () => {
   const ctx = await machine(false);
   const first = await ask(ctx, request());

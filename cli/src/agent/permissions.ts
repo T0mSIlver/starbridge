@@ -65,6 +65,8 @@ export class Permissions implements Feature {
           session(this.ctx),
           obj(b.hook) as PermissionHookInput,
           { agent: agent.data, source: source as unknown as PermissionSourceInput, waitMs },
+          // The hook gives up at its deadline, or when the keyboard answers and it hangs up.
+          AbortSignal.any([req.signal, AbortSignal.timeout(Math.max(1000, waitMs))]),
         );
         return { id };
       },

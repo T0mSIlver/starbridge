@@ -513,7 +513,8 @@ export async function poll(
     watch?: { quotaAsked?: string };
   },
 ): Promise<{ cursor?: string; directory: Directory; quotaAsked?: string }> {
-  let directory = opts.directory ?? (await refreshDirectory(ctx, s));
+  // `ctx.signal` cuts every request: Ctrl-C, or a hook's deadline.
+  let directory = opts.directory ?? (await refreshDirectory(ctx, s, ctx.signal));
   const page = await s.api.answers(
     opts.cursor,
     opts.seconds,
@@ -522,11 +523,11 @@ export async function poll(
   );
   const quotaAsked = page.quotaAsked !== undefined ? { quotaAsked: page.quotaAsked } : {};
   if (page.items.length === 0 && (page.directory ?? 0) > directory.length)
-    directory = await refreshDirectory(ctx, s);
+    directory = await refreshDirectory(ctx, s, ctx.signal);
   const before = ctx.store.state();
   if (page.items.length > 0 || before.held?.length || before.behind) {
     // A new device may have answered since the directory was read.
-    directory = await refreshDirectory(ctx, s);
+    directory = await refreshDirectory(ctx, s, ctx.signal);
     const dir = directory;
     const entries = ctx.store.directory();
     ctx.store.updateState((st) => {
