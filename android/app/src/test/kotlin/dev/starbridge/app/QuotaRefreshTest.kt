@@ -126,6 +126,16 @@ class QuotaRefreshTest {
         assertEquals(listOf("zai"), store.windows.value.map { it.provider })
     }
 
+    @Test
+    fun aServerThatRefusesThisReleaseAsksForAnUpdate() {
+        // Every route answers 426 below the server's minimum (#497): the app shows only the update screen.
+        val store = readyStore { path ->
+            if (path.startsWith("/v1/")) json(buildJsonObject { put("error", "client-too-old"); put("detail", "update"); put("client", "android"); put("minimum", "1.2.0") }, 426) else null
+        }
+        refreshAndWait(store)
+        assertEquals("1.2.0", store.tooOld.value)
+    }
+
     private fun refreshAndWait(store: ServerStore) {
         store.refreshQuotas()
         // Busy holds from the ask to the end of the sync, so it clears only once both ran.

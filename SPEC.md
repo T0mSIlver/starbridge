@@ -605,6 +605,10 @@ first window, so a provider with a window running out leads.
 - **Notifications off** (#342): a line heads the Inbox with "Turn on", which opens the app's
   notification settings, since Android stops showing the permission prompt after two refusals.
 - Pull to refresh shows only on the screen that was pulled.
+- **Update screen** (#497): when the server answers 426 `client-too-old`, the app shows only
+  "Update Starbridge", the server's minimum and this phone's release, and one button back to
+  where the app came from: Google Play, Obtainium (its launch intent, else the release page), or
+  the latest GitHub release. The updated app starts without it.
 
 ## Brand
 

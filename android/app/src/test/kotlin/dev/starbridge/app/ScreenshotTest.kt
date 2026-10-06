@@ -57,6 +57,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import dev.starbridge.app.ui.quotas.QuotasScreen
 import dev.starbridge.app.ui.setup.SetupActions
 import dev.starbridge.app.ui.setup.SetupScreen
+import dev.starbridge.app.ui.setup.Installer
 import dev.starbridge.app.ui.setup.UpdateRequired
 import dev.starbridge.app.ui.theme.StarbridgeTheme
 import org.junit.Rule
@@ -279,9 +280,11 @@ class ScreenshotTest(private val dark: Boolean) {
 
     @Test fun addDeviceFound() = capture("add-device-found") { Phone(null, 0) { AddDeviceScreen(fake.approval, deviceActions) } }
 
-    @Test fun updateRequiredPlay() = capture("update-required-play") { Phone(null, 0) { UpdateRequired("1.2.0", "1.0.3", fromPlay = true, update = {}) } }
+    @Test fun updateRequiredPlay() = capture("update-required-play") { Phone(null, 0) { UpdateRequired("1.2.0", "1.0.3", Installer.Play, update = {}) } }
 
-    @Test fun updateRequiredRelease() = capture("update-required-release") { Phone(null, 0) { UpdateRequired("1.2.0", "1.0.3", fromPlay = false, update = {}) } }
+    @Test fun updateRequiredObtainium() = capture("update-required-obtainium") { Phone(null, 0) { UpdateRequired("1.2.0", "1.0.3", Installer.Obtainium, update = {}) } }
+
+    @Test fun updateRequiredRelease() = capture("update-required-release") { Phone(null, 0) { UpdateRequired("1.2.0", "1.0.3", Installer.Other, update = {}) } }
 
     @Test fun setupSignIn() = capture("setup-sign-in") { Phone(null, 0) { SetupScreen(Phase.SignedOut, "https://starbridge.run", false, setupActions, {}) } }
 

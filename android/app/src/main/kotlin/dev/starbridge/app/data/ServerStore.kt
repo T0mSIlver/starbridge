@@ -159,6 +159,8 @@ class ServerStore(
     override val push = MutableStateFlow(PushSetting(saved.pushType, fcmAvailable, emptyList(), false))
     override val server = MutableStateFlow(saved.server)
     override val busy = MutableStateFlow(false)
+    override val tooOld = MutableStateFlow<String?>(null)
+
     override val notice = MutableStateFlow(
         disk.unreadable.takeIf { it.isNotEmpty() }?.let { "Could not read ${it.joinToString(" and ")}; this phone's saved files were kept aside. Sign in again." },
     )
@@ -285,7 +287,12 @@ class ServerStore(
         notice.value = describe(e)
     }
 
-    private fun describe(e: Exception): String = when (e) {
+    private fun describe(e: Exception): String {
+        if (e is TooOld) tooOld.value = e.minimum ?: "a newer release"
+        return explain(e)
+    }
+
+    private fun explain(e: Exception): String = when (e) {
         is ApiException -> when (e.error) {
             "machine-cap" -> "This account already has its maximum number of machines. Revoke one first."
             "already-answered" -> "Already answered on another device."

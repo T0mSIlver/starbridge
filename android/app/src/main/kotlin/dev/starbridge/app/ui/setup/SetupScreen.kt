@@ -265,12 +265,19 @@ private fun Join(busy: Boolean, actions: SetupActions, modifier: Modifier) {
     )
 }
 
+/** Where this app came from, so the update screen sends the owner back there. */
+enum class Installer(val action: String) {
+    Play("Update on Google Play"),
+    Obtainium("Update in Obtainium"),
+    Other("Get the latest release"),
+}
+
 /**
  * The server refuses this release (#497): it needs [minimum] or later, this phone has
  * [current]. Nothing else works until the app is updated, so this is the only screen.
  */
 @Composable
-fun UpdateRequired(minimum: String, current: String, fromPlay: Boolean, update: () -> Unit, modifier: Modifier = Modifier) {
+fun UpdateRequired(minimum: String, current: String, installer: Installer, update: () -> Unit, modifier: Modifier = Modifier) {
     Step(
         modifier,
         top = {
@@ -285,7 +292,7 @@ fun UpdateRequired(minimum: String, current: String, fromPlay: Boolean, update: 
             Tile(Sym.Phone)
         },
         bottom = {
-            Primary(if (fromPlay) "Update on Google Play" else "Get the latest release", busy = false, onClick = update)
+            Primary(installer.action, busy = false, onClick = update)
         },
     )
 }
