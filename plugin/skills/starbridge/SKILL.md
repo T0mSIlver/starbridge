@@ -39,8 +39,9 @@ They decide from the card alone, without opening this session.
   are designs, say how they differ, with numbers ("9 rows per screen instead
   of 6"), even with images. Leave out what the card already shows and your
   own process. Line breaks and `code` render; other Markdown shows as typed.
-- **Options:** two to four short labels that differ at a glance; the one you
-  would pick first, or named with `--recommended`.
+- **Options:** two to four short labels that differ at a glance, in their
+  natural order (A, B, C stay A, B, C). Name your pick with `--recommended`:
+  devices highlight it wherever it sits.
 - **Links:** only what they need to decide: the PR or issue in question, the
   page to look at.
 - **Images**, when seeing beats reading (variants, a broken screen, a chart):
@@ -90,7 +91,9 @@ in your final message.
 When you built a claude.ai artifact whose buttons send the pick to this
 session, post with `--answer-in <url>` and no options; when its message
 arrives, run `starbridge settle <id>`, then act; a card answered in Starbridge
-needs no settle. An artifact only to look at goes in `--link`, with options.
+needs no settle. When the owner taps Done on the card instead, you get
+`Answer to <id> (…): answered on its page; read the answer there`: the card is
+closed, so read the pick on the page and act, with no settle. An artifact only to look at goes in `--link`, with options.
 `starbridge settle <id> --outcome withdrawn` takes back a card you no longer
 need.
 

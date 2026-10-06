@@ -4,7 +4,6 @@
  * Every step shows what it found, so a rerun changes only what is missing.
  */
 
-import { readFileSync } from "node:fs";
 import { CLIENT_HEADER, clientHeader, type QuotaSnapshot } from "@starbridge/protocol";
 import type { Status } from "../agent/api";
 import { AgentClient, withAgent } from "../agent/client";
@@ -62,9 +61,11 @@ import {
 } from "./plugins";
 import {
   enableLinger,
+  installedService,
   installService,
+  kind,
   lingering,
-  servicePath,
+  PLACES,
   unavailable,
   withInstalledPlaces,
 } from "./service";
@@ -107,14 +108,11 @@ async function checkServer(server: string): Promise<void> {
  */
 export async function refresh(sys: Sys): Promise<string[]> {
   const done = refreshFiles(sys);
-  const path = servicePath(sys);
-  let text: string | undefined;
-  try {
-    text = path ? readFileSync(path, "utf8") : undefined;
-  } catch {}
+  const { path, text } = installedService(sys) ?? {};
   if (path && text !== undefined && ours(text))
     try {
-      const env = withInstalledPlaces(sys.ctx.env, text);
+      // A task names no places: its agent reads the user's environment.
+      const env = kind(sys) === "task" ? sys.ctx.env : withInstalledPlaces(sys.ctx.env, text);
       const { restarted } = await installService({ ...sys, ctx: { ...sys.ctx, env } }, true);
       if (restarted) done.push(`Restarted the agent (${path}).`);
     } catch (e) {
@@ -194,6 +192,12 @@ async function codexbarStep(sys: Sys, opts: SetupOpts): Promise<Quota | undefine
   section(ctx, "CodexBar");
   const cfg = ctx.store.agentConfig();
   let found: Found | undefined = findCodexbar(sys, cfg.quota?.codexbar);
+  if (!found && sys.platform === "win32") {
+    ctx.out(
+      "CodexBar, which reads plan quotas, has no Windows build: this machine uploads none. Questions and runs work without it.",
+    );
+    return undefined;
+  }
   if (!found) {
     const how = sys.platform === "darwin" ? "the CodexBar app" : "the CodexBar CLI";
     if (
@@ -315,6 +319,11 @@ async function serviceStep(sys: Sys, opts: SetupOpts, configChanged: boolean) {
       ? `Started ${installed.path}.`
       : `${installed.path} is up to date and running.`,
   );
+  if (kind(sys) === "task")
+    for (const k of PLACES.filter((k) => ctx.env[k]))
+      ctx.out(
+        `The agent's task reads your user environment variables, not this terminal's: \`setx ${k} "${ctx.env[k]}"\` makes ${k} one, if it is not already.`,
+      );
   const status = await waitReady(ctx, opts.readyTimeoutMs ?? 20_000);
   if (!status)
     ctx.out("The agent did not answer on its socket yet: `starbridge status` shows its state.");

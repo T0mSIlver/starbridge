@@ -44,6 +44,7 @@ export function sweepStorage(db: Database, limits: Limits, now = Date.now()): vo
     ).run(...withRe);
     db.query("DELETE FROM sessions WHERE expires_at < ?").run(new Date(now).toISOString());
     db.query("DELETE FROM revoked_sessions WHERE expires_at < ?").run(new Date(now).toISOString());
+    // Nothing writes app_codes since #527; this clears the codes issued before it.
     db.query("DELETE FROM app_codes WHERE expires_at < ?").run(now);
   })();
 }

@@ -10,7 +10,7 @@ import { dirname, join } from "node:path";
 import rule from "../../../plugin/hooks/rule.md" with { type: "text" };
 import skill from "../../../plugin/skills/starbridge/SKILL.md" with { type: "text" };
 import { VERSION } from "../version";
-import { markedSkill, marker, ours, oursSkill } from "./marker";
+import { markedSkill, marker, ours } from "./marker";
 import plugin from "./opencode-files.js";
 import { failure, run, type Sys, which } from "./sys";
 
@@ -51,7 +51,7 @@ function fileState(text: string | undefined, want: string, owned: boolean): File
 
 export function codexSkill(sys: Home): FileState {
   const text = readText(join(codexSkillDir(sys), "SKILL.md"));
-  return fileState(text, SKILL, oursSkill(text));
+  return fileState(text, SKILL, ours(text));
 }
 
 export function installCodexSkill(sys: Home) {
@@ -63,7 +63,7 @@ export function installCodexSkill(sys: Home) {
 /** Removes the skill folder, only when it holds the skill setup wrote. */
 export function removeCodexSkill(sys: Sys): boolean {
   const dir = codexSkillDir(sys);
-  if (!oursSkill(readText(join(dir, "SKILL.md")))) return false;
+  if (!ours(readText(join(dir, "SKILL.md")))) return false;
   rmSync(dir, { recursive: true, force: true });
   return true;
 }
@@ -210,7 +210,7 @@ export function installOpencode(sys: Home, present = false): string[] {
   const dir = opencodeDir(sys);
   const skillText = readIn(dir, SKILL_FILE);
   const entryText = readIn(dir, ENTRY_FILE);
-  const skillOk = skillText === undefined ? !present : oursSkill(skillText);
+  const skillOk = skillText === undefined ? !present : ours(skillText);
   const pluginOk = entryText === undefined ? !present : ours(entryText);
   const foreign = [
     ...(skillText !== undefined && !skillOk ? [join(dir, SKILL_FILE)] : []),
@@ -229,7 +229,7 @@ export function removeOpencode(sys: Home): string[] {
   const dir = opencodeDir(sys);
   const done: string[] = [];
   const read = (path: string) => readIn(dir, path);
-  if (oursSkill(read(SKILL_FILE))) {
+  if (ours(read(SKILL_FILE))) {
     rmSync(join(dir, "skills/starbridge"), { recursive: true, force: true });
     done.push(join(dir, "skills/starbridge"));
   }

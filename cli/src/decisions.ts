@@ -186,6 +186,7 @@ export function buildDecision(input: AskInput, ctx: Ctx, machine: string, to: st
     ...(links.length > 0 ? { links } : {}),
     ...(input.answerIn !== undefined ? { answerIn: link(input.answerIn) } : {}),
     ...(options.length > 0 ? { replies: true as const } : {}),
+    ...(input.answerIn !== undefined ? { done: true as const } : {}),
   };
   return checked(decision);
 }
@@ -292,6 +293,7 @@ export async function postDecision(ctx: Ctx, s: Session, input: AskInput): Promi
       ...(cursor !== undefined ? { cursor } : {}),
       ...(decision.source.session && !input.held ? { session: decision.source.session } : {}),
       ...(decision.answerIn ? { answerIn: true } : {}),
+      ...(decision.done ? { done: true } : {}),
       ...(input.codex && decision.source.session ? { codex: input.codex } : {}),
       ...(input.extensionAnswers && decision.source.session ? { extensionAnswers: true } : {}),
       ...(input.held ? { held: true } : {}),
@@ -432,12 +434,12 @@ export async function settle(ctx: Ctx, opts: { id?: string; outcome?: string }):
 }
 
 /** What `checkAnswer` reads of a decision this machine asked. */
-type Asked = Pick<State["asked"][string], "options" | "settled" | "answerIn" | "to">;
+type Asked = Pick<State["asked"][string], "options" | "settled" | "answerIn" | "done" | "to">;
 
 /**
  * Checks an answer item: sealed to this machine, signed by an active device that the decision was
  * sealed to, for an open decision this machine asked that takes answers in Starbridge, with one of
- * its options or a typed reply.
+ * its options or a typed reply; or, for one answered on its own page, a Done.
  */
 export function checkAnswer(
   raw: unknown,
@@ -457,8 +459,14 @@ export function checkAnswer(
   // A server can hold a signed answer back and release it once the agent moved on.
   if (decision.settled)
     throw new ProtocolError("id-mismatch", `${body.decisionId} is settled: no answer counts`);
-  if (decision.answerIn)
-    throw new ProtocolError("id-mismatch", `${body.decisionId} is answered on its own page`);
+  // A decision answered on its own page takes a Done, when it asked for one, and nothing else.
+  if (!!body.done !== !!(decision.answerIn && decision.done))
+    throw new ProtocolError(
+      "id-mismatch",
+      decision.answerIn
+        ? `${body.decisionId} is answered on its own page`
+        : `${body.decisionId} takes no Done`,
+    );
   // Decisions asked before the machine kept recipients have none, and take no answer.
   if (!decision.to?.includes(signer.id))
     throw new ProtocolError("unknown-member", `${body.decisionId} was not sent to ${signer.id}`);
@@ -470,12 +478,12 @@ export function checkAnswer(
 }
 
 /**
- * Whether decision `id`'s answer may reach its session: neither settled nor answered elsewhere,
- * and the machine not behind on the directory.
+ * Whether decision `id`'s answer may reach its session: not settled, taking answers (a Done for
+ * one answered on its own page), and the machine not behind on the directory.
  */
 export function deliverable(st: State, id: string): boolean {
   const asked = st.asked[id];
-  return !!asked && !asked.settled && !asked.answerIn && !st.behind;
+  return !!asked && !asked.settled && (!asked.answerIn || !!asked.done) && !st.behind;
 }
 
 /** Answers held at most while the directory is behind. */
@@ -554,9 +562,12 @@ export function deliveryLine(id: string, d: Delivery): string {
 
 /** The line `wait` prints and the mod submits; the decision skill tells agents to expect it. */
 export function answerLine(a: Answer, question: string | undefined): string {
-  const what = a.choice !== undefined ? a.choice : a.text;
+  const what = a.choice ?? a.text ?? DONE_LINE;
   return `Answer to ${a.decisionId}${question ? ` (${question})` : ""}: ${what}`;
 }
+
+/** What a Done says to the agent: the answer is on the page the question named (#539). */
+export const DONE_LINE = "answered on its page; read the answer there";
 
 function printAnswer(ctx: Ctx, a: Answer, question: string | undefined, json?: boolean) {
   ctx.out(json ? JSON.stringify(a) : answerLine(a, question));
@@ -676,7 +687,12 @@ async function announce(ctx: Ctx, s: Session, dir: Directory): Promise<void> {
       at: iso(ctx.now()),
       outcome: "device" as const,
       device: device as string,
-      ...(answer.choice !== undefined ? { choice: answer.choice } : { text: answer.text }),
+      // A Done repeats nothing: devices read a device's notice without either as one.
+      ...(answer.choice !== undefined
+        ? { choice: answer.choice }
+        : answer.text !== undefined
+          ? { text: answer.text }
+          : {}),
       dir: signedHead(ctx, dir),
     } satisfies Settled;
     try {
@@ -979,7 +995,7 @@ export function closedError(ctx: Ctx, id: string | undefined): UsageError | unde
     return new UsageError(
       `${id} was answered from a device removed since, so that answer does not count and no other will come: ask again if you still need it`,
     );
-  if (a?.settled || a?.answerIn)
+  if (a?.settled || (a?.answerIn && !a.done))
     return new UsageError(`${id} is settled or answered on its own page: no answer will come`);
 }
 

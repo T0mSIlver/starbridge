@@ -4,8 +4,16 @@
  * never keep the harness from exiting.
  */
 import { spawn } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { request } from "node:http";
-import { HEADERS } from "./agent.ts";
+import { HEADERS, isPortFile, PROOF_HEADER, portTarget, signCall } from "./agent.ts";
+
+/**
+ * On Windows `starbridge` may be npm's `starbridge.cmd`, which only a shell starts, and Node
+ * passes the arguments to cmd.exe unquoted: anything but plain words and ids is refused.
+ */
+const shell = process.platform === "win32";
+const plain = (args: string[]) => !shell || args.every((a) => /^[\w.:@/=-]+$/.test(a));
 
 /** The mod's host aborts a call after 30 s; the loop is built around that limit. */
 const CALL_MS = 30_000;
@@ -13,20 +21,44 @@ const CALL_MS = 30_000;
 /** How long the CLI gets once stopped: it reports the prompt settled within 5 s. */
 export const STOP_MS = 10_000;
 
-/** One HTTP call on the agent's unix socket. Rejects when it cannot connect or takes too long. */
-export function socketFetch(socket: string, method: string, path: string, body?: unknown) {
+/**
+ * One HTTP call on the agent's unix socket, or on loopback TCP when the address is a port file.
+ * Rejects when it cannot connect or takes too long.
+ */
+export async function socketFetch(socket: string, method: string, path: string, body?: unknown) {
+  let target: { socketPath: string } | { host: string; port: number } = { socketPath: socket };
+  let auth: Record<string, string> = {};
+  let expect: string | undefined;
+  if (isPortFile(socket)) {
+    let t: ReturnType<typeof portTarget>;
+    try {
+      t = portTarget(readFileSync(socket, "utf8"));
+    } catch {}
+    if (!t) throw new Error(`no agent on ${socket}`);
+    target = { host: "127.0.0.1", port: t.port };
+    const signed = await signCall(t.token);
+    auth = signed.headers;
+    expect = signed.expect;
+  }
   return new Promise<{ status: number; text: string }>((resolve, reject) => {
     const payload = body === undefined ? undefined : JSON.stringify(body);
     const req = request(
       {
-        socketPath: socket,
+        ...target,
         path,
         method,
-        headers:
-          payload === undefined ? HEADERS : { ...HEADERS, "content-type": "application/json" },
+        headers: {
+          ...auth,
+          ...HEADERS,
+          ...(payload === undefined ? {} : { "content-type": "application/json" }),
+        },
         timeout: CALL_MS,
       },
       (res) => {
+        if (expect !== undefined && res.headers[PROOF_HEADER] !== expect) {
+          res.resume();
+          return reject(new Error(`no agent on ${socket}: the port answers without its proof`));
+        }
         let text = "";
         res.setEncoding("utf8");
         res.on("data", (d) => {
@@ -46,7 +78,9 @@ export function socketFetch(socket: string, method: string, path: string, body?:
 export function runCommand(argv: string[], timeoutMs: number) {
   return new Promise<{ exitCode: number | null; stdout: string; stderr: string }>((resolve) => {
     const [cmd, ...args] = argv;
-    const child = spawn(cmd as string, args, { stdio: ["ignore", "pipe", "pipe"] });
+    if (!plain(argv))
+      return resolve({ exitCode: null, stdout: "", stderr: "an argument cmd.exe cannot carry" });
+    const child = spawn(cmd as string, args, { stdio: ["ignore", "pipe", "pipe"], shell });
     let stdout = "";
     let stderr = "";
     child.stdout.on("data", (d) => {
@@ -88,9 +122,11 @@ export function hookCommand(
   env: Record<string, string> = {},
 ) {
   return new Promise<string>((resolve) => {
+    if (!plain(args)) return resolve("");
     const child = spawn("starbridge", ["hook", ...args], {
       env: { ...process.env, ...env },
       stdio: ["pipe", "pipe", "ignore"],
+      shell,
     });
     let stdout = "";
     child.stdout.on("data", (d) => {
@@ -100,7 +136,13 @@ export function hookCommand(
     // SIGTERM is killed.
     let kill: ReturnType<typeof setTimeout> | undefined;
     const stop = () => {
-      child.kill("SIGTERM");
+      // Through a shell, `kill` would end only cmd.exe; Windows has no SIGTERM to catch anyway.
+      if (shell && child.pid !== undefined)
+        spawn("taskkill", ["/pid", String(child.pid), "/T", "/F"], { stdio: "ignore" }).on(
+          "error",
+          () => {},
+        );
+      else child.kill("SIGTERM");
       kill = setTimeout(() => child.kill("SIGKILL"), STOP_MS);
       kill.unref();
     };

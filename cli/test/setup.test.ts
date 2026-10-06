@@ -179,7 +179,7 @@ test("a second setup changes nothing", async () => {
   // A Codex skill from an older CLI is offered as an update.
   writeFileSync(
     join(m.home, ".codex/skills/starbridge/SKILL.md"),
-    "---\nname: starbridge\n---\nold\n",
+    "---\n# Written by starbridge 0.9.0; `starbridge uninstall` removes it.\nname: starbridge\n---\nold\n",
   );
   const asked: string[] = [];
   await setup(
@@ -217,16 +217,17 @@ test("refresh brings what setup wrote to this release and leaves the rest alone"
   const entry = join(m.home, ".config/opencode/plugins/starbridge.ts");
   const unit = join(m.units, "starbridge-agent.service");
   const want = readFileSync(unit, "utf8");
-  // As an earlier release wrote them, with its markers; the skill is another one the owner put there.
+  // As an earlier release wrote them, with its markers; the skill, unmarked, is a copy another
+  // skill manager put there.
   writeFileSync(rule, "# Written by starbridge setup: questions need the network.\nold\n");
   writeFileSync(entry, "// Written by starbridge setup: answers.\nold\n");
   writeFileSync(unit, "# Written by `starbridge setup`; `starbridge uninstall` removes it.\nold\n");
-  writeFileSync(skill, "---\nname: mine\n---\nmine\n");
+  writeFileSync(skill, "---\nname: starbridge\n---\nmine\n");
   const done = await refresh(m.sys);
   expect(readFileSync(rule, "utf8")).toBe(CODEX_RULE);
   expect(readFileSync(entry, "utf8")).toStartWith(`// Written by starbridge ${VERSION};`);
   expect(readFileSync(unit, "utf8")).toBe(want);
-  expect(readFileSync(skill, "utf8")).toBe("---\nname: mine\n---\nmine\n");
+  expect(readFileSync(skill, "utf8")).toBe("---\nname: starbridge\n---\nmine\n");
   expect(done.some((l) => l.startsWith("Restarted the agent"))).toBe(true);
   // Again: nothing to update; the agent restarts on the binary that runs it.
   expect(await refresh(m.sys)).toEqual([`Restarted the agent (${unit}).`]);
@@ -240,12 +241,12 @@ test("setup leaves a Codex rule, a skill or a unit it did not write alone", asyn
   mkdirSync(dirname(rule), { recursive: true });
   mkdirSync(dirname(skill), { recursive: true });
   writeFileSync(rule, "# mine\n");
-  writeFileSync(skill, "---\nname: mine\n---\nmine\n");
+  writeFileSync(skill, "---\nname: starbridge\n---\nmine\n");
   writeFileSync(unit, "[Service]\nExecStart=/usr/bin/true\n");
   await setup(m.sys, { yes: true, readyTimeoutMs: 500 });
   const out = m.ctx.lines.join("\n");
   expect(readFileSync(rule, "utf8")).toBe("# mine\n");
-  expect(readFileSync(skill, "utf8")).toBe("---\nname: mine\n---\nmine\n");
+  expect(readFileSync(skill, "utf8")).toBe("---\nname: starbridge\n---\nmine\n");
   expect(readFileSync(unit, "utf8")).toBe("[Service]\nExecStart=/usr/bin/true\n");
   expect(out).toContain("was not written by setup");
   expect(await refresh(m.sys)).toEqual([]);
@@ -539,4 +540,51 @@ test("opencode files someone else wrote stay, and so does the code a changed ent
   removeOpencode(sys);
   expect(existsSync(join(oc, "starbridge/mod/opencode/starbridge.ts"))).toBe(true);
   expect(existsSync(join(oc, "skills/starbridge"))).toBe(false);
+});
+
+test("on Windows, setup registers a logon task that runs the agent headless, and uninstall removes it", async () => {
+  const m = await machine();
+  await startAgent(m.ctx);
+  const local = join(m.home, "AppData", "Local");
+  Object.assign(m.ctx.env, {
+    SystemRoot: join(import.meta.dir, "fixtures", "fake-windows"),
+    LOCALAPPDATA: local,
+    USERDOMAIN: "PC",
+    USERNAME: "tom",
+  });
+  const sys: Sys = {
+    ...m.sys,
+    platform: "win32",
+    self: ["C:\\Users\\tom\\.local\\bin\\starbridge.exe"],
+  };
+  expect(await setup(sys, { yes: true, readyTimeoutMs: 2_000 })).toBe(0);
+
+  const path = join(local, "starbridge", "starbridge-agent.xml");
+  const bytes = readFileSync(path);
+  expect([bytes[0], bytes[1]]).toEqual([0xff, 0xfe]);
+  const task = bytes.toString("utf16le");
+  expect(task).toContain(`<!-- Written by starbridge ${VERSION};`);
+  expect(task).toContain("<UserId>PC\\tom</UserId>");
+  expect(task).toContain("<ExecutionTimeLimit>PT0S</ExecutionTimeLimit>");
+  expect(task).toContain(
+    `<Arguments>--headless C:\\Users\\tom\\.local\\bin\\starbridge.exe agent --log ${join(local, "starbridge", "agent.log")}</Arguments>`,
+  );
+  const ps = () => m.calls().filter((c) => c.startsWith("powershell"));
+  expect(ps().some((c) => c.startsWith("powershell Register-ScheduledTask"))).toBe(true);
+  expect(ps()).toContain("powershell Start-ScheduledTask -TaskName starbridge-agent");
+
+  // A second setup finds the same task and leaves the running agent alone.
+  const before = ps().length;
+  await setup(sys, { yes: true, readyTimeoutMs: 2_000 });
+  expect(
+    ps()
+      .slice(before)
+      .some((c) => c.startsWith("powershell Start-")),
+  ).toBe(false);
+
+  m.ctx.lines.length = 0;
+  expect(await uninstall(sys, { purge: true })).toBe(0);
+  expect(m.ctx.lines).toContain("Stopped and removed the agent service.");
+  expect(ps().some((c) => c.startsWith("powershell Unregister-ScheduledTask"))).toBe(true);
+  expect(existsSync(path)).toBe(false);
 });

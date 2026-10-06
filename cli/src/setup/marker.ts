@@ -1,8 +1,8 @@
 /**
  * The line that marks a file setup writes into another tool (#474): its writer and version, in
  * that file's comment syntax. A file that has it is Starbridge's: setup replaces it when it
- * differs from this release's, and uninstall removes it. Files from before 1.0.0 said "Written
- * by starbridge setup" or "Written by `starbridge setup`", which the same test recognises.
+ * differs from this release's, and uninstall removes it. Files from before the first release said
+ * "Written by starbridge setup" or "Written by `starbridge setup`", which the same test recognises.
  */
 import { VERSION } from "../version";
 
@@ -15,16 +15,6 @@ export function marker(open: string, close?: string): string {
 export function ours(text: string | undefined): boolean {
   if (text === undefined) return false;
   return text.split("\n", 3).some((line) => /^(#|\/\/|<!--) Written by `?starbridge\b/.test(line));
-}
-
-/**
- * Whether a skill is Starbridge's: its marker, or the name `starbridge` in its front matter,
- * which is the skill's identity in Codex and opencode (and all that skills before the marker had).
- */
-export function oursSkill(text: string | undefined): boolean {
-  if (text === undefined) return false;
-  const front = /^---\n([\s\S]*?)\n---/.exec(text)?.[1] ?? "";
-  return ours(text) || /^name: starbridge$/m.test(front);
 }
 
 /** A skill with the marker as a YAML comment, first in its front matter. */

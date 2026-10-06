@@ -1555,6 +1555,18 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
         valid: true,
       },
       {
+        name: "answered in an artifact, taking done",
+        body: {
+          ...decisionBody,
+          options: [],
+          recommended: undefined,
+          answerIn: artifact,
+          done: true,
+        },
+        valid: true,
+      },
+      { name: "done without answerIn", body: { ...decisionBody, done: true }, valid: false },
+      {
         name: "answered in an artifact and with options",
         body: { ...decisionBody, answerIn: artifact },
         valid: false,
@@ -1579,6 +1591,13 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
       },
       { name: "both", body: { ...answerBody, text: "and text" }, valid: false },
       { name: "neither", body: { ...answerBody, choice: undefined }, valid: false },
+      { name: "done", body: { ...answerBody, choice: undefined, done: true }, valid: true },
+      { name: "choice and done", body: { ...answerBody, done: true }, valid: false },
+      {
+        name: "done false",
+        body: { ...answerBody, choice: undefined, done: false },
+        valid: false,
+      },
     ],
     permission: [
       { name: "valid", body: permissionBody, valid: true },

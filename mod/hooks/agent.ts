@@ -12,7 +12,7 @@ import { configDir } from "./poller.ts";
 
 /** The agent API revision this mod speaks, sent in the `starbridge-api` header. */
 export const API = 1;
-export const VERSION = "1.0.0";
+export const VERSION = "0.1.0";
 const CLIENT = `starbridge-mod/${VERSION}`;
 
 /** Event types this mod submits; others are skipped and left unconfirmed, as the API asks. */
@@ -60,8 +60,9 @@ export const AGENT_TIMING: AgentTiming = {
 
 /**
  * Where the agent listens, as the CLI's `socketPath` (cli/src/agent/api.ts) works it out:
- * `$STARBRIDGE_AGENT_SOCKET`; for the default config directory `$XDG_RUNTIME_DIR/starbridge/
- * agent.sock` when that is set; else `agent.sock` in the config directory.
+ * `$STARBRIDGE_AGENT_SOCKET`; on Windows (`OS=Windows_NT`) the port file `agent.port` in the
+ * config directory; for the default config directory `$XDG_RUNTIME_DIR/starbridge/agent.sock`
+ * when that is set; else `agent.sock` in the config directory.
  */
 export function socketPath(env: {
   STARBRIDGE_AGENT_SOCKET?: string;
@@ -69,14 +70,60 @@ export function socketPath(env: {
   XDG_CONFIG_HOME?: string;
   XDG_RUNTIME_DIR?: string;
   HOME?: string;
+  USERPROFILE?: string;
+  OS?: string;
 }): string {
   if (env.STARBRIDGE_AGENT_SOCKET) return env.STARBRIDGE_AGENT_SOCKET;
   const dir = configDir(env);
+  if (env.OS === "Windows_NT") return `${dir}/agent.port`;
   const standard = configDir({ ...env, STARBRIDGE_CONFIG_DIR: undefined });
   if (env.XDG_RUNTIME_DIR && dir === standard)
     return `${env.XDG_RUNTIME_DIR}/starbridge/agent.sock`;
   return `${dir}/agent.sock`;
 }
+
+/**
+ * An address ending in `.port` names the file where an agent on loopback TCP wrote its port and
+ * its token, which calls prove they hold without sending it (the CLI's `PortFile` and `proof`).
+ */
+export const isPortFile = (address: string) => address.endsWith(".port");
+
+/** The port and the token in port file `text`; undefined when it is not one. */
+export function portTarget(text: string): { port: number; token: string } | undefined {
+  try {
+    const f = JSON.parse(text) as { port?: unknown; token?: unknown };
+    if (Number.isInteger(f.port) && typeof f.token === "string")
+      return { port: f.port as number, token: f.token };
+  } catch {}
+  return undefined;
+}
+
+const hex = (bytes: Uint8Array) => [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
+
+async function proof(token: string, role: "client" | "agent", nonce: string): Promise<string> {
+  const data = new TextEncoder().encode(`${token}:${role}:${nonce}`);
+  return hex(new Uint8Array(await crypto.subtle.digest("SHA-256", data)));
+}
+
+/**
+ * The headers that prove a call holds `token`, and the `starbridge-proof` header the agent's
+ * answer must carry: anything that answers without it took the port of an agent that stopped.
+ */
+export async function signCall(token: string): Promise<{
+  headers: Record<string, string>;
+  expect: string;
+}> {
+  const nonce = hex(crypto.getRandomValues(new Uint8Array(16)));
+  return {
+    headers: {
+      "starbridge-nonce": nonce,
+      authorization: `Starbridge ${await proof(token, "client", nonce)}`,
+    },
+    expect: await proof(token, "agent", nonce),
+  };
+}
+
+export const PROOF_HEADER = "starbridge-proof";
 
 /** The headers every call carries. */
 export const HEADERS: Record<string, string> = {

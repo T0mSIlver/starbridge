@@ -207,9 +207,22 @@ export function QuestionDetail({
       {closed ? (
         <p className={`t-small ${s.closed}`}>{closed}</p>
       ) : d.answerIn ? (
-        <div className={s.actions}>
-          <AnswerElsewhere page={d.answerIn} />
-        </div>
+        <>
+          <div className={s.actions}>
+            <AnswerElsewhere page={d.answerIn} />
+          </div>
+          {d.done && (
+            // Quiet, as Reply: the page stays the answer, Done only says it was given there.
+            <button
+              type="button"
+              className={`t-small ${s.link} ${s.reply}`}
+              disabled={sending}
+              onClick={() => send({ done: true })}
+            >
+              Done
+            </button>
+          )}
+        </>
       ) : paired ? (
         <Picks d={d} keys={keys} sending={sending} onPick={(choice) => send({ choice })} />
       ) : options.length > 0 ? (

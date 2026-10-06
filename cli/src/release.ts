@@ -1,5 +1,6 @@
 import { createHash, createPublicKey, verify } from "node:crypto";
 import { realpathSync } from "node:fs";
+import { inBunfs } from "./platform";
 
 /** The release key. Also in cli/minisign.pub, cli/install.sh and the README. */
 export const RELEASE_KEY = "RWRT+qMmByDpj/1KhL5yCxdzIkVgZ3NqTrlVIIvhrezr/38FgzBIen0F";
@@ -54,10 +55,10 @@ export function parseSums(text: string): Map<string, string> {
 
 /** The release asset for this machine, as `cli/scripts/build-bin.ts` names it. */
 export function platformAsset(platform: string = process.platform, arch: string = process.arch) {
-  const os = { linux: "linux", darwin: "darwin" }[platform];
+  const os = { linux: "linux", darwin: "darwin", win32: "windows" }[platform];
   const cpu = { x64: "x64", arm64: "arm64" }[arch];
   if (!os || !cpu) throw new ReleaseError(`no starbridge build for ${platform}-${arch}`);
-  return `starbridge-${os}-${cpu}`;
+  return `starbridge-${os}-${cpu}${os === "windows" ? ".exe" : ""}`;
 }
 
 /** Orders `1.2.3` and `1.2.3-rc.4` versions; a release sorts after its release candidates. */
@@ -120,7 +121,7 @@ export type InstallKind = { kind: "binary"; path: string } | { kind: "brew" } | 
  * Homebrew Cellar it belongs to brew. Anything else runs as a script under Node or Bun: npm.
  */
 export function installKind(): InstallKind {
-  const compiled = typeof Bun !== "undefined" && Bun.main.startsWith("/$bunfs/");
+  const compiled = typeof Bun !== "undefined" && inBunfs(Bun.main);
   if (!compiled) return { kind: "npm" };
   const path = realpathSync(process.execPath);
   return path.includes("/Cellar/") ? { kind: "brew" } : { kind: "binary", path };

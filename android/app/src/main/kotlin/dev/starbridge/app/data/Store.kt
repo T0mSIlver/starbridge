@@ -35,9 +35,9 @@ interface Store {
     val recovery: StateFlow<RecoveryUi?>
     val replacing: StateFlow<Replacing>
 
-    /** The URL that starts GitHub sign-in; it ends at starbridge://auth?code=… */
+    /** The URL that starts GitHub sign-in; it ends at a link [SignIn.redirect] reads. */
     fun gitHubSignInUrl(server: String): String
-    /** The starbridge://auth redirect that ends GitHub sign-in. */
+    /** The redirect that ends GitHub sign-in. */
     fun receiveSignIn(redirect: String)
     fun signInWithOwnerToken(server: String, token: String)
 
@@ -57,6 +57,7 @@ interface Store {
     fun refresh(shown: Boolean = true)
     /** Asks the machines for fresh quota snapshots, waits for them, then refreshes. */
     fun refreshQuotas()
+    /** Answers [id] with [choice] or [text]; with neither, Done: answered on its own page (#539). */
     fun answer(id: String, choice: String?, text: String?)
     /** Allows prompt [id] for [scope] ("once", "session", "project"), or denies it with [message]. */
     fun answerPrompt(id: String, allow: Boolean, scope: String, message: String?)

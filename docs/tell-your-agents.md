@@ -62,9 +62,9 @@ asks before each one:
   `working`, `wait` and `settle` run without a permission prompt.
 - Codex: the skill, in `~/.codex/skills/starbridge` (or under `$CODEX_HOME`),
   so it knows how to write a question. Codex doesn't load plugins, so it runs
-  the same `starbridge` commands without the rules: add the lines you want
-  below. A later setup offers to update the skill when the CLI carries a newer
-  one. Codex runs commands in a sandbox with no network, so setup also writes
+  the same `starbridge` commands without the rules: add
+  [the rules for Codex](#rules-for-codex). A later setup offers to update the
+  skill when the CLI carries a newer one. Codex runs commands in a sandbox with no network, so setup also writes
   `~/.codex/rules/starbridge.rules`, which runs `starbridge ask`, `waiting`,
   `working`, `wait` and `settle` outside it.
 - Pi: the Starbridge Pi package (`pi install
@@ -108,6 +108,17 @@ has an `AGENTS.md`, put your lines in the every-repo file.
 
 Checked on 2026-10-05 with Claude Code 2.1.289, Codex CLI 0.160.0 and Pi
 0.87.1, and on 2026-10-06 with opencode 1.18.31.
+
+## Rules for Codex
+
+Codex gets the skill but not the plugin's rules. To have it reach you as Claude Code does, paste
+the plugin's rules into `~/.codex/AGENTS.md`:
+
+```
+I am often away from this terminal and may not read your final message for hours. Reach me through the `starbridge` skill, not here, when you need a decision that is mine, and before you end a turn on work that waits on me, such as a PR to review or merge, or a failure only I can fix. Decide everything else yourself and keep working. Ask here only when `starbridge` fails.
+
+Run a command that blocks me (takes over the screen, keyboard or session, or holds a device I use), or that my instructions ask you to report, whole through `starbridge run`.
+```
 
 ## Lines to copy
 

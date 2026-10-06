@@ -1,7 +1,7 @@
 name: release
 
 # A v1.2.3 or v1.2.3-rc.4 tag publishes a GitHub Release with the signed APK and App Bundle, the CLI binaries,
-# install.sh and their checksums, signed with minisign, then updates the Homebrew tap (not for -rc)
+# install.sh, install.ps1 and their checksums, signed with minisign, then updates the Homebrew tap (not for -rc)
 # and npm. Run by hand, it builds the same files as workflow artifacts and releases nothing.
 # Cut a release with `bun cli/scripts/version.ts 1.2.3` in a PR, then tag the merged commit.
 on:
@@ -104,13 +104,14 @@ jobs:
         run: |
           npm pkg set version="$VERSION"
           bun run build:bin
-          cp install.sh dist/
+          cp install.sh install.ps1 dist/
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: cli
           path: |
             cli/dist/starbridge-*
             cli/dist/install.sh
+            cli/dist/install.ps1
 
   release:
     needs: [version, android, cli]

@@ -59,7 +59,9 @@ server.
   carries every image, and the 2 MB cap in Limits covers them once per device.
   A decision with `answerIn` is answered on that page (a claude.ai artifact whose button wakes
   the agent), never in Starbridge: it has no options, devices show the page and no answer
-  field, and it closes when the machine posts `settled` for it.
+  field, and it closes when the machine posts `settled` for it. When it also sets `done: true`,
+  devices offer Done beside the page: an answer with `done: true` in place of a choice or text,
+  saying the owner answered there, which closes it like any answer (#539).
 
 ## Versions
 
@@ -278,14 +280,7 @@ last backup is stale or the disk runs low.
 
 Every request names its client and release in `starbridge-client: <name>/<version>`, `name`
 one of `cli`, `android`, `web` and `mod`, `version` MAJOR.MINOR.PATCH with an optional
-pre-release, which comes before its release (`cli/1.0.0`, `android/1.2.0-rc.1`). The server counts the
-releases in use, and keeps a minimum release per client name: below it, any route answers 426
-`{error: "client-too-old", detail, client, minimum}`, and the client asks its owner to update. A
-request without the header, or with one the server cannot read, is served.
-
-Every request names its client and release in `starbridge-client: <name>/<version>`, `name`
-one of `cli`, `android`, `web` and `mod`, `version` MAJOR.MINOR.PATCH with an optional
-pre-release, which comes before its release (`cli/1.0.0`, `android/1.2.0-rc.1`). The server counts the
+pre-release, which comes before its release (`cli/0.1.0`, `android/0.2.0-rc.1`). The server counts the
 releases in use, and keeps a minimum release per client name: below it, any route answers 426
 `{error: "client-too-old", detail, client, minimum}`, and the client asks its owner to update. A
 request without the header, or with one the server cannot read, is served.
@@ -300,8 +295,16 @@ request without the header, or with one the server cannot read, is served.
   NUL member NUL nonce.
 - **App sign-in** follows PKCE (RFC 7636, S256), because any app can claim the `starbridge://`
   scheme. The app keeps a random verifier and sends only its challenge,
-  base64url(SHA-256(verifier)). The redirect carries a single-use code, never the session, and
-  the app trades code and verifier for the session over HTTPS. Any trade attempt burns the code.
+  base64url(SHA-256(verifier)), which the server passes to GitHub as `code_challenge` and as the
+  state. GitHub binds its code to the challenge, and the app trades code and verifier for the
+  session over HTTPS; the app ignores a redirect whose state is not its challenge, and one with
+  no state unless it carries a pre-#527 server's own `sbc_` code. GitHub
+  redirects to `/v1/auth/github/callback/app`, which the Android app claims as an App Link on
+  starbridge.run (`/.well-known/assetlinks.json` binds it to the app's signing keys). When the
+  browser gets the redirect instead, the server hands code and state on to `APP_REDIRECT_URI`:
+  `starbridge://auth` by default, and on starbridge.run the App Link
+  `https://starbridge.run/app/auth`, whose page has an "Open Starbridge" button to
+  `starbridge://auth`.
 - **Machines** send `Authorization: Bearer <machine token>`, issued when their pairing is
   approved. The server stores a hash of it and drops it when the directory revokes the machine.
 - Pairing requests are unauthenticated and rate-limited per IP.
@@ -313,8 +316,9 @@ request without the header, or with one the server cannot read, is served.
 | Route | Who | What |
 |---|---|---|
 | `GET /auth/github` | anyone | start GitHub sign-in; the app adds `?app=1&challenge=<S256 challenge>` |
-| `GET /auth/github/callback` | anyone | finish it, set the session; for the app, redirect to `starbridge://auth?code=<code>` instead |
-| `POST /auth/app/session` | the app | `{code, verifier}` → `{session}`; 400 `bad-code` when the code is unknown, used, older than 60 s or the verifier does not match; rate-limited per IP |
+| `GET /auth/github/callback` | anyone | finish it, set the session |
+| `GET /auth/github/callback/app` | anyone | the browser got the app's sign-in: redirect to `<APP_REDIRECT_URI>?code=<code>&state=<state>`, or GitHub's `error` instead of the code; 400 `bad-state` without them |
+| `POST /auth/app/session` | the app | `{code, verifier}`: GitHub's code → `{session}`; 400 `bad-code` when GitHub refuses the code: unknown, used, expired or not this verifier's |
 | `POST /auth/owner` | anyone | self-hosted: `{token}` against `OWNER_TOKEN`; sets the session and returns `{session}` |
 | `POST /auth/logout` | device | end the session |
 | `GET /auth/challenge` | device | `{nonce, expiresInSeconds}`: one nonce per session, single use, 5 minutes; asking again returns the outstanding one |
@@ -405,10 +409,10 @@ the server started. A machine that sends back `directory=<n>&quotaAsked=<time>` 
 knows gets a reply at once when the directory is longer or a device asked since, and every
 directory append ends its open waits. So the machine's agent re-reads the directory as soon as a
 device joins and posts a fresh snapshot sealed to it, and posts one when a device asks.
-A machine checks that an answer's `decisionId` is one it asked, still open and without
-`answerIn`, that its signer is one of the devices the decision was sealed to, and that its
+A machine checks that an answer's `decisionId` is one it asked, still open, and with
+`answerIn` exactly when the answer is `done`, that its signer is one of the devices the decision was sealed to, and that its
 `choice`, if any, is one of the decision's options. It never delivers an answer to a decision it
-settled, even one it accepted before, since the server could have held it back until then. An answer carries `choice` or `text`: a decision with options that sets
+settled, even one it accepted before, since the server could have held it back until then. An answer carries one of `choice`, `text` and `done`: a decision with options that sets
 `replies: true` also takes a typed `text` reply, which clients offer as "Reply" under the
 options; machines from before it leave `replies` out. For permission answers, see below.
 
@@ -465,7 +469,7 @@ server whose disk is full answers writes 503 `storage-full` with `Retry-After`; 
 | `POST /directory` | 30 an hour per account |
 | Directory entries | from entry 200 on, a device's `add`: 409 `directory-full`; revocations and confirmations always pass, the recovery key may add 20 more devices, and devices may propose 20 more recovery keys; 8 KB per entry: 413 `too-large` |
 | Sessions | 50 per account; signing in past that ends the oldest, unpaired ones first |
-| `GET /auth/github/callback` | 20 a minute per address |
+| `GET /auth/github/callback` and `POST /auth/app/session` | 20 a minute per address, together |
 | `POST /pairings` | 10 a minute per address; 20 unapproved pairings per address, an IPv6 client counting as its /48: 429 `too-many-pairings` |
 | Pairing messages | 4 KB each: 400 `bad-schema` |
 | `GET /pairings/:rendezvous/result` and `GET /pairings/:rendezvous?wait=` waiting | 4 per pairing: 429 `too-many-waits` |
@@ -543,7 +547,7 @@ first answer wins.
   machine applied, with `behavior` saying whether it allowed or denied. For a decision,
   `elsewhere` means it was answered outside Starbridge and `withdrawn` that the agent no longer
   needs it; `device`, posted once the machine accepts a device's answer, names that device and
-  repeats its `choice` or `text`. An answer is sealed only to the machine, so this notice is how
+  repeats its `choice` or `text`, neither for a Done. An answer is sealed only to the machine, so this notice is how
   the other devices learn which answer won, for instance when two answered at once. Devices
   show it after the decision is answered, whenever it arrives; clients that predate the two
   fields ignore them.
@@ -611,7 +615,20 @@ so the dialog decides, and posts `settled: timeout`.
 one connection to the server, and serves the CLI and the Claude Code sessions on that machine
 over HTTP on a unix socket: `$XDG_RUNTIME_DIR/starbridge/agent.sock` on Linux when that is set,
 else `agent.sock` in the config directory (`$STARBRIDGE_AGENT_SOCKET` overrides). The directory
-is 0700, the socket 0600, and there is no TCP listener. Types: `cli/src/agent/api.ts`.
+is 0700, the socket 0600. Types: `cli/src/agent/api.ts`.
+
+On Windows (#552), Node and Bun read a socket path as a named pipe, which other local users can
+open, so the agent listens on a free port on 127.0.0.1 instead. It writes `agent.port`,
+`{port, token, pid}`, into the config directory through a temporary file that `icacls` makes
+readable by its user only. `token` is 32 random bytes, new at each start, and never crosses the
+wire. Each request sends a fresh 16-byte nonce as `starbridge-nonce: <32 hex>` and
+`authorization: Starbridge <sha256hex("<token>:client:<nonce>")>`; the agent answers any other
+with 401 `{error: "unauthorized"}`, and every answer to a proven request carries
+`starbridge-proof: <sha256hex("<token>:agent:<nonce>")>`. A client takes an answer without that
+proof as no agent: whatever took the port after the agent stopped learns nothing it can use and
+cannot answer for it. (SHA-256 rather than HMAC, since the mod's host has no HMAC; the fixed
+shape leaves a length extension nothing to forge.) The CLI also sends nothing while `pid` runs no
+more. An address ending in `.port` names such a file on any platform.
 
 Every request sends `starbridge-api: <n>` and a `user-agent` such as `starbridge-mod/0.2.0`. The
 agent serves revisions `min` to `max` (1 to 1 today) and answers anything else with 426

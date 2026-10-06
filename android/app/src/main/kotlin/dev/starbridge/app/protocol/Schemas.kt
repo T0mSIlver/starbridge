@@ -297,6 +297,8 @@ data class Decision(
     val answerIn: DecisionLink? = null,
     /** The machine takes a typed reply in place of an option (#201); older machines omit it. */
     val replies: Boolean? = null,
+    /** With answerIn: the machine takes a Done answer (#539); older machines omit it. */
+    val done: Boolean? = null,
     override val dir: DirectoryHead? = null,
 ) : ItemBody {
     override val recipients get() = to
@@ -321,6 +323,10 @@ data class Decision(
             schema(options.isEmpty(), "a decision answered elsewhere has no options")
         }
         replies?.let { schema(it, "replies is true or absent") }
+        done?.let {
+            schema(it, "done is true or absent")
+            schema(answerIn != null, "done needs answerIn")
+        }
         schema(options.size != 1, "options: 0 or 2 to 4")
         schema(options.toSet().size == options.size, "options must be distinct")
         if (options.isNotEmpty()) schema(recommended != null && recommended in options, "recommended must be one of the options")
@@ -337,6 +343,8 @@ data class Answer(
     val answeredAt: String,
     val choice: String? = null,
     val text: String? = null,
+    /** The owner answered on the decision's answerIn page (#539). */
+    val done: Boolean? = null,
 ) : ItemBody {
     override val re get() = decisionId
     override val recipients get() = listOf(to)
@@ -349,7 +357,8 @@ data class Answer(
         time(answeredAt, "answeredAt")
         choice?.let { len(it, 0, 100, "choice") }
         text?.let { len(it, 0, 4000, "text") }
-        schema((choice == null) != (text == null), "exactly one of choice and text")
+        done?.let { schema(it, "done is true or absent") }
+        schema(listOfNotNull(choice, text, done).size == 1, "exactly one of choice, text and done")
     }
 }
 

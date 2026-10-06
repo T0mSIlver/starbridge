@@ -53,6 +53,12 @@ native app. No native iOS app until there is demand and a device to test on. A d
 one comes, is Tauri over Electron, to reuse the web code; a Mac surface may instead live in
 CodexBar's menu bar, upstream.
 
+The CLI runs on Linux, macOS and Windows (#552, decided 2026-10-06 for launch). On Windows,
+CodexBar has no build, so a Windows machine uploads no quotas and setup says so; questions,
+runs and permission prompts work as elsewhere. The CLI reads `Path` as `PATH`, takes `HOME` from
+`USERPROFILE`, finds commands by `PATHEXT`, and starts an npm `.cmd` shim through cmd.exe with
+every argument escaped as cross-spawn does it, so no argument runs as a command.
+
 ## Architecture
 
 ```
@@ -159,8 +165,8 @@ provider plugins add providers, not panels.
 - **Android keys** (#9) sit in files wrapped by a Keystore AES key usable while the screen is
   locked, so lock-screen buttons can sign. Signing out revokes the phone unless it is the last
   device.
-- **Versions** (#468, #469, #478). 1.0.0 is the compatibility floor, so nothing carries code for
-  clients before it: `ask` refuses `--default` and `--default-at` rather than ignoring them, and
+- **Versions** (#468, #469, #478, #551). 0.1.0, the first public release, is the compatibility
+  floor, so nothing carries code for clients before it: `ask` refuses `--default` and `--default-at` rather than ignoring them, and
   clients, setup and the CLI dropped what served earlier releases. Later compatibility branches
   name the minimum client release that retires them (`// until min cli >= 1.2`). An algorithm
   changes only with a new protocol version (`v: 2`, `starbridge/v2/...`, `/v2` routes) and members
@@ -204,11 +210,24 @@ provider plugins add providers, not panels.
 ## Sign-in
 
 - The hosted server signs in with GitHub; a self-hosted server with `OWNER_TOKEN`.
-- Android (#34): GitHub redirects to `starbridge://auth` with a single-use code bound to a PKCE S256
-  challenge, which the app trades at `POST /v1/auth/app/session`. Not Android App Links: they bind
-  one domain into the APK, so self-hosted servers could not use them, and a failed verification
-  falls back to the browser silently, leaving the token in its URL. Known gap: a hostile app can
-  start its own sign-in, and if GitHub skips the consent screen it gets a session.
+- Android (#34, #527): the app signs in with PKCE, and GitHub binds its code to the app's
+  challenge, so only the app holding the verifier can trade the code, whoever catches the
+  redirect. Known gap: a hostile app can start its own sign-in, and if GitHub skips the consent
+  screen it gets a session.
+- On starbridge.run, GitHub redirects the app's sign-in to `/v1/auth/github/callback/app`, an
+  App Link the app catches (#527). The installed web app's scope is the whole origin, so Chrome
+  handed it the page's callback when no other app claimed that; where both claim a URL, Chrome
+  opens the verified app. The page's sign-ins keep `/v1/auth/github/callback`, which the app does
+  not claim, so they stay in the web app.
+- When the browser gets the app's redirect (app missing, verification failed, an older app), the
+  server passes GitHub's code on to `APP_REDIRECT_URI`: on starbridge.run the App Link
+  `https://starbridge.run/app/auth`, whose page has an "Open Starbridge" button to
+  `starbridge://auth`. Chrome asks "Continue to Starbridge?" before following a `starbridge://`
+  redirect that no tap started; after a tap it does not. Self-hosted servers keep
+  `starbridge://auth`, since the APK can bind only starbridge.run.
+- `assetlinks.json` lists the release key, which Play App Signing also uses, and the dev box's
+  debug key, so dogfood builds verify too. That key never leaves the dev box, and a caught code is
+  useless without the verifier.
 
 ## Server
 
@@ -250,7 +269,7 @@ provider plugins add providers, not panels.
 - **Schema migrations** (#470). `PRAGMA user_version` counts the migrations a database has run;
   each runs in one transaction with its version. A server refuses a database newer than it knows,
   so a rollback past a migration fails at start instead of writing rows the newer schema misreads.
-  Version 1 is the 1.0.0 schema with `IF NOT EXISTS`, so it adopts a database made before versions
+  Version 1 is the 0.1.0 schema with `IF NOT EXISTS`, so it adopts a database made before versions
   were counted. A migration changes the schema and never rewrites rows, to stay within the 30 s
   Caddy holds requests; backfills run in the hourly sweep. `apply.sh` backs the database up just
   before the new server starts and keeps the last five.
@@ -278,11 +297,13 @@ provider plugins add providers, not panels.
 
 ## Machines
 
-- **The local agent**, `starbridge agent` (#68), one per machine as a user service (systemd or launchd), owns the
+- **The local agent**, `starbridge agent` (#68), one per machine as a user service (systemd, launchd, or a Scheduled Task on Windows), owns the
   keys and the server connection, uploads quotas, and routes answers, prompts and runs to sessions
   over HTTP on a unix socket (PROTOCOL.md, "Local agent API"). Every CLI command asks the local
   agent first and talks to the server itself when none listens or it answers 426; once it has
-  answered it never falls back, so nothing posts twice. Answers stay in the CLI's state file,
+  answered it never falls back, so nothing posts twice. `wait` is the exception (#548): the agent
+  marks an answer seen only for a client still listening, so when it restarts under a wait, the
+  wait asks the new one, and after 30 s with no agent it waits at the server. Answers stay in the CLI's state file,
   so both paths share one store.
 - **Files** in `~/.config/starbridge` (or `$XDG_CONFIG_HOME`, `$STARBRIDGE_CONFIG_DIR`): 0600 in a
   0700 directory. A `.lock` guards every read-modify-write (#33). A directory refresh keeps the
@@ -290,8 +311,28 @@ provider plugins add providers, not panels.
 - **The socket** is bound under a 077 umask (#95). There is no peer uid check, since neither Bun
   nor Node exposes `SO_PEERCRED`. The local agent runs only the CodexBar binary its own config names,
   never a path a client sends.
+- **On Windows** (#552) the agent listens on loopback TCP with a per-start token in `agent.port`
+  in the config directory (PROTOCOL.md, "Local agent API"). A named pipe was the other choice:
+  libuv creates one with the default DACL, which lets other users open it for reading, and Bun's
+  named-pipe `listen` has crashed in Claude Code's own use. The token never crosses the wire:
+  each call and each answer proves it over a fresh nonce, so a process that takes the port of a
+  stopped agent can neither use what it hears nor answer. Windows never runs the agent's
+  shutdown, since stopping a task terminates it, so a stale `agent.port` is the usual case.
+  `icacls` gives the file to its user only, as the 0600 mode does the socket. The service is a Scheduled Task
+  at the user's logon, registered from a marked XML file in `%LOCALAPPDATA%\starbridge` with the
+  ScheduledTasks cmdlets: it needs no administrator, unlike a Windows service, and restarts on
+  failure, unlike the `Run` registry key. It runs the agent under `conhost.exe --headless`, since
+  a console program opens a window, with no time limit, since a task stops after 3 days by
+  default, and logs to `agent.log` beside the XML. A second trigger starts it every 5 minutes
+  when it is not running, since conhost may not pass a crash on as a failure. Stopping the task
+  ends conhost, so setup also ends the agent, by the pid the agent reports through a proven
+  call, never a pid read from the file. A task carries no environment of its own, so the agent
+  reads the user's: `STARBRIDGE_CONFIG_DIR` and `CODEX_HOME` reach it only as user environment
+  variables. Windows has no SIGTERM: a stopped hook dies without settling its prompt, and the
+  next `Stop` hook settles it.
 - **Answers on the machine** (#260). A machine accepts an answer only from a device the question
-  was sealed to, only while it is open, and never for an `answerIn` question. A settled question's
+  was sealed to, only while it is open, and for an `answerIn` question only a Done, when it asked
+  for one (#539). A settled question's
   answer is never delivered, since a server could hold an answer back until the agent moved on.
 - **Pairing a machine.** `pair` uses starbridge.run unless `--server` or `STARBRIDGE_SERVER` says
   otherwise (#154). `pair --force` keeps the machine's server and name (#245) and leaves the old
@@ -316,9 +357,10 @@ provider plugins add providers, not panels.
 - **Files setup writes into other tools** (#474) start with one marker line, ``Written by
   starbridge <version>; `starbridge uninstall` removes it.``, in the file's comment syntax: the
   systemd unit, the launchd plist, the Codex rule, the opencode entry and the copied skills (a YAML
-  comment first in the front matter). A file is Starbridge's when it has the marker (a skill also
-  when its front matter names it `starbridge`); setup replaces it when it differs from this
-  release's, uninstall removes it, and any other file at those paths is left alone. An owner who
+  comment first in the front matter). A file is Starbridge's only when it has the marker: setup
+  replaces it when it differs from this release's, uninstall removes it, and any other file at
+  those paths is left alone, even a skill named `starbridge`, which another skill manager may have
+  installed (#538). An owner who
   deletes the line keeps the file. `starbridge update` runs the new binary's `setup --refresh`,
   which rewrites the marked files that differ and restarts the local agent; Homebrew and npm users
   run it after upgrading, and the local agent refreshes the skills and rule when it starts.
@@ -336,17 +378,22 @@ provider plugins add providers, not panels.
   since the command it wraps is the agent's own. Uninstall removes exactly what setup added.
 - **Docs** (#211) at `/docs` are the repository's Markdown files listed in `web/src/lib/docs.ts`,
   rendered by the web page. Links between them become `/docs` links; other relative links go to
-  GitHub.
-- **The CLI's agent-facing contract is frozen for 1.x** (#475): the commands, flags, output lines
-  and exit codes under "What agents parse" in `cli/README.md`, pinned by
-  `cli/test/contract.test.ts`. A 1.x release may add to it; changing or removing anything listed
-  takes a major version, since the plugins, the Pi extension and agents' instructions update apart
-  from the CLI. `--json` always means an output format (`wait --json`); `ask` reads its input with
+  GitHub. Images are screenshots under `web/public`, served from the site root, so GitHub shows
+  the same file; a `-light` one comes with its `-dark` twin, shown by the page's theme (#558). The Overview's Start ends at a
+  first question answered from an agent, and the FAQ page holds the launch questions (#558).
+- **The CLI's agent-facing contract is stable from 0.1.0** (#475, #551): the commands, flags,
+  output lines and exit codes under "What agents parse" in `cli/README.md`, pinned by
+  `cli/test/contract.test.ts`. A release may add to it; changing or removing anything listed comes
+  only after a release that deprecates it, since the plugins, the Pi extension and agents'
+  instructions update apart from the CLI. `--json` always means an output format (`wait --json`); `ask` reads its input with
   `--input <path>`.
 - **Install and update.** `https://starbridge.run/install.sh` is `cli/install.sh`, prerendered by
   the web page, so each deploy serves its own revision's script. It checks `SHA256SUMS` with
   minisign, or OpenSSL 3 when minisign is missing. `starbridge update` replaces script installs
-  and points Homebrew and npm installs at their manager.
+  and points Homebrew and npm installs at their manager. Windows refuses to replace or delete a
+  running `.exe` but lets it be renamed, so `update` moves it aside to `starbridge.exe.old` and
+  the next update removes that; `uninstall` deletes the binary from a detached cmd.exe two seconds
+  after it exits (#552).
 
 ## Harnesses
 
@@ -453,7 +500,7 @@ Codex prompts are not supported.
 
 - Fields: `question`, `context`, `options` (2 to 4, or none for a typed answer), `recommended`,
   `source` (machine, project, session, its title and links, `machineKind`), `agent`, `images`,
-  `links`, `answerIn`, `replies`.
+  `links`, `answerIn`, `done`, `replies`.
 - **The first option is the agent's default** (#191), its proposal with no timer: listed first,
   the one amber button. `recommended` names it when it isn't first.
 - **Typed replies** (#201). Every question with options also takes a typed reply, as a steer to act
@@ -469,7 +516,11 @@ Codex prompts are not supported.
   `owner/repo#123` with the GitHub mark.
 - **`answerIn`** names a page (a Claude artifact whose button messages the agent) where the
   question is answered. It has no options; the schema refuses both. It closes when the agent runs
-  `starbridge settle`.
+  `starbridge settle`, or when the owner taps Done beside the page's link (#539): an agent that
+  forgot to settle left the card in Needs you. Done is an answer that carries no pick, so it closes
+  the card on every device and reaches the agent as `answered on its page; read the answer
+  there`; the page stays the one place the owner answers. Clients show Done only when the
+  machine says it takes one (`done`), since an older CLI would drop it and the agent never hear.
 - **Waiting state** (#122, #191, #202). A `waiting` item says whether the agent is blocked on the
   question. A flip either way pushes, so the phone moves the notification between channels. `ask
   --waiting` posts the question quietly and lets its `waiting` item push, so the first
@@ -644,11 +695,13 @@ Tokens, type and components: `DESIGN.md`.
 ## Releases, deploys and CI
 
 - **Releases** (#64). A `v1.2.3` or `v1.2.3-rc.4` tag runs `release.yml`: the APK and AAB signed
-  with the release key, four CLI binaries, `SHA256SUMS` signed with minisign in CI (public key in
+  with the release key, six CLI binaries (Linux and macOS, and Windows `.exe`, each x64 and
+  arm64, cross-compiled by Bun on Linux), `SHA256SUMS` signed with minisign in CI (public key in
   `cli/minisign.pub`), `install.sh`, and notes from merged PRs. `-rc` tags are prereleases and go
   to npm under `next`. Non-rc tags commit the formula to `T0mSIlver/homebrew-starbridge`. The npm
-  step skips without `NPM_TOKEN` (#480). versionCode is `MAJOR*1000000 + MINOR*10000 + PATCH*100`
-  plus the rc number or 99, so release candidates sort first. Play App Signing keeps the release
+  step skips without `NPM_TOKEN` (#480). versionCode is `2000000 + MAJOR*1000000 + MINOR*10000 +
+  PATCH*100` plus the rc number or 99, so release candidates sort first; the 2000000 keeps 0.1.0
+  above 1.0.0-rc.1 (1000001), which Play's closed test already had (#551). Play App Signing keeps the release
   key, so Play and GitHub builds share one signature (#148).
 - **One version everywhere** (#471). `bun cli/scripts/version.ts <version>` stamps the version
   into `cli/package.json`, `web/package.json`, both `plugin.json`, the mod's `VERSION`, Android's
@@ -680,7 +733,10 @@ Tokens, type and components: `DESIGN.md`.
 - **CI** (#380). Main runs one at a time; a newer merge replaces the waiting run, and the head's
   deploy covers the merges in between. A pull request runs only the jobs its files can affect;
   skipped jobs still report success. The e2e runs under `.github/watchdog.sh`. Tests point
-  `TMPDIR` at one directory per run and remove it (`test-tmp.ts`, #313).
+  `TMPDIR` at one directory per run and remove it (`test-tmp.ts`, #313). A `windows-latest` job
+  (#552) runs the CLI's platform tests and starts a built `.exe`; the rest of the CLI suite runs
+  there without failing the job until it passes. A private repository skips it, since GitHub's
+  Windows runners need a public one or paid minutes.
 - **Monitoring.** `uptime.yml` checks `/healthz`, `/healthz/backup` (fails when the last nightly
   backup is over 26 h old) and `/healthz/disk` (under 2 GB free), and opens one `outage` issue.
 

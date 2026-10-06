@@ -82,6 +82,38 @@
   margin: var(--s10) 0 var(--s5);
 }
 
+.apps {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: var(--s8);
+  width: min(100%, var(--size-content));
+  margin-top: var(--s5);
+}
+
+.app {
+  padding: var(--s6);
+  border-radius: var(--radius-xl);
+  background: var(--surface);
+  text-align: center;
+}
+
+.app h3 {
+  font-weight: 500;
+}
+
+.app p {
+  margin-top: var(--s1h);
+}
+
+.appLinks {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--s4);
+  margin-top: var(--s3);
+}
+
 /* The web inbox in a browser window, the Android inbox overlapping it on the right. */
 .page > .showcase {
   position: relative;
@@ -411,6 +443,11 @@
 
   .lead {
     margin-top: var(--s4);
+  }
+
+  .apps {
+    grid-auto-flow: row;
+    gap: var(--s6);
   }
 
   .actions {

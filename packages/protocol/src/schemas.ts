@@ -332,6 +332,12 @@ export const Decision = z
      * "Reply" under them. Machines from before it leave it out and accept only a choice.
      */
     replies: z.literal(true).optional(),
+    /**
+     * With `answerIn`: the machine takes a Done answer, the owner saying they answered on that
+     * page (#539). Clients then offer Done beside the page's link. Machines from before it leave
+     * it out and take no answer to such a decision.
+     */
+    done: z.literal(true).optional(),
     dir: DirectoryHead.optional(),
   })
   .superRefine((d, ctx) => {
@@ -344,6 +350,8 @@ export const Decision = z
       ctx.addIssue({ code: "custom", message: "recommended needs options" });
     if (d.answerIn !== undefined && d.options.length > 0)
       ctx.addIssue({ code: "custom", message: "a decision answered elsewhere has no options" });
+    if (d.done && d.answerIn === undefined)
+      ctx.addIssue({ code: "custom", message: "done needs answerIn" });
   });
 export type Decision = z.infer<typeof Decision>;
 
@@ -357,10 +365,12 @@ export const Answer = z
     answeredAt: Time,
     choice: z.string().max(100).optional(),
     text: z.string().max(4000).optional(),
+    /** The owner answered on the decision's `answerIn` page (#539). */
+    done: z.literal(true).optional(),
     dir: DirectoryHead.optional(),
   })
-  .refine((a) => (a.choice === undefined) !== (a.text === undefined), {
-    message: "exactly one of choice and text",
+  .refine((a) => [a.choice, a.text, a.done].filter((x) => x !== undefined).length === 1, {
+    message: "exactly one of choice, text and done",
   });
 export type Answer = z.infer<typeof Answer>;
 
@@ -459,7 +469,10 @@ export const Settled = z
     outcome: z.enum(["keyboard", "timeout", "device", "elsewhere", "withdrawn"]).optional(),
     /** With outcome "device": the device whose answer the machine applied. */
     device: Id.optional(),
-    /** With outcome "device" on a decision: the answer it applied, so every device can show it. */
+    /**
+     * With outcome "device" on a decision: the answer it applied, so every device can show it.
+     * Neither for a Done answer.
+     */
     choice: z.string().max(100).optional(),
     text: z.string().max(4000).optional(),
     dir: DirectoryHead.optional(),

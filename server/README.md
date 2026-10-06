@@ -14,10 +14,11 @@ them. Its routes are in `PROTOCOL.md`.
 
 ## Set it up
 
-1. With Docker installed, clone this repository and build the two images:
+1. With Docker installed, clone the latest release of this repository (replace `v0.1.0` with
+   its tag) and build the two images:
 
    ```bash
-   git clone https://github.com/T0mSIlver/starbridge
+   git clone --branch v0.1.0 https://github.com/T0mSIlver/starbridge
    cd starbridge
    docker build -f server/Dockerfile -t starbridge-server .
    docker build -f web/Dockerfile -t starbridge-web .
@@ -62,9 +63,10 @@ them. Its routes are in `PROTOCOL.md`.
    }
    ```
 
-5. Sign in. On the web, open your origin and pick "Use your own server" at the bottom of the
-   page. In the Android app, pick "Use your own server" and enter your origin. Both ask for the
-   owner token.
+5. Sign in. On the web, open your origin and pick "Use your own server" under "Continue with
+   GitHub". In the Android app, pick "Use your own server" and enter your origin. Both ask for
+   the owner token. With [GitHub sign-in](#sign-in) set up, the app and the web page can use it
+   on your server too.
 
 6. Pair each machine that runs agents with your server:
 
@@ -83,11 +85,12 @@ the server pushes to it directly.
 
 Web Push also goes through the relay unless you set your own VAPID keys.
 
-Without the relay or UnifiedPush, the Android app gets no pushes, so while it is open it doesn't
-show new questions or permission prompts. Close and reopen it to see them. The web page still
-updates on its own. For live updates on Android, set `RELAY_URL`, or install a UnifiedPush
+Without the relay or UnifiedPush, the Android app gets no pushes: while it is open it checks for
+new items every 10 seconds, and nothing reaches the phone while it is closed. The web page still
+updates on its own. For notifications on Android, set `RELAY_URL`, or install a UnifiedPush
 distributor such as ntfy and pick UnifiedPush in the app under Settings → Notifications →
-Delivered through.
+Delivered through. For an ntfy on your own network or on plain HTTP, set
+`ALLOW_PRIVATE_PUSH_ENDPOINTS=1`.
 
 ## Upgrade
 
@@ -122,9 +125,9 @@ release, restore the copy you made before upgrading.
 <dt><code>OWNER_TOKEN</code></dt>
 <dd>Signs you in to the server's one owner account. Set it, GitHub sign-in, or both. Unset by default.</dd>
 <dt><code>GITHUB_CLIENT_ID</code>, <code>GITHUB_CLIENT_SECRET</code></dt>
-<dd>GitHub sign-in, where each GitHub user gets their own account, from a GitHub OAuth app whose callback is <code>$PUBLIC_URL/v1/auth/github/callback</code>. Unset by default.</dd>
+<dd>GitHub sign-in, where each GitHub user gets their own account, from a GitHub OAuth app. Set both. Register two callback URLs in the OAuth app: <code>$PUBLIC_URL/v1/auth/github/callback</code> for the web and <code>$PUBLIC_URL/v1/auth/github/callback/app</code> for the Android app. GitHub refuses the app's sign-in when only the first is listed. Unset by default.</dd>
 <dt><code>APP_REDIRECT_URI</code></dt>
-<dd>Where GitHub sign-in sends the Android app. Default: <code>starbridge://auth</code>.</dd>
+<dd>Where GitHub sign-in sends the Android app. Only starbridge.run can vouch for the app, so its server sets <code>https://starbridge.run/app/auth</code>. Default: <code>starbridge://auth</code>.</dd>
 </dl>
 
 ### Notifications

@@ -38,6 +38,12 @@ on each machine that runs agents:
 curl -fsSL https://starbridge.run/install.sh | sh
 ```
 
+On Windows, in PowerShell:
+
+```powershell
+irm https://starbridge.run/install.ps1 | iex
+```
+
 Or with Homebrew:
 
 ```bash
@@ -50,9 +56,10 @@ Or with npm:
 npm install -g starbridge
 ```
 
-The script runs `starbridge setup`, which pairs the machine and installs Starbridge in each agent
-it finds.
-After Homebrew or npm, run `starbridge setup` yourself.
+The script runs `starbridge setup`, which pairs the machine, installs Starbridge in each agent it
+finds and ends by sending a test question to your phone. After Homebrew or npm, run
+`starbridge setup` yourself. [Start](https://starbridge.run/docs#start) goes on to your agent's
+first question.
 
 ## What each agent supports
 
@@ -64,6 +71,10 @@ After Homebrew or npm, run `starbridge setup` yourself.
 | Runs | ✓ | ✓ | ✓ | ✓ |
 | Permission prompts | Opt-in | No | Opt-in | Opt-in |
 | The agent's own ask tool | ✓ | n/a | n/a | ✓ |
+| Rules for when to ask you | ✓ | [Paste them](https://starbridge.run/docs/tell-your-agents#rules-for-codex) | ✓ | ✓ |
+
+Answers go into interactive sessions; Codex needs CLI 0.160 or later. In `codex exec`, `pi -p` and
+`opencode run`, the agent waits for the answer with `starbridge wait` instead.
 
 [What each agent supports](https://starbridge.run/docs/tell-your-agents#what-each-agent-supports)
 lists the version and setup each one needs.
@@ -71,7 +82,8 @@ lists the version and setup each one needs.
 ## Docs
 
 [starbridge.run/docs](https://starbridge.run/docs): getting started, the CLI, telling your agents
-when to reach you, and self-hosting.
+when to reach you, self-hosting, and the [FAQ](https://starbridge.run/docs/faq), with what the
+server can and can't see.
 
 ## Contributing
 

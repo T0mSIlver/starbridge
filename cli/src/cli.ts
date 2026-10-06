@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { parseArgs } from "node:util";
 import { ProtocolError, ready, type SessionLink } from "@starbridge/protocol";
 import { AgentError, Interrupted, withAgent } from "./agent/client";
-import { answersVia, askVia, quotaVia, waitingVia, waitVia } from "./agent/commands";
+import { AgentGone, answersVia, askVia, quotaVia, waitingVia, waitVia } from "./agent/commands";
 import { runAgent } from "./agent/main";
 import { ApiError, sandboxHint, Unreachable } from "./api";
 import { StateFileError } from "./config";
@@ -114,7 +114,7 @@ const HELP = `starbridge: post decisions to your devices, report runs, upload qu
       Run \`codexbar usage --format json\` for each provider (or for every enabled one),
       compute pace and alerts, and post a sealed snapshot every interval.
 
-  starbridge agent [--provider <name>]... [--interval 5m] [--codexbar <path>] [--no-quota]
+  starbridge agent [--provider <name>]... [--interval 5m] [--codexbar <path>] [--no-quota] [--log <file>]
       Run the machine's agent (as a user service): it holds the keys and the server
       connection, uploads quota snapshots every interval, and hands each Claude Code session
       its answers over a unix socket. Flags override agent.json in the config directory.
@@ -188,6 +188,17 @@ function readJson(path: string): unknown {
   }
 }
 
+/** A `wait` whose agent stopped and stayed away goes on at the server (#548). */
+async function orServer(ctx: Ctx, viaAgent: Promise<number>): Promise<number> {
+  try {
+    return await viaAgent;
+  } catch (e) {
+    if (!(e instanceof AgentGone)) throw e;
+    ctx.err(`starbridge: ${e.message}; waiting at the server`);
+    return wait(ctx, e.rest);
+  }
+}
+
 export async function run(argv: string[], ctx: Ctx): Promise<number> {
   const [command, ...rest] = argv;
   try {
@@ -256,7 +267,7 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
         const opts = { wait: v.wait, timeout: v.timeout };
         return await withAgent(
           ctx,
-          (agent) => askVia(ctx, agent, input, opts),
+          (agent) => orServer(ctx, askVia(ctx, agent, input, opts)),
           () => ask(ctx, input, opts),
         );
       }
@@ -295,7 +306,7 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
         const opts = { id, ...(session !== undefined ? { session } : {}), ...values };
         return await withAgent(
           ctx,
-          (agent) => waitVia(ctx, agent, opts),
+          (agent) => orServer(ctx, waitVia(ctx, agent, opts)),
           () => wait(ctx, opts),
         );
       }
@@ -408,9 +419,11 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
             interval: { type: "string" },
             codexbar: { type: "string" },
             "no-quota": { type: "boolean" },
+            log: { type: "string" },
           },
         });
         return await runAgent(ctx, {
+          ...(values.log ? { log: values.log } : {}),
           ...(values.provider ? { providers: values.provider } : {}),
           ...(values.interval ? { interval: values.interval } : {}),
           ...(values.codexbar ? { codexbar: values.codexbar } : {}),
