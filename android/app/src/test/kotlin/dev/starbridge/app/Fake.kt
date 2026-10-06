@@ -144,6 +144,36 @@ class Fake(private val now: Instant) {
         ),
     )
 
+    /** Put off by the owner (#571): back later today, and tomorrow morning though its agent waits. */
+    val snoozed = listOf(
+        Decision(
+            id = "s1",
+            question = "Which pricing tier for the free plan?",
+            context = "Stripe charges the same for both; the difference is the seat limit.",
+            options = listOf("3 seats", "5 seats"),
+            recommended = "3 seats",
+            source = Source("MacBook", "vidtheque", "free-plan-pricing", machineKind = "laptop"),
+            createdAt = ago(40),
+            agent = "claude-code",
+            replies = true,
+            snoozedUntil = now.plusSeconds(4 * 3600),
+        ),
+        Decision(
+            id = "s2",
+            question = "Publish 0.1.1 to npm?",
+            context = "The changelog and the tag are ready.",
+            options = listOf("Publish", "Wait"),
+            recommended = "Publish",
+            source = Source("dev box", "starbridge", "release-0-1-1", links = listOf(SessionLink("web", "https://claude.ai/code/session_07")), machineKind = "server"),
+            createdAt = ago(55),
+            agent = "claude-code",
+            waiting = true,
+            waitingSince = ago(50),
+            replies = true,
+            snoozedUntil = now.plusSeconds(19 * 3600),
+        ),
+    )
+
     /** Answered on a page of its own: the link opens it, and Done says it was answered there. */
     val answerIn = Decision(
         id = "d6",

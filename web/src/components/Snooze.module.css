@@ -1,0 +1,126 @@
+/* Snooze's menu of times (#571), drawn as the inbox's View menu. */
+
+.snooze {
+  position: relative;
+}
+
+.menu {
+  position: absolute;
+  left: 0;
+  top: calc(100% + var(--s1));
+  z-index: 3;
+  width: 340px;
+  max-width: calc(100vw - 2 * var(--s4));
+  padding: var(--s1h);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  box-shadow: 0 12px 32px var(--scrim);
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  width: 100%;
+  height: var(--s8);
+  padding: 0 var(--s2);
+  border: 0;
+  border-radius: var(--radius-xs);
+  background: none;
+  color: var(--fg);
+  text-align: left;
+}
+
+.item:hover,
+.item:focus-visible {
+  background: var(--surface2);
+}
+
+.when {
+  margin-left: auto;
+  color: var(--fg2);
+}
+
+.pick {
+  display: grid;
+  gap: var(--s2);
+  padding: var(--s2);
+}
+
+.days {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--s1);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.days legend,
+.timeLabel {
+  margin-bottom: var(--s1);
+  color: var(--fg2);
+}
+
+.day {
+  height: var(--s8);
+  padding: 0 var(--s1);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-pill);
+  background: none;
+  color: var(--fg);
+  white-space: nowrap;
+}
+
+.day[aria-pressed="true"] {
+  border-color: var(--fg);
+  background: var(--fg);
+  color: var(--bg);
+}
+
+.timeLabel {
+  display: grid;
+  gap: var(--s1);
+}
+
+.time {
+  height: var(--s10);
+  padding: 0 var(--s2);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-dense);
+  background: var(--surface);
+  color: var(--fg);
+}
+
+.go {
+  justify-self: end;
+}
+
+/* Phones open the times in place, under the quiet buttons, as Android does: a popover would run
+   under the bottom bar. */
+@media (max-width: 599px) {
+  .snooze {
+    display: contents;
+  }
+
+  .menu {
+    order: 1;
+    flex-basis: 100%;
+    position: static;
+    width: auto;
+    max-width: none;
+    margin-top: var(--s2);
+    box-shadow: none;
+  }
+
+  .item {
+    height: var(--size-tap);
+  }
+
+  .go,
+  .day,
+  .time {
+    height: var(--size-tap);
+  }
+}

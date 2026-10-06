@@ -6,7 +6,9 @@ import { ago, type Entry, type MachineKind, type Past, timer } from "@/lib/feed"
 import { useFind } from "@/lib/find";
 import { clockTime } from "@/lib/format";
 import { fitsRow, fullInput } from "@/lib/permissionInput";
+import type { Prefs } from "@/lib/prefs";
 import { duration, progressText, runState } from "@/lib/runs";
+import { snoozeTime } from "@/lib/snooze";
 import type { Decision, PromptItem, RunItem, Source } from "@/lib/types";
 import s from "./Feed.module.css";
 import { Icon, Play } from "./icons";
@@ -195,13 +197,30 @@ type RowProps = {
   onSelect: () => void;
   /** Phones answer on the row: a question's options, a prompt's Allow and Deny. */
   actions?: React.ReactNode;
+  /** Under Snoozed: when it comes back, in the time slot, and nothing amber (#571). */
+  until?: string;
+  clock?: Prefs["clock"];
 };
 
 /** One prompt or question in the feed; the whole row selects it. */
-export function NeedRow({ entry, now, selected, comfy, onSelect, actions }: RowProps) {
+export function NeedRow({
+  entry,
+  now,
+  selected,
+  comfy,
+  onSelect,
+  actions,
+  until,
+  clock,
+}: RowProps) {
   const type = entry.type === "prompt" ? "prompt" : "question";
-  const since = waitingSince(entry);
-  const waited = since ? `Waiting for you, ${duration(now - Date.parse(since))}. ` : "";
+  const since = until ? undefined : waitingSince(entry);
+  const back = until && `Until ${snoozeTime(new Date(until), new Date(now), clock)}`;
+  const waited = back
+    ? `Snoozed ${back.toLowerCase()}. `
+    : since
+      ? `Waiting for you, ${duration(now - Date.parse(since))}. `
+      : "";
   return (
     <div
       className={`${s.row} ${comfy ? s.comfy : ""} ${since ? s.blocks : ""}`}
@@ -221,7 +240,7 @@ export function NeedRow({ entry, now, selected, comfy, onSelect, actions }: RowP
           machine={entry.machine}
           kind={entry.kind}
           repo={entry.repo}
-          time={slotTime(entry.at, since, now)}
+          time={back || slotTime(entry.at, since, now)}
           waiting={!!since}
           size={comfy ? "comfy" : "dense"}
         />
@@ -358,6 +377,33 @@ export function HistoryHead({
       <Icon name="history" size={16} />
       <span className={s.historyTitle}>History</span>
       <span>{count} answered today</span>
+      <Icon name="chev" size={16} className={s.chev} />
+    </button>
+  );
+}
+
+/** Snoozed's head (#571): collapsed by default, its state remembered on this device. */
+export function SnoozedHead({
+  open,
+  count,
+  comfy,
+  onToggle,
+}: {
+  open: boolean;
+  count: number;
+  comfy?: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      className={`${comfy ? "t-small" : "t-meta"} ${s.historyHead} ${comfy ? s.comfy : ""}`}
+      aria-expanded={open}
+      onClick={onToggle}
+    >
+      <Icon name="snooze" size={16} />
+      <span className={s.historyTitle}>Snoozed</span>
+      <span>{count}</span>
       <Icon name="chev" size={16} className={s.chev} />
     </button>
   );

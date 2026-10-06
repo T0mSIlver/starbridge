@@ -10,6 +10,7 @@ import {
   type Past,
   promptOpen,
   running,
+  snoozedEntries,
 } from "@/lib/feed";
 import { matches, useFind } from "@/lib/find";
 import { clockTime } from "@/lib/format";
@@ -21,7 +22,16 @@ import { afterAnswer, selectedId, step } from "@/lib/selection";
 import type { InboxItem, PromptItem } from "@/lib/types";
 import { useApp } from "./AppProvider";
 import { PromptDetail, QuestionDetail } from "./Detail";
-import { HistoryHead, machineIcon, NeedRow, PastRow, RunRow, useNow, waitingSince } from "./Feed";
+import {
+  HistoryHead,
+  machineIcon,
+  NeedRow,
+  PastRow,
+  RunRow,
+  SnoozedHead,
+  useNow,
+  waitingSince,
+} from "./Feed";
 import feed from "./Feed.module.css";
 import s from "./Inbox.module.css";
 import { InstallBox } from "./InstallBox";
@@ -67,11 +77,14 @@ export function Inbox() {
     promptLog,
     loadPromptLog,
     answer,
+    snooze,
     answerPrompt,
     deviceName,
   } = app;
   const [grouping, setGrouping] = usePref("grouping");
   const [historyOpen, setHistoryOpen] = usePref("historyOpen");
+  const [snoozedOpen, setSnoozedOpen] = usePref("snoozedOpen");
+  const [clock] = usePref("clock");
   // History's rows fade in when the owner opens it, not when the page loads with it open or the
   // list comes back.
   const [historyToggled, setHistoryToggled] = useState(false);
@@ -115,6 +128,8 @@ export function Inbox() {
   const all = [...needsYou(inbox.items, prompts, now), ...running(runs?.items ?? [], now)];
   const needs = all.filter((e) => e.type !== "run" && keep(e));
   const runEntries = all.filter((e) => e.type === "run" && keep(e));
+  const snoozed = snoozedEntries(inbox.items, now).filter(keep);
+  const showSnoozed = snoozedOpen || finding;
   const allPrompts = useMemo(() => {
     const seen = new Map<string, PromptItem>();
     for (const p of [...(promptLog ?? []), ...prompts]) seen.set(p.permission.id, p);
@@ -132,6 +147,7 @@ export function Inbox() {
   const lost = useRef(new Set<string>());
   const ids = [
     ...needs,
+    ...(showSnoozed ? snoozed : []),
     ...past.filter((p) => showPast || lost.current.has(p.entry.id)).map((p) => p.entry),
   ].map((e) => e.id);
   const [picked, setPicked] = useState<string>();
@@ -192,13 +208,21 @@ export function Inbox() {
     }
     moveOn(item.decision.id);
   };
+  // Put off, it leaves the open list as an answer does; brought back, it stays selected.
+  const snoozeQuestion = async (item: InboxItem, until: Date) => {
+    await snooze(item, until.toISOString());
+    if (until.getTime() <= Date.now()) return;
+    if (!wide) closeItem();
+    const next = afterAnswer(openIds, item.decision.id);
+    setPicked((cur) => (cur === item.decision.id ? next : cur));
+  };
   const answerOne = async (item: PromptItem, reply: Parameters<typeof answerPrompt>[1]) => {
     await answerPrompt(item, reply);
     moveOn(item.permission.id);
   };
 
   const pastOf = new Map(past.map((p) => [p.entry.id, p]));
-  const entryOf = new Map(needs.map((e) => [e.id, e]));
+  const entryOf = new Map([...needs, ...snoozed].map((e) => [e.id, e]));
   // An item opened by a link or a reload is known once the inbox loaded, or the 7-day prompt
   // log for a closed prompt; after one try at the log, an unknown id counts as answered.
   const stillOpen = opened !== undefined && entryOf.has(opened);
@@ -247,12 +271,13 @@ export function Inbox() {
         keys={wide}
         closed={closed}
         onAnswer={(r) => answerQuestion(e.item, r)}
+        onSnooze={(until) => snoozeQuestion(e.item, until)}
       />
     );
   };
 
   const comfy = !wide;
-  const row = (e: Entry) =>
+  const entryRow = (e: Entry, until?: string) =>
     e.type === "run" ? (
       <RunRow key={e.id} item={e.item} now={now} comfy={comfy} />
     ) : (
@@ -263,13 +288,19 @@ export function Inbox() {
         comfy={comfy}
         selected={wide && e.id === selected}
         onSelect={() => (wide ? setPicked(e.id) : openItem(e.id))}
+        until={until}
+        clock={clock}
+        // A snoozed row stays quiet, with no amber default: the owner opens it to answer.
         actions={
-          comfy ? (
+          comfy && !until ? (
             <RowActions entry={e} onPrompt={answerOne} onQuestion={answerQuestion} />
           ) : undefined
         }
       />
     );
+  const row = (e: Entry) => entryRow(e);
+  const snoozedRow = (e: Entry) =>
+    entryRow(e, e.type === "question" ? e.item.snoozedUntil : undefined);
   const sub = (label: React.ReactNode) => <div className={`t-caption ${s.sub}`}>{label}</div>;
   // Under a grouping's header, the group's items share one box (#248).
   const grouped = view !== "none";
@@ -282,6 +313,22 @@ export function Inbox() {
   const noMachine = pairedMachines(app) === 0;
   const waitingOn = needs.filter((e) => waitingSince(e));
   const whenYouCan = needs.filter((e) => !waitingSince(e));
+  // Questions the owner put off (#571), collapsed at the end, out of the count; Find opens it.
+  const snoozedPart = snoozed.length > 0 && (
+    <>
+      {finding ? (
+        sub(`Snoozed · ${snoozed.length}`)
+      ) : (
+        <SnoozedHead
+          open={snoozedOpen}
+          count={snoozed.length}
+          comfy={comfy}
+          onToggle={() => setSnoozedOpen(!snoozedOpen)}
+        />
+      )}
+      {showSnoozed && snoozed.map(snoozedRow)}
+    </>
+  );
   const historyPart = (
     <>
       {finding ? (
@@ -398,9 +445,15 @@ export function Inbox() {
           ) : (
             <p className={`t-small ${s.empty}`}>Nothing needs you</p>
           )
-        ) : past.length === 0 ? (
+        ) : past.length === 0 && snoozed.length === 0 ? (
           <p className={`t-small ${s.empty}`}>Nothing matches</p>
         ) : null)}
+      {snoozedPart && (
+        <>
+          <div className={s.gap} />
+          {grouped ? seg(snoozedPart) : snoozedPart}
+        </>
+      )}
       <div ref={historyRef} className={showPast ? undefined : s.down}>
         <div className={s.gap} />
         {grouped ? seg(historyPart) : historyPart}

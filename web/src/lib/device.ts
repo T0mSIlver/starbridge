@@ -55,6 +55,7 @@ import {
   type SealedItem,
   type Settled,
   type SignedEnvelope,
+  type Snooze,
   sealAsync,
   toB64,
   verifyDirectory,
@@ -1077,6 +1078,8 @@ export interface Inbox {
   retry?: Stored[];
   /** The latest waiting state each machine posted, by `<machine>/<decision id>` (#122). */
   waits?: Record<string, Pick<Waiting, "state" | "at">>;
+  /** The owner's latest snooze of each decision, from any device, by decision id (#571). */
+  snoozes?: Record<string, Pick<Snooze, "until" | "at">>;
 }
 
 /** The server picks what it lists: an item of another kind is refused before it is opened. */
@@ -1225,7 +1228,18 @@ export async function loadInbox(ctx: Ctx, inbox: Inbox = { items: [], rejected: 
   // A settled notice lists before the decision it closed, which moved past it.
   const closings: Closings = new Map();
   const waits = { ...inbox.waits };
+  const snoozes = { ...inbox.snoozes };
   const take = async (s: Stored, again: boolean) => {
+    if (s.item.kind === "snooze") {
+      // Only tells until when the owner put a decision off: one that fails costs that alone.
+      try {
+        const z = await openSnooze(ctx, s.item);
+        const had = snoozes[z.decisionId];
+        if (!had || Date.parse(had.at) < Date.parse(z.at))
+          snoozes[z.decisionId] = { until: z.until, at: z.at };
+      } catch {}
+      return;
+    }
     if (s.item.kind === "waiting") {
       // Only tells whether the agent waits: one that fails to open costs that and nothing else.
       try {
@@ -1263,7 +1277,7 @@ export async function loadInbox(ctx: Ctx, inbox: Inbox = { items: [], rejected: 
   for (const s of inbox.retry ?? []) await take(s, true);
   let cursor = inbox.cursor;
   for (;;) {
-    const page = await api.items("decision,settled,waiting", cursor);
+    const page = await api.items("decision,settled,waiting,snooze", cursor);
     for (const s of page.items) await take(s, false);
     cursor = page.cursor;
     if (page.items.length < 100) break;
@@ -1279,11 +1293,21 @@ export async function loadInbox(ctx: Ctx, inbox: Inbox = { items: [], rejected: 
   // Only the machine that asked can say its agent waits on the question.
   const items = [...byId.values()].map((i) => {
     const w = waits[`${i.machine.id}/${i.decision.id}`];
-    const { waitingSince: _, ...rest } = i;
-    return w?.state === "waiting" ? { ...rest, waitingSince: w.at } : rest;
+    const z = snoozes[i.decision.id];
+    const { waitingSince: _, snoozedUntil: __, ...rest } = i;
+    return {
+      ...rest,
+      ...(w?.state === "waiting" ? { waitingSince: w.at } : {}),
+      // Back now ends at its own time, read before this browser's clock, which may run behind.
+      ...(z && Date.parse(z.until) > Date.parse(z.at) ? { snoozedUntil: z.until } : {}),
+    };
   });
+  await noteSnoozes(
+    ctx,
+    Object.entries(snoozes).map(([decisionId, z]) => ({ decisionId, at: z.at })),
+  );
   await hold(ctx);
-  return { items, cursor, rejected, retry, waits } satisfies Inbox;
+  return { items, cursor, rejected, retry, waits, snoozes } satisfies Inbox;
 }
 
 /** Signs the answer and seals it to the machine that asked, which must still be active. */
@@ -1315,6 +1339,58 @@ export async function answer(ctx: Ctx, item: InboxItem, reply: Reply): Promise<s
     [item.decision.id]: { ...reply, answeredAt },
   }));
   return answeredAt;
+}
+
+/**
+ * Keeps the latest snooze time this browser knows per decision, for the service worker (#571).
+ * Returns whether `latest` holds no newer one than each given.
+ */
+export async function noteSnoozes(
+  ctx: Pick<Ctx, "account">,
+  seen: { decisionId: string; at: string }[],
+): Promise<boolean> {
+  let newest = true;
+  await store.update("snoozes", ctx.account, (old) => {
+    const next = { ...old };
+    for (const z of seen) {
+      const had = next[z.decisionId];
+      if (had && Date.parse(had) > Date.parse(z.at)) newest = false;
+      else next[z.decisionId] = z.at;
+    }
+    return next;
+  });
+  return newest;
+}
+
+/** Opens a snooze another device, or this one, sealed to this browser (#571). */
+export async function openSnooze(ctx: Ctx, item: SealedItem): Promise<Snooze> {
+  const { body } = await openAsync(expectKind(item, "snooze"), me(ctx), ctx.dir);
+  return body as Snooze;
+}
+
+/**
+ * Puts the question off until `until` (#571), or brings it back with a time already passed:
+ * sealed to the machine that asked, so its agent hears of it when it would block, and to every
+ * active device, this one included, so each one hides it.
+ */
+export async function snooze(ctx: Ctx, item: InboxItem, until: string): Promise<Snooze> {
+  const fresh = await refresh(ctx);
+  await hold(fresh);
+  const machine = fresh.dir.members.get(item.machine.id);
+  if (!machine?.active) throw new Error(`${item.machine.name} was revoked`);
+  const to = [machine.member, ...activeMembers(fresh.dir, "device")];
+  const body: Snooze = {
+    v: 1,
+    id: randomId("z_"),
+    decisionId: item.decision.id,
+    to: to.map((m) => m.id),
+    until,
+    at: now(),
+    dir: { length: fresh.dir.length, head: fresh.dir.head },
+  };
+  await api.post(await sealAsync("snooze", body, me(fresh), to));
+  await noteSnoozes(ctx, [body]);
+  return body;
 }
 
 // --- Permission prompts -------------------------------------------------------------------

@@ -7,9 +7,11 @@ import { CLIENT } from "../lib/api";
 import {
   answer,
   deviceContext,
+  noteSnoozes,
   openPushedDecision,
   openPushedPermission,
   openSettled,
+  openSnooze,
   openWaiting,
   Withheld,
 } from "../lib/device";
@@ -23,10 +25,11 @@ declare const self: ServiceWorkerGlobalScope;
 type Payload =
   | {
       v: 1;
-      kind: "decision" | "quota" | "answer" | "permission" | "settled" | "waiting";
+      kind: "decision" | "quota" | "answer" | "permission" | "settled" | "waiting" | "snooze";
       id: string;
       from: string;
       re?: string;
+      wakeAt?: string;
       box?: string;
     }
   | { v: 1; kind: "answered"; id: string }
@@ -105,6 +108,7 @@ async function onPush(text: string): Promise<void> {
         id: payload.id,
         from: payload.from,
         ...(payload.re ? { re: payload.re } : {}),
+        ...(payload.wakeAt ? { wakeAt: payload.wakeAt } : {}),
         boxes: [{ to: ctx.device.id, box: payload.box }],
       }
     : await (async () => {
@@ -128,6 +132,26 @@ async function onPush(text: string): Promise<void> {
     // It may close a prompt or a decision.
     for (const t of [tag(settled.itemId), promptTag(settled.itemId)])
       for (const n of await self.registration.getNotifications({ tag: t })) n.close();
+  } else if (payload.kind === "snooze") {
+    // The owner put a question off (#571): its notification goes until its time, when the
+    // server pushes the snooze once more and the question notifies again, once.
+    const z = await openSnooze(ctx, item);
+    // A newer snooze of the question, from any device, stands: an older one's return shows nothing.
+    if (!(await noteSnoozes(ctx, [z]))) return;
+    const until = Date.parse(z.until);
+    if (until <= Date.parse(z.at)) return; // Back now: the inbox lists it again, quietly.
+    if (Date.now() < until - WAKE_SKEW_MS) {
+      for (const n of await self.registration.getNotifications({ tag: tag(z.decisionId) }))
+        n.close();
+      return;
+    }
+    if (answered.has(`${account}/${z.decisionId}`)) return;
+    const res = await fetch(`/v1/items/${encodeURIComponent(z.decisionId)}`, { headers: CLIENT });
+    if (!res.ok) return;
+    const stored = await res.json();
+    if (stored.answeredAt) return;
+    const opened = await openPushedDecision(ctx, stored.item);
+    if (!opened.reply) await showDecision(account as string, opened, false, false, true);
   } else if (payload.kind === "waiting") {
     // The agent ran out of other work: notify once more, in place of the question's notification.
     // Back to working, the notification loses its waiting line without a sound (#191).
@@ -172,11 +196,20 @@ function summary(context: string): string {
   return text.length > 180 ? `${text.slice(0, 179)}…` : text;
 }
 
+/**
+ * How far a snooze's time may be ahead of this browser's clock when its second push comes: the
+ * server sends it at the time, a little late, by its own clock. A snooze runs at least 5 minutes
+ * (lib/snooze.ts), so its first push never passes for its second.
+ */
+const WAKE_SKEW_MS = 2 * 60_000;
+
 async function showDecision(
   account: string,
   item: InboxItem,
   waiting = false,
   flip = false,
+  /** Its snooze is over (#571): it notifies again, once. */
+  back = false,
 ): Promise<void> {
   const done = () => moot(account, item.decision.id);
   const d = item.decision;
@@ -197,9 +230,9 @@ async function showDecision(
     renotify?: boolean;
     silent?: boolean;
   } = {
-    body: `${waiting ? "Waiting · " : ""}${d.source.machine} · ${d.source.project}\n${summary(d.context)}`,
+    body: `${back ? "Back from snooze · " : waiting ? "Waiting · " : ""}${d.source.machine} · ${d.source.project}\n${summary(d.context)}`,
     tag: tag(d.id),
-    renotify: waiting,
+    renotify: waiting || back,
     // A flip back to working replaces the waiting notification quietly.
     silent: flip && !waiting,
     requireInteraction: true,

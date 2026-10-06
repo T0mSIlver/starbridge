@@ -581,6 +581,16 @@ Codex prompts are not supported.
   notification already says waiting.
 - **Settling** (#62, #405). `settle` closes a question as `elsewhere` or `withdrawn`. It never
   withdraws one whose answer reached the agent, since devices would hold both.
+- **Snoozing** (#571). The owner can put a question off: "not now, show me this again at 18:00".
+  A snooze is not an answer, so #122 holds: for the agent it means what no answer means. Its job
+  is less clutter, in the inbox and in the owner's head. Agents are never woken by one; when an
+  agent would block, `waiting` and `wait` say until when, and `wait` exits 3 once per snooze, so
+  a polling agent stops paying for the wait. The server brings the question back at its time
+  from a plain-text hint, so the web, whose service worker cannot schedule, notifies as Android
+  does; it learns only that some question was put off until then. Permission prompts and runs
+  can't be snoozed: a prompt's answer window is 10 minutes and the keyboard already takes it.
+  Agent-suggested times and event snoozes ("until the run ends") were dropped: a snooze is when
+  the owner has time; when the agent needs the answer is its waiting state.
 - **Who won a race** (#330). Answers are sealed only to the asking machine, so once it accepts one
   it posts a `settled` notice with the device and its choice or text, sealed to every device. The
   losing device then says "Answered on Pixel: Later".
@@ -666,6 +676,16 @@ first window, so a provider with a window running out leads.
   thing, the amber fill. A waiting item's title is weight 500 and its time slot a clock ticking
   from when it started waiting; screen readers hear "Waiting for you, 2 minutes" first. No state
   tag anywhere. Under a grouping, the items under one header are joined.
+- **Snoozed** (#571). Snooze sits beside Reply in a question's detail (web) and sheet (Android),
+  never on a notification: 1 hour, This evening (18:00, offered until 17:00), Tomorrow morning
+  (9:00), or Pick a time, today and the 7 days after it, each half hour from 5 minutes on, in the
+  Clock setting. Phones open the times in place under Snooze; the desktop web opens a menu. A
+  snoozed question leaves Needs you, the count and the badge, and its notification closes on
+  every device; it waits in a collapsed "Snoozed · n" group after them, soonest back first, its
+  time slot "Until 18:00", with no amber and no answer buttons even when its agent waits. Opened,
+  it says "Snoozed until …" and offers Snooze again (replaces the time) and Back now. At its time
+  it returns to its place and notifies once, "Back from snooze", never again. The owner chose
+  these from mockups.
 - **History** lists answered questions and the last 7 days of prompts, with how and where each was
   answered.
 - **Find** matches every word in the machine, repo, the agent's words, the session and a History

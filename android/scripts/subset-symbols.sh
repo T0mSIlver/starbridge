@@ -7,7 +7,7 @@ NAMES="inbox speed settings terminal contact_support check more_vert arrow_back 
 desktop_windows dns cloud notifications drag_indicator chevron_right expand_more expand_less play_arrow
 qr_code_2 lock filter_list history key devices open_in_new open_in_full hourglass_top sync send link keyboard_arrow_up
 keyboard_arrow_down check_circle computer close error content_copy visibility logout add pin search
-notifications_off"
+notifications_off snooze"
 BASE=https://github.com/google/material-design-icons/raw/master/variablefont
 FONT="MaterialSymbolsRounded%5BFILL,GRAD,opsz,wght%5D"
 OUT="$(cd "$(dirname "$0")/.." && pwd)/app/src/main/res/font/material_symbols_rounded.ttf"

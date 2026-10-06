@@ -235,10 +235,21 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
         post(decision, null, silent)
     }
 
-    private fun post(decision: Decision, note: String?, silent: Boolean = false) {
+    override fun back(decision: Decision) {
+        manager.cancel(tag(decision.id))
+        post(decision, null, back = true)
+    }
+
+    private fun post(decision: Decision, note: String?, silent: Boolean = false, back: Boolean = false) {
         if (!allowed()) return
         val b = base(decision, actions(decision))
         if (silent) b.setSilent(true)
+        // Its snooze is over (#571): an old question ringing again says why.
+        if (back) {
+            val text = TextUtils.concat("Back from snooze · ", words(decision.context))
+            b.setContentText(text)
+            if (decision.images.isEmpty()) b.setStyle(NotificationCompat.BigTextStyle().bigText(text))
+        }
         if (note != null) b.setContentText(note).setStyle(NotificationCompat.BigTextStyle().bigText(note)).setSilent(true)
         @Suppress("MissingPermission")
         manager.notify(tag(decision.id), b.build())

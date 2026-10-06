@@ -6,6 +6,8 @@ export type Prefs = {
   /** The inbox in one feed, by machine, or by whether an agent waits (#191). */
   grouping: "none" | "machine" | "waiting";
   historyOpen: boolean;
+  /** The Snoozed group open (#571); collapsed by default. */
+  snoozedOpen: boolean;
   theme: "system" | "light" | "dark";
   /** When a question's row carries its answer buttons on narrow screens (#138). */
   rowAnswers: "always" | "waiting" | "never";
@@ -21,6 +23,7 @@ export type Prefs = {
 const DEFAULTS: Prefs = {
   grouping: "none",
   historyOpen: false,
+  snoozedOpen: false,
   theme: "system",
   rowAnswers: "always",
   clock: "system",

@@ -46,6 +46,9 @@ data class SavedDecision(
     /** The agent's latest waiting state for it, "working" or "waiting", and when it flipped. */
     val waiting: String? = null,
     val waitingAt: String? = null,
+    /** The owner's latest snooze of it, from any device (#571): until when, and when it was sent. */
+    val snoozedUntil: String? = null,
+    val snoozedAt: String? = null,
 ) {
     val body: Decision by parsed("decision", text)
 }

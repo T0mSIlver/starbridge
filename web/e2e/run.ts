@@ -1515,6 +1515,74 @@ async function main() {
     .getByText(/Answered in the artifact · on /)
     .waitFor({ timeout: 30_000 });
 
+  step(
+    "snooze on one browser: it leaves both inboxes, wait says until when, and at its time it comes back with one notification (#571)",
+  );
+  await pageB.getByRole("button", { name: "Turn on notifications" }).click();
+  await pageB.getByRole("button", { name: "Turn on notifications" }).waitFor({ state: "detached" });
+  const snoozeAsk = cli(
+    "snooze-ask",
+    [
+      ...["ask", "--question", "Snooze probe: ship the docs?", "--option", "Ship"],
+      ...["--option", "Hold", "--project", "starbridge", "--session", "e2e"],
+    ],
+    machineHome,
+  );
+  const [snoozeId] = await snoozeAsk.waitFor(/d_[\w-]+/);
+  if ((await snoozeAsk.exited) !== 0) throw new Error("ask for the snooze probe failed");
+  const probe = (p: Page) => p.locator(`button[data-id="${snoozeId}"]`);
+  const probes = async (p: Page) =>
+    ((await p.evaluate(NOTIFICATIONS)) as { title: string; body: string }[]).filter((n) =>
+      n.title.startsWith("Snooze probe"),
+    );
+  for (let i = 0; i < 50 && (await probes(pageB)).length === 0; i++)
+    await pageB.waitForTimeout(200);
+  if ((await probes(pageB)).length !== 1) throw new Error("no notification for the snooze probe");
+  // The second browser snoozes, since the first one's push subscription may be gone by now
+  // (Firefox drops one that got many quiet pushes). Its clock runs 57 minutes behind, so its
+  // "1 hour" ends 3 minutes from now.
+  const SHIFT = 57 * 60_000;
+  await pageB.clock.install({ time: new Date(Date.now() - SHIFT) });
+  await pageB.goto(ORIGIN);
+  await probe(pageB).click({ timeout: 30_000 });
+  await selected(pageB).getByRole("button", { name: "Snooze", exact: true }).click();
+  await pageB.getByRole("menuitem", { name: /^1 hour/ }).click();
+  const snoozedAt = Date.now();
+  // It leaves Needs you on both, for the collapsed Snoozed group, and its notification closes.
+  await probe(pageB).waitFor({ state: "detached", timeout: 10_000 });
+  await pageB.getByRole("button", { name: /^Snoozed\s*1/ }).waitFor();
+  for (let i = 0; i < 50 && (await probes(pageB)).length > 0; i++) await pageB.waitForTimeout(200);
+  if ((await probes(pageB)).length > 0) throw new Error("the snooze left its notification up");
+  await page.goto(ORIGIN);
+  await page.getByRole("button", { name: /^Snoozed\s*1/ }).waitFor({ timeout: 30_000 });
+  if (await probe(page).count()) throw new Error("the snoozed question is still listed open");
+  await shoot(page, "inbox-snoozed");
+  // The agent hears of it when it would block.
+  const snoozeWait = cli(
+    "snooze-wait",
+    ["wait", snoozeId as string, "--timeout", "60s"],
+    machineHome,
+  );
+  await snoozeWait.waitFor(
+    /Snoozed d_\S+ \(Snooze probe: ship the docs\?\) until \S+: no answer before then\./,
+  );
+  if ((await snoozeWait.exited) !== 3) throw new Error("wait on a snoozed question did not exit 3");
+  // At its time the server pushes every device once: one notification, back from snooze.
+  const back = async (p: Page) =>
+    (await probes(p)).filter((n) => n.body.startsWith("Back from snooze")).length;
+  while ((await back(pageB)) < 1) {
+    if (Date.now() - snoozedAt > 5 * 60_000)
+      throw new Error("the snoozed question never came back");
+    await pageB.waitForTimeout(2_000);
+  }
+  await pageB.clock.setSystemTime(new Date());
+  await pageB.waitForTimeout(20_000);
+  if ((await probes(pageB)).length !== 1) throw new Error("the return notified more than once");
+  await page.reload();
+  await probe(page).waitFor({ timeout: 30_000 });
+  await probe(page).click();
+  await selected(page).getByRole("button", { name: /^Ship/ }).click();
+
   step("replace the recovery key with the current one; the second browser says so once (#348)");
   await page.goto(`${ORIGIN}/settings`);
   const recoveryRow = page.getByRole("region", { name: "Devices" });

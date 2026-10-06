@@ -50,6 +50,8 @@ export type Store = {
   /** Runs boot again, after sign-in, setup, pairing or recovery. */
   reload: () => Promise<void>;
   answer: (item: InboxItem, reply: Reply) => Promise<void>;
+  /** Puts the question off until `until` (#571), or brings it back now with the current time. */
+  snooze: (item: InboxItem, until: string) => Promise<void>;
   /** Replaces the context after a directory write (approve, revoke). */
   update: (ctx: Ctx) => void;
   refreshQuotas: () => Promise<void>;
@@ -488,6 +490,39 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     [ctx],
   );
 
+  const snooze = useCallback(
+    async (item: InboxItem, until: string) => {
+      if (!ctx) return;
+      const d = await load();
+      try {
+        const z = await d.snooze(ctx, item, until);
+        // The server pushes the other devices; this browser closes its own notification.
+        if (Date.parse(z.until) > Date.now()) {
+          const reg = await navigator.serviceWorker?.getRegistration("/").catch(() => undefined);
+          const tag = `d:${item.decision.id}`;
+          for (const n of (await reg?.getNotifications({ tag }).catch(() => [])) ?? []) n.close();
+        }
+        // As an answer: a read in flight must not land without it.
+        inboxRead.current()();
+        setInbox((all) => ({
+          ...all,
+          snoozes: { ...all.snoozes, [item.decision.id]: { until: z.until, at: z.at } },
+          items: all.items.map((i) => {
+            if (i.decision.id !== item.decision.id) return i;
+            const { snoozedUntil: _, ...rest } = i;
+            return Date.parse(z.until) > Date.parse(z.at)
+              ? { ...rest, snoozedUntil: z.until }
+              : rest;
+          }),
+        }));
+      } catch (e) {
+        if (e instanceof d.ApiError && e.status === 401) reload();
+        if (e instanceof d.ApiError && e.code === "already-answered") await refreshInbox();
+        throw e;
+      }
+    },
+    [ctx, reload, refreshInbox],
+  );
   const answer = useCallback(
     async (item: InboxItem, reply: Reply) => {
       if (!ctx) return;
@@ -526,6 +561,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         runs,
         reload,
         answer,
+        snooze,
         update,
         refreshQuotas,
         askQuotas,
