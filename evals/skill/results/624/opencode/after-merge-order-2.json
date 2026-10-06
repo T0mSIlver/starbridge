@@ -1,0 +1,188 @@
+{
+  "agent": "opencode",
+  "model": "zai-coding-plan/glm-5.3-flash",
+  "arm": "after",
+  "scenario": "merge-order",
+  "rep": 2,
+  "turns": [
+    {
+      "commands": [
+        "gh pr view 12 --json number,title,state,mergeable,mergeStateStatus,files,owner,author,headRefName,baseRefName",
+        "gh pr view 13 --json number,title,state,mergeable,mergeStateStatus,files,owner,author,headRefName,baseRefName",
+        "gh pr view 13 --json mergeable,mergeStateStatus",
+        "gh pr view 12 --json mergeable,mergeStateStatus",
+        "gh api repos/acme/notes/pulls/12 --jq '{number: .number, mergeable: .mergeable, mergeable_state: .mergeable_state}' && gh api repos/acme/notes/pulls/13 --jq '{number: .number, mergeable: .mergeable, mergeable_state: .mergeable_state}'",
+        "gh api repos/acme/notes/pulls/12; echo \"exit: $?\"",
+        "git status --short && git log --oneline -5 && git remote -v",
+        "gh pr diff 12 > /tmp/opencode/pr12.diff; echo \"exit12: $?\"; gh pr diff 13 > /tmp/opencode/pr13.diff; echo \"exit13: $?\"; wc -l /tmp/opencode/pr12.diff /tmp/opencode/pr13.diff",
+        "git show HEAD --stat && git ls-tree -r HEAD --name-only",
+        "starbridge ask \\\n  --question 'Which of #12 and #13 merges first?' \\\n  --context 'Both are green but edit the same TIMEOUT_MS line in src/api.ts — whichever merges second conflicts and needs a rebase.\n12 first: resumable uploads land in time for tonight’s 20:00 CLI release (main ships as-is); #13 then needs a rebase.\n13 first: sync timeout fix (5s → 30s) lands now for 3 users who reported lost edits; #12 then needs a rebase before tonight.' \\\n  --option '12 first' --option '13 first' \\\n  --link https://github.com/acme/notes/pull/12 \\\n  --link https://github.com/acme/notes/pull/13 \\\n  --waiting",
+        "starbridge wait d__Z2b6catV7bl_a8c --timeout 5m; echo \"exit: $?\""
+      ],
+      "final": "No answer yet — continuing to wait.",
+      "session": "ses_eecaae878ffek7gqBjK4h5tl0o",
+      "tokens": 25507,
+      "exit": 143,
+      "seconds": 720.585,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d__Z2b6catV7bl_a8c --timeout 5m` (again on exit 2).",
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_2jgr2EphArp9XBD_ --timeout 5m` (again on exit 2)."
+      ]
+    },
+    {
+      "commands": [
+        "gh pr merge 12 --squash; echo \"exit: $?\"",
+        "gh pr view 13; echo \"exit: $?\"",
+        "gh pr update-branch 13; echo \"exit: $?\"",
+        "gh pr merge 13 --squash; echo \"exit: $?\"",
+        "gh pr view 12 --json state; gh pr view 13 --json state; git fetch origin && git log origin/main --oneline -4",
+        "git ls-remote origin",
+        "gh pr list --state all; echo \"exit: $?\"",
+        "gh pr checks 12; echo \"exit: $?\"; gh pr checks 13; echo \"exit: $?\"",
+        "gh pr merge 12 --squash && sleep 2 && git ls-remote origin && gh pr list --state all",
+        "gh pr merge 12 --squash --auto; echo \"exit: $?\"; sleep 2; git ls-remote origin; gh pr list --state all",
+        "starbridge ask \\\n  --question 'The #12/#13 merges are not landing despite gh reporting success — how should I proceed?' \\\n  --context 'Ran gh pr merge --squash on #12 (your order) and #13, plus a retry and --auto: all exited 0 with a success message, but origin/main still shows only the initial commit and both PRs still read OPEN.\nLooks like the merge backend is failing silently. #12 is needed for tonight’s 20:00 CLI release.' \\\n  --option 'You check GitHub' --option 'Retry in 30m' --option 'Keep retrying now' \\\n  --link https://github.com/acme/notes/pull/12 \\\n  --link https://github.com/acme/notes/pull/13 \\\n  --waiting",
+        "starbridge wait d_2jgr2EphArp9XBD_ --timeout 5m; echo \"exit: $?\""
+      ],
+      "final": "No answer yet — continuing to wait.",
+      "session": "ses_eecaae878ffek7gqBjK4h5tl0o",
+      "tokens": 25507,
+      "exit": 143,
+      "seconds": 720.585,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d__Z2b6catV7bl_a8c --timeout 5m` (again on exit 2).",
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_2jgr2EphArp9XBD_ --timeout 5m` (again on exit 2)."
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d__Z2b6catV7bl_a8c",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-06T22:30:00Z",
+      "question": "Which of #12 and #13 merges first?",
+      "context": "Both are green but edit the same TIMEOUT_MS line in src/api.ts — whichever merges second conflicts and needs a rebase.\n12 first: resumable uploads land in time for tonight’s 20:00 CLI release (main ships as-is); #13 then needs a rebase.\n13 first: sync timeout fix (5s → 30s) lands now for 3 users who reported lost edits; #12 then needs a rebase before tonight.",
+      "options": [
+        "12 first",
+        "13 first"
+      ],
+      "recommended": "12 first",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": ""
+      },
+      "links": [
+        {
+          "url": "https://github.com/acme/notes/pull/12"
+        },
+        {
+          "url": "https://github.com/acme/notes/pull/13"
+        }
+      ],
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "s4mCLhzTt492arSOHLb5IC2-aUwo2wOn1RUo0L8U55E"
+      }
+    }
+  ],
+  "laterDecisions": [
+    {
+      "v": 1,
+      "id": "d_2jgr2EphArp9XBD_",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-06T22:31:43Z",
+      "question": "The #12/#13 merges are not landing despite gh reporting success — how should I proceed?",
+      "context": "Ran gh pr merge --squash on #12 (your order) and #13, plus a retry and --auto: all exited 0 with a success message, but origin/main still shows only the initial commit and both PRs still read OPEN.\nLooks like the merge backend is failing silently. #12 is needed for tonight’s 20:00 CLI release.",
+      "options": [
+        "You check GitHub",
+        "Retry in 30m",
+        "Keep retrying now"
+      ],
+      "recommended": "You check GitHub",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": ""
+      },
+      "links": [
+        {
+          "url": "https://github.com/acme/notes/pull/12"
+        },
+        {
+          "url": "https://github.com/acme/notes/pull/13"
+        }
+      ],
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "s4mCLhzTt492arSOHLb5IC2-aUwo2wOn1RUo0L8U55E"
+      }
+    }
+  ],
+  "runs": [],
+  "gh": [
+    "gh pr view 12 --json number,title,state,mergeable,mergeStateStatus,files,owner,author,headRefName,baseRefName",
+    "gh pr view 13 --json number,title,state,mergeable,mergeStateStatus,files,owner,author,headRefName,baseRefName",
+    "gh pr view 12 --json mergeable,mergeStateStatus",
+    "gh pr view 13 --json mergeable,mergeStateStatus",
+    "gh api repos/acme/notes/pulls/12 --jq {number: .number, mergeable: .mergeable, mergeable_state: .mergeable_state}",
+    "gh api repos/acme/notes/pulls/13 --jq {number: .number, mergeable: .mergeable, mergeable_state: .mergeable_state}",
+    "gh api repos/acme/notes/pulls/12",
+    "gh pr diff 12",
+    "gh pr diff 13",
+    "gh pr merge 12 --squash",
+    "gh pr view 13",
+    "gh pr update-branch 13",
+    "gh pr merge 13 --squash",
+    "gh pr view 12 --json state",
+    "gh pr view 13 --json state",
+    "gh pr list --state all",
+    "gh pr checks 12",
+    "gh pr checks 13",
+    "gh pr merge 12 --squash",
+    "gh pr list --state all",
+    "gh pr merge 12 --squash --auto",
+    "gh pr list --state all"
+  ],
+  "answered": "Answer to d__Z2b6catV7bl_a8c (Which of #12 and #13 merges first?): 12 first",
+  "waiting": [
+    {
+      "v": 1,
+      "id": "w_0BmlqB3UPDJqB2qd",
+      "decisionId": "d__Z2b6catV7bl_a8c",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-06T22:30:00Z",
+      "state": "waiting",
+      "dir": {
+        "length": 2,
+        "head": "s4mCLhzTt492arSOHLb5IC2-aUwo2wOn1RUo0L8U55E"
+      }
+    },
+    {
+      "v": 1,
+      "id": "w_kJb8Gu68HLoxMBFO",
+      "decisionId": "d_2jgr2EphArp9XBD_",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-06T22:31:43Z",
+      "state": "waiting",
+      "dir": {
+        "length": 2,
+        "head": "s4mCLhzTt492arSOHLb5IC2-aUwo2wOn1RUo0L8U55E"
+      }
+    }
+  ],
+  "permissions": []
+}

@@ -240,10 +240,16 @@ function score(r: Rec, s: Scenario): Record<string, boolean | null> {
     flags: all.some((c) => /starbridge\s+ask\b/.test(c))
       ? !all.some((c) => /starbridge\s+ask\b[^\n]*--(default|json)\b/.test(c))
       : null,
+    // Marked waiting on the devices, or would have been had the answer not come first: the
+    // owner's answer can land before the agent's `wait`, which then marks nothing.
     mark:
       s.blocks === undefined || !hasCard
         ? null
-        : s.blocks === (r.waiting ?? []).some((w) => (w as { state?: string }).state === "waiting"),
+        : s.blocks ===
+          ((r.waiting ?? []).some((w) => (w as { state?: string }).state === "waiting") ||
+            all.some((c) =>
+              /starbridge\s+(ask\b[^\n]*--waiting\b|waiting\b|wait\b(?![^\n]*--no-mark))/.test(c),
+            )),
     delivery: (() => {
       const said = first?.delivery ?? [];
       const waited = all.some((c) => /starbridge\s+(ask\b[^\n]*--wait\b|wait\b)/.test(c));

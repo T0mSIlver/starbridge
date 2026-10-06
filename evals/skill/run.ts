@@ -561,7 +561,7 @@ async function liveRun(
           // The mod's prompt, in whatever entry carries it; a `wait`'s output is a tool result.
           if (e.type !== "assistant") {
             const text = JSON.stringify(e);
-            if (text.includes("Answer to d_") && !text.includes("tool_result")) rec.prompted = true;
+            if (text.includes("Answer to d_") && !/tool_result|toolUseResult/.test(text)) rec.prompted = true;
           }
           if (e.type !== "assistant") continue;
           for (const b of e.message?.content ?? []) {

@@ -844,6 +844,9 @@ What the code relies on, with the versions checked.
 - **Skill eval** (#299): what lifted scores was one context line per option starting with its
   label, "no answer is never a yes" placed where the agent waits, and card text in single quotes
   (`$0` in double quotes blanked a Codex card). Records: `evals/skill/results/299`.
+  Round 2 (#624): a card that blocks nothing was still marked waiting until the skill said
+  "post without `--waiting`" beside `--no-mark`, and GLM Flash put its pick first until "even
+  when your pick is not first". Records: `evals/skill/results/624`.
 
 ## Open questions
 

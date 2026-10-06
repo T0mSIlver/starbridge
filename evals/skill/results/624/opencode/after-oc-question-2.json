@@ -1,0 +1,84 @@
+{
+  "agent": "opencode",
+  "model": "zai-coding-plan/glm-5.3-flash",
+  "arm": "after",
+  "scenario": "oc-question",
+  "rep": 2,
+  "turns": [
+    {
+      "commands": [],
+      "final": "",
+      "exit": 0,
+      "seconds": 453.204,
+      "delivery": [],
+      "background": [],
+      "tools": [
+        "read",
+        "question"
+      ]
+    },
+    {
+      "commands": [],
+      "final": "src/hello.js now exports `greeting = 'Hello!'`.",
+      "exit": 0,
+      "seconds": 453.204,
+      "delivery": [],
+      "background": [],
+      "tools": [
+        "edit"
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_3pYAD6LQ7BVDwD03",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-06T22:59:30Z",
+      "question": "Which language should src/hello.js greet the user in?",
+      "context": "- English: e.g. \"Hello!\"\n- French: e.g. \"Bonjour !\"\n- German: e.g. \"Hallo!\"",
+      "options": [
+        "English",
+        "French",
+        "German"
+      ],
+      "recommended": "English",
+      "agent": "opencode",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "ses_eec8eaea7ffeVlEmmeXnjsQs91",
+        "sessionTitle": "Greeting language choice for src/hello.js"
+      },
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "yuz_MkfDoR8EoybKYkFxojOu7SjnreOIErU-OQq_AmU"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "answered": "Answer to d_3pYAD6LQ7BVDwD03 (Which language should src/hello.js greet the user in?): English",
+  "waiting": [
+    {
+      "v": 1,
+      "id": "w_a6Z2hEsu4ZjU2UHk",
+      "decisionId": "d_3pYAD6LQ7BVDwD03",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-06T22:59:30Z",
+      "state": "waiting",
+      "dir": {
+        "length": 2,
+        "head": "yuz_MkfDoR8EoybKYkFxojOu7SjnreOIErU-OQq_AmU"
+      }
+    }
+  ],
+  "permissions": []
+}

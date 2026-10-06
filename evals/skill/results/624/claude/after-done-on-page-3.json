@@ -1,0 +1,95 @@
+{
+  "agent": "claude",
+  "model": "claude-sonnet-5-5",
+  "arm": "after",
+  "scenario": "done-on-page",
+  "rep": 3,
+  "turns": [
+    {
+      "commands": [
+        "git ls-files && ls -la . src",
+        "sh scripts/read-artifact.sh",
+        "starbridge ask \\\n  --question 'Which set of tier names should the pricing page use?' \\\n  --context 'src/pricing.html is done except the three tier names ($0, $8, $20).\nOpen the artifact, compare the three sets, and tap Pick on your choice.' \\\n  --answer-in https://claude.ai/artifact/7c1e9a52-0d3b-4f6e-9a21-5b8c3d2e1f00 \\\n  --link https://claude.ai/artifact/7c1e9a52-0d3b-4f6e-9a21-5b8c3d2e1f00",
+        "starbridge wait d_1rfs6KLjTgCkGZfD --timeout 5m"
+      ],
+      "final": "The pricing page is finished. The owner picked **Starter, Plus, Studio** in the artifact, and `src/pricing.html` now uses those names:\n\n- Starter $0\n- Plus $8\n- Studio $20\n\nI also removed the TODO comment. I haven't committed anything.",
+      "session": "0b614e94-4ac9-42ed-a4a2-6d0d6cf6f325",
+      "tokens": 188583,
+      "costUsd": 0.0924296,
+      "exit": 0,
+      "seconds": 36.676,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_1rfs6KLjTgCkGZfD --timeout 5m` (again on exit 2)."
+      ]
+    },
+    {
+      "commands": [
+        "sh scripts/read-artifact.sh"
+      ],
+      "final": "The pricing page is finished. The owner picked **Starter, Plus, Studio** in the artifact, and `src/pricing.html` now uses those names:\n\n- Starter $0\n- Plus $8\n- Studio $20\n\nI also removed the TODO comment. I haven't committed anything.",
+      "session": "0b614e94-4ac9-42ed-a4a2-6d0d6cf6f325",
+      "tokens": 188583,
+      "costUsd": 0.0924296,
+      "exit": 0,
+      "seconds": 36.676,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_1rfs6KLjTgCkGZfD --timeout 5m` (again on exit 2)."
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_1rfs6KLjTgCkGZfD",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-06T22:03:14Z",
+      "question": "Which set of tier names should the pricing page use?",
+      "context": "src/pricing.html is done except the three tier names ($0, $8, $20).\nOpen the artifact, compare the three sets, and tap Pick on your choice.",
+      "options": [],
+      "agent": "claude-code",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "0b614e94-4ac9-42ed-a4a2-6d0d6cf6f325",
+        "sessionTitle": "proj-03"
+      },
+      "links": [
+        {
+          "url": "https://claude.ai/artifact/7c1e9a52-0d3b-4f6e-9a21-5b8c3d2e1f00"
+        }
+      ],
+      "answerIn": {
+        "url": "https://claude.ai/artifact/7c1e9a52-0d3b-4f6e-9a21-5b8c3d2e1f00"
+      },
+      "done": true,
+      "dir": {
+        "length": 2,
+        "head": "EX1xIKD2__Qm1D2_htbatPIGNvQPSaOQKsEsCuKcVfA"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "answered": "Answer to d_1rfs6KLjTgCkGZfD (Which set of tier names should the pricing page use?): answered on its page; read the answer there",
+  "waiting": [
+    {
+      "v": 1,
+      "id": "w_XUyBwWPds0Pd_1o1",
+      "decisionId": "d_1rfs6KLjTgCkGZfD",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-06T22:03:16Z",
+      "state": "waiting",
+      "dir": {
+        "length": 2,
+        "head": "EX1xIKD2__Qm1D2_htbatPIGNvQPSaOQKsEsCuKcVfA"
+      }
+    }
+  ],
+  "permissions": []
+}
