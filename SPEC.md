@@ -1293,6 +1293,10 @@ so the mod is the first path.
   read process arguments; `wait <id>` prints a delivered answer from local state. The npm bundle
   runs under Node, so the CLI uses no Bun global without a guard; a test runs it there.
 
+- 2026-10-06. Recovery with the words keeps its new keys under `pending` until the directory
+  append lands, as a join does (#283, after #274). A failed append leaves the stored device's
+  keys alone; one that landed with its reply lost counts once the directory lists the entry.
+
 ## Encryption, with existing libraries
 
 - libsodium sealed boxes (`crypto_box_seal`, X25519 + XSalsa20-Poly1305): an

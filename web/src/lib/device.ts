@@ -346,8 +346,16 @@ export async function recover(account: string, name: string, typed: string): Pro
     }
     const entry = addEntry(dir, { id: RECOVERY, signKey: recovery.privateKey }, member, now());
     const next = verifyDirectory([...entries, entry], { account });
-    await store.put("device", record, account);
-    await api.append(entry);
+    // Pending until the append lands: a failed one must not replace keys that still work (#283).
+    await store.put("pending", record, account);
+    try {
+      await api.append(entry);
+    } catch (e) {
+      // It may have landed with its response lost: it did if the directory holds it.
+      const landed = await api.directory().catch(() => []);
+      if (!landed.some((x) => x.sig === entry.sig)) throw e;
+    }
+    await adopt(account, record);
     await pinTo(account, [...entries, entry], next);
   } finally {
     seed.fill(0);
