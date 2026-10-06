@@ -219,6 +219,18 @@ export function openDb(path: string): Database {
   db.run("PRAGMA journal_mode = WAL");
   db.run("PRAGMA foreign_keys = ON");
   db.run("PRAGMA busy_timeout = 5000");
+  // Transactions begin IMMEDIATE, taking the write lock first, so they wait under busy_timeout
+  // while another connection writes. A deferred one that reads before it writes gets SQLITE_BUSY
+  // at once in WAL mode (#628).
+  const transaction = db.transaction.bind(db);
+  db.transaction = ((fn) => {
+    const t = transaction(fn);
+    return Object.assign((...args: Parameters<typeof t>) => t.immediate(...args), {
+      deferred: t.deferred,
+      immediate: t.immediate,
+      exclusive: t.exclusive,
+    });
+  }) as Database["transaction"];
   migrate(db, MIGRATIONS);
   return db;
 }
