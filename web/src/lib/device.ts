@@ -302,6 +302,11 @@ export async function prepareFirstDevice(account: string, name: string): Promise
   const dir = verifyDirectory([entry], { account });
   await store.put("device", record, account);
   const commit = async () => {
+    // Another tab's boot drops these keys as never used, or its setup replaces them: posting
+    // now would make an account whose device keys no browser holds.
+    const held = await store.get("device", account);
+    if (held?.id !== record.id || held.signPk !== record.signPk)
+      throw new Error("Another tab started the setup over, so this key was never used. Reload.");
     try {
       await api.append(entry);
     } catch (e) {
