@@ -130,6 +130,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     } catch (e) {
       if (!(e instanceof d.Withheld)) throw e;
       setWithheld(e.message);
+      // Their buttons would still offer answers the hold refuses.
+      const reg = await navigator.serviceWorker?.getRegistration("/").catch(() => undefined);
+      for (const n of (await reg?.getNotifications().catch(() => [])) ?? []) n.close();
       // From the start once the hold ends: the cursor moved past what is hidden now.
       setInbox({ items: [], rejected: [] });
       setPrompts([]);
