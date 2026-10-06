@@ -164,8 +164,11 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
     ? limits.answerBytes
     : item.kind === "run"
       ? limits.runBytes
-      : limits.itemBytes;
+      : item.kind === "quota"
+        ? limits.quotaBytes
+        : limits.itemBytes;
   if (size > most) fail(413, "too-large", `a ${item.kind}'s boxes hold at most ${most} bytes`);
+  rateLimit(c, `bytes:${caller.account}`, limits.postedBytes, size);
 
   // Devices the referred item was sealed to, told once a device answers it.
   let answeredDevices: string[] = [];

@@ -101,6 +101,17 @@ test("item posts past the account's rate get 429 with Retry-After", async () => 
   expect(Number(r.headers.get("retry-after"))).toBeGreaterThan(0);
 });
 
+test("quota snapshots that replace each other still count against the account's bytes a minute", async () => {
+  const probe = await setup();
+  const size = quota(probe.devbox, probe.phone).boxes.reduce((n, b) => n + b.box.length, 0);
+  const { s, phone, devbox } = await setup({ postedBytes: [Math.floor(size * 2.5), 60_000] });
+  expect((await post(s, devbox, quota(devbox, phone))).status).toBe(201);
+  expect((await post(s, devbox, quota(devbox, phone))).status).toBe(201);
+  const r = await post(s, devbox, quota(devbox, phone));
+  expect(r.status).toBe(429);
+  expect(r.json.detail).toContain("MB");
+});
+
 test("a full account refuses new decisions but still takes answers and replaced quotas", async () => {
   const { s, phone, devbox } = await setup({ decisions: 2 });
   const first = decision(devbox, phone);
@@ -184,7 +195,7 @@ test("stored bytes are capped per account, keeping room for answers, and per ite
   expect(r.json.error).toBe("too-many-items");
   expect((await post(s, phone, a)).status).toBe(201);
 
-  s.deps.config.limits = { ...DEFAULT_LIMITS, itemBytes: boxes(q) - 1, answerBytes: boxes(a) - 1 };
+  s.deps.config.limits = { ...DEFAULT_LIMITS, quotaBytes: boxes(q) - 1, answerBytes: boxes(a) - 1 };
   const big = await post(s, devbox, quota(devbox, phone));
   expect(big.status).toBe(413);
   expect(big.json.error).toBe("too-large");
