@@ -15,14 +15,14 @@ instruction files, in your words. Starbridge never writes to them.
 | "Waiting for you" | ✓ | ✓ | ✓ | ✓ |
 | Runs | ✓ | ✓ | ✓ | ✓ |
 | Permission prompts | Opt-in | No | Opt-in⁴ | Opt-in⁶ |
-| `AskUserQuestion` hook | ✓ | n/a² | n/a² | No⁷ |
+| The agent's own ask tool | ✓² | n/a | n/a | ✓⁷ |
 
 ¹ In interactive sessions, when `starbridge agent` runs (Codex CLI 0.160 or
 later). In `codex exec`, the agent waits for the answer with `starbridge wait`
 before it ends its turn.
 
-² Codex and Pi have no `AskUserQuestion` tool. The hook turns Claude Code's
-questions in the terminal into Starbridge questions.
+² A hook answers `AskUserQuestion` by telling the agent to ask through
+Starbridge instead. Codex and Pi have no ask tool of their own.
 
 ³ In the interactive TUI and RPC mode, through `starbridge agent` or the CLI.
 In `pi -p`, the agent waits for the answer with `starbridge wait` before it
@@ -47,8 +47,11 @@ ends its turn.
 first answer wins. Your devices can allow a call once or deny it. `opencode run`
 rejects every prompt at once, so none reaches your devices.
 
-⁷ opencode's own `question` tool still asks in the terminal. The skill tells the
-agent to use `starbridge ask` instead.
+⁷ Each question of opencode's `question` tool reaches your devices too, its
+options as one-tap answers, and your answer goes back into the waiting call.
+The question stays open in the terminal, and the first answer wins; answering
+or dismissing it there closes it on your devices. A question with more than 4
+options, or that takes several, lists them and takes a typed reply.
 
 `starbridge setup` offers to install Starbridge in each agent it finds, and
 asks before each one:
