@@ -427,7 +427,8 @@
 }
 
 .seg > * + *,
-.seg > div > .past + .past {
+.seg > div > .past + .past,
+.seg > div > .row + .row {
   border-top: 1px solid var(--line);
 }
 
