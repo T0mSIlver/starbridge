@@ -558,11 +558,11 @@ async function liveRun(
         const ran: Ran[] = [];
         for (const e of es) {
           const at = Date.parse(e.timestamp ?? "") || 0;
-          if (e.type === "user" && typeof e.message?.content === "string" && /^Answer to /.test(e.message.content))
-            rec.prompted = true;
-          if (e.type === "user" && Array.isArray(e.message?.content))
-            for (const b of e.message.content)
-              if (b.type === "text" && /^Answer to /.test(b.text ?? "")) rec.prompted = true;
+          // The mod's prompt, in whatever entry carries it; a `wait`'s output is a tool result.
+          if (e.type !== "assistant") {
+            const text = JSON.stringify(e);
+            if (text.includes("Answer to d_") && !text.includes("tool_result")) rec.prompted = true;
+          }
           if (e.type !== "assistant") continue;
           for (const b of e.message?.content ?? []) {
             if (b.type === "tool_use" && b.name === "Bash")
@@ -637,7 +637,7 @@ async function liveRun(
         }[];
         const ran: Ran[] = [];
         for (const m of msgs) {
-          if (m.info.role === "user" && m.parts.some((p) => /^Answer to /.test(p.text ?? "")))
+          if (m.info.role === "user" && m.parts.some((p) => /Answer to d_/.test(p.text ?? "")))
             rec.prompted = true;
           if (m.info.role !== "assistant") continue;
           // A provider's error (a spent quota): the run says nothing about the agent.

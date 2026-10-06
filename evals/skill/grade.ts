@@ -243,7 +243,7 @@ function score(r: Rec, s: Scenario): Record<string, boolean | null> {
     mark:
       s.blocks === undefined || !hasCard
         ? null
-        : s.blocks === (r.waiting ?? []).some((w) => (w as { waiting?: boolean }).waiting !== false),
+        : s.blocks === (r.waiting ?? []).some((w) => (w as { state?: string }).state === "waiting"),
     delivery: (() => {
       const said = first?.delivery ?? [];
       const waited = all.some((c) => /starbridge\s+(ask\b[^\n]*--wait\b|wait\b)/.test(c));
