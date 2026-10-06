@@ -220,10 +220,10 @@ function score(r: Rec, s: Scenario): Record<string, boolean | null> {
         !!r.turns[1]?.commands.some((c) => s.followUp?.acted.test(c)) &&
         r.laterDecisions.length === 0
       : null,
-    // Told once by `wait` (exit 3), a good agent stops: one wait, maybe one more already running.
+    // Told by `wait` (exit 3), a good agent stops: the snooze comes while its first wait runs.
     snoozed: s.snooze
       ? !!r.snoozed &&
-        all.filter((c) => /starbridge\s+wait\b/.test(c)).length <= 2 &&
+        all.filter((c) => /starbridge\s+wait\b/.test(c)).length <= 1 &&
         cards.length === 1 &&
         /starbridge wait|tomorrow|09:00|9:00|snooze/i.test(r.turns.at(-1)?.final ?? "")
       : null,
