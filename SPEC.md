@@ -1440,6 +1440,23 @@ so the mod is the first path.
 - 2026-10-06. Workflows pin every action by commit SHA, with its version in a comment (#361). A
   moved tag could otherwise run code in the release job before it writes the minisign key.
   Dependabot proposes the updates in one grouped PR a month.
+- 2026-10-06. A browser trusts a served directory only against its pin (#354, from the #366
+  audit). On reload, the web adopted a join's or recovery's pending keys from whatever chain the
+  server served, and a browser with no pin accepts any chain, so a server could enrol it into a
+  chain of its own. Now a directory read with no pin trusts only a genesis its own device signed
+  (a first device cut off before it pinned); otherwise it drops the pending keys and shows Join
+  again. Joins and recovery pin before they save the device, so a device never exists without a
+  pin, and a pending record with a pin is still adopted on reload as #274 and #283 need.
+- 2026-10-06. Only the server could make the directory empty once a first device's genesis may
+  have gone out, so a browser's keys stay then (#371, from the #302 audit). After #354, the only
+  device a browser holds without a pin is a first device whose commit was cut off: joins and
+  recovery pin before they save the device. Commit now marks the device as posted before it posts
+  the genesis, and boot deletes a device's keys on an empty directory only when it is unmarked,
+  as #328 needs; a marked one shows the broken directory page and keeps its keys. A commit
+  whose post never reached the server, closed before the owner retried, also lands there. A
+  401 that says the device was revoked no longer deletes its keys either: the browser shows the
+  landing page as #219 wants, and on sign-in the verified chain shows whether it was revoked. A
+  tab still offering a first key cannot replace a device whose genesis went out.
 
 - 2026-10-06. Main's CI runs one at a time (#380). Each merge used to queue its own run, and
   deploys waited behind all of them: six main runs queued for up to 30 min with prod six merges
