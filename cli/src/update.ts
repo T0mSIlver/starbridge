@@ -107,10 +107,12 @@ export async function update(
   const r = spawnSync(install.path, ["setup", "--refresh"], {
     env: ctx.env as NodeJS.ProcessEnv,
     encoding: "utf8",
+    timeout: 120_000,
   });
-  if (r.status === 0) for (const line of r.stdout.split("\n").filter(Boolean)) ctx.out(line);
-  else {
-    ctx.out(`Could not update the files setup wrote: ${`${r.stderr ?? ""}`.trim() || r.error}`);
+  for (const line of `${r.stdout ?? ""}`.split("\n").filter(Boolean)) ctx.out(line);
+  if (r.status !== 0) {
+    const why = `${r.stderr ?? ""}`.trim() || r.error?.message || `ended by ${r.signal}`;
+    ctx.out(`Could not update the files setup wrote: ${why}`);
     restartAgent(ctx);
   }
   updatePlugins(ctx);

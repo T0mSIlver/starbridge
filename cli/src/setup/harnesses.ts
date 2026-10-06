@@ -10,7 +10,7 @@ import { dirname, join } from "node:path";
 import rule from "../../../plugin/hooks/rule.md" with { type: "text" };
 import skill from "../../../plugin/skills/starbridge/SKILL.md" with { type: "text" };
 import { VERSION } from "../version";
-import { markedSkill, marker, ours } from "./marker";
+import { markedSkill, marker, ours, oursSkill } from "./marker";
 import plugin from "./opencode-files.js";
 import { failure, run, type Sys, which } from "./sys";
 
@@ -37,15 +37,21 @@ function readText(path: string): string | undefined {
   }
 }
 
-/** Whether a file setup writes is there, and whether it is this CLI's version. */
-export type FileState = "missing" | "current" | "outdated";
+/**
+ * Whether a file setup writes is there, whether it is this CLI's version, or whether it is
+ * someone else's (no marker), which setup leaves alone.
+ */
+export type FileState = "missing" | "current" | "outdated" | "foreign";
 
-function fileState(text: string | undefined, want: string): FileState {
-  return text === undefined ? "missing" : text === want ? "current" : "outdated";
+function fileState(text: string | undefined, want: string, owned: boolean): FileState {
+  if (text === undefined) return "missing";
+  if (text === want) return "current";
+  return owned ? "outdated" : "foreign";
 }
 
 export function codexSkill(sys: Home): FileState {
-  return fileState(readText(join(codexSkillDir(sys), "SKILL.md")), SKILL);
+  const text = readText(join(codexSkillDir(sys), "SKILL.md"));
+  return fileState(text, SKILL, oursSkill(text));
 }
 
 export function installCodexSkill(sys: Home) {
@@ -57,7 +63,7 @@ export function installCodexSkill(sys: Home) {
 /** Removes the skill folder, only when it holds the skill setup wrote. */
 export function removeCodexSkill(sys: Sys): boolean {
   const dir = codexSkillDir(sys);
-  if (!ours(readText(join(dir, "SKILL.md")))) return false;
+  if (!oursSkill(readText(join(dir, "SKILL.md")))) return false;
   rmSync(dir, { recursive: true, force: true });
   return true;
 }
@@ -75,10 +81,9 @@ export function codexRulePath(sys: Home): string {
   return join(sys.ctx.env.CODEX_HOME || join(sys.home, ".codex"), "rules", "starbridge.rules");
 }
 
-/** Whether Codex has the rule; one setup did not write counts as missing and stays. */
 export function codexRule(sys: Home): FileState {
   const text = readText(codexRulePath(sys));
-  return text !== undefined && !ours(text) ? "missing" : fileState(text, CODEX_RULE);
+  return fileState(text, CODEX_RULE, ours(text));
 }
 
 export function installCodexRule(sys: Home) {
@@ -170,6 +175,12 @@ function opencodeFiles(): Record<string, string> {
   };
 }
 
+/** Every file setup writes into opencode's folder as it is now, to tell whether a write changed one. */
+function opencodeSnapshot(sys: Home): string {
+  const dir = opencodeDir(sys);
+  return JSON.stringify(Object.keys(opencodeFiles()).map((path) => readIn(dir, path) ?? null));
+}
+
 /** Whether opencode has the skill and plugin, and whether they are this CLI's. */
 export function opencodeState(sys: Home): FileState {
   const dir = opencodeDir(sys);
@@ -199,7 +210,7 @@ export function installOpencode(sys: Home, present = false): string[] {
   const dir = opencodeDir(sys);
   const skillText = readIn(dir, SKILL_FILE);
   const entryText = readIn(dir, ENTRY_FILE);
-  const skillOk = skillText === undefined ? !present : ours(skillText);
+  const skillOk = skillText === undefined ? !present : oursSkill(skillText);
   const pluginOk = entryText === undefined ? !present : ours(entryText);
   const foreign = [
     ...(skillText !== undefined && !skillOk ? [join(dir, SKILL_FILE)] : []),
@@ -218,7 +229,7 @@ export function removeOpencode(sys: Home): string[] {
   const dir = opencodeDir(sys);
   const done: string[] = [];
   const read = (path: string) => readIn(dir, path);
-  if (ours(read(SKILL_FILE))) {
+  if (oursSkill(read(SKILL_FILE))) {
     rmSync(join(dir, "skills/starbridge"), { recursive: true, force: true });
     done.push(join(dir, "skills/starbridge"));
   }
@@ -252,10 +263,13 @@ export function refreshFiles(sys: Home): string[] {
     }
   };
   const skillFile = join(codexSkillDir(sys), "SKILL.md");
-  if (codexSkill(sys) === "outdated" && ours(readText(skillFile)))
-    step(skillFile, () => installCodexSkill(sys));
+  if (codexSkill(sys) === "outdated") step(skillFile, () => installCodexSkill(sys));
   if (codexRule(sys) === "outdated") step(codexRulePath(sys), () => installCodexRule(sys));
-  if (opencodeState(sys) === "outdated")
+  // Files someone else wrote keep it outdated: only a write that changed something counts.
+  if (opencodeState(sys) === "outdated") {
+    const before = opencodeSnapshot(sys);
     step(`the opencode skill and plugin in ${opencodeDir(sys)}`, () => installOpencode(sys, true));
+    if (opencodeSnapshot(sys) === before) done.pop();
+  }
   return done;
 }

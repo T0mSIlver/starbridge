@@ -26,6 +26,7 @@ import {
 } from "../src/setup/harnesses";
 import { markedSkill } from "../src/setup/marker";
 import opencodeFiles from "../src/setup/opencode-files.js";
+import { withInstalledPlaces } from "../src/setup/service";
 import { refresh, setup } from "../src/setup/setup";
 import { status } from "../src/setup/status";
 import { defaults, failure, type Sys } from "../src/setup/sys";
@@ -215,19 +216,51 @@ test("refresh brings what setup wrote to this release and leaves the rest alone"
   const entry = join(m.home, ".config/opencode/plugins/starbridge.ts");
   const unit = join(m.units, "starbridge-agent.service");
   const want = readFileSync(unit, "utf8");
-  // As an earlier release wrote them, with its markers; the skill is one the owner wrote.
+  // As an earlier release wrote them, with its markers; the skill is another one the owner put there.
   writeFileSync(rule, "# Written by starbridge setup: questions need the network.\nold\n");
   writeFileSync(entry, "// Written by starbridge setup: answers.\nold\n");
   writeFileSync(unit, "# Written by `starbridge setup`; `starbridge uninstall` removes it.\nold\n");
-  writeFileSync(skill, "---\nname: starbridge\n---\nmine\n");
+  writeFileSync(skill, "---\nname: mine\n---\nmine\n");
   const done = await refresh(m.sys);
   expect(readFileSync(rule, "utf8")).toBe(CODEX_RULE);
   expect(readFileSync(entry, "utf8")).toStartWith(`// Written by starbridge ${VERSION};`);
   expect(readFileSync(unit, "utf8")).toBe(want);
-  expect(readFileSync(skill, "utf8")).toBe("---\nname: starbridge\n---\nmine\n");
+  expect(readFileSync(skill, "utf8")).toBe("---\nname: mine\n---\nmine\n");
   expect(done.some((l) => l.startsWith("Restarted the agent"))).toBe(true);
   // Again: nothing to update; the agent restarts on the binary that runs it.
   expect(await refresh(m.sys)).toEqual([`Restarted the agent (${unit}).`]);
+});
+
+test("setup leaves a Codex rule, a skill or a unit it did not write alone", async () => {
+  const m = await machine();
+  const rule = join(m.home, ".codex/rules/starbridge.rules");
+  const skill = join(m.home, ".codex/skills/starbridge/SKILL.md");
+  const unit = join(m.units, "starbridge-agent.service");
+  mkdirSync(dirname(rule), { recursive: true });
+  mkdirSync(dirname(skill), { recursive: true });
+  writeFileSync(rule, "# mine\n");
+  writeFileSync(skill, "---\nname: mine\n---\nmine\n");
+  writeFileSync(unit, "[Service]\nExecStart=/usr/bin/true\n");
+  await setup(m.sys, { yes: true, readyTimeoutMs: 500 });
+  const out = m.ctx.lines.join("\n");
+  expect(readFileSync(rule, "utf8")).toBe("# mine\n");
+  expect(readFileSync(skill, "utf8")).toBe("---\nname: mine\n---\nmine\n");
+  expect(readFileSync(unit, "utf8")).toBe("[Service]\nExecStart=/usr/bin/true\n");
+  expect(out).toContain("was not written by setup");
+  expect(await refresh(m.sys)).toEqual([]);
+  await uninstall(m.sys, {});
+  expect(existsSync(rule) && existsSync(skill) && existsSync(unit)).toBe(true);
+});
+
+test("a refresh keeps the places the installed unit points the agent at", () => {
+  const unit = `${"# Written by starbridge 1.0.0"}\nEnvironment=PATH=/usr/bin\nEnvironment="STARBRIDGE_CONFIG_DIR=/srv/a b"\nEnvironment=CODEX_HOME=/c\n`;
+  expect(
+    withInstalledPlaces({ PATH: "/x", CODEX_HOME: "/other", XDG_CONFIG_HOME: "/y" }, unit),
+  ).toEqual({
+    PATH: "/x",
+    STARBRIDGE_CONFIG_DIR: "/srv/a b",
+    CODEX_HOME: "/c",
+  });
 });
 
 test("status reports the agent, the service and the plugins", async () => {

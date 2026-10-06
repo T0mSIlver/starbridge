@@ -17,6 +17,16 @@ export function ours(text: string | undefined): boolean {
   return text.split("\n", 3).some((line) => /^(#|\/\/|<!--) Written by `?starbridge\b/.test(line));
 }
 
+/**
+ * Whether a skill is Starbridge's: its marker, or the name `starbridge` in its front matter,
+ * which is the skill's identity in Codex and opencode (and all that skills before the marker had).
+ */
+export function oursSkill(text: string | undefined): boolean {
+  if (text === undefined) return false;
+  const front = /^---\n([\s\S]*?)\n---/.exec(text)?.[1] ?? "";
+  return ours(text) || /^name: starbridge$/m.test(front);
+}
+
 /** A skill with the marker as a YAML comment, first in its front matter. */
 export function markedSkill(skill: string): string {
   return skill.replace(/^---\n/, `---\n${marker("#")}\n`);

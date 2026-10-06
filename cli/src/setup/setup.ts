@@ -60,7 +60,14 @@ import {
   pluginState,
   settingsPath,
 } from "./plugins";
-import { enableLinger, installService, lingering, servicePath, unavailable } from "./service";
+import {
+  enableLinger,
+  installService,
+  lingering,
+  servicePath,
+  unavailable,
+  withInstalledPlaces,
+} from "./service";
 import type { Sys } from "./sys";
 
 export interface SetupOpts {
@@ -104,9 +111,10 @@ export async function refresh(sys: Sys): Promise<string[]> {
   try {
     text = path ? readFileSync(path, "utf8") : undefined;
   } catch {}
-  if (path && ours(text))
+  if (path && text !== undefined && ours(text))
     try {
-      const { restarted } = await installService(sys, true);
+      const env = withInstalledPlaces(sys.ctx.env, text);
+      const { restarted } = await installService({ ...sys, ctx: { ...sys.ctx, env } }, true);
       if (restarted) done.push(`Restarted the agent (${path}).`);
     } catch (e) {
       done.push(`Could not restart the agent: ${(e as Error).message}`);
@@ -416,6 +424,8 @@ async function codexStep(sys: Sys) {
   const dir = codexSkillDir(sys);
   const state = codexSkill(sys);
   if (state === "current") ctx.out(`The starbridge skill is in ${dir}.`);
+  else if (state === "foreign")
+    ctx.out(`${dir}/SKILL.md is not the Starbridge skill, so it stays as it is.`);
   else {
     const verb = state === "missing" ? "Install" : "Update";
     if (await prompt.confirm(`${verb} the Starbridge skill for Codex in ${dir}?`, true)) {
@@ -430,9 +440,15 @@ async function codexStep(sys: Sys) {
   const rule = codexRulePath(sys);
   const ruleState = codexRule(sys);
   if (ruleState === "current") ctx.out(`The starbridge rule is in ${rule}.`);
+  else if (ruleState === "foreign")
+    ctx.out(`${rule} was not written by setup, so it stays as it is.`);
   else if (ruleState === "outdated") {
-    installCodexRule(sys);
-    ctx.out(`Updated ${rule}.`);
+    try {
+      installCodexRule(sys);
+      ctx.out(`Updated ${rule}.`);
+    } catch (e) {
+      ctx.out(`Could not update the rule: ${(e as Error).message}`);
+    }
   } else if (
     await prompt.confirm(
       "Let `starbridge ask`, `waiting`, `wait` and `settle` run outside Codex's sandbox, which has no network?",
