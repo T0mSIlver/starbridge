@@ -70,6 +70,8 @@ export interface State {
       session?: string;
       /** The Codex session that asked, which the agent queues the answer into. */
       codex?: CodexSession;
+      /** Told its answer comes back as a prompt from the Pi extension or the opencode plugin. */
+      extensionAnswers?: boolean;
     }
   >;
   /**

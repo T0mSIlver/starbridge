@@ -132,16 +132,19 @@ SAS verification. Code: `packages/protocol/src/join.ts`; vectors: `vectors/join.
    `T = j.pk a.pk R`. The MAC key is `BLAKE2b-256(key = s, "starbridge/v1/join-mac" NUL T)`; the
    digits are the first 4 bytes of `BLAKE2b-256(key = s, "starbridge/v1/join-sas" NUL T)`,
    big-endian, mod 10^6, as 6 digits.
-5. The owner checks that both screens show the same digits and taps Approve. The approver appends
-   the `add` entry for the keys in `R` and posts the approval `{v, join, account, length, head,
-   approver}` with `crypto_auth` under the MAC key, over `"starbridge/v1/join-approval" NUL body`.
-   The joining device checks the MAC, verifies the directory with `{length, head}` as its pin,
-   and checks that it holds its own keys, as after a code.
+5. The owner checks that both screens show the same digits and confirms on both: Approve on the
+   approver, They match on the joining device. The approver appends the `add` entry for the keys
+   in `R` and posts the approval `{v, join, account, length, head, approver}` with `crypto_auth`
+   under the MAC key, over `"starbridge/v1/join-approval" NUL body`. The joining device holds
+   any approval until its owner confirmed, then checks the MAC, verifies the directory with
+   `{length, head}` as its pin, and checks that it holds its own keys, as after a code.
 
 A server in the middle must give the approver a commitment of its own before it sees `a.pk`, and
 must send the joining device an approver key before it learns `j.pk`, so it cannot pick keys that
 make the two screens agree: each attempt matches with probability 10^-6, and each needs the owner
-to tap Compare digits. Without the approval's MAC the joining device trusts no directory.
+to tap Compare digits. The MAC proves only that whoever sent the approver key approved, which
+in that attack is the server, so the joining device counts it only once its own owner has seen
+the digits match. Without the approval's MAC the joining device trusts no directory.
 
 ## Recovery
 
@@ -509,7 +512,7 @@ for an unknown route or decision, 502 when the server refused or failed (`detail
 | `GET /sessions/:id/events?wait=<s>` | `{events: [{type, ack, line, decisionId?}]}`: what the session has not confirmed, held up to `wait` while there is nothing |
 | `POST /sessions/:id/ack` | `{acks}`: confirm events by their `ack`; others' tokens do nothing |
 | `POST /permissions` | `{hook, agent, source: {project, session, sessionTitle?, links?}, waitMs}`: post a permission prompt from the hook's input → `{id}`; 403 `disabled` until `starbridge config permissions on` |
-| `POST /permissions/:id/wait` | `{wait}`: `{output}` once an accepted answer is in, the hook's stdout, handed out once; `{settled}` when the prompt ended another way; `{}` when `wait` passed |
+| `POST /permissions/:id/wait` | `{wait}`: `{output}` once an accepted answer is in, the hook's stdout, handed out once; `{settled}` when the prompt ended another way; `{}` when `wait` passed; a hook that hangs up mid-hold and holds no more within 5 s is gone, and the prompt settles as `keyboard` |
 | `POST /permissions/:id/settle` | `{outcome: "keyboard" \| "timeout"}` → `{settled}`: the hook's wait ended without an answer |
 | `POST /sessions/:id/permissions/settle` | `{inputHash?}` → `{settled: [ids]}`: the keyboard answered the session's waiting prompt for that input, or all of them without `inputHash` |
 

@@ -1,5 +1,6 @@
 package dev.starbridge.app.ui.quotas
 
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
 import android.content.Intent
@@ -8,14 +9,13 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -171,9 +171,10 @@ private fun ProviderCard(windows: List<QuotaWindow>, now: Instant, settings: Quo
     val first = windows.first()
     Surface(modifier.fillMaxWidth(), shape = shape, color = scheme.surfaceContainer) {
         Column(Modifier.padding(Spacing.s4)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(first.provider, style = StarbridgeTheme.type.subtitle, color = scheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                first.machine?.let { Text(it, style = StarbridgeTheme.type.meta, color = scheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+            // The machine at the end of the provider's line, or on a line of its own when both don't fit.
+            FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, itemVerticalAlignment = Alignment.CenterVertically) {
+                Text(first.provider, style = StarbridgeTheme.type.subtitle, color = scheme.onSurface, modifier = Modifier.padding(end = Spacing.s2))
+                first.machine?.let { Text(it, style = StarbridgeTheme.type.meta, color = scheme.onSurfaceVariant) }
             }
             windows.forEachIndexed { i, w ->
                 if (i > 0) HorizontalDivider(color = scheme.outlineVariant, modifier = Modifier.padding(top = Spacing.s4))
@@ -194,15 +195,15 @@ private fun WindowRow(window: QuotaWindow, now: Instant, settings: QuotaSettings
     val h24 = LocalClock24.current
     val card = scheme.surfaceContainer
     Column(modifier, verticalArrangement = Arrangement.spacedBy(Spacing.s3)) {
-        // One line of body text, 24 dp at the default font size: the figure's glyphs are taller
-        // than the line they sit on.
+        // At least one line of body text, 24 dp at the default font size: the figure's glyphs are
+        // taller than the line they sit on. A long window name takes a second line.
         val line = with(LocalDensity.current) { type.body.lineHeight.toDp() }
-        Row(Modifier.height(line), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.heightIn(min = line), verticalAlignment = Alignment.CenterVertically) {
             Text(
                 window.window,
                 style = type.body,
                 color = scheme.onSurface,
-                maxLines = 1,
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f),
             )
@@ -213,12 +214,13 @@ private fun WindowRow(window: QuotaWindow, now: Instant, settings: QuotaSettings
                 },
                 style = type.figure.copy(lineHeight = type.figure.fontSize),
                 color = if (ended) scheme.onSurfaceVariant else scheme.onSurface,
+                modifier = Modifier.height(line).wrapContentHeight(Alignment.Top, unbounded = true),
             )
         }
         Meter(bar, course, StarbridgeTheme.provider(window.provider), settings.showUsed, card)
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(tone.word, style = type.metaStrong, color = tone.color, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-            Spacer(Modifier.width(Spacing.s2))
+        // The pace and the reset time on one line, or two when both don't fit.
+        FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, itemVerticalAlignment = Alignment.CenterVertically) {
+            Text(tone.word, style = type.metaStrong, color = tone.color, modifier = Modifier.padding(end = Spacing.s2))
             Text(
                 window.resetsAt?.let { if (ended) "Reset ${ago(now, it)}" else if (settings.absoluteResets) "Resets ${resetClock(it, now, h24)}" else "Resets in ${span(now, it)}" } ?: "Reset time unknown",
                 style = type.meta,

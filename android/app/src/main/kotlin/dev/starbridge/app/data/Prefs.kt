@@ -13,9 +13,15 @@ enum class Colours { Starbridge, Wallpaper }
 
 /**
  * How the inbox shows, remembered on this phone: one feed, grouped by machine or by waiting,
- * History open or closed, and when question cards carry their answer buttons (#138).
+ * History open or closed, when question cards carry their answer buttons (#138), and whether it
+ * says so while notifications are off (#342).
  */
-data class InboxView(val grouping: Grouping = Grouping.None, val historyOpen: Boolean = false, val buttons: CardButtons = CardButtons.Always)
+data class InboxView(
+    val grouping: Grouping = Grouping.None,
+    val historyOpen: Boolean = false,
+    val buttons: CardButtons = CardButtons.Always,
+    val remindOff: Boolean = true,
+)
 
 /** The inbox's groups: none, one per machine, or what blocks an agent above what can wait (#191). */
 enum class Grouping { None, Machine, Waiting }
@@ -66,12 +72,13 @@ class Prefs @Inject constructor(@ApplicationContext context: Context) {
                 ?: if (prefs.getBoolean(BY_MACHINE, false)) Grouping.Machine else Grouping.None,
             prefs.getBoolean(HISTORY_OPEN, false),
             CardButtons.entries.find { it.name == prefs.getString(BUTTONS, null) } ?: CardButtons.Always,
+            prefs.getBoolean(REMIND_OFF, true),
         ),
     )
     val inbox: StateFlow<InboxView> = _inbox
 
     fun setInbox(value: InboxView) {
-        prefs.edit().putString(GROUPING, value.grouping.name).remove(BY_MACHINE).putBoolean(HISTORY_OPEN, value.historyOpen).putString(BUTTONS, value.buttons.name).apply()
+        prefs.edit().putString(GROUPING, value.grouping.name).remove(BY_MACHINE).putBoolean(HISTORY_OPEN, value.historyOpen).putString(BUTTONS, value.buttons.name).putBoolean(REMIND_OFF, value.remindOff).apply()
         _inbox.value = value
     }
 
@@ -104,6 +111,7 @@ class Prefs @Inject constructor(@ApplicationContext context: Context) {
         const val HISTORY_OPEN = "inbox-history-open"
         const val BUTTONS = "inbox-card-buttons"
         const val ALLOW_UNSEEN = "allow-unseen"
+        const val REMIND_OFF = "inbox-remind-notifications-off"
         val json = Json { ignoreUnknownKeys = true; encodeDefaults = false }
     }
 }

@@ -504,8 +504,11 @@ async function finishJoin(
 export interface DigitJoin {
   /** Resolves once a device took the request: the digits it shows too. */
   digits: Promise<string>;
-  /** Resolves once that device approved and the directory holds this browser's keys. */
+  /** Resolves once that device approved, this browser's owner confirmed the digits match, and
+   * the directory holds this browser's keys. */
   done: Promise<void>;
+  /** This browser's owner saw the same digits on the other device. */
+  confirm: () => void;
   cancel: () => void;
 }
 
@@ -519,6 +522,12 @@ export async function startDigitJoin(account: string, name: string): Promise<Dig
   await store.put("pending", record, account);
   const { expiresAt } = (await api.postJoin(request, joinCommitment(eph.publicKey, request))).join;
   const abort = new AbortController();
+  let confirm: () => void = () => {};
+  const confirmed = new Promise<void>((resolve, reject) => {
+    confirm = resolve;
+    abort.signal.addEventListener("abort", () => reject(new Error("cancelled")));
+  });
+  confirmed.catch(() => {});
   let shown: (digits: string) => void = () => {};
   const digits = new Promise<string>((resolve) => {
     shown = resolve;
@@ -545,10 +554,15 @@ export async function startDigitJoin(account: string, name: string): Promise<Dig
               if (!(e instanceof ApiError && e.code === "already-revealed")) throw e;
             }),
           );
+          if (abort.signal.aborted) throw new Error("cancelled");
           shown(derived.digits);
         }
         if (derived && join.approval !== undefined) {
           const body = openJoinApproval(join.approval, derived, id);
+          // The approval's MAC proves only that whoever sent the approver key approved, which
+          // may be the server: it counts once this browser's owner has seen the digits match
+          // (#355).
+          await confirmed;
           if (body.account !== account) throw new ProtocolError("wrong-account", body.account);
           const entries = await api.directory();
           const dir = verifyDirectory(entries, {
@@ -568,6 +582,7 @@ export async function startDigitJoin(account: string, name: string): Promise<Dig
   return {
     digits,
     done,
+    confirm,
     cancel: () => {
       abort.abort();
       api.cancelJoin(id).catch(() => {});

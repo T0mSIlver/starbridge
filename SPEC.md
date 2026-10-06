@@ -1292,6 +1292,16 @@ so the mod is the first path.
   since `codex queue` (0.160) takes the message only as an argument and other local users can
   read process arguments; `wait <id>` prints a delivered answer from local state. The npm bundle
   runs under Node, so the CLI uses no Bun global without a guard; a test runs it there.
+- 2026-10-06. CI runners on dell2 (#392), a host for CI only (6 cores, 13 GB visible). Two
+  runners: `dell2-1` with the label `starbridge-android` alone, so Android builds never queue
+  behind CI jobs, and `dell2-2` with `starbridge-devbox`; jobs spread with no workflow change.
+  Android builds left the dev box when `devbox-1` lost `starbridge-android`.
+  `deploy/setup-runners.sh` installs #380's system units in `ci.slice` on every host. It takes
+  the runners as `RUNNERS="name:labels ..."` (the dev box's three by default), a `RUNNER_TOKEN`
+  for hosts without gh, and `GRADLE_PROPS`, written to the shared Gradle home, which Gradle reads
+  over the project's: dell2 keeps `-Xmx4g` and caps workers at 4. At launch the dell2 runners go
+  with the dev box's (#59): a repo-level runner serves a fork's copy of any workflow, and runner
+  groups that limit runners to chosen workflows exist only for organizations.
 
 - 2026-10-06. A device that joins later reads the questions already waiting (#340), as #158 did
   for quotas. Decisions and permission prompts are sealed and signed to the devices in the
@@ -1443,6 +1453,13 @@ so the mod is the first path.
 - 2026-10-06. Workflows pin every action by commit SHA, with its version in a comment (#361). A
   moved tag could otherwise run code in the release job before it writes the minisign key.
   Dependabot proposes the updates in one grouped PR a month.
+- 2026-10-06. Both screens confirm a join by digits (#355, from the #366 audit). Only the
+  approver's owner compared the digits; the joining device acted on the first approval it got.
+  A server in the middle that sends the joiner its own approver key derives the same MAC key and
+  forges an approval naming a chain of its own. Now the joining browser and phone show They match
+  under the digits and hold any approval until the owner taps it, as Matrix SAS confirms on both
+  sides. The CLI never joins by digits. On Android, a restarted wait no longer drops the join:
+  its cancellation was caught as an `IllegalStateException`.
 - 2026-10-06. A browser trusts a served directory only against its pin (#354, from the #366
   audit). On reload, the web adopted a join's or recovery's pending keys from whatever chain the
   server served, and a browser with no pin accepts any chain, so a server could enrol it into a
@@ -1547,6 +1564,25 @@ so the mod is the first path.
   it carries Codex's skill, so the versions match, and the agent rewrites outdated files when it
   starts. opencode's own `question` tool (on in the TUI, off in `opencode run`) is not
   intercepted, as in Pi; the skill already tells agents to avoid tools that ask the user.
+- 2026-10-06. opencode integration audit (#298), reproduced with opencode 1.18.31 on
+  glm-5.3-flash in a throwaway HOME. A session's loop started only at its first command, so after
+  opencode restarted, a session waiting for its answer never got it (#398). The plugin now starts
+  a loop, when it loads, for each session of its directory (not a subagent's) that the CLI's
+  state shows told to expect a prompt (`asked.extensionAnswers`), with a question asked in the
+  last 7 days still open or an answer undelivered. It matches the session's `directory`, since
+  worktrees of one repository share opencode's `projectID` (the root commit), and a session told
+  to `wait` (`opencode run`) is left to its wait. Two opencode processes can show one
+  session (`opencode -c` in a second terminal), and each submitted every answer (#399). The
+  plugin now claims an answer before submitting it, with a file in
+  `<config>/opencode-claims` created exclusively and kept 7 days; whoever loses the claim skips
+  it; a claim whose submits all failed is dropped. A permission card outlived the agent that asked: a closed terminal killed the hook before it
+  settled the card, and `kill -9` left it orphaned; either way a later Allow was accepted and
+  nothing ran (#400). The agent now settles a prompt at the keyboard when its hook hangs up
+  mid-hold and holds no more within 5 s, and the hook stops once its parent process is gone. This
+  covers every harness's hook, except one run through a shell that does not `exec` it and
+  survives the agent.
+- 2026-10-06. A permission whose input has two keys that read alike once redacted or escaped stays
+  at the keyboard (#410, #357): devices would see one value for both keys.
 
 ## Encryption, with existing libraries
 
@@ -2006,6 +2042,17 @@ goes in git.
   `keepalive_idle_conns_per_host 4096` it held 3 to 120, with p99 unchanged.
   25 s stays below the server's 30 s idle close, so Caddy never reuses a
   connection the server is closing.
+- 2026-10-06: Android says when notifications are off (#342, the owner's
+  pick of A plus C). A quiet line heads the Inbox, "Notifications are
+  off", with "Turn on" and a ✕. The ✕ hides the line for good, so the
+  line never nags someone who wants notifications off; Settings,
+  Notifications holds "Remind me when notifications are off", on by
+  default, which brings it back. Settings' first Notifications row reads
+  "Notifications are off" whatever the reminder says. "Turn on" opens
+  Android's notification settings for the app rather than the
+  permission prompt, which Android stops showing after two refusals;
+  turning notifications on there grants the permission too. The state
+  is read again each time the app comes back to the front.
 - 2026-10-06: load and failure test (#301, `evals/load/`). Prod's stack ran
   from `deploy/compose.yaml` on the dev box. Its containers shared two cores,
   with memory caps adding up to a CX23's 4 GB less the OS. Simulated users
@@ -2065,3 +2112,12 @@ goes in git.
   Restore drill: the 2026-10-06 backup, copied read-only from the VPS and
   restored as `deploy/README.md` says, passed `integrity_check`, started and
   served. Umami's dump restored too. The copies were deleted afterwards.
+- 2026-10-06: why Android's Find showed no results (#341). The app's
+  NavDisplay fills the screen and passes that size on to its entry as a
+  minimum height, and Material 3's
+  (1.5.0-alpha29) expanded `SearchBar` passes that minimum on to its
+  input field. The field filled the screen, its text centred, and the
+  results sat below the bottom edge. Find now stands in a `Box`, which
+  drops the minimum. The screenshots had hidden it, since they drew Find
+  in a plain `Box`; Find's shots and `FindScreenTest` now draw it inside
+  a screen-filling NavDisplay, as the app does.

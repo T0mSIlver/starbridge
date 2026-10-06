@@ -1,5 +1,8 @@
 package dev.starbridge.app.ui.inbox
 
+import androidx.compose.foundation.text.TextAutoSize
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.foundation.layout.widthIn
@@ -134,30 +137,41 @@ private fun rememberSend(prompt: Prompt, actions: PromptActions): Pair<Boolean, 
     }
 }
 
-/** The connected Allow and Deny, Allow the one amber button; [trailing] closes the group. */
+/** Allow's or Deny's label on one line: on a narrow phone at a large font it shrinks rather than break. */
+@Composable
+private fun Label(text: String, height: Dp) {
+    val style = if (height > 48.dp) StarbridgeTheme.type.action else StarbridgeTheme.type.label
+    Text(text, style = style, maxLines = 1, autoSize = TextAutoSize.StepBased(maxFontSize = style.fontSize))
+}
+
+/** The connected Allow and Deny, Allow the one amber button; [trailing], as tall as they are, closes the group. */
 @Composable
 private fun AllowDeny(height: Dp, enabled: Boolean, ground: Color, onAllow: () -> Unit, onDeny: () -> Unit, allows: Boolean = enabled, trailing: (@Composable () -> Unit)? = null) {
     val colors = StarbridgeTheme.colors
     val end = height / 2
+    // Labels centred in a width the row sets: narrow sides leave them room on a small phone.
+    val padding = PaddingValues(horizontal = Spacing.s2, vertical = ButtonDefaults.ContentPadding.calculateTopPadding())
     // [height] at the default font size, taller when the labels need it; never padded to 48 dp,
     // as the design sets them under it.
     CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
-        Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+        Row(Modifier.height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
             Button(
                 onClick = onAllow,
                 enabled = allows,
                 shape = RoundedCornerShape(topStart = end, bottomStart = end, topEnd = 8.dp, bottomEnd = 8.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = colors.accent, contentColor = colors.onAccent, disabledContainerColor = colors.accent, disabledContentColor = colors.onAccent),
-                modifier = Modifier.weight(1f).heightIn(min = height),
-            ) { Text("Allow", style = if (height > 48.dp) StarbridgeTheme.type.action else StarbridgeTheme.type.label) }
+                contentPadding = padding,
+                modifier = Modifier.weight(1f).heightIn(min = height).fillMaxHeight(),
+            ) { Label("Allow", height) }
             val last = trailing == null
             Button(
                 onClick = onDeny,
                 enabled = enabled,
                 shape = RoundedCornerShape(topStart = 8.dp, bottomStart = 8.dp, topEnd = if (last) end else 8.dp, bottomEnd = if (last) end else 8.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = ground, contentColor = MaterialTheme.colorScheme.onSurface),
-                modifier = Modifier.weight(1f).heightIn(min = height),
-            ) { Text("Deny", style = if (height > 48.dp) StarbridgeTheme.type.action else StarbridgeTheme.type.label) }
+                contentPadding = padding,
+                modifier = Modifier.weight(1f).heightIn(min = height).fillMaxHeight(),
+            ) { Label("Deny", height) }
             trailing?.invoke()
         }
     }
@@ -192,7 +206,7 @@ fun PromptCard(prompt: Prompt, now: Instant, actions: PromptActions, shape: Shap
                         shape = RoundedCornerShape(topStart = 8.dp, bottomStart = 8.dp, topEnd = 20.dp, bottomEnd = 20.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = scheme.surfaceContainer, contentColor = scheme.onSurface),
                         contentPadding = PaddingValues(0.dp),
-                        modifier = Modifier.width(48.dp).height(40.dp),
+                        modifier = Modifier.width(48.dp).fillMaxHeight(),
                     ) { Symbol(Sym.More, size = 20.dp, contentDescription = "More answers") }
                 }
                 Box(Modifier.align(Alignment.TopEnd)) {
