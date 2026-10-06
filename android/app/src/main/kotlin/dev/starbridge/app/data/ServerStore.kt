@@ -133,6 +133,13 @@ class ServerStore(
     private var joinJob: Job? = null
     private var showJob: Job? = null
     private var watchJob: Job? = null
+    private var pollJob: Job? = null
+
+    /** A push reached this app since it started: the server can deliver, so nothing polls (#445). */
+    @Volatile private var pushed = false
+
+    /** How often the app in front reads the items while no push has arrived. */
+    internal var pollMs = 10_000L
     private var compareJob: Job? = null
     /** The join requests as last listed, by id, so comparing uses what was listed. */
     private var joinViews = mapOf<String, JoinView>()
@@ -1214,6 +1221,7 @@ class ServerStore(
      * its id to fetch; or `answered` once a decision is answered anywhere.
      */
     suspend fun onPush(payload: String) = lock.withLock {
+        pushed = true
         if (phase.value != Phase.Ready) return@withLock
         val p = ProtocolJson.parseToJsonElement(payload).jsonObject
         val kind = p["kind"]?.jsonPrimitive?.content
@@ -1439,6 +1447,31 @@ class ServerStore(
     private fun listJoins(list: JoinList) {
         joinViews = list.joins.associateBy { it.id }
         joinAsks.value = list.joins.mapNotNull(::toAsk)
+    }
+
+    /**
+     * While the app is in front and no push has reached it, reads the items every [pollMs]: a
+     * server without a relay or UnifiedPush sends none, and the Inbox would never change (#445).
+     * Quiet: a failed read leaves no notice, since the next one, or the owner's pull, says why.
+     */
+    override fun foreground(on: Boolean) {
+        pollJob?.cancel()
+        if (!on) return
+        pollJob = scope.launch {
+            while (true) {
+                delay(pollMs)
+                if (pushed || phase.value != Phase.Ready) continue
+                lock.withLock {
+                    try {
+                        sync()
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        Log.w("Starbridge", "poll failed: $e")
+                    }
+                }
+            }
+        }
     }
 
     override fun watchJoins(on: Boolean) {

@@ -108,11 +108,13 @@ class MainActivity : ComponentActivity() {
         if (store.phase.value == Phase.Ready) store.refresh(shown = false)
         // Join requests arrive live while the app is in front; a push covers the rest.
         store.watchJoins(true)
+        store.foreground(true)
     }
 
     override fun onPause() {
         super.onPause()
         store.watchJoins(false)
+        store.foreground(false)
     }
 
     private fun handle(intent: Intent?) {
