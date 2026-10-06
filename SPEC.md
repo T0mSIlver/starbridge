@@ -1695,6 +1695,11 @@ so the mod is the first path.
     API routes only, no web page. It pushes through prod's relay (`RELAY_URL`), as any
     self-hosted server does: the app shows a new item on a push, or on resume and pull to
     refresh, and does not poll while open.
+- 2026-10-06. GitHub links on questions (#171, the owner's pick on the question display page:
+  links stay as built, plus this). A GitHub pull request or issue link with no title reads
+  "owner/repo#123" instead of its host and path, and its chip leads with the GitHub mark, on the
+  web and Android; "Answer in" uses the same label. Every other link is unchanged. Android's
+  untitled chips now start with "Open" too, as the web's and the #171 entry above do.
 
 ## Encryption, with existing libraries
 

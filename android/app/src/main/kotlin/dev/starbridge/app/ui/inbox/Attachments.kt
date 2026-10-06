@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -32,12 +33,15 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import dev.starbridge.app.R
 import dev.starbridge.app.data.Link
 import dev.starbridge.app.data.bitmap
+import dev.starbridge.app.data.githubRef
 import dev.starbridge.app.data.label
 import dev.starbridge.app.data.openLink
 import dev.starbridge.app.ui.Sym
@@ -114,7 +118,8 @@ private fun ImageBox(image: Attached, maxHeight: Dp, wide: Boolean, crop: Boolea
 
 /**
  * Pages the agent wants the owner to see before answering, such as a Claude artifact, as chips
- * under "Attached by the agent" (#171): "Open" and the page's title, else its label.
+ * under "Attached by the agent" (#171): "Open" and the page's title, else its label; a GitHub pull
+ * request or issue leads with the GitHub mark.
  */
 @Composable
 fun Links(links: List<Link>, modifier: Modifier = Modifier) {
@@ -127,7 +132,10 @@ fun Links(links: List<Link>, modifier: Modifier = Modifier) {
             links.forEach { link ->
                 AssistChip(
                     onClick = { openLink(context, link.url) },
-                    label = { Text(link.title?.let { "Open $it" } ?: link.label(), style = StarbridgeTheme.type.label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                    label = { Text("Open ${link.label()}", style = StarbridgeTheme.type.label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                    leadingIcon = githubRef(link.url)?.let {
+                        { Icon(painterResource(R.drawable.ic_github), contentDescription = null, Modifier.size(AssistChipDefaults.IconSize), tint = scheme.onSurfaceVariant) }
+                    },
                     trailingIcon = { Symbol(Sym.Open, size = AssistChipDefaults.IconSize, tint = scheme.onSurfaceVariant) },
                     colors = AssistChipDefaults.assistChipColors(labelColor = scheme.onSurface),
                     border = AssistChipDefaults.assistChipBorder(enabled = true, borderColor = scheme.outline),

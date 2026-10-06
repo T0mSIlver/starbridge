@@ -495,6 +495,10 @@ a decision's context, a permission prompt's command and a session's name.
   kind icon and name, the repo, and the time right-aligned. The agent's own
   words come below it. Details end with the session name, truncated in the
   middle, and "Open in Claude" or "Open in Codex" as text, with no logos.
+- Links the agent attaches sit under "Attached by the agent", each a chip with
+  "Open", the page's title (else its label) and an open-outside icon. A GitHub
+  pull request or issue reads "owner/repo#123" when it has no title and leads
+  with the GitHub mark.
 - An answered item goes to History, collapsed by default, as one line: the
   answer, the question, which device answered and when.
 - Find (the web rail's box) lists the matching open items, then "History · N"
