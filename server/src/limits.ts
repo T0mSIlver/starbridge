@@ -64,6 +64,17 @@ export const DEFAULT_LIMITS = {
   sessions: 50,
   /** GitHub sign-ins finished per address. */
   githubCallbacks: [20, MINUTE] as RateWindow,
+  /** Owner-token sign-ins per address, so the token cannot be guessed fast. */
+  ownerSignIns: [10, MINUTE] as RateWindow,
+  /** Sign-in challenges per account, which a device signs to bind a new session. */
+  challenges: [20, MINUTE] as RateWindow,
+
+  /** Pairing requests posted per address. */
+  pairingPosts: [10, MINUTE] as RateWindow,
+  /** Pairing requests read per account, by the device that shows the QR code. */
+  pairingReads: [30, MINUTE] as RateWindow,
+  /** Pairing results read per address, by the member that posted the request. */
+  pairingResults: [60, MINUTE] as RateWindow,
 
   /**
    * Pairings stored on the whole server, about 4 KB each: the disk bound. Filling it takes a
@@ -78,6 +89,8 @@ export const DEFAULT_LIMITS = {
 
   /** Push subscription writes per account. */
   pushSubscribes: [30, MINUTE] as RateWindow,
+  /** Pushes relayed for other servers per address, on a server in relay mode. */
+  relayPosts: [120, MINUTE] as RateWindow,
 
   /** Asks for fresh quota snapshots per account; each makes every machine run CodexBar. */
   quotaAsks: [6, MINUTE] as RateWindow,
