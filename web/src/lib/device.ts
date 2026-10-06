@@ -184,8 +184,9 @@ export async function boot(): Promise<Boot> {
     if (e instanceof ApiError && e.status === 401) {
       const last = await store.get("current");
       // Its device was revoked: this browser is a visitor again, not a device signing back in.
-      if (last && e.code === "revoked") await store.del("device", last);
-      return { state: "signed-out", known: !!last && !!(await store.get("device", last)) };
+      // The keys stay: only the server says so, and a verified chain decides on sign-in (#371).
+      const known = !!last && e.code !== "revoked" && !!(await store.get("device", last));
+      return { state: "signed-out", known };
     }
     throw e;
   }
@@ -333,6 +334,9 @@ export async function prepareFirstDevice(account: string, name: string): Promise
     recovery.privateKey.fill(0);
   }
   const dir = verifyDirectory([entry], { account });
+  // Another tab posted its genesis since this page offered a key: its keys are the account's.
+  if ((await store.get("device", account))?.posted)
+    throw new Error("Another tab set up this account. Reload.");
   await store.put("device", record, account);
   const commit = async () => {
     // Another tab's boot drops these keys as never used, or its setup replaces them: posting

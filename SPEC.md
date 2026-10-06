@@ -1437,7 +1437,10 @@ so the mod is the first path.
   recovery pin before they save the device. Commit now marks the device as posted before it posts
   the genesis, and boot deletes a device's keys on an empty directory only when it is unmarked,
   as #328 needs; a marked one shows the broken directory page and keeps its keys. A commit
-  whose post never reached the server, closed before the owner retried, also lands there.
+  whose post never reached the server, closed before the owner retried, also lands there. A
+  401 that says the device was revoked no longer deletes its keys either: the browser shows the
+  landing page as #219 wants, and on sign-in the verified chain shows whether it was revoked. A
+  tab still offering a first key cannot replace a device whose genesis went out.
 
 - 2026-10-06. `ask --default` is gone from the help and the skill (#352): no client shows it, so
   an agent that passed one believed the owner saw it. Like `--default-at`, it is accepted and

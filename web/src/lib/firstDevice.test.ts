@@ -65,4 +65,17 @@ test("a first device cut off before it pinned keeps its keys when the server lis
   }
   // Served the real chain again, its own genesis anchors it.
   expect((await device.boot()).state).toBe("ready");
+  // A tab still offering a key cannot replace them.
+  await expect(device.prepareFirstDevice(account, "Tab C")).rejects.toThrow("Another tab set up");
+  // Nor can the server, by saying the device was revoked.
+  globalThis.fetch = (async (input: string, init?: RequestInit) =>
+    input === "/v1/me"
+      ? Response.json({ error: "revoked" }, { status: 401 })
+      : served(input, init)) as typeof fetch;
+  try {
+    expect(await device.boot()).toEqual({ state: "signed-out", known: false });
+  } finally {
+    globalThis.fetch = served;
+  }
+  expect(await store.get("device", account)).toEqual(held as store.DeviceRecord);
 });
