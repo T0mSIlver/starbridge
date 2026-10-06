@@ -1319,15 +1319,21 @@ class ServerStore(
     override fun newRecoveryKey(currentKey: String) = run {
         syncDirectory()
         // Both keys sign, so neither a stolen phone nor a leaked key replaces it alone.
-        val current = sodium.signSeedKeyPair(recoverySignSeed(RecoveryKeys.seed(currentKey, sodium), sodium))
+        val typed = RecoveryKeys.seed(currentKey, sodium)
+        val signSeed = recoverySignSeed(typed, sodium)
+        val current = sodium.signSeedKeyPair(signSeed)
+        typed.fill(0)
+        signSeed.fill(0)
         if (toB64(current.public) != directory!!.recoveryPk) {
             current.secret.fill(0)
             throw IllegalArgumentException("This isn't the account's current recovery key.")
         }
         val seed = sodium.random(16)
-        val next = sodium.signSeedKeyPair(recoverySignSeed(seed, sodium))
+        val nextSeed = recoverySignSeed(seed, sodium)
+        val next = sodium.signSeedKeyPair(nextSeed)
         val shown = RecoveryKeys.shown(seed, sodium)
         seed.fill(0)
+        nextSeed.fill(0)
         dropReplacement()
         replacement = next to current
         replacing.value = Replacing.Shown(shown)
@@ -1342,8 +1348,11 @@ class ServerStore(
             syncDirectory()
             val nextPk = toB64(next.public)
             if (directory!!.recoveryPk != nextPk) {
-                // A retry after the proposal landed confirms it rather than proposing it again.
-                if (directory!!.pendingRecovery?.recoveryPk != nextPk) appendEntry { directories.recoveryEntry(it, me.id, signKey, next, now()) }
+                // A retry after the proposal landed confirms it rather than proposing it again; one
+                // another proposal replaced meanwhile can never be posted again.
+                val pending = directory!!.pendingRecovery?.recoveryPk
+                if (pending != nextPk && nextPk in directory!!.recoveryPks) throw IllegalStateException("Another device proposed a new key meanwhile. Start again.")
+                if (pending != nextPk) appendEntry { directories.recoveryEntry(it, me.id, signKey, next, now()) }
                 appendEntry { directories.recoveryConfirmEntry(it, current.secret, nextPk, now()) }
             }
         } catch (e: Exception) {

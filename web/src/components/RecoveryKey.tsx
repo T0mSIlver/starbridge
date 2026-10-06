@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { NewRecoveryKey, RecoveryEntry } from "@/lib/device";
 import { useApp, useDevice } from "./AppProvider";
 import p from "./Pairing.module.css";
@@ -29,6 +29,10 @@ export function ReplaceRecoveryKey() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
 
+  // Leaving the page without saving wipes the keys. A ref, so the cleanup runs on unmount only.
+  const held = useRef<NewRecoveryKey>(undefined);
+  held.current = made;
+  useEffect(() => () => held.current?.discard(), []);
   useEffect(() => {
     let live = true;
     load().then((d) => live && setTyped(d.readRecoveryEntry(typedKey)));

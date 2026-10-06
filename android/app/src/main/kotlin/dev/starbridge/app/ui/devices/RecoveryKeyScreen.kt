@@ -1,6 +1,7 @@
 package dev.starbridge.app.ui.devices
 
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.LocalActivity
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -14,6 +15,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -57,6 +60,9 @@ fun RecoveryKeyScreen(
 ) {
     val leave = { actions.close(); onBack() }
     BackHandler(onBack = leave)
+    // However the screen goes (a tab, a notification), the keys go with it; a rotation keeps them.
+    val activity = LocalActivity.current
+    DisposableEffect(Unit) { onDispose { if (activity?.isChangingConfigurations != true) actions.close() } }
     when (replacing) {
         is Replacing.Shown -> Column(
             modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = Spacing.s4, end = Spacing.s4, bottom = Spacing.s10),
@@ -91,7 +97,8 @@ fun RecoveryKeyScreen(
 
 @Composable
 private fun Ask(busy: Boolean, actions: RecoveryActions, modifier: Modifier, onBack: () -> Unit) {
-    var typedKey by rememberSaveable { mutableStateOf("") }
+    // Not saveable: the typed key stays out of the saved instance state.
+    var typedKey by remember { mutableStateOf("") }
     var shown by rememberSaveable { mutableStateOf(false) }
     val reading = RecoveryKeys.read(typedKey)
     SecureWindow()

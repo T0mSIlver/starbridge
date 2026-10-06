@@ -870,6 +870,8 @@ export interface NewRecoveryKey {
    * it picks up where it stopped.
    */
   replace: () => Promise<Ctx>;
+  /** Wipes both private keys, when the page closes without saving. */
+  discard: () => void;
 }
 
 /**
@@ -887,7 +889,8 @@ export async function prepareRecoveryKey(ctx: Ctx, currentKey: string): Promise<
   }
   const current = recoveryKeyPair(seed);
   seed.fill(0);
-  if (toB64(current.publicKey) !== ctx.dir.recoveryPk) {
+  // Against the chain as it is now: another device may have replaced the key since boot.
+  if (toB64(current.publicKey) !== (await refresh(ctx)).dir.recoveryPk) {
     current.privateKey.fill(0);
     throw new Error("This isn't the account's current recovery key.");
   }
@@ -899,18 +902,24 @@ export async function prepareRecoveryKey(ctx: Ctx, currentKey: string): Promise<
   const replace = async () => {
     let latest = await refresh(ctx);
     if (latest.dir.recoveryPk !== nextPk) {
-      // A retry after the proposal landed confirms it rather than proposing the same key again.
+      // A retry after the proposal landed confirms it rather than proposing the same key again;
+      // one another proposal replaced meanwhile can never be posted again.
+      if (latest.dir.pendingRecovery?.recoveryPk !== nextPk && latest.dir.recoveryPks.has(nextPk))
+        throw new Error("Another device proposed a new key meanwhile. Start again.");
       if (latest.dir.pendingRecovery?.recoveryPk !== nextPk)
         latest = await append(latest, (dir) => recoveryEntryAsync(dir, me(latest), next, now()));
       latest = await append(latest, async (dir) =>
         recoveryConfirmEntry(dir, current.privateKey, nextPk, now()),
       );
     }
-    next.privateKey.fill(0);
-    current.privateKey.fill(0);
+    discard();
     return latest;
   };
-  return { recoveryKey: shown, replace };
+  const discard = () => {
+    next.privateKey.fill(0);
+    current.privateKey.fill(0);
+  };
+  return { recoveryKey: shown, replace, discard };
 }
 
 /**
