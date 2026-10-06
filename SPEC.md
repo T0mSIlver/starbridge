@@ -382,7 +382,8 @@ provider plugins add providers, not panels.
   the same file; a `-light` one comes with its `-dark` twin, shown by the page's theme (#558). The Overview's Start ends at a
   first question answered from an agent, and the FAQ page holds the launch questions (#558).
 - **The CLI's agent-facing contract is stable from 0.1.0** (#475, #551): the commands, flags,
-  output lines and exit codes under "What agents parse" in `cli/README.md`, pinned by
+  output lines and exit codes in `cli/CONTRACT.md`, kept apart from the user-facing CLI page
+  (#565), pinned by
   `cli/test/contract.test.ts`. A release may add to it; changing or removing anything listed comes
   only after a release that deprecates it, since the plugins, the Pi extension and agents'
   instructions update apart from the CLI. `--json` always means an output format (`wait --json`); `ask` reads its input with
