@@ -8,6 +8,9 @@ import dev.starbridge.app.protocol.Directories
 import dev.starbridge.app.protocol.Directory
 import dev.starbridge.app.protocol.DirectoryEntry
 import dev.starbridge.app.protocol.Envelopes
+import dev.starbridge.app.protocol.DirectoryHead
+import dev.starbridge.app.protocol.Heads
+import dev.starbridge.app.protocol.ItemBody
 import dev.starbridge.app.protocol.JoinApprovalBody
 import dev.starbridge.app.protocol.JoinKeys
 import dev.starbridge.app.protocol.JoinRequestBody
@@ -146,6 +149,7 @@ class ServerStore(
     override val server = MutableStateFlow(saved.server)
     override val busy = MutableStateFlow(false)
     override val notice = MutableStateFlow<String?>(null)
+    private val headBook = Heads(directories)
     override val sending = MutableStateFlow<Map<String, String>>(emptyMap())
     /** Answers tapped but not yet sealed into [Saved.outbox]: the lock may be busy. */
     private val tapped = java.util.concurrent.ConcurrentHashMap<String, String>()
@@ -191,12 +195,14 @@ class ServerStore(
         }
         server.value = saved.server
         push.value = push.value.copy(type = saved.pushType, registered = saved.push?.type == saved.pushType)
-        decisions.value = saved.decisions.map(::toUi)
-        prompts.value = saved.prompts.map(::toUi)
+        // While the server holds back entries a machine has seen, no machine's item shows (#362).
+        val held = withheld() != null
+        decisions.value = if (held) emptyList() else saved.decisions.map(::toUi)
+        prompts.value = if (held) emptyList() else saved.prompts.map(::toUi)
         // As the web: named once the account has more than one active machine.
         val named = (directory?.members?.values?.count { it.active && it.member.role == "machine" } ?: 0) > 1
-        windows.value = saved.quotas.flatMap { toUi(it, named) }
-        runs.value = saved.runs.map(::toUi)
+        windows.value = if (held) emptyList() else saved.quotas.flatMap { toUi(it, named) }
+        runs.value = if (held) emptyList() else saved.runs.map(::toUi)
         members.value = directory?.let(::toUi).orEmpty()
         showSending()
     }
@@ -653,13 +659,41 @@ class ServerStore(
         persist(saved.copy(entries = all, pin = Pin(dir.length, dir.head)))
     }
 
+    /**
+     * Opens a machine's item and keeps the directory head it signed. Refuses every item while a
+     * head an active machine signed is missing from this phone's chain (#362).
+     */
     private fun open(item: SealedItem): Pair<String, Any>? = try {
         val opened = envelopes.open(item, me.id, box, directory!!)
-        item.from to opened.body
+        keepHead(item.from, (opened.body as? ItemBody)?.dir)
+        if (withheld() != null) null else item.from to opened.body
     } catch (e: ProtocolException) {
         // Not shown: an item that fails its checks is the server's or a stranger's.
         Log.w("Starbridge", "dropped ${item.kind} ${item.id}: ${e.message}")
         null
+    }
+
+    private fun keepHead(machine: String, head: DirectoryHead?) {
+        // A `by` this phone's chain does not hold would only add a key that never counts.
+        if (head == null || (head.by != null && directory?.members?.containsKey(head.by) != true)) return
+        val heads = saved.heads.toMutableMap()
+        if (headBook.note(heads, machine, head, saved.entries)) persist(saved.copy(heads = heads))
+    }
+
+    /** Why no machine's item counts: the server holds back entries a machine has seen. */
+    private fun withheld(): String? {
+        val dir = directory ?: return null
+        val (id, _) = headBook.withheldBy(saved.heads, dir, saved.entries) ?: return null
+        val name = dir.members[id]?.member?.name ?: id
+        return "The server is holding back changes to your devices that $name has seen. Nothing from your machines shows until it sends them."
+    }
+
+    /** Keeps the heads of [items] before any counts, so the one that shows a gap holds back the rest. */
+    private fun scan(items: List<SealedItem>): Boolean {
+        items.forEach { open(it) }
+        val why = withheld() ?: return false
+        notice.value = why
+        return true
     }
 
     private suspend fun syncDecisions() {
@@ -673,6 +707,8 @@ class ServerStore(
         val waits = mutableListOf<Pair<String, Waiting>>()
         while (true) {
             val page = api().items("decision,settled,waiting", cursor)
+            // Held: the cursor stays, so these items are read again once the hold ends.
+            if (scan(page.items.map { it.item })) return
             for (listed in page.items) {
                 if (listed.item.kind == "waiting") {
                     val (from, body) = open(listed.item) ?: continue
@@ -750,6 +786,7 @@ class ServerStore(
             cursor = page.cursor
             if (page.items.size < 100) break
         }
+        if (scan(read.map { it.item })) return
         // A settled prompt comes back after its notice, so prompts go first: a notice whose
         // prompt is new to this phone would otherwise find nothing to close.
         for (listed in read.sortedBy { if (it.item.kind == "permission") 0 else 1 }) takePrompt(listed.item, listed.answeredAt, byId)
@@ -871,7 +908,9 @@ class ServerStore(
         lock.withLock { sendPrompt(id, allow, scope, null) }
 
     private suspend fun syncQuotas() {
-        val quotas = api().quota().mapNotNull { listed -> open(listed.item)?.let { (from, body) -> SavedQuota(from, body as QuotaSnapshot) } }
+        val listed = api().quota()
+        if (scan(listed.map { it.item })) return
+        val quotas = listed.mapNotNull { open(it.item)?.let { (from, body) -> SavedQuota(from, body as QuotaSnapshot) } }
         persist(saved.copy(quotas = quotas))
         alerts.quota(quotas.flatMap(::notices))
     }
@@ -897,6 +936,7 @@ class ServerStore(
         val fresh = mutableListOf<SavedRun>()
         while (true) {
             val page = api().items("run", cursor)
+            if (scan(page.items.map { it.item })) return
             for (listed in page.items) open(listed.item)?.let { (from, body) -> fresh += SavedRun(from, body as RunBody) }
             cursor = page.cursor
             if (page.items.size < 100) break

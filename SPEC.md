@@ -1445,6 +1445,13 @@ so the mod is the first path.
   included, so a machine the server also keeps behind still passes on what a device told it. The
   head is optional so that older machines' items keep opening; they only add no evidence. Older
   devices drop the field and run without the check, as before.
+- 2026-10-06. How devices hold machines' items (#362, PR 3). The web and the phone keep the
+  longest head each machine signed, in IndexedDB and on disk, and while one counts they show no
+  machine's item, raise no notification and send no answer. The web says why in a banner above
+  every screen; the phone shows it as a notice. Settings, and so revoking, keep working, since a
+  compromised member's false head ends only once the owner revokes it. The phone reads every
+  head on a page before it applies any item, and keeps its cursor while held, so the items come
+  back once the server serves the missing entries.
 
 ## Encryption, with existing libraries
 

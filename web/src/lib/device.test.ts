@@ -14,6 +14,7 @@ import {
   openJoinApproval,
   publicKeys,
   recoveryKey,
+  revokeEntry,
   seal,
   toB64,
   verifyDirectory,
@@ -265,6 +266,83 @@ test("a machine's settled notice closes only that machine's decisions (#362)", a
     };
     const own = await device.loadInbox(fresh);
     expect(own.items.find((i) => i.decision.id === "d_asked")?.settled).toBe("withdrawn");
+  } finally {
+    globalThis.fetch = served;
+  }
+});
+
+test("a machine's head exposes a revocation the server withholds, and holds every machine's items (#362)", async () => {
+  const at = "2026-10-06T12:00:00Z";
+  const phone = { id: "phone", signKey: live.owner.device.keys.sign.privateKey };
+  const postEntry = async (entry: unknown) => {
+    const r = await realFetch(`${live.url}/v1/directory`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${live.owner.device.token}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ entry }),
+    });
+    expect(r.status).toBe(201);
+  };
+  const machines = ["m_revoked", "m_honest"].map((id) => {
+    const keys = generateMemberKeys();
+    return { keys, member: { id, role: "machine" as const, name: id, ...publicKeys(keys) } };
+  });
+  for (const m of machines) await postEntry(addEntry(await live.directory(), phone, m.member, at));
+  const before = (await device.deviceContext(ctx.account)) as device.Ctx;
+  // The owner revokes one machine from the phone; the server keeps that entry from this browser.
+  await postEntry(revokeEntry(await live.directory(), phone, "m_revoked", at));
+  const full = await live.directory();
+  const [revoked, honest] = machines as [(typeof machines)[0], (typeof machines)[0]];
+  const { id, name, boxPk, signPk } = before.device;
+  const to = [{ id, role: "device" as const, name, boxPk, signPk }];
+  const decision = (m: typeof revoked, dir?: { length: number; head: string }) =>
+    seal(
+      "decision",
+      {
+        v: 1,
+        id: `d_${m.member.id}`,
+        to: [id],
+        createdAt: at,
+        question: "Deploy?",
+        context: "",
+        options: ["Yes", "No"],
+        recommended: "Yes",
+        source: { machine: m.member.name, project: "p", session: "s" },
+        ...(dir ? { dir } : {}),
+      },
+      { id: m.member.id, signKey: m.keys.sign.privateKey },
+      to,
+    );
+  const items = [
+    { item: decision(revoked), cursor: "1", receivedAt: at },
+    {
+      item: decision(honest, { length: full.length, head: full.head }),
+      cursor: "2",
+      receivedAt: at,
+    },
+  ];
+  const served = globalThis.fetch;
+  let withholding = true;
+  globalThis.fetch = (async (input: string, init?: RequestInit) => {
+    if (input.startsWith("/v1/items?kind=decision")) return Response.json({ items, cursor: "2" });
+    const res = await served(input, init);
+    if (input !== "/v1/directory" || !withholding) return res;
+    const { entries } = (await res.json()) as { entries: unknown[] };
+    return Response.json({ entries: entries.slice(0, -1) });
+  }) as typeof fetch;
+  try {
+    const held = (await device.deviceContext(ctx.account)) as device.Ctx;
+    expect(held.dir.members.get("m_revoked")?.active).toBe(true);
+    await expect(device.loadInbox(held)).rejects.toThrow("holding back changes to your devices");
+    // The head is kept: another load, of nothing new, holds too.
+    await expect(device.loadRuns(held)).rejects.toThrow("holding back");
+    // Served in full, the revoked machine's question no longer opens, and the hold ends.
+    withholding = false;
+    const fresh = (await device.deviceContext(ctx.account)) as device.Ctx;
+    const inbox = await device.loadInbox(fresh);
+    expect(inbox.items.map((i) => i.decision.id)).toEqual(["d_m_honest"]);
   } finally {
     globalThis.fetch = served;
   }

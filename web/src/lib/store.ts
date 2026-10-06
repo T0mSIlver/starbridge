@@ -1,6 +1,6 @@
 // IndexedDB, shared by the page and the service worker. One object store of records keyed by
 // account, so a browser signed in to a second account keeps both devices apart.
-import type { Pin } from "@starbridge/protocol";
+import type { Heads, Pin } from "@starbridge/protocol";
 import type { StoredKeys } from "./crypto/keys";
 import type { PromptReply, Reply } from "./types";
 
@@ -30,6 +30,8 @@ type Records = {
   current: string;
   /** Keys written and read back once by `keeps`. */
   probe: StoredKeys;
+  /** The longest directory head each machine signed into its items (#362). */
+  heads: Heads;
 };
 
 const DB = "starbridge";
