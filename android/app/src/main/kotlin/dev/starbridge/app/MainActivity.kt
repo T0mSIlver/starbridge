@@ -40,6 +40,7 @@ import androidx.navigation3.runtime.NavKey
 import dev.starbridge.app.ui.DecisionKey
 import dev.starbridge.app.ui.LocalClock24
 import dev.starbridge.app.ui.Main
+import dev.starbridge.app.ui.PairLinkKey
 import dev.starbridge.app.ui.PromptKey
 import dev.starbridge.app.ui.Setup
 import dev.starbridge.app.ui.pairing.JoinActions
@@ -67,7 +68,9 @@ class MainActivity : ComponentActivity() {
         // The bars' icons follow the system's light or dark mode, as the theme does.
         enableEdgeToEdge(SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT), SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT))
         super.onCreate(savedInstanceState)
-        handle(intent)
+        // A recreated activity (rotation, or the process restored) gets its launch intent again,
+        // which was handled the first time.
+        if (savedInstanceState == null) handle(intent)
         setContent {
             val colours by prefs.colours.collectAsStateWithLifecycle()
             LaunchedEffect(colours) { splashFor(colours) }
@@ -131,6 +134,14 @@ class MainActivity : ComponentActivity() {
         val data = intent?.data
         if (data != null && SignIn.redirect(data.toString()) != null) {
             store.receiveSignIn(data.toString())
+            setIntent(Intent(this, MainActivity::class.java))
+        }
+        // A pairing link (#611). Signed in to an account this phone is not in yet: another device's
+        // code for this phone to join with. Otherwise a machine's or browser's request: Add a device
+        // with its code, once this phone is in the account.
+        if (data != null && data.scheme == "https" && data.host == "starbridge.run" && data.path == "/pair") {
+            if ((store.phase.value as? Phase.NoDevice)?.accountExists == true) store.joinWithCode(data.toString())
+            else opening.trySend(PairLinkKey(data.toString(), System.nanoTime()))
             setIntent(Intent(this, MainActivity::class.java))
         }
         intent?.getStringExtra(EXTRA_DECISION)?.let {

@@ -784,7 +784,7 @@ function NoMachine() {
       </p>
       <InstallBox />
       <p className={`t-small ${s.noMachineText}`}>
-        Windows and the other steps: <a href="/docs">the docs</a>
+        What setup does: <a href="/docs">the docs</a>
       </p>
     </div>
   );

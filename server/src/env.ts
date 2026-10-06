@@ -5,6 +5,7 @@ import type { Caller } from "./auth";
 import type { Config } from "./config";
 import type { Push } from "./push";
 import type { RateLimiter } from "./ratelimit";
+import type { PairingClients } from "./routes/pairings";
 import type { Usage } from "./usage";
 import type { Waiters } from "./waiters";
 
@@ -20,6 +21,7 @@ export interface Deps {
   quotaAsks: Map<string, string>;
   /** Wakes pairing-result long-polls; keyed by rendezvous id. */
   pairings: Waiters;
+  pairingClients: PairingClients;
   /** Wakes join long-polls; keyed by "join:<id>" and "account:<account>". */
   joins: Waiters;
   limiter: RateLimiter;

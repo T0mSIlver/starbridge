@@ -241,6 +241,7 @@ describe("schemas.json", () => {
     "permission-answer",
     "settled",
     "waiting",
+    "snooze",
     "run",
     "quota",
   ] as const;

@@ -59,7 +59,11 @@ asks before each one:
 
 - Claude Code: the Starbridge plugin, which brings the rules above, the skill
   and the hooks, and allow rules so that `starbridge ask`, `waiting`,
-  `working`, `wait` and `settle` run without a permission prompt.
+  `working`, `wait` and `settle` run without a permission prompt. Beside it,
+  the Starbridge mod, a [Claude Code mod](https://code.claude.com/docs/en/plugins/mods/overview) (code that runs
+  inside Claude Code, 2.1.287 or later), submits each answer into the live
+  session as its next prompt, in the terminal, the desktop app and Remote
+  Control.
 - Codex: the skill, in `~/.codex/skills/starbridge` (or under `$CODEX_HOME`),
   so it knows how to write a question. Codex doesn't load plugins, so it runs
   the same `starbridge` commands without the rules: add
