@@ -27,17 +27,29 @@ export function Quotas() {
     refreshQuotas().catch(() => {});
   }, [refreshQuotas]);
   const now = new Date(useNow(true, 60_000));
+  const [busy, setBusy] = useState(false);
+  const refresh = () => {
+    if (busy) return;
+    setBusy(true);
+    askQuotas()
+      .catch(() => {})
+      .finally(() => setBusy(false));
+  };
   const cards = arrange(quotas?.cards ?? [], settings, now);
   return (
     <>
-      <PhoneBar title="Quotas" find={false} view={<Refresh ask={askQuotas} />} />
+      <PhoneBar
+        title="Quotas"
+        find={false}
+        view={<Refresh busy={busy} run={refresh} size={22} />}
+      />
       <div className={s.page}>
         <header className={s.head}>
           <h1 className={`t-heading ${s.title}`}>Quotas</h1>
           {quotas?.takenAt && (
             <span className={`t-caption ${s.dim}`}>Updated {relative(quotas.takenAt, now)}</span>
           )}
-          <Refresh ask={askQuotas} />
+          <Refresh busy={busy} run={refresh} size={18} />
         </header>
         {quotas?.rejected.length ? (
           <p className={`t-meta ${s.bad}`} role="status">
@@ -74,17 +86,10 @@ export function Quotas() {
 
 /**
  * Asks every machine to read CodexBar again and loads what they post, as Android's pull to
- * refresh does; the icon turns until then, up to the 15 s the server holds the ask.
+ * refresh does; the icon turns until then, up to the 15 s the server holds the ask. The phone
+ * bar's and the header's buttons share one `busy`, so either shows a refresh the other started.
  */
-function Refresh({ ask }: { ask: () => Promise<void> }) {
-  const [busy, setBusy] = useState(false);
-  const run = () => {
-    if (busy) return;
-    setBusy(true);
-    ask()
-      .catch(() => {})
-      .finally(() => setBusy(false));
-  };
+function Refresh({ busy, run, size }: { busy: boolean; run: () => void; size: number }) {
   return (
     <button
       type="button"
@@ -93,7 +98,7 @@ function Refresh({ ask }: { ask: () => Promise<void> }) {
       aria-busy={busy}
       onClick={run}
     >
-      <Icon name="refresh" size={18} />
+      <Icon name="refresh" size={size} />
     </button>
   );
 }
