@@ -1560,6 +1560,8 @@ so the mod is the first path.
   mid-hold and holds no more within 5 s, and the hook stops once its parent process is gone. This
   covers every harness's hook, except one run through a shell that does not `exec` it and
   survives the agent.
+- 2026-10-06. A permission whose input has two keys that read alike once redacted or escaped stays
+  at the keyboard (#410, #357): devices would see one value for both keys.
 
 ## Encryption, with existing libraries
 
