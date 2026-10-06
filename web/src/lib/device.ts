@@ -519,11 +519,11 @@ export async function startDigitJoin(account: string, name: string): Promise<Dig
           shown(derived.digits);
         }
         if (derived && join.approval !== undefined) {
+          const body = openJoinApproval(join.approval, derived, id);
           // The approval's MAC proves only that whoever sent the approver key approved, which
           // may be the server: it counts once this browser's owner has seen the digits match
           // (#355).
           await confirmed;
-          const body = openJoinApproval(join.approval, derived, id);
           if (body.account !== account) throw new ProtocolError("wrong-account", body.account);
           const entries = await api.directory();
           const dir = verifyDirectory(entries, {

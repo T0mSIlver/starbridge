@@ -565,11 +565,11 @@ class ServerStore(
             }
         }
         val approval = view.approval ?: return false
+        val keys = joins.joinerKeys(eph, approverKey, dj.request)
+        val body = joins.openApproval(approval, keys, dj.id)
         // The approval's MAC proves only that whoever sent the approver key approved, which may be
         // the server: it counts once this phone's owner has seen the digits match (#355).
         if (!dj.matched) return false
-        val keys = joins.joinerKeys(eph, approverKey, dj.request)
-        val body = joins.openApproval(approval, keys, dj.id)
         if (body.account != saved.account) throw ProtocolException("wrong-account", body.account)
         val entries = api().directory(0)
         val dir = directories.verify(entries, saved.account, Pin(body.length, body.head))
