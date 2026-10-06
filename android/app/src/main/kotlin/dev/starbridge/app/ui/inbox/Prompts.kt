@@ -167,7 +167,7 @@ fun PromptCard(prompt: Prompt, now: Instant, actions: PromptActions, shape: Shap
         shape = shape,
         color = promptGround(),
     ) {
-        Column(Modifier.padding(Spacing.s4), verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+        Column(Modifier.padding(Spacing.s5), verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
             MetaRow(prompt.source, waited(prompt.createdAt, now), clock = true)
             ToolLine(prompt, StarbridgeTheme.type.action.copy(lineHeight = 22.sp), 20.dp)
             Command(prompt.summary, StarbridgeTheme.type.code.copy(fontSize = 15.sp, lineHeight = 22.sp), scheme.surfaceContainer, RoundedCornerShape(12.dp), PaddingValues(horizontal = 14.dp, vertical = Spacing.s3), maxLines = 3)
@@ -219,7 +219,7 @@ private fun ToolLine(prompt: Prompt, style: TextStyle, icon: Dp, waiting: Boolea
 @Composable
 fun ClosedPrompt(prompt: Prompt, shape: Shape, modifier: Modifier = Modifier) {
     Surface(modifier.fillMaxWidth(), shape = shape, color = MaterialTheme.colorScheme.surfaceContainer) {
-        Column(Modifier.padding(Spacing.s4), verticalArrangement = Arrangement.spacedBy(Spacing.s1)) {
+        Column(Modifier.padding(Spacing.s5), verticalArrangement = Arrangement.spacedBy(Spacing.s1)) {
             Text(prompt.summary, style = StarbridgeTheme.type.code, color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(prompt.ended.orEmpty(), style = StarbridgeTheme.type.small, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
