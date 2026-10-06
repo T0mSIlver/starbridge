@@ -137,12 +137,15 @@ fun Setup(phase: Phase, notice: StateFlow<String?>, dismiss: () -> Unit, openUrl
     }
 }
 
-/** The navigation suite for the window: none on phones, which get [BottomBar]; the wide rail beside wider content. */
+/**
+ * The navigation suite for the window: none on phones, which get [BottomBar]; the wide rail beside
+ * wider content, collapsed on a phone in landscape, where its labels would crowd the badge.
+ */
 @Composable
-private fun suiteType(): NavigationSuiteType {
+fun suiteType(): NavigationSuiteType {
     val width = currentWindowAdaptiveInfo().windowSizeClass
     return when {
-        width.isWidthAtLeastBreakpoint(WindowSizeClass.WIDTH_DP_EXPANDED_LOWER_BOUND) -> NavigationSuiteType.WideNavigationRailExpanded
+        width.isWidthAtLeastBreakpoint(WindowSizeClass.WIDTH_DP_EXPANDED_LOWER_BOUND) && width.isHeightAtLeastBreakpoint(WindowSizeClass.HEIGHT_DP_MEDIUM_LOWER_BOUND) -> NavigationSuiteType.WideNavigationRailExpanded
         width.isWidthAtLeastBreakpoint(WindowSizeClass.WIDTH_DP_MEDIUM_LOWER_BOUND) -> NavigationSuiteType.WideNavigationRailCollapsed
         else -> NavigationSuiteType.None
     }
