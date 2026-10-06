@@ -2,6 +2,7 @@
 # Prod's stack on this machine for the load and failure tests (README.md). Usage:
 #   evals/load/stack.sh up        build and start it; Caddy on http://127.0.0.1:18000
 #   evals/load/stack.sh load …    run load.ts against it, from a container on its network
+#   evals/load/stack.sh spike …   run spike.ts the same way
 #   evals/load/stack.sh deploy    roll it out again under load, as deploy/host/apply.sh does
 #   evals/load/stack.sh small-disk [MB]  move the server's data to an MB-sized tmpfs (sudo)
 #   evals/load/stack.sh big-disk  back to its volume, unmounting the small disk
@@ -56,10 +57,14 @@ secrets() {
       "$pw" "$(openssl rand -hex 16)" > "$LOAD_DIR/umami.env"
   }
   # Prod's Caddyfile, served on plain HTTP at :18000 inside the compose network: the upstreams
-  # by service name, and the admin API open to the published port.
+  # by service name, and the admin API open to the published port. The client's address, which
+  # the server's and Umami's per-address limits key on, is the X-Sim-IP header spike.ts sends
+  # for each visitor; without it the server sees Caddy's own address, as before.
   sed -e 's/^starbridge\.run {/http:\/\/:18000 {/' -e 's/^\tservers {/\tadmin 0.0.0.0:2019\n\tservers {/' \
     -e 's/127\.0\.0\.1:8080/server:8080/; s/127\.0\.0\.1:3001/umami:3000/' \
     -e 's/127\.0\.0\.1:3010/web-a:3000/; s/127\.0\.0\.1:3011/web-b:3000/' \
+    -e 's/^\(\t*\)reverse_proxy server:8080 {/&\n\1\theader_up X-Forwarded-For {http.request.header.X-Sim-IP}/' \
+    -e 's/key {http\.request\.remote\.host}/key {http.request.header.X-Sim-IP}/' \
     "$repo/deploy/Caddyfile" > "$LOAD_DIR/Caddyfile"
   chmod 644 "$LOAD_DIR/Caddyfile"
 }
@@ -121,17 +126,18 @@ big-disk)
   compose up -d server
   healthy http://127.0.0.1:18080/healthz server 30
   ;;
-load)
-  # load.ts in its own container on the stack's network, so its sockets stay out of the
+load | spike)
+  # load.ts or spike.ts in its own container on the stack's network, so its sockets stay out of the
   # machine's port range. It reads the containers' stats from the host's cgroups and the
   # Docker socket. Paths it takes (--until, --out) are under /load, which is LOAD_DIR.
+  script=$1
   shift
-  docker run --rm -i --name starbridge-load-client --network starbridge-load_default \
+  docker run --rm -i --name "starbridge-$script-client" ${LOAD_CLIENT_CPUS:+--cpuset-cpus "$LOAD_CLIENT_CPUS"} --network starbridge-load_default \
     --user "$(id -u):$(id -g)" --group-add "$(stat -c %g /var/run/docker.sock)" \
     -v "$repo:/repo:ro" -v "$LOAD_DIR:/load" -e LOAD_DIR=/load \
     -v /sys/fs/cgroup:/host/cgroup:ro -e LOAD_CGROUPS=/host/cgroup \
     -v /var/run/docker.sock:/var/run/docker.sock --ulimit nofile=524288:524288 \
-    oven/bun:1.4.2 bun /repo/evals/load/load.ts "$@"
+    oven/bun:1.4.2 bun "/repo/evals/load/$script.ts" "$@"
   ;;
 down) compose down -v ;;
 compose) shift; compose "$@" ;;
