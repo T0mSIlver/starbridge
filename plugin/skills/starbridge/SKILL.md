@@ -58,11 +58,9 @@ Now: checkouts fail for those 4 minutes, at peak hour.' \
   --link https://github.com/acme/shop/pull/41
 ```
 
-Quote text in single quotes: in double quotes the shell expands `$` and
-backticks. For context with an apostrophe, end the command with
-`--context-file - <<'EOF'`, then the text, then `EOF` alone on a line. Other
-flags: `--image` (up to 4 PNG or JPEG), `--link` (up to 4 HTTPS URLs),
-`--waiting`, `--answer-in`. Never set `--default`: with no
+Quote text in single quotes, since double quotes expand `$` and backticks,
+and write apostrophes as ’. Other flags: `--image` (up to 4 PNG or JPEG),
+`--link` (up to 4 HTTPS URLs), `--waiting`, `--answer-in`. Never set `--default`: with no
 answer, the card waits. `ask` prints the decision id (`d_Xk3…`) and how the
 answer comes back.
 
