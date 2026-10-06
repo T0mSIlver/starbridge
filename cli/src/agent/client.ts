@@ -39,9 +39,10 @@ export class Interrupted extends Error {}
 
 /**
  * A connection error that proves the agent never saw the request, so falling back cannot do
- * anything twice: no socket file, nobody listening on it, or not a socket.
+ * anything twice: no socket file, nobody listening on it, not a socket, or a path too long for a
+ * socket, which no agent can listen on either (#622).
  */
-const NOT_LISTENING = new Set(["ENOENT", "ECONNREFUSED", "ENOTSOCK"]);
+const NOT_LISTENING = new Set(["ENOENT", "ECONNREFUSED", "ENOTSOCK", "EINVAL"]);
 /** A connection the agent closed under the call: it stopped or restarted. */
 const DROPPED = new Set(["ECONNRESET", "EPIPE"]);
 

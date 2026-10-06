@@ -33,6 +33,9 @@ import {
 } from "./api";
 import { AgentClient, AgentError, NoAgent } from "./client";
 
+/** The longest unix socket path every platform takes: macOS's `sun_path` holds 104 bytes with the NUL, Linux's 108 (#622). */
+const MAX_SOCKET_PATH = 103;
+
 export interface Request {
   params: Record<string, string>;
   query: URLSearchParams;
@@ -196,6 +199,10 @@ export class Agent implements Hub {
   }
 
   private async listenUnix(server: Server) {
+    if (Buffer.byteLength(this.socket) > MAX_SOCKET_PATH)
+      throw new UsageError(
+        `the agent's socket path ${this.socket} is over ${MAX_SOCKET_PATH} bytes, too long for a unix socket: set STARBRIDGE_AGENT_SOCKET to a shorter path, or STARBRIDGE_CONFIG_DIR to a shorter folder`,
+      );
     try {
       if (lstatSync(this.socket).isSocket()) unlinkSync(this.socket);
     } catch {}
