@@ -117,7 +117,7 @@ export async function status(sys: Sys): Promise<number> {
   if (hasOpencode(sys)) {
     const state = opencodeState(sys);
     out(
-      `opencode skill and plugin: ${state === "current" ? "installed" : state === "outdated" ? "outdated (`starbridge setup` updates them)" : "not installed"}`,
+      `opencode skill and plugin: ${state === "current" ? "installed" : state === "outdated" ? "outdated (`starbridge setup` updates them)" : state === "foreign" ? "not managed by starbridge (another skill or plugin named starbridge)" : "not installed"}`,
     );
   }
   return 0;

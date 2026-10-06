@@ -641,10 +641,20 @@ test("opencode files someone else wrote stay, and so does the code a changed ent
   expect(readFileSync(join(oc, "plugins/starbridge.ts"), "utf8")).toBe("// mine\n");
   expect(existsSync(join(oc, "starbridge"))).toBe(false);
   expect(existsSync(join(oc, "skills/starbridge/SKILL.md"))).toBe(true);
-  // The agent's update leaves them alone too.
-  expect(opencodeState(sys)).toBe("outdated");
+  // Status says so rather than "outdated" forever (#541), and the agent's update leaves them alone.
+  expect(opencodeState(sys)).toBe("foreign");
   installOpencode(sys, true);
   expect(readFileSync(join(oc, "plugins/starbridge.ts"), "utf8")).toBe("// mine\n");
+  // A setup skill gone stale still reads as outdated beside the foreign entry.
+  writeFileSync(join(oc, "skills/starbridge/SKILL.md"), "# Written by starbridge 0.0.1\n");
+  expect(opencodeState(sys)).toBe("outdated");
+  // Someone else's skill beside a current plugin: the same.
+  rmSync(join(oc, "plugins/starbridge.ts"));
+  rmSync(join(oc, "skills/starbridge/SKILL.md"));
+  installOpencode(sys);
+  writeFileSync(join(oc, "skills/starbridge/SKILL.md"), "---\nname: starbridge\n---\n");
+  expect(opencodeState(sys)).toBe("foreign");
+  rmSync(join(oc, "skills/starbridge/SKILL.md"));
 
   // An entry the owner took over (its marker gone) keeps its code at uninstall.
   rmSync(join(oc, "plugins/starbridge.ts"));
