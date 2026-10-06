@@ -12,7 +12,24 @@ Your phone, browsers and machines encrypt everything they send each other, so th
 only ciphertext. Use the free server at [starbridge.run](https://starbridge.run), or host your
 own.
 
-## Install
+<!-- Demo video: drag the short MP4 into GitHub's README editor here, under the intro. -->
+
+Launch week: [known issues](https://github.com/T0mSIlver/starbridge/issues?q=is%3Aissue%20label%3Aknown-issue).
+
+## Get the app
+
+- **Android:** the signed APK from the [latest release](https://github.com/T0mSIlver/starbridge/releases/latest),
+  or add the repository to [Obtainium](https://apps.obtainium.imranr.dev/redirect?r=obtainium://add/https://github.com/T0mSIlver/starbridge)
+  to get updates. The APK is signed with the same key as the Google Play build, so a Play install
+  later updates it in place.
+- **Google Play:** in closed testing. Google needs 12 testers for 14 days before the app can be
+  public. To help, join [the testers group](https://groups.google.com/g/starbridge-testers) with
+  your phone's Google account, then [become a tester](https://play.google.com/apps/testing/dev.starbridge.app).
+- **iPhone:** web app, native app is planned. Open [starbridge.run](https://starbridge.run) in
+  Safari and add it to the Home Screen to get notifications.
+- **Any browser:** [starbridge.run](https://starbridge.run).
+
+## Install the CLI
 
 Sign in at [starbridge.run](https://starbridge.run) or in the Android app, then install the CLI
 on each machine that runs agents:
