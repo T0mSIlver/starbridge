@@ -80,7 +80,11 @@ services:
     logging: *logging
 
   caddy:
-    image: caddy:2
+    # Caddy with the rate_limit module (caddy.Dockerfile).
+    build:
+      context: .
+      dockerfile: caddy.Dockerfile
+    image: starbridge-caddy:latest
     restart: unless-stopped
     # Host networking: Caddy sees real client IPv4 and IPv6 addresses, which the server's
     # per-IP rate limits read from X-Forwarded-For.

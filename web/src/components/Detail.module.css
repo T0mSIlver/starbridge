@@ -30,6 +30,17 @@
   margin-top: var(--s1);
 }
 
+/* A long option wraps inside its button. Unwrapped, it widens the page, and a phone's browser
+   zooms the whole page out to fit it. */
+.options > button {
+  max-width: 100%;
+  height: auto;
+  min-height: var(--s10);
+  padding-block: var(--s2);
+  white-space: normal;
+  text-align: center;
+}
+
 .toolHead {
   display: flex;
   align-items: center;
@@ -78,6 +89,46 @@
   justify-items: start;
 }
 
+/* Material 3's filled field with a trailing icon button, centred on the field's line. */
+.field {
+  position: relative;
+  width: 100%;
+}
+
+.fieldInput {
+  display: block;
+  padding-right: calc(var(--size-tap) + var(--s1));
+  resize: none;
+  field-sizing: content;
+}
+
+.send {
+  position: absolute;
+  top: 50%;
+  right: var(--s1);
+  display: grid;
+  place-items: center;
+  width: var(--s10);
+  height: var(--s10);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: none;
+  color: var(--fg);
+  transform: translateY(-50%);
+  transition: background var(--t-fast) var(--ease);
+}
+
+.send:disabled {
+  color: var(--fg3);
+}
+
+@media (hover: hover) {
+  .send:not(:disabled):hover {
+    background: var(--surface);
+  }
+}
+
 .head {
   display: grid;
   gap: var(--s4);
@@ -93,13 +144,6 @@
   padding: var(--s4);
   border-radius: var(--radius-lg);
   background: var(--accent-soft);
-}
-
-/* "Default" after the first option's label, quiet like the key hints. */
-.default {
-  margin-left: var(--s1h);
-  font-weight: 400;
-  opacity: 0.75;
 }
 
 @media (prefers-reduced-motion: reduce) {

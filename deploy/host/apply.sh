@@ -4,14 +4,17 @@ set -eu
 cd /opt/starbridge/deploy
 compose="docker compose -p starbridge -f compose.yaml"
 
-install -m 644 host/starbridge-backup.service host/starbridge-backup.timer /etc/systemd/system/
+install -m 644 host/starbridge-backup.service host/starbridge-backup.timer \
+  host/starbridge-umami-trim.service host/starbridge-umami-trim.timer /etc/systemd/system/
 systemctl daemon-reload
-systemctl enable --now starbridge-backup.timer
+systemctl enable --now starbridge-backup.timer starbridge-umami-trim.timer
 install -m 755 host/deploy-rev.sh /usr/local/sbin/starbridge-deploy
 
 host/server-env.sh
 host/umami-env.sh
 $compose build --pull server web-a
+# Not pulled: Caddy's image changes only when caddy.Dockerfile does.
+$compose build caddy
 
 # healthy URL SERVICE [SECONDS]
 healthy() {

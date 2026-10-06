@@ -10,6 +10,7 @@ import { Images, Links } from "./Attachments";
 import { Context } from "./Context";
 import s from "./Detail.module.css";
 import { KindTile, MetaRow, SessionLine, slotTime } from "./Feed";
+import { Icon } from "./icons";
 import { ordered } from "./options";
 import ui from "./ui.module.css";
 
@@ -79,7 +80,7 @@ function Head({ since, children }: { since?: string; children: React.ReactNode }
   return <div className={`${s.head} ${since ? s.blocks : ""}`}>{children}</div>;
 }
 
-/** A typed answer and its Send button. */
+/** A typed answer: a filled text field with its send button on the field's line (#254). */
 function FreeText({
   id,
   sending,
@@ -103,23 +104,27 @@ function FreeText({
       <label className="sr-only" htmlFor={`answer-${id}`}>
         Your answer
       </label>
-      <textarea
-        id={`answer-${id}`}
-        className={`${ui.input} t-body`}
-        rows={2}
-        placeholder="Reply"
-        value={text}
-        // biome-ignore lint/a11y/noAutofocus: opened by the Reply button, to type at once
-        autoFocus={focus}
-        onChange={(e) => setText(e.target.value)}
-      />
-      <button
-        type="submit"
-        className={`t-label ${ui.btn} ${ui.fill}`}
-        disabled={sending || !text.trim()}
-      >
-        Send
-      </button>
+      <div className={s.field}>
+        <textarea
+          id={`answer-${id}`}
+          className={`${ui.input} t-body ${s.fieldInput}`}
+          rows={1}
+          placeholder="Reply"
+          value={text}
+          // biome-ignore lint/a11y/noAutofocus: opened by the Reply button, to type at once
+          autoFocus={focus}
+          onChange={(e) => setText(e.target.value)}
+        />
+        <button
+          type="submit"
+          className={s.send}
+          aria-label="Send"
+          title="Send"
+          disabled={sending || !text.trim()}
+        >
+          <Icon name="send" size={20} />
+        </button>
+      </div>
     </form>
   );
 }
@@ -191,7 +196,7 @@ export function QuestionDetail({
           <AnswerElsewhere page={d.answerIn} />
         </div>
       ) : options.length > 0 ? (
-        <fieldset className={s.actions}>
+        <fieldset className={`${s.actions} ${s.options}`}>
           <legend className="sr-only">Answer</legend>
           {options.map((o, i) => (
             <button
@@ -203,7 +208,8 @@ export function QuestionDetail({
               onClick={() => send({ choice: o })}
             >
               {o}
-              {i === 0 && <span className={s.default}>Default</span>}
+              {/* Seen by its place and amber; heard as "Default" (#254). */}
+              {i === 0 && <span className="sr-only"> Default</span>}
               {keys && i < 4 && <Kbd k={String(i + 1)} />}
             </button>
           ))}

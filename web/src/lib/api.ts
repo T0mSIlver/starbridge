@@ -13,21 +13,56 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * A deploy restarts the server in a few seconds (#150), so a 502 or 503 from Caddy, or a refused
+ * connection, is retried quietly for this long before the caller hears of it (#250).
+ */
+const RETRY_FOR_MS = 20_000;
+
+/** Resolves after `ms`, or rejects at once when `signal` aborts. */
+function pause(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) return reject(signal.reason);
+    const t = setTimeout(resolve, ms);
+    const abort = () => {
+      clearTimeout(t);
+      reject(signal?.reason);
+    };
+    signal?.addEventListener("abort", abort, { once: true });
+  });
+}
+
 async function call<T>(
   method: string,
   path: string,
   opts: { body?: unknown; headers?: Record<string, string>; signal?: AbortSignal } = {},
 ): Promise<T> {
-  const res = await fetch(`/v1${path}`, {
-    method,
-    credentials: "same-origin",
-    headers: {
-      ...(opts.body === undefined ? {} : { "content-type": "application/json" }),
-      ...opts.headers,
-    },
-    body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
-    signal: opts.signal,
-  });
+  const started = Date.now();
+  let res: Response;
+  for (let wait = 250; ; wait = Math.min(wait * 2, 4_000)) {
+    const retry = Date.now() - started + wait <= RETRY_FOR_MS;
+    try {
+      res = await fetch(`/v1${path}`, {
+        method,
+        credentials: "same-origin",
+        headers: {
+          ...(opts.body === undefined ? {} : { "content-type": "application/json" }),
+          ...opts.headers,
+        },
+        body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
+        signal: opts.signal,
+      });
+    } catch (e) {
+      // fetch tells a refused connection from one cut after the request left by nothing, so
+      // only a read, which is safe to repeat, retries on it.
+      if (opts.signal?.aborted || method !== "GET" || !retry) throw e;
+      await pause(wait, opts.signal);
+      continue;
+    }
+    if ((res.status !== 502 && res.status !== 503) || !retry) break;
+    await res.body?.cancel();
+    await pause(wait, opts.signal);
+  }
   const text = await res.text();
   let json: unknown;
   try {

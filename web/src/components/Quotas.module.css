@@ -20,7 +20,7 @@
   color: var(--bad);
 }
 
-/* One card per provider, apart as Android's cards are, with no line between them. */
+/* Under 900 px, one card per provider, apart as Android's cards are, with no line between them. */
 .rows {
   display: grid;
   gap: var(--s3);
@@ -54,5 +54,59 @@
 
   .rows {
     padding: 0;
+  }
+}
+
+/* From 900 px the page may run up to `size.page`; its table needs `size.quota-table-from` of
+   its own width, which the rail and padding take a share of, so the table asks the page. */
+@media (min-width: 900px) {
+  .page {
+    max-width: calc(var(--size-page) + 2 * var(--s16));
+  }
+}
+
+.page {
+  container: quotas / inline-size;
+}
+
+/* `size.quota-table-from`: a query cannot read a custom property. */
+@container quotas (min-width: 840px) {
+  .rows {
+    gap: 0;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-md);
+    background: var(--surface);
+  }
+
+  .rows > * {
+    border: 0;
+    border-radius: 0;
+    background: var(--surface);
+  }
+
+  .rows > :first-child {
+    border-radius: var(--radius-md) var(--radius-md) 0 0;
+  }
+
+  .rows > :last-of-type {
+    border-radius: 0 0 var(--radius-md) var(--radius-md);
+  }
+
+  .rows > * + * {
+    border-top: 1px solid var(--line);
+  }
+}
+
+/* Keeps a provider's later machines' names in line with its first, which has the handle. */
+.handleSpace {
+  display: none;
+  flex: none;
+  width: var(--s5);
+  margin-left: calc(-1 * var(--s1));
+}
+
+@container quotas (min-width: 840px) {
+  .handleSpace {
+    display: block;
   }
 }

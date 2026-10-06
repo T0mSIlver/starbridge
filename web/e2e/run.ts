@@ -138,6 +138,16 @@ async function noWordsAsked(page: Page) {
   if (found) throw new Error(`the page says "${found[0]}"`);
 }
 
+/** Nothing runs past the window's width: a phone's browser would zoom the whole page out. */
+async function fitsWidth(page: Page, name: string) {
+  const [content, window] = (await page.evaluate(() => [
+    document.documentElement.scrollWidth,
+    innerWidth,
+  ])) as [number, number];
+  if (content > window)
+    throw new Error(`${name}: the page is ${content} px wide in a ${window} px window`);
+}
+
 async function shoot(page: Page, name: string) {
   for (const [size, viewport] of [
     ["phone", { width: 390, height: 844 }],
@@ -147,6 +157,7 @@ async function shoot(page: Page, name: string) {
       await page.setViewportSize(viewport);
       await page.emulateMedia({ colorScheme: scheme });
       await page.waitForTimeout(150);
+      await fitsWidth(page, name);
       // Firefox draws the phone layout's fixed bottom bar mid-page in a full-page capture.
       await page.screenshot({
         path: join(SHOTS, `${name}-${size}-${scheme}.png`),
@@ -345,6 +356,42 @@ async function main() {
     .waitFor({ state: "detached", timeout: 10_000 });
   await shoot(page, "inbox-cleared");
   await page.getByRole("button", { name: /History/ }).click();
+
+  step("long options wrap on a phone's row instead of widening the page");
+  const long = cli(
+    "ask-long",
+    [
+      "ask",
+      "--question",
+      "Which inbox shot goes on the landing page?",
+      "--option",
+      "The dark inbox, because it shows the amber waiting rows best against the background",
+      "--option",
+      "The light inbox, because most visitors browse in light mode during the day",
+      "--option",
+      "Both, following the visitor's system theme",
+      "--project",
+      "starbridge",
+      "--session",
+      "e2e-long",
+      "--wait",
+    ],
+    machineHome,
+  );
+  await long.waitFor(/^d_\S+$/m);
+  await page
+    .getByText("Which inbox shot goes on the landing page?")
+    .first()
+    .waitFor({ timeout: 30_000 });
+  await shoot(page, "inbox-long-options");
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page
+    .getByRole("button", { name: /^Both, following/ })
+    .first()
+    .click();
+  await long.waitFor(/Answer to d_\S+ .*: Both, following the visitor's system theme/);
+  if ((await long.exited) !== 0) throw new Error("ask --wait for the long options failed");
+  await page.setViewportSize(DESKTOP);
 
   step("leave one open decision for the screenshots");
   const open = cli(
@@ -781,6 +828,16 @@ async function main() {
   await page.goto(`${ORIGIN}/settings/devices/add`);
   await page.getByTestId("shown-code").waitFor();
   await shoot(page, "add-device");
+
+  step("sign out the recovered browser: it leaves the devices and forgets its keys");
+  await pageC
+    .getByRole("navigation", { name: "Main" })
+    .getByRole("link", { name: "Settings" })
+    .click();
+  await pageC.getByRole("button", { name: "Sign out" }).click();
+  await pageC.getByRole("dialog").getByRole("button", { name: "Sign out" }).click();
+  // With no keys left, the browser is a visitor: the landing page, not "Sign in to Starbridge".
+  await pageC.getByRole("heading", { name: /Your agents ask/ }).waitFor({ timeout: 30_000 });
 
   await ff.close();
   console.log("\nE2E PASSED");
