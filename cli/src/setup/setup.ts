@@ -139,7 +139,11 @@ export async function setup(sys: Sys, opts: SetupOpts): Promise<number> {
       ctx.env.STARBRIDGE_SERVER ??
       (await prompt.text("Starbridge server:", DEFAULT_SERVER));
     await checkServer(server);
-    const code = await pair(ctx, { server, ...(opts.name ? { name: opts.name } : {}) });
+    const code = await pair(ctx, {
+      server,
+      again: "starbridge setup",
+      ...(opts.name ? { name: opts.name } : {}),
+    });
     if (code !== 0) return code;
     machine = ctx.store.machine();
   }

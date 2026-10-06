@@ -150,7 +150,7 @@ pairingRoutes.post("/pairings", async (c) => {
  * request open until the new member posts, and gets 204 if `wait` passes first.
  */
 pairingRoutes.get("/pairings/:rendezvous", requireCaller("paired-device"), async (c) => {
-  rateLimit(c, `pair-read:${c.var.caller.account}`, [30, 60_000]);
+  rateLimit(c, `pair-read:${c.var.caller.account}`, c.var.config.limits.pairingReads);
   const rendezvous = c.req.param("rendezvous");
   if (!RENDEZVOUS.test(rendezvous)) fail(404, "not-found");
   const find = () => {
@@ -217,7 +217,7 @@ pairingRoutes.post("/pairings/:rendezvous/approve", requireCaller("paired-device
 });
 
 pairingRoutes.get("/pairings/:rendezvous/result", async (c) => {
-  rateLimit(c, `pair-result:${ipKey(c)}`, [60, 60_000]);
+  rateLimit(c, `pair-result:${ipKey(c)}`, c.var.config.limits.pairingResults);
   const rendezvous = c.req.param("rendezvous");
   const claim = c.req.header("x-claim") ?? "";
   let p = load(c, rendezvous);

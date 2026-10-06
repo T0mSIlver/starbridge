@@ -175,7 +175,7 @@ authRoutes.post("/auth/app/session", async (c) => {
 authRoutes.post("/auth/owner", async (c) => {
   const { ownerToken, secureCookies } = c.var.config;
   if (!ownerToken) fail(404, "not-configured", "owner sign-in is off on this server");
-  rateLimit(c, `owner:${ipKey(c)}`, [10, 60_000]);
+  rateLimit(c, `owner:${ipKey(c)}`, c.var.config.limits.ownerSignIns);
   const { token } = await json(c, z.object({ token: z.string().max(1000) }));
   if (!safeEqual(token, ownerToken)) fail(401, "unauthenticated", "wrong owner token");
   const db = c.var.db;

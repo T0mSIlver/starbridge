@@ -68,6 +68,17 @@ export const DEFAULT_LIMITS = {
    * the load test (#619).
    */
   githubCallbacks: [60, MINUTE] as RateWindow,
+  /** Owner-token sign-ins per address, so the token cannot be guessed fast. */
+  ownerSignIns: [10, MINUTE] as RateWindow,
+  /** Sign-in challenges per account, which a device signs to bind a new session. */
+  challenges: [20, MINUTE] as RateWindow,
+
+  /** Pairing requests posted per address: a person's setup posts one per machine or page (#619). */
+  pairingPosts: [30, MINUTE] as RateWindow,
+  /** Pairing requests read per account, by the device approving the pairing. */
+  pairingReads: [30, MINUTE] as RateWindow,
+  /** Pairing results read per address, by the member that posted the request. */
+  pairingResults: [60, MINUTE] as RateWindow,
 
   /**
    * Pairings stored on the whole server, about 4 KB each: the disk bound. Filling it takes 400
@@ -79,11 +90,19 @@ export const DEFAULT_LIMITS = {
    * count, so an office behind one NAT pairs as many members as it likes, 50 waiting at a time.
    */
   pairingsPerClient: 50,
-  /** Pairing requests per address: each person's setup posts one per machine or page (#619). */
-  pairingPosts: [30, MINUTE] as RateWindow,
+
+  /**
+   * Relayed Web Pushes in flight on the whole server (RELAY_MODE), and per address. Each may
+   * take pushTimeoutMs, so a slow or hostile push service cannot pile up open requests; past
+   * either the relay answers 503. FCM, which goes to Google, does not count (#577).
+   */
+  relaySends: 16,
+  relaySendsPerClient: 4,
 
   /** Push subscription writes per account. */
   pushSubscribes: [30, MINUTE] as RateWindow,
+  /** Pushes relayed for other servers per address, on a server in relay mode. */
+  relayPosts: [120, MINUTE] as RateWindow,
 
   /** Asks for fresh quota snapshots per account; each makes every machine run CodexBar. */
   quotaAsks: [6, MINUTE] as RateWindow,

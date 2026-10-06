@@ -293,7 +293,9 @@ provider plugins add providers, not panels.
 
 - FCM goes through the relay, since its credentials belong to the app's Firebase project. Web Push
   goes through the relay only when a server has no VAPID keys; UnifiedPush always goes direct. The
-  relay is open, rate-limited per IP, and pushes only ciphertext or ids. A push carries the
+  relay is open, rate-limited per IP and in all (600 a minute in Caddy; 16 Web Pushes in flight
+  in the server, 4 per address), so nobody can aim it at a host or burn the VAPID key (#577). It
+  pushes only ciphertext or ids. A push carries the
   device's ciphertext when it fits FCM's 4 KB, else the item id.
 - Quota snapshots and runs skip Web Push: browsers drop subscriptions whose pushes show no
   notification (Firefox after 16). The web page polls them instead.
@@ -420,7 +422,12 @@ Where nothing can deliver a prompt, the agent runs `starbridge wait <id> --timeo
 ending its turn. `ask` prints which of the two applies (#203). `wait <id>` marks the decision
 waiting, which notifies the owner once more; `wait --no-mark` collects the answer to a question
 that blocks nothing yet, such as one for tomorrow, without that (#603). A `wait` without an id, run in an
-agent's session, takes only that session's answers (#324).
+agent's session, takes only that session's answers (#324). `ask` promises a prompt in Claude Code
+only when that session's mod called the local agent within the last 45 s (#537); after `/clear` the mod's
+hello under the new id names the old one (`replaces`), which then no longer counts. An installed plugin is no proof,
+since a session started before it, or one whose mod failed to load, has none; without an agent,
+the poller's lease says only that some session runs a mod. When unsure, `ask` prints the `wait`
+line, the safe side: at worst a prompt repeats an answer the agent already read.
 
 | Harness | Delivery |
 |---|---|
@@ -774,8 +781,8 @@ Tokens, type and components: `DESIGN.md`.
   privacy@starbridge.run; abuse@ appears only in `/terms`.
 - **Analytics** (#141). Umami, self-hosted, on the landing page, the docs, `/privacy` and `/terms`
   only. No cookie, no stored IP, a daily salt, Do Not Track honoured, so no consent banner. The
-  Android app has none (Play data safety form). Caddy rate-limits its open endpoint, and a timer
-  caps its tables, so it cannot fill the disk.
+  Android app has none (Play data safety form). Caddy rate-limits its open endpoint, and an hourly
+  timer keeps each table to 180 days and a million rows, so it cannot fill the disk (#574).
 - **Launch funnel** (#559, #590). Landing view, a sign-in click, first sign-in, recovery key
   saved, first machine, first answer (with its kind: choice, text or Done); a second device is
   counted beside it. The signed-in app loads no tracker: the browser that created an account posts
