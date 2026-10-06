@@ -95,7 +95,7 @@ async function get(url: string, init?: RequestInit): Promise<Response> {
 export async function latestVersion(releases = RELEASES_URL): Promise<string> {
   const res = await get(`${releases}/latest`, { redirect: "manual" });
   const m = /\/tag\/v([^/]+)$/.exec(res.headers.get("location") ?? "");
-  if (!m) throw new ReleaseError(`no latest release at ${releases}`);
+  if (!m) throw new DownloadError(`no latest release at ${releases} (${res.status})`);
   return m[1] as string;
 }
 

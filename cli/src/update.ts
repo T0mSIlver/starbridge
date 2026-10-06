@@ -13,6 +13,7 @@ import {
   platformAsset,
   RELEASE_KEY,
   RELEASES_URL,
+  ReleaseError,
 } from "./release";
 import { updateCodexbar } from "./setup/codexbar";
 import { piPackage, piSource } from "./setup/harnesses";
@@ -111,14 +112,14 @@ export async function update(
   const sys = makeSys(ctx, defaults);
   const configured = ctx.store.agentConfig().quota?.codexbar;
   if (codexbar !== undefined) return updateCodexbar(sys, configured, codexbar);
-  // CodexBar comes from elsewhere: a download that failed here, offline say, does not hold it
-  // back (#617). A release that does not check out stops everything.
+  // CodexBar comes from elsewhere: a download that failed here, offline or cut short, does not
+  // hold it back (#617). A release that does not check out stops everything.
   let self = 0;
   try {
     await updateSelf(ctx, install, pubkey);
   } catch (e) {
-    if (!(e instanceof DownloadError)) throw e;
-    ctx.out(`Could not update starbridge: ${e.message}`);
+    if (e instanceof ReleaseError && !(e instanceof DownloadError)) throw e;
+    ctx.out(`Could not update starbridge: ${(e as Error).message}`);
     self = 1;
   }
   return Math.max(self, await updateCodexbar(sys, configured));

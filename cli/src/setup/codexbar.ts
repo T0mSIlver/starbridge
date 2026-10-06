@@ -18,7 +18,7 @@ import {
   unlinkSync,
   writeSync,
 } from "node:fs";
-import { basename, dirname, join } from "node:path";
+import { dirname, join } from "node:path";
 import { parseUsage, runCodexbar } from "../codexbar";
 import { failure, run, type Sys, which } from "./sys";
 
@@ -196,7 +196,7 @@ export async function installTarball(sys: Sys, key: string, version: string): Pr
   const old = `${fresh}.old`;
   mkdirSync(fresh, { recursive: true });
   try {
-    await download(sys, res, file, want, `CodexBar ${version} (${key}`);
+    await download(sys, res, file, want, name, `CodexBar ${version} (${key})`);
     const r = await run(sys, "tar", ["-xzf", file, "-C", fresh]);
     if (r?.code !== 0)
       throw new Error(`could not unpack ${name} into ${opt}; is the disk full? (${failure(r)})`);
@@ -212,13 +212,19 @@ export async function installTarball(sys: Sys, key: string, version: string): Pr
 }
 
 /**
- * Streams `res`, the tarball of `what`, into `file`, saying its size first and then how far it got every few seconds,
+ * Streams `res`, the tarball `name` of `label`, into `file`, saying its size first and then how far it got every few seconds,
  * since a tarball of 170 MB takes a minute or more (#618). Throws unless its SHA-256 is `want`.
  */
-async function download(sys: Sys, res: Response, file: string, want: string, what: string) {
+async function download(
+  sys: Sys,
+  res: Response,
+  file: string,
+  want: string,
+  name: string,
+  label: string,
+) {
   const total = Number(res.headers.get("content-length")) || undefined;
-  sys.ctx.out(`Downloading ${what}${total ? `, ${size(total)}` : ""})`);
-  const name = basename(res.url) || what;
+  sys.ctx.out(`Downloading ${label}${total ? `, ${size(total)}` : ""}`);
   const hash = createHash("sha256");
   const fd = openSync(file, "w");
   let got = 0;
