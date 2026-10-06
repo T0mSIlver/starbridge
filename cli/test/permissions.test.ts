@@ -7,7 +7,13 @@ import { AgentClient } from "../src/agent/client";
 import { makeAgent } from "../src/agent/main";
 import type { Agent } from "../src/agent/server";
 import { run } from "../src/cli";
-import { ASK_USER_REASON, hookAskUser, hookPermission, hookSettle } from "../src/hook";
+import {
+  ASK_USER_REASON,
+  hookAskUser,
+  hookPermission,
+  hookSettle,
+  untilOrphaned,
+} from "../src/hook";
 import {
   buildPermission,
   DENIED,
@@ -328,6 +334,43 @@ test("SIGTERM (Esc or No at the keyboard) reports the prompt settled and prints 
     itemId: permission.id,
     outcome: "keyboard",
   });
+});
+
+test("a hook that hangs up and does not hold again is gone: the prompt settles at the keyboard (#400)", async () => {
+  const ctx = await machine();
+  const agent = new AgentClient(join(ctx.store.dir, "agent.sock"));
+  const { id } = await agent.call<{ id: string }>(
+    "POST",
+    "/v1/permissions",
+    {
+      hook: JSON.parse(request()),
+      agent: "opencode",
+      source: { project: "starbridge", session: "ses_1" },
+      waitMs: 60_000,
+    },
+    10_000,
+  );
+  const hold = async (ms: number) => {
+    const hangUp = AbortSignal.timeout(ms);
+    await agent
+      .call("POST", `/v1/permissions/${id}/wait`, { wait: 20 }, 25_000, hangUp)
+      .catch(() => {});
+  };
+  // Hung up, then held again at once: still the hook's.
+  await hold(300);
+  await hold(6_000);
+  expect(await server.opened("settled")).toEqual([]);
+  await until(async () => (await server.opened("settled")).length === 1, 10_000);
+  expect((await server.opened("settled"))[0]).toMatchObject({ itemId: id, outcome: "keyboard" });
+});
+
+test("a hook whose parent is gone stops waiting", async () => {
+  let ppid = 42;
+  const watch = untilOrphaned(undefined, () => ppid);
+  expect(watch.signal.aborted).toBe(false);
+  ppid = 1;
+  await until(async () => watch.signal.aborted, 5_000);
+  watch.stop();
 });
 
 test("while disabled the hooks post nothing and print nothing", async () => {

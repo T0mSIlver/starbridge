@@ -5,6 +5,10 @@
  * agent, else the CLI) and submits each answer with `promptAsync`. An idle session starts a turn
  * with it; a busy one takes it at the next step of its turn.
  *
+ * After a restart, a session waiting for its answer runs no command, so the plugin also starts
+ * the loop of each session of its directory that the CLI's state shows waiting. Two opencode
+ * processes may show one session; the first to claim an answer submits it.
+ *
  * opencode gives commands no session id, so the plugin sets STARBRIDGE_OPENCODE_SESSION and
  * STARBRIDGE_OPENCODE_TITLE for them (cli/src/opencode.ts), and STARBRIDGE_OPENCODE_ANSWERS while
  * answers come back, which they cannot in `opencode run`: it exits once the session is idle.
@@ -18,8 +22,9 @@
  * config folder with the repository's layout, and opencode loads it with Bun. The types below are
  * the part of opencode's plugin API it uses, so it needs no dependency on opencode.
  */
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { readFile, stat, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { AgentLoop, socketPath } from "../hooks/agent.ts";
@@ -30,7 +35,9 @@ import { Switch } from "../hooks/switch.ts";
 /** opencode's SDK client (v1), as plugins receive it. */
 interface Client {
   session: {
-    get(o: { path: { id: string } }): Promise<{ data?: { title?: string; parentID?: string } }>;
+    get(o: {
+      path: { id: string };
+    }): Promise<{ data?: { title?: string; parentID?: string; directory?: string } }>;
     promptAsync(o: {
       path: { id: string };
       body: { parts: { type: "text"; text: string }[] };
@@ -80,6 +87,9 @@ const INHERITED = ["CLAUDECODE", "CODEX_THREAD_ID", "PI_SESSION_ID"];
  */
 const HOOK_MS = 600_000;
 
+/** How long a claim on a submitted answer is kept (`claim`), and a question resumed. */
+const CLAIM_MS = 7 * 24 * 3600_000;
+
 const here = dirname(fileURLToPath(import.meta.url));
 
 function rule(): string | undefined {
@@ -107,6 +117,68 @@ export function hookInput(p: Asked, cwd: string) {
     tool_name: p.permission,
     tool_input: typeof command === "string" ? { command } : { path: (p.patterns ?? []).join(", ") },
   };
+}
+
+/**
+ * The sessions in the CLI's state told their answer comes back as a prompt, with a question
+ * asked in the last `CLAIM_MS` still open or an answer not yet delivered: after a restart they run
+ * no command that would start their loop. A session told to `wait` (`opencode run`) is left to it.
+ */
+export function waitingSessions(state: unknown, now: number): string[] {
+  const st = state as {
+    asked?: Record<
+      string,
+      {
+        session?: string;
+        askedAt?: string;
+        extensionAnswers?: boolean;
+        settled?: boolean;
+        answerIn?: boolean;
+      }
+    >;
+    answers?: Record<string, { seen?: boolean }>;
+  };
+  const ids = new Set<string>();
+  for (const [id, a] of Object.entries(st?.asked ?? {})) {
+    if (!a.session || !a.extensionAnswers || a.settled || a.answerIn) continue;
+    if (st.answers?.[id]?.seen || !(now - Date.parse(a.askedAt ?? "") < CLAIM_MS)) continue;
+    ids.add(a.session);
+  }
+  return [...ids];
+}
+
+/**
+ * Claims answer `line` for session `id`, so that of two opencode processes showing the same
+ * session only one submits it. False when the other already did.
+ */
+export async function claim(dir: string, id: string, line: string): Promise<boolean> {
+  try {
+    await mkdir(join(dir, "opencode-claims"), { recursive: true });
+    await writeFile(claimFile(dir, id, line), "", { flag: "wx" });
+    return true;
+  } catch (e) {
+    // Unwritable: submitting twice beats never.
+    return (e as { code?: string }).code !== "EEXIST";
+  }
+}
+
+const claimFile = (dir: string, id: string, line: string) =>
+  join(
+    dir,
+    "opencode-claims",
+    createHash("sha256").update(`${id}\n${line}`).digest("hex").slice(0, 32),
+  );
+
+const unclaim = (dir: string, id: string, line: string) =>
+  rm(claimFile(dir, id, line), { force: true }).catch(() => {});
+
+/** Drops claims older than `CLAIM_MS`. */
+async function pruneClaims(dir: string, now: number) {
+  const claims = join(dir, "opencode-claims");
+  for (const f of await readdir(claims).catch(() => [])) {
+    const m = (await stat(join(claims, f)).catch(() => undefined))?.mtimeMs;
+    if (m !== undefined && now - m > CLAIM_MS) await rm(join(claims, f), { force: true });
+  }
 }
 
 async function server({ client, directory }: Input) {
@@ -142,6 +214,7 @@ async function server({ client, directory }: Input) {
     // times; the answer also stays in the CLI's state, where `starbridge wait` finds it.
     const submit = (line: string) => {
       void (async () => {
+        if (!(await claim(dir, id, line))) return;
         for (let i = 0; i < 4; i++) {
           const r = await client.session
             .promptAsync({ path: { id }, body: { parts: [{ type: "text", text: line }] } })
@@ -149,6 +222,8 @@ async function server({ client, directory }: Input) {
           if (!r.error) return;
           await sleep(5_000 * 2 ** i);
         }
+        // Another process showing the session may still submit it.
+        await unclaim(dir, id, line);
       })();
     };
     loops.set(
@@ -225,6 +300,18 @@ async function server({ client, directory }: Input) {
         : { reply: "reject", ...(v.reason ? { message: v.reason } : {}) },
     );
   };
+
+  // Sessions of this directory waiting since before opencode started.
+  if (answers)
+    void (async () => {
+      await pruneClaims(dir, Date.now());
+      const state = await readFile(join(dir, "state.json"), "utf8").catch(() => "{}");
+      for (const id of waitingSessions(JSON.parse(state), Date.now())) {
+        // Worktrees of one repository share a project: the session's own directory decides.
+        const s = await info(id);
+        if (s && !s.parentID && s.directory === directory) loop(id);
+      }
+    })().catch(() => {});
 
   return {
     "shell.env": async (input: { sessionID?: string }, output: { env: Record<string, string> }) => {
