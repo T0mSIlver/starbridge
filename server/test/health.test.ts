@@ -45,4 +45,5 @@ test("a full database refuses writes with 503 storage-full and keeps answering r
   expect(r.status).toBe(503);
   expect(r.json.error).toBe("storage-full");
   expect(r.headers.get("retry-after")).toBe("60");
+  expect((await s.app.request("/healthz")).status).toBe(200);
 });
