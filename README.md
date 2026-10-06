@@ -38,6 +38,12 @@ on each machine that runs agents:
 curl -fsSL https://starbridge.run/install.sh | sh
 ```
 
+On Windows, in PowerShell:
+
+```powershell
+irm https://starbridge.run/install.ps1 | iex
+```
+
 Or with Homebrew:
 
 ```bash

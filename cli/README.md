@@ -7,12 +7,19 @@ ciphertext only.
 
 ## Install
 
-Linux or macOS. Pick one of the three.
+Linux, macOS or Windows. Pick one.
 
 The install script puts the binary in `~/.local/bin`, then runs `starbridge setup`:
 
 ```bash
 curl -fsSL https://starbridge.run/install.sh | sh
+```
+
+On Windows, the PowerShell script does the same, with `%USERPROFILE%\.local\bin`, which it adds
+to your user PATH:
+
+```powershell
+irm https://starbridge.run/install.ps1 | iex
 ```
 
 Homebrew:
@@ -38,12 +45,14 @@ starbridge setup
 Setup asks before each step, and a rerun repairs only what is missing:
 
 1. It pairs the machine with your account.
-2. It finds CodexBar, or installs it: with Homebrew if you have it, else CodexBar's latest
+2. It finds CodexBar, or installs it (Linux and macOS; CodexBar has no Windows build, so a
+   Windows machine uploads no quotas): with Homebrew if you have it, else CodexBar's latest
    release tarball from GitHub, checked against the `.sha256` that release publishes, into
    `~/.local/opt/codexbar`. It installs nothing when the checksum is missing or does not match.
 3. It asks which providers' quotas to upload.
-4. It installs the background service, `starbridge agent`, as a systemd user unit or a launchd
-   agent.
+4. It installs the background service, `starbridge agent`, as a systemd user unit, a launchd
+   agent, or on Windows a Scheduled Task that starts at logon without administrator rights and
+   logs to `%LOCALAPPDATA%\starbridge\agent.log`.
 5. It installs Starbridge in each agent it finds: the Claude Code plugin at user scope, the
    skill in Codex's skills folder, the Starbridge Pi package, and the skill and plugin in
    opencode's config folder. A later setup updates the Codex and opencode files when the CLI
@@ -78,8 +87,9 @@ devices to revoke the machine. It deletes the keys only when you say so, or with
 
 ### Check a download
 
-The script and `starbridge update` install a binary only if its hash is in the release's
-`SHA256SUMS` and the release key signed `SHA256SUMS.minisig`. The key is also in
+The scripts and `starbridge update` install a binary only if its hash is in the release's
+`SHA256SUMS` and the release key signed `SHA256SUMS.minisig`. `install.ps1` checks the signature
+with minisign's own Windows build, pinned by its hash, since Windows has no Ed25519 check. The key is also in
 [`minisign.pub`](minisign.pub):
 
 ```
@@ -251,7 +261,8 @@ the merged commit `v1.2.3`; the workflow refuses a tag that disagrees with the s
 marketplace installs both plugins from that tag, and setup installs the Pi package at the tag of
 the CLI it runs. A release candidate (`1.2.3-rc.1`) leaves the marketplace on the last release.
 
-`bun run build:bin` builds the standalone binaries (Linux and macOS, x64 and arm64). A `v*` tag
-runs `.github/workflows/release.yml`, which attaches them, `install.sh` and the signed
+`bun run build:bin` builds the standalone binaries (Linux, macOS and Windows, x64 and arm64). A
+`v*` tag runs `.github/workflows/release.yml`, which attaches them, `install.sh`, `install.ps1`
+and the signed
 `SHA256SUMS` to a GitHub Release, commits the formula to `T0mSIlver/homebrew-starbridge` and
 publishes to npm. The signing key lives in the `MINISIGN_SECRET_KEY` Actions secret and, offline, with the maintainer.
