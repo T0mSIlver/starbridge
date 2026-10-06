@@ -42,4 +42,10 @@ const ctx: Ctx = {
     }),
   signal: controller.signal,
 };
-process.exitCode = await run(process.argv.slice(2), ctx);
+try {
+  process.exitCode = await run(process.argv.slice(2), ctx);
+} catch (e) {
+  // Never Bun's crash banner: a caller must see the command failed, and why (#548).
+  ctx.err(`starbridge: ${(e as Error)?.message ?? String(e)}`);
+  process.exitCode = 1;
+}

@@ -16,6 +16,12 @@ export class AgentError extends Error {
   }
 }
 
+/**
+ * The agent dropped the connection mid-call, as a restart does (#548): it may or may not have
+ * carried the call out.
+ */
+export class AgentLost extends Error {}
+
 /** Ctrl-C or SIGTERM cut a call short. */
 export class Interrupted extends Error {}
 
@@ -24,6 +30,8 @@ export class Interrupted extends Error {}
  * anything twice: no socket file, nobody listening on it, or not a socket.
  */
 const NOT_LISTENING = new Set(["ENOENT", "ECONNREFUSED", "ENOTSOCK"]);
+/** A connection the agent closed under the call: it stopped or restarted. */
+const DROPPED = new Set(["ECONNRESET", "EPIPE"]);
 
 export class AgentClient {
   /** Set once the agent carried out a call: from then on, falling back could act twice. */
@@ -93,7 +101,9 @@ export class AgentClient {
               reject(new AgentError(status, { ...e, error: e.error ?? `status ${status}` }));
             } else resolve(json as T);
           });
-          res.on("error", reject);
+          res.on("error", (e: NodeJS.ErrnoException) =>
+            reject(e.code && DROPPED.has(e.code) ? new AgentLost(e.message) : e),
+          );
         },
       );
       const onAbort = () => {
@@ -105,6 +115,8 @@ export class AgentClient {
       req.on("timeout", () => req.destroy(new Error(`agent: no answer within ${timeoutMs} ms`)));
       req.on("error", (e: NodeJS.ErrnoException) => {
         if (e.code && NOT_LISTENING.has(e.code)) reject(new NoAgent(`no agent on ${this.socket}`));
+        else if (e.code && DROPPED.has(e.code))
+          reject(new AgentLost(`the agent dropped the call: ${e.message}`));
         else reject(e);
       });
       req.end(text);
