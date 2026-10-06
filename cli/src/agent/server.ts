@@ -390,6 +390,10 @@ export class Agent implements Hub {
     const pid = pick<number>(b.pid, "number");
     const cwd = pick<string>(b.cwd, "string");
     const title = pick<string>(b.title, "string");
+    // After a `/clear` the mod greets under the new id and names the old one, which has no mod
+    // any more (#537). Its events stay held for a `/resume`.
+    const replaces = pick<string>(b.replaces, "string");
+    if (replaces !== undefined && replaces !== id) this.sessions.delete(replaces);
     this.touch(id, req, {
       helloAt: iso(this.ctx.now()),
       ...(pid !== undefined ? { pid } : {}),

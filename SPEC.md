@@ -403,11 +403,11 @@ An agent posts a question, keeps working and ends its turn; the answer arrives a
 Where nothing can deliver a prompt, the agent runs `starbridge wait <id> --timeout 5m` before
 ending its turn. `ask` prints which of the two applies (#203). A `wait` without an id, run in an
 agent's session, takes only that session's answers (#324). `ask` promises a prompt in Claude Code
-only when something will submit it (#537): through the local agent, when that session's mod
-called the agent within the last 90 s; without one, while a mod holds the CLI poller's lease. An
-installed plugin is no proof, since a session started before it, or one whose mod failed to load,
-has none. When unsure it prints the `wait` line: an answer `wait` printed is marked seen and never
-submitted again, so nothing comes twice.
+only when that session's mod called the local agent within the last 45 s (#537); after `/clear` the mod's
+hello under the new id names the old one (`replaces`), which then no longer counts. An installed plugin is no proof,
+since a session started before it, or one whose mod failed to load, has none; without an agent,
+the poller's lease says only that some session runs a mod. When unsure, `ask` prints the `wait`
+line, the safe side: at worst a prompt repeats an answer the agent already read.
 
 | Harness | Delivery |
 |---|---|

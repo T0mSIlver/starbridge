@@ -665,7 +665,27 @@ test("ask promises a prompt only once the agent has seen this session's mod (#53
   await ask(c, "--session", "s-other");
   expect(c.errors.at(-1)).toContain("run `starbridge wait");
 
+  // A /clear: the same process greets under a new id, and the old one has no mod any more.
+  const http = new AgentClient(socket, "starbridge-mod/test");
+  await http.call("POST", "/v1/sessions/s-cleared/hello", { cwd: "/work/x", replaces: "s-mod" });
+  await ask(c, "--session", "s-mod");
+  expect(c.errors.at(-1)).toContain("run `starbridge wait");
+  await ask(c, "--session", "s-cleared");
+  expect(c.errors.at(-1)).toBe(prompt);
+
+  await s.events();
   await s.bye();
   await ask(c, "--session", "s-mod");
+  expect(c.errors.at(-1)).toContain("run `starbridge wait");
+});
+
+test("a mod silent for longer than one events cycle no longer counts (#537)", async () => {
+  const { socket, ctx } = await machine();
+  const c = client(socket);
+  c.env.CLAUDECODE = "1";
+  await session(socket, "s-quiet").events();
+  const start = Date.now();
+  ctx.now = () => new Date(start + 46_000);
+  await ask(c, "--session", "s-quiet");
   expect(c.errors.at(-1)).toContain("run `starbridge wait");
 });

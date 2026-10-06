@@ -1,6 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { readFileSync } from "node:fs";
-import { basename, join, resolve } from "node:path";
+import { basename, resolve } from "node:path";
 import {
   type Agent,
   type Answer,
@@ -314,7 +313,9 @@ export async function ask(
   const resolved = resolveSource(input, ctx.env, process.cwd());
   const decision = await postDecision(ctx, s, { ...resolved, waiting: input.waiting || opts.wait });
   ctx.out(decision.id);
-  if (!opts.wait) ctx.err(deliveryLine(decision.id, delivery(resolved, false, modPolling(ctx))));
+  // With no agent, nothing tells which sessions run a mod: the poller's lease says only that one
+  // does (#537).
+  if (!opts.wait) ctx.err(deliveryLine(decision.id, delivery(resolved, false, false)));
   if (!opts.wait) return 0;
   return wait(ctx, { id: decision.id, timeout: opts.timeout, json: opts.json }, s);
 }
@@ -558,26 +559,10 @@ export function delivery(
 }
 
 /**
- * How long after its last call the agent still counts a session's mod as there. The mod holds
- * each events call up to 25 s and backs off at most 60 s after errors.
+ * How long after its last call the agent still counts a session's mod as there: one events call
+ * held 25 s, and the next one.
  */
-export const MOD_SEEN_MS = 90_000;
-
-/**
- * With no agent, whether a mod polls through the CLI: one session's mod holds a live lease in
- * `mod-poller.json` while every session's mod delivers (mod/hooks/poller.ts). The CLI cannot
- * tell which sessions run one; Claude Code's plugin runs in every session or none.
- */
-export function modPolling(ctx: Ctx): boolean {
-  try {
-    const lease = JSON.parse(readFileSync(join(ctx.store.dir, "mod-poller.json"), "utf8")) as {
-      until?: unknown;
-    };
-    return typeof lease.until === "number" && lease.until > ctx.now().getTime();
-  } catch {
-    return false;
-  }
-}
+export const MOD_SEEN_MS = 45_000;
 
 /** What `ask` prints after the id, on stderr, so the asking agent knows what to do next. */
 export function deliveryLine(id: string, d: Delivery): string {
