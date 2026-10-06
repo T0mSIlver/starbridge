@@ -472,6 +472,18 @@ test("through the local agent, waiting and wait say the snooze too, and --json p
   }
 });
 
+test("a snooze waiting read is not told by wait once the owner answered since", async () => {
+  const ctx = await paired(server);
+  await run(ASK, ctx);
+  const id = ctx.lines[0] as string;
+  await server.snooze(id, new Date(Date.now() + 3_600_000));
+  expect(await run(["waiting", id], ctx)).toBe(0);
+  expect(ctx.lines.at(-1)).toStartWith(`Snoozed ${id}`);
+  await server.answer(id, { choice: "Merge" });
+  expect(await run(["wait", id, "--timeout", "10s"], ctx)).toBe(0);
+  expect(ctx.lines.at(-1)).toBe(`Answer to ${id} (Merge #12 now?): Merge`);
+});
+
 test("back now from a device whose clock runs ahead says nothing either", async () => {
   const ctx = await paired(server);
   await run(ASK, ctx);
