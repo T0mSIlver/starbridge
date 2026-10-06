@@ -143,6 +143,9 @@ async function browser() {
       "dom.push.serverURL": `ws://localhost:${PORTS.push}/`,
       "dom.push.testing.allowInsecureServerURL": true,
       "permissions.default.desktop-notification": 1,
+      // Firefox queues past a few notifications that stay up until dismissed, and their
+      // showNotification never settles; the run leaves many up across its browsers.
+      "dom.webnotifications.requireinteraction.count": 100,
     },
   });
 }
@@ -1239,7 +1242,7 @@ async function main() {
   longRun.proc.kill();
 
   step("add a second browser by pairing code");
-  const b = await ff.newContext();
+  const b = await ff.newContext({ permissions: ["notifications"] });
   await watchCsp(b);
   const pageB = await signIn(b);
   await pageB.getByTestId("pairing-code").waitFor({ timeout: 10_000 });
@@ -1327,9 +1330,40 @@ async function main() {
   await devices.getByRole("button", { name: "Revoke" }).first().click();
   await page.getByRole("dialog").getByRole("button", { name: "Revoke" }).click();
   await page.getByRole("dialog").waitFor({ state: "detached" });
+  // A notification left from before: the server's refusal closes it.
+  await pageB.evaluate(() =>
+    Promise.race([
+      navigator.serviceWorker.ready.then((r) =>
+        r.showNotification("Left over", { tag: "e2e-left", requireInteraction: true }),
+      ),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("the left-over notification hung")), 10_000),
+      ),
+    ]),
+  );
+  if (!(await pageB.evaluate(NOTIFICATIONS)).some((n) => n.tag === "e2e-left"))
+    throw new Error("the left-over notification did not show");
   await pageB.reload();
-  // A browser whose device was revoked is a visitor again: the landing page, not sign-in.
-  await pageB.getByRole("heading", { name: /Your agents ask/ }).waitFor();
+  // The server's 401 alone is unsigned: the browser keeps its keys and shows the refusal (#310).
+  await pageB.getByText("The server says this browser was revoked.").waitFor();
+  if ((await pageB.evaluate(NOTIFICATIONS)).length > 0)
+    throw new Error("the refusal left notifications on screen");
+  // Another one, so the device list's verdict, not the refusal, has to close it.
+  await pageB.evaluate(() =>
+    Promise.race([
+      navigator.serviceWorker.ready.then((r) =>
+        r.showNotification("Left over", { tag: "e2e-left", requireInteraction: true }),
+      ),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("the left-over notification hung")), 10_000),
+      ),
+    ]),
+  );
+  await pageB.getByRole("link", { name: SIGN_IN }).click();
+  // Signed in, the device list confirms the revocation.
+  await pageB.getByRole("heading", { name: /was revoked$/ }).waitFor({ timeout: 30_000 });
+  if ((await pageB.evaluate(NOTIFICATIONS)).length > 0)
+    throw new Error("a revoked browser still shows notifications");
   await page.emulateMedia({ colorScheme: "light" });
   await shoot(page, "devices");
 
@@ -1361,7 +1395,7 @@ async function main() {
   step(
     "recover a third browser with the new key: the old one is refused, every other member goes (#348, #363)",
   );
-  const c = await ff.newContext();
+  const c = await ff.newContext({ permissions: ["notifications"] });
   await watchCsp(c);
   const pageC = await signIn(c);
   await pageC.getByRole("button", { name: "Use the recovery key" }).click();
@@ -1379,19 +1413,37 @@ async function main() {
   await pageC.getByText("28 of 28 characters").waitFor();
   await pageC.getByRole("button", { name: "Recover" }).click();
   await pageC.getByRole("heading", { name: "Inbox" }).waitFor({ timeout: 30_000 });
-  // Recovery keeps no earlier device: the first browser is a visitor again.
+  // Recovery keeps no earlier device. The server's 401 is unsigned, so the first browser keeps
+  // its keys and shows the refusal; signed in, the device list confirms it (#310).
   await page.goto(ORIGIN);
-  await page.getByRole("heading", { name: /Your agents ask/ }).waitFor({ timeout: 30_000 });
+  await page.getByText("The server says this browser was revoked.").waitFor({ timeout: 30_000 });
+  await page.getByRole("link", { name: SIGN_IN }).click();
+  await page.getByRole("heading", { name: /was revoked$/ }).waitFor({ timeout: 30_000 });
 
   step("sign out the recovered browser: it leaves the devices and forgets its keys");
   await pageC
     .getByRole("navigation", { name: "Main" })
     .getByRole("link", { name: "Settings" })
     .click();
+  await pageC.evaluate(() =>
+    Promise.race([
+      navigator.serviceWorker.ready.then((r) =>
+        r.showNotification("Left over", { tag: "e2e-left", requireInteraction: true }),
+      ),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("the left-over notification hung")), 10_000),
+      ),
+    ]),
+  );
+  if (!(await pageC.evaluate(NOTIFICATIONS)).some((n) => n.tag === "e2e-left"))
+    throw new Error("the left-over notification did not show");
   await pageC.getByRole("button", { name: "Sign out" }).click();
   await pageC.getByRole("dialog").getByRole("button", { name: "Sign out" }).click();
   // With no keys left, the browser is a visitor: the landing page, not "Sign in to Starbridge".
   await pageC.getByRole("heading", { name: /Your agents ask/ }).waitFor({ timeout: 30_000 });
+  // Notifications hold decrypted questions: none outlive the sign-out (#311).
+  if ((await pageC.evaluate(NOTIFICATIONS)).length > 0)
+    throw new Error("signing out left notifications on screen");
 
   await ff.close();
   if (violations.length) throw new Error(`CSP violations:\n${violations.join("\n")}`);

@@ -33,12 +33,21 @@ let live: LiveServer;
 let ctx: device.Ctx;
 const realFetch = globalThis.fetch;
 const realGenerateKey = crypto.subtle.generateKey;
+/** Answers in the server's place: a compromised server can send anything unsigned. */
+let forge: ((path: string) => Response | undefined) | undefined;
+/**
+ * The notifications the service worker shows, how many of them the page closed, and whether the
+ * keys were still stored when it last listed them.
+ */
+const shown = { open: 0, closed: 0, keys: false };
 
 beforeAll(async () => {
   live = await LiveServer.start();
   // The page's same-origin calls, with the session cookie a browser would keep.
   let cookie = "";
   globalThis.fetch = (async (input: string, init?: RequestInit) => {
+    const forged = forge?.(input);
+    if (forged) return forged;
     const res = await realFetch(`${live.url}${input}`, {
       ...init,
       headers: { ...(init?.headers as Record<string, string>), cookie },
@@ -47,6 +56,21 @@ beforeAll(async () => {
     return res;
   }) as typeof fetch;
   device.retryDelay.ms = 10;
+  const registration = {
+    pushManager: { getSubscription: async () => null },
+    getNotifications: async () => {
+      shown.keys = !!(await store.get("device", ctx.account));
+      return Array.from({ length: shown.open }, () => ({
+        close: () => {
+          shown.closed++;
+        },
+      }));
+    },
+  };
+  Object.defineProperty(navigator, "serviceWorker", {
+    configurable: true,
+    value: { getRegistration: async () => registration },
+  });
   // Bun cannot store a CryptoKey in IndexedDB, so the keys take the raw libsodium fallback.
   crypto.subtle.generateKey = (() =>
     Promise.reject(new Error("no WebCrypto keys"))) as typeof crypto.subtle.generateKey;
@@ -60,6 +84,7 @@ beforeAll(async () => {
 afterAll(() => {
   globalThis.fetch = realFetch;
   crypto.subtle.generateKey = realGenerateKey;
+  Reflect.deleteProperty(navigator, "serviceWorker");
   live.stop();
 });
 
@@ -395,4 +420,58 @@ test("a recovery that landed but was cut off before adopting its keys resumes ov
   expect(b.state).toBe("ready");
   expect(await store.get("device", ctx.account)).toEqual(recovered);
   expect(await store.get("pending", ctx.account)).toBeUndefined();
+});
+
+// These revoke this browser and sign it out: they run last.
+test("an unsigned 401 revoked from the server keeps the device's keys (#310)", async () => {
+  const before = await store.get("device", ctx.account);
+  expect((await device.boot()).state).toBe("ready");
+  forge = (path) =>
+    path === "/v1/me"
+      ? new Response(JSON.stringify({ error: "revoked" }), { status: 401 })
+      : undefined;
+  shown.open = 1;
+  shown.closed = 0;
+  const b = await device.boot();
+  forge = undefined;
+  expect(b).toMatchObject({ state: "signed-out", known: true, refused: "revoked" });
+  expect(await store.get("device", ctx.account)).toEqual(before as store.DeviceRecord);
+  // Its notifications close all the same: that loses nothing.
+  expect(shown.closed).toBe(1);
+  // The chain still lists the device, and the session still works: nothing was lost.
+  expect((await device.boot()).state).toBe("ready");
+});
+
+test("a revocation the chain confirms shows as revoked and closes the notifications (#310, #311)", async () => {
+  const mine = (await device.deviceContext(ctx.account)) as device.Ctx;
+  await device.revoke(mine, mine.device.id);
+  // The server ends the session; the keys stay until the chain says why.
+  expect(await device.boot()).toMatchObject({
+    state: "signed-out",
+    known: true,
+    refused: "revoked",
+  });
+  await api.ownerSignIn("owner-secret");
+  shown.open = 2;
+  shown.closed = 0;
+  expect((await device.boot()).state).toBe("revoked");
+  expect(shown.closed).toBe(2);
+});
+
+test("recovering closes the notifications (#311)", async () => {
+  shown.open = 1;
+  shown.closed = 0;
+  await device.recover(ctx.account, "Recovered again", recoveryKey(live.owner.recoverySeed));
+  expect(shown.closed).toBe(1);
+  expect((await device.boot()).state).toBe("ready");
+});
+
+test("signing out closes the notifications (#311)", async () => {
+  const mine = (await device.deviceContext(ctx.account)) as device.Ctx;
+  shown.open = 3;
+  shown.closed = 0;
+  await device.signOut(mine);
+  expect(shown.closed).toBe(3);
+  // Closed after the keys went, so a push the service worker was opening finds none.
+  expect(shown.keys).toBe(false);
 });

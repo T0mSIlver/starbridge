@@ -1438,6 +1438,14 @@ so the mod is the first path.
   session, takes only answers to that session's decisions, so it cannot take one that another
   session's mod or `wait` is due; outside an agent's session it still takes any. Checked with Pi 1.0.4 and pi-permission-system 39.1.0: `starbridge ask` ran
   without a dialog while `touch` still asked, and uninstall left no config behind.
+- 2026-10-06. Only the verified directory revokes a browser (#310, as Android decides). A 401
+  `revoked` is unsigned, so the page keeps its keys and shows the refusal on the sign-in screen;
+  after sign-in, boot reads the chain and shows "was revoked" only if the chain says so.
+- 2026-10-06. The web page closes every notification the service worker shows when it signs out,
+  when the chain shows its device revoked, and when it adopts new keys after a recovery or a join
+  (#311, as #282 on Android). They stay up until dismissed and hold decrypted questions. The
+  service worker checks the keys are still there before and after it shows one, so a push it was
+  opening during a sign-out leaves nothing on screen.
 - 2026-10-06. The recovery key can be replaced (#348, owner ruling after #328). Entry 0 fixed it
   for good, so an owner who thought the key leaked had no fix short of a new account. Two new
   directory entries replace it: `recovery` proposes a key, signed by a device and by the new key,
@@ -1502,9 +1510,8 @@ so the mod is the first path.
   the genesis, and boot deletes a device's keys on an empty directory only when it is unmarked,
   as #328 needs; a marked one shows the broken directory page and keeps its keys. A commit
   whose post never reached the server, closed before the owner retried, also lands there. A
-  401 that says the device was revoked no longer deletes its keys either: the browser shows the
-  landing page as #219 wants, and on sign-in the verified chain shows whether it was revoked. A
-  tab still offering a first key cannot replace a device whose genesis went out.
+  tab still offering a first key cannot replace a device whose genesis went out. A 401 that says
+  the device was revoked keeps the keys too, as #310's entry says.
 - 2026-10-06. Android allows only what the owner saw whole, as the web does since #276 (#356). A
   notification's Allow sends at once only when the whole input fits the one line a collapsed or
   heads-up notification shows (owner's rule); otherwise it opens the prompt's sheet. A card's

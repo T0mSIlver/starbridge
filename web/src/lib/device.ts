@@ -86,8 +86,11 @@ export interface Ctx {
 }
 
 export type Boot =
-  /** `known`: this browser holds a device of the account it last signed in to. */
-  | { state: "signed-out"; known: boolean }
+  /**
+   * `known`: this browser holds a device of the account it last signed in to. `refused`: the
+   * server's reason for ending the session, unsigned, so the keys stay until the chain agrees.
+   */
+  | { state: "signed-out"; known: boolean; refused?: string }
   /** `unsaved`: the name of a first device whose page closed before its recovery key was saved. */
   | { state: "first-device"; account: string; unsaved?: string }
   /** The account has devices and this browser is not one of them (or lost its binding). */
@@ -163,6 +166,22 @@ async function trusted(account: string): Promise<{ dir: Directory; entries: Sign
   }
 }
 
+function registration() {
+  return (
+    navigator.serviceWorker?.getRegistration("/").catch(() => undefined) ??
+    Promise.resolve(undefined)
+  );
+}
+
+/**
+ * Closes every notification the service worker shows. They stay up until dismissed and carry
+ * decrypted questions, so they go when this browser stops being the device that read them (#311).
+ */
+async function closeNotifications(): Promise<void> {
+  const reg = await registration();
+  for (const n of (await reg?.getNotifications().catch(() => [])) ?? []) n.close();
+}
+
 /** Whether `entry`, once verified as entry 0, is a genesis this browser's own device signed. */
 function signedGenesis(
   account: string,
@@ -186,10 +205,14 @@ export async function boot(): Promise<Boot> {
   } catch (e) {
     if (e instanceof ApiError && e.status === 401) {
       const last = await store.get("current");
-      // Its device was revoked: this browser is a visitor again, not a device signing back in.
-      // The keys stay: only the server says so, and a verified chain decides on sign-in (#371).
-      const known = !!last && e.code !== "revoked" && !!(await store.get("device", last));
-      return { state: "signed-out", known };
+      // A "revoked" here is the server's word only: the keys stay, and the next sign-in reads
+      // the chain, which alone revokes a device (#310). Closing notifications loses nothing.
+      if (e.code === "revoked") await closeNotifications();
+      return {
+        state: "signed-out",
+        known: !!last && !!(await store.get("device", last)),
+        ...(e.code === "revoked" ? { refused: e.code } : {}),
+      };
     }
     throw e;
   }
@@ -242,7 +265,10 @@ export async function boot(): Promise<Boot> {
     await store.del("device", account);
     return { state: "join", account, stale: false };
   }
-  if (!entry.active) return { state: "revoked", account, name: device.name };
+  if (!entry.active) {
+    await closeNotifications();
+    return { state: "revoked", account, name: device.name };
+  }
   if (me.member === null && !(await bind(account, device))) {
     return { state: "join", account, stale: true };
   } else if (me.member !== null && me.member !== device.id) {
@@ -481,10 +507,11 @@ export async function startJoin(account: string, name: string): Promise<Join> {
   return { code: formatPairingCode(code), done, cancel: () => abort.abort() };
 }
 
-/** A join approved: its keys become this browser's device for the account. */
+/** New keys become this browser's device; notifications the older keys read go (#311). */
 async function adopt(account: string, record: store.DeviceRecord): Promise<void> {
   await store.put("device", record, account);
   await store.del("pending", account);
+  await closeNotifications();
 }
 
 async function finishJoin(
@@ -1019,11 +1046,13 @@ export async function signOut(stale: Ctx): Promise<void> {
   );
   if (ctx && others.length > 0) await revoke(ctx, ctx.device.id).catch(() => {});
   await api.logout().catch(() => {});
-  const reg = await navigator.serviceWorker?.getRegistration("/").catch(() => undefined);
+  const reg = await registration();
   await (await reg?.pushManager.getSubscription())?.unsubscribe().catch(() => {});
   for (const kind of ["device", "pin", "answers", "promptAnswers"] as const)
     await store.del(kind, stale.account);
   await store.del("current");
+  // Last: a push the service worker was still opening finds no keys now.
+  await closeNotifications();
 }
 
 // --- Decisions ------------------------------------------------------------------------------
