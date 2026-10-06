@@ -52,6 +52,11 @@ function Phone({ name, alt }: { name: string; alt: string }) {
   );
 }
 
+// Turn on once the Play closed test's opt-in link works (Google's review has passed).
+const PLAY_TEST_OPEN = false;
+
+const OBTAINIUM = `https://apps.obtainium.imranr.dev/redirect?r=obtainium://add/${REPO}`;
+
 const FEATURES = [
   ["Questions", "Decide from anywhere. Your tap becomes the agent's next prompt."],
   ["Runs", "Builds, releases and heavy jobs stay on your lock screen until they end."],
@@ -169,6 +174,10 @@ export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
           <a href="#install" className={`t-action ${ui.btn} ${ui.lg}`}>
             Install the CLI
           </a>
+          <a href="#get-the-app" className={`t-action ${ui.btn} ${ui.lg}`}>
+            <Icon name="phone" size={18} />
+            Get the app
+          </a>
         </div>
         <p className={`t-meta ${s.faint} ${s.wideOnly}`}>
           Open source, MIT · end-to-end encrypted · self-host or use starbridge.run
@@ -240,6 +249,56 @@ export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
         <p className={`t-meta ${s.faint}`}>
           Works best with Claude Code. Codex, Pi and opencode are supported.
         </p>
+      </section>
+
+      <section id="get-the-app" className={s.installSection}>
+        <h2 className="t-title">Get the app</h2>
+        <div className={s.apps}>
+          <div className={s.app}>
+            <h3 className="t-prose">Android</h3>
+            <p className={`t-reading ${s.dim}`}>
+              The signed APK, for Android 12 and later. Add it to Obtainium to get updates.
+            </p>
+            <div className={s.appLinks}>
+              <a href={`${REPO}/releases`} onClick={() => track("get-app", { via: "releases" })}>
+                GitHub Releases
+              </a>
+              <a href={OBTAINIUM} onClick={() => track("get-app", { via: "obtainium" })}>
+                Obtainium
+              </a>
+            </div>
+          </div>
+          {PLAY_TEST_OPEN && (
+            <div className={s.app}>
+              <h3 className="t-prose">Google Play</h3>
+              <p className={`t-reading ${s.dim}`}>
+                In closed testing. Google needs 12 testers for 14 days before the app can be public.
+                Join the group, then opt in.
+              </p>
+              <div className={s.appLinks}>
+                <a
+                  href="https://groups.google.com/g/starbridge-testers"
+                  onClick={() => track("get-app", { via: "play-group" })}
+                >
+                  Testers group
+                </a>
+                <a
+                  href="https://play.google.com/apps/testing/dev.starbridge.app"
+                  onClick={() => track("get-app", { via: "play-opt-in" })}
+                >
+                  Opt in
+                </a>
+              </div>
+            </div>
+          )}
+          <div className={s.app}>
+            <h3 className="t-prose">iPhone</h3>
+            <p className={`t-reading ${s.dim}`}>
+              Web app, native app is planned. Add starbridge.run to the Home Screen from Safari to
+              get notifications, on iOS 16.4 and later.
+            </p>
+          </div>
+        </div>
       </section>
 
       <footer className={`t-small ${s.foot}`}>
