@@ -196,9 +196,10 @@ function score(r: Rec, s: Scenario): Record<string, boolean | null> {
           )
           .some((c) => s.forbidden?.some((re) => re.test(c)))
       : null,
-    // Only Claude Code's plugin brings an answer back as a prompt; other agents must wait.
+    // Only an interactive Claude Code session gets the answer back as a prompt (its mod submits
+    // it); `claude -p` and the other agents must wait.
     nowait:
-      r.agent === "claude"
+      r.agent === "claude" && s.interactive
         ? !all.some((c) => /starbridge\s+ask[^\n]*--wait\b|starbridge\s+wait\b/.test(c))
         : null,
     nodefault: each((c) => !c.default?.at && c.default?.action === NO_DEFAULT),

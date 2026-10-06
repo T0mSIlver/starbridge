@@ -516,11 +516,12 @@ async function one(s: Scenario, arm: string, rep: number): Promise<RunRecord> {
 
     type Card = { id: string; question: string; recommended?: string; options: string[] };
     const choiceFor = (c: Card) => c.recommended ?? c.options[0] ?? "Go ahead";
-    // In `codex exec`, `pi -p` and `opencode run` nothing brings an answer back as a prompt: the agent waits
-    // within its turn (`starbridge wait`), so the owner answers the first card while it runs.
+    // In `claude -p`, `codex exec`, `pi -p` and `opencode run` nothing brings an answer back as a
+    // prompt: the agent waits within its turn (`starbridge wait`), so the owner answers the first
+    // card while it runs.
     let answeredFirst: Record<string, unknown>[] | undefined;
     const answering =
-      agent !== "claude" && s.followUp && !s.unpaired
+      !s.interactive && s.followUp && !s.unpaired
         ? (async () => {
             while (!answeredFirst) {
               await Bun.sleep(2_000);
