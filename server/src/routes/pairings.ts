@@ -31,6 +31,7 @@ interface Pairing {
   account_id: string | null;
   approval: string | null;
   token: string | null;
+  refused: string | null;
 }
 
 function parseBody<T extends z.ZodType>(schema: T, text: string): z.infer<T> {
@@ -85,6 +86,28 @@ export class PairingClients {
  */
 export function sweepPairings(db: Database): void {
   db.query("DELETE FROM pairings WHERE created_at < ?").run(Date.now() - LIFETIME_MS);
+}
+
+/**
+ * Marks refused, with error code `reason`, the waiting pairings of a machine whose directory entry
+ * the server refused, and wakes their result polls. Matched by the member's id and both keys,
+ * which only the pairing's request carries.
+ */
+export function refusePairings(
+  c: { var: Env["Variables"] },
+  account: string,
+  member: { id: string; boxPk: string; signPk: string },
+  reason: string,
+): void {
+  const rows = c.var.db
+    .query(
+      `UPDATE pairings SET refused = ?, account_id = ?
+       WHERE member_id = ? AND box_pk = ? AND sign_pk = ? AND role = 'machine'
+         AND approval IS NULL AND account_id IS NULL
+       RETURNING rendezvous`,
+    )
+    .all(reason, account, member.id, member.boxPk, member.signPk) as { rendezvous: string }[];
+  for (const r of rows) c.var.pairings.wake(r.rendezvous);
 }
 
 function load(c: { var: Env["Variables"] }, rendezvous: string): Pairing {
@@ -222,6 +245,15 @@ pairingRoutes.get("/pairings/:rendezvous/result", async (c) => {
   const claim = c.req.header("x-claim") ?? "";
   let p = load(c, rendezvous);
   if (!safeEqual(claimHash(claim), p.claim_hash)) fail(403, "forbidden", "wrong claim");
+  const refused = (r: string) =>
+    fail(
+      403,
+      r,
+      r === "machine-cap"
+        ? `the account already holds its maximum of ${c.var.config.maxMachines} machines: revoke one under Devices, then pair again`
+        : "the approving device refused this pairing",
+    );
+  if (p.refused) refused(p.refused);
   if (!p.approval) {
     const seconds = waitSeconds(c);
     if (seconds > 0) {
@@ -234,6 +266,7 @@ pairingRoutes.get("/pairings/:rendezvous/result", async (c) => {
       if (again.created_at !== p.created_at || !safeEqual(claimHash(claim), again.claim_hash))
         fail(404, "not-found", "no such pairing, or it expired");
       p = again;
+      if (p.refused) refused(p.refused);
     }
     if (!p.approval) return c.body(null, 204);
   }

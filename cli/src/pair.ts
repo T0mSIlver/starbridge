@@ -93,6 +93,11 @@ export async function pair(
       if (ctx.signal?.aborted) return 130;
       // The server forgets a pairing when it expires.
       if (e instanceof ApiError && e.status === 404) throw expired();
+      // The approving device hit the account's machine limit; the server ended the pairing (#615).
+      if (e instanceof ApiError && e.code === "machine-cap")
+        throw new UsageError(
+          "this account already holds its maximum number of machines: revoke one under Devices in the app or web page, then run `starbridge setup` again",
+        );
       throw e;
     }
   }

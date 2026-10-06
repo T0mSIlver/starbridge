@@ -95,6 +95,19 @@ test("pair prints a link and a QR code that carry the code", async () => {
   expect(await done).toBe(0);
 });
 
+test("pair past the account's machine limit ends at once with the reason (#615)", async () => {
+  server.stop();
+  server = await LiveServer.start({ maxMachines: 1 });
+  await paired(server);
+  const ctx = testCtx();
+  const done = run(["pair", "--server", server.url, "--name", "sixth"], ctx);
+  await until(() => ctx.lines.some((l) => l.startsWith("Pairing code: ")));
+  const code = ctx.lines[0]?.replace("Pairing code: ", "") as string;
+  await expect(server.approve(code)).rejects.toThrow("machine-cap");
+  expect(await done).toBe(1);
+  expect(ctx.errors.join("\n")).toContain("maximum number of machines: revoke one under Devices");
+});
+
 test("pair uses the hosted server unless --server or STARBRIDGE_SERVER names another", async () => {
   const real = globalThis.fetch;
   const asked: string[] = [];
