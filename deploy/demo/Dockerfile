@@ -4,9 +4,10 @@ FROM oven/bun:1.4.2 AS bun
 
 FROM node:24-slim AS build
 COPY --from=bun /usr/local/bin/bun /usr/local/bin/bun
-RUN corepack enable
 WORKDIR /src
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+# pnpm at package.json's packageManager version; node images no longer all ship corepack.
+RUN npm install -g --silent "$(node -p 'require("./package.json").packageManager')"
 COPY packages/protocol/package.json packages/protocol/
 COPY server/package.json server/
 COPY cli/package.json cli/
