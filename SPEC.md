@@ -1397,6 +1397,9 @@ so the mod is the first path.
   name, unbroken branch names, 24 items, a permission prompt, a run) and runs in CI; it picks
   free ports, so runners on one machine do not collide. `AUDIT=<folder>` shoots every size from
   320 to 1920 px in both themes, plus 200% text at 390, and lists what the checks find.
+- 2026-10-06. Workflows pin every action by commit SHA, with its version in a comment (#361). A
+  moved tag could otherwise run code in the release job before it writes the minisign key.
+  Dependabot proposes the updates in one grouped PR a month.
 
 ## Encryption, with existing libraries
 
