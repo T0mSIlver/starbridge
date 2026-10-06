@@ -387,6 +387,9 @@ export async function settle(ctx: Ctx, opts: { id?: string; outcome?: string }):
   if (!id) throw new UsageError("settle needs a decision id");
   const asked = ctx.store.state().asked[id];
   if (!asked) throw new UsageError(`${id} is not a decision this machine asked`);
+  // Closed by a revoked device's answer the server holds: a notice would contradict it. A
+  // decision `settle` closed earlier is posted again, in case that post failed.
+  if (asked.revoked) return 0;
   const outcome = opts.outcome ?? (asked.answerIn ? "elsewhere" : "withdrawn");
   if (outcome !== "elsewhere" && outcome !== "withdrawn")
     throw new UsageError("--outcome is elsewhere or withdrawn");
@@ -712,6 +715,13 @@ function dropRevoked(st: State, dir: Directory): boolean {
   for (const [id, a] of Object.entries(st.answers))
     if (!a.seen && revoked(a.device)) {
       delete st.answers[id];
+      // The server holds it answered, so no device can answer it again: closed (#515).
+      const asked = st.asked[id];
+      if (asked) {
+        asked.settled = true;
+        asked.revoked = true;
+        forget(asked);
+      }
       dropped = true;
     }
   for (const p of Object.values(st.permissions ?? {}))
@@ -728,7 +738,7 @@ function dropRevoked(st: State, dir: Directory): boolean {
  * when there is an undelivered answer from a device, so a call with nothing to hand out stays
  * offline.
  */
-async function dropRevokedNow(ctx: Ctx) {
+export async function dropRevokedNow(ctx: Ctx) {
   const st = ctx.store.state();
   if (!Object.values(st.answers).some((a) => !a.seen && a.device)) return;
   const s = session(ctx);
@@ -912,8 +922,7 @@ export async function wait(
   const target = opts.id;
   if (target && !state.asked[target])
     throw new UsageError(`${target} is not a decision this machine asked`);
-  if (target && (state.asked[target]?.settled || state.asked[target]?.answerIn))
-    throw new UsageError(`${target} is settled or answered on its own page: no answer will come`);
+  const closed = () => closedError(ctx, target);
 
   const report = (found: { answer: Answer; question?: string }) => {
     printAnswer(ctx, found.answer, found.question, opts.json);
@@ -921,6 +930,8 @@ export async function wait(
   };
 
   await dropRevokedNow(ctx);
+  const shut = closed();
+  if (shut) throw shut;
   const already = takeAnswer(ctx.store, target, opts.session);
   if (already) return report(already);
   if (target) await markWaiting(ctx, () => postWaiting(ctx, s, target, "waiting"));
@@ -956,7 +967,20 @@ export async function wait(
     }
     const found = takeAnswer(ctx.store, target, opts.session);
     if (found) return report(found);
+    const ended = closed();
+    if (ended) throw ended;
   }
+}
+
+/** Why no answer to decision `id` will come, for `wait`: settled, answered elsewhere, or revoked. */
+export function closedError(ctx: Ctx, id: string | undefined): UsageError | undefined {
+  const a = id === undefined ? undefined : ctx.store.state().asked[id];
+  if (a?.revoked)
+    return new UsageError(
+      `${id} was answered from a device removed since, so that answer does not count and no other will come: ask again if you still need it`,
+    );
+  if (a?.settled || a?.answerIn)
+    return new UsageError(`${id} is settled or answered on its own page: no answer will come`);
 }
 
 /** Marks a decision waiting on the way into a wait; a failure only costs the devices' label. */

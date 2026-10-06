@@ -56,6 +56,8 @@ export interface Feature {
   routes?: Route[];
   /** What session `id` has not confirmed yet, oldest first. */
   events?(session: string): SessionEvent[];
+  /** Runs before events are handed out, such as dropping a revoked device's answers (#491). */
+  beforeEvents?(): Promise<void>;
   /** Confirms events; tokens this feature did not hand out must be ignored. */
   ack?(session: string, tokens: string[]): void;
   /** The session said `bye`: drop what belongs to that session. */
@@ -347,6 +349,7 @@ export class Agent implements Hub {
     const wait = holdSeconds(req.query.get("wait"));
     this.touch(id, req);
     const end = Date.now() + wait * 1000;
+    for (const f of this.features) await f.beforeEvents?.();
     let events = this.collect(id);
     while (events.length === 0 && !req.signal.aborted && Date.now() < end) {
       await this.changed(end - Date.now(), req.signal);

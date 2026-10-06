@@ -71,8 +71,13 @@ export interface State {
       askedAt: string;
       /** Answered on its `answerIn` page instead of Starbridge. */
       answerIn?: boolean;
-      /** Closed with `settle`: no answer will follow. */
+      /** Closed with `settle`, or by `revoked`: no answer will follow. */
       settled?: boolean;
+      /**
+       * Answered by a device the chain revoked since: the machine dropped that answer, and the
+       * server takes no other (#515).
+       */
+      revoked?: boolean;
       /** The devices it was sealed to, the only ones whose answer counts. */
       to?: string[];
       /** The decision as signed, without its images, to re-seal it to devices that join. */

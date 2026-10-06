@@ -12,6 +12,7 @@ import {
   ackLines,
   deliverable,
   delivery,
+  dropRevokedNow,
   poll,
   postDecision,
   postWaiting,
@@ -106,6 +107,7 @@ export class Decisions implements Feature {
           );
         const wait = holdSeconds(b.wait === undefined ? undefined : String(b.wait));
         const end = Date.now() + wait * 1000;
+        await this.beforeEvents();
         let found = takeAnswer(this.ctx.store, id, from);
         while (!found && !req.signal.aborted && Date.now() < end) {
           await this.hub.changed(end - Date.now(), req.signal);
@@ -115,6 +117,14 @@ export class Decisions implements Feature {
       },
     },
   ];
+
+  /**
+   * Drops the saved answers of a device revoked since, before one is handed out (#491): the
+   * agent's poll drops them too, but not before its first round.
+   */
+  async beforeEvents() {
+    await dropRevokedNow(this.ctx);
+  }
 
   events(id: string): SessionEvent[] {
     return sessionLines(this.ctx.store.state(), id);
