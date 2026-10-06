@@ -26,6 +26,34 @@ async function deleteItems(
 }
 
 /**
+ * Deletes items matching `where` that an index cannot narrow (a NOT EXISTS check), walking the
+ * table once by rowid: each batch starts past the last one, so the rows kept are checked once a
+ * sweep rather than once a batch. `where` must not let the planner pick an index over the rowid
+ * walk; prefix an indexed column with `+`.
+ */
+async function deleteOrphans(
+  db: Database,
+  where: string,
+  params: string[],
+  batch: number,
+): Promise<void> {
+  const next = db.query(
+    `SELECT rowid AS r FROM items WHERE rowid > ? AND ${where} ORDER BY rowid LIMIT ${batch}`,
+  );
+  // Checks `where` again, so a row that changed since `next` read it stays.
+  const del = db.query(`DELETE FROM items WHERE rowid > ? AND rowid <= ? AND ${where}`);
+  for (let after = 0; ; ) {
+    const rows = next.all(after, ...params) as { r: number }[];
+    const last = rows.at(-1)?.r;
+    if (last === undefined) return;
+    del.run(after, last, ...params);
+    if (rows.length < batch) return;
+    after = last;
+    await new Promise((r) => setImmediate(r));
+  }
+}
+
+/**
  * Drops what no client needs any more: each kind's items as its `keep` in `ITEM_KINDS` says,
  * expired sessions and expired app sign-in codes. Boxes go with their items.
  */
@@ -54,18 +82,18 @@ export async function sweepStorage(
   const withRe = kinds("withRe");
   const fromActive = kinds("fromActive");
   if (aged.length > 0) await deleteItems(db, aged.join(" OR "), params, batch);
-  await deleteItems(
+  await deleteOrphans(
     db,
-    `kind IN (${marks(fromActive)}) AND NOT EXISTS (SELECT 1 FROM members m
+    `+kind IN (${marks(fromActive)}) AND NOT EXISTS (SELECT 1 FROM members m
        WHERE m.account_id = items.account_id AND m.id = items.from_id AND m.active = 1)`,
     fromActive,
     batch,
   );
   // Last, so an item goes in the same sweep as the one it refers to. Between batches a list
   // may show a waiting or snoozed item for a moment after its decision is gone.
-  await deleteItems(
+  await deleteOrphans(
     db,
-    `kind IN (${marks(withRe)}) AND NOT EXISTS (SELECT 1 FROM items d
+    `+kind IN (${marks(withRe)}) AND NOT EXISTS (SELECT 1 FROM items d
        WHERE d.account_id = items.account_id AND d.id = items.re)`,
     withRe,
     batch,
