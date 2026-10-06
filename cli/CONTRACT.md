@@ -14,6 +14,7 @@ the lines; the hook outputs are pinned in `cli/test/permissions.test.ts`.
 | `settle <id>` | Flag `--outcome elsewhere\|withdrawn`. |
 | `answers --session <id>` | Flags `--wait <seconds>`, `--ack <ack>`. Prints one JSON object per line: `{"decisionId", "ack", "line"}`, where `line` is the `Answer to` line above. |
 | `answers --all` | Flags `--follow`, `--since <time or duration>` (a duration takes its unit: `90s`, `2h`). Prints one JSON object per line, oldest first: `{"decisionId", "question", "choice" or "text" or "done": true, "answeredAt", "session"?, "sessionTitle"?, "project"?}`. With `--follow`, then each new answer until interrupted. Marks nothing seen or waiting. |
+| `decisions --open` | Prints one JSON object per line, oldest first: `{"decisionId", "question", "options", "askedAt", "waiting", "session"?, "sessionTitle"?, "project"?}`. |
 | `run` | Flags `--title`, `--reason`, then `--` and the command. Exits with the command's code: 127 when it cannot start, 128 plus the signal when a signal ends it. |
 | `hook permission` | Flags `--agent claude-code\|pi\|opencode`, `--wait`. Reads the hook's JSON on stdin and prints the output its harness defines, or nothing to leave the prompt to the keyboard. SIGTERM means the keyboard answered. Exits 0. |
 | `hook settle` | Flag `--agent claude-code`. Reads the hook's JSON on stdin. Exits 0. |

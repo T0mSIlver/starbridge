@@ -165,6 +165,9 @@ It prints one JSON line per answer, with the question, the session and the proje
 then each new one until interrupted. `--since 2h` or `--since 2026-10-06T21:00Z` skips older ones.
 It only reads: each answer still comes back into the session that asked.
 
+`starbridge decisions --open` lists the questions still open, in the same form, so an orchestrator
+can check that no session already asked what it is about to ask.
+
 ### Runs
 
 `starbridge run` wraps a command you want to follow: a build, a release, an eval, heavy work on

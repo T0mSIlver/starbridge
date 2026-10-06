@@ -1212,3 +1212,45 @@ export async function answersAll(
   }
   return EXIT_INTERRUPTED;
 }
+
+/** One line of `decisions --open`: a question this machine asked that is still open. */
+export interface OpenDecision {
+  decisionId: string;
+  question: string;
+  options: string[];
+  askedAt: string;
+  waiting: boolean;
+  session?: string;
+  sessionTitle?: string;
+  project?: string;
+}
+
+/**
+ * The questions this machine asked that have no answer yet, are not settled and the server still
+ * holds (it drops them after 30 days), oldest first. Questions a hook waits on itself are left
+ * out: no session owns them.
+ */
+export function openDecisions(st: State, now: Date): OpenDecision[] {
+  const lines: OpenDecision[] = [];
+  for (const [id, a] of Object.entries(st.asked)) {
+    if (a.settled || a.held || st.answers[id]) continue;
+    if (now.getTime() - Date.parse(a.askedAt) >= RESEAL_MS) continue;
+    lines.push({
+      decisionId: id,
+      question: a.question,
+      options: a.options,
+      askedAt: a.askedAt,
+      waiting: a.waiting?.state === "waiting",
+      ...(a.session ? { session: a.session } : {}),
+      ...(a.sessionTitle ? { sessionTitle: a.sessionTitle } : {}),
+      ...(a.project !== undefined ? { project: a.project } : {}),
+    });
+  }
+  return lines.sort((x, y) => x.askedAt.localeCompare(y.askedAt));
+}
+
+/** `decisions --open`: prints `openDecisions` as JSON lines, from the state file both paths share. */
+export function decisionsOpen(ctx: Ctx): number {
+  for (const d of openDecisions(ctx.store.state(), ctx.now())) ctx.out(JSON.stringify(d));
+  return 0;
+}

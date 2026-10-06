@@ -20,6 +20,7 @@ import {
   answers,
   answersAll,
   ask,
+  decisionsOpen,
   resolveSource,
   settle,
   setWaiting,
@@ -123,6 +124,10 @@ const HELP = `starbridge: post decisions to your devices, report runs, upload qu
       For an orchestrator: print, as JSON lines, every answer to a decision this machine asked,
       with its question and the session and project that asked; --follow keeps printing new
       ones until interrupted. It only reads: each answer still reaches the session that asked.
+
+  starbridge decisions --open
+      Print, as JSON lines, the questions this machine asked that are still open, with the
+      session and project that asked, so an orchestrator does not ask the same thing again.
 
   starbridge run --title <text> --reason <text> -- <command> [<arg>...]
       Run the command, its output passed through unchanged, and show it on every device:
@@ -368,6 +373,11 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
           (agent) => answersVia(ctx, agent, target, values),
           () => answers(ctx, values),
         );
+      }
+      case "decisions": {
+        const { values } = parseArgs({ args: rest, options: { open: { type: "boolean" } } });
+        if (!values.open) throw new UsageError("usage: starbridge decisions --open");
+        return decisionsOpen(ctx);
       }
       case "quota": {
         const [sub, ...args] = rest;

@@ -127,3 +127,38 @@ test("answers --all prints every answer as JSON lines and leaves each to its ses
   controller.abort();
   expect(await following).toBe(130);
 });
+
+test("decisions --open lists the open questions as JSON lines, until answered or settled", async () => {
+  const ctx = await paired(server);
+  const asked = ["--session", "s1", "--session-title", "Fix login", "--project", "web"];
+  expect(
+    await run(
+      ["ask", "--question", "Merge #12?", "--option", "Merge", "--option", "Wait", ...asked],
+      ctx,
+    ),
+  ).toBe(0);
+  const id = ctx.lines[0] as string;
+  expect(await run(["ask", "--question", "Ship?", "--waiting", "--session", "s2"], ctx)).toBe(0);
+  const other = ctx.lines[1] as string;
+  ctx.lines.length = 0;
+  expect(await run(["decisions", "--open"], ctx)).toBe(0);
+  expect(ctx.lines.map((l) => JSON.parse(l))).toEqual([
+    {
+      decisionId: id,
+      question: "Merge #12?",
+      options: ["Merge", "Wait"],
+      askedAt: expect.any(String),
+      waiting: false,
+      session: "s1",
+      sessionTitle: "Fix login",
+      project: "web",
+    },
+    expect.objectContaining({ decisionId: other, waiting: true, session: "s2" }),
+  ]);
+  await server.answer(id, { choice: "Merge" });
+  expect(await run(["wait", id], ctx)).toBe(0);
+  expect(await run(["settle", other, "--outcome", "withdrawn"], ctx)).toBe(0);
+  ctx.lines.length = 0;
+  expect(await run(["decisions", "--open"], ctx)).toBe(0);
+  expect(ctx.lines).toEqual([]);
+});
