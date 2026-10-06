@@ -9,6 +9,8 @@ tmp=$(mktemp /etc/starbridge/server.env.XXXXXX)
 {
   printf '%s\n' "PUBLIC_URL='https://starbridge.run'"
   printf '%s\n' "TRUST_PROXY='1'"
+  # The App Link the app verifies against web/public/.well-known/assetlinks.json (#527).
+  printf '%s\n' "APP_REDIRECT_URI='https://starbridge.run/app/auth'"
   printf '%s\n' "RELAY_MODE='1'"
   printf '%s\n' "GITHUB_CLIENT_ID='Ov23liEVyfnca8hO548x'"
   printf '%s\n' "GITHUB_CLIENT_SECRET='$(tr -d '\n' < $s/github-oauth-client-secret)'"

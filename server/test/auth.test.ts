@@ -3,6 +3,12 @@ import { makeServer, signIn } from "../test-support/app";
 
 // A stand-in for GitHub's OAuth endpoints and user API.
 let github: ReturnType<typeof Bun.serve>;
+/** The redirect_uri of the last code exchange: GitHub requires the authorize request's. */
+let exchangedFor = "";
+/** Codes bound to a challenge work once, as all of GitHub's do. */
+const used = new Set<string>();
+const s256 = (verifier: string) =>
+  new Bun.CryptoHasher("sha256").update(verifier).digest("base64url");
 const githubUrl = () => `http://localhost:${github.port}`;
 
 beforeAll(() => {
@@ -11,10 +17,20 @@ beforeAll(() => {
     async fetch(req) {
       const url = new URL(req.url);
       if (url.pathname === "/login/oauth/access_token") {
-        const body = (await req.json()) as { code: string; client_secret: string };
-        if (body.client_secret !== "gh-secret" || !body.code.startsWith("code-"))
+        const body = (await req.json()) as {
+          code: string;
+          client_secret: string;
+          redirect_uri: string;
+          code_verifier?: string;
+        };
+        exchangedFor = body.redirect_uri;
+        // code-<user>, or code-<user>-<challenge> for a code bound to a PKCE challenge.
+        const [, user, challenge] = /^code-(\d+)(?:-(.+))?$/.exec(body.code) ?? [];
+        const verified = !challenge || s256(body.code_verifier ?? "") === challenge;
+        if (body.client_secret !== "gh-secret" || !user || !verified || used.has(body.code))
           return Response.json({ error: "bad_verification_code" });
-        return Response.json({ access_token: `tok-${body.code.slice(5)}` });
+        if (challenge) used.add(body.code);
+        return Response.json({ access_token: `tok-${user}` });
       }
       if (url.pathname === "/user") {
         const auth = req.headers.get("authorization") ?? "";
@@ -43,16 +59,16 @@ function githubConfig() {
 async function githubSignIn(
   s: Awaited<ReturnType<typeof makeServer>>,
   user: number,
-  opts: { challenge?: string; state?: string } = {},
+  opts: { state?: string } = {},
 ) {
-  const query = opts.challenge ? `?app=1&challenge=${opts.challenge}` : "";
-  const start = await s.app.request(`/v1/auth/github${query}`);
+  const start = await s.app.request("/v1/auth/github");
   expect(start.status).toBe(302);
   const authorize = new URL(start.headers.get("location") ?? "");
   expect(authorize.searchParams.get("client_id")).toBe("gh-client");
   const cookie = (start.headers.get("set-cookie") ?? "").split(";")[0] ?? "";
   const state = opts.state ?? authorize.searchParams.get("state");
-  return s.app.request(`/v1/auth/github/callback?code=code-${user}&state=${state}`, {
+  const back = new URL(authorize.searchParams.get("redirect_uri") ?? "");
+  return s.app.request(`${back.pathname}?code=code-${user}&state=${state}`, {
     headers: { cookie },
   });
 }
@@ -84,57 +100,77 @@ test("GitHub sign-in sets an HTTP-only session cookie on one account per GitHub 
 /** RFC 7636 S256: the challenge is the base64url SHA-256 of the verifier. */
 function pkce() {
   const verifier = Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url");
-  const challenge = new Bun.CryptoHasher("sha256").update(verifier).digest("base64url");
-  return { verifier, challenge };
+  return { verifier, challenge: s256(verifier) };
 }
 
-async function appSignIn(s: Awaited<ReturnType<typeof makeServer>>, user: number) {
-  const { verifier, challenge } = pkce();
-  const res = await githubSignIn(s, user, { challenge });
-  expect(res.status).toBe(302);
-  const location = new URL(res.headers.get("location") ?? "");
-  return { location, code: location.searchParams.get("code") ?? "", verifier };
+/** Starts the app's sign-in and returns where GitHub is asked to send it back. */
+async function appStart(s: Awaited<ReturnType<typeof makeServer>>, challenge: string) {
+  const start = await s.app.request(`/v1/auth/github?app=1&challenge=${challenge}`);
+  expect(start.status).toBe(302);
+  return new URL(start.headers.get("location") ?? "").searchParams;
 }
 
-test("GitHub sign-in for the app redirects with a code, never the session", async () => {
+test("the app's sign-in binds GitHub's code to its challenge and comes back to its own path", async () => {
   const s = await makeServer(githubConfig());
-  const { location, code } = await appSignIn(s, 42);
-  expect(location.protocol + location.host + location.pathname).toBe("starbridge:auth");
-  expect(location.href).not.toContain("sbs_");
-  expect(code).toStartWith("sbc_");
-  expect((await s.call("GET", "/v1/me", { token: code })).status).toBe(401);
+  const { challenge } = pkce();
+  const authorize = await appStart(s, challenge);
+  expect(authorize.get("redirect_uri")).toEndWith("/v1/auth/github/callback/app");
+  expect(authorize.get("state")).toBe(challenge);
+  expect(authorize.get("code_challenge")).toBe(challenge);
+  expect(authorize.get("code_challenge_method")).toBe("S256");
+  const page = new URL((await s.app.request("/v1/auth/github")).headers.get("location") ?? "");
+  expect(page.searchParams.get("redirect_uri")).toEndWith("/v1/auth/github/callback");
+  expect(page.searchParams.has("code_challenge")).toBe(false);
 });
 
-test("the app trades its code and verifier for a session, once", async () => {
+test("the app trades GitHub's code and its verifier for a session, once", async () => {
   const s = await makeServer(githubConfig());
-  const { code, verifier } = await appSignIn(s, 42);
+  const { verifier, challenge } = pkce();
+  const code = `code-42-${challenge}`;
   const r = await s.call("POST", "/v1/auth/app/session", { body: { code, verifier } });
   expect(r.status).toBe(200);
+  expect(exchangedFor).toEndWith("/v1/auth/github/callback/app");
   const me = await s.call("GET", "/v1/me", { token: r.json.session });
-  expect(me.json).toMatchObject({ role: "device", member: null });
+  const web = await s.call("GET", "/v1/me", { token: sessionCookie(await githubSignIn(s, 42)) });
+  expect(me.json.account).toBe(web.json.account);
   const again = await s.call("POST", "/v1/auth/app/session", { body: { code, verifier } });
   expect(again.status).toBe(400);
+  expect(again.json.error).toBe("bad-code");
 });
 
-test("an app that caught the redirect cannot trade the code without the verifier", async () => {
+test("whoever catches the app's redirect cannot trade GitHub's code without the verifier", async () => {
   const s = await makeServer(githubConfig());
-  const { code, verifier } = await appSignIn(s, 42);
-  const stolen = await s.call("POST", "/v1/auth/app/session", {
-    body: { code, verifier: pkce().verifier },
+  const { challenge } = pkce();
+  const r = await s.call("POST", "/v1/auth/app/session", {
+    body: { code: `code-42-${challenge}`, verifier: pkce().verifier },
   });
-  expect(stolen.status).toBe(400);
-  // A failed try burns the code, so the thief cannot keep guessing.
-  const late = await s.call("POST", "/v1/auth/app/session", { body: { code, verifier } });
-  expect(late.status).toBe(400);
+  expect(r.status).toBe(400);
+  expect(r.json.error).toBe("bad-code");
 });
 
-test("app sign-in needs a challenge and its code expires", async () => {
+test("the browser passes the app's sign-in on to the app, untouched", async () => {
+  const s = await makeServer(githubConfig());
+  const { challenge } = pkce();
+  const res = await s.app.request(
+    `/v1/auth/github/callback/app?code=code-42-${challenge}&state=${challenge}`,
+  );
+  expect(res.status).toBe(302);
+  expect(res.headers.get("location")).toBe(
+    `starbridge://auth?code=code-42-${challenge}&state=${challenge}`,
+  );
+  expect(res.headers.get("set-cookie") ?? "").not.toContain("sb_session");
+  const denied = await s.app.request(
+    `/v1/auth/github/callback/app?error=access_denied&state=${challenge}`,
+  );
+  expect(denied.headers.get("location")).toBe(
+    `starbridge://auth?error=access_denied&state=${challenge}`,
+  );
+  expect((await s.app.request("/v1/auth/github/callback/app?code=code-42")).status).toBe(400);
+});
+
+test("app sign-in needs a challenge", async () => {
   const s = await makeServer(githubConfig());
   expect((await s.app.request("/v1/auth/github?app=1")).status).toBe(400);
-  const { code, verifier } = await appSignIn(s, 42);
-  s.deps.db.query("UPDATE app_codes SET expires_at = 0").run();
-  const r = await s.call("POST", "/v1/auth/app/session", { body: { code, verifier } });
-  expect(r.status).toBe(400);
 });
 
 test("GitHub sign-in refuses a callback whose state does not match", async () => {

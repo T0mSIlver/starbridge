@@ -124,7 +124,7 @@ release, restore the copy you made before upgrading.
 <dt><code>GITHUB_CLIENT_ID</code>, <code>GITHUB_CLIENT_SECRET</code></dt>
 <dd>GitHub sign-in, where each GitHub user gets their own account, from a GitHub OAuth app whose callback is <code>$PUBLIC_URL/v1/auth/github/callback</code>. Unset by default.</dd>
 <dt><code>APP_REDIRECT_URI</code></dt>
-<dd>Where GitHub sign-in sends the Android app. Default: <code>starbridge://auth</code>.</dd>
+<dd>Where GitHub sign-in sends the Android app. Only starbridge.run can vouch for the app, so its server sets <code>https://starbridge.run/app/auth</code>. Default: <code>starbridge://auth</code>.</dd>
 </dl>
 
 ### Notifications
