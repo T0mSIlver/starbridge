@@ -755,17 +755,19 @@ Tokens, type and components: `DESIGN.md`.
   privacy@starbridge.run; abuse@ appears only in `/terms`.
 - **Analytics** (#141). Umami, self-hosted, on the landing page, the docs, `/privacy` and `/terms`
   only. No cookie, no stored IP, a daily salt, Do Not Track honoured, so no consent banner. The
-  Android app has none (Play data safety form).
-- **Launch funnel** (#559). Landing view, a sign-in click, first sign-in, first machine, first
-  answer. The signed-in app loads no tracker: the browser that created an account posts those
-  three events itself, once each, with `/` as the page and nothing about the account
+  Android app has none (Play data safety form). Caddy rate-limits its open endpoint, and a timer
+  caps its tables, so it cannot fill the disk.
+- **Launch funnel** (#559, #590). Landing view, a sign-in click, first sign-in, recovery key
+  saved, first machine, first answer (with its kind: choice, text or Done); a second device is
+  counted beside it. The signed-in app loads no tracker: the browser that created an account posts
+  those events itself, once each, with `/` as the page and nothing about the account
   (`web/src/lib/funnel.ts`); Umami joins them to the landing visit by address, browser and day.
+  For every signed-in user it sends only which error screen showed and an install as an app.
   The first sign-in's time matches the account's creation, so the operator could link the two;
   `/privacy` says so.
   It sees machines and answers from any device, so a pairing or answer made on the phone counts
   once this browser sees them. Owner's view: an Umami share link on `stats.starbridge.run`,
   where Caddy passes only GET requests and blocks the login.
-  Caddy rate-limits its open endpoint, and a timer caps its tables, so it cannot fill the disk.
 - **Demo server** (#423). Play reviewers cannot pass GitHub's new-device check and cannot be given
   a recovery key, so `demo.starbridge.run` is a self-hosted server with an owner token, and
   `demo/` is its first device and machine. It approves every join by digits without comparing,
