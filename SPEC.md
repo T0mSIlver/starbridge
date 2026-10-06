@@ -1816,3 +1816,12 @@ goes in git.
   the meta row cut its text. No text measured under 3:1 in either theme. The 200% text is
   emulated by scaling each element's computed font size and line height, since the page sets
   type in px; a browser that zooms the whole page instead is not covered.
+- 2026-10-06: Caddy's connections to the server (#301). By default Caddy
+  keeps 32 idle connections to an upstream and closes the rest. Every
+  long-poll that returns frees one, so at 1000 load-test users Caddy held
+  about 1200 TIME-WAIT sockets toward the server, in the host's port range
+  since Caddy runs on the host network. During a restart storm at 3000 users,
+  the dev box ran out of ports. With `keepalive 25s` and
+  `keepalive_idle_conns_per_host 4096` it held 3 to 120, with p99 unchanged.
+  25 s stays below the server's 30 s idle close, so Caddy never reuses a
+  connection the server is closing.
