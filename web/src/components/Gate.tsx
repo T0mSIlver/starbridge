@@ -71,25 +71,37 @@ function useDefaultName(initial = ""): [string, (v: string) => void] {
   return [name, setName];
 }
 
-/** GitHub sign-in; self-hosting sits behind "Use your own server" (SPEC.md, "Clients"). */
 /** What the server's `signin` says when GitHub sign-in failed (PROTOCOL.md, "Auth"). */
 const SIGN_IN_FAILED: Record<string, string> = {
   declined: "GitHub didn't sign you in.",
-  expired: "Sign-in took over an hour, or started in another browser.",
+  expired:
+    "Sign-in could not be matched to this browser: it took over an hour, or started elsewhere.",
   failed: "GitHub didn't answer as expected.",
   off: "This server has no GitHub sign-in. Sign in with its owner token.",
 };
 
-/** Why the last GitHub sign-in failed, from the address the server sent the browser back to. */
-function useSignInFailure(): string | undefined {
+/**
+ * Why the last GitHub sign-in failed, from the address the server sent the browser back to,
+ * until this browser is signed in.
+ */
+function useSignInFailure(signedOut: boolean): string | undefined {
   const [why, setWhy] = useState<string>();
   useEffect(() => {
-    const v = new URLSearchParams(window.location.search).get("signin");
-    if (v && v in SIGN_IN_FAILED) setWhy(v);
+    if (!signedOut) setWhy(undefined);
+  }, [signedOut]);
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const v = url.searchParams.get("signin");
+    if (!v) return;
+    // Read once, so a reload does not say it again.
+    url.searchParams.delete("signin");
+    window.history.replaceState(window.history.state, "", url);
+    if (v in SIGN_IN_FAILED) setWhy(v);
   }, []);
   return why;
 }
 
+/** GitHub sign-in; self-hosting sits behind "Use your own server" (SPEC.md, "Clients"). */
 export function SignIn({
   ownServer = false,
   refused,
@@ -502,7 +514,7 @@ export function Gate({ children }: { children: React.ReactNode }) {
     () => false,
   );
   const [ownServer, setOwnServer] = useState(false);
-  const failed = useSignInFailure();
+  const failed = useSignInFailure(boot.state === "signed-out");
   const router = useRouter();
   const path = usePathname();
   // A pairing link opened before sign-in or setup: keep its code, and go back to it after.

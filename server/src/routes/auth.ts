@@ -139,7 +139,7 @@ async function gitHubAccount(c: Context<Env>, code: string, verifier?: string): 
 /**
  * The page's sign-in comes back: the state must match the cookie it started with. A sign-in that
  * fails goes back to the page with why, in `signin`, which the page says in words with a way to
- * start again (#616): `declined` on GitHub, `expired` (or from another browser), or `failed`.
+ * start again (#616): `declined` on GitHub, `expired` (or not matched to this browser), or `failed`.
  */
 authRoutes.get("/auth/github/callback", async (c) => {
   const { secureCookies } = c.var.config;
@@ -157,8 +157,9 @@ authRoutes.get("/auth/github/callback", async (c) => {
   try {
     account = await gitHubAccount(c, code);
   } catch (e) {
-    if (e instanceof HTTPException) return back("failed");
-    throw e;
+    // GitHub refused, or could not be reached.
+    if (!(e instanceof HTTPException)) console.error(`GitHub sign-in: ${e}`);
+    return back("failed");
   }
   const token = createSession(c.var.db, account, c.var.config.limits.sessions);
   setSessionCookie(c, token, secureCookies);
