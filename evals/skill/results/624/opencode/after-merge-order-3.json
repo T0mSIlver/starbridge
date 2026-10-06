@@ -1,0 +1,119 @@
+{
+  "agent": "opencode",
+  "model": "zai-coding-plan/glm-5.3-flash",
+  "arm": "after",
+  "scenario": "merge-order",
+  "rep": 3,
+  "turns": [
+    {
+      "commands": [
+        "gh pr view 12 --json number,title,mergeable,mergeStateStatus,files,statusCheckRollup",
+        "gh pr view 13 --json number,title,mergeable,mergeStateStatus,files,statusCheckRollup",
+        "gh api repos/acme/notes/pulls/12 --jq '{mergeable, mergeable_state}'",
+        "gh api repos/acme/notes/pulls/13 --jq '{mergeable, mergeable_state}'",
+        "gh api repos/acme/notes/pulls/12; echo ---; gh api repos/acme/notes/pulls/13",
+        "git fetch origin main refs/pull/12/head:refs/remotes/pr/12 refs/pull/13/head:refs/remotes/pr/13 && git log --oneline -1 origin/main && git merge-base origin/main pr/12 && git merge-base origin/main pr/13",
+        "git fetch origin --prune 2>&1; git branch -a; git status",
+        "gh pr diff 12 > /tmp/opencode/pr12.diff; gh pr diff 13 > /tmp/opencode/pr13.diff; git remote -v",
+        "git ls-remote origin",
+        "starbridge ask --waiting \\\n  --question 'PRs #12 and #13 both edit src/api.ts and conflict — which merges first?' \\\n  --context 'Both are green; whichever merges second needs a rebase before it can merge.\n#12 first: resumable uploads land now; needed for tonight’s 20:00 CLI release (release ships whatever is on main), #13 rebases after.\n#13 first: sync-timeout fix lands now (3 user reports this week), #12 rebases after and must land before the 20:00 release cut.' \\\n  --option '#12 first' --option '#13 first' \\\n  --link https://github.com/acme/notes/pull/12 \\\n  --link https://github.com/acme/notes/pull/13",
+        "starbridge wait d_suLFaeqM4OX8K3z3 --timeout 5m"
+      ],
+      "final": "Both PRs are merged.\n\n- #12 and #13 both edit the same line of `src/api.ts`, so per the project rules I didn't pick an order — I sent a card and you answered \"#12 first\".\n- `gh pr merge 12 --squash` and then `gh pr merge 13 --squash` both reported success.\n- One caveat: this sandbox's git remote never exposes the merged commit, so I couldn't independently verify the composed file. Since #13 squash-landed second on a shared line, give `src/api.ts` a quick glance before tonight's 20:00 release cut to confirm `TIMEOUT_MS = 30000` and #12's `CHUNK` are both present on main.",
+      "session": "ses_eecaae8ccffetKOuF8A5CTC9gv",
+      "tokens": 19608,
+      "exit": 0,
+      "seconds": 180.192,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_suLFaeqM4OX8K3z3 --timeout 5m` (again on exit 2)."
+      ]
+    },
+    {
+      "commands": [
+        "gh pr merge 12 --squash",
+        "gh pr view 13 --json number,title,mergeable,mergeStateStatus 2>&1; gh pr merge 13 --squash 2>&1",
+        "git fetch origin && git log --oneline -3 origin/main && git show origin/main:src/api.ts",
+        "gh pr view 12 --json state,mergedAt; gh pr view 13 --json state,mergedAt"
+      ],
+      "final": "Both PRs are merged.\n\n- #12 and #13 both edit the same line of `src/api.ts`, so per the project rules I didn't pick an order — I sent a card and you answered \"#12 first\".\n- `gh pr merge 12 --squash` and then `gh pr merge 13 --squash` both reported success.\n- One caveat: this sandbox's git remote never exposes the merged commit, so I couldn't independently verify the composed file. Since #13 squash-landed second on a shared line, give `src/api.ts` a quick glance before tonight's 20:00 release cut to confirm `TIMEOUT_MS = 30000` and #12's `CHUNK` are both present on main.",
+      "session": "ses_eecaae8ccffetKOuF8A5CTC9gv",
+      "tokens": 19608,
+      "exit": 0,
+      "seconds": 180.192,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_suLFaeqM4OX8K3z3 --timeout 5m` (again on exit 2)."
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_suLFaeqM4OX8K3z3",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-06T22:30:12Z",
+      "question": "PRs #12 and #13 both edit src/api.ts and conflict — which merges first?",
+      "context": "Both are green; whichever merges second needs a rebase before it can merge.\n#12 first: resumable uploads land now; needed for tonight’s 20:00 CLI release (release ships whatever is on main), #13 rebases after.\n#13 first: sync-timeout fix lands now (3 user reports this week), #12 rebases after and must land before the 20:00 release cut.",
+      "options": [
+        "#12 first",
+        "#13 first"
+      ],
+      "recommended": "#12 first",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": ""
+      },
+      "links": [
+        {
+          "url": "https://github.com/acme/notes/pull/12"
+        },
+        {
+          "url": "https://github.com/acme/notes/pull/13"
+        }
+      ],
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "BQQyCgnnkvha7RZiAnc6lB099D7nsaVGjkF7ET9Fpbw"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [
+    "gh pr view 12 --json number,title,mergeable,mergeStateStatus,files,statusCheckRollup",
+    "gh pr view 13 --json number,title,mergeable,mergeStateStatus,files,statusCheckRollup",
+    "gh api repos/acme/notes/pulls/12 --jq {mergeable, mergeable_state}",
+    "gh api repos/acme/notes/pulls/13 --jq {mergeable, mergeable_state}",
+    "gh api repos/acme/notes/pulls/12",
+    "gh api repos/acme/notes/pulls/13",
+    "gh pr diff 12",
+    "gh pr diff 13",
+    "gh pr merge 12 --squash",
+    "gh pr view 13 --json number,title,mergeable,mergeStateStatus",
+    "gh pr merge 13 --squash",
+    "gh pr view 12 --json state,mergedAt",
+    "gh pr view 13 --json state,mergedAt"
+  ],
+  "answered": "Answer to d_suLFaeqM4OX8K3z3 (PRs #12 and #13 both edit src/api.ts and conflict — which merges first?): #12 first",
+  "waiting": [
+    {
+      "v": 1,
+      "id": "w_xysb94dx3Sw8xuIH",
+      "decisionId": "d_suLFaeqM4OX8K3z3",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-06T22:30:12Z",
+      "state": "waiting",
+      "dir": {
+        "length": 2,
+        "head": "BQQyCgnnkvha7RZiAnc6lB099D7nsaVGjkF7ET9Fpbw"
+      }
+    }
+  ],
+  "permissions": []
+}

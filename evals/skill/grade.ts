@@ -32,6 +32,7 @@ interface Card {
   options: string[];
   recommended?: string;
   links?: { url: string }[];
+  held?: boolean;
   images?: unknown[];
   answerIn?: { url: string } | null;
 }
@@ -61,6 +62,14 @@ const CHECKS: { id: string; label: string; judge?: true }[] = [
   { id: "run", label: "Blocking command wrapped whole, with a reason" },
   { id: "after", label: "Acted on the answer at once, posted nothing new" },
   { id: "snoozed", label: "Snoozed: stopped polling, said what waits, posted nothing new" },
+  { id: "recommended", label: "Names its pick with --recommended" },
+  { id: "order", label: "Options in their natural order" },
+  { id: "flags", label: "Only current ask flags (no --default, no --json)" },
+  { id: "mark", label: "Marked waiting only when blocked" },
+  { id: "delivery", label: "Did what ask's last line said: waited, or ended the turn" },
+  { id: "done", label: "On Done: read the page, no settle, no new card" },
+  { id: "question", label: "opencode's question reached the devices and its answer the session" },
+  { id: "diff", label: "opencode's edit prompt reached the devices with its diff" },
   { id: "cold", label: "Answerable cold, from the card alone", judge: true },
   { id: "consequences", label: "Says what each option changes", judge: true },
   { id: "surface", label: "Did not also ask in the terminal (or did, when Starbridge failed)", judge: true },
@@ -226,6 +235,52 @@ function score(r: Rec, s: Scenario): Record<string, boolean | null> {
         all.filter((c) => /starbridge\s+wait\b/.test(c)).length <= 1 &&
         cards.length === 1 &&
         /starbridge wait|tomorrow|09:00|9:00|snooze/i.test(r.turns.at(-1)?.final ?? "")
+      : null,
+    recommended: hasCard && cards.some((c) => c.options.length > 1)
+      ? cards.filter((c) => c.options.length > 1).every((c) => !!c.recommended && c.options.includes(c.recommended))
+      : null,
+    order: s.natural && hasCard
+      ? cards.every((c) => {
+          const at = (s.natural ?? []).map((re) => c.options.findIndex((o) => re.test(o)));
+          return at.every((i, k) => i >= 0 && (k === 0 || i > (at[k - 1] as number)));
+        })
+      : null,
+    flags: all.some((c) => /starbridge\s+ask\b/.test(c))
+      ? !all.some((c) => /starbridge\s+ask\b[^\n]*--(default|json)\b/.test(c))
+      : null,
+    // Marked waiting on the devices, or would have been had the answer not come first: the
+    // owner's answer can land before the agent's `wait`, which then marks nothing.
+    mark:
+      s.blocks === undefined || !hasCard
+        ? null
+        : s.blocks ===
+          ((r.waiting ?? []).some((w) => (w as { state?: string }).state === "waiting") ||
+            all.some((c) =>
+              /starbridge\s+(ask\b[^\n]*--waiting\b|waiting\b|wait\b(?![^\n]*--no-mark))/.test(c),
+            )),
+    delivery: (() => {
+      const said = first?.delivery ?? [];
+      const waited = all.some((c) => /starbridge\s+(ask\b[^\n]*--wait\b|wait\b)/.test(c));
+      if (said.some((l) => l.startsWith("The answer will come back")))
+        return !cmds.some((c) => /starbridge\s+(ask\b[^\n]*--wait\b|wait\b)/.test(c)) && !!r.prompted;
+      if (said.some((l) => l.startsWith("Nothing brings"))) return waited;
+      return null;
+    })(),
+    done: s.done
+      ? !!r.answered &&
+        !all.some((c) => /starbridge\s+settle\b/.test(c)) &&
+        r.laterDecisions.length === 0 &&
+        !!r.turns[1]?.commands.some((c) => /read-artifact|page-pick/.test(c))
+      : null,
+    question: s.name === "oc-question"
+      ? !!first?.tools?.includes("question") &&
+        cards.some((c) => c.options.length >= 2) &&
+        !!r.answered &&
+        (r.turns[1]?.tools ?? []).some((t) => /edit|write|patch/.test(t))
+      : null,
+    diff: s.name === "oc-edit"
+      ? (r.permissions ?? []).some((p) => /30000/.test(String((p as { input?: string }).input)) && /5000/.test(String((p as { input?: string }).input))) &&
+        !!r.answered
       : null,
     cold: j && hasCard ? j.cold : null,
     consequences: j && hasCard ? j.consequences : null,

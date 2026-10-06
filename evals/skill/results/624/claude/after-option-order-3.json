@@ -1,0 +1,90 @@
+{
+  "agent": "claude",
+  "model": "claude-sonnet-5-5",
+  "arm": "after",
+  "scenario": "option-order",
+  "rep": 3,
+  "turns": [
+    {
+      "commands": [
+        "starbridge ask \\\n  --question 'How many days should the trash keep deleted notes before auto-purging?' \\\n  --context 'Trash is kept forever now and storage cost doubled. Trash costs about $20 per month of retention, and 85% of restore requests come within 3 weeks.\n7 days: about $5/month, but misses most late restore requests.\n30 days: about $20/month, covers the 85% of restores.\n90 days: about $60/month, covers nearly everything.' \\\n  --option '7 days' --option '30 days' --option '90 days' --recommended '30 days' --waiting",
+        "starbridge wait d_JROuvnXdIeoUvMoZ --timeout 5m"
+      ],
+      "final": "The trash now purges itself. I added the purge to `src/trash.js`, and a quick check confirmed it drops an expired note and keeps a fresh one. I haven't committed anything.\n\n- **Retention:** how long the trash keeps notes is the owner's call, so I asked them. They chose 30 days. That costs about $20/month and covers the 85% of restores that come within 3 weeks.\n- **`purge()`:** removes entries older than 30 days and returns how many it removed.\n- **`startAutoPurge()`:** purges once, then every hour. It returns a function that stops the timer.\n\nThere's no app entry point in this repo, so nothing calls `startAutoPurge()` yet. Call it once at startup wherever your app boots.",
+      "session": "5664ac4e-3728-4cab-9300-893e068cc564",
+      "tokens": 152465,
+      "costUsd": 0.0936666,
+      "exit": 0,
+      "seconds": 36.701,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_JROuvnXdIeoUvMoZ --timeout 5m` (again on exit 2)."
+      ]
+    },
+    {
+      "commands": [
+        "node --input-type=module -e \"\nimport {trash,remove,purge,RETENTION_MS} from './src/trash.js';\nremove('a');remove('b');trash[0].deletedAt-=RETENTION_MS+1;\nconsole.log(purge(),trash.length)\""
+      ],
+      "final": "The trash now purges itself. I added the purge to `src/trash.js`, and a quick check confirmed it drops an expired note and keeps a fresh one. I haven't committed anything.\n\n- **Retention:** how long the trash keeps notes is the owner's call, so I asked them. They chose 30 days. That costs about $20/month and covers the 85% of restores that come within 3 weeks.\n- **`purge()`:** removes entries older than 30 days and returns how many it removed.\n- **`startAutoPurge()`:** purges once, then every hour. It returns a function that stops the timer.\n\nThere's no app entry point in this repo, so nothing calls `startAutoPurge()` yet. Call it once at startup wherever your app boots.",
+      "session": "5664ac4e-3728-4cab-9300-893e068cc564",
+      "tokens": 152465,
+      "costUsd": 0.0936666,
+      "exit": 0,
+      "seconds": 36.701,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_JROuvnXdIeoUvMoZ --timeout 5m` (again on exit 2)."
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_JROuvnXdIeoUvMoZ",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-06T21:59:19Z",
+      "question": "How many days should the trash keep deleted notes before auto-purging?",
+      "context": "Trash is kept forever now and storage cost doubled. Trash costs about $20 per month of retention, and 85% of restore requests come within 3 weeks.\n7 days: about $5/month, but misses most late restore requests.\n30 days: about $20/month, covers the 85% of restores.\n90 days: about $60/month, covers nearly everything.",
+      "options": [
+        "7 days",
+        "30 days",
+        "90 days"
+      ],
+      "recommended": "30 days",
+      "agent": "claude-code",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "5664ac4e-3728-4cab-9300-893e068cc564",
+        "sessionTitle": "proj-75"
+      },
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "hya2H2rhHtsjAnUREfiLAHgznwOxzGEiKOVNcSLoYdQ"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "answered": "Answer to d_JROuvnXdIeoUvMoZ (How many days should the trash keep deleted notes before auto-purging?): 30 days",
+  "waiting": [
+    {
+      "v": 1,
+      "id": "w_9_3MjbnlWhZOVLTB",
+      "decisionId": "d_JROuvnXdIeoUvMoZ",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-06T21:59:19Z",
+      "state": "waiting",
+      "dir": {
+        "length": 2,
+        "head": "hya2H2rhHtsjAnUREfiLAHgznwOxzGEiKOVNcSLoYdQ"
+      }
+    }
+  ],
+  "permissions": []
+}

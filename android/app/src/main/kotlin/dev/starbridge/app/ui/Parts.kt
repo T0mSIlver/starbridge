@@ -69,6 +69,7 @@ import dev.starbridge.app.ui.theme.Radius
 import dev.starbridge.app.ui.theme.Sizes
 import dev.starbridge.app.ui.theme.Spacing
 import dev.starbridge.app.ui.theme.StarbridgeTheme
+import androidx.compose.ui.unit.Density
 
 /**
  * A top-level screen: a large flexible top app bar that collapses as the content scrolls, over
@@ -128,18 +129,35 @@ fun Page(
     titleGap: Dp = Spacing.s3,
     /** Above the title: the Inbox's lockup. */
     header: (@Composable () -> Unit)? = null,
+    /** The last item waits at the bottom of the screen while everything fits: the Inbox's History. */
+    lastAtBottom: Boolean = false,
     content: LazyListScope.() -> Unit,
 ) {
     Refreshable(refresh) {
         LazyColumn(
             modifier.fillMaxSize().widthIn(max = Sizes.content),
             contentPadding = PaddingValues(start = margin, end = margin, bottom = Spacing.s6),
-            verticalArrangement = Arrangement.spacedBy(gap),
+            verticalArrangement = if (lastAtBottom) LastAtBottom(gap) else Arrangement.spacedBy(gap),
         ) {
             item(key = "page-title") { PageTitle(title, subtitle, trailing, onBack, titleGap - gap, header) }
             content()
         }
     }
+}
+
+/** [gap] between items, as `spacedBy`, with the last one moved down to the bottom when they fit. */
+private class LastAtBottom(private val gap: Dp) : Arrangement.Vertical {
+    override val spacing = gap
+
+    override fun Density.arrange(totalSize: Int, sizes: IntArray, outPositions: IntArray) {
+        with(Arrangement.spacedBy(gap)) { arrange(totalSize, sizes, outPositions) }
+        if (sizes.size < 2) return
+        val last = sizes.lastIndex
+        outPositions[last] = maxOf(outPositions[last], totalSize - sizes[last])
+    }
+
+    override fun equals(other: Any?) = other is LastAtBottom && other.gap == gap
+    override fun hashCode() = gap.hashCode()
 }
 
 @Composable

@@ -43,3 +43,16 @@ provider's error, such as a rate limit, makes the run a failed run rather than a
 
 `results/299` holds the records behind #299's entry in SPEC.md, "Platform facts", one folder per
 text the agents ran: `main`, `rev3`, `heredoc` and `final`.
+
+`results/624` holds round 2, on what changed since: option order, Done, the delivery line,
+`wait --no-mark` and opencode's question and edit prompts. Its cases run in sessions that live
+across the answer (`live` in `scenarios.ts`): Claude Code in tmux with the mod and `starbridge
+agent`, opencode under `opencode serve` with its plugin.
+
+```bash
+TMPDIR=/var/tmp bun evals/skill/run.ts --agent claude --arms after --reps 3 \
+  --only merge-order,option-order,design-pick,later-question,done-on-page,delivery-prompt,delivery-wait
+TMPDIR=/var/tmp bun evals/skill/run.ts --agent opencode --arms after --reps 3 \
+  --only merge-order,option-order,design-pick,later-question,done-on-page,delivery-prompt,oc-question,oc-edit
+bun evals/skill/grade.ts --no-judge evals/skill/results/624/claude
+```

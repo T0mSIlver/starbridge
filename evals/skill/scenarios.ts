@@ -40,6 +40,27 @@ export interface Scenario {
   followUp?: { acted: RegExp };
   /** The owner snoozes the first card until tomorrow 09:00 instead of answering it (#571). */
   snooze?: true;
+  /** The options' natural order, one pattern per option (#545). */
+  natural?: RegExp[];
+  /**
+   * Only the answer unblocks the work: the card should be marked waiting. False for a card that
+   * blocks nothing yet, which should never be (#603).
+   */
+  blocks?: boolean;
+  /** Seconds the owner takes to answer the first card (default 15). */
+  answerAfter?: number;
+  /** The owner taps Done on an `--answer-in` card instead of picking (#539). */
+  done?: boolean;
+  /**
+   * A session that lives across the answer, as in the TUI: Claude Code in tmux, opencode under
+   * `opencode serve` with its Starbridge plugin. `mod` adds the Claude Code mod and runs
+   * `starbridge agent`, so `ask` promises the answer as a prompt (#589); without it `ask` prints
+   * the `wait` line. `permissions` turns on `starbridge config permissions` and makes opencode
+   * ask before every edit (#489).
+   */
+  live?: { mod?: boolean; permissions?: boolean };
+  /** Only for these agents. */
+  agents?: string[];
   /** Writes the project into `dir`; `gh` reads its canned output from `gh`. */
   build(dir: string, gh: string): void;
 }
@@ -65,8 +86,7 @@ ${body}
 Files changed: ${files.join(", ")}
 `;
 
-export const scenarios: Scenario[] = [
-  {
+const mergeOrder: Scenario = {
     name: "merge-order",
     what: "two green PRs conflict; the owner picks the order",
     prompt: "PRs #12 and #13 are both green. Get them merged.",
@@ -74,6 +94,8 @@ export const scenarios: Scenario[] = [
     links: ["pull/12", "pull/13"],
     forbidden: [/gh pr merge/],
     followUp: { acted: /gh pr merge/ },
+    natural: [/12/, /13/],
+    blocks: true,
     build(dir, gh) {
       write(dir, {
         "AGENTS.md":
@@ -104,7 +126,10 @@ export const scenarios: Scenario[] = [
         "pr-merge": "✓ Squashed and merged pull request\n",
       });
     },
-  },
+};
+
+export const scenarios: Scenario[] = [
+  mergeOrder,
   {
     name: "snoozed-release",
     what: "the owner snoozes the release card until tomorrow morning",
@@ -273,6 +298,107 @@ export const scenarios: Scenario[] = [
         "package.json": '{ "name": "TBD", "version": "1.0.0" }\n',
         "NAMES.md":
           "notekit: free on npm, matches the repo.\njotter: free on npm, shorter, but a dead app with that name exists.\n",
+      });
+    },
+  },
+  // Round 2 (#624): what changed since #299.
+  {
+    name: "option-order",
+    what: "three retention periods; the pick is not the first",
+    prompt:
+      "Deleted notes stay in the trash forever and the storage bill doubled. Purge the trash automatically.",
+    expect: "ask",
+    natural: [/\b7\b/, /\b30\b/, /\b90\b/],
+    blocks: true,
+    build(dir) {
+      write(dir, {
+        "AGENTS.md":
+          "# acme notes sync\n\n- How long the trash keeps deleted notes is the owner's call: it trades storage cost against what support can restore.\n",
+        "NOTES.md":
+          "Trash retention, the candidates: 7, 30 or 90 days.\n- Support: 85% of restore requests come within 3 weeks of the delete.\n- Storage: each month of trash costs about $20/month at today's volume.\n",
+        "src/trash.js":
+          "// Deleted notes, kept until purged.\nexport const trash = [];\nexport function remove(note) {\n  trash.push({ note, deletedAt: Date.now() });\n}\n",
+      });
+    },
+  },
+  {
+    name: "later-question",
+    what: "a question for next week beside work the agent can do now",
+    prompt:
+      "Fix the lint errors (`node scripts/lint.js`). Also ask me what to call next week's release: it goes in RELEASE.md before Monday, no rush.",
+    expect: "ask",
+    blocks: false,
+    answerAfter: 120,
+    build(dir) {
+      write(dir, {
+        "AGENTS.md": "# acme notes\n\n- The owner names each release himself.\n",
+        "RELEASE.md": "# Next release (ships Monday)\n\nName: TBD\n\n- Resumable uploads\n- Faster sync on slow links\n",
+        "NAMES.md": "Release name ideas: Driftwood, Lantern, Juniper.\n",
+        "scripts/lint.js":
+          'import { readdirSync, readFileSync } from "node:fs";\nlet bad = 0;\nfor (const f of readdirSync("src")) {\n  readFileSync(`src/${f}`, "utf8").split("\\n").forEach((l, i) => {\n    if (/\\bvar\\b/.test(l)) { console.log(`src/${f}:${i + 1}: use let or const, not var`); bad++; }\n  });\n}\nprocess.exit(bad ? 1 : 0);\n',
+        "package.json": '{ "name": "notes", "type": "module" }\n',
+        "src/upload.js": "export function upload(file) {\n  var size = file.length;\n  var chunks = Math.ceil(size / 1024);\n  return chunks;\n}\n",
+      });
+    },
+  },
+  {
+    name: "done-on-page",
+    what: "the owner answers in the artifact and taps Done on the card",
+    prompt:
+      "Finish the pricing page (src/pricing.html). The tier names are still open: the owner compares them in the artifact from the last session.",
+    expect: "answer-in",
+    links: ["claude.ai/artifact/7c1e9a52"],
+    done: true,
+    build(dir, gh) {
+      write(dir, {
+        "AGENTS.md": "# acme notes site\n\nStatic marketing site.\n",
+        "NOTES.md":
+          "Last session: I published a comparison of three sets of tier names at https://claude.ai/artifact/7c1e9a52-0d3b-4f6e-9a21-5b8c3d2e1f00 . Its Pick buttons send the owner's choice to this session. `sh scripts/read-artifact.sh` prints the pick the page holds.\n",
+        "scripts/read-artifact.sh": `cat '${join(gh, "..", "page-pick")}' 2>/dev/null || echo 'No pick yet.'\n`,
+        "src/pricing.html":
+          "<h1>Pricing</h1>\n<!-- TODO: tier names -->\n<div class=tier>TIER_1 $0</div>\n<div class=tier>TIER_2 $8</div>\n<div class=tier>TIER_3 $20</div>\n",
+      });
+    },
+  },
+  {
+    ...mergeOrder,
+    name: "delivery-prompt",
+    what: "a live session whose mod brings the answer back as a prompt",
+    live: { mod: true },
+  },
+  {
+    ...mergeOrder,
+    name: "delivery-wait",
+    what: "a live session with no mod: ask prints the wait line",
+    live: {},
+    agents: ["claude"],
+  },
+  {
+    name: "oc-question",
+    what: "opencode's question tool asks on the devices",
+    prompt:
+      "Make src/hello.js greet the user in their language. Ask me which language with your question tool (English, French or German) before you write it.",
+    expect: "ask",
+    live: { mod: true },
+    agents: ["opencode"],
+    build(dir) {
+      write(dir, {
+        "AGENTS.md": "# acme hello\n",
+        "src/hello.js": "export const greeting = 'TODO';\n",
+      });
+    },
+  },
+  {
+    name: "oc-edit",
+    what: "opencode asks before an edit; the devices show its diff",
+    prompt: "Raise TIMEOUT_MS in src/api.ts to 30000.",
+    expect: "none",
+    live: { mod: true, permissions: true },
+    agents: ["opencode"],
+    build(dir) {
+      write(dir, {
+        "AGENTS.md": "# acme notes\n",
+        "src/api.ts": "export const TIMEOUT_MS = 5000;\n",
       });
     },
   },
