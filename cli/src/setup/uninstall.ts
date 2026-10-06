@@ -18,6 +18,7 @@ import {
   piPackage,
   removeCodexRule,
   removeCodexSkill,
+  removeOpencode,
   removePiPackage,
 } from "./harnesses";
 import {
@@ -49,7 +50,6 @@ export async function uninstall(sys: Sys, opts: UninstallOpts): Promise<number> 
       question: `Revoke ${machine.name}? It was uninstalled.`,
       context: `\`starbridge uninstall\` ran on ${machine.name}. A machine cannot revoke itself: revoke it under Devices so its keys no longer receive your decisions and quotas.`,
       options: ["I revoked it", "Keep it"],
-      default: "Keep it",
       project: "starbridge",
       session: "",
     };
@@ -107,6 +107,7 @@ export async function uninstall(sys: Sys, opts: UninstallOpts): Promise<number> 
 
   if (removeCodexSkill(sys)) ctx.out(`Removed ${codexSkillDir(sys)}.`);
   if (removeCodexRule(sys)) ctx.out(`Removed ${codexRulePath(sys)}.`);
+  for (const path of removeOpencode(sys)) ctx.out(`Removed ${path}.`);
   const piSource = hasPi(sys) ? piPackage(sys) : undefined;
   if (piSource)
     try {

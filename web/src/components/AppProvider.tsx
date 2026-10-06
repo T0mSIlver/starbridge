@@ -40,6 +40,8 @@ function single(read: () => Promise<unknown>): () => void {
 export type Store = {
   boot: Boot | { state: "loading" } | { state: "error"; error: string };
   inbox: Inbox;
+  /** The inbox came back once since boot: until then, an empty one means nothing yet. */
+  inboxLoaded: boolean;
   quotas?: Quotas;
   runs?: Runs;
   /** Runs boot again, after sign-in, setup, pairing or recovery. */
@@ -87,6 +89,7 @@ const QUOTA_JOIN_MS = 30_000;
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [boot, setBoot] = useState<Store["boot"]>({ state: "loading" });
   const [inbox, setInbox] = useState<Inbox>({ items: [], rejected: [] });
+  const [inboxLoaded, setInboxLoaded] = useState(false);
   const [quotas, setQuotas] = useState<Quotas>();
   const [quotaSettings, setSettingsState] = useState<QuotaSettings>(DEFAULT_SETTINGS);
   const settingsRef = useRef(quotaSettings);
@@ -115,6 +118,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setBoot(b);
       if (b.state === "ready") {
         setInbox(await d.loadInbox(b.ctx));
+        setInboxLoaded(true);
         const push = await import("@/lib/push");
         push.registerWorker();
         push.resubscribe().catch(() => {});
@@ -354,6 +358,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       value={{
         boot,
         inbox,
+        inboxLoaded,
         quotas,
         runs,
         reload,

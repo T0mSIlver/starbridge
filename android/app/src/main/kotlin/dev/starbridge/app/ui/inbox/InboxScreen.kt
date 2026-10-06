@@ -719,7 +719,7 @@ internal fun HistoryRow(
         Column(Modifier.padding(horizontal = Spacing.s5, vertical = Spacing.s3), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             MetaRow(source, time, clock = clock, words = words)
             Text(highlight(text, words, hit), style = if (prompt) StarbridgeTheme.type.code.copy(fontSize = 13.sp) else StarbridgeTheme.type.small, color = scheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            if (how.isNotEmpty()) Text(highlight(how, words, hit), style = StarbridgeTheme.type.meta, color = scheme.onSurfaceVariant, maxLines = 1)
+            if (how.isNotEmpty()) Text(highlight(how, words, hit), style = StarbridgeTheme.type.meta, color = scheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }

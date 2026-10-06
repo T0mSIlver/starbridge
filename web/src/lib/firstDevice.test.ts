@@ -4,6 +4,7 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { makeServer } from "@starbridge/server/test-support";
 import { api } from "./api";
 import * as device from "./device";
+import * as store from "./store";
 
 let http: ReturnType<typeof Bun.serve>;
 let account: string;
@@ -45,4 +46,26 @@ test("a key shown but not yet saved posts nothing, and another tab's start-over 
   expect(second.recoveryKey).not.toBe(first.recoveryKey);
   await second.commit();
   expect((await device.boot()).state).toBe("ready");
+});
+
+test("a first device cut off before it pinned keeps its keys when the server lists no devices (#371)", async () => {
+  // Tab B's genesis went out; the page closed before the pin was written.
+  const held = await store.get("device", account);
+  await store.del("pin", account);
+  const served = globalThis.fetch;
+  globalThis.fetch = (async (input: string, init?: RequestInit) =>
+    input === "/v1/directory"
+      ? Response.json({ entries: [] })
+      : served(input, init)) as typeof fetch;
+  try {
+    expect((await device.boot()).state).toBe("broken");
+    expect(await store.get("device", account)).toEqual(held as store.DeviceRecord);
+  } finally {
+    globalThis.fetch = served;
+  }
+  // Served the real chain again, its own genesis anchors it.
+  expect((await device.boot()).state).toBe("ready");
+  // A tab still offering a key cannot replace them.
+  await expect(device.prepareFirstDevice(account, "Tab C")).rejects.toThrow("Another tab set up");
+  expect(await store.get("device", account)).toEqual(held as store.DeviceRecord);
 });

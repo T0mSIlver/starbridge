@@ -25,6 +25,7 @@ export function SampleProvider({
     const { devices, ...s } = sample();
     return {
       boot: { state: "loading" },
+      inboxLoaded: true,
       ...s,
       ...(landing && {
         prompts: [],

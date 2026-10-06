@@ -51,14 +51,14 @@ const HELP = `starbridge: post decisions to your devices, report runs, upload qu
       --context-file <path>   the same, from a file ("-" for stdin)
       --option <text>         2 to 4 times; none asks for a free-text answer
       --recommended <text>    one of the options (default: the first)
-      --default <text>        what you do if nobody answers (default: wait for the answer)
       --waiting               you have nothing else to do: post it as waiting for the owner
-      --agent <name>          claude-code, codex or pi (default: the one that runs the
-                              command)
+      --agent <name>          claude-code, codex, pi or opencode (default: the one that
+                              runs the command)
       --project <name>        default: the current directory's name
       --session <id>          default: the agent's session ($CLAUDE_CODE_SESSION_ID,
-                              $CODEX_THREAD_ID, $PI_SESSION_ID)
-      --session-title <text>  default: the Claude Code or Pi session's name
+                              $CODEX_THREAD_ID, $PI_SESSION_ID,
+                              $STARBRIDGE_OPENCODE_SESSION)
+      --session-title <text>  default: the Claude Code, Pi or opencode session's name
       --image <path>          a PNG or JPEG to show with the question, up to 4 times;
                               scaled down to fit the server's size cap
       --link <url>            an https page to open, such as a claude.ai artifact,
@@ -72,6 +72,7 @@ const HELP = `starbridge: post decisions to your devices, report runs, upload qu
                               Code records for the session: Remote Control, Desktop)
       --json <path>           read these fields from a JSON file ("-" for stdin)
       --wait                  then wait for the answer, as \`wait\` does
+      --timeout <duration>    with --wait: give up then, as \`wait\` does
 
   starbridge waiting <decision id>
   starbridge working <decision id>
@@ -124,12 +125,12 @@ const HELP = `starbridge: post decisions to your devices, report runs, upload qu
       starbridge plugin's permission hook exits at once. machine-kind: the icon devices
       show, detected by setup.
 
-  starbridge hook permission --agent claude-code|pi [--wait 570s]
+  starbridge hook permission --agent claude-code|pi|opencode [--wait 570s]
   starbridge hook settle --agent claude-code
       For Claude Code's PermissionRequest hook, and for its PostToolUse, PermissionDenied,
       Stop and SessionEnd hooks: hook JSON on stdin; prints the hook's decision, or nothing
       to leave the prompt to the keyboard. The Starbridge Pi extension runs it with --agent pi
-      for pi-permission-system's prompts.
+      for pi-permission-system's prompts, the opencode plugin with --agent opencode.
 
   starbridge hook ask-user
       For Claude Code's PreToolUse hook on AskUserQuestion: hook JSON on stdin; answers each
@@ -204,7 +205,9 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
             timeout: { type: "string" },
           },
         });
-        const fromJson: AskInput = v.json ? (JSON.parse(readText(v.json)) as AskInput) : {};
+        const { default: jsonDefault, ...fromJson }: AskInput & { default?: unknown } = v.json
+          ? JSON.parse(readText(v.json))
+          : {};
         const input: AskInput = {
           ...fromJson,
           ...(v.question !== undefined ? { question: v.question } : {}),
@@ -212,7 +215,6 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
           ...(v["context-file"] !== undefined ? { context: readText(v["context-file"]) } : {}),
           ...(v.option !== undefined ? { options: v.option } : {}),
           ...(v.recommended !== undefined ? { recommended: v.recommended } : {}),
-          ...(v.default !== undefined ? { default: v.default } : {}),
           ...(v.waiting ? { waiting: true } : {}),
           ...(v.agent !== undefined ? { agent: v.agent as AskInput["agent"] } : {}),
           ...(v.project !== undefined ? { project: v.project } : {}),
@@ -225,9 +227,13 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
           ...(v.link !== undefined ? { links: v.link } : {}),
           ...(v["answer-in"] !== undefined ? { answerIn: v["answer-in"] } : {}),
         };
-        // Accepted until the skill drops it: decisions have no default time any more (#122).
-        if (v["default-at"] !== undefined)
-          ctx.err("starbridge: --default-at is ignored: agents never answer for the owner");
+        // Accepted so older commands still post: decisions have no default (#122, #352).
+        for (const [flag, given] of [
+          ["--default", v.default ?? jsonDefault],
+          ["--default-at", v["default-at"]],
+        ] as const)
+          if (given !== undefined)
+            ctx.err(`starbridge: ${flag} is ignored: agents never answer for the owner`);
         if (v.wait && input.answerIn !== undefined)
           throw new UsageError("--answer-in takes no --wait: the answer comes from that page");
         const opts = { wait: v.wait, timeout: v.timeout };
