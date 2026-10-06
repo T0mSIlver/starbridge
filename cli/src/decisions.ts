@@ -15,6 +15,7 @@ import {
   type SessionLink,
   type Settled,
   seal,
+  verifyDirectory,
   type Waiting,
   withheldBy,
 } from "@starbridge/protocol";
@@ -721,6 +722,28 @@ function dropRevoked(st: State, dir: Directory): boolean {
   return dropped;
 }
 
+/**
+ * Before a saved answer is handed out without a poll: drops those from devices revoked since,
+ * against the directory as the server has it now, else as this machine last verified it. Only
+ * when there is an undelivered answer from a device, so a call with nothing to hand out stays
+ * offline.
+ */
+async function dropRevokedNow(ctx: Ctx) {
+  const st = ctx.store.state();
+  if (!Object.values(st.answers).some((a) => !a.seen && a.device)) return;
+  const s = session(ctx);
+  let dir: Directory;
+  try {
+    dir = await refreshDirectory(ctx, s, ctx.signal);
+  } catch {
+    dir = verifyDirectory(ctx.store.directory(), {
+      account: s.machine.account,
+      pin: s.machine.pin,
+    });
+  }
+  if (dropRevoked(st, dir)) ctx.store.updateState((fresh) => dropRevoked(fresh, dir));
+}
+
 function forget(a: State["asked"][string]) {
   delete a.body;
   delete a.images;
@@ -893,6 +916,7 @@ export async function wait(
     return 0;
   };
 
+  await dropRevokedNow(ctx);
   const already = takeAnswer(ctx.store, target, opts.session);
   if (already) return report(already);
   if (target) await markWaiting(ctx, () => postWaiting(ctx, s, target, "waiting"));
@@ -1004,6 +1028,7 @@ export async function answers(
     return 0;
   }
   const seconds = opts.wait === undefined ? undefined : waitSeconds(opts.wait);
+  await dropRevokedNow(ctx);
   const first = sessionLines(ctx.store.state(), target);
   for (const l of first) printLine(ctx, l);
   if (first.length > 0 || seconds === undefined) return 0;

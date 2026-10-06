@@ -591,7 +591,8 @@ test("open decisions reach a device that joins later, which can answer them", as
   expect(Object.values(ctx.store.state().asked).map((a) => a.body)).toEqual([undefined, undefined]);
 });
 
-test("an undelivered answer from a device revoked since never reaches a session (#491)", async () => {
+/** A laptop's answer the machine accepted, not yet taken by its session, then the laptop revoked. */
+async function revokedAnswer() {
   const ctx = await paired(server);
   const laptop = await server.addDevice("laptop");
   await run([...ASK, "--session", "s"], ctx);
@@ -615,13 +616,24 @@ test("an undelivered answer from a device revoked since never reaches a session 
     body: JSON.stringify(sealed),
   });
   expect(posted.status).toBe(201);
-  const s = session(ctx);
-  const polled = await poll(ctx, s, { seconds: 0, shared: true });
-  // Accepted, and not yet taken by the session: its agent was closed.
+  const { cursor } = await poll(ctx, session(ctx), { seconds: 0, shared: true });
+  // Accepted while the session's agent was closed.
   expect(ctx.store.state().answers[id]?.seen).toBe(false);
-  // The owner revokes the stolen laptop; the next poll sees only the longer directory.
   await server.revoke("laptop");
-  await poll(ctx, s, { cursor: polled.cursor, seconds: 0, shared: true });
+  return { ctx, id, cursor };
+}
+
+test("a revoked device's undelivered answer is not handed to its session (#491)", async () => {
+  const { ctx, id } = await revokedAnswer();
+  // `answers` hands out what is saved before it polls, as `wait` does.
+  expect(await run(["answers", "--session", "s", "--wait", "0"], ctx)).toBe(0);
+  expect(ctx.lines.join("\n")).not.toContain("Merge");
+  expect(ctx.store.state().answers[id]).toBeUndefined();
+});
+
+test("a poll that brings no answer drops a revoked device's undelivered one (#491)", async () => {
+  const { ctx, id, cursor } = await revokedAnswer();
+  await poll(ctx, session(ctx), { cursor, seconds: 0, shared: true });
   expect(ctx.store.state().answers[id]).toBeUndefined();
 });
 
