@@ -30,7 +30,7 @@ import { Switch } from "../hooks/switch.ts";
 /** opencode's SDK client (v1), as plugins receive it. */
 interface Client {
   session: {
-    get(o: { path: { id: string } }): Promise<{ data?: { title?: string } }>;
+    get(o: { path: { id: string } }): Promise<{ data?: { title?: string; parentID?: string } }>;
     promptAsync(o: {
       path: { id: string };
       body: { parts: { type: "text"; text: string }[] };
@@ -63,7 +63,7 @@ export interface Asked {
 
 type Event =
   | { type: "permission.asked"; properties: Asked }
-  | { type: "permission.replied"; properties: { requestID: string } }
+  | { type: "permission.replied"; properties: { requestID: string; reply: string } }
   | { type: "session.deleted"; properties: { info: { id: string } } }
   | { type: string; properties: unknown };
 
@@ -88,9 +88,12 @@ function rule(): string | undefined {
   }
 }
 
-/** Whether this process is `opencode run`, which exits once its session is idle. */
+/**
+ * Whether this process is `opencode run`, which exits once its session is idle. The TUI's
+ * plugins run in a worker whose argv holds no command, and a flag's value may come before `run`.
+ */
 export function isRun(argv: string[]): boolean {
-  return argv.slice(2).find((a) => !a.startsWith("-")) === "run";
+  return argv.slice(2).includes("run");
 }
 
 /** The hook input `starbridge hook permission` reads, in Claude Code's shape. */
@@ -117,14 +120,14 @@ async function server({ client, directory }: Input) {
   const status = (_s: string | undefined) => {};
   /** The answer loop of each session that ran a command. */
   const loops = new Map<string, Switch>();
-  /** Prompts on the devices, by request id; aborting one stops its CLI. */
-  const asks = new Map<string, AbortController>();
-  /** Prompts this plugin answered, whose `permission.replied` is its own. */
-  const replied = new Set<string>();
+  /** Prompts on the devices, by request id, with their session; aborting one stops its CLI. */
+  const asks = new Map<string, { session: string; stop: AbortController }>();
+  /** The reply this plugin sent to each prompt, to tell its `permission.replied` apart. */
+  const replied = new Map<string, string>();
 
-  const title = async (id: string) => {
+  const info = async (id: string) => {
     try {
-      return (await client.session.get({ path: { id } })).data?.title;
+      return (await client.session.get({ path: { id } })).data;
     } catch {
       return undefined;
     }
@@ -174,20 +177,24 @@ async function server({ client, directory }: Input) {
     );
   };
 
-  const reply = (requestID: string, body: { reply: "once" | "reject"; message?: string }) =>
-    client._client
+  const reply = async (requestID: string, body: { reply: "once" | "reject"; message?: string }) => {
+    replied.set(requestID, body.reply);
+    const r = await client._client
       .post({
         url: "/permission/{requestID}/reply",
         path: { requestID },
         body,
         headers: { "Content-Type": "application/json" },
       })
-      .catch(() => {});
+      .catch((e: unknown) => ({ error: e }));
+    // Refused: the prompt was already answered, and its event came or will not come.
+    if (r.error) replied.delete(requestID);
+  };
 
   const ask = async (p: Asked) => {
     const stop = new AbortController();
-    asks.set(p.id, stop);
-    const name = await title(p.sessionID);
+    asks.set(p.id, { session: p.sessionID, stop });
+    const name = (await info(p.sessionID))?.title;
     const overran = setTimeout(() => stop.abort(), HOOK_MS);
     overran.unref();
     const out = await permissionHook(
@@ -201,7 +208,6 @@ async function server({ client, directory }: Input) {
     if (stop.signal.aborted) return;
     const v = verdictOf(out);
     if (v.kind === "defer") return;
-    replied.add(p.id);
     await reply(
       p.id,
       v.kind === "allow"
@@ -216,9 +222,12 @@ async function server({ client, directory }: Input) {
       // The owner's own terminal (PTY) has no session.
       if (!id) return;
       output.env[SESSION_ENV] = id;
-      const name = await title(id);
-      if (name) output.env[TITLE_ENV] = name;
-      if (answers) output.env[ANSWERS_ENV] = id;
+      const session = await info(id);
+      if (session?.title) output.env[TITLE_ENV] = session.title;
+      // A subagent's session ends with its task, so an answer submitted there reaches nobody:
+      // its agent waits for the answer instead.
+      if (!answers || session?.parentID) return;
+      output.env[ANSWERS_ENV] = id;
       loop(id);
     },
     "experimental.chat.system.transform": async (_input: unknown, output: { system: string[] }) => {
@@ -227,9 +236,19 @@ async function server({ client, directory }: Input) {
     event: async ({ event }: { event: Event }) => {
       if (event.type === "permission.asked") void ask(event.properties as Asked);
       else if (event.type === "permission.replied") {
-        const id = (event.properties as { requestID: string }).requestID;
-        // Answered at the keyboard: the CLI settles the prompt on the devices.
-        if (!replied.delete(id)) asks.get(id)?.abort();
+        const { requestID: id, reply: how } = event.properties as {
+          requestID: string;
+          reply: string;
+        };
+        const sent = replied.get(id);
+        replied.delete(id);
+        // Answered at the keyboard, or by opencode for a sibling prompt: the CLI settles the
+        // prompt on the devices.
+        if (sent !== how) asks.get(id)?.stop.abort();
+      } else if (event.type === "session.idle") {
+        // The turn ended (Esc, an error) with prompts still out: they are moot.
+        const session = (event.properties as { sessionID: string }).sessionID;
+        for (const a of asks.values()) if (a.session === session) a.stop.abort();
       } else if (event.type === "session.deleted") {
         const id = (event.properties as { info: { id: string } }).info.id;
         void loops.get(id)?.end();
@@ -237,7 +256,7 @@ async function server({ client, directory }: Input) {
       }
     },
     dispose: async () => {
-      for (const stop of asks.values()) stop.abort();
+      for (const a of asks.values()) a.stop.abort();
       const ending = [...loops.values()];
       loops.clear();
       await Promise.all(ending.map((l) => l.end()));

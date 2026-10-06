@@ -55,7 +55,7 @@ export async function runAgent(ctx: Ctx, opts: AgentOpts): Promise<number> {
   }
   if (opencodeState(home) === "outdated") {
     try {
-      installOpencode(home);
+      installOpencode(home, true);
       agent.log(`updated the opencode skill and plugin in ${opencodeDir(home)}`);
     } catch (e) {
       agent.log(`could not update the opencode skill and plugin: ${(e as Error).message}`);

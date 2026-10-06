@@ -10,11 +10,12 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import { LiveServer } from "@starbridge/server/test-support";
 import { makeAgent } from "../src/agent/main";
 import type { Agent } from "../src/agent/server";
 import { installTarball, linkIntoLocalBin } from "../src/setup/codexbar";
+import opencodeFiles from "../src/setup/opencode-files.js";
 import { setup } from "../src/setup/setup";
 import { status } from "../src/setup/status";
 import { defaults, failure, type Sys } from "../src/setup/sys";
@@ -349,4 +350,18 @@ test("setup installs no plugin from a marketplace named starbridge that is not t
   expect(m.ctx.lines.join("\n")).toContain(
     "comes from someone/starbridge, not T0mSIlver/starbridge",
   );
+});
+
+test("setup ships every file the opencode plugin imports", () => {
+  const root = join(import.meta.dir, "../..");
+  const need = new Set<string>();
+  const walk = (path: string) => {
+    if (need.has(path)) return;
+    need.add(path);
+    const text = readFileSync(join(root, path), "utf8");
+    for (const [, spec] of text.matchAll(/from "(\.{1,2}\/[^"]+)"/g))
+      walk(relative(root, resolve(dirname(join(root, path)), spec as string)));
+  };
+  walk("mod/opencode/starbridge.ts");
+  expect([...need].sort()).toEqual(Object.keys(opencodeFiles).sort());
 });

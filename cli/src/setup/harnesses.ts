@@ -5,7 +5,7 @@
  * (#300). The skill and the opencode plugin ship inside this binary, so setup needs no download
  * and installs the version that matches the CLI.
  */
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import rule from "../../../plugin/hooks/rule.md" with { type: "text" };
 import skill from "../../../plugin/skills/starbridge/SKILL.md" with { type: "text" };
@@ -173,9 +173,16 @@ export function opencodeState(sys: Home): "missing" | "current" | "outdated" {
   return same.every((s) => s === true) ? "current" : "outdated";
 }
 
-export function installOpencode(sys: Home) {
+/**
+ * Writes the skill and the plugin; with `present`, only the ones still there (the plugin counts
+ * as there while its entry file is), so an update never brings back one the owner removed.
+ */
+export function installOpencode(sys: Home, present = false) {
   const dir = opencodeDir(sys);
+  const there = (path: string) =>
+    existsSync(join(dir, path.startsWith("skills/") ? path : "plugins/starbridge.ts"));
   for (const [path, body] of Object.entries(opencodeFiles())) {
+    if (present && !there(path)) continue;
     mkdirSync(dirname(join(dir, path)), { recursive: true });
     writeFileSync(join(dir, path), body);
   }

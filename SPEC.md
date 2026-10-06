@@ -1301,7 +1301,8 @@ so the mod is the first path.
   session runs. It sets `STARBRIDGE_OPENCODE_SESSION` (the session's id) and
   `STARBRIDGE_OPENCODE_TITLE` for every command through the `shell.env` hook, since opencode
   gives commands no session id of its own, and `STARBRIDGE_OPENCODE_ANSWERS` (the id again)
-  unless the process is `opencode run`, which exits once the session is idle. `ask` detects
+  unless the process is `opencode run`, which exits once the session is idle, or the session is a
+  subagent's (it has a `parentID`), which ends with its task: there the agent waits. `ask` detects
   opencode from the first variable and says the answer comes back as a prompt only when the third
   matches it, as for Pi; the field that carries this to the agent, `piAnswers`, becomes
   `extensionAnswers`. The plugin appends `plugin/hooks/rule.md` to the system prompt through
@@ -1311,7 +1312,10 @@ so the mod is the first path.
   (`once` or `reject` with a message) while the TUI shows its dialog. So the plugin runs
   `starbridge hook permission --agent opencode` on each one, which does nothing while
   `starbridge config permissions` is off (the default), and the first answer wins: a reply from
-  the keyboard (`permission.replied`) stops the CLI, which settles the prompt on the devices.
+  the keyboard (`permission.replied` with another reply than the plugin's) stops the CLI, which
+  settles the prompt on the devices, as does the session going idle with the prompt out (Esc).
+  opencode settles a session's other prompts itself when one is rejected; those show as answered
+  at the keyboard.
   The devices offer Allow (this call) and Deny. `opencode run` rejects every prompt at once, so
   nothing reaches the devices from it. `starbridge setup` offers, when `opencode` is on the PATH,
   the skill in `~/.config/opencode/skills/starbridge` and the plugin in
