@@ -1,7 +1,7 @@
 blank_issues_enabled: true
 contact_links:
   - name: Question or idea
-    url: https://github.com/T0mSIlver/starbridge/discussions
+    url: https://github.com/T0mSIlver/starbridge/discussions/categories/q-a
     about: Setup, self-hosting, other agents and feature ideas go in Discussions.
   - name: Security vulnerability
     url: https://github.com/T0mSIlver/starbridge/security/advisories/new
