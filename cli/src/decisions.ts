@@ -284,6 +284,7 @@ export async function postDecision(ctx: Ctx, s: Session, input: AskInput): Promi
       ...(decision.source.session ? { session: decision.source.session } : {}),
       ...(decision.answerIn ? { answerIn: true } : {}),
       ...(input.codex && decision.source.session ? { codex: input.codex } : {}),
+      ...(input.extensionAnswers && decision.source.session ? { extensionAnswers: true } : {}),
     };
   });
   if (input.waiting) await markWaiting(ctx, () => postWaiting(ctx, s, decision.id, "waiting"));

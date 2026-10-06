@@ -13,21 +13,29 @@ test("only `opencode run` counts as run, whatever flags come first", () => {
   expect(isRun([...exe, "serve", "--port", "4096"])).toBe(false);
 });
 
-test("after a restart, the sessions with an open question or an undelivered answer get a loop", () => {
-  const asked = (session: string, more = {}) => ({ session, question: "q", ...more });
+test("after a restart, the sessions told to expect their answer as a prompt, with a question open or an answer undelivered, get a loop", () => {
+  const now = Date.parse("2026-10-06T12:00:00Z");
+  const asked = (session: string, more = {}) => ({
+    session,
+    askedAt: "2026-10-06T11:00:00Z",
+    extensionAnswers: true,
+    ...more,
+  });
   const state = {
     asked: {
       d_open: asked("ses_a"),
       d_unseen: asked("ses_b"),
       d_seen: asked("ses_c"),
       d_settled: asked("ses_d", { settled: true }),
-      d_artifact: asked("ses_e", { answerIn: "https://claude.ai/code/artifact/x" }),
-      d_none: { question: "q" },
+      d_artifact: asked("ses_e", { answerIn: true }),
+      d_run: asked("ses_f", { extensionAnswers: undefined }),
+      d_old: asked("ses_g", { askedAt: "2026-09-28T11:00:00Z" }),
+      d_none: { askedAt: "2026-10-06T11:00:00Z", extensionAnswers: true },
     },
     answers: { d_unseen: { seen: false }, d_seen: { seen: true } },
   };
-  expect(waitingSessions(state).sort()).toEqual(["ses_a", "ses_b"]);
-  expect(waitingSessions({})).toEqual([]);
+  expect(waitingSessions(state, now).sort()).toEqual(["ses_a", "ses_b"]);
+  expect(waitingSessions({}, now)).toEqual([]);
 });
 
 test("of two processes showing a session, only the first to claim an answer submits it", async () => {

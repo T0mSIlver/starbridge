@@ -6,7 +6,7 @@
  * with it; a busy one takes it at the next step of its turn.
  *
  * After a restart, a session waiting for its answer runs no command, so the plugin also starts
- * the loop of each session of its project that the CLI's state shows waiting. Two opencode
+ * the loop of each session of its directory that the CLI's state shows waiting. Two opencode
  * processes may show one session; the first to claim an answer submits it.
  *
  * opencode gives commands no session id, so the plugin sets STARBRIDGE_OPENCODE_SESSION and
@@ -37,7 +37,7 @@ interface Client {
   session: {
     get(o: {
       path: { id: string };
-    }): Promise<{ data?: { title?: string; parentID?: string; projectID?: string } }>;
+    }): Promise<{ data?: { title?: string; parentID?: string; directory?: string } }>;
     promptAsync(o: {
       path: { id: string };
       body: { parts: { type: "text"; text: string }[] };
@@ -56,7 +56,6 @@ interface Client {
 
 interface Input {
   client: Client;
-  project: { id: string };
   directory: string;
 }
 
@@ -88,7 +87,7 @@ const INHERITED = ["CLAUDECODE", "CODEX_THREAD_ID", "PI_SESSION_ID"];
  */
 const HOOK_MS = 600_000;
 
-/** How long a claim on a submitted answer is kept (`claim`). */
+/** How long a claim on a submitted answer is kept (`claim`), and a question resumed. */
 const CLAIM_MS = 7 * 24 * 3600_000;
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -121,17 +120,30 @@ export function hookInput(p: Asked, cwd: string) {
 }
 
 /**
- * The sessions in the CLI's state with a question still open or an answer not yet delivered:
- * after a restart they run no command that would start their loop.
+ * The sessions in the CLI's state told their answer comes back as a prompt, with a question
+ * asked in the last `CLAIM_MS` still open or an answer not yet delivered: after a restart they run
+ * no command that would start their loop. A session told to `wait` (`opencode run`) is left to it.
  */
-export function waitingSessions(state: unknown): string[] {
+export function waitingSessions(state: unknown, now: number): string[] {
   const st = state as {
-    asked?: Record<string, { session?: string; settled?: boolean; answerIn?: string }>;
+    asked?: Record<
+      string,
+      {
+        session?: string;
+        askedAt?: string;
+        extensionAnswers?: boolean;
+        settled?: boolean;
+        answerIn?: boolean;
+      }
+    >;
     answers?: Record<string, { seen?: boolean }>;
   };
   const ids = new Set<string>();
-  for (const [id, a] of Object.entries(st?.asked ?? {}))
-    if (a.session && !a.settled && !a.answerIn && !st.answers?.[id]?.seen) ids.add(a.session);
+  for (const [id, a] of Object.entries(st?.asked ?? {})) {
+    if (!a.session || !a.extensionAnswers || a.settled || a.answerIn) continue;
+    if (st.answers?.[id]?.seen || !(now - Date.parse(a.askedAt ?? "") < CLAIM_MS)) continue;
+    ids.add(a.session);
+  }
   return [...ids];
 }
 
@@ -140,17 +152,25 @@ export function waitingSessions(state: unknown): string[] {
  * session only one submits it. False when the other already did.
  */
 export async function claim(dir: string, id: string, line: string): Promise<boolean> {
-  const claims = join(dir, "opencode-claims");
-  const key = createHash("sha256").update(`${id}\n${line}`).digest("hex").slice(0, 32);
   try {
-    await mkdir(claims, { recursive: true });
-    await writeFile(join(claims, key), "", { flag: "wx" });
+    await mkdir(join(dir, "opencode-claims"), { recursive: true });
+    await writeFile(claimFile(dir, id, line), "", { flag: "wx" });
     return true;
   } catch (e) {
     // Unwritable: submitting twice beats never.
     return (e as { code?: string }).code !== "EEXIST";
   }
 }
+
+const claimFile = (dir: string, id: string, line: string) =>
+  join(
+    dir,
+    "opencode-claims",
+    createHash("sha256").update(`${id}\n${line}`).digest("hex").slice(0, 32),
+  );
+
+const unclaim = (dir: string, id: string, line: string) =>
+  rm(claimFile(dir, id, line), { force: true }).catch(() => {});
 
 /** Drops claims older than `CLAIM_MS`. */
 async function pruneClaims(dir: string, now: number) {
@@ -161,7 +181,7 @@ async function pruneClaims(dir: string, now: number) {
   }
 }
 
-async function server({ client, project, directory }: Input) {
+async function server({ client, directory }: Input) {
   const text = rule();
   const answers = !isRun(process.argv);
   const env: Record<string, string | undefined> = process.env;
@@ -202,6 +222,8 @@ async function server({ client, project, directory }: Input) {
           if (!r.error) return;
           await sleep(5_000 * 2 ** i);
         }
+        // Another process showing the session may still submit it.
+        await unclaim(dir, id, line);
       })();
     };
     loops.set(
@@ -279,14 +301,15 @@ async function server({ client, project, directory }: Input) {
     );
   };
 
-  // Sessions of this project waiting since before opencode started.
+  // Sessions of this directory waiting since before opencode started.
   if (answers)
     void (async () => {
       await pruneClaims(dir, Date.now());
       const state = await readFile(join(dir, "state.json"), "utf8").catch(() => "{}");
-      for (const id of waitingSessions(JSON.parse(state))) {
+      for (const id of waitingSessions(JSON.parse(state), Date.now())) {
+        // Worktrees of one repository share a project: the session's own directory decides.
         const s = await info(id);
-        if (s && !s.parentID && s.projectID === project.id) loop(id);
+        if (s && !s.parentID && s.directory === directory) loop(id);
       }
     })().catch(() => {});
 

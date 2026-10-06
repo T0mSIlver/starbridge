@@ -41,10 +41,7 @@ export class Permissions implements Feature {
   /** The holds open on each prompt. */
   private readonly holds = new Map<string, number>();
 
-  constructor(
-    private readonly hub: Hub,
-    private readonly goneMs = GONE_MS,
-  ) {}
+  constructor(private readonly hub: Hub) {}
 
   private get ctx(): Ctx {
     return this.hub.ctx;
@@ -174,7 +171,7 @@ export class Permissions implements Feature {
       this.hub.log(`permission ${id}: its hook hung up; settled at the keyboard`);
       this.report(id, how);
       this.hub.notify();
-    }, this.goneMs).unref();
+    }, GONE_MS).unref();
   }
 
   bye(sessionId: string) {
