@@ -225,9 +225,11 @@ provider plugins add providers, not panels.
   `starbridge://auth`. Chrome asks "Continue to Starbridge?" before following a `starbridge://`
   redirect that no tap started; after a tap it does not. Self-hosted servers keep
   `starbridge://auth`, since the APK can bind only starbridge.run.
-- `assetlinks.json` lists the release key, which Play App Signing also uses, and the dev box's
-  debug key, so dogfood builds verify too. That key never leaves the dev box, and a caught code is
-  useless without the verifier.
+- `assetlinks.json` lists only the release key, which Play App Signing also uses. A debug
+  keystore's password is public, and an app signed with it would verify as the App Link handler
+  (#569). Dogfood builds sign with the release key instead, opted into by a gitignored
+  `local.properties` line on the maintainer's machine and refused under CI; other debug builds keep
+  the debug key, and their sign-in falls back to the `starbridge://auth` button.
 
 ## Server
 
@@ -623,12 +625,20 @@ first window, so a provider with a window running out leads.
 - **Answer buttons** (#138, #166): "Answer buttons on questions", Always (default), When the agent
   waits, or Never, applies under 1100 px. More than two options, or a label over 18 characters,
   stack. `answerIn` and typed-only questions have no buttons.
+- **Typed answers** (#562): Enter sends, Shift+Enter starts a new line, on the web and with an
+  Android hardware keyboard. An Enter that ends an input method's composition only commits it.
 - **Context** renders line breaks and code, inline and fenced. Other Markdown shows as typed; the
   skill says so rather than the clients growing a renderer.
 - **Revoked machines.** Their items leave the Inbox and their notifications close (#344).
 - **Clock** (#161): System, 12-hour or 24-hour, per device. UI words stay English.
 - **Images** open a full-screen viewer (zoom, pan, swipe or arrow keys between images) and carry
   an expand badge, since nothing else tells a touch screen they open (#170).
+- **Image rows** (#536). A question's images go two to a row, both at one height and each as wide
+  as its shape asks, together filling the row (at most `size.media` tall): no grey bands, no
+  crop, no frame. With one image per option, two or more, each image sits over its option's
+  button in equal columns, in the agent's order: its own shape, no wider than the button and at
+  most `size.pick` tall, the row's images centred on one midline so the buttons line up. The owner
+  chose both from mockups. "Reply" sits under them, as under plain options.
 - **Signed out.** A browser that holds no device of the account it last signed in to gets the
   landing page at `/`, as does a revoked browser (#209); one with a device gets sign-in.
 - **Restarts go unnoticed** (#250). Clients retry a 502, 503 or refused connection quietly for
@@ -755,19 +765,19 @@ Tokens, type and components: `DESIGN.md`.
   privacy@starbridge.run; abuse@ appears only in `/terms`.
 - **Analytics** (#141). Umami, self-hosted, on the landing page, the docs, `/privacy` and `/terms`
   only. No cookie, no stored IP, a daily salt, Do Not Track honoured, so no consent banner. The
-  Android app has none (Play data safety form).
-- **Launch funnel** (#559). Landing view, a sign-in click, first sign-in, first machine, first
-  answer. The signed-in app loads no tracker: the browser that created an account posts those
-  three events itself, once each, with `/` as the page and nothing about the account
+  Android app has none (Play data safety form). Caddy rate-limits its open endpoint, and a timer
+  caps its tables, so it cannot fill the disk.
+- **Launch funnel** (#559, #590). Landing view, a sign-in click, first sign-in, recovery key
+  saved, first machine, first answer (with its kind: choice, text or Done); a second device is
+  counted beside it. The signed-in app loads no tracker: the browser that created an account posts
+  those events itself, once each, with `/` as the page and nothing about the account
   (`web/src/lib/funnel.ts`); Umami joins them to the landing visit by address, browser and day.
+  For every signed-in user it sends only which error screen showed and an install as an app.
   The first sign-in's time matches the account's creation, so the operator could link the two;
   `/privacy` says so.
   It sees machines and answers from any device, so a pairing or answer made on the phone counts
   once this browser sees them. Owner's view: an Umami share link on `stats.starbridge.run`,
-  where Caddy passes only GET requests and blocks the login. A password (user `tom`) guards the
-  whole host, since the link alone would open it to whoever saw it; bcrypt cost 10 and a limit of
-  300 requests a minute per address keep its checks from spending the box's CPU.
-  Caddy rate-limits its open endpoint, and a timer caps its tables, so it cannot fill the disk.
+  where Caddy passes only GET requests and blocks the login.
 - **Demo server** (#423). Play reviewers cannot pass GitHub's new-device check and cannot be given
   a recovery key, so `demo.starbridge.run` is a self-hosted server with an owner token, and
   `demo/` is its first device and machine. It approves every join by digits without comparing,

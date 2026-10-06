@@ -284,7 +284,7 @@ typography:
     weight: 400
     lineHeight: 28
     letterSpacing: 0
-  snippet: # a command or a session name in the web's dense rows
+  snippet: # a command or a session id in the web's dense rows
     font: mono
     size: 13
     weight: 400
@@ -344,6 +344,7 @@ size:
   hatch: 6
   media: 360 # the tallest an attached image shows in a decision
   media-wide: 560 # the same, in a wide detail pane
+  pick: 240 # the tallest a row of images over their options shows
   detail-wide-from: 1000 # the web's detail pane width from which its content widens and its type steps up
   detail-wide: 1280 # the widest a wide detail pane's content runs
   page: 1200 # the landing page's width
@@ -433,7 +434,8 @@ Google Sans Flex sets everything a person reads, numbers included, with
 tabular figures where they line up. It is the face of Google's own apps and
 open source (OFL) since November 2025, so a Material app reads native in it
 where Roboto reads stock. Google Sans Code is for code only: Markdown code in
-a decision's context, a permission prompt's command and a session's name.
+a decision's context, a permission prompt's command and a session's id when
+it has no title. A session's title is words, in the reading face (#563).
 
 ## Rules
 
@@ -506,6 +508,11 @@ a decision's context, a permission prompt's command and a session's name.
 - An image on a question opens the full-screen viewer, and says so: an expand
   badge in its bottom right corner, `s2` in, a `s8` circle of `surface` at 72%
   with the expand icon (`s5`) in `fg`. Touch screens show no zoom cursor.
+- A question's images go two to a row at one height, each as wide as its
+  shape asks, the row filling the width: `radius.lg` corners, no frame, no
+  fill (`surface2` shows only until an image decodes). Over options, each
+  image sits in its button's column, no wider than the button, the row's
+  images centred on one midline.
 - Destructive actions are neutral text buttons on the row; only the confirm
   button in their dialog is red (`bad`).
 - Copy inside the UI is labels and states only, never a sentence explaining
@@ -693,4 +700,4 @@ phone top bar) is unchanged.
 | `caption` | body small | group names in a list, footnotes, navigation bar labels |
 | `key` | label small | keyboard hints, counts in badges |
 | `figure` | headline small | a large number, such as used percent |
-| `code`, `command`, `snippet` | | Markdown code; a permission prompt's command; a command or session name in a dense row; the only mono |
+| `code`, `command`, `snippet` | | Markdown code; a permission prompt's command; a command or session id in a dense row; the only mono |
