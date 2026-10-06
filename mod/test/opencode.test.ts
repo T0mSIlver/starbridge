@@ -58,7 +58,7 @@ test("the CLI's answers reach opencode only when there is one per question", () 
 });
 
 test("the devices see what opencode's dialog shows: an edit's diff, a command's directories (#489)", () => {
-  const ask = (permission: string, patterns: string[], metadata: object) =>
+  const ask = (permission: string, patterns: string[], metadata: Record<string, unknown>) =>
     hookInput({ id: "per_1", sessionID: "ses_1", permission, patterns, metadata }, "/w").tool_input;
   const diff = '--- a/package.json\n+++ b/package.json\n@@ -1 +1 @@\n-{}\n+{"x":1}\n';
   // edit, write and apply_patch all ask as `edit`; the path stays first, as the summary.
@@ -77,7 +77,37 @@ test("the devices see what opencode's dialog shows: an edit's diff, a command's 
     }),
   ).toEqual({ path: "/etc", command: "cat /etc/hosts" });
   expect(ask("bash", ["git push"], { command: "git push" })).toEqual({ command: "git push" });
+  // apply_patch: where a move takes a file, and that a delete removes one.
+  const files = [
+    {
+      filePath: "/w/notes.md",
+      relativePath: ".husky/pre-commit",
+      type: "move",
+      movePath: "/w/.husky/pre-commit",
+    },
+    { filePath: "/w/old.ts", relativePath: "old.ts", type: "delete" },
+    { filePath: "/w/a.ts", relativePath: "a.ts", type: "update" },
+  ];
+  expect(
+    ask("edit", ["notes.md", "old.ts", "a.ts"], {
+      filepath: "notes.md, old.ts, a.ts",
+      diff,
+      files,
+    }),
+  ).toEqual({
+    file_path: "notes.md → .husky/pre-commit, old.ts (deleted), a.ts",
+    diff,
+  });
+  // Any other permission brings its metadata; an MCP tool's `*` says nothing.
+  expect(ask("doom_loop", ["read"], { tool: "read", input: { filePath: "/w/a" } })).toEqual({
+    path: "read",
+    tool: "read",
+    input: { filePath: "/w/a" },
+  });
+  expect(ask("github_create_issue", ["*"], {})).toEqual({});
   expect(ask("external_directory", ["/tmp/*"], { filepath: "/tmp/x", parentDir: "/tmp" })).toEqual({
     path: "/tmp/*",
+    file_path: "/tmp/x",
+    parentDir: "/tmp",
   });
 });

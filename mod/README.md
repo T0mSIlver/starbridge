@@ -120,11 +120,13 @@ opencode`, which exits at once while `starbridge config permissions` is off.
 opencode's dialog stays up meanwhile: the devices' answer is sent through
 opencode's reply route, and an answer at the keyboard stops the CLI, which
 settles the prompt on the devices.
-The devices see what opencode's dialog shows: the command for `bash`; the path
-and the diff for `edit`, which its edit, write and apply_patch tools ask; the
-directories and the command for an `external_directory` ask from its shell,
-and the path pattern for one from a file tool. Other permissions show their
-patterns. Past 8,000 characters the CLI cuts the longest string and says so.
+The devices see what an Allow approves: the command for `bash`; the paths and
+the diff for `edit`, which its edit, write and apply_patch tools ask, with
+where a move takes a file and which files a patch deletes; the directories
+and the command for an `external_directory` ask from its shell. Other
+permissions show their patterns and metadata. An MCP tool call shows only the
+tool's name, since opencode's permission event carries none of its arguments.
+Past 8,000 characters the CLI cuts the longest string and says so.
 
 Each `question.asked` event (a call of opencode's `question` tool) runs
 `starbridge hook question --agent opencode`, which posts each question with its

@@ -102,10 +102,11 @@ const PRIVATE_KEY = /-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----/;
 /**
  * A PEM private key's body after its opening line: `Name: value` headers (an encrypted key's
  * `Proc-Type`, `DEK-Info`), which stay, and base64 lines, which go, with or without the END line.
+ * Each line may start with a diff's `+`, `-` or space, as in an opencode edit's diff (#489).
  */
 const PEM_BODY =
-  /(-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----)((?:\r?\n(?:[A-Za-z-]+:[^\r\n]*|[A-Za-z0-9+/=]*[ \t]*)(?=\r?\n|$))*)/g;
-const PEM_HEADER = /\r?\n[A-Za-z-]+:[^\r\n]*/g;
+  /(-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----)((?:\r?\n[-+ ]?(?:[A-Za-z-]+:[^\r\n]*|[A-Za-z0-9+/=]*[ \t]*)(?=\r?\n|$))*)/g;
+const PEM_HEADER = /\r?\n[-+ ]?[A-Za-z-]+:[^\r\n]*/g;
 
 /** A name whose value is a secret: `FOO_KEY`, `GITHUB_TOKEN`, `password`. */
 const SECRET_NAME = /^[A-Za-z0-9_-]*(?:KEY|TOKEN|SECRET|PASSWORD|PASSWD)[A-Za-z0-9_-]*$/i;
