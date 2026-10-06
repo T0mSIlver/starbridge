@@ -121,37 +121,50 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   inboxRef.current = inbox;
   const ctx = boot.state === "ready" ? boot.ctx : undefined;
 
+  /** Drops every machine's item the page holds in memory. */
+  const forget = useCallback(() => {
+    setInbox({ items: [], rejected: [] });
+    setPrompts([]);
+    setPromptLog(undefined);
+    setQuotas(undefined);
+    setRuns(undefined);
+  }, []);
+
   /**
    * Runs a load of machines' items. While the server holds back directory entries a machine has
    * seen, every machine's items are hidden and the reason shows instead (#362).
    */
-  const holding = useCallback(async <T,>(read: () => Promise<T>): Promise<T | undefined> => {
-    const d = await load();
-    try {
-      const got = await read();
-      setWithheld(undefined);
-      return got;
-    } catch (e) {
-      if (!(e instanceof d.Withheld)) throw e;
-      setWithheld(e.message);
-      // Their buttons would still offer answers the hold refuses.
-      const reg = await navigator.serviceWorker?.getRegistration("/").catch(() => undefined);
-      for (const n of (await reg?.getNotifications().catch(() => [])) ?? []) n.close();
-      // From the start once the hold ends: the cursor moved past what is hidden now.
-      setInbox({ items: [], rejected: [] });
-      setPrompts([]);
-      setPromptLog(undefined);
-      setQuotas(undefined);
-      setRuns(undefined);
-      return undefined;
-    }
-  }, []);
+  const holding = useCallback(
+    async <T,>(read: () => Promise<T>): Promise<T | undefined> => {
+      const d = await load();
+      try {
+        const got = await read();
+        setWithheld(undefined);
+        return got;
+      } catch (e) {
+        if (!(e instanceof d.Withheld)) throw e;
+        setWithheld(e.message);
+        // Their buttons would still offer answers the hold refuses.
+        const reg = await navigator.serviceWorker?.getRegistration("/").catch(() => undefined);
+        for (const n of (await reg?.getNotifications().catch(() => [])) ?? []) n.close();
+        // From the start once the hold ends: the cursor moved past what is hidden now.
+        forget();
+        return undefined;
+      }
+    },
+    [forget],
+  );
 
   const reload = useCallback(async () => {
     try {
       const d = await load();
       const b = await d.boot();
       setBoot(b);
+      // Signed out, revoked or broken: nothing decrypted stays behind the page that says so.
+      if (b.state !== "ready") {
+        forget();
+        settledRef.current = { byKey: new Map() };
+      }
       if (b.state === "ready") {
         const loaded = await holding(() => d.loadInbox(b.ctx));
         if (loaded) setInbox(loaded);
@@ -163,7 +176,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     } catch (e) {
       setBoot({ state: "error", error: e instanceof Error ? e.message : String(e) });
     }
-  }, [holding]);
+  }, [forget, holding]);
 
   useEffect(() => {
     reload();
@@ -176,7 +189,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const was = ctxRef.current;
     if (!was) return undefined;
     const d = await load();
-    const fresh = await d.reverify(was);
+    let fresh: Awaited<ReturnType<typeof d.reverify>>;
+    try {
+      fresh = await d.reverify(was);
+    } catch (e) {
+      // The server ended this session: revoked, signed out elsewhere or expired. Boot says which.
+      if (!(e instanceof d.ApiError && e.status === 401)) throw e;
+      await reload();
+      return undefined;
+    }
     if (!fresh) {
       // Revoked from another device: boot shows why.
       await reload();
