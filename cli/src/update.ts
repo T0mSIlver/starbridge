@@ -15,6 +15,7 @@ import {
 } from "./release";
 import { updateCodexbar } from "./setup/codexbar";
 import { piPackage, piSource } from "./setup/harnesses";
+import { installedService, kind, restartTask } from "./setup/service";
 import { defaults, makeSys } from "./setup/sys";
 import { VERSION } from "./version";
 
@@ -46,7 +47,14 @@ function sh(ctx: Ctx, cmd: string, args: string[]) {
 }
 
 /** Restarts the agent's user service, if setup installed one, so it runs the new binary. */
-function restartAgent(ctx: Ctx) {
+async function restartAgent(ctx: Ctx) {
+  const sys = makeSys(ctx, defaults);
+  if (kind(sys) === "task") {
+    if (!installedService(sys)) return;
+    const why = await restartTask(sys);
+    ctx.out(why ? `Could not restart the agent: ${why}` : "Restarted the starbridge agent.");
+    return;
+  }
   const home = ctx.env.HOME ?? homedir();
   const linux = join(home, ".config/systemd/user/starbridge-agent.service");
   const mac = join(home, "Library/LaunchAgents/run.starbridge.agent.plist");
@@ -134,7 +142,7 @@ async function updateSelf(ctx: Ctx, install: InstallKind, pubkey: string) {
   if (r.status !== 0) {
     const why = `${r.stderr ?? ""}`.trim() || r.error?.message || `ended by ${r.signal}`;
     ctx.out(`Could not update the files setup wrote: ${why}`);
-    restartAgent(ctx);
+    await restartAgent(ctx);
   }
   updatePlugins(ctx);
   movePiPackage(ctx, latest);

@@ -1,8 +1,19 @@
+import { randomBytes } from "node:crypto";
 import { request } from "node:http";
 import type { Ctx } from "../context";
 import { processAlive } from "../platform";
 import { VERSION } from "../version";
-import { API, API_HEADER, type ErrorBody, isPortFile, readPortFile, socketPath } from "./api";
+import {
+  API,
+  API_HEADER,
+  type ErrorBody,
+  isPortFile,
+  NONCE_HEADER,
+  PROOF_HEADER,
+  proof,
+  readPortFile,
+  socketPath,
+} from "./api";
 
 /** No agent listens: the CLI talks to the server itself. */
 export class NoAgent extends Error {}
@@ -61,11 +72,17 @@ export class AgentClient {
         socketPath: this.socket,
       };
       let auth: Record<string, string> = {};
+      let expect: string | undefined;
       if (isPortFile(this.socket)) {
         const f = readPortFile(this.socket);
         if (!f || !processAlive(f.pid)) return reject(new NoAgent(`no agent on ${this.socket}`));
         target = { host: "127.0.0.1", port: f.port };
-        auth = { authorization: `Bearer ${f.token}` };
+        const nonce = randomBytes(16).toString("hex");
+        auth = {
+          [NONCE_HEADER]: nonce,
+          authorization: `Starbridge ${proof(f.token, "client", nonce)}`,
+        };
+        expect = proof(f.token, "agent", nonce);
       }
       const req = request(
         {
@@ -85,6 +102,13 @@ export class AgentClient {
           timeout: timeoutMs,
         },
         (res) => {
+          // Whatever took the port of an agent that stopped: nothing it says counts.
+          if (expect !== undefined && res.headers[PROOF_HEADER] !== expect) {
+            res.resume();
+            return reject(
+              new NoAgent(`no agent on ${this.socket}: the port answers without its proof`),
+            );
+          }
           let raw = "";
           res.setEncoding("utf8");
           res.on("data", (d) => {

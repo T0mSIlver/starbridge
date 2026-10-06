@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { LiveServer } from "@starbridge/server/test-support";
 import { PNG } from "pngjs";
-import type { SessionEvent, Status } from "../src/agent/api";
+import { proof, type SessionEvent, type Status } from "../src/agent/api";
 import { AgentClient, AgentError, Interrupted } from "../src/agent/client";
 import { makeAgent } from "../src/agent/main";
 import type { Agent } from "../src/agent/server";
@@ -552,7 +552,7 @@ test("the socket is never open to other users, even between bind and chmod (#95)
   expect(process.umask()).toBe(umask);
 });
 
-test("on loopback TCP (Windows), only a call with the port file's token gets through", async () => {
+test("on loopback TCP (Windows), only a call that proves the port file's token gets through", async () => {
   const dir = mkdtempSync(join(tmpdir(), "starbridge-port-"));
   const socket = join(dir, "agent.port");
   const { agent } = await machine({ socket });
@@ -563,21 +563,35 @@ test("on loopback TCP (Windows), only a call with the port file's token gets thr
   await ask(client(socket), "--project", "p");
   expect(await server.opened("decision")).toHaveLength(1);
 
-  const status = (headers: Record<string, string>) =>
-    new Promise<number>((resolve, reject) =>
+  const call = (headers: Record<string, string>) =>
+    new Promise<{ status: number; proof: unknown }>((resolve, reject) =>
       request({ host: "127.0.0.1", port: file.port, path: "/v1/status", headers }, (res) => {
         res.resume();
-        resolve(res.statusCode ?? 0);
+        resolve({ status: res.statusCode ?? 0, proof: res.headers["starbridge-proof"] });
       })
         .on("error", reject)
         .end(),
     );
-  expect(await status({ "starbridge-api": "1" })).toBe(401);
-  expect(await status({ "starbridge-api": "1", authorization: "Bearer wrong" })).toBe(401);
-  expect(await status({ "starbridge-api": "1", authorization: `Bearer ${file.token}` })).toBe(200);
+  const nonce = "0".repeat(32);
+  const api = { "starbridge-api": "1", "starbridge-nonce": nonce };
+  expect((await call(api)).status).toBe(401);
+  expect((await call({ ...api, authorization: `Bearer ${file.token}` })).status).toBe(401);
+  expect(
+    await call({ ...api, authorization: `Starbridge ${proof(file.token, "client", nonce)}` }),
+  ).toEqual({ status: 200, proof: proof(file.token, "agent", nonce) });
 
   await agent.stop();
   expect(existsSync(socket)).toBe(false);
+
+  // Whatever takes the port after the agent stopped cannot answer for it.
+  const impostor = createServer((_req, res) => res.end("{}"));
+  await new Promise<void>((r) => impostor.listen(file.port, "127.0.0.1", r));
+  writeFileSync(socket, JSON.stringify(file));
+  try {
+    await expect(new AgentClient(socket).call("GET", "/v1/status")).rejects.toThrow("proof");
+  } finally {
+    impostor.close();
+  }
   // A port file left by an agent that died: its pid runs no more, so nothing is sent.
   writeFileSync(socket, JSON.stringify({ ...file, pid: 2 ** 22 + 1 }));
   await expect(new AgentClient(socket).call("GET", "/v1/status")).rejects.toThrow("no agent");

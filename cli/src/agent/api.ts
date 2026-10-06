@@ -3,6 +3,7 @@
  * (`PortFile`), for the CLI and the Claude Code mod on the same machine (PROTOCOL.md, "Local
  * agent API"). Both sides import this file.
  */
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { configDir } from "../config";
@@ -44,9 +45,10 @@ export function socketPath(
  * Where an agent on loopback TCP listens, in the file its address names (#552). Node and Bun take
  * a socket path on Windows as a named pipe, which other local users can open, so there the agent
  * listens on 127.0.0.1 and writes this file into the config directory, which only its user can
- * read. Every call carries `token`, new at each start, as `authorization: Bearer`; clients check
- * that `pid` still runs, so a port another process took after a crash never gets a request. An
- * address ending in `.port` names such a file on any platform.
+ * read. `token`, new at each start, never crosses the wire: a call carries a fresh nonce and
+ * `proof(token, "client", nonce)`, and the agent answers with `proof(token, "agent", nonce)`, so
+ * a process that took the port after the agent stopped learns nothing it can use and cannot
+ * answer. An address ending in `.port` names such a file on any platform.
  */
 export interface PortFile {
   port: number;
@@ -55,6 +57,17 @@ export interface PortFile {
 }
 
 export const isPortFile = (address: string) => address.endsWith(".port");
+
+export const NONCE_HEADER = "starbridge-nonce";
+export const PROOF_HEADER = "starbridge-proof";
+
+/**
+ * That a side holds `token`: SHA-256 of `token:role:nonce` in hex. The mod's host offers SHA-256
+ * but no HMAC; a role and a nonce in a fixed shape leave a length extension nothing to forge.
+ */
+export function proof(token: string, role: "client" | "agent", nonce: string): string {
+  return createHash("sha256").update(`${token}:${role}:${nonce}`).digest("hex");
+}
 
 /** The port file at `path`, or undefined when it is missing or not one. */
 export function readPortFile(path: string): PortFile | undefined {

@@ -1,5 +1,13 @@
 import type { Register } from "claude-code";
-import { AgentLoop, HEADERS, isPortFile, portTarget, socketPath } from "./agent.ts";
+import {
+  AgentLoop,
+  HEADERS,
+  isPortFile,
+  PROOF_HEADER,
+  portTarget,
+  signCall,
+  socketPath,
+} from "./agent.ts";
 import { configDir, Poller } from "./poller.ts";
 import { Switch } from "./switch.ts";
 
@@ -36,10 +44,13 @@ export const register: Register = (on) => {
         // Read each call: the agent writes a new port and token each time it starts.
         const t = portTarget((await $.fs.read(socket)).text);
         if (!t) throw new Error(`no agent on ${socket}`);
+        const signed = await signCall(t.token);
         r = await $.http.fetch(`http://127.0.0.1:${t.port}${path}`, {
           ...init,
-          headers: { ...headers, authorization: t.authorization },
+          headers: { ...headers, ...signed.headers },
         });
+        if (r.headers[PROOF_HEADER] !== signed.expect)
+          throw new Error(`no agent on ${socket}: the port answers without its proof`);
       } else
         r = await $.http.fetch(`http://agent${path}`, { ...init, socketPath: socket, headers });
       return { status: r.status, text: r.text };

@@ -3,8 +3,10 @@
  * Task at logon on Windows.
  */
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { userInfo } from "node:os";
 import { delimiter, dirname, join } from "node:path";
-import { readPortFile, socketPath } from "../agent/api";
+import { type Status, socketPath } from "../agent/api";
+import { AgentClient } from "../agent/client";
 import { processAlive } from "../platform";
 import { marker, ours } from "./marker";
 import { failure, run, type Sys } from "./sys";
@@ -69,7 +71,7 @@ export function servicePathVar(sys: Sys): string {
  * Environment the agent needs to find the same config directory and socket as the CLI, and the
  * Codex home whose skill it keeps current.
  */
-const PLACES = [
+export const PLACES = [
   "STARBRIDGE_CONFIG_DIR",
   "XDG_CONFIG_HOME",
   "STARBRIDGE_AGENT_SOCKET",
@@ -175,13 +177,14 @@ const winArg = (s: string) => (/[\s"]/.test(s) ? `"${s.replace(/"/g, '\\"')}"` :
 
 /**
  * The Scheduled Task: at this user's logon, as this user without elevation, so setup needs no
- * administrator; no time limit, since the default stops a task after 3 days; restarted a minute
- * after a failure. A console program opens a window, so conhost runs it headless, and the log
+ * administrator; no time limit, since the default stops a task after 3 days; started again every
+ * 5 minutes when it is not running, since conhost may not pass a crash on as a failure. A console program opens a window, so conhost runs it headless, and the log
  * goes to a file. A task carries no environment of its own: the agent gets the user's.
  */
 export function taskXml(sys: Sys): string {
   const env = sys.ctx.env;
-  const user = env.USERDOMAIN ? `${env.USERDOMAIN}\\${env.USERNAME}` : (env.USERNAME ?? "");
+  const name = env.USERNAME || userInfo().username;
+  const user = env.USERDOMAIN ? `${env.USERDOMAIN}\\${name}` : name;
   const conhost = join(
     env.SystemRoot || env.SYSTEMROOT || "C:\\Windows",
     "System32",
@@ -199,6 +202,13 @@ ${marker("<!--", "-->")}
       <Enabled>true</Enabled>
       <UserId>${xml(user)}</UserId>
     </LogonTrigger>
+    <TimeTrigger>
+      <Repetition>
+        <Interval>PT5M</Interval>
+      </Repetition>
+      <StartBoundary>2026-01-01T00:00:00</StartBoundary>
+      <Enabled>true</Enabled>
+    </TimeTrigger>
   </Triggers>
   <Principals>
     <Principal id="Author">
@@ -255,16 +265,29 @@ const powershell = (sys: Sys, script: string, env: Record<string, string> = {}) 
  * agent running, so the agent's own pid, from its port file, ends too.
  */
 async function stopTask(sys: Sys) {
+  // The pid as the agent itself reports it, through a call that proves who answers: a stale
+  // port file's pid may be anyone's by now.
+  let pid: number | undefined;
+  try {
+    const socket = socketPath(sys.ctx.env, sys.ctx.store.dir, sys.platform);
+    pid = (await new AgentClient(socket).call<Status>("GET", "/v1/status", undefined, 5_000)).pid;
+  } catch {}
   const r = await powershell(
     sys,
     `Stop-ScheduledTask -TaskName ${TASK} -ErrorAction SilentlyContinue`,
   );
-  const f = readPortFile(socketPath(sys.ctx.env, sys.ctx.store.dir, sys.platform));
-  if (f && processAlive(f.pid))
+  if (pid !== undefined && pid !== process.pid && processAlive(pid))
     try {
-      process.kill(f.pid);
+      process.kill(pid);
     } catch {}
   return r;
+}
+
+/** Restarts the agent's task, for `starbridge update` when the new binary's refresh failed. */
+export async function restartTask(sys: Sys): Promise<string | undefined> {
+  await stopTask(sys);
+  const r = await powershell(sys, `Start-ScheduledTask -TaskName ${TASK}`);
+  return r?.code === 0 ? undefined : failure(r);
 }
 
 const systemctl = (sys: Sys, ...args: string[]) =>

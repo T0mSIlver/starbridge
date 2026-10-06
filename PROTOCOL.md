@@ -626,12 +626,16 @@ is 0700, the socket 0600. Types: `cli/src/agent/api.ts`.
 
 On Windows (#552), Node and Bun read a socket path as a named pipe, which other local users can
 open, so the agent listens on a free port on 127.0.0.1 instead. It writes `agent.port`,
-`{port, token, pid}`, into the config directory, which only its user can read, through a
-temporary file. `token` is 32 random bytes, new at each start; every request carries it as
-`authorization: Bearer <token>`, and the agent answers any other with 401 `{error:
-"unauthorized"}`. A client sends nothing when `pid` no longer runs, so a port another process
-took after a crash never gets a request, and the agent removes the file when it stops. An
-address ending in `.port` names such a file on any platform.
+`{port, token, pid}`, into the config directory through a temporary file that `icacls` makes
+readable by its user only. `token` is 32 random bytes, new at each start, and never crosses the
+wire. Each request sends a fresh 16-byte nonce as `starbridge-nonce: <32 hex>` and
+`authorization: Starbridge <sha256hex("<token>:client:<nonce>")>`; the agent answers any other
+with 401 `{error: "unauthorized"}`, and every answer to a proven request carries
+`starbridge-proof: <sha256hex("<token>:agent:<nonce>")>`. A client takes an answer without that
+proof as no agent: whatever took the port after the agent stopped learns nothing it can use and
+cannot answer for it. (SHA-256 rather than HMAC, since the mod's host has no HMAC; the fixed
+shape leaves a length extension nothing to forge.) The CLI also sends nothing while `pid` runs no
+more. An address ending in `.port` names such a file on any platform.
 
 Every request sends `starbridge-api: <n>` and a `user-agent` such as `starbridge-mod/0.2.0`. The
 agent serves revisions `min` to `max` (1 to 1 today) and answers anything else with 426

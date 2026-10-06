@@ -312,14 +312,19 @@ provider plugins add providers, not panels.
 - **On Windows** (#552) the agent listens on loopback TCP with a per-start token in `agent.port`
   in the config directory (PROTOCOL.md, "Local agent API"). A named pipe was the other choice:
   libuv creates one with the default DACL, which lets other users open it for reading, and Bun's
-  named-pipe `listen` has crashed in Claude Code's own use. The profile folder's ACL keeps the
-  token from other users, as the 0600 mode does for the socket. The service is a Scheduled Task
+  named-pipe `listen` has crashed in Claude Code's own use. The token never crosses the wire:
+  each call and each answer proves it over a fresh nonce, so a process that takes the port of a
+  stopped agent can neither use what it hears nor answer. Windows never runs the agent's
+  shutdown, since stopping a task terminates it, so a stale `agent.port` is the usual case.
+  `icacls` gives the file to its user only, as the 0600 mode does the socket. The service is a Scheduled Task
   at the user's logon, registered from a marked XML file in `%LOCALAPPDATA%\starbridge` with the
   ScheduledTasks cmdlets: it needs no administrator, unlike a Windows service, and restarts on
   failure, unlike the `Run` registry key. It runs the agent under `conhost.exe --headless`, since
   a console program opens a window, with no time limit, since a task stops after 3 days by
-  default, and logs to `agent.log` beside the XML. Stopping the task ends conhost, so setup also
-  ends the agent's pid from `agent.port`. A task carries no environment of its own, so the agent
+  default, and logs to `agent.log` beside the XML. A second trigger starts it every 5 minutes
+  when it is not running, since conhost may not pass a crash on as a failure. Stopping the task
+  ends conhost, so setup also ends the agent, by the pid the agent reports through a proven
+  call, never a pid read from the file. A task carries no environment of its own, so the agent
   reads the user's: `STARBRIDGE_CONFIG_DIR` and `CODEX_HOME` reach it only as user environment
   variables. Windows has no SIGTERM: a stopped hook dies without settling its prompt, and the
   next `Stop` hook settles it.

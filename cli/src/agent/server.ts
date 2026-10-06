@@ -5,10 +5,12 @@
  * permission prompts) plugs in as a `Feature`: its routes, the events it hands sessions, the acks
  * it takes and its background loop.
  */
+import { spawnSync } from "node:child_process";
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import { chmodSync, lstatSync, mkdirSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
+import { userInfo } from "node:os";
 import { dirname } from "node:path";
 import { ProtocolError } from "@starbridge/protocol";
 import { ApiError, Unreachable } from "../api";
@@ -21,6 +23,9 @@ import {
   isPortFile,
   MAX_HOLD_SECONDS,
   MIN_API,
+  NONCE_HEADER,
+  PROOF_HEADER,
+  proof,
   readPortFile,
   type SessionEvent,
   type SessionInfo,
@@ -220,15 +225,34 @@ export class Agent implements Hub {
     writeFileSync(tmp, JSON.stringify({ port, token: this.token, pid: process.pid }), {
       mode: 0o600,
     });
+    // Windows ignores the mode: the file would take its folder's ACL, which a config folder
+    // outside the profile may share with other users.
+    if (process.platform === "win32") {
+      const r = spawnSync(
+        "icacls",
+        [tmp, "/inheritance:r", "/grant:r", `${userInfo().username}:F`],
+        { windowsHide: true, encoding: "utf8" },
+      );
+      if (r.status !== 0)
+        this.log(
+          `could not make ${this.socket} readable by this user only: ${r.stdout}${r.stderr}`,
+        );
+    }
     renameSync(tmp, this.socket);
   }
 
-  /** Whether a request carries this start's token; true on a unix socket. */
-  private authorized(req: IncomingMessage): boolean {
-    if (this.token === undefined) return true;
+  /**
+   * The headers that answer a request proving this start's token: `{}` on a unix socket,
+   * undefined when the proof is missing or wrong.
+   */
+  private authorized(req: IncomingMessage): Record<string, string> | undefined {
+    if (this.token === undefined) return {};
+    const nonce = req.headers[NONCE_HEADER];
+    if (typeof nonce !== "string" || !/^[0-9a-f]{32}$/.test(nonce)) return undefined;
     const got = Buffer.from(req.headers.authorization ?? "");
-    const want = Buffer.from(`Bearer ${this.token}`);
-    return got.length === want.length && timingSafeEqual(got, want);
+    const want = Buffer.from(`Starbridge ${proof(this.token, "client", nonce)}`);
+    if (got.length !== want.length || !timingSafeEqual(got, want)) return undefined;
+    return { [PROOF_HEADER]: proof(this.token, "agent", nonce) };
   }
 
   /** Stops the loops, ends held requests and removes the socket. */
@@ -251,16 +275,18 @@ export class Agent implements Hub {
   }
 
   private async serve(req: IncomingMessage, res: ServerResponse) {
+    const proven = this.authorized(req);
     const send = (status: number, json: unknown) => {
       const text = JSON.stringify(json ?? {});
       res.writeHead(status, {
+        ...proven,
         "content-type": "application/json",
         "content-length": Buffer.byteLength(text),
       });
       res.end(text);
     };
     const fail = (status: number, body: ErrorBody) => send(status, body);
-    if (!this.authorized(req)) return fail(401, { error: "unauthorized" });
+    if (!proven) return fail(401, { error: "unauthorized" });
     const api = Number(req.headers[API_HEADER]);
     if (!Number.isInteger(api) || api < MIN_API || api > API) {
       const tooOld = Number.isInteger(api) && api > API;
