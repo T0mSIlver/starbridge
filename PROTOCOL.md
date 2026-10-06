@@ -71,25 +71,28 @@ then on it must drop every message from the owner's other devices to it, which t
 answers that never arrive. A machine cannot detect a revocation that no device has told it about,
 since the server is its only channel; the revoked device's key can sign any stale head itself.
 
-Devices do not detect a withheld revocation yet (#362). A machine's items carry no head, and a
-device learns new entries only from `GET /directory?from=<n>`, which the server may answer with
-nothing. So a server that holds a revoked machine's key and withholds the revocation from one
-device can keep that device opening the machine's items and reading its answers to them. In the
-inbox, a device applies a `settled` or `waiting` notice only to items of the machine that signed
-it, so the revoked machine cannot mark another machine's questions closed. A notification can
-still close on a notice from any machine, as it does on the server's own `answered` push.
+Devices run the same check on machines (#362). A machine signs into every item it posts the
+longest head it knows, `dir: {length, head}`: its own, or a longer one an active device signed
+into an answer that its chain lacks (`headToSign`). A device keeps the longest head each machine
+signed (`noteHead`) and, while a machine active in its chain has signed a head that chain does not
+hold (`withheldBy`), refuses every machine's items and says the server is holding back directory
+entries. It reads them again once the server serves those entries, or once its chain revokes that
+machine. Reading the directory and revoking keep working meanwhile.
 
-The planned check mirrors the machines' one. Each machine signs into every item it posts the
-longest head it knows, `dir: {length, head}`: its own, or a longer one a device signed into an
-answer that its chain lacks. A device keeps the longest head each machine signed and, while a
-machine active in its chain has signed a head that chain does not hold, refuses every machine's
-items and says the server is holding back directory entries; it reads them again once the server
-serves those entries, or once its chain revokes that machine. Reading the directory and revoking
-keep working meanwhile. So one machine that holds the revocation, or has seen the head of the
-device that made it, exposes the gap. A server that withholds it from every machine, and drops
-the revoking device's answers, keeps it hidden, as does a device that hears only from the
+So one machine that holds a withheld revocation, or has seen the head of the device that made it,
+exposes it to every device it posts to. A server that withholds it from every machine, and drops
+the revoking device's answers, keeps it hidden, as it does from a device that hears only from the
 revoked machine. A machine that is compromised but not yet revoked can sign a false long head and
 hold every device's items until the owner revokes it, which the owner sees.
+
+The head is optional, and both sides fail safe. A machine from before it signs no head: its items
+open as before and count neither for nor against a hold. A device from before it drops the field
+unread, so it runs without the check, as it did. The head is part of the signed body, so the
+server can neither strip nor change it.
+
+In the inbox, a device applies a `settled` or `waiting` notice only to items of the machine that
+signed it, so a revoked machine cannot mark another machine's questions closed. A notification can
+still close on a notice from any machine, as it does on the server's own `answered` push.
 
 ## Pairing
 

@@ -225,6 +225,18 @@ export const DecisionLink = z.object({
 });
 export type DecisionLink = z.infer<typeof DecisionLink>;
 
+/**
+ * A directory its signer vouches for: its length and the hash of its last entry. Devices sign
+ * the one they hold into answers, machines the longest they know into every item, and each side
+ * refuses the other's items while an active signer has signed a head its own chain lacks.
+ * Optional in every body: older clients neither sign nor read it.
+ */
+export const DirectoryHead = z.object({
+  length: z.number().int().min(1).max(100_000),
+  head: B64.length(43),
+});
+export type DirectoryHead = z.infer<typeof DirectoryHead>;
+
 export const Decision = z
   .object({
     v: z.literal(1),
@@ -260,6 +272,7 @@ export const Decision = z
      * "Reply" under them. Machines from before it leave it out and accept only a choice.
      */
     replies: z.literal(true).optional(),
+    dir: DirectoryHead.optional(),
   })
   .superRefine((d, ctx) => {
     if (d.options.length === 1) ctx.addIssue({ code: "custom", message: "options: 0 or 2 to 4" });
@@ -273,16 +286,6 @@ export const Decision = z
       ctx.addIssue({ code: "custom", message: "a decision answered elsewhere has no options" });
   });
 export type Decision = z.infer<typeof Decision>;
-
-/**
- * The directory a device held when it signed an answer: its length and the hash of its last
- * entry. A machine refuses answers while any device has signed a head its own chain lacks.
- */
-export const DirectoryHead = z.object({
-  length: z.number().int().min(1).max(100_000),
-  head: B64.length(43),
-});
-export type DirectoryHead = z.infer<typeof DirectoryHead>;
 
 export const Answer = z
   .object({
@@ -344,6 +347,7 @@ export const Permission = z
     suggestions: z.array(PermissionSuggestion).max(2),
     expiresAt: Time,
     source: Source,
+    dir: DirectoryHead.optional(),
   })
   .superRefine((p, ctx) => {
     const ttl = Date.parse(p.expiresAt) - Date.parse(p.createdAt);
@@ -395,6 +399,7 @@ export const Settled = z
     outcome: z.enum(["keyboard", "timeout", "device", "elsewhere", "withdrawn"]).optional(),
     /** With outcome "device": the device whose answer the machine applied. */
     device: Id.optional(),
+    dir: DirectoryHead.optional(),
   })
   .refine((s) => (s.outcome === "device") === (s.device !== undefined), {
     message: "device is set exactly when outcome is device",
@@ -413,6 +418,7 @@ export const Waiting = z.object({
   to: z.array(Id).min(1),
   at: Time,
   state: z.enum(["working", "waiting"]),
+  dir: DirectoryHead.optional(),
 });
 export type Waiting = z.infer<typeof Waiting>;
 
@@ -454,6 +460,7 @@ export const Run = z
     progress: RunProgress.optional(),
     /** Set once the command exited: its exit code (128 + n when signal n ended it). */
     exit: z.object({ code: z.number().int().min(0).max(255), at: Time }).optional(),
+    dir: DirectoryHead.optional(),
   })
   .superRefine((r, ctx) => {
     if (Date.parse(r.at) < Date.parse(r.startedAt))
@@ -541,6 +548,7 @@ export const QuotaSnapshot = z.object({
     }),
   ),
   alerts: z.array(QuotaAlert),
+  dir: DirectoryHead.optional(),
 });
 export type QuotaSnapshot = z.infer<typeof QuotaSnapshot>;
 
