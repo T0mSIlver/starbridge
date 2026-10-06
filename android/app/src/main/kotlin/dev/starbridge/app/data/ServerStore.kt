@@ -318,7 +318,8 @@ class ServerStore(
         val signKeys = sodium.signKeyPair()
         val member = DirectoryMember(newId("d_"), "device", deviceName.take(100).ifBlank { "Android" }, toB64(boxKeys.public), toB64(signKeys.public))
         // The keys reach the disk before the server hears of them, so a crash cannot strand them.
-        persist(newSecrets = secrets.copy(boxPk = member.boxPk, boxSk = toB64(boxKeys.secret), signPk = member.signPk, signSk = toB64(signKeys.secret)))
+        // New keys end any recovery attempt that made the ones they replace.
+        persist(saved.copy(recovering = null), secrets.copy(boxPk = member.boxPk, boxSk = toB64(boxKeys.secret), signPk = member.signPk, signSk = toB64(signKeys.secret)))
         return member
     }
 
@@ -541,7 +542,9 @@ class ServerStore(
         val dir = directories.verify(entries, saved.account, recoveryPk = toB64(recovery.public))
         // The keys made for an earlier attempt stay until the chain holds them: when its reply was
         // lost, the server has bound the session to that member, and a retry finds it there (#274).
-        val member = saved.recovering ?: newMember().also { persist(saved.copy(recovering = it)) }
+        // Only while those keys are still this phone's, and the member was not revoked since.
+        val earlier = saved.recovering?.takeIf { it.signPk == secrets.signPk && it.boxPk == secrets.boxPk && dir.members[it.id]?.active != false }
+        val member = earlier ?: newMember().also { persist(saved.copy(recovering = it)) }
         val all = if (dir.members[member.id]?.active == true) {
             entries
         } else {
