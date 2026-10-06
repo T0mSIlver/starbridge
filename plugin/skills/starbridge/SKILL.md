@@ -98,7 +98,8 @@ own.
 
 When you built a claude.ai artifact whose buttons send the pick to this
 session, the user answers there. Post with `--answer-in <url>` and no
-options. When its message arrives, run `starbridge settle <id>`, then act. An
+options. When the artifact's message arrives, run `starbridge settle <id>`,
+then act; a card answered in Starbridge needs no settle. An
 artifact that is only to look at goes in `--link`, with the options on the
 card. `starbridge settle <id> --outcome withdrawn` takes back a card you no
 longer need, for example after the user answered in the terminal.
