@@ -183,7 +183,11 @@ directoryRoutes.post("/directory", requireCaller("device"), async (c) => {
       member?: { id: string; boxPk: string; signPk: string };
     };
     if (member) refusePairings(c, member, "machine-cap");
-    fail(403, "machine-cap", `an account holds at most ${config.maxMachines} machines`);
+    fail(
+      403,
+      "machine-cap",
+      `an account holds at most ${config.maxMachines} machines; phones and browsers don't count`,
+    );
   }
   // Machines seal to the directory's devices, so each re-reads it: a new device gets their
   // next items, and their latest quota snapshot again.

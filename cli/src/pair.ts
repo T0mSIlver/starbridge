@@ -96,7 +96,7 @@ export async function pair(
       // The approving device hit the account's machine limit; the server ended the pairing (#615).
       if (e instanceof ApiError && e.code === "machine-cap")
         throw new UsageError(
-          "this account already holds its maximum number of machines: revoke one under Devices in the app or web page, then run `starbridge setup` again",
+          "this account already has its maximum number of machines (phones and browsers don't count): revoke one under Devices in the app or web page, then run `starbridge setup` again",
         );
       throw e;
     }

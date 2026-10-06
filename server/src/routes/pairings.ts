@@ -251,7 +251,7 @@ pairingRoutes.get("/pairings/:rendezvous/result", async (c) => {
       403,
       r,
       r === "machine-cap"
-        ? `the account already holds its maximum of ${c.var.config.maxMachines} machines: revoke one under Devices, then pair again`
+        ? `the account already has its ${c.var.config.maxMachines} machines (phones and browsers don't count): revoke one under Devices, then pair again`
         : "the approving device refused this pairing",
     );
   if (p.refused) refused(p.refused);

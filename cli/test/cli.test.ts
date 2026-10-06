@@ -105,7 +105,9 @@ test("pair past the account's machine limit ends at once with the reason (#615)"
   const code = ctx.lines[0]?.replace("Pairing code: ", "") as string;
   await expect(server.approve(code)).rejects.toThrow("machine-cap");
   expect(await done).toBe(1);
-  expect(ctx.errors.join("\n")).toContain("maximum number of machines: revoke one under Devices");
+  expect(ctx.errors.join("\n")).toContain(
+    "maximum number of machines (phones and browsers don't count): revoke one",
+  );
 });
 
 test("pair uses the hosted server unless --server or STARBRIDGE_SERVER names another", async () => {
