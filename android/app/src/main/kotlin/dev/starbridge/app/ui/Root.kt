@@ -31,6 +31,9 @@ import dev.starbridge.app.ui.theme.StarbridgeTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -42,6 +45,7 @@ import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
+import dev.starbridge.app.data.Kind
 import dev.starbridge.app.data.Decision
 import dev.starbridge.app.data.Phase
 import dev.starbridge.app.data.Run
@@ -79,6 +83,11 @@ import java.time.Instant
 @Serializable data object SettingsKey : NavKey
 @Serializable data object DevicesKey : NavKey
 @Serializable data object AddDeviceKey : NavKey
+/**
+ * Add a device with a pairing link, which the camera opened in the app (#611); [at] tells a link
+ * scanned again from the one already open, so it is looked up again.
+ */
+@Serializable data class PairLinkKey(val link: String, val at: Long) : NavKey
 @Serializable data object RecoveryKeyKey : NavKey
 
 private val Tab.key: NavKey get() = when (this) {
@@ -90,7 +99,7 @@ private val Tab.key: NavKey get() = when (this) {
 /** The tab a page belongs to. */
 private fun tabOf(key: NavKey?) = when (key) {
     QuotasKey -> Tab.Quotas
-    SettingsKey, DevicesKey, AddDeviceKey, RecoveryKeyKey -> Tab.Settings
+    SettingsKey, DevicesKey, AddDeviceKey, is PairLinkKey, RecoveryKeyKey -> Tab.Settings
     else -> Tab.Inbox
 }
 
@@ -180,11 +189,13 @@ fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> U
     val sheets = remember { BottomSheetSceneStrategy<NavKey>() }
     val notificationsOff = !rememberNotificationsOn()
     val colors = StarbridgeTheme.colors
-    // A notification's tap: its question's or prompt's sheet, over the inbox.
+    // A notification's tap: its question's or prompt's sheet, over the inbox. A pairing link:
+    // Add a device, over Devices.
     LaunchedEffect(opening) {
         opening.collect { key ->
             backStack.clear()
             backStack.add(InboxKey)
+            if (key is PairLinkKey) backStack.addAll(listOf(SettingsKey, DevicesKey))
             backStack.add(key)
         }
     }
@@ -249,6 +260,7 @@ fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> U
                         val runs by vm.runs.collectAsStateWithLifecycle()
                         val view by vm.view.collectAsStateWithLifecycle()
                         val recovery by vm.recovery.collectAsStateWithLifecycle()
+                        val members by vm.members.collectAsStateWithLifecycle()
                         InboxScreen(
                             decisions,
                             // A running run's timer, a lost run's "no news for" and the clock of
@@ -271,6 +283,8 @@ fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> U
                             recovery = recovery,
                             dismissRecovery = vm::dismissRecovery,
                             notificationsOff = notificationsOff,
+                            // Members load with the directory, which always holds this phone.
+                            noMachine = members.isNotEmpty() && members.none { it.kind == Kind.Machine },
                         )
                     }
                     entry<FindKey> {
@@ -310,12 +324,15 @@ fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> U
                         val windows by vm.windows.collectAsStateWithLifecycle()
                         val failures by vm.failures.collectAsStateWithLifecycle()
                         val settings by vm.settings.collectAsStateWithLifecycle()
+                        val members by vm.members.collectAsStateWithLifecycle()
                         QuotasScreen(
                             windows,
                             now,
                             settings = settings,
                             refresh = refresh(vm::refresh),
                             failures = failures,
+                            // Members load with the directory, which always holds this phone.
+                            machines = members.takeIf { it.isNotEmpty() }?.filter { it.kind == Kind.Machine }?.map { it.name },
                         )
                     }
                     entry<SettingsKey> {
@@ -366,6 +383,13 @@ fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> U
                     entry<AddDeviceKey> {
                         val vm: DevicesViewModel = hiltViewModel()
                         val approval by vm.approval.collectAsStateWithLifecycle()
+                        AddDeviceScreen(approval, vm.actions, onBack = { backStack.removeAt(backStack.lastIndex) })
+                    }
+                    entry<PairLinkKey> { key ->
+                        val vm: DevicesViewModel = hiltViewModel()
+                        val approval by vm.approval.collectAsStateWithLifecycle()
+                        var looked by rememberSaveable { mutableStateOf(false) }
+                        LaunchedEffect(Unit) { if (!looked) { looked = true; vm.actions.lookUp(key.link) } }
                         AddDeviceScreen(approval, vm.actions, onBack = { backStack.removeAt(backStack.lastIndex) })
                     }
                 },

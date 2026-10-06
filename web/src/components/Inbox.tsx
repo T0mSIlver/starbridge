@@ -34,6 +34,7 @@ import {
 } from "./Feed";
 import feed from "./Feed.module.css";
 import s from "./Inbox.module.css";
+import { InstallBox } from "./InstallBox";
 import { Icon } from "./icons";
 import { ordered } from "./options";
 import { PhoneBar } from "./PhoneBar";
@@ -41,6 +42,7 @@ import { PushBanner } from "./PushBanner";
 import { QuotaAside } from "./QuotaAside";
 import { RecoveryBanner } from "./RecoveryBanner";
 import { Resizer } from "./Resizer";
+import { pairedMachines } from "./Shell";
 import ui from "./ui.module.css";
 
 // From here the list and the detail sit side by side (Inbox.module.css).
@@ -66,6 +68,7 @@ const text = (e: Entry) =>
       : [e.item.run.title, e.item.run.reason];
 
 export function Inbox() {
+  const app = useApp();
   const {
     inbox,
     inboxLoaded,
@@ -77,7 +80,7 @@ export function Inbox() {
     snooze,
     answerPrompt,
     deviceName,
-  } = useApp();
+  } = app;
   const [grouping, setGrouping] = usePref("grouping");
   const [historyOpen, setHistoryOpen] = usePref("historyOpen");
   const [snoozedOpen, setSnoozedOpen] = usePref("snoozedOpen");
@@ -283,6 +286,8 @@ export function Inbox() {
   );
 
   const count = needs.length;
+  // Nothing can reach this inbox until a machine pairs: say how (#610).
+  const noMachine = pairedMachines(app) === 0;
   const waitingOn = needs.filter((e) => waitingSince(e));
   const whenYouCan = needs.filter((e) => !waitingSince(e));
   // Questions the owner put off (#571), collapsed at the end, out of the count; Find opens it.
@@ -411,7 +416,11 @@ export function Inbox() {
       {needs.length === 0 &&
         runEntries.length === 0 &&
         (!finding ? (
-          <p className={`t-small ${s.empty}`}>Nothing needs you</p>
+          noMachine && !wide ? (
+            <NoMachine />
+          ) : (
+            <p className={`t-small ${s.empty}`}>Nothing needs you</p>
+          )
         ) : past.length === 0 && snoozed.length === 0 ? (
           <p className={`t-small ${s.empty}`}>Nothing matches</p>
         ) : null)}
@@ -449,7 +458,7 @@ export function Inbox() {
   return (
     <Panes list={list}>
       <section className={s.detail} aria-label="Selected">
-        {detail(selected)}
+        {detail(selected) ?? (noMachine && <NoMachine />)}
       </section>
     </Panes>
   );
@@ -813,6 +822,23 @@ function ViewMenu({
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+/** The empty inbox of an account with no machine: what to install, where. */
+function NoMachine() {
+  return (
+    <div className={s.noMachine}>
+      <h2 className="t-heading">Add a machine</h2>
+      <p className={`t-small ${s.noMachineText}`}>
+        Install Starbridge on each machine that runs your agents. Its setup shows a code to approve
+        here; then its agents' questions arrive in this inbox.
+      </p>
+      <InstallBox />
+      <p className={`t-small ${s.noMachineText}`}>
+        What setup does: <a href="/docs">the docs</a>
+      </p>
     </div>
   );
 }

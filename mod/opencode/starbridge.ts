@@ -29,7 +29,7 @@
  */
 import { createHash, randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
+import { link, mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { AgentLoop, socketPath } from "../hooks/agent.ts";
@@ -263,6 +263,13 @@ export async function claim(
     ))
   )
     return { state: "held" };
+  // Another process may have taken the stale claim over since it was read: what moved aside is
+  // then its fresh claim, which goes back (link fails rather than overwrite a newer one).
+  if ((await readFile(aside, "utf8").catch(() => undefined)) !== text) {
+    await link(aside, file).catch(() => {});
+    await rm(aside, { force: true }).catch(() => {});
+    return { state: "held" };
+  }
   await rm(aside, { force: true }).catch(() => {});
   return (await take()) ? { state: "mine", token } : { state: "held" };
 }

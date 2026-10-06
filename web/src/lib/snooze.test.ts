@@ -48,7 +48,10 @@ test("a snoozed question leaves what needs you for Snoozed, the soonest back fir
   const now = Date.parse("2026-10-06T12:00:00Z");
   const inbox = [
     question("open"),
-    question("late", { snoozedUntil: "2026-10-07T07:00:00Z", waitingSince: "2026-10-06T11:00:00Z" }),
+    question("late", {
+      snoozedUntil: "2026-10-07T07:00:00Z",
+      waitingSince: "2026-10-06T11:00:00Z",
+    }),
     question("soon", { snoozedUntil: "2026-10-06T16:00:00Z" }),
     question("over", { snoozedUntil: "2026-10-06T11:59:00Z" }),
   ];

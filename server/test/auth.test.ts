@@ -173,16 +173,25 @@ test("app sign-in needs a challenge", async () => {
   expect((await s.app.request("/v1/auth/github?app=1")).status).toBe(400);
 });
 
-test("GitHub sign-in refuses a callback whose state does not match", async () => {
+test("a failed GitHub sign-in goes back to the page with why, and no session (#616)", async () => {
   const s = await makeServer(githubConfig());
   const res = await githubSignIn(s, 42, { state: "forged" });
-  expect(res.status).toBe(400);
+  expect(res.status).toBe(302);
+  expect(res.headers.get("location")).toBe("/?signin=expired");
   expect(res.headers.get("set-cookie") ?? "").not.toContain("sb_session=sbs_");
+  const denied = await s.app.request("/v1/auth/github/callback?error=access_denied&state=x");
+  expect(denied.headers.get("location")).toBe("/?signin=declined");
+  const start = await s.app.request("/v1/auth/github");
+  expect(start.headers.get("set-cookie")).toContain("Max-Age=3600");
 });
 
-test("GitHub sign-in is off without an OAuth app", async () => {
+test("GitHub sign-in is off without an OAuth app: the page says so, the app gets 404", async () => {
   const s = await makeServer();
-  expect((await s.call("GET", "/v1/auth/github")).status).toBe(404);
+  const page = await s.app.request("/v1/auth/github");
+  expect(page.headers.get("location")).toBe("/?signin=off");
+  expect((await s.call("GET", `/v1/auth/github?app=1&challenge=${pkce().challenge}`)).status).toBe(
+    404,
+  );
 });
 
 test("owner sign-in refuses a wrong token and is rate-limited", async () => {

@@ -166,7 +166,14 @@ export const itemRoutes = new Hono<Env>();
 
 itemRoutes.post("/items", requireCaller("paired"), async (c) => {
   const limits = c.var.config.limits;
-  rateLimit(c, `items:${c.var.caller.account}`, limits.items);
+  const { account } = c.var.caller;
+  const poster = memberOf(c.var.caller);
+  if (c.var.caller.role === "device")
+    rateLimit(c, `items:${account}:${poster}`, limits.deviceItems);
+  else {
+    rateLimit(c, `items:${account}:${poster}`, limits.machineItems);
+    rateLimit(c, `items:${account}`, limits.items);
+  }
   const item = await json(c, SealedItem);
   const caller = c.var.caller;
   const me = memberOf(caller);
@@ -184,8 +191,10 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
   const most = fromDevice
     ? limits.answerBytes
     : item.kind === "run"
-      ? limits.runBytes
-      : limits.itemBytes;
+      ? limits.runBytes * item.boxes.length
+      : item.kind === "quota"
+        ? limits.quotaBytes
+        : limits.itemBytes;
   if (size > most) fail(413, "too-large", `a ${item.kind}'s boxes hold at most ${most} bytes`);
   // A snooze names when the server pushes it again (#571): within 7 days of now.
   let wakeDue: string | null = null;
@@ -197,6 +206,11 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
     if (due > Date.now()) wakeDue = new Date(due).toISOString();
   } else if (item.wakeAt !== undefined)
     fail(400, "bad-schema", `${item.kind} items carry no wakeAt`);
+  // Answers are small and the owner's; only machines' items spend the byte budget, so a looping
+  // machine never blocks an answer. A post is refused once the budget is spent, and only a
+  // stored one spends it.
+  const budget = `bytes:${caller.account}`;
+  if (!fromDevice) rateLimit(c, budget, limits.postedBytes, 0);
 
   // Devices the referred item was sealed to, told once a device answers it.
   let answeredDevices: string[] = [];
@@ -386,6 +400,7 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
     }
     return seq;
   })();
+  if (!fromDevice) c.var.limiter.retryAfter(budget, ...limits.postedBytes, size);
 
   c.var.usage.record(`items.${item.kind}`);
   if (answered && caller.role === "device") {

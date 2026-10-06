@@ -37,7 +37,7 @@ export function pairingError(e: unknown): string {
     case "unauthenticated":
       return "Sign-in expired. Sign in again.";
     case "machine-cap":
-      return "This account already has its maximum number of machines. Revoke one first.";
+      return "This account already has its maximum number of machines; phones and browsers don't count. Revoke one first.";
     case "rate-limited":
       return "Too many tries. Wait a minute.";
   }
@@ -131,9 +131,11 @@ async function call<T>(
   const started = Date.now();
   let res: Response;
   for (let first = true; ; first = false) {
-    if (!first) {
+    // A retry waits until the backoff ends, which another call's failure may push back meanwhile.
+    while (!first) {
       const wait = Math.max(0, backoff.until - Date.now());
       if (Date.now() - started + wait > backoff.retryForMs) throw new Unreachable(offline());
+      if (wait === 0) break;
       await pause(wait, opts.signal);
     }
     try {
