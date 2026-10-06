@@ -414,7 +414,7 @@ async function main() {
   if ((await quota.exited) !== 0) throw new Error("quota push failed");
 
   step("answer `starbridge ask --wait` from the inbox, with a Web Push for it");
-  await page.getByRole("link", { name: "Inbox" }).click();
+  await page.getByRole("link", { name: "Inbox", exact: true }).click();
   const pushesBefore = (services.output().match(/"event":"push"/g) ?? []).length;
   const ask = cli(
     "ask",
@@ -602,7 +602,7 @@ async function main() {
         throw new Error(`${what}: at ${where()} showing the ${open ? "detail" : "list"}`);
     };
     await p.goto(`${ORIGIN}/quotas`);
-    await p.getByRole("link", { name: "Inbox" }).first().click();
+    await p.getByRole("link", { name: "Inbox", exact: true }).first().click();
     await p.locator(`button[data-id="${merge}"]`).click();
     await expectAt(`/?item=${merge}`, "detail", "a tapped question");
     await p.getByRole("heading", { name: MERGE }).waitFor();
@@ -903,7 +903,7 @@ async function main() {
   // 12-hour times are the longest: "Will run out on Oct 12 at 12:02 AM".
   await page.getByLabel("12-hour", { exact: true }).check({ force: true });
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.getByRole("link", { name: "Inbox" }).click();
+  await page.getByRole("link", { name: "Inbox", exact: true }).click();
   const aside = page.getByRole("complementary", { name: "Quota windows" });
   await aside.locator("article").first().waitFor();
   const { scroll, client } = await aside.evaluate((el) => ({
@@ -1189,7 +1189,7 @@ async function main() {
     ],
     farHome,
   );
-  await page.getByRole("link", { name: "Inbox" }).click();
+  await page.getByRole("link", { name: "Inbox", exact: true }).click();
   await page.locator("button[data-id]").nth(24).waitFor({ timeout: 30_000 });
   await page
     .getByText(/^Nightly eval/)
