@@ -101,11 +101,15 @@ test("item posts past the account's rate get 429 with Retry-After", async () => 
   expect(Number(r.headers.get("retry-after"))).toBeGreaterThan(0);
 });
 
-test("quota snapshots that replace each other still count against the account's bytes a minute", async () => {
+test("machines' items spend a byte budget a minute, replaced and stored ones only", async () => {
   const probe = await setup();
   const size = quota(probe.devbox, probe.phone).boxes.reduce((n, b) => n + b.box.length, 0);
-  const { s, phone, devbox } = await setup({ postedBytes: [Math.floor(size * 2.5), 60_000] });
-  expect((await post(s, devbox, quota(devbox, phone))).status).toBe(201);
+  const { s, phone, devbox } = await setup({ postedBytes: [Math.floor(size * 1.5), 60_000] });
+  const first = quota(devbox, phone);
+  expect((await post(s, devbox, first)).status).toBe(201);
+  // Refused posts spend nothing.
+  for (let i = 0; i < 3; i++) expect((await post(s, devbox, first)).status).toBe(409);
+  // Snapshots replace each other, so the stored-bytes cap never sees them; the budget does.
   expect((await post(s, devbox, quota(devbox, phone))).status).toBe(201);
   const r = await post(s, devbox, quota(devbox, phone));
   expect(r.status).toBe(429);

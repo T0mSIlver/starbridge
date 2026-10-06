@@ -30,10 +30,11 @@ export const DEFAULT_LIMITS = {
    */
   itemBytes: 2 * 1024 * 1024,
   /**
-   * Sealed boxes of one quota snapshot, in bytes. A real one is a few KB per device: six
-   * providers with four windows each, sealed to ten devices, is about 60 KB (#581).
+   * Sealed boxes of one quota snapshot, in bytes. A real one is about 8 KB per device (six
+   * providers with three windows each), and pages count as devices, so this leaves room for
+   * over a hundred (#581).
    */
-  quotaBytes: 256 * 1024,
+  quotaBytes: 1024 * 1024,
   /**
    * Bytes of boxes an account's machines may post a minute, counting items that replace
    * earlier ones (quota snapshots, runs), which the stored-bytes cap never sees: eight 2 MB
