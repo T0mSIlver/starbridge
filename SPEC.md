@@ -1279,6 +1279,15 @@ so the mod is the first path.
   another version (a brew or npm upgrade), and the agent rewrites an outdated Codex skill when
   it starts, so `starbridge update` also brings Codex the new skill.
 
+- 2026-10-06. Supply chain, #274 findings 2 to 4. Setup installs the plugins only from a
+  marketplace whose source is this repository: `claude plugin marketplace list --json` gives
+  `{source: "github", repo: "owner/repo"}` for an `owner/repo` add and `{source: "git", url}`
+  for a URL add; any other `starbridge` marketplace makes setup stop and say how to remove it.
+  Codex delivery queues only `Starbridge has the owner's answer to <id>: run starbridge wait <id>`,
+  since `codex queue` (0.160) takes the message only as an argument and other local users can
+  read process arguments; `wait <id>` prints a delivered answer from local state. The npm bundle
+  runs under Node, so the CLI uses no Bun global without a guard; a test runs it there.
+
 ## Encryption, with existing libraries
 
 - libsodium sealed boxes (`crypto_box_seal`, X25519 + XSalsa20-Poly1305): an
