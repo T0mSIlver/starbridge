@@ -576,11 +576,13 @@ Tokens, type and components: `DESIGN.md`.
   forced command that deploys only main's head or a commit on main containing the deployed one;
   the box fetches it itself. Rollbacks are manual (`deploy/deploy.sh`). The deploy fails unless the
   live server reports that commit or a later one (`x-starbridge-revision`).
-- **No downtime** (#150). The page runs as two copies; a deploy starts the idle one, waits for its
-  health, then stops the other, and Caddy sends every request to the first healthy copy. The
-  server stays one instance, since it holds the long-polls and SQLite; Caddy holds requests up to
-  30 s while it restarts. The Caddyfile reloads through Caddy's admin API. Only a change to
-  `deploy/caddy.Dockerfile` recreates Caddy and drops connections.
+- **No downtime** (#150, #508). The page runs as two copies; a deploy starts the idle one, waits
+  for its health, then stops the other, and Caddy sends every request to the first healthy copy.
+  The server stays one instance, since it holds the long-polls and SQLite; Caddy holds requests up
+  to 30 s while it restarts, which takes about 1 s. The Caddyfile reloads through Caddy's admin
+  API. Only a change to `deploy/caddy.Dockerfile` recreates Caddy and drops connections: its image
+  is tagged by a hash of that file, which pins every input, and built only when no image has the
+  tag, since a rebuild after the build-cache prune yields a new image even from the same file.
 - **Pinning** (#361, #423, #426). Actions are pinned by commit SHA and images by digest, so a
   dependency changes only in a Dependabot PR. A workflow writes `pnpm-lock.yaml` into Dependabot's
   security PRs, which update `package.json` alone, then dispatches CI, since a push with
