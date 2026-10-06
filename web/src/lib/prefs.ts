@@ -52,13 +52,16 @@ export function getPref<K extends keyof Prefs>(key: K): Prefs[K] {
 
 export function setPref<K extends keyof Prefs>(key: K, value: Prefs[K]): void {
   const next = { ...read(), [key]: value };
+  let raw: string | null = stored(next);
   try {
     // A newer Starbridge's prefs stay for it; this page keeps the change for itself.
-    if (writable(localStorage.getItem(KEY))) localStorage.setItem(KEY, stored(next));
+    const old = localStorage.getItem(KEY);
+    if (writable(old)) localStorage.setItem(KEY, raw);
+    else raw = old;
   } catch {
     // Private windows may refuse storage; the choice then lasts for this page.
   }
-  cache = { raw: stored(next), value: next };
+  cache = { raw, value: next };
   for (const l of listeners) l();
 }
 

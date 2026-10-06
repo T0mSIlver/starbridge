@@ -152,22 +152,30 @@ const val FORMAT = 1
 
 /** Both files are wrapped by the [Vault], so nothing decrypted sits on the disk in the clear. */
 class Disk(private val dir: File, private val vault: Vault) {
-    /**
-     * Files this app could not read, a newer app's or a damaged one: each was moved aside to
-     * `<name>.unreadable` rather than overwritten, and the app started without it.
-     */
+    /** Files this app could not read at [load], a newer app's or a damaged one. */
     val unreadable = mutableListOf<String>()
 
-    private fun <T> read(name: String, serializer: KSerializer<T>, format: (T) -> Int): T? {
+    private fun <T> read(name: String, serializer: KSerializer<T>, format: (T) -> Int): Result<T?> {
         val file = File(dir, name)
-        if (!file.isFile) return null
-        val value = runCatching { ProtocolJson.decodeFromString(serializer, vault.unwrap(file.readBytes()).decodeToString()) }
-        if (value.getOrNull()?.let(format) == FORMAT) return value.getOrNull()
-        val kept = File(dir, "$name.unreadable")
-        kept.delete()
-        file.renameTo(kept)
-        unreadable += name
-        return null
+        if (!file.isFile) return Result.success(null)
+        return runCatching { ProtocolJson.decodeFromString(serializer, vault.unwrap(file.readBytes()).decodeToString()) }
+            .mapCatching { if (format(it) == FORMAT) it else error("format ${format(it)}") }
+    }
+
+    /**
+     * Both files, read together: they describe one device, so when either cannot be read, both
+     * move aside to `<name>.unreadable-<time>`, kept rather than overwritten, and the app starts
+     * signed out.
+     */
+    fun load(): Pair<Saved?, Secrets> {
+        val saved = read("state.bin", Saved.serializer()) { it.v }
+        val secrets = read("secrets.bin", Secrets.serializer()) { it.v }
+        if (saved.isSuccess && secrets.isSuccess) return saved.getOrNull() to (secrets.getOrNull() ?: Secrets())
+        if (saved.isFailure) unreadable += "state.bin"
+        if (secrets.isFailure) unreadable += "secrets.bin"
+        val at = System.currentTimeMillis()
+        for (name in listOf("state.bin", "secrets.bin")) File(dir, name).takeIf { it.isFile }?.renameTo(File(dir, "$name.unreadable-$at"))
+        return null to Secrets()
     }
 
     private fun <T> write(name: String, serializer: KSerializer<T>, value: T) {
@@ -177,9 +185,9 @@ class Disk(private val dir: File, private val vault: Vault) {
         check(tmp.renameTo(File(dir, name)))
     }
 
-    fun saved(): Saved? = read("state.bin", Saved.serializer()) { it.v }
+    /** The saved state as it is on disk now, or null; moves nothing. */
+    fun saved(): Saved? = read("state.bin", Saved.serializer()) { it.v }.getOrNull()
     fun save(saved: Saved) = write("state.bin", Saved.serializer(), saved)
-    fun secrets(): Secrets = read("secrets.bin", Secrets.serializer()) { it.v } ?: Secrets()
     fun save(secrets: Secrets) = write("secrets.bin", Secrets.serializer(), secrets)
 
     fun wipe() {

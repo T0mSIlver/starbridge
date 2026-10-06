@@ -272,7 +272,9 @@ export class Store {
     if (typeof value !== "object" || value === null || Array.isArray(value))
       throw new StateFileError(
         p,
-        "is not in this starbridge's format (one from before 1.0.0?): run `starbridge pair` again",
+        name === "directory.json"
+          ? "is not in this starbridge's format (from before 1.0.0?): remove it, the server's copy is read again"
+          : "is not in this starbridge's format (from before 1.0.0?): move it away, then run `starbridge pair`",
       );
     const v = (value as { v?: unknown }).v ?? 1;
     if (v !== STATE_VERSION)

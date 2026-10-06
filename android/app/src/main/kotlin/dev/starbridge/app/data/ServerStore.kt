@@ -125,8 +125,9 @@ class ServerStore(
     private val wakeWhenOnline: () -> Unit = {},
 ) : Store {
     private val lock = Mutex()
-    private var saved = disk.saved() ?: Saved(defaultServer)
-    private var secrets = disk.secrets()
+    private val loaded = disk.load()
+    private var saved = loaded.first ?: Saved(defaultServer)
+    private var secrets = loaded.second
     private var directory: Directory? = null
     private var pending: Pair<PairingCode, PairingRequestBody>? = null
     private var joinJob: Job? = null
@@ -159,7 +160,7 @@ class ServerStore(
     override val server = MutableStateFlow(saved.server)
     override val busy = MutableStateFlow(false)
     override val notice = MutableStateFlow(
-        disk.unreadable.takeIf { it.isNotEmpty() }?.let { "Could not read ${it.joinToString(" and ")}, kept beside it as .unreadable: sign in again." },
+        disk.unreadable.takeIf { it.isNotEmpty() }?.let { "Could not read ${it.joinToString(" and ")}; this phone's saved files were kept aside. Sign in again." },
     )
     private val headBook = Heads(directories)
     /** The hold notice last shown, so it goes once the hold ends. */

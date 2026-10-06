@@ -52,7 +52,7 @@ test("state files carry their format, and one the CLI cannot read stays as it is
   for (const [text, says] of [
     ["{ not json", "is not valid JSON"],
     ['{"v": 2, "asked": {}}', "from a newer starbridge"],
-    ["[]", "starbridge pair"],
+    ["[]", "move it away"],
   ] as const) {
     writeFileSync(path, text);
     expect(await run(["waiting", "d_1"], ctx)).toBe(1);

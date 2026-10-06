@@ -27,14 +27,15 @@ class DiskTest {
         assertTrue(File(dir, "state.bin").readText().contains("\"v\":1"))
         assertTrue(File(dir, "secrets.bin").readText().contains("\"v\":1"))
 
-        val newer = """{"v":2,"session":"s"}"""
-        File(dir, "secrets.bin").writeText(newer)
-        File(dir, "state.bin").writeText("not json")
+        // Keys without the state they belong to would act as a device with no pin: both go aside.
+        val newer = """{"v":2,"server":"https://starbridge.run"}"""
+        File(dir, "state.bin").writeText(newer)
         val again = Disk(dir, identity)
+        assertEquals(null to Secrets(), again.load())
+        assertEquals(listOf("state.bin"), again.unreadable)
+        val kept = dir.listFiles()!!.map { it.name }.sorted()
+        assertTrue(kept.any { it.startsWith("state.bin.unreadable-") } && kept.any { it.startsWith("secrets.bin.unreadable-") })
+        assertEquals(newer, dir.listFiles()!!.single { it.name.startsWith("state.bin.unreadable-") }.readText())
         assertNull(again.saved())
-        assertEquals(Secrets(), again.secrets())
-        assertEquals(listOf("state.bin", "secrets.bin"), again.unreadable)
-        assertEquals(newer, File(dir, "secrets.bin.unreadable").readText())
-        assertEquals("not json", File(dir, "state.bin.unreadable").readText())
     }
 }

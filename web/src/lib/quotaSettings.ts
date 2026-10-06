@@ -293,6 +293,8 @@ export async function notifyAlerts(cards: QuotaCardData[], s: QuotaSettings): Pr
   try {
     raw = localStorage.getItem(SHOWN);
   } catch {}
+  // A newer Starbridge keeps that list: it notifies, so this page does not repeat it each poll.
+  if (!writable(raw)) return;
   const kept = readStored(SHOWN, raw)?.shown;
   const shown = Array.isArray(kept) ? (kept as string[]) : [];
   const fresh = cards.flatMap((c) =>
@@ -302,11 +304,10 @@ export async function notifyAlerts(cards: QuotaCardData[], s: QuotaSettings): Pr
   );
   if (fresh.length === 0) return;
   try {
-    if (writable(raw))
-      localStorage.setItem(
-        SHOWN,
-        stored({ shown: [...shown, ...fresh.map((f) => f.key)].slice(-200) }),
-      );
+    localStorage.setItem(
+      SHOWN,
+      stored({ shown: [...shown, ...fresh.map((f) => f.key)].slice(-200) }),
+    );
   } catch {}
   const reg = await navigator.serviceWorker?.getRegistration();
   for (const { a, c } of fresh) {
