@@ -1425,6 +1425,12 @@ so the mod is the first path.
   moved tag could otherwise run code in the release job before it writes the minisign key.
   Dependabot proposes the updates in one grouped PR a month.
 
+- 2026-10-06. Main's CI runs one at a time (#380). Each merge used to queue its own run, and
+  deploys waited behind all of them: six main runs queued for up to 30 min with prod six merges
+  behind. Now one runs and only the newest merge waits; a newer merge replaces it, and a replaced
+  run deploys nothing, so merges in between are deployed with the head. Deploy's own queue is on
+  its job, so a deploy skipped for a cancelled run cannot replace one that is waiting. A
+  re-run by hand of an older main run replaces the waiting head the same way.
 - 2026-10-06. `ask --default` is gone from the help and the skill (#352): no client shows it, so
   an agent that passed one believed the owner saw it. Like `--default-at`, it is accepted and
   ignored with a warning, so older commands still post; the CLI always sends "Waits for your
