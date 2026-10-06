@@ -10,10 +10,9 @@
  */
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
-import { claudeToken } from "./login.ts";
+import { claudeToken, tmpOutsideHome } from "./login.ts";
 
 const { values: opt } = parseArgs({
   args: process.argv.slice(2),
@@ -42,7 +41,7 @@ const pieces: Record<string, string> = {
   "Skill file, when read (SKILL.md)": skill,
 };
 
-const dir = mkdtempSync(join(tmpdir(), "tokens-"));
+const dir = mkdtempSync(join(tmpOutsideHome(), "tokens-"));
 const token = claudeToken();
 function input(extra: string): number {
   const r = spawnSync(

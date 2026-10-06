@@ -9,11 +9,10 @@
  * costs nothing.
  */
 import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
 import { NO_DEFAULT } from "../../cli/src/decisions.ts";
-import { claudeToken } from "./login.ts";
+import { claudeToken, tmpOutsideHome } from "./login.ts";
 import type { RunRecord } from "./run.ts";
 import { type Scenario, scenarios } from "./scenarios.ts";
 
@@ -123,7 +122,7 @@ Answer with only a JSON object, no prose around it:
 
 async function judge(r: Rec, s: Scenario): Promise<Verdict | undefined> {
   // A throwaway config dir, so none of the owner's instructions reach it.
-  const dir = mkdtempSync(join(tmpdir(), "judge-"));
+  const dir = mkdtempSync(join(tmpOutsideHome(), "judge-"));
   try {
   for (let attempt = 0; attempt < 2; attempt++) {
     const p = Bun.spawn(
@@ -190,9 +189,9 @@ function score(r: Rec, s: Scenario): Record<string, boolean | null> {
       ? !cmds
           .map((c) =>
             c
-              .replace(/<<-?\s*'?(\w+)'?\n[\s\S]*?\n\1\b/g, "")
+              .replace(/<<-?\s*(['"]?)(\w+)\1[^\n]*\n[\s\S]*?\n\s*\2\b/g, "")
               .replace(/'[^']*'|"(?:[^"\\]|\\.)*"/g, "''")
-              .replace(/[^;&|]*--help\b/g, ""),
+              .replace(/[^;&|\n]*--help\b/g, ""),
           )
           .some((c) => s.forbidden?.some((re) => re.test(c)))
       : null,

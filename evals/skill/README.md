@@ -23,8 +23,9 @@ touches your own `~/.claude`, `~/.codex`, `~/.pi` or opencode config. Claude Cod
 `$CODEX_HOME/AGENTS.md`, opencode the same in `$XDG_CONFIG_HOME/opencode` (`opencode run
 --pure --auto`, which waits for answers as `codex exec` does); Pi loads the Starbridge extension and skill with `-e` and `--skill`,
 and uses the providers in `~/.pi/agent`. Anthropic bills a Claude subscription used from Pi as
-extra usage, so Pi runs on another model. Situations with a follow-up answer the card with its
-recommended option, in the line the mod submits, and check that the agent acts on it.
+extra usage, so Pi runs on another model. While a non-interactive agent waits, the owner answers its first card with the
+recommended option; situations with a follow-up check that it acts on the answer. An interactive
+Claude Code session gets the answer as the line the mod submits.
 
 Claude Code, the judge and `tokens.ts` run on a long-lived token from `claude setup-token`, in
 `CLAUDE_CODE_OAUTH_TOKEN` or `~/.config/starbridge/secrets/claude-eval-token`: copies of

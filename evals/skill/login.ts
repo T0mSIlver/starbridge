@@ -6,7 +6,7 @@
  * rotated refresh token signs the original out.
  */
 import { existsSync, readFileSync } from "node:fs";
-import { homedir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 
 const secrets = join(homedir(), ".config/starbridge/secrets");
@@ -23,3 +23,9 @@ export const claudeToken = () =>
 
 export const codexKey = () =>
   secret("OPENAI_API_KEY", "codex-eval-key", "create an OpenAI API key");
+
+/** A `claude -p` under the home folder would read an ancestor's CLAUDE.md. */
+export function tmpOutsideHome(): string {
+  if (`${tmpdir()}/`.startsWith(`${homedir()}/`)) throw new Error("TMPDIR must be outside your home");
+  return tmpdir();
+}

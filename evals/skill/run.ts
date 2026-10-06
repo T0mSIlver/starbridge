@@ -29,11 +29,11 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { homedir, tmpdir } from "node:os";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
 import { LiveServer } from "../../server/test-support/index.ts";
-import { claudeToken, codexKey } from "./login.ts";
+import { claudeToken, codexKey, tmpOutsideHome } from "./login.ts";
 import { type Scenario, scenarios } from "./scenarios.ts";
 
 const { values: opt } = parseArgs({
@@ -67,8 +67,7 @@ mkdirSync(out, { recursive: true });
 // ~/.claude/CLAUDE.md as an ancestor's. Not in the scratchpad either: a path naming Starbridge
 // would hint the agent. Set TMPDIR to put it off a small /tmp. Each run's folder goes once its
 // record is written (a Codex home is 60 MB).
-if (`${tmpdir()}/`.startsWith(`${homedir()}/`)) throw new Error("TMPDIR must be outside your home");
-const work = mkdtempSync(join(tmpdir(), "skill-eval-"));
+const work = mkdtempSync(join(tmpOutsideHome(), "skill-eval-"));
 const bun = process.execPath;
 const which = (cmd: string) => {
   const r = spawnSync("sh", ["-c", `command -v ${cmd}`], { encoding: "utf8" });
@@ -320,10 +319,21 @@ async function interactiveTurn(
       projects: { [dir]: { hasTrustDialogAccepted: true } },
     }),
   );
+  // The environment goes through a private file, not argv, where `ps` would show the token.
+  const envFile = join(cfg, "env.sh");
+  writeFileSync(
+    envFile,
+    Object.entries({ ...env, TERM: "xterm-256color" })
+      .map(([k, v]) => `export ${k}='${v.replaceAll("'", "'\\''")}'\n`)
+      .join(""),
+    { mode: 0o600 },
+  );
   const cmd = [
     "env",
     "-i",
-    ...Object.entries({ ...env, TERM: "xterm-256color" }).map(([k, v]) => `${k}=${v}`),
+    "sh",
+    "-c",
+    `. '${envFile}'; exec "$0" "$@"`,
     agentBin,
     "--session-id",
     id,
@@ -429,9 +439,8 @@ async function one(s: Scenario, arm: string, rep: number): Promise<RunRecord> {
   const login: Record<string, string> = {};
   if (agent === "claude") login.CLAUDE_CODE_OAUTH_TOKEN = claudeToken();
   else if (agent === "pi") {
-    for (const f of ["models.json", "auth.json"])
-      if (existsSync(join(homedir(), ".pi/agent", f)))
-        copyFileSync(join(homedir(), ".pi/agent", f), join(cfg, f));
+    // Only the providers and their API keys: Pi's auth.json may hold OAuth logins that refresh.
+    copyFileSync(join(homedir(), ".pi/agent/models.json"), join(cfg, "models.json"));
   } else {
     // opencode reads its config from `$XDG_CONFIG_HOME/opencode` and its login from
     // `$XDG_DATA_HOME/opencode/auth.json` (the Z.ai key).
@@ -529,10 +538,10 @@ async function one(s: Scenario, arm: string, rep: number): Promise<RunRecord> {
     const choiceFor = (c: Card) => c.recommended ?? c.options[0] ?? "Go ahead";
     // In `claude -p`, `codex exec`, `pi -p` and `opencode run` nothing brings an answer back as a
     // prompt: the agent waits within its turn (`starbridge wait`), so the owner answers the first
-    // card while it runs.
+    // card while it runs, whether or not the situation checks what it does with the answer.
     let answeredFirst: Record<string, unknown>[] | undefined;
     const answering =
-      !s.interactive && s.followUp && !s.unpaired
+      !s.interactive && !s.unpaired
         ? (async () => {
             while (!answeredFirst) {
               await Bun.sleep(2_000);
@@ -542,9 +551,10 @@ async function one(s: Scenario, arm: string, rep: number): Promise<RunRecord> {
               if (!c) continue;
               await Bun.sleep(15_000);
               if (answeredFirst) break;
+              const latest = (await live.opened("decision")) as Record<string, unknown>[];
               await live.answer(c.id, { choice: choiceFor(c) });
               rec.answered = `Answer to ${c.id} (${c.question}): ${choiceFor(c)}`;
-              answeredFirst = now;
+              answeredFirst = latest;
             }
           })().catch(() => {}) // the turn ended and the server stopped first
         : undefined;
