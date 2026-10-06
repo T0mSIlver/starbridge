@@ -28,8 +28,10 @@ recommended option, in the line the mod submits, and check that the agent acts o
 
 Claude Code, the judge and `tokens.ts` run on a long-lived token from `claude setup-token`, in
 `CLAUDE_CODE_OAUTH_TOKEN` or `~/.config/starbridge/secrets/claude-eval-token`: copies of
-`~/.claude/.credentials.json` each refresh on their own, and a rotated refresh token signs the
-original out. `TMPDIR` must be outside your home, where an
+`~/.claude/.credentials.json` would each refresh on their own, and a rotated refresh token signs the
+original out. Codex runs log in with an OpenAI API key (`OPENAI_API_KEY` or
+`~/.config/starbridge/secrets/codex-eval-key`) for the same reason; the API bills it, not your
+ChatGPT plan. `TMPDIR` must be outside your home, where an
 ancestor's `AGENTS.md` or `CLAUDE.md` would reach the agent. A Codex home is 60 MB, so parallel
 runs can fill a small /tmp.
 

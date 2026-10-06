@@ -33,7 +33,7 @@ import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
 import { LiveServer } from "../../server/test-support/index.ts";
-import { claudeToken } from "./login.ts";
+import { claudeToken, codexKey } from "./login.ts";
 import { type Scenario, scenarios } from "./scenarios.ts";
 
 const { values: opt } = parseArgs({
@@ -442,7 +442,14 @@ async function one(s: Scenario, arm: string, rep: number): Promise<RunRecord> {
         join(homedir(), ".local/share/opencode/auth.json"),
         join(root, "data/opencode/auth.json"),
       );
-    } else copyFileSync(join(homedir(), ".codex/auth.json"), join(cfg, "auth.json"));
+    } else {
+      const r = spawnSync(agentBin, ["login", "--with-api-key"], {
+        input: codexKey(),
+        env: { ...process.env, CODEX_HOME: cfg },
+        encoding: "utf8",
+      });
+      if (r.status !== 0) throw new Error(`codex login --with-api-key: ${r.stderr}`);
+    }
     cpSync(join(plugin, "skills/starbridge"), join(conf, "skills/starbridge"), { recursive: true });
     const hook = spawnSync("sh", [join(plugin, "hooks/session-start.sh")], {
       env: { STARBRIDGE_CONFIG_DIR: sb },

@@ -1,20 +1,25 @@
 /**
- * The Claude login the eval runs on: a long-lived token from `claude setup-token`, in
- * CLAUDE_CODE_OAUTH_TOKEN or in `~/.config/starbridge/secrets/claude-eval-token`. Copies of
- * `~/.claude/.credentials.json` would each refresh on their own, and a rotated refresh token
- * signs the original out.
+ * The logins the eval runs on, none of which refreshes: for Claude, a long-lived token from
+ * `claude setup-token` (CLAUDE_CODE_OAUTH_TOKEN or `~/.config/starbridge/secrets/claude-eval-token`);
+ * for Codex, an OpenAI API key (OPENAI_API_KEY or `.../secrets/codex-eval-key`). Copies of
+ * `~/.claude/.credentials.json` or `~/.codex/auth.json` would each refresh on their own, and a
+ * rotated refresh token signs the original out.
  */
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
-const file = join(homedir(), ".config/starbridge/secrets/claude-eval-token");
+const secrets = join(homedir(), ".config/starbridge/secrets");
 
-export function claudeToken(): string {
-  const token =
-    process.env.CLAUDE_CODE_OAUTH_TOKEN ??
-    (existsSync(file) ? readFileSync(file, "utf8").trim() : undefined);
-  if (!token)
-    throw new Error(`no Claude token: run \`claude setup-token\` and save it in ${file}`);
-  return token;
+function secret(env: string, name: string, how: string): string {
+  const file = join(secrets, name);
+  const value = process.env[env] ?? (existsSync(file) ? readFileSync(file, "utf8").trim() : "");
+  if (!value) throw new Error(`no ${env}: ${how} and save it in ${file}`);
+  return value;
 }
+
+export const claudeToken = () =>
+  secret("CLAUDE_CODE_OAUTH_TOKEN", "claude-eval-token", "run `claude setup-token`");
+
+export const codexKey = () =>
+  secret("OPENAI_API_KEY", "codex-eval-key", "create an OpenAI API key");
