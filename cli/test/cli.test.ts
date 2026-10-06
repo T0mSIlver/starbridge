@@ -44,6 +44,23 @@ test("pair joins the directory and keeps the keys private", async () => {
   expect(ctx.errors.at(-1)).toContain("already paired");
 });
 
+test("state files carry their format, and one the CLI cannot read stays as it is", async () => {
+  const ctx = await paired(server);
+  for (const f of ["machine.json", "directory.json", "state.json"])
+    expect(JSON.parse(readFileSync(join(ctx.store.dir, f), "utf8")).v).toBe(1);
+  const path = join(ctx.store.dir, "state.json");
+  for (const [text, says] of [
+    ["{ not json", "is not valid JSON"],
+    ['{"v": 2, "asked": {}}', "from a newer starbridge"],
+    ["[]", "starbridge pair"],
+  ] as const) {
+    writeFileSync(path, text);
+    expect(await run(["waiting", "d_1"], ctx)).toBe(1);
+    expect(ctx.errors.at(-1)).toContain(says);
+    expect(readFileSync(path, "utf8")).toBe(text);
+  }
+});
+
 /** Reads a terminal QR back: each character is two modules, upper and lower, 4 px square. */
 function scan(lines: string[]): string | undefined {
   const rows = lines.map((l) => [
