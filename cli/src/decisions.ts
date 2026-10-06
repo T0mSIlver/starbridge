@@ -387,8 +387,9 @@ export async function settle(ctx: Ctx, opts: { id?: string; outcome?: string }):
   if (!id) throw new UsageError("settle needs a decision id");
   const asked = ctx.store.state().asked[id];
   if (!asked) throw new UsageError(`${id} is not a decision this machine asked`);
-  // Closed already, such as by a revoked device's answer the server holds: nothing to tell.
-  if (asked.settled) return 0;
+  // Closed by a revoked device's answer the server holds: a notice would contradict it. A
+  // decision `settle` closed earlier is posted again, in case that post failed.
+  if (asked.revoked) return 0;
   const outcome = opts.outcome ?? (asked.answerIn ? "elsewhere" : "withdrawn");
   if (outcome !== "elsewhere" && outcome !== "withdrawn")
     throw new UsageError("--outcome is elsewhere or withdrawn");
