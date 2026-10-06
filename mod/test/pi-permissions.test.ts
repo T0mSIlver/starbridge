@@ -88,6 +88,13 @@ test("Pi's bash call reaches the CLI as a command, other asks as their path or v
   expect(hookInput({ toolName: "write", path: "/etc/hosts" }, "s1", "/w").tool_input).toEqual({
     path: "/etc/hosts",
   });
+  // A tool gate names its target, or at least pi-permission-system's preview of the input.
+  expect(hookInput({ toolName: "read", target: "/x/SKILL.md" }, "s1", "/w").tool_input).toEqual({
+    path: "/x/SKILL.md",
+  });
+  expect(
+    hookInput({ toolName: "fetch", toolInputPreview: 'input {"url":1}' }, "s1", "/w").tool_input,
+  ).toEqual({ preview: 'input {"url":1}' });
   expect(
     hookInput(
       { payload: { request: { surface: "mcp", value: "github.create_issue" } } },
