@@ -1347,6 +1347,10 @@ class ServerStore(
         try {
             syncDirectory()
             val nextPk = toB64(next.public)
+            // Another device replaced the key since it was typed: the confirmation could never verify.
+            if (directory!!.recoveryPk != nextPk && directory!!.recoveryPk != toB64(current.public)) {
+                throw IllegalStateException("Another device replaced the recovery key meanwhile. Start again.")
+            }
             if (directory!!.recoveryPk != nextPk) {
                 // A retry after the proposal landed confirms it rather than proposing it again; one
                 // another proposal replaced meanwhile can never be posted again.
@@ -1364,6 +1368,8 @@ class ServerStore(
     }
 
     override fun closeRecoveryKey() {
+        // Not while a save signs with the keys: it ends in Done, or back on the key to retry.
+        if ((replacing.value as? Replacing.Shown)?.saving == true) return
         dropReplacement()
         replacing.value = Replacing.Idle
     }

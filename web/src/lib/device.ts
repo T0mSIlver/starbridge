@@ -901,6 +901,9 @@ export async function prepareRecoveryKey(ctx: Ctx, currentKey: string): Promise<
   const nextPk = toB64(next.publicKey);
   const replace = async () => {
     let latest = await refresh(ctx);
+    // Another device replaced the key since it was typed: the confirmation could never verify.
+    if (latest.dir.recoveryPk !== nextPk && latest.dir.recoveryPk !== toB64(current.publicKey))
+      throw new Error("Another device replaced the recovery key meanwhile. Start again.");
     if (latest.dir.recoveryPk !== nextPk) {
       // A retry after the proposal landed confirms it rather than proposing the same key again;
       // one another proposal replaced meanwhile can never be posted again.

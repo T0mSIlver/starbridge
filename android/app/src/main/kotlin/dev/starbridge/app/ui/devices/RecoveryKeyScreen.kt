@@ -59,7 +59,8 @@ fun RecoveryKeyScreen(
     onBack: () -> Unit = {},
 ) {
     val leave = { actions.close(); onBack() }
-    BackHandler(onBack = leave)
+    val saving = (replacing as? Replacing.Shown)?.saving == true
+    BackHandler(onBack = { if (!saving) leave() })
     // However the screen goes (a tab, a notification), the keys go with it; a rotation keeps them.
     val activity = LocalActivity.current
     DisposableEffect(Unit) { onDispose { if (activity?.isChangingConfigurations != true) actions.close() } }
@@ -76,7 +77,7 @@ fun RecoveryKeyScreen(
                 action = "Save the new key",
                 busy = replacing.saving,
             )
-            Link("Cancel", leave)
+            if (!replacing.saving) Link("Cancel", leave)
         }
         Replacing.Done -> Page("Recovery key", modifier, onBack = leave) {
             item {
