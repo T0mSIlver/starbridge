@@ -83,8 +83,9 @@ Within version 1 a newer sender may send what an older reader does not know, so 
   member's `role`, a permission answer's `scope` and `behavior`, a session link's `kind`;
 - lists only the item kinds it asks for, and ignores a push of a kind it does not know.
 
-A missing field or a value of another type still refuses the item, and a writer sends only
-values it knows. `readable` in packages/protocol and its Kotlin twin apply these rules to the
+A missing field, a value of another type, or a `null` in a field the schema does not make
+nullable (#505) still refuses the item, and a writer sends only values it knows. `readable` in
+packages/protocol and its Kotlin twin apply these rules to the
 body before its schema checks it; `schemas.json` in the vectors holds a case for each, with what
 the reader reads (`read`).
 
