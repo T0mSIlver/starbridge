@@ -7,8 +7,10 @@ import { type Ctx, parseDuration, UsageError } from "../context";
 import {
   type AskInput,
   answerLine,
+  closedError,
   type Delivery,
   deliveryLine,
+  dropRevokedNow,
   EXIT_TIMEOUT,
   markWaiting,
   resolveSource,
@@ -74,8 +76,16 @@ export async function waitVia(
       wait * 1000 + SLACK_MS,
       ctx.signal,
     );
+  // As the direct path does, before a saved answer is handed out (#491).
+  await dropRevokedNow(ctx);
   let r = await next(0);
   const id = opts.id;
+  // The agent's poll closes a decision a revoked device answered (#515).
+  const closed = () => {
+    const e = r.answer ? undefined : closedError(ctx, id);
+    if (e) throw e;
+  };
+  closed();
   if (!r.answer && id) await markWaiting(ctx, () => waitingVia(agent, { id, state: "waiting" }));
   let deadline = Number.POSITIVE_INFINITY;
   if (opts.timeout) deadline = ctx.now().getTime() + parseDuration(opts.timeout);
@@ -87,6 +97,7 @@ export async function waitVia(
       return EXIT_TIMEOUT;
     }
     r = await next(Math.max(1, Math.min(MAX_HOLD_SECONDS, Math.ceil(left / 1000))));
+    closed();
   }
   ctx.out(opts.json ? JSON.stringify(r.answer) : answerLine(r.answer, r.question));
   return 0;
@@ -105,6 +116,7 @@ export async function answersVia(
     return 0;
   }
   const wait = opts.wait === undefined ? 0 : waitSeconds(opts.wait);
+  await dropRevokedNow(ctx);
   const { events } = await agent.call<{ events: SessionEvent[] }>(
     "GET",
     `${path}/events?wait=${wait}`,

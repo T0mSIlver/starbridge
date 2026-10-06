@@ -7,6 +7,7 @@ import { LiveServer } from "@starbridge/server/test-support";
 import jpeg from "jpeg-js";
 import jsQR from "jsqr";
 import { PNG } from "pngjs";
+import { makeAgent } from "../src/agent/main";
 import { run } from "../src/cli";
 import { session } from "../src/context";
 import { poll } from "../src/decisions";
@@ -643,6 +644,20 @@ test("a decision whose answer came from a device revoked since is closed (#515)"
   const posts = server.log.filter((c) => c === "POST /items").length;
   expect(await run(["settle", id], ctx)).toBe(0);
   expect(server.log.filter((c) => c === "POST /items").length).toBe(posts);
+});
+
+test("through the local agent, wait says too that a revoked device answered (#515)", async () => {
+  const { ctx, id } = await revokedAnswer();
+  const agent = makeAgent(ctx, { socket: join(ctx.store.dir, "agent.sock"), noQuota: true });
+  await agent.start();
+  try {
+    const started = Date.now();
+    expect(await run(["wait", id, "--timeout", "20s"], ctx)).toBe(1);
+    expect(ctx.errors.join("\n")).toContain("removed since");
+    expect(Date.now() - started).toBeLessThan(10_000);
+  } finally {
+    await agent.stop();
+  }
 });
 
 test("a poll that brings no answer drops a revoked device's undelivered one (#491)", async () => {

@@ -738,7 +738,7 @@ function dropRevoked(st: State, dir: Directory): boolean {
  * when there is an undelivered answer from a device, so a call with nothing to hand out stays
  * offline.
  */
-async function dropRevokedNow(ctx: Ctx) {
+export async function dropRevokedNow(ctx: Ctx) {
   const st = ctx.store.state();
   if (!Object.values(st.answers).some((a) => !a.seen && a.device)) return;
   const s = session(ctx);
@@ -922,17 +922,7 @@ export async function wait(
   const target = opts.id;
   if (target && !state.asked[target])
     throw new UsageError(`${target} is not a decision this machine asked`);
-  const closed = () => {
-    const a = ctx.store.state().asked[target ?? ""];
-    if (a?.revoked)
-      return new UsageError(
-        `${target} was answered from a device removed since, so that answer does not count and no other will come: ask again if you still need it`,
-      );
-    if (a?.settled || a?.answerIn)
-      return new UsageError(
-        `${target} is settled or answered on its own page: no answer will come`,
-      );
-  };
+  const closed = () => closedError(ctx, target);
 
   const report = (found: { answer: Answer; question?: string }) => {
     printAnswer(ctx, found.answer, found.question, opts.json);
@@ -980,6 +970,17 @@ export async function wait(
     const ended = closed();
     if (ended) throw ended;
   }
+}
+
+/** Why no answer to decision `id` will come, for `wait`: settled, answered elsewhere, or revoked. */
+export function closedError(ctx: Ctx, id: string | undefined): UsageError | undefined {
+  const a = id === undefined ? undefined : ctx.store.state().asked[id];
+  if (a?.revoked)
+    return new UsageError(
+      `${id} was answered from a device removed since, so that answer does not count and no other will come: ask again if you still need it`,
+    );
+  if (a?.settled || a?.answerIn)
+    return new UsageError(`${id} is settled or answered on its own page: no answer will come`);
 }
 
 /** Marks a decision waiting on the way into a wait; a failure only costs the devices' label. */
