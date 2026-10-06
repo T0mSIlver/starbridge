@@ -30,9 +30,9 @@ interface Store {
     val recovery: StateFlow<RecoveryUi?>
     val replacing: StateFlow<Replacing>
 
-    /** The URL that starts GitHub sign-in; it ends at starbridge://auth?code=… */
+    /** The URL that starts GitHub sign-in; it ends at a redirect [SignIn.code] reads. */
     fun gitHubSignInUrl(server: String): String
-    /** The starbridge://auth redirect that ends GitHub sign-in. */
+    /** The redirect that ends GitHub sign-in. */
     fun receiveSignIn(redirect: String)
     fun signInWithOwnerToken(server: String, token: String)
 

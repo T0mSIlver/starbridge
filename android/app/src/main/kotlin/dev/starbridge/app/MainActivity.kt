@@ -29,6 +29,7 @@ import dev.starbridge.app.data.Clock
 import dev.starbridge.app.data.Colours
 import dev.starbridge.app.data.Phase
 import dev.starbridge.app.data.Prefs
+import dev.starbridge.app.data.SignIn
 import dev.starbridge.app.data.Store
 import androidx.navigation3.runtime.NavKey
 import dev.starbridge.app.ui.DecisionKey
@@ -119,7 +120,7 @@ class MainActivity : ComponentActivity() {
 
     private fun handle(intent: Intent?) {
         val data = intent?.data
-        if (data?.scheme == "starbridge" && data.host == "auth") {
+        if (data != null && SignIn.code(data.toString()) != null) {
             store.receiveSignIn(data.toString())
             setIntent(Intent(this, MainActivity::class.java))
         }

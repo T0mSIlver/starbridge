@@ -280,6 +280,10 @@ request without the header, or with one the server cannot read, is served.
   scheme. The app keeps a random verifier and sends only its challenge,
   base64url(SHA-256(verifier)). The redirect carries a single-use code, never the session, and
   the app trades code and verifier for the session over HTTPS. Any trade attempt burns the code.
+  The redirect goes to `APP_REDIRECT_URI`: `starbridge://auth` by default, and on starbridge.run
+  the Android App Link `https://starbridge.run/app/auth`, which `/.well-known/assetlinks.json`
+  binds to the app's signing keys. Where the app is missing or unverified, that URL is a page
+  whose "Open Starbridge" button leads to `starbridge://auth?code=<code>`.
 - **Machines** send `Authorization: Bearer <machine token>`, issued when their pairing is
   approved. The server stores a hash of it and drops it when the directory revokes the machine.
 - Pairing requests are unauthenticated and rate-limited per IP.
@@ -291,7 +295,7 @@ request without the header, or with one the server cannot read, is served.
 | Route | Who | What |
 |---|---|---|
 | `GET /auth/github` | anyone | start GitHub sign-in; the app adds `?app=1&challenge=<S256 challenge>` |
-| `GET /auth/github/callback` | anyone | finish it, set the session; for the app, redirect to `starbridge://auth?code=<code>` instead |
+| `GET /auth/github/callback` | anyone | finish it, set the session; for the app, redirect to `<APP_REDIRECT_URI>?code=<code>` instead |
 | `POST /auth/app/session` | the app | `{code, verifier}` → `{session}`; 400 `bad-code` when the code is unknown, used, older than 60 s or the verifier does not match; rate-limited per IP |
 | `POST /auth/owner` | anyone | self-hosted: `{token}` against `OWNER_TOKEN`; sets the session and returns `{session}` |
 | `POST /auth/logout` | device | end the session |

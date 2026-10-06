@@ -167,11 +167,17 @@ provider plugins add providers, not panels.
 ## Sign-in
 
 - The hosted server signs in with GitHub; a self-hosted server with `OWNER_TOKEN`.
-- Android (#34): GitHub redirects to `starbridge://auth` with a single-use code bound to a PKCE S256
-  challenge, which the app trades at `POST /v1/auth/app/session`. Not Android App Links: they bind
-  one domain into the APK, so self-hosted servers could not use them, and a failed verification
-  falls back to the browser silently, leaving the token in its URL. Known gap: a hostile app can
-  start its own sign-in, and if GitHub skips the consent screen it gets a session.
+- Android (#34): GitHub sign-in ends with a redirect carrying a single-use code bound to a PKCE
+  S256 challenge, which the app trades at `POST /v1/auth/app/session`. Known gap: a hostile app
+  can start its own sign-in, and if GitHub skips the consent screen it gets a session.
+- The hosted server redirects to the App Link `https://starbridge.run/app/auth` (#527): Chrome
+  asks "Continue to Starbridge?" before following a `starbridge://` redirect that no tap started,
+  and only the app signed with a key in starbridge.run's `assetlinks.json` receives the link.
+  That file lists the release key, which Play App Signing also uses, and the dev box's debug key,
+  so dogfood builds verify too; that key never leaves the dev box, and a stolen code is useless
+  without the verifier anyway. Where verification failed, the link opens a page with an "Open
+  Starbridge" button to `starbridge://auth`: a tap, so Chrome does not ask. Self-hosted servers
+  keep `starbridge://auth`, since the APK can bind only starbridge.run.
 
 ## Server
 
