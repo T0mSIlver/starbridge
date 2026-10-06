@@ -137,7 +137,7 @@ const TAIL = 12;
 /** The session's name, cut in the middle, and where to open it (DESIGN.md, "Rules"). */
 export function SessionLine({ source, agent }: { source: Source; agent?: string }) {
   // One space per run of white space, as the line would show it: the halves keep theirs (#630).
-  const name = (source.sessionTitle || source.session).replace(/\s+/g, " ").trim();
+  const name = (source.sessionTitle?.trim() || source.session).replace(/\s+/g, " ").trim();
   // A title is words; only a bare session id is set as code (#563).
   const code = source.sessionTitle ? "" : "t-snippet";
   const links = source.links ?? [];
