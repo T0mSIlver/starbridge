@@ -4,6 +4,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   readlinkSync,
   writeFileSync,
@@ -144,6 +145,16 @@ test("setup --yes replaces the dev box's manual installs and uploads a first sna
   expect(readFileSync(join(m.home, ".codex/rules/starbridge.rules"), "utf8")).toContain(
     '"starbridge", ["ask"',
   );
+  // opencode gets the skill and the plugin with the code it imports, in the repository's layout.
+  const oc = join(m.home, ".config/opencode");
+  expect(readFileSync(join(oc, "skills/starbridge/SKILL.md"), "utf8")).toBe(skill);
+  expect(readFileSync(join(oc, "plugins/starbridge.ts"), "utf8")).toContain(
+    'from "../starbridge/mod/opencode/starbridge.ts"',
+  );
+  for (const f of ["mod/opencode/starbridge.ts", "mod/hooks/node.ts", "plugin/hooks/rule.md"])
+    expect(readFileSync(join(oc, "starbridge", f), "utf8")).toBe(
+      readFileSync(join(import.meta.dir, "../..", f), "utf8"),
+    );
 
   const [snap] = await server.opened("quota");
   expect(snap?.providers.map((p) => p.provider)).toEqual(["codex", "zai"]);
@@ -208,6 +219,7 @@ test("status reports the agent, the service and the plugins", async () => {
   expect(out).toContain("starbridge-mod@starbridge: 0.2.0");
   expect(out).toContain("Codex skill: installed");
   expect(out).toContain("Pi package: installed");
+  expect(out).toContain("opencode skill and plugin: installed");
   expect(out).not.toContain("Manual install left");
 });
 
@@ -227,6 +239,8 @@ test("uninstall removes the service and plugins, asks the devices to revoke, kee
   expect(existsSync(join(m.home, ".codex/skills/starbridge"))).toBe(false);
   expect(existsSync(join(m.home, ".codex/rules/starbridge.rules"))).toBe(false);
   expect(m.calls()).toContain("pi remove git:github.com/T0mSIlver/starbridge");
+  expect(readdirSync(join(m.home, ".config/opencode")).sort()).toEqual(["plugins", "skills"]);
+  expect(readdirSync(join(m.home, ".config/opencode/plugins"))).toEqual([]);
   const [d] = await server.opened("decision");
   expect(d?.question).toBe("Revoke devbox? It was uninstalled.");
   expect(existsSync(join(m.ctx.store.dir, "machine.json"))).toBe(true);

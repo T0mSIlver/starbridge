@@ -14,23 +14,15 @@
  * Pi loads it from the repository's Pi package (package.json, `pi`), with jiti; the types below
  * are the part of Pi's `ExtensionAPI` it uses, so the package needs no dependency on Pi.
  */
-import { spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { readFile, stat, writeFile } from "node:fs/promises";
-import { request } from "node:http";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { AgentLoop, HEADERS, socketPath } from "../hooks/agent.ts";
+import { AgentLoop, socketPath } from "../hooks/agent.ts";
+import { permissionHook, runCommand, sleep, socketFetch } from "../hooks/node.ts";
 import { configDir, Poller } from "../hooks/poller.ts";
 import { Switch } from "../hooks/switch.ts";
-import {
-  type AskDetails,
-  authorize,
-  hookInput,
-  LINK,
-  permissionsService,
-  STOP_MS,
-} from "./permissions.ts";
+import { type AskDetails, authorize, hookInput, LINK, permissionsService } from "./permissions.ts";
 
 interface Ctx {
   hasUI: boolean;
@@ -64,8 +56,6 @@ interface PiApi {
 const ANSWERS_ENV = "STARBRIDGE_PI_ANSWERS";
 /** The longest an ask holds the "Answer here" dialogs after its own closed. */
 const DECIDE_MS = 10 * 60_000;
-/** The mod's host aborts a call after 30 s; the loop is built around that limit. */
-const CALL_MS = 30_000;
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -76,100 +66,6 @@ function rule(): string | undefined {
     return undefined;
   }
 }
-
-/** One HTTP call on the agent's unix socket. Rejects when it cannot connect or takes too long. */
-function socketFetch(socket: string, method: string, path: string, body?: unknown) {
-  return new Promise<{ status: number; text: string }>((resolve, reject) => {
-    const payload = body === undefined ? undefined : JSON.stringify(body);
-    const req = request(
-      {
-        socketPath: socket,
-        path,
-        method,
-        headers:
-          payload === undefined ? HEADERS : { ...HEADERS, "content-type": "application/json" },
-        timeout: CALL_MS,
-      },
-      (res) => {
-        let text = "";
-        res.setEncoding("utf8");
-        res.on("data", (d) => {
-          text += d;
-        });
-        res.on("end", () => resolve({ status: res.statusCode ?? 0, text }));
-        res.on("error", reject);
-      },
-    );
-    req.on("timeout", () => req.destroy(new Error(`no answer in ${CALL_MS / 1000} s`)));
-    req.on("error", reject);
-    req.end(payload);
-  });
-}
-
-/** Runs `argv`; never rejects, as the mod's `$.process.run`. */
-function runCommand(argv: string[], timeoutMs: number) {
-  return new Promise<{ exitCode: number | null; stdout: string; stderr: string }>((resolve) => {
-    const [cmd, ...args] = argv;
-    const child = spawn(cmd as string, args, { stdio: ["ignore", "pipe", "pipe"] });
-    let stdout = "";
-    let stderr = "";
-    child.stdout.on("data", (d) => {
-      stdout += d;
-    });
-    child.stderr.on("data", (d) => {
-      stderr += d;
-    });
-    const timer = setTimeout(() => child.kill("SIGKILL"), timeoutMs);
-    child.on("error", (e) => {
-      clearTimeout(timer);
-      resolve({ exitCode: null, stdout, stderr: e.message });
-    });
-    child.on("close", (code) => {
-      clearTimeout(timer);
-      resolve({ exitCode: code, stdout, stderr });
-    });
-  });
-}
-
-/**
- * `starbridge hook permission --agent pi` with `stdin`; resolves to what it printed. An abort
- * sends SIGTERM, which the CLI takes as the keyboard answering.
- */
-function permissionHook(stdin: string, signal: AbortSignal, sessionFile: string | undefined) {
-  return new Promise<string>((resolve) => {
-    const child = spawn("starbridge", ["hook", "permission", "--agent", "pi"], {
-      env: { ...process.env, ...(sessionFile ? { PI_SESSION_FILE: sessionFile } : {}) },
-      stdio: ["pipe", "pipe", "ignore"],
-    });
-    let stdout = "";
-    child.stdout.on("data", (d) => {
-      stdout += d;
-    });
-    // The link stops the CLI when the keyboard answers or it overran; one that ignores SIGTERM
-    // is killed.
-    let kill: ReturnType<typeof setTimeout> | undefined;
-    const stop = () => {
-      child.kill("SIGTERM");
-      kill = setTimeout(() => child.kill("SIGKILL"), STOP_MS);
-      kill.unref();
-    };
-    signal.addEventListener("abort", stop);
-    child.on("error", () => resolve(""));
-    child.on("close", () => {
-      clearTimeout(kill);
-      signal.removeEventListener("abort", stop);
-      resolve(stdout);
-    });
-    child.stdin.on("error", () => {});
-    child.stdin.end(stdin);
-  });
-}
-
-/** A sleep that never keeps Pi from exiting. */
-const sleep = (ms: number) =>
-  new Promise<void>((r) => {
-    setTimeout(r, ms).unref();
-  });
 
 export default function starbridge(pi: PiApi) {
   const text = rule();
@@ -229,7 +125,8 @@ export default function starbridge(pi: PiApi) {
           hookInput(details, ctx.sessionManager.getSessionId(), ctx.cwd),
         );
         return authorize(stdin, {
-          hook: (text, signal) => permissionHook(text, signal, file),
+          hook: (text, signal) =>
+            permissionHook("pi", text, signal, file ? { PI_SESSION_FILE: file } : {}),
           ...(ctx.hasUI
             ? {
                 keyboard: (signal: AbortSignal) =>

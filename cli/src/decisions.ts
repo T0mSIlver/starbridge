@@ -32,6 +32,7 @@ import {
   UsageError,
 } from "./context";
 import { fitPicture, loadPicture, type Picture } from "./images";
+import { OPENCODE_ANSWERS, OPENCODE_SESSION, OPENCODE_TITLE } from "./opencode";
 import { acceptPermissionAnswer } from "./permissions";
 import { PI_ANSWERS, piSessionTitle } from "./pi";
 
@@ -44,12 +45,12 @@ export interface AskInput {
   default?: string;
   /** Post it already `waiting`: the agent has nothing else to do. */
   waiting?: boolean;
-  /** The coding agent asking; default: Claude Code, Codex or Pi when it runs the command. */
+  /** The coding agent asking; default: Claude Code, Codex, Pi or opencode when it runs the command. */
   agent?: Agent;
   /** Where a Codex session runs: its `CODEX_HOME` and the `codex` that answers reach it with. */
   codex?: CodexSession;
-  /** A Pi session whose Starbridge extension submits answers into it. */
-  piAnswers?: boolean;
+  /** A Pi or opencode session whose Starbridge extension or plugin submits answers into it. */
+  extensionAnswers?: boolean;
   project?: string;
   session?: string;
   sessionTitle?: string;
@@ -98,26 +99,36 @@ export function resolveSource(
       ? env.CODEX_THREAD_ID
       : agent === "pi"
         ? env.PI_SESSION_ID
-        : env.CLAUDE_CODE_SESSION_ID) ??
+        : agent === "opencode"
+          ? env[OPENCODE_SESSION]
+          : env.CLAUDE_CODE_SESSION_ID) ??
     "";
   const codex = agent === "codex" ? (input.codex ?? codexSession(env)) : undefined;
-  const piAnswers =
-    agent === "pi" && (input.piAnswers ?? (!!session && env[PI_ANSWERS] === session));
+  const answersEnv = agent === "pi" ? PI_ANSWERS : agent === "opencode" ? OPENCODE_ANSWERS : "";
+  const extensionAnswers =
+    !!answersEnv && (input.extensionAnswers ?? (!!session && env[answersEnv] === session));
   const claude =
     session &&
     agent !== "codex" &&
     agent !== "pi" &&
+    agent !== "opencode" &&
     (input.sessionTitle === undefined || input.sessionLinks === undefined)
       ? claudeSession(env, session)
       : undefined;
   const title =
-    input.sessionTitle ?? (agent === "pi" ? piSessionTitle(env) : undefined) ?? claude?.title;
+    input.sessionTitle ??
+    (agent === "pi"
+      ? piSessionTitle(env)
+      : agent === "opencode"
+        ? env[OPENCODE_TITLE]?.slice(0, 200) || undefined
+        : undefined) ??
+    claude?.title;
   const at = (path: string) => resolve(cwd, path);
   return {
     ...input,
     ...(agent ? { agent } : {}),
     ...(codex ? { codex } : {}),
-    ...(piAnswers ? { piAnswers } : {}),
+    ...(extensionAnswers ? { extensionAnswers } : {}),
     project: input.project ?? basename(cwd),
     session,
     ...(title !== undefined ? { sessionTitle: title } : {}),
@@ -174,14 +185,16 @@ export function buildDecision(input: AskInput, ctx: Ctx, machine: string, to: st
 }
 
 /**
- * `--agent`, else Claude Code, Codex or Pi when it runs this command: Claude Code sets
- * CLAUDECODE=1, Codex gives every command its session id in CODEX_THREAD_ID, Pi in PI_SESSION_ID.
+ * `--agent`, else Claude Code, Codex, Pi or opencode when it runs this command: Claude Code sets
+ * CLAUDECODE=1, Codex gives every command its session id in CODEX_THREAD_ID, Pi in PI_SESSION_ID,
+ * and the Starbridge opencode plugin in STARBRIDGE_OPENCODE_SESSION.
  */
 function agentOf(input: AskInput, env: Ctx["env"]): { agent?: Agent } {
   if (input.agent !== undefined) return { agent: input.agent };
   if (env.CLAUDECODE === "1") return { agent: "claude-code" };
   if (env.CODEX_THREAD_ID) return { agent: "codex" };
-  return env.PI_SESSION_ID ? { agent: "pi" } : {};
+  if (env.PI_SESSION_ID) return { agent: "pi" };
+  return env[OPENCODE_SESSION] ? { agent: "opencode" } : {};
 }
 
 function checked(decision: unknown): Decision {
@@ -483,19 +496,23 @@ export function behindBy(st: State, dir: Directory, entries: unknown[]): string 
 }
 
 /**
- * How an answer comes back into the session that asked: as a prompt, which Claude Code's mod and
- * the Pi extension submit and the agent queues into a Codex session it can reach, or only
- * through `wait`.
+ * How an answer comes back into the session that asked: as a prompt, which Claude Code's mod,
+ * the Pi extension and the opencode plugin submit and the agent queues into a Codex session it
+ * can reach, or only through `wait`.
  */
 export type Delivery = "prompt" | "wait";
 
-/** With no agent running, Codex gets nothing back; the mod and the Pi extension poll by themselves. */
+/**
+ * With no agent running, Codex gets nothing back; the mod, the Pi extension and the opencode
+ * plugin poll by themselves.
+ */
 export function delivery(
-  input: Pick<AskInput, "agent" | "piAnswers">,
+  input: Pick<AskInput, "agent" | "extensionAnswers">,
   codexReachable: boolean,
 ): Delivery {
   if (input.agent === "claude-code") return "prompt";
-  if (input.agent === "pi") return input.piAnswers ? "prompt" : "wait";
+  if (input.agent === "pi" || input.agent === "opencode")
+    return input.extensionAnswers ? "prompt" : "wait";
   return input.agent === "codex" && codexReachable ? "prompt" : "wait";
 }
 

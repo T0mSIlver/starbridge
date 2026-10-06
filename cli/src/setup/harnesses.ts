@@ -1,12 +1,15 @@
 /**
  * Setup's steps for the agents other than Claude Code (#239): the `starbridge` skill copied into
- * Codex's skills folder, and the Starbridge Pi package (the skill, the rules and the extension
- * that puts answers into the session). The skill ships inside this binary, so setup needs no
- * download and installs the version that matches the CLI.
+ * Codex's skills folder, the Starbridge Pi package (the skill, the rules and the extension that
+ * puts answers into the session), and the skill and plugin copied into opencode's config folder
+ * (#300). The skill and the opencode plugin ship inside this binary, so setup needs no download
+ * and installs the version that matches the CLI.
  */
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import rule from "../../../plugin/hooks/rule.md" with { type: "text" };
 import skill from "../../../plugin/skills/starbridge/SKILL.md" with { type: "text" };
+import plugin from "./opencode-files.js";
 import { failure, run, type Sys, which } from "./sys";
 
 /** What the Codex skill steps need: the agent has no prompt. */
@@ -128,4 +131,78 @@ export async function installPiPackage(sys: Sys) {
 export async function removePiPackage(sys: Sys, source: string) {
   const r = await pi(sys, "remove", source);
   if (r?.code !== 0) throw new Error(`pi remove ${source}: ${piFailure(r)}`);
+}
+
+export function hasOpencode(sys: Sys): boolean {
+  return which(sys.ctx.env, "opencode") !== undefined;
+}
+
+/** opencode's global config folder, which it loads skills and plugins from. */
+export function opencodeDir(sys: Home): string {
+  return join(sys.ctx.env.XDG_CONFIG_HOME || join(sys.home, ".config"), "opencode");
+}
+
+/** The file opencode loads as a plugin; the code sits in `starbridge/`, as in this repository. */
+const OPENCODE_ENTRY = `// Written by starbridge setup: answers and permission prompts through Starbridge.
+export { default } from "../starbridge/mod/opencode/starbridge.ts";
+`;
+
+/** Every file setup writes into opencode's config folder, by path inside it. */
+function opencodeFiles(): Record<string, string> {
+  return {
+    "skills/starbridge/SKILL.md": skill,
+    "plugins/starbridge.ts": OPENCODE_ENTRY,
+    ...Object.fromEntries(
+      Object.entries(plugin).map(([path, body]) => [`starbridge/${path}`, body]),
+    ),
+    "starbridge/plugin/hooks/rule.md": rule,
+  };
+}
+
+/** Whether opencode has the skill and plugin, and whether they are this CLI's. */
+export function opencodeState(sys: Home): "missing" | "current" | "outdated" {
+  const dir = opencodeDir(sys);
+  const same = Object.entries(opencodeFiles()).map(([path, want]) => {
+    try {
+      return readFileSync(join(dir, path), "utf8") === want;
+    } catch {
+      return undefined;
+    }
+  });
+  if (same.every((s) => s === undefined)) return "missing";
+  return same.every((s) => s === true) ? "current" : "outdated";
+}
+
+export function installOpencode(sys: Home) {
+  const dir = opencodeDir(sys);
+  for (const [path, body] of Object.entries(opencodeFiles())) {
+    mkdirSync(dirname(join(dir, path)), { recursive: true });
+    writeFileSync(join(dir, path), body);
+  }
+}
+
+/** Removes what setup wrote, only the files that are Starbridge's. Returns what it removed. */
+export function removeOpencode(sys: Home): string[] {
+  const dir = opencodeDir(sys);
+  const done: string[] = [];
+  const read = (path: string) => {
+    try {
+      return readFileSync(join(dir, path), "utf8");
+    } catch {
+      return undefined;
+    }
+  };
+  if (/^name: starbridge$/m.test(read("skills/starbridge/SKILL.md") ?? "")) {
+    rmSync(join(dir, "skills/starbridge"), { recursive: true, force: true });
+    done.push(join(dir, "skills/starbridge"));
+  }
+  if (read("plugins/starbridge.ts") === OPENCODE_ENTRY) {
+    rmSync(join(dir, "plugins/starbridge.ts"), { force: true });
+    done.push(join(dir, "plugins/starbridge.ts"));
+  }
+  if (read("starbridge/mod/opencode/starbridge.ts") !== undefined) {
+    rmSync(join(dir, "starbridge"), { recursive: true, force: true });
+    done.push(join(dir, "starbridge"));
+  }
+  return done;
 }
