@@ -1824,6 +1824,18 @@ so the mod is the first path.
   answered on another device."). The machine keeps the notice due until the server takes it,
   skips it while behind on the directory, and stops at `already-settled` (withdrawn meanwhile).
   Older clients ignore the two new fields.
+- 2026-10-06. Landing page after the owner's review (#448). Its product shots use the Play Store
+  screenshots' neutral data (machines workstation, build server and laptop; projects billing-api
+  and web-app): `lib/sample.ts` on the web, `Showcase.kt` for the Roborazzi shots `inbox-landing`
+  and `sheet-pick`, and the round 4 mockup's lock screen with the same items. The install
+  section's inline command is set in Google Sans Code on a chip, as in the docs; the browser's
+  default monospace left a wide gap before "setup". Self-host leaves the top bar for the footer
+  and the docs, since the hosted instance is the one to start with.
+- 2026-10-06. The landing page's hero (#448, the owner's pick from two rounds of options): "Know
+  the moment your agent is stuck", then "When a coding agent stops for a question or a
+  permission, your phone tells you. Answer with one tap and it gets back to work." It sells the
+  pain the owner named: you don't notice that an agent is blocked. The shots below it still show
+  the web app beside the phone, so the page keeps saying both clients do the same.
 
 ## Encryption, with existing libraries
 

@@ -1,6 +1,6 @@
 # Starbridge
 
-Your agents ask. You answer from anywhere.
+Know the moment your agent is stuck.
 
 When a coding agent needs a decision from you, Starbridge puts the question on your phone and in
 your browser. You answer with one tap, and the waiting session carries on with your answer as its
