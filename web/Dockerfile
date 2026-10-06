@@ -12,8 +12,8 @@ COPY web/package.json web/
 RUN pnpm install --frozen-lockfile --filter @starbridge/web...
 COPY packages/protocol packages/protocol
 COPY web web
-# Served at /install.sh (web/src/app/install.sh/route.ts).
-COPY cli/install.sh cli/install.sh
+# Served at /install.sh and /install.ps1 (web/src/app/install.*/route.ts).
+COPY cli/install.sh cli/install.ps1 cli/
 # Rendered under /docs at build time (web/src/lib/docs.ts).
 COPY docs docs
 COPY cli/README.md cli/README.md

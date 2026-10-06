@@ -20,6 +20,8 @@ only ciphertext. Use the free server at starbridge.run, or [host your own](../se
    curl -fsSL https://starbridge.run/install.sh | sh
    ```
 
+   On Windows, in PowerShell: `irm https://starbridge.run/install.ps1 | iex`.
+
    The script then runs `starbridge setup`, which pairs the machine. Open the link it prints in a
    browser where you are signed in, or type the code it prints in Settings → Devices → Add a
    device, on your phone or in the web app. Setup also installs Starbridge in each agent it finds
