@@ -1655,7 +1655,6 @@ goes in git.
   stands for a reply the phone never got. OkHttp (5.5, the default
   `retryOnConnectionFailure`) also sends a POST again when the connection
   drops before the reply starts, so a server that committed the first one
-  sees it twice; the directory refuses the second, since its entry no
-  longer extends the chain. Only a connection that drops once the reply's
+  receives it twice. Only a connection that drops once the reply's
   headers are in reaches the app as a failure, and that is what
   `RecoveryRetryTest` scripts (MockWebServer's `onResponseBody`).
