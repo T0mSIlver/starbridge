@@ -20,6 +20,23 @@ const load = () => import("@/lib/device");
 /** Pollers read while the page is visible, and skip their turn while the server is away (#332). */
 const polling = () => document.visibilityState === "visible" && !backingOff();
 
+/**
+ * A poller's read that skips its turn while the last one is still running, so requests that hang
+ * rather than fail (a captive portal, a dead route) don't pile up before the backoff starts.
+ */
+function single(read: () => Promise<unknown>): () => void {
+  let running = false;
+  return () => {
+    if (running) return;
+    running = true;
+    read()
+      .catch(() => {})
+      .finally(() => {
+        running = false;
+      });
+  };
+}
+
 export type Store = {
   boot: Boot | { state: "loading" } | { state: "error"; error: string };
   inbox: Inbox;
@@ -186,16 +203,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (!ctx) return;
     const started = Date.now();
     let soon: ReturnType<typeof setTimeout> | undefined;
+    const read = single(() =>
+      fetchQuotas().then((next) => {
+        clearTimeout(soon);
+        if (next?.cards.length === 0 && Date.now() - started < QUOTA_JOIN_MS)
+          soon = setTimeout(tick, QUOTA_JOIN_POLL_MS);
+      }),
+    );
     const tick = () => {
       if (backingOff()) return;
-      if (document.visibilityState === "visible" || settingsRef.current.notify.length > 0)
-        fetchQuotas()
-          .then((next) => {
-            clearTimeout(soon);
-            if (next?.cards.length === 0 && Date.now() - started < QUOTA_JOIN_MS)
-              soon = setTimeout(tick, QUOTA_JOIN_POLL_MS);
-          })
-          .catch(() => {});
+      if (document.visibilityState === "visible" || settingsRef.current.notify.length > 0) read();
     };
     tick();
     const timer = setInterval(tick, QUOTA_POLL_MS);
@@ -215,8 +232,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const runLive = !!runs?.items.some((i) => runState(i.run, Date.now()) === "running");
   useEffect(() => {
     if (!ctx) return;
+    const read = single(refreshRuns);
     const tick = () => {
-      if (polling()) refreshRuns().catch(() => {});
+      if (polling()) read();
     };
     tick();
     const timer = setInterval(tick, runLive ? LIVE_RUNS_POLL_MS : RUNS_POLL_MS);
@@ -230,10 +248,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // Poll while the page is visible, and refresh as soon as the service worker sees a push.
   useEffect(() => {
     if (!ctx) return;
+    const readInbox = single(refreshInbox);
+    const readPrompts = single(refreshPrompts);
     const tick = () => {
       if (!polling()) return;
-      refreshInbox().catch(() => {});
-      refreshPrompts().catch(() => {});
+      readInbox();
+      readPrompts();
     };
     const timer = setInterval(tick, POLL_MS);
     refreshPrompts().catch(() => {});
@@ -264,8 +284,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const busy = prompts.length > 0;
   useEffect(() => {
     if (!ctx || !busy) return;
+    const read = single(refreshPrompts);
     const timer = setInterval(() => {
-      if (polling()) refreshPrompts().catch(() => {});
+      if (polling()) read();
     }, PROMPT_POLL_MS);
     return () => clearInterval(timer);
   }, [ctx, busy, refreshPrompts]);
