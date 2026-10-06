@@ -426,14 +426,11 @@ test("permissions on after installing pi-permission-system lets Starbridge's own
   ctx.env.HOME = mkdtempSync(join(tmpdir(), "starbridge-pi-home-"));
   // Installed after setup, as setup's hint says: setup had no config to add the rules to.
   mkdirSync(join(ctx.env.HOME, ".pi/agent/extensions/pi-permission-system"), { recursive: true });
-  const pkg = join(ctx.env.HOME, ".pi/agent/npm/node_modules/@gotgenes/pi-permission-system");
-  mkdirSync(pkg, { recursive: true });
-  writeFileSync(join(pkg, "package.json"), JSON.stringify({ version: "40.0.0" }));
   const yes = { confirm: async () => true, text: async (_q: string, d: string) => d };
   expect(await configCommand(ctx, ["permissions", "on"], yes)).toBe(0);
   const config = JSON.parse(readFileSync(piPermissionConfig(ctx.env), "utf8"));
   expect(config.authorizerChain).toEqual(["starbridge"]);
-  expect(Object.keys(config.permission)).toEqual(["bash", "skill", "read"]);
+  expect(Object.keys(config.permission)).toEqual(["skill", "read"]);
   expect(piAllow(ctx.env).state).toBe("allowed");
 });
 

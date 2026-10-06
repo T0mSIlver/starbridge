@@ -254,25 +254,20 @@ test("status says at once that the owner removed this machine, and how to pair i
 test("uninstall removes the service and plugins, asks the devices to revoke, keeps the keys", async () => {
   const m = await machine();
   await startAgent(m.ctx);
-  // pi-permission-system with the owner's own policy, and the link `config permissions on` adds.
+  // pi-permission-system with the owner's own policy, the link `config permissions on` adds,
+  // and a bash pattern setup added before #488.
   const pps = join(m.home, ".pi/agent/extensions/pi-permission-system/config.json");
   mkdirSync(dirname(pps), { recursive: true });
-  const own = { permission: { bash: { "*": "ask" } }, authorizerChain: ["judge", "starbridge"] };
-  writeFileSync(pps, JSON.stringify(own));
-  // A version that gates each command of a chain on its own, so the bash patterns are safe (#488).
-  const pkg = join(m.home, ".pi/agent/npm/node_modules/@gotgenes/pi-permission-system");
-  mkdirSync(pkg, { recursive: true });
-  writeFileSync(join(pkg, "package.json"), JSON.stringify({ version: "40.0.0" }));
+  const bash = { "*": "ask", "starbridge ask *": "allow" };
+  writeFileSync(
+    pps,
+    JSON.stringify({ permission: { bash }, authorizerChain: ["judge", "starbridge"] }),
+  );
   await setup(m.sys, { yes: true, readyTimeoutMs: 2_000 });
-  // The starbridge commands run without a prompt, after the owner's rules: the last match wins.
-  expect(JSON.parse(readFileSync(pps, "utf8")).permission.bash).toEqual({
-    "*": "ask",
-    "starbridge ask *": "allow",
-    "starbridge waiting *": "allow",
-    "starbridge working *": "allow",
-    "starbridge wait *": "allow",
-    "starbridge settle *": "allow",
-  });
+  // The link lets the starbridge commands through; no bash pattern does (#488).
+  const permission = JSON.parse(readFileSync(pps, "utf8")).permission;
+  expect(permission.bash).toEqual({ "*": "ask" });
+  expect(permission.skill).toEqual({ starbridge: "allow" });
   m.ctx.lines.length = 0;
   expect(await uninstall(m.sys, {})).toBe(0);
   expect(existsSync(join(m.units, "starbridge-agent.service"))).toBe(false);

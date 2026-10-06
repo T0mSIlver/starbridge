@@ -32,8 +32,11 @@ export interface AskDetails {
   };
   /** The gate's surface, such as `read` or `external_directory_read`, when it overrides it. */
   surface?: string | null;
-  /** What the gate checked; its surface is the one pi-permission-system caps grants on. */
-  accessIntent?: { surface?: string };
+  /**
+   * What the gate checked; its surface is the one pi-permission-system caps grants on. For a
+   * bash ask, `askingUnits` lists each command of the line that asked.
+   */
+  accessIntent?: { surface?: string; askingUnits?: { command?: string }[] };
 }
 
 /** pi-permission-system's `AuthorizerVerdict`, which is the CLI's. */
@@ -75,14 +78,70 @@ export function keyboardOnly(details: AskDetails): boolean {
   );
 }
 
+/** The commands the link allows without asking anyone: the ones the skill tells the agent to run. */
+const OWN = new Set(["ask", "waiting", "working", "wait", "settle"]);
+
 /**
- * The command the call runs. pi-permission-system gates each command of a chain on its own and
- * puts the one that asked in `command`, the whole line in the "full command" evidence; an allow
- * runs the whole line, so the devices must show it.
+ * Whether `command` runs one starbridge command of OWN and nothing else (#488): it starts with
+ * `starbridge <subcommand>`, and outside quotes has no separator, pipe, redirection, subshell,
+ * expansion, escape or line break other than a backslash that joins two lines, as the skill's
+ * examples do. Inside double quotes `$` and backquotes still expand, so they count too. Anything
+ * it is unsure of goes to the owner, as any other command does.
+ */
+export function ownCommand(command: string): boolean {
+  const head = /^starbridge ([a-z]+)(?=$|[ \t])/.exec(command);
+  if (!head?.[1] || !OWN.has(head[1])) return false;
+  let quote: "'" | '"' | undefined;
+  for (let i = head[0].length; i < command.length; i++) {
+    const c = command[i] as string;
+    if (quote === "'") {
+      if (c === "'") quote = undefined;
+    } else if (quote === '"') {
+      if (c === '"') quote = undefined;
+      else if (c === "$" || c === "`") return false;
+      else if (c === "\\") i++;
+    } else if (c === "'" || c === '"') quote = c;
+    else if (c === "\\" && command[i + 1] === "\n") i++;
+    else if (!/[A-Za-z0-9 \t_\-.,:=+/@%^~*?[\]]/.test(c)) return false;
+  }
+  return quote === undefined;
+}
+
+/**
+ * The command line the call runs. pi-permission-system gates each command of a line on its own
+ * and puts the one that asked in `command`, the line in the "full command" evidence when they
+ * differ; an allow runs the whole line, so this is what the devices show and what ownAsk checks.
+ * Without the evidence, as for a shell tool under another name, the commands that asked.
  */
 export function fullCommand(details: AskDetails): string | undefined {
-  const full = details.payload?.evidence?.find((e) => e.label === "full command")?.text;
+  const line = typedLine(details);
+  if (line !== undefined) return line;
+  const units = details.accessIntent?.askingUnits?.map((u) => u.command ?? "") ?? [];
+  return units.length > 1 ? units.join("\n") : details.command;
+}
+
+/**
+ * The line as typed, from an ask that carries its evidence: the "full command", or `command`
+ * when there is none, since the gate adds it whenever they differ.
+ */
+function typedLine(details: AskDetails): string | undefined {
+  const evidence = details.payload?.evidence;
+  if (!Array.isArray(evidence)) return undefined;
+  const full = evidence.find((e) => e.label === "full command")?.text;
   return typeof full === "string" && full.length > 0 ? full : details.command;
+}
+
+/**
+ * Whether the link allows this ask itself: Pi's bash tool running an ownCommand. Bash allow
+ * rules cannot do it: pi-permission-system matches each command with its `VAR=…` prefix taken
+ * off, and before 9.0.1 matched the whole line. Only a pi-permission-system whose asks carry
+ * their evidence says when `command` is part of a line; with an older one the owner decides.
+ */
+export function ownAsk(details: AskDetails): boolean {
+  const line = typedLine(details);
+  return (
+    details.toolName === "bash" && line !== undefined && !keyboardOnly(details) && ownCommand(line)
+  );
 }
 
 /** The hook input `starbridge hook permission` reads, in Claude Code's shape. */
