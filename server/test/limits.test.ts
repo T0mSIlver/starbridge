@@ -426,10 +426,11 @@ test("the GitHub callback is rate-limited per address", async () => {
     },
   });
   const statuses = [];
-  for (let i = 0; i < 21; i++)
+  const [n] = DEFAULT_LIMITS.githubCallbacks;
+  for (let i = 0; i <= n; i++)
     statuses.push((await s.call("GET", "/v1/auth/github/callback?code=x&state=y")).status);
-  expect(statuses.slice(0, 20).every((st) => st === 400)).toBe(true);
-  expect(statuses[20]).toBe(429);
+  expect(statuses.slice(0, n).every((st) => st === 400)).toBe(true);
+  expect(statuses[n]).toBe(429);
 });
 
 test("a short window's sweep leaves a longer window's count alone", () => {

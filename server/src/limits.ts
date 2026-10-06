@@ -62,19 +62,25 @@ export const DEFAULT_LIMITS = {
 
   /** Sessions per account; signing in past this ends the oldest, unpaired ones first. */
   sessions: 50,
-  /** GitHub sign-ins finished per address. */
-  githubCallbacks: [20, MINUTE] as RateWindow,
+  /**
+   * GitHub sign-ins finished per address. An office or a carrier's NAT shares one IPv4 address,
+   * and a launch brings many people at once; one a second is far below what the server held in
+   * the load test (#619).
+   */
+  githubCallbacks: [60, MINUTE] as RateWindow,
 
   /**
-   * Pairings stored on the whole server, about 4 KB each: the disk bound. Filling it takes a
-   * thousand addresses at pairingsPerClient.
+   * Pairings stored on the whole server, about 4 KB each: the disk bound. Filling it takes 400
+   * addresses at pairingsPerClient.
    */
   pendingPairings: 20_000,
   /**
    * Unapproved pairings per address, an IPv6 client counting as its /48. Approved ones do not
-   * count, so an office behind one NAT pairs as many members as it likes, 20 waiting at a time.
+   * count, so an office behind one NAT pairs as many members as it likes, 50 waiting at a time.
    */
-  pairingsPerClient: 20,
+  pairingsPerClient: 50,
+  /** Pairing requests per address: each person's setup posts one per machine or page (#619). */
+  pairingPosts: [30, MINUTE] as RateWindow,
 
   /** Push subscription writes per account. */
   pushSubscribes: [30, MINUTE] as RateWindow,

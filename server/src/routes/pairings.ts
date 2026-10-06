@@ -99,7 +99,7 @@ function load(c: { var: Env["Variables"] }, rendezvous: string): Pairing {
 }
 
 pairingRoutes.post("/pairings", async (c) => {
-  rateLimit(c, `pair:${ipKey(c)}`, [10, 60_000]);
+  rateLimit(c, `pair:${ipKey(c)}`, c.var.config.limits.pairingPosts);
   const { request, claimHash: claim } = await json(
     c,
     z.object({ request: Bounded, claimHash: B64.length(43) }),
