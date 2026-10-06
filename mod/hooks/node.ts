@@ -4,16 +4,32 @@
  * never keep the harness from exiting.
  */
 import { spawn } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { request } from "node:http";
 import { HEADERS, isPortFile, PROOF_HEADER, portTarget, signCall } from "./agent.ts";
+import { configDir } from "./poller.ts";
 
 /**
- * On Windows `starbridge` may be npm's `starbridge.cmd`, which only a shell starts, and Node
- * passes the arguments to cmd.exe unquoted: anything but plain words and ids is refused.
+ * On Windows a bare `starbridge` may be npm's `starbridge.cmd`, which only a shell starts, and
+ * Node passes the arguments to cmd.exe unquoted: anything but plain words and ids is refused. A
+ * path, as setup records, starts without one.
  */
-const shell = process.platform === "win32";
-const plain = (args: string[]) => !shell || args.every((a) => /^[\w.:@/=-]+$/.test(a));
+const viaShell = (cmd: string) => process.platform === "win32" && !/[\\/]/.test(cmd);
+const plain = (cmd: string, args: string[]) =>
+  !viaShell(cmd) || args.every((a) => /^[\w.:@/=-]+$/.test(a));
+
+/**
+ * The CLI to start: the path setup recorded in the config folder, since an agent's PATH may lack
+ * the install folder (#612), while that binary exists; else `starbridge` on the PATH.
+ */
+export function cli(env: Record<string, string | undefined> = process.env): string {
+  try {
+    const recorded = readFileSync(`${configDir(env)}/cli-path`, "utf8").trim();
+    // A binary removed since setup recorded it: the PATH may still hold another.
+    if (recorded && existsSync(recorded)) return recorded;
+  } catch {}
+  return "starbridge";
+}
 
 /** The mod's host aborts a call after 30 s; the loop is built around that limit. */
 const CALL_MS = 30_000;
@@ -78,7 +94,8 @@ export async function socketFetch(socket: string, method: string, path: string, 
 export function runCommand(argv: string[], timeoutMs: number) {
   return new Promise<{ exitCode: number | null; stdout: string; stderr: string }>((resolve) => {
     const [cmd, ...args] = argv;
-    if (!plain(argv))
+    const shell = viaShell(cmd as string);
+    if (!plain(cmd as string, args))
       return resolve({ exitCode: null, stdout: "", stderr: "an argument cmd.exe cannot carry" });
     const child = spawn(cmd as string, args, { stdio: ["ignore", "pipe", "pipe"], shell });
     let stdout = "";
@@ -122,8 +139,10 @@ export function hookCommand(
   env: Record<string, string> = {},
 ) {
   return new Promise<string>((resolve) => {
-    if (!plain(args)) return resolve("");
-    const child = spawn("starbridge", ["hook", ...args], {
+    const command = cli({ ...process.env, ...env });
+    const shell = viaShell(command);
+    if (!plain(command, args)) return resolve("");
+    const child = spawn(command, ["hook", ...args], {
       env: { ...process.env, ...env },
       stdio: ["pipe", "pipe", "ignore"],
       shell,

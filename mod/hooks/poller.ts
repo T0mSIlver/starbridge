@@ -95,6 +95,7 @@ export class Poller {
   /** The session id this poller last held the lease under; a `/clear` changes the id. */
   private leasedAs: string | undefined;
   private readonly leasePath: string;
+  private readonly cliPath: string;
   private readonly statePath: string;
   /** Resolves when the loop has ended. */
   readonly done: Promise<void>;
@@ -102,7 +103,8 @@ export class Poller {
   constructor(
     private readonly host: Host,
     dir: string,
-    private readonly command = "starbridge",
+    /** The CLI; by default the path setup recorded in `dir`, else `starbridge` on the PATH (#612). */
+    private readonly command?: string,
     private readonly t: Timing = TIMING,
     /**
      * Lines submitted but not yet confirmed, so a retried confirm submits nothing twice; shared
@@ -111,6 +113,7 @@ export class Poller {
     private readonly unconfirmed = new Set<string>(),
   ) {
     this.leasePath = `${dir}/mod-poller.json`;
+    this.cliPath = `${dir}/cli-path`;
     this.statePath = `${dir}/state.json`;
     this.done = this.loop();
   }
@@ -122,6 +125,16 @@ export class Poller {
     const lease = await this.readLease();
     if (lease && (lease.session === me || lease.session === this.leasedAs))
       await this.host.write(this.leasePath, JSON.stringify({ ...lease, until: 0 }));
+  }
+
+  private async cli(): Promise<string> {
+    if (this.command) return this.command;
+    try {
+      const recorded = (await this.host.read(this.cliPath)).trim();
+      // A binary removed since setup recorded it: the PATH may still hold another.
+      if (recorded && (await this.host.mtime(recorded)) !== undefined) return recorded;
+    } catch {}
+    return "starbridge";
   }
 
   private async loop() {
@@ -164,7 +177,7 @@ export class Poller {
    */
   private async answers(me: string, extra: string[]): Promise<number | undefined> {
     const timeoutMs = (this.t.waitSeconds + 30) * 1000;
-    const base = [this.command, "answers", "--session", me];
+    const base = [await this.cli(), "answers", "--session", me];
     const r = await this.host.run([...base, ...extra], timeoutMs);
     if (r.exitCode !== 0) {
       await this.fail(firstLine(r.stderr) || `exit ${r.exitCode}`);
