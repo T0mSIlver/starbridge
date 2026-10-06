@@ -289,7 +289,9 @@ provider plugins add providers, not panels.
 
 - FCM goes through the relay, since its credentials belong to the app's Firebase project. Web Push
   goes through the relay only when a server has no VAPID keys; UnifiedPush always goes direct. The
-  relay is open, rate-limited per IP, and pushes only ciphertext or ids. A push carries the
+  relay is open, rate-limited per IP and in all (600 a minute in Caddy; 16 Web Pushes in flight
+  in the server, 4 per address), so nobody can aim it at a host or burn the VAPID key (#577). It
+  pushes only ciphertext or ids. A push carries the
   device's ciphertext when it fits FCM's 4 KB, else the item id.
 - Quota snapshots and runs skip Web Push: browsers drop subscriptions whose pushes show no
   notification (Firefox after 16). The web page polls them instead.
@@ -354,6 +356,11 @@ provider plugins add providers, not panels.
   static musl build where the glibc one would not start. Only the repository is pinned, since
   CodexBar ships almost daily (#530): the tarball must match the `.sha256` of the same release,
   as Homebrew checks it, and `starbridge update` moves that install to the latest release too.
+  The latest version comes from where `releases/latest` redirects, not GitHub's API, which allows
+  60 unauthenticated requests an hour per address, few behind a shared NAT on launch day; the
+  download says its size and how far it got every 5 s, since the Linux tarball is 170 MB (#618).
+  `update` goes on to CodexBar when its own download fails, offline say, but not when a release
+  does not check out (#617).
   `update --codexbar <version>` installs one release, for when the latest breaks; a broken
   CodexBar already shows as each provider's quota error, so there is no other rollback. A daily
   workflow installs the latest release and reads its output without credentials, and opens an
@@ -416,7 +423,12 @@ Where nothing can deliver a prompt, the agent runs `starbridge wait <id> --timeo
 ending its turn. `ask` prints which of the two applies (#203). `wait <id>` marks the decision
 waiting, which notifies the owner once more; `wait --no-mark` collects the answer to a question
 that blocks nothing yet, such as one for tomorrow, without that (#603). A `wait` without an id, run in an
-agent's session, takes only that session's answers (#324).
+agent's session, takes only that session's answers (#324). `ask` promises a prompt in Claude Code
+only when that session's mod called the local agent within the last 45 s (#537); after `/clear` the mod's
+hello under the new id names the old one (`replaces`), which then no longer counts. An installed plugin is no proof,
+since a session started before it, or one whose mod failed to load, has none; without an agent,
+the poller's lease says only that some session runs a mod. When unsure, `ask` prints the `wait`
+line, the safe side: at worst a prompt repeats an answer the agent already read.
 
 | Harness | Delivery |
 |---|---|
@@ -758,7 +770,9 @@ Tokens, type and components: `DESIGN.md`.
 
 - **Stack** (`deploy/`): Docker Compose with Caddy on the host network, so rate limits see real
   client addresses. Caddy keeps connections to the server open (`keepalive 25s`, below the
-  server's 30 s idle close) so TIME-WAIT sockets don't use up ports (#376). Caddy compresses every
+  server's 30 s idle close) so TIME-WAIT sockets don't use up ports (#376). A client has 10 s for
+  its TLS handshake and its HTTP/1.1 request headers, since every open connection costs Caddy
+  memory, the VPS's first limit (#587). Caddy compresses every
   response and the web app none: Next's gzip ran on its one thread and filled it near 18 landing
   page visitors a second (#593). Nightly SQLite backups, kept 14 days.
 - **Capacity** (#301). A load test of the production stack on two cores held 2000 simulated users

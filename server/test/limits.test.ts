@@ -457,7 +457,7 @@ test("the GitHub callback is rate-limited per address", async () => {
   const statuses = [];
   for (let i = 0; i < 21; i++)
     statuses.push((await s.call("GET", "/v1/auth/github/callback?code=x&state=y")).status);
-  expect(statuses.slice(0, 20).every((st) => st === 400)).toBe(true);
+  expect(statuses.slice(0, 20).every((st) => st === 302)).toBe(true);
   expect(statuses[20]).toBe(429);
 });
 

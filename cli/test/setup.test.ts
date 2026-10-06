@@ -378,10 +378,14 @@ function fakeCodexbarReleases(latest: string, sums: (v: string, sha: string) => 
   };
   const server = Bun.serve({
     port: 0,
-    fetch(req) {
+    fetch(req): Response {
       const path = new URL(req.url).pathname;
-      if (path === "/api/latest") return Response.json({ tag_name: `v${state.latest}` });
-      const m = /^\/dl\/v([^/]+)\/CodexBarCLI-v[^/]+-linux-x86_64\.tar\.gz(\.sha256)?$/.exec(path);
+      if (path === "/rel/latest")
+        return Response.redirect(`${server.url.href}rel/tag/v${state.latest}`, 302);
+      const m =
+        /^\/rel\/download\/v([^/]+)\/CodexBarCLI-v[^/]+-linux-x86_64\.tar\.gz(\.sha256)?$/.exec(
+          path,
+        );
       if (!m) return new Response("not found", { status: 404 });
       const bytes = tarball(m[1] as string);
       if (!m[2]) return new Response(bytes);
@@ -391,8 +395,7 @@ function fakeCodexbarReleases(latest: string, sums: (v: string, sha: string) => 
   });
   const env = {
     PATH: "/usr/bin:/bin",
-    STARBRIDGE_CODEXBAR_API: `${server.url.href}api`,
-    STARBRIDGE_CODEXBAR_RELEASES: `${server.url.href}dl`,
+    STARBRIDGE_CODEXBAR_RELEASES: `${server.url.href}rel`,
   };
   return { server, env, state };
 }
@@ -429,14 +432,15 @@ test("update moves setup's CodexBar to the latest release, or the one named", as
     const sys = linuxSys(ctx, home);
     const path = await installTarball(sys, "linux-x86_64", "9.9.8");
     expect(path).toBe(join(home, ".local/opt/codexbar/codexbar"));
+    ctx.lines.length = 0;
     expect(await updateCodexbar(sys, undefined)).toBe(0);
     expect(await updateCodexbar(sys, undefined)).toBe(0);
     expect(await updateCodexbar(sys, undefined, "v9.9.7")).toBe(0);
     expect(ctx.lines).toEqual([
-      "Downloading CodexBar 9.9.9 (linux-x86_64)",
+      "Downloading CodexBar 9.9.9 (linux-x86_64), 1 kB",
       `Installed CodexBar 9.9.9 to ${join(home, ".local/opt/codexbar")}, linked as ${join(home, ".local/bin/codexbar")}.`,
       "CodexBar 9.9.9 is up to date.",
-      "Downloading CodexBar 9.9.7 (linux-x86_64)",
+      "Downloading CodexBar 9.9.7 (linux-x86_64), 1 kB",
       `Installed CodexBar 9.9.7 to ${join(home, ".local/opt/codexbar")}, linked as ${join(home, ".local/bin/codexbar")}.`,
     ]);
     expect(readlinkSync(join(home, ".local/bin/codexbar"))).toBe(path);
@@ -453,6 +457,52 @@ test("update moves setup's CodexBar to the latest release, or the one named", as
     expect(ctx.lines.at(-1)).toContain(`CodexBar at ${brew} was not installed by starbridge`);
   } finally {
     fake.server.stop();
+  }
+});
+
+test("a CodexBar download says how far it got; GitHub's limit is named (#618)", async () => {
+  const home = mkdtempSync(join(tmpdir(), "starbridge-home-"));
+  const fake = fakeCodexbarReleases("9.9.9", (v, sha) => `${sha}  CodexBarCLI-v${v}.tar.gz\n`);
+  const limited = Bun.serve({ port: 0, fetch: () => new Response("slow down", { status: 429 }) });
+  try {
+    const ctx = testCtx(fake.env);
+    let t = 0;
+    ctx.now = () => {
+      t += 6_000;
+      return new Date(t);
+    };
+    await installTarball(linuxSys(ctx, home), "linux-x86_64", "9.9.9");
+    expect(ctx.lines).toEqual([
+      "Downloading CodexBar 9.9.9 (linux-x86_64), 1 kB",
+      "  1 kB of 1 kB",
+    ]);
+    // A download cut short leaves nothing behind, and says which file.
+    const cut = Bun.serve({
+      port: 0,
+      fetch: (req) =>
+        req.url.endsWith(".sha256")
+          ? new Response(`${"0".repeat(64)}\n`)
+          : new Response(
+              new ReadableStream({
+                pull(c) {
+                  c.enqueue(new Uint8Array(1024));
+                  c.error(new Error("connection reset"));
+                },
+              }),
+            ),
+    });
+    const cutCtx = testCtx({ STARBRIDGE_CODEXBAR_RELEASES: cut.url.href.replace(/\/$/, "") });
+    await expect(installTarball(linuxSys(cutCtx, home), "linux-x86_64", "9.9.8")).rejects.toThrow(
+      "downloading CodexBarCLI-v9.9.8-linux-x86_64.tar.gz:",
+    );
+    cut.stop();
+    expect(readdirSync(join(home, ".local/opt"))).toEqual(["codexbar"]);
+    const offline = testCtx({ STARBRIDGE_CODEXBAR_RELEASES: limited.url.href });
+    await expect(updateCodexbar(linuxSys(offline, home), undefined)).resolves.toBe(1);
+    expect(offline.lines.join("\n")).toContain("GitHub is limiting requests from this address");
+  } finally {
+    fake.server.stop();
+    limited.stop();
   }
 });
 

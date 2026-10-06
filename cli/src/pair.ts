@@ -27,7 +27,7 @@ export const DEFAULT_SERVER = "https://starbridge.run";
 
 export async function pair(
   ctx: Ctx,
-  opts: { server?: string; name?: string; force?: boolean },
+  opts: { server?: string; name?: string; force?: boolean; again?: string },
 ): Promise<number> {
   const previous = ctx.store.machine();
   if (previous && !opts.force)
@@ -43,6 +43,11 @@ export async function pair(
   const name = opts.name ?? previous?.name ?? hostname();
   const claim = newClaimSecret();
 
+  // The server's 10 minutes start when it stores the pairing, after this: ending here first
+  // keeps the last poll from finding the pairing gone (#623).
+  const deadline = ctx.now().getTime() + CODE_LIFETIME_MS;
+  const expired = () =>
+    new UsageError(`the pairing code expired; run \`${opts.again ?? "starbridge pair"}\` again`);
   let code = newPairingCode();
   for (let attempt = 0; ; attempt++) {
     const request = {
@@ -72,16 +77,22 @@ export async function pair(
     "Or type the code under Devices in the Starbridge app or web page. It expires in 10 minutes.",
   );
 
-  const deadline = ctx.now().getTime() + CODE_LIFETIME_MS;
   let result: { approval: unknown; token?: string } | undefined;
   while (!result) {
     if (ctx.signal?.aborted) return 130;
-    if (ctx.now().getTime() >= deadline)
-      throw new UsageError("the pairing code expired; run `starbridge pair` again");
+    const left = Math.ceil((deadline - ctx.now().getTime()) / 1000);
+    if (left <= 0) throw expired();
     try {
-      result = await api.pairingResult(code.rendezvous, claim, POLL_SECONDS, ctx.signal);
+      result = await api.pairingResult(
+        code.rendezvous,
+        claim,
+        Math.min(POLL_SECONDS, left),
+        ctx.signal,
+      );
     } catch (e) {
       if (ctx.signal?.aborted) return 130;
+      // The server forgets a pairing when it expires.
+      if (e instanceof ApiError && e.status === 404) throw expired();
       throw e;
     }
   }
