@@ -324,7 +324,7 @@ async function main() {
   const landing = await visitor.goto(ORIGIN);
   const policy = landing?.headers()["content-security-policy"] ?? "";
   if (!policy.includes("'nonce-")) throw new Error(`expected a CSP with a nonce, got: ${policy}`);
-  await visitor.getByRole("heading", { name: /Your agents ask/ }).waitFor();
+  await visitor.getByRole("heading", { name: /Know the moment your agent is stuck/ }).waitFor();
   await shoot(visitor, "landing");
   for (const [path, name] of [
     ["/docs", "docs"],
@@ -1481,7 +1481,7 @@ async function main() {
   await pageC.getByRole("button", { name: "Sign out" }).click();
   await pageC.getByRole("dialog").getByRole("button", { name: "Sign out" }).click();
   // With no keys left, the browser is a visitor: the landing page, not "Sign in to Starbridge".
-  await pageC.getByRole("heading", { name: /Your agents ask/ }).waitFor({ timeout: 30_000 });
+  await pageC.getByRole("heading", { name: /Know the moment your agent is stuck/ }).waitFor({ timeout: 30_000 });
   // Notifications hold decrypted questions: none outlive the sign-out (#311).
   if ((await pageC.evaluate(NOTIFICATIONS)).length > 0)
     throw new Error("signing out left notifications on screen");
