@@ -1007,7 +1007,10 @@ async function reseal(ctx: Ctx, s: Session, known: Directory): Promise<void> {
       x.permission.to = [...new Set([...x.permission.to, ...ids])];
     });
     // Closed: answered or gone on the server, so no device needs it any more.
-    const sent = await post(() => ({ ...seal("permission", permission, signer, to), reseal: true }));
+    const sent = await post(() => ({
+      ...seal("permission", permission, signer, to),
+      reseal: true,
+    }));
     if (sent === "limited") return;
     if (sent === undefined) continue;
     ctx.store.updateState((st) => {

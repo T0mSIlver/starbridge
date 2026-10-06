@@ -293,7 +293,11 @@ test("status lists the answers no session has taken, until a wait prints them (#
   const id = m.ctx.lines.at(-1) as string;
   await server.answer(id, { choice: "Merge" });
   // The agent's poll stores the answer; the session's wait had died.
-  await poll(m.ctx, session(m.ctx), { cursor: m.ctx.store.state().cursor, seconds: 0, shared: true });
+  await poll(m.ctx, session(m.ctx), {
+    cursor: m.ctx.store.state().cursor,
+    seconds: 0,
+    shared: true,
+  });
   m.ctx.lines.length = 0;
   await status(m.sys);
   expect(m.ctx.lines).toContain("Answers no session has taken: 1");
