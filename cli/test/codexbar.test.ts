@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { collect, parseUsage, type RunResult, shortError } from "../src/codexbar";
 import { snapshot } from "../src/quota";
 
-// The fixtures were recorded on the dev box at 19:09 UTC.
+// The fixtures were recorded at 19:09 UTC.
 const NOW = new Date("2026-10-04T19:09:00Z");
 const fixture = (name: string) =>
   readFileSync(join(import.meta.dir, "fixtures", "codexbar", `${name}.json`), "utf8");

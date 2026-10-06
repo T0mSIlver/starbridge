@@ -50,8 +50,8 @@ session to the CLI path.
 
 ### Through the CLI
 
-With no agent, or with `STARBRIDGE_NO_AGENT=1`, the mod runs the CLI, as
-before the agent existed, and checks for the agent every 30 s.
+With no agent, or with `STARBRIDGE_NO_AGENT=1`, the mod runs the CLI and checks
+for the agent every 30 s.
 
 - Every interactive session runs the mod, but only one per machine polls: the
   session holding the lease in `~/.config/starbridge/mod-poller.json`. It runs
@@ -77,10 +77,11 @@ call succeeds.
 ## Pi
 
 `pi/starbridge.ts` is the same answer loop as a Pi extension. It ships in the
-repository's Pi package with the `starbridge` skill:
+repository's Pi package with the `starbridge` skill. `starbridge setup` installs it at the
+release tag of the CLI it runs, `v` and what `starbridge --version` prints:
 
 ```bash
-pi install git:github.com/T0mSIlver/starbridge
+pi install git:github.com/T0mSIlver/starbridge@v<version>
 ```
 
 In an interactive or RPC Pi session it submits each answer as a user message,

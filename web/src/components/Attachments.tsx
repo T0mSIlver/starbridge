@@ -40,7 +40,7 @@ export function Images({ d }: { d: Decision }) {
 
 /**
  * Pages the agent attached for the owner to see before answering, such as a Claude artifact it
- * built (SPEC 2026-10-05, links on questions): labelled as the agent's, each opening a new tab. A
+ * built (SPEC.md, "Questions"): labelled as the agent's, each opening a new tab. A
  * GitHub pull request or issue leads with the GitHub mark.
  */
 export function Links({ d }: { d: Decision }) {
