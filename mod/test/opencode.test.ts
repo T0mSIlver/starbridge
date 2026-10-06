@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { claim, isRun, waitingSessions } from "../opencode/starbridge.ts";
+import { answersOf, claim, isRun, waitingSessions } from "../opencode/starbridge.ts";
 
 test("only `opencode run` counts as run, whatever flags come first", () => {
   const exe = ["/usr/bin/opencode", "/$bunfs/root/src/index.js"];
@@ -46,4 +46,13 @@ test("of two processes showing a session, only the first to claim an answer subm
   expect(await claim(dir, "ses_b", line)).toBe(true);
   expect(await claim(dir, "ses_a", "Answer to d_2 (Push?): No")).toBe(true);
   rmSync(dir, { recursive: true, force: true });
+});
+
+test("the CLI's answers reach opencode only when there is one per question", () => {
+  const out = JSON.stringify({ answers: [["Redis"], ["t/cache"]] });
+  expect(answersOf(out, 2)).toEqual([["Redis"], ["t/cache"]]);
+  expect(answersOf(out, 3)).toBeUndefined();
+  // Nothing printed: the terminal answered, or the question never reached the devices.
+  expect(answersOf("", 1)).toBeUndefined();
+  expect(answersOf(JSON.stringify({ answers: [[1]] }), 1)).toBeUndefined();
 });

@@ -198,7 +198,10 @@ settings.
 
 The Claude Code plugin's hooks call `starbridge hook …`. One of them turns Claude Code's
 `AskUserQuestion` into `starbridge ask`, so the question reaches you away from the terminal; if
-the machine is not paired or the server doesn't answer, it lets the question through.
+the machine is not paired or the server doesn't answer, it lets the question through. The
+opencode plugin runs `starbridge hook question --agent opencode` on each call of opencode's
+`question` tool: it posts each question to your devices and prints the answers for opencode,
+or nothing if the terminal answers first or the server can't be reached.
 
 ## Release
 
