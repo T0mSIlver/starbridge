@@ -1884,6 +1884,16 @@ so the mod is the first path.
   keep working, and a minimum only refuses clients that say they are older.
 - 2026-10-06. The release's npm publish step keeps its `env.NODE_AUTH_TOKEN != ''` gate (#480).
   The audit suspected it never skips; it does skip without `NPM_TOKEN`. See the research log.
+- 2026-10-06. 1.0.0 is the compatibility floor, client side (#469). `ask` refuses `--default` and
+  `--default-at` instead of ignoring them; Android and the web drop the decision default with its
+  "No answer by its default time" outcome, the BIP-39 word list and 32-byte recovery seeds; `setup`
+  no longer looks for the hand-written installs that came before the plugins (`quota push` units,
+  a copied mod or skill, the CLAUDE.md rule); the CLI no longer falls back for agents from before
+  runs or `headless`; Android drops the `inbox-by-machine` pref and the `decisions` channel, the
+  web the `groupByMachine` pref. Two stay, because they are not about old clients:
+  `DECISION_FIELDS` re-reads open decisions when the app learns a new decision field, until
+  clients store the signed body text (#476); and the notification receiver checks
+  Allow again on tap, since the owner may turn off sending unseen commands after the post.
 
 ## Encryption, with existing libraries
 
