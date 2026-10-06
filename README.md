@@ -18,7 +18,7 @@ Launch week: [known issues](https://github.com/T0mSIlver/starbridge/issues?q=is%
 
 ## Get the app
 
-- **Android:** the signed APK from the [latest release](https://github.com/T0mSIlver/starbridge/releases),
+- **Android:** the signed APK from [GitHub Releases](https://github.com/T0mSIlver/starbridge/releases),
   or add the repository to [Obtainium](https://apps.obtainium.imranr.dev/redirect?r=obtainium://add/https://github.com/T0mSIlver/starbridge)
   to get updates. The APK is signed with the same key as the Google Play build, so a Play install
   later updates it in place.
