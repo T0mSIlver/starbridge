@@ -14,8 +14,9 @@ are off.
 Every push to main deploys once CI passes (`.github/workflows/deploy.yml`). Actions logs in as
 `deploy` with its own key (secret `DEPLOY_SSH_KEY`), whose forced command runs
 `/usr/local/sbin/starbridge-deploy <commit>` (`host/deploy-rev.sh`) and nothing else. That script
-fetches main from GitHub with a read-only deploy key and refuses commits that are not on it, then
-unpacks the commit and runs `host/apply.sh`. `deploy/setup-actions-deploy.sh` installs both keys
+fetches main from GitHub with a read-only deploy key and deploys only main's head, or a commit on
+main that contains the deployed one, so the Actions key cannot roll back. It unpacks the commit
+and runs `host/apply.sh`. `deploy/setup-actions-deploy.sh` installs both keys
 on the box; the private halves stay in `~/.config/starbridge/secrets`.
 
 To roll back, or to deploy a branch, from the operator's machine with any ref that is on GitHub:
@@ -24,8 +25,14 @@ To roll back, or to deploy a branch, from the operator's machine with any ref th
 deploy/deploy.sh                 # origin/main
 ```
 
-It unpacks the ref into `/opt/starbridge`, builds the server and web images on the box and restarts the stack
-(`deploy/host/apply.sh`). The previous release stays in `/opt/starbridge.old`.
+It unpacks the ref into `/opt/starbridge`, builds the server and web images on the box and rolls them
+out (`deploy/host/apply.sh`). The previous release stays in `/opt/starbridge.old`.
+
+No request fails during a deploy (`SPEC.md`, #150). The page runs as two copies, `web-a` (port
+3010) and `web-b` (3011): the deploy starts the idle one, waits for its health, then stops the
+other, and Caddy sends requests to the first healthy copy. The server restarts in place; Caddy
+holds requests for up to 30 s meanwhile. Each deploy loads the Caddyfile into the running Caddy
+through its admin API on `127.0.0.1:2019`.
 
 ## First setup
 
@@ -48,6 +55,7 @@ It unpacks the ref into `/opt/starbridge`, builds the server and web images on t
 | Database | volume `starbridge_data`, `/data/starbridge.db` in the container |
 | Backups | `/var/backups/starbridge/starbridge-YYYYMMDD.db` and `umami-YYYYMMDD.dump`, nightly at 03:15 UTC, 14 days; Hetzner backups cover the rest |
 | Analytics | Umami (`umami`, `umami-db`), volume `starbridge_umami-db`; secrets in `/etc/starbridge/umami.env` and `umami-db.env`, made on the first deploy |
+| Analytics limits | Caddy (built with the `rate_limit` module, `caddy.Dockerfile`) takes 30 events a minute per address and 300 in all, 8 KB each; `starbridge-umami-trim.timer` keeps each table to 180 days and a million rows, hourly |
 | Uptime | `.github/workflows/uptime.yml` checks `/healthz` and `/healthz/backup` (503 once the last backup is over 26 h old) hourly and opens an `outage` issue on failure |
 | FCM check | `sudo /opt/starbridge/deploy/host/check-fcm.sh` mints a token with the service account |
 | Usage counts | `sudo docker compose -p starbridge -f /opt/starbridge/deploy/compose.yaml exec server bun server.js usage 14` prints the last 14 days (`server/src/usage.ts`) |

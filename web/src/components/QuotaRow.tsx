@@ -10,15 +10,19 @@ export function QuotaGroup({
   settings,
   now,
   comfy = false,
+  handle,
 }: {
   g: Group;
   settings: QuotaSettings;
   now: Date;
   comfy?: boolean;
+  /** The Quotas page's drag handle, before the provider's name. */
+  handle?: React.ReactNode;
 }) {
   return (
     <section className={`${s.group} ${comfy ? s.groupComfy : ""}`} aria-label={g.provider}>
       <h2 className={`${comfy ? "t-action" : "t-label"} ${s.head}`}>
+        {handle}
         <span className={s.name}>{g.provider}</span>
         {g.machine && <span className={`t-meta ${s.dim}`}>{g.machine}</span>}
       </h2>
