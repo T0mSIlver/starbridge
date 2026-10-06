@@ -1464,6 +1464,20 @@ so the mod is the first path.
   run deploys nothing, so merges in between are deployed with the head. Deploy's own queue is on
   its job, so a deploy skipped for a cancelled run cannot replace one that is waiting. A
   re-run by hand of an older main run replaces the waiting head the same way.
+- 2026-10-06. Faster CI on the dev box's runners (#380). Over CI's first 199 runs, jobs waited
+  longer for a runner (e2e: 7.2 min median, 17 min p90) than they ran (4.3 min). A pull request
+  now runs only the jobs its files can affect: no checks for an Android-only change (unless it
+  edits `Tokens.kt`, which web's tests compare with DESIGN.md), no e2e for Android, evals or
+  Markdown that no page renders. Such a job still starts and passes in seconds, so its check
+  reports success; main runs everything. pnpm's store and Next's `.next/cache` stay on each
+  runner (`$RUNNER_TOOL_CACHE`); the store used to sit in the job's temp folder, so every install
+  downloaded every package, and setup-node uploaded it to GitHub's cache after every e2e, ~50 s.
+  The e2e runs under `.github/watchdog.sh`, which after 10 min prints its processes (Firefox
+  included, which Playwright starts in a session of its own) and their sockets, then stops them.
+  The runners are system units in `ci.slice` at CPU weight 400 to `user.slice`'s 100, where the
+  agent sessions build: `pnpm typecheck` on the loaded box took 8.7 s there against 14.3 s as a
+  user unit at Nice=5. "test, typecheck, lint" stays one job: split, it would install three times
+  and take three runners, which are what is short.
 - 2026-10-06. `ask --default` is gone from the help and the skill (#352): no client shows it, so
   an agent that passed one believed the owner saw it. Like `--default-at`, it is accepted and
   ignored with a warning, so older commands still post; the CLI always sends "Waits for your
