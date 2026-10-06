@@ -1300,7 +1300,10 @@ async function main() {
   await pageB.reload();
   // Other questions may be open: select this one on both.
   for (const p of [page, pageB])
-    await p.getByText("Race probe: rotate now?").first().click({ timeout: 30_000 });
+    await p
+      .getByRole("button", { name: /Race probe: rotate now\?$/ })
+      .first()
+      .click({ timeout: 30_000 });
   const selected = (p: typeof page) => p.locator('section[aria-label="Selected"]');
   const later = selected(page).getByRole("button", { name: /^Later/ });
   const rotate = selected(pageB).getByRole("button", { name: /^Rotate/ });
