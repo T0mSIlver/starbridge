@@ -2,7 +2,8 @@
 # Run once from the operator's machine after the first deploy with Umami. Through an SSH tunnel to its
 # dashboard, it replaces Umami's default admin password with a random one, kept in
 # ~/.config/starbridge/secrets/umami-admin-password, and adds the website whose id the public
-# pages send (WEBSITE_ID in web/src/lib/analytics.ts). Safe to run again.
+# pages send (WEBSITE_ID in web/src/lib/analytics.ts), the launch funnel (#559) and a share link
+# for it, served on stats.starbridge.run (deploy/Caddyfile). Safe to run again.
 set -eu
 host=${STARBRIDGE_HOST:-deploy@starbridge.run}
 key=$HOME/.ssh/starbridge_ed25519
@@ -47,3 +48,31 @@ else
     >/dev/null
   echo "website $id added"
 fi
+
+auth() {
+  path=$1
+  shift
+  curl -fsS "$url/api/websites/$id/$path" -H "authorization: Bearer $token" "$@"
+}
+# The steps the pages send (web/src/components/Landing.tsx, web/src/lib/funnel.ts). The window is
+# a day: Umami's daily salt splits a visit at midnight UTC anyway.
+funnel='Launch'
+if [ "$(auth funnels | jq --arg n "$funnel" '[.data[] | select(.name == $n)] | length')" = 0 ]; then
+  auth funnels -H 'content-type: application/json' -d "$(jq -n --arg n "$funnel" '{name: $n,
+    description: "Landing view, sign-in click, first sign-in, first machine, first answer",
+    parameters: {window: 1440, steps: [
+      {type: "path", value: "/"},
+      {type: "event", value: "sign-in"},
+      {type: "event", value: "first-sign-in"},
+      {type: "event", value: "first-machine"},
+      {type: "event", value: "first-answer"}]}}')" >/dev/null
+  echo "funnel $funnel added"
+fi
+# Read-only views for the owner's phone; the link holds the only secret.
+share='Owner'
+slug=$(auth shares | jq -r --arg n "$share" '[.data[] | select(.name == $n)][0].slug // empty')
+if [ -z "$slug" ]; then
+  slug=$(auth shares -H 'content-type: application/json' -d "$(jq -n --arg n "$share" '{name: $n,
+    parameters: {overview: true, events: true, funnels: true}}')" | jq -r .slug)
+fi
+echo "share link: https://stats.starbridge.run/share/$slug"

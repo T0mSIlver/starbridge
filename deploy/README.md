@@ -73,7 +73,9 @@ ssh -i ~/.ssh/starbridge_ed25519 -N -L 3001:127.0.0.1:3001 deploy@starbridge.run
 
 then open `http://localhost:3001` and log in as `admin` with the password in
 `~/.config/starbridge/secrets/umami-admin-password`. After the first deploy with Umami, run
-`deploy/umami-setup.sh` once: it sets that password and adds the website. To leave your own
+`deploy/umami-setup.sh` once: it sets that password and adds the website, the launch funnel and
+a share link on `stats.starbridge.run`, which it prints. That host serves only the share page
+(`Caddyfile`); its DNS records point at the box like the main domain's. To leave your own
 visits out, run `localStorage.setItem("umami.disabled", "1")` in the browser's console on
 starbridge.run.
 

@@ -94,6 +94,33 @@ starbridge.run {
 	}
 }
 
+# Umami's share page, for reading the launch funnel on a phone (#559; deploy/umami-setup.sh makes
+# the link). Umami's own page assets would clash with the web page's under starbridge.run, hence a
+# host of its own. Only what the share page reads passes, and only GET: the login page and its
+# API, and every write, stay behind the SSH tunnel. The website id is WEBSITE_ID in
+# web/src/lib/analytics.ts.
+stats.starbridge.run {
+	encode zstd gzip
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+		Referrer-Policy no-referrer
+		X-Robots-Tag noindex
+		defer
+	}
+	@share {
+		method GET HEAD
+		path /share/* /_next/static/* /images/* /intl/* /ip3/* /datamaps.world.json /favicon.ico /api/config /api/share/* /api/websites/f3741d82-c450-47d3-8845-646cddbe392f /api/websites/f3741d82-c450-47d3-8845-646cddbe392f/*
+		not path /api/websites/*/export* /api/websites/*/replays* /api/websites/*/recorder*
+	}
+	handle @share {
+		reverse_proxy 127.0.0.1:3001
+	}
+	handle {
+		respond 404
+	}
+}
+
 # The demo server for Play reviewers (#423): its own Compose project (deploy/demo), API only.
 demo.starbridge.run {
 	encode zstd gzip
