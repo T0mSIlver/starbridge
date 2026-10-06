@@ -1391,11 +1391,12 @@ so the mod is the first path.
   without a dialog while `touch` still asked, and uninstall left no config behind.
 - 2026-10-06. Layout breakage fails CI (#305). Every e2e screenshot, at 390 and 1280 px and
   checked again at 320, fails on a page wider than the window, a box that cuts its text without
-  an ellipsis, text past its box, anything past the window's edge, or text drawn over text
-  (`web/e2e/layout.ts`). Tap targets under 44 px and contrast under 3:1 are listed, not failed,
+  an ellipsis, text past its box, anything past the window's edge, text drawn over text
+  (`web/e2e/layout.ts`), or anything the Content-Security-Policy (#325) blocked. Tap targets under 44 px and contrast under 3:1 are listed, not failed,
   until the owner rules on them. The e2e now covers worst-case content (a host-length machine
-  name, unbroken branch names, 24 items, a permission prompt, a run) and runs in CI; it picks
-  free ports, so runners on one machine do not collide. `AUDIT=<folder>` shoots every size from
+  name, unbroken branch names, 24 items, a permission prompt, a run) and runs in CI. It holds
+  its ports from below 32768 until each server starts, so runners on one machine do not
+  collide, and closing outgoing connections, which share the range above, do not block them. `AUDIT=<folder>` shoots every size from
   320 to 1920 px in both themes, plus 200% text at 390, and lists what the checks find.
 
 - 2026-10-06. `ask --default` is gone from the help and the skill (#352): no client shows it, so
