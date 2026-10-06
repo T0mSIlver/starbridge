@@ -104,6 +104,7 @@ deploy)
 small-disk)
   # A size-capped tmpfs: writes past it fail with ENOSPC, as on a full disk. (A loop-mounted
   # ext4 would be closer, but containers like LXC have no loop devices.)
+  mountpoint -q "$LOAD_DIR/disk" 2>/dev/null && { echo "already on a small disk: big-disk first" >&2; exit 1; }
   compose stop server
   mkdir -p "$LOAD_DIR/disk"
   sudo mount -t tmpfs -o "size=${2:-256}m" tmpfs "$LOAD_DIR/disk"
@@ -116,7 +117,7 @@ small-disk)
   ;;
 big-disk)
   compose stop server
-  sudo umount "$LOAD_DIR/disk"
+  ! mountpoint -q "$LOAD_DIR/disk" 2>/dev/null || sudo umount "$LOAD_DIR/disk"
   compose up -d server
   healthy http://127.0.0.1:18080/healthz server 30
   ;;

@@ -1880,8 +1880,11 @@ goes in git.
   What broke: the VPS's disk was 84% full of Docker build cache, about 0.9 GB
   per deploy (pruned by hand; #326 prunes after each deploy). A full disk
   answered every write 500 with a stack trace while `/healthz` stayed green;
-  writes now get 503 `storage-full` with `Retry-After`, logged once a minute,
-  and the uptime check calls `/healthz/disk`, which fails under 2 GB free.
+  writes now get 503 `storage-full` with `Retry-After`, logged once a minute.
+  Usage counts and housekeeping skip while the disk is full, so a stored item
+  still gets its 201 and its push, a caller's first read of the day still
+  answers, and a sweep cannot crash the server. The uptime check calls
+  `/healthz/disk`, which fails under 2 GB free.
   Caddy closed most connections to the server after each request, and their
   TIME-WAIT sockets used up the shared machine's ports at 3000 users (#376
   keeps them open).

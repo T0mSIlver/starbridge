@@ -53,6 +53,9 @@ const stageMs = Number(values.stage) * 1000;
 // Long-polls wait by design: their time is not latency.
 const WAITS = new Set(["answers.wait", "joins.wait"]);
 
+/** The share `--pages` of users keep the web page open, spread evenly over user numbers. */
+const hasPage = (u: User) => (u.n * 0.618) % 1 < Number(values.pages);
+
 // --- Worker: drives the users n % procs == index -------------------------------------------
 
 async function worker(index: number, procs: number) {
@@ -82,7 +85,6 @@ async function worker(index: number, procs: number) {
 
   async function call(
     name: string,
-    u: User,
     token: string,
     method: string,
     path: string,
@@ -91,17 +93,14 @@ async function worker(index: number, procs: number) {
   ): Promise<{ status: number; json?: any }> {
     const t = performance.now();
     try {
-      const res = await fetch(
-        `${TARGET}${path === "/" ? "" : "/v1"}${path}`,
-        {
-          method,
-          headers: {
-            ...(token ? { authorization: `Bearer ${token}` } : {}),
-            ...(body ? { "content-type": "application/json" } : {}),
-          },
-          body: body ? JSON.stringify(body) : undefined,
+      const res = await fetch(`${TARGET}${path === "/" ? "" : "/v1"}${path}`, {
+        method,
+        headers: {
+          ...(token ? { authorization: `Bearer ${token}` } : {}),
+          ...(body ? { "content-type": "application/json" } : {}),
         },
-      );
+        body: body ? JSON.stringify(body) : undefined,
+      });
       const text = await res.text();
       op(name).hist.add(performance.now() - t);
       if (res.status >= 400) op(name).errors[res.status] = (op(name).errors[res.status] ?? 0) + 1;
@@ -118,11 +117,16 @@ async function worker(index: number, procs: number) {
     }
   }
 
-  /** A post retried with the same id until the server has it; 409 means an earlier try landed. */
-  async function post(name: string, u: User, token: string, item: unknown): Promise<boolean> {
+  /**
+   * A post retried with the same id until the server has it. A retry of a post that landed gets
+   * 409 `duplicate-id`, or `already-answered` for an answer (each decision gets one here).
+   */
+  async function post(name: string, token: string, item: unknown): Promise<boolean> {
     for (let wait = 1000; !stopped; wait = Math.min(wait * 2, 30_000)) {
-      const r = await call(name, u, token, "POST", "/items", item);
-      if (r.status === 201 || r.status === 409) return true;
+      const r = await call(name, token, "POST", "/items", item);
+      if (r.status === 201) return true;
+      if (r.status === 409 && ["duplicate-id", "already-answered"].includes(r.json?.error))
+        return true;
       if (r.status === 429 || (r.status >= 400 && r.status < 500)) return false;
       await Bun.sleep(wait);
     }
@@ -138,17 +142,11 @@ async function worker(index: number, procs: number) {
     let dirAt = Date.now();
     while (!stopped) {
       if (Date.now() - dirAt > 600_000) {
-        await call("directory", u, u.machine, "GET", "/directory");
+        await call("directory", u.machine, "GET", "/directory");
         dirAt = Date.now();
       }
       const q = `wait=${first ? 0 : 60}&directory=${u.directory}${cursor ? `&after=${cursor}` : ""}`;
-      const r = await call(
-        first ? "answers" : "answers.wait",
-        u,
-        u.machine,
-        "GET",
-        `/answers?${q}`,
-      );
+      const r = await call(first ? "answers" : "answers.wait", u.machine, "GET", `/answers?${q}`);
       if (r.status !== 200) {
         failures++;
         await pause(Math.min(60_000, 2000 * 2 ** (failures - 1)));
@@ -182,8 +180,8 @@ async function worker(index: number, procs: number) {
           { to: "web", box: box(1500) },
         ],
       };
-      if (await post("post.decision", u, u.machine, item)) {
-        decisions.set(d, false);
+      if (await post("post.decision", u.machine, item)) {
+        if (hasPage(u)) decisions.set(d, false);
         answerLater(u, d);
       }
       await pause(expMs(3_600_000 / Number(values.decisions)));
@@ -204,7 +202,7 @@ async function worker(index: number, procs: number) {
     };
     // Counted from the first try: what the waiting session sees.
     answers.set(a, Date.now());
-    if (await post("post.answer", u, token, item)) acked.add(a);
+    if (await post("post.answer", token, item)) acked.add(a);
     else answers.delete(a);
   }
 
@@ -212,7 +210,7 @@ async function worker(index: number, procs: number) {
     await pause(Math.random() * 300_000);
     while (posting) {
       const quiet = Math.random() < 0.9 ? { quiet: true } : {};
-      await post("post.quota", u, u.machine, {
+      await post("post.quota", u.machine, {
         v: 1,
         kind: "quota",
         id: id("q"),
@@ -232,7 +230,7 @@ async function worker(index: number, procs: number) {
     while (posting) {
       const r = id("r");
       for (let step = 0; step < 6 && posting; step++) {
-        await post("post.run", u, u.machine, {
+        await post("post.run", u.machine, {
           v: 1,
           kind: "run",
           id: r,
@@ -261,7 +259,7 @@ async function worker(index: number, procs: number) {
     const joins = async () => {
       let c = "0";
       while (!stopped) {
-        const r = await call("joins.wait", u, u.web, "GET", `/joins?after=${c}&wait=25`);
+        const r = await call("joins.wait", u.web, "GET", `/joins?after=${c}&wait=25`);
         if (r.status === 200) c = r.json.cursor;
         else await pause(5000);
       }
@@ -272,7 +270,6 @@ async function worker(index: number, procs: number) {
         for (;;) {
           const r = await call(
             "poll.inbox",
-            u,
             u.web,
             "GET",
             `/items?kind=decision,settled,waiting${after(cursors.inbox)}`,
@@ -286,10 +283,9 @@ async function worker(index: number, procs: number) {
           cursors.inbox = r.json.cursor;
           if (r.json.items.length < 100) break;
         }
-        await call("poll.prompts", u, u.web, "GET", "/items?kind=permission&open=1");
+        await call("poll.prompts", u.web, "GET", "/items?kind=permission&open=1");
         const s = await call(
           "poll.settled",
-          u,
           u.web,
           "GET",
           `/items?kind=settled${after(cursors.settled)}`,
@@ -297,15 +293,15 @@ async function worker(index: number, procs: number) {
         if (s.status === 200) cursors.settled = s.json.cursor;
       }),
       every(10_000, async () => {
-        const r = await call("poll.runs", u, u.web, "GET", `/items?kind=run${after(cursors.runs)}`);
+        const r = await call("poll.runs", u.web, "GET", `/items?kind=run${after(cursors.runs)}`);
         if (r.status === 200) cursors.runs = r.json.cursor;
       }),
       every(60_000, async () => {
-        await call("poll.quota", u, u.web, "GET", "/quota");
+        await call("poll.quota", u.web, "GET", "/quota");
       }),
       // Someone opens or reloads the page now and then: the web copies' share of the load.
       every(300_000, async () => {
-        await call("page", u, "", "GET", "/");
+        await call("page", "", "GET", "/");
       }),
     ]);
   }
@@ -331,16 +327,19 @@ async function worker(index: number, procs: number) {
         ask(u);
         quotas(u);
         runs(u);
-        if ((u.n * 0.618) % 1 < Number(values.pages)) page(u);
+        if (hasPage(u)) page(u);
       }, Math.random() * 5000);
     }
   };
   startUsers();
+  let sent = 0;
   const tick = setInterval(() => {
     startUsers();
     const out = Object.fromEntries([...ops].map(([k, v]) => [k, v]));
     try {
-      process.stdout.write(`${JSON.stringify({ users: started.size, ops: out, delivery })}\n`);
+      process.stdout.write(
+        `${JSON.stringify({ w: sent++, users: started.size, ops: out, delivery })}\n`,
+      );
     } catch {
       process.exit(0); // the parent is gone
     }
@@ -368,9 +367,7 @@ async function worker(index: number, procs: number) {
       const unseenIds = [...decisions].filter(([, seen]) => !seen).map(([d]) => d);
       const dup = [...got.values()].filter((n) => n > 1).length;
       const unseen = unseenIds.length;
-      const pages = all.filter(
-        (u) => started.has(u.n) && (u.n * 0.618) % 1 < Number(values.pages),
-      ).length;
+      const pages = all.filter((u) => started.has(u.n) && hasPage(u)).length;
       process.stdout.write(
         `${JSON.stringify({ final: { answers: answers.size, unacked, received: got.size, lost, dup, decisions: decisions.size, decisionsSeen, unseen, pages }, lostIds, unseenIds })}\n`,
       );
@@ -409,8 +406,8 @@ async function parent() {
     ops: Map<string, { hist: Hist; errors: Record<string, number> }>;
     delivery: Hist;
   };
-  let win: Window = { users: 0, ops: new Map(), delivery: new Hist() };
-  let reports = 0;
+  // Each worker numbers its windows; a window is done once every worker sent it.
+  const open = new Map<number, Window & { reports: number }>();
   let stageWins: Window[] = [];
   const finals: Record<string, number>[] = [];
   const lostIds: string[] = [];
@@ -431,6 +428,13 @@ async function parent() {
             if (finals.length === procs) resolveFinal();
             continue;
           }
+          const win = open.get(line.w) ?? {
+            users: 0,
+            ops: new Map(),
+            delivery: new Hist(),
+            reports: 0,
+          };
+          open.set(line.w, win);
           win.users += line.users;
           for (const [k, v] of Object.entries(line.ops) as [string, WorkerOp][]) {
             const o = win.ops.get(k) ?? { hist: new Hist(), errors: {} };
@@ -440,9 +444,9 @@ async function parent() {
               o.errors[code] = (o.errors[code] ?? 0) + n;
           }
           win.delivery.merge(line.delivery);
-          if (++reports % procs === 0) {
+          if (++win.reports === procs) {
             stageWins.push(win);
-            win = { users: 0, ops: new Map(), delivery: new Hist() };
+            open.delete(line.w);
           }
         }
       }
@@ -503,7 +507,8 @@ async function parent() {
       const cpuPct = Object.fromEntries(
         Object.entries(cpu).map(([k, v]) => [
           k,
-          ((v - (cpuWas[k] ?? 0)) / 1e4 / (WINDOW_MS / 1000)).toFixed(0),
+          // A recreated container starts its counters again.
+          (Math.max(0, v - (cpuWas[k] ?? 0)) / 1e4 / (WINDOW_MS / 1000)).toFixed(0),
         ]),
       );
       cpuWas = cpu;

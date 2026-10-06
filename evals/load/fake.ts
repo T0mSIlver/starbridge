@@ -14,7 +14,7 @@ const { values } = parseArgs({
   },
 });
 const PUSH_MS = 80;
-const counts: Record<string, number> = { token: 0, user: 0, fcm: 0, webpush: 0 };
+const counts = { token: 0, user: 0, fcm: 0, webpush: 0 };
 
 const server = Bun.serve({
   hostname: values.host,

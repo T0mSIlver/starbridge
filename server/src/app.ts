@@ -19,7 +19,7 @@ import { itemRoutes } from "./routes/items";
 import { joinRoutes, sweepJoins } from "./routes/joins";
 import { pairingRoutes, sweepPairings } from "./routes/pairings";
 import { pushRoutes } from "./routes/push";
-import { closeDays, Usage } from "./usage";
+import { closeDays, diskFull, Usage } from "./usage";
 import { Waiters } from "./waiters";
 
 /** /healthz/backup fails past this; deploy/host/backup.sh runs nightly. */
@@ -45,16 +45,26 @@ export async function createApp(config: Config, fetchFn: typeof fetch = fetch) {
   };
   deps.push.onSent = (type, result) => usage.record(`push.${type}.${result}`);
 
-  setInterval(() => {
+  // Housekeeping deletes, and a delete needs room in the WAL: on a full disk it waits for the
+  // next round rather than crash the server, at start included.
+  const housekeep = (job: () => void) => () => {
+    try {
+      job();
+    } catch (e) {
+      if (!diskFull(e)) throw e;
+    }
+  };
+  const minutely = housekeep(() => {
     sweepPairings(db);
     sweepJoins(db);
-  }, 60_000).unref();
-  sweepStorage(db, config.limits);
-  closeDays(db);
-  setInterval(() => {
+  });
+  const hourly = housekeep(() => {
     sweepStorage(db, config.limits);
     closeDays(db);
-  }, 3_600_000).unref();
+  });
+  setInterval(minutely, 60_000).unref();
+  hourly();
+  setInterval(hourly, 3_600_000).unref();
 
   const v1 = new Hono<Env>()
     .route("/", authRoutes)
@@ -113,7 +123,7 @@ export async function createApp(config: Config, fetchFn: typeof fetch = fetch) {
     if (e instanceof HTTPException) return e.getResponse();
     // A full disk refuses writes while reads go on. Clients retry a 503; one line a minute
     // stands for the stack each refused write would print.
-    if ((e as { code?: unknown }).code === "SQLITE_FULL") {
+    if (diskFull(e)) {
       if (Date.now() - fullLoggedAt > 60_000) {
         fullLoggedAt = Date.now();
         console.error("disk full: refusing writes");

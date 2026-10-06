@@ -22,7 +22,8 @@ env:
 jobs:
   check:
     runs-on: ${{ vars.RUNNER || 'ubuntu-latest' }}
-    timeout-minutes: 5
+    # Three checks of up to about 90 s each, then the issue step.
+    timeout-minutes: 8
     steps:
       - name: Check
         id: check

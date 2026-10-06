@@ -31,9 +31,15 @@ export class Usage {
       if (this.seenToday.has(key)) return;
       this.seenToday.add(key);
     }
-    this.db
-      .query("INSERT OR IGNORE INTO usage_events (day, metric, subject, value) VALUES (?, ?, ?, ?)")
-      .run(day, metric, subject, value);
+    // Counting is never worth failing a request: on a full disk the event is dropped, after
+    // whatever the request stored has committed.
+    try {
+      this.db
+        .query("INSERT OR IGNORE INTO usage_events (day, metric, subject, value) VALUES (?, ?, ?, ?)")
+        .run(day, metric, subject, value);
+    } catch (e) {
+      if (!diskFull(e)) throw e;
+    }
   }
 
   /**
@@ -47,6 +53,11 @@ export class Usage {
     if (caller.role === "machine") this.record("active.machines", member);
     else this.record(`active.devices.${caller.client}`, member);
   }
+}
+
+/** SQLite's answer to a write that found no room on the disk. */
+export function diskFull(e: unknown): boolean {
+  return (e as { code?: unknown } | null)?.code === "SQLITE_FULL";
 }
 
 export function dayOf(ms: number): string {
