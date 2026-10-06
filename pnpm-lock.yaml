@@ -44,6 +44,34 @@ importers:
         specifier: ^0.1.3
         version: 0.1.3
 
+  demo:
+    dependencies:
+      '@starbridge/protocol':
+        specifier: workspace:*
+        version: link:../packages/protocol
+      libsodium-wrappers:
+        specifier: ^0.8.4
+        version: 0.8.4
+    devDependencies:
+      '@biomejs/biome':
+        specifier: ^2.5.15
+        version: 2.5.15
+      '@starbridge/server':
+        specifier: workspace:*
+        version: link:../server
+      '@types/bun':
+        specifier: ^1.4.2
+        version: 1.4.2
+      '@types/libsodium-wrappers':
+        specifier: ^0.8.2
+        version: 0.8.2
+      starbridge:
+        specifier: workspace:*
+        version: link:../cli
+      typescript:
+        specifier: ^7.0.2
+        version: 7.0.2
+
   mod:
     devDependencies:
       '@biomejs/biome':

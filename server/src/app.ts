@@ -114,6 +114,8 @@ export async function createApp(config: Config, fetchFn: typeof fetch = fetch) {
     // No figure: anyone can call it, and the headroom left is the operator's to know.
     return bavail * bsize >= DISK_MIN_FREE ? c.text("ok") : c.text("disk low", 503);
   });
+  // The demo program (demo/) runs only against a server that answers this.
+  if (config.demo) app.get("/v1/demo", (c) => c.json({ demo: true }));
   app.route("/v1", v1);
   app.notFound((c) => c.json({ error: "not-found" }, 404));
   let fullLoggedAt = 0;
