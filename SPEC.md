@@ -356,6 +356,11 @@ Codex prompts are not supported.
   "Answer here", which takes it back.
 - **opencode** (#300): every prompt publishes `permission.asked`, and the plugin answers through
   `POST /permission/{id}/reply`. The first answer wins. `opencode run` rejects every prompt itself.
+  The devices see what an Allow approves (#489): an `edit`, which its edit, write and apply_patch
+  tools ask, as `{file_path, diff}`, the path first so it stays the summary and naming where an
+  apply_patch move takes a file and which files it deletes; an `external_directory` ask from the
+  shell as its directories and command; any other permission with its metadata. An MCP call shows
+  only the tool's name, since the event carries none of its arguments.
 - **A stalled server never holds a prompt** (#260): deadlines and SIGTERM cut every request the
   hook makes. When a hook dies mid-hold, the local agent settles its prompt as answered at the keyboard
   (#400).
@@ -405,8 +410,9 @@ Codex prompts are not supported.
   machine before sealing and again in every client, so a bidi override cannot reorder the command.
   An input with two keys that read alike once redacted or escaped stays at the keyboard.
 - **Redaction** (#358, #359). The summary and description are cut from the input after
-  redaction. `inputHash` is keyed under the machine's signing key, so a device holding the
-  redacted input cannot test guesses for a short redacted value.
+  redaction. A private key's lines go also when they carry a diff's `+`, `-` or space (#489).
+  `inputHash` is keyed under the machine's signing key, so a device holding the redacted input
+  cannot test guesses for a short redacted value.
 - History says how and where a prompt was answered ("Denied · on Pixel"), from the machine's
   `settled` notice (#349).
 
