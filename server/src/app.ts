@@ -20,6 +20,7 @@ import { itemRoutes } from "./routes/items";
 import { joinRoutes, sweepJoins } from "./routes/joins";
 import { PairingClients, pairingRoutes, sweepPairings } from "./routes/pairings";
 import { pushRoutes } from "./routes/push";
+import { wakeSnoozes } from "./snooze";
 import { closeDays, diskFull, Usage } from "./usage";
 import { Waiters } from "./waiters";
 
@@ -69,6 +70,9 @@ export async function createApp(config: Config, fetchFn: typeof fetch = fetch) {
         if (!diskFull(e)) throw e;
       });
   setInterval(minutely, 60_000).unref();
+  // Snoozed decisions come back within this much of their time (#571).
+  const snoozes = housekeep(() => wakeSnoozes(db, deps.push, config.pushInlineLimit));
+  setInterval(snoozes, 15_000).unref();
   hourly();
   setInterval(hourly, 3_600_000).unref();
 

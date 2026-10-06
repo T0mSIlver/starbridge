@@ -40,8 +40,10 @@ They decide from the card alone, without opening this session.
   of 6"), even with images. Leave out what the card already shows and your
   own process. Line breaks and `code` render; other Markdown shows as typed.
 - **Options:** two to four short labels that differ at a glance, in their
-  natural order (A, B, C stay A, B, C). Name your pick with `--recommended`:
-  devices highlight it wherever it sits.
+  natural order (A, B, C stay A, B, C), even when your pick is not first.
+  Name your pick with `--recommended`: devices highlight it wherever it sits.
+  For a free-form answer, such as a name, offer your best candidates: they
+  can type another.
 - **Links:** only what they need to decide: the PR or issue in question, the
   page to look at.
 - **Images**, when seeing beats reading (variants, a broken screen, a chart):
@@ -61,7 +63,7 @@ Now: checkouts fail for those 4 minutes, at peak hour.' \
 
 Quote text in single quotes, since double quotes expand `$` and backticks,
 and write apostrophes as ’. Other flags: `--image` (up to 4 PNG or JPEG),
-`--link` (up to 4 HTTPS URLs), `--waiting`, `--answer-in`. `ask` prints the decision id (`d_Xk3…`) and how the
+`--link` (up to 4 HTTPS URLs), `--waiting` (only the answer unblocks you), `--answer-in`. `ask` prints the decision id (`d_Xk3…`) and how the
 answer comes back.
 
 ## After you post
@@ -78,10 +80,19 @@ last line says:
   only names the card: run the `starbridge wait d_Xk3…` it gives.
 - **"Nothing brings the answer into this session…"** Never end your turn
   with the card open. When only the answer is left, run
-  `starbridge wait <id> --timeout 5m`, again on exit 2, as long as it takes.
-  `wait` marks the card waiting, which notifies them again: for a card that
-  blocks nothing yet, such as a question for tomorrow, add `--no-mark`.
+  `starbridge wait <id> --timeout 5m`, again on exit 2, as long as it takes,
+  but never again after exit 3. `wait` marks the card waiting, which notifies
+  them again: for a card that blocks nothing yet, such as a question for
+  tomorrow, post without `--waiting` and wait with `--no-mark`.
   No answer is never a yes: don't withdraw the card or do what it asks.
+
+The owner may snooze a card: `waiting` or `wait` then prints
+`Snoozed d_Xk3… (…?) until 18:00: no answer before then.` and `wait` exits 3.
+A snooze is not an answer: never act on the question or take your default.
+Stop waiting for it: no answer comes before that time, so don't run `wait`
+on it again. Do the work that does not depend on it, then end your turn
+saying what waits and until when, and that `starbridge wait <id>` reads the
+answer later. Never post a snoozed question again.
 
 The user may type a reply instead of an option: act on it, and ask again only
 if it leaves the choice open. Act on the answer at once. Post again only when

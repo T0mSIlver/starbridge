@@ -9,4 +9,4 @@ if [ -f "$dir/permissions-open" ]; then
 elif [ ! -e "$dir/state.json" ]; then
   exit 0
 fi
-exec starbridge hook settle --agent claude-code
+exec sh "$(dirname "$0")/cli.sh" hook settle --agent claude-code

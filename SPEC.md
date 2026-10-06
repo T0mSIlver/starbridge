@@ -251,11 +251,15 @@ provider plugins add providers, not panels.
   500 per account, for a day after the last update.
 - **Permission answers** are refused 10 minutes after the prompt arrived, since the server cannot
   read its `expiresAt`.
-- **Pairings** (#309). Each address may hold 20 unapproved pairings (IPv6 counted per /48 on this
-  route), on top of 10 a minute; the server-wide cap of 20000 is the disk bound. Mobile carriers
-  that hand out /64s from one /48 share 20, a smaller blast radius than the whole server.
-  The server counts them in memory, as every per-address limit, so no address reaches the
-  database, and a restart resets the counts (#575).
+- **Pairings** (#309, #619). Each address may hold 50 unapproved pairings (IPv6 counted per /48
+  on this route), on top of 30 a minute; the server-wide cap of 20000 is the disk bound. Mobile
+  carriers that hand out /64s from one /48 share 50, a smaller blast radius than the whole
+  server. The server counts them in memory, as every per-address limit, so no address reaches
+  the database, and a restart resets the counts (#575).
+- **Per-address sign-up limits** (#619). An office or carrier NAT puts many people behind one
+  IPv4 address, so the pairing limits above and the 60 GitHub sign-ins a minute leave room for a
+  launch-day crowd behind it; at one a second they stay far below the 10 sign-ups and visitors a
+  second the load test held.
 - **Long-polls** identify their caller again after the wait and answer 401 if the session or token
   was revoked meanwhile (#260). A directory append ends every machine's answer long-poll, and the
   reply carries the directory's length (#158). On SIGTERM the server ends every long-poll as if
@@ -289,7 +293,9 @@ provider plugins add providers, not panels.
 
 - FCM goes through the relay, since its credentials belong to the app's Firebase project. Web Push
   goes through the relay only when a server has no VAPID keys; UnifiedPush always goes direct. The
-  relay is open, rate-limited per IP, and pushes only ciphertext or ids. A push carries the
+  relay is open, rate-limited per IP and in all (600 a minute in Caddy; 16 Web Pushes in flight
+  in the server, 4 per address), so nobody can aim it at a host or burn the VAPID key (#577). It
+  pushes only ciphertext or ids. A push carries the
   device's ciphertext when it fits FCM's 4 KB, else the item id.
 - Quota snapshots and runs skip Web Push: browsers drop subscriptions whose pushes show no
   notification (Firefox after 16). The web page polls them instead.
@@ -345,15 +351,35 @@ provider plugins add providers, not panels.
   was sealed to, only while it is open, and for an `answerIn` question only a Done, when it asked
   for one (#539). A settled question's
   answer is never delivered, since a server could hold an answer back until the agent moved on.
+- **Following every answer** (#629). `answers --all --follow` gives an orchestrator the owner's
+  answers to every session's questions, so it no longer depends on each session relaying them or
+  reads the state file. It is an observer: it marks no answer seen and no decision waiting, so
+  each answer still reaches its session. The machine keeps each decision's project and session
+  title, like its question, after the answer drops its body. `decisions --open` lists the
+  questions still open, so one question has one asker: the orchestrator checks it before
+  asking, since the owner once got the same question from it and from a session.
 - **Pairing a machine.** `pair` uses starbridge.run unless `--server` or `STARBRIDGE_SERVER` says
   otherwise (#154). `pair --force` keeps the machine's server and name (#245) and leaves the old
   pairing active, so Devices shows the added time on rows that share a name (#287). `pair` and
   `setup` guess `machineKind` (cloud, laptop with a battery, server with no display, else desktop);
   `config machine-kind` corrects it.
+- **The pairing link** `https://starbridge.run/pair#CODE`, which `pair` prints and shows as a QR
+  code, is also an App Link (#611): setup says to scan it with the camera, and a phone's camera
+  hands links to apps, not to a browser that would first ask to become a device itself. The app
+  opens Add a device with the code looked up, once the phone is in the account; a phone signed in
+  but not in the account yet joins with it instead, as another device's "Scan with the new phone"
+  code asks. Without the app,
+  or on a self-hosted server, which the APK cannot claim, the link opens the web page as before;
+  where both the installed web app and the app claim it, Android opens the verified app.
 - **Setup** (`cli/src/setup/`; #68, #239, #245) installs CodexBar's latest release, taking the
   static musl build where the glibc one would not start. Only the repository is pinned, since
   CodexBar ships almost daily (#530): the tarball must match the `.sha256` of the same release,
   as Homebrew checks it, and `starbridge update` moves that install to the latest release too.
+  The latest version comes from where `releases/latest` redirects, not GitHub's API, which allows
+  60 unauthenticated requests an hour per address, few behind a shared NAT on launch day; the
+  download says its size and how far it got every 5 s, since the Linux tarball is 170 MB (#618).
+  `update` goes on to CodexBar when its own download fails, offline say, but not when a release
+  does not check out (#617).
   `update --codexbar <version>` installs one release, for when the latest breaks; a broken
   CodexBar already shows as each provider's quota error, so there is no other rollback. A daily
   workflow installs the latest release and reads its output without credentials, and opens an
@@ -365,6 +391,15 @@ provider plugins add providers, not panels.
   and offers, each after asking, Codex's skill, the Pi package and opencode's plugin and skill,
   from copies the CLI carries so versions match. The local agent rewrites outdated copies when
   it starts.
+- **The CLI's path** (#612). Hooks and plugins start the CLI from an agent whose PATH may lack
+  the install folder: on macOS `~/.local/bin` is not on the default PATH, and Claude Code opened
+  from the Dock has no shell profile. So setup and `update` record the binary's absolute path in
+  the config folder (`cli-path`); the Claude Code hooks (`plugin/hooks/cli.sh`), the mod, and the
+  Pi and opencode plugins start that one, else `starbridge` on the PATH, and `cli.sh` then tries
+  the installers' folders. When the binary's folder is not on the PATH, setup offers to add it to
+  the shell's startup file (`--yes` adds it), and its last lines say to open a new terminal or what to add, since
+  install.sh's own hint scrolls away under setup. Windows gets the folder on the PATH from
+  install.ps1.
 - **Files setup writes into other tools** (#474) start with one marker line, ``Written by
   starbridge <version>; `starbridge uninstall` removes it.``, in the file's comment syntax: the
   systemd unit, the launchd plist, the Codex rule, the opencode entry and the copied skills (a YAML
@@ -597,6 +632,11 @@ Codex prompts are not supported.
   with the error and when they were read. Kept windows raise no alerts and go once their reset
   passes. A provider with nothing to keep shows only its error. Devices get a short error; the CLI
   logs CodexBar's whole. The run timeout is 120 s.
+- **No snapshot yet** (#661). A snapshot is sealed to the devices active when it is taken, so a
+  device that just joined reads none until the next upload, and quota items send no push. The
+  agent posts one when it sees a device join; the Quotas screen with nothing to show also asks
+  the machines once, as a pull does, and says "Loading quotas from <machines>…" meanwhile. Only
+  when nothing comes back does it give the setup line, and with no machine it says to add one.
 
 ### Quota settings follow CodexBar
 
@@ -763,12 +803,30 @@ Tokens, type and components: `DESIGN.md`.
 
 - **Stack** (`deploy/`): Docker Compose with Caddy on the host network, so rate limits see real
   client addresses. Caddy keeps connections to the server open (`keepalive 25s`, below the
-  server's 30 s idle close) so TIME-WAIT sockets don't use up ports (#376). Caddy compresses every
+  server's 30 s idle close) so TIME-WAIT sockets don't use up ports (#376). A client has 10 s for
+  its TLS handshake and its HTTP/1.1 request headers, since every open connection costs Caddy
+  memory, the VPS's first limit (#587). Caddy compresses every
   response and the web app none: Next's gzip ran on its one thread and filled it near 18 landing
   page visitors a second (#593). Nightly SQLite backups, kept 14 days.
-- **Capacity** (#301). A load test of the production stack on two cores held 2000 simulated users
-  at a 194 ms p99. On the production VPS, Caddy's memory runs out first, near 8000 users (each held
-  long-poll costs about 96 KB in Caddy and 13 KB in the server); CPU near 10,000.
+- **Per-address reads** (#582). Caddy counts every `/v1` request per address, 3000 a minute
+  (IPv6 per /64): most reads count against no account, so this keeps a looping client or script
+  to about 2% of a core. A visible page with a prompt waiting and a run live makes about 200 a
+  minute and a heavy user about 600, so five heavy users can share an office's address.
+- **Capacity** (#301, #625). On the production stack capped to the VPS's two cores and 4 GB,
+  memory runs out first: each signed-in user with a machine and an open page holds two
+  long-polls, which cost about 300 KB in Caddy, 60 KB in the server and 55 KB in docker-proxy
+  (Caddy's hop to the server's published port), so about 5000 such users fit; CPU stays under
+  one core. A new visitor to the landing page costs about 50 ms of CPU across Next and Caddy
+  once Caddy compresses (#593), so the VPS serves 15 to 20 a second.
+- **Machines** (#658). A hosted account takes 3 machines, the computers that run agents, and any
+  number of phones and browsers; self-hosting sets its own (`MAX_MACHINES`, default 5). Each
+  machine holds a long-poll, about 200 KB on the VPS, and 3 covers a laptop, a desktop and a
+  server. Raising it later is a setting nobody notices; lowering it would strand accounts above
+  it. Devices need no cap of their own: the directory holds at most 200 entries, an account's
+  pages hold at most 16 join-list long-polls, and Caddy limits each address's requests (#582).
+  Every item is sealed once per device, so its size grows with their number: a run update is
+  capped per device for that reason, and a question with 8000 characters of context fits up to
+  about 140 devices in its 2 MB, pictures shrinking to fit.
 - **Privacy and terms** (`/privacy`, `/terms`). Each claim follows the code: stored columns in
   `server/src/db.ts`, retention in `server/src/limits.ts`, logs and backups in `deploy/`. A change
   to what is stored changes the page, and the Play data-safety form. Contact is
@@ -787,7 +845,9 @@ Tokens, type and components: `DESIGN.md`.
   `/privacy` says so.
   It sees machines and answers from any device, so a pairing or answer made on the phone counts
   once this browser sees them. Owner's view: an Umami share link on `stats.starbridge.run`,
-  where Caddy passes only GET requests and blocks the login.
+  where Caddy passes only GET requests and blocks the login. A password (user `tom`) guards the
+  whole host, since the link alone would open it to whoever saw it; bcrypt cost 10 and a limit of
+  300 requests a minute per address keep its checks from spending the box's CPU (#595).
 - **Demo server** (#423). Play reviewers cannot pass GitHub's new-device check and cannot be given
   a recovery key, so `demo.starbridge.run` is a self-hosted server with an owner token, and
   `demo/` is its first device and machine. It approves every join by digits without comparing,
@@ -804,6 +864,9 @@ What the code relies on, with the versions checked.
   must not await it. Remote Control shows a submitted prompt on the phone. A hot reload aborts the
   mod's requests. `/resume` fires `session.end` with reason `resume` and no `session.start`. Mods
   load only from user or managed settings or an installed plugin, not project settings.
+  Starbridge states 2.1.287, the oldest the mod works with, as its minimum, and setup says when
+  `claude --version` is older, since an older one may lack mods or `claude plugin list --json`
+  (#620).
 - **Claude Code sessions**: `~/.claude/sessions/<pid>.json` holds `sessionId`, `name` (the title)
   and, under Remote Control, `bridgeSessionId`; the Remote Control URL is
   `https://claude.ai/code/<bridgeSessionId>`. Records are rewritten in place without truncation,
@@ -844,6 +907,9 @@ What the code relies on, with the versions checked.
 - **Skill eval** (#299): what lifted scores was one context line per option starting with its
   label, "no answer is never a yes" placed where the agent waits, and card text in single quotes
   (`$0` in double quotes blanked a Codex card). Records: `evals/skill/results/299`.
+  Round 2 (#624): a card that blocks nothing was still marked waiting until the skill said
+  "post without `--waiting`" beside `--no-mark`, and GLM Flash put its pick first until "even
+  when your pick is not first". Records: `evals/skill/results/624`.
 
 ## Open questions
 

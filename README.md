@@ -24,8 +24,9 @@ Launch week: [known issues](https://github.com/T0mSIlver/starbridge/issues?q=is%
   or add the repository to [Obtainium](https://apps.obtainium.imranr.dev/redirect?r=obtainium://add/https://github.com/T0mSIlver/starbridge)
   to get updates. The APK is signed with the same key as the Google Play build, so a Play install
   later updates it in place.
-- **Google Play:** coming. The tester sign-up opens once Google's review passes; until then, use
-  the APK above, which a Play install will update in place.
+- **Google Play:** in closed testing. Google needs 12 testers for 14 days before the app can be
+  public. Join [the testers group](https://groups.google.com/g/starbridge-testers) with your
+  phone's Google account, then [opt in](https://play.google.com/apps/testing/dev.starbridge.app).
 - **iPhone:** web app, native app is planned. Open [starbridge.run](https://starbridge.run) in
   Safari and add it to the Home Screen to get notifications.
 - **Any browser:** [starbridge.run](https://starbridge.run).
@@ -78,7 +79,7 @@ In Claude Code, the answer arrives through a [Claude Code mod](https://code.clau
 runs inside Claude Code: it submits your answer into the live session as its next prompt. Setup
 installs it beside the Starbridge plugin.
 
-Answers go into interactive sessions; Codex needs CLI 0.160 or later. In `codex exec`, `pi -p` and
+Answers go into interactive sessions; Claude Code needs 2.1.287 or later, Codex CLI 0.160 or later. In `codex exec`, `pi -p` and
 `opencode run`, the agent waits for the answer with `starbridge wait` instead.
 
 [What each agent supports](https://starbridge.run/docs/tell-your-agents#what-each-agent-supports)

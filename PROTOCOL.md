@@ -316,8 +316,8 @@ request without the header, or with one the server cannot read, is served.
 
 | Route | Who | What |
 |---|---|---|
-| `GET /auth/github` | anyone | start GitHub sign-in; the app adds `?app=1&challenge=<S256 challenge>` |
-| `GET /auth/github/callback` | anyone | finish it, set the session |
+| `GET /auth/github` | anyone | start GitHub sign-in; the app adds `?app=1&challenge=<S256 challenge>`; without GitHub on the server, the page goes to `/?signin=off` and the app gets 404 `not-configured` |
+| `GET /auth/github/callback` | anyone | finish it, set the session, redirect to `/`; on failure redirect to `/?signin=declined`, `expired` (state missing or not this browser's, kept an hour) or `failed` |
 | `GET /auth/github/callback/app` | anyone | the browser got the app's sign-in: redirect to `<APP_REDIRECT_URI>?code=<code>&state=<state>`, or GitHub's `error` instead of the code; 400 `bad-state` without them |
 | `POST /auth/app/session` | the app | `{code, verifier}`: GitHub's code → `{session}`; 400 `bad-code` when GitHub refuses the code: unknown, used, expired or not this verifier's |
 | `POST /auth/owner` | anyone | self-hosted: `{token}` against `OWNER_TOKEN`; sets the session and returns `{session}` |
@@ -331,7 +331,7 @@ request without the header, or with one the server cannot read, is served.
 | Route | Who | What |
 |---|---|---|
 | `GET /directory?from=<seq>` | device, machine | `{entries}` from `seq` on |
-| `POST /directory` | device | append `{entry}`; 409 unless its `seq` is the next one; 403 `machine-cap` past the account's machine limit (5 on the hosted server); 409 `directory-full` for an add or a recovery proposal past 200 entries, beyond their budgets ("Limits") |
+| `POST /directory` | device | append `{entry}`; 409 unless its `seq` is the next one; 403 `machine-cap` past the account's machine limit (3 on the hosted server; devices don't count); 409 `directory-full` for an add or a recovery proposal past 200 entries, beyond their budgets ("Limits") |
 
 The server runs `verifyDirectory` before it accepts an entry, to refuse garbage early. Clients
 never rely on that check.
@@ -340,10 +340,10 @@ never rely on that check.
 
 | Route | Who | What |
 |---|---|---|
-| `POST /pairings` | new member | `{request, claimHash}`: the request message and BLAKE2b-256 of a random claim secret's text (`claimHash`); 409 if the rendezvous id is taken; 429 `too-many-pairings` when the caller's address holds 20 unapproved pairings, 429 `busy` when the server holds 20000 pairings |
+| `POST /pairings` | new member | `{request, claimHash}`: the request message and BLAKE2b-256 of a random claim secret's text (`claimHash`); 409 if the rendezvous id is taken; 429 `too-many-pairings` when the caller's address holds 50 unapproved pairings, 429 `busy` when the server holds 20000 pairings |
 | `GET /pairings/:rendezvous?wait=<s>` | device | `{request}`; with `wait`, holds until the new member posts and answers 204 if `wait` passes first |
 | `POST /pairings/:rendezvous/approve` | device | `{approval}`; the directory must already hold the new member's entry; 409 `already-paired` when that member already holds a session or token |
-| `GET /pairings/:rendezvous/result?wait=<s>` | new member, with `X-Claim: <secret>` | long-poll: `{approval, token?}` once approved, `token` for machines only; 204 when `wait` passes |
+| `GET /pairings/:rendezvous/result?wait=<s>` | new member, with `X-Claim: <secret>` | long-poll: `{approval, token?}` once approved, `token` for machines only; 204 when `wait` passes; 403 `machine-cap` once the server refused the new machine's directory entry for the machine limit |
 
 ### Joins
 
@@ -428,7 +428,7 @@ options; machines from before it leave `replies` out. For permission answers, se
 | `POST /push/subscriptions` | device | `{type: "fcm" \| "webpush" \| "unifiedpush", endpoint, keys?}` → `{id}`; URL endpoints must be public HTTPS; 409 `too-many-subscriptions` past 10 per device or 30 per account (re-subscribing a known endpoint always works) |
 | `DELETE /push/subscriptions/:id` | device | stop pushing there |
 | `GET /push/vapid` | anyone | `{publicKey}`: the VAPID key a browser subscribes with (the relay's when this server forwards Web Push) |
-| `POST /relay` | another server | relay mode only: `{type: "fcm" \| "webpush", endpoint, keys?, payload}` → `{result: "ok" \| "gone" \| "failed" \| "no-route"}`; rate-limited per IP |
+| `POST /relay` | another server | relay mode only: `{type: "fcm" \| "webpush", endpoint, keys?, payload}` → `{result: "ok" \| "gone" \| "failed" \| "no-route"}`; rate-limited per IP; 503 `busy` with `Retry-After` while the server has 16 relayed Web Pushes in flight, or the address 4 |
 
 A push payload is JSON text: `{v, kind, id, from, re?, wakeAt?, box?}` for a new item, with the device's
 own box when the payload stays within 3 KB, else without it and the device fetches
@@ -467,19 +467,19 @@ server whose disk is full answers writes 503 `storage-full` with `Retry-After`; 
 
 | What | Limit |
 |---|---|
-| `POST /items` | 120 a minute per account |
+| `POST /items` | from machines: 90 a minute per machine and 120 per account, and 16 MB of machines' boxes a minute per account, items that replace earlier ones included; from devices: 60 a minute per device |
 | Stored decisions, open or answered | 10000 per account: 409 `too-many-items` |
 | Stored permission prompts, open or settled | 10000 per account: 409 `too-many-items` |
 | Stored runs | 500 per account: 409 `too-many-items` for a new run; updates still pass |
 | A snooze | until at most 7 days after it is posted (`SNOOZE_MAX_MS`), since an unanswered decision drops after 30: 400 `bad-schema` |
-| Stored items | 128 MB per account, counting each item's boxes plus 512 bytes for the item and for each box, of which machine-signed items may fill all but the last 8 MB: 409 `too-many-items`; 2 MB per machine-signed item (all its boxes), 32 KB per run update and 32 KB per answer or permission answer: 413 `too-large` |
+| Stored items | 128 MB per account, counting each item's boxes plus 512 bytes for the item and for each box, of which machine-signed items may fill all but the last 8 MB: 409 `too-many-items`; 2 MB per machine-signed item (all its boxes), 1 MB per quota snapshot, 32 KB per run update for each device it is sealed to, and 32 KB per answer or permission answer: 413 `too-large` |
 | `POST /directory` | 30 an hour per account |
 | Directory entries | from entry 200 on, a device's `add`: 409 `directory-full`; revocations and confirmations always pass, the recovery key may add 20 more devices, and devices may propose 20 more recovery keys; 8 KB per entry: 413 `too-large` |
 | Sessions | 50 per account; signing in past that ends the oldest, unpaired ones first |
-| `GET /auth/github/callback` and `POST /auth/app/session` | 20 a minute per address, together |
+| `GET /auth/github/callback` and `POST /auth/app/session` | 60 a minute per address, together |
 | `POST /auth/owner` | 10 a minute per address |
 | `GET /auth/challenge` | 20 a minute per account |
-| `POST /pairings` | 10 a minute per address; 20 unapproved pairings per address, an IPv6 client counting as its /48: 429 `too-many-pairings` |
+| `POST /pairings` | 30 a minute per address; 50 unapproved pairings per address, an IPv6 client counting as its /48: 429 `too-many-pairings` |
 | `GET /pairings/:rendezvous` | 30 a minute per account |
 | `GET /pairings/:rendezvous/result` | 60 a minute per address |
 | Pairing messages | 4 KB each: 400 `bad-schema` |
@@ -529,14 +529,18 @@ nothing.
 
 - `snooze` `{v, id, decisionId, to, until, at, dir?}`: a device signs it, under a new id each
   time, and seals it to the machine that asked and to every active device, so each one hides the
-  decision. The latest `at`, compared as instants, wins, whichever device sent it, and the server
-  keeps only the latest per decision. `until` at or before `at` brings the decision back now.
+  decision. The latest `at`, compared as instants, wins, whichever device sent it. `until` at or
+  before `at` brings the decision back now. The server cannot read `at`, so it keeps each snooze
+  (at most 50 per decision), and a replayed id is 409 `duplicate-id`.
 - The item's `wakeAt` hint repeats `until`, so the server learns that some decision was put off
-  until then, and nothing else. At `wakeAt` it pushes the snooze once more to every device, which
-  shows the decision's notification again, once. Until then it pushes no `waiting` item of that
-  decision: the agent's flips are silent. An answer, Done or a settled notice cancels the push.
+  until then, and nothing else. At each snooze's `wakeAt` it pushes that snooze once more to
+  every device; a device shows the decision's notification again, once, only when that snooze is
+  the latest it knows. While the snooze that came last is pending, the server pushes no `waiting`
+  item of that decision: the agent's flips are silent. An answer, Done or a settled notice
+  cancels every pending push, and a stopping server sends the pushes it queued first.
 - The server refuses a snooze once its decision is answered or settled (409 `already-answered`),
-  and one whose `wakeAt` is more than 7 days ahead.
+  one whose `wakeAt` is more than 7 days ahead, and one whose `wakeAt` comes after the sweep
+  drops an unanswered decision (30 days after it arrived; 400 `bad-schema`).
 - Devices list `snooze` with the machine-signed kinds. A device that does not know the kind never
   lists it and ignores its push, so it shows the decision as open; a machine reads it only when
   it asks for it in `GET /answers?kinds=`.
@@ -681,6 +685,7 @@ for an unknown route or decision, 502 when the server refused or failed (`detail
 | `POST /decisions` | `{input}` with `ask`'s fields (`question`, `options`, `waiting`, `agent`, `project`, `session`, …); the client fills `project`, `session`, title and links from its own process, for Codex `codex` (`{home, bin}`: its `CODEX_HOME` and `codex` binary), and for Pi `piAnswers: true` while the Starbridge Pi extension runs in the session, for `claude -p` `headless: true` → `{id, delivery}`: `prompt` when the answer will come back into the session as a prompt (Claude Code's mod, when that session's mod called the agent within 45 s, which `claude -p` never does; the Pi extension; Codex, which the agent reaches with `codex queue` while the session's app-server daemon listens; that message names the decision and `starbridge wait <id>`, never its text, since process arguments are readable by other local users), else `wait` |
 | `POST /decisions/:id/waiting` | `{state: "working" \| "waiting"}` → `{posted, snoozedUntil?}`: post the decision's waiting state, `posted: false` when it already had it; `snoozedUntil` while the owner has snoozed it; 404 `unknown-decision`, 400 when it is answered. `starbridge waiting`, `working` |
 | `POST /answers/next` | `{id?, session?, wait?}`: the answer to decision `id`, or the first answer no `wait` printed to a decision session `session` asked, marked printed → `{answer?, question?, snoozedUntil?}`; with `id` and no answer, `snoozedUntil` once per snooze while the owner has snoozed it; 404 `unknown-decision`. `starbridge wait` |
+| `POST /answers/all` | `{since?, known?, wait?}`: every accepted answer the asking sessions may have, answered from `since` (ms since the epoch) on, leaving out the decision ids in `known`, held up to `wait` while there is none; marks nothing seen → `{answers: [{decisionId, question, choice? \| text? \| done?, answeredAt, session?, sessionTitle?, project?}]}`. `starbridge answers --all` |
 | `POST /quota` | `{providers?}`: run CodexBar and post a snapshot now → `{snapshot}` |
 | `POST /runs` | `{run}`: seal one update of a `starbridge run` to every device and post it; `run` is `{id, title, reason, startedAt, at, progress?, exit?, project, session, sessionTitle?, links?}` → `{id}` |
 | `POST /sessions/:id/hello` | `{pid?, cwd?, title?, replaces?}`: a session starts → `{version}`; `replaces` names the id it had before a `/clear`, which the agent no longer counts as having a mod (#537) |

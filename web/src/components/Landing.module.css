@@ -278,53 +278,6 @@
   text-align: center;
 }
 
-.install {
-  width: var(--size-content);
-  max-width: 100%;
-  margin-top: var(--s4);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-lg);
-  overflow: hidden;
-  background: var(--surface);
-}
-
-/* Four tabs wrap on a narrow phone; each side keeps room for the copy button, centred on the row. */
-.tabs {
-  position: relative;
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: var(--s1);
-  padding: var(--s2) var(--s10);
-  border-bottom: 1px solid var(--line);
-}
-
-.tab {
-  white-space: nowrap;
-  padding: var(--s1h) var(--s3);
-  border: 0;
-  border-radius: var(--radius-pill);
-  background: none;
-  color: var(--fg2);
-}
-
-.tab[aria-selected="true"] {
-  background: var(--surface2);
-  color: var(--fg);
-}
-
-.copy {
-  position: absolute;
-  right: var(--s2);
-  top: 50%;
-  transform: translateY(-50%);
-  display: grid;
-  padding: var(--s1h);
-  border: 0;
-  background: none;
-  color: var(--fg2);
-}
-
 /* The docs' inline code: Google Sans Code on a chip, kept on one line. */
 .inlineCode {
   padding: 1px var(--s1h);
@@ -333,13 +286,6 @@
   font-family: var(--mono);
   font-size: 0.875em;
   white-space: nowrap;
-}
-
-.cmd {
-  padding: var(--s5);
-  white-space: pre-wrap;
-  word-break: break-all;
-  text-align: center;
 }
 
 .foot {

@@ -1,0 +1,84 @@
+{
+  "agent": "opencode",
+  "model": "zai-coding-plan/glm-5.3-flash",
+  "arm": "after",
+  "scenario": "oc-question",
+  "rep": 3,
+  "turns": [
+    {
+      "commands": [],
+      "final": "",
+      "exit": 0,
+      "seconds": 69.166,
+      "delivery": [],
+      "background": [],
+      "tools": [
+        "question"
+      ]
+    },
+    {
+      "commands": [],
+      "final": "src/hello.js now greets in English: `export const greeting = 'Hello';`",
+      "exit": 0,
+      "seconds": 69.166,
+      "delivery": [],
+      "background": [],
+      "tools": [
+        "read",
+        "edit"
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_-glLM4jo1xz0j5Ga",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-06T22:53:34Z",
+      "question": "Which language should hello.js greet the user in?",
+      "context": "- English: Greet with \"Hello\"\n- French: Greet with \"Bonjour\"\n- German: Greet with \"Hallo\"\n\nMore than one can apply: reply with each one you pick.",
+      "options": [
+        "English",
+        "French",
+        "German"
+      ],
+      "recommended": "English",
+      "agent": "opencode",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "ses_eec940b60ffe36ZWhX5ERaOaWH",
+        "sessionTitle": "Multilingual greeting in hello.js"
+      },
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "1mR1nMZ51QIyYgHQwo6zBniA4V6YeQisyHoGzzbIDQQ"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "answered": "Answer to d_-glLM4jo1xz0j5Ga (Which language should hello.js greet the user in?): English",
+  "waiting": [
+    {
+      "v": 1,
+      "id": "w_-kiNNpQpIAoWrzYw",
+      "decisionId": "d_-glLM4jo1xz0j5Ga",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-06T22:53:34Z",
+      "state": "waiting",
+      "dir": {
+        "length": 2,
+        "head": "1mR1nMZ51QIyYgHQwo6zBniA4V6YeQisyHoGzzbIDQQ"
+      }
+    }
+  ],
+  "permissions": []
+}

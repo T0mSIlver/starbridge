@@ -4,7 +4,9 @@
 echo "claude $*" >>"$FAKE_LOG"
 s=$FAKE_STATE
 mkdir -p "$s"
+[ "$1" = "--version" ] && { echo "${FAKE_CLAUDE_VERSION:-2.1.291} (Claude Code)"; exit 0; }
 [ "$1" = "plugin" ] || exit 1
+case " $* " in *" --json "*) [ -n "$FAKE_NO_JSON" ] && { echo "error: unknown option '--json'" >&2; exit 1; } ;; esac
 shift
 case "$1 $2" in
   "marketplace list")

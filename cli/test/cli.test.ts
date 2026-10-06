@@ -95,6 +95,21 @@ test("pair prints a link and a QR code that carry the code", async () => {
   expect(await done).toBe(0);
 });
 
+test("pair past the account's machine limit ends at once with the reason (#615)", async () => {
+  server.stop();
+  server = await LiveServer.start({ maxMachines: 1 });
+  await paired(server);
+  const ctx = testCtx();
+  const done = run(["pair", "--server", server.url, "--name", "sixth"], ctx);
+  await until(() => ctx.lines.some((l) => l.startsWith("Pairing code: ")));
+  const code = ctx.lines[0]?.replace("Pairing code: ", "") as string;
+  await expect(server.approve(code)).rejects.toThrow("machine-cap");
+  expect(await done).toBe(1);
+  expect(ctx.errors.join("\n")).toContain(
+    "maximum number of machines (phones and browsers don't count): revoke one",
+  );
+});
+
 test("pair uses the hosted server unless --server or STARBRIDGE_SERVER names another", async () => {
   const real = globalThis.fetch;
   const asked: string[] = [];
@@ -111,6 +126,36 @@ test("pair uses the hosted server unless --server or STARBRIDGE_SERVER names ano
     globalThis.fetch = real;
   }
   expect(asked).toEqual(["https://starbridge.run/v1/pairings", "https://self.example/v1/pairings"]);
+});
+
+test("the last poll waits no longer than the code has left, and a swept pairing reads as expired (#623)", async () => {
+  const real = globalThis.fetch;
+  const polls: string[] = [];
+  const start = Date.now();
+  let posted = false;
+  globalThis.fetch = (async (url: string | URL | Request) => {
+    if (String(url).endsWith("/v1/pairings")) {
+      posted = true;
+      return new Response(null, { status: 201 });
+    }
+    polls.push(String(url));
+    return Response.json(
+      { error: "not-found", detail: "no such pairing, or it expired" },
+      { status: 404 },
+    );
+  }) as unknown as typeof fetch;
+  try {
+    const ctx = testCtx();
+    // Half a second of the 10 minutes is left once the pairing is stored.
+    ctx.now = () => new Date(posted ? start + 599_500 : start);
+    expect(await run(["pair", "--server", "https://self.example"], ctx)).toBe(1);
+    expect(polls.map((u) => new URL(u).searchParams.get("wait"))).toEqual(["1"]);
+    expect(ctx.errors.at(-1)).toBe(
+      "starbridge: the pairing code expired; run `starbridge pair` again",
+    );
+  } finally {
+    globalThis.fetch = real;
+  }
 });
 
 test("pair --force names the old pairing as Devices shows it, not by its id (#287)", async () => {
@@ -377,6 +422,90 @@ test("waiting and working flip a decision's state, and each flip pushes", async 
   await run(["wait", id], ctx);
   expect(await run(["working", id], ctx)).toBe(1);
   expect(ctx.errors.at(-1)).toContain("already answered");
+});
+
+test("waiting says when the owner snoozed the question, and wait says it once with exit 3", async () => {
+  const ctx = await paired(server);
+  await run(ASK, ctx);
+  const id = ctx.lines[0] as string;
+  const until = new Date();
+  until.setDate(until.getDate() + 1);
+  until.setHours(18, 0, 0, 0);
+  // Without the agent, `waiting` reads the snooze itself.
+  await server.snooze(id, until);
+  const line = `Snoozed ${id} (Merge #12 now?) until tomorrow 18:00: no answer before then.`;
+  expect(await run(["waiting", id], ctx)).toBe(0);
+  expect(ctx.lines.at(-1)).toBe(line);
+  expect(await run(["wait", id, "--timeout", "5s"], ctx)).toBe(3);
+  expect(ctx.lines.at(-1)).toBe(line);
+  // Told once: the next wait waits on, and an answer still comes.
+  const next = run(["wait", id, "--timeout", "20s"], ctx);
+  await server.answer(id, { choice: "Merge" });
+  expect(await next).toBe(0);
+  expect(ctx.lines.at(-1)).toBe(`Answer to ${id} (Merge #12 now?): Merge`);
+});
+
+test("through the local agent, waiting and wait say the snooze too, and --json prints its time", async () => {
+  const ctx = await paired(server);
+  const agent = makeAgent(ctx, { socket: join(ctx.store.dir, "agent.sock"), noQuota: true });
+  await agent.start();
+  try {
+    await run(ASK, ctx);
+    const id = ctx.lines.at(-1) as string;
+    const back = new Date();
+    back.setDate(back.getDate() + 1);
+    back.setHours(18, 0, 0, 0);
+    await server.snooze(id, back);
+    await until(() => !!ctx.store.state().asked[id]?.snooze);
+    expect(await run(["waiting", id], ctx)).toBe(0);
+    expect(ctx.lines.at(-1)).toBe(
+      `Snoozed ${id} (Merge #12 now?) until tomorrow 18:00: no answer before then.`,
+    );
+    expect(await run(["wait", id, "--json", "--timeout", "5s"], ctx)).toBe(3);
+    expect(JSON.parse(ctx.lines.at(-1) as string)).toEqual({
+      decisionId: id,
+      snoozedUntil: back.toISOString(),
+    });
+    expect(await run(["wait", id, "--timeout", "2s"], ctx)).toBe(2);
+  } finally {
+    await agent.stop();
+  }
+});
+
+test("a snooze waiting read is not told by wait once the owner answered since", async () => {
+  const ctx = await paired(server);
+  await run(ASK, ctx);
+  const id = ctx.lines[0] as string;
+  await server.snooze(id, new Date(Date.now() + 3_600_000));
+  expect(await run(["waiting", id], ctx)).toBe(0);
+  expect(ctx.lines.at(-1)).toStartWith(`Snoozed ${id}`);
+  await server.answer(id, { choice: "Merge" });
+  expect(await run(["wait", id, "--timeout", "10s"], ctx)).toBe(0);
+  expect(ctx.lines.at(-1)).toBe(`Answer to ${id} (Merge #12 now?): Merge`);
+});
+
+test("back now from a device whose clock runs ahead says nothing either", async () => {
+  const ctx = await paired(server);
+  await run(ASK, ctx);
+  const id = ctx.lines[0] as string;
+  const ahead = new Date(Date.now() + 4 * 60_000);
+  await server.snooze(id, ahead, ahead);
+  expect(await run(["waiting", id], ctx)).toBe(0);
+  expect(ctx.lines.at(-1)).toBe(id);
+  expect(await run(["wait", id, "--timeout", "2s"], ctx)).toBe(2);
+});
+
+test("back now: a snooze already over says nothing", async () => {
+  const ctx = await paired(server);
+  await run(ASK, ctx);
+  const id = ctx.lines[0] as string;
+  await server.snooze(id, new Date(Date.now() - 1000));
+  await poll(ctx, session(ctx), {
+    cursor: ctx.store.state().asked[id]?.cursor,
+    seconds: 0,
+    shared: false,
+  });
+  expect(await run(["wait", id, "--timeout", "2s"], ctx)).toBe(2);
 });
 
 test("wait --no-mark collects an answer without marking it waiting, which would notify again (#603)", async () => {

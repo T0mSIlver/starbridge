@@ -101,6 +101,35 @@ test("item posts past the account's rate get 429 with Retry-After", async () => 
   expect(Number(r.headers.get("retry-after"))).toBeGreaterThan(0);
 });
 
+test("machines' items spend a byte budget a minute, replaced and stored ones only", async () => {
+  const probe = await setup();
+  const size = quota(probe.devbox, probe.phone).boxes.reduce((n, b) => n + b.box.length, 0);
+  const { s, phone, devbox } = await setup({ postedBytes: [Math.floor(size * 1.5), 60_000] });
+  const first = quota(devbox, phone);
+  expect((await post(s, devbox, first)).status).toBe(201);
+  // Refused posts spend nothing.
+  for (let i = 0; i < 3; i++) expect((await post(s, devbox, first)).status).toBe(409);
+  // Snapshots replace each other, so the stored-bytes cap never sees them; the budget does.
+  expect((await post(s, devbox, quota(devbox, phone))).status).toBe(201);
+  const r = await post(s, devbox, quota(devbox, phone));
+  expect(r.status).toBe(429);
+  expect(r.json.detail).toContain("MB");
+});
+
+test("a looping machine spends its own window first, and the owner's answers always pass", async () => {
+  const { s, acct, phone, devbox } = await setup({ items: [3, 60_000], machineItems: [2, 60_000] });
+  const laptop = await pair(s, acct, "laptop", "machine");
+  const d = decision(devbox, phone);
+  expect((await post(s, devbox, d)).status).toBe(201);
+  expect((await post(s, devbox, decision(devbox, phone))).status).toBe(201);
+  // The machine's own window is full; the account's still has room for the laptop.
+  expect((await post(s, devbox, decision(devbox, phone))).status).toBe(429);
+  expect((await post(s, laptop, decision(laptop, phone))).status).toBe(201);
+  // Now the account's window is full too, but answers count in the device's own.
+  expect((await post(s, laptop, decision(laptop, phone))).status).toBe(429);
+  expect((await post(s, phone, answer(d, phone, devbox))).status).toBe(201);
+});
+
 test("a full account refuses new decisions but still takes answers and replaced quotas", async () => {
   const { s, phone, devbox } = await setup({ decisions: 2 });
   const first = decision(devbox, phone);
@@ -184,7 +213,7 @@ test("stored bytes are capped per account, keeping room for answers, and per ite
   expect(r.json.error).toBe("too-many-items");
   expect((await post(s, phone, a)).status).toBe(201);
 
-  s.deps.config.limits = { ...DEFAULT_LIMITS, itemBytes: boxes(q) - 1, answerBytes: boxes(a) - 1 };
+  s.deps.config.limits = { ...DEFAULT_LIMITS, quotaBytes: boxes(q) - 1, answerBytes: boxes(a) - 1 };
   const big = await post(s, devbox, quota(devbox, phone));
   expect(big.status).toBe(413);
   expect(big.json.error).toBe("too-large");
@@ -427,10 +456,11 @@ test("the GitHub callback is rate-limited per address", async () => {
     },
   });
   const statuses = [];
-  for (let i = 0; i < 21; i++)
+  const [n] = DEFAULT_LIMITS.githubCallbacks;
+  for (let i = 0; i <= n; i++)
     statuses.push((await s.call("GET", "/v1/auth/github/callback?code=x&state=y")).status);
-  expect(statuses.slice(0, 20).every((st) => st === 400)).toBe(true);
-  expect(statuses[20]).toBe(429);
+  expect(statuses.slice(0, n).every((st) => st === 302)).toBe(true);
+  expect(statuses[n]).toBe(429);
 });
 
 test("a short window's sweep leaves a longer window's count alone", () => {

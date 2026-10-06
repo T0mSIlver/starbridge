@@ -24,6 +24,7 @@ import { PromptDetail, QuestionDetail } from "./Detail";
 import { HistoryHead, machineIcon, NeedRow, PastRow, RunRow, useNow, waitingSince } from "./Feed";
 import feed from "./Feed.module.css";
 import s from "./Inbox.module.css";
+import { InstallBox } from "./InstallBox";
 import { Icon } from "./icons";
 import { ordered } from "./options";
 import { PhoneBar } from "./PhoneBar";
@@ -31,6 +32,7 @@ import { PushBanner } from "./PushBanner";
 import { QuotaAside } from "./QuotaAside";
 import { RecoveryBanner } from "./RecoveryBanner";
 import { Resizer } from "./Resizer";
+import { pairedMachines } from "./Shell";
 import ui from "./ui.module.css";
 
 // From here the list and the detail sit side by side (Inbox.module.css).
@@ -56,6 +58,7 @@ const text = (e: Entry) =>
       : [e.item.run.title, e.item.run.reason];
 
 export function Inbox() {
+  const app = useApp();
   const {
     inbox,
     inboxLoaded,
@@ -66,12 +69,35 @@ export function Inbox() {
     answer,
     answerPrompt,
     deviceName,
-  } = useApp();
+  } = app;
   const [grouping, setGrouping] = usePref("grouping");
   const [historyOpen, setHistoryOpen] = usePref("historyOpen");
   // History's rows fade in when the owner opens it, not when the page loads with it open or the
   // list comes back.
   const [historyToggled, setHistoryToggled] = useState(false);
+  // History glides between the list's bottom and its place under the items (#662): where it was
+  // before the toggle, played back to where it lands (FLIP). Reduced motion makes it a jump.
+  const historyRef = useRef<HTMLDivElement>(null);
+  const historyFrom = useRef<number>(undefined);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: runs after each toggle's render.
+  useLayoutEffect(() => {
+    const el = historyRef.current;
+    const from = historyFrom.current;
+    historyFrom.current = undefined;
+    if (!el || from === undefined) return;
+    // A toggle mid-glide: where it lands is measured without the glide still running.
+    for (const a of el.getAnimations()) a.cancel();
+    const by = from - el.getBoundingClientRect().top;
+    if (Math.abs(by) < 1 || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const root = getComputedStyle(document.documentElement);
+    // The browser may give the token back in seconds ("0.25s") or milliseconds.
+    const t = root.getPropertyValue("--t-state").trim();
+    const ms = Number.parseFloat(t) * (t.endsWith("ms") ? 1 : 1000);
+    el.animate([{ transform: `translateY(${by}px)` }, { transform: "none" }], {
+      duration: ms || 250,
+      easing: root.getPropertyValue("--ease").trim() || "ease-out",
+    });
+  }, [historyOpen]);
   const find = useFind();
   // Find searches History too, so its prompt log loads once a query starts, not per keystroke.
   const finding = find.trim() !== "";
@@ -252,6 +278,8 @@ export function Inbox() {
   );
 
   const count = needs.length;
+  // Nothing can reach this inbox until a machine pairs: say how (#610).
+  const noMachine = pairedMachines(app) === 0;
   const waitingOn = needs.filter((e) => waitingSince(e));
   const whenYouCan = needs.filter((e) => !waitingSince(e));
   const historyPart = (
@@ -264,6 +292,7 @@ export function Inbox() {
           count={closedToday(past, now)}
           comfy={comfy}
           onToggle={() => {
+            historyFrom.current = historyRef.current?.getBoundingClientRect().top;
             setHistoryOpen(!historyOpen);
             setHistoryToggled(true);
           }}
@@ -364,12 +393,18 @@ export function Inbox() {
       {needs.length === 0 &&
         runEntries.length === 0 &&
         (!finding ? (
-          <p className={`t-small ${s.empty}`}>Nothing needs you</p>
+          noMachine && !wide ? (
+            <NoMachine />
+          ) : (
+            <p className={`t-small ${s.empty}`}>Nothing needs you</p>
+          )
         ) : past.length === 0 ? (
           <p className={`t-small ${s.empty}`}>Nothing matches</p>
         ) : null)}
-      <div className={s.gap} />
-      {grouped ? seg(historyPart) : historyPart}
+      <div ref={historyRef} className={showPast ? undefined : s.down}>
+        <div className={s.gap} />
+        {grouped ? seg(historyPart) : historyPart}
+      </div>
     </section>
   );
 
@@ -396,7 +431,7 @@ export function Inbox() {
   return (
     <Panes list={list}>
       <section className={s.detail} aria-label="Selected">
-        {detail(selected)}
+        {detail(selected) ?? (noMachine && <NoMachine />)}
       </section>
     </Panes>
   );
@@ -760,6 +795,23 @@ function ViewMenu({
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+/** The empty inbox of an account with no machine: what to install, where. */
+function NoMachine() {
+  return (
+    <div className={s.noMachine}>
+      <h2 className="t-heading">Add a machine</h2>
+      <p className={`t-small ${s.noMachineText}`}>
+        Install Starbridge on each machine that runs your agents. Its setup shows a code to approve
+        here; then its agents' questions arrive in this inbox.
+      </p>
+      <InstallBox />
+      <p className={`t-small ${s.noMachineText}`}>
+        What setup does: <a href="/docs">the docs</a>
+      </p>
     </div>
   );
 }

@@ -2,12 +2,31 @@ import { readFileSync } from "node:fs";
 import { parseArgs } from "node:util";
 import { ProtocolError, ready, type SessionLink } from "@starbridge/protocol";
 import { AgentError, Interrupted, withAgent } from "./agent/client";
-import { AgentGone, answersVia, askVia, quotaVia, waitingVia, waitVia } from "./agent/commands";
+import {
+  AgentGone,
+  answersAllVia,
+  answersVia,
+  askVia,
+  quotaVia,
+  waitingVia,
+  waitVia,
+} from "./agent/commands";
 import { runAgent } from "./agent/main";
 import { ApiError, sandboxHint, Unreachable } from "./api";
 import { StateFileError } from "./config";
 import { type Ctx, UsageError } from "./context";
-import { type AskInput, answers, ask, resolveSource, settle, setWaiting, wait } from "./decisions";
+import {
+  type AskInput,
+  answers,
+  answersAll,
+  ask,
+  decisionsOpen,
+  resolveSource,
+  settle,
+  setWaiting,
+  sinceTime,
+  wait,
+} from "./decisions";
 import { hookAskUser, hookPermission, hookQuestion, hookSettle } from "./hook";
 import { pair } from "./pair";
 import { pushOnce, quotaPush } from "./quota";
@@ -101,6 +120,15 @@ const HELP = `starbridge: post decisions to your devices, report runs, upload qu
   starbridge answers --session <id> --ack <ack>...
       For the Claude Code mod: confirm it submitted these lines (each line's "ack"), so they
       are not printed again.
+
+  starbridge answers --all [--follow] [--since <time or duration>]
+      For an orchestrator: print, as JSON lines, every answer to a decision this machine asked,
+      with its question and the session and project that asked; --follow keeps printing new
+      ones until interrupted. It only reads: each answer still reaches the session that asked.
+
+  starbridge decisions --open
+      Print, as JSON lines, the questions this machine asked that are still open, with the
+      session and project that asked, so an orchestrator does not ask the same thing again.
 
   starbridge run --title <text> --reason <text> -- <command> [<arg>...]
       Run the command, its output passed through unchanged, and show it on every device:
@@ -286,7 +314,7 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
         const opts = { id: positionals[0], state: command };
         return await withAgent(
           ctx,
-          (agent) => waitingVia(agent, opts),
+          (agent) => waitingVia(agent, opts, ctx),
           () => setWaiting(ctx, opts),
         );
       }
@@ -322,8 +350,26 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
             session: { type: "string" },
             wait: { type: "string" },
             ack: { type: "string", multiple: true },
+            all: { type: "boolean" },
+            follow: { type: "boolean" },
+            since: { type: "string" },
           },
         });
+        if (values.all) {
+          if (values.session !== undefined || values.wait !== undefined || values.ack)
+            throw new UsageError("--all takes no --session, --wait or --ack");
+          const opts = {
+            follow: values.follow,
+            ...(values.since !== undefined ? { since: sinceTime(values.since, ctx.now()) } : {}),
+          };
+          return await withAgent(
+            ctx,
+            (agent) => answersAllVia(ctx, agent, opts, (printed) => answersAll(ctx, opts, printed)),
+            () => answersAll(ctx, opts),
+          );
+        }
+        if (values.follow || values.since !== undefined)
+          throw new UsageError("--follow and --since go with --all");
         const target = values.session;
         if (!target) throw new UsageError("answers needs --session");
         if (values.ack && values.wait !== undefined) throw new UsageError("--ack takes no --wait");
@@ -332,6 +378,11 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
           (agent) => answersVia(ctx, agent, target, values),
           () => answers(ctx, values),
         );
+      }
+      case "decisions": {
+        const { values } = parseArgs({ args: rest, options: { open: { type: "boolean" } } });
+        if (!values.open) throw new UsageError("usage: starbridge decisions --open");
+        return decisionsOpen(ctx);
       }
       case "quota": {
         const [sub, ...args] = rest;

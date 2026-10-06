@@ -30,7 +30,8 @@ signed hash chain that every client pins, so the server can't add a key of its o
 a revocation unseen.
 
 What it does see: your GitHub numeric id, device and machine ids, public keys, the names you
-give devices, and each item's kind, id, sender, recipients, size and times, plus push tokens.
+give devices and machines, and each item's kind, id, sender, recipients, the item it answers,
+size and times, plus push tokens.
 It can hold items back or drop them.
 
 The limits:
@@ -54,13 +55,14 @@ the agent doesn't matter. Quotas read your AI plans through CodexBar; with no pl
 
 ## Which agents, and how well?
 
-Claude Code gets the most: a plugin with rules, a skill and hooks, answers into the live
-session, its own `AskUserQuestion` sent to your phone, and permission prompts if you turn them
-on. opencode gets the same through its plugin, its own `question` tool included. Pi gets the
-rules, the skill and answers into the live session through its package, and permission prompts
-with pi-permission-system. Codex gets the skill and answers into interactive sessions, but no
-rules and no permission prompts. Any other agent can
-run `starbridge ask` and `starbridge wait`.
+Claude Code gets the most: a plugin with rules, a skill and hooks; answers into the live session
+through a [Claude Code mod](https://code.claude.com/docs/en/plugins/mods/overview), code that
+runs inside Claude Code; its own `AskUserQuestion` sent to your phone; and permission prompts if
+you turn them on. opencode gets the same through its plugin, its own `question` tool included.
+Pi gets the rules, the skill and answers into the live session through its package, and
+permission prompts with pi-permission-system. Codex gets the skill and answers into interactive
+sessions, but no rules and no permission prompts. Any other agent can run `starbridge ask` and
+`starbridge wait`.
 [What each agent supports](tell-your-agents.md#what-each-agent-supports) has the details.
 
 ## Do I restart my agents after setup?
@@ -88,7 +90,8 @@ Your plan credentials stay on the machine, and only the encrypted snapshot goes 
 
 Nothing. starbridge.run is a small VPS the author pays for. The [terms](https://starbridge.run/terms)
 promise 60 days' notice before any price and 30 days' notice before a shutdown. Each account
-takes up to 5 machines. Self-hosting is free, under the MIT licence.
+takes up to 3 machines, the computers that run your agents, and any number of phones and
+browsers. Self-hosting is free, under the MIT licence.
 
 ## What's kept, and for how long?
 
@@ -106,10 +109,11 @@ it keeps only the numeric GitHub id. A self-hosted server can use an owner token
 
 It is TypeScript compiled with `bun build --compile`, so the binary carries the Bun runtime. It
 shares the signing and sealing code with the web app and the server. `starbridge --version`
-takes about 45 ms, and the background service uses about 36 MB of memory. The Claude Code
-plugin runs `starbridge hook settle` after each tool call, which adds about 50 ms.
+takes about 45 ms, and the background service holds about 35 MB of memory of its own, 80 MB
+with the runtime it maps. After each tool call, the Claude Code plugin's hook checks whether a
+permission prompt is open, which takes under a millisecond, and starts the CLI only if one is.
 
 ## Will the hosted server hold up?
 
-A load test on a copy of the server, capped at its VPS's size, served 2000 simulated users at a
-p99 of 194 ms. The VPS can be resized in minutes.
+A load test ran the production stack on two cores with the VPS's memory. It holds about 5000
+signed-in users and 15 to 20 new visitors a second. The VPS can be resized in minutes.

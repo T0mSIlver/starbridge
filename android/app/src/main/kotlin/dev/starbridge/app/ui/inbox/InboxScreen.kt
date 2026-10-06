@@ -119,6 +119,19 @@ import kotlinx.coroutines.delay
 import java.time.Instant
 import java.time.ZoneId
 import javax.inject.Inject
+import androidx.compose.animation.core.tween
+import androidx.compose.ui.zIndex
+import androidx.compose.ui.draw.clip
+import android.content.ClipData
+import android.content.Intent
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.ui.platform.ClipEntry
+import androidx.compose.ui.platform.LocalClipboard
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
+import android.os.Build
+import android.widget.Toast
 
 @HiltViewModel
 class InboxViewModel @Inject constructor(private val store: Store, private val prefs: Prefs) : ViewModel() {
@@ -133,6 +146,7 @@ class InboxViewModel @Inject constructor(private val store: Store, private val p
     fun answer(id: String, choice: String?, text: String?) = store.answer(id, choice, text)
     fun refresh() = store.refresh()
     val recovery = store.recovery
+    val members = store.members
     fun dismissRecovery(seq: Int) = store.dismissRecoveryNotice(seq)
 }
 
@@ -206,6 +220,8 @@ fun InboxScreen(
     recovery: RecoveryUi? = null,
     dismissRecovery: (Int) -> Unit = {},
     notificationsOff: Boolean = false,
+    /** The account has no active machine yet: the empty inbox says how to add one (#610). */
+    noMachine: Boolean = false,
 ) {
     // While a prompt is on screen, read prompts every 1.5 s, so one settled elsewhere leaves
     // at once; the clock ticks with it for the 3 s a closed prompt stays.
@@ -245,11 +261,13 @@ fun InboxScreen(
         header = { Lockup(24.dp, 22.sp) },
         gap = groupGap,
         margin = Spacing.s4,
+        // Closed, History waits at the bottom, out of the way; opened, it rises under the items (#662).
+        lastAtBottom = !view.historyOpen && history.rows.isNotEmpty(),
     ) {
         recoveryBanner(recovery, dismissRecovery)
         if (notificationsOff && view.remindOff) item(key = "notifications-off") { NotificationsOff { onView(view.copy(remindOff = false)) } }
         if (feed.isEmpty()) {
-            item(key = "empty") { Empty() }
+            item(key = "empty") { if (noMachine) NoMachine() else Empty() }
         } else {
             when (view.grouping) {
                 Grouping.Machine -> byMachine(runItems, needs) { it.machine.machine }.forEach { items ->
@@ -395,6 +413,52 @@ private fun Empty() {
         Text("Nothing needs you", style = StarbridgeTheme.type.heading, color = MaterialTheme.colorScheme.onSurface, textAlign = TextAlign.Center)
     }
 }
+
+/** A new account's empty inbox: the install command to copy or send to the machine. */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun NoMachine() {
+    val context = LocalContext.current
+    val clipboard = LocalClipboard.current
+    val scope = rememberCoroutineScope()
+    Column(Modifier.fillMaxWidth().padding(top = 56.dp, bottom = 40.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(Spacing.s4)) {
+        Box(Modifier.size(160.dp).background(MaterialTheme.colorScheme.surfaceContainerHighest, MaterialShapes.Cookie9Sided.toShape()), contentAlignment = Alignment.Center) {
+            Symbol(Sym.Computer, size = 56.dp, tint = MaterialTheme.colorScheme.onSurface)
+        }
+        Text("Add a machine", style = StarbridgeTheme.type.heading, color = MaterialTheme.colorScheme.onSurface, textAlign = TextAlign.Center, modifier = Modifier.semantics { heading() })
+        Text(
+            "Install Starbridge on each machine that runs your agents. Its setup shows a code to approve here; then its agents’ questions arrive in this inbox.",
+            style = StarbridgeTheme.type.body,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
+        Surface(shape = RoundedCornerShape(Radius.lg), color = MaterialTheme.colorScheme.surfaceContainerHighest, modifier = Modifier.fillMaxWidth()) {
+            Text(INSTALL, style = StarbridgeTheme.type.code, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(Spacing.s4))
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+            FilledTonalButton(onClick = {
+                scope.launch { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("Install command", INSTALL))) }
+                // Android 13 and later confirm a copy themselves.
+                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) Toast.makeText(context, "Copied", Toast.LENGTH_SHORT).show()
+            }, modifier = Modifier.heightIn(min = Sizes.tap)) {
+                Symbol(Sym.Copy, size = 18.dp)
+                Spacer(Modifier.width(Spacing.s2))
+                Text("Copy", style = StarbridgeTheme.type.action)
+            }
+            // To the computer, by mail or a chat, when this phone is not where the terminal is.
+            OutlinedButton(
+                onClick = { runCatching { context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, INSTALL), null)) } },
+                modifier = Modifier.heightIn(min = Sizes.tap),
+            ) { Text("Send", style = StarbridgeTheme.type.action) }
+        }
+        TextButton(onClick = { openLink(context, INSTALL_DOCS) }, modifier = Modifier.heightIn(min = Sizes.tap)) {
+            Text("Windows, Homebrew and npm", style = StarbridgeTheme.type.action)
+        }
+    }
+}
+
+private const val INSTALL = "curl -fsSL https://starbridge.run/install.sh | sh"
+private const val INSTALL_DOCS = "https://starbridge.run/docs"
 
 /**
  * A question in the feed, on the same card as every item (#248): one its agent waits on takes the
@@ -774,9 +838,11 @@ private fun LazyListScope.history(history: History, open: Boolean, onOpen: (Bool
     if (history.rows.isEmpty()) return
     item(key = "history") {
         val scheme = MaterialTheme.colorScheme
+        val shape = if (joined) segment(0, count) else cardShape
         Surface(
-            Modifier.fillMaxWidth().padding(top = Spacing.s3).clickable(onClickLabel = if (open) "Hide History" else "Show History") { onOpen(!open) },
-            shape = if (joined) segment(0, count) else cardShape,
+            // Moving between the bottom and its place under the items, it glides as the cards do.
+            Modifier.animateItem(placementSpec = MaterialTheme.motionScheme.defaultSpatialSpec()).zIndex(1f).fillMaxWidth().padding(top = Spacing.s3).clip(shape).clickable(onClickLabel = if (open) "Hide History" else "Show History") { onOpen(!open) },
+            shape = shape,
             color = scheme.surfaceContainer,
         ) {
             Row(Modifier.padding(horizontal = Spacing.s5, vertical = Spacing.s4), verticalAlignment = Alignment.CenterVertically) {
@@ -794,7 +860,9 @@ private fun LazyListScope.history(history: History, open: Boolean, onOpen: (Bool
     itemsIndexed(history.rows, key = { _, (_, it) -> if (it is Decision) "h/d/${it.id}" else "h/p/${(it as Prompt).id}" }) { i, (at, it) ->
         // Apart, one-line cards round less, as Material scales a corner with its container.
         val shape = if (joined) segment(i + 1, count) else RoundedCornerShape(Spacing.s5)
-        Box(Modifier.padding(top = if (joined) 0.dp else cardGap - groupGap)) {
+        // The rows fade in once the head has nearly risen to them, not under it on its way (#662).
+        val rows = Modifier.animateItem(fadeInSpec = tween(250, delayMillis = 200), placementSpec = MaterialTheme.motionScheme.defaultSpatialSpec())
+        Box(rows.padding(top = if (joined) 0.dp else cardGap - groupGap)) {
             when (it) {
                 is Decision -> HistoryRow(it.source, it.question, false, closedHow(it), shape) { actions.open(it.id) }
                 is Prompt -> HistoryRow(it.source, it.summary, true, closedHow(it), shape) { promptActions?.open?.invoke(it.id) }

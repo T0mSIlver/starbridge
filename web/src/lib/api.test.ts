@@ -35,6 +35,13 @@ test("a write is not repeated after a failure that may have reached the server",
 test("while the server is down, pollers share one backoff instead of each retrying (#332)", async () => {
   backoff.retryForMs = 1_500;
   const calls = serve(...Array.from({ length: 100 }, () => new TypeError("Failed to fetch")));
+  // Calls made while the backoff still runs; a timer may fire a millisecond early.
+  let during = 0;
+  const failing = globalThis.fetch;
+  globalThis.fetch = ((...args: Parameters<typeof fetch>) => {
+    if (Date.now() < backoff.until - 1) during++;
+    return failing(...args);
+  }) as typeof fetch;
   // A poller's turn every 50 ms for two seconds, as the inbox, prompts and runs add up to.
   const reads: Promise<unknown>[] = [];
   for (let i = 0; i < 40; i++) {
@@ -44,8 +51,10 @@ test("while the server is down, pollers share one backoff instead of each retryi
   const errors = await Promise.all(reads);
   expect(errors.every((e) => e instanceof Unreachable)).toBe(true);
   expect(errors[0]).toHaveProperty("message", "Can't reach the Starbridge server.");
-  // The first read retries at 125–250 ms, 250–500 ms and so on; the pollers wait meanwhile.
-  expect(calls.length).toBeLessThan(10);
+  // Reads retry when the shared backoff ends, and pollers skip their turn until then: no call
+  // goes out during a backoff, however slow the machine (a count of calls was flaky).
+  expect(calls.length).toBeGreaterThan(1);
+  expect(during).toBe(0);
 });
 
 test("a call's first try goes out during the backoff, and its answer ends it (#332)", async () => {
