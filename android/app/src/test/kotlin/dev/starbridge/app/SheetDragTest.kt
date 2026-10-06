@@ -7,14 +7,12 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.SemanticsNodeInteraction
-import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import dev.starbridge.app.ui.inbox.DecisionSheet
 import dev.starbridge.app.ui.inbox.Replies
@@ -29,7 +27,8 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import java.time.Instant
 
-// A question's image in its sheet (#246): a drag that starts on it moves the sheet, a tap opens it.
+// A drag that starts on a question's image still moves its sheet, so no gesture of the image's
+// own takes it (#246). `ScreenshotTest.imageViewer` covers the tap.
 @OptIn(ExperimentalMaterial3Api::class)
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [36], qualifiers = "w412dp-h892dp-xxhdpi")
@@ -72,11 +71,5 @@ class SheetDragTest {
         assertTrue("from the text $text dp", text > 0f)
         assertEquals(text, image, 0.5f)
         compose.onNodeWithContentDescription("Close").assertDoesNotExist()
-    }
-
-    @Test fun tapOnImageOpensViewer() {
-        open()
-        image.performClick()
-        compose.onNodeWithContentDescription("Close").assertIsDisplayed()
     }
 }

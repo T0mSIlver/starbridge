@@ -94,8 +94,9 @@ private fun ImageBox(image: Attached, maxHeight: Dp, wide: Boolean, crop: Boolea
                 .size(width, height)
                 .clip(RoundedCornerShape(Radius.lg))
                 .background(MaterialTheme.colorScheme.surfaceContainerHighest)
-                // No ripple: a finger resting on the image before it drags the sheet would press
-                // it, and the ripple over the image made the sheet stutter as it moved (#246).
+                // No ripple: a finger that rests on the image before it drags the sheet would press
+                // it, and the ripple starting and cancelling as the sheet moves is the one thing a
+                // drag from the image did that one from the text did not (#246).
                 .clickable(interactionSource = null, indication = null, onClickLabel = "View full screen", onClick = onOpen)
                 // Labelled before the bitmap lands.
                 .semantics { image.alt?.let { contentDescription = it } },
