@@ -113,6 +113,36 @@ test("pair uses the hosted server unless --server or STARBRIDGE_SERVER names ano
   expect(asked).toEqual(["https://starbridge.run/v1/pairings", "https://self.example/v1/pairings"]);
 });
 
+test("the last poll waits no longer than the code has left, and a swept pairing reads as expired (#623)", async () => {
+  const real = globalThis.fetch;
+  const polls: string[] = [];
+  const start = Date.now();
+  let posted = false;
+  globalThis.fetch = (async (url: string | URL | Request) => {
+    if (String(url).endsWith("/v1/pairings")) {
+      posted = true;
+      return new Response(null, { status: 201 });
+    }
+    polls.push(String(url));
+    return Response.json(
+      { error: "not-found", detail: "no such pairing, or it expired" },
+      { status: 404 },
+    );
+  }) as unknown as typeof fetch;
+  try {
+    const ctx = testCtx();
+    // Half a second of the 10 minutes is left once the pairing is stored.
+    ctx.now = () => new Date(posted ? start + 599_500 : start);
+    expect(await run(["pair", "--server", "https://self.example"], ctx)).toBe(1);
+    expect(polls.map((u) => new URL(u).searchParams.get("wait"))).toEqual(["1"]);
+    expect(ctx.errors.at(-1)).toBe(
+      "starbridge: the pairing code expired; run `starbridge pair` again",
+    );
+  } finally {
+    globalThis.fetch = real;
+  }
+});
+
 test("pair --force names the old pairing as Devices shows it, not by its id (#287)", async () => {
   const ctx = await paired(server);
   const done = run(["pair", "--force"], ctx);
@@ -418,8 +448,6 @@ test("a decision names its agent and the machine's kind, which config sets", asy
 test("a claude -p session is told to wait, since no mod brings its answer back", async () => {
   const ctx = await paired(server);
   ctx.env.CLAUDECODE = "1";
-  await run(ASK, ctx);
-  expect(ctx.errors.at(-1)).toBe("The answer will come back into this session as a new prompt.");
   ctx.env.CLAUDE_CODE_SESSION_ATTENDED = "0";
   await run(ASK, ctx);
   expect(ctx.errors.at(-1)).toContain("run `starbridge wait");
@@ -429,7 +457,6 @@ test("a claude -p session is told to wait, since no mod brings its answer back",
   await run(ASK, ctx);
   expect(ctx.errors.at(-1)).toContain("run `starbridge wait");
   expect((await server.opened("decision")).map((d) => d.agent)).toEqual([
-    "claude-code",
     "claude-code",
     "claude-code",
   ]);

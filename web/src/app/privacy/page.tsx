@@ -29,15 +29,22 @@ export default function Privacy() {
           The public keys of your devices and machines, and the names you give them, in a list they
           sign.
         </li>
-        <li>Hashes of your sign-in sessions, which expire after a year, and of machine tokens.</li>
+        <li>
+          Hashes of your sign-in sessions, which expire after a year, and of machine tokens. A new
+          machine&apos;s token is also kept as is with its pairing request for about 10 minutes, so
+          a reply lost on the way can be sent again; a backup taken in that time keeps it too.
+        </li>
         <li>
           For each device that gets notifications: the push service, its token or endpoint URL, and
           the keys that encrypt pushes to it.
         </li>
         <li>
-          Your decisions, answers, quota snapshots, permission prompts and runs. Your devices and
-          machines encrypt them before upload, and the server cannot read them. It does see the kind
-          of each one, its id, who sent it to whom, its size and when it arrived or was answered.
+          Your decisions, answers, quota snapshots, permission prompts and their answers, runs, and
+          the notices that close an item or say an agent is waiting. Your devices and machines
+          encrypt them before upload, and the server cannot read them. It does see the kind of each
+          one, its id, who sent it, which devices it went to, which item it answers or closes, its
+          size, when it arrived, was updated or was answered, and whether an item asked for a
+          notification.
         </li>
       </ul>
       <p>The server deletes them on this schedule:</p>
@@ -45,7 +52,10 @@ export default function Privacy() {
         <li>answered decisions and their answers, 7 days after the answer;</li>
         <li>permission prompts, their answers and settled notices, 7 days after they arrive;</li>
         <li>runs, 1 day after their last update;</li>
-        <li>unanswered decisions and quota snapshots, 30 days after they arrive;</li>
+        <li>
+          unanswered decisions and quota snapshots, 30 days after they arrive; a machine&apos;s new
+          quota snapshot replaces its last one;
+        </li>
         <li>a request to pair a new device or machine, 10 minutes after it is made.</li>
       </ul>
       <p>
@@ -59,9 +69,11 @@ export default function Privacy() {
       <p>
         The web server (Caddy) keeps no access log. The server, Caddy and the web page log startup,
         errors and failed pushes; these lines can include an account id or a push endpoint, but not
-        IP addresses or your content. Each keeps five files of 10 MB, so how long a log covers
-        depends on traffic. To enforce rate limits, the server counts requests per IP address in
-        memory; it never writes them to disk, and a restart clears them.
+        IP addresses or your content. Caddy&apos;s error log is the exception: for a request that
+        failed at the proxy, it can hold the request&apos;s IP address, path and headers. Each keeps
+        five files of 10 MB, so how long a log covers depends on traffic. To enforce rate limits,
+        the server counts requests per IP address in memory; it never writes them to disk, and a
+        restart clears them.
       </p>
 
       <h2 className="t-heading">Usage counts</h2>
@@ -90,7 +102,8 @@ export default function Privacy() {
           pushes by push service and outcome (sent, failed, gone, no route, dropped), and the same
           for pushes relayed for self-hosted servers;
         </li>
-        <li>push targets by push service.</li>
+        <li>push targets by push service;</li>
+        <li>which releases of the Android app, the web page and the CLI were in use.</li>
       </ul>
 
       <h2 className="t-heading">Who else sees what</h2>
@@ -147,11 +160,13 @@ export default function Privacy() {
       <h2 className="t-heading">Deletion</h2>
       <p>
         Removing a device or machine from your account ends its sign-in and deletes its push
-        targets; a push target the push service reports as gone is deleted too. To delete your whole
-        account, email <a href="mailto:privacy@starbridge.run">privacy@starbridge.run</a> with your
-        GitHub login. To show the account is yours, you post a code the operator sends you in a
-        public gist on that GitHub account. The operator deletes the account within 30 days of that,
-        and backups age out within 3 weeks after.
+        targets; a push target the push service reports as gone is deleted too. Its name and keys
+        stay in your account&apos;s signed device list, which nothing rewrites, and the items
+        encrypted for it stay until the schedule above deletes them. To delete your whole account,
+        email <a href="mailto:privacy@starbridge.run">privacy@starbridge.run</a> with your GitHub
+        login. To show the account is yours, you post a code the operator sends you in a public gist
+        on that GitHub account. The operator deletes the account within 30 days of that, and backups
+        age out within 3 weeks after.
       </p>
 
       <h2 className="t-heading">Your rights</h2>

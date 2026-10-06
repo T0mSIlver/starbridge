@@ -71,6 +71,7 @@ const FEATURES = [
 /** Label, command, and the method the copy event reports, kept as first named. */
 const INSTALL = [
   ["macOS / Linux", "curl -fsSL https://starbridge.run/install.sh | sh", "Script"],
+  ["Windows", "irm https://starbridge.run/install.ps1 | iex", "Windows"],
   ["Homebrew", "brew install T0mSIlver/starbridge/starbridge", "Homebrew"],
   ["npm", "npm i -g starbridge", "npm"],
 ] as const;
