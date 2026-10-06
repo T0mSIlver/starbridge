@@ -162,7 +162,8 @@ class ServerStore(
     override val tooOld = MutableStateFlow<String?>(null)
 
     override val notice = MutableStateFlow(
-        disk.unreadable.takeIf { it.isNotEmpty() }?.let { "Could not read ${it.joinToString(" and ")}; this phone's saved files were kept aside. Sign in again." },
+        // The files themselves are kept aside under their own names (Disk); the owner needs only what to do.
+        "This phone's saved sign-in couldn't be read, so you're signed out. Sign in again.".takeIf { disk.unreadable.isNotEmpty() },
     )
     private val headBook = Heads(directories)
     /** The hold notice last shown, so it goes once the hold ends. */
