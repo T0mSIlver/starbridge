@@ -7,6 +7,7 @@ import { CLIENT } from "../lib/api";
 import {
   answer,
   deviceContext,
+  noteSnoozes,
   openPushedDecision,
   openPushedPermission,
   openSettled,
@@ -135,6 +136,8 @@ async function onPush(text: string): Promise<void> {
     // The owner put a question off (#571): its notification goes until its time, when the
     // server pushes the snooze once more and the question notifies again, once.
     const z = await openSnooze(ctx, item);
+    // A newer snooze of the question, from any device, stands: an older one's return shows nothing.
+    if (!(await noteSnoozes(ctx, [z]))) return;
     const until = Date.parse(z.until);
     if (until <= Date.parse(z.at)) return; // Back now: the inbox lists it again, quietly.
     if (Date.now() < until - WAKE_SKEW_MS) {

@@ -507,9 +507,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setInbox((all) => ({
           ...all,
           snoozes: { ...all.snoozes, [item.decision.id]: { until: z.until, at: z.at } },
-          items: all.items.map((i) =>
-            i.decision.id === item.decision.id ? { ...i, snoozedUntil: z.until } : i,
-          ),
+          items: all.items.map((i) => {
+            if (i.decision.id !== item.decision.id) return i;
+            const { snoozedUntil: _, ...rest } = i;
+            return Date.parse(z.until) > Date.parse(z.at)
+              ? { ...rest, snoozedUntil: z.until }
+              : rest;
+          }),
         }));
       } catch (e) {
         if (e instanceof d.ApiError && e.status === 401) reload();
