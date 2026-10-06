@@ -52,13 +52,18 @@ fun clock(at: Instant, h24: Boolean, zone: ZoneId = ZoneId.systemDefault(), loca
 fun day(at: Instant, zone: ZoneId = ZoneId.systemDefault(), locale: Locale = Locale.getDefault()): String =
     format("MMMd", locale).withZone(zone).format(at)
 
-/** CodexBar's absolute reset: "14:30" today, "tomorrow 14:30", else "Oct 7, 22:00". */
-fun resetClock(at: Instant, now: Instant, h24: Boolean, zone: ZoneId = ZoneId.systemDefault(), locale: Locale = Locale.getDefault()): String {
+/**
+ * A clock time in a sentence: "at 15:55" today, "tomorrow at 10:15", "yesterday at 10:15", else
+ * "on Oct 8 at 10:15".
+ */
+fun clockAt(at: Instant, now: Instant, h24: Boolean, zone: ZoneId = ZoneId.systemDefault(), locale: Locale = Locale.getDefault()): String {
     val time = clock(at, h24, zone, locale)
+    val today = now.atZone(zone).toLocalDate()
     return when (at.atZone(zone).toLocalDate()) {
-        now.atZone(zone).toLocalDate() -> time
-        now.atZone(zone).toLocalDate().plusDays(1) -> "tomorrow $time"
-        else -> "${day(at, zone, locale)}, $time"
+        today -> "at $time"
+        today.plusDays(1) -> "tomorrow at $time"
+        today.minusDays(1) -> "yesterday at $time"
+        else -> "on ${day(at, zone, locale)} at $time"
     }
 }
 
