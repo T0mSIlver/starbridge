@@ -33,6 +33,8 @@ import {
   publicKeys,
   RECOVERY,
   ready,
+  recoveryConfirmEntry,
+  recoveryEntry,
   recoveryKey,
   recoveryKeyPair,
   recoveryWords,
@@ -168,8 +170,200 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
     head: d.head,
     active: [...d.members.values()].filter((m) => m.active).map((m) => m.member.id),
     revoked: [...d.members.values()].filter((m) => !m.active).map((m) => m.member.id),
+    recoveryPk: d.recoveryPk,
   });
   const pin = { length: 3, head: entryHash((chain[2] as SignedEnvelope).body) };
+
+  // Replacing the recovery key (PROTOCOL.md, "Replacing the recovery key"), on the valid chain:
+  // phone and phone2 active, browser revoked, devbox a machine.
+  function recoveryCases(): Case[] {
+    const next = verifyDirectory(chain);
+    const newRec = recoveryKeyPair(seed(30));
+    const newRecPk = toB64(newRec.publicKey);
+    const with_ = (entries: SignedEnvelope[], make: (d: Directory) => SignedEnvelope) => [
+      ...entries,
+      make(verifyDirectory(entries)),
+    ];
+    const proposed = with_(chain, (d) => recoveryEntry(d, signer(phone), newRec, T(10)));
+    const byOldKey = with_(proposed, (d) => recoveryConfirmEntry(d, rec, T(10, 1)));
+    const bySecondDevice = with_(proposed, (d) =>
+      recoveryConfirmEntry(d, signer(phone2), T(10, 1)),
+    );
+    const replaced = verifyDirectory(byOldKey);
+    const proposalBody = (d: Directory, pk: string) =>
+      nextBody(d, { op: "recovery", recoveryPk: pk });
+    const withSig = (env: SignedEnvelope, key: Uint8Array): SignedEnvelope => ({
+      ...env,
+      recoverySig: toB64(
+        sodium.crypto_sign_detached(signatureMessage("directory", RECOVERY, env.body), key),
+      ),
+    });
+    const confirmBody = (d: Directory, proposal: number) =>
+      nextBody(d, { op: "recovery-confirm", proposal });
+    const proposedByPhone2 = with_(chain, (d) => recoveryEntry(d, signer(phone2), newRec, T(10)));
+    const revokedProposer = with_(proposedByPhone2, (d) =>
+      revokeEntry(d, signer(phone), "phone2", T(10, 1)),
+    );
+    const secondProposal = with_(proposed, (d) =>
+      recoveryEntry(d, signer(phone2), recoveryKeyPair(seed(31)), T(10, 1)),
+    );
+    return [
+      { name: "recovery key replaced with the old key", entries: byOldKey, expect: ok(replaced) },
+      {
+        name: "recovery key replaced with a second device",
+        entries: bySecondDevice,
+        expect: ok(verifyDirectory(bySecondDevice)),
+      },
+      {
+        name: "a pending proposal leaves the recovery key as it was",
+        entries: proposed,
+        expect: ok(verifyDirectory(proposed)),
+      },
+      {
+        name: "replaced chain against the new recovery key",
+        entries: byOldKey,
+        options: { recoveryPk: newRecPk },
+        expect: ok(replaced),
+      },
+      {
+        name: "replaced chain against the old recovery key",
+        entries: byOldKey,
+        options: { recoveryPk },
+        expect: { error: "wrong-recovery-key" },
+      },
+      {
+        name: "old recovery key adds a device after its replacement",
+        entries: with_(byOldKey, (d) => addEntry(d, rec, evil.member, T(10, 2))),
+        expect: { error: "bad-signature" },
+      },
+      {
+        name: "new recovery key adds a device",
+        entries: with_(byOldKey, (d) =>
+          addEntry(d, { id: RECOVERY, signKey: newRec.privateKey }, evil.member, T(10, 2)),
+        ),
+        expect: ok(
+          verifyDirectory(
+            with_(byOldKey, (d) =>
+              addEntry(d, { id: RECOVERY, signKey: newRec.privateKey }, evil.member, T(10, 2)),
+            ),
+          ),
+        ),
+      },
+      {
+        name: "proposing device confirms its own proposal",
+        entries: with_(proposed, (d) => recoveryConfirmEntry(d, signer(phone), T(10, 1))),
+        expect: { error: "signer-not-allowed" },
+      },
+      {
+        name: "revoked device proposes a recovery key",
+        entries: [
+          ...chain,
+          withSig(
+            signRaw(proposalBody(next, newRecPk), "browser", browser.keys.sign.privateKey),
+            newRec.privateKey,
+          ),
+        ],
+        expect: { error: "revoked-signer" },
+      },
+      {
+        name: "revoked device confirms a proposal",
+        entries: [
+          ...proposed,
+          signRaw(
+            confirmBody(verifyDirectory(proposed), next.length),
+            "browser",
+            browser.keys.sign.privateKey,
+          ),
+        ],
+        expect: { error: "revoked-signer" },
+      },
+      {
+        name: "a proposal dies with its revoked proposer",
+        entries: with_(revokedProposer, (d) =>
+          signRaw(confirmBody(d, next.length), "phone", phone.keys.sign.privateKey),
+        ),
+        expect: { error: "bad-recovery" },
+      },
+      {
+        name: "a later proposal replaces a pending one",
+        entries: with_(secondProposal, (d) =>
+          signRaw(confirmBody(d, next.length), RECOVERY, recovery.privateKey),
+        ),
+        expect: { error: "bad-recovery" },
+      },
+      {
+        name: "proposal without the new key's signature",
+        entries: [
+          ...chain,
+          signRaw(proposalBody(next, newRecPk), "phone", phone.keys.sign.privateKey),
+        ],
+        expect: { error: "bad-recovery" },
+      },
+      {
+        name: "proposal naming a key it holds no signature of",
+        entries: [
+          ...chain,
+          withSig(
+            signRaw(proposalBody(next, newRecPk), "phone", phone.keys.sign.privateKey),
+            evil.keys.sign.privateKey,
+          ),
+        ],
+        expect: { error: "bad-signature" },
+      },
+      {
+        name: "proposal naming a member's key",
+        entries: [
+          ...chain,
+          withSig(
+            signRaw(proposalBody(next, phone2.member.signPk), "phone", phone.keys.sign.privateKey),
+            phone2.keys.sign.privateKey,
+          ),
+        ],
+        expect: { error: "bad-recovery" },
+      },
+      {
+        name: "recovery key proposes its successor",
+        entries: [
+          ...chain,
+          withSig(
+            signRaw(proposalBody(next, newRecPk), RECOVERY, recovery.privateKey),
+            newRec.privateKey,
+          ),
+        ],
+        expect: { error: "signer-not-allowed" },
+      },
+      {
+        name: "machine confirms a proposal",
+        entries: [
+          ...proposed,
+          signRaw(
+            confirmBody(verifyDirectory(proposed), next.length),
+            "devbox",
+            devbox.keys.sign.privateKey,
+          ),
+        ],
+        expect: { error: "signer-not-allowed" },
+      },
+      {
+        name: "confirmation with no proposal",
+        entries: [...chain, signRaw(confirmBody(next, 1), RECOVERY, recovery.privateKey)],
+        expect: { error: "bad-recovery" },
+      },
+      {
+        name: "entry of an op the verifier does not know",
+        entries: [
+          ...chain,
+          signRaw(
+            nextBody(next, { op: "rotate", recoveryPk: newRecPk }),
+            "phone",
+            phone.keys.sign.privateKey,
+          ),
+        ],
+        expect: { error: "bad-schema" },
+      },
+    ];
+  }
+
   const cases: Case[] = [
     { name: "valid chain", entries: chain, expect: ok(full) },
     { name: "valid chain extends its pin", entries: chain, options: { pin }, expect: ok(full) },
@@ -236,7 +430,7 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
       name: "server's own chain against the recovery key",
       entries: fakeChain,
       options: { recoveryPk },
-      expect: { error: "bad-genesis" },
+      expect: { error: "wrong-recovery-key" },
     },
     {
       name: "truncated chain against the pin",
@@ -382,6 +576,7 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
       options: { account: "acct_other" },
       expect: { error: "wrong-account" },
     },
+    ...recoveryCases(),
   ];
   const directory = {
     note: "verifyDirectory(entries, options) must succeed with `expect` or fail with expect.error.",

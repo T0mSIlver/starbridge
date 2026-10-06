@@ -121,11 +121,18 @@ directoryRoutes.post("/directory", requireCaller("device"), async (c) => {
     if (seqOf(entry) !== entries.length)
       fail(409, "not-next", `the next entry has seq ${entries.length}`);
     // Every append and every client replays the whole chain, so its length is capped. The cap
-    // stops devices adding members; revoking stays possible, and each member is revoked once, so
-    // revocations never outnumber adds. Recovery may still add a few devices, so an owner who
-    // lost every device gets back in.
+    // stops devices adding members and proposing recovery keys; revoking stays possible, and each
+    // member is revoked once, so revocations never outnumber adds, nor confirmations proposals.
+    // Recovery may still add a few devices, so an owner who lost every device gets back in.
     const { directoryEntries: cap, recoveryAdds } = c.var.config.limits;
-    if (entries.length >= cap && entryOp(entry) === "add") {
+    const op = entryOp(entry);
+    if (entries.length >= cap && op === "recovery")
+      fail(
+        409,
+        "directory-full",
+        `a directory proposes recovery keys in its first ${cap} entries only`,
+      );
+    if (entries.length >= cap && op === "add") {
       const recovered = entries
         .slice(cap)
         .filter((e) => e.signer === RECOVERY && entryOp(e) === "add");

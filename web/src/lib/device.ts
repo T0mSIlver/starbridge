@@ -348,8 +348,9 @@ export async function recover(account: string, name: string, typed: string): Pro
         ...(pin ? { pin } : {}),
       });
     } catch (e) {
-      if (e instanceof ProtocolError && e.message === "bad-genesis: recovery key differs")
-        throw new Error("This is a recovery key, but not this account's.");
+      // Another account's key, or this account's from before a replacement (#348).
+      if (e instanceof ProtocolError && e.code === "wrong-recovery-key")
+        throw new Error("This is a recovery key, but not this account's current one.");
       throw e;
     }
     const entry = addEntry(dir, { id: RECOVERY, signKey: recovery.privateKey }, member, now());

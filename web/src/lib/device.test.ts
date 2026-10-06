@@ -5,6 +5,7 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import {
   checkJoined,
   generateMemberKeys,
+  generateRecoverySeed,
   joinCommitment,
   joinerKeys,
   joinRequest,
@@ -12,7 +13,12 @@ import {
   newJoinKeyPair,
   openJoinApproval,
   publicKeys,
+  RECOVERY,
+  recoveryConfirmEntry,
+  recoveryEntry,
   recoveryKey,
+  recoveryKeyPair,
+  type SignedEnvelope,
   toB64,
   verifyDirectory,
 } from "@starbridge/protocol";
@@ -183,4 +189,33 @@ test("a recovery that landed but was cut off before adopting its keys resumes ov
   expect(b.state).toBe("ready");
   expect(await store.get("device", ctx.account)).toEqual(recovered);
   expect(await store.get("pending", ctx.account)).toBeUndefined();
+});
+
+test("once the recovery key is replaced, the old one recovers nothing and the new one does (#348)", async () => {
+  const { device: phone, recovery } = live.owner;
+  // The owner's phone writes both entries, the old key confirming.
+  const append = async (make: (d: ReturnType<typeof verifyDirectory>) => SignedEnvelope) => {
+    const headers = { authorization: `Bearer ${phone.token}`, "content-type": "application/json" };
+    const read = await realFetch(`${live.url}/v1/directory`, { headers });
+    const { entries } = (await read.json()) as { entries: SignedEnvelope[] };
+    const r = await realFetch(`${live.url}/v1/directory`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ entry: make(verifyDirectory(entries)) }),
+    });
+    expect(r.status).toBe(201);
+  };
+  const seed = generateRecoverySeed();
+  const now = new Date().toISOString();
+  const signer = { id: phone.id, signKey: phone.keys.sign.privateKey };
+  await append((d) => recoveryEntry(d, signer, recoveryKeyPair(seed), now));
+  await append((d) => recoveryConfirmEntry(d, { id: RECOVERY, signKey: recovery.privateKey }, now));
+
+  await api.ownerSignIn("owner-secret");
+  const old = recoveryKey(live.owner.recoverySeed);
+  await expect(device.recover(ctx.account, "Thief", old)).rejects.toThrow(
+    "This is a recovery key, but not this account's current one.",
+  );
+  await device.recover(ctx.account, "Recovered again", recoveryKey(seed));
+  expect((await store.get("device", ctx.account))?.name).toBe("Recovered again");
 });

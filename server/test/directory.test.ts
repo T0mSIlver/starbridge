@@ -1,12 +1,17 @@
 import { expect, test } from "bun:test";
 import {
   addEntry,
+  type Directory,
   generateMemberKeys,
   generateRecoverySeed,
   genesisEntry,
   publicKeys,
   RECOVERY,
+  recoveryConfirmEntry,
+  recoveryEntry,
   recoveryKeyPair,
+  type SignedEnvelope,
+  toB64,
   verifyDirectory,
 } from "@starbridge/protocol";
 import {
@@ -165,4 +170,71 @@ test("revoking a machine drops its token; revoking a device ends its sessions", 
   expect(me.status).toBe(401);
   // The revoked device's browser learns why, so it shows the landing page, not sign-in.
   expect(me.json.error).toBe("revoked");
+});
+
+test("replacing the recovery key: the old key confirms, then signs nothing more (#348)", async () => {
+  const s = await makeServer();
+  const acct = await setupAccount(s);
+  const phone = { id: acct.device.id, signKey: acct.device.keys.sign.privateKey };
+  const oldKey = { id: RECOVERY, signKey: acct.recovery.privateKey };
+  const newRecovery = recoveryKeyPair(generateRecoverySeed());
+  const token = acct.device.token;
+  const step = async (make: (d: Directory) => SignedEnvelope) =>
+    append(s, token, make(await directory(s, token)));
+
+  expect((await step((d) => recoveryEntry(d, phone, newRecovery, at))).status).toBe(201);
+  expect((await step((d) => recoveryConfirmEntry(d, oldKey, at))).status).toBe(201);
+  expect((await directory(s, token)).recoveryPk).toBe(toB64(newRecovery.publicKey));
+
+  const refused = await step((d) => addEntry(d, oldKey, memberOf("thief").member, at));
+  expect(refused.status).toBe(400);
+  expect(refused.json.error).toBe("bad-signature");
+  const newKey = { id: RECOVERY, signKey: newRecovery.privateKey };
+  expect((await step((d) => addEntry(d, newKey, memberOf("new-phone").member, at))).status).toBe(
+    201,
+  );
+});
+
+test("a second device confirms a replacement; a revoked one cannot propose (#348)", async () => {
+  const s = await makeServer();
+  const acct = await setupAccount(s);
+  const laptop = await pair(s, acct, "laptop", "device", await signIn(s));
+  const tablet = await pair(s, acct, "tablet", "device", await signIn(s));
+  const as = (a: { id: string; keys: { sign: { privateKey: Uint8Array } } }) => ({
+    id: a.id,
+    signKey: a.keys.sign.privateKey,
+  });
+  const newRecovery = recoveryKeyPair(generateRecoverySeed());
+  const read = () => directory(s, acct.device.token);
+
+  expect(
+    (
+      await append(
+        s,
+        acct.device.token,
+        recoveryEntry(await read(), as(acct.device), newRecovery, at),
+      )
+    ).status,
+  ).toBe(201);
+  const own = await append(
+    s,
+    acct.device.token,
+    recoveryConfirmEntry(await read(), as(acct.device), at),
+  );
+  expect(own.json.error).toBe("signer-not-allowed");
+  expect(
+    (await append(s, laptop.token, recoveryConfirmEntry(await read(), as(laptop), at))).status,
+  ).toBe(201);
+  expect((await read()).recoveryPk).toBe(toB64(newRecovery.publicKey));
+
+  await revoke(s, acct, "tablet");
+  const proposal = recoveryEntry(
+    await read(),
+    as(tablet),
+    recoveryKeyPair(generateRecoverySeed()),
+    at,
+  );
+  const r = await append(s, acct.device.token, proposal);
+  expect(r.status).toBe(400);
+  expect(r.json.error).toBe("revoked-signer");
 });

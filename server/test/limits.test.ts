@@ -8,6 +8,7 @@ import {
   claimHash,
   type Decision,
   generateMemberKeys,
+  generateRecoverySeed,
   hashInput,
   newPairingCode,
   type Permission,
@@ -15,6 +16,8 @@ import {
   publicKeys,
   type QuotaSnapshot,
   RECOVERY,
+  recoveryEntry,
+  recoveryKeyPair,
   type SealedItem,
   type Settled,
   seal,
@@ -260,6 +263,15 @@ test("a full directory refuses device-signed adds but takes revocations and reco
   expect(more.status).toBe(409);
   expect(more.json.error).toBe("directory-full");
   expect((await revoke(s, acct, "new-phone")).status).toBe(201);
+  const proposal = recoveryEntry(
+    await directory(s, acct.device.token),
+    phoneSigner,
+    recoveryKeyPair(generateRecoverySeed()),
+    at,
+  );
+  const proposed = await append(s, acct.device.token, proposal);
+  expect(proposed.status).toBe(409);
+  expect(proposed.json.error).toBe("directory-full");
 });
 
 test("the directory caps its append rate", async () => {

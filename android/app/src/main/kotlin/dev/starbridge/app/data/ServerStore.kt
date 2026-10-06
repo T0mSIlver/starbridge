@@ -544,7 +544,7 @@ class ServerStore(
     override fun recover(words: String) = run {
         val recovery = sodium.signSeedKeyPair(recoverySignSeed(RecoveryKeys.seed(words, sodium), sodium))
         val entries = api().directory(0)
-        // The chain's first entry must carry this key's own signature, which a server cannot fake.
+        // The chain's current recovery key must be this one, whose own signature a server cannot fake.
         val dir = directories.verify(entries, saved.account, recoveryPk = toB64(recovery.public))
         // The keys made for an earlier attempt stay until the chain holds them: when its reply was
         // lost, the server has bound the session to that member, and a retry finds it there (#274).

@@ -45,7 +45,27 @@ export const RevokeEntry = z.object({
   id: Id,
 });
 
-export const DirectoryEntry = z.discriminatedUnion("op", [AddEntry, RevokeEntry]);
+/** Proposes a new recovery key: signed by an active device, and by the new key (`recoverySig`). */
+export const RecoveryEntry = z.object({
+  ...EntryBase,
+  op: z.literal("recovery"),
+  recoveryPk: B64,
+});
+
+/** Makes the pending proposal's key the recovery key: signed by the old key or another device. */
+export const RecoveryConfirmEntry = z.object({
+  ...EntryBase,
+  op: z.literal("recovery-confirm"),
+  /** The proposal's `seq`. */
+  proposal: z.number().int().nonnegative(),
+});
+
+export const DirectoryEntry = z.discriminatedUnion("op", [
+  AddEntry,
+  RevokeEntry,
+  RecoveryEntry,
+  RecoveryConfirmEntry,
+]);
 export type DirectoryEntry = z.infer<typeof DirectoryEntry>;
 
 // --- Signed and sealed envelopes ---------------------------------------------
@@ -109,9 +129,9 @@ export const SignedEnvelope = z.object({
   body: z.string(),
   sig: B64,
   /**
-   * Directory entry 0 only: the recovery key's signature over the same body, as signer
-   * "recovery". It ties the genesis to the recovery key, so a server that copies the public
-   * recovery key into a genesis of its own cannot pass it off during recovery.
+   * Directory entry 0 and `recovery` entries only: the signature of the recovery key they name
+   * over the same body, as signer "recovery". It ties the entry to that key, so a server that
+   * copies a public recovery key into an entry of its own cannot pass it off during recovery.
    */
   recoverySig: B64.optional(),
 });
