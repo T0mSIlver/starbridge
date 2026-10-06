@@ -35,6 +35,15 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeoutOrNull
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
@@ -202,6 +211,29 @@ fun Section(text: String) {
 
 /** Pull to refresh: whether a sync runs, and how to start one. */
 class Refresh(val busy: Boolean, val run: () -> Unit)
+
+/**
+ * One screen's pull to refresh. The store's [busy] counts every sync the owner asked for, on any
+ * screen, so the indicator shows only on the screen whose pull started one, until it ends.
+ */
+@Composable
+fun pulled(busy: Boolean, run: () -> Unit): Refresh {
+    // Not saved: the Inbox stays on the back stack under every tab, and a saved pull would come
+    // back with it while another screen's sync runs.
+    var mine by remember { mutableStateOf(false) }
+    val now by rememberUpdatedState(busy)
+    LaunchedEffect(mine) {
+        if (!mine) return@LaunchedEffect
+        // The sync raises busy from another thread; one that never shows it ended already.
+        withTimeoutOrNull(2_000) { snapshotFlow { now }.first { it } }
+        snapshotFlow { now }.first { !it }
+        mine = false
+    }
+    return Refresh(mine && busy) {
+        mine = true
+        run()
+    }
+}
 
 /** Pull to refresh with the expressive loading indicator; [refresh] null leaves [content] as is. */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)

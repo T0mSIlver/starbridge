@@ -151,8 +151,8 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
     }
 
     /**
-     * The icon's circle and the action labels: amber, or the wallpaper's primary under "Match
-     * wallpaper". Android 12 to 15 show it; 16 tints them itself.
+     * The icon's circle and the action labels: amber, or the wallpaper's primary under "Material
+     * You". Android 12 to 15 show it; 16 tints them itself.
      */
     private fun accent() = context.getColor(if (prefs.colours.value == Colours.Wallpaper) R.color.accent_wallpaper else R.color.accent)
 
