@@ -1,5 +1,5 @@
 {
-  "note": "Bodies that must pass or fail schema validation.",
+  "note": "Bodies that must pass or fail schema validation. `read`, when set, is part of what a client reads: a value it only displays and does not know reads as the neutral case (null: absent), and an alert of an unknown kind is left out.",
   "decision": [
     {
       "name": "valid",
@@ -273,7 +273,12 @@
           "machineKind": "phone"
         }
       },
-      "valid": false
+      "valid": true,
+      "read": {
+        "source": {
+          "machineKind": null
+        }
+      }
     },
     {
       "name": "free text",
@@ -1969,7 +1974,10 @@
         "outcome": "lost",
         "at": "2026-10-04T10:01:00Z"
       },
-      "valid": false
+      "valid": true,
+      "read": {
+        "outcome": null
+      }
     },
     {
       "name": "device without its outcome",
@@ -2345,6 +2353,35 @@
       "valid": false
     },
     {
+      "name": "an unknown progress unit",
+      "body": {
+        "v": 1,
+        "id": "run_1",
+        "to": [
+          "phone",
+          "phone2"
+        ],
+        "title": "Mac e2e",
+        "reason": "uses your session and keyboard",
+        "source": {
+          "machine": "dev box",
+          "project": "localvoxtral",
+          "session": "s_42"
+        },
+        "startedAt": "2026-10-04T10:00:00Z",
+        "at": "2026-10-04T10:02:00Z",
+        "progress": {
+          "done": 3,
+          "total": 7,
+          "unit": "byte"
+        }
+      },
+      "valid": true,
+      "read": {
+        "progress": null
+      }
+    },
+    {
       "name": "a percent out of 50",
       "body": {
         "v": 1,
@@ -2549,7 +2586,10 @@
         "at": "2026-10-04T10:20:00Z",
         "state": "blocked"
       },
-      "valid": false
+      "valid": true,
+      "read": {
+        "state": "working"
+      }
     },
     {
       "name": "no decision",
@@ -2574,6 +2614,211 @@
         "to": [],
         "at": "2026-10-04T10:20:00Z",
         "state": "waiting"
+      },
+      "valid": false
+    }
+  ],
+  "quota": [
+    {
+      "name": "valid",
+      "body": {
+        "v": 1,
+        "id": "q_1",
+        "to": [
+          "phone",
+          "phone2"
+        ],
+        "takenAt": "2026-10-04T12:00:00Z",
+        "providers": [
+          {
+            "provider": "zai",
+            "windows": [
+              {
+                "id": "primary",
+                "label": "5h",
+                "usedPercent": 20,
+                "windowMinutes": 300,
+                "resetsAt": "2026-10-04T12:30:00Z",
+                "pace": {
+                  "stage": "behind",
+                  "expectedUsedPercent": 90,
+                  "deltaPercent": -70,
+                  "projectedUsedPercent": 22.2,
+                  "willLastToReset": true,
+                  "runsOutAt": null
+                }
+              }
+            ]
+          }
+        ],
+        "alerts": [
+          {
+            "kind": "unused-headroom",
+            "provider": "zai",
+            "window": "primary",
+            "resetsAt": "2026-10-04T12:30:00Z",
+            "unusedPercent": 77.8
+          }
+        ]
+      },
+      "valid": true
+    },
+    {
+      "name": "an unknown pace stage",
+      "body": {
+        "v": 1,
+        "id": "q_1",
+        "to": [
+          "phone",
+          "phone2"
+        ],
+        "takenAt": "2026-10-04T12:00:00Z",
+        "providers": [
+          {
+            "provider": "zai",
+            "windows": [
+              {
+                "id": "primary",
+                "label": "5h",
+                "usedPercent": 20,
+                "windowMinutes": 300,
+                "resetsAt": "2026-10-04T12:30:00Z",
+                "pace": {
+                  "stage": "racing",
+                  "expectedUsedPercent": 90,
+                  "deltaPercent": -70,
+                  "projectedUsedPercent": 22.2,
+                  "willLastToReset": true,
+                  "runsOutAt": null
+                }
+              }
+            ]
+          }
+        ],
+        "alerts": [
+          {
+            "kind": "unused-headroom",
+            "provider": "zai",
+            "window": "primary",
+            "resetsAt": "2026-10-04T12:30:00Z",
+            "unusedPercent": 77.8
+          }
+        ]
+      },
+      "valid": true,
+      "read": {
+        "providers": [
+          {
+            "windows": [
+              {
+                "pace": {
+                  "stage": "unknown"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "an alert of an unknown kind is left out",
+      "body": {
+        "v": 1,
+        "id": "q_1",
+        "to": [
+          "phone",
+          "phone2"
+        ],
+        "takenAt": "2026-10-04T12:00:00Z",
+        "providers": [
+          {
+            "provider": "zai",
+            "windows": [
+              {
+                "id": "primary",
+                "label": "5h",
+                "usedPercent": 20,
+                "windowMinutes": 300,
+                "resetsAt": "2026-10-04T12:30:00Z",
+                "pace": {
+                  "stage": "behind",
+                  "expectedUsedPercent": 90,
+                  "deltaPercent": -70,
+                  "projectedUsedPercent": 22.2,
+                  "willLastToReset": true,
+                  "runsOutAt": null
+                }
+              }
+            ]
+          }
+        ],
+        "alerts": [
+          {
+            "kind": "burst",
+            "provider": "zai",
+            "window": "primary",
+            "resetsAt": "2026-10-04T12:30:00Z"
+          },
+          {
+            "kind": "low",
+            "provider": "zai",
+            "window": "primary",
+            "resetsAt": "2026-10-04T12:30:00Z",
+            "threshold": 10
+          }
+        ]
+      },
+      "valid": true,
+      "read": {
+        "alerts": [
+          {
+            "kind": "low",
+            "provider": "zai",
+            "window": "primary",
+            "resetsAt": "2026-10-04T12:30:00Z",
+            "threshold": 10
+          }
+        ]
+      }
+    },
+    {
+      "name": "no recipients",
+      "body": {
+        "v": 1,
+        "id": "q_1",
+        "to": [],
+        "takenAt": "2026-10-04T12:00:00Z",
+        "providers": [
+          {
+            "provider": "zai",
+            "windows": [
+              {
+                "id": "primary",
+                "label": "5h",
+                "usedPercent": 20,
+                "windowMinutes": 300,
+                "resetsAt": "2026-10-04T12:30:00Z",
+                "pace": {
+                  "stage": "behind",
+                  "expectedUsedPercent": 90,
+                  "deltaPercent": -70,
+                  "projectedUsedPercent": 22.2,
+                  "willLastToReset": true,
+                  "runsOutAt": null
+                }
+              }
+            ]
+          }
+        ],
+        "alerts": [
+          {
+            "kind": "unused-headroom",
+            "provider": "zai",
+            "window": "primary",
+            "resetsAt": "2026-10-04T12:30:00Z",
+            "unusedPercent": 77.8
+          }
+        ]
       },
       "valid": false
     }

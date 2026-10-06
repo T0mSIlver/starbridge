@@ -49,6 +49,21 @@ suite id. Changing any of them is version 2 (`v: 2`, `starbridge/v2/...`, `/v2` 
 members re-pair; nothing changes an algorithm in place. A member's keys change only by revoking it
 and adding new ones.
 
+### What a reader keeps
+
+Within version 1 a newer sender may send what an older reader does not know, so a reader:
+
+- ignores a field it does not know;
+- reads a value it only displays, when it does not know it, as the neutral case and keeps the
+  item: `source.machineKind` as none, a settled notice's `outcome` as none, `waiting.state` as
+  `working`, a run's `progress` with another `unit` as no progress, a pace `stage` as `unknown`,
+  and a quota alert of another `kind` is left out of its snapshot;
+- refuses an item whose value gates behaviour when it does not know it: a directory `op`, a
+  member's `role`, a permission answer's `scope` and `behavior`, a session link's `kind`;
+- lists only the item kinds it asks for, and ignores a push of a kind it does not know.
+
+`schemas.json` in the vectors holds a case for each, with what the reader reads (`read`).
+
 ## Directory
 
 The account's directory is a hash chain of signed entries listing each member's X25519 and

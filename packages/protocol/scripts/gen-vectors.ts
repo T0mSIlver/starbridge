@@ -1404,7 +1404,7 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
     },
   ];
   const schemas = {
-    note: "Bodies that must pass or fail schema validation.",
+    note: "Bodies that must pass or fail schema validation. `read`, when set, is part of what a client reads: a value it only displays and does not know reads as the neutral case (null: absent), and an alert of an unknown kind is left out.",
     decision: [
       { name: "valid", body: decisionBody, valid: true },
       ...withHead(decisionBody),
@@ -1431,7 +1431,8 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
       {
         name: "an unknown machine kind",
         body: { ...decisionBody, source: { ...decisionBody.source, machineKind: "phone" } },
-        valid: false,
+        valid: true,
+        read: { source: { machineKind: null } },
       },
       {
         name: "free text",
@@ -1679,7 +1680,8 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
       {
         name: "unknown outcome",
         body: { ...settledBody, outcome: "lost", device: undefined },
-        valid: false,
+        valid: true,
+        read: { outcome: null },
       },
       {
         name: "device without its outcome",
@@ -1723,6 +1725,12 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
         valid: false,
       },
       {
+        name: "an unknown progress unit",
+        body: { ...runBody, progress: { done: 3, total: 7, unit: "byte" } },
+        valid: true,
+        read: { progress: null },
+      },
+      {
         name: "a percent out of 50",
         body: { ...runBody, progress: { done: 10, total: 50, unit: "percent" } },
         valid: false,
@@ -1738,9 +1746,45 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
       { name: "waiting", body: waitingBody, valid: true },
       ...withHead(waitingBody),
       { name: "working", body: { ...waitingBody, state: "working" }, valid: true },
-      { name: "an unknown state", body: { ...waitingBody, state: "blocked" }, valid: false },
+      {
+        name: "an unknown state",
+        body: { ...waitingBody, state: "blocked" },
+        valid: true,
+        read: { state: "working" },
+      },
       { name: "no decision", body: { ...waitingBody, decisionId: undefined }, valid: false },
       { name: "no recipients", body: { ...waitingBody, to: [] }, valid: false },
+    ],
+    quota: [
+      { name: "valid", body: quotaBody, valid: true },
+      {
+        name: "an unknown pace stage",
+        body: {
+          ...quotaBody,
+          providers: [
+            { provider: "zai", windows: [{ ...win, pace: { ...pace, stage: "racing" } }] },
+          ],
+        },
+        valid: true,
+        read: { providers: [{ windows: [{ pace: { stage: "unknown" } }] }] },
+      },
+      {
+        name: "an alert of an unknown kind is left out",
+        body: {
+          ...quotaBody,
+          alerts: [
+            { kind: "burst", provider: "zai", window: "primary", resetsAt: T(12, 30) },
+            { kind: "low", provider: "zai", window: "primary", resetsAt: T(12, 30), threshold: 10 },
+          ],
+        },
+        valid: true,
+        read: {
+          alerts: [
+            { kind: "low", provider: "zai", window: "primary", resetsAt: T(12, 30), threshold: 10 },
+          ],
+        },
+      },
+      { name: "no recipients", body: { ...quotaBody, to: [] }, valid: false },
     ],
   };
 

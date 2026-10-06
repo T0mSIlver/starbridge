@@ -95,19 +95,22 @@ class Envelopes(private val sodium: Sodium) {
     }
 }
 
-/** Parses a body whose signature was already checked. */
+/**
+ * Parses a body whose signature was already checked. A value it only displays and does not know
+ * reads as the neutral case first, as in schemas.ts.
+ */
 fun parseBody(kind: String, text: String): Any {
     val json = parseJsonText(text)
     return when (kind) {
         "directory" -> parseJson(DirectoryEntry.serializer(), json).also { it.check() }
-        "decision" -> parseJson(Decision.serializer(), json).also { it.check() }
+        "decision" -> parseJson(Decision.serializer(), json).read().also { it.check() }
         "answer" -> parseJson(Answer.serializer(), json).also { it.check() }
-        "quota" -> parseJson(QuotaSnapshot.serializer(), json).also { it.check() }
-        "permission" -> parseJson(Permission.serializer(), json).also { it.check() }
+        "quota" -> parseJson(QuotaSnapshot.serializer(), json).read().also { it.check() }
+        "permission" -> parseJson(Permission.serializer(), json).read().also { it.check() }
         "permission-answer" -> parseJson(PermissionAnswer.serializer(), json).also { it.check() }
-        "settled" -> parseJson(Settled.serializer(), json).also { it.check() }
-        "waiting" -> parseJson(Waiting.serializer(), json).also { it.check() }
-        "run" -> parseJson(Run.serializer(), json).also { it.check() }
+        "settled" -> parseJson(Settled.serializer(), json).read().also { it.check() }
+        "waiting" -> parseJson(Waiting.serializer(), json).read().also { it.check() }
+        "run" -> parseJson(Run.serializer(), json).read().also { it.check() }
         else -> throw ProtocolException("wrong-kind", kind)
     }
 }

@@ -1894,6 +1894,15 @@ so the mod is the first path.
   `DECISION_FIELDS` re-reads open decisions when the app learns a new decision field, until
   clients store the signed body text (#476); and the notification receiver checks
   Allow again on tap, since the owner may turn off sending unseen commands after the post.
+- 2026-10-06. A reader keeps what a newer sender adds (#472, PROTOCOL.md "What a reader keeps").
+  A value a client only displays reads as its neutral case when unknown: no machine kind, no
+  outcome, `working`, no progress, pace `unknown`, and an alert of an unknown kind is left out of
+  its snapshot. `schemas.ts` does it in the schema (`.catch`, or a filter for alerts and units),
+  so the CLI, the web and the server read alike; Android's twin does it in each body's `read()`
+  before `check()`; the vectors carry what each case reads. Values that gate behaviour stay
+  closed. Android also keeps a machine's last good quota snapshot when a new one fails to open,
+  where it used to blank that machine's quotas. Reader-side content limits stay as they are for
+  now: loosening them needs the screens to cope with longer text first.
 
 ## Encryption, with existing libraries
 
