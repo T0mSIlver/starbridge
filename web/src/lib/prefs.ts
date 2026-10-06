@@ -29,6 +29,7 @@ const DEFAULTS: Prefs = {
   sound: false,
 };
 
+import { readStored, stored, writable } from "./stored";
 import { PREFS_KEY as KEY } from "./themeScript";
 
 const listeners = new Set<() => void>();
@@ -40,12 +41,7 @@ function read(): Prefs {
     raw = localStorage.getItem(KEY);
   } catch {}
   if (cache && cache.raw === raw) return cache.value;
-  let value = DEFAULTS;
-  try {
-    if (raw) {
-      value = { ...DEFAULTS, ...(JSON.parse(raw) as Partial<Prefs>) };
-    }
-  } catch {}
+  const value = { ...DEFAULTS, ...(readStored(KEY, raw) as Partial<Prefs> | null) };
   cache = { raw, value };
   return value;
 }
@@ -57,11 +53,12 @@ export function getPref<K extends keyof Prefs>(key: K): Prefs[K] {
 export function setPref<K extends keyof Prefs>(key: K, value: Prefs[K]): void {
   const next = { ...read(), [key]: value };
   try {
-    localStorage.setItem(KEY, JSON.stringify(next));
+    // A newer Starbridge's prefs stay for it; this page keeps the change for itself.
+    if (writable(localStorage.getItem(KEY))) localStorage.setItem(KEY, stored(next));
   } catch {
     // Private windows may refuse storage; the choice then lasts for this page.
   }
-  cache = { raw: JSON.stringify(next), value: next };
+  cache = { raw: stored(next), value: next };
   for (const l of listeners) l();
 }
 

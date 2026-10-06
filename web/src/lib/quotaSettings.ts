@@ -2,6 +2,7 @@
 // CodexBar's own settings with CodexBar's meaning. They stay in this browser; the server learns
 // nothing of them. Android keeps the same set (QuotaSettings.kt).
 import { clockTime, relative } from "./format";
+import { readStored, stored, writable } from "./stored";
 import type { QuotaAlert, QuotaCardData, QuotaWindow } from "./types";
 
 export type Ticks = "subtle" | "high-contrast" | "hidden";
@@ -46,9 +47,7 @@ const KEY = "starbridge:quota-settings";
 export function loadSettings(): QuotaSettings {
   try {
     const raw = localStorage.getItem(KEY);
-    return raw
-      ? { ...DEFAULT_SETTINGS, ...(JSON.parse(raw) as Partial<QuotaSettings>) }
-      : DEFAULT_SETTINGS;
+    return { ...DEFAULT_SETTINGS, ...(readStored(KEY, raw) as Partial<QuotaSettings> | null) };
   } catch {
     return DEFAULT_SETTINGS;
   }
@@ -56,7 +55,7 @@ export function loadSettings(): QuotaSettings {
 
 export function saveSettings(s: QuotaSettings): void {
   try {
-    localStorage.setItem(KEY, JSON.stringify(s));
+    if (writable(localStorage.getItem(KEY))) localStorage.setItem(KEY, stored(s));
   } catch {
     // Private windows may refuse storage; the settings then last for this page.
   }
@@ -290,12 +289,12 @@ const SHOWN = "starbridge:quota-notified";
 export async function notifyAlerts(cards: QuotaCardData[], s: QuotaSettings): Promise<void> {
   if (s.notify.length === 0 || typeof Notification === "undefined") return;
   if (Notification.permission !== "granted") return;
-  let shown: string[];
+  let raw: string | null = null;
   try {
-    shown = JSON.parse(localStorage.getItem(SHOWN) ?? "[]") as string[];
-  } catch {
-    shown = [];
-  }
+    raw = localStorage.getItem(SHOWN);
+  } catch {}
+  const kept = readStored(SHOWN, raw)?.shown;
+  const shown = Array.isArray(kept) ? (kept as string[]) : [];
   const fresh = cards.flatMap((c) =>
     toNotify(c.alerts, s)
       .map((a) => ({ a, c, key: `${c.snapshot}/${a.provider}/${a.window}/${a.kind}` }))
@@ -303,7 +302,11 @@ export async function notifyAlerts(cards: QuotaCardData[], s: QuotaSettings): Pr
   );
   if (fresh.length === 0) return;
   try {
-    localStorage.setItem(SHOWN, JSON.stringify([...shown, ...fresh.map((f) => f.key)].slice(-200)));
+    if (writable(raw))
+      localStorage.setItem(
+        SHOWN,
+        stored({ shown: [...shown, ...fresh.map((f) => f.key)].slice(-200) }),
+      );
   } catch {}
   const reg = await navigator.serviceWorker?.getRegistration();
   for (const { a, c } of fresh) {
