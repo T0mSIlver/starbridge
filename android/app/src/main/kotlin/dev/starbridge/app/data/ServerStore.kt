@@ -214,17 +214,28 @@ class ServerStore(
         scope.launch { locked(showBusy, block) }
     }
 
-    private suspend fun locked(showBusy: Boolean = true, block: suspend () -> Unit) {
+    // A run the owner sees raises busy before it waits for the lock: a pull during a quiet sync
+    // shows at once. Quiet runs, such as the prompt poll, leave it alone.
+    private suspend fun locked(showBusy: Boolean = true, block: suspend () -> Unit) = shown(showBusy) {
         lock.withLock {
-            if (showBusy) busy.value = true
             try {
                 block()
             } catch (e: Exception) {
                 report(e)
-            } finally {
-                // A quiet run, such as the prompt poll, leaves another's spinner alone.
-                if (showBusy) busy.value = false
             }
+        }
+    }
+
+    /** Counts the shown runs under way; [busy] holds while any is. */
+    private var shownRuns = 0
+
+    private inline fun <T> shown(on: Boolean, block: () -> T): T {
+        if (!on) return block()
+        synchronized(this) { busy.value = ++shownRuns > 0 }
+        try {
+            return block()
+        } finally {
+            synchronized(this) { busy.value = --shownRuns > 0 }
         }
     }
 
@@ -599,13 +610,12 @@ class ServerStore(
 
     // --- Syncing -----------------------------------------------------------------
 
-    override fun refresh() = run { sync() }
+    override fun refresh(shown: Boolean) = run(showBusy = shown) { sync() }
 
     // Outside the lock: the machines take seconds to post, and answers must not wait on them.
     override fun refreshQuotas() {
         scope.launch {
-            busy.value = true
-            try {
+            shown(true) {
                 try {
                     if (phase.value == Phase.Ready) api().askQuota(QUOTA_ASK_SECONDS)
                 } catch (e: ApiException) {
@@ -621,8 +631,6 @@ class ServerStore(
                 // Not `run`: inside launch it resolves to the standard library's, which never
                 // clears busy and lets a failed sync escape (#303).
                 locked { sync() }
-            } finally {
-                busy.value = false
             }
         }
     }
