@@ -1567,8 +1567,8 @@ so the mod is the first path.
   lock-screen Allow of #57 and #182). It still asks for the unlock, then opens the prompt's sheet
   with the whole command, Allow one tap away; it no longer sends. Deny still answers from the
   lock screen.
-- 2026-10-06. One opt-in skips both (owner, #390): Settings, Notifications, "Allow from
-  notifications without seeing the whole command", off by default and labelled unsafe. On, a
+- 2026-10-06. One opt-in skips both (owner, #390): Settings, Notifications, "Quick Allow"
+  ("Allow from a notification without seeing the whole command. Unsafe."), off by default. On, a
   notification's Allow sends right after the unlock on the lock screen, and at once from a
   collapsed or heads-up notification whose command does not fit its line.
 - 2026-10-06. Permission text shows control and format characters as escapes (`\u202E`), on the
@@ -1780,6 +1780,11 @@ so the mod is the first path.
   15 s hold. The CLI now reads them at once, so a snapshot takes as long as the slowest, and a
   refresh holds up to 25 s on Android and the web. It still ends as soon as every machine posted,
   and stays under the 30 s at which proxies cut long polls.
+- 2026-10-06. Settings labels (#449). The link to `/docs/tell-your-agents` reads "Agent
+  instructions" in Settings (web and Android), the docs and the landing footer: two words that
+  name what the page holds, the rules agents get and what to add to their instruction files.
+  "Answer buttons on questions" says "On narrow screens", since it applies to any window under
+  1100 px, not only phones.
 - 2026-10-06. The Android app in front polls while no push reaches it (#445). A server without
   a relay or UnifiedPush sends no push, and the open Inbox never changed. While the app is in
   front, and until a push has reached it since it started, it syncs every 10 s, without the
@@ -1790,6 +1795,31 @@ so the mod is the first path.
   "owner/repo#123" instead of its host and path, and its chip leads with the GitHub mark, on the
   web and Android; "Answer in" uses the same label. Every other link is unchanged. Android's
   untitled chips now start with "Open" too, as the web's and the #171 entry above do.
+- 2026-10-06. Pull to refresh belongs to the screen that was pulled (owner): the store counts
+  every sync the owner asked for, so a pull on Quotas showed the indicator on the Inbox too. Each
+  screen now shows it only for its own pull, until that sync ends. The theme option "Match
+  wallpaper" is now "Material You", the name power users know (owner).
+
+- 2026-10-06. A revoked machine learns at once (#353). A directory append wakes every machine's
+  long-poll, revoked ones included, so the revoked machine's next request gets 401 instead of
+  waiting out its 60 s poll; `status` then prints `Server: reachable, but this machine was
+  removed …` with the `pair --force` hint, rather than "not reachable".
+
+- 2026-10-06. `settle` never withdraws a decision whose answer reached the agent (#405): it exits
+  0 and posts nothing, since devices would hold both the answer and a withdrawal. An answer
+  accepted but not yet delivered can still be withdrawn. The skill says only `--answer-in` cards
+  need `settle`.
+
+- 2026-10-06. Which answer won a race reaches every device (#330), as Tom chose over sealing
+  answers to every device. An answer is sealed only to the machine that asked, so a device whose
+  answer the server refused (409 `already-answered`) could not say what won. Once the machine
+  accepts a device's answer, it posts a `settled` notice with `outcome: "device"`, that device,
+  and its `choice` or `text`; the notice is signed by the asking machine, sealed to every active
+  device and checked like any other. Devices show "Later · on Pixel" in History and Find matches
+  it; the device that lost says "Answered on Pixel: Later" (until the notice lands, "Already
+  answered on another device."). The machine keeps the notice due until the server takes it,
+  skips it while behind on the directory, and stops at `already-settled` (withdrawn meanwhile).
+  Older clients ignore the two new fields.
 
 ## Encryption, with existing libraries
 

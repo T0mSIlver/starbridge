@@ -805,6 +805,8 @@ class ServerStore(
         // How each item a settled notice closed was closed, with the time: the notice lists before
         // the decision it closed, which moved past it.
         val closings = mutableMapOf<String, Pair<String?, String>>()
+        // Which device's answer each machine took, whenever its notice comes (#330).
+        val wins = mutableListOf<Pair<String, Settled>>()
         val waits = mutableListOf<Pair<String, Waiting>>()
         while (true) {
             val page = api().items("decision,settled,waiting", cursor)
@@ -819,8 +821,9 @@ class ServerStore(
                 if (listed.item.kind == "settled") {
                     val (from, body) = open(listed.item) ?: continue
                     body as Settled
+                    if (body.outcome == "device") wins += from to body
                     // Keyed by machine: a notice closes only the machine's own items (#362).
-                    closings["$from/${body.itemId}"] = body.outcome to listed.receivedAt
+                    else closings["$from/${body.itemId}"] = body.outcome to listed.receivedAt
                     continue
                 }
                 // The notice that closed it arrived in the same write, so it carries the same time;
@@ -849,6 +852,7 @@ class ServerStore(
         }
         // An update may list before the decision it is about, so they apply once all are read.
         for ((from, w) in waits) byId[w.decisionId]?.let { d -> wait(d, from, w)?.let { byId[w.decisionId] = it } }
+        for ((from, n) in wins) byId[n.itemId]?.let { d -> won(d, from, n)?.let { byId[n.itemId] = it } }
         persist(saved.copy(cursor = cursor, decisions = byId.values.sortedBy { it.body.createdAt }.takeLast(500), decisionFields = DECISION_FIELDS))
     }
 
@@ -914,7 +918,7 @@ class ServerStore(
                 val notice = body as Settled
                 val p = byId[notice.itemId]
                 if (p == null) {
-                    settleDecision(notice.itemId, from, notice.outcome)
+                    settleDecision(notice.itemId, from, notice)
                     return null
                 }
                 if (p.from != from) return null
@@ -927,11 +931,31 @@ class ServerStore(
 
     /** A settled notice may close one of the machine's decisions: it counts as answered. */
     /** A notice after a device's answer closed nothing, so only an open decision takes its [outcome]. */
-    private fun settleDecision(id: String, from: String, outcome: String?) {
+    private fun settleDecision(id: String, from: String, notice: Settled) {
         val d = saved.decisions.find { it.body.id == id && it.from == from } ?: return
         alerts.cancel(id)
-        if (d.answeredAt == null && d.answer == null) persist(saved.copy(decisions = saved.decisions.map { if (it === d) it.copy(answeredAt = now(), settled = outcome) else it }))
+        val updated = if (notice.outcome == "device") won(d, from, notice)
+        else if (d.answeredAt == null && d.answer == null) d.copy(answeredAt = now(), settled = notice.outcome)
+        else null
+        if (updated != null) persist(saved.copy(decisions = saved.decisions.map { if (it === d) updated else it }))
     }
+
+    /** Decisions this phone's answer lost to another device's, until the machine says which won. */
+    private val lost = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+
+    /**
+     * [d] answered with the other device's answer the asking machine's notice names, or null when
+     * the notice is not the asking machine's, names this phone, or carries no answer (#330).
+     */
+    private fun won(d: SavedDecision, from: String, n: Settled): SavedDecision? {
+        val answer = n.choice ?: n.text ?: return null
+        if (d.from != from || n.device == null || n.device == me.id || d.answer != null) return null
+        if (lost.remove(d.body.id)) notice.value = answeredFirst(answer, n.device)
+        return d.copy(answeredAt = d.answeredAt ?: now(), theirAnswer = answer, answeredBy = n.device)
+    }
+
+    private fun answeredFirst(answer: String, device: String) =
+        "Answered on ${directory?.members?.get(device)?.member?.name ?: device}: $answer"
 
     /** Keeps a week of prompts, the log's span, as the server does. */
     private fun keepPrompts(byId: Map<String, SavedPrompt>, cursor: String = saved.promptCursor) {
@@ -1080,7 +1104,16 @@ class ServerStore(
             try {
                 when (val sent = send(id, choice, text)) {
                     is Sent.Queued -> notice.value = "No connection. ${sent.answer} will be sent when the phone is back online."
-                    Sent.Elsewhere -> notice.value = "Already answered on another device."
+                    Sent.Elsewhere -> {
+                        val d = saved.decisions.find { it.body.id == id }
+                        val by = d?.answeredBy
+                        val theirs = d?.theirAnswer
+                        if (by != null && theirs != null) notice.value = answeredFirst(theirs, by)
+                        else {
+                            lost += id
+                            notice.value = "Already answered on another device."
+                        }
+                    }
                     is Sent.Failed -> notice.value = "Not sent: ${sent.why}"
                     is Sent.Answered -> Unit
                 }
@@ -1767,6 +1800,8 @@ class ServerStore(
             answer = d.answer,
             answeredAt = instant(d.answeredAt) ?: d.answer?.let { Instant.now() },
             settled = d.settled,
+            theirAnswer = d.theirAnswer,
+            answeredOn = d.answeredBy?.let { directory?.members?.get(it)?.member?.name ?: it },
             replies = b.replies == true,
         )
     }

@@ -27,8 +27,9 @@ import {
 import { LiveServer } from "@starbridge/server/test-support";
 import { api } from "./api";
 import * as device from "./device";
+import { closedByPhrase, outcomeText } from "./outcome";
 import * as store from "./store";
-import type { JoinView } from "./types";
+import type { InboxItem, JoinView } from "./types";
 
 let live: LiveServer;
 let ctx: device.Ctx;
@@ -318,6 +319,44 @@ test("a machine's settled notice closes only that machine's decisions (#362)", a
     };
     const own = await device.loadInbox(fresh);
     expect(own.items.find((i) => i.decision.id === "d_asked")?.settled).toBe("withdrawn");
+    // Answered on the phone: the asking machine's later notice says with what, and only its own
+    // counts (#330).
+    const told = (by: (typeof machines)[0], choice: string) => ({
+      item: seal(
+        "settled",
+        {
+          v: 1,
+          id: `s_${choice}`,
+          itemId: "d_asked",
+          to,
+          at,
+          outcome: "device",
+          device: "phone",
+          choice,
+        },
+        { id: by.member.id, signKey: by.keys.sign.privateKey },
+        recipient,
+      ),
+      cursor: "1",
+      receivedAt: "2026-10-06T12:00:01Z",
+    });
+    items[0] = told(closes, "Yes");
+    expect(
+      (await device.loadInbox(fresh)).items.find((i) => i.decision.id === "d_asked")?.answeredBy,
+    ).toBeUndefined();
+    // Read before the notice came: a later read lists the notice alone, and it still counts.
+    items.splice(0, 1);
+    const before = await device.loadInbox(fresh);
+    items.length = 0;
+    items.push(told(asks, "No"));
+    const won = (await device.loadInbox(fresh, before)).items.find(
+      (i) => i.decision.id === "d_asked",
+    );
+    const phone = fresh.dir.members.get("phone")?.member.name;
+    expect(won?.answeredBy).toEqual({ device: phone as string, reply: { choice: "No" } });
+    expect(won?.settled).toBeUndefined();
+    expect(outcomeText(won as InboxItem)).toBe("No");
+    expect(closedByPhrase(won as InboxItem)).toBe(`on ${phone}`);
   } finally {
     globalThis.fetch = served;
   }

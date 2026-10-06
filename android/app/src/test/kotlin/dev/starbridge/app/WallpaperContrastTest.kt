@@ -12,7 +12,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Under "Match wallpaper" the grounds come from the wallpaper while amber, the quota states and
+ * Under "Material You" the grounds come from the wallpaper while amber, the quota states and
  * the provider dots stay fixed: each must still read on every wallpaper, light and dark. Text
  * needs 4.5:1 (WCAG AA), dots and marks 3:1. `fg3`, the hint tier, needs 3:1, as DESIGN.md's own
  * `fg3` reaches about 3.3:1 on its cards.

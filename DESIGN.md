@@ -392,13 +392,13 @@ side on wide screens. Stock components take their colours from these tokens
 through the theme.
 
 Colours on Android are a setting, "Colours": "Starbridge" (the default) uses
-these tokens; "Match wallpaper" uses Material You dynamic colour. Screens
+these tokens; "Material You" uses dynamic colour from the wallpaper. Screens
 draw neutrals and components from Material's roles, not from the tokens, and
 the "Starbridge" scheme maps the tokens onto those roles (`bg` is `surface`,
 `surface` is `surfaceContainer`, `surface2` is `surfaceContainerHighest` and
 `secondaryContainer`, `fg` is `onSurface` and `primary`, `fg2` is
 `onSurfaceVariant` and `secondary`, `line` and `line-strong` are
-`outlineVariant` and `outline`). So under "Match wallpaper" every role
+`outlineVariant` and `outline`). So under "Material You" every role
 follows the wallpaper: grounds, cards, the navigation bar and rail, top app
 bars, buttons and button groups, text fields, the selected decision,
 progress tracks and loading indicators, dialogs, snackbars, the window behind

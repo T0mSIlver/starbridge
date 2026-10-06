@@ -16,8 +16,9 @@ export function closedAt(item: InboxItem): string | undefined {
 
 /** The answer, or how a decision answered on another page closed. */
 export function outcomeText(item: InboxItem): string {
-  // Answers are sealed to the asking machine: only the device that sent one can show it.
-  if (item.reply) return "choice" in item.reply ? item.reply.choice : item.reply.text;
+  // Answers are sealed to the asking machine: another device's shows once the machine names it.
+  const reply = item.reply ?? item.answeredBy?.reply;
+  if (reply) return "choice" in reply ? reply.choice : reply.text;
   if (item.settled === "withdrawn") return "Withdrawn";
   const page = item.decision.answerIn;
   if (!page) return "Answered";
@@ -27,6 +28,7 @@ export function outcomeText(item: InboxItem): string {
 /** Who closed it: this browser, the agent (withdrawn, or for another page), or another device. */
 export function closedBy(item: InboxItem): string {
   if (item.reply) return "This browser";
+  if (item.answeredBy) return item.answeredBy.device;
   return item.settled || item.decision.answerIn ? "The agent" : "Another device";
 }
 
@@ -63,8 +65,19 @@ export function promptOutcome(
   return { outcome: left ? "No longer waiting" : "Expired", by: "" };
 }
 
+/** This browser's answer lost to another device's (#330). */
+export class AnsweredFirst extends Error {}
+
+/** Why this browser's answer was not sent: what won, once the machine said. */
+export function answeredFirstText(item: InboxItem): string {
+  const by = item.answeredBy;
+  if (!by) return "Already answered on another device.";
+  return `Answered on ${by.device}: ${"choice" in by.reply ? by.reply.choice : by.reply.text}`;
+}
+
 /** Who closed a question, after its answer in History: "on this browser", "by the agent". */
 export function closedByPhrase(item: InboxItem): string {
   if (item.reply) return "on this browser";
+  if (item.answeredBy) return `on ${item.answeredBy.device}`;
   return item.settled || item.decision.answerIn ? "by the agent" : "on another device";
 }
