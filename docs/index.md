@@ -46,8 +46,8 @@ only ciphertext. Use the free server at starbridge.run, or [host your own](../se
    starbridge ask --question "Does this reach my phone?" --option Yes --option No --wait
    ```
 
-5. **Ask from an agent.** Start a new Claude Code, Pi or opencode session, since sessions that
-   were running before setup don't have Starbridge. Type:
+5. **Ask from an agent.** Start a new Claude Code, Pi or opencode session, or
+   [resume a running one](#sessions-already-running). Type:
 
    ```
    Ask me through Starbridge whether to name the branch "fix" or "patch", then create it.
@@ -64,6 +64,21 @@ are yours and reports the commands that block you. Pi and opencode get the same 
 Starbridge package and plugin. Codex gets the skill only, so paste the
 [rules for Codex](tell-your-agents.md#rules-for-codex) into its instructions.
 [Agent instructions](tell-your-agents.md) covers each agent and how to add your own rules.
+
+## Sessions already running
+
+A session that was running when you installed Starbridge doesn't have it: each agent loads its
+plugins, skills and instructions when it starts. Quit the agent and resume the session, which
+keeps its conversation:
+
+| Agent | Resume the last session | Pick one |
+|---|---|---|
+| Claude Code | `claude --continue` | `claude --resume` |
+| Codex | `codex resume --last` | `codex resume` |
+| Pi | `pi --continue` | `pi --resume` |
+| opencode | `opencode --continue` | `opencode --session <id>` |
+
+Run the command in the session's own directory, since the last session is per directory.
 
 ## What you get
 

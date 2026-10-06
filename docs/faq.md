@@ -65,7 +65,9 @@ run `starbridge ask` and `starbridge wait`.
 
 ## Do I restart my agents after setup?
 
-Yes: sessions that were running before setup don't have Starbridge. Start new ones.
+Yes: sessions that were running before setup don't have Starbridge. Quit each one and resume it
+with its agent's command, such as `claude --continue`; the
+[Overview](index.md#sessions-already-running) lists them.
 
 ## Which platforms?
 
