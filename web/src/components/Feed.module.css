@@ -287,10 +287,13 @@
   overflow-wrap: anywhere;
 }
 
+/* As a row's content: a long host name or branch in the title or reason wraps inside the card. */
 .run {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--s1);
   padding: var(--s3) var(--s4);
+  overflow-wrap: anywhere;
 }
 
 .run.comfy {
