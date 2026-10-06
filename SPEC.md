@@ -1836,6 +1836,14 @@ so the mod is the first path.
   permission, your phone tells you. Answer with one tap and it gets back to work." It sells the
   pain the owner named: you don't notice that an agent is blocked. The shots below it still show
   the web app beside the phone, so the page keeps saying both clients do the same.
+- 2026-10-06. Numbered schema migrations (#470). `PRAGMA user_version` counts the migrations a
+  database has run; each runs in one transaction with its version, and a server refuses a
+  database newer than it knows, so a rollback past a migration fails at start instead of writing
+  rows the newer schema reads wrong. Version 1 is the 1.0.0 schema with `IF NOT EXISTS`, which
+  adopts a database the server made before it counted versions: the hosted one already ran the
+  three column probes, which go (#469). A migration changes the schema and never rewrites rows,
+  to stay within the 30 s Caddy holds requests; backfills run in the hourly sweep. `apply.sh`
+  backs the database up just before the new server starts and keeps the last five.
 
 ## Encryption, with existing libraries
 

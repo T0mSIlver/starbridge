@@ -476,31 +476,3 @@ test("posting and answering an item never scans the account's items or boxes", a
   });
   expect(scans).toEqual([]);
 });
-
-test("a database from before the item totals counts what it holds once, then keeps count", () => {
-  const dir = mkdtempSync(join(tmpdir(), "sb-totals-"));
-  const path = join(dir, "db.sqlite");
-  let db = openDb(path);
-  db.run("INSERT INTO accounts (id, created_at) VALUES ('a', '')");
-  const add = (id: string, size: number) =>
-    db
-      .query(
-        "INSERT INTO items (seq, account_id, id, kind, from_id, received_at, size) VALUES (?, 'a', ?, 'permission', 'm', '', ?)",
-      )
-      .run(nextSeq(db), id, size);
-  add("p1", 100);
-  add("p2", 200);
-  db.run("DROP TRIGGER item_totals_add");
-  db.run("DROP TRIGGER item_totals_drop");
-  db.run("DROP TABLE item_totals");
-  db.close();
-  db = openDb(path);
-  // The two older items are charged their rows now; they have no boxes.
-  add("p3", 300 + DEFAULT_LIMITS.rowBytes);
-  db.run("DELETE FROM items WHERE id = 'p1'");
-  db.close();
-  db = openDb(path);
-  expect(db.query("SELECT kind, n, bytes FROM item_totals").all()).toEqual([
-    { kind: "permission", n: 2, bytes: 500 + 2 * DEFAULT_LIMITS.rowBytes },
-  ]);
-});

@@ -89,6 +89,18 @@ updates on its own. For live updates on Android, set `RELAY_URL`, or install a U
 distributor such as ntfy and pick UnifiedPush in the app under Settings → Notifications →
 Delivered through.
 
+## Upgrade
+
+A new server brings its database's schema up to date when it starts. Copy the database first,
+with the server running:
+
+```bash
+sqlite3 /var/lib/docker/volumes/starbridge/_data/starbridge.db ".backup 'starbridge-before.db'"
+```
+
+A server refuses a database a newer release has already upgraded, so to go back to an older
+release, restore the copy you made before upgrading.
+
 ## Environment
 
 ### Basics
