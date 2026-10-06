@@ -1695,6 +1695,12 @@ so the mod is the first path.
     API routes only, no web page. It pushes through prod's relay (`RELAY_URL`), as any
     self-hosted server does: the app shows a new item on a push, or on resume and pull to
     refresh, and does not poll while open.
+- 2026-10-06. Images say they open full screen (#170, owner's pick of option B on the question
+  display page). On a touch screen nothing showed that a tap on an image opens the viewer, as the
+  zoom cursor needs a mouse. Every image that opens the viewer (Android's cards and sheet, the
+  web's detail) now carries an expand badge in its bottom right corner: a `s8` circle of
+  `surface` at 72% with the expand icon in `fg`. The web's 40 px list thumbnail opens the
+  question, not the viewer, so it has none.
 
 ## Encryption, with existing libraries
 

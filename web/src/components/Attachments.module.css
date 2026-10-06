@@ -9,6 +9,7 @@
 }
 
 .image {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -26,6 +27,19 @@
   height: auto;
   max-height: var(--size-media);
   object-fit: contain;
+}
+
+.expand {
+  position: absolute;
+  right: var(--s2);
+  bottom: var(--s2);
+  display: grid;
+  place-items: center;
+  width: var(--s8);
+  height: var(--s8);
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--surface) 72%, transparent);
+  color: var(--fg);
 }
 
 .thumb {
