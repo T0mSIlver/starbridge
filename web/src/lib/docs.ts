@@ -12,6 +12,7 @@ export const DOCS = [
   { slug: "cli", file: "cli/README.md", title: "The CLI" },
   { slug: "tell-your-agents", file: "docs/tell-your-agents.md", title: "Agent instructions" },
   { slug: "self-host", file: "server/README.md", title: "Self-host" },
+  { slug: "faq", file: "docs/faq.md", title: "FAQ" },
 ] as const;
 
 export type Doc = (typeof DOCS)[number];
@@ -64,6 +65,19 @@ export function renderDoc(doc: Doc): string {
         const external = /^https?:/.test(to) ? ' rel="noreferrer"' : "";
         const titled = t ? ` title="${attr(t)}"` : "";
         return `<a href="${attr(to)}"${titled}${external}>${this.parser.parseInline(tokens)}</a>`;
+      },
+      // An image under web/public, which the site serves from its root. A `-light` one comes with
+      // its `-dark` twin; the stylesheet shows the one for the page's theme (Docs.module.css).
+      image({ href, text }: Tokens.Image) {
+        const target = normalize(join(dirname(doc.file), href));
+        if (!target.startsWith("web/public/"))
+          throw new Error(`${doc.file}: ${href} is not under web/public`);
+        const src = target.slice("web/public".length);
+        const light = /-light(\.\w+)$/;
+        const img = (s: string, scheme?: string) =>
+          `<img src="${attr(s)}" alt="${attr(text)}" loading="lazy"${scheme ? ` data-scheme="${scheme}"` : ""}>`;
+        if (!light.test(src)) return img(src);
+        return img(src.replace(light, "-dark$1"), "dark") + img(src, "light");
       },
     },
   });

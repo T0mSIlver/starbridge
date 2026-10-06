@@ -336,7 +336,14 @@ async function main() {
     await visitor.goto(ORIGIN + path);
     await shoot(visitor, name);
   }
-  for (const path of ["/docs", "/docs/cli", "/docs/tell-your-agents", "/docs/self-host", "/sample"])
+  for (const path of [
+    "/docs",
+    "/docs/cli",
+    "/docs/tell-your-agents",
+    "/docs/self-host",
+    "/docs/faq",
+    "/sample",
+  ])
     await visitor.goto(ORIGIN + path, { waitUntil: "networkidle" });
   await visitor.close();
 
