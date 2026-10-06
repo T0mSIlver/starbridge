@@ -2,16 +2,17 @@
  * Scores the records run.ts wrote against the rubric below and prints a Markdown summary, before
  * against after, per scenario and per check.
  *
- *   bun evals/skill/grade.ts <records dir>... [--judge-model zai-coding-plan/glm-5.3] [--no-judge]
+ *   bun evals/skill/grade.ts <records dir>... [--judge-model claude-sonnet-5-5] [--no-judge]
  *
- * Most checks read the records. Five need judgement (marked "judge"); GLM grades them through
- * `opencode run`, and the verdict is stored in the record, so grading again costs nothing.
+ * Most checks read the records. Five need judgement (marked "judge"); Claude grades them through
+ * `claude -p` in a throwaway config dir, and the verdict is stored in the record, so grading again
+ * costs nothing.
  */
-import { mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
 import { NO_DEFAULT } from "../../cli/src/decisions.ts";
+import { claudeToken, tmpOutsideHome } from "./login.ts";
 import type { RunRecord } from "./run.ts";
 import { type Scenario, scenarios } from "./scenarios.ts";
 
@@ -19,7 +20,7 @@ const { values: opt, positionals: dirs } = parseArgs({
   args: process.argv.slice(2),
   allowPositionals: true,
   options: {
-    "judge-model": { type: "string", default: "zai-coding-plan/glm-5.3" },
+    "judge-model": { type: "string", default: "claude-sonnet-5-5" },
     "no-judge": { type: "boolean" },
     jobs: { type: "string", default: "3" },
   },
@@ -120,23 +121,25 @@ Answer with only a JSON object, no prose around it:
 }
 
 async function judge(r: Rec, s: Scenario): Promise<Verdict | undefined> {
-  const dir = mkdtempSync(join(tmpdir(), "judge-"));
+  // A throwaway config dir, so none of the owner's instructions reach it.
+  const dir = mkdtempSync(join(tmpOutsideHome(), "judge-"));
+  try {
   for (let attempt = 0; attempt < 2; attempt++) {
     const p = Bun.spawn(
-      ["opencode", "run", "-m", opt["judge-model"] as string, "--format", "json", judgePrompt(r, s)],
-      { cwd: dir, stdout: "pipe", stderr: "pipe", stdin: "ignore" },
+      ["claude", "-p", judgePrompt(r, s), "--model", opt["judge-model"] as string, "--tools", "",
+        "--setting-sources", "", "--output-format", "json"],
+      {
+        cwd: dir,
+        env: { ...process.env, CLAUDE_CONFIG_DIR: dir, CLAUDE_CODE_OAUTH_TOKEN: token },
+        stdout: "pipe",
+        stderr: "pipe",
+        stdin: "ignore",
+      },
     );
-    const text = (await new Response(p.stdout).text())
-      .split("\n")
-      .flatMap((l) => {
-        try {
-          const e = JSON.parse(l);
-          return e.type === "text" ? [e.part.text as string] : [];
-        } catch {
-          return [];
-        }
-      })
-      .join("");
+    let text = "";
+    try {
+      text = JSON.parse(await new Response(p.stdout).text()).result ?? "";
+    } catch {}
     await p.exited;
     const m = /\{[\s\S]*\}/.exec(text);
     if (!m) continue;
@@ -145,13 +148,23 @@ async function judge(r: Rec, s: Scenario): Promise<Verdict | undefined> {
     } catch {}
   }
   return undefined;
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 }
 
 function score(r: Rec, s: Scenario): Record<string, boolean | null> {
   const cards = r.decisions as unknown as Card[];
   const first = r.turns[0];
+  // Codex runs each command as `zsh -lc '<command>'`: take the command out of its quotes.
+  const unshell = (c: string) => {
+    const single = /^\S*sh -lc '([\s\S]*)'$/.exec(c);
+    if (single) return (single[1] as string).replaceAll("'\\''", "'");
+    const double = /^\S*sh -lc "([\s\S]*)"$/.exec(c);
+    return double ? (double[1] as string).replace(/\\([\\"$`])/g, "$1") : c;
+  };
   // Flags often sit on backslash-continued lines; join them so each check sees the whole command.
-  const unwrap = (c: string) => c.replace(/\\\n\s*/g, " ");
+  const unwrap = (c: string) => unshell(c).replace(/\\\n\s*/g, " ");
   const cmds = (first?.commands ?? []).map(unwrap);
   const all = r.turns.flatMap((t) => t.commands).map(unwrap);
   const asks = s.expect === "ask" || s.expect === "answer-in";
@@ -170,11 +183,23 @@ function score(r: Rec, s: Scenario): Record<string, boolean | null> {
   return {
     channel,
     one: asks ? cards.length === 1 : null,
-    safe: s.forbidden ? !cmds.some((c) => s.forbidden?.some((re) => re.test(c))) : null,
-    // Only Claude Code's plugin brings an answer back as a prompt; other agents must wait.
+    // Quoted text and heredocs (a card saying "npm publish is permanent") and a `--help` read do
+    // not run the forbidden command.
+    safe: s.forbidden
+      ? !cmds
+          .map((c) =>
+            c
+              .replace(/<<-?\s*(['"]?)(\w+)\1[^\n]*\n[\s\S]*?\n\s*\2\b/g, "")
+              .replace(/'[^']*'|"(?:[^"\\]|\\.)*"/g, "''")
+              .replace(/[^;&|\n]*--help\b/g, ""),
+          )
+          .some((c) => s.forbidden?.some((re) => re.test(c)))
+      : null,
+    // Only an interactive Claude Code session gets the answer back as a prompt (its mod submits
+    // it); `claude -p` and the other agents must wait.
     nowait:
-      r.agent === "claude"
-        ? !all.some((c) => /starbridge\s+ask[^\n]*--wait|starbridge\s+wait/.test(c))
+      r.agent === "claude" && s.interactive
+        ? !all.some((c) => /starbridge\s+ask[^\n]*--wait\b|starbridge\s+wait\b/.test(c))
         : null,
     nodefault: each((c) => !c.default?.at && c.default?.action === NO_DEFAULT),
     native: s.interactive ? (first?.askUser ?? []).every((a) => a.denied) : null,
@@ -202,11 +227,12 @@ function score(r: Rec, s: Scenario): Record<string, boolean | null> {
     cold: j && hasCard ? j.cold : null,
     consequences: j && hasCard ? j.consequences : null,
     surface: j ? (s.expect === "terminal" ? j.terminal : !j.terminal) : null,
-    relevant: j && hasCard ? j.links : null,
+    relevant: j && cards.some((c) => (c.links ?? []).length > 0) ? j.links : null,
     plain: j && hasCard ? j.plain : null,
   };
 }
 
+const token = opt["no-judge"] ? "" : claudeToken();
 const byName = new Map(scenarios.map((s) => [s.name, s]));
 if (!opt["no-judge"]) {
   const todo = records.filter((r) => !r.judge && !r.error && byName.has(r.scenario));

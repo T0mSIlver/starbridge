@@ -242,9 +242,9 @@ test("the plugin's SessionStart hook adds the rule to reach the owner and the ru
   expect(out.hookSpecificOutput.hookEventName).toBe("SessionStart");
   const text = out.hookSpecificOutput.additionalContext as string;
   expect(text).toContain(
-    "Starbridge is how you reach me: use the `starbridge` skill, instead of asking here or with AskUserQuestion",
+    "Reach me through the `starbridge` skill, not here or with AskUserQuestion",
   );
-  expect(text).toContain("\n\nWhen a command you are about to run blocks me");
+  expect(text).toContain("\n\nRun a command that blocks me");
   expect(text).toContain("`starbridge run`");
   expect(text).not.toContain("inference");
 });

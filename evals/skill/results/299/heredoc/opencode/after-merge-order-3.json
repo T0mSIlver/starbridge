@@ -1,0 +1,88 @@
+{
+  "agent": "opencode",
+  "model": "zai-coding-plan/glm-5.3-flash",
+  "arm": "after",
+  "scenario": "merge-order",
+  "rep": 3,
+  "turns": [
+    {
+      "commands": [
+        "gh pr view 12 --json number,title,state,mergeable,mergeStateStatus,headRefName,baseRefName,files",
+        "gh pr view 13 --json number,title,state,mergeable,mergeStateStatus,headRefName,baseRefName,files",
+        "gh pr view 12 --json mergeable,mergeStateStatus",
+        "gh pr view 13 --json mergeable,mergeStateStatus",
+        "gh pr view 12 --json mergeable --jq '.mergeable' ; gh pr view 13 --json mergeable --jq '.mergeable'",
+        "starbridge ask \\\n  --question 'PRs #12 and #13 are both green but both touch src/api.ts, so they conflict — which merges first?' \\\n  --context 'Whichever goes second will need a rebase before it can merge.\n#12 (CLI resumable uploads) is needed for the CLI release at 20:00 tonight.\n#13 (server sync-timeout fix) is blocking users on slow links (3 reports this week).' \\\n  --option '#12 first' --option '#13 first' \\\n  --link https://github.com/acme/notes/pull/12 \\\n  --link https://github.com/acme/notes/pull/13 \\\n  --waiting",
+        "starbridge wait d_HpAoREkVQCMB9g3s --timeout 5m"
+      ],
+      "final": "Both merged:\n\n- **#12** (CLI resumable uploads) squash-merged first, per your card answer.\n- **#13** (sync timeout fix) conflicted on `src/api.ts`; I updated its branch onto main, checks re-ran green, then squash-merged it.",
+      "session": "ses_eee8377d7ffee5GGiiHQdcBhBt",
+      "tokens": 11575,
+      "exit": 0,
+      "seconds": 119.76
+    },
+    {
+      "commands": [
+        "gh pr merge 12 --squash",
+        "gh pr update-branch 13",
+        "sleep 45 && gh pr checks 13",
+        "gh pr merge 13 --squash"
+      ],
+      "final": "Both merged:\n\n- **#12** (CLI resumable uploads) squash-merged first, per your card answer.\n- **#13** (sync timeout fix) conflicted on `src/api.ts`; I updated its branch onto main, checks re-ran green, then squash-merged it.",
+      "session": "ses_eee8377d7ffee5GGiiHQdcBhBt",
+      "tokens": 11575,
+      "exit": 0,
+      "seconds": 119.76
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_HpAoREkVQCMB9g3s",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-06T13:52:53Z",
+      "question": "PRs #12 and #13 are both green but both touch src/api.ts, so they conflict — which merges first?",
+      "context": "Whichever goes second will need a rebase before it can merge.\n#12 (CLI resumable uploads) is needed for the CLI release at 20:00 tonight.\n#13 (server sync-timeout fix) is blocking users on slow links (3 reports this week).",
+      "options": [
+        "#12 first",
+        "#13 first"
+      ],
+      "recommended": "#12 first",
+      "default": {
+        "action": "Waits for your answer"
+      },
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": ""
+      },
+      "links": [
+        {
+          "url": "https://github.com/acme/notes/pull/12"
+        },
+        {
+          "url": "https://github.com/acme/notes/pull/13"
+        }
+      ],
+      "replies": true
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [
+    "gh pr view 12 --json number,title,state,mergeable,mergeStateStatus,headRefName,baseRefName,files",
+    "gh pr view 13 --json number,title,state,mergeable,mergeStateStatus,headRefName,baseRefName,files",
+    "gh pr view 12 --json mergeable,mergeStateStatus",
+    "gh pr view 13 --json mergeable,mergeStateStatus",
+    "gh pr view 12 --json mergeable --jq .mergeable",
+    "gh pr view 13 --json mergeable --jq .mergeable",
+    "gh pr merge 12 --squash",
+    "gh pr update-branch 13",
+    "gh pr checks 13",
+    "gh pr merge 13 --squash"
+  ],
+  "answered": "Answer to d_HpAoREkVQCMB9g3s (PRs #12 and #13 are both green but both touch src/api.ts, so they conflict — which merges first?): #12 first"
+}

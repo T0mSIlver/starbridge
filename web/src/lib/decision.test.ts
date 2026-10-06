@@ -15,13 +15,25 @@ test("an image becomes a padded base64 data URL", () => {
   expect(imageSrc({ ...pixel, data: "-_8" })).toBe("data:image/png;base64,+/8=");
 });
 
-test("a link reads as its title, a Claude artifact, or its host and path", () => {
+test("a link reads as its title, a GitHub reference, a Claude artifact, or its host and path", () => {
   expect(linkLabel({ url: "https://claude.ai/public/artifacts/0b3f", title: "Mockups" })).toBe(
     "Mockups",
   );
   expect(linkLabel({ url: "https://claude.ai/public/artifacts/0b3f" })).toBe("Claude artifact");
   expect(linkLabel({ url: "https://claude.ai/code/artifact/7c1d" })).toBe("Claude artifact");
   expect(linkLabel({ url: "https://www.example.com/" })).toBe("example.com");
+  expect(linkLabel({ url: "https://github.com/T0mSIlver/starbridge/pull/86/files#diff" })).toBe(
+    "T0mSIlver/starbridge#86",
+  );
+  expect(linkLabel({ url: "https://github.com/T0mSIlver/starbridge/issues/171" })).toBe(
+    "T0mSIlver/starbridge#171",
+  );
+  expect(linkLabel({ url: "https://GitHub.com/T0mSIlver/starbridge/pull/86" })).toBe(
+    "T0mSIlver/starbridge#86",
+  );
+  expect(linkLabel({ url: "https://github.com/T0mSIlver/starbridge/pulls" })).toBe(
+    "github.com/T0mSIlver/starbridge/pulls",
+  );
   // Passes the schema but not URL: shown as written rather than crashing the inbox.
   expect(linkLabel({ url: "https://%" })).toBe("https://%");
   expect(linkLabel({ url: `https://example.com/${"a".repeat(60)}` })).toHaveLength(40);

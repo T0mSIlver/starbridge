@@ -1,0 +1,75 @@
+{
+  "agent": "codex",
+  "model": "default",
+  "arm": "after",
+  "scenario": "design-pick",
+  "rep": 1,
+  "turns": [
+    {
+      "commands": [
+        "/usr/bin/zsh -lc 'cat /var/tmp/skill-eval-osxkMr/after-design-pick-1/cfg/skills/starbridge/SKILL.md'",
+        "/usr/bin/zsh -lc 'git status --short; git branch --list; rg --files shots; cat AGENTS.md'",
+        "/usr/bin/zsh -lc 'git log --oneline --all -5; git diff --stat main settings-compact; git diff --stat main settings-roomy'",
+        "/usr/bin/zsh -lc \"starbridge ask --question 'Which settings-screen design should I merge into main?' --context 'Both variants are done and pass the tests.\nCompact: 9 visible rows, including Language, Shortcuts and About; tighter spacing.\nRoomy: 6 visible rows with more space between settings.' --option 'Compact' --option 'Roomy' --image shots/compact.png --image shots/roomy.png --waiting\"",
+        "/usr/bin/zsh -lc \"rg --files -g '\"'!shots/**'\"'; git show-ref --heads\"",
+        "/usr/bin/zsh -lc 'starbridge wait d_64hNAZm1NpfOkkjN --timeout 5m'",
+        "/usr/bin/zsh -lc 'starbridge wait d_64hNAZm1NpfOkkjN --timeout 5m'"
+      ],
+      "final": "Still waiting for your Compact or Roomy pick on Starbridge. The merge will follow that selection.",
+      "session": "01a11075-56ca-73a0-ac9d-84e3b13b3a39",
+      "exit": 143,
+      "seconds": 720.018
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_64hNAZm1NpfOkkjN",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-06T09:05:03Z",
+      "question": "Which settings-screen design should I merge into main?",
+      "context": "Both variants are done and pass the tests.\nCompact: 9 visible rows, including Language, Shortcuts and About; tighter spacing.\nRoomy: 6 visible rows with more space between settings.",
+      "options": [
+        "Compact",
+        "Roomy"
+      ],
+      "recommended": "Compact",
+      "agent": "codex",
+      "default": {
+        "action": "Waits for your answer"
+      },
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "01a11075-56ca-73a0-ac9d-84e3b13b3a39"
+      },
+      "images": [
+        {
+          "type": "image/png",
+          "width": 360,
+          "height": 640
+        },
+        {
+          "type": "image/png",
+          "width": 360,
+          "height": 640
+        }
+      ],
+      "replies": true
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "judge": {
+    "cold": true,
+    "consequences": false,
+    "terminal": false,
+    "links": null,
+    "plain": true,
+    "notes": "The card gives only row counts and spacing for each variant and never says what merging either one changes for users, and it gives no reason for recommending Compact."
+  }
+}

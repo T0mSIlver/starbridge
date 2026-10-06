@@ -495,11 +495,18 @@ a decision's context, a permission prompt's command and a session's name.
   kind icon and name, the repo, and the time right-aligned. The agent's own
   words come below it. Details end with the session name, truncated in the
   middle, and "Open in Claude" or "Open in Codex" as text, with no logos.
+- Links the agent attaches sit under "Attached by the agent", each a chip with
+  "Open", the page's title (else its label) and an open-outside icon. A GitHub
+  pull request or issue reads "owner/repo#123" when it has no title and leads
+  with the GitHub mark.
 - An answered item goes to History, collapsed by default, as one line: the
   answer, the question, which device answered and when.
 - Find (the web rail's box) lists the matching open items, then "History · N"
   with the matching answered ones, answers included. A matched word is bold
   on `surface2`, never amber.
+- An image on a question opens the full-screen viewer, and says so: an expand
+  badge in its bottom right corner, `s2` in, a `s8` circle of `surface` at 72%
+  with the expand icon (`s5`) in `fg`. Touch screens show no zoom cursor.
 - Destructive actions are neutral text buttons on the row; only the confirm
   button in their dialog is red (`bad`).
 - Copy inside the UI is labels and states only, never a sentence explaining
@@ -622,7 +629,8 @@ round caps and joins, no fills. Android uses Material Symbols Rounded tuned to
 Google Sans Flex; a native iOS app, if one comes, would use SF Symbols. Every
 platform has the same icons by job: laptop, desktop, server and cloud (a
 machine's kind), permission prompt, question, run, quota, history, settings,
-devices, open in the agent, waiting, inbox, send.
+devices, open in the agent, waiting, inbox, send, expand (an image opens full
+screen).
 
 ## The mark
 

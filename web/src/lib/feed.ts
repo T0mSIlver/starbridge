@@ -1,6 +1,6 @@
 // The inbox as one feed (DESIGN.md, "Rules"): runs, then what needs the owner, then History.
 // Pure, so the order has tests.
-import { closedAt, outcomeText } from "./outcome";
+import { closedAt, closedByPhrase, outcomeText } from "./outcome";
 import { shownRuns } from "./runs";
 import type { InboxItem, PromptItem, RunItem, Source } from "./types";
 
@@ -95,7 +95,8 @@ export function byMachine(runs: Entry[], needs: Entry[]): Group[] {
 }
 
 /** An answered item, as History lists it. */
-export type Past = { entry: Entry; closed: string; text: string; outcome: string };
+/** A History row; `by` says where it was answered ("on this browser"), empty when nobody did. */
+export type Past = { entry: Entry; closed: string; text: string; outcome: string; by: string };
 
 /**
  * Answered questions, and prompts the page saw answered or loaded from the last 7 days,
@@ -104,13 +105,21 @@ export type Past = { entry: Entry; closed: string; text: string; outcome: string
 export function history(
   inbox: InboxItem[],
   prompts: PromptItem[],
-  promptOutcome: (p: PromptItem) => string,
+  promptOutcome: (p: PromptItem) => { outcome: string; by: string },
   now: number,
 ): Past[] {
   const questions = inbox.flatMap((i): Past[] => {
     const closed = closedAt(i);
     return closed
-      ? [{ entry: questionEntry(i), closed, text: i.decision.question, outcome: outcomeText(i) }]
+      ? [
+          {
+            entry: questionEntry(i),
+            closed,
+            text: i.decision.question,
+            outcome: outcomeText(i),
+            by: closedByPhrase(i),
+          },
+        ]
       : [];
   });
   const answered = prompts.flatMap((p): Past[] =>
@@ -121,7 +130,7 @@ export function history(
             entry: promptEntry(p),
             closed: p.answeredAt ?? p.permission.expiresAt,
             text: p.permission.summary,
-            outcome: promptOutcome(p),
+            ...promptOutcome(p),
           },
         ],
   );

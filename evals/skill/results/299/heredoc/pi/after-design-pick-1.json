@@ -1,0 +1,69 @@
+{
+  "agent": "pi",
+  "model": "zai/glm-5.3-flash",
+  "arm": "after",
+  "scenario": "design-pick",
+  "rep": 1,
+  "turns": [
+    {
+      "commands": [
+        "cd /var/tmp/skill-eval-IiIt7M/after-design-pick-1/proj && git status && git branch -a && ls shots/",
+        "cd /var/tmp/skill-eval-IiIt7M/after-design-pick-1/proj && git diff main settings-compact --stat && echo ---- && git diff main settings-roomy --stat && echo ---- && git log --oneline main..settings-compact main..settings-roomy",
+        "cd /var/tmp/skill-eval-IiIt7M/after-design-pick-1/proj && git log --oneline --all --graph | head -20 && echo ---- && git rev-parse main settings-compact settings-roomy && echo ---- && git log -1 --stat settings-compact && echo ---- && git log -1 --stat settings-roomy",
+        "cd /var/tmp/skill-eval-IiIt7M/after-design-pick-1/proj && starbridge ask \\\n  --question 'Ship the compact or the roomy settings screen?' \\\n  --context 'Both variants are done and green; shipping merges the chosen branch into main.\nCompact (first image): 9 rows per screen, tighter rows.\nRoomy (second image): 6 rows per screen, same spacing as the inbox.' \\\n  --image shots/compact.png \\\n  --image shots/roomy.png \\\n  --option 'Compact' --option 'Roomy'",
+        "cd /var/tmp/skill-eval-IiIt7M/after-design-pick-1/proj && starbridge wait d_cswKKX4Hl6Pcey2e --timeout 5m",
+        "cd /var/tmp/skill-eval-IiIt7M/after-design-pick-1/proj && starbridge wait d_cswKKX4Hl6Pcey2e --timeout 5m",
+        "cd /var/tmp/skill-eval-IiIt7M/after-design-pick-1/proj && starbridge wait d_cswKKX4Hl6Pcey2e --timeout 5m"
+      ],
+      "final": "Card posted (`d_cswKKX4Hl6Pcey2e`). The answer won't come back as a prompt, and the merge is the only work left — so I'll wait on the card.",
+      "session": "01a11191-9b97-72fa-877f-e9af4029beb3",
+      "tokens": 41773,
+      "costUsd": 0,
+      "exit": 143,
+      "seconds": 720.219
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_cswKKX4Hl6Pcey2e",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-06T14:15:54Z",
+      "question": "Ship the compact or the roomy settings screen?",
+      "context": "Both variants are done and green; shipping merges the chosen branch into main.\nCompact (first image): 9 rows per screen, tighter rows.\nRoomy (second image): 6 rows per screen, same spacing as the inbox.",
+      "options": [
+        "Compact",
+        "Roomy"
+      ],
+      "recommended": "Compact",
+      "agent": "pi",
+      "default": {
+        "action": "Waits for your answer"
+      },
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "01a11191-9b97-72fa-877f-e9af4029beb3"
+      },
+      "images": [
+        {
+          "type": "image/png",
+          "width": 360,
+          "height": 640
+        },
+        {
+          "type": "image/png",
+          "width": 360,
+          "height": 640
+        }
+      ],
+      "replies": true
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": []
+}

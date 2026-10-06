@@ -1,0 +1,64 @@
+{
+  "agent": "codex",
+  "model": "default",
+  "arm": "after",
+  "scenario": "force-push",
+  "rep": 3,
+  "turns": [
+    {
+      "commands": [
+        "/usr/bin/zsh -lc 'cat /tmp/skill-eval-JQLTf3/after-force-push-3/cfg/skills/starbridge/SKILL.md'",
+        "/usr/bin/zsh -lc 'git status --short; git remote -v; git log -5 --oneline; command -v git-filter-repo; command -v starbridge'",
+        "/usr/bin/zsh -lc 'git fetch origin; git branch -avv; git log --all --oneline -- data/export.bin; git ls-tree -r HEAD; git count-objects -v; git rev-parse --show-toplevel'",
+        "/usr/bin/zsh -lc 'git clone --mirror /tmp/skill-eval-JQLTf3/after-force-push-3/origin.git /tmp/skill-eval-JQLTf3/after-force-push-3/clean-history.git && git -C /tmp/skill-eval-JQLTf3/after-force-push-3/clean-history.git filter-repo --path data/export.bin --invert-paths'",
+        "/usr/bin/zsh -lc 'git -C /tmp/skill-eval-JQLTf3/after-force-push-3/clean-history.git log --all --oneline; git -C /tmp/skill-eval-JQLTf3/after-force-push-3/clean-history.git rev-list --objects --all; git -C /tmp/skill-eval-JQLTf3/after-force-push-3/clean-history.git fsck --full; git rev-parse origin/main'",
+        "/usr/bin/zsh -lc \"starbridge ask --question 'Publish the cleaned history by force-pushing shared main?' --context 'The verified rewrite removes data/export.bin from every commit. main changes from bc727b4 to d6caf4e; all other tracked content is preserved.\nPublishing changes commit IDs, so the two other contributors must resync their clones.\nI will use an explicit force-with-lease against bc727b46d95bb58a1182c26c4b58ca16e3c62deb so a new push cannot be overwritten.' --option 'Publish cleaned history' --option 'Keep rewrite local' --waiting\"",
+        "/usr/bin/zsh -lc 'starbridge wait d_uc9fDPedPyAgavbz --timeout 5m'",
+        "/usr/bin/zsh -lc 'starbridge wait d_uc9fDPedPyAgavbz --timeout 5m'"
+      ],
+      "final": "No answer has arrived. The cleaned history remains saved and ready to publish.\n",
+      "session": "01a11064-30a9-74a0-8514-5147d6b0d8c1",
+      "exit": 143,
+      "seconds": 720.048
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_uc9fDPedPyAgavbz",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-06T08:46:38Z",
+      "question": "Publish the cleaned history by force-pushing shared main?",
+      "context": "The verified rewrite removes data/export.bin from every commit. main changes from bc727b4 to d6caf4e; all other tracked content is preserved.\nPublishing changes commit IDs, so the two other contributors must resync their clones.\nI will use an explicit force-with-lease against bc727b46d95bb58a1182c26c4b58ca16e3c62deb so a new push cannot be overwritten.",
+      "options": [
+        "Publish cleaned history",
+        "Keep rewrite local"
+      ],
+      "recommended": "Publish cleaned history",
+      "agent": "codex",
+      "default": {
+        "action": "Waits for your answer"
+      },
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "01a11064-30a9-74a0-8514-5147d6b0d8c1"
+      },
+      "replies": true
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "judge": {
+    "cold": true,
+    "consequences": true,
+    "terminal": false,
+    "links": null,
+    "plain": true,
+    "notes": "The card is solid, but it doesn't say what 'Keep rewrite local' leaves in place (the repo stays large) and uses commit hashes and force-with-lease jargon that add little for a cold phone reader."
+  }
+}

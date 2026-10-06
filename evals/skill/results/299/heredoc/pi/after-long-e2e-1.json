@@ -1,0 +1,53 @@
+{
+  "agent": "pi",
+  "model": "zai/glm-5.3-flash",
+  "arm": "after",
+  "scenario": "long-e2e",
+  "rep": 1,
+  "turns": [
+    {
+      "commands": [
+        "ls && head -5 src/onboarding.txt",
+        "grep -A3 '^e2e' Makefile",
+        "starbridge run --title 'iOS e2e' --reason 'drives the iOS simulator and takes over your screen and keyboard for ~10 min (AGENTS.md)' -- make e2e"
+      ],
+      "final": "The e2e suite passed — all 4 onboarding flows are green, so the copy change in `src/onboarding.txt` didn't break anything.\n\n- Ran via `starbridge run` since `make e2e` takes over your Mac's screen/keyboard (~10 min)\n- Result: `4 passed` (onboarding flow 1–4)\n\nNo further action needed.",
+      "session": "01a11190-9e4c-71db-9289-954d0f3af346",
+      "tokens": 14321,
+      "costUsd": 0,
+      "exit": 0,
+      "seconds": 20.952
+    }
+  ],
+  "decisions": [],
+  "laterDecisions": [],
+  "runs": [
+    {
+      "v": 1,
+      "id": "r_L-X8mW95lUH_WsnJ",
+      "to": [
+        "phone"
+      ],
+      "title": "iOS e2e",
+      "reason": "drives the iOS simulator and takes over your screen and keyboard for ~10 min (AGENTS.md)",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "01a11190-9e4c-71db-9289-954d0f3af346"
+      },
+      "startedAt": "2026-10-06T14:14:26Z",
+      "at": "2026-10-06T14:14:30Z",
+      "progress": {
+        "done": 4,
+        "total": 4,
+        "unit": "step"
+      },
+      "exit": {
+        "code": 0,
+        "at": "2026-10-06T14:14:30Z"
+      }
+    }
+  ],
+  "gh": []
+}

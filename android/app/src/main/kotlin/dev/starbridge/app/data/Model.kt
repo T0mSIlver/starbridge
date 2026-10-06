@@ -85,7 +85,7 @@ data class PromptScope(val scope: String, val label: String, val rule: String)
 
 /**
  * An agent waiting at a permission prompt (#57). [input] is the tool's input as JSON text,
- * redacted on the machine. [ended] says how it ended once it did ("Answered on devbox").
+ * redacted on the machine. [ended] says how it ended once it did ("Denied · on Pixel").
  */
 data class Prompt(
     val id: String,

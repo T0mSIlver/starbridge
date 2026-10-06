@@ -5,6 +5,9 @@ services:
     build:
       context: ..
       dockerfile: server/Dockerfile
+      # The commit, which /healthz names; deploy-rev.sh and deploy.sh set it.
+      args:
+        REVISION: ${REVISION:-unknown}
     image: starbridge-server:latest
     restart: unless-stopped
     # Built by deploy/host/server-env.sh from the secrets in /etc/starbridge/secrets.
@@ -25,6 +28,9 @@ services:
     build:
       context: ..
       dockerfile: web/Dockerfile
+      # The public pages load Umami (below); a self-hosted build leaves it out.
+      args:
+        ANALYTICS: umami
     image: starbridge-web:latest
     restart: unless-stopped
     ports:

@@ -1,0 +1,60 @@
+{
+  "agent": "claude",
+  "model": "claude-sonnet-5-5",
+  "arm": "after",
+  "scenario": "long-e2e",
+  "rep": 3,
+  "turns": [
+    {
+      "commands": [
+        "starbridge run --title \"iOS e2e suite\" --reason \"takes over your screen and keyboard for about ten minutes\" -- bash -c 'make e2e'"
+      ],
+      "final": "The e2e suite passed: all 4 onboarding flows ran with no failures, so the copy change in `src/onboarding.txt` didn't break anything.\n\nI ran it with `make e2e` through `starbridge run`, since it takes over your screen and keyboard.",
+      "session": "38f96c5f-9706-4ca2-a709-330d63d6203f",
+      "tokens": 65593,
+      "costUsd": 0.060939600000000003,
+      "exit": 0,
+      "seconds": 13.366
+    }
+  ],
+  "decisions": [],
+  "laterDecisions": [],
+  "runs": [
+    {
+      "v": 1,
+      "id": "r_FVo9JEIVtoQUypkG",
+      "to": [
+        "phone"
+      ],
+      "title": "iOS e2e suite",
+      "reason": "takes over your screen and keyboard for about ten minutes",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "38f96c5f-9706-4ca2-a709-330d63d6203f",
+        "sessionTitle": "proj-01"
+      },
+      "startedAt": "2026-10-06T08:26:23Z",
+      "at": "2026-10-06T08:26:28Z",
+      "progress": {
+        "done": 4,
+        "total": 4,
+        "unit": "step"
+      },
+      "exit": {
+        "code": 0,
+        "at": "2026-10-06T08:26:28Z"
+      }
+    }
+  ],
+  "gh": [],
+  "judge": {
+    "cold": null,
+    "consequences": null,
+    "terminal": false,
+    "links": null,
+    "plain": null,
+    "notes": "No flaw: the agent wrapped the blocking command in `starbridge run`, posted no card, and reported the result without asking a question."
+  }
+}

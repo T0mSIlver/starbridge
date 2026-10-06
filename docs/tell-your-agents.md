@@ -28,12 +28,16 @@ questions in the terminal into Starbridge questions.
 In `pi -p`, the agent waits for the answer with `starbridge wait` before it
 ends its turn.
 
-⁴ With [pi-permission-system](https://github.com/gotgenes/pi-packages/tree/main/packages/pi-permission-system):
+⁴ With [pi-permission-system](https://github.com/gotgenes/pi-packages/tree/main/packages/pi-permission-system),
+which `pi install npm:@gotgenes/pi-permission-system` installs. Then
 `starbridge config permissions on` offers to add `starbridge` to its
-`authorizerChain` (in `~/.pi/agent/extensions/pi-permission-system/config.json`). Your devices can allow a call once or deny
-it; "Answer here" in Pi brings back its own prompt. Reading or writing a path that a `path` or
-`external_directory` rule guards stays at the keyboard: pi-permission-system lets no link allow
-those.
+`authorizerChain`, and to let Starbridge's own calls through without a prompt
+(see the Pi item below). Both go in
+`~/.pi/agent/extensions/pi-permission-system/config.json`. Your devices can
+allow a call once or deny it, and "Answer here" in Pi brings back its own
+prompt. An ask from a `path` or `external_directory` rule stays at the
+keyboard, because pi-permission-system lets no link allow those. An ask from a
+tool rule, such as `read` or `bash`, reaches your devices.
 
 ⁵ In the TUI and `opencode serve`, through `starbridge agent` or the CLI. In
 `opencode run`, the agent waits for the answer with `starbridge wait` before it
@@ -50,18 +54,22 @@ agent to use `starbridge ask` instead.
 asks before each one:
 
 - Claude Code: the Starbridge plugin, which brings the rules above, the skill
-  and the hooks, and allow rules so that `starbridge ask`, `waiting`, `wait`
-  and `settle` run without a permission prompt.
+  and the hooks, and allow rules so that `starbridge ask`, `waiting`,
+  `working`, `wait` and `settle` run without a permission prompt.
 - Codex: the skill, in `~/.codex/skills/starbridge` (or under `$CODEX_HOME`),
   so it knows how to write a question. Codex doesn't load plugins, so it runs
   the same `starbridge` commands without the rules: add the lines you want
   below. A later setup offers to update the skill when the CLI carries a newer
   one. Codex runs commands in a sandbox with no network, so setup also writes
   `~/.codex/rules/starbridge.rules`, which runs `starbridge ask`, `waiting`,
-  `wait` and `settle` outside it.
+  `working`, `wait` and `settle` outside it.
 - Pi: the Starbridge Pi package (`pi install
   git:github.com/T0mSIlver/starbridge`), which brings the skill, the rules and
-  the extension that puts each answer into the session.
+  the extension that puts each answer into the session. With
+  pi-permission-system, setup and `starbridge config permissions on` also offer
+  allow rules, so that Pi loads the `starbridge` skill, reads the files in its
+  folder and runs `starbridge ask`, `waiting`, `working`, `wait` and `settle`
+  without a prompt. Other reads and commands still ask.
 - opencode: the skill, in `~/.config/opencode/skills/starbridge`, and the
   Starbridge plugin, in `~/.config/opencode/plugins/starbridge.ts` with its code
   in `~/.config/opencode/starbridge/`. The plugin brings the rules, puts each

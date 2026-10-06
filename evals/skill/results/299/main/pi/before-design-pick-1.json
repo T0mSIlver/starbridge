@@ -1,0 +1,79 @@
+{
+  "agent": "pi",
+  "model": "zai/glm-5.3-flash",
+  "arm": "before",
+  "scenario": "design-pick",
+  "rep": 1,
+  "turns": [
+    {
+      "commands": [
+        "git branch -a && git log --oneline -5 && ls shots/",
+        "git log --oneline main..settings-compact; echo ---; git log --oneline main..settings-roomy; echo ---; git diff --stat main settings-compact | tail -3; echo ---; git diff --stat main settings-roomy | tail -3",
+        "git log --oneline --all --graph | head; echo ---; git rev-parse main settings-compact settings-roomy; echo ---; git diff main settings-compact --stat; git diff main settings-roomy --stat",
+        "ls -la; echo ---; git worktree list; echo ---; find . -name \"*ettings*\" -not -path \"./.git/*\" | head -20; echo ---; git status --short | head",
+        "file shots/*.png; ls -la shots/",
+        "starbridge ask \\\n  --question \"Which settings-screen variant should I ship to main?\" \\\n  --context \"Both branches are done and pass the tests; ship = merge the branch into main.\nFirst image: \\`settings-roomy\\` — 6 rows per screen, same spacing as the inbox.\nSecond image: \\`settings-compact\\` — 9 rows per screen, tighter rows.\nRoomy is first only as my tiebreaker (matches inbox spacing) — the pick is yours.\" \\\n  --option \"Roomy (6 rows)\" \\\n  --option \"Compact (9 rows)\" \\\n  --image shots/roomy.png \\\n  --image shots/compact.png",
+        "starbridge wait d_SJNLp0fyQt8O8wRG --timeout 5m",
+        "starbridge wait d_SJNLp0fyQt8O8wRG --timeout 5m",
+        "starbridge wait d_SJNLp0fyQt8O8wRG --timeout 5m"
+      ],
+      "final": "No answer yet after 5 minutes — waiting again, as the skill directs.",
+      "session": "01a11064-7fa6-77d3-ba61-c572b6339c36",
+      "tokens": 51831,
+      "costUsd": 0,
+      "exit": 143,
+      "seconds": 720.099
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_SJNLp0fyQt8O8wRG",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-06T08:47:18Z",
+      "question": "Which settings-screen variant should I ship to main?",
+      "context": "Both branches are done and pass the tests; ship = merge the branch into main.\nFirst image: `settings-roomy` — 6 rows per screen, same spacing as the inbox.\nSecond image: `settings-compact` — 9 rows per screen, tighter rows.\nRoomy is first only as my tiebreaker (matches inbox spacing) — the pick is yours.",
+      "options": [
+        "Roomy (6 rows)",
+        "Compact (9 rows)"
+      ],
+      "recommended": "Roomy (6 rows)",
+      "agent": "pi",
+      "default": {
+        "action": "Waits for your answer"
+      },
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "01a11064-7fa6-77d3-ba61-c572b6339c36"
+      },
+      "images": [
+        {
+          "type": "image/png",
+          "width": 360,
+          "height": 640
+        },
+        {
+          "type": "image/png",
+          "width": 360,
+          "height": 640
+        }
+      ],
+      "replies": true
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "judge": {
+    "cold": true,
+    "consequences": false,
+    "terminal": false,
+    "links": null,
+    "plain": true,
+    "notes": "The card says what each variant looks like but not what picking it changes beyond a one-line 'ship = merge' note, and the final message only reports it is waiting again rather than asking in the terminal."
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "agent": "opencode",
+  "model": "zai-coding-plan/glm-5.3-flash",
+  "arm": "before",
+  "scenario": "merge-order",
+  "rep": 2,
+  "turns": [
+    {
+      "commands": [
+        "gh pr view 12 --json number,title,state,mergeable,mergeStateStatus,baseRefName,headRefName,owner,isDraft 2>&1",
+        "gh pr view 13 --json number,title,state,mergeable,mergeStateStatus,baseRefName,headRefName,owner,isDraft 2>&1",
+        "git status && git log --oneline -5 && git remote -v",
+        "git fetch origin pull/12/head:pr-12 pull/13/head:pr-13 && git log --oneline origin/main..pr-12 && git log --oneline origin/main..pr-13",
+        "git ls-remote origin && git branch -a",
+        "which gh && file $(which gh)"
+      ],
+      "final": "Both PRs are green, but both touch `src/api.ts` — a likely conflict. Let me verify by test-merging locally.",
+      "session": "ses_eef1e7ce9ffeHWpCffssIwAR6e",
+      "tokens": 6549,
+      "exit": 1,
+      "seconds": 194.065
+    }
+  ],
+  "decisions": [],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [
+    "gh pr view 12 --json number,title,state,mergeable,mergeStateStatus,baseRefName,headRefName,owner,isDraft",
+    "gh pr view 13 --json number,title,state,mergeable,mergeStateStatus,baseRefName,headRefName,owner,isDraft"
+  ]
+}

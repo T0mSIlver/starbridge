@@ -1,0 +1,50 @@
+{
+  "agent": "opencode",
+  "model": "zai-coding-plan/glm-5.3-flash",
+  "arm": "before",
+  "scenario": "long-e2e",
+  "rep": 2,
+  "turns": [
+    {
+      "commands": [
+        "starbridge run --title \"Mac e2e\" --reason \"make e2e drives the iOS simulator, taking over your screen and keyboard for ~10 minutes\" -- bash -c 'make e2e'"
+      ],
+      "final": "`make e2e` passed — all 4 onboarding flows green (4/4). Your copy change in src/onboarding.txt didn't break anything.",
+      "session": "ses_eef0b0b31ffeHSXovvHX2vlvfM",
+      "tokens": 5238,
+      "exit": 0,
+      "seconds": 56.874
+    }
+  ],
+  "decisions": [],
+  "laterDecisions": [],
+  "runs": [
+    {
+      "v": 1,
+      "id": "r_cmkxQCHawQpI8btu",
+      "to": [
+        "phone"
+      ],
+      "title": "Mac e2e",
+      "reason": "make e2e drives the iOS simulator, taking over your screen and keyboard for ~10 minutes",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": ""
+      },
+      "startedAt": "2026-10-06T11:24:48Z",
+      "at": "2026-10-06T11:24:52Z",
+      "progress": {
+        "done": 4,
+        "total": 4,
+        "unit": "step"
+      },
+      "exit": {
+        "code": 0,
+        "at": "2026-10-06T11:24:52Z"
+      }
+    }
+  ],
+  "gh": []
+}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { imageSrc, linkLabel } from "@/lib/attachments";
+import { githubRef, imageSrc, linkLabel } from "@/lib/attachments";
 import type { Decision } from "@/lib/types";
 import s from "./Attachments.module.css";
 import { Icon } from "./icons";
@@ -25,6 +25,10 @@ export function Images({ d }: { d: Decision }) {
         >
           {/* biome-ignore lint/performance/noImgElement: decrypted data, nothing for next/image to fetch */}
           <img src={imageSrc(img)} alt={img.alt ?? ""} width={img.width} height={img.height} />
+          {/* Says the image opens full screen; touch screens show no zoom cursor (#170). */}
+          <span className={s.expand}>
+            <Icon name="expand" size={20} />
+          </span>
         </button>
       ))}
       {open !== undefined && (
@@ -34,17 +38,10 @@ export function Images({ d }: { d: Decision }) {
   );
 }
 
-/** The first image, small, beside a decision in the list. */
-export function Thumb({ d }: { d: Decision }) {
-  const img = d.images?.[0];
-  if (!img) return null;
-  // biome-ignore lint/performance/noImgElement: decrypted data, nothing for next/image to fetch
-  return <img className={s.thumb} src={imageSrc(img)} alt="" width={40} height={40} />;
-}
-
 /**
  * Pages the agent attached for the owner to see before answering, such as a Claude artifact it
- * built (SPEC 2026-10-05, links on questions): labelled as the agent's, each opening a new tab.
+ * built (SPEC 2026-10-05, links on questions): labelled as the agent's, each opening a new tab. A
+ * GitHub pull request or issue leads with the GitHub mark.
  */
 export function Links({ d }: { d: Decision }) {
   const links = d.links ?? [];
@@ -56,6 +53,7 @@ export function Links({ d }: { d: Decision }) {
       </span>
       {links.map((l) => (
         <a key={l.url} className={s.chip} href={l.url} target="_blank" rel="noopener noreferrer">
+          {githubRef(l.url) && <Icon name="github" size={16} />}
           <span className="t-label">Open {linkLabel(l)}</span>
           <Icon name="open" size={16} />
         </a>
