@@ -834,7 +834,10 @@ async function main() {
   step("a group pinned by running out first says why on a click (#296)");
   await page.setViewportSize(DESKTOP);
   await page.getByRole("button", { name: "Why codex is first" }).click();
-  const why = page.getByText("First because it runs out soonest.");
+  // Scoped to codex: depending on the hour, claude's group may be pinned and say so too.
+  const why = page
+    .getByRole("region", { name: "codex" })
+    .getByText("First because it runs out soonest.");
   await why.waitFor();
   if (AUDIT) await shoot(page, "quotas-pinned");
   else
