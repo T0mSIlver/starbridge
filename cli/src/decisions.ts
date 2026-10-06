@@ -3,6 +3,7 @@ import { basename, resolve } from "node:path";
 import {
   type Agent,
   type Answer,
+  activeMembers,
   Decision,
   type DecisionLink,
   type Directory,
@@ -252,12 +253,15 @@ export async function postDecision(ctx: Ctx, s: Session, input: AskInput): Promi
   const cursor = ctx.store.state().cursor;
   // Asked already waiting, its waiting state pushes instead, so the notification says so.
   await s.api.postItem(input.waiting ? { ...item, quiet: true } : item);
+  const { images: _, ...body } = decision;
   ctx.store.updateState((st) => {
     st.asked[decision.id] = {
       question: decision.question,
       options: decision.options,
       askedAt: decision.createdAt,
       to: decision.to,
+      body,
+      ...(input.images ? { images: input.images } : {}),
       ...(cursor !== undefined ? { cursor } : {}),
       ...(decision.source.session ? { session: decision.source.session } : {}),
       ...(decision.answerIn ? { answerIn: true } : {}),
@@ -596,7 +600,85 @@ export async function poll(
         st.cursor = page.cursor;
     });
   }
+  // A device that joined since reads nothing this machine sealed before: re-seal it.
+  await reseal(ctx, s, directory).catch((e) =>
+    ctx.err(`starbridge: could not re-send open questions: ${(e as Error).message}`),
+  );
   return { cursor: page.cursor ?? opts.cursor, directory, ...quotaAsked };
+}
+
+/** The server drops an unanswered decision after 30 days; one re-sealed later would come back. */
+const RESEAL_MS = 29 * 24 * 3600_000;
+
+/**
+ * Re-seals this machine's open decisions, with their waiting state, and permission prompts to
+ * the active devices of the verified directory when one of those was not among their
+ * recipients. They keep their ids, so a device that had them sees no second copy, and the server
+ * pushes only the new devices. Revoked devices get nothing, and nothing is re-sealed while the
+ * server may be withholding directory entries.
+ */
+async function reseal(ctx: Ctx, s: Session, known: Directory): Promise<void> {
+  const st = ctx.store.state();
+  const now = ctx.now().getTime();
+  const decisions = Object.entries(st.asked).flatMap(([id, a]) =>
+    a.body && a.to && !a.settled && !st.answers[id] && now - Date.parse(a.askedAt) < RESEAL_MS
+      ? [{ id, a, body: a.body, to: a.to }]
+      : [],
+  );
+  const prompts = Object.values(st.permissions ?? {}).filter(
+    (p) => !p.settled && !p.answer && Date.parse(p.permission.expiresAt) > now,
+  );
+  const lacking = (to: string[], dir: Directory) =>
+    activeMembers(dir, "device").some((d) => !to.includes(d.id));
+  const all = [...decisions.map((d) => d.to), ...prompts.map((p) => p.permission.to)];
+  if (st.behind || !all.some((to) => lacking(to, known))) return;
+  const dir = await refreshDirectory(ctx, s, ctx.signal);
+  const to = activeMembers(dir, "device");
+  const ids = to.map((d) => d.id);
+  const signer = { id: s.machine.id, signKey: s.keys.sign.privateKey };
+  // Recorded once posted, or once closed meanwhile; a failed post is tried again next poll.
+  const post = async (item: SealedItem, record: (st: State) => void) => {
+    try {
+      await s.api.postItem(item);
+    } catch (e) {
+      if (!(e instanceof ApiError && e.code === "already-answered"))
+        return ctx.err(`starbridge: could not re-send ${item.id}: ${(e as Error).message}`);
+    }
+    ctx.store.updateState(record);
+  };
+  for (const { id, a, body } of decisions) {
+    if (!lacking(a.to ?? [], dir)) continue;
+    const pictures = (a.images ?? []).flatMap((i) => {
+      try {
+        return [typeof i === "string" ? loadPicture(i) : loadPicture(i.path, i.alt)];
+      } catch {
+        return []; // Moved or deleted since: the re-sealed copy goes without it.
+      }
+    });
+    const { item } = sealWithPictures({ ...body, to: ids }, pictures, signer, to);
+    await post(item, (st) => {
+      const x = st.asked[id];
+      if (x) x.to = ids;
+    });
+    if (a.waiting?.state !== "waiting") continue;
+    const w = {
+      v: 1 as const,
+      id: a.waiting.id,
+      decisionId: id,
+      to: ids,
+      at: iso(ctx.now()),
+      state: a.waiting.state,
+    } satisfies Waiting;
+    await post({ ...seal("waiting", w, signer, to), quiet: true }, () => {});
+  }
+  for (const p of prompts) {
+    if (!lacking(p.permission.to, dir)) continue;
+    const permission = { ...p.permission, to: ids };
+    await post(seal("permission", permission, signer, to), (st) => {
+      const x = st.permissions?.[permission.id];
+      if (x) x.permission = permission;
+    });
+  }
 }
 
 /**

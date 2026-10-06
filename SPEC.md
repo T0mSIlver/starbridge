@@ -1293,6 +1293,19 @@ so the mod is the first path.
   read process arguments; `wait <id>` prints a delivered answer from local state. The npm bundle
   runs under Node, so the CLI uses no Bun global without a guard; a test runs it there.
 
+- 2026-10-06. A device that joins later reads the questions already waiting (#340), as #158 did
+  for quotas. Decisions and permission prompts are sealed and signed to the devices in the
+  directory when asked, so a new phone, a browser that signed in again or a recovery read none
+  of them. Each answer poll now checks the machine's open decisions and prompts against the
+  active devices; when one lacks a device, the machine re-signs it with the full recipient list
+  and posts it again under its own id, with the decision's waiting state. The server takes such
+  a re-post only from the machine that posted the item and only while it is open, keeps its
+  arrival time, so a prompt's 10 minutes do not restart, and pushes only the devices that were
+  not recipients yet. Revoked devices are not active, so they get nothing, and nothing is
+  re-sealed while the machine finds the directory behind (#280). A decision keeps its signed body
+  in the state for this; its images are read again from their files, and one moved since is left
+  out. Decisions older than 29 days are not re-sealed, since the server drops them at 30.
+
 ## Encryption, with existing libraries
 
 - libsodium sealed boxes (`crypto_box_seal`, X25519 + XSalsa20-Poly1305): an

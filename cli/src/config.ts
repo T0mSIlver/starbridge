@@ -13,6 +13,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import {
   type Answer,
+  type Decision,
   fromB64,
   type MachineKind,
   type MemberKeys,
@@ -58,6 +59,10 @@ export interface State {
       settled?: boolean;
       /** The devices it was sealed to, the only ones whose answer counts. */
       to?: string[];
+      /** The decision as signed, without its images, to re-seal it to devices that join. */
+      body?: Omit<Decision, "images">;
+      /** Its image files, read again when it is re-sealed. */
+      images?: (string | { path: string; alt?: string })[];
       /** The decision's waiting state as last posted, under the one id it keeps. */
       waiting?: { id: string; state: Waiting["state"] };
       cursor?: string;

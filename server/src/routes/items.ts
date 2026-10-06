@@ -19,6 +19,12 @@ type KindRule = {
 /** How long after it arrives an item can still be answered; unlisted kinds have no limit. */
 const ANSWERABLE_FOR: Partial<Record<ItemKind, number>> = { permission: PERMISSION_TTL_MS };
 
+/**
+ * Kinds a machine re-seals under their id while open, to the devices active now: a device that
+ * joined since reads them too.
+ */
+const RESEALED: readonly ItemKind[] = ["decision", "permission"];
+
 /** Kinds a device answers: what device-signed kinds refer to. */
 const ANSWERABLE = ItemKind.options.flatMap((k) => {
   const rule: KindRule = ITEM_KINDS[k];
@@ -165,6 +171,8 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
   let answeredDevices: string[] = [];
   // What a device answered and when it arrived, for the usage counts.
   let answered: { kind: ItemKind; receivedAt: string } | undefined;
+  // Devices to push to: all of them, or for a re-sealed item those it was not sealed to yet.
+  let pushTo = to;
   const seq = db.transaction(() => {
     recheck(c);
     const now = new Date();
@@ -227,12 +235,32 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
       }
     }
     const earlier = db
-      .query("SELECT kind, from_id FROM items WHERE account_id = ? AND id = ?")
-      .get(caller.account, item.id) as { kind: string; from_id: string } | null;
+      .query(
+        "SELECT kind, from_id, received_at, answered_at FROM items WHERE account_id = ? AND id = ?",
+      )
+      .get(caller.account, item.id) as {
+      kind: string;
+      from_id: string;
+      received_at: string;
+      answered_at: string | null;
+    } | null;
+    let receivedAt = now.toISOString();
     if (earlier) {
       // A kind with updates is re-posted under its id as it changes: the latest replaces it.
-      if (!rule.updates || earlier.kind !== item.kind || earlier.from_id !== me)
+      const resealed = RESEALED.includes(item.kind);
+      if (!(rule.updates || resealed) || earlier.kind !== item.kind || earlier.from_id !== me)
         fail(409, "duplicate-id");
+      if (resealed) {
+        // It keeps its arrival, so a permission's answer window does not move.
+        if (earlier.answered_at) fail(409, "already-answered");
+        receivedAt = earlier.received_at;
+        const had = (
+          db
+            .query("SELECT to_id FROM boxes WHERE account_id = ? AND item_id = ?")
+            .all(caller.account, item.id) as { to_id: string }[]
+        ).map((r) => r.to_id);
+        pushTo = to.filter((id) => !had.includes(id));
+      }
       db.query("DELETE FROM items WHERE account_id = ? AND id = ?").run(caller.account, item.id);
     }
 
@@ -264,7 +292,7 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
     const seq = nextSeq(db);
     db.query(
       "INSERT INTO items (seq, account_id, id, kind, from_id, re, received_at, size) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-    ).run(seq, caller.account, item.id, item.kind, me, item.re ?? null, iso, charged);
+    ).run(seq, caller.account, item.id, item.kind, me, item.re ?? null, receivedAt, charged);
     const box = db.query("INSERT INTO boxes (account_id, item_id, to_id, box) VALUES (?, ?, ?, ?)");
     for (const b of item.boxes) box.run(caller.account, item.id, b.to, b.box);
     // Marks the referred item answered and moves it past every cursor, so devices listing after
@@ -294,7 +322,7 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
     // fetch them instead.
     c.var.push.notify(
       caller.account,
-      to,
+      pushTo,
       (device) => pushPayload(item, device, config.pushInlineLimit),
       item.kind === "quota" || item.kind === "run" ? ["fcm", "unifiedpush"] : undefined,
     );

@@ -136,12 +136,23 @@ test("boxes must go to active members of the right role", async () => {
   expect((await post(devbox, decision([phone, laptop]))).status).toBe(400);
 });
 
-test("a reused item id gets 409", async () => {
-  const d = decision();
+test("a reused item id gets 409, unless its machine re-seals it while open", async () => {
+  const d = decision([phone]);
   expect((await post(devbox, d)).status).toBe(201);
-  const r = await post(devbox, d);
+  const [before] = (await s.call("GET", "/v1/items", { token: phone.token })).json.items;
+  const r = await post(devbox, quota(d.id));
   expect(r.status).toBe(409);
   expect(r.json.error).toBe("duplicate-id");
+  // To the laptop, which joined since: one copy each, the arrival kept.
+  expect((await post(devbox, decision([phone, laptop], { id: d.id }))).status).toBe(201);
+  for (const who of [phone, laptop]) {
+    const { items } = (await s.call("GET", "/v1/items", { token: who.token })).json;
+    expect(items.map((i: { item: SealedItem }) => i.item.id)).toEqual([d.id]);
+    expect(items[0].receivedAt).toBe(before.receivedAt);
+  }
+  await post(laptop, answer(d, laptop));
+  const again = await post(devbox, decision([phone, laptop], { id: d.id }));
+  expect(again.json.error).toBe("already-answered");
 });
 
 test("a malformed item gets 400", async () => {

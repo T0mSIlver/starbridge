@@ -226,8 +226,12 @@ createdAt, expiresAt, version}`; `state` is `open`, `comparing`, `approved` or `
 | `POST /quota/ask?wait=<s>` | device | ask every machine for a fresh quota snapshot → `{askedAt, behind}`; with `wait`, holds until each active machine that has a snapshot posted a newer one; `behind` counts those that have not |
 
 Item ids are random, chosen by the sender. A machine re-posts a run under its id as it changes;
-the server replaces the earlier post and moves it past every cursor. Any other reused id, or a
-run id posted by another machine or as another kind, is 409 `duplicate-id`. Cursors are opaque strings;
+the server replaces the earlier post and moves it past every cursor. It also re-posts an open
+decision or permission under its id, re-signed to the active devices, when a device joined
+since it was posted; the server replaces it only while it is unanswered, keeps its `receivedAt`,
+and pushes only the devices that had no box yet. Any other reused id, or a
+reused id posted by another machine or as another kind, is 409 `duplicate-id`; re-posting an
+answered decision or permission is 409 `already-answered`. Cursors are opaque strings;
 without `after`, a list starts at the first item. An item with `re` marks the item it names
 answered, so every device moves it out of the open inbox: an answer its decision, a permission
 answer its permission, a settled notice the permission or decision it closes. A `waiting` item
