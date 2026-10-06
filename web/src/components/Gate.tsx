@@ -172,6 +172,8 @@ function Join({ account, stale }: { account: string; stale: boolean }) {
   const [mode, setMode] = useState<"code" | "digits" | "key">("code");
   const [code, setCode] = useState<string>();
   const [digits, setDigits] = useState<string>();
+  const [matched, setMatched] = useState(false);
+  const confirm = useRef<() => void>(undefined);
   const [typedKey, setTypedKey] = useState("");
   const [typed, setTyped] = useState<RecoveryEntry>({ complete: false, status: "" });
   const cancel = useRef<() => void>(undefined);
@@ -220,11 +222,13 @@ function Join({ account, stale }: { account: string; stale: boolean }) {
     cancel.current?.();
     setCode(undefined);
     setDigits(undefined);
+    setMatched(false);
     setMode(next);
     if (next === "digits")
       run(async () => {
         const join = await begin(async () => (await load()).startDigitJoin(account, name.trim()));
         if (!join) return;
+        confirm.current = join.confirm;
         join.digits.then(setDigits, () => {});
         await join.done;
         await reload();
@@ -273,9 +277,11 @@ function Join({ account, stale }: { account: string; stale: boolean }) {
       {mode === "digits" && (
         <>
           <p className={`t-small ${s.lede}`}>
-            {digits
-              ? `Approve ${name.trim()} on your other device if the digits match.`
-              : `Open Starbridge on a signed-in device: it asks whether to let ${name.trim()} join.`}
+            {matched
+              ? `Approve ${name.trim()} on your other device.`
+              : digits
+                ? "Does your other device show the same digits?"
+                : `Open Starbridge on a signed-in device: it asks whether to let ${name.trim()} join.`}
           </p>
           {digits && (
             <div className={`t-heading ${s.digits}`} data-testid="join-digits">
@@ -286,6 +292,18 @@ function Join({ account, stale }: { account: string; stale: boolean }) {
                 </span>
               ))}
             </div>
+          )}
+          {digits && !matched && (
+            <button
+              type="button"
+              className={`t-label ${ui.btn} ${ui.fill}`}
+              onClick={() => {
+                confirm.current?.();
+                setMatched(true);
+              }}
+            >
+              They match
+            </button>
           )}
           <button
             type="button"
