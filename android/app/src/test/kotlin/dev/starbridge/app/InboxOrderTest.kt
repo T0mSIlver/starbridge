@@ -17,7 +17,7 @@ class InboxOrderTest {
     private val source = Source("devbox", "p", "s")
 
     private fun question(id: String, at: Long, waiting: Boolean = false) =
-        Decision(id, id, "", emptyList(), null, null, null, source, t0.plusSeconds(at), waiting = waiting)
+        Decision(id, id, "", emptyList(), null, source, t0.plusSeconds(at), waiting = waiting)
 
     private fun prompt(id: String, at: Long) =
         Prompt(id, "Bash", id, null, "{}", emptyList(), source, t0.plusSeconds(at), now.plusSeconds(600))
