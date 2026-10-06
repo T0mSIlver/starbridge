@@ -28,7 +28,8 @@ JDK 21 and an Android SDK with platform 37, then:
 
 Release builds sign with the release key when `STARBRIDGE_KEYSTORE`, `STARBRIDGE_KEYSTORE_PASSWORD`
 and `STARBRIDGE_KEY_ALIAS` are set, as the release workflow does, and with the debug key
-otherwise. The build never looks for the key on disk. `-PversionName=1.2.3` sets the version; the release workflow
+otherwise. A release build never looks for the key on disk; debug builds use it only for the
+maintainer's dogfood APKs (CONTRIBUTING.md, "Release"). `-PversionName=1.2.3` sets the version; the release workflow
 passes the tag's.
 
 Screenshots render on the JVM through Roborazzi: `./gradlew
