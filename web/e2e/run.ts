@@ -724,6 +724,75 @@ async function main() {
   if (again.output().includes("(new)"))
     throw new Error("the second snapshot raised its alerts again");
 
+  step("the Quotas table fits its longest reset times, phone to desktop (#294)");
+  // Local clock times: "tomorrow 21:59", "tomorrow 12:59 PM" and a date five days out.
+  const local = (days: number, h: number, m: number) => {
+    const d = new Date();
+    d.setDate(d.getDate() + days);
+    d.setHours(h, m, 0, 0);
+    return d.toISOString().replace(/\.\d+Z$/, "Z");
+  };
+  const longResets = [
+    {
+      provider: "e2e",
+      source: "api",
+      usage: {
+        updatedAt: at(0),
+        primary: { windowMinutes: 10080, usedPercent: 22, resetsAt: local(1, 21, 59) },
+        secondary: { windowMinutes: 10080, usedPercent: 40, resetsAt: local(1, 12, 59) },
+        tertiary: { windowMinutes: 10080, usedPercent: 10, resetsAt: local(5, 22, 59) },
+      },
+    },
+  ];
+  writeFileSync(fakeBar, `#!/bin/sh\ncat <<'EOF'\n${JSON.stringify(longResets)}\nEOF\n`);
+  const longPush = cli(
+    "quota-long",
+    ["quota", "push", "--once", "--codexbar", fakeBar, "--provider", "e2e"],
+    machineHome,
+  );
+  if ((await longPush.exited) !== 0) throw new Error("quota push failed");
+  for (const clock of ["24-hour", "12-hour"] as const) {
+    await page
+      .getByRole("navigation", { name: "Main" })
+      .getByRole("link", { name: "Settings" })
+      .click();
+    await page.getByLabel(clock, { exact: true }).check({ force: true });
+    await page.getByRole("link", { name: "Quotas" }).click();
+    const resets = page.locator("article span", { hasText: /^tomorrow \d/ });
+    await resets.first().waitFor();
+    for (const [size, viewport] of [
+      ["desktop", { width: 1440, height: 900 }],
+      // About the narrowest window with the table, where its columns are at their minimums.
+      ["table-edge", { width: 1210, height: 900 }],
+      ["phone", { width: 390, height: 844 }],
+    ] as const) {
+      await page.setViewportSize(viewport);
+      await page.emulateMedia({ colorScheme: "light" });
+      await page.waitForTimeout(150);
+      await page.screenshot({
+        path: join(SHOTS, `quotas-long-resets-${clock}-${size}.png`),
+        fullPage: size !== "phone",
+      });
+      await fitsWidth(page, `quotas at ${viewport.width} px`);
+      for (const cell of await resets.all()) {
+        const { text, scroll, client, lines } = await cell.evaluate((el) => ({
+          text: el.textContent,
+          scroll: el.scrollWidth,
+          client: el.clientWidth,
+          lines: (() => {
+            const r = document.createRange();
+            r.selectNodeContents(el);
+            return new Set([...r.getClientRects()].map((x) => Math.round(x.top))).size;
+          })(),
+        }));
+        if (scroll > client || lines > 1)
+          throw new Error(
+            `"${text}" overflows its cell at ${viewport.width} px: ${scroll} > ${client} px, ${lines} lines`,
+          );
+      }
+    }
+  }
+
   step("add a second browser by pairing code");
   const b = await ff.newContext();
   const pageB = await signIn(b);
