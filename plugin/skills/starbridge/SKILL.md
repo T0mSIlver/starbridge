@@ -37,8 +37,8 @@ They decide from the card alone, without opening this session.
   choice (the error, the number, the cost). Then one line per option, starting
   with its label: what picking it does and what it costs. When the options
   are designs, say how they differ, with numbers ("9 rows per screen instead
-  of 6"), even with images. Leave out what the card already shows and your own process. Line
-  breaks and `code` render; other Markdown shows as typed.
+  of 6"), even with images. Leave out what the card already shows and your
+  own process. Line breaks and `code` render; other Markdown shows as typed.
 - **Options:** two to four short labels that differ at a glance; the one you
   would pick first, or named with `--recommended`.
 - **Links:** only what they need to decide: the PR or issue in question, the
@@ -102,7 +102,7 @@ session; anything holding a device they use), or when their instructions ask
 you to report it.
 
 ```bash
-starbridge run --title "Mac e2e" --reason "takes over your screen and keyboard" \
+starbridge run --title 'Mac e2e' --reason 'takes over your screen and keyboard' \
   -- bash -c 'make build && make e2e'
 ```
 
