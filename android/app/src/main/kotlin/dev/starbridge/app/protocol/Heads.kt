@@ -29,7 +29,9 @@ class Heads(private val directories: Directories) {
             else -> "$signer/$by"
         }
         val known = heads[key]
-        val replace = known == null || head.length > known.length || (holds(entries, known) && !holds(entries, head))
+        // A head passed on from a member the chain now revokes counts no more: any head replaces it.
+        val dropped = known?.by != null && dir?.members?.get(known.by)?.active == false
+        val replace = known == null || dropped || head.length > known.length || (holds(entries, known) && !holds(entries, head))
         if (replace) heads[key] = head
         return replace
     }

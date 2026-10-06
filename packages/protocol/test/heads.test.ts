@@ -187,4 +187,7 @@ test("a head passed on from a device the chain does not list yet counts, in one 
     ),
   ];
   expect(withheldBy(heads, verifyDirectory(revoked), revoked)).toBeUndefined();
+  // And C's real head, passed on again, takes the slot back: the hold stands.
+  noteHead(heads, "m2", relayed, revoked, verifyDirectory(revoked));
+  expect(withheldBy(heads, verifyDirectory(revoked), revoked)).toMatchObject({ id: "m2", by: "c" });
 });
