@@ -83,6 +83,12 @@ the server pushes to it directly.
 
 Web Push also goes through the relay unless you set your own VAPID keys.
 
+Without the relay or UnifiedPush, the Android app gets no pushes, so while it is open it doesn't
+show new questions or permission prompts. Close and reopen it to see them. The web page still
+updates on its own. For live updates on Android, set `RELAY_URL`, or install a UnifiedPush
+distributor such as ntfy and pick UnifiedPush in the app under Settings → Notifications →
+Delivered through.
+
 ## Environment
 
 ### Basics

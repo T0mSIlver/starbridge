@@ -1,0 +1,65 @@
+{
+  "agent": "opencode",
+  "model": "zai-coding-plan/glm-5.3-flash",
+  "arm": "before",
+  "scenario": "design-pick",
+  "rep": 2,
+  "turns": [
+    {
+      "commands": [
+        "ls shots/",
+        "git branch -a && git status --short && git log --oneline -5",
+        "starbridge ask \\\n  --question \"Which settings-screen variant should I merge to main?\" \\\n  --context \"Both variants pass the tests. Images attached in option order.\nCompact: all 9 rows fit on one screen, no scrolling, tighter rows.\nRoomy: taller rows with bigger touch targets, but only 6 of 9 fit — needs scrolling.\" \\\n  --option \"Compact\" --option \"Roomy\" \\\n  --image shots/compact.png --image shots/roomy.png",
+        "starbridge wait d_gXlN9RuFjDjaOp1z --timeout 5m",
+        "starbridge wait d_gXlN9RuFjDjaOp1z --timeout 5m"
+      ],
+      "final": "The compact variant fits all 9 rows without scrolling; the roomy variant has taller, easier-to-tap rows but needs scrolling. This pick is the owner's, so I'll post a Starbridge card with both screenshots.",
+      "session": "ses_eeeafd346ffeOfPLOA6OGeIOh1",
+      "tokens": 12748,
+      "exit": 143,
+      "seconds": 720.151
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_gXlN9RuFjDjaOp1z",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-06T13:04:22Z",
+      "question": "Which settings-screen variant should I merge to main?",
+      "context": "Both variants pass the tests. Images attached in option order.\nCompact: all 9 rows fit on one screen, no scrolling, tighter rows.\nRoomy: taller rows with bigger touch targets, but only 6 of 9 fit — needs scrolling.",
+      "options": [
+        "Compact",
+        "Roomy"
+      ],
+      "recommended": "Compact",
+      "default": {
+        "action": "Waits for your answer"
+      },
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": ""
+      },
+      "images": [
+        {
+          "type": "image/png",
+          "width": 360,
+          "height": 640
+        },
+        {
+          "type": "image/png",
+          "width": 360,
+          "height": 640
+        }
+      ],
+      "replies": true
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": []
+}

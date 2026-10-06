@@ -1,0 +1,95 @@
+{
+  "agent": "opencode",
+  "model": "zai-coding-plan/glm-5.3-flash",
+  "arm": "after",
+  "scenario": "merge-order",
+  "rep": 1,
+  "turns": [
+    {
+      "commands": [
+        "gh pr view 12 --json number,title,state,mergeable,mergeStateStatus,files,headRefName",
+        "gh pr view 13 --json number,title,state,mergeable,mergeStateStatus,files,headRefName",
+        "gh pr view 12 --json mergeable,mergeStateStatus --jq '.mergeable + \" / \" + .mergeStateStatus'",
+        "gh pr view 13 --json mergeable,mergeStateStatus --jq '.mergeable + \" / \" + .mergeStateStatus'",
+        "gh pr view 12 --json mergeable,mergeStateStatus",
+        "gh api repos/acme/notes/pulls/12 --jq '{number, mergeable, mergeable_state}' 2>&1",
+        "gh api repos/acme/notes/pulls/13 --jq '{number, mergeable, mergeable_state}' 2>&1",
+        "git fetch origin pull/12/head:pr-12 pull/13/head:pr-13 2>&1 && git status -sb && git log --oneline -3 origin/main",
+        "git branch -a && git remote -v",
+        "git log --oneline -5 main && git ls-remote origin | grep -i -E \"pr|pull|12|13\" || true",
+        "ls -la && ls src/ 2>/dev/null",
+        "starbridge ask \\\n  --question 'PRs #12 and #13 both touch src/api.ts, so the merge order is yours to pick - which goes first?' \\\n  --context 'Both are green (4 checks each); whichever merges second may need a rebase and re-run before it can merge.\n#12 first: CLI uploader, needed for tonight's 20:00 CLI release.\n#13 first: server sync-timeout fix, 3 user reports this week.' \\\n  --option '#12 first' --option '#13 first' \\\n  --link https://github.com/acme/notes/pull/12 \\\n  --link https://github.com/acme/notes/pull/13 \\\n  --waiting",
+        "starbridge ask \\\n  --question 'PRs #12 and #13 both touch src/api.ts, so the merge order is yours to pick - which goes first?' \\\n  --context-file - <<'EOF' \\\n  --option '#12 first' --option '#13 first' \\\n  --link https://github.com/acme/notes/pull/12 \\\n  --link https://github.com/acme/notes/pull/13 \\\n  --waiting\nBoth are green (4 checks each); whichever merges second may need a rebase and re-run before it can merge.\n#12 first: CLI uploader, needed for the 20:00 CLI release tonight.\n#13 first: server sync-timeout fix, 3 user reports this week.\nEOF",
+        "starbridge wait d_9kLi25e_HFAXmZW7 --timeout 5m"
+      ],
+      "final": "Both PRs are merged:\n\n- **#12 (CLI uploader: resumable uploads)** — squash-merged first, per your card answer. It's the one needed for tonight's 20:00 CLI release, so it's on main in time.\n- **#13 (Server: sync timeout fix)** — squash-merged right after, cleanly.\n\nSince both touch `src/api.ts`, the order was yours to pick per the project rule; you chose `#12 first` via starbridge and the second merge went through without needing a rebase.",
+      "session": "ses_eee855848ffe5QnuisTm8JOxKn",
+      "tokens": 15506,
+      "exit": 0,
+      "seconds": 122.997
+    },
+    {
+      "commands": [
+        "gh pr merge 12 --squash 2>&1",
+        "gh pr merge 13 --squash 2>&1",
+        "gh pr view 12 2>&1; echo ---; gh pr view 13 2>&1; echo ---; git fetch origin && git log --oneline -3 origin/main"
+      ],
+      "final": "Both PRs are merged:\n\n- **#12 (CLI uploader: resumable uploads)** — squash-merged first, per your card answer. It's the one needed for tonight's 20:00 CLI release, so it's on main in time.\n- **#13 (Server: sync timeout fix)** — squash-merged right after, cleanly.\n\nSince both touch `src/api.ts`, the order was yours to pick per the project rule; you chose `#12 first` via starbridge and the second merge went through without needing a rebase.",
+      "session": "ses_eee855848ffe5QnuisTm8JOxKn",
+      "tokens": 15506,
+      "exit": 0,
+      "seconds": 122.997
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_9kLi25e_HFAXmZW7",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-06T13:51:41Z",
+      "question": "PRs #12 and #13 both touch src/api.ts, so the merge order is yours to pick - which goes first?",
+      "context": "Both are green (4 checks each); whichever merges second may need a rebase and re-run before it can merge.\n#12 first: CLI uploader, needed for the 20:00 CLI release tonight.\n#13 first: server sync-timeout fix, 3 user reports this week.\n",
+      "options": [
+        "#12 first",
+        "#13 first"
+      ],
+      "recommended": "#12 first",
+      "default": {
+        "action": "Waits for your answer"
+      },
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": ""
+      },
+      "links": [
+        {
+          "url": "https://github.com/acme/notes/pull/12"
+        },
+        {
+          "url": "https://github.com/acme/notes/pull/13"
+        }
+      ],
+      "replies": true
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [
+    "gh pr view 12 --json number,title,state,mergeable,mergeStateStatus,files,headRefName",
+    "gh pr view 13 --json number,title,state,mergeable,mergeStateStatus,files,headRefName",
+    "gh pr view 12 --json mergeable,mergeStateStatus --jq .mergeable + \" / \" + .mergeStateStatus",
+    "gh pr view 13 --json mergeable,mergeStateStatus --jq .mergeable + \" / \" + .mergeStateStatus",
+    "gh pr view 12 --json mergeable,mergeStateStatus",
+    "gh api repos/acme/notes/pulls/12 --jq {number, mergeable, mergeable_state}",
+    "gh api repos/acme/notes/pulls/13 --jq {number, mergeable, mergeable_state}",
+    "gh pr merge 12 --squash",
+    "gh pr merge 13 --squash",
+    "gh pr view 12",
+    "gh pr view 13"
+  ],
+  "answered": "Answer to d_9kLi25e_HFAXmZW7 (PRs #12 and #13 both touch src/api.ts, so the merge order is yours to pick - which goes first?): #12 first"
+}

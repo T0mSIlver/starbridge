@@ -198,8 +198,9 @@ class ServerStore(
             secrets.session == null -> Phase.SignedOut
             saved.joining != null -> Phase.Joining(saved.joining!!, saved.joiningScanned)
             saved.digitJoin != null -> Phase.JoiningByDigits(saved.digitJoin!!.digits, saved.digitJoin!!.matched)
-            saved.me == null || saved.pin == null -> Phase.NoDevice(saved.accountExists)
+            // Before the pin: the first entry waits on the server until the key is confirmed (#370).
             secrets.recoverySeed != null -> Phase.RecoveryKey(RecoveryKeys.shown(fromB64(secrets.recoverySeed!!), sodium))
+            saved.me == null || saved.pin == null -> Phase.NoDevice(saved.accountExists)
             else -> Phase.Ready
         }
         server.value = saved.server
@@ -388,24 +389,34 @@ class ServerStore(
     }
 
     /**
-     * The keys, the seed and the signed genesis reach the disk before the server sees the entry,
-     * so a lost response is retried with the same entry, and a chain that already starts with it
-     * is adopted instead of refused.
+     * Makes the keys, the seed and the signed first entry, all on disk, and shows the recovery key.
+     * The server sees the entry only once the owner confirms the key (#370, as the web since #337):
+     * data cleared before that leaves no account without a device, and a killed app shows the
+     * same key again.
      */
     override fun setUpFirstDevice() = run {
-        if (saved.pendingGenesis == null) {
-            if (api().directory(0).isNotEmpty()) throw IllegalStateException("This account already has devices. Join it instead.")
-            val member = newMember()
-            val seed = sodium.random(16)
-            val recovery = sodium.signSeedKeyPair(recoverySignSeed(seed, sodium))
-            val entry = ProtocolJson.encodeToJsonElement(directories.genesisEntry(saved.account!!, member, signKey, recovery, now()))
-            persist(saved.copy(me = member, pin = null, pendingGenesis = entry), secrets.copy(recoverySeed = toB64(seed)))
-        }
+        if (saved.pendingGenesis != null) return@run
+        if (api().directory(0).isNotEmpty()) throw IllegalStateException("This account already has devices. Join it instead.")
+        val member = newMember()
+        val seed = sodium.random(16)
+        val recovery = sodium.signSeedKeyPair(recoverySignSeed(seed, sodium))
+        val entry = ProtocolJson.encodeToJsonElement(directories.genesisEntry(saved.account!!, member, signKey, recovery, now()))
+        persist(saved.copy(me = member, pin = null, pendingGenesis = entry), secrets.copy(recoverySeed = toB64(seed)))
+    }
+
+    /**
+     * Posts the first entry kept on disk, so a lost response is retried with the same entry, and
+     * a chain that already starts with it is adopted instead of refused.
+     */
+    private suspend fun postFirstEntry() {
         val genesis: JsonElement = saved.pendingGenesis!!
         val existing = api().directory(0)
         if (existing.isEmpty()) api().append(ProtocolJson.decodeFromJsonElement(SignedEnvelope.serializer(), genesis))
-        else if (existing.first() != genesis) throw IllegalStateException("This account already has devices. Join it instead.")
-        else if (api().me().member == null) {
+        else if (existing.first() != genesis) {
+            // Another device set the account up meanwhile: this setup's key was never used.
+            persist(saved.copy(me = null, pendingGenesis = null, accountExists = true), Secrets(session = secrets.session))
+            throw IllegalStateException("This account already has devices. Join it instead.")
+        } else if (api().me().member == null) {
             // The server took the entry but the session that posted it is gone: bind this one.
             api().bind(me.id, toB64(sodium.sign(bindMessage(saved.account!!, me.id, api().challenge()), signKey)))
         }
@@ -416,6 +427,7 @@ class ServerStore(
     }
 
     override fun confirmRecoveryKey() = run {
+        if (saved.pendingGenesis != null) postFirstEntry()
         persist(newSecrets = secrets.copy(recoverySeed = null))
         sync()
     }
@@ -1715,18 +1727,7 @@ class ServerStore(
     }
 
     /** How a prompt ended, in words, from this device's answer or the machine's notice. */
-    private fun ended(p: SavedPrompt): String? {
-        p.answer?.let { return if (it.startsWith("allow")) "Allowed here" else "Denied here" }
-        val s = p.settled
-        return when {
-            s?.outcome == "keyboard" -> "Answered on ${p.body.source.machine}"
-            s?.outcome == "timeout" -> "Timed out: left to the keyboard"
-            s?.outcome == "device" && s.device == me.id -> "Answered here"
-            s?.outcome == "device" -> "Answered from ${directory?.members?.get(s.device)?.member?.name ?: "another device"}"
-            p.answeredAt != null -> "Answered on another device"
-            else -> null
-        }
-    }
+    private fun ended(p: SavedPrompt) = promptEnded(p.answer, p.settled, p.answeredAt, p.body.source.machine, me.id) { directory?.members?.get(it)?.member?.name }
 
     private fun toUi(p: SavedPrompt): Prompt {
         val b = p.body
@@ -1810,4 +1811,23 @@ internal fun paceOf(pace: dev.starbridge.app.protocol.Pace?, unusedAlert: Double
         pace.runsOutAt?.let { runCatching { OffsetDateTime.parse(it).toInstant() }.getOrNull() }?.let { Pace.RunsOut(it) } ?: Pace.Unknown
     unusedAlert != null -> Pace.Unused(unusedAlert.roundToInt())
     else -> Pace.Even
+}
+
+/**
+ * How a prompt ended and where, as the web's History puts it (#349): "Denied · on Pixel",
+ * "Allowed for this session · on this phone"; null while it waits.
+ */
+internal fun promptEnded(answer: String?, s: Settled?, answeredAt: String?, machine: String, me: String, name: (String) -> String?): String? {
+    val allowed = mapOf("once" to "Allowed once", "session" to "Allowed for this session", "project" to "Always allowed")
+    answer?.let { return "${if (it == "deny") "Denied" else allowed[it.removePrefix("allow:")] ?: "Allowed"} · on this phone" }
+    return when {
+        s?.outcome == "keyboard" -> "Answered · on $machine"
+        s?.outcome == "timeout" -> "Timed out: left to the keyboard"
+        s?.outcome == "device" && s.device != null -> {
+            val what = when (s.behavior) { "allow" -> "Allowed"; "deny" -> "Denied"; else -> "Answered" }
+            "$what · on ${if (s.device == me) "this phone" else name(s.device) ?: "another device"}"
+        }
+        answeredAt != null -> "Answered · on another device"
+        else -> null
+    }
 }

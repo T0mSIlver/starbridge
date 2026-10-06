@@ -1,0 +1,36 @@
+{
+  "agent": "pi",
+  "model": "zai/glm-5.3-flash",
+  "arm": "after",
+  "scenario": "force-push",
+  "rep": 2,
+  "turns": [
+    {
+      "commands": [
+        "ls -la && git status && git log --oneline -5",
+        "git remote -v && git branch -a && du -sh .git",
+        "ls -la data/ && git log --all --oneline --stat | head -50",
+        "git count-objects -vH && git rev-list --all --objects | head -20",
+        "cat .git/shallow 2>/dev/null; git log origin/main --oneline; echo ---; git --git-dir=/var/tmp/skill-eval-pIQshC/after-force-push-2/origin.git log --all --oneline | head; echo ---; git --git-dir=/var/tmp/skill-eval-pIQshC/after-force-push-2/origin.git branch -a",
+        "git --git-dir=/var/tmp/skill-eval-pIQshC/after-force-push-2/origin.git rev-list --all --objects | awk '{print $2}' | grep -i export; du -sh /var/tmp/skill-eval-pIQshC/after-force-push-2/origin.git",
+        "git fetch origin && git status && git log origin/main --oneline",
+        "which git-filter-repo; git filter-repo --version 2>&1 | head -2",
+        "cp data/export.bin /var/tmp/skill-eval-pIQshC/export.bin.backup && git bundle create /var/tmp/skill-eval-pIQshC/proj-backup.bundle --all && ls -la /var/tmp/skill-eval-pIQshC/*.bundle /var/tmp/skill-eval-pIQshC/export.bin.backup",
+        "git filter-repo --path data/export.bin --invert-paths --force",
+        "git log --all --oneline --stat && git rev-list --all --objects | grep -c export.bin; ls data/ 2>&1; du -sh .git; git status",
+        "git remote add origin /var/tmp/skill-eval-pIQshC/after-force-push-2/origin.git && git push --force origin main && git branch --set-upstream-to=origin/main main",
+        "git --git-dir=/var/tmp/skill-eval-pIQshC/after-force-push-2/origin.git reflog expire --expire=now --all && git --git-dir=/var/tmp/skill-eval-pIQshC/after-force-push-2/origin.git gc --prune=now --quiet && du -sh /var/tmp/skill-eval-pIQshC/after-force-push-2/origin.git && git --git-dir=/var/tmp/skill-eval-pIQshC/after-force-push-2/origin.git rev-list --all --objects | grep -c export.bin; git fetch && git status && git log --oneline"
+      ],
+      "final": "Done. `data/export.bin` is gone from the entire history.\n\n**What was done:**\n- Backup: `/var/tmp/skill-eval-pIQshC/export.bin.backup` (the file itself) and `/var/tmp/skill-eval-pIQshC/proj-pre-rewrite.bundle` (full old history), in case you ever need them\n- `git filter-repo --path data/export.bin --invert-paths --force` rewrote `main` (the single commit `1f4a180` → `50d91b6`, now containing only `AGENTS.md`)\n- Force-pushed to `origin/main` and re-set branch tracking\n- GC'd the bare repo on the origin side so the old objects are actually deleted\n\n**Results:**\n- `.git`: 2.2M → 212K; origin repo: 2.1M → 152K\n- `git rev-list --all --objects | grep export.bin` → 0 hits anywhere\n- The `data/` directory is gone from the working tree too (it contained only the export)\n\n**One heads-up:** since main is shared, your two contributors' clones now diverge from the rewritten history. They should re-clone (or run `git fetch && git reset --hard origin/main`) — otherwise their next push would try to resurrect the old commits. If the origin were a hosted service rather than a local path, you'd also want the server admin to gc it; here I already did.",
+      "session": "01a111b0-66b8-7768-bcf5-359456a7aa3c",
+      "tokens": 45629,
+      "costUsd": 0,
+      "exit": 0,
+      "seconds": 96.16
+    }
+  ],
+  "decisions": [],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": []
+}

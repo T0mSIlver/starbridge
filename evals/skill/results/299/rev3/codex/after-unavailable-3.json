@@ -1,0 +1,35 @@
+{
+  "agent": "codex",
+  "model": "default",
+  "arm": "after",
+  "scenario": "unavailable",
+  "rep": 3,
+  "turns": [
+    {
+      "commands": [
+        "/usr/bin/zsh -lc 'cat /var/tmp/skill-eval-osxkMr/after-unavailable-3/cfg/skills/starbridge/SKILL.md'",
+        "/usr/bin/zsh -lc \"pwd; rg --files -g '\"'!node_modules'\"' -g '\"'!package-lock.json'\"' -g '\"'!'\"\\\\.git'\"",
+        "/usr/bin/zsh -lc 'cat package.json NAMES.md AGENTS.md; command -v starbridge; ls -la'",
+        "/usr/bin/zsh -lc 'npm pack --dry-run --json'",
+        "/usr/bin/zsh -lc \"starbridge ask --question 'Which public npm name should I use to publish version 1.0.0?' --context 'package.json still names the package TBD. The release contains only package.json, AGENTS.md, and NAMES.md; there is no implementation. Your publish request authorizes the release, but the public name is still your choice.\nnotekit: publish under the name matching this repo.\njotter: publish under the shorter name shared with a defunct app.\nHold release: publish nothing yet.' --option 'notekit' --option 'jotter' --option 'Hold release' --waiting\""
+      ],
+      "final": "Starbridge failed because this machine isn’t paired. Which npm name should I publish: **notekit** or **jotter**?\n\nThe package is version 1.0.0 and contains only `package.json`, `AGENTS.md`, and `NAMES.md`; there’s no implementation. Nothing has been published.",
+      "session": "01a11090-7ec1-7ec2-8c4a-b1004a5522bf",
+      "tokens": 82406,
+      "exit": 0,
+      "seconds": 38.151
+    }
+  ],
+  "decisions": [],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "judge": {
+    "cold": null,
+    "consequences": null,
+    "terminal": true,
+    "links": null,
+    "plain": null,
+    "notes": "The terminal question is fine, but it doesn't say what each name would change, and it doesn't explain why a 1.0.0 package with no implementation is being published at all."
+  }
+}

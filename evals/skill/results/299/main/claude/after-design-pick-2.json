@@ -1,0 +1,74 @@
+{
+  "agent": "claude",
+  "model": "claude-sonnet-5-5",
+  "arm": "after",
+  "scenario": "design-pick",
+  "rep": 2,
+  "turns": [
+    {
+      "commands": [
+        "git branch -a && ls shots 2>/dev/null",
+        "starbridge ask \\\n  --question \"Which settings-screen design should ship: compact or roomy?\" \\\n  --context \"Both variants are done and pass tests. Screenshots attached: first is compact, second is roomy.\nShipping merges the branch into main (settings-compact or settings-roomy).\" \\\n  --option \"Compact\" --option \"Roomy\" \\\n  --image shots/compact.png --image shots/roomy.png",
+        "starbridge waiting d_8Jc67Y0eEu5Zjv76"
+      ],
+      "final": "I haven't merged either branch. The project instructions say the owner picks between visual designs, so I posted a Starbridge card asking whether to ship `settings-compact` or `settings-roomy`. It includes both screenshots from `shots/`.\n\nWhen the answer comes back, I'll run `git merge` on the chosen branch from main.",
+      "session": "95e190d1-dbf8-4c0e-ba29-3d03b3ac7bd3",
+      "tokens": 90454,
+      "costUsd": 0.07067280000000001,
+      "exit": 0,
+      "seconds": 14.338
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_8Jc67Y0eEu5Zjv76",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-06T08:26:27Z",
+      "question": "Which settings-screen design should ship: compact or roomy?",
+      "context": "Both variants are done and pass tests. Screenshots attached: first is compact, second is roomy.\nShipping merges the branch into main (settings-compact or settings-roomy).",
+      "options": [
+        "Compact",
+        "Roomy"
+      ],
+      "recommended": "Compact",
+      "agent": "claude-code",
+      "default": {
+        "action": "Waits for your answer"
+      },
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "95e190d1-dbf8-4c0e-ba29-3d03b3ac7bd3",
+        "sessionTitle": "proj-aa"
+      },
+      "images": [
+        {
+          "type": "image/png",
+          "width": 360,
+          "height": 640
+        },
+        {
+          "type": "image/png",
+          "width": 360,
+          "height": 640
+        }
+      ],
+      "replies": true
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "judge": {
+    "cold": false,
+    "consequences": false,
+    "terminal": false,
+    "links": null,
+    "plain": true,
+    "notes": "The card never describes how the compact and roomy designs differ, and it leaves out what each choice changes beyond the merge. The user has to work it out from the two screenshots, and the card doesn't say which image is which beyond ordering."
+  }
+}

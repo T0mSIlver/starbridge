@@ -44,9 +44,12 @@ Setup asks before each step, and a rerun repairs only what is missing:
 4. It installs the background service, `starbridge agent`, as a systemd user unit or a launchd
    agent.
 5. It installs Starbridge in each agent it finds: the Claude Code plugin at user scope, the
-   skill in Codex's skills folder (updated when the CLI carries a newer one), and the Starbridge
-   Pi package. Claude Code may then run `starbridge ask`, `waiting`, `wait` and `settle` without
-   a permission prompt; `starbridge run` still asks, since the command it wraps can be anything.
+   skill in Codex's skills folder, the Starbridge Pi package, and the skill and plugin in
+   opencode's config folder. A later setup updates the Codex and opencode files when the CLI
+   carries newer ones. Claude Code, Codex and Pi may then run `starbridge ask`, `waiting`,
+   `working`, `wait` and `settle` without a permission prompt; `starbridge run` still asks, since
+   the command it wraps can be anything. For Pi, setup adds these rules only when
+   pi-permission-system is installed; `starbridge config permissions on` offers them later.
 6. It uploads a first quota snapshot.
 
 `--yes` takes every default. `--no-quota`, `--no-service` and `--no-plugin` skip a step;
@@ -91,7 +94,9 @@ skill tells them when. `starbridge --help` lists every flag.
 starbridge pair
 ```
 
-It prints a code. Type it under Devices on your phone or in the web app. The machine pairs with
+It prints a code, a link and a QR code. Open the link in a browser where you are signed in, scan
+the QR code with your phone, or type the code in Settings → Devices → Add a device, on your phone
+or in the web app. The machine pairs with
 https://starbridge.run unless you pass `--server https://starbridge.example` or set
 `STARBRIDGE_SERVER`.
 
@@ -151,7 +156,8 @@ starbridge quota push --provider claude --provider codex
 
 ### Permission prompts
 
-Claude Code's permission prompts stay at the keyboard until you turn them on, in setup or with:
+Permission prompts from Claude Code, opencode and Pi stay at the keyboard until you turn them on,
+in setup or with:
 
 ```bash
 starbridge config permissions on
@@ -162,9 +168,15 @@ the keyboard, and the first answer wins. Only prompts Claude Code still shows re
 in auto mode, its default, it settles most calls itself. When the keyboard answers first, the
 device's card closes once the tool has run, since Claude Code reports the call only then.
 
-Pi's prompts come from pi-permission-system. With the Starbridge Pi package installed, the same
-command offers to add `starbridge` to its `authorizerChain`, which it needs as well. Your devices then allow a call
-once or deny it, and "Answer here" in Pi brings back pi-permission-system's own prompt.
+opencode's prompts work the same way, from its TUI and `opencode serve`. `opencode run` rejects
+every prompt at once, so none reaches your devices.
+
+Pi's prompts come from pi-permission-system (`pi install npm:@gotgenes/pi-permission-system`).
+With the Starbridge Pi package installed, the same command offers to add `starbridge` to its
+`authorizerChain`, which it needs as well. It also offers allow rules, so that Pi reads the
+Starbridge skill and runs the commands above without a prompt. Your devices then allow a call once
+or deny it, and "Answer here" in Pi brings back pi-permission-system's own prompt. Asks from its
+`path` and `external_directory` rules stay at the keyboard, since it lets no link allow those.
 
 If you use the Claude app, turn off its "Code updates" notifications, which fire at the end of
 every turn. Keep "Code permission requests" on, unless you turned on Starbridge's permission

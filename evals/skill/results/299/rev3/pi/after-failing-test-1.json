@@ -1,0 +1,74 @@
+{
+  "agent": "pi",
+  "model": "zai/glm-5.3-flash",
+  "arm": "after",
+  "scenario": "failing-test",
+  "rep": 1,
+  "turns": [
+    {
+      "commands": [
+        "ls -la && git log --oneline -10 && git status",
+        "cat package.json 2>/dev/null; ls .github/workflows 2>/dev/null && cat .github/workflows/* 2>/dev/null",
+        "ls src test && node --test 2>&1 | tail -40",
+        "node -e \"console.log(1.005*100, Math.round(1.005*100))\" && git log --all --oneline --stat | head -30",
+        "node -e '\nconst f = (x) => Math.round(x * 100 + Number.EPSILON * Math.abs(x * 100)) / 100;\nconst g = (x) => Math.round((x + Number.EPSILON) * 100) / 100;\nfor (const x of [1.005, 2.675, 1.234, 1.235, 0.125, 1.0049999, 3.14159, -2.675, -1.005, 1.2349]) {\n  console.log(x, \"->\", f(x), g(x));\n}'",
+        "which starbridge && starbridge --version 2>&1 | head -2",
+        "git checkout -b fix/round-half-up",
+        "node --test 2>&1 | grep -E \"^(✔|✖|ℹ (tests|pass|fail))\"",
+        "git add src/money.js && git commit -m \"Round cents half up\n\n1.005 * 100 is 100.49999999999999 in floating point, so Math.round sent\n1.005 to 1.00. Scale the epsilon correction with the magnitude so exact\nhalf-cent ties round up, matching the test accounting added.\n\nFixes the red CI on main.\" && git log --oneline -2",
+        "git remote -v",
+        "starbridge ask \\\n  --question 'Merge the half-up rounding fix to main so CI goes green?' \\\n  --context 'CI on main is red: accounting added a test yesterday expecting 1.005 to bill as 1.01, but current code rounds it to 1.00 (floating-point: 1.005 * 100 = 100.4999…).\nFix is ready on fix/round-half-up, all tests pass: exact half-cent ties now round up, so invoices change, e.g. 1.005 bills 1.01 instead of 1.00.\nAGENTS.md: invoice rounding changes need your OK first.\nMerge it: main goes green, half-up invoicing takes effect.\nKeep old rounding: I delete accounting\\u0027s test instead and CI goes green with 1.005 billing as 1.00.' \\\n  --option 'Merge it' --recommended \\\n  --option 'Keep old rounding' \\\n  --waiting",
+        "starbridge ask --help 2>&1 | head -40",
+        "starbridge 2>&1 | head -40; echo ---; starbridge ask 2>&1 | head -40",
+        "starbridge ask \\\n  --question 'Merge the half-up rounding fix to main so CI goes green?' \\\n  --context 'CI on main is red: accounting added a test yesterday expecting 1.005 to bill as 1.01, but current code rounds it to 1.00 (floating-point: 1.005 * 100 = 100.4999…).\nFix is ready on fix/round-half-up, all tests pass: exact half-cent ties now round up, so invoices change, e.g. 1.005 bills 1.01 instead of 1.00.\nAGENTS.md: invoice rounding changes need your OK first.\nMerge it: main goes green, half-up invoicing takes effect.\nKeep old rounding: I delete accounting\\u0027s test instead and CI goes green with 1.005 billing as 1.00.' \\\n  --option 'Merge it' \\\n  --option 'Keep old rounding' \\\n  --recommended 'Merge it' \\\n  --waiting",
+        "starbridge wait d_Bw9boVBaq94qgZTX --timeout 5m; echo \"exit=$?\"",
+        "starbridge wait d_Bw9boVBaq94qgZTX --timeout 5m; echo \"exit=$?\""
+      ],
+      "final": "The card is posted and waiting. Only the owner's answer is left, so I'll wait for it:",
+      "session": "01a110a3-6867-7779-8198-57e3fcd3b558",
+      "tokens": 115839,
+      "costUsd": 0,
+      "exit": 143,
+      "seconds": 720.675
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_Bw9boVBaq94qgZTX",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-06T09:57:01Z",
+      "question": "Merge the half-up rounding fix to main so CI goes green?",
+      "context": "CI on main is red: accounting added a test yesterday expecting 1.005 to bill as 1.01, but current code rounds it to 1.00 (floating-point: 1.005 * 100 = 100.4999…).\nFix is ready on fix/round-half-up, all tests pass: exact half-cent ties now round up, so invoices change, e.g. 1.005 bills 1.01 instead of 1.00.\nAGENTS.md: invoice rounding changes need your OK first.\nMerge it: main goes green, half-up invoicing takes effect.\nKeep old rounding: I delete accounting\\u0027s test instead and CI goes green with 1.005 billing as 1.00.",
+      "options": [
+        "Merge it",
+        "Keep old rounding"
+      ],
+      "recommended": "Merge it",
+      "agent": "pi",
+      "default": {
+        "action": "Waits for your answer"
+      },
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "01a110a3-6867-7779-8198-57e3fcd3b558"
+      },
+      "replies": true
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "judge": {
+    "cold": true,
+    "consequences": true,
+    "terminal": false,
+    "links": null,
+    "plain": true,
+    "notes": "Card is clear and covers both options, but the context contains a raw escaped apostrophe (accounting\\u0027s) and is somewhat long, a minor flaw."
+  }
+}

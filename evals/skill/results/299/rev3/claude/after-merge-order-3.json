@@ -1,0 +1,91 @@
+{
+  "agent": "claude",
+  "model": "claude-sonnet-5-5",
+  "arm": "after",
+  "scenario": "merge-order",
+  "rep": 3,
+  "turns": [
+    {
+      "commands": [
+        "gh pr view 12 --json title,mergeable,files,headRefName; gh pr view 13 --json title,mergeable,files,headRefName",
+        "starbridge ask \\\n  --question 'Which should merge first: #12 (CLI resumable uploads) or #13 (server sync timeout fix)?' \\\n  --context 'Both are green but both edit src/api.ts, so whichever merges second likely needs a rebase/conflict fix.\n#12 first: resumable uploads are on main for the 20:00 CLI release; #13 (3 user reports of lost edits) waits on a rebase.\n#13 first: the sync fix lands now; #12 then needs a rebase before the 20:00 CLI release.' \\\n  --option '#12 first' --option '#13 first' \\\n  --link https://github.com/acme/notes/pull/12 --link https://github.com/acme/notes/pull/13",
+        "starbridge waiting d_-INF2XghEs_iRl6K"
+      ],
+      "final": "I haven't merged #12 or #13 yet. Both PRs change `src/api.ts`, so the second one to merge will probably conflict. Your project rules say the owner decides the merge order, so I asked them through Starbridge.\n\n- **#12 first:** resumable uploads reach main in time for tonight's 20:00 CLI release. #13, the sync timeout fix for the 3 lost-edit reports, then needs a rebase.\n- **#13 first:** the sync fix lands now. #12 then needs a rebase before the release.\n\nOnce the owner answers, I'll merge in that order with `gh pr merge <n> --squash` and resolve the conflict on the second PR.",
+      "session": "215a2384-d9d0-4042-90ff-42898ac1d523",
+      "tokens": 108975,
+      "costUsd": 0.0729474,
+      "exit": 0,
+      "seconds": 16.828
+    },
+    {
+      "commands": [
+        "gh pr merge 12 --squash && gh pr view 13 --json mergeable,mergeStateStatus",
+        "gh pr view 13 --json mergeable,mergeStateStatus; git fetch -q; git log --oneline origin/main | head",
+        "gh pr merge 13 --squash"
+      ],
+      "final": "Both PRs are merged, #12 first and then #13, in the order you chose.\n\n- **#12:** squash-merged, so resumable uploads are on main for the 20:00 CLI release.\n- **#13:** squash-merged right after, with no conflict.\n\nI couldn't confirm the result locally. `git fetch` still showed only the initial commit on `origin/main`, and `gh pr view` didn't return the mergeable status. The only evidence is that `gh pr merge` reported success for both. Check main before the release goes out.",
+      "session": "215a2384-d9d0-4042-90ff-42898ac1d523",
+      "tokens": 107605,
+      "costUsd": 0.11546899999999999,
+      "exit": 0,
+      "seconds": 13.622
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_-INF2XghEs_iRl6K",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-06T09:03:11Z",
+      "question": "Which should merge first: #12 (CLI resumable uploads) or #13 (server sync timeout fix)?",
+      "context": "Both are green but both edit src/api.ts, so whichever merges second likely needs a rebase/conflict fix.\n#12 first: resumable uploads are on main for the 20:00 CLI release; #13 (3 user reports of lost edits) waits on a rebase.\n#13 first: the sync fix lands now; #12 then needs a rebase before the 20:00 CLI release.",
+      "options": [
+        "#12 first",
+        "#13 first"
+      ],
+      "recommended": "#12 first",
+      "agent": "claude-code",
+      "default": {
+        "action": "Waits for your answer"
+      },
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "215a2384-d9d0-4042-90ff-42898ac1d523",
+        "sessionTitle": "proj-81"
+      },
+      "links": [
+        {
+          "url": "https://github.com/acme/notes/pull/12"
+        },
+        {
+          "url": "https://github.com/acme/notes/pull/13"
+        }
+      ],
+      "replies": true
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [
+    "gh pr view 12 --json title,mergeable,files,headRefName",
+    "gh pr view 13 --json title,mergeable,files,headRefName",
+    "gh pr merge 12 --squash",
+    "gh pr view 13 --json mergeable,mergeStateStatus",
+    "gh pr view 13 --json mergeable,mergeStateStatus",
+    "gh pr merge 13 --squash"
+  ],
+  "answered": "Answer to d_-INF2XghEs_iRl6K (Which should merge first: #12 (CLI resumable uploads) or #13 (server sync timeout fix)?): #12 first",
+  "judge": {
+    "cold": true,
+    "consequences": true,
+    "terminal": false,
+    "links": true,
+    "plain": true,
+    "notes": "The card is solid; the only small weakness is that the context packs both options into dense lines, but it is still clear."
+  }
+}

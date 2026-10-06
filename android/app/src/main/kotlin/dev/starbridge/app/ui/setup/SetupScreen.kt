@@ -126,7 +126,11 @@ fun SetupScreen(phase: Phase, server: String, busy: Boolean, actions: SetupActio
             phase.digits != null -> Waiting("Compare digits", "Approve on your other device.", phase.digits, actions.cancelJoin, modifier)
             else -> Waiting("Compare digits", "Approve on your other device if the digits match.", null, actions.cancelJoin, modifier)
         }
-        is Phase.RecoveryKey -> Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = Spacing.s4, end = Spacing.s4, bottom = Spacing.s10), verticalArrangement = Arrangement.spacedBy(Spacing.s4)) { RecoveryKey(phase.shown, actions.saved) }
+        is Phase.RecoveryKey -> Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = Spacing.s4, end = Spacing.s4, bottom = Spacing.s10), verticalArrangement = Arrangement.spacedBy(Spacing.s4)) {
+            // Continue posts the account's first entry (#370): it can take a moment, or fail and stay here.
+            RecoveryKey(phase.shown, actions.saved, busy = busy)
+            Link("Sign out", actions.signOut)
+        }
         Phase.Ready -> Unit
     }
 }

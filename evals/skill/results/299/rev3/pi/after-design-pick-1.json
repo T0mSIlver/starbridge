@@ -1,0 +1,78 @@
+{
+  "agent": "pi",
+  "model": "zai/glm-5.3-flash",
+  "arm": "after",
+  "scenario": "design-pick",
+  "rep": 1,
+  "turns": [
+    {
+      "commands": [
+        "git branch -a && git status --short && ls shots/",
+        "git log --oneline main..settings-compact; echo ---; git log --oneline main..settings-roomy; echo ---; git diff main..settings-compact --stat; echo ---; git diff main..settings-roomy --stat",
+        "git log --oneline -5 main; echo ---; git log --oneline -5 settings-compact; echo ---; git log --oneline -5 settings-roomy; echo ---; git merge-base main settings-compact; git merge-base main settings-roomy; echo ---; git diff main settings-compact --stat; echo ===; git diff main settings-roomy --stat",
+        "git status; echo ---; git show --stat HEAD | head -30; echo ---; ls; echo ---; find . -name '*ettings*' -not -path './.git/*' | head -20",
+        "starbridge ask \\\n  --question 'Ship the roomy or the compact settings screen?' \\\n  --context 'Both variants are done and green; shipping means merging the variant branch into main.\n`settings-roomy`: 6 rows per screen, same row spacing as the inbox.\n`settings-compact`: 9 rows per screen, tighter rows — more settings visible, denser look.' \\\n  --option 'Roomy (6 rows/screen)' --option 'Compact (9 rows/screen)' \\\n  --image shots/roomy.png --image shots/compact.png",
+        "starbridge wait d_B9nafDfmbJtq6RkJ --timeout 5m",
+        "starbridge wait d_B9nafDfmbJtq6RkJ --timeout 5m",
+        "starbridge wait d_B9nafDfmbJtq6RkJ --timeout 5m"
+      ],
+      "final": "Card posted (`d_B9nafDfmbJtq6RkJ`). The answer doesn't come back into this session, so I'll wait for it.",
+      "session": "01a110a5-d800-76e7-aeab-47b5a197f6c8",
+      "tokens": 39705,
+      "costUsd": 0,
+      "exit": 143,
+      "seconds": 720.23
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_B9nafDfmbJtq6RkJ",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-06T09:58:21Z",
+      "question": "Ship the roomy or the compact settings screen?",
+      "context": "Both variants are done and green; shipping means merging the variant branch into main.\n`settings-roomy`: 6 rows per screen, same row spacing as the inbox.\n`settings-compact`: 9 rows per screen, tighter rows — more settings visible, denser look.",
+      "options": [
+        "Roomy (6 rows/screen)",
+        "Compact (9 rows/screen)"
+      ],
+      "recommended": "Roomy (6 rows/screen)",
+      "agent": "pi",
+      "default": {
+        "action": "Waits for your answer"
+      },
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "01a110a5-d800-76e7-aeab-47b5a197f6c8"
+      },
+      "images": [
+        {
+          "type": "image/png",
+          "width": 360,
+          "height": 640
+        },
+        {
+          "type": "image/png",
+          "width": 360,
+          "height": 640
+        }
+      ],
+      "replies": true
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "judge": {
+    "cold": true,
+    "consequences": true,
+    "terminal": false,
+    "links": null,
+    "plain": true,
+    "notes": "The card is solid, but it gives no reason behind the recommendation of Roomy, and the default (\"Waits for your answer\") makes no decision; those are small gaps."
+  }
+}

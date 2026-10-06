@@ -1,0 +1,50 @@
+{
+  "agent": "opencode",
+  "model": "zai-coding-plan/glm-5.3-flash",
+  "arm": "before",
+  "scenario": "long-e2e",
+  "rep": 3,
+  "turns": [
+    {
+      "commands": [
+        "starbridge run --title \"acme-notes iOS e2e\" --reason \"make e2e drives the iOS simulator on your Mac: it takes over your screen and keyboard for about ten minutes\" -- bash -c 'make e2e'"
+      ],
+      "final": "E2e passed — all 4 onboarding flows green against the new copy in src/onboarding.txt. Nothing broke; the run card on your phone already shows the pass, so no action needed.",
+      "session": "ses_eef0a4297ffeCguV6vqG8kMbMi",
+      "tokens": 18566,
+      "exit": 0,
+      "seconds": 52.308
+    }
+  ],
+  "decisions": [],
+  "laterDecisions": [],
+  "runs": [
+    {
+      "v": 1,
+      "id": "r_AkCYGIXS1p5M5Awi",
+      "to": [
+        "phone"
+      ],
+      "title": "acme-notes iOS e2e",
+      "reason": "make e2e drives the iOS simulator on your Mac: it takes over your screen and keyboard for about ten minutes",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": ""
+      },
+      "startedAt": "2026-10-06T11:25:37Z",
+      "at": "2026-10-06T11:25:41Z",
+      "progress": {
+        "done": 4,
+        "total": 4,
+        "unit": "step"
+      },
+      "exit": {
+        "code": 0,
+        "at": "2026-10-06T11:25:41Z"
+      }
+    }
+  ],
+  "gh": []
+}

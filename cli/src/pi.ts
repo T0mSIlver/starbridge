@@ -35,8 +35,7 @@ export function piSessionTitle(env: Ctx["env"]): string | undefined {
 
 /** pi-permission-system's config file, which holds the `authorizerChain` that names links. */
 export function piPermissionConfig(env: Ctx["env"]): string {
-  const dir = env.PI_CODING_AGENT_DIR || join(env.HOME ?? "", ".pi", "agent");
-  return join(dir, "extensions", "pi-permission-system", "config.json");
+  return join(piAgentDir(env), "extensions", "pi-permission-system", "config.json");
 }
 
 /** The name of the Starbridge Pi extension's link (mod/pi/permissions.ts). */
@@ -83,14 +82,46 @@ export function chainPiLink(file: string) {
     `${JSON.stringify({ ...config, authorizerChain: [...chain, PI_LINK] }, null, 2)}\n`,
   );
 }
+/** Pi's agent folder: `PI_CODING_AGENT_DIR`, else `~/.pi/agent`. */
+function piAgentDir(env: Ctx["env"]): string {
+  return env.PI_CODING_AGENT_DIR || join(env.HOME ?? "", ".pi", "agent");
+}
+
+/** Where `pi install git:github.com/T0mSIlver/starbridge` puts the Starbridge skill. */
+export function piSkillDir(env: Ctx["env"]): string {
+  return join(
+    piAgentDir(env),
+    "git",
+    "github.com",
+    "T0mSIlver",
+    "starbridge",
+    "plugin",
+    "skills",
+    "starbridge",
+  );
+}
 
 /**
- * The `permission.bash` patterns that let an agent reach the owner without a prompt: the
- * commands setup lets run in Claude Code (allow rules) and Codex (`starbridge.rules`).
+ * The `permission` rules that let an agent reach the owner without a prompt, by surface: the
+ * commands setup lets run in Claude Code (allow rules) and Codex (`starbridge.rules`), and the
+ * Starbridge skill, whose file pi-permission-system gates twice, as the `starbridge` skill and
+ * as a `read` (#443).
  */
-export const PI_ALLOW = ["ask", "waiting", "working", "wait", "settle"].map(
-  (c) => `starbridge ${c} *`,
-);
+export function piRules(env: Ctx["env"]): Record<string, string[]> {
+  return {
+    bash: ["ask", "waiting", "working", "wait", "settle"].map((c) => `starbridge ${c} *`),
+    skill: ["starbridge"],
+    read: [`${piSkillDir(env)}/*`],
+  };
+}
+
+/** The rules of `surfaces` (all by default) as the JSON to add under `permission`, to paste. */
+export function piRulesText(env: Ctx["env"], surfaces?: string[]): string {
+  return Object.entries(piRules(env))
+    .filter(([s]) => !surfaces || surfaces.includes(s))
+    .map(([s, ps]) => `"${s}": {${ps.map((p) => `"${p}": "allow"`).join(", ")}}`)
+    .join(", ");
+}
 
 type Config = Record<string, unknown>;
 const isObject = (v: unknown): v is Config =>
@@ -113,53 +144,65 @@ function writeConfig(file: string, config: Config) {
 }
 
 /**
- * Whether pi-permission-system lets the starbridge commands run: `absent` and `unreadable` as
- * for `piChain`, also `unreadable` when `permission` or its `bash` has a shape this command
- * does not rewrite.
+ * A surface this command leaves to the owner: a plain level other than `allow`. As
+ * `{"*": level}` it would merge with a project's map for that surface instead of giving way.
+ */
+const plainLevel = (rules: unknown) => rules !== undefined && rules !== "allow" && !isObject(rules);
+
+/**
+ * Whether pi-permission-system lets the agent reach the owner, on the surfaces this command may
+ * rewrite: `absent` and `unreadable` as for `piChain`, also `unreadable` when `permission` is
+ * not a map. `plain` names the surfaces left to the owner (plainLevel).
  */
 export function piAllow(env: Ctx["env"]): {
   state: "absent" | "allowed" | "missing" | "unreadable";
   file: string;
+  plain: string[];
 } {
   const { state, file } = piChain(env);
-  if (state === "absent" || state === "unreadable") return { state, file };
-  const bash = bashRules(readConfig(file));
-  if (bash === undefined) return { state: "unreadable", file };
-  // Last, since the last match wins: a later pattern of the owner's could shadow them.
-  const tail = Object.entries(bash).slice(-PI_ALLOW.length);
-  const allowed = PI_ALLOW.every((p, i) => tail[i]?.[0] === p && tail[i]?.[1] === "allow");
-  return { state: allowed ? "allowed" : "missing", file };
+  if (state === "absent" || state === "unreadable") return { state, file, plain: [] };
+  const config = readConfig(file);
+  const permission = config?.permission ?? {};
+  if (!isObject(permission)) return { state: "unreadable", file, plain: [] };
+  let allowed = true;
+  const plain: string[] = [];
+  for (const [surface, patterns] of Object.entries(piRules(env))) {
+    const rules = permission[surface] ?? {};
+    if (rules === "allow") continue;
+    if (!isObject(rules)) {
+      plain.push(surface);
+      continue;
+    }
+    // Last, since the last match wins: a later pattern of the owner's could shadow them.
+    const tail = Object.entries(rules).slice(-patterns.length);
+    if (!patterns.every((p, i) => tail[i]?.[0] === p && tail[i]?.[1] === "allow")) allowed = false;
+  }
+  return { state: allowed ? "allowed" : "missing", file, plain };
 }
 
 /**
- * `permission.bash` as a pattern map; undefined for any other shape. A plain level is left to
- * the owner: as `{"*": level}` it would merge with a project's bash map instead of giving way.
+ * Adds piRules to `permission`, each after the owner's own patterns for its surface since the
+ * last match wins, keeping the rest of the file. A surface set to a plain `allow` needs none,
+ * and one set to another plain level stays as it is (plainLevel).
  */
-function bashRules(config: Config | undefined): Config | undefined {
-  if (!config) return undefined;
-  const permission = config.permission ?? {};
-  if (!isObject(permission)) return undefined;
-  const bash = permission.bash ?? {};
-  return isObject(bash) ? bash : undefined;
-}
-
-/**
- * Adds PI_ALLOW to `permission.bash`, a pattern map or none, after the owner's own patterns
- * since the last match wins, keeping the rest of the file.
- */
-export function allowPiCommands(file: string) {
+export function allowPiRules(env: Ctx["env"]) {
+  const file = piPermissionConfig(env);
   const config = readConfig(file) ?? {};
-  const bash = { ...bashRules(config) };
-  for (const p of PI_ALLOW) delete bash[p];
-  for (const p of PI_ALLOW) bash[p] = "allow";
-  const permission = isObject(config.permission) ? config.permission : {};
-  writeConfig(file, { ...config, permission: { ...permission, bash } });
+  const permission = isObject(config.permission) ? { ...config.permission } : {};
+  for (const [surface, patterns] of Object.entries(piRules(env))) {
+    if (permission[surface] === "allow" || plainLevel(permission[surface])) continue;
+    const rules = isObject(permission[surface]) ? { ...permission[surface] } : {};
+    for (const p of patterns) delete rules[p];
+    for (const p of patterns) rules[p] = "allow";
+    permission[surface] = rules;
+  }
+  writeConfig(file, { ...config, permission });
 }
 
 /**
  * Takes out what setup and `config permissions on` added to pi-permission-system's config: the
- * Starbridge link in `authorizerChain` and the PI_ALLOW patterns, dropping a list, map or file
- * they leave empty. Returns whether it changed the file.
+ * Starbridge link in `authorizerChain` and the piRules, dropping a list, map or file they leave
+ * empty. Returns whether it changed the file.
  */
 export function removePiEntries(env: Ctx["env"]): boolean {
   const file = piPermissionConfig(env);
@@ -175,14 +218,17 @@ export function removePiEntries(env: Ctx["env"]): boolean {
     changed = true;
   }
   const permission = config.permission;
-  const bash = isObject(permission) ? permission.bash : undefined;
-  if (isObject(permission) && isObject(bash)) {
-    for (const p of PI_ALLOW)
-      if (bash[p] === "allow") {
-        delete bash[p];
-        changed = true;
-      }
-    if (Object.keys(bash).length === 0) delete permission.bash;
+  if (isObject(permission)) {
+    for (const [surface, patterns] of Object.entries(piRules(env))) {
+      const rules = permission[surface];
+      if (!isObject(rules)) continue;
+      for (const p of patterns)
+        if (rules[p] === "allow") {
+          delete rules[p];
+          changed = true;
+        }
+      if (Object.keys(rules).length === 0) delete permission[surface];
+    }
     if (Object.keys(permission).length === 0) delete config.permission;
   }
   // Left empty, it is the file setup created: an empty config and none mean the same.

@@ -1,0 +1,74 @@
+{
+  "agent": "claude",
+  "model": "claude-sonnet-5-5",
+  "arm": "after",
+  "scenario": "design-pick",
+  "rep": 1,
+  "turns": [
+    {
+      "commands": [
+        "git branch -a && ls shots",
+        "starbridge ask \\\n  --question \"Which settings-screen design should I ship: compact or roomy?\" \\\n  --context \"Both variants are done and pass tests. Screenshots attached: first is compact, second is roomy.\nShipping merges the chosen branch into main (settings-compact or settings-roomy).\nI won't merge until you pick.\" \\\n  --option \"Compact\" --option \"Roomy\" \\\n  --image shots/compact.png --image shots/roomy.png",
+        "starbridge waiting d_Z_PXN1voj91zG2b9"
+      ],
+      "final": "I haven't merged anything yet, because the project rules say you pick between designs yourself. I posted a Starbridge card (`d_Z_PXN1voj91zG2b9`) asking you to choose Compact or Roomy. It has both screenshots attached.\n\nOnce you answer, I'll run `git merge settings-compact` or `git merge settings-roomy` on main.",
+      "session": "4ca8fbd9-801f-4792-b853-7223c86bed30",
+      "tokens": 90462,
+      "costUsd": 0.0708312,
+      "exit": 0,
+      "seconds": 9.459
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_Z_PXN1voj91zG2b9",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-06T08:26:24Z",
+      "question": "Which settings-screen design should I ship: compact or roomy?",
+      "context": "Both variants are done and pass tests. Screenshots attached: first is compact, second is roomy.\nShipping merges the chosen branch into main (settings-compact or settings-roomy).\nI won't merge until you pick.",
+      "options": [
+        "Compact",
+        "Roomy"
+      ],
+      "recommended": "Compact",
+      "agent": "claude-code",
+      "default": {
+        "action": "Waits for your answer"
+      },
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "4ca8fbd9-801f-4792-b853-7223c86bed30",
+        "sessionTitle": "proj-c5"
+      },
+      "images": [
+        {
+          "type": "image/png",
+          "width": 360,
+          "height": 640
+        },
+        {
+          "type": "image/png",
+          "width": 360,
+          "height": 640
+        }
+      ],
+      "replies": true
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "judge": {
+    "cold": false,
+    "consequences": false,
+    "terminal": false,
+    "links": true,
+    "plain": true,
+    "notes": "The card never says how the two designs differ (what compact or roomy actually means) and gives no reason for the recommendation, so the user must open the screenshots to choose; the merge consequence is the same for both options."
+  }
+}
