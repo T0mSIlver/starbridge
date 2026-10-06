@@ -2097,3 +2097,12 @@ goes in git.
   Restore drill: the 2026-10-06 backup, copied read-only from the VPS and
   restored as `deploy/README.md` says, passed `integrity_check`, started and
   served. Umami's dump restored too. The copies were deleted afterwards.
+- 2026-10-06: why Android's Find showed no results (#341). The app's
+  NavDisplay fills the screen and passes that size on to its entry as a
+  minimum height, and Material 3's
+  (1.5.0-alpha29) expanded `SearchBar` passes that minimum on to its
+  input field. The field filled the screen, its text centred, and the
+  results sat below the bottom edge. Find now stands in a `Box`, which
+  drops the minimum. The screenshots had hidden it, since they drew Find
+  in a plain `Box`; Find's shots and `FindScreenTest` now draw it inside
+  a screen-filling NavDisplay, as the app does.

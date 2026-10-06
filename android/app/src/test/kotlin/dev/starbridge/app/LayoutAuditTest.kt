@@ -207,7 +207,7 @@ class LayoutAuditTest(private val shot: String, private val look: Look) {
         "inbox-prompt-menu" to Shot(Tab.Inbox, before = { compose.onAllNodes(SemanticsMatcher.expectValue(SemanticsProperties.ContentDescription, listOf("More answers")))[0].performScrollTo().performClick() }) {
             InboxScreen(emptyList(), now, decisionActions, prompts = worst.prompts, promptActions = promptActions)
         },
-        "find" to Shot(Tab.Inbox, bar = false) { FindScreen(worst.decisions, worst.prompts, now, {}, {}, {}, initial = "rebase") },
+        "find" to Shot(Tab.Inbox, bar = false, before = { compose.onNode(hasSetTextAction()).performTextInput("rebase") }) { Entry { FindScreen(worst.decisions, worst.prompts, now, {}, {}, {}) } },
         "sheet-question" to sheet { DecisionSheet(worst.decisions[0], now, { _, _, _ -> }, Replies(rememberDrafts(), emptyMap())) },
         "sheet-reply" to sheet(before = { compose.onNodeWithText("Reply").performClick() }) { DecisionSheet(worst.decisions[1], now, { _, _, _ -> }, Replies(rememberDrafts(), emptyMap())) },
         "sheet-prompt" to sheet { PromptSheet(worst.prompts[0], now, promptActions) },
