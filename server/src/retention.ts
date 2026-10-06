@@ -61,7 +61,8 @@ export async function sweepStorage(
     fromActive,
     batch,
   );
-  // Last, so an item goes in the same sweep as the one it refers to.
+  // Last, so an item goes in the same sweep as the one it refers to. Between batches a list
+  // may show a waiting or snoozed item for a moment after its decision is gone.
   await deleteItems(
     db,
     `kind IN (${marks(withRe)}) AND NOT EXISTS (SELECT 1 FROM items d
