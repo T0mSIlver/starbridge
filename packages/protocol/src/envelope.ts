@@ -12,6 +12,7 @@ import {
   reOf,
   SealedItem,
   SignedEnvelope,
+  wakeOf,
 } from "./schemas";
 import { concat, fromB64, ProtocolError, sodium, toB64, utf8 } from "./sodium";
 
@@ -139,6 +140,7 @@ function sealEnvelope<K extends ItemKind>(
     id: body.id,
     from: env.signer,
     ...(reOf(kind, body) !== undefined ? { re: reOf(kind, body) } : {}),
+    ...(wakeOf(kind, body) !== undefined ? { wakeAt: wakeOf(kind, body) } : {}),
     boxes: recipients.map((r) => ({
       to: r.id,
       box: toB64(sodium.crypto_box_seal(plain, fromB64(r.boxPk))),
@@ -236,6 +238,8 @@ function check<K extends ItemKind>(
   if (body.id !== item.id) throw new ProtocolError("id-mismatch", "body id is not the item id");
   if (item.re !== reOf(item.kind, body))
     throw new ProtocolError("id-mismatch", "re is not the item the body refers to");
+  if (item.wakeAt !== wakeOf(item.kind, body))
+    throw new ProtocolError("id-mismatch", "wakeAt is not the time the body names");
   const named = typeof body.to === "string" ? [body.to] : body.to;
   if (!named.includes(me)) throw new ProtocolError("wrong-recipient", "body does not name me");
   return { signer: entry.member, body };

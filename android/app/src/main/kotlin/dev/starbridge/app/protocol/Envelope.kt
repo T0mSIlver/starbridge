@@ -58,6 +58,7 @@ class Envelopes(private val sodium: Sodium) {
             id = parsed.id,
             from = signer,
             re = parsed.re,
+            wakeAt = parsed.wakeAt,
             boxes = recipients.map { SealedBox(it.id, toB64(sodium.seal(plain, fromB64(it.boxPk)))) },
         )
     }
@@ -92,6 +93,7 @@ class Envelopes(private val sodium: Sodium) {
         val body = parseBody(item.kind, env.body) as ItemBody
         if (body.id != item.id) throw ProtocolException("id-mismatch", "body id is not the item id")
         if (item.re != body.re) throw ProtocolException("id-mismatch", "re is not the item the body refers to")
+        if (item.wakeAt != body.wakeAt) throw ProtocolException("id-mismatch", "wakeAt is not the time the body names")
         if (me !in body.recipients) throw ProtocolException("wrong-recipient", "body does not name me")
         return Opened(entry.member, body, env.body)
     }
@@ -116,6 +118,7 @@ fun parseBody(kind: String, text: String): Any {
         "settled" -> decodeBody(Settled.serializer(), json).also { it.check() }
         "waiting" -> decodeBody(Waiting.serializer(), json).also { it.check() }
         "run" -> decodeBody(Run.serializer(), json).also { it.check() }
+        "snooze" -> decodeBody(Snooze.serializer(), json).also { it.check() }
         else -> throw ProtocolException("wrong-kind", kind)
     }
 }

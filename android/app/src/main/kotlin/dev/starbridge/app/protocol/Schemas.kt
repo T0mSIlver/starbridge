@@ -124,6 +124,7 @@ val SIGNER_ROLE = mapOf(
     "settled" to "machine",
     "waiting" to "machine",
     "run" to "machine",
+    "snooze" to "device",
 )
 val ITEM_KINDS = SIGNER_ROLE.keys
 val KINDS = setOf("directory") + ITEM_KINDS
@@ -150,6 +151,8 @@ interface ItemBody {
     val recipients: List<String>
     /** The directory head a machine signed into it; devices sign theirs elsewhere. */
     val dir: DirectoryHead? get() = null
+    /** A `wake` kind's time, which the item's `wakeAt` hint repeats (ITEM_KINDS in schemas.ts). */
+    val wakeAt: String? get() = null
 }
 
 /** `body` is the JSON text exactly as signed; verifiers check the signature before parsing it. */
@@ -183,6 +186,8 @@ data class SealedItem(
     val from: String,
     val re: String? = null,
     val boxes: List<SealedBox>,
+    /** A `wake` kind's time: the server pushes every device once then. */
+    val wakeAt: String? = null,
 ) {
     fun check() {
         schema(v == 1, "v")
@@ -190,6 +195,7 @@ data class SealedItem(
         id(id, "id")
         id(from, "from")
         re?.let { id(it, "re") }
+        wakeAt?.let { time(it, "wakeAt") }
         schema(boxes.size in 1..64, "boxes")
         for (b in boxes) {
             id(b.to, "to")
@@ -522,6 +528,40 @@ data class Waiting(
         to.forEach { id(it, "to") }
         time(at, "at")
         schema(state in WAITING_STATES, "state")
+    }
+}
+
+/** SNOOZE_MAX_MS in schemas.ts: the latest a snooze may run. */
+const val SNOOZE_MAX_MS = 7L * 24 * 60 * 60 * 1000
+
+/**
+ * The owner put a decision off until [until] (Snooze in schemas.ts, #571): not an answer. Sealed
+ * to the machine that asked and every active device; the latest [at] wins. [until] at or before
+ * [at] brings it back now.
+ */
+@Serializable
+data class Snooze(
+    val v: Int,
+    override val id: String,
+    val decisionId: String,
+    val to: List<String>,
+    val until: String,
+    val at: String,
+    override val dir: DirectoryHead? = null,
+) : ItemBody {
+    override val re get() = decisionId
+    override val recipients get() = to
+    override val wakeAt get() = until
+
+    fun check() {
+        dir?.check()
+        schema(v == 1, "v")
+        id(id, "id")
+        id(decisionId, "decisionId")
+        schema(to.isNotEmpty(), "to")
+        to.forEach { id(it, "to") }
+        time(until, "until")
+        time(at, "at")
     }
 }
 
