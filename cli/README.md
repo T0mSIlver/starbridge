@@ -174,8 +174,8 @@ every prompt at once, so none reaches your devices.
 Pi's prompts come from pi-permission-system (`pi install npm:@gotgenes/pi-permission-system`).
 With the Starbridge Pi package installed, the same command offers to add `starbridge` to its
 `authorizerChain`, which it needs as well. It also offers allow rules, so that Pi reads the
-Starbridge skill without a prompt; the link runs the commands above without one when they stand
-alone, never chained to another command. Your devices then allow a call once
+Starbridge skill and runs the commands above without a prompt; the commands' rules need
+pi-permission-system 9.0.1 or later, which checks each command of a chain on its own. Your devices then allow a call once
 or deny it, and "Answer here" in Pi brings back pi-permission-system's own prompt. Asks from its
 `path` and `external_directory` rules stay at the keyboard, since it lets no link allow those.
 

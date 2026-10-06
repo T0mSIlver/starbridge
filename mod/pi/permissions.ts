@@ -25,7 +25,11 @@ export interface AskDetails {
   target?: string;
   /** pi-permission-system's own one-line rendering of the call's input. */
   toolInputPreview?: string;
-  payload?: { request?: { surface?: string; toolName?: string; value?: string } };
+  payload?: {
+    request?: { surface?: string; toolName?: string; value?: string };
+    /** Facts beside the ask, such as the "full command" when `command` is one of its parts. */
+    evidence?: { label?: string; text?: string }[];
+  };
   /** The gate's surface, such as `read` or `external_directory_read`, when it overrides it. */
   surface?: string | null;
   /** What the gate checked; its surface is the one pi-permission-system caps grants on. */
@@ -71,53 +75,24 @@ export function keyboardOnly(details: AskDetails): boolean {
   );
 }
 
-/** The commands the link allows without asking anyone: the ones the skill tells the agent to run. */
-const OWN = new Set(["ask", "waiting", "working", "wait", "settle"]);
-
 /**
- * Whether `command` runs one starbridge command of OWN and nothing else (#488): it starts with
- * `starbridge <subcommand>`, and outside quotes has no separator, pipe, redirection, subshell,
- * expansion, escape or line break. Inside double quotes `$` and backquotes still expand, so they
- * count too. Anything it is unsure of goes to the owner, as any other command does.
+ * The command the call runs. pi-permission-system gates each command of a chain on its own and
+ * puts the one that asked in `command`, the whole line in the "full command" evidence; an allow
+ * runs the whole line, so the devices must show it.
  */
-export function ownCommand(command: string): boolean {
-  const head = /^starbridge ([a-z]+)(?=$|[ \t])/.exec(command);
-  if (!head?.[1] || !OWN.has(head[1])) return false;
-  let quote: "'" | '"' | undefined;
-  for (let i = head[0].length; i < command.length; i++) {
-    const c = command[i] as string;
-    if (quote === "'") {
-      if (c === "'") quote = undefined;
-    } else if (quote === '"') {
-      if (c === '"') quote = undefined;
-      else if (c === "$" || c === "`") return false;
-      else if (c === "\\") i++;
-    } else if (c === "'" || c === '"') quote = c;
-    else if (!/[A-Za-z0-9 \t_\-.,:=+/@%^~*?[\]]/.test(c)) return false;
-  }
-  return quote === undefined;
-}
-
-/**
- * Whether the link allows this ask itself: Pi's bash tool running an ownCommand. Setup used to
- * allow them with bash rules, which pi-permission-system matches against the whole command.
- */
-export function ownAsk(details: AskDetails): boolean {
-  return (
-    details.toolName === "bash" &&
-    details.command !== undefined &&
-    !keyboardOnly(details) &&
-    ownCommand(details.command)
-  );
+export function fullCommand(details: AskDetails): string | undefined {
+  const full = details.payload?.evidence?.find((e) => e.label === "full command")?.text;
+  return typeof full === "string" && full.length > 0 ? full : details.command;
 }
 
 /** The hook input `starbridge hook permission` reads, in Claude Code's shape. */
 export function hookInput(details: AskDetails, session: string, cwd: string) {
   const req = details.payload?.request;
   const tool = details.toolName ?? req?.toolName ?? req?.surface ?? "tool";
+  const command = fullCommand(details);
   const input =
-    details.command !== undefined
-      ? { command: details.command }
+    command !== undefined
+      ? { command }
       : details.path !== undefined
         ? { path: details.path }
         : details.target !== undefined

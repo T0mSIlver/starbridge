@@ -1,6 +1,6 @@
 import { homedir } from "node:os";
 import { type Ctx, parseDuration } from "../context";
-import { dropOldPiRules, piPermissionConfig } from "../pi";
+import { dropUnsafePiRules, piPermissionConfig } from "../pi";
 import {
   codexSkill,
   codexSkillDir,
@@ -44,7 +44,8 @@ export async function runAgent(ctx: Ctx, opts: AgentOpts): Promise<number> {
   const agent = makeAgent(ctx, opts);
   await agent.start();
   // `starbridge update` restarts the agent, so a new binary brings Codex its skill, and opencode
-  // its skill and plugin, here; it also takes Pi's pre-#488 bash allow patterns out.
+  // its skill and plugin, here. It also takes out Pi's bash allow patterns where they would let a
+  // chain through (#488).
   const home = { ctx, home: ctx.env.HOME ?? homedir() };
   if (codexSkill(home) === "outdated") {
     try {
@@ -63,9 +64,9 @@ export async function runAgent(ctx: Ctx, opts: AgentOpts): Promise<number> {
     }
   }
   try {
-    if (dropOldPiRules(ctx.env))
+    if (dropUnsafePiRules(ctx.env))
       agent.log(
-        `removed the starbridge bash patterns from ${piPermissionConfig(ctx.env)}: the Starbridge link allows the commands now (#488)`,
+        `removed the starbridge bash patterns from ${piPermissionConfig(ctx.env)}: pi-permission-system before 9.0.1, or of an unknown version, matches them against a whole chain (#488)`,
       );
   } catch (e) {
     agent.log(`could not remove the starbridge bash patterns: ${(e as Error).message}`);

@@ -101,29 +101,52 @@ export function piSkillDir(env: Ctx["env"]): string {
   );
 }
 
+const PPS = "@gotgenes/pi-permission-system";
+
+/** The commands setup lets run in Claude Code (allow rules) and Codex (`starbridge.rules`). */
+const BASH = ["ask", "waiting", "working", "wait", "settle"].map((c) => `starbridge ${c} *`);
+
 /**
- * The `permission` rules that let an agent reach the owner without a prompt: the Starbridge
- * skill, whose file pi-permission-system gates twice, as the `starbridge` skill and as a `read`
- * (#443). The starbridge commands get no bash rule: pi-permission-system matches a bash pattern
- * against the whole command, so `starbridge ask *` also matched `starbridge ask x; curl … | sh`
- * (#488). The Starbridge link allows them instead, one command at a time (mod/pi/permissions.ts).
+ * Whether pi-permission-system matches bash patterns one command at a time, as Claude Code's
+ * allow rules do: since 9.0.1 (its #301) it splits a chain on `;`, `&&`, `|`, newlines and
+ * substitutions and gates each command. Before, `starbridge ask *` matched the whole line, so
+ * `starbridge ask x; curl … | sh` ran with no prompt (#488). False when the version Pi installed
+ * under its agent folder cannot be read, such as a project-scoped install.
+ */
+export function piSplitsChains(env: Ctx["env"]): boolean {
+  const file = join(piAgentDir(env), "npm", "node_modules", ...PPS.split("/"), "package.json");
+  let version: unknown;
+  try {
+    version = (JSON.parse(readFileSync(file, "utf8")) as { version?: unknown }).version;
+  } catch {
+    return false;
+  }
+  const m = typeof version === "string" ? /^(\d+)\.(\d+)\.(\d+)/.exec(version) : null;
+  if (!m) return false;
+  const [major, minor, patch] = m.slice(1).map(Number) as [number, number, number];
+  return major > 9 || (major === 9 && (minor > 0 || patch >= 1));
+}
+
+/**
+ * The `permission` rules that let an agent reach the owner without a prompt, by surface: the
+ * starbridge commands, where pi-permission-system gates each command of a chain on its own
+ * (piSplitsChains), and the Starbridge skill, whose file it gates twice, as the `starbridge`
+ * skill and as a `read` (#443).
  */
 export function piRules(env: Ctx["env"]): Record<string, string[]> {
   return {
+    ...(piSplitsChains(env) ? { bash: BASH } : {}),
     skill: ["starbridge"],
     read: [`${piSkillDir(env)}/*`],
   };
 }
 
-/** The bash patterns setup added before #488, which removePiEntries and allowPiRules take out. */
-const OLD_BASH = ["ask", "waiting", "working", "wait", "settle"].map((c) => `starbridge ${c} *`);
-
-/** Takes OLD_BASH out of `permission`, dropping a bash map they leave empty. */
-function dropOldBash(permission: Config): boolean {
+/** Takes the starbridge bash patterns out of `permission`, dropping a bash map they leave empty. */
+function dropBash(permission: Config): boolean {
   const rules = permission.bash;
   if (!isObject(rules)) return false;
   let changed = false;
-  for (const p of OLD_BASH)
+  for (const p of BASH)
     if (p in rules) {
       delete rules[p];
       changed = true;
@@ -133,16 +156,18 @@ function dropOldBash(permission: Config): boolean {
 }
 
 /**
- * Takes the pre-#488 bash patterns out of pi-permission-system's config, which the agent does
- * at start so that an update closes the hole without a new setup. Returns whether it did.
+ * Takes the starbridge bash patterns out of pi-permission-system's config where they would let
+ * a chain through (piSplitsChains), which the agent does at start: an older setup added them
+ * whatever the version (#488). Returns whether it did.
  */
-export function dropOldPiRules(env: Ctx["env"]): boolean {
+export function dropUnsafePiRules(env: Ctx["env"]): boolean {
+  if (piSplitsChains(env)) return false;
   const file = piPermissionConfig(env);
   if (!existsSync(file)) return false;
   const config = readConfig(file);
   if (!config || !isObject(config.permission)) return false;
   const permission = { ...config.permission };
-  if (!dropOldBash(permission)) return false;
+  if (!dropBash(permission)) return false;
   writeConfig(file, { ...config, permission });
   return true;
 }
@@ -182,11 +207,10 @@ function writeConfig(file: string, config: Config) {
 const plainLevel = (rules: unknown) => rules !== undefined && rules !== "allow" && !isObject(rules);
 
 /**
- * Whether pi-permission-system lets the agent reach the owner: the piRules, on the surfaces this
- * command may rewrite, and the Starbridge link in the chain, which lets the starbridge commands
- * through. `absent` and `unreadable` as for `piChain`, also `unreadable` when `permission` is
- * not a map; `missing` too while a pre-#488 bash pattern is left. `plain` names the surfaces
- * left to the owner (plainLevel).
+ * Whether pi-permission-system lets the agent reach the owner, on the surfaces this command may
+ * rewrite: `absent` and `unreadable` as for `piChain`, also `unreadable` when `permission` is
+ * not a map, and `missing` while it holds bash patterns that would let a chain through
+ * (piSplitsChains). `plain` names the surfaces left to the owner (plainLevel).
  */
 export function piAllow(env: Ctx["env"]): {
   state: "absent" | "allowed" | "missing" | "unreadable";
@@ -198,17 +222,18 @@ export function piAllow(env: Ctx["env"]): {
   const config = readConfig(file);
   const permission = config?.permission ?? {};
   if (!isObject(permission)) return { state: "unreadable", file, plain: [] };
-  let allowed = state === "chained" && !dropOldBash(structuredClone(permission));
+  const rules = piRules(env);
+  let allowed = "bash" in rules || !dropBash(structuredClone(permission));
   const plain: string[] = [];
-  for (const [surface, patterns] of Object.entries(piRules(env))) {
-    const rules = permission[surface] ?? {};
-    if (rules === "allow") continue;
-    if (!isObject(rules)) {
+  for (const [surface, patterns] of Object.entries(rules)) {
+    const own = permission[surface] ?? {};
+    if (own === "allow") continue;
+    if (!isObject(own)) {
       plain.push(surface);
       continue;
     }
     // Last, since the last match wins: a later pattern of the owner's could shadow them.
-    const tail = Object.entries(rules).slice(-patterns.length);
+    const tail = Object.entries(own).slice(-patterns.length);
     if (!patterns.every((p, i) => tail[i]?.[0] === p && tail[i]?.[1] === "allow")) allowed = false;
   }
   return { state: allowed ? "allowed" : "missing", file, plain };
@@ -216,29 +241,29 @@ export function piAllow(env: Ctx["env"]): {
 
 /**
  * Adds piRules to `permission`, each after the owner's own patterns for its surface since the
- * last match wins, and the Starbridge link to the chain, keeping the rest of the file. A surface
- * set to a plain `allow` needs none, and one set to another plain level stays as it is
- * (plainLevel). Takes out the pre-#488 bash patterns.
+ * last match wins, keeping the rest of the file. A surface set to a plain `allow` needs none,
+ * and one set to another plain level stays as it is (plainLevel). Takes out bash patterns that
+ * would let a chain through.
  */
 export function allowPiRules(env: Ctx["env"]) {
   const file = piPermissionConfig(env);
   const config = readConfig(file) ?? {};
   const permission = isObject(config.permission) ? { ...config.permission } : {};
-  for (const [surface, patterns] of Object.entries(piRules(env))) {
+  const wanted = piRules(env);
+  if (!("bash" in wanted)) dropBash(permission);
+  for (const [surface, patterns] of Object.entries(wanted)) {
     if (permission[surface] === "allow" || plainLevel(permission[surface])) continue;
     const rules = isObject(permission[surface]) ? { ...permission[surface] } : {};
     for (const p of patterns) delete rules[p];
     for (const p of patterns) rules[p] = "allow";
     permission[surface] = rules;
   }
-  dropOldBash(permission);
   writeConfig(file, { ...config, permission });
-  chainPiLink(file);
 }
 
 /**
  * Takes out what setup and `config permissions on` added to pi-permission-system's config: the
- * Starbridge link in `authorizerChain`, the piRules and the pre-#488 bash patterns, dropping a list, map or file they leave
+ * Starbridge link in `authorizerChain` and the piRules, dropping a list, map or file they leave
  * empty. Returns whether it changed the file.
  */
 export function removePiEntries(env: Ctx["env"]): boolean {
@@ -266,7 +291,8 @@ export function removePiEntries(env: Ctx["env"]): boolean {
         }
       if (Object.keys(rules).length === 0) delete permission[surface];
     }
-    if (dropOldBash(permission)) changed = true;
+    // The bash patterns too, where this version would not have added them.
+    if (dropBash(permission)) changed = true;
     if (Object.keys(permission).length === 0) delete config.permission;
   }
   // Left empty, it is the file setup created: an empty config and none mean the same.

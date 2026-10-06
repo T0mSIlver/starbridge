@@ -25,10 +25,10 @@ import { Switch } from "../hooks/switch.ts";
 import {
   type AskDetails,
   authorize,
+  fullCommand,
   hookInput,
   keyboardOnly,
   LINK,
-  ownAsk,
   permissionsService,
   type Verdict,
 } from "./permissions.ts";
@@ -129,7 +129,6 @@ export default function starbridge(pi: PiApi) {
       service.registerAuthorizer(LINK, (details: AskDetails) => {
         const ctx = current;
         if (!ctx) return Promise.resolve({ kind: "defer" });
-        if (ownAsk(details)) return Promise.resolve({ kind: "allow" });
         if (keyboardOnly(details)) {
           if (!ctx.hasUI) return Promise.resolve({ kind: "defer" });
           // The defer opens pi-permission-system's dialog, so it waits its turn among the
@@ -155,7 +154,7 @@ export default function starbridge(pi: PiApi) {
                 keyboard: (signal: AbortSignal) =>
                   new Promise<void>((resolve) => {
                     const what =
-                      details.command ??
+                      fullCommand(details) ??
                       details.path ??
                       details.target ??
                       details.toolName ??
