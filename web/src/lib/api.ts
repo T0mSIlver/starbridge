@@ -101,6 +101,7 @@ function unanswered() {
   const now = Date.now();
   // Calls in flight together fail together: count them once.
   if (now < backoff.until) return;
+  backoff.limited = false;
   backoff.failures++;
   const ceiling = Math.min(30_000, 250 * 2 ** (backoff.failures - 1));
   backoff.until = now + ceiling * (0.5 + Math.random() / 2);
@@ -159,7 +160,11 @@ async function call<T>(
         throw backoff.limited
           ? new ApiError(429, "rate-limited", "too many requests; retry later")
           : new Unreachable(offline());
-      if (wait === 0) break;
+      if (wait === 0) {
+        // A 429's hold is over; a later outage's deadline must not read as a rate limit.
+        backoff.limited = false;
+        break;
+      }
       await pause(wait, opts.signal);
     }
     try {

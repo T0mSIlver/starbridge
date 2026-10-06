@@ -120,6 +120,15 @@ test("a 429 waiting longer than a call retries reaches the caller, and the backo
   expect(calls).toEqual(["GET"]);
 });
 
+test("once a 429's hold is over, an outage reads as one again (#645)", async () => {
+  serve({ retryAfter: "60" });
+  await expect(api.challenge()).rejects.toMatchObject({ status: 429 });
+  backoff.until = Date.now();
+  backoff.retryForMs = 500;
+  serve(...Array.from({ length: 20 }, () => 502));
+  await expect(api.challenge()).rejects.toBeInstanceOf(Unreachable);
+});
+
 test("a 429 without Retry-After is a cap, and reaches the caller at once", async () => {
   const calls = serve(429);
   await expect(api.challenge()).rejects.toMatchObject({ status: 429 });
