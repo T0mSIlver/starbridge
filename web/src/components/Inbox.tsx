@@ -72,6 +72,28 @@ export function Inbox() {
   // History's rows fade in when the owner opens it, not when the page loads with it open or the
   // list comes back.
   const [historyToggled, setHistoryToggled] = useState(false);
+  // History glides between the list's bottom and its place under the items (#662): where it was
+  // before the toggle, played back to where it lands (FLIP). Reduced motion makes it a jump.
+  const historyRef = useRef<HTMLDivElement>(null);
+  const historyFrom = useRef<number>(undefined);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: runs after each toggle's render.
+  useLayoutEffect(() => {
+    const el = historyRef.current;
+    const from = historyFrom.current;
+    historyFrom.current = undefined;
+    if (!el || from === undefined) return;
+    const by = from - el.getBoundingClientRect().top;
+    if (Math.abs(by) < 1) return;
+    el.style.transition = "none";
+    el.style.transform = `translateY(${by}px)`;
+    el.getBoundingClientRect();
+    el.style.transition = "transform var(--t-state) var(--ease)";
+    el.style.transform = "";
+    const done = () => {
+      el.style.transition = "";
+    };
+    el.addEventListener("transitionend", done, { once: true });
+  }, [historyOpen]);
   const find = useFind();
   // Find searches History too, so its prompt log loads once a query starts, not per keystroke.
   const finding = find.trim() !== "";
@@ -264,6 +286,7 @@ export function Inbox() {
           count={closedToday(past, now)}
           comfy={comfy}
           onToggle={() => {
+            historyFrom.current = historyRef.current?.getBoundingClientRect().top;
             setHistoryOpen(!historyOpen);
             setHistoryToggled(true);
           }}
@@ -368,8 +391,10 @@ export function Inbox() {
         ) : past.length === 0 ? (
           <p className={`t-small ${s.empty}`}>Nothing matches</p>
         ) : null)}
-      <div className={s.gap} />
-      {grouped ? seg(historyPart) : historyPart}
+      <div ref={historyRef} className={showPast ? undefined : s.down}>
+        <div className={s.gap} />
+        {grouped ? seg(historyPart) : historyPart}
+      </div>
     </section>
   );
 

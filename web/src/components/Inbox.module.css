@@ -17,10 +17,22 @@
 
 /* Each pane keeps its scrollbar's gutter, so opening History never shifts its rows. */
 .list {
+  display: flex;
+  flex-direction: column;
   min-width: 0;
   overflow-y: auto;
   scrollbar-gutter: stable;
   border-right: 1px solid var(--line);
+}
+
+.list > * {
+  flex-shrink: 0;
+}
+
+/* Closed, History waits at the bottom of the list, out of the way; opened, it rises to just
+   under the open items (#662). */
+.down {
+  margin-top: auto;
 }
 
 .detail {
@@ -167,8 +179,16 @@
   width: var(--s4);
 }
 
-/* Narrow: the page scrolls, above the bottom bar on phones. */
+/* Narrow: the page scrolls, above the bottom bar on phones. The list fills the screen, so a
+   closed History sits at its bottom. */
+.single {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100dvh - var(--size-bar-web) - env(safe-area-inset-bottom));
+}
+
 .single .list {
+  flex: 1;
   overflow: visible;
   border-right: 0;
 }
