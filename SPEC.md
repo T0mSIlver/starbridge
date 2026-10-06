@@ -360,10 +360,10 @@ Codex prompts are not supported.
   `PermissionDenied`, and all of a session's prompts on `Stop` and `SessionEnd`. `PostToolUse` runs
   a shell check that starts the CLI only while the CLI marks a prompt open
   (`<config>/permissions-open`, kept in step with the state): starting it on every tool call cost
-  about 50 ms and 50 MB, prompts on or off (#517). "This session" and
-  "always" are offered only for `addRules` and `addDirectories` suggestions whose rules fit in
-  full; a `setMode` suggestion changes more than the call, so it stays at the keyboard. A deny with
-  no message tells the agent the owner denied it.
+  about 50 ms and 50 MB, prompts on or off (#517). "This session" and "always" are offered only
+  for `addRules` and `addDirectories` suggestions whose rules fit in full; a `setMode` suggestion
+  changes more than the call, so it stays at the keyboard. A deny with no message tells the agent
+  the owner denied it.
 - **Pi** (#232, #288), through pi-permission-system's authorizer chain: the link `starbridge`,
   once the owner names it in `authorizerChain`. A link cannot allow for the session, so devices
   offer Allow and Deny. Asks on the `path` and `external_directory` families stay at the keyboard,
