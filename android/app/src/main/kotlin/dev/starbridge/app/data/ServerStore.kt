@@ -1346,6 +1346,12 @@ class ServerStore(
         replacing.value = shown.copy(saving = true)
         try {
             syncDirectory()
+            // A recovery or a revocation removed this phone: the sync wiped it and said so.
+            if (saved.me == null) {
+                dropReplacement()
+                replacing.value = Replacing.Idle
+                return@run
+            }
             val nextPk = toB64(next.public)
             // Another device replaced the key since it was typed: the confirmation could never verify.
             if (directory!!.recoveryPk != nextPk && directory!!.recoveryPk != toB64(current.public)) {

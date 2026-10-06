@@ -109,6 +109,8 @@ test("a replacement made on the phone shows here once", async () => {
 });
 
 test("once the key is replaced, the old one recovers nothing; the new one does, and the phone goes", async () => {
+  // A new key made on this browser, still unsaved when the recovery below removes it.
+  const unsaved = await device.prepareRecoveryKey(ctx, recoveryKey(current));
   // The tests above replaced the key twice: the first one recovers nothing.
   await api.ownerSignIn("owner-secret");
   await expect(
@@ -120,4 +122,6 @@ test("once the key is replaced, the old one recovers nothing; the new one does, 
   expect(dir.members.get(live.owner.device.id)?.active).toBe(false);
   const active = [...dir.members.values()].filter((m) => m.active && m.member.role === "device");
   expect(active.map((m) => m.member.name)).toEqual(["Recovered"]);
+  // Saving the key made before says why it cannot be saved (Fable review of #393).
+  await expect(unsaved.replace()).rejects.toThrow("This browser was removed from the account.");
 });

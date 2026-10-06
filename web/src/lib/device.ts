@@ -918,7 +918,15 @@ export async function prepareRecoveryKey(ctx: Ctx, currentKey: string): Promise<
     }
   };
   const save = async () => {
-    let latest = await refresh(ctx);
+    let latest: Ctx;
+    try {
+      latest = await refresh(ctx);
+    } catch (e) {
+      if (e instanceof ApiError && e.code === "revoked") throw removed();
+      throw e;
+    }
+    // A recovery or a revocation dropped this browser, and its proposal with it.
+    if (!latest.dir.members.get(ctx.device.id)?.active) throw removed();
     // Another device replaced the key since it was typed: the confirmation could never verify.
     if (latest.dir.recoveryPk !== nextPk && latest.dir.recoveryPk !== toB64(current.publicKey))
       throw new Error("Another device replaced the recovery key meanwhile. Start again.");
@@ -939,6 +947,7 @@ export async function prepareRecoveryKey(ctx: Ctx, currentKey: string): Promise<
     if (saving) dropped = true;
     else wipe();
   };
+  const removed = () => new Error("This browser was removed from the account.");
   return { recoveryKey: shown, replace, discard };
 }
 
