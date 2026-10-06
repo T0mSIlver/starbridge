@@ -191,6 +191,47 @@ async function noWordsAsked(page: Page) {
   if (found) throw new Error(`the page says "${found[0]}"`);
 }
 
+/**
+ * #630: a session name cut into a head and a tail keeps the space at the cut. Each half is a
+ * flex item, whose line would drop it ("Starbridgeorchestrator"). Measures the gap between the
+ * glyphs on either side of the cut; skips a head shown with an ellipsis.
+ */
+async function keepsSessionSpace(page: Page, at: string) {
+  const found = await page.evaluate(() => {
+    const glyph = (node: Node, i: number) => {
+      const r = document.createRange();
+      r.setStart(node, i);
+      r.setEnd(node, i + 1);
+      return r.getBoundingClientRect();
+    };
+    const rows: { name: string; gap: number | null }[] = [];
+    for (const el of document.querySelectorAll("[title]")) {
+      const [head, tail] = [...el.children] as HTMLElement[];
+      const name = el.getAttribute("title") ?? "";
+      if (el.children.length !== 2 || !head || !tail) continue;
+      if (`${head.textContent}${tail.textContent}` !== name) continue;
+      const h = head.firstChild;
+      const t = tail.firstChild;
+      const cut = head.textContent?.length ?? 0;
+      if (!h || !t || !/\s/.test(`${name[cut - 1]}${name[cut]}`)) continue;
+      if (head.scrollWidth > head.clientWidth) {
+        rows.push({ name, gap: null });
+        continue;
+      }
+      const last = (head.textContent ?? "").trimEnd().length - 1;
+      const first = (tail.textContent ?? "").length - (tail.textContent ?? "").trimStart().length;
+      if (last < 0 || first >= (tail.textContent ?? "").length) continue;
+      rows.push({ name, gap: glyph(t, first).left - glyph(h, last).right });
+    }
+    return rows;
+  });
+  const measured = found.filter((r) => r.gap !== null);
+  if (measured.length === 0) throw new Error(`no session name cut at a space to measure at ${at}`);
+  for (const r of measured)
+    if ((r.gap as number) < 2)
+      throw new Error(`"${r.name}" loses the space at its cut at ${at}: ${r.gap} px between words`);
+}
+
 /** What fails the run; contrast is only listed. */
 const FAILS: Problem["kind"][] = ["page-width", "clipped", "spills", "offscreen", "overlap", "tap"];
 
@@ -345,6 +386,18 @@ async function main() {
     "/sample",
   ])
     await visitor.goto(ORIGIN + path, { waitUntil: "networkidle" });
+  for (const [size, viewport] of [
+    ["desktop", DESKTOP],
+    ["phone", { width: 390, height: 844 }],
+  ] as const) {
+    await visitor.setViewportSize(viewport);
+    await visitor.goto(`${ORIGIN}/sample`, { waitUntil: "networkidle" });
+    // The question whose session is "Ship checkout v2", cut as "Ship" and " checkout v2".
+    await visitor
+      .getByRole("button", { name: /Merge the API change before the checkout PR/ })
+      .click();
+    await keepsSessionSpace(visitor, `/sample, ${size}`);
+  }
   await visitor.close();
 
   step("sign in with GitHub (stub) and set up the first device");
