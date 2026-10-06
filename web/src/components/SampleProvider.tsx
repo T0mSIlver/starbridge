@@ -15,9 +15,12 @@ const noop = async () => {};
  */
 export function SampleProvider({
   landing = false,
+  quiet = false,
   children,
 }: {
   landing?: boolean;
+  /** Nothing open, History only: the quiet inbox (#662). */
+  quiet?: boolean;
   children: React.ReactNode;
 }) {
   const [quotaSettings, setQuotaSettings] = useState(DEFAULT_SETTINGS);
@@ -31,6 +34,11 @@ export function SampleProvider({
         prompts: [],
         runs: { ...s.runs, items: s.runs.items.filter((i) => i.run.id !== "r3") },
       }),
+      ...(quiet && {
+        inbox: { ...s.inbox, items: s.inbox.items.filter((i) => i.answeredAt) },
+        prompts: [],
+        runs: { ...s.runs, items: [] },
+      }),
       sampleDevices: devices,
       reload: noop,
       answer: noop,
@@ -43,6 +51,6 @@ export function SampleProvider({
       loadPromptLog: noop,
       deviceName: (id) => id,
     };
-  }, [landing, quotaSettings]);
+  }, [landing, quiet, quotaSettings]);
   return <StoreContext.Provider value={store}>{children}</StoreContext.Provider>;
 }

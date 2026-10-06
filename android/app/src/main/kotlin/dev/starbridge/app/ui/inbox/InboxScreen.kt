@@ -119,6 +119,9 @@ import kotlinx.coroutines.delay
 import java.time.Instant
 import java.time.ZoneId
 import javax.inject.Inject
+import androidx.compose.animation.core.tween
+import androidx.compose.ui.zIndex
+import androidx.compose.ui.draw.clip
 
 @HiltViewModel
 class InboxViewModel @Inject constructor(private val store: Store, private val prefs: Prefs) : ViewModel() {
@@ -245,6 +248,8 @@ fun InboxScreen(
         header = { Lockup(24.dp, 22.sp) },
         gap = groupGap,
         margin = Spacing.s4,
+        // Closed, History waits at the bottom, out of the way; opened, it rises under the items (#662).
+        lastAtBottom = !view.historyOpen && history.rows.isNotEmpty(),
     ) {
         recoveryBanner(recovery, dismissRecovery)
         if (notificationsOff && view.remindOff) item(key = "notifications-off") { NotificationsOff { onView(view.copy(remindOff = false)) } }
@@ -774,9 +779,11 @@ private fun LazyListScope.history(history: History, open: Boolean, onOpen: (Bool
     if (history.rows.isEmpty()) return
     item(key = "history") {
         val scheme = MaterialTheme.colorScheme
+        val shape = if (joined) segment(0, count) else cardShape
         Surface(
-            Modifier.fillMaxWidth().padding(top = Spacing.s3).clickable(onClickLabel = if (open) "Hide History" else "Show History") { onOpen(!open) },
-            shape = if (joined) segment(0, count) else cardShape,
+            // Moving between the bottom and its place under the items, it glides as the cards do.
+            Modifier.animateItem(placementSpec = MaterialTheme.motionScheme.defaultSpatialSpec()).zIndex(1f).fillMaxWidth().padding(top = Spacing.s3).clip(shape).clickable(onClickLabel = if (open) "Hide History" else "Show History") { onOpen(!open) },
+            shape = shape,
             color = scheme.surfaceContainer,
         ) {
             Row(Modifier.padding(horizontal = Spacing.s5, vertical = Spacing.s4), verticalAlignment = Alignment.CenterVertically) {
@@ -794,7 +801,9 @@ private fun LazyListScope.history(history: History, open: Boolean, onOpen: (Bool
     itemsIndexed(history.rows, key = { _, (_, it) -> if (it is Decision) "h/d/${it.id}" else "h/p/${(it as Prompt).id}" }) { i, (at, it) ->
         // Apart, one-line cards round less, as Material scales a corner with its container.
         val shape = if (joined) segment(i + 1, count) else RoundedCornerShape(Spacing.s5)
-        Box(Modifier.padding(top = if (joined) 0.dp else cardGap - groupGap)) {
+        // The rows fade in once the head has nearly risen to them, not under it on its way (#662).
+        val rows = Modifier.animateItem(fadeInSpec = tween(250, delayMillis = 200), placementSpec = MaterialTheme.motionScheme.defaultSpatialSpec())
+        Box(rows.padding(top = if (joined) 0.dp else cardGap - groupGap)) {
             when (it) {
                 is Decision -> HistoryRow(it.source, it.question, false, closedHow(it), shape) { actions.open(it.id) }
                 is Prompt -> HistoryRow(it.source, it.summary, true, closedHow(it), shape) { promptActions?.open?.invoke(it.id) }
