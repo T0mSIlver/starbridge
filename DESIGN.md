@@ -330,6 +330,9 @@ size:
   aside: 320 # the web inbox's quota windows
   pane-head: 48 # the head of each web inbox pane
   content: 720
+  settings-label: 220 # the column of section names beside Settings' boxes, from 900 px
+  quota-provider: 200 # the provider's column on the Quotas table
+  quota-table-from: 840 # the Quotas page's own width from which it is one table
   # Quota meters. The pace tick and the overrun's red cap stand `s1` beyond
   # the track on each side; the overrun is hatched at -45°, `tick`-wide
   # stripes every `hatch`.
@@ -373,8 +376,7 @@ accent: the amber of the icon's climber, which means "needs you" and nothing
 else. Everything else is black, white and grey, except the quota bars, which
 fill in each provider's lab colour.
 
-Design v2 (2026-10-05, SPEC.md) gives each surface a job, and the mockups in
-https://claude.ai/artifact/4Esy3goyohvLThcPVCKaEf are the source for every
+Design v2 (2026-10-05, SPEC.md) gives each surface a job, and the owner's mockups are the source for every
 screen: the landing page shows the product (direction B), the web app is a
 quiet, dense control surface for any browser (A), and Android is full
 Material 3 Expressive (C).
@@ -462,16 +464,32 @@ a decision's context, a permission prompt's command and a session's name.
   terminal icon, the exact command in mono, Allow and Deny,
   and how long it has waited. A question shows its text as the title, then
   its options, its default (the first) filled.
-- An item that blocks an agent is filled; one it works around is hollow. A
-  prompt, and a question whose agent waits on it: `accent-soft` behind the
-  whole item, its kind icon in `accent` on that ground with no tile of its
-  own, its title at weight 500, and in the
-  meta row's time slot a clock ticking m:ss in `accent`, weight 500. A
-  question its agent works around: no ground, an outlined card on Android
-  (`line-strong`), its icon in `fg2` (on the web, in an outlined tile), its
-  title at weight 400, its age in the
-  time slot. No line of text says which; screen readers get it in the item's
-  label. Fill, weight and the clock keep it readable without colour.
+- Allow covers what the owner saw. A prompt's detail shows the whole tool
+  input, never the one-line summary: a command in full, else the input as
+  indented JSON. Allow, by button, key or a wider grant, waits until the
+  input's end has been on screen. A row carries Allow only when its input fits
+  on one line of 200 characters, shown whole; otherwise only Deny, and the
+  detail allows. A wider grant (this session, this project) shows its exact
+  rule in mono beside its label, never only in a tooltip.
+- Every inbox item is the same container (#248): on Android a filled card
+  (`surface`) with no border and no shadow; on the web a box as its settings
+  rows are (`surface`, a `line` border, `radius.sm`). An item that blocks an
+  agent (a prompt, and a question whose agent waits on it) differs by its
+  fill alone: the amber fill
+  (`accent-soft` over `surface`), its kind icon in `accent`, its title at
+  weight 500, and in the meta row's time slot a clock ticking m:ss in
+  `accent`, weight 500. A question its agent works around keeps the plain
+  card, its icon in `fg2`, its title at weight 400 and its age in the time
+  slot. Kind icons sit on the card, with no tile. No line of text says which;
+  screen readers get it in the item's label. Fill, weight and the clock keep
+  it readable without colour.
+- In One feed each item stands apart, `s2` from the next. Under a grouping's
+  header (Group by machine, Group by waiting) the group's items are joined,
+  and History with them: on Android a segmented group (2 dp apart, rounded
+  outside as a card and `radius.xs` inside, Material 3 Expressive); on the
+  web one box with hairline dividers.
+- On Android, secondary buttons and the command box on a card are tonal:
+  `surface2`, or `surface` on an amber card. Nothing on a card is outlined.
 - Every item opens with one meta row of facts Starbridge knows: the machine's
   kind icon and name, the repo, and the time right-aligned. The agent's own
   words come below it. Details end with the session name, truncated in the
@@ -492,9 +510,11 @@ a decision's context, a permission prompt's command and a session's name.
 - Labels are sentence case, never uppercase.
 - Shapes follow the Material 3 scale: cards `radius.xl`, buttons `radius.pill`
   (round ends in a connected group, inner corners `radius.sm`), inset areas
-  such as code `radius.lg`, inputs `radius.xs` on top. Cards on the dark
-  ground are filled (`surface`), with no border and no shadow, except a
-  question its agent works around, which is outlined.
+  such as code `radius.lg`, inputs `radius.xs` on top. Android's cards are
+  filled (`surface`), with no border and no shadow; its inbox cards are
+  `radius.xl` with 20 dp inside, 16 dp from the screen's edges; one-line
+  cards (History's rows) round at 20 dp. The web keeps its own dense shapes
+  and takes none of Material's: its inbox items are `radius.sm` boxes.
 - Quota tracks are `size.track` thick on Android and `size.track-dense` on
   the web.
 
@@ -502,7 +522,7 @@ a decision's context, a permission prompt's command and a session's name.
 
 Decided 2026-10-05: the web moves only where motion shows what changed,
 and never makes an action wait. It follows the quiet dashboards in the
-design research (https://claude.ai/artifact/43JkSwnLEVmakivuuoZqXw: Linear,
+design research (Linear,
 Vercel, Tailscale), where views and selections switch at once and a read row
 changes in place; durations and the easing come from Material 3, so the web
 and Android move alike.
@@ -529,6 +549,7 @@ and Android move alike.
 | A status line ("Pixel joined.", "Refused …") | fades in at `state`, stays until the next action |
 | Pressing a button | its fill steps one tone darker while pressed; no scale, no ripple |
 | A switch | the knob slides at `fast` |
+| Dragging a row by its handle (the Quotas table's providers, Settings' providers) | the row follows the pointer, mouse, pen or touch, with no transition; the rows it passes slide aside at `state`; on release it settles into its place at `state`, landing with the rows it passed; Escape puts it back. The arrow keys, Home and End on a focused handle move it at once |
 | The theme changing | at once: transitions are off for that frame, so nothing fades at its own pace |
 
 Never animated: page and tab changes, moving the selection (J, K or a click),
@@ -566,7 +587,18 @@ error) share one rhythm: the page title in `heading`, sections `s10` apart
 `size.tap` tall). An empty section says what is missing in one line of
 `fg2`, with its action if it has one. First-run, not found and error pages
 use the first-run frame: the brand top left, one 400 px column, legal links
-at the foot.
+at the foot. From 900 px, Settings sets each section's name in a column
+(`size.settings-label`) beside its box, and the rows keep `size.content`.
+
+**Quotas page** (web). Narrower, a card per provider, as on Android.
+Once the page itself is `size.quota-table-from` wide (a window about 1210 px wide,
+with the rail), one table up to `size.page` wide, as dense as the inbox: the
+provider (and its machine) in a column of `size.quota-provider`, then one
+line per window with its name, meter, figure, state and reset in columns. A
+handle before the provider's name reorders providers there; providers that
+lead while "Running out first" is on keep their place, and a provider with a leading
+row is a barrier the others don't cross. Narrow screens reorder
+in Settings.
 
 ## Provider colours
 
@@ -616,7 +648,7 @@ edge (y 90 of the grid, where the planet's edge ends), and its "g" descends
 below. The gap is 0.4 × the mark's size (`s2` at 20 px). The web aligns them
 with `align-items: baseline`, since a mark's synthesized baseline is its
 bottom edge; Android with `alignBy` (the mark at its height, the name at
-`LastBaseline`). The mark alone (favicon, app and notification icons, the
+`LastBaseline`), in `ui/Lockup.kt`. The mark alone (favicon, app and notification icons, the
 phone top bar) is unchanged.
 
 ## Roles

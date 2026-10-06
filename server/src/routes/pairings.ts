@@ -131,6 +131,7 @@ pairingRoutes.get("/pairings/:rendezvous", requireCaller("paired-device"), async
       fail(429, "too-many-waits", "this rendezvous id already has its long-polls open");
     holdOpen(c);
     await c.var.pairings.wait(`request:${rendezvous}`, seconds, c.req.raw.signal);
+    recheck(c);
     p = find();
     if (!p) return c.body(null, 204);
   }

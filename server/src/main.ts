@@ -2,6 +2,7 @@ import { createApp } from "./app";
 import { configFromEnv } from "./config";
 import { openDb } from "./db";
 import { formatReport, report } from "./usage";
+import { Waiters } from "./waiters";
 
 const config = configFromEnv();
 
@@ -14,7 +15,7 @@ if (process.argv[2] === "usage") {
   console.log(formatReport(report(openDb(config.dbPath), days)));
   process.exit(0);
 }
-const { app } = await createApp(config);
+const { app, deps } = await createApp(config);
 
 const server = Bun.serve({
   port: config.port,
@@ -33,3 +34,11 @@ const modes = [
 console.log(
   `starbridge server on port ${server.port} (${modes.join(", ") || "no sign-in configured"})`,
 );
+
+// A deploy stops this container with SIGTERM (deploy/host/apply.sh). Long-polls answer at once,
+// as if their wait passed, and the client's next one waits in Caddy until the new server is up.
+process.on("SIGTERM", async () => {
+  for (const w of Object.values(deps)) if (w instanceof Waiters) w.close();
+  await server.stop();
+  process.exit(0);
+});

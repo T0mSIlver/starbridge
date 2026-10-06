@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { DEFAULT_SETTINGS } from "@/lib/quotaSettings";
 import { sample } from "@/lib/sample";
 import { type Store, StoreContext } from "./AppProvider";
@@ -8,7 +8,8 @@ import { type Store, StoreContext } from "./AppProvider";
 const noop = async () => {};
 
 /**
- * The app's store filled with the mockups' data, for product shots: answers go nowhere.
+ * The app's store filled with the mockups' data, for product shots: answers go nowhere, and quota
+ * settings last for the page.
  * `landing` leaves out the permission prompt, which would top the list, and the lost run: the
  * landing page leads with questions.
  */
@@ -19,6 +20,7 @@ export function SampleProvider({
   landing?: boolean;
   children: React.ReactNode;
 }) {
+  const [quotaSettings, setQuotaSettings] = useState(DEFAULT_SETTINGS);
   const store = useMemo<Store>(() => {
     const { devices, ...s } = sample();
     return {
@@ -33,12 +35,12 @@ export function SampleProvider({
       answer: noop,
       update: () => {},
       refreshQuotas: noop,
-      quotaSettings: DEFAULT_SETTINGS,
-      setQuotaSettings: () => {},
+      quotaSettings,
+      setQuotaSettings,
       answerPrompt: noop,
       loadPromptLog: noop,
       deviceName: (id) => id,
     };
-  }, [landing]);
+  }, [landing, quotaSettings]);
   return <StoreContext.Provider value={store}>{children}</StoreContext.Provider>;
 }

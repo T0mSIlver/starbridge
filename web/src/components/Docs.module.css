@@ -194,12 +194,33 @@
   font: 500 13px / 18px var(--sans);
 }
 
+/* Both labels share one grid cell, the inactive one hidden, so the button keeps the width of the
+   wider and the code beside it never re-wraps when it says "Copied". */
+.text [data-copy] {
+  display: inline-grid;
+}
+
+.text [data-copy]::before,
+.text [data-copy]::after {
+  grid-area: 1 / 1;
+  text-align: center;
+}
+
 .text [data-copy]::before {
   content: "Copy";
 }
 
-.text [data-copy][data-copied]::before {
+.text [data-copy]::after {
   content: "Copied";
+  visibility: hidden;
+}
+
+.text [data-copy][data-copied]::before {
+  visibility: hidden;
+}
+
+.text [data-copy][data-copied]::after {
+  visibility: visible;
 }
 
 .text [data-copy]:hover {
