@@ -517,6 +517,8 @@ test("open decisions reach a device that joins later, which can answer them", as
   expect((await call("/items", { method: "POST", body: JSON.stringify(sealed) })).status).toBe(201);
   expect(await run(["wait", id, "--timeout", "5s"], ctx)).toBe(0);
   expect(ctx.lines.at(-1)).toBe(`Answer to ${id} (Merge #12 now?): Merge`);
+  // Answered or withdrawn, a decision's plaintext leaves the state.
+  expect(Object.values(ctx.store.state().asked).map((a) => a.body)).toEqual([undefined, undefined]);
 });
 
 test("wait with no id returns each answer once, then times out with exit 2", async () => {

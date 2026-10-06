@@ -363,7 +363,10 @@ export async function settle(ctx: Ctx, opts: { id?: string; outcome?: string }):
   // Closed here first: from now on no answer to it is accepted or delivered, even if the post fails.
   ctx.store.updateState((st) => {
     const a = st.asked[id];
-    if (a) a.settled = true;
+    if (a) {
+      a.settled = true;
+      forget(a);
+    }
   });
   const to = devices(await refreshDirectory(ctx, s));
   const body = {
@@ -591,6 +594,8 @@ export async function poll(
             const a = checkAnswer(raw, s, dir, st.asked);
             const device = signers.get(raw);
             st.answers[a.decisionId] ??= { answer: a, seen: false, ...(device ? { device } : {}) };
+            const asked = st.asked[a.decisionId];
+            if (asked) forget(asked);
           } catch (e) {
             ctx.err(`starbridge: ignored an answer: ${(e as Error).message}`);
           }
@@ -605,6 +610,12 @@ export async function poll(
     ctx.err(`starbridge: could not re-send open questions: ${(e as Error).message}`),
   );
   return { cursor: page.cursor ?? opts.cursor, directory, ...quotaAsked };
+}
+
+/** Drops a closed decision's body, so its plaintext does not stay on disk. */
+function forget(a: State["asked"][string]) {
+  delete a.body;
+  delete a.images;
 }
 
 /** The server drops an unanswered decision after 30 days; one re-sealed later would come back. */
@@ -637,14 +648,16 @@ async function reseal(ctx: Ctx, s: Session, known: Directory): Promise<void> {
   const ids = to.map((d) => d.id);
   const signer = { id: s.machine.id, signKey: s.keys.sign.privateKey };
   // Recorded once posted, or once closed meanwhile; a failed post is tried again next poll.
-  const post = async (item: SealedItem, record: (st: State) => void) => {
+  const post = async (item: SealedItem, record: (st: State, closed: boolean) => void) => {
+    let closed = false;
     try {
       await s.api.postItem(item);
     } catch (e) {
-      if (!(e instanceof ApiError && e.code === "already-answered"))
+      closed = e instanceof ApiError && e.code === "already-answered";
+      if (!closed)
         return ctx.err(`starbridge: could not re-send ${item.id}: ${(e as Error).message}`);
     }
-    ctx.store.updateState(record);
+    ctx.store.updateState((st) => record(st, closed));
   };
   for (const { id, a, body } of decisions) {
     if (!lacking(a.to ?? [], dir)) continue;
@@ -656,9 +669,10 @@ async function reseal(ctx: Ctx, s: Session, known: Directory): Promise<void> {
       }
     });
     const { item } = sealWithPictures({ ...body, to: ids }, pictures, signer, to);
-    await post(item, (st) => {
+    await post(item, (st, closed) => {
       const x = st.asked[id];
       if (x) x.to = ids;
+      if (x && closed) forget(x);
     });
     if (a.waiting?.state !== "waiting") continue;
     const w = {

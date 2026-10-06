@@ -1303,8 +1303,8 @@ so the mod is the first path.
   arrival time, so a prompt's 10 minutes do not restart, and pushes only the devices that were
   not recipients yet. Revoked devices are not active, so they get nothing, and nothing is
   re-sealed while the machine finds the directory behind (#280). A decision keeps its signed body
-  in the state for this; its images are read again from their files, and one moved since is left
-  out. Decisions older than 29 days are not re-sealed, since the server drops them at 30.
+  in the state (0600, like the rest) for this, only until it is answered or withdrawn; its images
+  are read again from their files, and one moved since is left out. Decisions older than 29 days are not re-sealed, since the server drops them at 30.
 
 ## Encryption, with existing libraries
 
