@@ -310,6 +310,16 @@ test("ask refuses a decision that would not stand alone", async () => {
   expect(await server.opened("decision")).toEqual([]);
 });
 
+test("ask refuses a default, as a flag or in --json: agents never answer for the owner", async () => {
+  const ctx = await paired(server);
+  expect(await run([...ASK, "--default", "A"], ctx)).toBe(1);
+  const file = join(mkdtempSync(join(tmpdir(), "starbridge-ask-")), "ask.json");
+  writeFileSync(file, JSON.stringify({ question: "Q?", options: ["A", "B"], default: "A" }));
+  expect(await run(["ask", "--json", file], ctx)).toBe(1);
+  expect(ctx.errors.at(-1)).toContain("no default");
+  expect(await server.opened("decision")).toEqual([]);
+});
+
 test("waiting and working flip a decision's state, and each flip pushes", async () => {
   const ctx = await paired(server);
   await run(ASK, ctx);

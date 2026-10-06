@@ -217,7 +217,7 @@ fun InboxScreen(
         }
     }
     val shownRuns = Run.shown(runs, now)
-    val open = openQuestions(decisions, now)
+    val open = openQuestions(decisions)
     val runItems = shownRuns.map(Item::RunItem)
     val needs: List<Item> = shown.map(Item::PromptItem) + open.map(Item::Question)
     val feed: List<Item> = runItems + needs

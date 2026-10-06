@@ -25,7 +25,7 @@ class InboxOrderTest {
     @Test
     fun questionsWaitingFirstThenEachOldestFirst() {
         val decisions = listOf(question("infra3", 20), question("infra1", 0), question("waits", 30, waiting = true), question("infra2", 10))
-        assertEquals(listOf("waits", "infra1", "infra2", "infra3"), openQuestions(decisions, now).map { it.id })
+        assertEquals(listOf("waits", "infra1", "infra2", "infra3"), openQuestions(decisions).map { it.id })
     }
 
     @Test

@@ -104,7 +104,7 @@ fun <T> byMachine(runs: List<T>, needs: List<T>, machine: (T) -> String): List<L
     (needs.map(machine) + runs.map(machine)).distinct().map { m -> runs.filter { machine(it) == m } + needs.filter { machine(it) == m } }
 
 /** Open questions as the feed lists them (SPEC, Design v2 inbox): those whose agent waits first, each oldest first. */
-fun openQuestions(decisions: List<Decision>, now: Instant): List<Decision> = decisions
+fun openQuestions(decisions: List<Decision>): List<Decision> = decisions
     .filter { it.isOpen }
     .sortedWith(compareByDescending<Decision> { it.waiting }.thenBy { it.createdAt })
 

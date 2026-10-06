@@ -173,7 +173,6 @@ internal fun suiteType(): NavigationSuiteType {
 fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> Unit, opening: Flow<NavKey>) {
     val backStack = rememberNavBackStack(InboxKey)
     val now = now()
-    // An answer-in decision stops waiting at its default time, so count against the ticking clock.
     val openDecisions = decisions.count { it.isOpen }
     // Shared by a decision's card and its detail, which are separate entries.
     val drafts = rememberDrafts()

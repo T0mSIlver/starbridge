@@ -209,7 +209,11 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
             timeout: { type: "string" },
           },
         });
-        const fromJson: AskInput = v.json ? JSON.parse(readText(v.json)) : {};
+        const fromJson: AskInput & { default?: unknown } = v.json
+          ? JSON.parse(readText(v.json))
+          : {};
+        if (fromJson.default !== undefined)
+          throw new UsageError("a decision has no default: agents never answer for the owner");
         const input: AskInput = {
           ...fromJson,
           ...(v.question !== undefined ? { question: v.question } : {}),

@@ -206,7 +206,9 @@ class ServerStore(
             saved.joining != null -> Phase.Joining(saved.joining!!, saved.joiningScanned)
             saved.digitJoin != null -> Phase.JoiningByDigits(saved.digitJoin!!.digits, saved.digitJoin!!.matched)
             // Before the pin: the first entry waits on the server until the key is confirmed (#370).
-            secrets.recoverySeed != null -> Phase.RecoveryKey(RecoveryKeys.encode(fromB64(secrets.recoverySeed!!), sodium))
+            // A seed of another length came from before 1.0.0, which showed words: nothing to show now.
+            secrets.recoverySeed?.let(::fromB64)?.takeIf { it.size == 16 } != null ->
+                Phase.RecoveryKey(RecoveryKeys.encode(fromB64(secrets.recoverySeed!!), sodium))
             saved.me == null || saved.pin == null -> Phase.NoDevice(saved.accountExists)
             else -> Phase.Ready
         }

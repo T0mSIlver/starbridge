@@ -16,7 +16,7 @@ import kotlinx.serialization.json.JsonElement
 import java.io.File
 
 /** Raised when [SavedDecision]'s body gains a field, so open decisions saved without it are read again. */
-const val DECISION_FIELDS = 1
+const val DECISION_FIELDS = 3
 
 /** A decision this device opened and verified, and what became of it. */
 @Serializable
