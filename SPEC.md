@@ -2092,16 +2092,16 @@ goes in git.
   restored as `deploy/README.md` says, passed `integrity_check`, started and
   served. Umami's dump restored too. The copies were deleted afterwards.
 - 2026-10-06: Claude's quota probe on the dev box (#397). "Claude usage
-  probe timed out." is CodexBar's error, not Starbridge's: CodexBar runs
-  `claude` in a terminal, types `/usage` and reads the panel, giving it 12 s,
-  then 60 s, each followed by up to 8 s for `claude /usage` without a
-  terminal. In a throwaway HOME with the owner's settings, plugins and mods
-  (hooks and the refresh token left out), 17 runs took 9.0 to 12.3 s, one
-  more failed to parse; with `claude` slowed by 8 and 15 s, the 60 s retry
-  still read it. The agent's own runs, with the real HOME, began failing at
-  19:00 on 2026-10-05 and failed every round from 12:00 on 2026-10-06, each
-  after about 22 s, so in production the retry does not read the panel
-  either. What the real HOME adds that the copies lack (history, hooks, the
-  status line, the Starbridge mod's poller with its config) was not tested,
-  to leave the owner's config alone. The first attempt's 12 s sits at the
-  measured maximum: CodexBar's `cliAutoProbeTimeout` should be about 20 s.
+  probe timed out." was CodexBar's error, not Starbridge's. CodexBar runs
+  `claude` in a terminal and reads its `/usage` panel; when that fails it runs
+  `claude /usage` without a terminal, capped at 8 s. With the build installed
+  on 2026-09-27, four debug runs in the owner's real HOME showed the terminal
+  probe quitting after 2 to 3 s every time and the fallback taking 5.2 to
+  8.5 s: one run hit the cap and took 21.9 s over two rounds, the others
+  passed in 7.9 to 9.0 s. That matches the agent's ~22 s failures since
+  2026-10-05. Copies of the owner's `~/.claude` never reproduced the early
+  quit; the fallback took 3.3 s in a copy without history and 5 s with it.
+  CodexBar 0.72.0 (upstream, with #4115 and #4155 on its Claude probe), installed
+  2026-10-06, read the panel in all four real runs, in 9.1 to 10.0 s, with no
+  fallback. The 8 s fallback cap is still tight for a busy machine; a fork
+  branch raises it (`fix/claude-direct-usage-timeout`).
