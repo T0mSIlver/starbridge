@@ -22,6 +22,8 @@ import dev.starbridge.app.ui.SheetShape
 import dev.starbridge.app.ui.theme.StarbridgeTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Alignment
+import androidx.navigation3.runtime.entryProvider
+import androidx.navigation3.ui.NavDisplay
 
 /**
  * A screen as the phone lays it out, for screenshots that line up with the mockups: the status
@@ -58,4 +60,10 @@ fun Sheet(behind: @Composable () -> Unit, sheet: @Composable () -> Unit) {
         }
         Spacer(Modifier.fillMaxWidth().height(24.dp).background(scheme.surfaceContainer))
     }
+}
+
+/** [content] as an entry of the app's NavDisplay, which fills the screen and so hands it the full height as a minimum (#341). */
+@Composable
+fun Entry(content: @Composable () -> Unit) {
+    NavDisplay(listOf(Unit), Modifier.fillMaxSize(), entryProvider = entryProvider { entry<Unit> { content() } })
 }

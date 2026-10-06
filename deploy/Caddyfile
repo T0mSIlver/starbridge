@@ -93,3 +93,21 @@ starbridge.run {
 		}
 	}
 }
+
+# The demo server for Play reviewers (#423): its own Compose project (deploy/demo), API only.
+demo.starbridge.run {
+	encode zstd gzip
+	@server path /v1/* /healthz
+	handle @server {
+		# As for prod's server above.
+		reverse_proxy 127.0.0.1:8090 {
+			transport http {
+				keepalive 25s
+				keepalive_idle_conns_per_host 4096
+			}
+		}
+	}
+	handle {
+		respond "Starbridge demo server for app reviewers. In the app, choose Use your own server and enter this address." 404
+	}
+}

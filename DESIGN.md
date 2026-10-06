@@ -500,6 +500,9 @@ a decision's context, a permission prompt's command and a session's name.
 - Find (the web rail's box) lists the matching open items, then "History · N"
   with the matching answered ones, answers included. A matched word is bold
   on `surface2`, never amber.
+- An image on a question opens the full-screen viewer, and says so: an expand
+  badge in its bottom right corner, `s2` in, a `s8` circle of `surface` at 72%
+  with the expand icon (`s5`) in `fg`. Touch screens show no zoom cursor.
 - Destructive actions are neutral text buttons on the row; only the confirm
   button in their dialog is red (`bad`).
 - Copy inside the UI is labels and states only, never a sentence explaining
@@ -622,7 +625,8 @@ round caps and joins, no fills. Android uses Material Symbols Rounded tuned to
 Google Sans Flex; a native iOS app, if one comes, would use SF Symbols. Every
 platform has the same icons by job: laptop, desktop, server and cloud (a
 machine's kind), permission prompt, question, run, quota, history, settings,
-devices, open in the agent, waiting, inbox, send.
+devices, open in the agent, waiting, inbox, send, expand (an image opens full
+screen).
 
 ## The mark
 
@@ -630,19 +634,23 @@ The mark is a space elevator on a 108-unit canvas (the Android adaptive
 icon grid; the visible area is the central 72): a planet's edge (a circle at
 54,148, radius 80) and a tether (x 51.75 to 56.25, from the top edge down
 into the planet) in `fg` dark, and one amber climber, a capsule 11 wide and
-20 tall at 48.5,34, in `accent` dark. The ground is `bg` dark in both
-schemes, and the climber is the only amber. Single-colour uses (themed icon,
+20 tall at 48.5,34, in `accent` dark. Where the mark has a ground, it is `bg`
+dark in both schemes, and the climber is the only amber. Single-colour uses (themed icon,
 notification icon) draw all three shapes in one colour.
 
 | Where | File |
 |---|---|
 | Android launcher | `res/mipmap-anydpi/ic_launcher*.xml`, layers in `res/drawable/ic_launcher_*.xml` |
 | Android notification | `res/drawable/ic_notification.xml` (white, 24 dp) |
-| Web favicon | `web/src/app/icon.svg`, `favicon.ico` (16, 32, 48 px) |
-| Web install icons | `web/src/app/apple-icon.png` (180 px), `web/public/icon-*.png`, `manifest.ts` |
+| Web tab icon | `web/src/app/icon.svg` |
+| Web favicon and install icons | `web/src/app/favicon.ico` (16, 32, 48 px), `apple-icon.png` (180 px), `web/public/icon-*.png`, `manifest.ts` |
 
-The PNG and ICO files are rendered from the SVG; redraw them when the mark
-changes.
+The tab icon is the mark as the page's rail draws it, with no ground, in
+`fg` and `accent` of the system's scheme, with a thin halo in the other
+scheme's `fg` so it stays legible on a tab strip that does not follow the
+system. The other web icons stand on the launcher's ground,
+since a home screen, or a browser that skips the SVG, shows them on any
+colour; `node web/scripts/icons.ts` renders them.
 
 The product name has no wordmark: it is "Starbridge" in the sans, weight 500. Beside the mark,
 the name stands on the mark's ground: its baseline sits on the mark's bottom

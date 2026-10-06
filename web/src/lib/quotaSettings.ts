@@ -109,7 +109,12 @@ export function arrange(
     .map(({ c }) => c);
 }
 
-export type QuotaGroup = { provider: string; machine?: string; cards: QuotaCardData[] };
+export type QuotaGroup = {
+  provider: string;
+  machine?: string;
+  cards: QuotaCardData[];
+  stale?: QuotaCardData["stale"];
+};
 
 /**
  * Arranged cards under one heading per provider and machine (#160): groups in the order their
@@ -121,9 +126,33 @@ export function groups(arranged: QuotaCardData[]): QuotaGroup[] {
     const key = `${c.provider}\n${c.machine ?? ""}`;
     const g = byKey.get(key);
     if (g) g.cards.push(c);
-    else byKey.set(key, { provider: c.provider, machine: c.machine, cards: [c] });
+    else
+      byKey.set(key, {
+        provider: c.provider,
+        machine: c.machine,
+        cards: [c],
+        ...(c.stale ? { stale: c.stale } : {}),
+      });
   }
   return [...byKey.values()];
+}
+
+/**
+ * Of the groups that lead while "Running out first" is on, the one with the window that runs out
+ * soonest (#351): they lead in the provider order, so it need not be the first.
+ */
+export function runsOutSoonest(lead: QuotaGroup[], now: Date): QuotaGroup | undefined {
+  const at = (g: QuotaGroup) =>
+    Math.min(
+      ...g.cards
+        .filter((c) => runningOut(c.window, now))
+        .map((c) => Date.parse(c.window.pace?.runsOutAt ?? "") || Infinity),
+    );
+  // None when no leading window says when it runs out.
+  return lead.reduce<QuotaGroup | undefined>(
+    (best, g) => (at(g) < (best ? at(best) : Infinity) ? g : best),
+    undefined,
+  );
 }
 
 /** The alerts this browser shows a notification for: newly raised, of providers it opted in. */
@@ -174,6 +203,24 @@ export function clock(iso: string, now = new Date()): string {
   tomorrow.setDate(now.getDate() + 1);
   if (sameDay(d, tomorrow)) return `tomorrow ${time}`;
   return `${d.toLocaleDateString(undefined, { month: "short", day: "numeric" })}, ${time}`;
+}
+
+/**
+ * A clock time in a sentence: "at 15:55" today, "tomorrow at 10:15", "yesterday at 10:15", else
+ * "on Oct 8 at 10:15".
+ */
+export function clockAt(iso: string, now = new Date(), hours?: "12" | "24"): string {
+  const d = new Date(iso);
+  const time = clockTime(d, hours);
+  const day = (offset: number) => {
+    const x = new Date(now);
+    x.setDate(now.getDate() + offset);
+    return sameDay(d, x);
+  };
+  if (day(0)) return `at ${time}`;
+  if (day(1)) return `tomorrow at ${time}`;
+  if (day(-1)) return `yesterday at ${time}`;
+  return `on ${d.toLocaleDateString(undefined, { month: "short", day: "numeric" })} at ${time}`;
 }
 
 /** A reset time in the chosen style: "in 2 h", "2 h ago", or a clock time. */

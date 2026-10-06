@@ -13,12 +13,14 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import {
   type Answer,
+  type Decision,
   fromB64,
   type MachineKind,
   type MemberKeys,
   type Permission,
   type PermissionAnswer,
   type Pin,
+  type QuotaWindow,
   toB64,
   type Waiting,
 } from "@starbridge/protocol";
@@ -58,6 +60,10 @@ export interface State {
       settled?: boolean;
       /** The devices it was sealed to, the only ones whose answer counts. */
       to?: string[];
+      /** The decision as signed, without its images, to re-seal it to devices that join. */
+      body?: Omit<Decision, "images">;
+      /** Its image files, read again when it is re-sealed. */
+      images?: (string | { path: string; alt?: string })[];
       /** The decision's waiting state as last posted, under the one id it keeps. */
       waiting?: { id: string; state: Waiting["state"] };
       cursor?: string;
@@ -65,6 +71,8 @@ export interface State {
       session?: string;
       /** The Codex session that asked, which the agent queues the answer into. */
       codex?: CodexSession;
+      /** Told its answer comes back as a prompt from the Pi extension or the opencode plugin. */
+      extensionAnswers?: boolean;
     }
   >;
   /**
@@ -86,6 +94,14 @@ export interface State {
   permissions?: Record<string, PendingPermission>;
   /** Quota alerts already raised, by `alertKey`: the reset of the cycle they were raised in. */
   alerts?: Record<string, string>;
+  /** Each provider's last windows read without an error, and when, for the rounds CodexBar fails. */
+  quotas?: Record<string, LastQuota>;
+}
+
+export interface LastQuota {
+  at: string;
+  account?: string;
+  windows: QuotaWindow[];
 }
 
 /**
@@ -102,8 +118,10 @@ export interface PermissionUpdate {
 
 /** A permission prompt as the machine keeps it while a hook waits on it. */
 export interface PendingPermission {
-  /** The body as signed and posted. */
+  /** The body as signed and posted; `to` also names devices it was re-sealed to (#340). */
   permission: Permission;
+  /** The devices of its last re-seal the server took; until one, `permission.to`. */
+  sealedTo?: string[];
   /** The Claude Code session that asked. */
   session: string;
   /** The updates behind the offered scopes; an allow for a wider scope writes these. */

@@ -39,6 +39,7 @@ export function testConfig(over: Partial<Config> = {}): Config {
     allowPrivatePushEndpoints: true,
     pushTimeoutMs: 2000,
     relayMode: false,
+    demo: false,
     limits: DEFAULT_LIMITS,
     ...over,
   };

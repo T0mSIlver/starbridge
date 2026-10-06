@@ -10,6 +10,7 @@ import {
   type Directory,
   hashInput,
   type MachineKind,
+  type MemberKeys,
   open,
   PERMISSION_TTL_MS,
   type Permission,
@@ -21,6 +22,7 @@ import {
   SealedItem,
   type Settled,
   seal,
+  visible,
 } from "@starbridge/protocol";
 import { claudeSession } from "./claude";
 import type { PendingPermission, PermissionUpdate, State } from "./config";
@@ -31,6 +33,7 @@ import {
   machineKind,
   refreshDirectory,
   type Session,
+  signedHead,
   UsageError,
 } from "./context";
 import { OPENCODE_TITLE } from "./opencode";
@@ -142,12 +145,22 @@ export function redactText(text: string): string {
     .replace(ASSIGNMENT, (_, name: string, sep: string) => `${name}${sep}${REDACTED}`);
 }
 
+/**
+ * An object from `entries` whose keys were rewritten (redacted, escaped). Throws when two keys now
+ * read alike: devices would see one value for both, while the hash covers the input as received.
+ */
+function uniqueKeys(entries: (readonly [string, unknown])[]): Record<string, unknown> {
+  if (new Set(entries.map(([k]) => k)).size < entries.length)
+    throw new UsageError("the input has keys that read alike: it stays at the keyboard");
+  return Object.fromEntries(entries);
+}
+
 /** Redacts every string in a JSON value, keys included, and a token under a secret's name. */
 export function redactValue(value: unknown): unknown {
   if (typeof value === "string") return redactText(value);
   if (Array.isArray(value)) return value.map(redactValue);
   if (value && typeof value === "object")
-    return Object.fromEntries(
+    return uniqueKeys(
       Object.entries(value).map(([k, v]) => [
         redactText(k),
         SECRET_NAME.test(k) && typeof v === "string" && new RegExp(`^${TOKEN}+$`).test(v)
@@ -160,7 +173,7 @@ export function redactValue(value: unknown): unknown {
 
 /** JSON text of `value` within `max` characters: the longest strings are cut until it fits. */
 export function fitJson(value: unknown, max = INPUT_MAX): string {
-  let v = value;
+  let v = visibleValue(value);
   let text = JSON.stringify(v) ?? "null";
   for (let round = 0; text.length > max && round < 64; round++) {
     const over = text.length - max;
@@ -190,6 +203,20 @@ export function fitJson(value: unknown, max = INPUT_MAX): string {
   return out;
 }
 
+/**
+ * Every string in a JSON value, keys included, through `visible`. Throws when two keys read alike
+ * once escaped (`x` + U+202E and `x\\u202E`).
+ */
+function visibleValue(value: unknown): unknown {
+  if (typeof value === "string") return visible(value);
+  if (Array.isArray(value)) return value.map(visibleValue);
+  if (value && typeof value === "object")
+    return uniqueKeys(
+      Object.entries(value).map(([k, v]) => [visible(k), visibleValue(v)] as const),
+    );
+  return value;
+}
+
 function setAt(v: unknown, path: (string | number)[], f: (s: string) => string): unknown {
   if (path.length === 0) return f(v as string);
   const [head, ...rest] = path as [string | number, ...(string | number)[]];
@@ -201,14 +228,17 @@ function setAt(v: unknown, path: (string | number)[], f: (s: string) => string):
 // --- Building the prompt ------------------------------------------------------
 
 const oneLine = (s: string, max: number) => {
-  const flat = s.replace(/\s+/g, " ").trim();
+  const flat = visible(s.replace(/\s+/g, " ").trim());
   return flat.length <= max ? flat : `${flat.slice(0, max - 1)}…`;
 };
 
 /** Claude Code's shell tool, or Pi's. */
 const isShell = (tool: string) => tool === "Bash" || tool === "bash";
 
-/** One line: the Bash command, the edited path, the URL; else the tool and its input. */
+/**
+ * One line: the Bash command, the edited path, the URL; else the tool and its input. `input` is
+ * redacted already (`redactValue`).
+ */
 export function summarize(tool: string, input: unknown): string {
   const o = (input && typeof input === "object" ? input : {}) as Record<string, unknown>;
   const pick = (...keys: string[]) =>
@@ -217,7 +247,7 @@ export function summarize(tool: string, input: unknown): string {
     ? pick("command")
     : (pick("file_path", "notebook_path", "path", "url", "query", "pattern", "preview") ??
       `${tool} ${JSON.stringify(input) ?? ""}`);
-  return oneLine(redactText(main ?? tool), SUMMARY_MAX) || tool;
+  return oneLine(main ?? tool, SUMMARY_MAX) || tool;
 }
 
 /**
@@ -256,7 +286,7 @@ export function ruleText(updates: PermissionUpdate[]): string {
       ? (u.rules ?? []).map((r) => (r.ruleContent ? `${r.toolName}(${r.ruleContent})` : r.toolName))
       : (u.directories ?? []).map((d) => `access to ${d}`),
   );
-  const text = parts.join(", ").replace(/\s+/g, " ").trim();
+  const text = visible(parts.join(", ").replace(/\s+/g, " ").trim());
   return text.length <= RULE_MAX && redactText(text) === text ? text : "";
 }
 
@@ -272,6 +302,11 @@ export function updatesFor(
   return updates.map((u) => ({ ...u, destination: DESTINATION[scope] }));
 }
 
+/** The `inputHash` of a call's input, keyed under the machine's signing key. */
+export function inputHashOf(keys: MemberKeys, input: unknown): string {
+  return hashInput(JSON.stringify(input), keys.sign.privateKey);
+}
+
 export function buildPermission(
   hook: PermissionHookInput,
   opts: {
@@ -279,6 +314,7 @@ export function buildPermission(
     source: PermissionSourceInput;
     machine: string;
     machineKind?: MachineKind;
+    keys: MemberKeys;
     to: string[];
     now: Date;
     waitMs: number;
@@ -293,7 +329,10 @@ export function buildPermission(
   const updates = usableUpdates(hook.permission_suggestions);
   const rule = ruleText(updates);
   const project = opts.source.project;
-  const description = (raw as { description?: unknown }).description;
+  // The summary and description come from the redacted input too: key-name redaction is
+  // `redactValue`'s alone.
+  const safe = redactValue(raw);
+  const description = (safe as { description?: unknown }).description;
   const ttl = Math.min(PERMISSION_TTL_MS, Math.max(1000, opts.waitMs));
   const permission = {
     v: 1 as const,
@@ -302,12 +341,12 @@ export function buildPermission(
     createdAt: iso(opts.now),
     agent: opts.agent,
     tool: tool.slice(0, 100),
-    summary: summarize(tool, raw),
+    summary: summarize(tool, safe),
     ...(typeof description === "string" && description.trim()
-      ? { description: oneLine(redactText(description), DESCRIPTION_MAX) }
+      ? { description: oneLine(description, DESCRIPTION_MAX) }
       : {}),
-    input: fitJson(redactValue(raw)),
-    inputHash: hashInput(JSON.stringify(raw)),
+    input: fitJson(safe),
+    inputHash: inputHashOf(opts.keys, raw),
     suggestions: rule
       ? [
           { label: "Allow for this session", rule, scope: "session" as const },
@@ -382,12 +421,13 @@ export async function postPermission(
     ...opts,
     machine: s.machine.name,
     ...machineKind(ctx),
+    keys: s.keys,
     to: to.map((d) => d.id),
     now: ctx.now(),
   });
   const item = seal(
     "permission",
-    permission,
+    { ...permission, dir: signedHead(ctx, dir) },
     { id: s.machine.id, signKey: s.keys.sign.privateKey },
     to,
   );
@@ -482,6 +522,9 @@ export function hookDecision(p: PendingPermission): unknown {
   return { hookSpecificOutput: { hookEventName: "PermissionRequest", decision } };
 }
 
+/** How a prompt ended, as its settled notice tells the devices. */
+type Settling = Pick<Settled, "outcome" | "device" | "behavior">;
+
 /**
  * Marks prompt `id` settled, if no one settled it yet, and returns what to tell the devices;
  * undefined when it was settled already. Synchronous, so a waiting hook marks its prompt before
@@ -491,14 +534,14 @@ export function markSettled(
   ctx: Ctx,
   id: string,
   outcome: "keyboard" | "timeout" | "device",
-): { outcome: Settled["outcome"]; device?: string } | undefined {
-  let marked: { outcome: Settled["outcome"]; device?: string } | undefined;
+): Settling | undefined {
+  let marked: Settling | undefined;
   ctx.store.updateState((st) => {
     const p = st.permissions?.[id];
     if (!p || p.settled) return;
     p.settled = outcome;
-    const device = outcome === "device" ? p.answer?.device : undefined;
-    marked = { outcome, ...(device ? { device } : {}) };
+    const a = outcome === "device" ? p.answer : undefined;
+    marked = { outcome, ...(a ? { device: a.device, behavior: a.behavior } : {}) };
   });
   return marked;
 }
@@ -508,18 +551,20 @@ export async function postSettled(
   ctx: Ctx,
   s: Session,
   id: string,
-  how: { outcome: Settled["outcome"]; device?: string },
+  how: Settling,
   signal?: AbortSignal,
 ): Promise<void> {
-  const to = devices(await refreshDirectory(ctx, s, signal));
+  const dir = await refreshDirectory(ctx, s, signal);
+  const to = devices(dir);
   const body: Settled = {
     v: 1,
     id: `st_${randomBytes(12).toString("base64url")}`,
     itemId: id,
     to: to.map((d) => d.id),
     outcome: how.outcome,
-    ...(how.device ? { device: how.device } : {}),
+    ...(how.device ? { device: how.device, behavior: how.behavior } : {}),
     at: iso(ctx.now()),
+    dir: signedHead(ctx, dir),
   };
   await s.api.postItem(
     seal("settled", body, { id: s.machine.id, signKey: s.keys.sign.privateKey }, to),

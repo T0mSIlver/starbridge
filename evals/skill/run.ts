@@ -68,6 +68,12 @@ mkdirSync(out, { recursive: true });
 // would hint the agent. Set TMPDIR to put it off a small /tmp. Each run's folder goes once its
 // record is written (a Codex home is 60 MB).
 const work = mkdtempSync(join(tmpOutsideHome(), "skill-eval-"));
+// Also when a run throws: the homes go even if the eval dies (#313).
+process.on("exit", () => {
+  if (!opt.keep) rmSync(work, { recursive: true, force: true });
+});
+for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"] as const)
+  process.on(signal, () => process.exit(130));
 const bun = process.execPath;
 const which = (cmd: string) => {
   const r = spawnSync("sh", ["-c", `command -v ${cmd}`], { encoding: "utf8" });
@@ -631,6 +637,5 @@ await Promise.all(
     }
   }),
 );
-if (!opt.keep) rmSync(work, { recursive: true, force: true });
-else console.log(`kept ${work}`);
+if (opt.keep) console.log(`kept ${work}`);
 if (existsSync(out)) console.log(`records in ${out}`);

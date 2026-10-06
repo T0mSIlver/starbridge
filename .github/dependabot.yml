@@ -1,4 +1,5 @@
-# Workflows pin actions by commit SHA (#361); this proposes the updates, one grouped PR a month.
+# Workflows pin actions by commit SHA (#361). Dependabot proposes version updates once a month, one
+# grouped PR per ecosystem; security updates for known vulnerabilities come as soon as they're found.
 version: 2
 updates:
   - package-ecosystem: github-actions
@@ -7,4 +8,25 @@ updates:
       interval: monthly
     groups:
       actions:
+        patterns: ["*"]
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      npm:
+        patterns: ["*"]
+  - package-ecosystem: gradle
+    directory: /android
+    schedule:
+      interval: monthly
+    groups:
+      gradle:
+        patterns: ["*"]
+  - package-ecosystem: docker
+    directories: [/deploy, /deploy/demo, /server, /web]
+    schedule:
+      interval: monthly
+    groups:
+      docker:
         patterns: ["*"]

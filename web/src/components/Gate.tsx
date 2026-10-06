@@ -70,7 +70,14 @@ function useDefaultName(initial = ""): [string, (v: string) => void] {
 }
 
 /** GitHub sign-in; self-hosting sits behind "Use your own server" (SPEC.md, design v2). */
-export function SignIn({ ownServer = false }: { ownServer?: boolean }) {
+export function SignIn({
+  ownServer = false,
+  refused,
+}: {
+  ownServer?: boolean;
+  /** Why the server ended the last session; only the device list can confirm a revocation. */
+  refused?: string;
+}) {
   const { reload } = useApp();
   const [own, setOwn] = useState(ownServer);
   const [token, setToken] = useState("");
@@ -78,6 +85,12 @@ export function SignIn({ ownServer = false }: { ownServer?: boolean }) {
   return (
     <FirstRunPage centered>
       <h1 className="t-heading">Sign in to Starbridge</h1>
+      {refused === "revoked" && (
+        <p className={`t-small ${s.lede}`}>
+          The server says this browser was revoked. It keeps its keys until your device list
+          confirms that: sign in to check.
+        </p>
+      )}
       <a href="/v1/auth/github" className={`t-label ${ui.btn} ${ui.lg} ${ui.fill} ${s.go}`}>
         <Icon name="github" size={18} />
         Continue with GitHub
@@ -172,6 +185,8 @@ function Join({ account, stale }: { account: string; stale: boolean }) {
   const [mode, setMode] = useState<"code" | "digits" | "key">("code");
   const [code, setCode] = useState<string>();
   const [digits, setDigits] = useState<string>();
+  const [matched, setMatched] = useState(false);
+  const confirm = useRef<() => void>(undefined);
   const [typedKey, setTypedKey] = useState("");
   const [typed, setTyped] = useState<RecoveryEntry>({ complete: false, status: "" });
   const cancel = useRef<() => void>(undefined);
@@ -220,12 +235,20 @@ function Join({ account, stale }: { account: string; stale: boolean }) {
     cancel.current?.();
     setCode(undefined);
     setDigits(undefined);
+    setMatched(false);
+    confirm.current = undefined;
     setMode(next);
     if (next === "digits")
       run(async () => {
         const join = await begin(async () => (await load()).startDigitJoin(account, name.trim()));
         if (!join) return;
-        join.digits.then(setDigits, () => {});
+        confirm.current = join.confirm;
+        // A join the owner moved on from shows no digits, so they confirm only this one's.
+        const mine = started.current;
+        join.digits.then(
+          (d) => mine === started.current && setDigits(d),
+          () => {},
+        );
         await join.done;
         await reload();
       });
@@ -273,9 +296,11 @@ function Join({ account, stale }: { account: string; stale: boolean }) {
       {mode === "digits" && (
         <>
           <p className={`t-small ${s.lede}`}>
-            {digits
-              ? `Approve ${name.trim()} on your other device if the digits match.`
-              : `Open Starbridge on a signed-in device: it asks whether to let ${name.trim()} join.`}
+            {matched
+              ? `Approve ${name.trim()} on your other device.`
+              : digits
+                ? "Does your other device show the same digits?"
+                : `Open Starbridge on a signed-in device: it asks whether to let ${name.trim()} join.`}
           </p>
           {digits && (
             <div className={`t-heading ${s.digits}`} data-testid="join-digits">
@@ -287,12 +312,25 @@ function Join({ account, stale }: { account: string; stale: boolean }) {
               ))}
             </div>
           )}
+          {digits && !matched && (
+            <button
+              type="button"
+              className={`t-label ${ui.btn} ${ui.fill}`}
+              onClick={() => {
+                confirm.current?.();
+                setMatched(true);
+              }}
+            >
+              They match
+            </button>
+          )}
           <button
             type="button"
             className={`t-label ${ui.btn}`}
             onClick={() => {
               started.current++;
               cancel.current?.();
+              confirm.current = undefined;
               setMode("code");
             }}
           >
@@ -312,6 +350,10 @@ function Join({ account, stale }: { account: string; stale: boolean }) {
           }}
         >
           <NameField value={name} onChange={setName} />
+          <p className={`t-small ${s.lede}`}>
+            Recovering removes every other device and machine from the account. Pair the ones you
+            still have again from this browser afterwards.
+          </p>
           <label className={`t-meta ${s.dim}`} htmlFor="recovery-key">
             Your recovery key
           </label>
@@ -352,24 +394,20 @@ function Join({ account, stale }: { account: string; stale: boolean }) {
   );
 }
 
-function Revoked({ account, name }: { account: string; name: string }) {
+function Revoked({ by }: { by: string }) {
   const { reload } = useApp();
   const { busy, error, run } = useAction();
   return (
     <FirstRunPage>
-      <h1 className="t-heading">{name} was revoked</h1>
-      <p className={`t-small ${s.lede}`}>It can no longer read or answer anything.</p>
+      <h1 className="t-heading">This browser was removed from your account by {by}</h1>
+      <p className={`t-small ${s.lede}`}>
+        Its keys and saved answers are deleted from this browser.
+      </p>
       <button
         type="button"
         className={`t-label ${ui.btn} ${ui.lg} ${ui.fill} ${s.go}`}
         disabled={busy}
-        onClick={() =>
-          run(async () => {
-            const store = await import("@/lib/store");
-            await store.del("device", account);
-            await reload();
-          })
-        }
+        onClick={() => run(reload)}
       >
         Add it again
       </button>
@@ -419,13 +457,13 @@ export function Gate({ children }: { children: React.ReactNode }) {
       // Visitors land on the landing page; a browser with a device signs in to its Inbox.
       if (path === "/" && !boot.known && !ownServer)
         return <Landing onOwnerToken={() => setOwnServer(true)} />;
-      return <SignIn ownServer={ownServer} />;
+      return <SignIn ownServer={ownServer} refused={boot.refused} />;
     case "first-device":
       return <FirstDevice account={boot.account} unsaved={boot.unsaved} />;
     case "join":
       return <Join account={boot.account} stale={boot.stale} />;
     case "revoked":
-      return <Revoked account={boot.account} name={boot.name} />;
+      return <Revoked by={boot.by} />;
     case "broken":
       return (
         <Problem

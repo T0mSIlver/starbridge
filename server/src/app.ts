@@ -97,7 +97,11 @@ export async function createApp(config: Config, fetchFn: typeof fetch = fetch) {
       onError: (c) => c.json({ error: "too-large" }, 413),
     }),
   );
-  app.get("/healthz", (c) => c.text("ok"));
+  // The deploy checks that the server it reaches runs the commit it deployed.
+  app.get("/healthz", (c) => {
+    if (config.revision) c.header("x-starbridge-revision", config.revision);
+    return c.text("ok");
+  });
   // deploy/host/backup.sh touches this file beside the database after each good backup. The
   // answer says only whether it is fresh, for the uptime check (.github/workflows/uptime.yml).
   const backupStamp = join(dirname(config.dbPath), "last-backup");
@@ -114,6 +118,8 @@ export async function createApp(config: Config, fetchFn: typeof fetch = fetch) {
     // No figure: anyone can call it, and the headroom left is the operator's to know.
     return bavail * bsize >= DISK_MIN_FREE ? c.text("ok") : c.text("disk low", 503);
   });
+  // The demo program (demo/) runs only against a server that answers this.
+  if (config.demo) app.get("/v1/demo", (c) => c.json({ demo: true }));
   app.route("/v1", v1);
   app.notFound((c) => c.json({ error: "not-found" }, 404));
   let fullLoggedAt = 0;

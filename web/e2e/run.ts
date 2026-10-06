@@ -143,6 +143,9 @@ async function browser() {
       "dom.push.serverURL": `ws://localhost:${PORTS.push}/`,
       "dom.push.testing.allowInsecureServerURL": true,
       "permissions.default.desktop-notification": 1,
+      // Firefox queues past a few notifications that stay up until dismissed, and their
+      // showNotification never settles; the run leaves many up across its browsers.
+      "dom.webnotifications.requireinteraction.count": 100,
     },
   });
 }
@@ -161,19 +164,6 @@ async function watchCsp(ctx: BrowserContext) {
       ),
     ),
   );
-}
-
-/** A context whose pages record what their Content-Security-Policy blocks (#325). */
-async function context(ff: Browser, opts: Parameters<Browser["newContext"]>[0] = {}) {
-  const ctx = await ff.newContext(opts);
-  await ctx.addInitScript(() => {
-    const w = window as unknown as { cspBlocked: string[] };
-    w.cspBlocked = [];
-    document.addEventListener("securitypolicyviolation", (e) =>
-      w.cspBlocked.push(`${e.violatedDirective} blocked ${e.blockedURI || "inline"}`),
-    );
-  });
-  return ctx;
 }
 
 /** The landing page's link, or the sign-in screen's. */
@@ -201,25 +191,12 @@ async function noWordsAsked(page: Page) {
   if (found) throw new Error(`the page says "${found[0]}"`);
 }
 
-/** What fails the run; the rest is for AUDIT's list. */
-const FAILS: (Problem["kind"] | "csp")[] = [
-  "page-width",
-  "clipped",
-  "spills",
-  "offscreen",
-  "overlap",
-  "csp",
-];
+/** What fails the run; contrast is only listed. */
+const FAILS: Problem["kind"][] = ["page-width", "clipped", "spills", "offscreen", "overlap", "tap"];
 
 /** Fails on what a screenshot would show broken (layout.ts); AUDIT lists it instead. */
 async function fitsLayout(page: Page, name: string) {
-  const blocked = (await page.evaluate(
-    () => (window as unknown as { cspBlocked?: string[] }).cspBlocked ?? [],
-  )) as string[];
-  const problems = [
-    ...(await layoutProblems(page)),
-    ...blocked.map((what) => ({ kind: "csp" as const, what })),
-  ];
+  const problems = await layoutProblems(page);
   if (AUDIT) {
     const at = await page.evaluate(() => `${innerWidth}`);
     for (const p of problems)
@@ -286,6 +263,7 @@ async function shoot(page: Page, name: string) {
 }
 
 let failPage: Page | undefined;
+let ff: Browser | undefined;
 
 async function main() {
   mkdirSync(AUDIT ?? SHOTS, { recursive: true });
@@ -333,8 +311,8 @@ async function main() {
   });
   await web.waitFor(/Ready|started server/i);
 
-  const ff = await browser();
-  const a = await context(ff, {
+  ff = await browser();
+  const a = await ff.newContext({
     permissions: ["notifications"],
     ...(MOTION_VIDEO ? { recordVideo: { dir: join(tmp, "video"), size: DESKTOP } } : {}),
   });
@@ -840,6 +818,17 @@ async function main() {
   await page.locator("article").first().waitFor();
   await shoot(page, "quotas");
 
+  step("the refresh button asks the machines for fresh quotas, as Android's pull to refresh");
+  await page.setViewportSize(DESKTOP);
+  const refresh = page.getByRole("button", { name: "Refresh quotas" }).filter({ visible: true });
+  const asked = page.waitForRequest((r) => r.method() === "POST" && r.url().includes("/quota/ask"));
+  await refresh.click();
+  await asked;
+  // No agent runs in this test, so the server holds the ask its 15 s before it answers.
+  await page.waitForSelector('button[aria-label="Refresh quotas"][aria-busy="false"]:visible', {
+    timeout: 30_000,
+  });
+
   step("quota settings: remaining, clock times, workdays");
   await page
     .getByRole("navigation", { name: "Main" })
@@ -858,8 +847,9 @@ async function main() {
 
   step("a group pinned by running out first says why on a click (#296)");
   await page.setViewportSize(DESKTOP);
-  await page.getByRole("button", { name: "Why codex is first" }).click();
-  const why = page.getByText("First because it runs out soonest.");
+  await page.getByRole("button", { name: "Why codex is up top" }).click();
+  // Scoped to codex: depending on the hour, claude's group may be pinned too.
+  const why = page.getByRole("region", { name: "codex" }).getByText(/^Up top because it/);
   await why.waitFor();
   if (AUDIT) await shoot(page, "quotas-pinned");
   else
@@ -870,7 +860,7 @@ async function main() {
     }
   await page.keyboard.press("Escape");
   await why.waitFor({ state: "hidden" });
-  await page.getByRole("button", { name: "Why codex is first" }).click();
+  await page.getByRole("button", { name: "Why codex is up top" }).click();
   await why.getByRole("link", { name: "Settings" }).click();
   await page.waitForURL(/\/settings#running-out-first$/);
   await page.getByRole("switch", { name: "Running out first" }).waitFor();
@@ -908,7 +898,7 @@ async function main() {
     .getByRole("navigation", { name: "Main" })
     .getByRole("link", { name: "Settings" })
     .click();
-  // 12-hour times are the longest: "Will run out at Oct 12, 12:02 AM".
+  // 12-hour times are the longest: "Will run out on Oct 12 at 12:02 AM".
   await page.getByLabel("12-hour", { exact: true }).check({ force: true });
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.getByRole("link", { name: "Inbox" }).click();
@@ -971,6 +961,28 @@ async function main() {
   if ((await again.exited) !== 0) throw new Error("quota push failed");
   if (again.output().includes("(new)"))
     throw new Error("the second snapshot raised its alerts again");
+
+  step("a failed probe keeps the provider's last windows, stale, with its failure (#397)");
+  const timedOut = [
+    { provider: "e2e", source: "auto", error: { message: "Claude usage probe timed out." } },
+  ];
+  writeFileSync(fakeBar, `#!/bin/sh\ncat <<'EOF'\n${JSON.stringify(timedOut)}\nEOF\nexit 1\n`);
+  const failedPush = cli(
+    "quota-failed",
+    ["quota", "push", "--once", "--codexbar", fakeBar, "--provider", "e2e"],
+    machineHome,
+  );
+  if ((await failedPush.exited) !== 0) throw new Error("quota push failed");
+  await page.getByRole("link", { name: "Settings" }).first().click();
+  await page.getByRole("link", { name: "Quotas" }).click();
+  const group = page.getByRole("region", { name: "e2e" });
+  await group.getByText("Claude usage probe timed out.").waitFor();
+  await group.getByText(/^Updated /).waitFor();
+  if ((await group.getByRole("article").count()) === 0)
+    throw new Error("the failed provider lost its windows");
+  if ((await page.getByText("e2e on ").count()) > 0)
+    throw new Error("the failure shows as a line above the table");
+  await shoot(page, "quotas-failed");
 
   step("the Quotas table fits its longest reset times, phone to desktop (#294)");
   // Local clock times: "tomorrow 21:59", "tomorrow 12:59 PM" and a date five days out.
@@ -1058,6 +1070,48 @@ async function main() {
   await page.getByRole("button", { name: "Check code" }).click();
   await page.getByRole("button", { name: "Approve" }).click();
   if ((await farPair.exited) !== 0) throw new Error("pair of the long-named machine failed");
+  // The audit also shoots device names of about 10, 25, 40 and 70 characters, with and without
+  // dots and hyphens, to see where each breaks in Settings: three at a time, as an account
+  // holds at most five machines, each batch revoked before the next.
+  const NAMES = [
+    "mac-studio",
+    "buildhost7",
+    "runner02.eu-west.example",
+    "Tomsmacbookprofromtheoffice",
+    "runner02.eu-west.internal.example.org",
+    "buildrunnerinthebasementrackzerotwoeuwest",
+    "build-runner-in-the-basement-rack-02.ci.internal.example-company.org",
+    "averyveryverylongmachinenamewithnobreaksatallthatkeepsongoingforseventy",
+  ];
+  for (let b = 0; AUDIT && b < NAMES.length; b += 3) {
+    const batch = NAMES.slice(b, b + 3);
+    for (const name of batch) {
+      const pair = cli(`pair-${name}`, ["pair", "--name", name], join(tmp, `name-${name}`));
+      const code = (await pair.waitFor(/Pairing code: (\S+)/))[1] as string;
+      await page.getByLabel("Pair a machine or device").fill(code);
+      await page.getByRole("button", { name: "Check code" }).click();
+      await page.getByText(`Let ${name} post decisions and quotas?`).waitFor();
+      await page.getByRole("button", { name: "Approve" }).click();
+      if ((await pair.exited) !== 0) throw new Error(`pair of ${name} failed`);
+    }
+    await page
+      .getByRole("navigation", { name: "Main" })
+      .getByRole("link", { name: "Settings" })
+      .click();
+    const devices = page.getByRole("region", { name: "Devices" });
+    await devices.getByText(batch.at(-1) as string).waitFor();
+    await shoot(page, `settings-names-${b / 3 + 1}`);
+    for (const name of batch) {
+      await devices
+        .locator('[class*="__device"]')
+        .filter({ hasText: name })
+        .getByRole("button", { name: "Revoke" })
+        .click();
+      await page.getByRole("dialog").getByRole("button", { name: "Revoke" }).click();
+      await page.getByRole("dialog").waitFor({ state: "detached" });
+    }
+    await page.getByRole("link", { name: "Add a device" }).click();
+  }
   if ((await cli("perm-on", ["config", "permissions", "on"], farHome).exited) !== 0)
     throw new Error("config permissions on failed");
   const farQuota = cli(
@@ -1186,7 +1240,7 @@ async function main() {
   longRun.proc.kill();
 
   step("add a second browser by pairing code");
-  const b = await context(ff);
+  const b = await ff.newContext({ permissions: ["notifications"] });
   await watchCsp(b);
   const pageB = await signIn(b);
   await pageB.getByTestId("pairing-code").waitFor({ timeout: 10_000 });
@@ -1232,21 +1286,36 @@ async function main() {
   await shoot(pageB, "inbox-banner");
   // The new device sees decisions sealed after it joined; the open one predates it.
 
-  step("recover a third browser with the recovery key");
-  const c = await context(ff);
-  await watchCsp(c);
-  const pageC = await signIn(c);
-  await pageC.getByRole("button", { name: "Use the recovery key" }).click();
-  const entry = pageC.getByLabel("Your recovery key");
-  await noWordsAsked(pageC);
-  await entry.fill(`${key.slice(0, 9)}U`);
-  await pageC.getByText('Character 10, "U", is not in a recovery key.').waitFor();
-  await shoot(pageC, "recovery-typo");
-  // Lower case, in groups split by spaces: the key reads all the same.
-  await entry.fill(key.toLowerCase().match(/.{4}/g)?.join(" ") ?? "");
-  await pageC.getByText("28 of 28 characters").waitFor();
-  await pageC.getByRole("button", { name: "Recover" }).click();
-  await pageC.getByRole("heading", { name: "Inbox" }).waitFor({ timeout: 30_000 });
+  step("replace the recovery key with the current one; the second browser says so once (#348)");
+  await page.goto(`${ORIGIN}/settings`);
+  const recoveryRow = page.getByRole("region", { name: "Devices" });
+  await recoveryRow.getByText(/^Set .* on this browser$/).waitFor();
+  await recoveryRow.getByRole("link", { name: "Replace" }).click();
+  await page.getByRole("heading", { name: "Replace the recovery key" }).waitFor();
+  await page
+    .getByText("Lost it? Without the current key it can't be replaced.", { exact: false })
+    .waitFor();
+  await page.getByLabel("Your current recovery key").fill(key);
+  await page.getByText("28 of 28 characters").waitFor();
+  await shoot(page, "recovery-key-replace");
+  await page.getByRole("button", { name: "Make a new key" }).click();
+  await page.getByRole("heading", { name: "Save your new recovery key" }).waitFor();
+  const newKey = ((await page.getByTestId("new-recovery-key").textContent()) ?? "").trim();
+  if (newKey === key || !/^([0-9A-Z]{4}){7}$/.test(newKey))
+    throw new Error(`expected a new recovery key, got: ${newKey}`);
+  await shoot(page, "recovery-key-new");
+  await page.getByLabel(/I wrote this key down/).check();
+  await page.getByRole("button", { name: "Save the new key" }).click();
+  await page.getByRole("heading", { name: "Recovery key replaced" }).waitFor();
+  await pageB.goto(ORIGIN);
+  await pageB.getByText(/^Recovery key replaced on .+, .+\.$/).waitFor({ timeout: 30_000 });
+  await shoot(pageB, "inbox-recovery-notice");
+  await pageB.getByRole("button", { name: "OK" }).click();
+  await pageB.getByText(/^Recovery key replaced on /).waitFor({ state: "detached" });
+
+  await page.goto(`${ORIGIN}/settings`);
+  await recoveryRow.getByText(/^Replaced .* on this browser$/).waitFor();
+  await shoot(page, "devices-recovery");
 
   step("revoke the second browser");
   await page
@@ -1256,14 +1325,47 @@ async function main() {
   const devices = page.getByRole("region", { name: "Devices" });
   await devices.getByText("Device · this browser").waitFor();
   // Devices list this browser, then the others by when they joined: the second browser first.
-  // The list may still gain the recovered browser, so the second browser's sign-out below,
-  // not a count, proves the revocation.
   await devices.getByRole("button", { name: "Revoke" }).first().click();
   await page.getByRole("dialog").getByRole("button", { name: "Revoke" }).click();
   await page.getByRole("dialog").waitFor({ state: "detached" });
-  await pageB.reload();
-  // A browser whose device was revoked is a visitor again: the landing page, not sign-in.
-  await pageB.getByRole("heading", { name: /Your agents ask/ }).waitFor();
+  // A notification left from before: the server's refusal closes it.
+  await pageB.evaluate(() =>
+    Promise.race([
+      navigator.serviceWorker.ready.then((r) =>
+        r.showNotification("Left over", { tag: "e2e-left", requireInteraction: true }),
+      ),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("the left-over notification hung")), 10_000),
+      ),
+    ]),
+  );
+  if (!(await pageB.evaluate(NOTIFICATIONS)).some((n) => n.tag === "e2e-left"))
+    throw new Error("the left-over notification did not show");
+  // Without a reload: the page's next poll gets the 401 and drops what it showed (#343). The
+  // server's 401 alone is unsigned: the browser keeps its keys and shows the refusal (#310).
+  await pageB.getByText("The server says this browser was revoked.").waitFor({ timeout: 25_000 });
+  if ((await pageB.getByRole("heading", { name: "Inbox" }).count()) > 0)
+    throw new Error("the revoked browser still shows its inbox");
+  if ((await pageB.evaluate(NOTIFICATIONS)).length > 0)
+    throw new Error("the refusal left notifications on screen");
+  // Another one, so the device list's verdict, not the refusal, has to close it.
+  await pageB.evaluate(() =>
+    Promise.race([
+      navigator.serviceWorker.ready.then((r) =>
+        r.showNotification("Left over", { tag: "e2e-left", requireInteraction: true }),
+      ),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("the left-over notification hung")), 10_000),
+      ),
+    ]),
+  );
+  await pageB.getByRole("link", { name: SIGN_IN }).click();
+  // Signed in, the device list confirms the revocation.
+  await pageB
+    .getByRole("heading", { name: /^This browser was removed from your account by / })
+    .waitFor({ timeout: 30_000 });
+  if ((await pageB.evaluate(NOTIFICATIONS)).length > 0)
+    throw new Error("a revoked browser still shows notifications");
   await page.emulateMedia({ colorScheme: "light" });
   await shoot(page, "devices");
 
@@ -1292,15 +1394,62 @@ async function main() {
   await page.getByTestId("shown-code").waitFor();
   await shoot(page, "add-device");
 
+  step(
+    "recover a third browser with the new key: the old one is refused, every other member goes (#348, #363)",
+  );
+  const c = await ff.newContext({ permissions: ["notifications"] });
+  await watchCsp(c);
+  const pageC = await signIn(c);
+  await pageC.getByRole("button", { name: "Use the recovery key" }).click();
+  const entry = pageC.getByLabel("Your recovery key");
+  await noWordsAsked(pageC);
+  await entry.fill(`${key.slice(0, 9)}U`);
+  await pageC.getByText('Character 10, "U", is not in a recovery key.').waitFor();
+  await shoot(pageC, "recovery-typo");
+  // The key replaced above: a recovery key, but no longer this account's.
+  await entry.fill(key);
+  await pageC.getByRole("button", { name: "Recover" }).click();
+  await pageC.getByText("This is a recovery key, but not this account's current one.").waitFor();
+  // Lower case, in groups split by spaces: the key reads all the same.
+  await entry.fill(newKey.toLowerCase().match(/.{4}/g)?.join(" ") ?? "");
+  await pageC.getByText("28 of 28 characters").waitFor();
+  await pageC.getByRole("button", { name: "Recover" }).click();
+  await pageC.getByRole("heading", { name: "Inbox" }).waitFor({ timeout: 30_000 });
+  // Recovery keeps no earlier device. The server's 401 is unsigned, so the first browser keeps
+  // its keys and shows the refusal; signed in, the device list confirms it (#310).
+  await page.goto(ORIGIN);
+  await page.getByText("The server says this browser was revoked.").waitFor({ timeout: 30_000 });
+  await page.getByRole("link", { name: SIGN_IN }).click();
+  await page
+    .getByRole("heading", {
+      name: "This browser was removed from your account by your recovery key",
+    })
+    .waitFor({ timeout: 30_000 });
+
   step("sign out the recovered browser: it leaves the devices and forgets its keys");
   await pageC
     .getByRole("navigation", { name: "Main" })
     .getByRole("link", { name: "Settings" })
     .click();
+  await pageC.evaluate(() =>
+    Promise.race([
+      navigator.serviceWorker.ready.then((r) =>
+        r.showNotification("Left over", { tag: "e2e-left", requireInteraction: true }),
+      ),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("the left-over notification hung")), 10_000),
+      ),
+    ]),
+  );
+  if (!(await pageC.evaluate(NOTIFICATIONS)).some((n) => n.tag === "e2e-left"))
+    throw new Error("the left-over notification did not show");
   await pageC.getByRole("button", { name: "Sign out" }).click();
   await pageC.getByRole("dialog").getByRole("button", { name: "Sign out" }).click();
   // With no keys left, the browser is a visitor: the landing page, not "Sign in to Starbridge".
   await pageC.getByRole("heading", { name: /Your agents ask/ }).waitFor({ timeout: 30_000 });
+  // Notifications hold decrypted questions: none outlive the sign-out (#311).
+  if ((await pageC.evaluate(NOTIFICATIONS)).length > 0)
+    throw new Error("signing out left notifications on screen");
 
   await ff.close();
   if (violations.length) throw new Error(`CSP violations:\n${violations.join("\n")}`);
@@ -1326,12 +1475,10 @@ try {
   }
   process.exitCode = 1;
 } finally {
-  await failPage
-    ?.context()
-    .browser()
-    ?.close()
-    .catch(() => {});
+  await ff?.close().catch(() => {});
   for (const p of children) p.kill();
   for (const s of held.values()) s.close();
   rmSync(tmp, { recursive: true, force: true });
+  // A browser that would not close keeps Node running: a CI job would hang until its timeout.
+  process.exit();
 }

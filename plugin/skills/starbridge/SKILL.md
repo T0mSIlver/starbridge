@@ -90,9 +90,10 @@ in your final message.
 
 When you built a claude.ai artifact whose buttons send the pick to this
 session, post with `--answer-in <url>` and no options; when its message
-arrives, run `starbridge settle <id>`, then act. An artifact only to look at
-goes in `--link`, with options. `starbridge settle <id> --outcome withdrawn`
-takes back a card you no longer need.
+arrives, run `starbridge settle <id>`, then act; a card answered in Starbridge
+needs no settle. An artifact only to look at goes in `--link`, with options.
+`starbridge settle <id> --outcome withdrawn` takes back a card you no longer
+need.
 
 ## Report a run
 
