@@ -41,7 +41,7 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            // Without the release key (forks, CI on pull requests) release builds sign with the debug key.
+            // Without the release key's environment (every build but release.yml's) release builds sign with the debug key.
             signingConfig = signingConfigs.getByName(if (releaseKeystore() != null) "release" else "debug")
         }
     }
@@ -125,16 +125,14 @@ fun versionCodeOf(name: String): Int {
 class Keystore(val file: File, val password: String, val alias: String)
 
 /**
- * The release key: from STARBRIDGE_KEYSTORE* in CI, else from ~/.config/starbridge/secrets/ on the
- * owner's machine. It never goes in git.
+ * The release key, only from STARBRIDGE_KEYSTORE, STARBRIDGE_KEYSTORE_PASSWORD and STARBRIDGE_KEY_ALIAS,
+ * which release.yml sets. It is never found on disk, so a build of someone else's code on a machine
+ * that holds the key cannot sign with it (#274).
  */
 fun releaseKeystore(): Keystore? {
-    System.getenv("STARBRIDGE_KEYSTORE")?.takeIf { it.isNotEmpty() }?.let {
-        return Keystore(File(it), System.getenv("STARBRIDGE_KEYSTORE_PASSWORD")!!, System.getenv("STARBRIDGE_KEY_ALIAS")!!)
-    }
-    val dir = File(System.getProperty("user.home"), ".config/starbridge/secrets")
-    val file = File(dir, "release.jks").takeIf { it.isFile } ?: return null
-    return Keystore(file, File(dir, "release-keystore-password").readText().trim(), "starbridge")
+    val path = System.getenv("STARBRIDGE_KEYSTORE")?.takeIf { it.isNotEmpty() } ?: return null
+    fun env(name: String) = System.getenv(name)?.takeIf { it.isNotEmpty() } ?: error("STARBRIDGE_KEYSTORE is set but $name is not")
+    return Keystore(File(path), env("STARBRIDGE_KEYSTORE_PASSWORD"), env("STARBRIDGE_KEY_ALIAS"))
 }
 
 /**

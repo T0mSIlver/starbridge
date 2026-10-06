@@ -188,5 +188,4 @@ the machine is not paired or the server doesn't answer, it lets the question thr
 `bun run build:bin` builds the standalone binaries (Linux and macOS, x64 and arm64). A `v*` tag
 runs `.github/workflows/release.yml`, which attaches them, `install.sh` and the signed
 `SHA256SUMS` to a GitHub Release, commits the formula to `T0mSIlver/homebrew-starbridge` and
-publishes to npm. The signing key lives in `~/.config/starbridge/secrets/minisign.key` on the
-dev box and in the `MINISIGN_SECRET_KEY` Actions secret.
+publishes to npm. The signing key lives in the `MINISIGN_SECRET_KEY` Actions secret and, offline, with the maintainer.

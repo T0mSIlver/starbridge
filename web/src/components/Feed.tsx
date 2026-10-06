@@ -5,6 +5,7 @@ import { imageSrc } from "@/lib/attachments";
 import { ago, type Entry, type MachineKind, type Past, timer } from "@/lib/feed";
 import { useFind } from "@/lib/find";
 import { clockTime } from "@/lib/format";
+import { fitsRow, fullInput } from "@/lib/permissionInput";
 import { duration, progressText, runState } from "@/lib/runs";
 import type { Decision, PromptItem, RunItem, Source } from "@/lib/types";
 import s from "./Feed.module.css";
@@ -35,7 +36,7 @@ export function Hit({ text }: { text: string }) {
   return parts.map((part, i) =>
     i % 2 ? (
       // biome-ignore lint/suspicious/noArrayIndexKey: the parts of one string, in order
-      <mark key={i} className={s.hit}>
+      <mark key={i} className={s.match}>
         {part}
       </mark>
     ) : (
@@ -83,8 +84,8 @@ export function MetaRow({
 }
 
 /**
- * A terminal for a permission prompt, a speech bubble for a question: filled in amber while its
- * agent waits on it, outlined while it works around it (#191).
+ * A terminal for a permission prompt, a speech bubble for a question, straight on its card: amber
+ * while its agent waits on it, `fg2` while it works around it (#248).
  */
 export function KindTile({
   type,
@@ -242,9 +243,16 @@ function PromptBody({ p, comfy }: { p: PromptItem; comfy?: boolean }) {
           <Hit text={p.permission.tool} />
         </span>
       </div>
-      <pre className={`${comfy ? "t-code" : "t-snippet"} ${s.cmd}`}>
-        <Hit text={p.permission.summary} />
-      </pre>
+      {/* A phone's row carries Allow when the input fits it: then it shows the input whole. */}
+      {comfy && fitsRow(p.permission) ? (
+        <pre className={`t-code ${s.cmd} ${s.cmdWhole}`}>
+          <Hit text={fullInput(p.permission)} />
+        </pre>
+      ) : (
+        <pre className={`${comfy ? "t-code" : "t-snippet"} ${s.cmd}`}>
+          <Hit text={p.permission.summary} />
+        </pre>
+      )}
     </>
   );
 }
@@ -349,17 +357,22 @@ export function HistoryHead({
 export function PastRow({
   past,
   by,
+  comfy,
   selected,
   onSelect,
 }: {
   past: Past;
   by: string;
+  comfy?: boolean;
   selected?: boolean;
   onSelect: () => void;
 }) {
   const e = past.entry;
   return (
-    <div className={`${s.row} ${s.past}`} aria-current={selected ? "true" : undefined}>
+    <div
+      className={`${s.row} ${s.past} ${comfy ? s.comfy : ""}`}
+      aria-current={selected ? "true" : undefined}
+    >
       <button
         type="button"
         className={s.hit}
@@ -368,7 +381,11 @@ export function PastRow({
         tabIndex={selected ? 0 : -1}
         onClick={onSelect}
       />
-      <KindTile type={e.type === "prompt" ? "prompt" : "question"} filled={false} />
+      <KindTile
+        type={e.type === "prompt" ? "prompt" : "question"}
+        filled={false}
+        size={comfy ? 36 : 32}
+      />
       <div className={s.pastBody}>
         <MetaRow
           machine={e.machine}
