@@ -87,27 +87,20 @@
   color: var(--fg2);
 }
 
+@media (hover: hover) {
+  .actions .quiet:hover {
+    color: var(--fg);
+  }
+}
+
 .apps {
   display: grid;
   grid-auto-flow: column;
   grid-auto-columns: minmax(0, 1fr);
   gap: var(--s8);
-  width: min(100%, calc(var(--s40) * 5));
+  width: min(100%, var(--size-content));
   margin-top: var(--s5);
   text-align: left;
-}
-
-.app {
-  padding-top: var(--s5);
-  border-top: 1px solid var(--line);
-}
-
-.app h3 {
-  font-weight: 500;
-}
-
-.app p {
-  margin-top: var(--s1h);
 }
 
 .appLinks {

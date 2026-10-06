@@ -254,34 +254,48 @@ export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
       <section id="get-the-app" className={s.installSection}>
         <h2 className="t-title">Get the app</h2>
         <div className={s.apps}>
-          <div className={s.app}>
+          <div className={s.feature}>
             <h3 className="t-prose">Android</h3>
             <p className={`t-reading ${s.dim}`}>
               The signed APK, for Android 12 and later. Add it to Obtainium to get updates.
             </p>
             <div className={s.appLinks}>
-              <a href={`${REPO}/releases`}>GitHub Releases</a>
-              <a href={OBTAINIUM}>Obtainium</a>
+              <a href={`${REPO}/releases`} onClick={() => track("get-app", { via: "releases" })}>
+                GitHub Releases
+              </a>
+              <a href={OBTAINIUM} onClick={() => track("get-app", { via: "obtainium" })}>
+                Obtainium
+              </a>
             </div>
           </div>
           {PLAY_TEST_OPEN && (
-            <div className={s.app}>
+            <div className={s.feature}>
               <h3 className="t-prose">Google Play</h3>
               <p className={`t-reading ${s.dim}`}>
                 In closed testing. Google needs 12 testers for 14 days before the app can be public.
                 Join the group, then opt in.
               </p>
               <div className={s.appLinks}>
-                <a href="https://groups.google.com/g/starbridge-testers">Testers group</a>
-                <a href="https://play.google.com/apps/testing/dev.starbridge.app">Opt in</a>
+                <a
+                  href="https://groups.google.com/g/starbridge-testers"
+                  onClick={() => track("get-app", { via: "play-group" })}
+                >
+                  Testers group
+                </a>
+                <a
+                  href="https://play.google.com/apps/testing/dev.starbridge.app"
+                  onClick={() => track("get-app", { via: "play-opt-in" })}
+                >
+                  Opt in
+                </a>
               </div>
             </div>
           )}
-          <div className={s.app}>
+          <div className={s.feature}>
             <h3 className="t-prose">iPhone</h3>
             <p className={`t-reading ${s.dim}`}>
               Web app, native app is planned. Add starbridge.run to the Home Screen from Safari to
-              get notifications.
+              get notifications, on iOS 16.4 and later.
             </p>
           </div>
         </div>
