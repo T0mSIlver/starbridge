@@ -9,7 +9,7 @@ export type Problem = {
    * - `spills`: text runs past the edge of its box.
    * - `offscreen`: something runs past the window's edge where nothing can scroll to it.
    * - `overlap`: two pieces of text are drawn over each other.
-   * - `tap`: a control on a phone is smaller than 44 px across.
+   * - `tap`: a control's tap area on a phone is under 48 px (`size.tap`) across.
    * - `contrast`: text under 3:1 against what is behind it.
    */
   kind: "page-width" | "clipped" | "spills" | "offscreen" | "overlap" | "tap" | "contrast";
@@ -77,6 +77,14 @@ function inspect(phone: boolean): Problem[] {
   };
   const page = document.documentElement.scrollWidth;
   if (page > W) problems.push({ kind: "page-width", what: `the page is ${page} px wide in ${W}` });
+
+  // A phone's invisible tap areas (globals.css) may reach past a box that clips, which hides
+  // nothing; they are left out of what a box holds, though not out of the page's width above.
+  const noTapAreas = new CSSStyleSheet();
+  noTapAreas.replaceSync(
+    ":where(a[href], button, summary, label:has(input)):not([data-copy])::after { display: none !important; }",
+  );
+  document.adoptedStyleSheets = [...document.adoptedStyleSheets, noTapAreas];
 
   const all = [...document.body.querySelectorAll("*")].filter(
     (el) => !el.closest("[aria-hidden='true'], svg, script, style, noscript") && shown(el),
@@ -155,6 +163,8 @@ function inspect(phone: boolean): Problem[] {
         problems.push({ kind: "overlap", what: `${name(a.el)} is drawn over ${name(c.el)}` });
     }
 
+  document.adoptedStyleSheets = document.adoptedStyleSheets.filter((x) => x !== noTapAreas);
+
   if (phone) {
     const controls = all.filter((el) =>
       el.matches(
@@ -166,12 +176,14 @@ function inspect(phone: boolean): Problem[] {
       if (el.matches("a") && css(el).display === "inline") continue;
       // A control drawn inside a bigger one takes the bigger one's tap.
       if (el.parentElement?.closest("label, button, a[href], summary")) continue;
+      // The tap area: the control, or the invisible area globals.css centres on it if larger.
       const r = el.getBoundingClientRect();
-      if (r.width < 44 || r.height < 44)
-        problems.push({
-          kind: "tap",
-          what: `${name(el)} is ${Math.round(r.width)}×${Math.round(r.height)} px`,
-        });
+      const area = css(el).position === "static" ? undefined : getComputedStyle(el, "::after");
+      const grown = area?.content !== "none" && area?.position === "absolute";
+      const w = Math.max(r.width, grown ? Number.parseFloat(area.width) || 0 : 0);
+      const h = Math.max(r.height, grown ? Number.parseFloat(area.height) || 0 : 0);
+      if (w < 48 || h < 48)
+        problems.push({ kind: "tap", what: `${name(el)} is ${Math.round(w)}×${Math.round(h)} px` });
     }
   }
 

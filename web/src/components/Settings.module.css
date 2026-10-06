@@ -277,6 +277,20 @@
 }
 
 @media (max-width: 599px) {
+  .segment {
+    min-height: var(--size-tap);
+  }
+
+  /* A switch's tap area is size.tap across: a transparent border makes it, the track stays drawn
+     in the padding box, and the negative margin gives the room back to the row. */
+  .switch {
+    box-sizing: content-box;
+    margin: -15px -8px;
+    border: solid transparent;
+    border-width: 15px 8px;
+    background-clip: padding-box;
+  }
+
   .page {
     padding: var(--s6) var(--s4) var(--s8);
     gap: var(--s8);

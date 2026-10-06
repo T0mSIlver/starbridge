@@ -227,6 +227,18 @@
   color: var(--fg);
 }
 
+/* On a phone the button's tap area is `size.tap` tall without its look changing: a transparent
+   border makes the area, an inset shadow draws the line the border drew, and the margin gives
+   back what the border adds, so the pill stays where it was. */
+@media (max-width: 599px) {
+  .text [data-copy] {
+    margin: 1px 1px 0 0;
+    border: 11px solid transparent;
+    background-clip: padding-box;
+    box-shadow: inset 0 0 0 1px var(--line);
+  }
+}
+
 .text dl {
   display: grid;
   gap: var(--s1);

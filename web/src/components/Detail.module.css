@@ -158,3 +158,9 @@
   justify-self: start;
   text-decoration: none;
 }
+
+@media (max-width: 599px) {
+  .options > button {
+    min-height: var(--size-tap);
+  }
+}
