@@ -135,6 +135,7 @@ load | spike)
   docker run --rm -i --name "starbridge-$script-client" ${LOAD_CLIENT_CPUS:+--cpuset-cpus "$LOAD_CLIENT_CPUS"} --network starbridge-load_default \
     --user "$(id -u):$(id -g)" --group-add "$(stat -c %g /var/run/docker.sock)" \
     -v "$repo:/repo:ro" -v "$LOAD_DIR:/load" -e LOAD_DIR=/load ${LOAD_TARGET:+-e LOAD_TARGET="$LOAD_TARGET"} \
+    -e BUN_CONFIG_MAX_HTTP_REQUESTS=65535 \
     -v /sys/fs/cgroup:/host/cgroup:ro -e LOAD_CGROUPS=/host/cgroup \
     -v /var/run/docker.sock:/var/run/docker.sock --ulimit nofile=524288:524288 \
     oven/bun:1.4.2 bun "/repo/evals/load/$script.ts" "$@"
