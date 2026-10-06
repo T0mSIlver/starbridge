@@ -102,8 +102,7 @@ each browser's own push service still carries them, encrypted, such as Google's 
 
    If your ntfy is on a private address or plain HTTP, add `ALLOW_PRIVATE_PUSH_ENDPOINTS=1`. Then
    restart: `docker compose -f server/compose.yaml up -d`. A browser that turned notifications on
-   through the relay keeps the relay's key and gets no more: sign it out, sign in again, and approve
-   it from another device.
+   through the relay subscribes again with your key the next time it opens the page.
 
 2. On an ntfy server with access control, let anyone publish to UnifiedPush topics, which the
    ntfy app names `up` and a random id, and sign the ntfy app in as a user who can read them:
