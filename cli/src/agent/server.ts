@@ -33,8 +33,8 @@ import {
 } from "./api";
 import { AgentClient, AgentError, NoAgent } from "./client";
 
-/** The longest unix socket path every platform takes: macOS's `sun_path` holds 104 bytes with the NUL, Linux's 108 (#622). */
-const MAX_SOCKET_PATH = 103;
+/** The longest unix socket path: `sun_path` holds 108 bytes with the NUL on Linux, 104 elsewhere (#622). */
+const MAX_SOCKET_PATH: Partial<Record<NodeJS.Platform, number>> = { linux: 107 };
 
 export interface Request {
   params: Record<string, string>;
@@ -177,6 +177,11 @@ export class Agent implements Hub {
       if (!(e instanceof NoAgent || e instanceof AgentError)) throw e;
       if (e instanceof AgentError) throw new UsageError(`an agent already runs on ${this.socket}`);
     }
+    const max = MAX_SOCKET_PATH[process.platform] ?? 103;
+    if (!isPortFile(this.socket) && Buffer.byteLength(this.socket) > max)
+      throw new UsageError(
+        `the agent's socket path ${this.socket} is over ${max} bytes, too long for a unix socket: set STARBRIDGE_AGENT_SOCKET to a shorter path, or STARBRIDGE_CONFIG_DIR to a shorter folder`,
+      );
     const dir = dirname(this.socket);
     mkdirSync(dir, { recursive: true, mode: 0o700 });
     if (dir === this.ctx.store.dir || dir.endsWith("/starbridge")) chmodSync(dir, 0o700);
@@ -199,10 +204,6 @@ export class Agent implements Hub {
   }
 
   private async listenUnix(server: Server) {
-    if (Buffer.byteLength(this.socket) > MAX_SOCKET_PATH)
-      throw new UsageError(
-        `the agent's socket path ${this.socket} is over ${MAX_SOCKET_PATH} bytes, too long for a unix socket: set STARBRIDGE_AGENT_SOCKET to a shorter path, or STARBRIDGE_CONFIG_DIR to a shorter folder`,
-      );
     try {
       if (lstatSync(this.socket).isSocket()) unlinkSync(this.socket);
     } catch {}
