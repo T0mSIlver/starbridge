@@ -1,4 +1,4 @@
-# Tell your agents when to use Starbridge
+# Agent instructions
 
 The Starbridge plugin gives every Claude Code session two rules. The agent
 reaches you through Starbridge for decisions that are yours and for work that

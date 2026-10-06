@@ -269,7 +269,7 @@ export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
           <button type="button" className={s.textButton} onClick={onOwnerToken}>
             Use your own server
           </button>
-          <a href={AGENTS_GUIDE}>How to tell your agents</a>
+          <a href={AGENTS_GUIDE}>Agent instructions</a>
           <a href={`${REPO}/releases`}>Changelog</a>
         </div>
         <div className={s.footCol}>
@@ -280,7 +280,7 @@ export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
         <nav className={s.footInline} aria-label="Links">
           <a href={REPO}>GitHub</a>
           <a href={SELF_HOST}>Self-host</a>
-          <a href={AGENTS_GUIDE}>How to tell your agents</a>
+          <a href={AGENTS_GUIDE}>Agent instructions</a>
           <a href="/privacy">Privacy</a>
           <a href="/terms">Terms</a>
         </nav>

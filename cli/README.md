@@ -134,7 +134,7 @@ If the machine is not paired or the server is down, `run` warns once and runs th
 
 The Starbridge skill has agents wrap, unasked, any command that blocks you or needs you at the machine. To hear about
 other commands, such as local inference, say so in their instruction files
-([Tell your agents](../docs/tell-your-agents.md)).
+([Agent instructions](../docs/tell-your-agents.md)).
 
 ### Quotas
 

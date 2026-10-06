@@ -27,7 +27,7 @@ only ciphertext. Use the free server at starbridge.run, or [host your own](../se
 
 3. **Tell your agents** when to reach you. With the plugin, Claude Code asks you for decisions
    that are yours and reports the commands that block you. Codex needs the Starbridge skill
-   copied in. [Tell your agents](tell-your-agents.md) covers both, and how to add your own rules.
+   copied in. [Agent instructions](tell-your-agents.md) covers both, and how to add your own rules.
 
 ## What you get
 
@@ -42,4 +42,4 @@ only ciphertext. Use the free server at starbridge.run, or [host your own](../se
   permission to run. Off until you turn them on.
 
 Starbridge works with Claude Code, Codex and Pi.
-[Tell your agents](tell-your-agents.md#what-each-agent-supports) lists what each one supports.
+[Agent instructions](tell-your-agents.md#what-each-agent-supports) lists what each one supports.
