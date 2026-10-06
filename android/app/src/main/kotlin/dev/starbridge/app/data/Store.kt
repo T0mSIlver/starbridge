@@ -59,6 +59,8 @@ interface Store {
     fun refreshQuotas()
     /** Answers [id] with [choice] or [text]; with neither, Done: answered on its own page (#539). */
     fun answer(id: String, choice: String?, text: String?)
+    /** Puts question [id] off until [until] (#571); a time already passed brings it back. */
+    fun snooze(id: String, until: java.time.Instant)
     /** Allows prompt [id] for [scope] ("once", "session", "project"), or denies it with [message]. */
     fun answerPrompt(id: String, allow: Boolean, scope: String, message: String?)
     /** Reads prompts again, quickly, while one waits on screen. */

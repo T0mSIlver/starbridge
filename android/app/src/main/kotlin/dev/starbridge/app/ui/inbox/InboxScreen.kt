@@ -131,6 +131,7 @@ class InboxViewModel @Inject constructor(private val store: Store, private val p
     fun answerPrompt(id: String, allow: Boolean, scope: String, message: String?) = store.answerPrompt(id, allow, scope, message)
     fun refreshPrompts() = store.refreshPrompts()
     fun answer(id: String, choice: String?, text: String?) = store.answer(id, choice, text)
+    fun snooze(id: String, until: Instant) = store.snooze(id, until)
     fun refresh() = store.refresh()
     val recovery = store.recovery
     fun dismissRecovery(seq: Int) = store.dismissRecoveryNotice(seq)

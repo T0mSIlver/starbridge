@@ -66,8 +66,11 @@ fun snoozePresets(now: Instant, zone: ZoneId = ZoneId.systemDefault()): List<Pai
     )
 }
 
-/** Whether [until] is a time a snooze may take: after now, at most 7 days ahead. */
-fun snoozeAllowed(until: Instant, now: Instant) = until.isAfter(now) && !until.isAfter(now.plus(SNOOZE_MAX))
+/** The shortest snooze: a device tells its first push from its return by it (ServerStore). */
+val SNOOZE_MIN: Duration = Duration.ofMinutes(5)
+
+/** Whether [until] is a time a snooze may take: 5 minutes from now on, at most 7 days ahead. */
+fun snoozeAllowed(until: Instant, now: Instant) = !until.isBefore(now.plus(SNOOZE_MIN)) && !until.isAfter(now.plus(SNOOZE_MAX))
 
 /** Whether the owner put [this] off and its time has not come. */
 fun Decision.snoozed(now: Instant) = isOpen && snoozedUntil?.isAfter(now) == true

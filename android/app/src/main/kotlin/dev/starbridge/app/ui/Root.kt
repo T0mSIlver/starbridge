@@ -258,7 +258,7 @@ fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> U
                                     decisions.any { it.waiting && it.isOpen } || prompts.any { it.waiting(Instant.now()) },
                                 now,
                             ),
-                            DecisionActions(answer = vm::answer, open = { open(DecisionKey(it)) }),
+                            DecisionActions(answer = vm::answer, open = { open(DecisionKey(it)) }, snooze = vm::snooze),
                             refresh = refresh(vm::refresh),
                             replies = Replies(drafts, sending),
                             prompts = prompts,
@@ -292,7 +292,11 @@ fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> U
                         val decisions by vm.decisions.collectAsStateWithLifecycle()
                         val sending by vm.sending.collectAsStateWithLifecycle()
                         val d = decisions.find { it.id == key.id } ?: return@entry
-                        DecisionSheet(d, seconds(d.waiting, now), vm::answer, Replies(drafts, sending))
+                        DecisionSheet(d, seconds(d.waiting, now), vm::answer, Replies(drafts, sending), onSnooze = { until ->
+                            vm.snooze(d.id, until)
+                            // Put off, it leaves as an answered question would; brought back, it stays open.
+                            if (until.isAfter(Instant.now()) && backStack.lastOrNull() == key) backStack.removeAt(backStack.lastIndex)
+                        })
                     }
                     entry<PromptKey>(metadata = BottomSheetSceneStrategy.sheet) { key ->
                         val vm: InboxViewModel = hiltViewModel()
