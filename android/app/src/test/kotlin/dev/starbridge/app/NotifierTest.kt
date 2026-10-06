@@ -11,6 +11,7 @@ import androidx.test.core.app.ApplicationProvider
 import dev.starbridge.app.data.Prefs
 import dev.starbridge.app.data.visible
 import dev.starbridge.app.push.Notifier
+import dev.starbridge.app.push.PromptReceiver
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -93,6 +94,25 @@ class NotifierTest {
             assertTrue(n.publicVersion.actions.first().isAuthenticationRequired)
         }
         prefs.setAllowUnseen(false)
+    }
+
+    // A lock-screen Allow posted while the setting was on carries its own mark, so the receiver
+    // refuses it once the setting is off, even for a command the shade line shows whole.
+    @Test
+    fun theLockScreenAllowIsMarkedForTheReceiver() {
+        val prefs = Prefs(context)
+        val notifier = Notifier(context, prefs)
+        val p = fake.prompts.first()
+        prefs.setAllowUnseen(true)
+        notifier.prompt(p)
+        val n = posted()
+        val shade = shadowOf(n.actions.first().actionIntent).savedIntent
+        val locked = shadowOf(n.publicVersion.actions.first().actionIntent).savedIntent
+        assertFalse(shade.getBooleanExtra(PromptReceiver.EXTRA_LOCKED, true))
+        assertTrue(locked.getBooleanExtra(PromptReceiver.EXTRA_LOCKED, false))
+        prefs.setAllowUnseen(false)
+        assertTrue(notifier.allowSends(p, locked = false))
+        assertFalse(notifier.allowSends(p, locked = true))
     }
 
     @Test

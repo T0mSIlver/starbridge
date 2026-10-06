@@ -315,13 +315,14 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
 
     private fun promptTag(p: Prompt) = "p:${p.source.machine}/${p.source.session}".hashCode()
 
-    private fun promptIntent(p: Prompt, allow: Boolean, scope: String, request: Int): PendingIntent = PendingIntent.getBroadcast(
+    private fun promptIntent(p: Prompt, allow: Boolean, scope: String, request: Int, locked: Boolean = false): PendingIntent = PendingIntent.getBroadcast(
         context,
         request,
         Intent(context, PromptReceiver::class.java)
             .setAction(PromptReceiver.ACTION)
-            .setData(Uri.Builder().scheme("starbridge-prompt").authority(if (allow) "allow" else "deny").appendPath(p.id).appendPath(scope).build())
+            .setData(Uri.Builder().scheme("starbridge-prompt").authority(if (allow) "allow" else "deny").appendPath(p.id).appendPath(scope).apply { if (locked) appendPath("locked") }.build())
             .putExtra(PromptReceiver.EXTRA_ID, p.id)
+            .putExtra(PromptReceiver.EXTRA_LOCKED, locked)
             .putExtra(PromptReceiver.EXTRA_ALLOW, allow)
             .putExtra(PromptReceiver.EXTRA_SCOPE, scope),
         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
@@ -415,15 +416,17 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
     private fun postPrompt(prompt: Prompt, note: String?) {
         if (!allowed()) return
         val tag = promptTag(prompt)
-        val allow = { sends: Boolean ->
-            NotificationCompat.Action.Builder(0, "Allow", if (sends) promptIntent(prompt, true, "once", tag * 31) else openPrompt(prompt))
+        // The lock screen's Allow is its own intent, so the receiver applies the lock screen's rule.
+        val allow = { locked: Boolean ->
+            val sends = allowSends(prompt, locked)
+            NotificationCompat.Action.Builder(0, "Allow", if (sends) promptIntent(prompt, true, "once", tag * 31 + if (locked) 1 else 0, locked) else openPrompt(prompt))
                 .setAuthenticationRequired(true)
                 .build()
         }
         val deny = NotificationCompat.Action.Builder(0, "Deny", promptIntent(prompt, false, "once", tag * 31 + 2))
             .setAuthenticationRequired(false)
             .build()
-        val b = promptBase(prompt, listOf(allow(allowSends(prompt)), deny), locked = listOf(allow(allowSends(prompt, locked = true)), deny))
+        val b = promptBase(prompt, listOf(allow(false), deny), locked = listOf(allow(true), deny))
         // The note goes above the command, so Allow still shows what it covers.
         if (note != null) b.setContentText(note).setStyle(NotificationCompat.BigTextStyle().bigText(TextUtils.concat(note, "\n", command(prompt)))).setSilent(true)
         shown[tag] = prompt.id
