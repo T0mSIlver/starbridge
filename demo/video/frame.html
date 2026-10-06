@@ -1,8 +1,9 @@
 <!doctype html>
 <!--
-  One frame of the demo video at 1920×1080: the agent's terminal on the left, a hole on the right
-  where compose.ts lays the phone recording, a caption, and the end card. compose.ts calls
-  render(t, take) for each frame, take being a take's events.json.
+  One frame of the demo video at 1920×1080: one or two agents' terminals, a hole where compose.ts
+  lays the recording (a phone, or a browser on the web inbox), a caption, and the end card.
+  compose.ts calls layout(hole, terminals) once, then render(t, take) for each frame, take being
+  a take's events.json.
 -->
 <meta charset="utf-8" />
 <style>
@@ -29,10 +30,10 @@
   html, body { margin: 0; background: transparent; }
   body { width: 1920px; height: 1080px; position: relative; overflow: hidden; color: var(--fg); font-family: "Google Sans Flex", sans-serif; }
   /* Everything outside the phone's screen: a rounded hole by a spread shadow. */
-  .hole { position: absolute; border-radius: 48px; box-shadow: 0 0 0 3000px var(--bg); }
-  .bezel { position: absolute; border-radius: 56px; border: 2px solid #333; box-shadow: inset 0 0 0 8px #050505; }
+  .hole { position: absolute; box-shadow: 0 0 0 3000px var(--bg); }
+  .bezel { position: absolute; border: 2px solid #333; box-shadow: inset 0 0 0 8px #050505; }
   .term {
-    position: absolute; left: 80px; top: 60px; width: 1240px; height: 880px; box-sizing: border-box;
+    position: absolute; box-sizing: border-box;
     background: var(--surface); border: 1px solid var(--line); border-radius: 20px; overflow: hidden;
   }
   .bar { height: 56px; display: flex; align-items: center; gap: 10px; padding: 0 24px; border-bottom: 1px solid var(--line); color: var(--fg3); font-size: 22px; }
@@ -40,7 +41,7 @@
   .bar span { margin-left: 14px; }
   .screen {
     position: absolute; left: 0; right: 0; bottom: 0; top: 57px; padding: 20px 30px; box-sizing: border-box;
-    font: 27px/1.45 "Google Sans Code", monospace; display: flex; flex-direction: column; justify-content: flex-end;
+    font: var(--size, 27px)/1.45 "Google Sans Code", monospace; display: flex; flex-direction: column; justify-content: flex-end; overflow: hidden;
   }
   .l { white-space: pre-wrap; padding-left: 34px; text-indent: -34px; }
   .gap { height: 14px; }
@@ -54,7 +55,7 @@
   .answer { color: var(--accent); }
   .cmd { color: var(--fg2); }
   .caption {
-    position: absolute; left: 80px; width: 1240px; top: 972px; text-align: center; font-size: 40px; font-weight: 500;
+    position: absolute; text-align: center; font-size: 40px; font-weight: 500;
     letter-spacing: -0.2px; transition: none;
   }
   .end {
@@ -68,10 +69,7 @@
 </style>
 <div class="hole" id="hole"></div>
 <div class="bezel" id="bezel"></div>
-<div class="term">
-  <div class="bar"><i></i><i></i><i></i><span>billing-api — claude — workstation</span></div>
-  <div class="screen" id="screen"></div>
-</div>
+<div id="terms"></div>
 <div class="caption" id="caption"></div>
 <div class="end" id="end">
   <div class="name">
@@ -90,64 +88,83 @@
   const SPINNER = ["·", "✢", "✳", "✶", "✻", "✽"];
   const esc = (s) => s.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]);
 
-  /** Places the phone's hole; compose.ts lays the recording at the same rectangle. */
-  window.layout = (phone) => {
+  /**
+   * Places the recording's hole (rounded like a phone or a browser window), the terminals and the
+   * caption; compose.ts lays the recording at the hole's rectangle.
+   */
+  window.layout = ({ hole, terminals, caption }) => {
     for (const [id, pad] of [["hole", 0], ["bezel", 10]]) {
-      const el = document.getElementById(id);
-      Object.assign(el.style, {
-        left: `${phone.x - pad}px`, top: `${phone.y - pad}px`,
-        width: `${phone.w + 2 * pad - (pad ? 4 : 0)}px`, height: `${phone.h + 2 * pad - (pad ? 4 : 0)}px`,
+      Object.assign(document.getElementById(id).style, {
+        left: `${hole.x - pad}px`, top: `${hole.y - pad}px`,
+        width: `${hole.w + 2 * pad - (pad ? 4 : 0)}px`, height: `${hole.h + 2 * pad - (pad ? 4 : 0)}px`,
+        borderRadius: `${hole.r + pad}px`,
       });
     }
+    document.getElementById("terms").innerHTML = terminals
+      .map((r) => `<div class="term" style="left:${r.x}px;top:${r.y}px;width:${r.w}px;height:${r.h}px;--size:${r.size}px">
+        <div class="bar"><i></i><i></i><i></i><span></span></div><div class="screen"></div></div>`)
+      .join("");
+    Object.assign(document.getElementById("caption").style, {
+      left: `${caption.x}px`, width: `${caption.w}px`, top: `${caption.y}px`,
+    });
   };
 
-  /** The terminal's lines at time t: the scripted agent around the real CLI's input and output. */
-  function lines(t, take) {
-    const e = take.events;
-    const q = take.question;
+  /** How each agent prints: Claude Code's ⏺ and ⎿, Codex's • and └. */
+  const SKINS = {
+    "claude-code": { name: "claude", user: "&gt;", text: "⏺", tool: "⏺", out: "⎿", shell: (c) => `<b>Bash</b>(<span class="cmd">${c}</span>)` },
+    codex: { name: "codex", user: "›", text: "•", tool: "•", out: "└", shell: (c) => `<b>Ran</b> <span class="cmd">${c}</span>` },
+  };
+
+  /** A terminal's lines at time t: the scripted agent around the real CLI's input and output. */
+  function lines(t, pane) {
+    const k = SKINS[pane.agent];
+    const q = pane.question;
     const out = [];
-    const at = (time, html) => { if (t >= time) out.push(html); };
+    const at = (time, html) => { if (time !== undefined && t >= time) out.push(html); };
     const typed = (time, text, cps = 90) => esc(text.slice(0, Math.max(0, Math.floor((t - time) * cps))));
-    at(0, `<div class="l user">&gt; <b>Retire the legacy pricing tiers in billing-api.</b></div>`);
-    at(0, `<div class="gap"></div>`);
-    at(0, `<div class="l"><span class="dot tool">⏺</span> <span class="tool"><b>Read</b>(src/plans/tiers.ts)</span></div>`);
-    at(0, `<div class="l sub">⎿  Read 84 lines</div>`);
-    at(0.6, `<div class="gap"></div>`);
-    at(0.6, `<div class="l"><span class="dot">⏺</span> ${typed(0.6, "1,284 plans are still on the two legacy tiers. Where they go is a pricing call, so I'm asking.")}</div>`);
-    const askAt = e.ask - 0.4;
-    at(askAt, `<div class="gap"></div>`);
-    at(askAt, `<div class="l"><span class="dot tool">⏺</span> <span class="tool"><b>Bash</b>(<span class="cmd">starbridge ask --question "${esc(q.question)}" --image tiers.png ${q.options.map((o) => `--option "${esc(o)}"`).join(" ")} --waiting --wait</span>)</span></div>`);
-    if (t >= askAt && t < e.answered) {
+    const gap = (time) => at(time, `<div class="gap"></div>`);
+    const tool = (time, html) => at(time, `<div class="l"><span class="dot tool">${k.tool}</span> <span class="tool">${html}</span></div>`);
+    const said = (time, text) => at(time, `<div class="l"><span class="dot">${k.text}</span> ${typed(time, text)}</div>`);
+    at(0, `<div class="l user">${k.user} <b>${esc(pane.prompt)}</b></div>`);
+    gap(0);
+    tool(0, `<b>${pane.tool[0]}</b>(${esc(pane.tool[1])})`);
+    at(0, `<div class="l sub">${k.out}  ${esc(pane.tool[2])}</div>`);
+    gap(0.6);
+    said(0.6, pane.why);
+    const askAt = pane.asked - 0.4;
+    gap(askAt);
+    const image = pane.image ? ` --image ${esc(pane.image)}` : "";
+    tool(askAt, k.shell(`starbridge ask --question "${esc(q.question)}"${image} ${q.options.map((o) => `--option "${esc(o)}"`).join(" ")} --waiting --wait`));
+    if (t >= askAt && !(t >= pane.answered)) {
       const s = SPINNER[Math.floor(t * 8) % SPINNER.length];
       out.push(`<div class="l sub"><span class="answer">${s}</span> Waiting for your answer… ${Math.floor(t - askAt)}s</div>`);
     }
     // The CLI's answer line, its choice in amber.
-    const said = take.answer.split("\n").at(-1);
-    const cut = said.lastIndexOf(": ") + 2;
-    at(e.answered, `<div class="l sub">⎿  ${esc(said.slice(0, cut))}<span class="answer">${esc(said.slice(cut))}</span></div>`);
-    at(e.answered + 0.5, `<div class="gap"></div>`);
-    at(e.answered + 0.5, `<div class="l"><span class="dot">⏺</span> ${typed(e.answered + 0.5, "Mapping both legacy tiers to Standard, then running the tests.")}</div>`);
-    at(e.run, `<div class="gap"></div>`);
-    at(e.run, `<div class="l"><span class="dot tool">⏺</span> <span class="tool"><b>Bash</b>(<span class="cmd">starbridge run --title "${esc(take.run.title)}" --reason "${esc(take.run.reason)}" -- pnpm test</span>)</span></div>`);
-    for (const [i, line] of take.lines.entries())
-      at(line.t, `<div class="l sub">${i === 0 ? "⎿  " : "   "}${esc(line.text)}</div>`);
-    at(e.ran + 0.6, `<div class="gap"></div>`);
-    at(e.ran + 0.6, `<div class="l"><span class="dot">⏺</span> ${typed(e.ran + 0.6, "Done. Legacy tiers map to Standard at the same price; all 4 suites pass.")}</div>`);
+    const line = pane.answer.split("\n").at(-1);
+    const cut = line.lastIndexOf(": ") + 2;
+    at(pane.answered, `<div class="l sub">${k.out}  ${esc(line.slice(0, cut))}<span class="answer">${esc(line.slice(cut))}</span></div>`);
+    gap(pane.answered + 0.5);
+    said(pane.answered + 0.5, pane.next);
+    if (pane.run) {
+      gap(pane.running);
+      tool(pane.running, k.shell(`starbridge run --title "${esc(pane.run.title)}" --reason "${esc(pane.run.reason)}" -- ${esc(pane.run.command)}`));
+      for (const [i, l] of pane.lines.entries())
+        at(l.t, `<div class="l sub">${i === 0 ? `${k.out}  ` : "   "}${esc(l.text)}</div>`);
+    }
+    const doneAt = (pane.run ? pane.ran : pane.answered + 0.5 + pane.next.length / 90) + 0.6;
+    gap(doneAt);
+    said(doneAt, pane.done);
     return out.join("");
   }
 
-  const CAPTIONS = (e) => [
-    [0, e.notified, "Your agent needs a decision. You're away from your desk."],
-    [e.notified, e.tapped, "It asks on your phone."],
-    [e.tapped, e.run, "One tap. The answer goes back into the session."],
-    [e.run, e.end, "Runs show their progress there too."],
-  ];
-
   window.render = (t, take) => {
-    const e = take.events;
-    document.getElementById("end").style.display = t < e.end ? "none" : "flex";
-    document.getElementById("screen").innerHTML = lines(t, take);
-    const cap = CAPTIONS(e).find(([a, b]) => t >= a && t < b);
+    document.getElementById("end").style.display = t < take.end ? "none" : "flex";
+    const terms = document.querySelectorAll(".term");
+    take.panes.forEach((pane, i) => {
+      terms[i].querySelector(".bar span").textContent = `${pane.project} — ${SKINS[pane.agent].name} — ${pane.machine}`;
+      terms[i].querySelector(".screen").innerHTML = lines(t, pane);
+    });
+    const cap = take.captions.find(([a, b]) => t >= a && t < b);
     const el = document.getElementById("caption");
     el.textContent = cap ? cap[2] : "";
     // 150 ms fades at both ends.

@@ -5,11 +5,12 @@
  *
  *   bun demo/video/stack.ts <dir>
  *
- * Env: PORT (8640), FCM_PROJECT_ID, FCM_CLIENT_EMAIL, FCM_PRIVATE_KEY (notifications on a real
- * phone or a Play emulator). The machines' homes are <dir>/workstation and <dir>/build-server;
+ * Env: PORT (8640), WEB_PORT (8641), FCM_PROJECT_ID, FCM_CLIENT_EMAIL, FCM_PRIVATE_KEY
+ * (notifications on a real phone or a Play emulator). When web/ is built against the server
+ * (README.md), the stack serves it on WEB_PORT, which is then the server's public origin. The machines' homes are <dir>/workstation and <dir>/build-server;
  * scenario.ts runs the CLI in them.
  */
-import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { DemoDevice } from "../src/device";
 
@@ -49,6 +50,7 @@ if (import.meta.main) {
   const dir = resolve(process.argv[2] ?? "demo-video");
   const port = Number(process.env.PORT ?? 8640);
   const server = `http://127.0.0.1:${port}`;
+  const web = `http://127.0.0.1:${process.env.WEB_PORT ?? port + 1}`;
   process.on("SIGTERM", () => process.exit(0));
   process.on("SIGINT", () => process.exit(0));
   // Starts over only in an earlier stack's directory (it holds the database), never in another.
@@ -62,7 +64,8 @@ if (import.meta.main) {
       ...process.env,
       PORT: String(port),
       DB_PATH: join(dir, "starbridge.db"),
-      PUBLIC_URL: server,
+      // The server refuses writes from a browser on another origin than this.
+      PUBLIC_URL: web,
       OWNER_TOKEN,
       DEMO: "1",
       ALLOW_PRIVATE_PUSH_ENDPOINTS: "1",
@@ -81,6 +84,39 @@ if (import.meta.main) {
   ) {
     if (i === 60) throw new Error(`${server} is not up`);
     await Bun.sleep(500);
+  }
+
+  // Next's standalone server, with the files `next build` leaves out of it, behind a proxy that
+  // sends /v1 to the server as Caddy does in production: Next's own rewrite holds long-polls.
+  const standalone = join(ROOT, "web/.next/standalone/web");
+  if (existsSync(join(standalone, "server.js"))) {
+    cpSync(join(ROOT, "web/public"), join(standalone, "public"), { recursive: true });
+    cpSync(join(ROOT, "web/.next/static"), join(standalone, ".next/static"), { recursive: true });
+    const nextPort = Number(new URL(web).port) + 1;
+    const next = Bun.spawn(["node", "server.js"], {
+      cwd: standalone,
+      env: { ...process.env, PORT: String(nextPort), HOSTNAME: "127.0.0.1" },
+      stdout: Bun.file(join(dir, "web.log")),
+      stderr: Bun.file(join(dir, "web.err")),
+    });
+    process.on("exit", () => next.kill());
+    Bun.serve({
+      port: Number(new URL(web).port),
+      hostname: "127.0.0.1",
+      idleTimeout: 0,
+      fetch(req) {
+        const url = new URL(req.url);
+        const to = url.pathname.startsWith("/v1/") ? server : `http://127.0.0.1:${nextPort}`;
+        return fetch(to + url.pathname + url.search, {
+          method: req.method,
+          headers: req.headers,
+          // As sent, still compressed: the response keeps its Content-Encoding.
+          decompress: false,
+          body: req.body,
+          redirect: "manual",
+        });
+      },
+    });
   }
 
   const device = new DemoDevice(server, OWNER_TOKEN);
@@ -113,6 +149,6 @@ if (import.meta.main) {
     const agent = cli(dir, home, ["agent", ...quota, "--interval", "1m"]);
     process.on("exit", () => agent.kill());
   }
-  console.log(`demo stack on ${server}, owner token ${OWNER_TOKEN}, account ${device.account}`);
+  console.log(`demo stack: server ${server}, web ${web}, owner token ${OWNER_TOKEN}`);
   await device.approveJoins(new AbortController().signal);
 }
