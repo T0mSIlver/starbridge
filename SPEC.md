@@ -740,9 +740,9 @@ so the mod is the first path.
   --waiting` posts it already waiting, and `wait <id>` marks it waiting before it blocks. The CLI keeps each decision's waiting id
   and last state, posts nothing when the state is unchanged, and refuses once the decision is
   answered. The default-time machinery is gone: no `--default-at` (accepted and ignored, with a
-  warning, until the skill drops it), no `default` session event, no notice line, and `wait`
+  warning), no `default` session event, no notice line, and `wait`
   ends only at `--timeout`. `--default` is optional; without it the CLI sends "Waits for your
-  answer" for older clients. Decisions carry `agent` (`--agent`, else `claude-code` when Claude
+  answer" for older clients (since #352, it is always sent and `--default` is ignored). Decisions carry `agent` (`--agent`, else `claude-code` when Claude
   Code runs the CLI, which sets `CLAUDECODE=1`), and every source carries `machineKind`:
   `pair` and `setup` guess it (cloud session or codespace, a battery, Linux with no display,
   else desktop) and `starbridge config machine-kind` corrects it. `starbridge config
@@ -795,8 +795,8 @@ so the mod is the first path.
   question its options answer, two to five lines of context saying what each option changes,
   links and images only when they help decide, one question per card. Agents never answer for
   the owner: no default to apply when nobody answers; a blocked agent works on something else,
-  builds both options when cheap and asks which to keep, or waits (`ask --default` is optional,
-  and #127 made `default` optional in the protocol). A `PreToolUse` hook on `AskUserQuestion`
+  builds both options when cheap and asks which to keep, or waits (#127 made `default` optional in
+  the protocol, and #352 dropped `ask --default`). A `PreToolUse` hook on `AskUserQuestion`
   (`starbridge hook ask-user`) turns the question away towards `starbridge ask`, unless the
   machine is unpaired or the server does not answer within 3 s. The skill no longer covers
   permission prompts (#124). `evals/skill` checks all this with real Claude Code and Codex
@@ -1397,6 +1397,11 @@ so the mod is the first path.
   name, unbroken branch names, 24 items, a permission prompt, a run) and runs in CI; it picks
   free ports, so runners on one machine do not collide. `AUDIT=<folder>` shoots every size from
   320 to 1920 px in both themes, plus 200% text at 390, and lists what the checks find.
+
+- 2026-10-06. `ask --default` is gone from the help and the skill (#352): no client shows it, so
+  an agent that passed one believed the owner saw it. Like `--default-at`, it is accepted and
+  ignored with a warning, so older commands still post; the CLI always sends "Waits for your
+  answer" for clients from before 2026-10-05. `ask --help` now lists `--timeout`.
 
 ## Encryption, with existing libraries
 
