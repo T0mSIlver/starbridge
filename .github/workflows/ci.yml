@@ -30,3 +30,31 @@ jobs:
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test
+
+  # The whole product on one machine (web/e2e/run.ts). Each screenshot also fails on layout
+  # breakage: a page wider than the window, clipped, spilled or overlapping text (web/e2e/layout.ts).
+  e2e:
+    name: end to end
+    runs-on: ${{ vars.RUNNER || 'ubuntu-latest' }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+        with:
+          dest: ${{ runner.temp }}/setup-pnpm
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @starbridge/web exec playwright install ${{ runner.environment == 'github-hosted' && '--with-deps' || '' }} firefox
+      - run: xvfb-run -a node web/e2e/run.ts
+        env:
+          TMPDIR: ${{ runner.temp }}
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-failure
+          path: ${{ runner.temp }}/starbridge-e2e-failure.png
+          if-no-files-found: ignore
