@@ -1776,6 +1776,27 @@ so the mod is the first path.
   web and Android; "Answer in" uses the same label. Every other link is unchanged. Android's
   untitled chips now start with "Open" too, as the web's and the #171 entry above do.
 
+- 2026-10-06. A revoked machine learns at once (#353). A directory append wakes every machine's
+  long-poll, revoked ones included, so the revoked machine's next request gets 401 instead of
+  waiting out its 60 s poll; `status` then prints `Server: reachable, but this machine was
+  removed …` with the `pair --force` hint, rather than "not reachable".
+
+- 2026-10-06. `settle` never withdraws a decision whose answer reached the agent (#405): it exits
+  0 and posts nothing, since devices would hold both the answer and a withdrawal. An answer
+  accepted but not yet delivered can still be withdrawn. The skill says only `--answer-in` cards
+  need `settle`.
+
+- 2026-10-06. Which answer won a race reaches every device (#330), as Tom chose over sealing
+  answers to every device. An answer is sealed only to the machine that asked, so a device whose
+  answer the server refused (409 `already-answered`) could not say what won. Once the machine
+  accepts a device's answer, it posts a `settled` notice with `outcome: "device"`, that device,
+  and its `choice` or `text`; the notice is signed by the asking machine, sealed to every active
+  device and checked like any other. Devices show "Later · on Pixel" in History and Find matches
+  it; the device that lost says "Answered on Pixel: Later" (until the notice lands, "Already
+  answered on another device."). The machine keeps the notice due until the server takes it,
+  skips it while behind on the directory, and stops at `already-settled` (withdrawn meanwhile).
+  Older clients ignore the two new fields.
+
 ## Encryption, with existing libraries
 
 - libsodium sealed boxes (`crypto_box_seal`, X25519 + XSalsa20-Poly1305): an

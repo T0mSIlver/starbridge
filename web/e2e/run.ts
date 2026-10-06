@@ -1286,6 +1286,38 @@ async function main() {
   await shoot(pageB, "inbox-banner");
   // The new device sees decisions sealed after it joined; the open one predates it.
 
+  step("two browsers answer at once: the one that loses says which answer won (#330)");
+  const race = cli(
+    "race",
+    [
+      ...["ask", "--question", "Race probe: rotate now?", "--option", "Rotate"],
+      ...["--option", "Later", "--project", "starbridge", "--session", "e2e", "--wait"],
+    ],
+    machineHome,
+  );
+  await race.waitFor(/^d_\S+$/m);
+  await page.goto(ORIGIN);
+  await pageB.reload();
+  // Other questions may be open: select this one on both.
+  for (const p of [page, pageB])
+    await p
+      .getByRole("button", { name: /Race probe: rotate now\?$/ })
+      .first()
+      .click({ timeout: 30_000 });
+  const selected = (p: typeof page) => p.locator('section[aria-label="Selected"]');
+  const later = selected(page).getByRole("button", { name: /^Later/ });
+  const rotate = selected(pageB).getByRole("button", { name: /^Rotate/ });
+  await later.waitFor({ timeout: 30_000 });
+  await rotate.waitFor({ timeout: 30_000 });
+  await later.click();
+  await race.waitFor(/Answer to d_\S+ \(Race probe: rotate now\?\): Later/);
+  if ((await race.exited) !== 0) throw new Error("ask --wait failed");
+  // The second browser has not read the inbox since: its answer reaches the server second, and
+  // the machine's settled notice tells it which answer won.
+  await rotate.click();
+  await pageB.getByText(/^Answered on .+: Later$/).waitFor({ timeout: 30_000 });
+  await pageB.getByText(/^Later · on /).waitFor();
+
   step("replace the recovery key with the current one; the second browser says so once (#348)");
   await page.goto(`${ORIGIN}/settings`);
   const recoveryRow = page.getByRole("region", { name: "Devices" });
@@ -1359,6 +1391,9 @@ async function main() {
       ),
     ]),
   );
+  // In the background since the race above, Firefox paints this window no more frames, and a
+  // click waits for one.
+  await pageB.bringToFront();
   await pageB.getByRole("link", { name: SIGN_IN }).click();
   // Signed in, the device list confirms the revocation.
   await pageB
