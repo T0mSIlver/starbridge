@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { answersOf, claim, hookInput, isRun, waitingSessions } from "../opencode/starbridge.ts";
+import { answersOf, claim, hookInput, isRun, submitted, waitingSessions } from "../opencode/starbridge.ts";
 
 test("only `opencode run` counts as run, whatever flags come first", () => {
   const exe = ["/usr/bin/opencode", "/$bunfs/root/src/index.js"];
@@ -45,6 +45,10 @@ test("of two processes showing a session, only the first to claim an answer subm
   expect(both.sort()).toEqual([false, true]);
   expect(await claim(dir, "ses_b", line)).toBe(true);
   expect(await claim(dir, "ses_a", "Answer to d_2 (Push?): No")).toBe(true);
+  // A claim never marked submitted, left by a process that died, is taken over after a minute.
+  expect(await claim(dir, "ses_a", line, Date.now() + 61_000)).toBe(true);
+  await submitted(dir, "ses_a", line);
+  expect(await claim(dir, "ses_a", line, Date.now() + 61_000)).toBe(false);
   rmSync(dir, { recursive: true, force: true });
 });
 
