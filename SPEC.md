@@ -295,7 +295,9 @@ provider plugins add providers, not panels.
   keys and the server connection, uploads quotas, and routes answers, prompts and runs to sessions
   over HTTP on a unix socket (PROTOCOL.md, "Local agent API"). Every CLI command asks the local
   agent first and talks to the server itself when none listens or it answers 426; once it has
-  answered it never falls back, so nothing posts twice. Answers stay in the CLI's state file,
+  answered it never falls back, so nothing posts twice. `wait` is the exception (#548): the agent
+  marks an answer seen only for a client still listening, so when it restarts under a wait, the
+  wait asks the new one, and after 30 s with no agent it waits at the server. Answers stay in the CLI's state file,
   so both paths share one store.
 - **Files** in `~/.config/starbridge` (or `$XDG_CONFIG_HOME`, `$STARBRIDGE_CONFIG_DIR`): 0600 in a
   0700 directory. A `.lock` guards every read-modify-write (#33). A directory refresh keeps the
