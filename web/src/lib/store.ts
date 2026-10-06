@@ -13,6 +13,8 @@ export interface DeviceRecord {
   boxPk: string;
   signPk: string;
   keys: StoredKeys;
+  /** A first device whose genesis may have reached the server: an empty directory is forged. */
+  posted?: true;
 }
 
 /** What this browser answered, since answers are sealed to the machine and unreadable after. */

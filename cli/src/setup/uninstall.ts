@@ -18,6 +18,7 @@ import {
   piPackage,
   removeCodexRule,
   removeCodexSkill,
+  removeOpencode,
   removePiPackage,
 } from "./harnesses";
 import {
@@ -106,6 +107,7 @@ export async function uninstall(sys: Sys, opts: UninstallOpts): Promise<number> 
 
   if (removeCodexSkill(sys)) ctx.out(`Removed ${codexSkillDir(sys)}.`);
   if (removeCodexRule(sys)) ctx.out(`Removed ${codexRulePath(sys)}.`);
+  for (const path of removeOpencode(sys)) ctx.out(`Removed ${path}.`);
   const piSource = hasPi(sys) ? piPackage(sys) : undefined;
   if (piSource)
     try {

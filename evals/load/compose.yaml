@@ -1,0 +1,64 @@
+# Prod's stack (deploy/compose.yaml) on the dev box, laid over it by evals/load/stack.sh. It is
+# sized like the Hetzner CX23 that runs prod: every container shares the same two cores, and the
+# memory caps add up to its 4 GB less about 600 MB for the OS (web-b runs only during a deploy).
+# Prod sets no caps: these split the box's memory where the load test found it goes. Ports move
+# to 1xxxx so nothing collides with the dev box, and the secrets come from fakes made by stack.sh.
+x-cx23: &cx23
+  cpuset: ${LOAD_CPUS:-8,9}
+
+services:
+  server:
+    <<: *cx23
+    env_file: !override ${LOAD_DIR}/server.env
+    ports: !override ["127.0.0.1:18080:8080"]
+    # The fake GitHub and push services (fake.ts) listen on the host.
+    extra_hosts: ["host.docker.internal:host-gateway"]
+    mem_limit: 1280m
+    memswap_limit: 1280m
+
+  web-a:
+    <<: *cx23
+    ports: !override ["127.0.0.1:13010:3000"]
+    mem_limit: 384m
+    memswap_limit: 384m
+
+  web-b:
+    <<: *cx23
+    ports: !override ["127.0.0.1:13011:3000"]
+    mem_limit: 384m
+    memswap_limit: 384m
+
+  umami:
+    <<: *cx23
+    env_file: !override ${LOAD_DIR}/umami.env
+    ports: !override ["127.0.0.1:13001:3000"]
+    mem_limit: 512m
+    memswap_limit: 512m
+
+  umami-db:
+    <<: *cx23
+    env_file: !override ${LOAD_DIR}/umami-db.env
+    mem_limit: 256m
+    memswap_limit: 256m
+
+  caddy:
+    <<: *cx23
+    # Off the host's network, unlike prod: Caddy opens a connection to the server for many
+    # requests, and on this shared machine their TIME-WAIT sockets used up the port range that
+    # other processes need (#301). Its sockets stay in its own namespace here, and it reaches
+    # the upstreams by name (stack.sh rewrites the Caddyfile).
+    network_mode: !reset null
+    networks: [default, umami]
+    ports: ["127.0.0.1:18000:18000", "127.0.0.1:12019:2019"]
+    volumes: !override
+      - ${LOAD_DIR}/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    # Caddy takes about 100 KB for every long-poll it holds, a connection each way: 3000 users
+    # with the page open hold 6000.
+    mem_limit: 1g
+    memswap_limit: 1g
+
+networks:
+  default:
+  umami:

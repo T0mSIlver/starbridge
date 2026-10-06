@@ -5,10 +5,12 @@ on:
     branches: [main]
   pull_request:
 
-# A new push to a pull request cancels its older run; main runs every commit, for deploys.
+# A new push to a pull request cancels its older run. Main runs one at a time and never cancels
+# the running one; a newer merge replaces the one waiting, so only main's head waits. deploy.yml
+# deploys each run that passes, and the box refuses a revision older than the one it runs.
 concurrency:
-  group: ci-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
-  cancel-in-progress: true
+  group: ci-${{ github.event_name == 'pull_request' && github.ref || 'main' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # Jobs run on the maintainer's self-hosted runners while the repository variable RUNNER is set
 # (deploy/setup-runners.sh); delete the variable to go back to GitHub's runners.

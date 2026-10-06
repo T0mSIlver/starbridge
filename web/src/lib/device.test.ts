@@ -6,6 +6,8 @@ import {
   addEntry,
   checkJoined,
   generateMemberKeys,
+  generateRecoverySeed,
+  genesisEntry,
   joinCommitment,
   joinerKeys,
   joinRequest,
@@ -14,6 +16,7 @@ import {
   openJoinApproval,
   publicKeys,
   recoveryKey,
+  recoveryKeyPair,
   revokeEntry,
   seal,
   toB64,
@@ -186,6 +189,53 @@ test("a recovery that landed but was cut off before adopting its keys resumes ov
   expect(b.state).toBe("ready");
   expect(await store.get("device", ctx.account)).toEqual(recovered);
   expect(await store.get("pending", ctx.account)).toBeUndefined();
+});
+
+test("a join cut off on a browser with no pin starts over rather than trust the served chain (#354)", async () => {
+  const record = (await store.get("device", ctx.account)) as store.DeviceRecord;
+  const pin = await store.get("pin", ctx.account);
+  // A browser that never pinned this account, its join cut off before the approval arrived.
+  await store.put("pending", record, ctx.account);
+  await store.del("device", ctx.account);
+  await store.del("pin", ctx.account);
+  // The server serves a chain of its own: its genesis device, then an add of the pending keys.
+  const x = generateMemberKeys();
+  const at = "2026-10-06T12:00:00Z";
+  const fake = { id: "w_server", role: "device" as const, name: "Server", ...publicKeys(x) };
+  const genesis = genesisEntry({
+    account: ctx.account,
+    device: fake,
+    signKey: x.sign.privateKey,
+    recovery: recoveryKeyPair(generateRecoverySeed()),
+    at,
+  });
+  const { keys: _, account: __, ...pending } = record;
+  const add = addEntry(
+    verifyDirectory([genesis]),
+    { id: fake.id, signKey: x.sign.privateKey },
+    { ...pending, role: "device" },
+    at,
+  );
+  const served = globalThis.fetch;
+  globalThis.fetch = (async (input: string, init?: RequestInit) =>
+    input === "/v1/directory"
+      ? Response.json({ entries: [genesis, add] })
+      : served(input, init)) as typeof fetch;
+  try {
+    const b = await device.boot();
+    expect(b.state).toBe("join");
+    expect(await store.get("device", ctx.account)).toBeUndefined();
+    expect(await store.get("pending", ctx.account)).toBeUndefined();
+    expect(await store.get("pin", ctx.account)).toBeUndefined();
+    // Nor does a device saved without a pin: the chain must start with its own genesis.
+    await store.put("device", record, ctx.account);
+    expect((await device.boot()).state).toBe("join");
+    expect(await store.get("pin", ctx.account)).toBeUndefined();
+  } finally {
+    globalThis.fetch = served;
+    await store.put("device", record, ctx.account);
+    if (pin) await store.put("pin", pin, ctx.account);
+  }
 });
 
 test("a machine's settled notice closes only that machine's decisions (#362)", async () => {
