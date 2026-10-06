@@ -20,6 +20,9 @@ private fun withSource(body: JsonObject): JsonObject {
     return if (source["machineKind"].newer(MACHINE_KINDS)) body.with("source", source.with("machineKind", null)) else body
 }
 
+/** Each alert kind's own field; this app's one QuotaAlert class holds all three. */
+private val ALERT_FIELDS = mapOf("unused-headroom" to "unusedPercent", "runs-out" to "runsOutAt", "low" to "threshold")
+
 /** The fields that are null by design (`.nullable()` in schemas.ts). */
 private val NULLABLE = setOf("prev", "projectedUsedPercent", "runsOutAt", "windowMinutes", "resetsAt", "pace")
 
@@ -73,7 +76,11 @@ fun readable(kind: String, json: JsonElement): JsonElement {
                 }))
             }
             (b["alerts"] as? JsonArray)?.let { alerts ->
-                b = b.with("alerts", JsonArray(alerts.filterNot { (it as? JsonObject)?.get("kind").newer(ALERT_KINDS) }))
+                b = b.with("alerts", JsonArray(alerts.filterNot { (it as? JsonObject)?.get("kind").newer(ALERT_KINDS) }.map { a ->
+                    // Another kind's field is not this alert's, as zod's union strips it.
+                    val own = ALERT_FIELDS[((a as? JsonObject)?.get("kind") as? JsonPrimitive)?.content] ?: return@map a
+                    JsonObject((a as JsonObject).filterKeys { it == own || it !in ALERT_FIELDS.values })
+                }))
             }
             b
         }

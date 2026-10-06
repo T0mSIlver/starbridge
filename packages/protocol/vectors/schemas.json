@@ -2991,6 +2991,51 @@
       "valid": false
     },
     {
+      "name": "another kind's field, null, on an alert",
+      "body": {
+        "v": 1,
+        "id": "q_1",
+        "to": [
+          "phone",
+          "phone2"
+        ],
+        "takenAt": "2026-10-04T12:00:00Z",
+        "providers": [
+          {
+            "provider": "zai",
+            "windows": [
+              {
+                "id": "primary",
+                "label": "5h",
+                "usedPercent": 20,
+                "windowMinutes": 300,
+                "resetsAt": "2026-10-04T12:30:00Z",
+                "pace": {
+                  "stage": "behind",
+                  "expectedUsedPercent": 90,
+                  "deltaPercent": -70,
+                  "projectedUsedPercent": 22.2,
+                  "willLastToReset": true,
+                  "runsOutAt": null
+                }
+              }
+            ]
+          }
+        ],
+        "alerts": [
+          {
+            "kind": "low",
+            "provider": "zai",
+            "window": "primary",
+            "resetsAt": "2026-10-04T12:30:00Z",
+            "threshold": 10,
+            "runsOutAt": null
+          }
+        ]
+      },
+      "valid": true
+    },
+    {
       "name": "no recipients",
       "body": {
         "v": 1,

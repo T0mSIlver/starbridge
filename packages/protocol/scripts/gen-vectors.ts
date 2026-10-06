@@ -1813,6 +1813,23 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
         },
         valid: false,
       },
+      {
+        name: "another kind's field, null, on an alert",
+        body: {
+          ...quotaBody,
+          alerts: [
+            {
+              kind: "low",
+              provider: "zai",
+              window: "primary",
+              resetsAt: T(12, 30),
+              threshold: 10,
+              runsOutAt: null,
+            },
+          ],
+        },
+        valid: true,
+      },
       { name: "no recipients", body: { ...quotaBody, to: [] }, valid: false },
     ],
   };
