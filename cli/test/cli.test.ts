@@ -113,6 +113,26 @@ test("pair uses the hosted server unless --server or STARBRIDGE_SERVER names ano
   expect(asked).toEqual(["https://starbridge.run/v1/pairings", "https://self.example/v1/pairings"]);
 });
 
+test("a pairing the server swept before the CLI's deadline ends as expired, not as a 404 (#623)", async () => {
+  const real = globalThis.fetch;
+  globalThis.fetch = (async (url: string | URL | Request) =>
+    String(url).endsWith("/v1/pairings")
+      ? new Response(null, { status: 201 })
+      : Response.json(
+          { error: "not-found", detail: "no such pairing, or it expired" },
+          { status: 404 },
+        )) as unknown as typeof fetch;
+  try {
+    const ctx = testCtx();
+    expect(await run(["pair", "--server", "https://self.example"], ctx)).toBe(1);
+    expect(ctx.errors.at(-1)).toBe(
+      "starbridge: the pairing code expired after 10 minutes; run `starbridge pair` again",
+    );
+  } finally {
+    globalThis.fetch = real;
+  }
+});
+
 test("pair --force names the old pairing as Devices shows it, not by its id (#287)", async () => {
   const ctx = await paired(server);
   const done = run(["pair", "--force"], ctx);
