@@ -45,7 +45,7 @@ services:
       - "127.0.0.1:3011:3000"
     logging: *logging
 
-  # Umami, the cookieless analytics of the public pages (SPEC.md, #141). Caddy serves its
+  # Umami, the cookieless analytics of the public pages (SPEC.md, "The hosted instance"). Caddy serves its
   # tracker script and collect endpoint under /stats; the dashboard is on 127.0.0.1:3001 only,
   # for the owner through an SSH tunnel.
   umami:

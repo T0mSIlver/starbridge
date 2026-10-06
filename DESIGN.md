@@ -371,16 +371,15 @@ clients share colours, type and spacing. Change a value here, then run
 
 ## The look
 
-Direction C, "Beacon", picked on 2026-10-04 (#49, SPEC.md). Soft black and
-neutral greys with no hue, large type, round cards, airy spacing. One
+Direction C, "Beacon" (SPEC.md, "Brand"). Soft black and neutral greys
+with no hue, large type, round cards, airy spacing. One
 accent: the amber of the icon's climber, which means "needs you" and nothing
 else. Everything else is black, white and grey, except the quota bars, which
 fill in each provider's lab colour.
 
-Design v2 (2026-10-05, SPEC.md) gives each surface a job, and the owner's mockups are the source for every
-screen: the landing page shows the product (direction B), the web app is a
-quiet, dense control surface for any browser (A), and Android is full
-Material 3 Expressive (C).
+Design v2 (SPEC.md, "Brand") gives each surface a job: the landing page shows the
+product (direction B), the web app is a quiet, dense control surface for any
+browser (A), and Android is full Material 3 Expressive (C).
 
 Android is a flagship Material 3 Expressive app, used fully and by the
 guidelines: connected button groups for a decision's options, the navigation
@@ -444,7 +443,7 @@ a decision's context, a permission prompt's command and a session's name.
   as text with a count or a timer (a blocked item's clock, the inbox count),
   as a tint (`accent-soft`) behind a whole item that blocks an agent, as the
   kind icon of such an item, as the one filled default button, and as
-  "Headroom unused", which the owner treats as waste to act on. A screen at
+  "Headroom unused", which is waste to act on. A screen at
   rest has no amber.
 - Lab colours show in one place only: a quota bar's fill. Never as text, a
   dot, a border or a container. Position keeps them apart from amber: a lab
@@ -528,12 +527,10 @@ a decision's context, a permission prompt's command and a session's name.
 
 ## Motion and states (web)
 
-Decided 2026-10-05: the web moves only where motion shows what changed,
-and never makes an action wait. It follows the quiet dashboards in the
-design research (Linear,
-Vercel, Tailscale), where views and selections switch at once and a read row
-changes in place; durations and the easing come from Material 3, so the web
-and Android move alike.
+The web moves only where motion shows what changed, and never makes an
+action wait. Views and selections switch at once and a read row changes in
+place, as in quiet dashboards such as Linear's; durations and the easing
+come from Material 3, so the web and Android move alike.
 
 - Two durations and one easing: `motion.fast` (150 ms) for hover, press, a
   switch and anything leaving; `motion.state` (250 ms) for something
@@ -554,7 +551,7 @@ and Android move alike.
 | An item arriving while the page is open | fades in at `state`; items present at load don't animate |
 | An answered item leaving | fades out at `fast`, then the list closes up without moving |
 | A row changing place (a question starts or stops waiting) | slides to its new place at `state`; its colours change at `state` |
-| A status line ("Pixel joined.", "Refused …") | fades in at `state`, stays until the next action |
+| A status line ("Phone joined.", "Refused …") | fades in at `state`, stays until the next action |
 | Pressing a button | its fill steps one tone darker while pressed; no scale, no ripple |
 | A switch | the knob slides at `fast` |
 | Dragging a row by its handle (the Quotas table's providers, Settings' providers) | the row follows the pointer, mouse, pen or touch, with no transition; the rows it passes slide aside at `state`; on release it settles into its place at `state`, landing with the rows it passed; Escape puts it back. The arrow keys, Home and End on a focused handle move it at once |
@@ -626,8 +623,7 @@ just far enough to reach it. Web: `--provider-<id>`; Android:
 
 The web draws its own icon set to the mark: 24-unit grid, 1.75 strokes,
 round caps and joins, no fills. Android uses Material Symbols Rounded tuned to
-Google Sans Flex; a native iOS app, if one comes, would use SF Symbols. Every
-platform has the same icons by job: laptop, desktop, server and cloud (a
+Google Sans Flex. Every platform has the same icons by job: laptop, desktop, server and cloud (a
 machine's kind), permission prompt, question, run, quota, history, settings,
 devices, open in the agent, waiting, inbox, send, expand (an image opens full
 screen).
