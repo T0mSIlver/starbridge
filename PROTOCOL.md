@@ -5,6 +5,14 @@ signs, seals and verifies lives in `packages/protocol`; its JSON test vectors in
 `packages/protocol/vectors` pin the byte formats for the Kotlin client. This file covers what the
 code cannot show: the HTTP API and the flows.
 
+## The web app trusts its server
+
+A browser runs the page the server sends on each load. A compromised server can therefore send a
+page that reads the browser's keys, opens every item sealed to that browser, and signs answers
+and permission answers as it. The checks in this file hold against a hostile server only for
+members whose code the server doesn't deliver: the Android app and the CLI, which are installed.
+Where that matters, answer permission prompts from the Android app, or host your own server.
+
 ## Formats
 
 - Binary values are base64url without padding. Times are ISO 8601.
