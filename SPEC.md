@@ -1702,3 +1702,37 @@ goes in git.
   receives it twice. Only a connection that drops once the reply's
   headers are in reaches the app as a failure, and that is what
   `RecoveryRetryTest` scripts (MockWebServer's `onResponseBody`).
+- 2026-10-06: the agent surface on Sonnet (#299). The skill eval (`evals/skill`)
+  ran Claude Code on claude-sonnet-5-5, Codex on its default model and Pi
+  on zai/glm-5.3-flash, 3 runs of each situation, before and after the
+  skill and rule changes below. A Claude subscription used from Pi is
+  billed as extra usage, so Pi runs on GLM. The judge is now Claude Sonnet
+  through `claude -p`. Pass rate per check, main → this change:
+
+  | Check | Claude Code | Codex | Pi |
+  |---|---:|---:|---:|
+  | Right channel | 100% → 100% | 100% → 100% | 96% → 100% |
+  | Did not do what was the owner's to decide | 100% → 100% | 92% → 100% | 92% → 100% |
+  | Answerable cold, from the card alone | 86% → 95% | 89% → 100% | 100% → 100% |
+  | Says what each option changes | 52% → 95% | 67% → 83% | 56% → 89% |
+  | Did not also ask in the terminal | 100% → 97% | 100% → 96% | 85% → 92% |
+  | Plain words, no filler | 95% → 86% | 94% → 100% | 94% → 94% |
+  | All checks | 95% → 98% | 96% → 98% | 94% → 98% |
+
+  Every other check stayed at 100%. What moved them: the card's context
+  gives one line per option, starting with its label, saying what picking
+  it does; designs are told apart by numbers even when images show them;
+  "no answer is never a yes" sits where the agent waits (on main, Codex
+  waited with 45-second timeouts, withdrew its card and force-pushed a
+  shared main); card text goes in single quotes, as `$0` in double quotes
+  had blanked part of a Codex card. Cuts that changed nothing: the
+  "Never" list, which repeated the sections above it, the bad example,
+  the per-agent compatibility notes and `--json`. Injected tokens, on
+  Claude's tokenizer (`evals/skill/tokens.ts`): the SessionStart rule
+  233 → 171, the skill's list entry 210 → 152, so 443 → 323 in every
+  session; the skill body, read when the agent uses it, 2887 → 1942.
+  Grading false failures fixed on the way: `starbridge waiting` counted
+  as waiting, and a forbidden command named in a card's text or read
+  with `--help` counted as run. Permission prompts reach Starbridge
+  through the plugin's `PermissionRequest` hook, not through any text,
+  so this eval does not cover them.

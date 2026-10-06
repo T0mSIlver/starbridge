@@ -487,6 +487,8 @@ async function one(s: Scenario, arm: string, rep: number): Promise<RunRecord> {
       : await turn(proj, env, s.prompt, armDir);
     if (answering && !answeredFirst) answeredFirst = [];
     rec.turns.push(first);
+    // The model's provider failed (a rate limit): the run says nothing about the agent.
+    if (first.final.startsWith("(error) ")) throw new Error(first.final);
     const opened = s.unpaired ? [] : ((await live.opened("decision")) as Record<string, unknown>[]);
     if (answering) {
       // Split the turn where the agent got the answer: what it ran after its last wait is what
