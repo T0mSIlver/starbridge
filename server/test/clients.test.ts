@@ -14,7 +14,8 @@ test("a release below its client's minimum gets 426; others, and requests withou
   const old = await me("cli/1.1.9");
   expect(old.status).toBe(426);
   expect(old.json).toMatchObject({ error: "client-too-old", client: "cli", minimum: "1.2.0" });
-  expect((await me("cli/1.2.0-rc.1")).status).toBe(200);
+  expect((await me("cli/1.2.0-rc.1")).status).toBe(426);
+  expect((await me("cli/1.2.1-rc.1")).status).toBe(200);
   expect((await me("android/0.1.0")).status).toBe(200);
   expect((await me("cli/garbage")).status).toBe(200);
   expect((await me()).status).toBe(200);
