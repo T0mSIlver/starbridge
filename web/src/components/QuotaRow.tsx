@@ -24,7 +24,7 @@ export function QuotaGroup({
       <h2 className={`${comfy ? "t-action" : "t-label"} ${s.head}`}>
         {handle}
         <span className={s.name}>{g.provider}</span>
-        {g.machine && <span className={`t-meta ${s.dim}`}>{g.machine}</span>}
+        {g.machine && <span className={`t-meta ${s.dim} ${s.name}`}>{g.machine}</span>}
       </h2>
       {g.cards.map((q) => (
         <QuotaRow key={q.window.id} q={q} settings={settings} now={now} comfy={comfy} />
