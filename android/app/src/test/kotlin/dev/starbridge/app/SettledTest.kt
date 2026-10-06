@@ -18,6 +18,7 @@ import dev.starbridge.app.protocol.Member
 import dev.starbridge.app.protocol.Pairings
 import dev.starbridge.app.protocol.Pin
 import dev.starbridge.app.protocol.ProtocolJson
+import dev.starbridge.app.protocol.SealedItem
 import dev.starbridge.app.protocol.Sodium
 import dev.starbridge.app.protocol.envelopeJson
 import dev.starbridge.app.protocol.toB64
@@ -91,19 +92,20 @@ class SettledTest {
         val settled = envelopes.seal("settled", buildJsonObject {
             put("v", 1); put("id", "s_forged"); put("itemId", "d_asked"); putJsonArray("to") { add("phone") }; put("at", at); put("outcome", "withdrawn")
         }, closes.id, closesSign.secret, listOf(phone))
-        val page = buildJsonObject {
+        fun page(notice: SealedItem) = buildJsonObject {
             put("items", buildJsonArray {
-                add(buildJsonObject { put("item", ProtocolJson.encodeToJsonElement(settled)); put("cursor", "1"); put("receivedAt", at) })
+                add(buildJsonObject { put("item", ProtocolJson.encodeToJsonElement(notice)); put("cursor", "1"); put("receivedAt", at) })
                 add(buildJsonObject { put("item", ProtocolJson.encodeToJsonElement(decision)); put("cursor", "2"); put("receivedAt", at); put("answeredAt", at) })
             })
             put("cursor", "2")
         }
+        var served = page(settled)
         val empty = buildJsonObject { put("items", buildJsonArray {}); put("cursor", "") }
 
         http.dispatcher = object : Dispatcher() {
             override fun dispatch(request: RecordedRequest): MockResponse = when (request.url.encodedPath) {
                 "/v1/directory" -> json(buildJsonObject { put("entries", buildJsonArray {}) })
-                "/v1/items" -> json(if (request.url.queryParameter("kind")!!.startsWith("decision")) page else empty)
+                "/v1/items" -> json(if (request.url.queryParameter("kind")!!.startsWith("decision")) served else empty)
                 "/v1/quota" -> json(empty)
                 else -> MockResponse(404, okhttp3.Headers.headersOf(), "")
             }
@@ -133,6 +135,14 @@ class SettledTest {
         val saved = disk.saved()!!.decisions.single()
         assertEquals(asks.id, saved.from)
         assertNull(saved.settled)
+
+        // The asking machine's own notice still closes it.
+        served = page(envelopes.seal("settled", buildJsonObject {
+            put("v", 1); put("id", "s_own"); put("itemId", "d_asked"); putJsonArray("to") { add("phone") }; put("at", at); put("outcome", "withdrawn")
+        }, asks.id, asksSign.secret, listOf(phone)))
+        store.refresh()
+        until { disk.saved()!!.decisions.single().settled != null }
+        assertEquals("withdrawn", disk.saved()!!.decisions.single().settled)
     }
 
     private fun until(pred: () -> Boolean) {

@@ -252,6 +252,19 @@ test("a machine's settled notice closes only that machine's decisions (#362)", a
     const asked = inbox.items.find((i) => i.decision.id === "d_asked");
     expect(asked?.machine.id).toBe(asks.member.id);
     expect(asked?.settled).toBeUndefined();
+    // The asking machine's own notice still closes it.
+    items[0] = {
+      item: seal(
+        "settled",
+        { v: 1, id: "s_own", itemId: "d_asked", to, at, outcome: "withdrawn" },
+        { id: asks.member.id, signKey: asks.keys.sign.privateKey },
+        recipient,
+      ),
+      cursor: "1",
+      receivedAt: at,
+    };
+    const own = await device.loadInbox(fresh);
+    expect(own.items.find((i) => i.decision.id === "d_asked")?.settled).toBe("withdrawn");
   } finally {
     globalThis.fetch = served;
   }

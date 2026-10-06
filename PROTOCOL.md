@@ -74,16 +74,22 @@ since the server is its only channel; the revoked device's key can sign any stal
 Devices do not detect a withheld revocation yet (#362). A machine's items carry no head, and a
 device learns new entries only from `GET /directory?from=<n>`, which the server may answer with
 nothing. So a server that holds a revoked machine's key and withholds the revocation from one
-device can keep that device opening the machine's items and reading its answers to them. A
-device applies a `settled` or `waiting` notice only to items of the machine that signed it, so
-the revoked machine cannot close or mark another machine's questions.
+device can keep that device opening the machine's items and reading its answers to them. In the
+inbox, a device applies a `settled` or `waiting` notice only to items of the machine that signed
+it, so the revoked machine cannot mark another machine's questions closed. A notification can
+still close on a notice from any machine, as it does on the server's own `answered` push.
 
-The planned check mirrors the machines' one. Each machine signs the head it holds, `dir: {length,
-head}`, into every item it posts. A device keeps the longest head each machine signed and, while
-a machine active in its chain has signed a head that chain does not hold, refuses every machine's
+The planned check mirrors the machines' one. Each machine signs into every item it posts the
+longest head it knows, `dir: {length, head}`: its own, or a longer one a device signed into an
+answer that its chain lacks. A device keeps the longest head each machine signed and, while a
+machine active in its chain has signed a head that chain does not hold, refuses every machine's
 items and says the server is holding back directory entries; it reads them again once the server
-serves those entries. Machines read the directory on every poll, so one honest machine's post
-exposes the gap. A device that hears only from the revoked machine still detects nothing.
+serves those entries, or once its chain revokes that machine. Reading the directory and revoking
+keep working meanwhile. So one machine that holds the revocation, or has seen the head of the
+device that made it, exposes the gap. A server that withholds it from every machine, and drops
+the revoking device's answers, keeps it hidden, as does a device that hears only from the
+revoked machine. A machine that is compromised but not yet revoked can sign a false long head and
+hold every device's items until the owner revokes it, which the owner sees.
 
 ## Pairing
 
