@@ -32,10 +32,19 @@ export const DEFAULT_LIMITS = {
   deviceItems: [60, MINUTE] as RateWindow,
   /** Stored decisions per account, open or answered. */
   decisions: 10_000,
-  /** Sealed boxes stored per account, in bytes. */
-  storedBytes: 128 * 1024 * 1024,
+  /**
+   * Sealed boxes stored per account, in bytes. A heavy user, a hundred questions a day with
+   * screenshots, stores about 80 MB in the 7 days answered ones are kept (#586).
+   */
+  storedBytes: 256 * 1024 * 1024,
   /** Stored bytes only answers may use, so a full account can still answer. */
   answerReserve: 8 * 1024 * 1024,
+  /**
+   * Stored bytes of every account together, past which machines' items get 503 `storage-full`
+   * while answers still pass. The hosted disk holds the live database and 12 backup copies of
+   * it (deploy/host), so this keeps all 13 under the disk alert (#586).
+   */
+  serverBytes: 1536 * 1024 * 1024,
   /**
    * Sealed boxes of one decision or quota snapshot, in bytes. Each box carries the decision's
    * images, so this is what lets a phone screenshot reach three or four devices at full size.

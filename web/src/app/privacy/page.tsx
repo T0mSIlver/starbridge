@@ -60,9 +60,9 @@ export default function Privacy() {
       </ul>
       <p>
         Your account, device list and push targets stay until you delete them (see Deletion). A
-        nightly copy of the database is kept on the server for 14 days, and Hetzner keeps its own
+        nightly copy of the database is kept on the server for 7 days, and Hetzner keeps its own
         backups of the server, with those copies, for 7 more, so deleted data can remain in backups
-        for up to 3 weeks.
+        for up to 2 weeks.
       </p>
 
       <h2 className="t-heading">Logs</h2>

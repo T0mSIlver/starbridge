@@ -19,6 +19,12 @@ export class ApiError extends Error {
   }
 }
 
+/** What a refused post says when the account or the server has no room left (#586). */
+const FULL: Record<string, string> = {
+  "account-full": "your Starbridge account is full; answer or settle open questions to free room",
+  "storage-full": "the Starbridge server is out of storage; try again in an hour",
+};
+
 /** The server did not answer at all: down, or this machine is offline. */
 export class Unreachable extends Error {}
 
@@ -83,7 +89,12 @@ export class Api {
       // The server drops a machine's token when the directory revokes the machine.
       if (res.status === 401 && this.token)
         throw new ApiError(401, e.error ?? res.statusText, e.detail, REMOVED);
-      const err = new ApiError(res.status, e.error ?? res.statusText, e.detail);
+      const err = new ApiError(
+        res.status,
+        e.error ?? res.statusText,
+        e.detail,
+        ...(e.error && e.error in FULL ? [`${FULL[e.error]} (${e.detail ?? e.error})`] : []),
+      );
       const wait = Number(res.headers.get("retry-after"));
       if (res.status === 429 && wait > 0) err.retryAfter = wait;
       throw err;

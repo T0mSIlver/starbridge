@@ -163,6 +163,22 @@ function permission(from: Actor, to: Actor): SealedItem {
   return seal("permission", body, { id: from.id, signKey: from.keys.sign.privateKey }, [to.member]);
 }
 
+test("the server's stored bytes are capped across accounts, answers excepted", async () => {
+  const { s, phone, devbox } = await setup();
+  const d = decision(devbox, phone);
+  expect((await post(s, devbox, d)).status).toBe(201);
+  const a = answer(d, phone, devbox);
+  const { bytes } = s.deps.db.query("SELECT SUM(bytes) AS bytes FROM item_totals").get() as {
+    bytes: number;
+  };
+  s.deps.config.limits = { ...DEFAULT_LIMITS, serverBytes: bytes + 100 };
+  const r = await post(s, devbox, decision(devbox, phone));
+  expect(r.status).toBe(503);
+  expect(r.json.error).toBe("storage-full");
+  expect(r.headers.get("retry-after")).toBe("3600");
+  expect((await post(s, phone, a)).status).toBe(201);
+});
+
 test("permission prompts are capped per account like decisions", async () => {
   const { s, phone, devbox } = await setup({ permissions: 2 });
   expect((await post(s, devbox, permission(devbox, phone))).status).toBe(201);
@@ -186,7 +202,7 @@ test("each stored item is charged its rows as well as its boxes", async () => {
   expect((await post(s, devbox, permission(devbox, phone))).status).toBe(201);
   const r = await post(s, devbox, permission(devbox, phone));
   expect(r.status).toBe(409);
-  expect(r.json.error).toBe("too-many-items");
+  expect(r.json.error).toBe("account-full");
 });
 
 test("stored bytes are capped per account, keeping room for answers, and per item", async () => {
@@ -211,7 +227,7 @@ test("stored bytes are capped per account, keeping room for answers, and per ite
   expect((await post(s, devbox, quota(devbox, phone))).status).toBe(201);
   const r = await post(s, devbox, decision(devbox, phone));
   expect(r.status).toBe(409);
-  expect(r.json.error).toBe("too-many-items");
+  expect(r.json.error).toBe("account-full");
   expect((await post(s, phone, a)).status).toBe(201);
 
   s.deps.config.limits = { ...DEFAULT_LIMITS, quotaBytes: boxes(q) - 1, answerBytes: boxes(a) - 1 };

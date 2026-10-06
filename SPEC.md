@@ -236,8 +236,10 @@ provider plugins add providers, not panels.
 - **Bounds** (#65, #260), sized for an orchestrator with 10 sessions asking a few hundred
   questions a day: every route that stores something has a cap or retention, and every write that
   grows it a rate limit. Answered questions and their answers are kept 7 days, unanswered ones and
-  quota snapshots 30. Per account: 10000 questions, 10000 permission prompts, 128 MB, each item
-  charged its boxes plus 512 bytes per row. The numbers live in `server/src/limits.ts` and
+  quota snapshots 30. Per account: 10000 questions, 10000 permission prompts, 256 MB, each item
+  charged its boxes plus 512 bytes per row: a heavy user, a hundred questions a day with
+  screenshots, stores about 80 MB in a week. A full account gets 409 `account-full`, which the
+  CLI words as such. The numbers live in `server/src/limits.ts` and
   PROTOCOL.md, "Limits". A post reads counts from a totals table kept by triggers.
 - **Retention comes from `ITEM_KINDS`** (#477). Each kind names its `keep`: a day, a week or a
   month after it was received, answered or left unanswered; `withRe` (it goes with the item it
@@ -282,6 +284,12 @@ provider plugins add providers, not panels.
   were counted. A migration changes the schema and never rewrites rows, to stay within the 30 s
   Caddy holds requests; backfills run in the hourly sweep. `apply.sh` backs the database up just
   before the new server starts and keeps the last five.
+- **Server-wide cap** (#586). Machines' items stop at 1.5 GB stored across accounts, with 503
+  `storage-full` and a Retry-After of an hour; answers pass, so questions still close and expire.
+  The hosted disk (37 GB, 10 GB of it system and images, an alert at 2 GB free) holds the live
+  database plus 7 nightly and 5 per-deploy copies, 13 in all: 13 × 1.5 GB, plus SQLite's
+  overhead, stays near 21 GB of the 24 GB above the alert. Six accounts at their 256 MB fill it, a risk
+  taken over buying disk before launch.
 - **Full disk** (#301). Writes get 503 `storage-full` with `Retry-After`; usage counts and
   housekeeping skip, so a stored item still gets its push.
 - **Usage counts** (#140). `server/src/usage.ts` counts requests the server handles anyway. During
@@ -838,7 +846,7 @@ Tokens, type and components: `DESIGN.md`.
   its TLS handshake and its HTTP/1.1 request headers, since every open connection costs Caddy
   memory, the VPS's first limit (#587). Caddy compresses every
   response and the web app none: Next's gzip ran on its one thread and filled it near 18 landing
-  page visitors a second (#593). Nightly SQLite backups, kept 14 days.
+  page visitors a second (#593). Nightly SQLite backups, kept 7 days (#586).
 - **Per-address reads** (#582). Caddy counts every `/v1` request per address, 3000 a minute
   (IPv6 per /64): most reads count against no account, so this keeps a looping client or script
   to about 2% of a core. A visible page with a prompt waiting and a run live makes about 200 a

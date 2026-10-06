@@ -1,5 +1,6 @@
 #!/bin/sh
-# Copies the live SQLite file with `.backup`, dumps Umami's Postgres, and keeps 14 days of both.
+# Copies the live SQLite file with `.backup`, dumps Umami's Postgres, and keeps 7 days of both:
+# 13 copies of the database (live, 7 nightly, 5 per deploy) must fit the disk (#586).
 set -eu
 dir=/var/backups/starbridge
 db=$(docker volume inspect -f '{{.Mountpoint}}' starbridge_data)/starbridge.db
@@ -19,4 +20,4 @@ $compose exec -T umami-db pg_restore -l < "$umami.tmp" >/dev/null
 mv "$umami.tmp" "$umami"
 # The server answers /healthz/backup from this file's age.
 touch "$(dirname "$db")/last-backup"
-find "$dir" -maxdepth 1 \( \( -name 'starbridge-*.db' -o -name 'umami-*.dump' \) -mtime +13 -o -name '*.tmp' -mtime +0 \) -delete
+find "$dir" -maxdepth 1 \( \( -name 'starbridge-*.db' -o -name 'umami-*.dump' \) -mtime +6 -o -name '*.tmp' -mtime +0 \) -delete
