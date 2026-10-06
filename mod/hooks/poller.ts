@@ -65,14 +65,21 @@ interface Lease {
   until: number;
 }
 
-/** `$STARBRIDGE_CONFIG_DIR`, else `$XDG_CONFIG_HOME/starbridge`, else `~/.config/starbridge`, as the CLI. */
+/**
+ * `$STARBRIDGE_CONFIG_DIR`, else `$XDG_CONFIG_HOME/starbridge`, else `~/.config/starbridge`, as
+ * the CLI; on Windows (`OS=Windows_NT`) home is `USERPROFILE`, as the CLI reads it, whatever
+ * `HOME` a Git Bash set.
+ */
 export function configDir(env: {
   STARBRIDGE_CONFIG_DIR?: string;
   XDG_CONFIG_HOME?: string;
   HOME?: string;
+  USERPROFILE?: string;
+  OS?: string;
 }): string {
   if (env.STARBRIDGE_CONFIG_DIR) return env.STARBRIDGE_CONFIG_DIR;
-  return `${env.XDG_CONFIG_HOME || `${env.HOME}/.config`}/starbridge`;
+  const home = env.OS === "Windows_NT" ? env.USERPROFILE || env.HOME : env.HOME || env.USERPROFILE;
+  return `${env.XDG_CONFIG_HOME || `${home}/.config`}/starbridge`;
 }
 
 /** The CLI's first error line, without the "starbridge: " the status line adds again. */

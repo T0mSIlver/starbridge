@@ -114,7 +114,7 @@ const HELP = `starbridge: post decisions to your devices, report runs, upload qu
       Run \`codexbar usage --format json\` for each provider (or for every enabled one),
       compute pace and alerts, and post a sealed snapshot every interval.
 
-  starbridge agent [--provider <name>]... [--interval 5m] [--codexbar <path>] [--no-quota]
+  starbridge agent [--provider <name>]... [--interval 5m] [--codexbar <path>] [--no-quota] [--log <file>]
       Run the machine's agent (as a user service): it holds the keys and the server
       connection, uploads quota snapshots every interval, and hands each Claude Code session
       its answers over a unix socket. Flags override agent.json in the config directory.
@@ -419,9 +419,11 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
             interval: { type: "string" },
             codexbar: { type: "string" },
             "no-quota": { type: "boolean" },
+            log: { type: "string" },
           },
         });
         return await runAgent(ctx, {
+          ...(values.log ? { log: values.log } : {}),
           ...(values.provider ? { providers: values.provider } : {}),
           ...(values.interval ? { interval: values.interval } : {}),
           ...(values.codexbar ? { codexbar: values.codexbar } : {}),

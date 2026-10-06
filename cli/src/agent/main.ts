@@ -1,4 +1,6 @@
+import { appendFileSync, mkdirSync } from "node:fs";
 import { homedir } from "node:os";
+import { dirname } from "node:path";
 import { type Ctx, parseDuration } from "../context";
 import { dropOldPiRules, piPermissionConfig } from "../pi";
 import { refreshFiles } from "../setup/harnesses";
@@ -15,6 +17,8 @@ export interface AgentOpts {
   codexbar?: string;
   noQuota?: boolean;
   socket?: string;
+  /** Appends the log to this file instead of stderr, which a Windows task has nowhere to show. */
+  log?: string;
 }
 
 /** Builds the agent with every feature, from `agent.json` and the flags. Not started. */
@@ -34,6 +38,11 @@ export function makeAgent(ctx: Ctx, opts: AgentOpts = {}): Agent {
 
 /** `starbridge agent`: serves until Ctrl-C or SIGTERM. */
 export async function runAgent(ctx: Ctx, opts: AgentOpts): Promise<number> {
+  if (opts.log) {
+    const file = opts.log;
+    mkdirSync(dirname(file), { recursive: true });
+    ctx = { ...ctx, err: (line) => appendFileSync(file, `${line}\n`) };
+  }
   const agent = makeAgent(ctx, opts);
   await agent.start();
   // A new binary brings Codex and opencode their files here too, after a brew or npm upgrade;

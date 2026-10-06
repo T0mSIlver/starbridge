@@ -136,3 +136,13 @@ export function killTree(child: ChildProcess, signal: NodeJS.Signals = "SIGKILL"
     windowsHide: true,
   }).on("error", () => child.kill(signal));
 }
+
+/** Whether process `pid` runs; one of another user's counts. */
+export function processAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (e) {
+    return (e as NodeJS.ErrnoException).code === "EPERM";
+  }
+}
