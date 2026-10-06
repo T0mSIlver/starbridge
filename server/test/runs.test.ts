@@ -2,7 +2,15 @@ import { expect, test } from "bun:test";
 import { type Decision, open, type Run, type SealedItem, seal } from "@starbridge/protocol";
 import { DEFAULT_LIMITS, type Limits } from "../src/limits";
 import { sweepStorage } from "../src/retention";
-import { type Actor, at, directory, makeServer, pair, setupAccount } from "../test-support/app";
+import {
+  type Actor,
+  at,
+  directory,
+  makeServer,
+  pair,
+  setupAccount,
+  signIn,
+} from "../test-support/app";
 
 async function setup(limits: Partial<Limits> = {}) {
   const s = await makeServer({ limits: { ...DEFAULT_LIMITS, ...limits } });
@@ -109,6 +117,26 @@ test("a run update's boxes stay within runBytes", async () => {
   });
   expect(r.status).toBe(413);
   expect(r.json.error).toBe("too-large");
+});
+
+test("runBytes counts per device, so a run reaches every device", async () => {
+  const probe = await setup();
+  const box = run(probe.devbox, probe.phone, "r0").boxes[0]?.box.length ?? 0;
+  const { s, acct, phone, devbox } = await setup({ runBytes: Math.ceil(box * 1.2) });
+  const laptop = await pair(s, acct, "laptop", "device", await signIn(s));
+  const body: Run = {
+    v: 1,
+    id: "r1",
+    to: [phone.id, laptop.id],
+    title: "Mac e2e",
+    reason: "uses your session and keyboard",
+    source: { machine: devbox.id, project: "starbridge", session: "s1" },
+    startedAt: at,
+    at,
+  };
+  const item = seal("run", body, key(devbox), [phone.member, laptop.member]);
+  const r = await s.call("POST", "/v1/items", { token: devbox.token, body: item });
+  expect(r.status).toBe(201);
 });
 
 test("runs are dropped a day after their last update", async () => {

@@ -62,7 +62,10 @@ export const DEFAULT_LIMITS = {
   rowBytes: 512,
   /** Stored runs per account; each lives runRetention after its last update. */
   runs: 500,
-  /** Sealed boxes of one run update, in bytes. */
+  /**
+   * Sealed boxes of one run update, in bytes for each device it is sealed to. Each box holds the
+   * whole update, recipients included, so a fixed total stopped runs past about 23 devices (#658).
+   */
   runBytes: 32 * 1024,
   /** Runs are dropped this long after their last update. */
   runRetention: DAY,

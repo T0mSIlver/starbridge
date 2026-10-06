@@ -155,7 +155,15 @@ directoryRoutes.post("/directory", requireCaller("device"), async (c) => {
     const genesis = entries.length === 0;
     if (!genesis && entry.signer !== RECOVERY && entry.signer !== caller.member)
       fail(403, "forbidden", "a device appends only entries it signed");
-    if (activeMembers(dir, "machine").length > config.maxMachines) return undefined;
+    // Only an entry that adds a machine past the limit is refused, so an account the limit was
+    // lowered under can still revoke, add devices and recover (#658).
+    const machines = activeMembers(dir, "machine").length;
+    const before = db
+      .query(
+        "SELECT COUNT(*) AS n FROM members WHERE account_id = ? AND role = 'machine' AND active = 1",
+      )
+      .get(caller.account) as { n: number };
+    if (machines > config.maxMachines && machines > before.n) return undefined;
 
     db.query("INSERT INTO directory (account_id, seq, entry) VALUES (?, ?, ?)").run(
       caller.account,

@@ -170,7 +170,7 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
   const most = fromDevice
     ? limits.answerBytes
     : item.kind === "run"
-      ? limits.runBytes
+      ? limits.runBytes * item.boxes.length
       : item.kind === "quota"
         ? limits.quotaBytes
         : limits.itemBytes;
