@@ -273,6 +273,23 @@ test("ask --answer-in posts a pointer decision, and settle closes it", async () 
   expect(await run(["settle", "d_unknown"], ctx)).toBe(1);
 });
 
+test("the machine tells every device which answer it took, once (#330)", async () => {
+  const ctx = await paired(server);
+  expect(await run(ASK, ctx)).toBe(0);
+  const id = ctx.lines.at(-1) as string;
+  await server.answer(id, { choice: "Wait" });
+  expect(await run(["wait", id, "--timeout", "5s"], ctx)).toBe(0);
+  const phone = [...(await server.directory()).members.values()].find(
+    (m) => m.member.role === "device",
+  );
+  expect(await server.opened("settled")).toMatchObject([
+    { itemId: id, outcome: "device", device: phone?.member.id, choice: "Wait" },
+  ]);
+  // Told once: a later poll posts nothing more.
+  expect(await run(["answers", "--session", "s", "--wait", "1"], ctx)).toBe(0);
+  expect(await server.opened("settled")).toHaveLength(1);
+});
+
 test("settle leaves a decision whose answer reached the agent answered, not withdrawn", async () => {
   const ctx = await paired(server);
   expect(await run(ASK, ctx)).toBe(0);
@@ -280,7 +297,7 @@ test("settle leaves a decision whose answer reached the agent answered, not with
   await server.answer(id, { choice: "Merge" });
   expect(await run(["wait", id, "--timeout", "5s"], ctx)).toBe(0);
   expect(await run(["settle", id], ctx)).toBe(0);
-  expect(await server.opened("settled")).toEqual([]);
+  expect((await server.opened("settled")).map((n) => n.outcome)).toEqual(["device"]);
 });
 
 test("ask refuses a decision that would not stand alone", async () => {

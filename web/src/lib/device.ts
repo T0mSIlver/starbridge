@@ -1132,7 +1132,7 @@ export function heldText(dir: Directory, held: { id: string; by?: string }): str
 }
 
 /** How each item a settled notice closed was closed, by item id, with the time it closed. */
-type Closings = Map<string, { outcome: Settled["outcome"]; at: string }>;
+type Closings = Map<string, { notice: Settled; at: string }>;
 
 async function openDecision(
   ctx: Ctx,
@@ -1142,15 +1142,29 @@ async function openDecision(
 ): Promise<InboxItem> {
   const { signer: machine, body } = await openMachine(ctx, s.item, "decision");
   const reply = sent[body.id];
-  // The notice that closed it arrived in the same write, so it carries the same time; a later
-  // one, after a device's answer, closed nothing.
   const closing = closings.get(`${machine.id}/${body.id}`);
-  const settled = closing && closing.at === s.answeredAt ? closing.outcome : undefined;
+  const notice = closing?.notice;
+  // The machine names the device whose answer it took, whenever its notice comes (#330).
+  const by = notice?.outcome === "device" ? notice.device : undefined;
+  const theirs =
+    notice?.choice !== undefined
+      ? { choice: notice.choice }
+      : notice?.text !== undefined
+        ? { text: notice.text }
+        : undefined;
+  const answeredBy =
+    by && theirs && by !== ctx.device.id
+      ? { device: ctx.dir.members.get(by)?.member.name ?? by, reply: theirs }
+      : undefined;
+  // Any other notice that closed it arrived in the same write, so it carries the same time; a
+  // later one, after a device's answer, closed nothing.
+  const settled = notice && !by && closing.at === s.answeredAt ? notice.outcome : undefined;
   return {
     decision: body as Decision,
     machine,
     ...(s.answeredAt ? { answeredAt: s.answeredAt } : {}),
     ...(settled ? { settled } : {}),
+    ...(answeredBy ? { answeredBy } : {}),
     ...(reply
       ? { reply: "choice" in reply ? { choice: reply.choice } : { text: reply.text } }
       : {}),
@@ -1206,7 +1220,7 @@ export async function loadInbox(ctx: Ctx, inbox: Inbox = { items: [], rejected: 
       try {
         const { signer, body } = await openMachine(ctx, s.item, "settled");
         // Keyed by machine: a notice closes only the machine's own items (#362).
-        closings.set(`${signer.id}/${body.itemId}`, { outcome: body.outcome, at: s.receivedAt });
+        closings.set(`${signer.id}/${body.itemId}`, { notice: body, at: s.receivedAt });
       } catch {}
       return;
     }

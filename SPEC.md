@@ -1706,6 +1706,17 @@ so the mod is the first path.
   accepted but not yet delivered can still be withdrawn. The skill says only `--answer-in` cards
   need `settle`.
 
+- 2026-10-06. Which answer won a race reaches every device (#330), as Tom chose over sealing
+  answers to every device. An answer is sealed only to the machine that asked, so a device whose
+  answer the server refused (409 `already-answered`) could not say what won. Once the machine
+  accepts a device's answer, it posts a `settled` notice with `outcome: "device"`, that device,
+  and its `choice` or `text`; the notice is signed by the asking machine, sealed to every active
+  device and checked like any other. Devices show "Later · on Pixel" in History and Find matches
+  it; the device that lost says "Answered on Pixel: Later" (until the notice lands, "Already
+  answered on another device."). The machine keeps the notice due until the server takes it,
+  skips it while behind on the directory, and stops at `already-settled` (withdrawn meanwhile).
+  Older clients ignore the two new fields.
+
 ## Encryption, with existing libraries
 
 - libsodium sealed boxes (`crypto_box_seal`, X25519 + XSalsa20-Poly1305): an

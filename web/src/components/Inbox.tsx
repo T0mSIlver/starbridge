@@ -14,7 +14,7 @@ import {
 import { matches, useFind } from "@/lib/find";
 import { clockTime } from "@/lib/format";
 import { closeItem, linkedItem, openItem, stackItem, useOpened } from "@/lib/opened";
-import { closedByPhrase, promptOutcome } from "@/lib/outcome";
+import { AnsweredFirst, closedByPhrase, promptOutcome } from "@/lib/outcome";
 import { fitsRow } from "@/lib/permissionInput";
 import { type Prefs, usePref } from "@/lib/prefs";
 import { afterAnswer, selectedId, step } from "@/lib/selection";
@@ -101,7 +101,12 @@ export function Inbox() {
   const showPast = historyOpen || finding;
   const view = finding ? "none" : grouping;
 
-  const ids = [...needs, ...(showPast ? past.map((p) => p.entry) : [])].map((e) => e.id);
+  // A question another device answered first stays selected, saying what won (#330).
+  const lost = useRef(new Set<string>());
+  const ids = [
+    ...needs,
+    ...past.filter((p) => showPast || lost.current.has(p.entry.id)).map((p) => p.entry),
+  ].map((e) => e.id);
   const [picked, setPicked] = useState<string>();
   // Phones and narrow windows show the detail in place of the list once a row is tapped.
   const opened = useOpened();
@@ -152,7 +157,12 @@ export function Inbox() {
     setPicked((cur) => (cur === id ? next : cur));
   };
   const answerQuestion = async (item: InboxItem, reply: Parameters<typeof answer>[1]) => {
-    await answer(item, reply);
+    try {
+      await answer(item, reply);
+    } catch (e) {
+      if (e instanceof AnsweredFirst) lost.current.add(item.decision.id);
+      throw e;
+    }
     moveOn(item.decision.id);
   };
   const answerOne = async (item: PromptItem, reply: Parameters<typeof answerPrompt>[1]) => {

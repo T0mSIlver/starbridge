@@ -463,6 +463,9 @@ data class Settled(
     val at: String,
     val outcome: String? = null,
     val device: String? = null,
+    /** With outcome "device" on a decision: the answer the machine took (#330). */
+    val choice: String? = null,
+    val text: String? = null,
     override val dir: DirectoryHead? = null,
 ) : ItemBody {
     override val re get() = itemId
@@ -479,6 +482,10 @@ data class Settled(
         device?.let { id(it, "device") }
         time(at, "at")
         schema((outcome == "device") == (device != null), "device is set exactly when outcome is device")
+        choice?.let { len(it, 0, 100, "choice") }
+        text?.let { len(it, 0, 4000, "text") }
+        schema(device != null || (choice == null && text == null), "choice and text come only with a device's outcome")
+        schema(choice == null || text == null, "at most one of choice and text")
     }
 }
 

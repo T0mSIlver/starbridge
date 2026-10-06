@@ -628,7 +628,11 @@ export async function poll(
             }
             const a = checkAnswer(raw, s, dir, st.asked);
             const device = signers.get(raw);
-            st.answers[a.decisionId] ??= { answer: a, seen: false, ...(device ? { device } : {}) };
+            st.answers[a.decisionId] ??= {
+              answer: a,
+              seen: false,
+              ...(device ? { device, announce: true } : {}),
+            };
             const asked = st.asked[a.decisionId];
             if (asked) forget(asked);
           } catch (e) {
@@ -640,11 +644,55 @@ export async function poll(
         st.cursor = page.cursor;
     });
   }
+  await announce(ctx, s, directory);
   // A device that joined since reads nothing this machine sealed before: re-seal it.
   await reseal(ctx, s, directory).catch((e) =>
     ctx.err(`starbridge: could not re-send open questions: ${(e as Error).message}`),
   );
   return { cursor: page.cursor ?? opts.cursor, directory, ...quotaAsked };
+}
+
+/**
+ * Tells every device which answer this machine accepted, in a settled notice: the answer itself
+ * is sealed only to this machine, so a device that lost a race to it could not know (#330).
+ * Left to the next poll when the post fails.
+ */
+async function announce(ctx: Ctx, s: Session, dir: Directory): Promise<void> {
+  const st = ctx.store.state();
+  // Behind on the directory, it would seal to a device the server knows revoked: later.
+  if (st.behind) return;
+  const due = Object.entries(st.answers).filter(([, a]) => a.announce && a.device);
+  if (due.length === 0) return;
+  const to = devices(dir);
+  for (const [id, { answer, device }] of due) {
+    const body = {
+      v: 1 as const,
+      id: `s_${randomBytes(12).toString("base64url")}`,
+      itemId: id,
+      to: to.map((d) => d.id),
+      at: iso(ctx.now()),
+      outcome: "device" as const,
+      device: device as string,
+      ...(answer.choice !== undefined ? { choice: answer.choice } : { text: answer.text }),
+      dir: signedHead(ctx, dir),
+    } satisfies Settled;
+    try {
+      await s.api.postItem(
+        seal("settled", body, { id: s.machine.id, signKey: s.keys.sign.privateKey }, to),
+      );
+    } catch (e) {
+      // Settled already (withdrawn meanwhile, say) or gone: nothing left to tell.
+      const done = e instanceof ApiError && (e.code === "already-settled" || e.status === 404);
+      if (!done) {
+        ctx.err(`starbridge: could not tell the devices which answer won: ${(e as Error).message}`);
+        return;
+      }
+    }
+    ctx.store.updateState((st) => {
+      const a = st.answers[id];
+      if (a) delete a.announce;
+    });
+  }
 }
 
 /** Drops a closed decision's body, so its plaintext does not stay on disk. */
