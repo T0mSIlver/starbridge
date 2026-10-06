@@ -186,16 +186,18 @@ class ServerStore(
 
     /** Runs [block] off the caller, one at a time, and turns failures into a notice. */
     private fun run(showBusy: Boolean = true, block: suspend () -> Unit) {
-        scope.launch {
-            lock.withLock {
-                if (showBusy) busy.value = true
-                try {
-                    block()
-                } catch (e: Exception) {
-                    report(e)
-                } finally {
-                    busy.value = false
-                }
+        scope.launch { locked(showBusy, block) }
+    }
+
+    private suspend fun locked(showBusy: Boolean = true, block: suspend () -> Unit) {
+        lock.withLock {
+            if (showBusy) busy.value = true
+            try {
+                block()
+            } catch (e: Exception) {
+                report(e)
+            } finally {
+                busy.value = false
             }
         }
     }
@@ -578,18 +580,24 @@ class ServerStore(
         scope.launch {
             busy.value = true
             try {
-                if (phase.value == Phase.Ready) api().askQuota(QUOTA_ASK_SECONDS)
-            } catch (e: ApiException) {
-                // Asked too often, or a server without asks: the sync shows what it holds.
-            } catch (e: IOException) {
-                // Offline: the sync reports it.
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                // Nothing may escape this coroutine: it would end the app (#253).
-                Log.w("Starbridge", "quota ask failed: $e", e)
+                try {
+                    if (phase.value == Phase.Ready) api().askQuota(QUOTA_ASK_SECONDS)
+                } catch (e: ApiException) {
+                    // Asked too often, or a server without asks: the sync shows what it holds.
+                } catch (e: IOException) {
+                    // Offline: the sync reports it.
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    // Nothing may escape this coroutine: it would end the app (#253).
+                    Log.w("Starbridge", "quota ask failed: $e", e)
+                }
+                // Not `run`: inside launch it resolves to the standard library's, which never
+                // clears busy and lets a failed sync escape (#303).
+                locked { sync() }
+            } finally {
+                busy.value = false
             }
-            run { sync() }
         }
     }
 
