@@ -165,8 +165,9 @@ class ServerStore(
             secrets.session == null -> Phase.SignedOut
             saved.joining != null -> Phase.Joining(saved.joining!!, saved.joiningScanned)
             saved.digitJoin != null -> Phase.JoiningByDigits(saved.digitJoin!!.digits)
-            saved.me == null || saved.pin == null -> Phase.NoDevice(saved.accountExists)
+            // Before the pin: the first entry waits on the server until the key is confirmed (#370).
             secrets.recoverySeed != null -> Phase.RecoveryKey(RecoveryKeys.shown(fromB64(secrets.recoverySeed!!), sodium))
+            saved.me == null || saved.pin == null -> Phase.NoDevice(saved.accountExists)
             else -> Phase.Ready
         }
         server.value = saved.server
@@ -327,24 +328,34 @@ class ServerStore(
     }
 
     /**
-     * The keys, the seed and the signed genesis reach the disk before the server sees the entry,
-     * so a lost response is retried with the same entry, and a chain that already starts with it
-     * is adopted instead of refused.
+     * Makes the keys, the seed and the signed first entry, all on disk, and shows the recovery key.
+     * The server sees the entry only once the owner confirms the key (#370, as the web since #337):
+     * data cleared before that leaves no account without a device, and a killed app shows the
+     * same key again.
      */
     override fun setUpFirstDevice() = run {
-        if (saved.pendingGenesis == null) {
-            if (api().directory(0).isNotEmpty()) throw IllegalStateException("This account already has devices. Join it instead.")
-            val member = newMember()
-            val seed = sodium.random(16)
-            val recovery = sodium.signSeedKeyPair(recoverySignSeed(seed, sodium))
-            val entry = ProtocolJson.encodeToJsonElement(directories.genesisEntry(saved.account!!, member, signKey, recovery, now()))
-            persist(saved.copy(me = member, pin = null, pendingGenesis = entry), secrets.copy(recoverySeed = toB64(seed)))
-        }
+        if (saved.pendingGenesis != null) return@run
+        if (api().directory(0).isNotEmpty()) throw IllegalStateException("This account already has devices. Join it instead.")
+        val member = newMember()
+        val seed = sodium.random(16)
+        val recovery = sodium.signSeedKeyPair(recoverySignSeed(seed, sodium))
+        val entry = ProtocolJson.encodeToJsonElement(directories.genesisEntry(saved.account!!, member, signKey, recovery, now()))
+        persist(saved.copy(me = member, pin = null, pendingGenesis = entry), secrets.copy(recoverySeed = toB64(seed)))
+    }
+
+    /**
+     * Posts the first entry kept on disk, so a lost response is retried with the same entry, and
+     * a chain that already starts with it is adopted instead of refused.
+     */
+    private suspend fun postFirstEntry() {
         val genesis: JsonElement = saved.pendingGenesis!!
         val existing = api().directory(0)
         if (existing.isEmpty()) api().append(ProtocolJson.decodeFromJsonElement(SignedEnvelope.serializer(), genesis))
-        else if (existing.first() != genesis) throw IllegalStateException("This account already has devices. Join it instead.")
-        else if (api().me().member == null) {
+        else if (existing.first() != genesis) {
+            // Another device set the account up meanwhile: this setup's key was never used.
+            persist(saved.copy(me = null, pendingGenesis = null, accountExists = true), Secrets(session = secrets.session))
+            throw IllegalStateException("This account already has devices. Join it instead.")
+        } else if (api().me().member == null) {
             // The server took the entry but the session that posted it is gone: bind this one.
             api().bind(me.id, toB64(sodium.sign(bindMessage(saved.account!!, me.id, api().challenge()), signKey)))
         }
@@ -355,6 +366,7 @@ class ServerStore(
     }
 
     override fun confirmRecoveryKey() = run {
+        if (saved.pendingGenesis != null) postFirstEntry()
         persist(newSecrets = secrets.copy(recoverySeed = null))
         sync()
     }
