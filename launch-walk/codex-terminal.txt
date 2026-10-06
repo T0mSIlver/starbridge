@@ -1,0 +1,249 @@
+cat /home/dev/work/starbridge/.scratch/launch/proof/codex-terminal.clean; sleep 1000
+dev in 🌐 sandbox in mystifying-galileo-1c4264 on  launch/pi-web via  v24.18.0 
+⬢ [Systemd] ❯ cat /home/dev/work/starbridge/.scratch/launch/proof/codex-terminal.clean; sleep 1000
+Script started on 2026-10-06 01:43:17+02:00 [COMMAND="bash --norc" TERM="tmux-256color" TTY="/dev/pts/9" COLUMNS="160" LINES="50"]
+bash-5.2$ export PS1='newuser$ '; cd ~; curl -fsSL http://127.0.0.1:8395/releases/latest/download/install.sh | sh
+Installed starbridge 0.9.1 to /home/dev/work/starbridge/.scratch/launch/home-codex/.local/bin/starbridge
+Pairing
+Starbridge server: [https://starbridge.run] http://127.0.0.1:3790
+Pairing code: P1FK-E81F-GD6F-746N-4ENE-S29F
+Scan this with the Starbridge app or your phone's camera, or open http://127.0.0.1:3790/pair#P1FK-E81F-GD6F-746N-4ENE-S29F
+  █▀▀▀▀▀█ ▄█ ▄▄  ▀▀  ▀▄█▀   █▀▀▀▀▀█  
+  █ ███ █ ▄█▀█  ▀ █▄█▀█▀ ▀█ █ ███ █  
+  █ ▀▀▀ █ ▄ █ ▀███▄▄ ▀▄█▀▀█ █ ▀▀▀ █  
+  ▀▀▀▀▀▀▀ ▀ ▀ █▄▀▄▀ █ █▄█▄█ ▀▀▀▀▀▀▀  
+  ▀▀███▄▀▀██▀ ▀ ▀█▄▄▄█ █▀▄ █▄█ ▀ █▄  
+   ▀▄▀ █▀▄▀█▄█▀ ▄ ▄▀▄▄▄▄▀ ▄▄ ▀█ ▄    
+   █▀▀█ ▀ ▄▀▄▀▄▄▄▄ ██ ▄▀▀█▀▄▄█▀▄ ▄▄  
+  ▀█ █▀█▀█▄▀▄ ▄█▀▀▄  ▄▄▄▄ ▄ ██ ▀▄▀   
+  █ ▄ ▀▄▀▄ ▄█ ▀ ▀█▄▀▀▄▀  ▄▀▄▄▄▀▄ █▄  
+    █▄▀▀▀▀ █ █▀ ▄█▀ ▄ ▄██ █▄▄▀█▀▄▀   
+  ██ █ ▄▀▀ ▀ ▀▄▄▄ ▀ ▄ ▄█▀▄ ▄▄█▀▀▄█▄  
+  █  ▀  ▀ ▀ █ ▄█▀▀   ▄███▄ █▄█ ▀█▀   
+  ▀ ▀ ▀▀▀▀█▄▄ ▀ ▀▀▀▄▄ ▄ ▄▀█▀▀▀█▀▄ █  
+  █▀▀▀▀▀█ ▀▄ █▀ ▄▀▀▀▄ ██ ▀█ ▀ █ ▄▀   
+  █ ███ █ █ █▀▄▄▄██ ▄█ ▄▄ █▀▀▀██▄▄█  
+  █ ▀▀▀ █ █▀  ▄█▀██  ▄▄█▄▄▀▀██▄▀▄    
+  ▀▀▀▀▀▀▀ ▀   ▀ ▀  ▀▀  ▀▀ ▀▀  ▀  ▀   
+Or type the code under Devices in the Starbridge app or web page. It expires in 10 minutes.
+Paired "sandbox" (m_IVsKRSCVEP-X). Keys are in /home/dev/work/starbridge/.scratch/launch/home-codex/.config/starbridge.
+Shown as a server (`starbridge config machine-kind` changes it).
+CodexBar
+CodexBar reads your plan quotas and is not installed. Install the CodexBar CLI? [Y/n] n
+No quotas without CodexBar; questions and runs work without it. `starbridge setup` installs it when you rerun it.
+Agent
+Started /home/dev/work/starbridge/.scratch/launch/home-codex/.config/systemd/user/starbridge-agent.service.
+Agent 0.9.1 runs (pid 3997658).
+Claude Code
+Install the Starbridge plugins for Claude Code (the skill and the mod)? [Y/n] n
+Codex
+Install the Starbridge skill for Codex in /home/dev/work/starbridge/.scratch/launch/home-codex/.codex/skills/starbridge? [Y/n] y
+Installed /home/dev/work/starbridge/.scratch/launch/home-codex/.codex/skills/starbridge/SKILL.md.
+Pi
+Install the Starbridge Pi package (the skill, and answers into the session)? This runs `pi install git:github.com/T0mSIlver/starbridge`. [Y/n] n
+Skipped: `pi install git:github.com/T0mSIlver/starbridge` installs it later.
+Permission prompts
+Also send Claude Code permission prompts to your devices? The Claude app already shows them for Remote Control sessions. [y/N] n
+They stay at the keyboard (`starbridge config permissions on` sends them).
+Check
+Send a test decision to your phone? [Y/n] n
+Setup is done. `starbridge status` shows the same checks at any time.
+newuser$ clear; mkdir -p ~/proj && cd ~/proj && git init -q && echo '# demo' > README.md && git add . && git commit -qm init && codex
+                         ⣀⣤⣤⣤⣀⣀      
+                      ⣠⣶⣿⣿⣿⣿⣿⣿⣿⣿⣦⣤⣤⣤⣤⣤⣤⡀ 
+                    ⢀⣾⣿⣿⠿⠋⠉⠉⢉⣭⣿⣿⣿⣿⣿⠿⣿⣿⣿⣿⣷⣄ 
+                   ⣀⣾⣿⣿⠃ ⣀⣴⣾⣿⣿⡿⠟⠋ ⣀⡀ ⠈⠙⢿⣿⣿⣧ 
+                ⣀⣶⣿⣿⣿⣿⡇ ⢸⣿⣿⡿⠛⠉⢀⣠⣴⣿⣿⣿⣷⣦⣀⠈⢻⣿⣿⡇ 
+               ⣰⣿⣿⡿⢿⣿⣿⡇ ⢸⣿⣿⢀⣤⣶⣿⣿⣿⠟⠛⠻⣿⣿⣿⣿⣮⣿⣿⡷  
+              ⢰⣿⣿⡟⠁⢸⣿⣿⡇ ⢸⣿⣿⣿⣿⠿⠿⣿⣿⣿⣦⣄⡀⠈⠛⠿⣿⣿⣿⣧⡀ 
+              ⣾⣿⣿⠃ ⢸⣿⣿⡇ ⢸⣿⣿⠋⠁  ⠈⠙⢻⣿⣿⣿⣶⣤⡀ ⠹⢿⣿⣷⡄ 
+              ⢸⣿⣿⣇ ⠸⣿⣿⣷⣦⣼⣿⣿      ⢸⣿⣿⠻⢿⣿⣿⡇ ⠘⣿⣿⣿ 
+              ⠈⢿⣿⣿⣦⡀⠈⠛⠿⣿⣿⣿⣿⣄⡀  ⢀⣠⣼⣿⣿  ⣿⣿⡇  ⣿⣿⣿⠇
+                ⢻⣿⣿⣿⣷⣦⣀⠈⠙⠻⣿⣿⣿⣶⣶⣿⣿⣿⣿⣿  ⣿⣿⡇ ⣠⣿⣿⣿
+                ⢸⣿⣿⡿⢿⣿⣿⣿⣦⣠⣴⣿⣿⣿⡿⠟⠋⢸⣿⣿  ⣿⣿⣷⣴⣿⣿⣿⠃
+                ⠘⣿⣿⣷ ⠈⠛⢿⣿⣿⣿⠿⠋⠉ ⣠⣴⣿⣿⣿  ⣿⣿⣿⣿⣿⠟⠁
+                 ⠻⣿⣿⣿⣤⣀ ⠈⠉ ⢀⣤⣶⣿⣿⣿⠿⠟⠁ ⣰⣿⣿⡟⠋⠁ 
+                  ⠈⠿⣿⣿⣿⣿⣶⣾⣿⣿⣿⣿⠟⠋⠁  ⣠⣼⣿⣿⡟                                         
+                     ⠙⠛⠛⠛⠻⠛⢿⣿⣿⣿⣿⣷⣾⣿⣿⣿⡿⠏                                                   
+                            ⠈⠙⠛⠿⠿⠿⠿⠛⠉                                                       
+  Welcome to Codex, OpenAI's command-line coding agent                                         
+  Sign in with ChatGPT to use Codex as part of your paid plan                                   
+  or connect an API key for usage-based billing                                                  
+> 1. Sign in with ChatGPT                                                                       
+     Usage included with Plus, Pro, Business, and Enterprise plans                             
+  2. Sign in with Device Code                                                             
+     Sign in from another device with a one-time code                                    
+  3. Provide your own API key
+     Pay for what you use
+  Press enter to continue
+newuser$ clear; codex
+                         ⣀⣤⣤⣤⣀⣀      
+                      ⣠⣶⣿⣿⣿⣿⣿⣿⣿⣿⣦⣤⣤⣤⣤⣤⣤⡀
+                    ⢀⣾⣿⣿⠿⠋⠉⠉⢉⣭⣿⣿⣿⣿⣿⠿⣿⣿⣿⣿⣷⣄ 
+                   ⣀⣾⣿⣿⠃ ⣀⣴⣾⣿⣿⡿⠟⠋ ⣀⡀ ⠈⠙⢿⣿⣿⣧ 
+                ⣀⣶⣿⣿⣿⣿⡇ ⢸⣿⣿⡿⠛⠉⢀⣠⣴⣿⣿⣿⣷⣦⣀⠈⢻⣿⣿⡇ 
+               ⣰⣿⣿⡿⢿⣿⣿⡇ ⢸⣿⣿⢀⣤⣶⣿⣿⣿⠟⠛⠻⣿⣿⣿⣿⣮⣿⣿⡷  
+              ⢰⣿⣿⡟⠁⢸⣿⣿⡇ ⢸⣿⣿⣿⣿⠿⠿⣿⣿⣿⣦⣄⡀⠈⠛⠿⣿⣿⣿⣧⡀              
+              ⣾⣿⣿⠃ ⢸⣿⣿⡇ ⢸⣿⣿⠋⠁  ⠈⠙⢻⣿⣿⣿⣶⣤⡀ ⠹⢿⣿⣷⡄ 
+              ⢸⣿⣿⣇ ⠸⣿⣿⣷⣦⣼⣿⣿      ⢸⣿⣿⠻⢿⣿⣿⡇ ⠘⣿⣿⣿ 
+              ⠈⢿⣿⣿⣦⡀⠈⠛⠿⣿⣿⣿⣿⣄⡀  ⢀⣠⣼⣿⣿  ⣿⣿⡇  ⣿⣿⣿⠇
+                ⢻⣿⣿⣿⣷⣦⣀⠈⠙⠻⣿⣿⣿⣶⣶⣿⣿⣿⣿⣿  ⣿⣿⡇ ⣠⣿⣿⣿
+                ⢸⣿⣿⡿⢿⣿⣿⣿⣦⣠⣴⣿⣿⣿⡿⠟⠋⢸⣿⣿  ⣿⣿⣷⣴⣿⣿⣿⠃
+                ⠘⣿⣿⣷ ⠈⠛⢿⣿⣿⣿⠿⠋⠉ ⣠⣴⣿⣿⣿  ⣿⣿⣿⣿⣿⠟⠁
+                 ⠻⣿⣿⣿⣤⣀ ⠈⠉ ⢀⣤⣶⣿⣿⣿⠿⠟⠁ ⣰⣿⣿⡟⠋⠁ 
+                  ⠈⠿⣿⣿⣿⣿⣶⣾⣿⣿⣿⣿⠟⠋⠁  ⣠⣼⣿⣿⡟                                         
+                     ⠙⠛⠛⠛⠻⠛⢿⣿⣿⣿⣿⣷⣾⣿⣿⣿⡿⠏                                                   
+                            ⠈⠙⠛⠿⠿⠿⠿⠛⠉                                                       
+  Welcome to Codex, OpenAI's command-line coding agent                                         
+  Sign in with ChatGPT to use Codex as part of your paid plan                                   
+  or connect an API key for usage-based billing                                                  
+> 1. Sign in with ChatGPT                                                                       
+     Usage included with Plus, Pro, Business, and Enterprise plans                             
+  2. Sign in with Device Code                                                             
+     Sign in from another device with a one-time code                                    
+  3. Provide your own API key
+     Pay for what you use
+  Press enter to continue
+newuser$ clear; cd ~/proj; codex
+                         ⣀⣤⣤⣤⣀⣀      
+                      ⣠⣶⣿⣿⣿⣿⣿⣿⣿⣿⣦⣤⣤⣤⣤⣤⣤⡀ 
+                    ⢀⣾⣿⣿⠿⠋⠉⠉⢉⣭⣿⣿⣿⣿⣿⠿⣿⣿⣿⣿⣷⣄             
+                   ⣀⣾⣿⣿⠃ ⣀⣴⣾⣿⣿⡿⠟⠋ ⣀⡀ ⠈⠙⢿⣿⣿⣧ 
+                ⣀⣶⣿⣿⣿⣿⡇ ⢸⣿⣿⡿⠛⠉⢀⣠⣴⣿⣿⣿⣷⣦⣀⠈⢻⣿⣿⡇ 
+               ⣰⣿⣿⡿⢿⣿⣿⡇ ⢸⣿⣿⢀⣤⣶⣿⣿⣿⠟⠛⠻⣿⣿⣿⣿⣮⣿⣿⡷  
+              ⢰⣿⣿⡟⠁⢸⣿⣿⡇ ⢸⣿⣿⣿⣿⠿⠿⣿⣿⣿⣦⣄⡀⠈⠛⠿⣿⣿⣿⣧⡀ 
+              ⣾⣿⣿⠃ ⢸⣿⣿⡇ ⢸⣿⣿⠋⠁  ⠈⠙⢻⣿⣿⣿⣶⣤⡀ ⠹⢿⣿⣷⡄ 
+              ⢸⣿⣿⣇ ⠸⣿⣿⣷⣦⣼⣿⣿      ⢸⣿⣿⠻⢿⣿⣿⡇ ⠘⣿⣿⣿ 
+              ⠈⢿⣿⣿⣦⡀⠈⠛⠿⣿⣿⣿⣿⣄⡀  ⢀⣠⣼⣿⣿  ⣿⣿⡇  ⣿⣿⣿⠇
+                ⢻⣿⣿⣿⣷⣦⣀⠈⠙⠻⣿⣿⣿⣶⣶⣿⣿⣿⣿⣿  ⣿⣿⡇ ⣠⣿⣿⣿
+                ⢸⣿⣿⡿⢿⣿⣿⣿⣦⣠⣴⣿⣿⣿⡿⠟⠋⢸⣿⣿  ⣿⣿⣷⣴⣿⣿⣿⠃
+                ⠘⣿⣿⣷ ⠈⠛⢿⣿⣿⣿⠿⠋⠉ ⣠⣴⣿⣿⣿  ⣿⣿⣿⣿⣿⠟⠁
+                 ⠻⣿⣿⣿⣤⣀ ⠈⠉ ⢀⣤⣶⣿⣿⣿⠿⠟⠁ ⣰⣿⣿⡟⠋⠁ 
+                  ⠈⠿⣿⣿⣿⣿⣶⣾⣿⣿⣿⣿⠟⠋⠁  ⣠⣼⣿⣿⡟                                         
+                     ⠙⠛⠛⠛⠻⠛⢿⣿⣿⣿⣿⣷⣾⣿⣿⣿⡿⠏                                                   
+                            ⠈⠙⠛⠿⠿⠿⠿⠛⠉                                                       
+  Welcome to Codex, OpenAI's command-line coding agent                                         
+  Sign in with ChatGPT to use Codex as part of your paid plan                                   
+  or connect an API key for usage-based billing                                                  
+> 1. Sign in with ChatGPT                                                                       
+     Usage included with Plus, Pro, Business, and Enterprise plans                             
+  2. Sign in with Device Code                                                             
+     Sign in from another device with a one-time code                                    
+  3. Provide your own API key
+     Pay for what you use
+  Press enter to continue
+newuser$ ^C
+newuser$ clear; codex exec 'I want a notes file in this repo. Ask me through Starbridge whether to call it notes.md or todo.md, then create it with one line.' 2>&1 | tee ~/exec1.log | tail -40
+  -- bash -c 'make build && make e2e'
+```
+- Wrap the whole command, chained or not, in `-- bash -c '…'`. They want to
+  know when the machine is busy and when it is free again.
+- `--title` is a few words. `--reason` is required: what it blocks, or the
+  rule it matches.
+- The output and exit code are the command's own. Progress lines such as
+  `[3/7]` or `42%` reach the phone on their own.
+- Run anything else as usual.
+exec
+/usr/bin/zsh -lc "starbridge ask --question 'Should the notes file in this repo be called notes.md or todo.md?' --context 'I will create the selected file in the repo root.
+It will contain one line: Notes.' --option 'notes.md' --option 'todo.md' --waiting" in /home/dev/work/starbridge/.scratch/launch/home-codex/proj
+ exited 1 in 51ms:
+2103 | youth
+2104 | zebra
+2105 | zero
+2106 | zone
+2107 | zoo`.split(`
+2108 | `,{mode:384}),EB(t,384),yB(t,this.path(A))}machine(){return this.read("machine.json")}saveMachine(A){this.write("machine.json",A)}directory(){return this.read("directory.json")??[]}saveDirectory(A){this.write("directory.json",A)}agentConfig(){return this.read("agent.json")??{}}saveAgentConfig(A){this.write("agent.json",A)}state(){return this.read("state.json")??{asked:{},answers:{}}}updateState(A){return this.locked(()=>{let e=this.state();return A(e),this.write("state.json",e),e})}}function _B(A){return{boxPk:PA(A.box.publicKey),boxSk:PA(A.box.privateKey),signPk:PA(A.sign.publicKey),signSk:PA(A.sign.privateKey)}}function DB(A){return{box:{publicKey:he(A.boxPk),privateKey:he(A.boxSk)},sign:{publicKey:he(A.signPk),privateKey:he(A.signSk)}}}var lt=1,Wi=1,Vi="starbridge-api",Et=25;function Xi(A,e){if(A.STARBRIDGE_AGENT_SOCKET)return A.STARBRIDGE_AGENT_SOCKET;let t=Zi({...A,STARBRIDGE_CONFIG_DIR:void 0});if(A.XDG_RUNTIME_DIR&&e===t)return SB(A.XDG_RUNTIME_DIR,"starbridge","agent.sock");return SB(e,"agent.sock")}c
+error: cannot reach http://127.0.0.1:3790: Was there a typo in the url or port?
+      at call (/$bunfs/root/starbridge-linux-x64:2108:3315)
+      at async directory (/$bunfs/root/starbridge-linux-x64:2108:4028)
+      at async Qe (/$bunfs/root/starbridge-linux-x64:2108:4858)
+      at async vg (/$bunfs/root/starbridge-linux-x64:2112:8748)
+      at async $t (/$bunfs/root/starbridge-linux-x64:2112:9423)
+Bun v1.4.2 (Linux x64)
+codex
+Starbridge failed to reach its local service, so no card was sent. Should I use `notes.md` or `todo.md`?
+This session also has read-only filesystem access, so creating the file will require write access. The line will be `Notes.`
+tokens used
+5,745
+Starbridge failed to reach its local service, so no card was sent. Should I use `notes.md` or `todo.md`?
+This session also has read-only filesystem access, so creating the file will require write access. The line will be `Notes.`
+newuser$ clear; cd ~; curl -fsSL http://127.0.0.1:8395/releases/latest/download/install.sh | sh
+Installed starbridge 0.9.1 to /home/dev/work/starbridge/.scratch/launch/home-codex/.local/bin/starbridge
+Pairing
+Paired as "sandbox" (m_IVsKRSCVEP-X) on http://127.0.0.1:3790.
+Shown as a server (`starbridge config machine-kind` changes it).
+CodexBar
+CodexBar reads your plan quotas and is not installed. Install the CodexBar CLI? [Y/n] n
+No quotas without CodexBar; questions and runs work without it. `starbridge setup` installs it when you rerun it.
+Agent
+/home/dev/work/starbridge/.scratch/launch/home-codex/.config/systemd/user/starbridge-agent.service is up to date and running.
+Agent 0.9.1 runs (pid 3997658).
+Claude Code
+Install the Starbridge plugins for Claude Code (the skill and the mod)? [Y/n] n
+Codex
+The starbridge skill is in /home/dev/work/starbridge/.scratch/launch/home-codex/.codex/skills/starbridge.
+Let `starbridge ask`, `waiting`, `wait` and `settle` run outside Codex's sandbox, which has no network? [Y/n] y
+Wrote /home/dev/work/starbridge/.scratch/launch/home-codex/.codex/rules/starbridge.rules.
+Pi
+Install the Starbridge Pi package (the skill, and answers into the session)? This runs `pi install git:github.com/T0mSIlver/starbridge`. [Y/n] n
+Skipped: `pi install git:github.com/T0mSIlver/starbridge` installs it later.
+Permission prompts
+Also send Claude Code permission prompts to your devices? The Claude app already shows them for Remote Control sessions. [y/N] n
+They stay at the keyboard (`starbridge config permissions on` sends them).
+Check
+Send a test decision to your phone? [Y/n] n
+Setup is done. `starbridge status` shows the same checks at any time.
+newuser$ clear; cd ~/proj; codex exec 'I want a notes file in this repo. Ask me through Starbridge whether to call it notes.md or todo.md, then create it with one line.' </dev/null 2>&1 | tee ~/exec2.log | tail -25
+exec
+/usr/bin/zsh -lc 'starbridge wait d_Ad9mInFPHPjcOyt4 --timeout 1m' in /home/dev/work/starbridge/.scratch/launch/home-codex/proj
+codex
+You selected `todo.md`. I’ve sent a Starbridge card about the read-only restriction; the file hasn’t been created.
+ succeeded in 45605ms:
+Answer to d_Ad9mInFPHPjcOyt4 (Can you reopen this repo in a writable session so I can create todo.md?): I will create it myself
+codex
+You chose `todo.md` through Starbridge, then opted to create it yourself because this session is read-only.
+Use this single line:
+```markdown
+# Notes
+```
+tokens used
+17,325
+You chose `todo.md` through Starbridge, then opted to create it yourself because this session is read-only.
+Use this single line:
+```markdown
+# Notes
+```
+newuser$ clear; codex exec 'Run the e2e tests; they take over my screen. The command is: bash -c "for i in 1 2 3; do echo [$i/3]; sleep 3; done"' </dev/null 2>&1 | tail -25
+- Wrap the whole command, chained or not, in `-- bash -c '…'`. They want to
+  know when the machine is busy and when it is free again.
+- `--title` is a few words. `--reason` is required: what it blocks, or the
+  rule it matches.
+- The output and exit code are the command's own. Progress lines such as
+  `[3/7]` or `42%` reach the phone on their own.
+- Run anything else as usual.
+exec
+/usr/bin/zsh -lc "starbridge run --title 'E2E tests' --reason 'takes over your screen' -- bash -c 'for i in 1 2 3; do echo ["'$i/3]; sleep 3; done'"'" in /home/dev/work/starbridge/.scratch/launch/home-codex/proj
+ succeeded in 8941ms:
+[1/3]
+starbridge: the run was not reported: cannot reach http://127.0.0.1:3790: Was there a typo in the url or port?
+[2/3]
+[3/3]
+codex
+The command completed successfully (exit code 0), running all three steps.
+Starbridge couldn’t report progress because its local service was unreachable.
+tokens used
+7,203
+The command completed successfully (exit code 0), running all three steps.
+Starbridge couldn’t report progress because its local service was unreachable.
+newuser$ clear; curl -fsSL http://127.0.0.1:8395/releases/latest/download/install.sh | STARBRIDGE_NO_SETUP=1 sh; starbridge uninstall
+Installed starbridge 0.9.1 to /home/dev/work/starbridge/.scratch/launch/home-codex/.local/bin/starbridge
+Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_-3_HYKsF4GB4ltNZ --timeout 5m` (again on exit 2).
+Posted "Revoke sandbox? It was uninstalled." to your devices.
+Stopped and removed the agent service.
+Removed /home/dev/work/starbridge/.scratch/launch/home-codex/.codex/skills/starbridge.
+Removed /home/dev/work/starbridge/.scratch/launch/home-codex/.codex/rules/starbridge.rules.
+Delete /home/dev/work/starbridge/.scratch/launch/home-codex/.config/starbridge (this machine's keys and state)? [y/N] n
+Kept /home/dev/work/starbridge/.scratch/launch/home-codex/.config/starbridge: `starbridge setup` reuses it.
+Revoke "sandbox" under Devices in the Starbridge app or web page.
+Removed /home/dev/work/starbridge/.scratch/launch/home-codex/.local/bin/starbridge.
+newuser$ 
