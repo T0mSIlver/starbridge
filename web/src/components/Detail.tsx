@@ -196,7 +196,7 @@ export function QuestionDetail({
           <AnswerElsewhere page={d.answerIn} />
         </div>
       ) : options.length > 0 ? (
-        <fieldset className={s.actions}>
+        <fieldset className={`${s.actions} ${s.options}`}>
           <legend className="sr-only">Answer</legend>
           {options.map((o, i) => (
             <button

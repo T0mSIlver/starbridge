@@ -30,6 +30,17 @@
   margin-top: var(--s1);
 }
 
+/* A long option wraps inside its button. Unwrapped, it widens the page, and a phone's browser
+   zooms the whole page out to fit it. */
+.options > button {
+  max-width: 100%;
+  height: auto;
+  min-height: var(--s10);
+  padding-block: var(--s2);
+  white-space: normal;
+  text-align: center;
+}
+
 .toolHead {
   display: flex;
   align-items: center;
