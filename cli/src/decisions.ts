@@ -383,13 +383,16 @@ export async function setWaiting(
   if (!opts.id) throw new UsageError(`${opts.state} needs a decision id`);
   const s = session(ctx);
   await postWaiting(ctx, s, opts.id, opts.state);
-  // Without the agent nothing polls meanwhile: read the owner's latest snooze first.
-  if (opts.state === "waiting")
-    await poll(ctx, s, {
-      cursor: ctx.store.state().asked[opts.id]?.cursor,
-      seconds: 0,
-      shared: false,
-    });
+  // Without the agent nothing polls meanwhile: read every page since the question was asked,
+  // so the owner's latest snooze is among them.
+  if (opts.state === "waiting") {
+    let cursor = ctx.store.state().asked[opts.id]?.cursor;
+    for (let page = 0; page < 100; page++) {
+      const next = (await poll(ctx, s, { cursor, seconds: 0, shared: false })).cursor;
+      if (next === cursor) break;
+      cursor = next;
+    }
+  }
   const until = snoozedUntil(ctx.store.state(), opts.id, ctx.now());
   if (until && opts.state === "waiting")
     ctx.out(snoozeLine(opts.id, ctx.store.state().asked[opts.id]?.question, until, ctx.now()));
@@ -518,7 +521,8 @@ export function acceptSnooze(raw: unknown, s: Session, dir: Directory, st: State
 export function snoozedUntil(st: State, id: string, now: Date): string | undefined {
   const a = st.asked[id];
   const until = a?.snooze?.until;
-  if (!until || a.settled || st.answers[id]) return undefined;
+  // Held while the directory is behind, as answers are: a newer word may be among the held.
+  if (!until || a.settled || st.answers[id] || st.behind) return undefined;
   // Back now ends at its own time, read before this machine's clock: the device's may run ahead.
   if (Date.parse(until) <= Date.parse(a.snooze?.at ?? "")) return undefined;
   if (Date.parse(until) <= now.getTime()) return undefined;
@@ -1068,8 +1072,7 @@ export async function wait(
   if (already) return report(already);
   if (target && !opts["no-mark"])
     await markWaiting(ctx, () => postWaiting(ctx, s, target, "waiting"));
-  const put = snoozed();
-  if (put !== undefined) return put;
+  // A snooze is told only after a poll: the one cached may be over, or answered since.
 
   let deadline = Number.POSITIVE_INFINITY;
   if (opts.timeout) deadline = ctx.now().getTime() + parseDuration(opts.timeout);
