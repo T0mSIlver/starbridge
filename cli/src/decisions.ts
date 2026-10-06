@@ -292,7 +292,7 @@ export async function postDecision(ctx: Ctx, s: Session, input: AskInput): Promi
       body,
       ...(input.images ? { images: input.images } : {}),
       ...(cursor !== undefined ? { cursor } : {}),
-      ...(decision.source.session ? { session: decision.source.session } : {}),
+      ...(decision.source.session && !input.held ? { session: decision.source.session } : {}),
       ...(decision.answerIn ? { answerIn: true } : {}),
       ...(input.codex && decision.source.session ? { codex: input.codex } : {}),
       ...(input.extensionAnswers && decision.source.session ? { extensionAnswers: true } : {}),
@@ -942,8 +942,7 @@ export function sessionLines(st: State, session: string): SessionLine[] {
   if (st.behind) return lines;
   for (const [id, a] of Object.entries(st.answers)) {
     const asked = st.asked[id];
-    if (!asked || a.seen || asked.held || asked.session !== session || !deliverable(st, id))
-      continue;
+    if (!asked || a.seen || asked.session !== session || !deliverable(st, id)) continue;
     lines.push({
       type: "answer",
       decisionId: id,

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, setDefaultTimeout, test } from "bun:test";
 import { LiveServer } from "@starbridge/server/test-support";
 import { run } from "../src/cli";
-import { hookQuestion, questionInput } from "../src/hook";
+import { hookQuestion, opencodeAnswer, questionInput } from "../src/hook";
 import { paired, testCtx, until } from "./helpers";
 
 setDefaultTimeout(30_000);
@@ -86,4 +86,15 @@ test("a question a card cannot offer as taps lists its options and takes a typed
   const q = questionInput({ question: long, options: DB.options });
   expect(q.question).toHaveLength(300);
   expect(q.context?.startsWith(long)).toBe(true);
+});
+
+test("a reply that names only a multi-select question's labels picks those labels", () => {
+  const q = { question: "Which?", options: DB.options, multiple: true };
+  const reply = (text: string) => ({ text }) as Parameters<typeof opencodeAnswer>[0];
+  expect(opencodeAnswer(reply("Redis, SQLite (Recommended)"), q)).toEqual([
+    "Redis",
+    "SQLite (Recommended)",
+  ]);
+  expect(opencodeAnswer(reply("Redis, and Postgres"), q)).toEqual(["Redis, and Postgres"]);
+  expect(opencodeAnswer(reply("Redis"), { ...q, multiple: false })).toEqual(["Redis"]);
 });

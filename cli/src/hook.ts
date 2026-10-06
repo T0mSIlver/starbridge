@@ -12,7 +12,6 @@ import { basename } from "node:path";
 import type { Answer, Permission } from "@starbridge/protocol";
 import { MAX_HOLD_SECONDS } from "./agent/api";
 import { type AgentClient, Interrupted, withAgent } from "./agent/client";
-import { askVia } from "./agent/commands";
 import type { PermissionWait } from "./agent/permissions";
 import { type Ctx, parseDuration, session, UsageError } from "./context";
 import { type AskInput, ask, poll, settle } from "./decisions";
@@ -368,22 +367,38 @@ export function questionInput(q: OpencodeQuestion): AskInput {
   };
 }
 
-/** opencode's answer to one question: the labels picked, or the owner's own words. */
-export const opencodeAnswer = (a: Answer): string[] => [a.choice ?? a.text ?? ""];
+/**
+ * opencode's answer to one question: the label tapped, or the owner's own words. For a question
+ * that takes several, a reply that names only its labels, split on commas or lines, is those.
+ */
+export function opencodeAnswer(a: Answer, q: OpencodeQuestion): string[] {
+  if (a.choice !== undefined) return [a.choice];
+  const text = a.text ?? "";
+  const labels = new Set((q.options ?? []).map((o) => o.label));
+  const parts = text
+    .split(/[,\n]/)
+    .map((p) => p.trim())
+    .filter((p) => p.length > 0);
+  return q.multiple && parts.length > 0 && parts.every((p) => labels.has(p)) ? parts : [text];
+}
 
 /**
  * `starbridge hook question --agent opencode`, the plugin's input on stdin: posts each question
  * of one `question` tool call as a decision, already waiting, and once all are answered prints
- * `{"answers": [[label], ...]}` for opencode's reply route. Nothing else gets those answers: the
- * session's own answer loop skips them (`held`). SIGTERM means the terminal answered or
- * dismissed the call: the questions still open are settled as answered elsewhere. Any error
- * prints nothing, and the terminal's dialog decides.
+ * `{"answers": [[label], ...]}` for opencode's reply route. Nothing else gets those answers: they
+ * are `held`, recorded without the session, whose answer loop would submit them as a prompt; so
+ * it goes to the server itself, since an agent older than `held` would record the session.
+ * SIGTERM means the terminal answered or dismissed the call: the questions still open are
+ * settled as answered elsewhere. Any error prints nothing, and the terminal's dialog decides.
  */
 export async function hookQuestion(
-  ctx: Ctx,
+  outer: Ctx,
   stdin: string,
   opts: { agent?: string },
 ): Promise<number> {
+  // opencode killed outright never sends SIGTERM: the questions would wait for nobody.
+  const watch = untilOrphaned(outer.signal);
+  const ctx = { ...outer, signal: watch.signal };
   try {
     if (opts.agent !== "opencode")
       throw new UsageError(`--agent: opencode (got ${opts.agent ?? "nothing"})`);
@@ -408,18 +423,13 @@ export async function hookQuestion(
         };
         const how = { wait: true, json: true };
         try {
-          const code = await withAgent(
-            sub,
-            (a) => askVia(sub, a, input, how),
-            () => ask(sub, input, how),
-          );
+          const code = await ask(sub, input, how);
           ids[i] = lines[0];
           return code === 0 && lines[1]
-            ? opencodeAnswer(JSON.parse(lines[1]) as Answer)
+            ? opencodeAnswer(JSON.parse(lines[1]) as Answer, q)
             : undefined;
         } catch (e) {
           ids[i] = lines[0];
-          if (e instanceof Interrupted) return undefined;
           failed.abort();
           throw e;
         }
@@ -432,14 +442,22 @@ export async function hookQuestion(
       ctx.out(JSON.stringify({ answers: picked }));
       return 0;
     }
-    // Answered or dismissed at the terminal: a question it still waited on is moot.
-    for (const id of ids)
-      if (id)
-        await settle({ ...ctx, signal: undefined }, { id, outcome: "elsewhere" }).catch((e) =>
-          ctx.err(`starbridge: could not settle ${id}: ${(e as Error).message}`),
-        );
+    // Answered or dismissed at the terminal, or a question could not be asked: the ones still
+    // open are moot. A settle of one answered meanwhile does nothing.
+    const outcome = outer.signal?.aborted ? "elsewhere" : "withdrawn";
+    await Promise.all(
+      ids.map((id) =>
+        id
+          ? settle({ ...ctx, signal: undefined }, { id, outcome }).catch((e) =>
+              ctx.err(`starbridge: could not settle ${id}: ${(e as Error).message}`),
+            )
+          : undefined,
+      ),
+    );
   } catch (e) {
     ctx.err(`starbridge: question not sent: ${(e as Error).message}`);
+  } finally {
+    watch.stop();
   }
   return 0;
 }

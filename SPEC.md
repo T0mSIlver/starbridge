@@ -1685,10 +1685,14 @@ so the mod is the first path.
   100 characters, one option) lists the options in the context and takes a typed reply, as does
   `multiple`; the reply goes back as one answer. This goes further than Claude Code's
   `AskUserQuestion` hook, which tells the agent to use `starbridge ask` instead: opencode's
-  reply route takes any answer, so the question's own call gets it. These decisions are `held`
-  in the CLI's state: the session's answer loop and `starbridge wait` without an id skip them,
-  so the answer is not also submitted as a prompt. An agent older than this change does not
-  know `held` and would submit it too; `starbridge update` restarts the agent. The skill and
+  reply route takes any answer, so the question's own call gets it. A `multiple` question's
+  reply that names only its labels, split on commas or lines, goes back as those labels. These
+  decisions are `held` in the CLI's state, recorded without their session, so the session's
+  answer loop never submits the answer as a prompt too, and `starbridge wait` without an id
+  skips them. The hook posts and waits on the server itself rather than through the agent, since
+  an agent older than `held` would record the session. It stops when opencode dies, as the
+  permission hook does, and a question that could not be posted settles the others as
+  `withdrawn`. The skill and
   rule still tell agents to ask through `starbridge ask`. Checked in a throwaway HOME with the
   opencode TUI on glm-5.3-flash, the local server and `starbridge agent`: a device's "French"
   resolved the call and the model wrote "bonjour", with no duplicate prompt in `opencode

@@ -420,6 +420,7 @@ async function server({ client, directory }: Input) {
         // The turn ended (Esc, an error) with prompts still out: they are moot.
         const session = (event.properties as { sessionID: string }).sessionID;
         for (const a of asks.values()) if (a.session === session) a.stop.abort();
+        for (const q of questions.values()) if (q.session === session) q.stop.abort();
       } else if (event.type === "session.deleted") {
         const id = (event.properties as { info: { id: string } }).info.id;
         for (const q of questions.values()) if (q.session === id) q.stop.abort();

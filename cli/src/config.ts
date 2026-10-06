@@ -73,7 +73,10 @@ export interface State {
       codex?: CodexSession;
       /** Told its answer comes back as a prompt from the Pi extension or the opencode plugin. */
       extensionAnswers?: boolean;
-      /** Asked for a hook that waits for its answer itself: no session gets it as a prompt. */
+      /**
+       * Asked for a hook that waits for its answer itself: recorded without `session`, so no
+       * session gets it as a prompt, and `wait` without an id skips it.
+       */
       held?: boolean;
     }
   >;
