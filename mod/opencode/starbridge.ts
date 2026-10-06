@@ -18,6 +18,11 @@
  * the first answer wins: the CLI's is sent with opencode's reply route, and a reply from the
  * keyboard stops the CLI, which settles the prompt on the devices.
  *
+ * Each call of opencode's `question` tool goes to `starbridge hook question --agent opencode`,
+ * which posts its questions to the devices, the labels as options. The terminal's dialog stays up
+ * too, and the first answer wins: the CLI's is sent with opencode's question reply route, and the
+ * terminal answering or dismissing it stops the CLI, which settles the questions on the devices.
+ *
  * `starbridge setup` copies this file, the mod's hooks it imports and rule.md into opencode's
  * config folder with the repository's layout, and opencode loads it with Bun. The types below are
  * the part of opencode's plugin API it uses, so it needs no dependency on opencode.
@@ -28,7 +33,14 @@ import { mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises"
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { AgentLoop, socketPath } from "../hooks/agent.ts";
-import { permissionHook, runCommand, sleep, socketFetch, verdictOf } from "../hooks/node.ts";
+import {
+  hookCommand,
+  permissionHook,
+  runCommand,
+  sleep,
+  socketFetch,
+  verdictOf,
+} from "../hooks/node.ts";
 import { configDir, Poller } from "../hooks/poller.ts";
 import { Switch } from "../hooks/switch.ts";
 
@@ -68,8 +80,22 @@ export interface Asked {
   metadata?: { command?: unknown };
 }
 
+/** A `question.asked` event's properties: one call of the `question` tool. */
+export interface QuestionAsked {
+  id: string;
+  sessionID: string;
+  questions: {
+    question: string;
+    header?: string;
+    options?: { label: string; description?: string }[];
+    multiple?: boolean;
+    custom?: boolean;
+  }[];
+}
+
 type Event =
   | { type: "permission.asked"; properties: Asked }
+  | { type: "question.asked"; properties: QuestionAsked }
   | { type: "permission.replied"; properties: { requestID: string; reply: string } }
   | { type: "session.deleted"; properties: { info: { id: string } } }
   | { type: string; properties: unknown };
@@ -106,6 +132,20 @@ function rule(): string | undefined {
  */
 export function isRun(argv: string[]): boolean {
   return argv.slice(2).includes("run");
+}
+
+/** The answers `starbridge hook question` printed, one array of labels per question. */
+export function answersOf(stdout: string, count: number): string[][] | undefined {
+  try {
+    const a = (JSON.parse(stdout) as { answers?: unknown }).answers;
+    if (
+      Array.isArray(a) &&
+      a.length === count &&
+      a.every((x) => Array.isArray(x) && x.every((l) => typeof l === "string"))
+    )
+      return a as string[][];
+  } catch {}
+  return undefined;
 }
 
 /** The hook input `starbridge hook permission` reads, in Claude Code's shape. */
@@ -198,6 +238,8 @@ async function server({ client, directory }: Input) {
   const asks = new Map<string, { session: string; stop: AbortController }>();
   /** The reply this plugin sent to each prompt, to tell its `permission.replied` apart. */
   const replied = new Map<string, string>();
+  /** Questions on the devices, by request id, with their session; aborting one stops its CLI. */
+  const questions = new Map<string, { session: string; stop: AbortController }>();
 
   const info = async (id: string) => {
     try {
@@ -301,6 +343,31 @@ async function server({ client, directory }: Input) {
     );
   };
 
+  const question = async (q: QuestionAsked) => {
+    const stop = new AbortController();
+    questions.set(q.id, { session: q.sessionID, stop });
+    const name = (await info(q.sessionID))?.title;
+    const out = await hookCommand(
+      ["question", "--agent", "opencode"],
+      JSON.stringify({ session_id: q.sessionID, cwd: directory, questions: q.questions }),
+      stop.signal,
+      name ? { [TITLE_ENV]: name } : {},
+    );
+    // Deleted on the way out, so the `question.replied` this reply causes stops nothing.
+    questions.delete(q.id);
+    const answers = stop.signal.aborted ? undefined : answersOf(out, q.questions.length);
+    if (!answers) return;
+    // Refused: the terminal answered first, and the CLI settled nothing it could not tell.
+    await client._client
+      .post({
+        url: "/question/{requestID}/reply",
+        path: { requestID: q.id },
+        body: { answers },
+        headers: { "Content-Type": "application/json" },
+      })
+      .catch(() => {});
+  };
+
   // Sessions of this directory waiting since before opencode started.
   if (answers)
     void (async () => {
@@ -335,6 +402,10 @@ async function server({ client, directory }: Input) {
     },
     event: async ({ event }: { event: Event }) => {
       if (event.type === "permission.asked") void ask(event.properties as Asked);
+      else if (event.type === "question.asked") void question(event.properties as QuestionAsked);
+      else if (event.type === "question.replied" || event.type === "question.rejected")
+        // Answered or dismissed at the terminal: the CLI settles the questions on the devices.
+        questions.get((event.properties as { requestID: string }).requestID)?.stop.abort();
       else if (event.type === "permission.replied") {
         const { requestID: id, reply: how } = event.properties as {
           requestID: string;
@@ -351,12 +422,14 @@ async function server({ client, directory }: Input) {
         for (const a of asks.values()) if (a.session === session) a.stop.abort();
       } else if (event.type === "session.deleted") {
         const id = (event.properties as { info: { id: string } }).info.id;
+        for (const q of questions.values()) if (q.session === id) q.stop.abort();
         void loops.get(id)?.end();
         loops.delete(id);
       }
     },
     dispose: async () => {
       for (const a of asks.values()) a.stop.abort();
+      for (const q of questions.values()) q.stop.abort();
       const ending = [...loops.values()];
       loops.clear();
       await Promise.all(ending.map((l) => l.end()));

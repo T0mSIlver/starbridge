@@ -54,6 +54,8 @@ export interface AskInput {
   extensionAnswers?: boolean;
   /** A `claude -p` session: the mod runs only in interactive ones, so nothing submits answers. */
   headless?: boolean;
+  /** For a hook that waits for the answer itself (`hook question`): no session gets it. */
+  held?: boolean;
   project?: string;
   session?: string;
   sessionTitle?: string;
@@ -294,6 +296,7 @@ export async function postDecision(ctx: Ctx, s: Session, input: AskInput): Promi
       ...(decision.answerIn ? { answerIn: true } : {}),
       ...(input.codex && decision.source.session ? { codex: input.codex } : {}),
       ...(input.extensionAnswers && decision.source.session ? { extensionAnswers: true } : {}),
+      ...(input.held ? { held: true } : {}),
     };
   });
   if (input.waiting) await markWaiting(ctx, () => postWaiting(ctx, s, decision.id, "waiting"));
@@ -829,7 +832,7 @@ export function takeAnswer(
   session?: string,
 ): { answer: Answer; question?: string } | undefined {
   const mine = (st: State, d: string) =>
-    session === undefined || (st.asked[d]?.session ?? "") === session;
+    !st.asked[d]?.held && (session === undefined || (st.asked[d]?.session ?? "") === session);
   const found = (st: State) =>
     id
       ? deliverable(st, id)
@@ -939,7 +942,8 @@ export function sessionLines(st: State, session: string): SessionLine[] {
   if (st.behind) return lines;
   for (const [id, a] of Object.entries(st.answers)) {
     const asked = st.asked[id];
-    if (!asked || a.seen || asked.session !== session || !deliverable(st, id)) continue;
+    if (!asked || a.seen || asked.held || asked.session !== session || !deliverable(st, id))
+      continue;
     lines.push({
       type: "answer",
       decisionId: id,
