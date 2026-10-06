@@ -2,13 +2,14 @@
  * Scores the records run.ts wrote against the rubric below and prints a Markdown summary, before
  * against after, per scenario and per check.
  *
- *   bun evals/skill/grade.ts <records dir>... [--judge-model zai-coding-plan/glm-5.3] [--no-judge]
+ *   bun evals/skill/grade.ts <records dir>... [--judge-model claude-sonnet-5-5] [--no-judge]
  *
- * Most checks read the records. Five need judgement (marked "judge"); GLM grades them through
- * `opencode run`, and the verdict is stored in the record, so grading again costs nothing.
+ * Most checks read the records. Five need judgement (marked "judge"); Claude grades them through
+ * `claude -p` in a throwaway config dir, and the verdict is stored in the record, so grading again
+ * costs nothing.
  */
-import { mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { copyFileSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
 import { NO_DEFAULT } from "../../cli/src/decisions.ts";
@@ -19,7 +20,7 @@ const { values: opt, positionals: dirs } = parseArgs({
   args: process.argv.slice(2),
   allowPositionals: true,
   options: {
-    "judge-model": { type: "string", default: "zai-coding-plan/glm-5.3" },
+    "judge-model": { type: "string", default: "claude-sonnet-5-5" },
     "no-judge": { type: "boolean" },
     jobs: { type: "string", default: "3" },
   },
@@ -120,23 +121,25 @@ Answer with only a JSON object, no prose around it:
 }
 
 async function judge(r: Rec, s: Scenario): Promise<Verdict | undefined> {
+  // A throwaway config dir holding only the login, so none of the owner's instructions reach it.
   const dir = mkdtempSync(join(tmpdir(), "judge-"));
+  copyFileSync(join(homedir(), ".claude/.credentials.json"), join(dir, ".credentials.json"));
   for (let attempt = 0; attempt < 2; attempt++) {
     const p = Bun.spawn(
-      ["opencode", "run", "-m", opt["judge-model"] as string, "--format", "json", judgePrompt(r, s)],
-      { cwd: dir, stdout: "pipe", stderr: "pipe", stdin: "ignore" },
+      ["claude", "-p", judgePrompt(r, s), "--model", opt["judge-model"] as string, "--tools", "",
+        "--setting-sources", "", "--output-format", "json"],
+      {
+        cwd: dir,
+        env: { ...process.env, CLAUDE_CONFIG_DIR: dir },
+        stdout: "pipe",
+        stderr: "pipe",
+        stdin: "ignore",
+      },
     );
-    const text = (await new Response(p.stdout).text())
-      .split("\n")
-      .flatMap((l) => {
-        try {
-          const e = JSON.parse(l);
-          return e.type === "text" ? [e.part.text as string] : [];
-        } catch {
-          return [];
-        }
-      })
-      .join("");
+    let text = "";
+    try {
+      text = JSON.parse(await new Response(p.stdout).text()).result ?? "";
+    } catch {}
     await p.exited;
     const m = /\{[\s\S]*\}/.exec(text);
     if (!m) continue;

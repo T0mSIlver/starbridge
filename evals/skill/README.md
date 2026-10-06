@@ -12,14 +12,16 @@ bun evals/skill/grade.ts evals/skill/results/claude evals/skill/results/codex
 bun evals/skill/render.ts --out evals/skill/cards evals/skill/results/claude/after-merge-order-1.json
 ```
 
-`run.ts` gives every run a throwaway home, a throwaway `CLAUDE_CONFIG_DIR` or `CODEX_HOME`
-holding a copy of the login, the real server app on a random port with the CLI paired to it, a
+`run.ts` gives every run a throwaway home, a throwaway `CLAUDE_CONFIG_DIR`, `CODEX_HOME` or
+`PI_CODING_AGENT_DIR` holding a copy of the login, the real server app on a random port with the CLI paired to it, a
 git project with a bare remote, and a `gh` that prints canned output. Nothing touches your own
-`~/.claude` or `~/.codex`. Claude Code loads the plugin with `--plugin-dir`; Codex gets the
-skill in `$CODEX_HOME/skills` and the rule in `$CODEX_HOME/AGENTS.md`. Situations with a
+`~/.claude`, `~/.codex` or `~/.pi`. Claude Code loads the plugin with `--plugin-dir`; Codex
+gets the skill in `$CODEX_HOME/skills` and the rule in `$CODEX_HOME/AGENTS.md`; Pi loads the
+Starbridge extension and skill with `-e` and `--skill`. Pi on an `anthropic/` model gets your
+Claude access token; Anthropic bills a third-party harness on a subscription as extra usage. Situations with a
 follow-up answer the card with its recommended option, in the line the mod submits, and check
 that the agent acts on it.
 
-`grade.ts` scores each run: eleven checks read the record, five ask GLM 5.3 through `opencode`
-(stored in the record, so grading again is free). `render.ts` shows cards in the real web
+`grade.ts` scores each run: eleven checks read the record, five ask Claude Sonnet through
+`claude -p` in a throwaway config dir (stored in the record, so grading again is free). `render.ts` shows cards in the real web
 inbox (headless Chromium) and saves a screenshot of each.

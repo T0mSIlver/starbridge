@@ -2,15 +2,20 @@
  * Runs real agents through the scripted situations in scenarios.ts, once with the skill and rule
  * of `--before` (a git ref) and once with this checkout's, and records what each posted.
  *
- *   bun evals/skill/run.ts [--agent claude|codex] [--model sonnet] [--reps 2] [--jobs 4]
+ *   bun evals/skill/run.ts [--agent claude|codex|pi] [--model claude-sonnet-5-5] [--reps 2] [--jobs 4]
  *                          [--only merge-order,...] [--arms before,after] [--before origin/main]
  *                          [--out evals/skill/results/<agent>]
  *
- * Each run gets its own throwaway world: a home folder, a Claude Code config dir (or CODEX_HOME)
- * holding only a copy of the login, the real server app on a random port with the CLI paired to
- * it, a git project with a bare remote, and a `gh` that prints canned output. Nothing is written
- * to the owner's own config. Claude Code loads the plugin with `--plugin-dir`; Codex gets the
- * skill in `$CODEX_HOME/skills` and the SessionStart rule in `$CODEX_HOME/AGENTS.md`.
+ * Each run gets its own throwaway world: a home folder, a Claude Code config dir (or CODEX_HOME,
+ * or PI_CODING_AGENT_DIR) holding only a copy of the login, the real server app on a random port
+ * with the CLI paired to it, a git project with a bare remote, and a `gh` that prints canned
+ * output. Nothing is written to the owner's own config. Claude Code loads the plugin with
+ * `--plugin-dir`; Codex gets the skill in `$CODEX_HOME/skills` and the SessionStart rule in
+ * `$CODEX_HOME/AGENTS.md`; Pi loads the Starbridge Pi extension and skill with `-e` and `--skill`.
+ *
+ * Models: Claude Code defaults to claude-sonnet-5-5 and Codex to its own default. Pi takes
+ * `provider/id`, default anthropic/claude-sonnet-5-5: an `anthropic/` model gets the owner's
+ * Claude access token (not the refresh token), any other the providers of `~/.pi/agent`.
  *
  * Writes one JSON record per run to `--out`; grade.ts scores them.
  */
@@ -47,8 +52,10 @@ const { values: opt } = parseArgs({
   },
 });
 
-const agent = opt.agent as "claude" | "codex";
-const model = opt.model ?? (agent === "claude" ? "sonnet" : "gpt-6.1-sol");
+const agent = opt.agent as "claude" | "codex" | "pi";
+const model =
+  opt.model ??
+  { claude: "claude-sonnet-5-5", codex: undefined, pi: "anthropic/claude-sonnet-5-5" }[agent];
 const repo = join(import.meta.dir, "..", "..");
 const out = opt.out ?? join(import.meta.dir, "results", agent);
 mkdirSync(out, { recursive: true });
@@ -64,18 +71,20 @@ const which = (cmd: string) => {
 };
 const agentBin = which(agent);
 
-// The two plugins under test: the skill and hook at `--before`, and this checkout's.
+// The two versions under test, `plugin` and `mod` (the Pi extension) at `--before` and this
+// checkout's.
 const arms: Record<string, string> = {};
 for (const arm of (opt.arms as string).split(",")) {
   const dir = join(work, "arms", arm);
   mkdirSync(dir, { recursive: true });
-  if (arm === "after") cpSync(join(repo, "plugin"), dir, { recursive: true });
+  if (arm === "after")
+    for (const d of ["plugin", "mod"]) cpSync(join(repo, d), join(dir, d), { recursive: true });
   else {
-    const tar = spawnSync("git", ["-C", repo, "archive", opt.before as string, "plugin"], {
+    const tar = spawnSync("git", ["-C", repo, "archive", opt.before as string, "plugin", "mod"], {
       maxBuffer: 1 << 26,
     });
     if (tar.status !== 0) throw new Error(`git archive ${opt.before}: ${tar.stderr}`);
-    spawnSync("tar", ["-x", "--strip-components=1", "-C", dir], { input: tar.stdout });
+    spawnSync("tar", ["-x", "-C", dir], { input: tar.stdout });
   }
   arms[arm] = dir;
 }
@@ -135,9 +144,10 @@ async function turn(
   dir: string,
   env: Record<string, string>,
   prompt: string,
-  plugin: string,
+  arm: string,
   resume?: string,
 ): Promise<Turn & { session?: string }> {
+  const plugin = join(arm, "plugin");
   const t0 = Date.now();
   let args: string[];
   if (agent === "claude") {
@@ -151,14 +161,30 @@ async function turn(
       "--allowedTools",
       "Bash Write Edit Read Glob Grep",
       "--model",
-      model,
+      model as string,
       "--output-format",
       "stream-json",
       "--verbose",
       ...(resume ? ["--resume", resume] : []),
     ];
+  } else if (agent === "pi") {
+    args = [
+      "--no-extensions",
+      "-e",
+      join(arm, "mod/pi/starbridge.ts"),
+      "--no-skills",
+      "--skill",
+      join(plugin, "skills/starbridge"),
+      "--model",
+      model as string,
+      "--mode",
+      "json",
+      ...(resume ? ["--session", resume] : []),
+      "-p",
+      prompt,
+    ];
   } else {
-    const common = ["--json", "--skip-git-repo-check", "-m", model];
+    const common = ["--json", "--skip-git-repo-check", ...(model ? ["-m", model] : [])];
     const bypass = "--dangerously-bypass-approvals-and-sandbox";
     args = resume
       ? ["exec", "resume", ...common, bypass, resume, prompt]
@@ -209,6 +235,19 @@ async function turn(
           (u.cache_read_input_tokens ?? 0) +
           (u.cache_creation_input_tokens ?? 0);
       }
+    } else if (agent === "pi") {
+      if (e.type === "session") session = e.id;
+      const m = e.message;
+      if (e.type === "message_end" && m?.role === "assistant") {
+        for (const b of m.content ?? []) {
+          if (b.type === "toolCall" && b.name === "bash") commands.push(b.arguments?.command ?? "");
+          if (b.type === "text" && b.text) final = b.text;
+        }
+        if (m.errorMessage) final = `(error) ${m.errorMessage}`;
+        const u = m.usage ?? {};
+        tokens = (tokens ?? 0) + (u.input ?? 0) + (u.output ?? 0) + (u.cacheRead ?? 0) + (u.cacheWrite ?? 0);
+        costUsd = (costUsd ?? 0) + (u.cost?.total ?? 0);
+      }
     } else {
       if (e.type === "thread.started") session = e.thread_id;
       const item = e.item;
@@ -232,9 +271,10 @@ async function interactiveTurn(
   dir: string,
   env: Record<string, string>,
   prompt: string,
-  plugin: string,
+  arm: string,
   cfg: string,
 ): Promise<Turn & { session?: string }> {
+  const plugin = join(arm, "plugin");
   const t0 = Date.now();
   const id = crypto.randomUUID();
   const tmux = `skill-eval-${id.slice(0, 8)}`;
@@ -261,7 +301,7 @@ async function interactiveTurn(
     "--allowedTools",
     "Bash Write Edit Read Glob Grep",
     "--model",
-    model,
+    model as string,
     prompt,
   ];
   spawnSync("tmux", ["new-session", "-d", "-s", tmux, "-x", "200", "-y", "50", "-c", dir, ...cmd]);
@@ -350,9 +390,19 @@ async function one(s: Scenario, arm: string, rep: number): Promise<RunRecord> {
   chmodSync(join(bin, "starbridge"), 0o755);
 
   // The agent's login, copied into its throwaway config; the plugin or skill under test.
-  const plugin = arms[arm] as string;
+  const armDir = arms[arm] as string;
+  const plugin = join(armDir, "plugin");
+  const login: Record<string, string> = {};
   if (agent === "claude") copyFileSync(join(homedir(), ".claude/.credentials.json"), join(cfg, ".credentials.json"));
-  else {
+  else if (agent === "pi") {
+    if (model?.startsWith("anthropic/"))
+      login.ANTHROPIC_OAUTH_TOKEN = JSON.parse(
+        readFileSync(join(homedir(), ".claude/.credentials.json"), "utf8"),
+      ).claudeAiOauth.accessToken;
+    for (const f of ["models.json", "auth.json"])
+      if (existsSync(join(homedir(), ".pi/agent", f)))
+        copyFileSync(join(homedir(), ".pi/agent", f), join(cfg, f));
+  } else {
     copyFileSync(join(homedir(), ".codex/auth.json"), join(cfg, "auth.json"));
     cpSync(join(plugin, "skills/starbridge"), join(cfg, "skills/starbridge"), { recursive: true });
     const hook = spawnSync("sh", [join(plugin, "hooks/session-start.sh")], {
@@ -375,13 +425,14 @@ async function one(s: Scenario, arm: string, rep: number): Promise<RunRecord> {
     GIT_AUTHOR_EMAIL: "dev@example.com",
     GIT_COMMITTER_NAME: "dev",
     GIT_COMMITTER_EMAIL: "dev@example.com",
-    ...(agent === "claude" ? { CLAUDE_CONFIG_DIR: cfg } : { CODEX_HOME: cfg }),
+    ...{ claude: { CLAUDE_CONFIG_DIR: cfg }, codex: { CODEX_HOME: cfg }, pi: { PI_CODING_AGENT_DIR: cfg } }[agent],
+    ...login,
   };
 
   const live = await LiveServer.start();
   const rec: RunRecord = {
     agent,
-    model,
+    model: model ?? "default",
     arm,
     scenario: s.name,
     rep,
@@ -421,11 +472,11 @@ async function one(s: Scenario, arm: string, rep: number): Promise<RunRecord> {
 
     type Card = { id: string; question: string; recommended?: string; options: string[] };
     const choiceFor = (c: Card) => c.recommended ?? c.options[0] ?? "Go ahead";
-    // Codex has no plugin to bring an answer back as a prompt: it waits within its turn
-    // (`starbridge wait`), so the owner answers the first card while the turn runs.
+    // In `codex exec` and `pi -p` nothing brings an answer back as a prompt: the agent waits
+    // within its turn (`starbridge wait`), so the owner answers the first card while it runs.
     let answeredFirst: Record<string, unknown>[] | undefined;
     const answering =
-      agent === "codex" && s.followUp && !s.unpaired
+      agent !== "claude" && s.followUp && !s.unpaired
         ? (async () => {
             while (!answeredFirst) {
               await Bun.sleep(2_000);
@@ -441,8 +492,8 @@ async function one(s: Scenario, arm: string, rep: number): Promise<RunRecord> {
           })()
         : undefined;
     const first = s.interactive
-      ? await interactiveTurn(proj, env, s.prompt, plugin, cfg)
-      : await turn(proj, env, s.prompt, plugin);
+      ? await interactiveTurn(proj, env, s.prompt, armDir, cfg)
+      : await turn(proj, env, s.prompt, armDir);
     if (answering && !answeredFirst) answeredFirst = [];
     rec.turns.push(first);
     const opened = s.unpaired ? [] : ((await live.opened("decision")) as Record<string, unknown>[]);
@@ -463,7 +514,7 @@ async function one(s: Scenario, arm: string, rep: number): Promise<RunRecord> {
     if (s.followUp && card && first.session) {
       const choice = choiceFor(card);
       rec.answered = `Answer to ${card.id} (${card.question}): ${choice}`;
-      rec.turns.push(await turn(proj, env, rec.answered, plugin, first.session));
+      rec.turns.push(await turn(proj, env, rec.answered, armDir, first.session));
       const all = (await live.opened("decision")) as Record<string, unknown>[];
       rec.laterDecisions = strip(all.filter((d) => !opened.some((o) => o.id === d.id)));
     }
