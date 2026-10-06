@@ -188,7 +188,6 @@ test("a machine can settle its own decision; devices then cannot answer it", asy
     context: "",
     options: ["yes", "no"],
     recommended: "yes",
-    default: { action: "ship" },
     source: { machine: "devbox", project: "starbridge", session: "s1" },
   };
   const d = seal("decision", body, key(devbox), [phone.member, laptop.member]);

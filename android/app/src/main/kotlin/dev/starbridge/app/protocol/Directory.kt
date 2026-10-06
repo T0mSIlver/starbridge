@@ -39,11 +39,10 @@ class Directory(
 data class Pin(val length: Int, val head: String)
 
 /**
- * Who signs each op: an active device, the recovery key, or either. The recovery key adds a
- * device and confirms its own replacement, nothing else (#364); older clients recovered with a
- * plain `add`, which still verifies.
+ * Who signs each op: an active device or the recovery key. The recovery key adds a device and
+ * confirms its own replacement, nothing else (#364).
  */
-private val SIGNED_BY = mapOf("add" to "either", "revoke" to "device", "recover" to "recovery", "recovery" to "device", "recovery-confirm" to "recovery")
+private val SIGNED_BY = mapOf("add" to "device", "revoke" to "device", "recover" to "recovery", "recovery" to "device", "recovery-confirm" to "recovery")
 
 class Directories(private val sodium: Sodium, private val envelopes: Envelopes) {
     /** BLAKE2b-256 of an entry's body text. */
@@ -110,7 +109,7 @@ class Directories(private val sodium: Sodium, private val envelopes: Envelopes) 
         if (body.account != dir.account) throw ProtocolException("wrong-account", "entry $i")
         if (env.recoverySig != null && body.op != "recovery") throw ProtocolException("bad-chain", "entry $i: only entry 0 and proposals have recoverySig")
         val allowed = SIGNED_BY.getValue(body.op)
-        if (allowed != "either" && (env.signer == RECOVERY) != (allowed == "recovery")) {
+        if ((env.signer == RECOVERY) != (allowed == "recovery")) {
             throw ProtocolException("signer-not-allowed", "entry $i: a ${body.op} is signed by the $allowed")
         }
 
@@ -129,7 +128,6 @@ class Directories(private val sodium: Sodium, private val envelopes: Envelopes) 
             "add" -> {
                 if (body.recoveryPk != null) throw ProtocolException("bad-chain", "entry $i: only entry 0 names the recovery key")
                 val m = body.member!!
-                if (env.signer == RECOVERY && m.role != "device") throw ProtocolException("signer-not-allowed", "entry $i: recovery adds devices only")
                 addDevice(m)
             }
             "recover" -> {
@@ -189,7 +187,7 @@ class Directories(private val sodium: Sodium, private val envelopes: Envelopes) 
         return env.copy(recoverySig = toB64(recoverySig))
     }
 
-    /** [signer] is an active device's id. ([RECOVERY] still verifies, as older clients recovered so; new ones write [recoverEntry].) */
+    /** [signer] is an active device's id. */
     fun addEntry(dir: Directory, signer: String, signKey: ByteArray, member: Member, at: String): SignedEnvelope =
         envelopes.sign("directory", entryBase(dir, at, "add") { put("member", memberJson(member)) }, signer, signKey)
 

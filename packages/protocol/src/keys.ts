@@ -1,5 +1,3 @@
-import { entropyToMnemonic, mnemonicToEntropy, validateMnemonic } from "@scure/bip39";
-import { wordlist } from "@scure/bip39/wordlists/english.js";
 import { CROCKFORD, decodeCrockford, encodeCrockford } from "./pairing";
 import { concat, sodium, toB64, utf8 } from "./sodium";
 
@@ -32,11 +30,7 @@ export function publicKeys(keys: MemberKeys): { boxPk: string; signPk: string } 
 
 // --- Recovery key ------------------------------------------------------------
 
-/**
- * A fresh recovery seed: 16 bytes, shown once as a recovery key (`recoveryKey`). Accounts made
- * before 2026-10-06 were shown words instead: 24 BIP-39 words for a 32-byte seed, 12 for a
- * 16-byte one. All three recover (`readRecoveryKey`).
- */
+/** A fresh recovery seed: 16 bytes, shown once as a recovery key (`recoveryKey`). */
 export function generateRecoverySeed(): Uint8Array {
   return sodium.randombytes_buf(16);
 }
@@ -70,11 +64,9 @@ export type RecoveryKeyProblem =
   | { kind: "checksum" };
 
 export interface RecoveryKeyReading {
-  /** Old accounts recover with words; the text looks like words rather than a key. */
-  format: "key" | "words";
-  /** Characters of a key, or words. */
+  /** Characters of the key, separators aside. */
   count: number;
-  problem: RecoveryKeyProblem | RecoveryWordsProblem | null;
+  problem: RecoveryKeyProblem | null;
 }
 
 export class RecoveryKeyError extends Error {
@@ -83,55 +75,20 @@ export class RecoveryKeyError extends Error {
   }
 }
 
-/** Runs of 3 letters or more that no letter or digit touches. */
-const letterRuns = (text: string) =>
-  text.match(/(?<![\p{L}\p{N}])\p{L}{3,}(?![\p{L}\p{N}])/gu) ?? [];
-
-/**
- * Words, not a key: a run of 5 to 8 letters that a separator ends (BIP-39 words are 3 to 8
- * letters; a key's groups are 4), or 8 or more letter runs, or 12 or more words all on the list
- * however they are separated (digits included).
- */
-function looksLikeWords(text: string): boolean {
-  if (/(^|[^\p{L}\p{N}])\p{L}{5,8}[^\p{L}\p{N}]/u.test(text)) return true;
-  if (letterRuns(text).length >= 8) return true;
-  const words = splitRecoveryWords(text);
-  return words.length >= 12 && words.every((w) => known.has(w));
-}
-
 /** Any case, with or without dashes and spaces; Crockford's look-alikes (O for 0, I and L for 1). */
 function keyChars(text: string): string {
   return text.toUpperCase().replace(/[\s-]/g, "").replace(/O/g, "0").replace(/[IL]/g, "1");
 }
 
 /**
- * Reads typed text as a recovery key, or as the words of an older account. With `typing`, only
- * problems that more typing cannot fix count: a character no key holds, or a finished word that
- * is not on the list.
+ * Reads typed text as a recovery key. With `typing`, only a character no key holds counts: more
+ * typing fixes a short key.
  */
 export function readRecoveryKey(text: string, opts: { typing?: boolean } = {}): RecoveryKeyReading {
-  if (looksLikeWords(text)) {
-    const words = splitRecoveryWords(text);
-    // The last word is still being typed unless a separator follows it.
-    const finished = opts.typing && /\p{L}$/u.test(text) ? words.slice(0, -1) : words;
-    const problem = recoveryWordsProblem(finished);
-    return {
-      format: "words",
-      count: words.length,
-      problem: opts.typing && problem?.kind !== "unknown-word" ? null : problem,
-    };
-  }
   const chars = keyChars(text);
   const index = [...chars].findIndex((c) => !CROCKFORD.includes(c));
-  // A U in a word from the list, or the start of one, may be an older account's words, which
-  // only read as words from the eighth: while typing, it waits.
-  const maybeWords =
-    opts.typing &&
-    splitRecoveryWords(text).some(
-      (w) => w.length >= 3 && w.includes("u") && wordlist.some((listed) => listed.startsWith(w)),
-    );
   const problem: RecoveryKeyProblem | null =
-    index >= 0 && !(maybeWords && chars[index] === "U")
+    index >= 0
       ? { kind: "bad-character", index, char: chars[index] as string }
       : opts.typing
         ? null
@@ -140,7 +97,7 @@ export function readRecoveryKey(text: string, opts: { typing?: boolean } = {}): 
           : checks(chars)
             ? null
             : { kind: "checksum" };
-  return { format: "key", count: chars.length, problem };
+  return { count: chars.length, problem };
 }
 
 /** 28 characters are 140 bits: one padding character brings the check's last 4 bits into byte 17. */
@@ -156,70 +113,19 @@ function checks(chars: string): boolean {
   return bytes[16] === check[0] && ((bytes[17] as number) & 0xf0) === check[1];
 }
 
-/** The seed behind a typed recovery key or older account's words. Throws `RecoveryKeyError`. */
+/** The seed behind a typed recovery key. Throws `RecoveryKeyError`. */
 export function recoverySeedFromKey(text: string): Uint8Array {
   const reading = readRecoveryKey(text);
   if (reading.problem) throw new RecoveryKeyError(reading);
-  if (reading.format === "words")
-    return mnemonicToEntropy(splitRecoveryWords(text).join(" "), wordlist);
   return seedOf(keyChars(text));
 }
 
-export function recoveryWords(seed: Uint8Array): string {
-  return entropyToMnemonic(seed, wordlist);
-}
-
-/** What is wrong with typed recovery words; `index` counts from 0. */
-export type RecoveryWordsProblem =
-  | { kind: "unknown-word"; index: number; word: string }
-  | { kind: "word-count"; count: number }
-  | { kind: "checksum" };
-
-export class RecoveryWordsError extends Error {
-  constructor(readonly problem: RecoveryWordsProblem) {
-    super("recovery words are not valid");
-  }
-}
-
 /**
- * The words in typed text, lowercased. Anything that is not a letter separates words, so spaces,
- * dashes, commas, line breaks and numbering ("1.", "2)") all work.
- */
-export function splitRecoveryWords(text: string): string[] {
-  return text
-    .toLowerCase()
-    .split(/[^\p{L}]+/u)
-    .filter((w) => w !== "");
-}
-
-const known = new Set(wordlist);
-
-/** The first unknown word, else a count other than 12 or 24, else a failed checksum. */
-export function recoveryWordsProblem(words: string[]): RecoveryWordsProblem | null {
-  const index = words.findIndex((w) => !known.has(w));
-  if (index >= 0) return { kind: "unknown-word", index, word: words[index] as string };
-  if (words.length !== 12 && words.length !== 24)
-    return { kind: "word-count", count: words.length };
-  if (!validateMnemonic(words.join(" "), wordlist)) return { kind: "checksum" };
-  return null;
-}
-
-/** The seed behind typed words. Throws `RecoveryWordsError`: BIP-39 words carry a checksum. */
-export function recoverySeedFromWords(text: string): Uint8Array {
-  const words = splitRecoveryWords(text);
-  const problem = recoveryWordsProblem(words);
-  if (problem) throw new RecoveryWordsError(problem);
-  return mnemonicToEntropy(words.join(" "), wordlist);
-}
-
-/**
- * The recovery signing key pair. A 32-byte seed is the Ed25519 seed itself; a 16-byte one is
- * stretched to the 32 bytes Ed25519 takes with BLAKE2b-256 of "starbridge/v1/recovery-seed",
- * NUL, the seed.
+ * The recovery signing key pair: the 16-byte seed stretched to the 32 bytes Ed25519 takes with
+ * BLAKE2b-256 of "starbridge/v1/recovery-seed", NUL, the seed.
  */
 export function recoveryKeyPair(seed: Uint8Array): KeyPair {
-  if (seed.length === 32) return sodium.crypto_sign_seed_keypair(seed);
-  if (seed.length !== 16) throw new Error("a recovery seed is 16 or 32 bytes");
+  if (seed.length !== 16) throw new Error("a recovery seed is 16 bytes");
   const stretched = sodium.crypto_generichash(
     32,
     concat(utf8("starbridge/v1/recovery-seed"), new Uint8Array([0]), seed),

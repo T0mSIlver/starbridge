@@ -25,8 +25,6 @@ import {
   recoveryKey,
   recoveryKeyPair,
   recoverySeedFromKey,
-  recoverySeedFromWords,
-  recoveryWords,
   type SealedItem,
   toB64,
   verify,
@@ -253,17 +251,11 @@ describe("schemas.json", () => {
   }
 });
 
-test.each(["recovery", "recovery12"] as const)("%s words round-trip to the key", (name) => {
-  const recovery = V.keys[name];
-  expect(toB64(recoverySeedFromWords(recovery.words))).toBe(recovery.seed);
-  expect(recoveryWords(fromB64(recovery.seed))).toBe(recovery.words);
+test("the recovery key reads back to its seed and signing key", () => {
+  const { recovery } = V.keys;
+  expect(recoveryKey(fromB64(recovery.seed))).toBe(recovery.key);
+  expect(toB64(recoverySeedFromKey(recovery.key))).toBe(recovery.seed);
   expect(toB64(recoveryKeyPair(fromB64(recovery.seed)).publicKey)).toBe(recovery.signPk);
-});
-
-test("the recovery key reads back to its seed", () => {
-  const { recovery12 } = V.keys;
-  expect(recoveryKey(fromB64(recovery12.seed))).toBe(recovery12.key);
-  expect(toB64(recoverySeedFromKey(recovery12.key))).toBe(recovery12.seed);
 });
 
 test("the generator reproduces the committed vectors, sealed boxes aside", async () => {

@@ -117,7 +117,7 @@ test("recovery adds a device and binds the recovering session to it", async () =
   const fresh = await signIn(s);
   const dir = await directory(s, fresh);
   const { member } = memberOf("new-phone");
-  const entry = addEntry(dir, { id: RECOVERY, signKey: acct.recovery.privateKey }, member, at);
+  const entry = recoverEntry(dir, acct.recovery.privateKey, member, at);
   expect((await append(s, fresh, entry)).status).toBe(201);
   expect((await s.call("GET", "/v1/me", { token: fresh })).json.member).toBe("new-phone");
 });
@@ -179,7 +179,6 @@ test("replacing the recovery key: the old key confirms, then signs nothing more 
   const s = await makeServer();
   const acct = await setupAccount(s);
   const phone = { id: acct.device.id, signKey: acct.device.keys.sign.privateKey };
-  const oldKey = { id: RECOVERY, signKey: acct.recovery.privateKey };
   const newRecovery = recoveryKeyPair(generateRecoverySeed());
   const token = acct.device.token;
   const step = async (make: (d: Directory) => SignedEnvelope) =>
@@ -195,13 +194,15 @@ test("replacing the recovery key: the old key confirms, then signs nothing more 
   ).toBe(201);
   expect((await directory(s, token)).recoveryPk).toBe(toB64(newRecovery.publicKey));
 
-  const refused = await step((d) => addEntry(d, oldKey, memberOf("thief").member, at));
+  const refused = await step((d) =>
+    recoverEntry(d, acct.recovery.privateKey, memberOf("thief").member, at),
+  );
   expect(refused.status).toBe(400);
   expect(refused.json.error).toBe("bad-signature");
-  const newKey = { id: RECOVERY, signKey: newRecovery.privateKey };
-  expect((await step((d) => addEntry(d, newKey, memberOf("new-phone").member, at))).status).toBe(
-    201,
-  );
+  expect(
+    (await step((d) => recoverEntry(d, newRecovery.privateKey, memberOf("new-phone").member, at)))
+      .status,
+  ).toBe(201);
 });
 
 test("only the recovery key confirms a replacement, and it revokes no one (#348, #364)", async () => {
