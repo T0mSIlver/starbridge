@@ -430,7 +430,7 @@ test("permissions on after installing pi-permission-system lets Starbridge's own
   expect(await configCommand(ctx, ["permissions", "on"], yes)).toBe(0);
   const config = JSON.parse(readFileSync(piPermissionConfig(ctx.env), "utf8"));
   expect(config.authorizerChain).toEqual(["starbridge"]);
-  expect(Object.keys(config.permission)).toEqual(["bash", "skill", "read"]);
+  expect(Object.keys(config.permission)).toEqual(["skill", "read"]);
   expect(piAllow(ctx.env).state).toBe("allowed");
 });
 
