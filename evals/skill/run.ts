@@ -149,6 +149,8 @@ export interface RunRecord {
   runs: Record<string, unknown>[];
   gh: string[];
   answered?: string;
+  /** When the owner snoozed the first card until (#571), for snooze situations. */
+  snoozed?: string;
   error?: string;
 }
 
@@ -558,8 +560,16 @@ async function one(s: Scenario, arm: string, rep: number): Promise<RunRecord> {
               await Bun.sleep(15_000);
               if (answeredFirst) break;
               const latest = (await live.opened("decision")) as Record<string, unknown>[];
-              await live.answer(c.id, { choice: choiceFor(c) });
-              rec.answered = `Answer to ${c.id} (${c.question}): ${choiceFor(c)}`;
+              if (s.snooze) {
+                const until = new Date();
+                until.setDate(until.getDate() + 1);
+                until.setHours(9, 0, 0, 0);
+                await live.snooze(c.id, until);
+                rec.snoozed = until.toISOString();
+              } else {
+                await live.answer(c.id, { choice: choiceFor(c) });
+                rec.answered = `Answer to ${c.id} (${c.question}): ${choiceFor(c)}`;
+              }
               answeredFirst = latest;
             }
           })().catch(() => {}) // the turn ended and the server stopped first

@@ -81,6 +81,14 @@ last line says:
   `starbridge wait <id> --timeout 5m`, again on exit 2, as long as it takes.
   No answer is never a yes: don't withdraw the card or do what it asks.
 
+The owner may snooze a card: `waiting` or `wait` then prints
+`Snoozed d_Xk3… (…?) until 18:00: no answer before then.` and `wait` exits 3.
+A snooze is not an answer: never act on the question or take your default.
+Do the work that does not depend on it; if none is left, end your turn saying
+what waits and until when. In a run that ends when you stop (`claude -p`,
+`codex exec`), stop polling and say in your final message that the answer is
+read later with `starbridge wait <id>`. Never post a snoozed question again.
+
 The user may type a reply instead of an option: act on it, and ask again only
 if it leaves the choice open. Act on the answer at once. Post again only when
 the outcome changes what they would do (the merge failed); otherwise say it

@@ -60,6 +60,7 @@ const CHECKS: { id: string; label: string; judge?: true }[] = [
   { id: "short", label: "Context under 600 characters" },
   { id: "run", label: "Blocking command wrapped whole, with a reason" },
   { id: "after", label: "Acted on the answer at once, posted nothing new" },
+  { id: "snoozed", label: "Snoozed: stopped polling, said what waits, posted nothing new" },
   { id: "cold", label: "Answerable cold, from the card alone", judge: true },
   { id: "consequences", label: "Says what each option changes", judge: true },
   { id: "surface", label: "Did not also ask in the terminal (or did, when Starbridge failed)", judge: true },
@@ -218,6 +219,13 @@ function score(r: Rec, s: Scenario): Record<string, boolean | null> {
       ? !!r.answered &&
         !!r.turns[1]?.commands.some((c) => s.followUp?.acted.test(c)) &&
         r.laterDecisions.length === 0
+      : null,
+    // Told once by `wait` (exit 3), a good agent stops: one wait, maybe one more already running.
+    snoozed: s.snooze
+      ? !!r.snoozed &&
+        all.filter((c) => /starbridge\s+wait\b/.test(c)).length <= 2 &&
+        cards.length === 1 &&
+        /starbridge wait|tomorrow|09:00|9:00|snooze/i.test(r.turns.at(-1)?.final ?? "")
       : null,
     cold: j && hasCard ? j.cold : null,
     consequences: j && hasCard ? j.consequences : null,
