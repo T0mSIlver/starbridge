@@ -16,8 +16,16 @@ type RateWindow = readonly [calls: number, ms: number];
  * PROTOCOL.md lists them; keep the two in step.
  */
 export const DEFAULT_LIMITS = {
-  /** Item posts per account: a machine running many agents posts a few hundred decisions a day. */
+  /**
+   * Item posts per account from its machines: a machine running many agents posts a few
+   * hundred decisions a day. Each machine also has its own window, so one looping agent leaves
+   * the other machines room, and devices have theirs, so the owner's answers always pass (#583).
+   */
   items: [120, MINUTE] as RateWindow,
+  /** Item posts per machine, within the account's items. */
+  machineItems: [60, MINUTE] as RateWindow,
+  /** Item posts per device (answers, settles), apart from the machines' window. */
+  deviceItems: [60, MINUTE] as RateWindow,
   /** Stored decisions per account, open or answered. */
   decisions: 10_000,
   /** Sealed boxes stored per account, in bytes. */

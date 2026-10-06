@@ -116,6 +116,20 @@ test("machines' items spend a byte budget a minute, replaced and stored ones onl
   expect(r.json.detail).toContain("MB");
 });
 
+test("a looping machine spends its own window first, and the owner's answers always pass", async () => {
+  const { s, acct, phone, devbox } = await setup({ items: [3, 60_000], machineItems: [2, 60_000] });
+  const laptop = await pair(s, acct, "laptop", "machine");
+  const d = decision(devbox, phone);
+  expect((await post(s, devbox, d)).status).toBe(201);
+  expect((await post(s, devbox, decision(devbox, phone))).status).toBe(201);
+  // The machine's own window is full; the account's still has room for the laptop.
+  expect((await post(s, devbox, decision(devbox, phone))).status).toBe(429);
+  expect((await post(s, laptop, decision(laptop, phone))).status).toBe(201);
+  // Now the account's window is full too, but answers count in the device's own.
+  expect((await post(s, laptop, decision(laptop, phone))).status).toBe(429);
+  expect((await post(s, phone, answer(d, phone, devbox))).status).toBe(201);
+});
+
 test("a full account refuses new decisions but still takes answers and replaced quotas", async () => {
   const { s, phone, devbox } = await setup({ decisions: 2 });
   const first = decision(devbox, phone);
