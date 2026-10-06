@@ -21,8 +21,8 @@ demo account), `evals` (the skill's evals), `docs` (pages served under
 - One issue, one branch, one PR that says `Closes #n`.
 - Keep a PR to its issue. A `packages/protocol` change that another change
   needs goes in its own small PR first.
-- Before a PR is ready: `pnpm test`, `pnpm typecheck` and `pnpm lint`; for
-  Android, `./gradlew assembleRelease verifyRoborazziDebug` in `android/`.
+- Before a PR is ready, run the checks in
+  [CONTRIBUTING.md, "Develop"](CONTRIBUTING.md#develop).
 - When a change makes or changes a product decision, update its section of
   `SPEC.md`: the rule, why, and the issue. Replace what it supersedes.
 
