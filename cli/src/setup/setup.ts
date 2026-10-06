@@ -6,12 +6,12 @@
 
 import { CLIENT_HEADER, clientHeader, type QuotaSnapshot } from "@starbridge/protocol";
 import type { Status } from "../agent/api";
-import { AgentClient, withAgent } from "../agent/client";
+import { AgentClient, Interrupted, withAgent } from "../agent/client";
 import { askVia, quotaVia } from "../agent/commands";
 import { ApiError } from "../api";
 import type { AgentConfig } from "../config";
 import { type Ctx, UsageError } from "../context";
-import { type AskInput, ask } from "../decisions";
+import { type AskInput, ask, EXIT_INTERRUPTED, settle } from "../decisions";
 import { DEFAULT_SERVER, pair } from "../pair";
 import { permissionsEnabled } from "../permissions";
 import { pushOnce } from "../quota";
@@ -50,6 +50,7 @@ import {
   ALLOW_RULES,
   addAllowRules,
   autoUpdate,
+  claudeTooOld,
   enableAutoUpdate,
   foreignMarketplace,
   hasClaude,
@@ -69,7 +70,7 @@ import {
   unavailable,
   withInstalledPlaces,
 } from "./service";
-import type { Sys } from "./sys";
+import { otherCopies, type Sys } from "./sys";
 
 export interface SetupOpts {
   /** `--yes`: every question takes its default; sys.prompt answers so. */
@@ -171,12 +172,14 @@ export async function setup(sys: Sys, opts: SetupOpts): Promise<number> {
   }
   await permissionStep(sys);
 
-  section(ctx, "Check");
-  if (machine && quota && quota.providers.length > 0) await firstUpload(ctx, quota);
+  const upload = machine && quota && quota.providers.length > 0 ? quota : undefined;
+  if (upload || (machine && !opts.yes)) section(ctx, "Check");
+  if (upload) await firstUpload(ctx, upload);
   if (machine && !opts.yes && (await prompt.confirm("Send a test decision to your phone?", true)))
     await testDecision(ctx, machine.name);
 
   ctx.out("");
+  for (const line of await otherCopies(sys)) ctx.out(line);
   ctx.out("Setup is done. `starbridge status` shows the same checks at any time.");
   return 0;
 }
@@ -316,6 +319,9 @@ async function serviceStep(sys: Sys, opts: SetupOpts, configChanged: boolean) {
     installed = await installService(sys, configChanged || outdated);
   } catch (e) {
     ctx.out(`Could not start the agent service: ${(e as Error).message}`);
+    ctx.out(
+      "Run `starbridge agent` yourself to keep one running, or `starbridge setup` again to retry; commands talk to the server themselves meanwhile.",
+    );
     return;
   }
   ctx.out(
@@ -383,10 +389,12 @@ async function pluginStep(sys: Sys) {
     return;
   }
   const state = await pluginState(sys);
-  if (!state) {
-    ctx.out("`claude plugin list` failed: skipped.");
+  if (typeof state === "string") {
+    ctx.out(`${state}. Skipped: rerun setup once that is fixed.`);
     return;
   }
+  const old = await claudeTooOld(sys);
+  if (old) ctx.out(`${old}.`);
   const foreign = foreignMarketplace(state);
   if (foreign) {
     ctx.out(`Skipped: ${foreign}.`);
@@ -604,14 +612,35 @@ async function testDecision(ctx: Ctx, name: string) {
   };
   const opts = { wait: true, timeout: "10m" };
   ctx.out("Answer it on your phone or the web page (Ctrl-C skips):");
+  // `ask` prints the decision's id first: kept to withdraw the card on Ctrl-C (#613).
+  let id: string | undefined;
+  const asking: Ctx = {
+    ...ctx,
+    out: (line) => {
+      id ??= line;
+      ctx.out(line);
+    },
+  };
+  let code: number;
   try {
-    const code = await withAgent(
-      ctx,
-      (agent) => askVia(ctx, agent, input, opts),
-      () => ask(ctx, input, opts),
+    code = await withAgent(
+      asking,
+      (agent) => askVia(asking, agent, input, opts),
+      () => ask(asking, input, opts),
     );
-    if (code === 2) ctx.out("No answer within 10 minutes.");
   } catch (e) {
-    ctx.out(`The test decision failed: ${(e as Error).message}`);
+    if (!(e instanceof Interrupted)) {
+      ctx.out(`The test decision failed: ${(e as Error).message}`);
+      return;
+    }
+    code = EXIT_INTERRUPTED;
+  }
+  if (code === 2) ctx.out("No answer within 10 minutes.");
+  if (code !== EXIT_INTERRUPTED || !id) return;
+  try {
+    await settle(ctx, { id, outcome: "withdrawn" });
+    ctx.out("Skipped.");
+  } catch (e) {
+    ctx.out(`Skipped, but the card stays open on your devices: ${(e as Error).message}`);
   }
 }

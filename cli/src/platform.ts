@@ -3,7 +3,7 @@
  * PATH, and how a `.cmd` shim, which npm installs for every global package, is started.
  */
 import { type ChildProcess, spawn } from "node:child_process";
-import { accessSync, constants, readFileSync, statSync } from "node:fs";
+import { accessSync, constants, readFileSync, realpathSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { posix, win32 } from "node:path";
 
@@ -52,15 +52,30 @@ export function candidates(
   return dirs.flatMap((d) => names.map((n) => p.join(d, n)));
 }
 
+const executable = (path: string) => {
+  try {
+    accessSync(path, constants.X_OK);
+    return statSync(path).isFile();
+  } catch {
+    return false;
+  }
+};
+
 /** The first executable `name` on `$PATH`. */
 export function which(env: Record<string, string | undefined>, name: string): string | undefined {
-  for (const c of candidates(env, name)) {
-    try {
-      accessSync(c, constants.X_OK);
-      if (statSync(c).isFile()) return c;
-    } catch {}
-  }
-  return undefined;
+  return candidates(env, name).find(executable);
+}
+
+/** Every executable `name` on `$PATH`, in order, each file once however many links reach it. */
+export function whichAll(env: Record<string, string | undefined>, name: string): string[] {
+  const seen = new Set<string>();
+  return candidates(env, name).filter((c) => {
+    if (!executable(c)) return false;
+    const target = realpathSync(c);
+    if (seen.has(target)) return false;
+    seen.add(target);
+    return true;
+  });
 }
 
 /**

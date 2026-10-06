@@ -331,7 +331,10 @@ describe("update", () => {
     const c = ctx();
     expect(await update(c, { kind: "binary", path }, release.pubkey)).toBe(0);
     // Then what the new binary printed for `setup --refresh` (the fake prints its version).
-    expect(c.lines).toEqual([`Updated starbridge ${VERSION} to 99.0.0.`, "starbridge 99.0.0"]);
+    expect(c.lines).toEqual([
+      `Updated starbridge ${VERSION} to 99.0.0 in ${path}.`,
+      "starbridge 99.0.0",
+    ]);
     expect(spawnSync(path, ["--version"], { encoding: "utf8" }).stdout).toBe("starbridge 99.0.0\n");
   });
 

@@ -78,7 +78,7 @@ In Claude Code, the answer arrives through a [Claude Code mod](https://code.clau
 runs inside Claude Code: it submits your answer into the live session as its next prompt. Setup
 installs it beside the Starbridge plugin.
 
-Answers go into interactive sessions; Codex needs CLI 0.160 or later. In `codex exec`, `pi -p` and
+Answers go into interactive sessions; Claude Code needs 2.1.287 or later, Codex CLI 0.160 or later. In `codex exec`, `pi -p` and
 `opencode run`, the agent waits for the answer with `starbridge wait` instead.
 
 [What each agent supports](https://starbridge.run/docs/tell-your-agents#what-each-agent-supports)

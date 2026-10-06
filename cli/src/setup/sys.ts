@@ -3,7 +3,7 @@ import { realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { createInterface } from "node:readline/promises";
 import type { Ctx } from "../context";
-import { inBunfs, killTree, resolveCommand, spawnable, which } from "../platform";
+import { inBunfs, killTree, resolveCommand, spawnable, which, whichAll } from "../platform";
 
 export { which };
 
@@ -165,4 +165,30 @@ export function failure(r: RunOut | null): string {
       .map((l) => l.trim())
       .filter(Boolean);
   return lines(r.stderr)[0] ?? lines(r.stdout).pop() ?? `exited ${r.code ?? "on a signal"}`;
+}
+
+/**
+ * When more than one `starbridge` is on the PATH, such as an npm or Homebrew copy and the
+ * install script's, the lines that list them with their versions and how to remove each: the
+ * other copy goes stale, since `starbridge update` updates only the one it runs from (#621).
+ * Empty with one copy.
+ */
+export async function otherCopies(sys: Sys): Promise<string[]> {
+  const all = whichAll(sys.ctx.env, "starbridge");
+  if (all.length < 2) return [];
+  const self = real(sys.self.at(-1) as string);
+  const lines = [`${all.length} copies of starbridge are on the PATH; a terminal runs the first:`];
+  for (const path of all) {
+    const r = await run(sys, path, ["--version"], { timeoutMs: 10_000 });
+    const version = r?.code === 0 ? r.stdout.trim().replace(/^starbridge /, "") : "version unknown";
+    const target = real(path);
+    const remove = target.includes("/Cellar/")
+      ? "`brew uninstall starbridge` removes it"
+      : target.includes("/node_modules/")
+        ? "`npm rm -g starbridge` removes it"
+        : "delete the file to remove it";
+    lines.push(`  ${path}: ${version}, ${target === self ? "this one" : remove}`);
+  }
+  lines.push("Keep one: `starbridge update` updates only the copy it runs from.");
+  return lines;
 }

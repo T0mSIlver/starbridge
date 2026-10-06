@@ -59,7 +59,8 @@ what is missing:
 4. It installs Starbridge in each agent it finds: the Claude Code plugin at user scope, the
    skill in Codex's skills folder, the Starbridge Pi package, and the skill and plugin in
    opencode's config folder. A later setup updates the Codex and opencode files when the CLI
-   carries newer ones. Claude Code, Codex and Pi may then run `starbridge ask`, `waiting`,
+   carries newer ones. The Claude Code plugin needs Claude Code 2.1.287 or later; setup says
+   when it is older. Claude Code, Codex and Pi may then run `starbridge ask`, `waiting`,
    `working`, `wait` and `settle` without a permission prompt; `starbridge run` still asks, since
    the command it wraps can be anything. For Pi, setup adds these rules only when
    pi-permission-system is installed; `starbridge config permissions on` offers them later.
