@@ -156,10 +156,22 @@ provider plugins add providers, not panels.
 - **Android keys** (#9) sit in files wrapped by a Keystore AES key usable while the screen is
   locked, so lock-screen buttons can sign. Signing out revokes the phone unless it is the last
   device.
-- **Versions** (#468, #469, #478). 1.0.0 is the compatibility floor. Later compatibility branches
+- **Versions** (#468, #469, #478). 1.0.0 is the compatibility floor, so nothing carries code for
+  clients before it: `ask` refuses `--default` and `--default-at` rather than ignoring them, and
+  clients, setup and the CLI dropped what served earlier releases. Later compatibility branches
   name the minimum client release that retires them (`// until min cli >= 1.2`). An algorithm
   changes only with a new protocol version (`v: 2`, `starbridge/v2/...`, `/v2` routes) and members
   re-pair; keys change only by revoke and add.
+- **Readers keep what newer senders add** (#472; PROTOCOL.md, "What a reader keeps"). A string a
+  client only displays reads as its neutral case when unknown: no machine kind, no outcome,
+  `working`, no progress, pace `unknown`; an alert of an unknown kind is left out. Readers do this
+  on the raw body before the schema check (`readable`, with a Kotlin twin), so the schemas stay
+  strict for writers: a missing field or a value of another type still refuses the item on every
+  client. Values that gate behaviour stay closed. Reader-side content limits stay until the
+  screens cope with longer text. Android keeps a machine's last good quota snapshot when a new
+  one fails to open. Two checks stay that are not about old clients: Android re-reads open
+  questions when it learns a new question field (`DECISION_FIELDS`), until clients store the
+  signed body text (#476), and re-checks Allow when a notification's button is tapped.
 - **Old clients** (#468). Every client names its release in `starbridge-client:
   <name>/<version>` (`cli`, `android`, `web`, `mod`; MAJOR.MINOR.PATCH). The server refuses
   releases below `MINIMUM_RELEASES` in `server/src/clients.ts` (empty at launch; a pre-release
