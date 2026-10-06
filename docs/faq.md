@@ -69,13 +69,14 @@ Yes: sessions that were running before setup don't have Starbridge. Start new on
 
 ## Which platforms?
 
-The CLI runs on Linux and macOS, x64 and arm64. The app runs on Android, and the web app in any
+The CLI runs on Linux, macOS and Windows, x64 and arm64. Quotas need CodexBar, which has no
+Windows build, so a Windows machine uploads none. The app runs on Android, and the web app in any
 browser; on iPhone, add starbridge.run to the Home Screen in Safari (iOS 16.4 or later) to get
 notifications.
 
 ## Do you trust CodexBar's code?
 
-Setup installs [CodexBar](https://github.com/steipete/CodexBar) with Homebrew where it is
+On Linux and macOS, setup installs [CodexBar](https://github.com/steipete/CodexBar) with Homebrew where it is
 present, else from CodexBar's GitHub release, checked against the `.sha256` published in the
 same release. It installs nothing when the checksum is missing or doesn't match. The check
 proves the file is the one the release published; Starbridge doesn't vouch for CodexBar's code.
