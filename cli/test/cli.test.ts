@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSy
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { type Answer, fromB64, open, type SealedItem, seal } from "@starbridge/protocol";
-import { LiveServer } from "@starbridge/server/test-support";
+import { DEFAULT_LIMITS, LiveServer } from "@starbridge/server/test-support";
 import jpeg from "jpeg-js";
 import jsQR from "jsqr";
 import { PNG } from "pngjs";
@@ -693,6 +693,37 @@ test("open decisions reach a device that joins later, which can answer them", as
   expect(ctx.lines.at(-1)).toBe(`Answer to ${id} (Merge #12 now?): Merge`);
   // Answered or withdrawn, a decision's plaintext leaves the state.
   expect(Object.values(ctx.store.state().asked).map((a) => a.body)).toEqual([undefined, undefined]);
+});
+
+test("re-sealing stops at a 429 and waits its Retry-After, leaving the window to asks (#650)", async () => {
+  server.stop();
+  // Three items a minute: two asks and the first re-sealed copy fill it.
+  server = await LiveServer.start({
+    limits: { ...DEFAULT_LIMITS, machineItems: [3, 60_000] },
+  });
+  const ctx = await paired(server);
+  for (const q of ["First?", "Second?"])
+    expect(await run(["ask", "--question", q, "--session", "s"], ctx)).toBe(0);
+  await server.addDevice("laptop");
+  const s = session(ctx);
+  let posts = 0;
+  const postItem = s.api.postItem.bind(s.api);
+  s.api.postItem = (item) => {
+    posts++;
+    return postItem(item);
+  };
+  const again = () => poll(ctx, s, { cursor: ctx.store.state().cursor, seconds: 0, shared: true });
+  await again();
+  // The second copy got the 429: no third try, no error shown.
+  expect(posts).toBe(2);
+  expect(ctx.errors.filter((e) => e.includes("re-send"))).toEqual([]);
+  await again();
+  expect(posts).toBe(2);
+  // Past the Retry-After, the next poll sends the rest.
+  const later = Date.now() + 61_000;
+  ctx.now = () => new Date(later);
+  await again();
+  expect(posts).toBe(3);
 });
 
 /** A laptop's answer the machine accepted, not yet taken by its session, then the laptop revoked. */
