@@ -423,6 +423,8 @@ data class Settled(
     val at: String,
     val outcome: String? = null,
     val device: String? = null,
+    /** With outcome "device" on a permission: what that device answered (#349). */
+    val behavior: String? = null,
 ) : ItemBody {
     override val re get() = itemId
     override val recipients get() = to

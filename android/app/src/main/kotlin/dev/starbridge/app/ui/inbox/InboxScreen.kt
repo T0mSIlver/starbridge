@@ -206,7 +206,9 @@ fun InboxScreen(
     }
     val shownRuns = Run.shown(runs, now)
     val open = openQuestions(decisions, now)
-    val feed: List<Item> = shownRuns.map(Item::RunItem) + shown.map(Item::PromptItem) + open.map(Item::Question)
+    val runItems = shownRuns.map(Item::RunItem)
+    val needs: List<Item> = shown.map(Item::PromptItem) + open.map(Item::Question)
+    val feed: List<Item> = runItems + needs
     val needYou = open.size + shown.count { it.waiting(at) }
     val running = shownRuns.count { it.state(now) == Run.State.Running }
     val history = History(decisions.filterNot { it.isOpen(now) }, prompts.filter { !it.waiting(at) && it !in shown }, now)
@@ -228,8 +230,8 @@ fun InboxScreen(
             item(key = "empty") { Empty() }
         } else {
             when (view.grouping) {
-                Grouping.Machine -> feed.groupBy { it.machine.machine }.forEach { (machine, items) ->
-                    item(key = "machine/$machine") { MachineHeader(items.first().machine) }
+                Grouping.Machine -> byMachine(runItems, needs) { it.machine.machine }.forEach { items ->
+                    item(key = "machine/${items.first().machine.machine}") { MachineHeader(items.first().machine) }
                     cards(items, at, actions, replies, promptActions, view.buttons, segmented = true)
                 }
                 Grouping.Waiting -> {
