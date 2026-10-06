@@ -29,8 +29,6 @@ const ASK = [
   "Merge",
   "--option",
   "Wait",
-  "--default",
-  "Merge at 18:00",
 ];
 
 test("pair joins the directory and keeps the keys private", async () => {
@@ -252,10 +250,7 @@ test("ask turns a sideways phone photo upright", async () => {
 test("ask --answer-in posts a pointer decision, and settle closes it", async () => {
   const ctx = await paired(server);
   const page = "https://claude.ai/artifact/Xq7pLm2VnR4tBz9KcW1sYd";
-  const pointer = [
-    ...["ask", "--question", "Pick a layout?", "--default", "Roomy"],
-    ...["--default-at", "1s", "--session", "s"],
-  ];
+  const pointer = ["ask", "--question", "Pick a layout?", "--session", "s"];
   expect(await run([...pointer, "--answer-in", page, "--option", "A", "--option", "B"], ctx)).toBe(
     1,
   );
@@ -270,8 +265,6 @@ test("ask --answer-in posts a pointer decision, and settle closes it", async () 
   expect(await run(["settle", id], ctx)).toBe(0);
   const listed = (await server.listed("decision"))[0];
   expect(listed?.answeredAt).toBeDefined();
-  // Settled before its default time passed: the mod is never told to apply the default.
-  await Bun.sleep(1100);
   ctx.lines.length = 0;
   expect(await run(["answers", "--session", "s"], ctx)).toBe(0);
   expect(ctx.lines).toEqual([]);
@@ -282,16 +275,18 @@ test("ask --answer-in posts a pointer decision, and settle closes it", async () 
 
 test("ask refuses a decision that would not stand alone", async () => {
   const ctx = await paired(server);
-  expect(await run(["ask", "--question", "Q?", "--option", "Only", "--default", "x"], ctx)).toBe(1);
+  expect(await run(["ask", "--question", "Q?", "--option", "Only"], ctx)).toBe(1);
   expect(await run([...ASK, "--recommended", "Neither"], ctx)).toBe(1);
   expect(await run(["ask", "--option", "A", "--option", "B"], ctx)).toBe(1);
   expect(ctx.errors.at(-1)).toContain("--question");
   expect(await server.opened("decision")).toEqual([]);
 });
 
-test("ask without --default waits for the owner: no default time", async () => {
+test("ask ignores --default: the decision waits for the owner", async () => {
   const ctx = await paired(server);
-  expect(await run(["ask", "--question", "Q?", "--option", "A", "--option", "B"], ctx)).toBe(0);
+  const args = ["ask", "--question", "Q?", "--option", "A", "--option", "B", "--default", "A"];
+  expect(await run(args, ctx)).toBe(0);
+  expect(ctx.errors.some((e) => e.includes("--default is ignored"))).toBe(true);
   const [d] = await server.opened("decision");
   expect(d?.default).toEqual({ action: NO_DEFAULT });
 });
@@ -500,7 +495,7 @@ test("a device the decision was not sealed to cannot answer it", async () => {
 test("wait with no id returns each answer once, then times out with exit 2", async () => {
   const ctx = await paired(server);
   await run(ASK, ctx);
-  await run(["ask", "--question", "Name the branch?", "--default", "Use t/6"], ctx);
+  await run(["ask", "--question", "Name the branch?"], ctx);
   const [first, second] = ctx.lines as [string, string];
   await server.answer(second, { text: "t/6-cli" });
   await server.answer(first, { choice: "Merge" });
@@ -567,7 +562,7 @@ test("answers hands each session only its own answers, until it confirms them", 
   const ctx = await paired(server);
   await run([...ASK, "--session", "s1"], ctx);
   ctx.env.CLAUDE_CODE_SESSION_ID = "s2";
-  await run(["ask", "--question", "Name the branch?", "--default", "Use t/6"], ctx);
+  await run(["ask", "--question", "Name the branch?"], ctx);
   const [mine, theirs] = ctx.lines as [string, string];
   expect(ctx.store.state().asked[theirs]?.session).toBe("s2");
   ctx.lines.length = 0;

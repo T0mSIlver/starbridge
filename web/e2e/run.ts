@@ -5,14 +5,37 @@
 //
 // Needs `npx playwright install firefox` once. Writes screenshots to web/screenshots.
 import { type ChildProcess, spawn, spawnSync } from "node:child_process";
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  appendFileSync,
+  cpSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { type AddressInfo, createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { type BrowserContext, firefox, type Page } from "playwright";
+import { layoutProblems, type Problem, zoomText } from "./layout.ts";
 
 const ROOT = resolve(import.meta.dirname, "../..");
 const WEB = join(ROOT, "web");
-const PORTS = { web: 3870, server: 3871, github: 3872, push: 3873 };
+/** A port nothing listens on, so runs on one machine (CI's runners share one) never collide. */
+const freePort = () =>
+  new Promise<number>((done) => {
+    const s = createServer().listen(0, "127.0.0.1", () => {
+      const { port } = s.address() as AddressInfo;
+      s.close(() => done(port));
+    });
+  });
+const PORTS = {
+  web: await freePort(),
+  server: await freePort(),
+  github: await freePort(),
+  push: await freePort(),
+};
 const ORIGIN = `http://localhost:${PORTS.web}`;
 const SHOTS = join(WEB, "screenshots");
 // Set to a folder to record the inbox's motion there, as one GIF per motion (needs ffmpeg).
@@ -62,7 +85,12 @@ function start(
   };
   p.stdout?.on("data", feed);
   p.stderr?.on("data", feed);
-  const exited = new Promise<number>((r) => p.on("exit", (code) => r(code ?? -1)));
+  const exited = new Promise<number>((r) =>
+    p.on("exit", (code, signal) => {
+      if (code !== 0 && !p.killed) console.log(`[${name}] exited ${signal ?? code}`);
+      r(code ?? -1);
+    }),
+  );
   return {
     proc: p,
     exited,
@@ -154,38 +182,81 @@ async function noWordsAsked(page: Page) {
   if (found) throw new Error(`the page says "${found[0]}"`);
 }
 
-/** Nothing runs past the window's width: a phone's browser would zoom the whole page out. */
-async function fitsWidth(page: Page, name: string) {
-  const [content, window] = (await page.evaluate(() => [
-    document.documentElement.scrollWidth,
-    innerWidth,
-  ])) as [number, number];
-  if (content > window)
-    throw new Error(`${name}: the page is ${content} px wide in a ${window} px window`);
+/** What fails the run; the rest is for AUDIT's list. */
+const FAILS: Problem["kind"][] = ["page-width", "clipped", "spills", "offscreen", "overlap"];
+
+/** Fails on what a screenshot would show broken (layout.ts); AUDIT lists it instead. */
+async function fitsLayout(page: Page, name: string) {
+  const problems = await layoutProblems(page);
+  if (AUDIT) {
+    const at = await page.evaluate(() => `${innerWidth}`);
+    for (const p of problems)
+      appendFileSync(join(AUDIT, "problems.jsonl"), `${JSON.stringify({ name, at, ...p })}\n`);
+    return;
+  }
+  const broken = problems.filter((p) => FAILS.includes(p.kind));
+  if (broken.length)
+    throw new Error(
+      `${name} at ${page.viewportSize()?.width} px:\n${broken.map((p) => `  ${p.kind}: ${p.what}`).join("\n")}`,
+    );
 }
 
+// AUDIT=<folder> shoots every size into that folder, phones' text at 200% too, and writes what
+// the checks find to problems.jsonl there instead of failing.
+const AUDIT = process.env.AUDIT;
+const SIZES = AUDIT
+  ? ([
+      ...(
+        [
+          [320, 568],
+          [360, 780],
+          [390, 844],
+          [430, 932],
+          [768, 1024],
+          [1024, 768],
+          [1280, 800],
+          [1440, 900],
+          [1920, 1080],
+        ] as const
+      ).map(([width, height]) => [`${width}`, { width, height }, 1] as const),
+      ["390-text200", { width: 390, height: 844 }, 2] as const,
+    ] as const)
+  : ([
+      ["phone", { width: 390, height: 844 }, 1],
+      ["desktop", DESKTOP, 1],
+    ] as const);
+
 async function shoot(page: Page, name: string) {
-  for (const [size, viewport] of [
-    ["phone", { width: 390, height: 844 }],
-    ["desktop", { width: 1280, height: 860 }],
-  ] as const)
+  for (const [size, viewport, text] of SIZES)
     for (const scheme of ["light", "dark"] as const) {
       await page.setViewportSize(viewport);
-      await page.emulateMedia({ colorScheme: scheme });
+      // Without motion, so no row is caught sliding over another.
+      await page.emulateMedia({ colorScheme: scheme, reducedMotion: "reduce" });
       await page.waitForTimeout(150);
-      await fitsWidth(page, name);
+      const unzoom = text > 1 ? await zoomText(page, text) : undefined;
+      await fitsLayout(page, `${name} ${scheme}${unzoom ? " text 200%" : ""}`);
       // Firefox draws the phone layout's fixed bottom bar mid-page in a full-page capture.
       await page.screenshot({
-        path: join(SHOTS, `${name}-${size}-${scheme}.png`),
-        fullPage: size === "desktop",
+        path: join(AUDIT ?? SHOTS, `${name}-${size}-${scheme}.png`),
+        fullPage: AUDIT !== undefined || viewport.width >= 600,
       });
+      await unzoom?.();
     }
+  // The narrowest phones are checked too, without a shot.
+  if (!AUDIT) {
+    await page.setViewportSize({ width: 320, height: 568 });
+    await page.waitForTimeout(150);
+    await fitsLayout(page, name);
+  }
+  // The steps after a shot carry on at the desktop size, as the last of the default sizes leaves.
+  await page.setViewportSize(DESKTOP);
+  await page.emulateMedia({ reducedMotion: "no-preference" });
 }
 
 let failPage: Page | undefined;
 
 async function main() {
-  mkdirSync(SHOTS, { recursive: true });
+  mkdirSync(AUDIT ?? SHOTS, { recursive: true });
 
   step("services, server, web");
   const services = start("services", "bun", [join(WEB, "e2e/services.ts")], {
@@ -243,6 +314,8 @@ async function main() {
   await visitor.getByRole("heading", { name: /Your agents ask/ }).waitFor();
   await shoot(visitor, "landing");
   for (const [path, name] of [
+    ["/docs", "docs"],
+    ["/docs/tell-your-agents", "docs-tell-your-agents"],
     ["/privacy", "privacy"],
     ["/terms", "terms"],
     ["/no-such-page", "not-found"],
@@ -276,6 +349,7 @@ async function main() {
   await page.getByLabel(/I wrote this key down/).check();
   await page.getByRole("button", { name: "Continue" }).click();
   await page.getByRole("heading", { name: "Inbox" }).waitFor();
+  await shoot(page, "inbox-empty");
 
   step("turn on Web Push");
   await page.getByRole("button", { name: "Turn on notifications" }).click();
@@ -310,7 +384,9 @@ async function main() {
   other.proc.kill();
 
   step("upload a quota snapshot");
-  const real = spawnSync("codexbar", ["--version"], { encoding: "utf8" }).status === 0;
+  // CI uploads the fixture: a runner's own CodexBar would read whoever's accounts it has.
+  const real =
+    !process.env.CI && spawnSync("codexbar", ["--version"], { encoding: "utf8" }).status === 0;
   const quota = cli(
     "quota",
     [
@@ -339,10 +415,6 @@ async function main() {
       "Run it",
       "--option",
       "Wait for tonight",
-      "--default",
-      "Wait for tonight",
-      "--default-at",
-      "2h",
       "--project",
       "starbridge",
       "--session",
@@ -436,8 +508,6 @@ async function main() {
       "Merge now",
       "--option",
       "Hold",
-      "--default",
-      "Hold until the owner is back",
       "--project",
       "starbridge",
       "--session",
@@ -615,7 +685,7 @@ async function main() {
         "--context",
         "Each layout is live in the artifact. Its buttons send your pick to the session.",
       ],
-      ...["--answer-in", artifact, "--default", "Ship the roomy layout"],
+      ...["--answer-in", artifact],
       ...["--project", "starbridge", "--session-title", "Settings screen (#88)"],
     ],
     machineHome,
@@ -667,11 +737,13 @@ async function main() {
   await page.getByRole("button", { name: "Why codex is first" }).click();
   const why = page.getByText("First because it runs out soonest.");
   await why.waitFor();
-  for (const scheme of ["light", "dark"] as const) {
-    await page.emulateMedia({ colorScheme: scheme });
-    await page.waitForTimeout(150);
-    await page.screenshot({ path: join(SHOTS, `quotas-pinned-${scheme}.png`) });
-  }
+  if (AUDIT) await shoot(page, "quotas-pinned");
+  else
+    for (const scheme of ["light", "dark"] as const) {
+      await page.emulateMedia({ colorScheme: scheme });
+      await page.waitForTimeout(150);
+      await page.screenshot({ path: join(SHOTS, `quotas-pinned-${scheme}.png`) });
+    }
   await page.keyboard.press("Escape");
   await why.waitFor({ state: "hidden" });
   await page.getByRole("button", { name: "Why codex is first" }).click();
@@ -726,7 +798,7 @@ async function main() {
   for (const scheme of ["light", "dark"] as const) {
     await page.emulateMedia({ colorScheme: scheme });
     await page.waitForTimeout(150);
-    await page.screenshot({ path: join(SHOTS, `inbox-aside-wide-${scheme}.png`) });
+    await page.screenshot({ path: join(AUDIT ?? SHOTS, `inbox-aside-wide-${scheme}.png`) });
   }
 
   step("a newly raised quota alert notifies a browser that opted in to its provider");
@@ -812,6 +884,7 @@ async function main() {
     await page.getByRole("link", { name: "Quotas" }).click();
     const resets = page.locator("article span", { hasText: /^tomorrow \d/ });
     await resets.first().waitFor();
+    if (AUDIT) await shoot(page, `quotas-long-resets-${clock}`);
     for (const [size, viewport] of [
       ["desktop", { width: 1440, height: 900 }],
       // About the narrowest window with the table, where its columns are at their minimums.
@@ -822,10 +895,10 @@ async function main() {
       await page.emulateMedia({ colorScheme: "light" });
       await page.waitForTimeout(150);
       await page.screenshot({
-        path: join(SHOTS, `quotas-long-resets-${clock}-${size}.png`),
+        path: join(AUDIT ?? SHOTS, `quotas-long-resets-${clock}-${size}.png`),
         fullPage: size !== "phone",
       });
-      await fitsWidth(page, `quotas at ${viewport.width} px`);
+      await fitsLayout(page, "quotas");
       for (const cell of await resets.all()) {
         const { text, scroll, client, lines } = await cell.evaluate((el) => ({
           text: el.textContent,
@@ -844,6 +917,149 @@ async function main() {
       }
     }
   }
+
+  step("worst-case content: long names, unbroken words, many items, a prompt and a run");
+  await page.setViewportSize(DESKTOP);
+  const farHome = join(tmp, "far");
+  const MACHINE = "build-runner-in-the-basement-rack-02.internal.example.org";
+  const PROJECT = "a-monorepo-whose-name-runs-on-past-any-column";
+  const farPair = cli("pair-far", ["pair", "--name", MACHINE], farHome);
+  const farCode = (await farPair.waitFor(/Pairing code: (\S+)/))[1] as string;
+  await page
+    .getByRole("navigation", { name: "Main" })
+    .getByRole("link", { name: "Settings" })
+    .click();
+  await page.getByRole("link", { name: "Add a device" }).click();
+  await page.getByLabel("Pair a machine or device").fill(farCode);
+  await page.getByRole("button", { name: "Check code" }).click();
+  await page.getByRole("button", { name: "Approve" }).click();
+  if ((await farPair.exited) !== 0) throw new Error("pair of the long-named machine failed");
+  if ((await cli("perm-on", ["config", "permissions", "on"], farHome).exited) !== 0)
+    throw new Error("config permissions on failed");
+  const farQuota = cli(
+    "quota-far",
+    ["quota", "push", "--once", "--codexbar", fakeBar, "--provider", "e2e"],
+    farHome,
+  );
+  if ((await farQuota.exited) !== 0)
+    throw new Error("quota push from the long-named machine failed");
+  const BRANCH = "refs/heads/t/rename-every-provider-id-to-codexbar-names-and-keep-aliases";
+  for (let i = 1; i <= 24; i++) {
+    const asked = cli(
+      `ask-many-${i}`,
+      [
+        "ask",
+        "--question",
+        i % 3
+          ? `Question ${i}: rebase ${BRANCH} onto main and force-push it before the reviewers wake up, or wait for their pass on the old base first?`
+          : `Ship ${i}?`,
+        ...(i % 4 === 0
+          ? [
+              "--context",
+              `See ${BRANCH} and https://github.com/T0mSIlver/starbridge/pull/${i}/files#diff-${"0123456789abcdef".repeat(4)}`,
+            ]
+          : []),
+        "--option",
+        i % 2 ? "Rebase and force-push now, then ask the reviewers again in the morning" : "Yes",
+        "--option",
+        i % 2 ? `Wait for ${BRANCH}` : "No",
+        ...(i % 5 === 0 ? ["--waiting"] : []),
+        "--project",
+        PROJECT,
+        "--session",
+        `worst-case-session-${i}-${"x".repeat(40)}`,
+        "--session-title",
+        `Rename every provider id to CodexBar's names and keep the old ones as aliases (${i})`,
+      ],
+      i % 2 ? farHome : machineHome,
+    );
+    if ((await asked.exited) !== 0) throw new Error(`ask ${i} failed`);
+  }
+  const prompt = spawn(
+    "bun",
+    ["run", join(ROOT, "cli/src/main.ts"), "hook", "permission", "--agent", "claude-code"],
+    {
+      env: {
+        ...process.env,
+        STARBRIDGE_CONFIG_DIR: farHome,
+        STARBRIDGE_SERVER: `http://localhost:${PORTS.server}`,
+      },
+      stdio: ["pipe", "ignore", "inherit"],
+    },
+  );
+  children.push(prompt);
+  prompt.on("exit", (code) => {
+    if (!prompt.killed) console.log(`[prompt] exited ${code} before it was answered`);
+  });
+  prompt.stdin?.end(
+    JSON.stringify({
+      session_id: "worst-case-prompt",
+      cwd: `/home/dev/work/${PROJECT}`,
+      tool_name: "Bash",
+      tool_input: {
+        command: `git push --force-with-lease origin ${BRANCH} && gh pr edit 305 --body-file /home/dev/work/${PROJECT}/.scratch/pr-body-with-a-long-name.md`,
+      },
+    }),
+  );
+  const longRun = cli(
+    "run-long",
+    [
+      ...["run", "--title", `Nightly eval of every provider on ${MACHINE}`],
+      ...["--reason", `Checks ${BRANCH} against the recorded answers`, "--", "sleep", "600"],
+    ],
+    farHome,
+  );
+  await page.getByRole("link", { name: "Inbox" }).click();
+  await page.locator("button[data-id]").nth(24).waitFor({ timeout: 30_000 });
+  await page
+    .getByText(/^Nightly eval/)
+    .first()
+    .waitFor({ timeout: 30_000 });
+  await page
+    .getByText(/^git push --force-with-lease/)
+    .first()
+    .waitFor({ timeout: 30_000 });
+  await shoot(page, "inbox-full");
+  for (const [view, name] of [
+    ["Group by machine", "inbox-by-machine"],
+    ["Group by waiting", "inbox-by-waiting"],
+    ["One feed", ""],
+  ] as const) {
+    await page.getByRole("button", { name: "View", exact: true }).click();
+    await page.getByRole("menuitemradio", { name: view }).click();
+    if (name) await shoot(page, name);
+  }
+  await page.getByRole("button", { name: /History/ }).click();
+  await shoot(page, "inbox-history");
+  await page.getByRole("button", { name: /History/ }).click();
+  await page
+    .getByRole("button", { name: /^Waiting for you.*git push/ })
+    .first()
+    .click();
+  await shoot(page, "inbox-prompt");
+  await page.setViewportSize({ width: 390, height: 844 });
+  // A phone's row carries its options; its meta line opens it.
+  await page
+    .locator("button[data-id]")
+    .nth(3)
+    .click({ position: { x: 80, y: 12 } });
+  await page.getByRole("button", { name: /Back/ }).waitFor();
+  await shoot(page, "inbox-detail");
+  await page.setViewportSize(DESKTOP);
+  await page.getByLabel("Find").fill("rebase");
+  await shoot(page, "inbox-search");
+  await page.getByLabel("Find").fill("");
+  await page.getByRole("link", { name: "Quotas" }).click();
+  await page.locator("article").first().waitFor();
+  await shoot(page, "quotas-machines");
+  await page
+    .getByRole("navigation", { name: "Main" })
+    .getByRole("link", { name: "Settings" })
+    .click();
+  await page.getByRole("heading", { name: "Settings" }).waitFor();
+  await shoot(page, "settings-full");
+  prompt.kill();
+  longRun.proc.kill();
 
   step("add a second browser by pairing code");
   const b = await ff.newContext();
