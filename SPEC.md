@@ -772,8 +772,8 @@ Tokens, type and components: `DESIGN.md`.
   privacy@starbridge.run; abuse@ appears only in `/terms`.
 - **Analytics** (#141). Umami, self-hosted, on the landing page, the docs, `/privacy` and `/terms`
   only. No cookie, no stored IP, a daily salt, Do Not Track honoured, so no consent banner. The
-  Android app has none (Play data safety form). Caddy rate-limits its open endpoint, and a timer
-  caps its tables, so it cannot fill the disk.
+  Android app has none (Play data safety form). Caddy rate-limits its open endpoint, and an hourly
+  timer keeps each table to 180 days and a million rows, so it cannot fill the disk (#574).
 - **Launch funnel** (#559, #590). Landing view, a sign-in click, first sign-in, recovery key
   saved, first machine, first answer (with its kind: choice, text or Done); a second device is
   counted beside it. The signed-in app loads no tracker: the browser that created an account posts
