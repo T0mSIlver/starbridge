@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, setDefaultTimeout, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { generateMemberKeys, hashInput, ready } from "@starbridge/protocol";
@@ -9,7 +9,7 @@ import { AgentClient } from "../src/agent/client";
 import { makeAgent } from "../src/agent/main";
 import type { Agent } from "../src/agent/server";
 import { run } from "../src/cli";
-import { PROMPTS_OPEN } from "../src/config";
+import { PROMPTS_OPEN, promptsMark } from "../src/config";
 import { session } from "../src/context";
 import { poll } from "../src/decisions";
 import {
@@ -304,7 +304,7 @@ test("a keyboard answer settles the prompt: PostToolUse for the same call releas
   const ctx = await machine();
   const { out, permission } = await ask(ctx);
   // The open prompt is marked for the plugin's PostToolUse check (#517).
-  expect(ctx.store.promptsMarked()).toBe(true);
+  expect(readFileSync(join(ctx.store.dir, PROMPTS_OPEN), "utf8")).toBe("open");
   // Another tool call of the session finishing settles nothing.
   const other = JSON.stringify({ session_id: SESSION, tool_name: "Read", tool_input: { a: 1 } });
   expect(await hookSettle(ctx, other, { agent: "claude-code" })).toBe(0);
@@ -331,25 +331,44 @@ test("a keyboard answer settles the prompt: PostToolUse for the same call releas
   await expect(
     server.answerPermission(permission.id, { behavior: "allow", scope: "once" }),
   ).rejects.toThrow("already-answered");
-  await until(() => !ctx.store.promptsMarked());
+  await until(() => readFileSync(join(ctx.store.dir, PROMPTS_OPEN), "utf8") === "");
 });
 
 test("the plugin's PostToolUse check starts the CLI only while a prompt is open (#517)", () => {
   const dir = mkdtempSync(join(tmpdir(), "sb-settle-"));
   const bin = join(dir, "bin");
+  const cfg = join(dir, "cfg");
   mkdirSync(bin);
+  mkdirSync(cfg);
   writeFileSync(join(bin, "starbridge"), `#!/bin/sh\ncat > "${dir}/ran"\n`, { mode: 0o755 });
   const script = join(import.meta.dir, "../../plugin/hooks/settle.sh");
-  const env = { PATH: `${bin}:/usr/bin:/bin`, HOME: dir, STARBRIDGE_CONFIG_DIR: join(dir, "cfg") };
-  const runHook = () =>
-    Bun.spawnSync(["sh", script], { env, stdin: new TextEncoder().encode('{"session_id":"s"}') });
-  expect(runHook().exitCode).toBe(0);
-  expect(existsSync(join(dir, "ran"))).toBe(false);
-  mkdirSync(join(dir, "cfg"));
-  writeFileSync(join(dir, "cfg", PROMPTS_OPEN), "");
-  expect(runHook().exitCode).toBe(0);
-  // The hook input reaches the CLI.
-  expect(readFileSync(join(dir, "ran"), "utf8")).toBe('{"session_id":"s"}');
+  const env = { PATH: `${bin}:/usr/bin:/bin`, HOME: dir, STARBRIDGE_CONFIG_DIR: cfg };
+  const started = () => {
+    rmSync(join(dir, "ran"), { force: true });
+    const r = Bun.spawnSync(["sh", script], { env, stdin: new TextEncoder().encode('{"a":1}') });
+    expect(r.exitCode).toBe(0);
+    return existsSync(join(dir, "ran"));
+  };
+  // Nothing asked yet.
+  expect(started()).toBe(false);
+  // A state with no mark: an older CLI, which the hook runs as before.
+  writeFileSync(join(cfg, "state.json"), "{}");
+  expect(started()).toBe(true);
+  expect(readFileSync(join(dir, "ran"), "utf8")).toBe('{"a":1}');
+  writeFileSync(join(cfg, PROMPTS_OPEN), "");
+  expect(started()).toBe(false);
+  writeFileSync(join(cfg, PROMPTS_OPEN), "open");
+  expect(started()).toBe(true);
+});
+
+test("the mark counts only unsettled prompts that have not expired (#517)", () => {
+  const prompt = (settled: boolean, expiresAt: string) =>
+    ({ settled: settled ? "keyboard" : undefined, permission: { expiresAt } }) as never;
+  const now = Date.parse("2026-10-06T12:00:00Z");
+  const st = (p: unknown) => ({ asked: {}, answers: {}, permissions: { p } }) as never;
+  expect(promptsMark(st(prompt(false, "2026-10-06T12:05:00Z")), now)).toBe("open");
+  expect(promptsMark(st(prompt(false, "2026-10-06T11:55:00Z")), now)).toBe("");
+  expect(promptsMark(st(prompt(true, "2026-10-06T12:05:00Z")), now)).toBe("");
 });
 
 test("SIGTERM (Esc or No at the keyboard) reports the prompt settled and prints nothing", async () => {
