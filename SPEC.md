@@ -1790,10 +1790,6 @@ so the mod is the first path.
   waiting out its 60 s poll; `status` then prints `Server: reachable, but this machine was
   removed …` with the `pair --force` hint, rather than "not reachable".
 
-- 2026-10-06. `settle` never withdraws a decision whose answer reached the agent (#405): it exits
-  0 and posts nothing, since devices would hold both the answer and a withdrawal. An answer
-  accepted but not yet delivered can still be withdrawn. The skill says only `--answer-in` cards
-  need `settle`.
 
 - 2026-10-06. Which answer won a race reaches every device (#330), as Tom chose over sealing
   answers to every device. An answer is sealed only to the machine that asked, so a device whose
