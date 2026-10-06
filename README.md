@@ -9,8 +9,9 @@ machine. It also shows what's left on each AI plan, read from CodexBar, with an 
 before a window runs out.
 
 Your phone, browsers and machines encrypt everything they send each other, so the server stores
-only ciphertext. Use the free server at [starbridge.run](https://starbridge.run), or host your
-own.
+your content only as ciphertext; it still sees who sent what to which device, and when.
+[What the server sees](https://starbridge.run/docs/faq#what-does-the-server-see) has the details
+and the limits. Use the free server at [starbridge.run](https://starbridge.run), or host your own.
 
 <!-- Demo video: drag the short MP4 into GitHub's README editor here, under the intro. -->
 
