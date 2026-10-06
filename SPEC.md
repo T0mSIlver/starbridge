@@ -763,7 +763,9 @@ Tokens, type and components: `DESIGN.md`.
 
 - **Stack** (`deploy/`): Docker Compose with Caddy on the host network, so rate limits see real
   client addresses. Caddy keeps connections to the server open (`keepalive 25s`, below the
-  server's 30 s idle close) so TIME-WAIT sockets don't use up ports (#376). Caddy compresses every
+  server's 30 s idle close) so TIME-WAIT sockets don't use up ports (#376). A client has 10 s for
+  its TLS handshake and its HTTP/1.1 request headers, since every open connection costs Caddy
+  memory, the VPS's first limit (#587). Caddy compresses every
   response and the web app none: Next's gzip ran on its one thread and filled it near 18 landing
   page visitors a second (#593). Nightly SQLite backups, kept 14 days.
 - **Capacity** (#301). A load test of the production stack on two cores held 2000 simulated users
