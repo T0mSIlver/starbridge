@@ -1,5 +1,7 @@
 package dev.starbridge.app.ui
 
+import androidx.compose.material3.LocalTextStyle
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -137,6 +139,10 @@ fun Setup(phase: Phase, notice: StateFlow<String?>, dismiss: () -> Unit, openUrl
     }
 }
 
+/** A tab's label in the rail, on one line: in the narrow rail a large font shrinks it rather than break it. */
+@Composable
+internal fun TabLabel(tab: Tab) = Text(tab.label, maxLines = 1, autoSize = TextAutoSize.StepBased(maxFontSize = LocalTextStyle.current.fontSize))
+
 /**
  * The navigation suite for the window: none on phones, which get [BottomBar]; the wide rail beside
  * wider content, collapsed on a phone in landscape, where its labels would crowd the badge.
@@ -207,7 +213,7 @@ fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> U
                             Symbol(tab.sym, filled = selected)
                         }
                     },
-                    label = { Text(tab.label) },
+                    label = { TabLabel(tab) },
                     modifier = Modifier.semantics { if (tab == Tab.Inbox && openDecisions > 0) stateDescription = "$openDecisions need you" },
                 )
             }

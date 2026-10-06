@@ -1,5 +1,6 @@
 package dev.starbridge.app.ui.inbox
 
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.runtime.CompositionLocalProvider
@@ -131,6 +132,13 @@ private fun rememberSend(prompt: Prompt, actions: PromptActions): Pair<Boolean, 
     }
 }
 
+/** Allow's or Deny's label on one line: on a narrow phone at a large font it shrinks rather than break. */
+@Composable
+private fun Label(text: String, height: Dp) {
+    val style = if (height > 48.dp) StarbridgeTheme.type.action else StarbridgeTheme.type.label
+    Text(text, style = style, maxLines = 1, autoSize = TextAutoSize.StepBased(maxFontSize = style.fontSize))
+}
+
 /** The connected Allow and Deny, Allow the one amber button; [trailing], as tall as they are, closes the group. */
 @Composable
 private fun AllowDeny(height: Dp, enabled: Boolean, ground: Color, onAllow: () -> Unit, onDeny: () -> Unit, trailing: (@Composable () -> Unit)? = null) {
@@ -145,16 +153,20 @@ private fun AllowDeny(height: Dp, enabled: Boolean, ground: Color, onAllow: () -
                 enabled = enabled,
                 shape = RoundedCornerShape(topStart = end, bottomStart = end, topEnd = 8.dp, bottomEnd = 8.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = colors.accent, contentColor = colors.onAccent, disabledContainerColor = colors.accent, disabledContentColor = colors.onAccent),
+                // Centred in a width the row sets: narrow sides leave the label room on a small phone.
+                contentPadding = PaddingValues(horizontal = Spacing.s2, vertical = ButtonDefaults.ContentPadding.calculateTopPadding()),
                 modifier = Modifier.weight(1f).heightIn(min = height).fillMaxHeight(),
-            ) { Text("Allow", style = if (height > 48.dp) StarbridgeTheme.type.action else StarbridgeTheme.type.label) }
+            ) { Label("Allow", height) }
             val last = trailing == null
             Button(
                 onClick = onDeny,
                 enabled = enabled,
                 shape = RoundedCornerShape(topStart = 8.dp, bottomStart = 8.dp, topEnd = if (last) end else 8.dp, bottomEnd = if (last) end else 8.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = ground, contentColor = MaterialTheme.colorScheme.onSurface),
+                // Centred in a width the row sets: narrow sides leave the label room on a small phone.
+                contentPadding = PaddingValues(horizontal = Spacing.s2, vertical = ButtonDefaults.ContentPadding.calculateTopPadding()),
                 modifier = Modifier.weight(1f).heightIn(min = height).fillMaxHeight(),
-            ) { Text("Deny", style = if (height > 48.dp) StarbridgeTheme.type.action else StarbridgeTheme.type.label) }
+            ) { Label("Deny", height) }
             trailing?.invoke()
         }
     }

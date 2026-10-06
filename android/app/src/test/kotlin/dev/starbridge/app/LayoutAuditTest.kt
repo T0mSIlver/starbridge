@@ -61,6 +61,7 @@ import dev.starbridge.app.ui.SheetShape
 import dev.starbridge.app.ui.Symbol
 import dev.starbridge.app.ui.Tab
 import dev.starbridge.app.ui.suiteType
+import dev.starbridge.app.ui.TabLabel
 import dev.starbridge.app.ui.devices.AddDeviceScreen
 import dev.starbridge.app.ui.devices.DeviceActions
 import dev.starbridge.app.ui.devices.DevicesScreen
@@ -275,7 +276,7 @@ class LayoutAuditTest(private val shot: String, private val look: Look) {
                         selected = shot.tab == tab,
                         onClick = {},
                         icon = { BadgedBox(badge = { if (tab == Tab.Inbox) Badge(containerColor = colors.accent, contentColor = colors.onAccent) { Text("12") } }) { Symbol(tab.sym, filled = shot.tab == tab) } },
-                        label = { Text(tab.label) },
+                        label = { TabLabel(tab) },
                     )
                 }
             },
@@ -396,6 +397,9 @@ class LayoutAuditTest(private val shot: String, private val look: Look) {
             if (widest > l.size.width + 2) out += "wider than its box: $name"
             val ellipsized = (0 until l.lineCount).any { l.isLineEllipsized(it) }
             // The size tells a page title from a tab label with the same words.
+            // A short word split across lines ("Setting" over "s"); long names and commands may break anywhere.
+            val text = l.layoutInput.text.text
+            if (text.length <= 15 && ' ' !in text && l.lineCount > 1) out += "word broken: $name"
             if (l.multiParagraph.didExceedMaxLines && !ellipsized) out += "lines cut off: $name (${l.layoutInput.style.fontSize.value.toInt()} sp)"
             else if (l.lineCount > 0) {
                 val last = l.lineCount - 1
