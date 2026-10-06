@@ -27,7 +27,7 @@ import java.time.Instant
 // What the shade and the lock screen get, which no screenshot shows (#182, #183, #184).
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-@Config(sdk = [36])
+@Config(sdk = [36], qualifiers = "w412dp-h892dp-xxhdpi")
 class NotifierTest {
     private val context = ApplicationProvider.getApplicationContext<Application>()
     private val fake = Fake(Instant.now())

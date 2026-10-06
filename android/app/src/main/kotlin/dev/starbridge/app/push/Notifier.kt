@@ -8,6 +8,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import dev.starbridge.app.data.Source
+import android.graphics.Typeface
 import android.text.SpannableString
 import android.text.SpannableStringBuilder
 import android.text.Spanned
@@ -349,7 +350,11 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
     fun fitsLine(p: Prompt): Boolean {
         if (!p.fitsRow) return false
         val metrics = context.resources.displayMetrics
-        val paint = TextPaint().apply { textSize = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 14f, metrics) }
+        // Monospace, as the command's span asks: wider than the template's sans, so it errs short.
+        val paint = TextPaint().apply {
+            typeface = Typeface.MONOSPACE
+            textSize = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 14f, metrics)
+        }
         val width = metrics.widthPixels - TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 160f, metrics)
         return paint.measureText(p.fullInput) <= width
     }
