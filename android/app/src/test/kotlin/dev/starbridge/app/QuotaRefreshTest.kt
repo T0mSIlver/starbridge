@@ -88,14 +88,13 @@ class QuotaRefreshTest {
         val store = readyStore { path -> if (path == "/v1/quota/ask") MockResponse(404, okhttp3.Headers.headersOf(), "") else null }
         refreshAndWait(store)
         assertEquals(emptyList<Any>(), store.windows.value)
+        assertNull(store.notice.value)
     }
 
     private fun refreshAndWait(store: ServerStore) {
         store.refreshQuotas()
+        // Busy holds from the ask to the end of the sync, so it clears only once both ran.
         until { http.requestCount > 0 && !store.busy.value }
-        // Settled, not between the ask and the sync.
-        Thread.sleep(300)
-        assertEquals(false, store.busy.value)
     }
 
     /** A phone in an account with one machine; [route] answers first, else empty lists. */

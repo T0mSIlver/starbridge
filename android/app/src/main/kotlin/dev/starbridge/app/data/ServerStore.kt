@@ -197,7 +197,8 @@ class ServerStore(
             } catch (e: Exception) {
                 report(e)
             } finally {
-                busy.value = false
+                // A quiet run, such as the prompt poll, leaves another's spinner alone.
+                if (showBusy) busy.value = false
             }
         }
     }
