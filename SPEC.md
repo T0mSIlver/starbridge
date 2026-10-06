@@ -1457,6 +1457,13 @@ so the mod is the first path.
   401 that says the device was revoked no longer deletes its keys either: the browser shows the
   landing page as #219 wants, and on sign-in the verified chain shows whether it was revoked. A
   tab still offering a first key cannot replace a device whose genesis went out.
+- 2026-10-06. Android allows only what the owner saw whole, as the web does since #276 (#356). A
+  notification and an inbox card carry Allow only when the whole input fits one line of 200
+  characters; otherwise the notification offers Deny alone and the card's Allow opens the sheet.
+  The sheet shows the whole input and enables Allow once its end has been on screen.
+- 2026-10-06. Permission text shows control and format characters as escapes (`\u202E`), on the
+  machine before sealing and again in every client, so a bidi override cannot reorder the
+  command the owner allows (#357).
 
 - 2026-10-06. Main's CI runs one at a time (#380). Each merge used to queue its own run, and
   deploys waited behind all of them: six main runs queued for up to 30 min with prod six merges

@@ -50,6 +50,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
@@ -59,6 +62,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.starbridge.app.data.Prompt
+import dev.starbridge.app.data.visible
 import dev.starbridge.app.ui.Sym
 import dev.starbridge.app.ui.SheetBody
 import dev.starbridge.app.ui.Symbol
@@ -90,7 +94,7 @@ fun shownPrompts(prompts: List<Prompt>, now: Instant): List<Prompt> = prompts
 
 private val pretty = Json { prettyPrint = true }
 
-private fun prettyInput(input: String) = runCatching { pretty.encodeToString(JsonElement.serializer(), Json.parseToJsonElement(input)) }.getOrDefault(input)
+private fun prettyInput(input: String) = visible(runCatching { pretty.encodeToString(JsonElement.serializer(), Json.parseToJsonElement(input)) }.getOrDefault(input))
 
 /** A prompt's ground: amber, faint, over the page, since it holds an agent up. */
 @Composable
@@ -98,14 +102,14 @@ fun promptGround(): Color = StarbridgeTheme.colors.accentSoft.compositeOver(Mate
 
 /** The exact command, in mono, on [color]. */
 @Composable
-private fun Command(text: String, style: TextStyle, color: Color, shape: Shape, padding: PaddingValues, maxLines: Int = Int.MAX_VALUE) {
+private fun Command(text: String, style: TextStyle, color: Color, shape: Shape, padding: PaddingValues, maxLines: Int = Int.MAX_VALUE, modifier: Modifier = Modifier) {
     Text(
         text,
         style = style,
         color = MaterialTheme.colorScheme.onSurface,
         maxLines = maxLines,
         overflow = TextOverflow.Ellipsis,
-        modifier = Modifier.fillMaxWidth().background(color, shape).padding(padding),
+        modifier = modifier.fillMaxWidth().background(color, shape).padding(padding),
     )
 }
 
@@ -131,7 +135,7 @@ private fun rememberSend(prompt: Prompt, actions: PromptActions): Pair<Boolean, 
 
 /** The connected Allow and Deny, Allow the one amber button; [trailing] closes the group. */
 @Composable
-private fun AllowDeny(height: Dp, enabled: Boolean, ground: Color, onAllow: () -> Unit, onDeny: () -> Unit, trailing: (@Composable () -> Unit)? = null) {
+private fun AllowDeny(height: Dp, enabled: Boolean, ground: Color, onAllow: () -> Unit, onDeny: () -> Unit, allows: Boolean = enabled, trailing: (@Composable () -> Unit)? = null) {
     val colors = StarbridgeTheme.colors
     val end = height / 2
     // [height] at the default font size, taller when the labels need it; never padded to 48 dp,
@@ -140,7 +144,7 @@ private fun AllowDeny(height: Dp, enabled: Boolean, ground: Color, onAllow: () -
         Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
             Button(
                 onClick = onAllow,
-                enabled = enabled,
+                enabled = allows,
                 shape = RoundedCornerShape(topStart = end, bottomStart = end, topEnd = 8.dp, bottomEnd = 8.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = colors.accent, contentColor = colors.onAccent, disabledContainerColor = colors.accent, disabledContentColor = colors.onAccent),
                 modifier = Modifier.weight(1f).heightIn(min = height),
@@ -168,6 +172,8 @@ fun PromptCard(prompt: Prompt, now: Instant, actions: PromptActions, shape: Shap
     val scheme = MaterialTheme.colorScheme
     val (sent, send) = rememberSend(prompt, actions)
     var menu by remember { mutableStateOf(false) }
+    // The card shows the summary, so an allow covers it only when it is the whole input (#356).
+    val allow = { scope: String -> if (prompt.fitsRow) send(true, scope, null) else actions.open(prompt.id) }
     Surface(
         modifier.fillMaxWidth().clickable(onClickLabel = "Open the prompt") { actions.open(prompt.id) }.semantics { stateDescription = waitingLabel(prompt.createdAt, now) },
         shape = shape,
@@ -178,7 +184,7 @@ fun PromptCard(prompt: Prompt, now: Instant, actions: PromptActions, shape: Shap
             ToolLine(prompt, StarbridgeTheme.type.action.copy(lineHeight = 22.sp), 20.dp)
             Command(prompt.summary, StarbridgeTheme.type.code.copy(fontSize = 15.sp, lineHeight = 22.sp), scheme.surfaceContainer, RoundedCornerShape(12.dp), PaddingValues(horizontal = 14.dp, vertical = Spacing.s3), maxLines = 3)
             Box(Modifier.padding(top = Spacing.s1)) {
-                AllowDeny(40.dp, !sent, scheme.surfaceContainer, onAllow = { send(true, "once", null) }, onDeny = { send(false, "once", null) }) {
+                AllowDeny(40.dp, !sent, scheme.surfaceContainer, onAllow = { allow("once") }, onDeny = { send(false, "once", null) }) {
                     Button(
                         onClick = { menu = true },
                         shape = RoundedCornerShape(topStart = 8.dp, bottomStart = 8.dp, topEnd = 20.dp, bottomEnd = 20.dp),
@@ -191,7 +197,7 @@ fun PromptCard(prompt: Prompt, now: Instant, actions: PromptActions, shape: Shap
                     DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                         // Each wider allow shows the exact rule it adds before it is chosen (PROTOCOL.md).
                         prompt.scopes.forEach { scope ->
-                            DropdownMenuItem(text = { ScopeText(scope) }, onClick = { menu = false; send(true, scope.scope, null) }, modifier = Modifier.widthIn(max = 320.dp))
+                            DropdownMenuItem(text = { ScopeText(scope) }, onClick = { menu = false; allow(scope.scope) }, modifier = Modifier.widthIn(max = 320.dp))
                         }
                         DropdownMenuItem(text = { Text("Deny with a note") }, onClick = { menu = false; actions.open(prompt.id) })
                     }
@@ -243,6 +249,8 @@ fun PromptSheet(prompt: Prompt, now: Instant, actions: PromptActions) {
     var denying by rememberSaveable(prompt.id) { mutableStateOf(false) }
     var note by rememberSaveable(prompt.id) { mutableStateOf("") }
     var input by rememberSaveable(prompt.id) { mutableStateOf(false) }
+    // Allow, by button or grant, waits until the input's end has been on screen (#356).
+    var seen by remember(prompt.id) { mutableStateOf(false) }
     val waiting = prompt.waiting(now)
     SheetBody(
         prompt.source,
@@ -252,10 +260,13 @@ fun PromptSheet(prompt: Prompt, now: Instant, actions: PromptActions) {
         head = { ToolLine(prompt, StarbridgeTheme.type.question, 20.dp, waiting) },
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            Command(prompt.summary, StarbridgeTheme.type.code.copy(fontSize = 17.sp, lineHeight = 26.sp), scheme.surfaceContainerHighest, RoundedCornerShape(Spacing.s4), PaddingValues(horizontal = 18.dp, vertical = Spacing.s4))
+            Command(
+                prompt.fullInput, StarbridgeTheme.type.code.copy(fontSize = 17.sp, lineHeight = 26.sp), scheme.surfaceContainerHighest, RoundedCornerShape(Spacing.s4), PaddingValues(horizontal = 18.dp, vertical = Spacing.s4),
+                modifier = Modifier.onGloballyPositioned { if (it.boundsInWindow().bottom >= it.positionInWindow().y + it.size.height - 1) seen = true },
+            )
             prompt.description?.let { Text(it, style = StarbridgeTheme.type.reading.copy(lineHeight = 22.sp), color = scheme.onSurfaceVariant) }
             if (waiting) {
-                AllowDeny(56.dp, !sent, scheme.surfaceContainerHighest, onAllow = { send(true, "once", null) }, onDeny = { if (denying) send(false, "once", note.ifBlank { null }) else denying = true })
+                AllowDeny(56.dp, !sent, scheme.surfaceContainerHighest, onAllow = { send(true, "once", null) }, onDeny = { if (denying) send(false, "once", note.ifBlank { null }) else denying = true }, allows = !sent && seen)
                 if (denying) {
                     TextField(
                         value = note,
@@ -270,7 +281,7 @@ fun PromptSheet(prompt: Prompt, now: Instant, actions: PromptActions) {
                         prompt.scopes.forEach { scope ->
                             OutlinedButton(
                                 onClick = { send(true, scope.scope, null) },
-                                enabled = !sent,
+                                enabled = !sent && seen,
                                 shape = RoundedCornerShape(Spacing.s4),
                                 border = ButtonDefaults.outlinedButtonBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(scheme.outlineVariant)),
                                 contentPadding = PaddingValues(horizontal = Spacing.s4, vertical = Spacing.s3),

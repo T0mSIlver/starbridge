@@ -323,8 +323,11 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
     )
 
-    /** The command in mono, the one thing to judge from the shade; the app shows the agent's words (#182). */
-    private fun command(p: Prompt): CharSequence = SpannableString(p.summary).apply { setSpan(TypefaceSpan("monospace"), 0, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE) }
+    /**
+     * The command in mono, the one thing to judge from the shade; the app shows the agent's words
+     * (#182). The whole input when it fits, which Allow then covers (#356).
+     */
+    private fun command(p: Prompt): CharSequence = SpannableString(if (p.fitsRow) p.fullInput else p.summary).apply { setSpan(TypefaceSpan("monospace"), 0, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE) }
 
     /** [actions] go on the public version too, as a question's do. A tap opens the prompt's sheet. */
     private fun promptBase(p: Prompt, actions: List<NotificationCompat.Action> = emptyList()): NotificationCompat.Builder {
@@ -375,17 +378,19 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
 
     /**
      * Allow and Deny, as in the inbox. Deny works from the lock screen; Allow asks for the unlock
-     * first (the owner's choice, SPEC.md). The wider grants need the app.
+     * first (the owner's choice, SPEC.md), and shows only when the whole input does: else the
+     * prompt's sheet takes it (#356). The wider grants need the app.
      */
     override fun prompt(prompt: Prompt) = postPrompt(prompt, null)
 
     private fun postPrompt(prompt: Prompt, note: String?) {
         if (!allowed()) return
         val tag = promptTag(prompt)
-        val actions = listOf(
+        val actions = listOfNotNull(
             NotificationCompat.Action.Builder(0, "Allow", promptIntent(prompt, true, "once", tag * 31))
                 .setAuthenticationRequired(true)
-                .build(),
+                .build()
+                .takeIf { prompt.fitsRow },
             NotificationCompat.Action.Builder(0, "Deny", promptIntent(prompt, false, "once", tag * 31 + 2))
                 .setAuthenticationRequired(false)
                 .build(),

@@ -22,6 +22,7 @@ import {
   SealedItem,
   type Settled,
   seal,
+  visible,
 } from "@starbridge/protocol";
 import { claudeSession } from "./claude";
 import type { PendingPermission, PermissionUpdate, State } from "./config";
@@ -161,7 +162,7 @@ export function redactValue(value: unknown): unknown {
 
 /** JSON text of `value` within `max` characters: the longest strings are cut until it fits. */
 export function fitJson(value: unknown, max = INPUT_MAX): string {
-  let v = value;
+  let v = visibleValue(value);
   let text = JSON.stringify(v) ?? "null";
   for (let round = 0; text.length > max && round < 64; round++) {
     const over = text.length - max;
@@ -191,6 +192,15 @@ export function fitJson(value: unknown, max = INPUT_MAX): string {
   return out;
 }
 
+/** Every string in a JSON value, keys included, through `visible`. */
+function visibleValue(value: unknown): unknown {
+  if (typeof value === "string") return visible(value);
+  if (Array.isArray(value)) return value.map(visibleValue);
+  if (value && typeof value === "object")
+    return Object.fromEntries(Object.entries(value).map(([k, v]) => [visible(k), visibleValue(v)]));
+  return value;
+}
+
 function setAt(v: unknown, path: (string | number)[], f: (s: string) => string): unknown {
   if (path.length === 0) return f(v as string);
   const [head, ...rest] = path as [string | number, ...(string | number)[]];
@@ -202,7 +212,7 @@ function setAt(v: unknown, path: (string | number)[], f: (s: string) => string):
 // --- Building the prompt ------------------------------------------------------
 
 const oneLine = (s: string, max: number) => {
-  const flat = s.replace(/\s+/g, " ").trim();
+  const flat = visible(s.replace(/\s+/g, " ").trim());
   return flat.length <= max ? flat : `${flat.slice(0, max - 1)}…`;
 };
 
@@ -260,7 +270,7 @@ export function ruleText(updates: PermissionUpdate[]): string {
       ? (u.rules ?? []).map((r) => (r.ruleContent ? `${r.toolName}(${r.ruleContent})` : r.toolName))
       : (u.directories ?? []).map((d) => `access to ${d}`),
   );
-  const text = parts.join(", ").replace(/\s+/g, " ").trim();
+  const text = visible(parts.join(", ").replace(/\s+/g, " ").trim());
   return text.length <= RULE_MAX && redactText(text) === text ? text : "";
 }
 
