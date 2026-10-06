@@ -1301,6 +1301,16 @@ so the mod is the first path.
   keys alone; one that landed with its reply lost counts once the directory lists the entry. Boot
   adopts a pending record the directory lists as active even when an older device is stored, so a
   recovery or join cut off after it landed is not lost to the older keys.
+- 2026-10-06. Waiting pairings are capped per address, not only server-wide (#309, after
+  #302). `POST /pairings` needs no account, and 500 IPv6 /64s, a sliver of one free /48, kept
+  the server's 5000 full so nobody could pair. Each address may now hold 20 unapproved
+  pairings, an IPv6 client counting as its /48 on this route; approved ones do not count, so an
+  office behind one NAT pairs everyone, 20 waiting at once on top of the 10-a-minute rate
+  limit. The server-wide cap, now 20000 (about 80 MB of 4 KB requests), stays as the disk
+  bound, and filling it takes a thousand addresses or /48s. The cost: subscribers of a mobile
+  carrier that hands out /64s from one /48 share its 20, so one of them can block pairing there
+  for 10 minutes, a far smaller blast radius than the whole server. Approving one's own
+  pairings frees the slots, but each approval needs a directory entry, 200 per account.
 
 - 2026-10-06. Add a device on the web says a failed pairing in the app's words, as Android does,
   not the API's code (#289): an expired or unknown code reads "No pairing with this code, or it
