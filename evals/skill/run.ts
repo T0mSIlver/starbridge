@@ -60,7 +60,8 @@ const work = mkdtempSync("/tmp/skill-eval-");
 process.on("exit", () => {
   if (!opt.keep) rmSync(work, { recursive: true, force: true });
 });
-process.on("SIGINT", () => process.exit(130));
+for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"] as const)
+  process.on(signal, () => process.exit(130));
 const bun = process.execPath;
 const which = (cmd: string) => {
   const r = spawnSync("sh", ["-c", `command -v ${cmd}`], { encoding: "utf8" });
