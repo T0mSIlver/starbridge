@@ -62,7 +62,7 @@ export class Decisions implements Feature {
       handle: async (req: { body: unknown }) => {
         const input = (req.body as { input?: unknown } | undefined)?.input;
         if (typeof input !== "object" || input === null)
-          throw new HttpError(400, "bad-request", "post {input: {question, default, ...}}");
+          throw new HttpError(400, "bad-request", "post {input: {question, ...}}");
         const ask = input as AskInput;
         // The asking process knows its directory; the agent's would name the wrong project.
         if (typeof ask.project !== "string")
@@ -93,8 +93,10 @@ export class Decisions implements Feature {
       method: "POST",
       path: "/v1/answers/next",
       handle: async (req: { body: unknown; signal: AbortSignal }) => {
-        const b = (req.body ?? {}) as { id?: unknown; wait?: unknown };
+        const b = (req.body ?? {}) as { id?: unknown; session?: unknown; wait?: unknown };
         const id = typeof b.id === "string" ? b.id : undefined;
+        // Clients from before `session` take any session's answer, as they did.
+        const from = typeof b.session === "string" ? b.session : undefined;
         const asked = id ? this.ctx.store.state().asked[id] : undefined;
         if (id && !asked)
           throw new HttpError(
@@ -104,10 +106,10 @@ export class Decisions implements Feature {
           );
         const wait = holdSeconds(b.wait === undefined ? undefined : String(b.wait));
         const end = Date.now() + wait * 1000;
-        let found = takeAnswer(this.ctx.store, id);
+        let found = takeAnswer(this.ctx.store, id, from);
         while (!found && !req.signal.aborted && Date.now() < end) {
           await this.hub.changed(end - Date.now(), req.signal);
-          found = takeAnswer(this.ctx.store, id);
+          found = takeAnswer(this.ctx.store, id, from);
         }
         return found ?? {};
       },

@@ -51,6 +51,8 @@ export type ErrorCode =
   | "signer-not-allowed"
   | "bad-genesis"
   | "bad-chain"
+  | "bad-recovery"
+  | "wrong-recovery-key"
   | "duplicate-member"
   | "unknown-member"
   | "wrong-account"

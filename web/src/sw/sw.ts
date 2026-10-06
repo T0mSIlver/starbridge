@@ -10,6 +10,7 @@ import {
   openPushedPermission,
   openSettled,
   openWaiting,
+  Withheld,
 } from "../lib/device";
 import { answerPlace } from "../lib/outcome";
 import * as store from "../lib/store";
@@ -47,6 +48,9 @@ self.addEventListener("activate", (e) => e.waitUntil(self.clients.claim()));
 self.addEventListener("push", (e) => {
   e.waitUntil(
     onPush(e.data?.text() ?? "").catch(async (err) => {
+      // Held (#362): the notifications already up would still let the owner answer from them.
+      if (err instanceof Withheld)
+        for (const n of await self.registration.getNotifications()) n.close();
       // A push that fails to open or verify shows nothing; open pages log why.
       for (const c of await self.clients.matchAll({ type: "window" }))
         c.postMessage({ type: "starbridge:push-error", error: String(err) });
@@ -142,6 +146,14 @@ function maxActions(): number {
   return N?.maxActions ?? 0;
 }
 
+/**
+ * Whether a notification for this item should not stay up: answered already, or the keys that
+ * opened it were deleted since, by a sign-out the push raced (#311).
+ */
+async function moot(account: string, id: string): Promise<boolean> {
+  return answered.has(`${account}/${id}`) || !(await store.get("device", account));
+}
+
 /** First lines of the context, without code fences, for the notification body. */
 function summary(context: string): string {
   const text = context
@@ -161,7 +173,7 @@ async function showDecision(
   waiting = false,
   flip = false,
 ): Promise<void> {
-  const done = () => answered.has(`${account}/${item.decision.id}`);
+  const done = () => moot(account, item.decision.id);
   const d = item.decision;
   const options = d.recommended
     ? [d.recommended, ...d.options.filter((o) => o !== d.recommended)]
@@ -191,10 +203,10 @@ async function showDecision(
     data: { account, item, options },
     actions,
   };
-  if (done()) return;
+  if (await done()) return;
   await self.registration.showNotification(d.question, options_);
-  // An answered push may have closed nothing while this one was still opening.
-  if (done())
+  // An answered push, or a sign-out, may have closed nothing while this one was still opening.
+  if (await done())
     for (const n of await self.registration.getNotifications({ tag: tag(d.id) })) n.close();
 }
 
@@ -204,14 +216,14 @@ async function showDecision(
  */
 async function showPrompt(account: string, item: PromptItem): Promise<void> {
   const p = item.permission;
-  const done = () => answered.has(`${account}/${p.id}`);
-  if (done()) return;
+  const done = () => moot(account, p.id);
+  if (await done()) return;
   await self.registration.showNotification(`${p.tool} on ${p.source.machine}`, {
     body: `${p.source.project}\n${p.summary}`,
     tag: promptTag(p.id),
     requireInteraction: true,
   });
-  if (done())
+  if (await done())
     for (const n of await self.registration.getNotifications({ tag: promptTag(p.id) })) n.close();
 }
 

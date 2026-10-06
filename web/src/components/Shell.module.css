@@ -15,6 +15,10 @@
   padding: 0 0 calc(var(--size-bar-web) + env(safe-area-inset-bottom));
 }
 
+.withheld {
+  margin: var(--s3) var(--s4) 0;
+}
+
 .bottom {
   position: fixed;
   z-index: 10;

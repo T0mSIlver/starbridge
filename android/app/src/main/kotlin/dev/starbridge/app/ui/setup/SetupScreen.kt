@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.text.KeyboardOptions
@@ -87,6 +88,7 @@ class SetupViewModel @Inject constructor(private val store: Store) : ViewModel()
         joinWithCode = store::joinWithCode,
         askDevices = store::askDevices,
         cancelJoin = store::cancelJoin,
+        confirmDigits = store::confirmDigits,
         recover = store::recover,
         saved = store::confirmRecoveryKey,
         signOut = store::signOut,
@@ -106,6 +108,7 @@ class SetupActions(
     val recover: (key: String) -> Unit,
     val saved: () -> Unit,
     val signOut: () -> Unit,
+    val confirmDigits: () -> Unit = {},
 )
 
 /**
@@ -118,8 +121,16 @@ fun SetupScreen(phase: Phase, server: String, busy: Boolean, actions: SetupActio
         Phase.SignedOut -> SignIn(server, busy, actions, openUrl, modifier)
         is Phase.NoDevice -> if (phase.accountExists) Join(busy, actions, modifier) else FirstDevice(busy, actions, modifier)
         is Phase.Joining -> Waiting("Approve this phone", if (phase.scanned) "Approve it on the device that shows the QR code." else "Type this code on a device you already use: ${phase.code}", null, actions.cancelJoin, modifier)
-        is Phase.JoiningByDigits -> Waiting("Compare digits", "Approve on your other device if the digits match.", phase.digits, actions.cancelJoin, modifier)
-        is Phase.RecoveryKey -> Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = Spacing.s4, end = Spacing.s4, bottom = Spacing.s10), verticalArrangement = Arrangement.spacedBy(Spacing.s4)) { RecoveryKey(phase.shown, busy, actions) }
+        is Phase.JoiningByDigits -> when {
+            phase.digits != null && !phase.matched -> Waiting("Compare digits", "Does your other device show the same digits?", phase.digits, actions.cancelJoin, modifier, onMatch = actions.confirmDigits)
+            phase.digits != null -> Waiting("Compare digits", "Approve on your other device.", phase.digits, actions.cancelJoin, modifier)
+            else -> Waiting("Compare digits", "Approve on your other device if the digits match.", null, actions.cancelJoin, modifier)
+        }
+        is Phase.RecoveryKey -> Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = Spacing.s4, end = Spacing.s4, bottom = Spacing.s10), verticalArrangement = Arrangement.spacedBy(Spacing.s4)) {
+            // Continue posts the account's first entry (#370): it can take a moment, or fail and stay here.
+            RecoveryKey(phase.shown, actions.saved, busy = busy)
+            Link("Sign out", actions.signOut)
+        }
         Phase.Ready -> Unit
     }
 }
@@ -136,15 +147,15 @@ private fun Step(modifier: Modifier, top: @Composable ColumnScope.() -> Unit, bo
 
 /** A setup step's headline. */
 @Composable
-private fun Title(text: String, modifier: Modifier = Modifier) {
+internal fun Title(text: String, modifier: Modifier = Modifier) {
     Text(text, style = StarbridgeTheme.type.title, color = MaterialTheme.colorScheme.onSurface, modifier = modifier)
 }
 
 /** The main action: filled in `fg`, 56 dp, the full width. */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-private fun Primary(text: String, busy: Boolean, enabled: Boolean = true, icon: (@Composable () -> Unit)? = null, onClick: () -> Unit) {
-    Button(onClick = onClick, enabled = enabled && !busy, modifier = Modifier.fillMaxWidth().height(56.dp)) {
+internal fun Primary(text: String, busy: Boolean, enabled: Boolean = true, icon: (@Composable () -> Unit)? = null, onClick: () -> Unit) {
+    Button(onClick = onClick, enabled = enabled && !busy, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
         if (busy) {
             LoadingIndicator(Modifier.size(Spacing.s6), color = MaterialTheme.colorScheme.onPrimary)
         } else {
@@ -156,7 +167,7 @@ private fun Primary(text: String, busy: Boolean, enabled: Boolean = true, icon: 
 
 /** A quieter way: underlined text. */
 @Composable
-private fun Link(text: String, onClick: () -> Unit) {
+internal fun Link(text: String, onClick: () -> Unit) {
     Text(
         text,
         style = StarbridgeTheme.type.small.copy(textDecoration = TextDecoration.Underline),
@@ -219,7 +230,7 @@ private fun SignIn(server: String, busy: Boolean, actions: SetupActions, openUrl
                 Link("Use your own server") { selfHosted = true }
             } else {
                 Primary("Sign in", busy, enabled = url.isNotBlank() && token.isNotBlank()) { actions.ownerToken(url, token) }
-                OutlinedButton(onClick = { openUrl(actions.gitHub(url)) }, enabled = url.isNotBlank() && !busy, modifier = Modifier.fillMaxWidth().height(56.dp)) {
+                OutlinedButton(onClick = { openUrl(actions.gitHub(url)) }, enabled = url.isNotBlank() && !busy, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
                     Text("Sign in with GitHub on this server", style = StarbridgeTheme.type.action)
                 }
                 Link("Use starbridge.run") { selfHosted = false; url = BuildConfig.DEFAULT_SERVER }
@@ -245,7 +256,8 @@ private fun Join(busy: Boolean, actions: SetupActions, modifier: Modifier) {
         bottom = {
             Primary("Scan a QR code", busy, icon = { Symbol(Sym.Qr, size = 20.dp) }, onClick = scan)
             Link("Can't scan? Compare digits", actions.askDevices)
-            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s6)) {
+            // 24 dp under the link above, so each keeps a 48 dp tap area at every font size.
+            FlowRow(Modifier.padding(top = Spacing.s3), horizontalArrangement = Arrangement.spacedBy(Spacing.s6, Alignment.CenterHorizontally), verticalArrangement = Arrangement.spacedBy(Spacing.s6)) {
                 Link("Use the recovery key") { recovering = true }
                 Link("Sign out", actions.signOut)
             }
@@ -283,6 +295,11 @@ private fun Recover(busy: Boolean, actions: SetupActions, modifier: Modifier, on
         top = {
             Column(Modifier.padding(start = Spacing.s4, end = Spacing.s4, top = 48.dp), verticalArrangement = Arrangement.spacedBy(Spacing.s4)) {
                 Title("Recovery key")
+                Text(
+                    "Recovering removes every other device and machine from the account. Pair the ones you still have again from this phone afterwards.",
+                    style = StarbridgeTheme.type.body,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
                 TextField(
                     value = typedKey,
                     onValueChange = { typedKey = it },
@@ -292,7 +309,8 @@ private fun Recover(busy: Boolean, actions: SetupActions, modifier: Modifier, on
                     supportingText = { Text(reading.problem ?: reading.status) },
                     isError = reading.problem != null,
                     textStyle = StarbridgeTheme.type.machine,
-                    colors = fieldColors(),
+                    // The default label reads at 4.4:1 on the field; this one clears 4.5:1.
+                    colors = fieldColors().copy(unfocusedLabelColor = MaterialTheme.colorScheme.onSurface),
                     // Masked as a password, with the eye to check what was typed (#274).
                     visualTransformation = if (shown) VisualTransformation.None else PasswordVisualTransformation(),
                     trailingIcon = {
@@ -316,7 +334,7 @@ private fun Recover(busy: Boolean, actions: SetupActions, modifier: Modifier, on
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-private fun Waiting(title: String, text: String, digits: String?, onCancel: () -> Unit, modifier: Modifier) {
+private fun Waiting(title: String, text: String, digits: String?, onCancel: () -> Unit, modifier: Modifier, onMatch: (() -> Unit)? = null) {
     Step(
         modifier,
         top = {
@@ -331,35 +349,43 @@ private fun Waiting(title: String, text: String, digits: String?, onCancel: () -
                         digits.forEachIndexed { i, d ->
                             if (i == 3) Spacer(Modifier.width(Spacing.s3))
                             if (i > 0) Spacer(Modifier.width(Spacing.s2))
-                            Box(Modifier.size(48.dp, 64.dp).background(MaterialTheme.colorScheme.surfaceContainerHighest, RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) {
+                            // Narrower than 48 dp only where six of them don't fit.
+                            Box(Modifier.weight(1f, fill = false).widthIn(max = 48.dp).fillMaxWidth().height(64.dp).background(MaterialTheme.colorScheme.surfaceContainerHighest, RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) {
                                 Text("$d", style = StarbridgeTheme.type.figure.copy(fontSize = 32.sp, lineHeight = 32.sp), color = MaterialTheme.colorScheme.onSurface)
                             }
                         }
                     }
                 }
             }
-            Row(Modifier.padding(horizontal = Spacing.s6, vertical = 28.dp), verticalAlignment = Alignment.CenterVertically) {
-                LoadingIndicator(Modifier.size(40.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Spacer(Modifier.width(Spacing.s4))
-                Text("Waiting for the approval", style = StarbridgeTheme.type.body, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (onMatch == null) {
+                Row(Modifier.padding(horizontal = Spacing.s6, vertical = 28.dp), verticalAlignment = Alignment.CenterVertically) {
+                    LoadingIndicator(Modifier.size(40.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(Modifier.width(Spacing.s4))
+                    Text("Waiting for the approval", style = StarbridgeTheme.type.body, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
             }
         },
         bottom = {
-            OutlinedButton(onClick = onCancel, modifier = Modifier.fillMaxWidth().height(56.dp)) { Text("Cancel", style = StarbridgeTheme.type.action) }
+            if (onMatch != null) Button(onClick = onMatch, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) { Text("They match", style = StarbridgeTheme.type.action) }
+            OutlinedButton(onClick = onCancel, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) { Text("Cancel", style = StarbridgeTheme.type.action) }
         },
     )
 }
 
+/** A recovery key to write down, and the box that enables [action]: first run, or a replacement (#348). */
 @Composable
-private fun RecoveryKey(shown: String, busy: Boolean, actions: SetupActions) {
+internal fun RecoveryKey(
+    shown: String,
+    onDone: () -> Unit,
+    title: String = "Your recovery key",
+    text: String = "Write this key down and keep it offline. If you lose every device, it adds a new one. This is the only time it is shown.",
+    action: String = "Continue",
+    busy: Boolean = false,
+) {
     SecureWindow()
     var saved by rememberSaveable { mutableStateOf(false) }
-    Title("Your recovery key", Modifier.padding(top = 48.dp))
-    Text(
-        "Write this key down and keep it offline. If you lose every device, it adds a new one. This is the only time it is shown.",
-        style = StarbridgeTheme.type.body,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
+    Title(title, Modifier.padding(top = 48.dp))
+    Text(text, style = StarbridgeTheme.type.body, color = MaterialTheme.colorScheme.onSurfaceVariant)
     Panel(Modifier.fillMaxWidth().padding(top = Spacing.s2)) {
         // Groups of four, two or three to a line, never split.
         FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.s4, Alignment.CenterHorizontally), verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
@@ -376,14 +402,12 @@ private fun RecoveryKey(shown: String, busy: Boolean, actions: SetupActions) {
         Spacer(Modifier.width(Spacing.s3))
         Text("I wrote this key down", style = StarbridgeTheme.type.body, color = MaterialTheme.colorScheme.onSurface)
     }
-    // Continue posts the account's first entry (#370): it can take a moment, or fail and stay here.
-    Primary("Continue", busy, enabled = saved, onClick = actions.saved)
-    Link("Sign out", actions.signOut)
+    Primary(action, busy = busy, enabled = saved, onClick = onDone)
 }
 
 /** While shown, the window stays out of screenshots, screen sharing and the recents screen. */
 @Composable
-private fun SecureWindow() {
+internal fun SecureWindow() {
     val window = LocalActivity.current?.window ?: return
     DisposableEffect(window) {
         window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)

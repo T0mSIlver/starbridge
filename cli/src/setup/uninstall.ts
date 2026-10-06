@@ -7,6 +7,7 @@ import { join } from "node:path";
 import { withAgent } from "../agent/client";
 import { askVia } from "../agent/commands";
 import { type AskInput, ask } from "../decisions";
+import { piPermissionConfig, removePiEntries } from "../pi";
 import type { InstallKind } from "../release";
 import { removeBinary } from "../update";
 import { findCodexbar } from "./codexbar";
@@ -17,6 +18,7 @@ import {
   piPackage,
   removeCodexRule,
   removeCodexSkill,
+  removeOpencode,
   removePiPackage,
 } from "./harnesses";
 import {
@@ -48,7 +50,6 @@ export async function uninstall(sys: Sys, opts: UninstallOpts): Promise<number> 
       question: `Revoke ${machine.name}? It was uninstalled.`,
       context: `\`starbridge uninstall\` ran on ${machine.name}. A machine cannot revoke itself: revoke it under Devices so its keys no longer receive your decisions and quotas.`,
       options: ["I revoked it", "Keep it"],
-      default: "Keep it",
       project: "starbridge",
       session: "",
     };
@@ -106,6 +107,7 @@ export async function uninstall(sys: Sys, opts: UninstallOpts): Promise<number> 
 
   if (removeCodexSkill(sys)) ctx.out(`Removed ${codexSkillDir(sys)}.`);
   if (removeCodexRule(sys)) ctx.out(`Removed ${codexRulePath(sys)}.`);
+  for (const path of removeOpencode(sys)) ctx.out(`Removed ${path}.`);
   const piSource = hasPi(sys) ? piPackage(sys) : undefined;
   if (piSource)
     try {
@@ -114,6 +116,13 @@ export async function uninstall(sys: Sys, opts: UninstallOpts): Promise<number> 
     } catch (e) {
       ctx.out(`Could not remove the Pi package: ${(e as Error).message}`);
     }
+
+  const piConfig = piPermissionConfig(ctx.env);
+  try {
+    if (removePiEntries(ctx.env)) ctx.out(`Removed Starbridge's entries from ${piConfig}.`);
+  } catch (e) {
+    ctx.out(`Could not remove Starbridge's entries from ${piConfig}: ${(e as Error).message}`);
+  }
 
   const dir = ctx.store.dir;
   if (!stopped && existsSync(dir)) {

@@ -11,6 +11,9 @@
  * While the devices have it, the keyboard can still take it: a small dialog offers "Answer
  * here", which takes the prompt back from the devices and opens pi-permission-system's dialog.
  */
+import { STOP_MS, type Verdict, verdictOf } from "../hooks/node.ts";
+
+export { STOP_MS, verdictOf };
 
 /** The fields of pi-permission-system's `PromptPermissionDetails` this link reads. */
 export interface AskDetails {
@@ -23,10 +26,14 @@ export interface AskDetails {
   /** pi-permission-system's own one-line rendering of the call's input. */
   toolInputPreview?: string;
   payload?: { request?: { surface?: string; toolName?: string; value?: string } };
+  /** The gate's surface, such as `read` or `external_directory_read`, when it overrides it. */
+  surface?: string | null;
+  /** What the gate checked; its surface is the one pi-permission-system caps grants on. */
+  accessIntent?: { surface?: string };
 }
 
-/** pi-permission-system's `AuthorizerVerdict`. */
-export type Verdict = { kind: "allow" } | { kind: "deny"; reason?: string } | { kind: "defer" };
+/** pi-permission-system's `AuthorizerVerdict`, which is the CLI's. */
+export type { Verdict };
 
 /** The link's name, which the owner adds to pi-permission-system's `authorizerChain`. */
 export const LINK = "starbridge";
@@ -48,6 +55,22 @@ export function permissionsService(id: string): PermissionsService | undefined {
   return typeof service?.registerAuthorizer === "function" ? service : undefined;
 }
 
+/**
+ * Whether only the keyboard can allow this ask. pi-permission-system turns a link's allow on the
+ * `path` and `external_directory` surface families into defer (its delegation envelope, ADR
+ * 0007), so a device's Allow there would be dropped and its own dialog open anyway. The link
+ * defers these at once rather than ask the devices for nothing (#288).
+ */
+export function keyboardOnly(details: AskDetails): boolean {
+  const surface =
+    details.accessIntent?.surface ?? details.surface ?? details.payload?.request?.surface;
+  return (
+    surface !== undefined &&
+    surface !== null &&
+    /^(path|external_directory)(_read|_write)?$/.test(surface)
+  );
+}
+
 /** The hook input `starbridge hook permission` reads, in Claude Code's shape. */
 export function hookInput(details: AskDetails, session: string, cwd: string) {
   const req = details.payload?.request;
@@ -63,18 +86,6 @@ export function hookInput(details: AskDetails, session: string, cwd: string) {
             ? { preview: details.toolInputPreview }
             : { value: req?.value ?? "" };
   return { session_id: session, cwd, tool_name: tool, tool_input: input };
-}
-
-/** The verdict in what the CLI printed: Claude Code's `PermissionRequest` decision, or none. */
-export function verdictOf(stdout: string): Verdict {
-  try {
-    const d = (JSON.parse(stdout) as { hookSpecificOutput?: { decision?: unknown } })
-      .hookSpecificOutput?.decision as { behavior?: unknown; message?: unknown } | undefined;
-    if (d?.behavior === "allow") return { kind: "allow" };
-    if (d?.behavior === "deny")
-      return { kind: "deny", ...(typeof d.message === "string" ? { reason: d.message } : {}) };
-  } catch {}
-  return { kind: "defer" };
 }
 
 export interface LinkDeps {
@@ -95,8 +106,6 @@ export const QUIET_MS = 1_000;
  * stalled server must never hold the prompt, nor the keyboard's dialog after it.
  */
 export const HOOK_MS = 600_000;
-/** How long the CLI gets once stopped: it reports the prompt settled within 5 s. */
-export const STOP_MS = 10_000;
 
 /** Asks the devices, and the keyboard when there is one; the first to answer decides. */
 export async function authorize(

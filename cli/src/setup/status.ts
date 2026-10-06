@@ -1,9 +1,10 @@
 /** `starbridge status`: setup's checks, at any time. */
 import type { Status } from "../agent/api";
 import { AgentClient } from "../agent/client";
+import { REMOVED } from "../api";
 import { VERSION } from "../version";
 import { findCodexbar, listProviders, probe } from "./codexbar";
-import { codexSkill, hasCodex, hasPi, piPackage } from "./harnesses";
+import { codexSkill, hasCodex, hasOpencode, hasPi, opencodeState, piPackage } from "./harnesses";
 import { autoUpdate, hasClaude, legacyInstalls, PLUGINS, pluginState } from "./plugins";
 import { legacyUnits, lingering, serviceState } from "./service";
 import { probeLines } from "./setup";
@@ -36,9 +37,12 @@ export async function status(sys: Sys): Promise<number> {
   else {
     out(`Agent: ${agent.version}, pid ${agent.pid}, since ${agent.startedAt}, on ${agent.socket}`);
     const s = agent.server;
-    out(
-      `Server: ${s.reachable ? "reachable" : "not reachable"}${s.lastOkAt ? `, last answered ${s.lastOkAt}` : ""}${s.lastError ? `, last error: ${s.lastError}` : ""}`,
-    );
+    // The server answered, refusing this machine's token.
+    if (s.lastError === REMOVED) out(`Server: reachable, but ${REMOVED}`);
+    else
+      out(
+        `Server: ${s.reachable ? "reachable" : "not reachable"}${s.lastOkAt ? `, last answered ${s.lastOkAt}` : ""}${s.lastError ? `, last error: ${s.lastError}` : ""}`,
+      );
     const q = agent.quota;
     out(
       q.providers.length > 0
@@ -95,5 +99,11 @@ export async function status(sys: Sys): Promise<number> {
     );
   }
   if (hasPi(sys)) out(`Pi package: ${piPackage(sys) ? "installed" : "not installed"}`);
+  if (hasOpencode(sys)) {
+    const state = opencodeState(sys);
+    out(
+      `opencode skill and plugin: ${state === "current" ? "installed" : state === "outdated" ? "outdated (`starbridge setup` updates them)" : "not installed"}`,
+    );
+  }
   return 0;
 }

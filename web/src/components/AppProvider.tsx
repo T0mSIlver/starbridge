@@ -2,6 +2,7 @@
 
 import type { Settled } from "@starbridge/protocol";
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { api, backingOff } from "@/lib/api";
 import type { Boot, Ctx, Inbox, Quotas, Runs } from "@/lib/device";
 import {
   DEFAULT_SETTINGS,
@@ -16,10 +17,31 @@ import type { Device, InboxItem, PromptItem, PromptReply, Reply } from "@/lib/ty
 
 // The protocol code and libsodium load here, after the first paint.
 const load = () => import("@/lib/device");
+/** Pollers read while the page is visible, and skip their turn while the server is away (#332). */
+const polling = () => document.visibilityState === "visible" && !backingOff();
+
+/**
+ * A poller's read that skips its turn while the last one is still running, so requests that hang
+ * rather than fail (a captive portal, a dead route) don't pile up before the backoff starts.
+ */
+function single(read: () => Promise<unknown>): () => void {
+  let running = false;
+  return () => {
+    if (running) return;
+    running = true;
+    read()
+      .catch(() => {})
+      .finally(() => {
+        running = false;
+      });
+  };
+}
 
 export type Store = {
   boot: Boot | { state: "loading" } | { state: "error"; error: string };
   inbox: Inbox;
+  /** The inbox came back once since boot: until then, an empty one means nothing yet. */
+  inboxLoaded: boolean;
   quotas?: Quotas;
   runs?: Runs;
   /** Runs boot again, after sign-in, setup, pairing or recovery. */
@@ -28,6 +50,8 @@ export type Store = {
   /** Replaces the context after a directory write (approve, revoke). */
   update: (ctx: Ctx) => void;
   refreshQuotas: () => Promise<void>;
+  /** Asks every machine to read CodexBar again, then loads quotas: Android's pull to refresh. */
+  askQuotas: () => Promise<void>;
   /** This browser's quota settings (lib/quotaSettings.ts). */
   quotaSettings: QuotaSettings;
   setQuotaSettings: (s: QuotaSettings) => void;
@@ -41,6 +65,11 @@ export type Store = {
   deviceName: (id: string) => string;
   /** The mockups' devices, on /sample only (SampleProvider), where no device is ready. */
   sampleDevices?: Device[];
+  /**
+   * Why no machine's item shows: the server holds back directory entries a machine has seen
+   * (#362). Settings still work, so the owner can revoke.
+   */
+  withheld?: string;
 };
 
 export const StoreContext = createContext<Store | null>(null);
@@ -63,11 +92,15 @@ const QUOTA_POLL_MS = 60_000;
  */
 const QUOTA_JOIN_POLL_MS = 3_000;
 const QUOTA_JOIN_MS = 30_000;
+/** How long a refresh holds for the machines' new snapshots, as Android's QUOTA_ASK_SECONDS. */
+const QUOTA_ASK_SECONDS = 15;
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [boot, setBoot] = useState<Store["boot"]>({ state: "loading" });
   const [inbox, setInbox] = useState<Inbox>({ items: [], rejected: [] });
+  const [inboxLoaded, setInboxLoaded] = useState(false);
   const [quotas, setQuotas] = useState<Quotas>();
+  const [withheld, setWithheld] = useState<string>();
   const [quotaSettings, setSettingsState] = useState<QuotaSettings>(DEFAULT_SETTINGS);
   const settingsRef = useRef(quotaSettings);
   settingsRef.current = quotaSettings;
@@ -88,21 +121,101 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   inboxRef.current = inbox;
   const ctx = boot.state === "ready" ? boot.ctx : undefined;
 
-  const reload = useCallback(async () => {
+  /** Bumped by `forget`: a load started before it keeps nothing it read. */
+  const generation = useRef(0);
+  /** Set to `reload` below; loads call it when the server ends the session. */
+  const reloadRef = useRef<() => Promise<void>>(async () => {});
+
+  /** Drops every machine's item the page holds in memory. */
+  const forget = useCallback(() => {
+    generation.current++;
+    setInbox({ items: [], rejected: [] });
+    setPrompts([]);
+    setPromptLog(undefined);
+    setQuotas(undefined);
+    setRuns(undefined);
+  }, []);
+
+  /**
+   * Runs a load of machines' items. While the server holds back directory entries a machine has
+   * seen, every machine's items are hidden and the reason shows instead (#362).
+   */
+  const holding = useCallback(
+    async <T,>(read: () => Promise<T>): Promise<T | undefined> => {
+      const d = await load();
+      const gen = generation.current;
+      try {
+        const got = await read();
+        if (gen !== generation.current) return undefined;
+        setWithheld(undefined);
+        return got;
+      } catch (e) {
+        // The server ended this session: revoked, signed out elsewhere or expired. Boot says which.
+        if (e instanceof d.ApiError && e.status === 401) {
+          reloadRef.current();
+          return undefined;
+        }
+        if (!(e instanceof d.Withheld)) throw e;
+        setWithheld(e.message);
+        // Their buttons would still offer answers the hold refuses.
+        const reg = await navigator.serviceWorker?.getRegistration("/").catch(() => undefined);
+        for (const n of (await reg?.getNotifications().catch(() => [])) ?? []) n.close();
+        // From the start once the hold ends: the cursor moved past what is hidden now.
+        forget();
+        return undefined;
+      }
+    },
+    [forget],
+  );
+
+  const boot1 = useCallback(async (): Promise<Store["boot"]["state"]> => {
     try {
       const d = await load();
       const b = await d.boot();
       setBoot(b);
+      // Signed out, revoked or broken: nothing decrypted stays behind the page that says so.
+      if (b.state !== "ready") {
+        forget();
+        settledRef.current = { byKey: new Map() };
+      }
       if (b.state === "ready") {
-        setInbox(await d.loadInbox(b.ctx));
+        const loaded = await holding(() => d.loadInbox(b.ctx));
+        if (loaded) setInbox(loaded);
+        setInboxLoaded(true);
         const push = await import("@/lib/push");
         push.registerWorker();
         push.resubscribe().catch(() => {});
       }
+      return b.state;
     } catch (e) {
       setBoot({ state: "error", error: e instanceof Error ? e.message : String(e) });
+      return "error";
     }
-  }, []);
+  }, [forget, holding]);
+
+  // One boot at a time: every poller that meets a 401 asks for one, and a second boot after the
+  // first deleted a revoked browser's keys would replace "removed by" with Join. A request during
+  // a boot that ended ready boots once more.
+  const reloading = useRef<Promise<void>>(undefined);
+  const again = useRef(false);
+  const reload = useCallback(() => {
+    if (reloading.current) {
+      again.current = true;
+      return reloading.current;
+    }
+    const run = async () => {
+      let state: Store["boot"]["state"];
+      do {
+        again.current = false;
+        state = await boot1();
+      } while (again.current && state === "ready");
+    };
+    reloading.current = run().finally(() => {
+      reloading.current = undefined;
+    });
+    return reloading.current;
+  }, [boot1]);
+  reloadRef.current = reload;
 
   useEffect(() => {
     reload();
@@ -115,7 +228,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const was = ctxRef.current;
     if (!was) return undefined;
     const d = await load();
-    const fresh = await d.reverify(was);
+    let fresh: Awaited<ReturnType<typeof d.reverify>>;
+    try {
+      fresh = await d.reverify(was);
+    } catch (e) {
+      // The server ended this session: revoked, signed out elsewhere or expired. Boot says which.
+      if (!(e instanceof d.ApiError && e.status === 401)) throw e;
+      reload();
+      return undefined;
+    }
     if (!fresh) {
       // Revoked from another device: boot shows why.
       await reload();
@@ -130,8 +251,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const fresh = await current();
     if (!fresh) return;
     const d = await load();
-    setInbox(await d.loadInbox(fresh, inboxRef.current));
-  }, [current]);
+    const loaded = await holding(() => d.loadInbox(fresh, inboxRef.current));
+    if (loaded) setInbox(loaded);
+  }, [current, holding]);
 
   /**
    * Reads the open prompts and the settled notices since the last read. A prompt that left the
@@ -141,10 +263,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const fresh = await current();
     if (!fresh) return;
     const d = await load();
-    const [open, notices] = await Promise.all([
-      d.loadPrompts(fresh),
-      d.loadSettled(fresh, settledRef.current.cursor),
-    ]);
+    const read = await holding(() =>
+      Promise.all([d.loadPrompts(fresh), d.loadSettled(fresh, settledRef.current.cursor)]),
+    );
+    if (!read) return;
+    const [open, notices] = read;
     const byKey = settledRef.current.byKey;
     for (const [k, v] of notices.settled) byKey.set(k, v);
     settledRef.current.cursor = notices.cursor;
@@ -163,18 +286,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       };
       return [...open, ...closed].map(withNotice);
     });
-  }, [current]);
+  }, [current, holding]);
 
   const fetchQuotas = useCallback(async () => {
     const fresh = await current();
     if (!fresh) return;
     const d = await load();
-    const next = await d.loadQuotas(fresh);
+    const next = await holding(() => d.loadQuotas(fresh));
+    if (!next) return;
     setQuotas(next);
     await notifyAlerts(next.cards, settingsRef.current);
     return next;
-  }, [current]);
+  }, [current, holding]);
   const refreshQuotas = useCallback(async () => {
+    await fetchQuotas();
+  }, [fetchQuotas]);
+  const askQuotas = useCallback(async () => {
+    // Asked too often, offline, or a server without asks: the load shows what the server holds.
+    await api.askQuota(QUOTA_ASK_SECONDS).catch(() => {});
     await fetchQuotas();
   }, [fetchQuotas]);
 
@@ -183,15 +312,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (!ctx) return;
     const started = Date.now();
     let soon: ReturnType<typeof setTimeout> | undefined;
+    const read = single(() =>
+      fetchQuotas().then((next) => {
+        clearTimeout(soon);
+        if (next?.cards.length === 0 && Date.now() - started < QUOTA_JOIN_MS)
+          soon = setTimeout(tick, QUOTA_JOIN_POLL_MS);
+      }),
+    );
     const tick = () => {
-      if (document.visibilityState === "visible" || settingsRef.current.notify.length > 0)
-        fetchQuotas()
-          .then((next) => {
-            clearTimeout(soon);
-            if (next?.cards.length === 0 && Date.now() - started < QUOTA_JOIN_MS)
-              soon = setTimeout(tick, QUOTA_JOIN_POLL_MS);
-          })
-          .catch(() => {});
+      if (backingOff()) return;
+      if (document.visibilityState === "visible" || settingsRef.current.notify.length > 0) read();
     };
     tick();
     const timer = setInterval(tick, QUOTA_POLL_MS);
@@ -205,14 +335,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const fresh = await current();
     if (!fresh) return;
     const d = await load();
-    setRuns(await d.loadRuns(fresh));
-  }, [current]);
+    const next = await holding(() => d.loadRuns(fresh));
+    if (next) setRuns(next);
+  }, [current, holding]);
 
   const runLive = !!runs?.items.some((i) => runState(i.run, Date.now()) === "running");
   useEffect(() => {
     if (!ctx) return;
+    const read = single(refreshRuns);
     const tick = () => {
-      if (document.visibilityState === "visible") refreshRuns().catch(() => {});
+      if (polling()) read();
     };
     tick();
     const timer = setInterval(tick, runLive ? LIVE_RUNS_POLL_MS : RUNS_POLL_MS);
@@ -226,10 +358,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // Poll while the page is visible, and refresh as soon as the service worker sees a push.
   useEffect(() => {
     if (!ctx) return;
+    const readInbox = single(refreshInbox);
+    const readPrompts = single(refreshPrompts);
     const tick = () => {
-      if (document.visibilityState !== "visible") return;
-      refreshInbox().catch(() => {});
-      refreshPrompts().catch(() => {});
+      if (!polling()) return;
+      readInbox();
+      readPrompts();
     };
     const timer = setInterval(tick, POLL_MS);
     refreshPrompts().catch(() => {});
@@ -244,11 +378,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (e.data.kind !== "quota" && e.data.kind !== "permission") refreshInbox().catch(() => {});
     };
     document.addEventListener("visibilitychange", tick);
+    // Back online: read at once rather than at the next tick (lib/api.ts ends its backoff too).
+    window.addEventListener("online", tick);
     navigator.serviceWorker?.addEventListener("message", onMessage);
     unlockSound();
     return () => {
       clearInterval(timer);
       document.removeEventListener("visibilitychange", tick);
+      window.removeEventListener("online", tick);
       navigator.serviceWorker?.removeEventListener("message", onMessage);
     };
   }, [ctx, refreshInbox, refreshQuotas, refreshPrompts]);
@@ -257,8 +394,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const busy = prompts.length > 0;
   useEffect(() => {
     if (!ctx || !busy) return;
+    const read = single(refreshPrompts);
     const timer = setInterval(() => {
-      if (document.visibilityState === "visible") refreshPrompts().catch(() => {});
+      if (polling()) read();
     }, PROMPT_POLL_MS);
     return () => clearInterval(timer);
   }, [ctx, busy, refreshPrompts]);
@@ -277,20 +415,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         );
       } catch (e) {
         // Settled at the keyboard or answered elsewhere meanwhile: show where.
+        if (e instanceof d.ApiError && e.status === 401) reload();
         if (e instanceof d.ApiError && (e.code === "already-answered" || e.code === "expired"))
           await refreshPrompts();
         else throw e;
       }
     },
-    [ctx, refreshPrompts],
+    [ctx, refreshPrompts, reload],
   );
 
   const loadPromptLog = useCallback(async () => {
     const fresh = await current();
     if (!fresh) return;
     const d = await load();
-    setPromptLog(await d.loadPromptLog(fresh));
-  }, [current]);
+    const log = await holding(() => d.loadPromptLog(fresh));
+    if (log) setPromptLog(log);
+  }, [current, holding]);
 
   const deviceName = useCallback(
     (id: string) =>
@@ -312,11 +452,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }));
       } catch (e) {
         // Answered on another device in the meantime: show it answered.
+        if (e instanceof d.ApiError && e.status === 401) reload();
         if (e instanceof d.ApiError && e.code === "already-answered") await refreshInbox();
         else throw e;
       }
     },
-    [ctx, refreshInbox],
+    [ctx, refreshInbox, reload],
   );
 
   const update = useCallback((next: Ctx) => setBoot({ state: "ready", ctx: next }), []);
@@ -326,12 +467,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       value={{
         boot,
         inbox,
+        inboxLoaded,
         quotas,
         runs,
         reload,
         answer,
         update,
         refreshQuotas,
+        askQuotas,
         quotaSettings,
         setQuotaSettings,
         prompts,
@@ -339,6 +482,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         promptLog,
         loadPromptLog,
         deviceName,
+        withheld,
       }}
     >
       {children}

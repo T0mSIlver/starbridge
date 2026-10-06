@@ -1,0 +1,29 @@
+# The demo server for Play reviewers (#423), at https://demo.starbridge.run. A project of its
+# own, apart from prod's: `sudo docker compose -p starbridge-demo -f /opt/starbridge-demo/deploy/demo/compose.yaml`.
+# deploy/demo/deploy.sh unpacks the repository to /opt/starbridge-demo and builds the image there.
+services:
+  demo:
+    build:
+      context: ../..
+      dockerfile: deploy/demo/Dockerfile
+    image: starbridge-demo:latest
+    restart: unless-stopped
+    init: true
+    # OWNER_TOKEN, copied by deploy.sh from ~/.config/starbridge/secrets/demo-owner-token.
+    env_file: /etc/starbridge-demo/demo.env
+    environment:
+      PUBLIC_URL: https://demo.starbridge.run
+      TRUST_PROXY: "1"
+      # Pushes go through prod's relay, as on any self-hosted server: the app shows new items
+      # on a push. The relay counts them in prod's daily usage rows.
+      RELAY_URL: https://starbridge.run
+    # No volume: the database and the demo machine's keys live here and go with each restart.
+    tmpfs:
+      - /tmp:uid=1000,gid=1000,mode=700,size=64m
+    mem_limit: 384m
+    # Prod's Caddy reaches it here (deploy/Caddyfile).
+    ports:
+      - "127.0.0.1:8090:8080"
+    logging:
+      driver: json-file
+      options: { max-size: 10m, max-file: "3" }

@@ -26,6 +26,7 @@ import dev.starbridge.app.protocol.Envelopes
 import dev.starbridge.app.protocol.Joins
 import dev.starbridge.app.protocol.Pairings
 import dev.starbridge.app.protocol.Sodium
+import dev.starbridge.app.push.AnswerWorker
 import dev.starbridge.app.push.Notifier
 import dev.starbridge.app.push.Pusher
 import kotlinx.coroutines.CoroutineScope
@@ -71,6 +72,7 @@ object AppModule {
             defaultServer = BuildConfig.DEFAULT_SERVER,
             fcmAvailable = FirebaseApp.getApps(context).isNotEmpty(),
             scope = scope,
+            wakeWhenOnline = { AnswerWorker.schedule(context) },
         )
     }
 

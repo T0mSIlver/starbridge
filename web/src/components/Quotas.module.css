@@ -137,3 +137,50 @@
   font-weight: 400;
   white-space: normal;
 }
+
+/* The refresh button: in the phone bar a 48 px tap area around a 32 px icon slot, beside
+   "Updated" from 600 px, where a pointer needs less. */
+.refresh {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 48px;
+  height: 48px;
+  margin: calc(-1 * var(--s2)) calc(-1 * var(--s3));
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--fg2);
+  cursor: pointer;
+}
+
+.refresh:hover {
+  color: var(--fg);
+}
+
+.busy svg {
+  animation: turn 0.9s linear infinite;
+}
+
+@keyframes turn {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .busy svg {
+    animation: none;
+    opacity: 0.5;
+  }
+}
+
+@media (min-width: 600px) {
+  .refresh {
+    width: var(--s8);
+    height: var(--s8);
+    margin: calc(-1 * var(--s2)) calc(-1 * var(--s2)) calc(-1 * var(--s2)) 0;
+    align-self: center;
+  }
+}

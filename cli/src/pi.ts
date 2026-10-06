@@ -5,7 +5,7 @@
  * an interactive session that gets its answers as prompts from `pi -p` or a Pi without it, even
  * a `pi -p` started from that session's shell, which inherits the variable.
  */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { Ctx } from "./context";
 
@@ -82,4 +82,111 @@ export function chainPiLink(file: string) {
     file,
     `${JSON.stringify({ ...config, authorizerChain: [...chain, PI_LINK] }, null, 2)}\n`,
   );
+}
+
+/**
+ * The `permission.bash` patterns that let an agent reach the owner without a prompt: the
+ * commands setup lets run in Claude Code (allow rules) and Codex (`starbridge.rules`).
+ */
+export const PI_ALLOW = ["ask", "waiting", "working", "wait", "settle"].map(
+  (c) => `starbridge ${c} *`,
+);
+
+type Config = Record<string, unknown>;
+const isObject = (v: unknown): v is Config =>
+  typeof v === "object" && v !== null && !Array.isArray(v);
+
+/** pi-permission-system's config, `{}` when there is none; undefined when it is not plain JSON. */
+function readConfig(file: string): Config | undefined {
+  if (!existsSync(file)) return {};
+  try {
+    const config = JSON.parse(readFileSync(file, "utf8")) as unknown;
+    return isObject(config) ? config : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function writeConfig(file: string, config: Config) {
+  mkdirSync(dirname(file), { recursive: true });
+  writeFileSync(file, `${JSON.stringify(config, null, 2)}\n`);
+}
+
+/**
+ * Whether pi-permission-system lets the starbridge commands run: `absent` and `unreadable` as
+ * for `piChain`, also `unreadable` when `permission` or its `bash` has a shape this command
+ * does not rewrite.
+ */
+export function piAllow(env: Ctx["env"]): {
+  state: "absent" | "allowed" | "missing" | "unreadable";
+  file: string;
+} {
+  const { state, file } = piChain(env);
+  if (state === "absent" || state === "unreadable") return { state, file };
+  const bash = bashRules(readConfig(file));
+  if (bash === undefined) return { state: "unreadable", file };
+  // Last, since the last match wins: a later pattern of the owner's could shadow them.
+  const tail = Object.entries(bash).slice(-PI_ALLOW.length);
+  const allowed = PI_ALLOW.every((p, i) => tail[i]?.[0] === p && tail[i]?.[1] === "allow");
+  return { state: allowed ? "allowed" : "missing", file };
+}
+
+/**
+ * `permission.bash` as a pattern map; undefined for any other shape. A plain level is left to
+ * the owner: as `{"*": level}` it would merge with a project's bash map instead of giving way.
+ */
+function bashRules(config: Config | undefined): Config | undefined {
+  if (!config) return undefined;
+  const permission = config.permission ?? {};
+  if (!isObject(permission)) return undefined;
+  const bash = permission.bash ?? {};
+  return isObject(bash) ? bash : undefined;
+}
+
+/**
+ * Adds PI_ALLOW to `permission.bash`, a pattern map or none, after the owner's own patterns
+ * since the last match wins, keeping the rest of the file.
+ */
+export function allowPiCommands(file: string) {
+  const config = readConfig(file) ?? {};
+  const bash = { ...bashRules(config) };
+  for (const p of PI_ALLOW) delete bash[p];
+  for (const p of PI_ALLOW) bash[p] = "allow";
+  const permission = isObject(config.permission) ? config.permission : {};
+  writeConfig(file, { ...config, permission: { ...permission, bash } });
+}
+
+/**
+ * Takes out what setup and `config permissions on` added to pi-permission-system's config: the
+ * Starbridge link in `authorizerChain` and the PI_ALLOW patterns, dropping a list, map or file
+ * they leave empty. Returns whether it changed the file.
+ */
+export function removePiEntries(env: Ctx["env"]): boolean {
+  const file = piPermissionConfig(env);
+  if (!existsSync(file)) return false;
+  const config = readConfig(file);
+  if (!config) return false;
+  let changed = false;
+  const chain = config.authorizerChain;
+  if (Array.isArray(chain) && chain.includes(PI_LINK)) {
+    const rest = chain.filter((l) => l !== PI_LINK);
+    if (rest.length > 0) config.authorizerChain = rest;
+    else delete config.authorizerChain;
+    changed = true;
+  }
+  const permission = config.permission;
+  const bash = isObject(permission) ? permission.bash : undefined;
+  if (isObject(permission) && isObject(bash)) {
+    for (const p of PI_ALLOW)
+      if (bash[p] === "allow") {
+        delete bash[p];
+        changed = true;
+      }
+    if (Object.keys(bash).length === 0) delete permission.bash;
+    if (Object.keys(permission).length === 0) delete config.permission;
+  }
+  // Left empty, it is the file setup created: an empty config and none mean the same.
+  if (changed && Object.keys(config).length === 0) rmSync(file, { force: true });
+  else if (changed) writeConfig(file, config);
+  return changed;
 }
