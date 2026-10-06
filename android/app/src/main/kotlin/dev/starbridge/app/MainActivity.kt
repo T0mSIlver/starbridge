@@ -21,6 +21,11 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Scaffold
+import androidx.compose.ui.Modifier
+import dev.starbridge.app.ui.setup.Installer
+import dev.starbridge.app.ui.setup.UpdateRequired
 import androidx.core.net.toUri
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -84,7 +89,11 @@ class MainActivity : ComponentActivity() {
                         store.refresh(shown = false)
                     }
                 }
-                if (phase == Phase.Ready) {
+                val tooOld by store.tooOld.collectAsStateWithLifecycle()
+                // Signed out, the owner may pick another server instead: the refusal shows as a notice.
+                if (tooOld != null && phase != Phase.SignedOut) {
+                    Scaffold { padding -> UpdateRequired(tooOld!!, BuildConfig.VERSION_NAME, installer(), ::openUpdate, Modifier.padding(padding)) }
+                } else if (phase == Phase.Ready) {
                     Main(decisions, store.notice, store::dismissNotice, opening.receiveAsFlow())
                     val asks by store.joinAsks.collectAsStateWithLifecycle()
                     val comparison by store.comparison.collectAsStateWithLifecycle()
@@ -139,11 +148,31 @@ class MainActivity : ComponentActivity() {
         splashScreen.setSplashScreenTheme(if (colours == Colours.Wallpaper) R.style.Theme_Starbridge_Starting_Wallpaper else Resources.ID_NULL)
     }
 
+    /** Who installed this app, by the installer's package name. */
+    private fun installer(): Installer = when (runCatching { packageManager.getInstallSourceInfo(packageName).installingPackageName }.getOrNull()) {
+        "com.android.vending" -> Installer.Play
+        in OBTAINIUM -> Installer.Obtainium
+        else -> Installer.Other
+    }
+
+    /** Opens where this app updates: its Play listing, Obtainium, or the latest GitHub release. */
+    private fun openUpdate() {
+        val intent = when (installer()) {
+            Installer.Play -> Intent(Intent.ACTION_VIEW, "market://details?id=$packageName".toUri())
+            Installer.Obtainium -> OBTAINIUM.firstNotNullOfOrNull { packageManager.getLaunchIntentForPackage(it) }
+            Installer.Other -> null
+        }
+        if (intent == null || runCatching { startActivity(intent) }.isFailure) runCatching { openInBrowser(RELEASES) }
+    }
+
     private fun openInBrowser(url: String) {
         CustomTabsIntent.Builder().build().launchUrl(this, url.toUri())
     }
 
     companion object {
+        /** Obtainium, as its GitHub and F-Droid builds name it. */
+        private val OBTAINIUM = setOf("dev.imranr.obtainium", "dev.imranr.obtainium.fdroid")
+        private const val RELEASES = "https://github.com/T0mSIlver/starbridge/releases/latest"
         const val EXTRA_DECISION = "decision"
         const val EXTRA_PROMPT = "prompt"
     }

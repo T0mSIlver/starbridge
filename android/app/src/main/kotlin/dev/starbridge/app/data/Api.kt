@@ -32,7 +32,10 @@ import kotlin.coroutines.resumeWithException
 import java.util.concurrent.TimeUnit
 
 /** A refusal from the server: its status and `{error, detail}` (PROTOCOL.md, "HTTP API"). */
-class ApiException(val status: Int, val error: String, detail: String?) : IOException(detail?.let { "$error: $it" } ?: "$error ($status)")
+open class ApiException(val status: Int, val error: String, detail: String?) : IOException(detail?.let { "$error: $it" } ?: "$error ($status)")
+
+/** The server no longer serves this release: it needs [minimum] or later (426 `client-too-old`). */
+class TooOld(val minimum: String?) : ApiException(426, "client-too-old", "this server needs ${minimum ?: "a newer release"} or later")
 
 @Serializable
 data class Me(val account: String, val member: String?, val role: String)
@@ -117,7 +120,7 @@ class Api(private val http: OkHttpClient, private val server: String, private va
                 val o = parsed as? JsonObject
                 val error = o?.get("error")?.jsonPrimitive?.content ?: "http-$code"
                 // The server no longer serves this release (PROTOCOL.md, "HTTP API").
-                if (code == 426) throw ApiException(code, error, "update Starbridge from Google Play: this server needs ${o?.get("minimum")?.jsonPrimitive?.content ?: "a newer release"} or later")
+                if (code == 426 && error == "client-too-old") throw TooOld(o?.get("minimum")?.jsonPrimitive?.content)
                 throw ApiException(code, error, o?.get("detail")?.jsonPrimitive?.content)
             }
             code to parsed
