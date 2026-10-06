@@ -2454,7 +2454,7 @@ goes in git.
   `env.NODE_AUTH_TOKEN` empty in that step's `if` when `NPM_TOKEN` is unset.
   actions/setup-node v7.0.0 (the pinned `8207627`) exports `NODE_AUTH_TOKEN`
   only when the caller set it (`src/authutil.ts:49-52`); the
-  `XXXXX-XXXXX-XXXXX-XXXXX` placeholder went in setup-node#1558. And
+  `XXXXX-XXXXX-XXXXX-XXXXX` placeholder was removed in setup-node#1558. And
   actions/runner merges the step's own `env` into the `env` context
   (`src/Runner.Worker/StepsRunner.cs:106-129`, main at `67f01c2`) before it
   evaluates the step's `if` (`:200-221`), so the step's empty value would
