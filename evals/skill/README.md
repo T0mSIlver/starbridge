@@ -17,8 +17,8 @@ bun evals/skill/render.ts --out evals/skill/cards evals/skill/results/claude/aft
 git project with a bare remote, and a `gh` that prints canned output. Nothing touches your own
 `~/.claude`, `~/.codex` or `~/.pi`. Claude Code loads the plugin with `--plugin-dir`; Codex
 gets the skill in `$CODEX_HOME/skills` and the rule in `$CODEX_HOME/AGENTS.md`; Pi loads the
-Starbridge extension and skill with `-e` and `--skill`. Pi on an `anthropic/` model gets your
-Claude access token; Anthropic bills a third-party harness on a subscription as extra usage. Situations with a
+Starbridge extension and skill with `-e` and `--skill`. Pi uses the providers in `~/.pi/agent`;
+Anthropic bills a Claude subscription used from Pi as extra usage, so Pi runs on another model. Situations with a
 follow-up answer the card with its recommended option, in the line the mod submits, and check
 that the agent acts on it.
 

@@ -13,11 +13,8 @@
  * `--plugin-dir`; Codex gets the skill in `$CODEX_HOME/skills` and the SessionStart rule in
  * `$CODEX_HOME/AGENTS.md`; Pi loads the Starbridge Pi extension and skill with `-e` and `--skill`.
  *
- * Models: Claude Code defaults to claude-sonnet-5-5 and Codex to its own default. Pi takes
- * `provider/id`, default anthropic/claude-sonnet-5-5: an `anthropic/` model gets the owner's
- * Claude access token (not the refresh token), any other the providers of `~/.pi/agent`.
- *
- * Writes one JSON record per run to `--out`; grade.ts scores them.
+ * Models: Claude Code defaults to claude-sonnet-5-5, Codex to its own default and Pi to
+ * zai/glm-5.3-flash (`provider/id`, with the providers of `~/.pi/agent`).
  */
 import { spawnSync } from "node:child_process";
 import {
@@ -55,7 +52,7 @@ const { values: opt } = parseArgs({
 const agent = opt.agent as "claude" | "codex" | "pi";
 const model =
   opt.model ??
-  { claude: "claude-sonnet-5-5", codex: undefined, pi: "anthropic/claude-sonnet-5-5" }[agent];
+  { claude: "claude-sonnet-5-5", codex: undefined, pi: "zai/glm-5.3-flash" }[agent];
 const repo = join(import.meta.dir, "..", "..");
 const out = opt.out ?? join(import.meta.dir, "results", agent);
 mkdirSync(out, { recursive: true });
@@ -392,13 +389,8 @@ async function one(s: Scenario, arm: string, rep: number): Promise<RunRecord> {
   // The agent's login, copied into its throwaway config; the plugin or skill under test.
   const armDir = arms[arm] as string;
   const plugin = join(armDir, "plugin");
-  const login: Record<string, string> = {};
   if (agent === "claude") copyFileSync(join(homedir(), ".claude/.credentials.json"), join(cfg, ".credentials.json"));
   else if (agent === "pi") {
-    if (model?.startsWith("anthropic/"))
-      login.ANTHROPIC_OAUTH_TOKEN = JSON.parse(
-        readFileSync(join(homedir(), ".claude/.credentials.json"), "utf8"),
-      ).claudeAiOauth.accessToken;
     for (const f of ["models.json", "auth.json"])
       if (existsSync(join(homedir(), ".pi/agent", f)))
         copyFileSync(join(homedir(), ".pi/agent", f), join(cfg, f));
@@ -426,7 +418,6 @@ async function one(s: Scenario, arm: string, rep: number): Promise<RunRecord> {
     GIT_COMMITTER_NAME: "dev",
     GIT_COMMITTER_EMAIL: "dev@example.com",
     ...{ claude: { CLAUDE_CONFIG_DIR: cfg }, codex: { CODEX_HOME: cfg }, pi: { PI_CODING_AGENT_DIR: cfg } }[agent],
-    ...login,
   };
 
   const live = await LiveServer.start();
