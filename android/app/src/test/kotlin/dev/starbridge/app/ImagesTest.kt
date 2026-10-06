@@ -36,4 +36,12 @@ class ImagesTest {
         assertNotNull(b)
         assertTrue("${b!!.width}", b.width < 512)
     }
+
+    // The viewer asks for 4096 px a side; a larger image still decodes under 64 MB.
+    @Test
+    fun aDecodeHoldsAtMost4096SquaredPixels() {
+        val b = Image(png(4100), 4100, 4100).bitmap(8192)
+        assertNotNull(b)
+        assertTrue("${b!!.width}", b.width.toLong() * b.height <= 4096L * 4096)
+    }
 }
