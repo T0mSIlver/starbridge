@@ -1,3 +1,5 @@
+import { type ClientName, isMinimumRelease } from "@starbridge/protocol";
+import { MINIMUM_RELEASES } from "./clients";
 import { DEFAULT_LIMITS, type Limits } from "./limits";
 
 /** Everything the server reads from its environment. Tests build this object directly. */
@@ -57,6 +59,8 @@ export interface Config {
   revision?: string;
   /** Rate limits, caps and retention; tests lower them. */
   limits: Limits;
+  /** The oldest release served per client (`MINIMUM_RELEASES`); tests set their own. */
+  minimumReleases: Partial<Record<ClientName, string>>;
 }
 
 type Env = Record<string, string | undefined>;
@@ -120,8 +124,12 @@ export function configFromEnv(env: Env = process.env): Config {
     demo: flag(env.DEMO),
     revision: env.STARBRIDGE_REVISION || undefined,
     limits: DEFAULT_LIMITS,
+    minimumReleases: MINIMUM_RELEASES,
   };
   if (config.demo) checkDemo(config);
+  for (const [name, minimum] of Object.entries(config.minimumReleases))
+    if (!isMinimumRelease(minimum))
+      throw new Error(`minimum ${name} release: not MAJOR.MINOR.PATCH`);
   return config;
 }
 

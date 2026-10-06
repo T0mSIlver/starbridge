@@ -69,6 +69,18 @@ class NotifierTest {
         }
     }
 
+    // A tablet in landscape: the shade is a fixed-width panel or a split column, much narrower than
+    // the display, so a command that fits the display's width still opens the sheet (#490).
+    @Test
+    @Config(qualifiers = "w1280dp-h800dp-xhdpi")
+    fun aWideDisplayCountsOnlyAPhonesLine() {
+        val short = fake.prompts.first()
+        val mid = short.copy(input = """{"command":"${"x".repeat(60)}"}""", summary = "x".repeat(60))
+        assertTrue(mid.fitsRow)
+        assertTrue(notifier.fitsLine(short))
+        assertFalse(notifier.fitsLine(mid))
+    }
+
     // Trojan Source: the bidi controls show as escapes, so the text reads in the order it runs (#357).
     @Test
     fun bidiAndInvisibleCharactersShowAsEscapes() {

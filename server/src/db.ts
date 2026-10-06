@@ -1,9 +1,12 @@
 import { Database } from "bun:sqlite";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
-import { DEFAULT_LIMITS } from "./limits";
 
-const SCHEMA = `
+/**
+ * The 1.0.0 schema. `IF NOT EXISTS` lets version 1 adopt a database this server made before it
+ * counted versions, which already holds exactly these tables.
+ */
+const V1 = `
 CREATE TABLE IF NOT EXISTS accounts (
   id TEXT PRIMARY KEY,
   github_id INTEGER UNIQUE,
@@ -183,37 +186,42 @@ CREATE TABLE IF NOT EXISTS usage_days (
 );
 `;
 
+/**
+ * Schema changes, in order; `PRAGMA user_version` counts those a database has run. Append only:
+ * a shipped migration never changes. A migration changes the schema and never rewrites rows, so
+ * it runs well within the 30 s Caddy holds requests while the server restarts; a backfill runs in
+ * the hourly sweep instead.
+ */
+const MIGRATIONS = [V1];
+
 export function openDb(path: string): Database {
   if (path !== ":memory:") mkdirSync(dirname(path), { recursive: true });
   const db = new Database(path, { strict: true });
   db.run("PRAGMA journal_mode = WAL");
   db.run("PRAGMA foreign_keys = ON");
   db.run("PRAGMA busy_timeout = 5000");
-  db.transaction(() => {
-    const totals = db.query("SELECT 1 FROM sqlite_master WHERE name = 'item_totals'").get();
-    db.run(SCHEMA);
-    // Databases made before items had a size; their old items count as empty until swept.
-    const columns = db.query("PRAGMA table_info(items)").all() as { name: string }[];
-    if (!columns.some((col) => col.name === "size"))
-      db.run("ALTER TABLE items ADD COLUMN size INTEGER NOT NULL DEFAULT 0");
-    // Databases made before pairings had a client.
-    const pairingColumns = db.query("PRAGMA table_info(pairings)").all() as { name: string }[];
-    if (!pairingColumns.some((col) => col.name === "client"))
-      db.run("ALTER TABLE pairings ADD COLUMN client TEXT NOT NULL DEFAULT ''");
-    // Databases made before item_totals, whose sizes counted boxes only: charge the rows too,
-    // then count what they hold, once.
-    if (!totals) {
-      db.query(
-        `UPDATE items SET size = size + ? * (1 + (SELECT COUNT(*) FROM boxes b
-           WHERE b.account_id = items.account_id AND b.item_id = items.id))`,
-      ).run(DEFAULT_LIMITS.rowBytes);
-      db.run(
-        `INSERT INTO item_totals (account_id, kind, n, bytes)
-         SELECT account_id, kind, COUNT(*), SUM(size) FROM items GROUP BY account_id, kind`,
-      );
-    }
-  })();
+  migrate(db, MIGRATIONS);
   return db;
+}
+
+/**
+ * Runs the migrations `db` lacks, each in its own transaction with the version it reaches. A
+ * database newer than this server knows is refused, so a rolled-back server fails at start
+ * rather than write rows a newer schema reads wrong.
+ */
+export function migrate(db: Database, migrations: readonly string[]): void {
+  const { user_version: at } = db.query("PRAGMA user_version").get() as { user_version: number };
+  if (at > migrations.length) {
+    db.close();
+    throw new Error(
+      `the database is at schema ${at}, newer than this server's ${migrations.length}: run the release that wrote it, or restore a backup`,
+    );
+  }
+  for (let v = at; v < migrations.length; v++)
+    db.transaction(() => {
+      db.run(migrations[v] as string);
+      db.run(`PRAGMA user_version = ${v + 1}`);
+    })();
 }
 
 /** The next change sequence number. Call inside a transaction. */
