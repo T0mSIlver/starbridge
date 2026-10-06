@@ -31,8 +31,11 @@ import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import java.util.concurrent.TimeUnit
 
-/** A refusal from the server: its status and `{error, detail}` (PROTOCOL.md, "HTTP API"). */
-open class ApiException(val status: Int, val error: String, detail: String?) : IOException(detail?.let { "$error: $it" } ?: "$error ($status)")
+/**
+ * A refusal from the server: its status and `{error, detail}` (PROTOCOL.md, "HTTP API"), and a
+ * 429's `Retry-After` in ms.
+ */
+open class ApiException(val status: Int, val error: String, detail: String?, val retryAfterMs: Long? = null) : IOException(detail?.let { "$error: $it" } ?: "$error ($status)")
 
 /** The server no longer serves this release: it needs [minimum] or later (426 `client-too-old`). */
 class TooOld(val minimum: String?) : ApiException(426, "client-too-old", "this server needs ${minimum ?: "a newer release"} or later")
@@ -77,6 +80,15 @@ data class JoinList(val joins: List<JoinView>, val cursor: String)
  */
 const val RETRY_FOR_MS = 20_000L
 
+/**
+ * Until when a 429 with `Retry-After`, from Caddy's per-address limit (#582) or the server's, holds
+ * every call of this app, a call's first try included: the server is up and said when to come back
+ * (#645). Such a call is retried whatever its method, since the request was refused before it did
+ * anything.
+ */
+@Volatile
+internal var limitedUntil = 0L
+
 /** The server's routes this client uses, as PROTOCOL.md lists them. */
 class Api(private val http: OkHttpClient, private val server: String, private val session: String?) {
     private val json = "application/json".toMediaType()
@@ -85,9 +97,20 @@ class Api(private val http: OkHttpClient, private val server: String, private va
         val started = System.currentTimeMillis()
         var wait = 250L
         while (true) {
+            val limited = limitedUntil - System.currentTimeMillis()
+            if (limited > 0) {
+                if (System.currentTimeMillis() - started + limited > RETRY_FOR_MS) throw ApiException(429, "rate-limited", "too many requests; retry later")
+                delay(limited)
+                continue
+            }
             try {
                 return once(method, path, body, headers, client)
             } catch (e: IOException) {
+                if (e is ApiException && e.status == 429 && e.retryAfterMs != null) {
+                    // Jitter spreads this app's calls past the limit's window, not into its first moment.
+                    limitedUntil = maxOf(limitedUntil, System.currentTimeMillis() + (e.retryAfterMs * (1 + Math.random() / 4)).toLong())
+                    continue
+                }
                 val transient = when (e) {
                     is ApiException -> e.status == 502 || e.status == 503
                     // Refused: the request never left. Any other failure may have reached the
@@ -114,30 +137,35 @@ class Api(private val http: OkHttpClient, private val server: String, private va
                     headers.forEach { (k, v) -> header(k, v) }
                 }
                 .build()
-            val (code, text) = client.newCall(request).await()
+            val (code, text, retryAfter) = client.newCall(request).await()
             val parsed = text.takeIf { it.isNotBlank() }?.let { runCatching { ProtocolJson.parseToJsonElement(it) }.getOrNull() }
             if (code !in 200..299) {
                 val o = parsed as? JsonObject
                 val error = o?.get("error")?.jsonPrimitive?.content ?: "http-$code"
                 // The server no longer serves this release (PROTOCOL.md, "HTTP API").
                 if (code == 426 && error == "client-too-old") throw TooOld(o?.get("minimum")?.jsonPrimitive?.content)
-                throw ApiException(code, error, o?.get("detail")?.jsonPrimitive?.content)
+                throw ApiException(code, error, o?.get("detail")?.jsonPrimitive?.content, retryAfter.takeIf { code == 429 })
             }
             code to parsed
         }
 
     /** Runs the call on OkHttp's threads; cancelling the coroutine cancels the call, body read included. */
-    private suspend fun Call.await(): Pair<Int, String> = suspendCancellableCoroutine { cont ->
+    private suspend fun Call.await(): Triple<Int, String, Long?> = suspendCancellableCoroutine { cont ->
         cont.invokeOnCancellation { cancel() }
         enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) = cont.resumeWithException(e)
 
             override fun onResponse(call: Call, response: Response) {
-                val result = runCatching { response.use { it.code to it.body.string() } }
+                val result = runCatching { response.use { Triple(it.code, it.body.string(), retryAfterMs(it)) } }
                 result.fold({ cont.resume(it) }, { cont.resumeWithException(it) })
             }
         })
     }
+
+    /** `Retry-After` in ms, from seconds or an HTTP date; null when absent or unreadable. */
+    private fun retryAfterMs(response: Response): Long? =
+        response.header("retry-after")?.trim()?.toLongOrNull()?.times(1000)
+            ?: response.headers.getDate("retry-after")?.let { maxOf(0L, it.time - System.currentTimeMillis()) }
 
     private suspend inline fun <reified T> get(path: String): T = ProtocolJson.decodeFromJsonElement(call("GET", path).second!!)
 

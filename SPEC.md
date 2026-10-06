@@ -720,6 +720,10 @@ first window, so a provider with a window running out leads.
 - **Restarts go unnoticed** (#250). Clients retry a 502, 503 or refused connection quietly for
   20 s. A write retries only when it cannot have landed; the web's writes retry on 502 and 503
   only, since it cannot tell a refused connection from a cut one.
+- **Rate limits** (#645). A 429 with `Retry-After` (seconds or a date) holds every call of the
+  page or app until then, first tries included, and the call is retried whatever its method, since
+  it was refused before doing anything. A wait past the 20 s retry window reaches the caller as
+  429 `rate-limited`. A 429 without `Retry-After` is a cap and reaches the caller at once.
 - **Devices.** Rows that share a name show when each was added (#287). A Recovery key row says
   when and on which device the key was set, with Replace; other devices show a replacement once
   (#348).

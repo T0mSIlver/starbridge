@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
-import { ApiError, api, backingOff, backoff, pairingError, Unreachable } from "./api";
+import { ApiError, api, backingOff, backoff, pairingError, retryAfter, Unreachable } from "./api";
 
 const real = globalThis.fetch;
 afterEach(() => {
@@ -8,13 +8,18 @@ afterEach(() => {
   backoff.retryForMs = 20_000;
 });
 
-/** Answers each call with the next of `replies`: a status, or an Error to throw as fetch does. */
-function serve(...replies: (number | Error)[]) {
+/**
+ * Answers each call with the next of `replies`: a status, a 429 with its Retry-After, or an Error
+ * to throw as fetch does.
+ */
+function serve(...replies: (number | { retryAfter: string } | Error)[]) {
   const calls: string[] = [];
   globalThis.fetch = (async (_url: string, init: RequestInit) => {
     calls.push(init.method ?? "GET");
     const r = replies.shift() ?? 200;
     if (r instanceof Error) throw r;
+    if (typeof r === "object")
+      return new Response("", { status: 429, headers: { "retry-after": r.retryAfter } });
     return new Response(r === 200 ? '{"nonce":"n"}' : "", { status: r });
   }) as typeof fetch;
   return calls;
@@ -85,6 +90,60 @@ test("other errors reach the caller at once", async () => {
   const calls = serve(500);
   await expect(api.challenge()).rejects.toBeInstanceOf(ApiError);
   expect(calls).toHaveLength(1);
+});
+
+test("a 429 holds every call until its Retry-After, then the call is retried (#645)", async () => {
+  const calls = serve({ retryAfter: "1" });
+  let during = 0;
+  const limited = globalThis.fetch;
+  globalThis.fetch = ((...args: Parameters<typeof fetch>) => {
+    if (Date.now() < backoff.until - 1) during++;
+    return limited(...args);
+  }) as typeof fetch;
+  const write = api.logout();
+  await new Promise((r) => setTimeout(r, 50));
+  expect(backingOff()).toBe(true);
+  // A new call's first try waits too: the server is up and said when to come back.
+  const read = api.challenge();
+  await write;
+  expect(await read).toBe("n");
+  expect(calls).toEqual(["POST", "POST", "GET"]);
+  expect(during).toBe(0);
+  expect(backingOff()).toBe(false);
+});
+
+test("a 429 waiting longer than a call retries reaches the caller, and the backoff stays (#645)", async () => {
+  const calls = serve({ retryAfter: new Date(Date.now() + 60_000).toUTCString() });
+  await expect(api.challenge()).rejects.toMatchObject({ status: 429, code: "rate-limited" });
+  expect(backingOff()).toBe(true);
+  await expect(api.logout()).rejects.toMatchObject({ status: 429 });
+  expect(calls).toEqual(["GET"]);
+});
+
+test("once a 429's hold is over, an outage reads as one again (#645)", async () => {
+  serve({ retryAfter: "60" });
+  await expect(api.challenge()).rejects.toMatchObject({ status: 429 });
+  backoff.until = Date.now();
+  backoff.retryForMs = 500;
+  serve(...Array.from({ length: 20 }, () => 502));
+  await expect(api.challenge()).rejects.toBeInstanceOf(Unreachable);
+});
+
+test("a 429 without Retry-After is a cap, and reaches the caller at once", async () => {
+  const calls = serve(429);
+  await expect(api.challenge()).rejects.toMatchObject({ status: 429 });
+  expect(calls).toHaveLength(1);
+  expect(backingOff()).toBe(false);
+});
+
+test("Retry-After reads as seconds or an HTTP date", () => {
+  const res = (v: string) => new Response("", { status: 429, headers: { "retry-after": v } });
+  expect(retryAfter(res("2"))).toBe(2000);
+  const ms = retryAfter(res(new Date(Date.now() + 30_000).toUTCString())) ?? 0;
+  expect(ms).toBeGreaterThan(28_000);
+  expect(ms).toBeLessThanOrEqual(30_000);
+  expect(retryAfter(res("soon"))).toBeNull();
+  expect(retryAfter(new Response(""))).toBeNull();
 });
 
 test("a pairing error reads as a sentence, without the API's code (#289)", () => {
