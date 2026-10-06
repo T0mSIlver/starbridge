@@ -225,6 +225,10 @@ test("a join cut off on a browser with no pin starts over rather than trust the 
     expect(await store.get("device", ctx.account)).toBeUndefined();
     expect(await store.get("pending", ctx.account)).toBeUndefined();
     expect(await store.get("pin", ctx.account)).toBeUndefined();
+    // Nor does a device saved without a pin: the chain must start with its own genesis.
+    await store.put("device", record, ctx.account);
+    expect((await device.boot()).state).toBe("join");
+    expect(await store.get("pin", ctx.account)).toBeUndefined();
   } finally {
     globalThis.fetch = served;
     await store.put("device", record, ctx.account);

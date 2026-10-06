@@ -134,11 +134,20 @@ function pinTo(account: string, entries: SignedEnvelope[], dir: Directory): Prom
   });
 }
 
-/** Fetches the chain, replays it against the pin, and moves the pin forward. */
+/** A browser with no pin was served a chain that nothing it holds anchors. */
+class Unanchored extends Error {}
+
+/**
+ * Fetches the chain, replays it against the pin, and moves the pin forward. Without a pin, only
+ * a genesis this browser's device signed anchors the chain (a first device cut off before it
+ * pinned): any other the server could have made, listing keys it relayed (#354).
+ */
 async function trusted(account: string): Promise<{ dir: Directory; entries: SignedEnvelope[] }> {
   for (let attempt = 0; ; attempt++) {
     const entries = await api.directory();
     const pin = await store.get("pin", account);
+    if (!pin && !signedGenesis(account, entries[0], await store.get("device", account)))
+      throw new Unanchored("no pin anchors this directory");
     const dir = verifyDirectory(entries, { account, ...(pin ? { pin } : {}) });
     try {
       await pinTo(account, entries, dir);
@@ -152,10 +161,16 @@ async function trusted(account: string): Promise<{ dir: Directory; entries: Sign
 }
 
 /** Whether `entry`, once verified as entry 0, is a genesis this browser's own device signed. */
-function signedGenesis(entry: SignedEnvelope | undefined, device?: store.DeviceRecord): boolean {
+function signedGenesis(
+  account: string,
+  entry: SignedEnvelope | undefined,
+  device?: store.DeviceRecord,
+): boolean {
   if (!device || entry?.signer !== device.id) return false;
   try {
-    return verifyDirectory([entry]).members.get(device.id)?.member.signPk === device.signPk;
+    return (
+      verifyDirectory([entry], { account }).members.get(device.id)?.member.signPk === device.signPk
+    );
   } catch {
     return false;
   }
@@ -188,17 +203,15 @@ export async function boot(): Promise<Boot> {
     if (device) await store.del("device", account);
     return { state: "first-device", account, ...(device ? { unsaved: device.name } : {}) };
   }
-  // Without a pin, only a genesis this browser's device signed anchors the served chain: a
-  // first device cut off before it pinned. A join or recovery cut off before it pinned starts
-  // over, since the server could serve a chain of its own that lists the pending keys (#354).
-  if (!(await store.get("pin", account)) && !signedGenesis(entries[0], device)) {
-    await store.del("pending", account);
-    return { state: "join", account, stale: false };
-  }
   let verified: { dir: Directory; entries: SignedEnvelope[] };
   try {
     verified = await trusted(account);
   } catch (e) {
+    // A join or recovery cut off before it pinned starts over (#354).
+    if (e instanceof Unanchored) {
+      await store.del("pending", account);
+      return { state: "join", account, stale: false };
+    }
     return { state: "broken", account, error: e instanceof Error ? e.message : String(e) };
   }
   // A join a device approved, or a recovery whose append landed, cut off before its keys became
