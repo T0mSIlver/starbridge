@@ -1,9 +1,9 @@
 /**
  * `starbridge agent`: one per machine, as a user service. It holds the machine keys and the one
  * connection to the server, and serves the CLI and the Claude Code sessions on this machine over
- * a unix socket (PROTOCOL.md, "Local agent API"). Each feature (decisions, quota uploads, runs;
- * later permission prompts #57) plugs in as a `Feature`: its routes, the
- * events it hands sessions, the acks it takes and its background loop.
+ * a unix socket (PROTOCOL.md, "Local agent API"). Each feature (decisions, quota uploads, runs,
+ * permission prompts) plugs in as a `Feature`: its routes, the events it hands sessions, the acks
+ * it takes and its background loop.
  */
 import { chmodSync, lstatSync, mkdirSync, unlinkSync } from "node:fs";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";

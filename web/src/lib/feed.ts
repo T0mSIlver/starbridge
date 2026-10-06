@@ -4,7 +4,7 @@ import { closedAt, closedByPhrase, outcomeText } from "./outcome";
 import { shownRuns } from "./runs";
 import type { InboxItem, PromptItem, RunItem, Source } from "./types";
 
-/** What a machine is, for its icon; #122 adds it to `source`, older items have none. */
+/** What a machine is, for its icon; items from older CLIs have none in `source`. */
 export type MachineKind = "server" | "desktop" | "laptop" | "cloud";
 
 type Base = { id: string; machine: string; kind?: MachineKind; repo: string };

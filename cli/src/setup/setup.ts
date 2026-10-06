@@ -430,8 +430,19 @@ async function piStep(sys: Sys) {
 
 async function piPackageStep(sys: Sys) {
   const { ctx, prompt } = sys;
-  if (piPackage(sys)) {
+  const installed = piPackage(sys);
+  if (installed === PI_PACKAGE) {
     ctx.out("The Starbridge Pi package is installed.");
+    return;
+  }
+  // Installed at another ref, or none: Pi moves the one entry to this CLI's tag.
+  if (installed) {
+    try {
+      await installPiPackage(sys);
+      ctx.out(`Moved the Starbridge Pi package to v${VERSION}.`);
+    } catch (e) {
+      ctx.out(`Could not move the Starbridge Pi package to v${VERSION}: ${(e as Error).message}`);
+    }
     return;
   }
   if (

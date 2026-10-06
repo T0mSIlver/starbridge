@@ -1,5 +1,5 @@
 // Umami, self-hosted beside the server (deploy/compose.yaml): cookieless page analytics for
-// the public pages only, never the signed-in app (SPEC.md, #141).
+// the public pages only, never the signed-in app (SPEC.md, "The hosted instance").
 
 /** Umami's id for starbridge.run; deploy/umami-setup.sh creates the website with it. */
 export const WEBSITE_ID = "f3741d82-c450-47d3-8845-646cddbe392f";

@@ -1,6 +1,6 @@
-import { homedir } from "node:os";
+import { join } from "node:path";
 
-export const LOAD_DIR = process.env.LOAD_DIR ?? `${homedir()}/work/starbridge/.scratch/load`;
+export const LOAD_DIR = process.env.LOAD_DIR ?? join(import.meta.dir, "../../.scratch/load");
 
 /** One account made by setup.ts: a phone, a machine and a web page, by their bearer tokens. */
 export interface User {

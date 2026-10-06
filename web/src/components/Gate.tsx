@@ -69,7 +69,7 @@ function useDefaultName(initial = ""): [string, (v: string) => void] {
   return [name, setName];
 }
 
-/** GitHub sign-in; self-hosting sits behind "Use your own server" (SPEC.md, design v2). */
+/** GitHub sign-in; self-hosting sits behind "Use your own server" (SPEC.md, "Clients"). */
 export function SignIn({
   ownServer = false,
   refused,

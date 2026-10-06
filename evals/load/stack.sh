@@ -7,12 +7,12 @@
 #   evals/load/stack.sh big-disk  back to its volume, unmounting the small disk
 #   evals/load/stack.sh down      stop it and delete its volumes
 #   evals/load/stack.sh compose … any docker compose command on it
-# LOAD_DIR (default ~/work/starbridge/.scratch/load) holds its fake secrets, its Caddyfile and the
+# LOAD_DIR (default .scratch/load in the repository) holds its fake secrets, its Caddyfile and the
 # load script's users. It never talks to starbridge.run.
 set -eu
 here=$(cd "$(dirname "$0")" && pwd)
 repo=$(cd "$here/../.." && pwd)
-export LOAD_DIR="${LOAD_DIR:-$HOME/work/starbridge/.scratch/load}"
+export LOAD_DIR="${LOAD_DIR:-$repo/.scratch/load}"
 # The fakes (fake.ts) listen on Docker's default bridge, which containers reach as
 # host.docker.internal.
 gw=$(docker network inspect bridge -f '{{(index .IPAM.Config 0).Gateway}}')
