@@ -1,5 +1,5 @@
 /**
- * End-to-end run of the answer path with real Claude Code sessions (issue #48): agents post
+ * End-to-end run of the answer path with real Claude Code sessions: agents post
  * decisions through the skill and keep working; a device answers through the server; the mod
  * submits each answer into the session that asked. Prints one row per case with its timings.
  *

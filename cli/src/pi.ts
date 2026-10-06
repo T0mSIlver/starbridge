@@ -87,7 +87,7 @@ function piAgentDir(env: Ctx["env"]): string {
   return env.PI_CODING_AGENT_DIR || join(env.HOME ?? "", ".pi", "agent");
 }
 
-/** Where `pi install git:github.com/T0mSIlver/starbridge` puts the Starbridge skill. */
+/** Where `pi install git:github.com/T0mSIlver/starbridge@<tag>` puts the Starbridge skill. */
 export function piSkillDir(env: Ctx["env"]): string {
   return join(
     piAgentDir(env),

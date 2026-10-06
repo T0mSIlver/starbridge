@@ -1541,6 +1541,16 @@ so the mod is the first path.
 - 2026-10-06. Workflows pin every action by commit SHA, with its version in a comment (#361). A
   moved tag could otherwise run code in the release job before it writes the minisign key.
   Dependabot proposes the updates in one grouped PR a month.
+- 2026-10-06. A workflow writes `pnpm-lock.yaml` into Dependabot's npm PRs, then starts CI by
+  `workflow_dispatch` (#426). Dependabot updates a pnpm workspace only from its root, as the
+  monthly update does, but a security update runs in the folder of the manifest its alert names
+  (`/web` for next's GHSA-vcvr-r3jv-pc5j), logs "missing lockfile" and changes `package.json`
+  alone. No `dependabot.yml` option moves it: `exclude-paths` skips security updates
+  (dependabot-core#14408). A push with `GITHUB_TOKEN` starts no workflow, a dispatch does, so
+  the fix needs no new credential. A PR lists only checks from runs its own events started, so
+  the dispatched run reports through the commit status `CI`. It checks the branch, not its
+  merge with main. The commit says `[dependabot skip]`, so Dependabot still rebases the PR
+  over it.
 - 2026-10-06. Both screens confirm a join by digits (#355, from the #366 audit). Only the
   approver's owner compared the digits; the joining device acted on the first approval it got.
   A server in the middle that sends the joiner its own approver key derives the same MAC key and
@@ -1866,6 +1876,21 @@ so the mod is the first path.
   permission, your phone tells you. Answer with one tap and it gets back to work." It sells the
   pain the owner named: you don't notice that an agent is blocked. The shots below it still show
   the web app beside the phone, so the page keeps saying both clients do the same.
+- 2026-10-06. The release is the unit (#471). `bun cli/scripts/version.ts <version>` stamps one
+  version into `cli/package.json`, `web/package.json`, both `plugin.json`, the mod's `VERSION`, the Android default
+  `versionName` and the marketplace's two `ref`s, in a PR; the owner tags the merged commit, and
+  the release workflow refuses a tag that disagrees (`--check`, also run by `cli/test/version.test.ts`
+  on every PR). The marketplace lists both plugins as `git-subdir` sources of
+  `https://github.com/T0mSIlver/starbridge.git` at that tag, so a hook flag merged on `main` no
+  longer reaches Claude Code users before the CLI that has it; the https URL clones without a
+  GitHub SSH key. A release candidate moves every version but the marketplace refs, so only
+  pinned installs get it. Setup installs the Pi package at its own CLI's tag
+  (`git:github.com/T0mSIlver/starbridge@v<version>`) and moves an install at another ref to it,
+  as `starbridge update` does to the new release's tag; `status` names a package at another ref;
+  Pi keeps a tag through `pi update` and `pi install` with a new ref rewrites the one entry
+  (Pi 0.87.1, `core/package-manager.js:618-639,1502-1512`). The mod keeps its own copy of the
+  agent API revision: Claude Code installs only `mod/`, so it cannot import the CLI's, and
+  `mod/test/agent.test.ts` runs it against the CLI's agent, which answers 426 outside its range.
 - 2026-10-06. 1.0.0 is the compatibility floor (#469, Tom: "reset and delete"). Protocol side:
   decisions carry no `default`, a recovery is a `recover` entry only (an `add` signed by the
   recovery key is refused, with a vector for it), and a recovery key is the 28-character key only:
@@ -1884,39 +1909,12 @@ so the mod is the first path.
   keep working, and a minimum only refuses clients that say they are older.
 - 2026-10-06. The release's npm publish step keeps its `env.NODE_AUTH_TOKEN != ''` gate (#480).
   The audit suspected it never skips; it does skip without `NPM_TOKEN`. See the research log.
-- 2026-10-06. 1.0.0 is the compatibility floor, client side (#469). `ask` refuses `--default` and
-  `--default-at` instead of ignoring them; Android and the web drop the decision default with its
-  "No answer by its default time" outcome, the BIP-39 word list and 32-byte recovery seeds; `setup`
-  no longer looks for the hand-written installs that came before the plugins (`quota push` units,
-  a copied mod or skill, the CLAUDE.md rule); the CLI no longer falls back for agents from before
-  runs or `headless`; Android drops the `inbox-by-machine` pref and the `decisions` channel, the
-  web the `groupByMachine` pref. Two stay, because they are not about old clients:
-  `DECISION_FIELDS` re-reads open decisions when the app learns a new decision field, until
-  clients store the signed body text (#476); and the notification receiver checks
-  Allow again on tap, since the owner may turn off sending unseen commands after the post.
-- 2026-10-06. A reader keeps what a newer sender adds (#472, PROTOCOL.md "What a reader keeps").
-  A value a client only displays reads as its neutral case when unknown: no machine kind, no
-  outcome, `working`, no progress, pace `unknown`, and an alert of an unknown kind is left out of
-  its snapshot. A reader does it on the raw body before the schema checks it (`readable`, with a
-  Kotlin twin that runs before decoding), so the schemas stay strict for writers, and a missing
-  field or a value of another type still refuses the item on every client alike; the vectors
-  carry what each case reads. Values that gate behaviour stay
-  closed. Android also keeps a machine's last good quota snapshot when a new one fails to open,
-  where it used to blank that machine's quotas. Reader-side content limits stay as they are for
-  now: loosening them needs the screens to cope with longer text first.
-- 2026-10-06. Every local state file carries its format, and one a client cannot read is kept,
-  never silently replaced (#473). The CLI writes `v: 1` into `machine.json`, `directory.json`
-  (now `{v, entries}`), `agent.json` and `state.json`; a file without `v` is format 1. A file
-  that is not JSON, not an object (a `directory.json` from before 1.0.0) or of a newer format
-  stops the command with the path and what to do, and stays as it is. Android writes `v` into
-  `state.bin` and `secrets.bin`, and a format byte ahead of the Keystore blob; a file it cannot
-  read moves to `<name>.unreadable`, the app starts without it and says so. A blob from before
-  1.0.0 has no format byte, so the owner's phone signs in again once, as the reset asks anyway.
-  Quota settings write their defaults, so a later default never changes a saved choice. The web
-  writes `v` into its localStorage values and leaves a newer format alone; a damaged one is
-  logged and replaced at the next change, since it holds only display choices. IndexedDB's own
-  version is the records' format: `onupgradeneeded` creates the store only when missing, and
-  sign-out removes every record kind of the account, `heads`, `pending` and `recoverySeen` too.
+- 2026-10-06. Retention comes from `ITEM_KINDS` (#477). Each kind names its `keep`: a day, a
+  week or a month after it was received, answered or left unanswered, or `withRe` (it goes with
+  the item it refers to) and `fromActive` (it goes when its machine is revoked). The hourly sweep
+  builds its deletes from that table, and a kind without `keep` fails typecheck, so a new kind
+  can no longer be stored and never dropped. The periods stay server limits, so tests and
+  self-hosters set their length.
 
 ## Encryption, with existing libraries
 
