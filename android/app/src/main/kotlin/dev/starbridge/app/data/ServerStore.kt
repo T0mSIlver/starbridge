@@ -555,6 +555,14 @@ class ServerStore(
         val after = directories.verify(all, saved.account, Pin(dir.length, dir.head))
         directory = after
         persist(saved.copy(me = member, recovering = null, entries = all, pin = Pin(after.length, after.head)))
+        // A session an abandoned attempt's append bound to its member cannot act as this one, and
+        // the server never moves it: signing in again binds a new one to this phone's keys.
+        val bound = runCatching { api().me().member }.getOrNull()
+        if (bound != null && bound != member.id) {
+            persist(newSecrets = secrets.copy(session = null))
+            notice.value = "Sign in again to finish recovering. This phone keeps its keys."
+            return@run
+        }
         sync()
     }
 
