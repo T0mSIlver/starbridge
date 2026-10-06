@@ -1,7 +1,12 @@
 package dev.starbridge.app.protocol
 
+import kotlinx.serialization.ExperimentalSerializationApi
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.descriptors.StructureKind
+import kotlinx.serialization.encoding.CompositeDecoder
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 
@@ -13,6 +18,34 @@ private fun JsonObject.with(key: String, value: JsonElement?) = JsonObject(if (v
 private fun withSource(body: JsonObject): JsonObject {
     val source = body["source"] as? JsonObject ?: return body
     return if (source["machineKind"].newer(MACHINE_KINDS)) body.with("source", source.with("machineKind", null)) else body
+}
+
+/** Each alert kind's own field; this app's one QuotaAlert class holds all three. */
+private val ALERT_FIELDS = mapOf("unused-headroom" to "unusedPercent", "runs-out" to "runsOutAt", "low" to "threshold")
+
+/** The fields that are null by design (`.nullable()` in schemas.ts). */
+private val NULLABLE = setOf("prev", "projectedUsedPercent", "runsOutAt", "windowMinutes", "resetsAt", "pace")
+
+/**
+ * Refuses a null under any field [descriptor] declares that schemas.ts does not make nullable, as
+ * zod does (#505): this app's classes take a null for an absent optional field, so an item with
+ * `"progress": null` would otherwise show here and nowhere else. A field it does not declare is
+ * left alone, as zod strips it.
+ */
+@OptIn(ExperimentalSerializationApi::class)
+fun refuseNulls(json: JsonElement, descriptor: SerialDescriptor) {
+    if (json is JsonArray && descriptor.kind == StructureKind.LIST) {
+        json.forEach { refuseNulls(it, descriptor.getElementDescriptor(0)) }
+        return
+    }
+    if (json !is JsonObject || descriptor.kind != StructureKind.CLASS) return
+    for ((k, v) in json) {
+        val i = descriptor.getElementIndex(k)
+        if (i == CompositeDecoder.UNKNOWN_NAME) continue
+        if (v is JsonNull) {
+            if (k !in NULLABLE) throw ProtocolException("bad-schema", "$k: null")
+        } else refuseNulls(v, descriptor.getElementDescriptor(i))
+    }
 }
 
 /**
@@ -43,7 +76,11 @@ fun readable(kind: String, json: JsonElement): JsonElement {
                 }))
             }
             (b["alerts"] as? JsonArray)?.let { alerts ->
-                b = b.with("alerts", JsonArray(alerts.filterNot { (it as? JsonObject)?.get("kind").newer(ALERT_KINDS) }))
+                b = b.with("alerts", JsonArray(alerts.filterNot { (it as? JsonObject)?.get("kind").newer(ALERT_KINDS) }.map { a ->
+                    // Another kind's field is not this alert's, as zod's union strips it.
+                    val own = ALERT_FIELDS[((a as? JsonObject)?.get("kind") as? JsonPrimitive)?.content] ?: return@map a
+                    JsonObject((a as JsonObject).filterKeys { it == own || it !in ALERT_FIELDS.values })
+                }))
             }
             b
         }

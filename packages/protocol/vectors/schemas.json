@@ -281,6 +281,58 @@
       }
     },
     {
+      "name": "an agent that is null",
+      "body": {
+        "v": 1,
+        "id": "dec_1",
+        "to": [
+          "phone",
+          "phone2"
+        ],
+        "createdAt": "2026-10-04T10:00:00Z",
+        "question": "Run inference on the Mac while you are away?",
+        "context": "The bench needs the GPU for about 40 minutes. No: it waits for tonight.",
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "recommended": "Yes",
+        "source": {
+          "machine": "dev box",
+          "project": "localvoxtral",
+          "session": "s_42"
+        },
+        "agent": null
+      },
+      "valid": false
+    },
+    {
+      "name": "a null under a field it does not know",
+      "body": {
+        "v": 1,
+        "id": "dec_1",
+        "to": [
+          "phone",
+          "phone2"
+        ],
+        "createdAt": "2026-10-04T10:00:00Z",
+        "question": "Run inference on the Mac while you are away?",
+        "context": "The bench needs the GPU for about 40 minutes. No: it waits for tonight.",
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "recommended": "Yes",
+        "source": {
+          "machine": "dev box",
+          "project": "localvoxtral",
+          "session": "s_42"
+        },
+        "later": null
+      },
+      "valid": true
+    },
+    {
       "name": "a machine kind that is no string",
       "body": {
         "v": 1,
@@ -2379,6 +2431,28 @@
       "valid": false
     },
     {
+      "name": "progress that is null",
+      "body": {
+        "v": 1,
+        "id": "run_1",
+        "to": [
+          "phone",
+          "phone2"
+        ],
+        "title": "Mac e2e",
+        "reason": "uses your session and keyboard",
+        "source": {
+          "machine": "dev box",
+          "project": "localvoxtral",
+          "session": "s_42"
+        },
+        "startedAt": "2026-10-04T10:00:00Z",
+        "at": "2026-10-04T10:02:00Z",
+        "progress": null
+      },
+      "valid": false
+    },
+    {
       "name": "an unknown progress unit",
       "body": {
         "v": 1,
@@ -2632,6 +2706,22 @@
       "valid": false
     },
     {
+      "name": "a directory head that is null",
+      "body": {
+        "v": 1,
+        "id": "wait_1",
+        "decisionId": "dec_1",
+        "to": [
+          "phone",
+          "phone2"
+        ],
+        "at": "2026-10-04T10:20:00Z",
+        "state": "waiting",
+        "dir": null
+      },
+      "valid": false
+    },
+    {
       "name": "no decision",
       "body": {
         "v": 1,
@@ -2795,7 +2885,8 @@
         "alerts": [
           {
             "kind": "burst",
-            "share": 0.5
+            "share": 0.5,
+            "resetsAt": null
           },
           {
             "kind": "low",
@@ -2818,6 +2909,43 @@
           }
         ]
       }
+    },
+    {
+      "name": "a window without its pace yet",
+      "body": {
+        "v": 1,
+        "id": "q_1",
+        "to": [
+          "phone",
+          "phone2"
+        ],
+        "takenAt": "2026-10-04T12:00:00Z",
+        "providers": [
+          {
+            "provider": "zai",
+            "windows": [
+              {
+                "id": "primary",
+                "label": "5h",
+                "usedPercent": 20,
+                "windowMinutes": 300,
+                "resetsAt": "2026-10-04T12:30:00Z",
+                "pace": null
+              }
+            ]
+          }
+        ],
+        "alerts": [
+          {
+            "kind": "unused-headroom",
+            "provider": "zai",
+            "window": "primary",
+            "resetsAt": "2026-10-04T12:30:00Z",
+            "unusedPercent": 77.8
+          }
+        ]
+      },
+      "valid": true
     },
     {
       "name": "a pace without its stage",
@@ -2861,6 +2989,51 @@
         ]
       },
       "valid": false
+    },
+    {
+      "name": "another kind's field, null, on an alert",
+      "body": {
+        "v": 1,
+        "id": "q_1",
+        "to": [
+          "phone",
+          "phone2"
+        ],
+        "takenAt": "2026-10-04T12:00:00Z",
+        "providers": [
+          {
+            "provider": "zai",
+            "windows": [
+              {
+                "id": "primary",
+                "label": "5h",
+                "usedPercent": 20,
+                "windowMinutes": 300,
+                "resetsAt": "2026-10-04T12:30:00Z",
+                "pace": {
+                  "stage": "behind",
+                  "expectedUsedPercent": 90,
+                  "deltaPercent": -70,
+                  "projectedUsedPercent": 22.2,
+                  "willLastToReset": true,
+                  "runsOutAt": null
+                }
+              }
+            ]
+          }
+        ],
+        "alerts": [
+          {
+            "kind": "low",
+            "provider": "zai",
+            "window": "primary",
+            "resetsAt": "2026-10-04T12:30:00Z",
+            "threshold": 10,
+            "runsOutAt": null
+          }
+        ]
+      },
+      "valid": true
     },
     {
       "name": "no recipients",

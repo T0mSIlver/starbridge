@@ -1057,8 +1057,7 @@ export async function signOut(stale: Ctx): Promise<void> {
   await api.logout().catch(() => {});
   const reg = await registration();
   await (await reg?.pushManager.getSubscription())?.unsubscribe().catch(() => {});
-  for (const kind of ["device", "pin", "answers", "promptAnswers"] as const)
-    await store.del(kind, stale.account);
+  for (const kind of store.ACCOUNT_KINDS) await store.del(kind, stale.account);
   await store.del("current");
   // Last: a push the service worker was still opening finds no keys now.
   await closeNotifications();

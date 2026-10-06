@@ -100,7 +100,7 @@ export async function status(sys: Sys): Promise<number> {
   if (hasCodex(sys)) {
     const state = codexSkill(sys);
     out(
-      `Codex skill: ${state === "current" ? "installed" : state === "outdated" ? "outdated (`starbridge setup` updates it)" : "not installed"}`,
+      `Codex skill: ${state === "current" ? "installed" : state === "outdated" ? "outdated (`starbridge setup` updates it)" : state === "foreign" ? "another skill named starbridge" : "not installed"}`,
     );
   }
   if (hasPi(sys)) {

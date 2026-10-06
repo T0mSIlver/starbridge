@@ -109,6 +109,7 @@ class Prefs @Inject constructor(@ApplicationContext context: Context) {
         const val BUTTONS = "inbox-card-buttons"
         const val ALLOW_UNSEEN = "allow-unseen"
         const val REMIND_OFF = "inbox-remind-notifications-off"
-        val json = Json { ignoreUnknownKeys = true; encodeDefaults = false }
+        // Defaults are written too, so changing one later never changes a choice already saved.
+        val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
     }
 }
