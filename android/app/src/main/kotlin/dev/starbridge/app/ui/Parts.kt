@@ -129,15 +129,15 @@ fun Page(
     titleGap: Dp = Spacing.s3,
     /** Above the title: the Inbox's lockup. */
     header: (@Composable () -> Unit)? = null,
-    /** The last item waits at the bottom of the screen while everything fits: the Inbox's History. */
-    lastAtBottom: Boolean = false,
+    /** The last this many items wait at the bottom of the screen while everything fits: the Inbox's closed Snoozed and History. */
+    atBottom: Int = 0,
     content: LazyListScope.() -> Unit,
 ) {
     Refreshable(refresh) {
         LazyColumn(
             modifier.fillMaxSize().widthIn(max = Sizes.content),
             contentPadding = PaddingValues(start = margin, end = margin, bottom = Spacing.s6),
-            verticalArrangement = if (lastAtBottom) LastAtBottom(gap) else Arrangement.spacedBy(gap),
+            verticalArrangement = if (atBottom > 0) LastAtBottom(gap, atBottom) else Arrangement.spacedBy(gap),
         ) {
             item(key = "page-title") { PageTitle(title, subtitle, trailing, onBack, titleGap - gap, header) }
             content()
@@ -145,19 +145,21 @@ fun Page(
     }
 }
 
-/** [gap] between items, as `spacedBy`, with the last one moved down to the bottom when they fit. */
-private class LastAtBottom(private val gap: Dp) : Arrangement.Vertical {
+/** [gap] between items, as `spacedBy`, with the last [n] moved down together to the bottom when they fit. */
+private class LastAtBottom(private val gap: Dp, private val n: Int) : Arrangement.Vertical {
     override val spacing = gap
 
     override fun Density.arrange(totalSize: Int, sizes: IntArray, outPositions: IntArray) {
         with(Arrangement.spacedBy(gap)) { arrange(totalSize, sizes, outPositions) }
-        if (sizes.size < 2) return
+        // The first item, the page title, stays on top.
+        if (sizes.size <= n) return
         val last = sizes.lastIndex
-        outPositions[last] = maxOf(outPositions[last], totalSize - sizes[last])
+        val down = totalSize - (outPositions[last] + sizes[last])
+        if (down > 0) for (i in sizes.size - n..last) outPositions[i] += down
     }
 
-    override fun equals(other: Any?) = other is LastAtBottom && other.gap == gap
-    override fun hashCode() = gap.hashCode()
+    override fun equals(other: Any?) = other is LastAtBottom && other.gap == gap && other.n == n
+    override fun hashCode() = 31 * gap.hashCode() + n
 }
 
 @Composable

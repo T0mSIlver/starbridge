@@ -68,6 +68,7 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.foundation.lazy.LazyItemScope
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -268,8 +269,9 @@ fun InboxScreen(
         header = { Lockup(24.dp, 22.sp) },
         gap = groupGap,
         margin = Spacing.s4,
-        // Closed, History waits at the bottom, out of the way; opened, it rises under the items (#662).
-        lastAtBottom = !view.historyOpen && history.rows.isNotEmpty(),
+        // Closed, History and Snoozed above it wait at the bottom, out of the way; opened, each
+        // rises under the items (#662, #682).
+        atBottom = atBottom(snoozed.isNotEmpty(), view.snoozedOpen, history.rows.isNotEmpty(), view.historyOpen),
     ) {
         recoveryBanner(recovery, dismissRecovery)
         if (notificationsOff && view.remindOff) item(key = "notifications-off") { NotificationsOff { onView(view.copy(remindOff = false)) } }
@@ -877,28 +879,53 @@ private fun LazyListScope.snoozed(decisions: List<Decision>, now: Instant, open:
     val joined = segmented && open
     val count = decisions.size + 1
     item(key = "snoozed") {
-        val scheme = MaterialTheme.colorScheme
-        Surface(
-            Modifier.fillMaxWidth().padding(top = Spacing.s3).clickable(onClickLabel = if (open) "Hide Snoozed" else "Show Snoozed") { onOpen(!open) },
-            shape = if (joined) segment(0, count) else cardShape,
-            color = scheme.surfaceContainer,
-        ) {
-            Row(Modifier.padding(horizontal = Spacing.s5, vertical = Spacing.s4), verticalAlignment = Alignment.CenterVertically) {
-                Symbol(Sym.Snooze, size = 20.dp, tint = scheme.onSurface)
-                Spacer(Modifier.width(10.dp))
-                Text("Snoozed", style = StarbridgeTheme.type.label.copy(fontSize = 15.sp), color = scheme.onSurface)
-                Spacer(Modifier.width(10.dp))
-                Text("${decisions.size}", style = StarbridgeTheme.type.small.copy(fontSize = 15.sp), color = scheme.onSurfaceVariant, modifier = Modifier.weight(1f))
-                Symbol(if (open) Sym.ExpandMore else Sym.Chevron, size = 20.dp, tint = scheme.onSurfaceVariant)
-            }
-        }
+        SectionHead(Sym.Snooze, "Snoozed", "${decisions.size}", open, onOpen, if (joined) segment(0, count) else cardShape)
     }
     if (!open) return
     itemsIndexed(decisions, key = { _, it -> "s/${it.id}" }) { i, it ->
         val shape = if (joined) segment(i + 1, count) else cardShape
-        DecisionCard(it, now, actions, replies, shape, buttons, Modifier.animateItem(placementSpec = MaterialTheme.motionScheme.defaultSpatialSpec()).padding(top = if (joined) 0.dp else cardGap - groupGap))
+        DecisionCard(it, now, actions, replies, shape, buttons, sectionRow().padding(top = if (joined) 0.dp else cardGap - groupGap))
     }
 }
+
+/**
+ * How many of the closed section heads wait at the bottom (#662, #682): History when closed, and
+ * Snoozed above it when it is closed too, or when there is no History.
+ */
+private fun atBottom(snoozed: Boolean, snoozedOpen: Boolean, history: Boolean, historyOpen: Boolean): Int {
+    if (history && historyOpen) return 0
+    val historyDown = if (history) 1 else 0
+    return historyDown + if (snoozed && !snoozedOpen) 1 else 0
+}
+
+/**
+ * The head of a collapsed, remembered section: Snoozed or History. Moving between the bottom and
+ * its place under the items, it glides as the cards do, over the rows it passes (#662).
+ */
+@Composable
+private fun LazyItemScope.SectionHead(symbol: Sym, title: String, detail: String?, open: Boolean, onOpen: (Boolean) -> Unit, shape: Shape) {
+    val scheme = MaterialTheme.colorScheme
+    Surface(
+        Modifier.animateItem(placementSpec = MaterialTheme.motionScheme.defaultSpatialSpec()).zIndex(1f).fillMaxWidth().padding(top = Spacing.s3).clip(shape).clickable(onClickLabel = if (open) "Hide $title" else "Show $title") { onOpen(!open) },
+        shape = shape,
+        color = scheme.surfaceContainer,
+    ) {
+        Row(Modifier.padding(horizontal = Spacing.s5, vertical = Spacing.s4), verticalAlignment = Alignment.CenterVertically) {
+            Symbol(symbol, size = 20.dp, tint = scheme.onSurface)
+            Spacer(Modifier.width(10.dp))
+            Text(title, style = StarbridgeTheme.type.label.copy(fontSize = 15.sp), color = scheme.onSurface)
+            Spacer(Modifier.width(10.dp))
+            if (detail != null) Text(detail, style = StarbridgeTheme.type.small.copy(fontSize = 15.sp), color = scheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+            else Spacer(Modifier.weight(1f))
+            Symbol(if (open) Sym.ExpandMore else Sym.Chevron, size = 20.dp, tint = scheme.onSurfaceVariant)
+        }
+    }
+}
+
+/** A section's row: it fades in once the head has nearly risen to it, not under it on its way (#662). */
+@Composable
+private fun LazyItemScope.sectionRow(): Modifier =
+    Modifier.animateItem(fadeInSpec = tween(250, delayMillis = 200), placementSpec = MaterialTheme.motionScheme.defaultSpatialSpec())
 
 /** History, collapsed and remembered: one row per answered question or ended prompt. */
 private fun LazyListScope.history(history: History, open: Boolean, onOpen: (Boolean) -> Unit, actions: DecisionActions, promptActions: PromptActions?, segmented: Boolean) {
@@ -907,32 +934,13 @@ private fun LazyListScope.history(history: History, open: Boolean, onOpen: (Bool
     val count = history.rows.size + 1
     if (history.rows.isEmpty()) return
     item(key = "history") {
-        val scheme = MaterialTheme.colorScheme
-        val shape = if (joined) segment(0, count) else cardShape
-        Surface(
-            // Moving between the bottom and its place under the items, it glides as the cards do.
-            Modifier.animateItem(placementSpec = MaterialTheme.motionScheme.defaultSpatialSpec()).zIndex(1f).fillMaxWidth().padding(top = Spacing.s3).clip(shape).clickable(onClickLabel = if (open) "Hide History" else "Show History") { onOpen(!open) },
-            shape = shape,
-            color = scheme.surfaceContainer,
-        ) {
-            Row(Modifier.padding(horizontal = Spacing.s5, vertical = Spacing.s4), verticalAlignment = Alignment.CenterVertically) {
-                Symbol(Sym.History, size = 20.dp, tint = scheme.onSurface)
-                Spacer(Modifier.width(10.dp))
-                Text("History", style = StarbridgeTheme.type.label.copy(fontSize = 15.sp), color = scheme.onSurface)
-                Spacer(Modifier.width(10.dp))
-                if (history.todayCount > 0) Text("${history.todayCount} answered today", style = StarbridgeTheme.type.small.copy(fontSize = 15.sp), color = scheme.onSurfaceVariant, modifier = Modifier.weight(1f))
-                else Spacer(Modifier.weight(1f))
-                Symbol(if (open) Sym.ExpandMore else Sym.Chevron, size = 20.dp, tint = scheme.onSurfaceVariant)
-            }
-        }
+        SectionHead(Sym.History, "History", if (history.todayCount > 0) "${history.todayCount} answered today" else null, open, onOpen, if (joined) segment(0, count) else cardShape)
     }
     if (!open) return
     itemsIndexed(history.rows, key = { _, (_, it) -> if (it is Decision) "h/d/${it.id}" else "h/p/${(it as Prompt).id}" }) { i, (at, it) ->
         // Apart, one-line cards round less, as Material scales a corner with its container.
         val shape = if (joined) segment(i + 1, count) else RoundedCornerShape(Spacing.s5)
-        // The rows fade in once the head has nearly risen to them, not under it on its way (#662).
-        val rows = Modifier.animateItem(fadeInSpec = tween(250, delayMillis = 200), placementSpec = MaterialTheme.motionScheme.defaultSpatialSpec())
-        Box(rows.padding(top = if (joined) 0.dp else cardGap - groupGap)) {
+        Box(sectionRow().padding(top = if (joined) 0.dp else cardGap - groupGap)) {
             when (it) {
                 is Decision -> HistoryRow(it.source, it.question, false, closedHow(it), shape) { actions.open(it.id) }
                 is Prompt -> HistoryRow(it.source, it.summary, true, closedHow(it), shape) { promptActions?.open?.invoke(it.id) }

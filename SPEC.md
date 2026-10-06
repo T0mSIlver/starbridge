@@ -695,6 +695,9 @@ first window, so a provider with a window running out leads.
   these from mockups.
 - **History** lists answered questions and the last 7 days of prompts, with how and where each was
   answered.
+- **Closed sections wait at the bottom** (#662, #682). Closed, History sits at the bottom of a
+  short inbox and Snoozed just above it, out of the way; opened, each glides up under the items
+  and its rows fade in. Opening Snoozed leaves History at the bottom.
 - **Find** matches every word in the machine, repo, the agent's words, the session and a History
   item's answer. On the web it lists open matches, then History's; Android uses Material 3's
   search view.
