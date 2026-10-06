@@ -1098,6 +1098,58 @@
       "valid": true
     },
     {
+      "name": "answered in an artifact, taking done",
+      "body": {
+        "v": 1,
+        "id": "dec_1",
+        "to": [
+          "phone",
+          "phone2"
+        ],
+        "createdAt": "2026-10-04T10:00:00Z",
+        "question": "Run inference on the Mac while you are away?",
+        "context": "The bench needs the GPU for about 40 minutes. No: it waits for tonight.",
+        "options": [],
+        "source": {
+          "machine": "dev box",
+          "project": "localvoxtral",
+          "session": "s_42"
+        },
+        "answerIn": {
+          "url": "https://claude.ai/public/artifacts/0b3f0e7c",
+          "title": "Both mockups"
+        },
+        "done": true
+      },
+      "valid": true
+    },
+    {
+      "name": "done without answerIn",
+      "body": {
+        "v": 1,
+        "id": "dec_1",
+        "to": [
+          "phone",
+          "phone2"
+        ],
+        "createdAt": "2026-10-04T10:00:00Z",
+        "question": "Run inference on the Mac while you are away?",
+        "context": "The bench needs the GPU for about 40 minutes. No: it waits for tonight.",
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "recommended": "Yes",
+        "source": {
+          "machine": "dev box",
+          "project": "localvoxtral",
+          "session": "s_42"
+        },
+        "done": true
+      },
+      "valid": false
+    },
+    {
       "name": "answered in an artifact and with options",
       "body": {
         "v": 1,
@@ -1197,6 +1249,43 @@
         "decisionId": "dec_1",
         "to": "devbox",
         "answeredAt": "2026-10-04T10:03:00Z"
+      },
+      "valid": false
+    },
+    {
+      "name": "done",
+      "body": {
+        "v": 1,
+        "id": "ans_1",
+        "decisionId": "dec_1",
+        "to": "devbox",
+        "answeredAt": "2026-10-04T10:03:00Z",
+        "done": true
+      },
+      "valid": true
+    },
+    {
+      "name": "choice and done",
+      "body": {
+        "v": 1,
+        "id": "ans_1",
+        "decisionId": "dec_1",
+        "to": "devbox",
+        "answeredAt": "2026-10-04T10:03:00Z",
+        "choice": "Yes",
+        "done": true
+      },
+      "valid": false
+    },
+    {
+      "name": "done false",
+      "body": {
+        "v": 1,
+        "id": "ans_1",
+        "decisionId": "dec_1",
+        "to": "devbox",
+        "answeredAt": "2026-10-04T10:03:00Z",
+        "done": false
       },
       "valid": false
     }
