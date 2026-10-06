@@ -40,6 +40,7 @@ import androidx.navigation3.runtime.NavKey
 import dev.starbridge.app.ui.DecisionKey
 import dev.starbridge.app.ui.LocalClock24
 import dev.starbridge.app.ui.Main
+import dev.starbridge.app.ui.PairLinkKey
 import dev.starbridge.app.ui.PromptKey
 import dev.starbridge.app.ui.Setup
 import dev.starbridge.app.ui.pairing.JoinActions
@@ -131,6 +132,11 @@ class MainActivity : ComponentActivity() {
         val data = intent?.data
         if (data != null && SignIn.redirect(data.toString()) != null) {
             store.receiveSignIn(data.toString())
+            setIntent(Intent(this, MainActivity::class.java))
+        }
+        // A machine's pairing link: Add a device with its code, once this phone is in the account.
+        if (data != null && data.scheme == "https" && data.host == "starbridge.run" && data.path == "/pair") {
+            opening.trySend(PairLinkKey(data.toString()))
             setIntent(Intent(this, MainActivity::class.java))
         }
         intent?.getStringExtra(EXTRA_DECISION)?.let {
