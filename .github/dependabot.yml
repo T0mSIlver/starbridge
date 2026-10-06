@@ -24,7 +24,7 @@ updates:
       gradle:
         patterns: ["*"]
   - package-ecosystem: docker
-    directories: [/deploy, /deploy/demo, /server, /web]
+    directories: [/deploy, /server, /web]
     schedule:
       interval: monthly
     groups:

@@ -53,8 +53,6 @@ export interface Config {
    * (`demo/`) needs before it approves joins unseen. Refused wherever the hosted service runs.
    */
   demo: boolean;
-  /** The commit this server was built from, which /healthz names. */
-  revision?: string;
   /** Rate limits, caps and retention; tests lower them. */
   limits: Limits;
 }
@@ -118,7 +116,6 @@ export function configFromEnv(env: Env = process.env): Config {
     relayUrl: env.RELAY_URL?.replace(/\/$/, "") || undefined,
     relayMode: flag(env.RELAY_MODE),
     demo: flag(env.DEMO),
-    revision: env.STARBRIDGE_REVISION || undefined,
     limits: DEFAULT_LIMITS,
   };
   if (config.demo) checkDemo(config);

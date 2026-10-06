@@ -30,9 +30,7 @@ fi
 rm -rf /opt/starbridge.new /opt/starbridge.old
 mkdir /opt/starbridge.new
 git -C $repo archive --format=tar "$rev" | tar -x -C /opt/starbridge.new
+echo "$rev" > /opt/starbridge.new/REVISION
 if [ -d /opt/starbridge ]; then mv /opt/starbridge /opt/starbridge.old; fi
 mv /opt/starbridge.new /opt/starbridge
-REVISION=$rev /opt/starbridge/deploy/host/apply.sh
-# Only once it is up and healthy: a failed deploy leaves no REVISION, so only main's head deploys
-# next, and the check above never trusts a release that never ran.
-echo "$rev" > /opt/starbridge/REVISION
+/opt/starbridge/deploy/host/apply.sh
