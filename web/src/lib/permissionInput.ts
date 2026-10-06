@@ -1,6 +1,6 @@
 // What a permission prompt asks to run, in full (#274). `summary` is one line capped at 200
 // characters, so a command's tail can hide past it; the owner allows only what they can see.
-import type { Permission } from "@starbridge/protocol";
+import { type Permission, visible } from "@starbridge/protocol";
 
 /** The longest input an inbox row shows whole, and so the longest a row may carry Allow for. */
 export const ROW_INPUT_MAX = 200;
@@ -11,6 +11,10 @@ export const ROW_INPUT_MAX = 200;
  * Input that is not JSON shows as it came.
  */
 export function fullInput(p: Pick<Permission, "input" | "summary">): string {
+  return visible(rawInput(p));
+}
+
+function rawInput(p: Pick<Permission, "input" | "summary">): string {
   if (!p.input) return p.summary;
   let parsed: unknown;
   try {

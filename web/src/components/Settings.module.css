@@ -59,7 +59,8 @@
   height: var(--s3);
 }
 
-/* A name too long for the row, such as a machine's host name, breaks rather than widening it. */
+/* A name too long for the row, such as a machine's host name, breaks rather than widening it:
+   after a dot or a hyphen first (HostName), inside a word only when it has neither. */
 .rowText {
   flex: 1;
   min-width: 0;
@@ -277,6 +278,27 @@
 }
 
 @media (max-width: 599px) {
+  .segment {
+    min-height: var(--size-tap);
+  }
+
+  /* A switch's tap area is size.tap across: a transparent border makes it, the track stays drawn
+     in the padding box, and the negative margin gives the room back to the row. */
+  .switch {
+    box-sizing: content-box;
+    margin: -15px -8px;
+    border: solid transparent;
+    border-width: 15px 8px;
+    /* The track's own 9 px ends: the radius less the border on each axis. */
+    border-radius: 17px / 24px;
+  }
+
+  /* Repeated for the checked state, whose `background` shorthand resets the clip. */
+  .switch,
+  .switch:checked {
+    background-clip: padding-box;
+  }
+
   .page {
     padding: var(--s6) var(--s4) var(--s8);
     gap: var(--s8);

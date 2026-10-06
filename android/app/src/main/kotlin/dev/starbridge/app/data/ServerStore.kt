@@ -680,14 +680,15 @@ class ServerStore(
                     continue
                 }
                 if (listed.item.kind == "settled") {
-                    val (_, body) = open(listed.item) ?: continue
+                    val (from, body) = open(listed.item) ?: continue
                     body as Settled
-                    closings[body.itemId] = body.outcome to listed.receivedAt
+                    // Keyed by machine: a notice closes only the machine's own items (#362).
+                    closings["$from/${body.itemId}"] = body.outcome to listed.receivedAt
                     continue
                 }
                 // The notice that closed it arrived in the same write, so it carries the same time;
                 // a later one, after a device's answer, closed nothing.
-                val settled = closings[listed.item.id]?.takeIf { it.second == listed.answeredAt }?.first
+                fun settledBy(machine: String) = closings["$machine/${listed.item.id}"]?.takeIf { it.second == listed.answeredAt }?.first
                 val known = byId[listed.item.id]
                 if (known != null && reread && known.answeredAt == null && listed.answeredAt == null) {
                     val (from, body) = open(listed.item) ?: continue
@@ -696,6 +697,7 @@ class ServerStore(
                 }
                 if (known != null) {
                     // A settled push marked it answered already, without saying how.
+                    val settled = settledBy(known.from)
                     if (listed.answeredAt != null && (known.answeredAt == null || settled != null)) {
                         byId[known.body.id] = known.copy(answeredAt = listed.answeredAt, settled = settled ?: known.settled)
                         alerts.cancel(known.body.id)
@@ -703,7 +705,7 @@ class ServerStore(
                     continue
                 }
                 val (from, body) = open(listed.item) ?: continue
-                byId[listed.item.id] = SavedDecision(from, body as DecisionBody, listed.answeredAt, settled = settled)
+                byId[listed.item.id] = SavedDecision(from, body as DecisionBody, listed.answeredAt, settled = settledBy(from))
             }
             cursor = page.cursor
             if (page.items.size < 100) break
@@ -1502,10 +1504,10 @@ class ServerStore(
         return Prompt(
             id = b.id,
             tool = b.tool,
-            summary = b.summary,
-            description = b.description,
+            summary = visible(b.summary),
+            description = b.description?.let(::visible),
             input = b.input,
-            scopes = b.suggestions.map { PromptScope(it.scope, it.label, it.rule) },
+            scopes = b.suggestions.map { PromptScope(it.scope, it.label, visible(it.rule)) },
             source = Source(b.source.machine, b.source.project, b.source.session, b.source.sessionTitle, b.source.links.orEmpty().map { SessionLink(it.kind, it.url) }, b.source.machineKind),
             agent = b.agent,
             createdAt = instant(b.createdAt) ?: Instant.EPOCH,
