@@ -1789,8 +1789,6 @@ so the mod is the first path.
   long-poll, revoked ones included, so the revoked machine's next request gets 401 instead of
   waiting out its 60 s poll; `status` then prints `Server: reachable, but this machine was
   removed …` with the `pair --force` hint, rather than "not reachable".
-
-
 - 2026-10-06. Which answer won a race reaches every device (#330), as Tom chose over sealing
   answers to every device. An answer is sealed only to the machine that asked, so a device whose
   answer the server refused (409 `already-answered`) could not say what won. Once the machine
