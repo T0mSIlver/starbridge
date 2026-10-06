@@ -1868,6 +1868,12 @@ so the mod is the first path.
   the web app beside the phone, so the page keeps saying both clients do the same.
 - 2026-10-06. The release's npm publish step keeps its `env.NODE_AUTH_TOKEN != ''` gate (#480).
   The audit suspected it never skips; it does skip without `NPM_TOKEN`. See the research log.
+- 2026-10-06. Retention comes from `ITEM_KINDS` (#477). Each kind names its `keep`: a day, a
+  week or a month after it was received, answered or left unanswered, or `withRe` (it goes with
+  the item it refers to) and `fromActive` (it goes when its machine is revoked). The hourly sweep
+  builds its deletes from that table, and a kind without `keep` fails typecheck, so a new kind
+  can no longer be stored and never dropped. The periods stay server limits, so tests and
+  self-hosters set their length.
 
 ## Encryption, with existing libraries
 

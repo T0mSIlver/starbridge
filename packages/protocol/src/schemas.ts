@@ -91,19 +91,38 @@ export type DirectoryEntry = z.infer<typeof DirectoryEntry>;
  * referred item answered, unless the kind is `open` (it describes the item, closing nothing).
  * A kind with `updates` is re-posted under the same id as it changes, and the server keeps
  * only the latest.
+ *
+ * `keep` is how long the server stores the kind's items (`server/src/retention.ts`), so no kind
+ * is stored and never dropped: for a `received` period after its last post, an `answered` one
+ * after the answer that closed it, an `unanswered` one after its post while nothing answers it.
+ * A period is a day, a week or a month, as the server's limits set them. A `withRe` item goes
+ * with the item it refers to, and a `fromActive` one when the directory revokes its machine.
  */
 export const ITEM_KINDS = {
-  decision: { signer: "machine" },
-  answer: { signer: "device", re: { field: "decisionId", kinds: ["decision"] } },
-  quota: { signer: "machine" },
-  permission: { signer: "machine" },
-  "permission-answer": { signer: "device", re: { field: "permissionId", kinds: ["permission"] } },
-  settled: { signer: "machine", re: { field: "itemId", kinds: ["permission", "decision"] } },
-  run: { signer: "machine", updates: true },
+  decision: { signer: "machine", keep: { answered: "week", unanswered: "month" } },
+  answer: {
+    signer: "device",
+    re: { field: "decisionId", kinds: ["decision"] },
+    keep: { received: "week" },
+  },
+  quota: { signer: "machine", keep: { received: "month", fromActive: true } },
+  permission: { signer: "machine", keep: { received: "week" } },
+  "permission-answer": {
+    signer: "device",
+    re: { field: "permissionId", kinds: ["permission"] },
+    keep: { received: "week" },
+  },
+  settled: {
+    signer: "machine",
+    re: { field: "itemId", kinds: ["permission", "decision"] },
+    keep: { received: "week" },
+  },
+  run: { signer: "machine", updates: true, keep: { received: "day" } },
   waiting: {
     signer: "machine",
     re: { field: "decisionId", kinds: ["decision"], open: true },
     updates: true,
+    keep: { withRe: true },
   },
 } as const satisfies Record<
   string,
@@ -111,8 +130,18 @@ export const ITEM_KINDS = {
     signer: "device" | "machine";
     re?: { field: string; kinds: readonly string[]; open?: true };
     updates?: true;
+    keep: Keep;
   }
 >;
+
+export type RetentionPeriod = "day" | "week" | "month";
+export interface Keep {
+  received?: RetentionPeriod;
+  answered?: RetentionPeriod;
+  unanswered?: RetentionPeriod;
+  withRe?: true;
+  fromActive?: true;
+}
 
 export type ItemKind = keyof typeof ITEM_KINDS;
 const ITEM_KIND_NAMES = Object.keys(ITEM_KINDS) as [ItemKind, ...ItemKind[]];
