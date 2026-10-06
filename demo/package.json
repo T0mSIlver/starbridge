@@ -1,0 +1,25 @@
+{
+  "name": "@starbridge/demo",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "start": "bun run src/main.ts",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check ."
+  },
+  "dependencies": {
+    "@starbridge/protocol": "workspace:*",
+    "libsodium-wrappers": "^0.8.4"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.15",
+    "@starbridge/server": "workspace:*",
+    "@types/bun": "^1.4.2",
+    "@types/libsodium-wrappers": "^0.8.2",
+    "starbridge": "workspace:*",
+    "typescript": "^7.0.2"
+  }
+}

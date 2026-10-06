@@ -83,3 +83,13 @@ To restore, stop the server, copy a backup over `starbridge.db` in the volume, d
 To restore Umami, stop `umami`, then
 `sudo docker compose -p starbridge -f /opt/starbridge/deploy/compose.yaml exec -T umami-db pg_restore -U umami -d umami --clean < umami-YYYYMMDD.dump`
 and start `umami`.
+
+## Demo server
+
+`https://demo.starbridge.run` lets Play reviewers try the app (`SPEC.md`, #423): the server with
+`DEMO=1` and the demo program (`demo/`) in one container, Compose project `starbridge-demo`, on
+`127.0.0.1:8090`, with no volume, so each restart is a fresh account. Prod's Caddy serves it.
+`deploy/demo/deploy.sh [ref]` deploys it from the operator's machine, with the owner token from
+`~/.config/starbridge/secrets/demo-owner-token`; it never touches prod's project or data.
+`sudo docker compose -p starbridge-demo -f /opt/starbridge-demo/deploy/demo/compose.yaml logs`
+shows each join it approved.

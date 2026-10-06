@@ -1666,7 +1666,35 @@ so the mod is the first path.
   interactions), none shared; content is exempt as end-to-end encrypted, which Play's rules
   allow. Reviewers cannot pass GitHub's new-device email check, so they need a demo server
   that signs in with an owner token and a demo machine that posts after their phone joins
-  (open).
+  (#423, below).
+- 2026-10-06. Demo server for Play reviewers (#423). A reviewer has no GitHub account we can
+  give them (GitHub mails a new-device code) and no recovery key we can give them (recovering
+  revokes every other member, #363). So `https://demo.starbridge.run` is a self-hosted server
+  with an owner token, and its demo program (`demo/`) is the account's first device and its
+  machine:
+  - **Way in**: the program approves every join by digits on its server without comparing
+    them. The reviewer signs in with the server and token, taps "Can't scan? Compare digits",
+    and is in within seconds. This needs no new protocol, no server route and no change to the
+    app: the reviewer walks the same screens as a real second phone. A fresh account per
+    reviewer was the alternative; it needs the reviewer to pair a machine by code, and a
+    machine spawned per account.
+  - **The machine** is the real CLI, run by the program in its own config directory: `pair`,
+    `agent` with a scripted CodexBar for quota windows, an `ask --waiting --wait` loop that
+    posts the next question 5 s after an answer, and a `run` loop. #365 re-seals open questions
+    and quota to devices that join later, so nothing is posted again on a join.
+  - **Never on starbridge.run**: the program runs only against a server that answers
+    `GET /v1/demo`, which exists only with `DEMO=1`. The server refuses to start with `DEMO=1`
+    and a PUBLIC_URL on starbridge.run, GitHub sign-in or relay mode, all three of which prod
+    sets; a test covers each.
+  - **Reset by restart**: the server and the program share one container whose database lives
+    in the container, so a restart is a fresh account. The program exits, and Docker restarts
+    the container, when its device or machine is revoked (a reviewer can revoke either) or the
+    directory nears its 200-entry cap; reviewers then sign in again.
+  - **Isolation**: its own Compose project, `starbridge-demo`, with no volume, a 384 MB memory
+    cap and its port on 127.0.0.1:8090; prod's Caddy serves `demo.starbridge.run` to it with the
+    API routes only, no web page. It pushes through prod's relay (`RELAY_URL`), as any
+    self-hosted server does: the app shows a new item on a push, or on resume and pull to
+    refresh, and does not poll while open.
 
 ## Encryption, with existing libraries
 
