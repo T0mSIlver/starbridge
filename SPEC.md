@@ -1429,6 +1429,15 @@ so the mod is the first path.
   an agent that passed one believed the owner saw it. Like `--default-at`, it is accepted and
   ignored with a warning, so older commands still post; the CLI always sends "Waits for your
   answer" for clients from before 2026-10-05. `ask --help` now lists `--timeout`.
+- 2026-10-06. Devices detecting a withheld machine revocation (#362, from the #366 audit). #280's
+  check runs one way: machines read the heads devices sign into answers, but devices read no head
+  from machines, so a server holding a revoked machine's key can keep one device answering it.
+  The fix mirrors #280: machines sign `dir: {length, head}` into every item, and a device refuses
+  every machine's items while an active machine has signed a head its chain lacks. It needs a
+  schema change in `packages/protocol` and its Kotlin twin, signing in the CLI, and the hold in
+  the web and Android clients, well past one small PR, so it goes in that order as separate PRs.
+  Until then PROTOCOL.md states the device-side limit. Now, a `settled` notice closes only the
+  signing machine's decisions on the web and Android, which applied it by item id alone.
 
 ## Encryption, with existing libraries
 

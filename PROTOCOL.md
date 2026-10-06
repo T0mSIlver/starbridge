@@ -71,6 +71,20 @@ then on it must drop every message from the owner's other devices to it, which t
 answers that never arrive. A machine cannot detect a revocation that no device has told it about,
 since the server is its only channel; the revoked device's key can sign any stale head itself.
 
+Devices do not detect a withheld revocation yet (#362). A machine's items carry no head, and a
+device learns new entries only from `GET /directory?from=<n>`, which the server may answer with
+nothing. So a server that holds a revoked machine's key and withholds the revocation from one
+device can keep that device opening the machine's items and reading its answers to them. A
+device applies a `settled` or `waiting` notice only to items of the machine that signed it, so
+the revoked machine cannot close or mark another machine's questions.
+
+The planned check mirrors the machines' one. Each machine signs the head it holds, `dir: {length,
+head}`, into every item it posts. A device keeps the longest head each machine signed and, while
+a machine active in its chain has signed a head that chain does not hold, refuses every machine's
+items and says the server is holding back directory entries; it reads them again once the server
+serves those entries. Machines read the directory on every poll, so one honest machine's post
+exposes the gap. A device that hears only from the revoked machine still detects nothing.
+
 ## Pairing
 
 A new member (a machine, or a second device) makes its keys and shows a 24-character code: 8
