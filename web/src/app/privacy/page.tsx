@@ -137,7 +137,7 @@ export default function Privacy() {
         stores nothing in your browser and does not store your IP address: it tells visitors apart
         by a hash of the IP address, the browser and a salt that changes every day, so a visit
         cannot be traced back to you or linked to your visits on other days. A browser that sends Do
-        Not Track is not counted. Umami&apos;s records are deleted after 180 days, and the nightly
+        Not Track is not counted. Umami keeps its records for 180 days at most, and the nightly
         backups keep them for 14 days more.
       </p>
 
