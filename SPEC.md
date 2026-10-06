@@ -1292,6 +1292,19 @@ so the mod is the first path.
   since `codex queue` (0.160) takes the message only as an argument and other local users can
   read process arguments; `wait <id>` prints a delivered answer from local state. The npm bundle
   runs under Node, so the CLI uses no Bun global without a guard; a test runs it there.
+- 2026-10-06. An answer is never lost on Android (#329, #331). The app seals and signs an answer,
+  then keeps it on the phone before posting it, so an answer tapped offline waits there,
+  ciphertext only, until the server takes it. WorkManager sends it once a network is up, the app
+  closed or not, and every sync tries again. It ends answered, answered on another device, or
+  refused, with the server's reason shown and the buttons back. While it waits, the sheet keeps
+  the tapped option filled and the other options locked, as while sending; a snackbar says it goes
+  out when the phone is back online; a notification says "Hold · waiting to send". A tap on a
+  decision this phone answered, or whose answer waits, repeats that outcome instead of failing,
+  so a double tap on a notification button sends once and says "Answered". The server answers
+  `already-answered` to a retry of an answer it took before its reply was lost, and does not say
+  by whom; the app counts it as its own when an earlier attempt may have reached the server (the
+  connection cut after the request left, a 500, or the notification's 9 s limit), and as another
+  device's otherwise.
 - 2026-10-06. Harness integrations audit (#298), each finding reproduced in a throwaway HOME
   with Claude Code 2.1.289, Codex CLI 0.160.0 and Pi 1.0.4 with pi-permission-system 39.1.0.
   Fixed here: an agent passes its variables to the agents it starts, and a `codex exec` run
