@@ -4,8 +4,8 @@
 #
 # CPU: the agent sessions' builds run in login sessions' scopes under user.slice, and anything in
 # user.slice, the user manager's units included, shares that slice's CPU with them. ci.slice sits
-# beside user.slice at CPU weight 400 to its 100, so CI gets up to 80% of a contended box and gives
-# it all back when idle (#380). CPU_WEIGHT changes it.
+# beside user.slice at CPU weight 400 to its 100 (and system.slice's 100), so CI gets 67-80% of a
+# contended box and gives it all back when idle (#380). CPU_WEIGHT changes it.
 set -euo pipefail
 VER=2.337.0
 REPO=T0mSIlver/starbridge
@@ -69,8 +69,8 @@ Description=CI runners, ahead of the agent sessions' builds
 CPUWeight=$CPU_WEIGHT
 EOF
 sudo systemctl daemon-reload
-# Until #380 the runners were user units. Each moves only while idle, so no job is cut off; rerun
-# the script for one that was busy.
+# Until #380 the runners were user units. Each moves only while idle; rerun the script for one that
+# was busy. A job GitHub assigns in the second between the check and the stop is cancelled.
 busy() { gh api "repos/$REPO/actions/runners" --jq ".runners[] | select(.name == \"devbox-$1\") | .busy"; }
 for i in $(seq 1 "$N"); do
   unit=gh-runner-starbridge-$i.service

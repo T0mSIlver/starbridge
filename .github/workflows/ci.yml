@@ -40,8 +40,11 @@ jobs:
               - '**'
               - '!android/**'
               - '!.github/workflows/android.yml'
+            # web's tests check it against DESIGN.md (web/scripts/tokens.ts).
+            tokens:
+              - 'android/app/src/main/kotlin/dev/starbridge/app/ui/theme/Tokens.kt'
       - id: scope
-        run: echo "run=${{ github.event_name != 'pull_request' || steps.changes.outputs.run == 'true' }}" >> "$GITHUB_OUTPUT"
+        run: echo "run=${{ github.event_name != 'pull_request' || steps.changes.outputs.run == 'true' || steps.changes.outputs.tokens == 'true' }}" >> "$GITHUB_OUTPUT"
       - if: steps.scope.outputs.run == 'true'
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       - if: steps.scope.outputs.run == 'true'
