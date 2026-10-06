@@ -1,0 +1,6 @@
+# The full-disk test (`stack.sh small-disk`): the server's /data on a small tmpfs that
+# stack.sh mounts at $LOAD_DIR/disk, holding a copy of the database.
+services:
+  server:
+    volumes: !override
+      - ${LOAD_DIR}/disk:/data

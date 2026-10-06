@@ -479,6 +479,44 @@ test("a Pi session with the extension gets its answer as an event, titled from i
   expect(bare.errors.at(-1)).toContain("run `starbridge wait");
 });
 
+test("an opencode session with the plugin gets its answer as an event, titled by the plugin", async () => {
+  const { socket } = await machine();
+  const oc = {
+    STARBRIDGE_OPENCODE_SESSION: "ses_1",
+    STARBRIDGE_OPENCODE_TITLE: "Fix the build",
+    CLAUDE_CODE_SESSION_ID: "c1",
+  };
+  const c = testCtx({
+    STARBRIDGE_AGENT_SOCKET: socket,
+    ...oc,
+    STARBRIDGE_OPENCODE_ANSWERS: "ses_1",
+  });
+  const id = await ask(c, "--project", "p");
+  expect(c.errors.at(-1)).toBe("The answer will come back into this session as a new prompt.");
+  const [d] = await server.opened("decision");
+  expect([d?.agent, d?.source.session, d?.source.sessionTitle]).toEqual([
+    "opencode",
+    "ses_1",
+    "Fix the build",
+  ]);
+
+  const s = session(socket, "ses_1");
+  await s.hello();
+  await server.answer(id, { choice: "Merge" });
+  await until(async () => (await s.events()).length === 1);
+  expect((await s.events())[0]?.line).toBe(`Answer to ${id} (Merge #12 now?): Merge`);
+
+  // `opencode run`, started from another session's shell, inherits that session's variable.
+  const run = testCtx({
+    STARBRIDGE_AGENT_SOCKET: socket,
+    ...oc,
+    STARBRIDGE_OPENCODE_SESSION: "ses_2",
+    STARBRIDGE_OPENCODE_ANSWERS: "ses_1",
+  });
+  await ask(run, "--project", "p");
+  expect(run.errors.at(-1)).toContain("run `starbridge wait");
+});
+
 test("the socket is never open to other users, even between bind and chmod (#95)", async () => {
   const ctx = await paired(server);
   ctx.env.STARBRIDGE_CODEXBAR = FAKE_CODEXBAR;

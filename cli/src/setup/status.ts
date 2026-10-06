@@ -3,7 +3,7 @@ import type { Status } from "../agent/api";
 import { AgentClient } from "../agent/client";
 import { VERSION } from "../version";
 import { findCodexbar, listProviders, probe } from "./codexbar";
-import { codexSkill, hasCodex, hasPi, piPackage } from "./harnesses";
+import { codexSkill, hasCodex, hasOpencode, hasPi, opencodeState, piPackage } from "./harnesses";
 import { autoUpdate, hasClaude, legacyInstalls, PLUGINS, pluginState } from "./plugins";
 import { legacyUnits, lingering, serviceState } from "./service";
 import { probeLines } from "./setup";
@@ -95,5 +95,11 @@ export async function status(sys: Sys): Promise<number> {
     );
   }
   if (hasPi(sys)) out(`Pi package: ${piPackage(sys) ? "installed" : "not installed"}`);
+  if (hasOpencode(sys)) {
+    const state = opencodeState(sys);
+    out(
+      `opencode skill and plugin: ${state === "current" ? "installed" : state === "outdated" ? "outdated (`starbridge setup` updates them)" : "not installed"}`,
+    );
+  }
   return 0;
 }

@@ -2,15 +2,16 @@
  * Runs real agents through the scripted situations in scenarios.ts, once with the skill and rule
  * of `--before` (a git ref) and once with this checkout's, and records what each posted.
  *
- *   bun evals/skill/run.ts [--agent claude|codex] [--model sonnet] [--reps 2] [--jobs 4]
+ *   bun evals/skill/run.ts [--agent claude|codex|opencode] [--model sonnet] [--reps 2] [--jobs 4]
  *                          [--only merge-order,...] [--arms before,after] [--before origin/main]
  *                          [--out evals/skill/results/<agent>]
  *
- * Each run gets its own throwaway world: a home folder, a Claude Code config dir (or CODEX_HOME)
- * holding only a copy of the login, the real server app on a random port with the CLI paired to
- * it, a git project with a bare remote, and a `gh` that prints canned output. Nothing is written
- * to the owner's own config. Claude Code loads the plugin with `--plugin-dir`; Codex gets the
- * skill in `$CODEX_HOME/skills` and the SessionStart rule in `$CODEX_HOME/AGENTS.md`.
+ * Each run gets its own throwaway world: a home folder, a Claude Code config dir (or CODEX_HOME,
+ * or opencode's XDG config and data folders) holding only a copy of the login, the real server
+ * app on a random port with the CLI paired to it, a git project with a bare remote, and a `gh`
+ * that prints canned output. Nothing is written to the owner's own config. Claude Code loads the
+ * plugin with `--plugin-dir`; Codex gets the skill in `$CODEX_HOME/skills` and the SessionStart
+ * rule in `$CODEX_HOME/AGENTS.md`, opencode the same in its config folder.
  *
  * Writes one JSON record per run to `--out`; grade.ts scores them.
  */
@@ -47,8 +48,10 @@ const { values: opt } = parseArgs({
   },
 });
 
-const agent = opt.agent as "claude" | "codex";
-const model = opt.model ?? (agent === "claude" ? "sonnet" : "gpt-6.1-sol");
+const agent = opt.agent as "claude" | "codex" | "opencode";
+const model =
+  opt.model ??
+  { claude: "sonnet", codex: "gpt-6.1-sol", opencode: "zai-coding-plan/glm-5.3-flash" }[agent];
 const repo = join(import.meta.dir, "..", "..");
 const out = opt.out ?? join(import.meta.dir, "results", agent);
 mkdirSync(out, { recursive: true });
@@ -157,6 +160,21 @@ async function turn(
       "--verbose",
       ...(resume ? ["--resume", resume] : []),
     ];
+  } else if (agent === "opencode") {
+    // `opencode run` rejects every permission prompt; `--auto` allows them, as Codex's bypass.
+    args = [
+      "run",
+      "--pure",
+      "--auto",
+      "--format",
+      "json",
+      "-m",
+      model,
+      "--dir",
+      dir,
+      ...(resume ? ["--session", resume] : []),
+      prompt,
+    ];
   } else {
     const common = ["--json", "--skip-git-repo-check", "-m", model];
     const bypass = "--dangerously-bypass-approvals-and-sandbox";
@@ -209,6 +227,13 @@ async function turn(
           (u.cache_read_input_tokens ?? 0) +
           (u.cache_creation_input_tokens ?? 0);
       }
+    } else if (agent === "opencode") {
+      session ??= e.sessionID;
+      const part = e.part;
+      if (e.type === "tool_use" && part?.tool === "bash") commands.push(part.state?.input?.command ?? "");
+      if (e.type === "text") final = part?.text ?? final;
+      if (e.type === "step_finish" && part?.tokens)
+        tokens = (tokens ?? 0) + (part.tokens.input ?? 0) + (part.tokens.output ?? 0);
     } else {
       if (e.type === "thread.started") session = e.thread_id;
       const item = e.item;
@@ -353,14 +378,20 @@ async function one(s: Scenario, arm: string, rep: number): Promise<RunRecord> {
   const plugin = arms[arm] as string;
   if (agent === "claude") copyFileSync(join(homedir(), ".claude/.credentials.json"), join(cfg, ".credentials.json"));
   else {
-    copyFileSync(join(homedir(), ".codex/auth.json"), join(cfg, "auth.json"));
-    cpSync(join(plugin, "skills/starbridge"), join(cfg, "skills/starbridge"), { recursive: true });
+    // opencode reads its config from `$XDG_CONFIG_HOME/opencode` and its login from
+    // `$XDG_DATA_HOME/opencode/auth.json` (the Z.ai key).
+    const conf = agent === "opencode" ? join(cfg, "opencode") : cfg;
+    if (agent === "opencode") {
+      mkdirSync(join(root, "data/opencode"), { recursive: true });
+      copyFileSync(join(homedir(), ".local/share/opencode/auth.json"), join(root, "data/opencode/auth.json"));
+    } else copyFileSync(join(homedir(), ".codex/auth.json"), join(cfg, "auth.json"));
+    cpSync(join(plugin, "skills/starbridge"), join(conf, "skills/starbridge"), { recursive: true });
     const hook = spawnSync("sh", [join(plugin, "hooks/session-start.sh")], {
       env: { STARBRIDGE_CONFIG_DIR: sb },
       encoding: "utf8",
     });
     writeFileSync(
-      join(cfg, "AGENTS.md"),
+      join(conf, "AGENTS.md"),
       `${JSON.parse(hook.stdout).hookSpecificOutput.additionalContext}\n`,
     );
   }
@@ -375,7 +406,18 @@ async function one(s: Scenario, arm: string, rep: number): Promise<RunRecord> {
     GIT_AUTHOR_EMAIL: "dev@example.com",
     GIT_COMMITTER_NAME: "dev",
     GIT_COMMITTER_EMAIL: "dev@example.com",
-    ...(agent === "claude" ? { CLAUDE_CONFIG_DIR: cfg } : { CODEX_HOME: cfg }),
+    ...(agent === "claude"
+      ? { CLAUDE_CONFIG_DIR: cfg }
+      : agent === "codex"
+        ? { CODEX_HOME: cfg }
+        : {
+            XDG_CONFIG_HOME: cfg,
+            XDG_DATA_HOME: join(root, "data"),
+            XDG_STATE_HOME: join(root, "state"),
+            // Shared, so each run does not download the model list again.
+            XDG_CACHE_HOME: join(work, "cache"),
+            OPENCODE_DISABLE_AUTOUPDATE: "1",
+          }),
   };
 
   const live = await LiveServer.start();
@@ -421,11 +463,11 @@ async function one(s: Scenario, arm: string, rep: number): Promise<RunRecord> {
 
     type Card = { id: string; question: string; recommended?: string; options: string[] };
     const choiceFor = (c: Card) => c.recommended ?? c.options[0] ?? "Go ahead";
-    // Codex has no plugin to bring an answer back as a prompt: it waits within its turn
-    // (`starbridge wait`), so the owner answers the first card while the turn runs.
+    // `codex exec` and `opencode run` get nothing back as a prompt: the agent waits within its
+    // turn (`starbridge wait`), so the owner answers the first card while the turn runs.
     let answeredFirst: Record<string, unknown>[] | undefined;
     const answering =
-      agent === "codex" && s.followUp && !s.unpaired
+      agent !== "claude" && s.followUp && !s.unpaired
         ? (async () => {
             while (!answeredFirst) {
               await Bun.sleep(2_000);

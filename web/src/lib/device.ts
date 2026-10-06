@@ -927,7 +927,7 @@ async function openDecision(
   const reply = sent[body.id];
   // The notice that closed it arrived in the same write, so it carries the same time; a later
   // one, after a device's answer, closed nothing.
-  const closing = closings.get(body.id);
+  const closing = closings.get(`${machine.id}/${body.id}`);
   const settled = closing && closing.at === s.answeredAt ? closing.outcome : undefined;
   return {
     decision: body as Decision,
@@ -985,8 +985,9 @@ export async function loadInbox(ctx: Ctx, inbox: Inbox = { items: [], rejected: 
     if (s.item.kind === "settled") {
       // Only tells how a decision closed: one that fails to open costs that and nothing else.
       try {
-        const { body } = await openAsync(expectKind(s.item, "settled"), me(ctx), ctx.dir);
-        closings.set(body.itemId, { outcome: body.outcome, at: s.receivedAt });
+        const { signer, body } = await openAsync(expectKind(s.item, "settled"), me(ctx), ctx.dir);
+        // Keyed by machine: a notice closes only the machine's own items (#362).
+        closings.set(`${signer.id}/${body.itemId}`, { outcome: body.outcome, at: s.receivedAt });
       } catch {}
       return;
     }

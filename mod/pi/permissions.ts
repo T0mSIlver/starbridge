@@ -11,6 +11,9 @@
  * While the devices have it, the keyboard can still take it: a small dialog offers "Answer
  * here", which takes the prompt back from the devices and opens pi-permission-system's dialog.
  */
+import { STOP_MS, type Verdict, verdictOf } from "../hooks/node.ts";
+
+export { STOP_MS, verdictOf };
 
 /** The fields of pi-permission-system's `PromptPermissionDetails` this link reads. */
 export interface AskDetails {
@@ -29,8 +32,8 @@ export interface AskDetails {
   accessIntent?: { surface?: string };
 }
 
-/** pi-permission-system's `AuthorizerVerdict`. */
-export type Verdict = { kind: "allow" } | { kind: "deny"; reason?: string } | { kind: "defer" };
+/** pi-permission-system's `AuthorizerVerdict`, which is the CLI's. */
+export type { Verdict };
 
 /** The link's name, which the owner adds to pi-permission-system's `authorizerChain`. */
 export const LINK = "starbridge";
@@ -85,18 +88,6 @@ export function hookInput(details: AskDetails, session: string, cwd: string) {
   return { session_id: session, cwd, tool_name: tool, tool_input: input };
 }
 
-/** The verdict in what the CLI printed: Claude Code's `PermissionRequest` decision, or none. */
-export function verdictOf(stdout: string): Verdict {
-  try {
-    const d = (JSON.parse(stdout) as { hookSpecificOutput?: { decision?: unknown } })
-      .hookSpecificOutput?.decision as { behavior?: unknown; message?: unknown } | undefined;
-    if (d?.behavior === "allow") return { kind: "allow" };
-    if (d?.behavior === "deny")
-      return { kind: "deny", ...(typeof d.message === "string" ? { reason: d.message } : {}) };
-  } catch {}
-  return { kind: "defer" };
-}
-
 export interface LinkDeps {
   /** Runs the CLI's hook with `stdin`; an abort ends it as the keyboard answering. */
   hook(stdin: string, signal: AbortSignal): Promise<string>;
@@ -115,8 +106,6 @@ export const QUIET_MS = 1_000;
  * stalled server must never hold the prompt, nor the keyboard's dialog after it.
  */
 export const HOOK_MS = 600_000;
-/** How long the CLI gets once stopped: it reports the prompt settled within 5 s. */
-export const STOP_MS = 10_000;
 
 /** Asks the devices, and the keyboard when there is one; the first to answer decides. */
 export async function authorize(

@@ -9,17 +9,8 @@
     "allowImportingTsExtensions": true,
     "skipLibCheck": true,
     "noEmit": true,
+    "typeRoots": ["../../server/node_modules/@types"],
     "types": ["bun"]
   },
-  "include": [
-    "../cli/src/text.d.ts",
-    "hooks/poller.ts",
-    "hooks/agent.ts",
-    "hooks/switch.ts",
-    "hooks/node.ts",
-    "opencode",
-    "pi",
-    "test",
-    "e2e"
-  ]
+  "include": ["*.ts"]
 }
