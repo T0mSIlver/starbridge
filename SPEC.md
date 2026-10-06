@@ -1389,6 +1389,14 @@ so the mod is the first path.
   session, takes only answers to that session's decisions, so it cannot take one that another
   session's mod or `wait` is due; outside an agent's session it still takes any. Checked with Pi 1.0.4 and pi-permission-system 39.1.0: `starbridge ask` ran
   without a dialog while `touch` still asked, and uninstall left no config behind.
+- 2026-10-06. Layout breakage fails CI (#305). Every e2e screenshot, at 390 and 1280 px and
+  checked again at 320, fails on a page wider than the window, a box that cuts its text without
+  an ellipsis, text past its box, anything past the window's edge, or text drawn over text
+  (`web/e2e/layout.ts`). Tap targets under 44 px and contrast under 3:1 are listed, not failed,
+  until the owner rules on them. The e2e now covers worst-case content (a host-length machine
+  name, unbroken branch names, 24 items, a permission prompt, a run) and runs in CI; it picks
+  free ports, so runners on one machine do not collide. `AUDIT=<folder>` shoots every size from
+  320 to 1920 px in both themes, plus 200% text at 390, and lists what the checks find.
 
 ## Encryption, with existing libraries
 
@@ -1799,3 +1807,12 @@ goes in git.
   receives it twice. Only a connection that drops once the reply's
   headers are in reaches the app as a failure, and that is what
   `RecoveryRetryTest` scripts (MockWebServer's `onResponseBody`).
+- 2026-10-06: screenshot audit (#305), Firefox 1543 through Playwright 1.63, every e2e screen at
+  320, 360, 390, 430, 768, 1024, 1280, 1440 and 1920 px in both themes and at 200% text. Broken
+  and fixed: a long machine name pushed the time off inbox rows and ran under the repo name;
+  Settings was 338 px wide at 320 (its segmented control) and wider still with a long device
+  name; from 900 px, Settings squeezed a label to one word a line; a quota card's machine name
+  was cut without an ellipsis; at 200% text, run cards and Setup's fields widened the page and
+  the meta row cut its text. No text measured under 3:1 in either theme. The 200% text is
+  emulated by scaling each element's computed font size and line height, since the page sets
+  type in px; a browser that zooms the whole page instead is not covered.
