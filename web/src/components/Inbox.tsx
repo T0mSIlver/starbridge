@@ -13,6 +13,7 @@ import {
 } from "@/lib/feed";
 import { matches, useFind } from "@/lib/find";
 import { clockTime } from "@/lib/format";
+import { closeItem, forgetItem, openItem, useOpened } from "@/lib/opened";
 import { closedByPhrase, promptOutcome } from "@/lib/outcome";
 import { fitsRow } from "@/lib/permissionInput";
 import { type Prefs, usePref } from "@/lib/prefs";
@@ -93,7 +94,7 @@ export function Inbox() {
   const ids = [...needs, ...(showPast ? past.map((p) => p.entry) : [])].map((e) => e.id);
   const [picked, setPicked] = useState<string>();
   // Phones and narrow windows show the detail in place of the list once a row is tapped.
-  const [opened, setOpened] = useState<string>();
+  const opened = useOpened();
   // What this page answered, which may still be listed as open until the inbox reloads.
   const answeredHere = useRef(new Set<string>());
   const firstOpen = needs.find((e) => !answeredHere.current.has(e.id))?.id;
@@ -105,6 +106,12 @@ export function Inbox() {
   useEffect(() => {
     if (wide && selected && picked !== selected) setPicked(selected);
   }, [wide, selected, picked]);
+  // A link or a narrower window opened an item: a wide window selects it beside the list instead.
+  useEffect(() => {
+    if (!wide || !opened) return;
+    setPicked(opened);
+    forgetItem();
+  }, [wide, opened]);
 
   const latest = useRef({ ids, selected });
   latest.current = { ids, selected };
@@ -190,7 +197,7 @@ export function Inbox() {
         now={now}
         comfy={comfy}
         selected={wide && e.id === selected}
-        onSelect={() => (wide ? setPicked(e.id) : setOpened(e.id))}
+        onSelect={() => (wide ? setPicked(e.id) : openItem(e.id))}
         actions={
           comfy ? (
             <RowActions entry={e} onPrompt={answerOne} onQuestion={answerQuestion} />
@@ -235,7 +242,7 @@ export function Inbox() {
               by={p.entry.type === "question" ? closedByPhrase(p.entry.item) : ""}
               comfy={comfy}
               selected={wide && p.entry.id === selected}
-              onSelect={() => (wide ? setPicked(p.entry.id) : setOpened(p.entry.id))}
+              onSelect={() => (wide ? setPicked(p.entry.id) : openItem(p.entry.id))}
             />
           ))}
         </div>
@@ -330,7 +337,7 @@ export function Inbox() {
   if (!wide && opened) {
     return (
       <div className={s.single}>
-        <PhoneBar title="Inbox" back={() => setOpened(undefined)} always />
+        <PhoneBar title="Inbox" back={closeItem} always />
         <div className={`m-enter ${s.openDetail}`}>
           {detail(opened) ?? <p className={`t-small ${s.empty}`}>Answered</p>}
         </div>

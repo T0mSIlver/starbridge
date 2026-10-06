@@ -1292,6 +1292,15 @@ so the mod is the first path.
   since `codex queue` (0.160) takes the message only as an argument and other local users can
   read process arguments; `wait <id>` prints a delivered answer from local state. The npm bundle
   runs under Node, so the CLI uses no Bun global without a guard; a test runs it there.
+
+- 2026-10-06. Back on a phone's web page closes an open item first (#347). Under 1100 px, the
+  item shown in place of the list sits in the address as `/?item=<id>`, pushed as its own history
+  entry, so Back, Android's back gesture and an installed app's Back return to the list; a reload
+  keeps the item open, and a link to `/?item=<id>` opens it. The in-page way back steps back
+  through history when the page pushed the entry (its `history.state` says so, through a reload),
+  else it replaces the address. A wide window pushes nothing: it selects a linked item beside the
+  list and drops `?item` from the address. Image and confirm dialogs are modal `<dialog>`s,
+  which Chrome on Android closes on the back gesture before it leaves the page.
 - 2026-10-06. Harness integrations audit (#298), each finding reproduced in a throwaway HOME
   with Claude Code 2.1.289, Codex CLI 0.160.0 and Pi 1.0.4 with pi-permission-system 39.1.0.
   Fixed here: an agent passes its variables to the agents it starts, and a `codex exec` run

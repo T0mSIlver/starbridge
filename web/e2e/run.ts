@@ -575,6 +575,72 @@ async function main() {
     if (!(await row.evaluate((el) => el.contains(document.activeElement))))
       throw new Error(`after ${key}, focus is not on the selected row`);
   }
+  step("on a phone, Back closes an open question first; a reload and a link keep it (#347)");
+  {
+    const MERGE = "Merge #19 (server) before the web PR rebases?";
+    const merge = await page
+      .locator("[data-row]", { hasText: MERGE })
+      .first()
+      .getAttribute("data-row");
+    const p = await a.newPage();
+    await p.setViewportSize({ width: 390, height: 844 });
+    const where = () => new URL(p.url()).pathname + new URL(p.url()).search;
+    const expectAt = async (path: string, showing: "list" | "detail", what: string) => {
+      await p
+        .waitForURL((u) => u.pathname + u.search === path, { timeout: 10_000 })
+        .catch(() => {});
+      const back = p.getByRole("button", { name: "Back", exact: true });
+      const open = (await back.count()) > 0;
+      if (where() !== path || open !== (showing === "detail"))
+        throw new Error(`${what}: at ${where()} showing the ${open ? "detail" : "list"}`);
+    };
+    await p.goto(`${ORIGIN}/quotas`);
+    await p.getByRole("link", { name: "Inbox" }).first().click();
+    await p.locator(`button[data-id="${merge}"]`).click();
+    await expectAt(`/?item=${merge}`, "detail", "a tapped question");
+    await p.getByRole("heading", { name: MERGE }).waitFor();
+    await p.goBack();
+    await expectAt("/", "list", "Back from the open question");
+    await p.goBack();
+    await expectAt("/quotas", "list", "Back from the inbox");
+    await p.goForward();
+    await p.goForward();
+    await expectAt(`/?item=${merge}`, "detail", "Forward to the question");
+    await p.reload();
+    await p.getByRole("heading", { name: MERGE }).waitFor({ timeout: 30_000 });
+    await expectAt(`/?item=${merge}`, "detail", "a reload with the question open");
+    // The in-page way back steps back through history, so it leaves no entry behind.
+    await p.getByRole("button", { name: "Back", exact: true }).click();
+    await expectAt("/", "list", "the in-page Back after a reload");
+    await p.goBack();
+    await expectAt("/quotas", "list", "Back after the in-page Back");
+
+    // A link to the question opens it; closing it stays on the inbox.
+    const linked = await a.newPage();
+    await linked.setViewportSize({ width: 390, height: 844 });
+    await linked.goto(`${ORIGIN}/?item=${merge}`);
+    await linked.getByRole("heading", { name: MERGE }).waitFor({ timeout: 30_000 });
+    await linked.getByRole("button", { name: "Back", exact: true }).click();
+    await linked.waitForURL((u) => u.pathname === "/" && u.search === "");
+    await linked.locator(`button[data-id="${merge}"]`).waitFor();
+    await linked.close();
+
+    // A desktop window selects beside the list and adds no history entry, linked or clicked.
+    await p.setViewportSize(DESKTOP);
+    await p.goto(`${ORIGIN}/?item=${merge}`);
+    await p.waitForURL((u) => u.pathname === "/" && u.search === "", { timeout: 30_000 });
+    await p
+      .locator('section[aria-label="Selected"]')
+      .getByRole("heading", { name: MERGE })
+      .waitFor();
+    const entries = await p.evaluate(() => history.length);
+    await p.locator("button[data-id]").last().click();
+    await p.locator("button[data-id]").first().click();
+    if ((await p.evaluate(() => history.length)) !== entries || where() !== "/")
+      throw new Error(`picking on a desktop moved history: at ${where()}`);
+    await p.close();
+  }
+
   step("inbox motion: an arrival, a flip to waiting, an answer, History, a phone's detail");
   {
     const m = await a.newPage();
