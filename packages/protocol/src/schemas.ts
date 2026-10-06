@@ -395,9 +395,14 @@ export const Settled = z
     outcome: z.enum(["keyboard", "timeout", "device", "elsewhere", "withdrawn"]).optional(),
     /** With outcome "device": the device whose answer the machine applied. */
     device: Id.optional(),
+    /** With outcome "device" on a permission: what that device answered (#349). */
+    behavior: z.enum(["allow", "deny"]).optional(),
   })
   .refine((s) => (s.outcome === "device") === (s.device !== undefined), {
     message: "device is set exactly when outcome is device",
+  })
+  .refine((s) => s.behavior === undefined || s.outcome === "device", {
+    message: "behavior is for outcome device",
   });
 export type Settled = z.infer<typeof Settled>;
 

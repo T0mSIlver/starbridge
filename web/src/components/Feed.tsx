@@ -356,13 +356,11 @@ export function HistoryHead({
 /** One answered item: the meta row, the question or command, the answer and who gave it. */
 export function PastRow({
   past,
-  by,
   comfy,
   selected,
   onSelect,
 }: {
   past: Past;
-  by: string;
   comfy?: boolean;
   selected?: boolean;
   onSelect: () => void;
@@ -397,7 +395,8 @@ export function PastRow({
           <Hit text={past.text} />
         </div>
         <div className={`t-meta ${s.dim}`}>
-          <Hit text={past.outcome} /> · {by}
+          <Hit text={past.outcome} />
+          {past.by && ` · ${past.by}`}
         </div>
       </div>
     </div>

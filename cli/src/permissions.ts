@@ -479,6 +479,9 @@ export function hookDecision(p: PendingPermission): unknown {
   return { hookSpecificOutput: { hookEventName: "PermissionRequest", decision } };
 }
 
+/** How a prompt ended, as its settled notice tells the devices. */
+type Settling = Pick<Settled, "outcome" | "device" | "behavior">;
+
 /**
  * Marks prompt `id` settled, if no one settled it yet, and returns what to tell the devices;
  * undefined when it was settled already. Synchronous, so a waiting hook marks its prompt before
@@ -488,14 +491,14 @@ export function markSettled(
   ctx: Ctx,
   id: string,
   outcome: "keyboard" | "timeout" | "device",
-): { outcome: Settled["outcome"]; device?: string } | undefined {
-  let marked: { outcome: Settled["outcome"]; device?: string } | undefined;
+): Settling | undefined {
+  let marked: Settling | undefined;
   ctx.store.updateState((st) => {
     const p = st.permissions?.[id];
     if (!p || p.settled) return;
     p.settled = outcome;
-    const device = outcome === "device" ? p.answer?.device : undefined;
-    marked = { outcome, ...(device ? { device } : {}) };
+    const a = outcome === "device" ? p.answer : undefined;
+    marked = { outcome, ...(a ? { device: a.device, behavior: a.behavior } : {}) };
   });
   return marked;
 }
@@ -505,7 +508,7 @@ export async function postSettled(
   ctx: Ctx,
   s: Session,
   id: string,
-  how: { outcome: Settled["outcome"]; device?: string },
+  how: Settling,
   signal?: AbortSignal,
 ): Promise<void> {
   const to = devices(await refreshDirectory(ctx, s, signal));
@@ -515,7 +518,7 @@ export async function postSettled(
     itemId: id,
     to: to.map((d) => d.id),
     outcome: how.outcome,
-    ...(how.device ? { device: how.device } : {}),
+    ...(how.device ? { device: how.device, behavior: how.behavior } : {}),
     at: iso(ctx.now()),
   };
   await s.api.postItem(

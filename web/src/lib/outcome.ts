@@ -30,15 +30,37 @@ export function closedBy(item: InboxItem): string {
   return item.settled || item.decision.answerIn ? "The agent" : "Another device";
 }
 
-/** How a prompt ended: "Allowed here", "Answered on devbox", "Timed out: left to the keyboard". */
-export function promptOutcome(p: PromptItem, deviceName: (id: string) => string): string {
-  if (p.reply) return p.reply.behavior === "allow" ? "Allowed here" : "Denied here";
-  const out = p.settled?.outcome;
-  if (out === "keyboard") return `Answered on ${p.permission.source.machine}`;
-  if (out === "timeout") return "Timed out: left to the keyboard";
-  if (out === "device" && p.settled?.device) return `Answered from ${deviceName(p.settled.device)}`;
-  if (p.answeredAt) return "Answered on another device";
-  return Date.parse(p.permission.expiresAt) > Date.now() ? "No longer waiting" : "Expired";
+const allowed = {
+  once: "Allowed once",
+  session: "Allowed for this session",
+  project: "Always allowed",
+};
+
+/**
+ * How a prompt ended and where, as History puts it: "Denied", "on Pixel". The where is empty
+ * when nobody answered (timed out, expired).
+ */
+export function promptOutcome(
+  p: PromptItem,
+  deviceName: (id: string) => string,
+): { outcome: string; by: string } {
+  if (p.reply)
+    return {
+      outcome: p.reply.behavior === "allow" ? allowed[p.reply.scope] : "Denied",
+      by: "on this browser",
+    };
+  const s = p.settled;
+  if (s?.outcome === "keyboard")
+    return { outcome: "Answered", by: `on ${p.permission.source.machine}` };
+  if (s?.outcome === "timeout") return { outcome: "Timed out: left to the keyboard", by: "" };
+  if (s?.outcome === "device" && s.device) {
+    const outcome =
+      s.behavior === "allow" ? "Allowed" : s.behavior === "deny" ? "Denied" : "Answered";
+    return { outcome, by: `on ${deviceName(s.device)}` };
+  }
+  if (p.answeredAt) return { outcome: "Answered", by: "on another device" };
+  const left = Date.parse(p.permission.expiresAt) > Date.now();
+  return { outcome: left ? "No longer waiting" : "Expired", by: "" };
 }
 
 /** Who closed a question, after its answer in History: "on this browser", "by the agent". */

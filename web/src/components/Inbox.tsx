@@ -13,7 +13,7 @@ import {
 } from "@/lib/feed";
 import { matches, useFind } from "@/lib/find";
 import { clockTime } from "@/lib/format";
-import { closedByPhrase, promptOutcome } from "@/lib/outcome";
+import { promptOutcome } from "@/lib/outcome";
 import { fitsRow } from "@/lib/permissionInput";
 import { type Prefs, usePref } from "@/lib/prefs";
 import { afterAnswer, selectedId, step } from "@/lib/selection";
@@ -85,7 +85,8 @@ export function Inbox() {
   }, [promptLog, prompts]);
   // History's matches, answers included, list under the open items while finding.
   const past = history(inbox.items, allPrompts, (p) => promptOutcome(p, deviceName), now).filter(
-    (p) => !finding || matches(find, [p.entry.machine, p.entry.repo, ...text(p.entry), p.outcome]),
+    (p) =>
+      !finding || matches(find, [p.entry.machine, p.entry.repo, ...text(p.entry), p.outcome, p.by]),
   );
   const showPast = historyOpen || finding;
   const view = finding ? "none" : grouping;
@@ -232,7 +233,6 @@ export function Inbox() {
             <PastRow
               key={p.entry.id}
               past={p}
-              by={p.entry.type === "question" ? closedByPhrase(p.entry.item) : ""}
               comfy={comfy}
               selected={wide && p.entry.id === selected}
               onSelect={() => (wide ? setPicked(p.entry.id) : setOpened(p.entry.id))}
@@ -539,9 +539,7 @@ function useRowMotion(list: React.RefObject<HTMLElement | null>, ids: string[], 
 
 /** History's second line: "Server first · on this browser · 11:02". */
 function closedLine(p: Past): string {
-  const by = p.entry.type === "question" ? ` · ${closedByPhrase(p.entry.item)}` : "";
-  const at = clockTime(new Date(p.closed));
-  return `${p.outcome}${by} · ${at}`;
+  return [p.outcome, p.by, clockTime(new Date(p.closed))].filter(Boolean).join(" · ");
 }
 
 /**

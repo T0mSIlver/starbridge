@@ -103,6 +103,7 @@ for (const viaAgent of [true, false]) {
       itemId: permission.id,
       outcome: "device",
       device: "phone",
+      behavior: "allow",
     });
     expect(await server.opened("permission", "&open=1")).toEqual([]);
   });
