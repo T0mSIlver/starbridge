@@ -251,8 +251,11 @@ sealed interface Phase {
     data class NoDevice(val accountExists: Boolean) : Phase
     /** Waiting for another device to approve this one; it shows [code], or [scanned] it. */
     data class Joining(val code: String, val scanned: Boolean = false) : Phase
-    /** Asked the account's devices to approve this one; [digits] once one of them took it. */
-    data class JoiningByDigits(val digits: String?) : Phase
+    /**
+     * Asked the account's devices to approve this one; [digits] once one of them took it, and
+     * [matched] once the owner said that device shows the same digits.
+     */
+    data class JoiningByDigits(val digits: String?, val matched: Boolean = false) : Phase
     /** The first device shows the recovery key once. */
     /** [shown]: a recovery key, or an older account's words. */
     data class RecoveryKey(val shown: String) : Phase

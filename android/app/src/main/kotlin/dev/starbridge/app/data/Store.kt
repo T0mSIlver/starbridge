@@ -41,6 +41,8 @@ interface Store {
     fun joinWithCode(text: String)
     /** Asks the account's devices to approve this phone by comparing digits. */
     fun askDevices()
+    /** The owner saw the same digits on the device comparing them: its approval may count. */
+    fun confirmDigits()
     fun cancelJoin()
     fun recover(words: String)
 

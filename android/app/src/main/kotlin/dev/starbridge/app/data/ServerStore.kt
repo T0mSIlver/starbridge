@@ -188,7 +188,7 @@ class ServerStore(
         phase.value = when {
             secrets.session == null -> Phase.SignedOut
             saved.joining != null -> Phase.Joining(saved.joining!!, saved.joiningScanned)
-            saved.digitJoin != null -> Phase.JoiningByDigits(saved.digitJoin!!.digits)
+            saved.digitJoin != null -> Phase.JoiningByDigits(saved.digitJoin!!.digits, saved.digitJoin!!.matched)
             saved.me == null || saved.pin == null -> Phase.NoDevice(saved.accountExists)
             secrets.recoverySeed != null -> Phase.RecoveryKey(RecoveryKeys.shown(fromB64(secrets.recoverySeed!!), sodium))
             else -> Phase.Ready
@@ -490,6 +490,14 @@ class ServerStore(
         waitForDigitJoin()
     }
 
+    override fun confirmDigits() = run {
+        val dj = saved.digitJoin ?: return@run
+        if (dj.digits == null) return@run
+        persist(saved.copy(digitJoin = dj.copy(matched = true)))
+        // From the start: an approval that came before the owner confirmed is read again.
+        waitForDigitJoin()
+    }
+
     private fun clearDigitJoin() = persist(saved.copy(me = null, digitJoin = null), secrets.copy(joinPk = null, joinSk = null))
 
     private fun waitForDigitJoin() {
@@ -533,6 +541,8 @@ class ServerStore(
                     report(e)
                 }
             } catch (e: IllegalStateException) {
+                // A restarted wait cancels this one, which is no reason to drop the join.
+                if (e is CancellationException) throw e
                 lock.withLock {
                     clearDigitJoin()
                     notice.value = e.message
@@ -564,6 +574,9 @@ class ServerStore(
         val approval = view.approval ?: return false
         val keys = joins.joinerKeys(eph, approverKey, dj.request)
         val body = joins.openApproval(approval, keys, dj.id)
+        // The approval's MAC proves only that whoever sent the approver key approved, which may be
+        // the server: it counts once this phone's owner has seen the digits match (#355).
+        if (!dj.matched) return false
         if (body.account != saved.account) throw ProtocolException("wrong-account", body.account)
         val entries = api().directory(0)
         val dir = directories.verify(entries, saved.account, Pin(body.length, body.head))

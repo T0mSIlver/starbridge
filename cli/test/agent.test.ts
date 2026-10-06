@@ -480,7 +480,7 @@ test("a Pi session with the extension gets its answer as an event, titled from i
 });
 
 test("an opencode session with the plugin gets its answer as an event, titled by the plugin", async () => {
-  const { socket } = await machine();
+  const { ctx, socket } = await machine();
   const oc = {
     STARBRIDGE_OPENCODE_SESSION: "ses_1",
     STARBRIDGE_OPENCODE_TITLE: "Fix the build",
@@ -513,8 +513,11 @@ test("an opencode session with the plugin gets its answer as an event, titled by
     STARBRIDGE_OPENCODE_SESSION: "ses_2",
     STARBRIDGE_OPENCODE_ANSWERS: "ses_1",
   });
-  await ask(run, "--project", "p");
+  const waits = await ask(run, "--project", "p");
   expect(run.errors.at(-1)).toContain("run `starbridge wait");
+  // What the plugin reads after a restart to resume only the sessions expecting a prompt (#398).
+  const asked = ctx.store.state().asked;
+  expect([asked[id]?.extensionAnswers, asked[waits]?.extensionAnswers]).toEqual([true, undefined]);
 });
 
 test("the socket is never open to other users, even between bind and chmod (#95)", async () => {

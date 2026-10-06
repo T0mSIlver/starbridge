@@ -4,10 +4,12 @@ import "fake-indexeddb/auto";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import {
   addEntry,
+  approverKeys,
   checkJoined,
   generateMemberKeys,
   generateRecoverySeed,
   genesisEntry,
+  joinApproval,
   joinCommitment,
   joinerKeys,
   joinRequest,
@@ -292,6 +294,80 @@ test("a machine's settled notice closes only that machine's decisions (#362)", a
     expect(own.items.find((i) => i.decision.id === "d_asked")?.settled).toBe("withdrawn");
   } finally {
     globalThis.fetch = served;
+  }
+});
+
+test("a join by digits counts the approval only once this browser's owner confirms the digits (#355)", async () => {
+  const record = (await store.get("device", ctx.account)) as store.DeviceRecord;
+  const pin = await store.get("pin", ctx.account);
+  // A new sign-in session, bound to no device, asks to join; the phone compares and approves.
+  await api.ownerSignIn("owner-secret");
+  const join = await device.startDigitJoin(ctx.account, "Digits");
+  const phone = async (method: string, path: string, body?: unknown) => {
+    const res = await realFetch(`${live.url}/v1${path}`, {
+      method,
+      headers: {
+        authorization: `Bearer ${live.owner.device.token}`,
+        "content-type": "application/json",
+      },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    if (!res.ok) throw new Error(`${method} ${path}: ${res.status}`);
+    return (await res.json()) as {
+      join: JoinView;
+      joins: JoinView[];
+      length: number;
+      head: string;
+    };
+  };
+  const { joins } = await phone("GET", "/joins?after=0&wait=0");
+  let view = joins.find((v) => JSON.parse(v.request).name === "Digits") as JoinView;
+  const eph = newJoinKeyPair();
+  ({ join: view } = await phone("POST", `/joins/${view.id}/approver`, {
+    key: toB64(eph.publicKey),
+    approver: "phone",
+  }));
+  while (!view.joinerKey)
+    ({ join: view } = await phone("GET", `/joins/${view.id}?after=${view.version}&wait=5`));
+  const keys = approverKeys({
+    mine: eph,
+    joinerKey: view.joinerKey,
+    request: view.request,
+    commitment: view.commitment,
+  });
+  expect(await join.digits).toBe(keys.digits);
+  const asked = JSON.parse(view.request);
+  const add = addEntry(
+    await live.directory(),
+    { id: "phone", signKey: live.owner.device.keys.sign.privateKey },
+    { id: asked.id, role: "device", name: asked.name, boxPk: asked.boxPk, signPk: asked.signPk },
+    "2026-10-06T12:00:00Z",
+  );
+  const head = await phone("POST", "/directory", { entry: add });
+  const approval = joinApproval(
+    {
+      v: 1,
+      join: view.id,
+      account: ctx.account,
+      length: head.length,
+      head: head.head,
+      approver: "phone",
+    },
+    keys,
+  );
+  await phone("POST", `/joins/${view.id}/approve`, { approval });
+  try {
+    // The approval is on the server, but this browser's owner has not compared the digits yet.
+    const first = await Promise.race([join.done.then(() => "done"), Bun.sleep(500)]);
+    expect(first).toBeUndefined();
+    expect((await store.get("pending", ctx.account))?.name).toBe("Digits");
+    join.confirm();
+    await join.done;
+    expect((await store.get("device", ctx.account))?.name).toBe("Digits");
+  } finally {
+    join.cancel();
+    await store.put("device", record, ctx.account);
+    if (pin) await store.put("pin", pin, ctx.account);
   }
 });
 

@@ -112,7 +112,7 @@ data class Saved(
  * it saw. The digits commit to that key, so this phone never answers a second one.
  */
 @Serializable
-data class SavedDigitJoin(val id: String, val request: String, val approverKey: String? = null, val digits: String? = null)
+data class SavedDigitJoin(val id: String, val request: String, val approverKey: String? = null, val digits: String? = null, val matched: Boolean = false)
 
 /** Private keys and tokens. */
 @Serializable

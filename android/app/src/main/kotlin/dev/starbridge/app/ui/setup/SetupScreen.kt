@@ -88,6 +88,7 @@ class SetupViewModel @Inject constructor(private val store: Store) : ViewModel()
         joinWithCode = store::joinWithCode,
         askDevices = store::askDevices,
         cancelJoin = store::cancelJoin,
+        confirmDigits = store::confirmDigits,
         recover = store::recover,
         saved = store::confirmRecoveryKey,
         signOut = store::signOut,
@@ -107,6 +108,7 @@ class SetupActions(
     val recover: (key: String) -> Unit,
     val saved: () -> Unit,
     val signOut: () -> Unit,
+    val confirmDigits: () -> Unit = {},
 )
 
 /**
@@ -119,7 +121,11 @@ fun SetupScreen(phase: Phase, server: String, busy: Boolean, actions: SetupActio
         Phase.SignedOut -> SignIn(server, busy, actions, openUrl, modifier)
         is Phase.NoDevice -> if (phase.accountExists) Join(busy, actions, modifier) else FirstDevice(busy, actions, modifier)
         is Phase.Joining -> Waiting("Approve this phone", if (phase.scanned) "Approve it on the device that shows the QR code." else "Type this code on a device you already use: ${phase.code}", null, actions.cancelJoin, modifier)
-        is Phase.JoiningByDigits -> Waiting("Compare digits", "Approve on your other device if the digits match.", phase.digits, actions.cancelJoin, modifier)
+        is Phase.JoiningByDigits -> when {
+            phase.digits != null && !phase.matched -> Waiting("Compare digits", "Does your other device show the same digits?", phase.digits, actions.cancelJoin, modifier, onMatch = actions.confirmDigits)
+            phase.digits != null -> Waiting("Compare digits", "Approve on your other device.", phase.digits, actions.cancelJoin, modifier)
+            else -> Waiting("Compare digits", "Approve on your other device if the digits match.", null, actions.cancelJoin, modifier)
+        }
         is Phase.RecoveryKey -> Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = Spacing.s4, end = Spacing.s4, bottom = Spacing.s10), verticalArrangement = Arrangement.spacedBy(Spacing.s4)) { RecoveryKey(phase.shown, actions.saved) }
         Phase.Ready -> Unit
     }
@@ -322,7 +328,7 @@ private fun Recover(busy: Boolean, actions: SetupActions, modifier: Modifier, on
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-private fun Waiting(title: String, text: String, digits: String?, onCancel: () -> Unit, modifier: Modifier) {
+private fun Waiting(title: String, text: String, digits: String?, onCancel: () -> Unit, modifier: Modifier, onMatch: (() -> Unit)? = null) {
     Step(
         modifier,
         top = {
@@ -345,13 +351,16 @@ private fun Waiting(title: String, text: String, digits: String?, onCancel: () -
                     }
                 }
             }
-            Row(Modifier.padding(horizontal = Spacing.s6, vertical = 28.dp), verticalAlignment = Alignment.CenterVertically) {
-                LoadingIndicator(Modifier.size(40.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Spacer(Modifier.width(Spacing.s4))
-                Text("Waiting for the approval", style = StarbridgeTheme.type.body, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (onMatch == null) {
+                Row(Modifier.padding(horizontal = Spacing.s6, vertical = 28.dp), verticalAlignment = Alignment.CenterVertically) {
+                    LoadingIndicator(Modifier.size(40.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(Modifier.width(Spacing.s4))
+                    Text("Waiting for the approval", style = StarbridgeTheme.type.body, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
             }
         },
         bottom = {
+            if (onMatch != null) Button(onClick = onMatch, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) { Text("They match", style = StarbridgeTheme.type.action) }
             OutlinedButton(onClick = onCancel, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) { Text("Cancel", style = StarbridgeTheme.type.action) }
         },
     )
