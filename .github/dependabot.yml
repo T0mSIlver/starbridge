@@ -1,0 +1,10 @@
+# Workflows pin actions by commit SHA (#361); this proposes the updates, one grouped PR a month.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns: ["*"]

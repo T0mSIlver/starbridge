@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, setDefaultTimeout, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { createServer, type IncomingMessage, request } from "node:http";
+import { createServer, Server as HttpServer, type IncomingMessage, request } from "node:http";
 import { createServer as createNetServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -62,7 +62,7 @@ function session(socket: string, id: string) {
 
 async function ask(c: TestCtx, ...extra: string[]): Promise<string> {
   const before = c.lines.length;
-  const code = await run([...ASK, "--default", "Merge at 18:00", ...extra], c);
+  const code = await run([...ASK, ...extra], c);
   if (code !== 0) throw new Error(c.errors.join("\n"));
   return c.lines[before] as string;
 }
@@ -142,8 +142,9 @@ test("several CLI clients at once: ask, wait, answers and quota push all go thro
   expect(new Set(ids).size).toBe(5);
   expect(await server.opened("decision")).toHaveLength(5);
 
-  // A wait for one decision, a wait for any, and the mod's `answers --wait`, all at once.
+  // A wait for one decision, a wait for any of session s1's, and the mod's `answers --wait`.
   const [w1, wAny, mod] = [client(socket), client(socket), client(socket)];
+  wAny.env.CLAUDE_CODE_SESSION_ID = "s1";
   const waiting = [
     run(["wait", ids[0] as string], w1),
     run(["wait", "--timeout", "20s"], wAny),
@@ -152,13 +153,15 @@ test("several CLI clients at once: ask, wait, answers and quota push all go thro
   await Bun.sleep(200);
   await server.answer(ids[0] as string, { choice: "Merge" });
   await server.answer(ids[2] as string, { choice: "Wait" });
+  await server.answer(ids[1] as string, { choice: "Merge" });
   expect(await Promise.all(waiting)).toEqual([0, 0, 0]);
   expect(w1.lines).toEqual([`Answer to ${ids[0]} (Merge #12 now?): Merge`]);
   // The wait for one decision marked it waiting.
   expect((await server.opened("waiting")).map((w) => [w.decisionId, w.state])).toEqual([
     [ids[0] as string, "waiting"],
   ]);
-  expect(wAny.lines).toHaveLength(1);
+  // Not s0's or s2's, which their own wait and mod are due.
+  expect(wAny.lines).toEqual([`Answer to ${ids[1]} (Merge #12 now?): Merge`]);
   expect(JSON.parse(mod.lines[0] as string)).toEqual({
     decisionId: ids[2],
     ack: ids[2],
@@ -237,7 +240,7 @@ test("the CLI goes to the server itself when no agent runs, or when the agent ca
   const dead = createServer();
   await new Promise<void>((r) => dead.listen(stale, r));
   await new Promise<void>((r) => dead.close(() => r()));
-  expect(await run([...ASK, "--default", "x", "--session", "s1"], ctx)).toBe(0);
+  expect(await run([...ASK, "--session", "s1"], ctx)).toBe(0);
 
   // An agent from another release.
   const old = createServer((_req, res) => {
@@ -246,7 +249,7 @@ test("the CLI goes to the server itself when no agent runs, or when the agent ca
   });
   await new Promise<void>((r) => old.listen(stale, r));
   try {
-    expect(await run([...ASK, "--default", "x", "--session", "s1"], ctx)).toBe(0);
+    expect(await run([...ASK, "--session", "s1"], ctx)).toBe(0);
     expect(ctx.errors).toContain("starbridge: update the agent; going to the server directly");
   } finally {
     await new Promise<void>((r) => old.close(() => r()));
@@ -339,7 +342,7 @@ test("once the agent posted the decision, a 426 on the wait never posts it again
   });
   await new Promise<void>((r) => fake.listen(socket, r));
   try {
-    expect(await run([...ASK, "--default", "x", "--wait"], ctx)).toBe(1);
+    expect(await run([...ASK, "--wait"], ctx)).toBe(1);
     expect(ctx.lines).toEqual(["d_fake"]);
     expect(ctx.errors.at(-1)).toBe("starbridge: update it");
   } finally {
@@ -383,8 +386,14 @@ async function codexHome(fail = false) {
     `#!/bin/sh\necho "$CODEX_HOME $*" >> ${log}\n${fail ? "echo 'no active session' >&2; exit 1" : ""}\n`,
     { mode: 0o755 },
   );
-  // Started from a Claude Code shell, Codex inherits its session id too.
-  const env = { CODEX_THREAD_ID: "t1", CLAUDE_CODE_SESSION_ID: "c1", CODEX_HOME: home, PATH: bin };
+  // Started from a Claude Code shell, Codex inherits its variables too: Codex still asks.
+  const env = {
+    CODEX_THREAD_ID: "t1",
+    CLAUDECODE: "1",
+    CLAUDE_CODE_SESSION_ID: "c1",
+    CODEX_HOME: home,
+    PATH: bin,
+  };
   return { env, log, close: () => new Promise<void>((r) => daemon.close(() => r())) };
 }
 
@@ -468,4 +477,74 @@ test("a Pi session with the extension gets its answer as an event, titled from i
   });
   await ask(bare, "--project", "p");
   expect(bare.errors.at(-1)).toContain("run `starbridge wait");
+});
+
+test("an opencode session with the plugin gets its answer as an event, titled by the plugin", async () => {
+  const { socket } = await machine();
+  const oc = {
+    STARBRIDGE_OPENCODE_SESSION: "ses_1",
+    STARBRIDGE_OPENCODE_TITLE: "Fix the build",
+    CLAUDE_CODE_SESSION_ID: "c1",
+  };
+  const c = testCtx({
+    STARBRIDGE_AGENT_SOCKET: socket,
+    ...oc,
+    STARBRIDGE_OPENCODE_ANSWERS: "ses_1",
+  });
+  const id = await ask(c, "--project", "p");
+  expect(c.errors.at(-1)).toBe("The answer will come back into this session as a new prompt.");
+  const [d] = await server.opened("decision");
+  expect([d?.agent, d?.source.session, d?.source.sessionTitle]).toEqual([
+    "opencode",
+    "ses_1",
+    "Fix the build",
+  ]);
+
+  const s = session(socket, "ses_1");
+  await s.hello();
+  await server.answer(id, { choice: "Merge" });
+  await until(async () => (await s.events()).length === 1);
+  expect((await s.events())[0]?.line).toBe(`Answer to ${id} (Merge #12 now?): Merge`);
+
+  // `opencode run`, started from another session's shell, inherits that session's variable.
+  const run = testCtx({
+    STARBRIDGE_AGENT_SOCKET: socket,
+    ...oc,
+    STARBRIDGE_OPENCODE_SESSION: "ses_2",
+    STARBRIDGE_OPENCODE_ANSWERS: "ses_1",
+  });
+  await ask(run, "--project", "p");
+  expect(run.errors.at(-1)).toContain("run `starbridge wait");
+});
+
+test("the socket is never open to other users, even between bind and chmod (#95)", async () => {
+  const ctx = await paired(server);
+  ctx.env.STARBRIDGE_CODEXBAR = FAKE_CODEXBAR;
+  const socket = join(ctx.store.dir, "agent.sock");
+  // The mode the socket has the moment it can take connections, before start() returns.
+  let bound: number | undefined;
+  const listen = HttpServer.prototype.listen;
+  HttpServer.prototype.listen = function (this: HttpServer, ...args: unknown[]) {
+    const done = args.pop() as () => void;
+    return listen.call(this, ...(args as []), () => {
+      try {
+        bound = statSync(socket).mode & 0o777;
+      } finally {
+        done();
+      }
+    });
+  } as typeof listen;
+  const umask = process.umask(0o002);
+  try {
+    const agent = makeAgent(ctx, { socket });
+    await agent.start();
+    agents.push(agent);
+  } finally {
+    HttpServer.prototype.listen = listen;
+    process.umask(umask);
+  }
+  expect(bound).toBeDefined();
+  expect((bound as number) & 0o077).toBe(0);
+  expect(statSync(socket).mode & 0o777).toBe(0o600);
+  expect(process.umask()).toBe(umask);
 });

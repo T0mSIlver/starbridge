@@ -2,7 +2,7 @@
  * Runs real agents through the scripted situations in scenarios.ts, once with the skill and rule
  * of `--before` (a git ref) and once with this checkout's, and records what each posted.
  *
- *   bun evals/skill/run.ts [--agent claude|codex|pi] [--model claude-sonnet-5-5] [--reps 2] [--jobs 4]
+ *   bun evals/skill/run.ts [--agent claude|codex|pi|opencode] [--model claude-sonnet-5-5] [--reps 2] [--jobs 4]
  *                          [--only merge-order,...] [--arms before,after] [--before origin/main]
  *                          [--out evals/skill/results/<agent>]
  *
@@ -11,7 +11,8 @@
  * with the CLI paired to it, a git project with a bare remote, and a `gh` that prints canned
  * output. Nothing is written to the owner's own config. Claude Code loads the plugin with
  * `--plugin-dir`; Codex gets the skill in `$CODEX_HOME/skills` and the SessionStart rule in
- * `$CODEX_HOME/AGENTS.md`; Pi loads the Starbridge Pi extension and skill with `-e` and `--skill`.
+ * `$CODEX_HOME/AGENTS.md`, opencode the same in its XDG config folder; Pi loads the Starbridge Pi
+ * extension and skill with `-e` and `--skill`.
  *
  * Models: Claude Code defaults to claude-sonnet-5-5, Codex to its own default and Pi to
  * zai/glm-5.3-flash (`provider/id`, with the providers of `~/.pi/agent`).
@@ -49,10 +50,15 @@ const { values: opt } = parseArgs({
   },
 });
 
-const agent = opt.agent as "claude" | "codex" | "pi";
+const agent = opt.agent as "claude" | "codex" | "pi" | "opencode";
 const model =
   opt.model ??
-  { claude: "claude-sonnet-5-5", codex: undefined, pi: "zai/glm-5.3-flash" }[agent];
+  {
+    claude: "claude-sonnet-5-5",
+    codex: undefined,
+    pi: "zai/glm-5.3-flash",
+    opencode: "zai-coding-plan/glm-5.3-flash",
+  }[agent];
 const repo = join(import.meta.dir, "..", "..");
 const out = opt.out ?? join(import.meta.dir, "results", agent);
 mkdirSync(out, { recursive: true });
@@ -184,6 +190,21 @@ async function turn(
       "-p",
       prompt,
     ];
+  } else if (agent === "opencode") {
+    // `opencode run` rejects every permission prompt; `--auto` allows them, as Codex's bypass.
+    args = [
+      "run",
+      "--pure",
+      "--auto",
+      "--format",
+      "json",
+      "-m",
+      model as string,
+      "--dir",
+      dir,
+      ...(resume ? ["--session", resume] : []),
+      prompt,
+    ];
   } else {
     const common = ["--json", "--skip-git-repo-check", ...(model ? ["-m", model] : [])];
     const bypass = "--dangerously-bypass-approvals-and-sandbox";
@@ -251,6 +272,14 @@ async function turn(
         tokens = (tokens ?? 0) + (u.input ?? 0) + (u.output ?? 0) + (u.cacheRead ?? 0) + (u.cacheWrite ?? 0);
         costUsd = (costUsd ?? 0) + (u.cost?.total ?? 0);
       }
+    } else if (agent === "opencode") {
+      session ??= e.sessionID;
+      const part = e.part;
+      if (e.type === "tool_use" && part?.tool === "bash")
+        commands.push(part.state?.input?.command ?? "");
+      if (e.type === "text") final = part?.text ?? final;
+      if (e.type === "step_finish" && part?.tokens)
+        tokens = (tokens ?? 0) + (part.tokens.input ?? 0) + (part.tokens.output ?? 0);
     } else {
       if (e.type === "thread.started") session = e.thread_id;
       const item = e.item;
@@ -401,14 +430,23 @@ async function one(s: Scenario, arm: string, rep: number): Promise<RunRecord> {
       if (existsSync(join(homedir(), ".pi/agent", f)))
         copyFileSync(join(homedir(), ".pi/agent", f), join(cfg, f));
   } else {
-    copyFileSync(join(homedir(), ".codex/auth.json"), join(cfg, "auth.json"));
-    cpSync(join(plugin, "skills/starbridge"), join(cfg, "skills/starbridge"), { recursive: true });
+    // opencode reads its config from `$XDG_CONFIG_HOME/opencode` and its login from
+    // `$XDG_DATA_HOME/opencode/auth.json` (the Z.ai key).
+    const conf = agent === "opencode" ? join(cfg, "opencode") : cfg;
+    if (agent === "opencode") {
+      mkdirSync(join(root, "data/opencode"), { recursive: true });
+      copyFileSync(
+        join(homedir(), ".local/share/opencode/auth.json"),
+        join(root, "data/opencode/auth.json"),
+      );
+    } else copyFileSync(join(homedir(), ".codex/auth.json"), join(cfg, "auth.json"));
+    cpSync(join(plugin, "skills/starbridge"), join(conf, "skills/starbridge"), { recursive: true });
     const hook = spawnSync("sh", [join(plugin, "hooks/session-start.sh")], {
       env: { STARBRIDGE_CONFIG_DIR: sb },
       encoding: "utf8",
     });
     writeFileSync(
-      join(cfg, "AGENTS.md"),
+      join(conf, "AGENTS.md"),
       `${JSON.parse(hook.stdout).hookSpecificOutput.additionalContext}\n`,
     );
   }
@@ -423,7 +461,16 @@ async function one(s: Scenario, arm: string, rep: number): Promise<RunRecord> {
     GIT_AUTHOR_EMAIL: "dev@example.com",
     GIT_COMMITTER_NAME: "dev",
     GIT_COMMITTER_EMAIL: "dev@example.com",
-    ...{ claude: { CLAUDE_CONFIG_DIR: cfg }, codex: { CODEX_HOME: cfg }, pi: { PI_CODING_AGENT_DIR: cfg } }[agent],
+    ...{ claude: { CLAUDE_CONFIG_DIR: cfg }, codex: { CODEX_HOME: cfg }, pi: { PI_CODING_AGENT_DIR: cfg },
+      opencode: {
+        XDG_CONFIG_HOME: cfg,
+        XDG_DATA_HOME: join(root, "data"),
+        XDG_STATE_HOME: join(root, "state"),
+        // Shared, so each run does not download the model list again.
+        XDG_CACHE_HOME: join(work, "cache"),
+        OPENCODE_DISABLE_AUTOUPDATE: "1",
+      },
+    }[agent],
   };
 
   const live = await LiveServer.start();
@@ -469,7 +516,7 @@ async function one(s: Scenario, arm: string, rep: number): Promise<RunRecord> {
 
     type Card = { id: string; question: string; recommended?: string; options: string[] };
     const choiceFor = (c: Card) => c.recommended ?? c.options[0] ?? "Go ahead";
-    // In `codex exec` and `pi -p` nothing brings an answer back as a prompt: the agent waits
+    // In `codex exec`, `pi -p` and `opencode run` nothing brings an answer back as a prompt: the agent waits
     // within its turn (`starbridge wait`), so the owner answers the first card while it runs.
     let answeredFirst: Record<string, unknown>[] | undefined;
     const answering =

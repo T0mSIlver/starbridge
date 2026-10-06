@@ -18,7 +18,7 @@ import {
 } from "@starbridge/protocol";
 import { ApiError } from "./api";
 import { claudeSession } from "./claude";
-import { type CodexSession, codexSession } from "./codex";
+import { type CodexSession, codexAsker, codexSession } from "./codex";
 import type { State } from "./config";
 import {
   type Ctx,
@@ -32,6 +32,7 @@ import {
   UsageError,
 } from "./context";
 import { fitPicture, loadPicture, type Picture } from "./images";
+import { OPENCODE_ANSWERS, OPENCODE_SESSION, OPENCODE_TITLE } from "./opencode";
 import { acceptPermissionAnswer } from "./permissions";
 import { PI_ANSWERS, piSessionTitle } from "./pi";
 
@@ -40,16 +41,16 @@ export interface AskInput {
   context?: string;
   options?: string[];
   recommended?: string;
-  /** What the agent does meanwhile; clients from before 2026-10-05 require one. */
-  default?: string;
   /** Post it already `waiting`: the agent has nothing else to do. */
   waiting?: boolean;
-  /** The coding agent asking; default: Claude Code, Codex or Pi when it runs the command. */
+  /** The coding agent asking; default: Claude Code, Codex, Pi or opencode when it runs the command. */
   agent?: Agent;
   /** Where a Codex session runs: its `CODEX_HOME` and the `codex` that answers reach it with. */
   codex?: CodexSession;
-  /** A Pi session whose Starbridge extension submits answers into it. */
-  piAnswers?: boolean;
+  /** A Pi or opencode session whose Starbridge extension or plugin submits answers into it. */
+  extensionAnswers?: boolean;
+  /** A `claude -p` session: the mod runs only in interactive ones, so nothing submits answers. */
+  headless?: boolean;
   project?: string;
   session?: string;
   sessionTitle?: string;
@@ -95,29 +96,42 @@ export function resolveSource(
   const session =
     input.session ??
     (agent === "codex"
-      ? env.CODEX_THREAD_ID
+      ? codexAsker(env)
       : agent === "pi"
         ? env.PI_SESSION_ID
-        : env.CLAUDE_CODE_SESSION_ID) ??
+        : agent === "opencode"
+          ? env[OPENCODE_SESSION]
+          : env.CLAUDE_CODE_SESSION_ID) ??
     "";
   const codex = agent === "codex" ? (input.codex ?? codexSession(env)) : undefined;
-  const piAnswers =
-    agent === "pi" && (input.piAnswers ?? (!!session && env[PI_ANSWERS] === session));
+  const answersEnv = agent === "pi" ? PI_ANSWERS : agent === "opencode" ? OPENCODE_ANSWERS : "";
+  const extensionAnswers =
+    !!answersEnv && (input.extensionAnswers ?? (!!session && env[answersEnv] === session));
+  const headless =
+    agent === "claude-code" && (input.headless ?? env.CLAUDE_CODE_SESSION_ATTENDED === "0");
   const claude =
     session &&
     agent !== "codex" &&
     agent !== "pi" &&
+    agent !== "opencode" &&
     (input.sessionTitle === undefined || input.sessionLinks === undefined)
       ? claudeSession(env, session)
       : undefined;
   const title =
-    input.sessionTitle ?? (agent === "pi" ? piSessionTitle(env) : undefined) ?? claude?.title;
+    input.sessionTitle ??
+    (agent === "pi"
+      ? piSessionTitle(env)
+      : agent === "opencode"
+        ? env[OPENCODE_TITLE]?.slice(0, 200) || undefined
+        : undefined) ??
+    claude?.title;
   const at = (path: string) => resolve(cwd, path);
   return {
     ...input,
     ...(agent ? { agent } : {}),
     ...(codex ? { codex } : {}),
-    ...(piAnswers ? { piAnswers } : {}),
+    ...(extensionAnswers ? { extensionAnswers } : {}),
+    ...(headless ? { headless } : {}),
     project: input.project ?? basename(cwd),
     session,
     ...(title !== undefined ? { sessionTitle: title } : {}),
@@ -163,7 +177,7 @@ export function buildDecision(input: AskInput, ctx: Ctx, machine: string, to: st
     context: input.context ?? "",
     options,
     ...(options.length > 0 ? { recommended: input.recommended ?? options[0] } : {}),
-    default: { action: input.default || NO_DEFAULT },
+    default: { action: NO_DEFAULT },
     ...agentOf(input, ctx.env),
     source: sourceFor(input, ctx, machine),
     ...(links.length > 0 ? { links } : {}),
@@ -174,14 +188,22 @@ export function buildDecision(input: AskInput, ctx: Ctx, machine: string, to: st
 }
 
 /**
- * `--agent`, else Claude Code, Codex or Pi when it runs this command: Claude Code sets
- * CLAUDECODE=1, Codex gives every command its session id in CODEX_THREAD_ID, Pi in PI_SESSION_ID.
+ * `--agent`, else the agent that runs this command: Claude Code sets CLAUDECODE=1, Codex gives
+ * every command its session id in CODEX_THREAD_ID, Pi in PI_SESSION_ID, and the Starbridge
+ * opencode plugin STARBRIDGE_OPENCODE_SESSION (clearing the others it inherited). An agent
+ * passes these on to the agents it starts, so two can be set. Codex, Pi and opencode run
+ * commands without a terminal, so a Claude Code they started runs as `claude -p`
+ * (CLAUDE_CODE_SESSION_ATTENDED=0); otherwise Codex, Pi or opencode was started from a Claude
+ * Code session (a `codex exec` review, a script) and asks.
  */
 function agentOf(input: AskInput, env: Ctx["env"]): { agent?: Agent } {
   if (input.agent !== undefined) return { agent: input.agent };
-  if (env.CLAUDECODE === "1") return { agent: "claude-code" };
+  const claude = env.CLAUDECODE === "1";
+  if (claude && env.CLAUDE_CODE_SESSION_ATTENDED === "0") return { agent: "claude-code" };
   if (env.CODEX_THREAD_ID) return { agent: "codex" };
-  return env.PI_SESSION_ID ? { agent: "pi" } : {};
+  if (env.PI_SESSION_ID) return { agent: "pi" };
+  if (env[OPENCODE_SESSION]) return { agent: "opencode" };
+  return claude ? { agent: "claude-code" } : {};
 }
 
 function checked(decision: unknown): Decision {
@@ -483,19 +505,23 @@ export function behindBy(st: State, dir: Directory, entries: unknown[]): string 
 }
 
 /**
- * How an answer comes back into the session that asked: as a prompt, which Claude Code's mod and
- * the Pi extension submit and the agent queues into a Codex session it can reach, or only
- * through `wait`.
+ * How an answer comes back into the session that asked: as a prompt, which Claude Code's mod,
+ * the Pi extension and the opencode plugin submit and the agent queues into a Codex session it
+ * can reach, or only through `wait`.
  */
 export type Delivery = "prompt" | "wait";
 
-/** With no agent running, Codex gets nothing back; the mod and the Pi extension poll by themselves. */
+/**
+ * With no agent running, Codex gets nothing back; the mod, the Pi extension and the opencode
+ * plugin poll by themselves.
+ */
 export function delivery(
-  input: Pick<AskInput, "agent" | "piAnswers">,
+  input: Pick<AskInput, "agent" | "extensionAnswers" | "headless">,
   codexReachable: boolean,
 ): Delivery {
-  if (input.agent === "claude-code") return "prompt";
-  if (input.agent === "pi") return input.piAnswers ? "prompt" : "wait";
+  if (input.agent === "claude-code") return input.headless ? "wait" : "prompt";
+  if (input.agent === "pi" || input.agent === "opencode")
+    return input.extensionAnswers ? "prompt" : "wait";
   return input.agent === "codex" && codexReachable ? "prompt" : "wait";
 }
 
@@ -600,19 +626,25 @@ export async function poll(
 }
 
 /**
- * The answer to decision `id`, or without `id` the first answer no `wait` printed yet, marked
- * printed. Undefined when there is none yet.
+ * The answer to decision `id`, or without `id` the first answer no `wait` printed yet to a
+ * decision session `session` asked (any session's when undefined), marked printed. Undefined
+ * when there is none yet.
  */
 export function takeAnswer(
   store: Ctx["store"],
   id: string | undefined,
+  session?: string,
 ): { answer: Answer; question?: string } | undefined {
+  const mine = (st: State, d: string) =>
+    session === undefined || (st.asked[d]?.session ?? "") === session;
   const found = (st: State) =>
     id
       ? deliverable(st, id)
         ? st.answers[id]
         : undefined
-      : Object.values(st.answers).find((a) => !a.seen && deliverable(st, a.answer.decisionId));
+      : Object.values(st.answers).find(
+          (a) => !a.seen && deliverable(st, a.answer.decisionId) && mine(st, a.answer.decisionId),
+        );
   if (!found(store.state())) return undefined;
   let taken: { answer: Answer; question?: string } | undefined;
   store.updateState((st) => {
@@ -632,7 +664,7 @@ export function takeAnswer(
  */
 export async function wait(
   ctx: Ctx,
-  opts: { id?: string; timeout?: string; json?: boolean },
+  opts: { id?: string; session?: string; timeout?: string; json?: boolean },
   s: Session = session(ctx),
   dir?: Directory,
 ): Promise<number> {
@@ -648,7 +680,7 @@ export async function wait(
     return 0;
   };
 
-  const already = takeAnswer(ctx.store, target);
+  const already = takeAnswer(ctx.store, target, opts.session);
   if (already) return report(already);
   if (target) await markWaiting(ctx, () => postWaiting(ctx, s, target, "waiting"));
 
@@ -681,7 +713,7 @@ export async function wait(
       await ctx.sleep(Math.min(RETRY_MS, Math.max(0, left)));
       continue;
     }
-    const found = takeAnswer(ctx.store, target);
+    const found = takeAnswer(ctx.store, target, opts.session);
     if (found) return report(found);
   }
 }
