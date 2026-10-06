@@ -69,6 +69,11 @@
   transition: background var(--t-fast);
 }
 
+/* A leading mark (GitHub) takes the start padding down, as Material's chips do. */
+.chip:has(> svg:first-child) {
+  padding-left: var(--s3);
+}
+
 .chip span {
   overflow: hidden;
   text-overflow: ellipsis;

@@ -1292,6 +1292,12 @@ so the mod is the first path.
   since `codex queue` (0.160) takes the message only as an argument and other local users can
   read process arguments; `wait <id>` prints a delivered answer from local state. The npm bundle
   runs under Node, so the CLI uses no Bun global without a guard; a test runs it there.
+- 2026-10-06. Android posts the account's first directory entry only once the recovery key is
+  confirmed (#370), as the web does since #337. "Create the keys" writes the keys, the seed and
+  the signed entry to the app's encrypted store; "I wrote this key down" posts the entry, then
+  drops the seed. The seed is stored exactly as long as before, and an app killed in between
+  shows the same key again. Data cleared before the confirmation leaves the server empty, so
+  signing in again starts the setup over instead of offering only "Add this phone".
 - 2026-10-06. A prompt in History says how and where it was answered, as a question does (#349):
   "Denied · on Pixel", "Allowed for this session · on this browser", and no separator when nobody
   answered ("Expired"). Answers are sealed to the asking machine, so other devices learn the
@@ -1750,6 +1756,11 @@ so the mod is the first path.
   name what the page holds, the rules agents get and what to add to their instruction files.
   "Answer buttons on questions" says "On narrow screens", since it applies to any window under
   1100 px, not only phones.
+- 2026-10-06. GitHub links on questions (#171, the owner's pick on the question display page:
+  links stay as built, plus this). A GitHub pull request or issue link with no title reads
+  "owner/repo#123" instead of its host and path, and its chip leads with the GitHub mark, on the
+  web and Android; "Answer in" uses the same label. Every other link is unchanged. Android's
+  untitled chips now start with "Open" too, as the web's and the #171 entry above do.
 
 ## Encryption, with existing libraries
 
