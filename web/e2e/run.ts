@@ -815,6 +815,17 @@ async function main() {
   await page.locator("article").first().waitFor();
   await shoot(page, "quotas");
 
+  step("the refresh button asks the machines for fresh quotas, as Android's pull to refresh");
+  await page.setViewportSize(DESKTOP);
+  const refresh = page.getByRole("button", { name: "Refresh quotas" }).filter({ visible: true });
+  const asked = page.waitForRequest((r) => r.method() === "POST" && r.url().includes("/quota/ask"));
+  await refresh.click();
+  await asked;
+  // No agent runs in this test, so the server holds the ask its 15 s before it answers.
+  await page.waitForSelector('button[aria-label="Refresh quotas"][aria-busy="false"]:visible', {
+    timeout: 30_000,
+  });
+
   step("quota settings: remaining, clock times, workdays");
   await page
     .getByRole("navigation", { name: "Main" })

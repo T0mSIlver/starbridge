@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useId, useRef } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { relative } from "@/lib/format";
 import {
   arrange,
@@ -22,7 +22,7 @@ import s from "./Quotas.module.css";
 import { useReorder } from "./Reorder";
 
 export function Quotas() {
-  const { quotas, refreshQuotas, quotaSettings: settings, setQuotaSettings } = useApp();
+  const { quotas, refreshQuotas, askQuotas, quotaSettings: settings, setQuotaSettings } = useApp();
   useEffect(() => {
     refreshQuotas().catch(() => {});
   }, [refreshQuotas]);
@@ -30,13 +30,14 @@ export function Quotas() {
   const cards = arrange(quotas?.cards ?? [], settings, now);
   return (
     <>
-      <PhoneBar title="Quotas" find={false} />
+      <PhoneBar title="Quotas" find={false} view={<Refresh ask={askQuotas} />} />
       <div className={s.page}>
         <header className={s.head}>
           <h1 className={`t-heading ${s.title}`}>Quotas</h1>
           {quotas?.takenAt && (
             <span className={`t-caption ${s.dim}`}>Updated {relative(quotas.takenAt, now)}</span>
           )}
+          <Refresh ask={askQuotas} />
         </header>
         {quotas?.rejected.length ? (
           <p className={`t-meta ${s.bad}`} role="status">
@@ -68,6 +69,32 @@ export function Quotas() {
         )}
       </div>
     </>
+  );
+}
+
+/**
+ * Asks every machine to read CodexBar again and loads what they post, as Android's pull to
+ * refresh does; the icon turns until then, up to the 15 s the server holds the ask.
+ */
+function Refresh({ ask }: { ask: () => Promise<void> }) {
+  const [busy, setBusy] = useState(false);
+  const run = () => {
+    if (busy) return;
+    setBusy(true);
+    ask()
+      .catch(() => {})
+      .finally(() => setBusy(false));
+  };
+  return (
+    <button
+      type="button"
+      className={`${s.refresh} ${busy ? s.busy : ""}`}
+      aria-label="Refresh quotas"
+      aria-busy={busy}
+      onClick={run}
+    >
+      <Icon name="refresh" size={18} />
+    </button>
   );
 }
 
