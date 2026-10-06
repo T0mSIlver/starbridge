@@ -2,6 +2,13 @@
 	servers {
 		# The Hetzner firewall lets in TCP only, so don't advertise HTTP/3.
 		protocols h1 h2
+		# A client has 10 s to send its request headers. Each open connection costs Caddy about
+		# 140 KB, and memory runs out first on the VPS (SPEC.md, "Capacity"), so a slow sender
+		# must not hold one for nothing (#587). Bodies keep no timeout: a 2 MB question over a
+		# slow phone link may take a while, and long-polls are responses, not reads.
+		timeouts {
+			read_header 10s
+		}
 	}
 	# The idle copy of the page fails its health check every second, by design. The rate limiter
 	# logs each refused client's address; the privacy page promises none is kept.
