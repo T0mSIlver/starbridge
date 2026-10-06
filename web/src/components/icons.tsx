@@ -65,6 +65,7 @@ const PATHS = {
   ),
   waiting: <path d="M7 3h10M7 21h10M8 3v2.5a4 4 0 0 0 8 0V3M8 21v-2.5a4 4 0 0 1 8 0V21" />,
   check: <path d="m5 12 5 5 9-10" />,
+  send: <path d="M5 12h13M12 6l6 6-6 6" />,
   more: (
     <>
       <circle cx="12" cy="5" r="1" />

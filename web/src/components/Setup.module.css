@@ -9,7 +9,8 @@
 
 .brand {
   display: flex;
-  align-items: center;
+  /* The name stands on the mark's ground: its baseline on the mark's bottom edge (DESIGN.md). */
+  align-items: baseline;
   gap: var(--s2);
   padding: 0 var(--s8);
   color: inherit;
