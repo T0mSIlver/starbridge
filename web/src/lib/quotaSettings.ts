@@ -109,7 +109,12 @@ export function arrange(
     .map(({ c }) => c);
 }
 
-export type QuotaGroup = { provider: string; machine?: string; cards: QuotaCardData[] };
+export type QuotaGroup = {
+  provider: string;
+  machine?: string;
+  cards: QuotaCardData[];
+  stale?: QuotaCardData["stale"];
+};
 
 /**
  * Arranged cards under one heading per provider and machine (#160): groups in the order their
@@ -121,7 +126,13 @@ export function groups(arranged: QuotaCardData[]): QuotaGroup[] {
     const key = `${c.provider}\n${c.machine ?? ""}`;
     const g = byKey.get(key);
     if (g) g.cards.push(c);
-    else byKey.set(key, { provider: c.provider, machine: c.machine, cards: [c] });
+    else
+      byKey.set(key, {
+        provider: c.provider,
+        machine: c.machine,
+        cards: [c],
+        ...(c.stale ? { stale: c.stale } : {}),
+      });
   }
   return [...byKey.values()];
 }

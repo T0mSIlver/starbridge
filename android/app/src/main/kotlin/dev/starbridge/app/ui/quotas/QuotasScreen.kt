@@ -162,7 +162,11 @@ private fun tone(window: QuotaWindow, now: Instant): Tone {
     }
 }
 
-/** A provider's name, the machine that sent its windows when there are several, and the windows. */
+/**
+ * A provider's name, the machine that sent its windows when there are several, and the windows.
+ * When CodexBar failed for it, its last windows stay, and the name says when they were read and
+ * why they were not read again.
+ */
 @Composable
 private fun ProviderCard(windows: List<QuotaWindow>, now: Instant, settings: QuotaSettings, shape: Shape, modifier: Modifier = Modifier) {
     val scheme = MaterialTheme.colorScheme
@@ -172,6 +176,12 @@ private fun ProviderCard(windows: List<QuotaWindow>, now: Instant, settings: Quo
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(first.provider, style = StarbridgeTheme.type.subtitle, color = scheme.onSurface, maxLines = 1, modifier = Modifier.weight(1f))
                 first.machine?.let { Text(it, style = StarbridgeTheme.type.meta, color = scheme.onSurfaceVariant, maxLines = 1) }
+            }
+            first.error?.let { error ->
+                Column(Modifier.padding(top = Spacing.s1)) {
+                    first.takenAt?.let { Text("Updated ${ago(now, it)}", style = StarbridgeTheme.type.meta, color = scheme.onSurfaceVariant) }
+                    Text(error, style = StarbridgeTheme.type.meta, color = scheme.onSurfaceVariant)
+                }
             }
             windows.forEachIndexed { i, w ->
                 if (i > 0) HorizontalDivider(color = scheme.outlineVariant, modifier = Modifier.padding(top = Spacing.s4))

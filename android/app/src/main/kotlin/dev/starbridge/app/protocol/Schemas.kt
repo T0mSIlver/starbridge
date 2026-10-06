@@ -562,6 +562,8 @@ data class QuotaProvider(
     val account: String? = null,
     val windows: List<QuotaWindow>,
     val error: String? = null,
+    /** With `error`: when `windows` were read, the last time CodexBar did not fail. */
+    val updatedAt: String? = null,
 )
 
 @Serializable

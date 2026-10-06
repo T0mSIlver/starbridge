@@ -18,6 +18,15 @@
   padding: var(--s4) var(--s4) 0;
 }
 
+/* A provider CodexBar failed for: when its windows were read, and the failure (#397). */
+.stale {
+  display: grid;
+  margin: var(--s1) 0 0;
+  padding: 0 var(--s4);
+  color: var(--fg2);
+  overflow-wrap: anywhere;
+}
+
 .row {
   display: grid;
   min-width: 0;
@@ -112,13 +121,23 @@
     grid-template-columns: var(--size-quota-provider) minmax(0, 1fr);
   }
 
-  .groupComfy .head {
+  .groupComfy .lead {
     grid-row: 1 / span 99;
+    align-self: start;
+    min-width: 0;
+    padding-bottom: var(--s3);
+  }
+
+  .groupComfy .head {
     justify-content: flex-start;
     align-items: center;
-    align-self: start;
     gap: var(--s2);
-    padding: var(--s3) var(--s4);
+    padding: var(--s3) var(--s4) 0;
+  }
+
+  /* In line with the name, past the handle's column. */
+  .groupComfy .stale {
+    padding-left: calc(var(--s4) + var(--s5) - var(--s1) + var(--s2));
   }
 
   .groupComfy .head > button {

@@ -176,8 +176,10 @@ data class QuotaWindow(
     /** The uploading machine's name, set when more than one machine uploads quotas. */
     val machine: String? = null,
     val windowMinutes: Int? = null,
-    /** When the uploader took the snapshot this window comes from. */
+    /** When the uploader read this window: its snapshot's time, or earlier when it is stale. */
     val takenAt: Instant? = null,
+    /** Why CodexBar failed for the provider; the window is then the last one it read (#397). */
+    val error: String? = null,
 )
 
 enum class Kind { Device, Machine }

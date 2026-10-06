@@ -746,6 +746,28 @@ async function main() {
   if (again.output().includes("(new)"))
     throw new Error("the second snapshot raised its alerts again");
 
+  step("a failed probe keeps the provider's last windows, stale, with its failure (#397)");
+  const timedOut = [
+    { provider: "e2e", source: "auto", error: { message: "Claude usage probe timed out." } },
+  ];
+  writeFileSync(fakeBar, `#!/bin/sh\ncat <<'EOF'\n${JSON.stringify(timedOut)}\nEOF\nexit 1\n`);
+  const failedPush = cli(
+    "quota-failed",
+    ["quota", "push", "--once", "--codexbar", fakeBar, "--provider", "e2e"],
+    machineHome,
+  );
+  if ((await failedPush.exited) !== 0) throw new Error("quota push failed");
+  await page.getByRole("link", { name: "Settings" }).first().click();
+  await page.getByRole("link", { name: "Quotas" }).click();
+  const group = page.getByRole("region", { name: "e2e" });
+  await group.getByText("Claude usage probe timed out.").waitFor();
+  await group.getByText(/^Updated /).waitFor();
+  if ((await group.getByRole("article").count()) === 0)
+    throw new Error("the failed provider lost its windows");
+  if ((await page.getByText("e2e on ").count()) > 0)
+    throw new Error("the failure shows as a line above the table");
+  await shoot(page, "quotas-failed");
+
   step("the Quotas table fits its longest reset times, phone to desktop (#294)");
   // Local clock times: "tomorrow 21:59", "tomorrow 12:59 PM" and a date five days out.
   const local = (days: number, h: number, m: number) => {

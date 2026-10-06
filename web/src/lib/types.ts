@@ -65,6 +65,8 @@ export type QuotaCardData = {
   alerts: QuotaAlert[];
   /** The snapshot's id. */
   snapshot: string;
+  /** Set when CodexBar failed for the provider: the window is the last one read, at `updatedAt`. */
+  stale?: { updatedAt: string; error: string };
 };
 
 /** An opened and verified run, and the name of the machine that signed it. */

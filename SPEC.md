@@ -1293,6 +1293,15 @@ so the mod is the first path.
   read process arguments; `wait <id>` prints a delivered answer from local state. The npm bundle
   runs under Node, so the CLI uses no Bun global without a guard; a test runs it there.
 
+- 2026-10-06 (#397): a provider CodexBar fails for is asked once more, then
+  keeps its last windows. The uploader keeps each provider's last windows read
+  without an error and sends them with the error and `updatedAt`, when they
+  were read; the server keeps one snapshot per machine, so only the uploader
+  can. The web and Android show the failure and "Updated 12 min ago" under the
+  provider's name, on its group; only a provider with nothing to show yet keeps
+  the line above the table. The run timeout went from 90 to 120 s, above
+  CodexBar's own worst case for Claude.
+
 ## Encryption, with existing libraries
 
 - libsodium sealed boxes (`crypto_box_seal`, X25519 + XSalsa20-Poly1305): an
@@ -1702,3 +1711,17 @@ goes in git.
   receives it twice. Only a connection that drops once the reply's
   headers are in reaches the app as a failure, and that is what
   `RecoveryRetryTest` scripts (MockWebServer's `onResponseBody`).
+- 2026-10-06: Claude's quota probe on the dev box (#397). "Claude usage
+  probe timed out." is CodexBar's error, not Starbridge's: CodexBar runs
+  `claude` in a terminal, types `/usage` and reads the panel, giving it 12 s,
+  then 60 s, each followed by up to 8 s for `claude /usage` without a
+  terminal. In a throwaway HOME with the owner's settings, plugins and mods
+  (hooks and the refresh token left out), 17 runs took 9.0 to 12.3 s, one
+  more failed to parse; with `claude` slowed by 8 and 15 s, the 60 s retry
+  still read it. The agent's own runs, with the real HOME, began failing at
+  19:00 on 2026-10-05 and failed every round from 12:00 on 2026-10-06, each
+  after about 22 s, so in production the retry does not read the panel
+  either. What the real HOME adds that the copies lack (history, hooks, the
+  status line, the Starbridge mod's poller with its config) was not tested,
+  to leave the owner's config alone. The first attempt's 12 s sits at the
+  measured maximum: CodexBar's `cliAutoProbeTimeout` should be about 20 s.
