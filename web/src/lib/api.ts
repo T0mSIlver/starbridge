@@ -1,6 +1,13 @@
 // The routes of PROTOCOL.md a device calls. Same origin, so the session cookie rides along; the
 // page and the service worker both use this.
-import type { PairingMessage, SealedItem, SignedEnvelope } from "@starbridge/protocol";
+import {
+  CLIENT_HEADER,
+  clientHeader,
+  type PairingMessage,
+  type SealedItem,
+  type SignedEnvelope,
+} from "@starbridge/protocol";
+import pkg from "../../package.json";
 import type { JoinView } from "./types";
 
 export class ApiError extends Error {
@@ -37,6 +44,22 @@ export function pairingError(e: unknown): string {
   const said = e.detail ?? e.code;
   return `${said.charAt(0).toUpperCase()}${said.slice(1)}${/[.!?]$/.test(said) ? "" : "."}`;
 }
+
+/** Sent on every call, the service worker's own fetches included. */
+export const CLIENT = { [CLIENT_HEADER]: clientHeader("web", pkg.version) };
+
+/**
+ * Set once the server answers 426 `client-too-old`: it no longer serves this page's release, and
+ * the page shows only a reload (`Gate`).
+ */
+export const outdated = {
+  is: false,
+  listeners: new Set<() => void>(),
+  subscribe(fn: () => void) {
+    outdated.listeners.add(fn);
+    return () => outdated.listeners.delete(fn);
+  },
+};
 
 /** Why a call never got an answer: the browser is offline, or the server is away. */
 export class Unreachable extends Error {
@@ -118,6 +141,7 @@ async function call<T>(
         method,
         credentials: "same-origin",
         headers: {
+          ...CLIENT,
           ...(opts.body === undefined ? {} : { "content-type": "application/json" }),
           ...opts.headers,
         },
@@ -143,6 +167,10 @@ async function call<T>(
     json = text ? JSON.parse(text) : undefined;
   } catch {
     json = undefined;
+  }
+  if (res.status === 426 && !outdated.is) {
+    outdated.is = true;
+    for (const fn of outdated.listeners) fn();
   }
   if (!res.ok) {
     const e = (json ?? {}) as { error?: string; detail?: string };

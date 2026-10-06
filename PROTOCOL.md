@@ -33,7 +33,7 @@ code cannot show: the HTTP API and the flows.
 
 - Every machine-signed body names its `source` (machine, project, session, and optionally the
   session's title and links, and `machineKind`: `server`, `desktop`, `laptop` or `cloud`, for
-  its icon). A decision may name its `agent`, `claude-code`, `codex`, `pi` or `opencode`, as a permission does. Clients accept any agent name (lowercase letters, digits and dashes, at most 40), so a newer machine's agent never makes an item unreadable; an agent a client does not know gets no "Open in" link.
+  its icon). A decision or a permission may name its `agent`, such as `claude-code`, `codex`, `pi` or `opencode`. Clients accept any agent name (lowercase letters, digits and dashes, at most 40), so a newer machine's agent never makes an item unreadable; an agent a client does not know gets no "Open in" link.
 - A decision's images (PNG or JPEG) and links (HTTPS) are part of its signed body, so each box
   carries every image, and the 2 MB cap in Limits covers them once per device.
   A decision with `answerIn` is answered on that page (a claude.ai artifact whose button wakes
@@ -232,7 +232,9 @@ entry>".
 ## HTTP API
 
 Base path `/v1`. JSON bodies. Errors are `{error, detail?}` with an HTTP status; protocol
-errors use the codes in `packages/protocol/src/sodium.ts`.
+errors use the codes in `packages/protocol/src/sodium.ts`. Outside `/v1`, `GET /healthz`
+answers anyone with `ok`; `/healthz/backup` and `/healthz/disk` answer `ok`, or 503 when the
+last backup is stale or the disk runs low.
 
 Every request names its client and release in `starbridge-client: <name>/<version>`, `name`
 one of `cli`, `android`, `web` and `mod`, `version` MAJOR.MINOR.PATCH with an optional
@@ -313,7 +315,7 @@ createdAt, expiresAt, version}`; `state` is `open`, `comparing`, `approved` or `
 |---|---|---|
 | `POST /items` | the kind's signing role | store a sealed item and push it to each recipient; 409 on a reused id; 409 `too-many-items` and 413 `too-large` past the caps in Limits |
 | `GET /items?kind=<kinds>&after=<cursor>&open=1` | device | items with only the caller's box, and `cursor`; `kinds` is a comma-separated list of machine-signed kinds, all of them when left out; `open=1` keeps only unanswered decisions and permissions still in their answer window |
-| `GET /items/:id` | device, machine | one item, the caller's box only; push points here when the item exceeds 4 KB |
+| `GET /items/:id` | device, machine | one item, the caller's box only; push points here when the item is over the inline limit (3 KB by default) |
 | `GET /quota` | device | the latest quota item from each machine |
 | `POST /quota/ask?wait=<s>` | device | ask every machine for a fresh quota snapshot → `{askedAt, behind}`; with `wait`, holds until each active machine that has a snapshot posted a newer one; `behind` counts those that have not |
 
@@ -395,7 +397,7 @@ that changes in between cannot point the push inward. Each account has at most 4
 flight and 200 waiting; each request gives up after 10 s.
 
 A server with FCM credentials or VAPID keys pushes directly. One without them posts to the relay
-set in `RELAY_URL` (the owner's hosted server runs with `RELAY_MODE=1`), which pushes with its
+set in `RELAY_URL` (starbridge.run runs with `RELAY_MODE=1`), which pushes with its
 own credentials; the payload is already ciphertext or an id. UnifiedPush always goes direct.
 `gone` from a push service drops the subscription.
 
@@ -555,6 +557,7 @@ input (Claude Code's `PermissionRequest` input carries no `tool_use_id`), and on
 `SessionEnd`, settling every waiting prompt of the session. The waiting hook then exits at
 once through the agent, or within 5 s on its own path. At the deadline the hook prints nothing,
 so the dialog decides, and posts `settled: timeout`.
+
 ## Local agent API
 
 `starbridge agent` runs once per machine as a user service. It holds the machine's keys and its

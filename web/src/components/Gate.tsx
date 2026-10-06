@@ -1,7 +1,8 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { outdated } from "@/lib/api";
 import type { FirstDevice as PreparedDevice, RecoveryEntry } from "@/lib/device";
 import { hasPairCode, holdPairCode } from "@/lib/pairLink";
 import { useApp } from "./AppProvider";
@@ -69,7 +70,7 @@ function useDefaultName(initial = ""): [string, (v: string) => void] {
   return [name, setName];
 }
 
-/** GitHub sign-in; self-hosting sits behind "Use your own server" (SPEC.md, design v2). */
+/** GitHub sign-in; self-hosting sits behind "Use your own server" (SPEC.md, "Clients"). */
 export function SignIn({
   ownServer = false,
   refused,
@@ -430,9 +431,31 @@ function Problem({ title, text, error }: { title: string; text: string; error: s
   );
 }
 
+/** The server no longer serves this page's release: a reload fetches the current one. */
+function Outdated() {
+  return (
+    <FirstRunPage>
+      <h1 className="t-heading">Starbridge was updated</h1>
+      <p className={`t-small ${s.lede}`}>This page is older than the server accepts. Reload it.</p>
+      <button
+        type="button"
+        className={`t-label ${ui.btn}`}
+        onClick={() => window.location.reload()}
+      >
+        Reload
+      </button>
+    </FirstRunPage>
+  );
+}
+
 /** Shows the screen for where this browser stands, and the app once it is a ready device. */
 export function Gate({ children }: { children: React.ReactNode }) {
   const { boot } = useApp();
+  const old = useSyncExternalStore(
+    outdated.subscribe,
+    () => outdated.is,
+    () => false,
+  );
   const [ownServer, setOwnServer] = useState(false);
   const router = useRouter();
   const path = usePathname();
@@ -441,6 +464,7 @@ export function Gate({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (boot.state === "ready" && path !== "/pair" && hasPairCode()) router.replace("/pair");
   }, [boot.state, path, router]);
+  if (old) return <Outdated />;
   switch (boot.state) {
     case "loading":
       // Plain ground until boot knows the screen: the landing page, sign-in or the app.

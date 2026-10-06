@@ -401,7 +401,7 @@ class ServerStore(
 
     /**
      * Makes the keys, the seed and the signed first entry, all on disk, and shows the recovery key.
-     * The server sees the entry only once the owner confirms the key (#370, as the web since #337):
+     * The server sees the entry only once the owner confirms the key, as on the web (#370):
      * data cleared before that leaves no account without a device, and a killed app shows the
      * same key again.
      */

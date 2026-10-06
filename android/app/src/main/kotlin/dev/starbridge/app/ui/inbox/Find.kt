@@ -100,7 +100,7 @@ private fun Decision.texts() = listOf(source.machine, source.project, question, 
 private fun Prompt.texts() = listOf(source.machine, source.project, tool, summary, source.title)
 
 /**
- * Find (#244's rules, option A): Material 3's search view over the inbox. The open items that
+ * Find (#244): Material 3's search view over the inbox. The open items that
  * match, under "Needs you", then the answered ones under "History", which also match by their
  * answer. Enter opens the first result, Down moves into the list, Escape clears the query and then
  * closes; Back closes, leaving the inbox as it was.

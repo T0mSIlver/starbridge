@@ -22,8 +22,8 @@ permissions:
   contents: read
   pull-requests: read
 
-# Jobs run on the maintainer's self-hosted runners while the repository variable RUNNER is set
-# (deploy/setup-runners.sh); delete the variable to go back to GitHub's runners.
+# Jobs run on GitHub-hosted runners by default. The repository variable RUNNER points them at
+# self-hosted runners instead, and DOCKER_RUNNER the image builds below.
 #
 # A pull request runs only the jobs its files can affect. A job that cannot be affected still
 # starts and passes in seconds, so its check reports success, which a skipped workflow would
@@ -151,9 +151,9 @@ jobs:
   # Builds the deployed images, without pushing them, when a pull request can change their base
   # images or dependencies: a change that breaks a build fails here, not at the deploy (#430).
   # Source changes outside these paths that a Dockerfile copies (docs/ for web, cli/ for the demo)
-  # are not covered. On a push, main's deploy builds them on the box. Only the dev box's runners
-  # (label `docker`) have Docker; a gate on the usual runners picks one only when there is
-  # something to build, so main's CI never waits on them.
+  # are not covered. On a push, main's deploy builds them on the server. Set
+  # DOCKER_RUNNER when RUNNER's runners have no Docker: a gate on the usual runners picks one of
+  # its runners only when there is something to build, so main's CI never waits on them.
   images-scope:
     name: images scope
     runs-on: ${{ vars.RUNNER || 'ubuntu-latest' }}
@@ -200,7 +200,7 @@ jobs:
         run: docker build --pull -f deploy/demo/Dockerfile -t starbridge-demo:$TAG .
       - if: env.BUILD == 'true' && !cancelled()
         run: docker build -f deploy/caddy.Dockerfile -t starbridge-caddy:$TAG deploy
-      # The dev box's disk is shared with every session on it: keep the build cache to 3 GB, as
+      # A self-hosted runner's disk may be shared with other work: keep the build cache to 3 GB, as
       # deploy/host/apply.sh does on the server. BuildKit keeps records a running build uses.
       - if: always() && env.BUILD == 'true'
         run: |
