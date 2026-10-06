@@ -214,7 +214,7 @@ export function summarize(tool: string, input: unknown): string {
     keys.map((k) => o[k]).find((v): v is string => typeof v === "string" && v.length > 0);
   const main = isShell(tool)
     ? pick("command")
-    : (pick("file_path", "notebook_path", "path", "url", "query", "pattern") ??
+    : (pick("file_path", "notebook_path", "path", "url", "query", "pattern", "preview") ??
       `${tool} ${JSON.stringify(input) ?? ""}`);
   return oneLine(redactText(main ?? tool), SUMMARY_MAX) || tool;
 }

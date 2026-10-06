@@ -1,5 +1,9 @@
 package dev.starbridge.app.ui.setup
 
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.runtime.DisposableEffect
+import android.view.WindowManager
+import androidx.activity.compose.LocalActivity
 import dev.starbridge.app.protocol.RecoveryKeys
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.FlowRow
@@ -43,6 +47,7 @@ import dev.starbridge.app.BuildConfig
 import dev.starbridge.app.data.Phase
 import dev.starbridge.app.data.Store
 import dev.starbridge.app.ui.Label
+import dev.starbridge.app.ui.Lockup
 import dev.starbridge.app.ui.Panel
 import dev.starbridge.app.ui.pairing.rememberScanner
 import dev.starbridge.app.protocol.formatDigits
@@ -61,7 +66,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
@@ -181,12 +185,7 @@ private fun SignIn(server: String, busy: Boolean, actions: SetupActions, openUrl
     Step(
         modifier,
         top = {
-            Column(Modifier.padding(start = Spacing.s6, top = 120.dp), verticalArrangement = Arrangement.spacedBy(Spacing.s8)) {
-                Box(Modifier.size(96.dp).clip(RoundedCornerShape(28.dp)).background(colorResource(R.color.icon_ground))) {
-                    Image(painterResource(R.drawable.ic_launcher_foreground), contentDescription = null, modifier = Modifier.fillMaxSize())
-                }
-                Text("Starbridge", style = StarbridgeTheme.type.display, color = MaterialTheme.colorScheme.onSurface)
-            }
+            Lockup(56.dp, 40.sp, Modifier.padding(start = Spacing.s6, top = 120.dp))
             if (selfHosted) {
                 Column(Modifier.padding(start = Spacing.s4, end = Spacing.s4, top = Spacing.s8), verticalArrangement = Arrangement.spacedBy(Spacing.s3)) {
                     TextField(
@@ -276,7 +275,9 @@ private fun FirstDevice(busy: Boolean, actions: SetupActions, modifier: Modifier
 @Composable
 private fun Recover(busy: Boolean, actions: SetupActions, modifier: Modifier, onBack: () -> Unit) {
     var typedKey by rememberSaveable { mutableStateOf("") }
+    var shown by rememberSaveable { mutableStateOf(false) }
     val reading = RecoveryKeys.read(typedKey)
+    SecureWindow()
     Step(
         modifier,
         top = {
@@ -285,13 +286,18 @@ private fun Recover(busy: Boolean, actions: SetupActions, modifier: Modifier, on
                 TextField(
                     value = typedKey,
                     onValueChange = { typedKey = it },
-                    minLines = 2,
+                    singleLine = true,
                     label = { Text("Your recovery key") },
                     placeholder = { Text("XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX") },
                     supportingText = { Text(reading.problem ?: reading.status) },
                     isError = reading.problem != null,
                     textStyle = StarbridgeTheme.type.machine,
                     colors = fieldColors(),
+                    // Masked as a password, with the eye to check what was typed (#274).
+                    visualTransformation = if (shown) VisualTransformation.None else PasswordVisualTransformation(),
+                    trailingIcon = {
+                        IconButton(onClick = { shown = !shown }) { Symbol(Sym.Visibility, filled = shown, contentDescription = if (shown) "Hide the key" else "Show the key") }
+                    },
                     keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters, autoCorrectEnabled = false, keyboardType = KeyboardType.Password),
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -346,6 +352,7 @@ private fun Waiting(title: String, text: String, digits: String?, onCancel: () -
 
 @Composable
 private fun RecoveryKey(shown: String, onDone: () -> Unit) {
+    SecureWindow()
     var saved by rememberSaveable { mutableStateOf(false) }
     Title("Your recovery key", Modifier.padding(top = 48.dp))
     Text(
@@ -370,4 +377,14 @@ private fun RecoveryKey(shown: String, onDone: () -> Unit) {
         Text("I wrote this key down", style = StarbridgeTheme.type.body, color = MaterialTheme.colorScheme.onSurface)
     }
     Primary("Continue", busy = false, enabled = saved, onClick = onDone)
+}
+
+/** While shown, the window stays out of screenshots, screen sharing and the recents screen. */
+@Composable
+private fun SecureWindow() {
+    val window = LocalActivity.current?.window ?: return
+    DisposableEffect(window) {
+        window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        onDispose { window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE) }
+    }
 }

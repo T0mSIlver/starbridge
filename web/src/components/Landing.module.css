@@ -29,7 +29,8 @@
 
 .brand {
   display: flex;
-  align-items: center;
+  /* The name stands on the mark's ground: its baseline on the mark's bottom edge (DESIGN.md). */
+  align-items: baseline;
   gap: var(--s2);
 }
 
@@ -205,19 +206,6 @@
   overflow: hidden;
 }
 
-.quotas {
-  width: calc(var(--size-aside) + var(--s40) - var(--s5));
-  max-width: 100%;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-md);
-  overflow: hidden;
-  background: var(--bg);
-}
-
-.quotas > :last-child {
-  border-bottom: 0;
-}
-
 /* The question sheet, cut to its lower half where the sheet sits. */
 .crop {
   width: var(--size-shot);
@@ -323,10 +311,6 @@
 }
 
 .footInline {
-  display: none;
-}
-
-.narrowOnly {
   display: none;
 }
 
@@ -459,21 +443,9 @@
     display: none;
   }
 
-  .narrowOnly {
-    display: block;
-  }
-
   .footInline {
     display: flex;
     flex-wrap: wrap;
     gap: var(--s3) var(--s5);
-  }
-
-  .quotas > :nth-child(n + 4) {
-    display: none;
-  }
-
-  .quotas > :nth-child(3) {
-    border-bottom: 0;
   }
 }

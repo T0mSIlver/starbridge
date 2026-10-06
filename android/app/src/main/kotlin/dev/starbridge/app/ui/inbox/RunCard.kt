@@ -63,7 +63,7 @@ fun RunCard(run: Run, now: Instant, shape: Shape, modifier: Modifier = Modifier)
                 Run.State.Running -> run.progress?.let { Progress(it) } ?: Working()
                 Run.State.Passed -> Text("Passed", style = type.metaStrong, color = colors.ok)
                 Run.State.Failed -> Text("Failed, exit ${run.exitCode}", style = type.metaStrong, color = colors.bad)
-                Run.State.Lost -> Text("No news for ${elapsed(run.at, now)}", style = type.metaStrong, color = colors.fg3)
+                Run.State.Lost -> Text("Lost, no news for ${elapsed(run.at, now)}", style = type.metaStrong, color = colors.fg3)
             }
         }
     }

@@ -307,6 +307,9 @@ object Sizes {
     val aside = 320.dp
     val paneHead = 48.dp
     val content = 720.dp
+    val settingsLabel = 220.dp
+    val quotaProvider = 200.dp
+    val quotaTableFrom = 840.dp
     val track = 10.dp
     val trackDense = 6.dp
     val tick = 2.dp

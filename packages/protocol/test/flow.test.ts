@@ -8,6 +8,7 @@ import {
   generateMemberKeys,
   generateRecoverySeed,
   genesisEntry,
+  holdsHead,
   type Member,
   type MemberKeys,
   newPairingCode,
@@ -192,4 +193,14 @@ test("recover with the words after losing every device", () => {
   expect(() =>
     recoverySeedFromWords(`notaword ${recoveryText.split(" ").slice(1).join(" ")}`),
   ).toThrow();
+});
+
+test("a chain holds the heads of its prefixes only", () => {
+  const dir = verifyDirectory(chain);
+  const head = { length: dir.length, head: dir.head };
+  expect(holdsHead(chain, head)).toBe(true);
+  expect(holdsHead(chain, { length: 1, head: verifyDirectory(chain.slice(0, 1)).head })).toBe(true);
+  expect(holdsHead(chain, { ...head, length: dir.length + 1 })).toBe(false);
+  expect(holdsHead(chain.slice(0, 1), head)).toBe(dir.length === 1);
+  expect(holdsHead(chain, { ...head, head: "A".repeat(43) })).toBe(false);
 });

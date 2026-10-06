@@ -219,7 +219,12 @@ export default function starbridge(pi: PiApi) {
             ? {
                 keyboard: (signal: AbortSignal) =>
                   new Promise<void>((resolve) => {
-                    const what = details.command ?? details.path ?? details.toolName ?? "a tool";
+                    const what =
+                      details.command ??
+                      details.path ??
+                      details.target ??
+                      details.toolName ??
+                      "a tool";
                     const decided = untilDecided(details.requestId, ended.signal);
                     // Pi strands a dialog that another opens over it, so asks take turns, and a
                     // turn lasts until pi-permission-system decided the ask: after "Answer here"

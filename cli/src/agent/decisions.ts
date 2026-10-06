@@ -153,10 +153,13 @@ export class Decisions implements Feature {
    */
   private async deliverCodex() {
     const now = Date.now();
-    const st = this.ctx.store.state();
-    for (const [id, a] of Object.entries(st.answers)) {
+    for (const [id, a] of Object.entries(this.ctx.store.state().answers)) {
+      // Read again before each: another process may have found the directory behind meanwhile.
+      const st = this.ctx.store.state();
+      if (st.behind) return;
       const asked = st.asked[id];
-      if (a.seen || !asked?.codex || !asked.session || !deliverable(st, id)) continue;
+      if (a.seen || !st.answers[id] || !asked?.codex || !asked.session || !deliverable(st, id))
+        continue;
       const retry = this.retries.get(id) ?? { tries: 0, at: 0 };
       if (retry.tries >= CODEX_TRIES || retry.at > now) continue;
       const error = await codexQueue(

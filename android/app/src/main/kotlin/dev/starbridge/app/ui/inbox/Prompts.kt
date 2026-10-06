@@ -1,5 +1,15 @@
 package dev.starbridge.app.ui.inbox
 
+import androidx.compose.foundation.layout.widthIn
+import dev.starbridge.app.data.PromptScope
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -173,14 +183,24 @@ fun PromptCard(prompt: Prompt, now: Instant, actions: PromptActions, shape: Shap
                 }
                 Box(Modifier.align(Alignment.TopEnd)) {
                     DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                        // Each wider allow shows the exact rule it adds before it is chosen (PROTOCOL.md).
                         prompt.scopes.forEach { scope ->
-                            DropdownMenuItem(text = { Text(scope.label) }, onClick = { menu = false; send(true, scope.scope, null) })
+                            DropdownMenuItem(text = { ScopeText(scope) }, onClick = { menu = false; send(true, scope.scope, null) }, modifier = Modifier.widthIn(max = 320.dp))
                         }
                         DropdownMenuItem(text = { Text("Deny with a note") }, onClick = { menu = false; actions.open(prompt.id) })
                     }
                 }
             }
         }
+    }
+}
+
+/** A wider allow: its label, and under it the exact rule it adds, in mono and in full. */
+@Composable
+private fun ScopeText(scope: PromptScope) {
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text(scope.label, style = StarbridgeTheme.type.label, color = MaterialTheme.colorScheme.onSurface)
+        Text(scope.rule, style = StarbridgeTheme.type.code.copy(fontSize = 13.sp, lineHeight = 18.sp), color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
@@ -228,14 +248,6 @@ fun PromptSheet(prompt: Prompt, now: Instant, actions: PromptActions) {
         Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Command(prompt.summary, StarbridgeTheme.type.code.copy(fontSize = 17.sp, lineHeight = 26.sp), scheme.surfaceContainerHighest, RoundedCornerShape(Spacing.s4), PaddingValues(horizontal = 18.dp, vertical = Spacing.s4))
             prompt.description?.let { Text(it, style = StarbridgeTheme.type.reading.copy(lineHeight = 22.sp), color = scheme.onSurfaceVariant) }
-            if (input) {
-                Text(
-                    prettyInput(prompt.input),
-                    style = StarbridgeTheme.type.code,
-                    color = scheme.onSurface,
-                    modifier = Modifier.fillMaxWidth().background(scheme.surfaceContainerHighest, RoundedCornerShape(Spacing.s4)).horizontalScroll(rememberScrollState()).padding(Spacing.s4),
-                )
-            }
             if (waiting) {
                 AllowDeny(56.dp, !sent, scheme.surfaceContainerHighest, onAllow = { send(true, "once", null) }, onDeny = { if (denying) send(false, "once", note.ifBlank { null }) else denying = true })
                 if (denying) {
@@ -247,24 +259,55 @@ fun PromptSheet(prompt: Prompt, now: Instant, actions: PromptActions) {
                         modifier = Modifier.fillMaxWidth(),
                     )
                 } else if (prompt.scopes.isNotEmpty()) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+                    // Stacked, each with the exact rule it adds, in full (PROTOCOL.md).
+                    Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
                         prompt.scopes.forEach { scope ->
                             OutlinedButton(
                                 onClick = { send(true, scope.scope, null) },
                                 enabled = !sent,
+                                shape = RoundedCornerShape(Spacing.s4),
                                 border = ButtonDefaults.outlinedButtonBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(scheme.outlineVariant)),
-                                contentPadding = PaddingValues(horizontal = Spacing.s3),
-                                modifier = Modifier.weight(1f).heightIn(min = 40.dp),
-                            ) { Text(scope.label, style = StarbridgeTheme.type.label, color = scheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                                contentPadding = PaddingValues(horizontal = Spacing.s4, vertical = Spacing.s3),
+                                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                            ) { Box(Modifier.fillMaxWidth()) { ScopeText(scope) } }
                         }
                     }
                 }
             }
+            FullInput(prompt.input, input) { input = !input }
+        }
+    }
+}
+
+/**
+ * "Full input": a row with a chevron that opens the tool's input under itself, as Material's
+ * expandable sections do, so nothing above it moves and Allow and Deny stay under the thumb (#265).
+ */
+@Composable
+private fun FullInput(input: String, open: Boolean, onToggle: () -> Unit) {
+    val scheme = MaterialTheme.colorScheme
+    val turn by animateFloatAsState(if (open) 180f else 0f, MaterialTheme.motionScheme.fastSpatialSpec(), label = "chevron")
+    Column {
+        Row(
+            Modifier.fillMaxWidth().heightIn(min = 48.dp).clip(RoundedCornerShape(Spacing.s3))
+                .clickable(onClickLabel = if (open) "Hide the full input" else "Show the full input", onClick = onToggle)
+                .semantics { stateDescription = if (open) "Expanded" else "Collapsed" }
+                .padding(horizontal = Spacing.s1),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("Full input", style = StarbridgeTheme.type.label, color = scheme.onSurface, modifier = Modifier.weight(1f))
+            Symbol(Sym.ExpandMore, size = 22.dp, tint = scheme.onSurfaceVariant, modifier = Modifier.rotate(turn))
+        }
+        AnimatedVisibility(
+            open,
+            enter = expandVertically(MaterialTheme.motionScheme.defaultSpatialSpec()) + fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()),
+            exit = shrinkVertically(MaterialTheme.motionScheme.fastSpatialSpec()) + fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()),
+        ) {
             Text(
-                if (input) "Hide the full input" else "Show the full input",
-                style = StarbridgeTheme.type.small,
-                color = scheme.onSurfaceVariant,
-                modifier = Modifier.clickable { input = !input }.padding(vertical = Spacing.s1),
+                prettyInput(input),
+                style = StarbridgeTheme.type.code,
+                color = scheme.onSurface,
+                modifier = Modifier.padding(top = Spacing.s1).fillMaxWidth().background(scheme.surfaceContainerHighest, RoundedCornerShape(Spacing.s4)).horizontalScroll(rememberScrollState()).padding(Spacing.s4),
             )
         }
     }

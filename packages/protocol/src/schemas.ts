@@ -274,6 +274,16 @@ export const Decision = z
   });
 export type Decision = z.infer<typeof Decision>;
 
+/**
+ * The directory a device held when it signed an answer: its length and the hash of its last
+ * entry. A machine refuses answers while any device has signed a head its own chain lacks.
+ */
+export const DirectoryHead = z.object({
+  length: z.number().int().min(1).max(100_000),
+  head: B64.length(43),
+});
+export type DirectoryHead = z.infer<typeof DirectoryHead>;
+
 export const Answer = z
   .object({
     v: z.literal(1),
@@ -284,6 +294,7 @@ export const Answer = z
     answeredAt: Time,
     choice: z.string().max(100).optional(),
     text: z.string().max(4000).optional(),
+    dir: DirectoryHead.optional(),
   })
   .refine((a) => (a.choice === undefined) !== (a.text === undefined), {
     message: "exactly one of choice and text",
@@ -357,6 +368,7 @@ export const PermissionAnswer = z
     inputHash: B64,
     /** On a deny: what the agent should do instead. */
     message: z.string().max(500).optional(),
+    dir: DirectoryHead.optional(),
   })
   .superRefine((a, ctx) => {
     if (a.behavior === "deny" && a.scope !== "once")

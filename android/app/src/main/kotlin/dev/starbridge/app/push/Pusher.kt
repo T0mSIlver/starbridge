@@ -1,6 +1,8 @@
 package dev.starbridge.app.push
 
 import android.content.Context
+import android.net.ConnectivityManager
+import android.net.Network
 import android.util.Log
 import com.google.firebase.FirebaseApp
 import com.google.firebase.messaging.FirebaseMessaging
@@ -27,6 +29,12 @@ class Pusher(private val context: Context, private val store: ServerStore, priva
                     if (type == "unifiedpush") useUnifiedPush() else useFcm()
                 }
         }
+        // A route that failed to register while offline is tried again once a network is back.
+        context.getSystemService(ConnectivityManager::class.java).registerDefaultNetworkCallback(object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) {
+                scope.launch { store.retryPush() }
+            }
+        })
     }
 
     private fun useFcm() {

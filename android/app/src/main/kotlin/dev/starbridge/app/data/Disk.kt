@@ -90,6 +90,8 @@ data class Saved(
     val digitJoin: SavedDigitJoin? = null,
     /** The first device's signed genesis entry, kept until the server's chain is known to hold it. */
     val pendingGenesis: JsonElement? = null,
+    /** While recovering: the member whose keys this phone made, until the chain holds it. */
+    val recovering: Member? = null,
 )
 
 /**
