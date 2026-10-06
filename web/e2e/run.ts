@@ -824,9 +824,9 @@ async function main() {
   const asked = page.waitForRequest((r) => r.method() === "POST" && r.url().includes("/quota/ask"));
   await refresh.click();
   await asked;
-  // No agent runs in this test, so the server holds the ask its 15 s before it answers.
+  // No agent runs in this test, so the server holds the ask its 25 s before it answers.
   await page.waitForSelector('button[aria-label="Refresh quotas"][aria-busy="false"]:visible', {
-    timeout: 30_000,
+    timeout: 40_000,
   });
 
   step("quota settings: remaining, clock times, workdays");
