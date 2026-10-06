@@ -259,7 +259,15 @@ async function main() {
   failPage = page;
   await page.getByRole("button", { name: "Create the keys" }).click();
   await page.getByRole("heading", { name: "Save your recovery key" }).waitFor();
+  const unsaved = ((await page.getByTestId("recovery-key").textContent()) ?? "").trim();
+
+  step("a reload before the key is saved offers a new key, not the inbox (#328)");
+  await page.reload();
+  await page.getByText(/so that key was never used/).waitFor();
+  await page.getByRole("button", { name: "Create the keys" }).click();
+  await page.getByRole("heading", { name: "Save your recovery key" }).waitFor();
   const key = ((await page.getByTestId("recovery-key").textContent()) ?? "").trim();
+  if (key === unsaved) throw new Error("expected a new recovery key after the reload");
   if (!/^([0-9A-Z]{4}){7}$/.test(key)) throw new Error(`expected a recovery key, got: ${key}`);
   await noWordsAsked(page);
   await shoot(page, "setup");

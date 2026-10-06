@@ -1353,6 +1353,13 @@ so the mod is the first path.
   Caddy sets what applies to every response, the API's included: HSTS for a year,
   `nosniff` and `Referrer-Policy: same-origin`; the self-host example does the same. Next
   stops sending `X-Powered-By`.
+- 2026-10-06. The web posts the account's first entry only once the owner confirms the recovery
+  key is saved (#328). The seed is dropped as soon as the key exists, so a page closed on "Save
+  your recovery key" had already posted an account whose key nobody saw, and could never show it
+  again. Now a reload before Continue finds an empty directory, says that key was never used,
+  and makes a new one; the key is never stored, in IndexedDB or elsewhere. Replacing the key
+  later needs a new directory entry kind, since entry 0 fixes the recovery public key; it waits
+  for the owner's ruling on the mockup.
 
 - 2026-10-06. Pi gets the allow rules Claude Code and Codex have (#322, #323, #324, from the #298
   audit). With pi-permission-system installed, setup offers to add `"starbridge ask *"`,
