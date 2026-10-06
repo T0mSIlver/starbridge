@@ -4,6 +4,7 @@ import { useState } from "react";
 import { track } from "@/lib/analytics";
 import { AGENTS_GUIDE, REPO, SELF_HOST } from "@/lib/links";
 import { Analytics } from "./Analytics";
+import { InstallBox } from "./InstallBox";
 import { Icon, Mark } from "./icons";
 import s from "./Landing.module.css";
 import ui from "./ui.module.css";
@@ -67,60 +68,8 @@ const FEATURES = [
   ["Permission prompts", "Allow or deny a command away from the keyboard. Off by default."],
 ] as const;
 
-/** Label, command, and the method the copy event reports, kept as first named. */
-const INSTALL = [
-  ["macOS / Linux", "curl -fsSL https://starbridge.run/install.sh | sh", "Script"],
-  ["Homebrew", "brew install T0mSIlver/starbridge/starbridge", "Homebrew"],
-  ["npm", "npm i -g starbridge", "npm"],
-] as const;
-
 /** Docs opened from the landing page; the docs pages count their own views. */
 const openDocs = (page: string) => () => track("open-docs", { page });
-
-function Install() {
-  const [at, setAt] = useState(0);
-  const [copied, setCopied] = useState(false);
-  const [, cmd, method] = INSTALL[at] ?? ["", "", ""];
-  const onCopied = () => track("copy-install", { method });
-  return (
-    <div className={s.install}>
-      <div className={`t-meta ${s.tabs}`} role="tablist" aria-label="Install with">
-        {INSTALL.map(([label], i) => (
-          <button
-            key={label}
-            type="button"
-            role="tab"
-            aria-selected={i === at}
-            className={s.tab}
-            onClick={() => {
-              setAt(i);
-              setCopied(false);
-            }}
-          >
-            {label}
-          </button>
-        ))}
-        <button
-          type="button"
-          className={s.copy}
-          aria-label={copied ? "Copied" : "Copy"}
-          onClick={async () => {
-            try {
-              await navigator.clipboard.writeText(cmd);
-              setCopied(true);
-              onCopied();
-            } catch {}
-          }}
-        >
-          <Icon name={copied ? "check" : "copy"} size={16} />
-        </button>
-      </div>
-      <pre className={`t-code ${s.cmd}`} role="tabpanel" onCopy={onCopied}>
-        {cmd}
-      </pre>
-    </div>
-  );
-}
 
 function Section({
   title,
@@ -259,7 +208,7 @@ export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
           After Homebrew or npm, run <code className={s.inlineCode}>starbridge setup</code> to pair
           the machine and install the Claude Code plugin. The script runs it for you.
         </p>
-        <Install />
+        <InstallBox />
         <p className={`t-meta ${s.faint}`}>
           Works best with Claude Code. Codex, Pi and opencode are supported.
         </p>
