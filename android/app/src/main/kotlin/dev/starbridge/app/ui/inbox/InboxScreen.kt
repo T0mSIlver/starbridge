@@ -547,34 +547,33 @@ fun DecisionSheet(decision: Decision, now: Instant, onAnswer: (String, String?, 
 }
 
 /**
- * "Pick a result": each image over the option it stands for; picking one answers. Both slots in a
- * row take the taller image's height, each image centred on the inset colour, so the buttons line
- * up and a phone screenshot beside a desktop one does not grow the row.
+ * "Pick a result": each image over the option it stands for, two to a row; picking one answers. The
+ * images of a row share one height, as everywhere ([ImageRow], #536), and the row's buttons sit
+ * under them in equal halves, so a narrow phone screenshot keeps a full-size button.
  */
 @Composable
 private fun Picks(decision: Decision, sending: String?, answer: (String?, String?) -> Unit) {
     val colors = StarbridgeTheme.colors
-    val maxHeight = Sizes.pick
     var viewing by remember { mutableStateOf<Int?>(null) }
     BoxWithConstraints {
-        val column = (maxWidth - Spacing.s2) / 2
+        val width = maxWidth
         Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            decision.images.zip(decision.options).chunked(2).forEachIndexed { r, row ->
-                val slot = minOf(maxHeight, row.maxOf { (image, _) -> column * image.height / image.width })
-                Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
-                    row.forEachIndexed { c, (image, option) ->
-                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
-                            ImageBox(image, maxHeight, wide = true, crop = false, Modifier.fillMaxWidth(), slot) { viewing = r * 2 + c }
+            decision.images.indices.chunked(2).forEach { row ->
+                Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+                    ImageRow(row.map { decision.images[it] }, width, Sizes.pick) { viewing = row[it] }
+                    Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+                        row.forEach { i ->
+                            val option = decision.options[i]
                             val recommended = option == decision.proposal
                             Button(
                                 onClick = { if (sending == null) answer(option, null) },
                                 colors = if (recommended) ButtonDefaults.buttonColors(containerColor = colors.accent, contentColor = colors.onAccent)
                                 else ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHighest, contentColor = MaterialTheme.colorScheme.onSurface),
-                                modifier = Modifier.fillMaxWidth().height(48.dp).semantics { if (recommended) stateDescription = "Default" },
+                                modifier = Modifier.weight(1f).height(48.dp).semantics { if (recommended) stateDescription = "Default" },
                             ) { Text(option, style = StarbridgeTheme.type.action, maxLines = 1, overflow = TextOverflow.Ellipsis) }
                         }
+                        if (row.size == 1) Spacer(Modifier.weight(1f))
                     }
-                    if (row.size == 1) Spacer(Modifier.weight(1f))
                 }
             }
         }

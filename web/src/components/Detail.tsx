@@ -6,7 +6,7 @@ import type { MachineKind } from "@/lib/feed";
 import { AnsweredFirst, answeredFirstText, answerPlace } from "@/lib/outcome";
 import { fullInput } from "@/lib/permissionInput";
 import type { InboxItem, PromptItem, PromptReply, Reply } from "@/lib/types";
-import { ImageButton, Images, Links } from "./Attachments";
+import { ImageButton, ImageRow, Images, Links, rows } from "./Attachments";
 import { Context } from "./Context";
 import s from "./Detail.module.css";
 import { KindTile, MetaRow, SessionLine, slotTime } from "./Feed";
@@ -258,9 +258,9 @@ export function QuestionDetail({
 }
 
 /**
- * "Pick a result": each image over the option it stands for; picking one answers. The images of a
- * row share the tallest one's height, each centred on the inset colour, so the buttons line up
- * and a phone screenshot beside a desktop one does not grow the row.
+ * "Pick a result": each image over the option it stands for, two to a row; picking one answers. The
+ * images of a row share one height, as everywhere (#536), and the row's buttons sit under them in
+ * equal halves, so a narrow phone screenshot keeps a full-size button.
  */
 function Picks({
   d,
@@ -275,36 +275,38 @@ function Picks({
 }) {
   const images = d.images ?? [];
   const [open, setOpen] = useState<number>();
-  // Two to a row: a row's images, then their buttons, so each row of the grid shares one height.
-  const rows = d.options.flatMap((_, i) =>
-    i % 2 ? [] : [[i, i + 1].filter((j) => j < images.length)],
-  );
   return (
     <fieldset className={`${s.actions} ${s.picks}`}>
       <legend className="sr-only">Answer</legend>
-      {rows.map((row) => [
-        ...row.map((i) => (
-          <ImageButton key={`i${i}`} img={images[i]} className={s.pick} onOpen={() => setOpen(i)} />
-        )),
-        ...row.map((i) => {
-          const o = d.options[i];
-          const rec = o === d.recommended;
-          return (
-            <button
-              key={o}
-              type="button"
-              className={`t-label ${ui.btn} ${rec ? ui.rec : ""}`}
-              disabled={sending}
-              aria-keyshortcuts={keys && i < 4 ? String(i + 1) : undefined}
-              onClick={() => onPick(o)}
-            >
-              {o}
-              {rec && <span className="sr-only"> Default</span>}
-              {keys && i < 4 && <Kbd k={String(i + 1)} />}
-            </button>
-          );
-        }),
-      ])}
+      {rows(images.length).map((row) => (
+        <div key={row[0]} className={s.pick}>
+          <ImageRow images={row.map((i) => images[i])}>
+            {row.map((i) => (
+              <ImageButton key={i} img={images[i]} onOpen={() => setOpen(i)} />
+            ))}
+          </ImageRow>
+          <div className={s.pickButtons}>
+            {row.map((i) => {
+              const o = d.options[i];
+              const rec = o === d.recommended;
+              return (
+                <button
+                  key={o}
+                  type="button"
+                  className={`t-label ${ui.btn} ${rec ? ui.rec : ""}`}
+                  disabled={sending}
+                  aria-keyshortcuts={keys && i < 4 ? String(i + 1) : undefined}
+                  onClick={() => onPick(o)}
+                >
+                  {o}
+                  {rec && <span className="sr-only"> Default</span>}
+                  {keys && i < 4 && <Kbd k={String(i + 1)} />}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ))}
       {open !== undefined && (
         <Viewer images={images} start={open} onClose={() => setOpen(undefined)} />
       )}

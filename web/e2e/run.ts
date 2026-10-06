@@ -543,15 +543,36 @@ async function main() {
       .locator("button[data-id]")
       .click();
     await page.getByRole("heading", { name: LAYOUTS }).waitFor({ timeout: 30_000 });
-    const tops = async (sel: string) =>
-      page
-        .locator(sel)
-        .evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().top)));
-    await page.locator('fieldset button[aria-label^="View"] img').nth(1).waitFor();
-    const images = await tops('fieldset button[aria-label^="View"]');
-    const buttons = await tops('fieldset button:not([aria-label^="View"])');
-    if (images.length !== 2 || images[0] !== images[1] || buttons[0] !== buttons[1])
-      throw new Error(`the picks do not line up: images at ${images}, buttons at ${buttons}`);
+    // Both images one height, each its own shape (no band), and both buttons on one line.
+    const rects = async (sel: string) =>
+      page.locator(sel).evaluateAll((els) =>
+        els.map((e) => {
+          const r = e.getBoundingClientRect();
+          const img = e.querySelector("img");
+          const shape = img ? img.naturalWidth / img.naturalHeight : 0;
+          return {
+            top: Math.round(r.top),
+            height: Math.round(r.height),
+            off: r.width / r.height - shape,
+          };
+        }),
+      );
+    await page.waitForFunction(() => {
+      const imgs = [...document.querySelectorAll("fieldset img")] as HTMLImageElement[];
+      return imgs.length === 2 && imgs.every((i) => i.complete && i.naturalWidth > 0);
+    });
+    const images = await rects('fieldset button[aria-label^="View"]');
+    const buttons = await rects('fieldset button:not([aria-label^="View"])');
+    if (
+      images.length !== 2 ||
+      images[0].top !== images[1].top ||
+      images[0].height !== images[1].height ||
+      images.some((r) => Math.abs(r.off) > 0.02) ||
+      buttons[0].top !== buttons[1].top
+    )
+      throw new Error(
+        `the picks do not line up: images ${JSON.stringify(images)}, buttons ${JSON.stringify(buttons)}`,
+      );
     for (const scheme of ["light", "dark"] as const) {
       await page.emulateMedia({ colorScheme: scheme, reducedMotion: "reduce" });
       await page.waitForTimeout(150);

@@ -344,7 +344,7 @@ size:
   hatch: 6
   media: 360 # the tallest an attached image shows in a decision
   media-wide: 560 # the same, in a wide detail pane
-  pick: 240 # the tallest an image over its option shows; the row's images share the tallest one's height
+  pick: 240 # the tallest a row of images over their options shows
   detail-wide-from: 1000 # the web's detail pane width from which its content widens and its type steps up
   detail-wide: 1280 # the widest a wide detail pane's content runs
   page: 1200 # the landing page's width
@@ -507,9 +507,10 @@ a decision's context, a permission prompt's command and a session's name.
 - An image on a question opens the full-screen viewer, and says so: an expand
   badge in its bottom right corner, `s2` in, a `s8` circle of `surface` at 72%
   with the expand icon (`s5`) in `fg`. Touch screens show no zoom cursor.
-- Images over their options (picks) share one height per row, the tallest
-  image's up to `size.pick`; each sits centred on `surface2`, its expand badge
-  in the frame's corner, and the option buttons line up under them.
+- A question's images go two to a row at one height, each as wide as its
+  shape asks, the row filling the width: `radius.lg` corners, no frame, no
+  fill (`surface2` shows only until an image decodes). Over options, the row's
+  buttons sit under it in equal halves.
 - Destructive actions are neutral text buttons on the row; only the confirm
   button in their dialog is red (`bad`).
 - Copy inside the UI is labels and states only, never a sentence explaining

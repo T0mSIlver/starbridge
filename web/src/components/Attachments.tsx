@@ -1,22 +1,31 @@
 "use client";
 
-import { useState } from "react";
+import { type CSSProperties, type ReactNode, useState } from "react";
 import { githubRef, imageSrc, linkLabel } from "@/lib/attachments";
 import type { Decision } from "@/lib/types";
 import s from "./Attachments.module.css";
 import { Icon } from "./icons";
 import { Viewer } from "./Viewer";
 
-/** The decision's images, side by side when there are several; each opens the viewer. */
+type Image = NonNullable<Decision["images"]>[number];
+
+/** Indexes of `n` images in rows of two, in order. */
+export const rows = (n: number) =>
+  Array.from({ length: Math.ceil(n / 2) }, (_, r) => [2 * r, 2 * r + 1].filter((i) => i < n));
+
+/** The decision's images, two to a row; each opens the viewer. */
 export function Images({ d }: { d: Decision }) {
   const images = d.images ?? [];
   const [open, setOpen] = useState<number>();
   if (images.length === 0) return null;
   return (
-    <div className={`${s.images} ${images.length > 1 ? s.grid : ""}`}>
-      {images.map((img, i) => (
-        // biome-ignore lint/suspicious/noArrayIndexKey: images have no id, and never reorder
-        <ImageButton key={i} img={img} onOpen={() => setOpen(i)} />
+    <div className={s.images}>
+      {rows(images.length).map((row) => (
+        <ImageRow key={row[0]} images={row.map((i) => images[i])}>
+          {row.map((i) => (
+            <ImageButton key={i} img={images[i]} onOpen={() => setOpen(i)} />
+          ))}
+        </ImageRow>
       ))}
       {open !== undefined && (
         <Viewer images={images} start={open} onClose={() => setOpen(undefined)} />
@@ -25,20 +34,27 @@ export function Images({ d }: { d: Decision }) {
   );
 }
 
-/** One image, opening the viewer; the inset colour bands it where its shape leaves room. */
-export function ImageButton({
-  img,
-  onOpen,
-  className = "",
-}: {
-  img: NonNullable<Decision["images"]>[number];
-  onOpen: () => void;
-  className?: string;
-}) {
+/**
+ * A row of images at one height, each as wide as its shape asks, together filling the row (#536):
+ * no image is banded or cropped. The row is at most `--row-max` tall, narrower when that caps it.
+ */
+export function ImageRow({ images, children }: { images: Image[]; children: ReactNode }) {
+  const shape = images.reduce((sum, i) => sum + i.width / i.height, 0);
+  const style = { "--shape": shape, "--n": images.length } as CSSProperties;
+  return (
+    <div className={s.row} style={style}>
+      {children}
+    </div>
+  );
+}
+
+/** One image, opening the viewer. */
+export function ImageButton({ img, onOpen }: { img: Image; onOpen: () => void }) {
   return (
     <button
       type="button"
-      className={`${s.image} ${className}`}
+      className={s.image}
+      style={{ "--r": img.width / img.height } as CSSProperties}
       onClick={onOpen}
       aria-label={img.alt ? `View ${img.alt}` : "View image"}
     >
