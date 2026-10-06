@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.text.KeyboardOptions
@@ -144,7 +145,7 @@ internal fun Title(text: String, modifier: Modifier = Modifier) {
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 internal fun Primary(text: String, busy: Boolean, enabled: Boolean = true, icon: (@Composable () -> Unit)? = null, onClick: () -> Unit) {
-    Button(onClick = onClick, enabled = enabled && !busy, modifier = Modifier.fillMaxWidth().height(56.dp)) {
+    Button(onClick = onClick, enabled = enabled && !busy, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
         if (busy) {
             LoadingIndicator(Modifier.size(Spacing.s6), color = MaterialTheme.colorScheme.onPrimary)
         } else {
@@ -219,7 +220,7 @@ private fun SignIn(server: String, busy: Boolean, actions: SetupActions, openUrl
                 Link("Use your own server") { selfHosted = true }
             } else {
                 Primary("Sign in", busy, enabled = url.isNotBlank() && token.isNotBlank()) { actions.ownerToken(url, token) }
-                OutlinedButton(onClick = { openUrl(actions.gitHub(url)) }, enabled = url.isNotBlank() && !busy, modifier = Modifier.fillMaxWidth().height(56.dp)) {
+                OutlinedButton(onClick = { openUrl(actions.gitHub(url)) }, enabled = url.isNotBlank() && !busy, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
                     Text("Sign in with GitHub on this server", style = StarbridgeTheme.type.action)
                 }
                 Link("Use starbridge.run") { selfHosted = false; url = BuildConfig.DEFAULT_SERVER }
@@ -245,7 +246,7 @@ private fun Join(busy: Boolean, actions: SetupActions, modifier: Modifier) {
         bottom = {
             Primary("Scan a QR code", busy, icon = { Symbol(Sym.Qr, size = 20.dp) }, onClick = scan)
             Link("Can't scan? Compare digits", actions.askDevices)
-            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s6)) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.s6, Alignment.CenterHorizontally)) {
                 Link("Use the recovery key") { recovering = true }
                 Link("Sign out", actions.signOut)
             }
@@ -336,7 +337,8 @@ private fun Waiting(title: String, text: String, digits: String?, onCancel: () -
                         digits.forEachIndexed { i, d ->
                             if (i == 3) Spacer(Modifier.width(Spacing.s3))
                             if (i > 0) Spacer(Modifier.width(Spacing.s2))
-                            Box(Modifier.size(48.dp, 64.dp).background(MaterialTheme.colorScheme.surfaceContainerHighest, RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) {
+                            // Narrower than 48 dp only where six of them don't fit.
+                            Box(Modifier.weight(1f, fill = false).widthIn(max = 48.dp).fillMaxWidth().height(64.dp).background(MaterialTheme.colorScheme.surfaceContainerHighest, RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) {
                                 Text("$d", style = StarbridgeTheme.type.figure.copy(fontSize = 32.sp, lineHeight = 32.sp), color = MaterialTheme.colorScheme.onSurface)
                             }
                         }
@@ -350,7 +352,7 @@ private fun Waiting(title: String, text: String, digits: String?, onCancel: () -
             }
         },
         bottom = {
-            OutlinedButton(onClick = onCancel, modifier = Modifier.fillMaxWidth().height(56.dp)) { Text("Cancel", style = StarbridgeTheme.type.action) }
+            OutlinedButton(onClick = onCancel, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) { Text("Cancel", style = StarbridgeTheme.type.action) }
         },
     )
 }

@@ -62,7 +62,7 @@ function session(socket: string, id: string) {
 
 async function ask(c: TestCtx, ...extra: string[]): Promise<string> {
   const before = c.lines.length;
-  const code = await run([...ASK, "--default", "Merge at 18:00", ...extra], c);
+  const code = await run([...ASK, ...extra], c);
   if (code !== 0) throw new Error(c.errors.join("\n"));
   return c.lines[before] as string;
 }
@@ -240,7 +240,7 @@ test("the CLI goes to the server itself when no agent runs, or when the agent ca
   const dead = createServer();
   await new Promise<void>((r) => dead.listen(stale, r));
   await new Promise<void>((r) => dead.close(() => r()));
-  expect(await run([...ASK, "--default", "x", "--session", "s1"], ctx)).toBe(0);
+  expect(await run([...ASK, "--session", "s1"], ctx)).toBe(0);
 
   // An agent from another release.
   const old = createServer((_req, res) => {
@@ -249,7 +249,7 @@ test("the CLI goes to the server itself when no agent runs, or when the agent ca
   });
   await new Promise<void>((r) => old.listen(stale, r));
   try {
-    expect(await run([...ASK, "--default", "x", "--session", "s1"], ctx)).toBe(0);
+    expect(await run([...ASK, "--session", "s1"], ctx)).toBe(0);
     expect(ctx.errors).toContain("starbridge: update the agent; going to the server directly");
   } finally {
     await new Promise<void>((r) => old.close(() => r()));
@@ -342,7 +342,7 @@ test("once the agent posted the decision, a 426 on the wait never posts it again
   });
   await new Promise<void>((r) => fake.listen(socket, r));
   try {
-    expect(await run([...ASK, "--default", "x", "--wait"], ctx)).toBe(1);
+    expect(await run([...ASK, "--wait"], ctx)).toBe(1);
     expect(ctx.lines).toEqual(["d_fake"]);
     expect(ctx.errors.at(-1)).toBe("starbridge: update it");
   } finally {
@@ -477,6 +477,44 @@ test("a Pi session with the extension gets its answer as an event, titled from i
   });
   await ask(bare, "--project", "p");
   expect(bare.errors.at(-1)).toContain("run `starbridge wait");
+});
+
+test("an opencode session with the plugin gets its answer as an event, titled by the plugin", async () => {
+  const { socket } = await machine();
+  const oc = {
+    STARBRIDGE_OPENCODE_SESSION: "ses_1",
+    STARBRIDGE_OPENCODE_TITLE: "Fix the build",
+    CLAUDE_CODE_SESSION_ID: "c1",
+  };
+  const c = testCtx({
+    STARBRIDGE_AGENT_SOCKET: socket,
+    ...oc,
+    STARBRIDGE_OPENCODE_ANSWERS: "ses_1",
+  });
+  const id = await ask(c, "--project", "p");
+  expect(c.errors.at(-1)).toBe("The answer will come back into this session as a new prompt.");
+  const [d] = await server.opened("decision");
+  expect([d?.agent, d?.source.session, d?.source.sessionTitle]).toEqual([
+    "opencode",
+    "ses_1",
+    "Fix the build",
+  ]);
+
+  const s = session(socket, "ses_1");
+  await s.hello();
+  await server.answer(id, { choice: "Merge" });
+  await until(async () => (await s.events()).length === 1);
+  expect((await s.events())[0]?.line).toBe(`Answer to ${id} (Merge #12 now?): Merge`);
+
+  // `opencode run`, started from another session's shell, inherits that session's variable.
+  const run = testCtx({
+    STARBRIDGE_AGENT_SOCKET: socket,
+    ...oc,
+    STARBRIDGE_OPENCODE_SESSION: "ses_2",
+    STARBRIDGE_OPENCODE_ANSWERS: "ses_1",
+  });
+  await ask(run, "--project", "p");
+  expect(run.errors.at(-1)).toContain("run `starbridge wait");
 });
 
 test("the socket is never open to other users, even between bind and chmod (#95)", async () => {

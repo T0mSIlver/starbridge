@@ -6,6 +6,7 @@ import dev.starbridge.app.protocol.Permission
 import dev.starbridge.app.protocol.Pin
 import dev.starbridge.app.protocol.ProtocolJson
 import dev.starbridge.app.protocol.QuotaSnapshot
+import dev.starbridge.app.protocol.SealedItem
 import dev.starbridge.app.protocol.Settled
 import dev.starbridge.app.protocol.Run
 import kotlinx.serialization.KSerializer
@@ -53,6 +54,14 @@ data class SavedQuota(val from: String, val body: QuotaSnapshot)
 @Serializable
 data class SavedRun(val from: String, val body: Run)
 
+/**
+ * An answer signed and sealed but not yet taken by the server: offline, say. [answer] is the
+ * choice or the text; [mayHaveLanded] is set once an attempt failed after the request may have
+ * reached the server, so a later `already-answered` is most likely this answer's own (#329).
+ */
+@Serializable
+data class QueuedAnswer(val decisionId: String, val answer: String, val item: SealedItem, val mayHaveLanded: Boolean = false)
+
 @Serializable
 data class SavedPush(val type: String, val id: String, val endpoint: String)
 
@@ -78,6 +87,8 @@ data class Saved(
     /** Where the last read of permission prompts and settled notices stopped. */
     val promptCursor: String = "",
     val prompts: List<SavedPrompt> = emptyList(),
+    /** Answers waiting to be sent, oldest first. */
+    val outbox: List<QueuedAnswer> = emptyList(),
     val quotas: List<SavedQuota> = emptyList(),
     val runs: List<SavedRun> = emptyList(),
     /** "fcm" or "unifiedpush". */

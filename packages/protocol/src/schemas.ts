@@ -166,6 +166,8 @@ export const SealedItem = z.object({
   re: Id.optional(),
   /** Store without pushing: a quota snapshot that raises no new alert. */
   quiet: z.literal(true).optional(),
+  /** A machine re-posts its open decision or permission under its id, to more devices. */
+  reseal: z.literal(true).optional(),
   boxes: z
     .array(z.object({ to: Id, box: B64 }))
     .min(1)
@@ -203,7 +205,7 @@ export const SessionLink = z
 export type SessionLink = z.infer<typeof SessionLink>;
 
 /** The coding agent behind a decision or a permission prompt, as machines send it. */
-export const Agent = z.enum(["claude-code", "codex", "pi"]);
+export const Agent = z.enum(["claude-code", "codex", "pi", "opencode"]);
 export type Agent = z.infer<typeof Agent>;
 
 /**
