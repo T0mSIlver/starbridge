@@ -3,7 +3,7 @@ import { realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { createInterface } from "node:readline/promises";
 import type { Ctx } from "../context";
-import { inBunfs, resolveCommand, spawnable, which } from "../platform";
+import { inBunfs, killTree, resolveCommand, spawnable, which } from "../platform";
 
 export { which };
 
@@ -140,7 +140,7 @@ export function run(
     child.stderr?.on("data", (d) => {
       stderr += d;
     });
-    const timer = setTimeout(() => child.kill("SIGKILL"), opts.timeoutMs ?? 120_000);
+    const timer = setTimeout(() => killTree(child), opts.timeoutMs ?? 120_000);
     child.on("error", (e) => {
       clearTimeout(timer);
       resolve({ code: null, stdout, stderr: e.message });

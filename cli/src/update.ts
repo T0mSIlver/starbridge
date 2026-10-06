@@ -1,7 +1,7 @@
 import { spawn, spawnSync } from "node:child_process";
-import { chmodSync, existsSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import type { Ctx } from "./context";
 import { resolveCommand, spawnable } from "./platform";
 import {
@@ -161,9 +161,13 @@ export function replaceBinary(next: string, target: string, platform = process.p
     renameSync(aside, target);
     throw e;
   }
-  try {
-    rmSync(aside, { force: true });
-  } catch {}
+  // This copy, and any a still-running one kept from an earlier update.
+  const dir = dirname(target);
+  const leftover = (f: string) => f.startsWith(`${basename(target)}.`) && f.endsWith(".old");
+  for (const f of readdirSync(dir).filter(leftover))
+    try {
+      rmSync(join(dir, f), { force: true });
+    } catch {}
 }
 
 /** Removes a script-installed binary; brew and npm installs are removed by their manager. */
@@ -187,13 +191,13 @@ function removeRunningExe(ctx: Ctx, path: string): number {
     ctx.out(`Delete ${path} once this command returns.`);
     return 0;
   }
-  const del = `ping -n 3 127.0.0.1 >nul & del /f /q "${path}" "${path}.old"`;
+  const del = `ping -n 3 127.0.0.1 >nul & del /f /q "${path}" "${path}.old" "${path}.*.old"`;
   spawn(ctx.env.ComSpec || "cmd.exe", ["/d", "/s", "/c", `"${del}"`], {
     detached: true,
     stdio: "ignore",
     windowsHide: true,
     windowsVerbatimArguments: true,
   }).unref();
-  ctx.out(`Removing ${path} once this command returns.`);
+  ctx.out(`${path} is deleted once this command returns; if it stays, a program still runs it.`);
   return 0;
 }

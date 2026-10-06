@@ -9,7 +9,7 @@ import { closeSync, openSync, readdirSync, readSync } from "node:fs";
 import { createConnection } from "node:net";
 import { join } from "node:path";
 import type { Ctx } from "./context";
-import { spawnable, which } from "./platform";
+import { killTree, spawnable, which } from "./platform";
 
 export interface CodexSession {
   /** `CODEX_HOME` of the session, which holds the daemon's socket. */
@@ -143,7 +143,7 @@ export function codexQueue(
     child.stderr.on("data", (d) => {
       stderr += d;
     });
-    const timer = setTimeout(() => child.kill("SIGKILL"), QUEUE_MS);
+    const timer = setTimeout(() => killTree(child), QUEUE_MS);
     child.on("error", (e) => {
       clearTimeout(timer);
       resolve(e.message);

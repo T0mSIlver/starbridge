@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { candidates, inBunfs, normalEnv, spawnable } from "../src/platform";
+import { candidates, inBunfs, normalEnv, resolveCommand, spawnable } from "../src/platform";
 import { platformAsset } from "../src/release";
 import { replaceBinary } from "../src/update";
 
@@ -81,6 +81,14 @@ describe("spawnable", () => {
     );
   });
 
+  test("a script that does not pass %* on gets its arguments escaped once", () => {
+    const bat = join(mkdtempSync(join(tmpdir(), "sb-bat-")), "tool.bat");
+    writeFileSync(bat, "@echo %~1\r\n");
+    expect(spawnable(bat, ["a&b"], {}, "win32").args[3]).toBe(
+      `"${bat.replace(/([ ()%])/g, "^$1")} ^"a^&b^""`,
+    );
+  });
+
   test("a line break cannot go through cmd.exe", () => {
     expect(() => spawnable("C:\\x.cmd", ["a\nb"], {}, "win32")).toThrow("line break");
   });
@@ -103,6 +111,14 @@ test("platformAsset names the Windows builds with .exe", () => {
   expect(() => platformAsset("win32", "ia32")).toThrow("no starbridge build");
 });
 
+test("resolveCommand keeps a relative path, and looks a bare name up on the PATH", () => {
+  expect(resolveCommand({ PATH: "/nowhere" }, "./build.sh", "linux")).toBe("./build.sh");
+  expect(resolveCommand({ PATH: "C:\\nowhere" }, "scripts\\build.cmd", "win32")).toBe(
+    "scripts\\build.cmd",
+  );
+  expect(resolveCommand({ PATH: "/nowhere" }, "build.sh", "linux")).toBeUndefined();
+});
+
 describe("replaceBinary on Windows", () => {
   const setup = () => {
     const dir = mkdtempSync(join(tmpdir(), "sb-replace-"));
@@ -116,10 +132,12 @@ describe("replaceBinary on Windows", () => {
   test("the new binary takes the name and the old one is gone", () => {
     const { target, next } = setup();
     writeFileSync(`${target}.old`, "from the update before");
+    writeFileSync(`${target}.4242.old`, "kept by a copy that still ran");
     replaceBinary(next, target, "win32");
     expect(readFileSync(target, "utf8")).toBe("new");
     expect(existsSync(next)).toBe(false);
     expect(existsSync(`${target}.old`)).toBe(false);
+    expect(existsSync(`${target}.4242.old`)).toBe(false);
   });
 
   test("when the move fails, the old binary goes back", () => {
