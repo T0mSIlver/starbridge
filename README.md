@@ -62,6 +62,10 @@ call once or deny it.
 [starbridge.run/docs](https://starbridge.run/docs): getting started, the CLI, telling your agents
 when to reach you, and self-hosting.
 
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). Report vulnerabilities privately: [SECURITY.md](SECURITY.md).
+
 ## Licence
 
-MIT
+[MIT](LICENSE)

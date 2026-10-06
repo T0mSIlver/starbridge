@@ -69,8 +69,18 @@ export function providerOrder(cards: QuotaCardData[], s: QuotaSettings): string[
   return [...known, ...seen.filter((p) => !known.includes(p))];
 }
 
+/**
+ * `order` (every provider) after the owner dragged some of them into `sequence`: those take the
+ * places they held, in their new order, and every other provider keeps its place.
+ */
+export function reorder(order: string[], sequence: string[]): string[] {
+  const moved = new Set(sequence);
+  let next = 0;
+  return order.map((p) => (moved.has(p) ? (sequence[next++] ?? p) : p));
+}
+
 /** The window will run out or ran out, and has not reset: what `status` words in red. */
-function runningOut(w: QuotaWindow, now: Date): boolean {
+export function runningOut(w: QuotaWindow, now: Date): boolean {
   if (w.resetsAt && Date.parse(w.resetsAt) <= now.getTime()) return false;
   return !!w.pace && w.pace.stage !== "unknown" && !w.pace.willLastToReset;
 }

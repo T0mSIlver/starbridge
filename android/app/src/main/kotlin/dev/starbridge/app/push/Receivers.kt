@@ -1,5 +1,6 @@
 package dev.starbridge.app.push
 
+import android.app.KeyguardManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -54,8 +55,9 @@ class AnswerReceiver : BroadcastReceiver() {
 }
 
 /**
- * A prompt notification's button. Allow buttons require the unlock (the system asks before it
- * delivers them); Deny does not.
+ * A prompt notification's button. Allow requires the unlock; Deny does not. The system asks for
+ * the unlock only when a person taps the button: an app with notification access can send the
+ * action's intent itself while the phone is locked, so a locked Allow is refused here (#274).
  */
 class PromptReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
@@ -63,6 +65,10 @@ class PromptReceiver : BroadcastReceiver() {
         val allow = intent.getBooleanExtra(EXTRA_ALLOW, false)
         val scope = intent.getStringExtra(EXTRA_SCOPE) ?: "once"
         val app = context.app()
+        if (allow && context.getSystemService(KeyguardManager::class.java).isDeviceLocked) {
+            app.store().prompts.value.find { it.id == id }?.let { app.notifier().promptFailed(it, "unlock the phone to allow") }
+            return
+        }
         val pending = goAsync()
         app.scope().launch {
             val prompt = app.store().prompts.value.find { it.id == id }

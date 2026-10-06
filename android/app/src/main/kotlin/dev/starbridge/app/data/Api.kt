@@ -1,10 +1,12 @@
 package dev.starbridge.app.data
 
 import dev.starbridge.app.protocol.PairingMessage
+import dev.starbridge.app.protocol.ProtocolException
 import dev.starbridge.app.protocol.ProtocolJson
 import dev.starbridge.app.protocol.SealedItem
 import dev.starbridge.app.protocol.SignedEnvelope
 import dev.starbridge.app.protocol.envelopeJson
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
@@ -23,6 +25,7 @@ import okhttp3.Response
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.IOException
+import java.net.ConnectException
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import java.util.concurrent.TimeUnit
@@ -64,15 +67,43 @@ data class JoinView(
 @Serializable
 data class JoinList(val joins: List<JoinView>, val cursor: String)
 
+/**
+ * A deploy restarts the server in a few seconds (#150), so a 502 or 503 from Caddy, or a refused
+ * connection, is retried quietly for this long before the caller hears of it (#250).
+ */
+const val RETRY_FOR_MS = 20_000L
+
 /** The server's routes this client uses, as PROTOCOL.md lists them. */
 class Api(private val http: OkHttpClient, private val server: String, private val session: String?) {
     private val json = "application/json".toMediaType()
 
-    private suspend fun call(method: String, path: String, body: JsonElement? = null, headers: Map<String, String> = emptyMap(), client: OkHttpClient = http): Pair<Int, JsonElement?> =
+    private suspend fun call(method: String, path: String, body: JsonElement? = null, headers: Map<String, String> = emptyMap(), client: OkHttpClient = http): Pair<Int, JsonElement?> {
+        val started = System.currentTimeMillis()
+        var wait = 250L
+        while (true) {
+            try {
+                return once(method, path, body, headers, client)
+            } catch (e: IOException) {
+                val transient = when (e) {
+                    is ApiException -> e.status == 502 || e.status == 503
+                    // Refused: the request never left. Any other failure may have reached the
+                    // server, so only a read, which is safe to repeat, retries on it.
+                    is ConnectException -> true
+                    else -> method == "GET"
+                }
+                if (!transient || System.currentTimeMillis() - started + wait > RETRY_FOR_MS) throw e
+            }
+            delay(wait)
+            wait = (wait * 2).coerceAtMost(4_000)
+        }
+    }
+
+    private suspend fun once(method: String, path: String, body: JsonElement?, headers: Map<String, String>, client: OkHttpClient): Pair<Int, JsonElement?> =
         run {
             val request = Request.Builder()
                 .url("$server/v1$path")
-                .method(method, body?.toString()?.toRequestBody(json))
+                // OkHttp refuses a POST without a body; a bodiless ask sends an empty one (#253).
+                .method(method, body?.toString()?.toRequestBody(json) ?: if (method == "GET" || method == "DELETE") null else ByteArray(0).toRequestBody())
                 .apply {
                     session?.let { header("Authorization", "Bearer $it") }
                     headers.forEach { (k, v) -> header(k, v) }
@@ -148,7 +179,9 @@ class Api(private val http: OkHttpClient, private val server: String, private va
         val longPoll = http.newBuilder().readTimeout((waitSeconds + 15).toLong(), TimeUnit.SECONDS).build()
         val (status, body) = call("GET", "/pairings/$rendezvous/result?wait=$waitSeconds", headers = mapOf("X-Claim" to claim), client = longPoll)
         if (status == 204 || body == null) return null
-        return PairingResult(body.jsonObject.getValue("approval"))
+        // A reply without one is the server's fault, never the end of the app (#274).
+        val approval = (body as? JsonObject)?.get("approval") ?: throw ProtocolException("malformed", "pairing result without an approval")
+        return PairingResult(approval)
     }
 
     private fun longPoll(waitSeconds: Int) = http.newBuilder().readTimeout((waitSeconds + 15).toLong(), TimeUnit.SECONDS).build()

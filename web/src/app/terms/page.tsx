@@ -8,11 +8,11 @@ export default function Terms() {
     <LegalPage title="Terms">
       <p>
         These terms cover the hosted service at starbridge.run and the Starbridge Android app. Last
-        updated: 5 October 2026.
+        updated: 6 October 2026.
       </p>
       <p>
         Operator: Tom Vaucourt, an individual in France, running Starbridge as a non-professional.
-        Contact: <a href="mailto:abuse@starbridge.run">abuse@starbridge.run</a>. Host: Hetzner
+        Contact: <a href="mailto:privacy@starbridge.run">privacy@starbridge.run</a>. Host: Hetzner
         Online GmbH, Industriestr. 25, 91710 Gunzenhausen, Germany, +49 9831 505-0.
       </p>
 

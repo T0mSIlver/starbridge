@@ -23,6 +23,8 @@ import {
   at,
   directory,
   makeServer,
+  pair,
+  revoke,
   type Server,
   setupAccount,
   signIn,
@@ -166,12 +168,21 @@ test("a signed-in browser joins by digits, and the phone hears of it live", asyn
     },
   );
   const { mine, theirs } = await compare(s, acct, j);
-  expect((await joinerWait).json.join.state).not.toBe("open");
+  const compared = await joinerWait;
+  expect(compared.json.join.state).not.toBe("open");
   expect(mine.digits).toBe(theirs.digits);
   expect(mine.digits).toMatch(/^\d{6}$/);
 
+  // The joiner's long-poll outlives the approval, which binds its session to the new device.
+  const before = (await s.call("GET", `/v1/joins/${j.id}`, { token: j.session })).json.join;
+  const approvalWait = s.call("GET", `/v1/joins/${j.id}?after=${before.version}&wait=30`, {
+    token: j.session,
+  });
   r = await approve(s, acct, j, theirs);
   expect(r.status).toBe(200);
+  const approved = await approvalWait;
+  expect(approved.status).toBe(200);
+  expect(approved.json.join.state).toBe("approved");
   r = await s.call("GET", `/v1/joins/${j.id}`, { token: j.session });
   expect(r.json.join.state).toBe("approved");
   const ok = openJoinApproval(r.json.join.approval, mine, j.id);
@@ -292,4 +303,27 @@ test("cancelling closes the request, and a new request replaces the session's la
     body: { request: wrong, commitment: joinCommitment(first.j.eph.publicKey, wrong) },
   });
   expect(r.status).toBe(400);
+});
+
+test("a long-poll opened before its device was revoked answers 401, not the change", async () => {
+  const s = await makeServer();
+  const acct = await setupAccount(s);
+  const tablet = await pair(s, acct, "tablet", "device", await signIn(s));
+  const { j } = await ask(s, acct);
+  const list = await s.call("GET", "/v1/joins", { token: tablet.token });
+  const listWait = s.call("GET", `/v1/joins?after=${list.json.cursor}&wait=30`, {
+    token: tablet.token,
+  });
+  const oneWait = s.call("GET", `/v1/joins/${j.id}?after=${list.json.cursor}&wait=30`, {
+    token: tablet.token,
+  });
+  expect((await revoke(s, acct, "tablet")).status).toBe(201);
+  // A change both polls wait for: a new request, and the first one cancelled.
+  await ask(s, acct);
+  expect((await s.call("DELETE", `/v1/joins/${j.id}`, { token: phone(acct) })).status).toBe(204);
+  const [listed, one] = await Promise.all([listWait, oneWait]);
+  expect(listed.status).toBe(401);
+  expect(listed.json?.joins).toBeUndefined();
+  expect(one.status).toBe(401);
+  expect(one.json?.join).toBeUndefined();
 });

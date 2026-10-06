@@ -69,7 +69,17 @@ export interface State {
    * Verified answers by decision id; `seen` once a `wait` has printed it or the mod confirmed it
    * submitted it (`answers --ack`).
    */
-  answers: Record<string, { answer: Answer; seen: boolean }>;
+  answers: Record<string, { answer: Answer; seen: boolean; device?: string }>;
+  /**
+   * The longest directory head each device signed into an answer: while a device active in the
+   * machine's chain signed one that chain lacks, the server is withholding entries (PROTOCOL.md,
+   * Directory) and no answer counts.
+   */
+  heads?: Record<string, Pin>;
+  /** Set while it does: why. No answer is accepted or delivered meanwhile. */
+  behind?: string;
+  /** Signed answers that came while the directory was behind, checked again once it is not. */
+  held?: unknown[];
   /** Permission prompts this machine posted (#57), by id, until a day after they expire. */
   permissions?: Record<string, PendingPermission>;
   /** Quota alerts already raised, by `alertKey`: the reset of the cycle they were raised in. */

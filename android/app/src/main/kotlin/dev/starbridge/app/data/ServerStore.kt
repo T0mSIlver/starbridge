@@ -37,6 +37,7 @@ import dev.starbridge.app.protocol.fromB64
 import dev.starbridge.app.protocol.pairingLink
 import dev.starbridge.app.protocol.parsePairingCode
 import dev.starbridge.app.protocol.toB64
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -51,6 +52,7 @@ import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonObject
 import okhttp3.OkHttpClient
 import java.io.IOException
 import dev.starbridge.app.ui.span
@@ -74,6 +76,8 @@ interface Alerts {
     fun run(run: Run)
     /** Quota alerts the uploader newly raised; each shows once, if this phone opted in. */
     fun quota(notices: List<QuotaNotice>) {}
+    /** Signed out: every notification goes, since they show decrypted questions and commands. */
+    fun clearAll() {}
 }
 
 /** How long pull to refresh on Quotas waits for the machines' fresh snapshots. */
@@ -197,7 +201,8 @@ class ServerStore(
     }
 
     private fun report(e: Exception) {
-        Log.w("Starbridge", "failed", e)
+        // With the exception in the message: Android drops the trace of an UnknownHostException.
+        Log.w("Starbridge", "failed: $e", e)
         if (e is ApiException && e.status == 401 && secrets.session != null) {
             // The keys stay: signing in again binds a new session to this phone.
             persist(newSecrets = secrets.copy(session = null))
@@ -230,6 +235,8 @@ class ServerStore(
         joinAsks.value = emptyList()
         comparison.value = Comparison.Idle
         disk.wipe()
+        alerts.clearAll()
+        pendingPush = null
         saved = Saved(saved.server, pushType = saved.pushType)
         secrets = Secrets()
         directory = null
@@ -314,7 +321,8 @@ class ServerStore(
         val signKeys = sodium.signKeyPair()
         val member = DirectoryMember(newId("d_"), "device", deviceName.take(100).ifBlank { "Android" }, toB64(boxKeys.public), toB64(signKeys.public))
         // The keys reach the disk before the server hears of them, so a crash cannot strand them.
-        persist(newSecrets = secrets.copy(boxPk = member.boxPk, boxSk = toB64(boxKeys.secret), signPk = member.signPk, signSk = toB64(signKeys.secret)))
+        // New keys end any recovery attempt that made the ones they replace.
+        persist(saved.copy(recovering = null), secrets.copy(boxPk = member.boxPk, boxSk = toB64(boxKeys.secret), signPk = member.signPk, signSk = toB64(signKeys.secret)))
         return member
     }
 
@@ -535,13 +543,29 @@ class ServerStore(
         val entries = api().directory(0)
         // The chain's first entry must carry this key's own signature, which a server cannot fake.
         val dir = directories.verify(entries, saved.account, recoveryPk = toB64(recovery.public))
-        val member = newMember()
-        val entry = directories.addEntry(dir, RECOVERY, recovery.secret, member, now())
-        api().append(entry)
-        val all = entries + ProtocolJson.encodeToJsonElement(entry)
+        // The keys made for an earlier attempt stay until the chain holds them: when its reply was
+        // lost, the server has bound the session to that member, and a retry finds it there (#274).
+        // Only while those keys are still this phone's, and the member was not revoked since.
+        val earlier = saved.recovering?.takeIf { it.signPk == secrets.signPk && it.boxPk == secrets.boxPk && dir.members[it.id]?.active != false }
+        val member = earlier ?: newMember().also { persist(saved.copy(recovering = it)) }
+        val all = if (dir.members[member.id]?.active == true) {
+            entries
+        } else {
+            val entry = directories.addEntry(dir, RECOVERY, recovery.secret, member, now())
+            api().append(entry)
+            entries + ProtocolJson.encodeToJsonElement(entry)
+        }
         val after = directories.verify(all, saved.account, Pin(dir.length, dir.head))
         directory = after
-        persist(saved.copy(me = member, entries = all, pin = Pin(after.length, after.head)))
+        persist(saved.copy(me = member, recovering = null, entries = all, pin = Pin(after.length, after.head)))
+        // A session an abandoned attempt's append bound to its member cannot act as this one, and
+        // the server never moves it: signing in again binds a new one to this phone's keys.
+        val bound = runCatching { api().me().member }.getOrNull()
+        if (bound != null && bound != member.id) {
+            persist(newSecrets = secrets.copy(session = null))
+            notice.value = "Sign in again to finish recovering. This phone keeps its keys."
+            return@run
+        }
         sync()
     }
 
@@ -559,6 +583,11 @@ class ServerStore(
                 // Asked too often, or a server without asks: the sync shows what it holds.
             } catch (e: IOException) {
                 // Offline: the sync reports it.
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // Nothing may escape this coroutine: it would end the app (#253).
+                Log.w("Starbridge", "quota ask failed: $e", e)
             }
             run { sync() }
         }
@@ -572,6 +601,8 @@ class ServerStore(
         syncPrompts()
         syncQuotas()
         syncRuns()
+        // The server answered, so a push route that failed to register gets another try.
+        pendingPush?.let { runCatching { subscribeHeld(it) } }
     }
 
     /** Fetches what is new and replays the whole chain; it must extend the pin. */
@@ -734,9 +765,27 @@ class ServerStore(
         persist(saved.copy(promptCursor = cursor, prompts = kept))
     }
 
-    override fun refreshPrompts() = run(showBusy = false) {
-        if (phase.value == Phase.Ready) syncPrompts()
+    /**
+     * The inbox's quick read while a prompt shows. After a failure (offline, say) it waits 3 s,
+     * then twice as long after each further one, up to a minute, instead of retrying every 1.5 s.
+     */
+    override fun refreshPrompts() {
+        if (System.currentTimeMillis() < promptsRetryAt) return
+        run(showBusy = false) {
+            if (phase.value != Phase.Ready) return@run
+            try {
+                syncPrompts()
+                promptFailures = 0
+            } catch (e: Exception) {
+                promptFailures++
+                promptsRetryAt = System.currentTimeMillis() + minOf(60_000L, 1_500L shl promptFailures.coerceAtMost(6))
+                throw e
+            }
+        }
     }
+
+    @Volatile private var promptFailures = 0
+    @Volatile private var promptsRetryAt = 0L
 
     override fun refreshDirectory() = run(showBusy = false) {
         if (phase.value == Phase.Ready) syncDirectory()
@@ -766,6 +815,8 @@ class ServerStore(
             put("scope", chosen)
             put("inputHash", p.body.inputHash)
             if (!allow) message?.trim()?.takeIf { it.isNotEmpty() }?.let { put("message", it.take(500)) }
+            // Lets the machine notice a server holding back entries, such as a revocation.
+            directory?.let { d -> putJsonObject("dir") { put("length", d.length); put("head", d.head) } }
         }
         val item = envelopes.seal("permission-answer", body, me.id, signKey, listOf(machine))
         try {
@@ -870,6 +921,8 @@ class ServerStore(
             put("answeredAt", now())
             choice?.let { put("choice", it) }
             text?.let { put("text", it) }
+            // Lets the machine notice a server holding back entries, such as a revocation.
+            directory?.let { d -> putJsonObject("dir") { put("length", d.length); put("head", d.head) } }
         }
         val item = envelopes.seal("answer", body, me.id, signKey, listOf(machine))
         try {
@@ -983,17 +1036,32 @@ class ServerStore(
     }
 
     /** Registers where pushes go; a new endpoint replaces the old subscription. */
-    suspend fun subscribe(type: String, endpoint: String, keys: Pair<String, String>?) = lock.withLock {
-        if (phase.value != Phase.Ready || type != saved.pushType) return@withLock
+    suspend fun subscribe(type: String, endpoint: String, keys: Pair<String, String>?) = lock.withLock { subscribeHeld(PushRoute(type, endpoint, keys)) }
+
+    /** Registers a route that failed earlier, offline say: on a new network, and after each sync (#274). */
+    suspend fun retryPush() = lock.withLock { pendingPush?.let { runCatching { subscribeHeld(it) } } }
+
+    private class PushRoute(val type: String, val endpoint: String, val keys: Pair<String, String>?)
+
+    /** The route whose registration failed, kept until one succeeds or the phone signs out. */
+    @Volatile private var pendingPush: PushRoute? = null
+
+    private suspend fun subscribeHeld(route: PushRoute) {
+        if (phase.value != Phase.Ready || route.type != saved.pushType) return
         val old = saved.push
-        if (old != null && old.type == type && old.endpoint == endpoint) return@withLock
+        if (old != null && old.type == route.type && old.endpoint == route.endpoint) {
+            pendingPush = null
+            return
+        }
+        pendingPush = route
         if (old != null) {
             runCatching { api().unsubscribe(old.id) }
             // Forgotten first, so a failed replacement is not mistaken for a working route.
             persist(saved.copy(push = null))
         }
-        val id = api().subscribe(type, endpoint, keys)
-        persist(saved.copy(push = SavedPush(type, id, endpoint)))
+        val id = api().subscribe(route.type, route.endpoint, route.keys)
+        persist(saved.copy(push = SavedPush(route.type, id, route.endpoint)))
+        pendingPush = null
     }
 
     override fun setPushType(type: String) = run(showBusy = false) {

@@ -6,10 +6,11 @@ import { AGENTS_GUIDE } from "@/lib/links";
 import { applyTheme, type Prefs, usePref } from "@/lib/prefs";
 import { providerOrder, type QuotaSettings } from "@/lib/quotaSettings";
 import { chime } from "@/lib/sound";
-import type { Device } from "@/lib/types";
+import type { Device, QuotaCardData } from "@/lib/types";
 import { useApp } from "./AppProvider";
 import { Icon } from "./icons";
 import { PhoneBar } from "./PhoneBar";
+import { useReorder } from "./Reorder";
 import s from "./Settings.module.css";
 import ui from "./ui.module.css";
 
@@ -231,7 +232,6 @@ function QuotaSection() {
 /** Each provider: drag (or arrow keys on the handle) to reorder, notify, show. */
 function ProviderSection() {
   const { quotas, refreshQuotas, quotaSettings: q, setQuotaSettings: set } = useApp();
-  const [dragging, setDragging] = useState<string>();
   const [settled, setSettled] = useState(false);
   useEffect(() => {
     refreshQuotas()
@@ -259,39 +259,51 @@ function ProviderSection() {
   };
   return (
     <Section title="Providers">
-      {providers.map((p, i) => {
+      <Providers
+        providers={providers}
+        cards={cards}
+        q={q}
+        moveTo={moveTo}
+        notify={notify}
+        patch={patch}
+      />
+    </Section>
+  );
+}
+
+/** The provider rows, reordered live by their handles (Reorder.tsx). */
+function Providers({
+  providers,
+  cards,
+  q,
+  moveTo,
+  notify,
+  patch,
+}: {
+  providers: string[];
+  cards: QuotaCardData[];
+  q: QuotaSettings;
+  moveTo: (p: string, at: number) => void;
+  notify: (p: string, on: boolean) => void;
+  patch: (p: Partial<QuotaSettings>) => void;
+}) {
+  const reorder = useReorder({ ids: providers, name: (p) => p, onMove: moveTo });
+  return (
+    <div className={`${s.providers} ${reorder.list.className ?? ""}`}>
+      {providers.map((p) => {
         const shown = !q.hidden.includes(p);
         const windows = [
           ...new Set(cards.filter((c) => c.provider === p).map((c) => c.window.label)),
         ];
+        const item = reorder.item(p);
         return (
-          // biome-ignore lint/a11y/noStaticElementInteractions: the handle is the keyboard path
           <div
             key={p}
-            className={`${s.provider} ${dragging === p ? s.dragging : ""}`}
-            onDragOver={(e) => dragging && e.preventDefault()}
-            onDrop={() => dragging && moveTo(dragging, i)}
+            ref={item.ref}
+            style={item.style}
+            className={`${s.provider} ${item.className}`}
           >
-            <button
-              type="button"
-              className={s.handle}
-              draggable
-              aria-label={`Move ${p}`}
-              aria-keyshortcuts="ArrowUp ArrowDown"
-              onDragStart={(e) => {
-                e.dataTransfer.effectAllowed = "move";
-                // Firefox starts a drag only with data set.
-                e.dataTransfer.setData("text/plain", p);
-                setDragging(p);
-              }}
-              onDragEnd={() => setDragging(undefined)}
-              onKeyDown={(e) => {
-                const by = e.key === "ArrowUp" ? -1 : e.key === "ArrowDown" ? 1 : 0;
-                if (!by) return;
-                e.preventDefault();
-                moveTo(p, i + by);
-              }}
-            >
+            <button type="button" {...reorder.handle(p)}>
               <Icon name="drag" size={18} />
             </button>
             <span className={`t-small ${s.providerName} ${shown ? "" : s.dim}`}>
@@ -314,7 +326,10 @@ function ProviderSection() {
           </div>
         );
       })}
-    </Section>
+      <p className="sr-only" aria-live="polite">
+        {reorder.said}
+      </p>
+    </div>
   );
 }
 
@@ -370,10 +385,12 @@ function DeviceSection() {
         </Link>
       </div>
       {revoking && (
-        <RevokeDialog
-          device={revoking}
+        <ConfirmDialog
+          title={`Revoke ${revoking.name}?`}
+          text="It can no longer read or answer anything. This can't be undone."
+          action="Revoke"
           onClose={() => setRevoking(undefined)}
-          onRevoke={async () => {
+          onConfirm={async () => {
             if (!ctx) return;
             update(await (await load()).revoke(ctx, revoking.id));
             setRevoking(undefined);
@@ -384,15 +401,19 @@ function DeviceSection() {
   );
 }
 
-/** Revoke stays neutral on the row; only this dialog's confirm button is red (DESIGN.md). */
-function RevokeDialog({
-  device,
+/** A destructive action's dialog: neutral on the row, only this confirm button is red (DESIGN.md). */
+function ConfirmDialog({
+  title,
+  text,
+  action,
   onClose,
-  onRevoke,
+  onConfirm,
 }: {
-  device: Device;
+  title: string;
+  text: string;
+  action: string;
   onClose: () => void;
-  onRevoke: () => Promise<void>;
+  onConfirm: () => Promise<void>;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const [busy, setBusy] = useState(false);
@@ -403,14 +424,12 @@ function RevokeDialog({
       ref={ref}
       className={`m-rise ${s.dialog}`}
       onClose={onClose}
-      aria-labelledby="revoke-title"
+      aria-labelledby="confirm-title"
     >
-      <h3 id="revoke-title" className="t-subtitle">
-        Revoke {device.name}?
+      <h3 id="confirm-title" className="t-subtitle">
+        {title}
       </h3>
-      <p className={`t-small ${s.sub}`}>
-        It can no longer read or answer anything. This can&apos;t be undone.
-      </p>
+      <p className={`t-small ${s.sub}`}>{text}</p>
       {error && <p className={`t-meta ${s.error}`}>{error}</p>}
       <div className={s.dialogActions}>
         <button type="button" className={`t-label ${ui.btn}`} onClick={() => ref.current?.close()}>
@@ -424,17 +443,43 @@ function RevokeDialog({
             setBusy(true);
             setError(undefined);
             try {
-              await onRevoke();
+              await onConfirm();
             } catch (e) {
               setError(message(e));
               setBusy(false);
             }
           }}
         >
-          Revoke
+          {action}
         </button>
       </div>
     </dialog>
+  );
+}
+
+function AccountSection() {
+  const { boot } = useApp();
+  const ctx = boot.state === "ready" ? boot.ctx : undefined;
+  const [asking, setAsking] = useState(false);
+  return (
+    <Section title="Account">
+      <button type="button" className={`t-small ${s.linkRow}`} onClick={() => setAsking(true)}>
+        Sign out
+      </button>
+      {asking && (
+        <ConfirmDialog
+          title="Sign out?"
+          text="This browser forgets its keys and leaves your devices. If it is your only device, you need the recovery key to set up another."
+          action="Sign out"
+          onClose={() => setAsking(false)}
+          onConfirm={async () => {
+            if (!ctx) return setAsking(false);
+            await (await load()).signOut(ctx);
+            location.assign("/");
+          }}
+        />
+      )}
+    </Section>
   );
 }
 
@@ -497,6 +542,7 @@ export function Settings() {
             <Icon name="open" size={16} />
           </a>
         </Section>
+        <AccountSection />
       </div>
     </>
   );

@@ -52,6 +52,25 @@ Clients replay the chain with `verifyDirectory` and keep a pin `{length, head}`.
 must extend the pin, so the server can neither insert a key, nor roll back a revocation, nor serve
 a chain of its own.
 
+A pin cannot show that a chain is current: a server can hold back entries it has, such as a
+revocation, and serve a shorter chain that still extends the pin. Devices therefore sign the
+head they hold, `dir: {length, head}`, into each answer and permission answer. A machine keeps
+the longest head each device signed, and refuses every device's answer while a device active in
+its chain has signed a head that chain does not hold (`holdsHead`): the server is withholding
+entries, or serving that device another chain. It reads every answer's head in a reply before it
+accepts any, never lets a shorter head replace a longer one, and while refusing delivers nothing it
+accepted earlier either; once it stops refusing, it drops undelivered answers whose device the
+chain now revokes. It keeps the refused answers, since their devices count them sent, and
+checks them again once the server serves the missing entries, or once the machine's chain revokes
+that device.
+
+This bounds the attack rather than ending it. A server that withholds a phone's revocation from a
+machine can relay that phone's answers only until any other device answers that machine (the ones
+a session has not taken by then never reach it); from
+then on it must drop every message from the owner's other devices to it, which the owner sees as
+answers that never arrive. A machine cannot detect a revocation that no device has told it about,
+since the server is its only channel; the revoked device's key can sign any stale head itself.
+
 ## Pairing
 
 A new member (a machine, or a second device) makes its keys and shows a 24-character code: 8
@@ -166,7 +185,7 @@ errors use the codes in `packages/protocol/src/sodium.ts`.
 | Route | Who | What |
 |---|---|---|
 | `GET /directory?from=<seq>` | device, machine | `{entries}` from `seq` on |
-| `POST /directory` | device | append `{entry}`; 409 unless its `seq` is the next one; 403 `machine-cap` past the account's machine limit (5 on the hosted server); 409 `directory-full` past 200 entries |
+| `POST /directory` | device | append `{entry}`; 409 unless its `seq` is the next one; 403 `machine-cap` past the account's machine limit (5 on the hosted server); 409 `directory-full` for an add past 200 entries ("Limits") |
 
 The server runs `verifyDirectory` before it accepts an entry, to refuse garbage early. Clients
 never rely on that check.
@@ -292,10 +311,11 @@ code below. Per-address limits count an IPv6 client as its /64.
 |---|---|
 | `POST /items` | 120 a minute per account |
 | Stored decisions, open or answered | 10000 per account: 409 `too-many-items` |
+| Stored permission prompts, open or settled | 10000 per account: 409 `too-many-items` |
 | Stored runs | 500 per account: 409 `too-many-items` for a new run; updates still pass |
-| Stored boxes | 128 MB per account, of which machine-signed items may fill all but the last 8 MB: 409 `too-many-items`; 2 MB per machine-signed item (all its boxes), 32 KB per run update and 32 KB per answer or permission answer: 413 `too-large` |
+| Stored items | 128 MB per account, counting each item's boxes plus 512 bytes for the item and for each box, of which machine-signed items may fill all but the last 8 MB: 409 `too-many-items`; 2 MB per machine-signed item (all its boxes), 32 KB per run update and 32 KB per answer or permission answer: 413 `too-large` |
 | `POST /directory` | 30 an hour per account |
-| Directory entries, revocations included | 200 per account: 409 `directory-full`; 8 KB per entry: 413 `too-large` |
+| Directory entries | from entry 200 on, a device's `add`: 409 `directory-full`; revocations always pass, and the recovery key may add 20 more devices; 8 KB per entry: 413 `too-large` |
 | Sessions | 50 per account; signing in past that ends the oldest, unpaired ones first |
 | `GET /auth/github/callback` | 20 a minute per address |
 | Pairing messages | 4 KB each: 400 `bad-schema` |
@@ -305,6 +325,12 @@ code below. Per-address limits count an IPv6 client as its /64.
 | `GET /answers` waiting | 32 per machine: 429 `too-many-waits` |
 | `POST /quota/ask` | 6 a minute per account |
 | `POST /push/subscriptions` | 30 a minute per account, on top of the subscription caps |
+
+The directory cap stops the chain growing, since every client replays all of it, without
+locking the owner out: revoking a lost member stays possible, and each member is revoked once,
+so revocations never outnumber adds; an owner who lost every device can still recover. A chain
+is therefore at most about 440 entries. Nothing compacts it: a full account starts a new one
+through the operator.
 
 Answers skip the decision count and may use the last 8 MB, so a full account can still answer. An hourly sweep drops answered
 decisions and their answers 7 days after the answer, permissions, permission answers and settled
@@ -381,7 +407,8 @@ Answering a permission from a phone is a trust decision, so:
   permission once it is settled. It dies with the prompt, at most 10 minutes; the server refuses
   later answers with 409 `expired`.
 - **The machine refreshes the directory before it accepts an allow**, so a revoked device's
-  answers are refused as soon as the revocation is in the chain.
+  answers are refused as soon as the revocation is in the chain, and refuses every answer while
+  another device has signed a longer chain than the server serves it (Directory, above).
 - **The device chooses only a scope, never a rule.** The machine keeps the rule behind each
   suggestion; "always" writes only Claude Code's local project settings
   (`.claude/settings.local.json`), never user settings.

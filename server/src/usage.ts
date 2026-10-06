@@ -6,7 +6,7 @@ import type { Caller } from "./auth";
  * holds one row per event; `closeDays` folds each finished day into counts and percentiles in
  * `usage_days` and deletes its events, so no row naming an account or member outlives its day.
  *
- * An event's metric names what happened. With a subject (an account or member id), the day's
+ * An event's metric names what happened. With a subject (an account id, or an account and member id), the day's
  * count is of distinct subjects; without, of events. Events that carry a value (seconds to
  * answer) also give `<metric>.p50` and `<metric>.p90`.
  */
@@ -36,11 +36,16 @@ export class Usage {
       .run(day, metric, subject, value);
   }
 
-  /** Marks the caller's account, and its machine or paired device, active today. */
+  /**
+   * Marks the caller's account, and its machine or paired device, active today. Member ids are
+   * unique only within an account, so a member's subject names both.
+   */
   seen(caller: Caller): void {
     this.record("active.accounts", caller.account);
-    if (caller.role === "machine") this.record("active.machines", caller.member);
-    else if (caller.member !== null) this.record(`active.devices.${caller.client}`, caller.member);
+    if (caller.member === null) return;
+    const member = `${caller.account}/${caller.member}`;
+    if (caller.role === "machine") this.record("active.machines", member);
+    else this.record(`active.devices.${caller.client}`, member);
   }
 }
 

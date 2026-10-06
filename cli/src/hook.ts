@@ -155,7 +155,8 @@ async function direct(ctx: Ctx, ask: Ask, deadline: number): Promise<unknown> {
       await settle("timeout");
       return undefined;
     }
-    if (p.answer) {
+    // Behind on the directory, the answer may be a revoked device's: it waits.
+    if (p.answer && !ctx.store.state().behind) {
       // Reporting may not outlive the hook: SIGTERM or the deadline still end it with no answer.
       const cut = AbortSignal.timeout(left);
       const signal = ctx.signal ? AbortSignal.any([ctx.signal, cut]) : cut;

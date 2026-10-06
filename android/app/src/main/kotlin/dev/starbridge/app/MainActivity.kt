@@ -8,7 +8,6 @@ import android.graphics.drawable.ColorDrawable
 import android.os.Build
 import android.os.Bundle
 import android.text.format.DateFormat
-import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
@@ -79,9 +78,7 @@ class MainActivity : ComponentActivity() {
                 val phase by store.phase.collectAsStateWithLifecycle()
                 val decisions by store.decisions.collectAsStateWithLifecycle()
                 LaunchedEffect(phase) {
-                    // The recovery key stays out of screenshots and the recents screen.
-                    if (phase is Phase.RecoveryKey) window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
-                    else window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                    // The recovery key's screens keep themselves out of screenshots (SetupScreen).
                     if (phase == Phase.Ready) {
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) askNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
                         store.refresh()

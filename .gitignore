@@ -3,3 +3,9 @@ dist/
 *.tsbuildinfo
 .scratch/
 /server/data/
+CLAUDE.local.md
+AGENTS.override.md
+.claude/settings.local.json
+.env
+.env.*
+.DS_Store

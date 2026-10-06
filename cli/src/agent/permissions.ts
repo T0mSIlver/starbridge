@@ -88,7 +88,8 @@ export class Permissions implements Feature {
         while (true) {
           const p = this.ctx.store.state().permissions?.[id];
           const out = outcomeOf(p);
-          if (out.answer && p && !p.settled) {
+          // Behind on the directory, the answer may be a revoked device's: it waits.
+          if (out.answer && p && !p.settled && !this.ctx.store.state().behind) {
             const how = markSettled(this.ctx, id, "device");
             // Another hold took it in between: the prompt is settled, nothing to hand out.
             if (!how) return { settled: "device" };
