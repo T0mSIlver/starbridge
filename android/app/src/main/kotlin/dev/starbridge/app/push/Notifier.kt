@@ -310,13 +310,14 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
 
     private fun promptTag(p: Prompt) = "p:${p.source.machine}/${p.source.session}".hashCode()
 
-    private fun promptIntent(p: Prompt, allow: Boolean, scope: String, request: Int): PendingIntent = PendingIntent.getBroadcast(
+    private fun promptIntent(p: Prompt, allow: Boolean, scope: String, request: Int, locked: Boolean = false): PendingIntent = PendingIntent.getBroadcast(
         context,
         request,
         Intent(context, PromptReceiver::class.java)
             .setAction(PromptReceiver.ACTION)
-            .setData(Uri.Builder().scheme("starbridge-prompt").authority(if (allow) "allow" else "deny").appendPath(p.id).appendPath(scope).build())
+            .setData(Uri.Builder().scheme("starbridge-prompt").authority(if (allow) "allow" else "deny").appendPath(p.id).appendPath(scope).apply { if (locked) appendPath("locked") }.build())
             .putExtra(PromptReceiver.EXTRA_ID, p.id)
+            .putExtra(PromptReceiver.EXTRA_LOCKED, locked)
             .putExtra(PromptReceiver.EXTRA_ALLOW, allow)
             .putExtra(PromptReceiver.EXTRA_SCOPE, scope),
         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
@@ -353,6 +354,9 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
         val width = metrics.widthPixels - TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 160f, metrics)
         return paint.measureText(p.fullInput) <= width
     }
+
+    /** Whether a notification's Allow sends at once, the lock screen's ([locked]) or the shade's (#390). */
+    fun allowSends(p: Prompt, locked: Boolean = false): Boolean = prefs.allowUnseen.value || (!locked && fitsLine(p))
 
     private fun promptBase(p: Prompt, actions: List<NotificationCompat.Action> = emptyList(), locked: List<NotificationCompat.Action> = actions): NotificationCompat.Builder {
         // A prompt always blocks: its ticking header says so, the title is the tool alone (#191).
@@ -399,22 +403,25 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
      * Allow and Deny, as in the inbox. Deny works from the lock screen; Allow asks for the unlock
      * first (the owner's choice, SPEC.md). It sends at once only when the whole input fits the
      * collapsed line; else, and always on the lock screen, which hides the command, it opens the
-     * prompt's sheet, which shows it whole (#356). The wider grants need the app.
+     * prompt's sheet, which shows it whole (#356), unless the owner turned on sending unseen
+     * (#390). The wider grants need the app.
      */
     override fun prompt(prompt: Prompt) = postPrompt(prompt, null)
 
     private fun postPrompt(prompt: Prompt, note: String?) {
         if (!allowed()) return
         val tag = promptTag(prompt)
-        val allow = { sends: Boolean ->
-            NotificationCompat.Action.Builder(0, "Allow", if (sends) promptIntent(prompt, true, "once", tag * 31) else openPrompt(prompt))
+        // The lock screen's Allow is its own intent, so the receiver applies the lock screen's rule.
+        val allow = { locked: Boolean ->
+            val sends = allowSends(prompt, locked)
+            NotificationCompat.Action.Builder(0, "Allow", if (sends) promptIntent(prompt, true, "once", tag * 31 + if (locked) 1 else 0, locked) else openPrompt(prompt))
                 .setAuthenticationRequired(true)
                 .build()
         }
         val deny = NotificationCompat.Action.Builder(0, "Deny", promptIntent(prompt, false, "once", tag * 31 + 2))
             .setAuthenticationRequired(false)
             .build()
-        val b = promptBase(prompt, listOf(allow(fitsLine(prompt)), deny), locked = listOf(allow(false), deny))
+        val b = promptBase(prompt, listOf(allow(false), deny), locked = listOf(allow(true), deny))
         // The note goes above the command, so Allow still shows what it covers.
         if (note != null) b.setContentText(note).setStyle(NotificationCompat.BigTextStyle().bigText(TextUtils.concat(note, "\n", command(prompt)))).setSilent(true)
         shown[tag] = prompt.id

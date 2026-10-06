@@ -87,6 +87,8 @@ class SettingsViewModel @Inject constructor(private val store: Store, private va
     val colours = prefs.colours
     val inbox = prefs.inbox
     fun setInbox(value: InboxView) = prefs.setInbox(value)
+    val allowUnseen = prefs.allowUnseen
+    fun setAllowUnseen(value: Boolean) = prefs.setAllowUnseen(value)
     fun setQuota(value: QuotaSettings) = prefs.setQuota(value)
     fun setColours(value: Colours) = prefs.setColours(value)
     val clock = prefs.clock
@@ -105,6 +107,7 @@ class SettingsActions(
     val addDevice: () -> Unit,
     val inbox: (InboxView) -> Unit = {},
     val clock: (Clock) -> Unit = {},
+    val allowUnseen: (Boolean) -> Unit = {},
 )
 
 /** Everything this phone keeps for itself, and the account's devices. The settings stay on the phone. */
@@ -120,6 +123,7 @@ fun SettingsScreen(
     modifier: Modifier = Modifier,
     inbox: InboxView = InboxView(),
     clock: Clock = Clock.System,
+    allowUnseen: Boolean = false,
     notificationsOff: Boolean = false,
 ) {
     val context = LocalContext.current
@@ -191,17 +195,24 @@ fun SettingsScreen(
         item { Section("Notifications") }
         item {
             LinkRow(
-                0, 3,
+                0, 4,
                 if (notificationsOff) "Notifications are off" else "Notification settings",
                 if (notificationsOff) "Questions only show in the app. Turn notifications on in Android's settings." else null,
                 Sym.Chevron,
             ) { openNotificationSettings(context) }
         }
-        item { SwitchRow(1, 3, "Remind me when notifications are off", inbox.remindOff) { actions.inbox(inbox.copy(remindOff = it)) } }
+        item { SwitchRow(1, 4, "Remind me when notifications are off", inbox.remindOff) { actions.inbox(inbox.copy(remindOff = it)) } }
         item {
-            ChoiceRow(2, 3, "Delivered through", push(push)) {
+            ChoiceRow(2, 4, "Delivered through", push(push)) {
                 Segments(listOf("fcm" to "Google", "unifiedpush" to "UnifiedPush"), push.type, actions.push)
             }
+        }
+        item {
+            SwitchRow(
+                3, 4, "Allow from notifications without seeing the whole command", allowUnseen,
+                sub = "Unsafe: you may approve commands you haven't read. Off, Allow opens the whole command first.",
+                onChange = actions.allowUnseen,
+            )
         }
 
         item { Section("Agents") }
@@ -258,9 +269,9 @@ private fun ChoiceRow(index: Int, count: Int, title: String, sub: String? = null
 }
 
 @Composable
-private fun SwitchRow(index: Int, count: Int, title: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+private fun SwitchRow(index: Int, count: Int, title: String, checked: Boolean, sub: String? = null, onChange: (Boolean) -> Unit) {
     Shell(index, count, Modifier.toggleable(checked, role = Role.Switch, onValueChange = onChange)) {
-        Line { Texts(title, null, Modifier.weight(1f)); Switch(checked = checked, onCheckedChange = null) }
+        Line { Texts(title, sub, Modifier.weight(1f)); Switch(checked = checked, onCheckedChange = null) }
     }
 }
 

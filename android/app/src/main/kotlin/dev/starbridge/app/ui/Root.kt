@@ -323,11 +323,13 @@ fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> U
                         val server by vm.server.collectAsStateWithLifecycle()
                         val inbox by vm.inbox.collectAsStateWithLifecycle()
                         val clock by vm.clock.collectAsStateWithLifecycle()
+                        val allowUnseen by vm.allowUnseen.collectAsStateWithLifecycle()
                         SettingsScreen(
                             windows, quota, members.size, colours, push, server,
-                            SettingsActions(vm::setQuota, vm::setColours, vm::setPush, vm::signOut, devices = { backStack.add(DevicesKey) }, addDevice = { backStack.add(AddDeviceKey) }, inbox = vm::setInbox, clock = vm::setClock),
+                            SettingsActions(vm::setQuota, vm::setColours, vm::setPush, vm::signOut, devices = { backStack.add(DevicesKey) }, addDevice = { backStack.add(AddDeviceKey) }, inbox = vm::setInbox, clock = vm::setClock, allowUnseen = vm::setAllowUnseen),
                             inbox = inbox,
                             clock = clock,
+                            allowUnseen = allowUnseen,
                             notificationsOff = notificationsOff,
                         )
                     }
