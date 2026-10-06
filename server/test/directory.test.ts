@@ -159,6 +159,16 @@ test("an account holds at most maxMachines machines", async () => {
   await pair(s, acct, "m3", "machine");
 });
 
+test("an account above a lowered machine limit can still revoke and add devices", async () => {
+  const s = await makeServer({ maxMachines: 3 });
+  const acct = await setupAccount(s);
+  for (const m of ["m1", "m2", "m3"]) await pair(s, acct, m, "machine");
+  s.deps.config.maxMachines = 1;
+  expect((await revoke(s, acct, "m1")).status).toBe(201);
+  await pair(s, acct, "laptop", "device", await signIn(s));
+  await expect(pair(s, acct, "m4", "machine")).rejects.toThrow("403");
+});
+
 test("revoking a machine drops its token; revoking a device ends its sessions", async () => {
   const s = await makeServer();
   const acct = await setupAccount(s);

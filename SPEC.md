@@ -779,8 +779,10 @@ Tokens, type and components: `DESIGN.md`.
   machine holds a long-poll, about 200 KB on the VPS, and 3 covers a laptop, a desktop and a
   server. Raising it later is a setting nobody notices; lowering it would strand accounts above
   it. Devices need no cap of their own: the directory holds at most 200 entries, an account's
-  pages hold at most 16 join-list long-polls, Caddy limits each address's requests, and every
-  picture sealed to one more device counts against the account's 128 MB.
+  pages hold at most 16 join-list long-polls, and Caddy limits each address's requests (#582).
+  Every item is sealed once per device, so its size grows with their number: a run update is
+  capped per device for that reason, and a question with 8000 characters of context fits up to
+  about 140 devices in its 2 MB, pictures shrinking to fit.
 - **Privacy and terms** (`/privacy`, `/terms`). Each claim follows the code: stored columns in
   `server/src/db.ts`, retention in `server/src/limits.ts`, logs and backups in `deploy/`. A change
   to what is stored changes the page, and the Play data-safety form. Contact is

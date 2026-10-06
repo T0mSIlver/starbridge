@@ -163,7 +163,7 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
   const most = fromDevice
     ? limits.answerBytes
     : item.kind === "run"
-      ? limits.runBytes
+      ? limits.runBytes * item.boxes.length
       : limits.itemBytes;
   if (size > most) fail(413, "too-large", `a ${item.kind}'s boxes hold at most ${most} bytes`);
 
