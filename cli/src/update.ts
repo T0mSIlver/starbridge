@@ -6,6 +6,7 @@ import type { Ctx } from "./context";
 import { resolveCommand, spawnable } from "./platform";
 import {
   compareVersions,
+  DownloadError,
   downloadVerified,
   type InstallKind,
   latestVersion,
@@ -110,8 +111,17 @@ export async function update(
   const sys = makeSys(ctx, defaults);
   const configured = ctx.store.agentConfig().quota?.codexbar;
   if (codexbar !== undefined) return updateCodexbar(sys, configured, codexbar);
-  await updateSelf(ctx, install, pubkey);
-  return updateCodexbar(sys, configured);
+  // CodexBar comes from elsewhere: a download that failed here, offline say, does not hold it
+  // back (#617). A release that does not check out stops everything.
+  let self = 0;
+  try {
+    await updateSelf(ctx, install, pubkey);
+  } catch (e) {
+    if (!(e instanceof DownloadError)) throw e;
+    ctx.out(`Could not update starbridge: ${e.message}`);
+    self = 1;
+  }
+  return Math.max(self, await updateCodexbar(sys, configured));
 }
 
 async function updateSelf(ctx: Ctx, install: InstallKind, pubkey: string) {

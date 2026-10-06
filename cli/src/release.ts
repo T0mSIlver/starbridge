@@ -9,6 +9,9 @@ export const RELEASES_URL = "https://github.com/T0mSIlver/starbridge/releases";
 /** A release that cannot be found or does not check out: printed without a stack, exit code 1. */
 export class ReleaseError extends Error {}
 
+/** A release URL that could not be fetched: offline, or an answer other than the file. */
+export class DownloadError extends ReleaseError {}
+
 // Ed25519 SubjectPublicKeyInfo header; the 32-byte key follows.
 const SPKI_ED25519 = Buffer.from("302a300506032b6570032100", "hex");
 
@@ -76,9 +79,15 @@ export function compareVersions(a: string, b: string): number {
 }
 
 async function get(url: string, init?: RequestInit): Promise<Response> {
-  const res = await fetch(url, init);
+  let res: Response;
+  try {
+    res = await fetch(url, init);
+  } catch (e) {
+    // Bun's own words name no URL (#617).
+    throw new DownloadError(`cannot reach ${url} (${(e as Error).message})`);
+  }
   if (!res.ok && !(res.status >= 300 && res.status < 400))
-    throw new ReleaseError(`download failed: ${res.status} ${url}`);
+    throw new DownloadError(`download failed: ${res.status} ${url}`);
   return res;
 }
 
