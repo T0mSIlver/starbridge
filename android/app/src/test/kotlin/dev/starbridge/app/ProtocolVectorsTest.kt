@@ -251,7 +251,7 @@ class ProtocolVectorsTest {
         }
         val (phone, phoneSk) = member("phone")
         val (devbox, _) = member("devbox")
-        val recovery = sodium.signSeedKeyPair(fromB64(keys.getValue("recovery").jsonObject.str("seed")))
+        val recovery = sodium.signSeedKeyPair(recoverySignSeed(fromB64(keys.getValue("recovery").jsonObject.str("seed")), sodium))
         val at = "2026-10-04T10:00:00Z"
         val genesis = directories.genesisEntry("acct_1", phone, phoneSk, recovery, at)
         val json = { e: SignedEnvelope -> ProtocolJson.encodeToJsonElement(e) }
