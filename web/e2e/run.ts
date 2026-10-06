@@ -834,8 +834,10 @@ async function main() {
   step("a group pinned by running out first says why on a click (#296)");
   await page.setViewportSize(DESKTOP);
   await page.getByRole("button", { name: "Why codex is first" }).click();
-  // Each pinned group has its popover; real quotas can pin more than one.
-  const why = page.getByText("First because it runs out soonest.").filter({ visible: true });
+  // Scoped to codex: depending on the hour, claude's group may be pinned and say so too.
+  const why = page
+    .getByRole("region", { name: "codex" })
+    .getByText("First because it runs out soonest.");
   await why.waitFor();
   if (AUDIT) await shoot(page, "quotas-pinned");
   else
@@ -1272,21 +1274,36 @@ async function main() {
   await shoot(pageB, "inbox-banner");
   // The new device sees decisions sealed after it joined; the open one predates it.
 
-  step("recover a third browser with the recovery key");
-  const c = await ff.newContext();
-  await watchCsp(c);
-  const pageC = await signIn(c);
-  await pageC.getByRole("button", { name: "Use the recovery key" }).click();
-  const entry = pageC.getByLabel("Your recovery key");
-  await noWordsAsked(pageC);
-  await entry.fill(`${key.slice(0, 9)}U`);
-  await pageC.getByText('Character 10, "U", is not in a recovery key.').waitFor();
-  await shoot(pageC, "recovery-typo");
-  // Lower case, in groups split by spaces: the key reads all the same.
-  await entry.fill(key.toLowerCase().match(/.{4}/g)?.join(" ") ?? "");
-  await pageC.getByText("28 of 28 characters").waitFor();
-  await pageC.getByRole("button", { name: "Recover" }).click();
-  await pageC.getByRole("heading", { name: "Inbox" }).waitFor({ timeout: 30_000 });
+  step("replace the recovery key with the current one; the second browser says so once (#348)");
+  await page.goto(`${ORIGIN}/settings`);
+  const recoveryRow = page.getByRole("region", { name: "Devices" });
+  await recoveryRow.getByText(/^Set .* on this browser$/).waitFor();
+  await recoveryRow.getByRole("link", { name: "Replace" }).click();
+  await page.getByRole("heading", { name: "Replace the recovery key" }).waitFor();
+  await page
+    .getByText("Lost it? Without the current key it can't be replaced.", { exact: false })
+    .waitFor();
+  await page.getByLabel("Your current recovery key").fill(key);
+  await page.getByText("28 of 28 characters").waitFor();
+  await shoot(page, "recovery-key-replace");
+  await page.getByRole("button", { name: "Make a new key" }).click();
+  await page.getByRole("heading", { name: "Save your new recovery key" }).waitFor();
+  const newKey = ((await page.getByTestId("new-recovery-key").textContent()) ?? "").trim();
+  if (newKey === key || !/^([0-9A-Z]{4}){7}$/.test(newKey))
+    throw new Error(`expected a new recovery key, got: ${newKey}`);
+  await shoot(page, "recovery-key-new");
+  await page.getByLabel(/I wrote this key down/).check();
+  await page.getByRole("button", { name: "Save the new key" }).click();
+  await page.getByRole("heading", { name: "Recovery key replaced" }).waitFor();
+  await pageB.goto(ORIGIN);
+  await pageB.getByText(/^Recovery key replaced on .+, .+\.$/).waitFor({ timeout: 30_000 });
+  await shoot(pageB, "inbox-recovery-notice");
+  await pageB.getByRole("button", { name: "OK" }).click();
+  await pageB.getByText(/^Recovery key replaced on /).waitFor({ state: "detached" });
+
+  await page.goto(`${ORIGIN}/settings`);
+  await recoveryRow.getByText(/^Replaced .* on this browser$/).waitFor();
+  await shoot(page, "devices-recovery");
 
   step("revoke the second browser");
   await page
@@ -1296,8 +1313,6 @@ async function main() {
   const devices = page.getByRole("region", { name: "Devices" });
   await devices.getByText("Device · this browser").waitFor();
   // Devices list this browser, then the others by when they joined: the second browser first.
-  // The list may still gain the recovered browser, so the second browser's sign-out below,
-  // not a count, proves the revocation.
   await devices.getByRole("button", { name: "Revoke" }).first().click();
   await page.getByRole("dialog").getByRole("button", { name: "Revoke" }).click();
   await page.getByRole("dialog").waitFor({ state: "detached" });
@@ -1331,6 +1346,31 @@ async function main() {
   await page.goto(`${ORIGIN}/settings/devices/add`);
   await page.getByTestId("shown-code").waitFor();
   await shoot(page, "add-device");
+
+  step(
+    "recover a third browser with the new key: the old one is refused, every other member goes (#348, #363)",
+  );
+  const c = await ff.newContext();
+  await watchCsp(c);
+  const pageC = await signIn(c);
+  await pageC.getByRole("button", { name: "Use the recovery key" }).click();
+  const entry = pageC.getByLabel("Your recovery key");
+  await noWordsAsked(pageC);
+  await entry.fill(`${key.slice(0, 9)}U`);
+  await pageC.getByText('Character 10, "U", is not in a recovery key.').waitFor();
+  await shoot(pageC, "recovery-typo");
+  // The key replaced above: a recovery key, but no longer this account's.
+  await entry.fill(key);
+  await pageC.getByRole("button", { name: "Recover" }).click();
+  await pageC.getByText("This is a recovery key, but not this account's current one.").waitFor();
+  // Lower case, in groups split by spaces: the key reads all the same.
+  await entry.fill(newKey.toLowerCase().match(/.{4}/g)?.join(" ") ?? "");
+  await pageC.getByText("28 of 28 characters").waitFor();
+  await pageC.getByRole("button", { name: "Recover" }).click();
+  await pageC.getByRole("heading", { name: "Inbox" }).waitFor({ timeout: 30_000 });
+  // Recovery keeps no earlier device: the first browser is a visitor again.
+  await page.goto(ORIGIN);
+  await page.getByRole("heading", { name: /Your agents ask/ }).waitFor({ timeout: 30_000 });
 
   step("sign out the recovered browser: it leaves the devices and forgets its keys");
   await pageC

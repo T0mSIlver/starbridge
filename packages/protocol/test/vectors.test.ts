@@ -74,6 +74,7 @@ describe("directory.json", () => {
         [...dir.members.values()].filter((m) => m.active === active).map((m) => m.member.id);
       expect(ids(true)).toEqual(c.expect.active);
       expect(ids(false)).toEqual(c.expect.revoked);
+      expect(dir.recoveryPk).toBe(c.expect.recoveryPk);
     });
   }
 });

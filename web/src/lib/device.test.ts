@@ -167,31 +167,6 @@ test("a join approved but cut off before its keys were saved resumes on the next
   expect(await store.get("pending", ctx.account)).toBeUndefined();
 });
 
-test("a recovery whose directory append fails leaves the device's keys alone (#283)", async () => {
-  const before = await store.get("device", ctx.account);
-  live.errors.push("POST /directory");
-  const words = recoveryKey(live.owner.recoverySeed);
-  await expect(device.recover(ctx.account, "Recovered", words)).rejects.toThrow("internal");
-  expect(await store.get("device", ctx.account)).toEqual(before as store.DeviceRecord);
-  expect((await store.get("pending", ctx.account))?.name).toBe("Recovered");
-  await store.del("pending", ctx.account);
-});
-
-test("a recovery that landed but was cut off before adopting its keys resumes over an older device (#283)", async () => {
-  const before = (await store.get("device", ctx.account)) as store.DeviceRecord;
-  // A fresh sign-in, bound to no device: the server binds it to the recovered one.
-  await api.ownerSignIn("owner-secret");
-  await device.recover(ctx.account, "Recovered", recoveryKey(live.owner.recoverySeed));
-  const recovered = (await store.get("device", ctx.account)) as store.DeviceRecord;
-  // As the browser held it when the page closed after the append: the older device still stored.
-  await store.put("pending", recovered, ctx.account);
-  await store.put("device", before, ctx.account);
-  const b = await device.boot();
-  expect(b.state).toBe("ready");
-  expect(await store.get("device", ctx.account)).toEqual(recovered);
-  expect(await store.get("pending", ctx.account)).toBeUndefined();
-});
-
 test("a join cut off on a browser with no pin starts over rather than trust the served chain (#354)", async () => {
   const record = (await store.get("device", ctx.account)) as store.DeviceRecord;
   const pin = await store.get("pin", ctx.account);
@@ -394,4 +369,30 @@ test("a join by digits counts the approval only once this browser's owner confir
     await store.put("device", record, ctx.account);
     if (pin) await store.put("pin", pin, ctx.account);
   }
+});
+
+// Last: a recovery revokes every other member, the owner's phone included (#363).
+test("a recovery whose directory append fails leaves the device's keys alone (#283)", async () => {
+  const before = await store.get("device", ctx.account);
+  live.errors.push("POST /directory");
+  const words = recoveryKey(live.owner.recoverySeed);
+  await expect(device.recover(ctx.account, "Recovered", words)).rejects.toThrow("internal");
+  expect(await store.get("device", ctx.account)).toEqual(before as store.DeviceRecord);
+  expect((await store.get("pending", ctx.account))?.name).toBe("Recovered");
+  await store.del("pending", ctx.account);
+});
+
+test("a recovery that landed but was cut off before adopting its keys resumes over an older device (#283)", async () => {
+  const before = (await store.get("device", ctx.account)) as store.DeviceRecord;
+  // A fresh sign-in, bound to no device: the server binds it to the recovered one.
+  await api.ownerSignIn("owner-secret");
+  await device.recover(ctx.account, "Recovered", recoveryKey(live.owner.recoverySeed));
+  const recovered = (await store.get("device", ctx.account)) as store.DeviceRecord;
+  // As the browser held it when the page closed after the append: the older device still stored.
+  await store.put("pending", recovered, ctx.account);
+  await store.put("device", before, ctx.account);
+  const b = await device.boot();
+  expect(b.state).toBe("ready");
+  expect(await store.get("device", ctx.account)).toEqual(recovered);
+  expect(await store.get("pending", ctx.account)).toBeUndefined();
 });

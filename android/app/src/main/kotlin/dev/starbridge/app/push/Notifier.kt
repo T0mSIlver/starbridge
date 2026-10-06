@@ -126,12 +126,7 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
         }
     }
 
-    // POST_NOTIFICATIONS exists from Android 13; before that the app's notification setting rules.
-    private fun allowed() = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-        context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
-    } else {
-        manager.areNotificationsEnabled()
-    }
+    private fun allowed() = notificationsAllowed(context)
 
     private fun tag(id: String) = id.hashCode()
 
@@ -566,4 +561,11 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
         /** Wide enough for an expanded notification on any phone, small enough for its bitmap limit. */
         private const val PICTURE_EDGE = 1024
     }
+}
+
+// POST_NOTIFICATIONS exists from Android 13; before that the app's notification setting rules.
+fun notificationsAllowed(context: Context) = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+    context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+} else {
+    NotificationManagerCompat.from(context).areNotificationsEnabled()
 }
