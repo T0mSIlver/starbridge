@@ -68,7 +68,7 @@ asks before each one:
   `~/.codex/rules/starbridge.rules`, which runs `starbridge ask`, `waiting`,
   `working`, `wait` and `settle` outside it.
 - Pi: the Starbridge Pi package (`pi install
-  git:github.com/T0mSIlver/starbridge`), which brings the skill, the rules and
+  git:github.com/T0mSIlver/starbridge@v<version>`, at your CLI's version), which brings the skill, the rules and
   the extension that puts each answer into the session. With
   pi-permission-system, setup and `starbridge config permissions on` also offer
   allow rules, so that Pi loads the `starbridge` skill, reads the files in its

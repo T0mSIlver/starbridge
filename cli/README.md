@@ -208,6 +208,12 @@ or nothing if the terminal answers first or the server can't be reached.
 
 ## Release
 
+One version covers the CLI, the web app, both Claude Code plugins, the mod and the Android app. To release
+1.2.3, run `bun cli/scripts/version.ts 1.2.3` from the repository root, merge it in a PR, and tag
+the merged commit `v1.2.3`; the workflow refuses a tag that disagrees with the stamped files. The
+marketplace installs both plugins from that tag, and setup installs the Pi package at the tag of
+the CLI it runs. A release candidate (`1.2.3-rc.1`) leaves the marketplace on the last release.
+
 `bun run build:bin` builds the standalone binaries (Linux and macOS, x64 and arm64). A `v*` tag
 runs `.github/workflows/release.yml`, which attaches them, `install.sh` and the signed
 `SHA256SUMS` to a GitHub Release, commits the formula to `T0mSIlver/homebrew-starbridge` and

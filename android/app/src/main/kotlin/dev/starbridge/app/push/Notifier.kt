@@ -340,7 +340,7 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
     /**
      * Whether the whole input fits the one line a collapsed or heads-up notification shows: its
      * text at 14 sp in the width the template leaves, the icon and the expand button taken off
-     * with room to spare (#356, the owner's rule).
+     * with room to spare (#356).
      */
     fun fitsLine(p: Prompt): Boolean {
         if (!p.fitsRow) return false
@@ -400,7 +400,7 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
 
     /**
      * Allow and Deny, as in the inbox. Deny works from the lock screen; Allow asks for the unlock
-     * first (the owner's choice, SPEC.md). It sends at once only when the whole input fits the
+     * first (SPEC.md, "Permission prompts"). It sends at once only when the whole input fits the
      * collapsed line; else, and always on the lock screen, which hides the command, it opens the
      * prompt's sheet, which shows it whole (#356), unless the owner turned on sending unseen
      * (#390). The wider grants need the app.

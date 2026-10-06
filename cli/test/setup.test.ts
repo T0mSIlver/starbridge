@@ -17,7 +17,13 @@ import { makeAgent } from "../src/agent/main";
 import type { Agent } from "../src/agent/server";
 import { REMOVED } from "../src/api";
 import { installTarball, linkIntoLocalBin } from "../src/setup/codexbar";
-import { CODEX_RULE, installOpencode, opencodeState, removeOpencode } from "../src/setup/harnesses";
+import {
+  CODEX_RULE,
+  installOpencode,
+  opencodeState,
+  PI_PACKAGE,
+  removeOpencode,
+} from "../src/setup/harnesses";
 import { markedSkill } from "../src/setup/marker";
 import opencodeFiles from "../src/setup/opencode-files.js";
 import { refresh, setup } from "../src/setup/setup";
@@ -82,6 +88,8 @@ async function startAgent(ctx: TestCtx) {
   const agent = makeAgent(ctx);
   await agent.start();
   agents.push(agent);
+  // An earlier setup's providers, which setup checks again; the agent started without them.
+  ctx.store.saveAgentConfig({ quota: { providers: ["codex", "zai"], interval: "5m" } });
 }
 
 test("setup --yes installs the agent, the plugins and the skills, and uploads a first snapshot", async () => {
@@ -128,7 +136,7 @@ test("setup --yes installs the agent, the plugins and the skills, and uploads a 
   expect(skill.split("\n")[1]).toBe(
     `# Written by starbridge ${VERSION}; \`starbridge uninstall\` removes it.`,
   );
-  expect(m.calls()).toContain("pi install git:github.com/T0mSIlver/starbridge");
+  expect(m.calls()).toContain(`pi install ${PI_PACKAGE}`);
   expect(readFileSync(join(m.home, ".codex/rules/starbridge.rules"), "utf8")).toContain(
     '"starbridge", ["ask"',
   );
@@ -163,7 +171,7 @@ test("a second setup changes nothing", async () => {
     again.filter((c) => /install|marketplace add|disable|restart|daemon-reload/.test(c)),
   ).toEqual([]);
   expect(readFileSync(join(m.units, "starbridge-agent.service"), "utf8")).toBe(unit);
-  expect(m.ctx.store.agentConfig().quota?.providers).toEqual(["codex", "claude"]);
+  expect(m.ctx.store.agentConfig().quota?.providers).toEqual(["codex", "zai"]);
   expect(m.ctx.lines.join("\n")).toContain("plugins are installed");
 
   // A Codex skill from an older CLI is offered as an update.
@@ -190,6 +198,12 @@ test("a second setup changes nothing", async () => {
   );
   // Declined: nothing written.
   expect(readFileSync(join(m.home, ".codex/skills/starbridge/SKILL.md"), "utf8")).toContain("old");
+
+  // A Pi package at another release moves to this CLI's tag.
+  const pi = join(m.home, ".pi/agent/settings.json");
+  writeFileSync(pi, JSON.stringify({ packages: ["git:github.com/T0mSIlver/starbridge@v0.9.0"] }));
+  await setup(m.sys, { yes: true, readyTimeoutMs: 2_000 });
+  expect(JSON.parse(readFileSync(pi, "utf8")).packages).toEqual([PI_PACKAGE]);
 });
 
 test("refresh brings what setup wrote to this release and leaves the rest alone", async () => {
@@ -280,7 +294,7 @@ test("uninstall removes the service and plugins, asks the devices to revoke, kee
   ).toEqual([]);
   expect(existsSync(join(m.home, ".codex/skills/starbridge"))).toBe(false);
   expect(existsSync(join(m.home, ".codex/rules/starbridge.rules"))).toBe(false);
-  expect(m.calls()).toContain("pi remove git:github.com/T0mSIlver/starbridge");
+  expect(m.calls()).toContain(`pi remove ${PI_PACKAGE}`);
   expect(readdirSync(join(m.home, ".config/opencode")).sort()).toEqual(["plugins", "skills"]);
   expect(readdirSync(join(m.home, ".config/opencode/plugins"))).toEqual([]);
   expect(JSON.parse(readFileSync(pps, "utf8"))).toEqual({
