@@ -8,6 +8,7 @@ import {
   claimHash,
   type Decision,
   generateMemberKeys,
+  generateRecoverySeed,
   hashInput,
   newPairingCode,
   type Permission,
@@ -15,6 +16,8 @@ import {
   publicKeys,
   type QuotaSnapshot,
   RECOVERY,
+  recoveryEntry,
+  recoveryKeyPair,
   type SealedItem,
   type Settled,
   seal,
@@ -238,7 +241,7 @@ test("the sweep drops answered decisions after a week and the rest after 30 days
 });
 
 test("a full directory refuses device-signed adds but takes revocations and recovery adds", async () => {
-  const { s, acct } = await setup({ directoryEntries: 2, recoveryAdds: 1 });
+  const { s, acct } = await setup({ directoryEntries: 2, recoveryAdds: 1, recoveryProposals: 1 });
   const add = async (signer: { id: string; signKey: Uint8Array }, id: string) => {
     const keys = generateMemberKeys();
     const member = { id, role: "device" as const, name: id, ...publicKeys(keys) };
@@ -260,6 +263,24 @@ test("a full directory refuses device-signed adds but takes revocations and reco
   expect(more.status).toBe(409);
   expect(more.json.error).toBe("directory-full");
   expect((await revoke(s, acct, "new-phone")).status).toBe(201);
+  const proposal = recoveryEntry(
+    await directory(s, acct.device.token),
+    phoneSigner,
+    recoveryKeyPair(generateRecoverySeed()),
+    at,
+  );
+  // A full directory still takes a few proposals, so a thief who filled it cannot stop the
+  // owner replacing the key (Fable review of #368).
+  expect((await append(s, acct.device.token, proposal)).status).toBe(201);
+  const again = recoveryEntry(
+    await directory(s, acct.device.token),
+    phoneSigner,
+    recoveryKeyPair(generateRecoverySeed()),
+    at,
+  );
+  const refused = await append(s, acct.device.token, again);
+  expect(refused.status).toBe(409);
+  expect(refused.json.error).toBe("directory-full");
 });
 
 test("the directory caps its append rate", async () => {
@@ -294,7 +315,7 @@ test("signing in past the session cap ends the oldest unpaired session, never th
 });
 
 /** Posts a pairing request and returns its rendezvous id and claim secret. */
-async function request(s: Server, name = "new") {
+async function request(s: Server, name = "new", ip?: string) {
   const keys = generateMemberKeys();
   const code = newPairingCode();
   const claim = toB64(crypto.getRandomValues(new Uint8Array(32)));
@@ -304,9 +325,40 @@ async function request(s: Server, name = "new") {
   );
   const r = await s.call("POST", "/v1/pairings", {
     body: { request: req, claimHash: claimHash(claim) },
+    headers: ip ? { "x-forwarded-for": ip } : undefined,
   });
   return { r, rendezvous: code.rendezvous, claim, req };
 }
+
+test("waiting pairings are capped per client, an IPv6 client counting as its /48", async () => {
+  // The hosted caps scaled down: five /64s of one /48 cannot fill the server for another client.
+  const s = await makeServer({
+    trustProxy: true,
+    limits: { ...DEFAULT_LIMITS, pendingPairings: 50, pairingsPerClient: 10 },
+  });
+  let ok = 0;
+  for (let p = 0; p < 5; p++)
+    for (let i = 1; i <= 10; i++)
+      if (
+        (await request(s, "m", `2001:db8:0:${p.toString(16)}::${i.toString(16)}`)).r.status === 201
+      )
+        ok++;
+  expect(ok).toBe(10);
+  const full = await request(s, "m", "2001:db8:0:ffff::1");
+  expect(full.r.status).toBe(429);
+  expect(full.r.json.error).toBe("too-many-pairings");
+  expect((await request(s, "m", "2001:db8:1::1")).r.status).toBe(201);
+  expect((await request(s, "m", "203.0.113.7")).r.status).toBe(201);
+});
+
+test("approved pairings leave the client's cap, so one address can pair many members", async () => {
+  const s = await makeServer({ limits: { ...DEFAULT_LIMITS, pairingsPerClient: 1 } });
+  const acct = await setupAccount(s);
+  await pair(s, acct, "a", "machine");
+  await pair(s, acct, "b", "machine");
+  expect((await request(s)).r.status).toBe(201);
+  expect((await request(s)).r.json.error).toBe("too-many-pairings");
+});
 
 test("pairings bound their message size, their number and their long-polls", async () => {
   const s = await makeServer({

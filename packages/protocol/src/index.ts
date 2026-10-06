@@ -1,5 +1,6 @@
 export * from "./directory";
 export * from "./envelope";
+export * from "./heads";
 export * from "./join";
 export * from "./keys";
 export * from "./pace";

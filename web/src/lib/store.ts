@@ -1,6 +1,6 @@
 // IndexedDB, shared by the page and the service worker. One object store of records keyed by
 // account, so a browser signed in to a second account keeps both devices apart.
-import type { Pin } from "@starbridge/protocol";
+import type { Heads, Pin } from "@starbridge/protocol";
 import type { StoredKeys } from "./crypto/keys";
 import type { PromptReply, Reply } from "./types";
 
@@ -13,6 +13,8 @@ export interface DeviceRecord {
   boxPk: string;
   signPk: string;
   keys: StoredKeys;
+  /** A first device whose genesis may have reached the server: an empty directory is forged. */
+  posted?: true;
 }
 
 /** What this browser answered, since answers are sealed to the machine and unreadable after. */
@@ -26,10 +28,14 @@ type Records = {
   answers: SentAnswers;
   /** What this browser answered to permission prompts, by permission id. */
   promptAnswers: Record<string, PromptReply & { answeredAt: string }>;
+  /** The last replacement of the recovery key whose notice this browser dismissed (its seq). */
+  recoverySeen: number;
   /** The last account signed in here: the service worker's default. */
   current: string;
   /** Keys written and read back once by `keeps`. */
   probe: StoredKeys;
+  /** The longest directory head each machine signed into its items (#362). */
+  heads: Heads;
 };
 
 const DB = "starbridge";

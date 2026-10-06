@@ -45,7 +45,40 @@ export const RevokeEntry = z.object({
   id: Id,
 });
 
-export const DirectoryEntry = z.discriminatedUnion("op", [AddEntry, RevokeEntry]);
+/**
+ * Recovery, when every device is lost: signed by the recovery key, it adds `member`, a device,
+ * and revokes every other member, machines included, so a chain a server cut short of a
+ * revocation cannot bring a revoked one back (#363).
+ */
+export const RecoverEntry = z.object({
+  ...EntryBase,
+  op: z.literal("recover"),
+  member: Member,
+});
+
+/** Proposes a new recovery key: signed by an active device, and by the new key (`recoverySig`). */
+export const RecoveryEntry = z.object({
+  ...EntryBase,
+  op: z.literal("recovery"),
+  recoveryPk: B64,
+});
+
+/** Makes the pending proposal's key the recovery key: signed by the current recovery key. */
+export const RecoveryConfirmEntry = z.object({
+  ...EntryBase,
+  op: z.literal("recovery-confirm"),
+  /** The proposal's `seq`, and the key it proposed, so a confirmation names what it approves. */
+  proposal: z.number().int().nonnegative(),
+  recoveryPk: B64,
+});
+
+export const DirectoryEntry = z.discriminatedUnion("op", [
+  AddEntry,
+  RevokeEntry,
+  RecoverEntry,
+  RecoveryEntry,
+  RecoveryConfirmEntry,
+]);
 export type DirectoryEntry = z.infer<typeof DirectoryEntry>;
 
 // --- Signed and sealed envelopes ---------------------------------------------
@@ -109,9 +142,9 @@ export const SignedEnvelope = z.object({
   body: z.string(),
   sig: B64,
   /**
-   * Directory entry 0 only: the recovery key's signature over the same body, as signer
-   * "recovery". It ties the genesis to the recovery key, so a server that copies the public
-   * recovery key into a genesis of its own cannot pass it off during recovery.
+   * Directory entry 0 and `recovery` entries only: the signature of the recovery key they name
+   * over the same body, as signer "recovery". It ties the entry to that key, so a server that
+   * copies a public recovery key into an entry of its own cannot pass it off during recovery.
    */
   recoverySig: B64.optional(),
 });
@@ -133,6 +166,8 @@ export const SealedItem = z.object({
   re: Id.optional(),
   /** Store without pushing: a quota snapshot that raises no new alert. */
   quiet: z.literal(true).optional(),
+  /** A machine re-posts its open decision or permission under its id, to more devices. */
+  reseal: z.literal(true).optional(),
   boxes: z
     .array(z.object({ to: Id, box: B64 }))
     .min(1)
@@ -170,7 +205,7 @@ export const SessionLink = z
 export type SessionLink = z.infer<typeof SessionLink>;
 
 /** The coding agent behind a decision or a permission prompt, as machines send it. */
-export const Agent = z.enum(["claude-code", "codex", "pi"]);
+export const Agent = z.enum(["claude-code", "codex", "pi", "opencode"]);
 export type Agent = z.infer<typeof Agent>;
 
 /**
@@ -225,6 +260,20 @@ export const DecisionLink = z.object({
 });
 export type DecisionLink = z.infer<typeof DecisionLink>;
 
+/**
+ * A directory its signer vouches for: its length and the hash of its last entry. Devices sign
+ * the one they hold into answers, machines the longest they know into every item, and each side
+ * refuses the other's items while an active signer has signed a head its own chain lacks.
+ * Optional in every body: older clients neither sign nor read it.
+ */
+export const DirectoryHead = z.object({
+  length: z.number().int().min(1).max(100_000),
+  head: B64.length(43),
+  /** A machine passing on a device's longer head names that device. */
+  by: Id.optional(),
+});
+export type DirectoryHead = z.infer<typeof DirectoryHead>;
+
 export const Decision = z
   .object({
     v: z.literal(1),
@@ -260,6 +309,7 @@ export const Decision = z
      * "Reply" under them. Machines from before it leave it out and accept only a choice.
      */
     replies: z.literal(true).optional(),
+    dir: DirectoryHead.optional(),
   })
   .superRefine((d, ctx) => {
     if (d.options.length === 1) ctx.addIssue({ code: "custom", message: "options: 0 or 2 to 4" });
@@ -273,16 +323,6 @@ export const Decision = z
       ctx.addIssue({ code: "custom", message: "a decision answered elsewhere has no options" });
   });
 export type Decision = z.infer<typeof Decision>;
-
-/**
- * The directory a device held when it signed an answer: its length and the hash of its last
- * entry. A machine refuses answers while any device has signed a head its own chain lacks.
- */
-export const DirectoryHead = z.object({
-  length: z.number().int().min(1).max(100_000),
-  head: B64.length(43),
-});
-export type DirectoryHead = z.infer<typeof DirectoryHead>;
 
 export const Answer = z
   .object({
@@ -344,6 +384,7 @@ export const Permission = z
     suggestions: z.array(PermissionSuggestion).max(2),
     expiresAt: Time,
     source: Source,
+    dir: DirectoryHead.optional(),
   })
   .superRefine((p, ctx) => {
     const ttl = Date.parse(p.expiresAt) - Date.parse(p.createdAt);
@@ -395,6 +436,7 @@ export const Settled = z
     outcome: z.enum(["keyboard", "timeout", "device", "elsewhere", "withdrawn"]).optional(),
     /** With outcome "device": the device whose answer the machine applied. */
     device: Id.optional(),
+    dir: DirectoryHead.optional(),
   })
   .refine((s) => (s.outcome === "device") === (s.device !== undefined), {
     message: "device is set exactly when outcome is device",
@@ -413,6 +455,7 @@ export const Waiting = z.object({
   to: z.array(Id).min(1),
   at: Time,
   state: z.enum(["working", "waiting"]),
+  dir: DirectoryHead.optional(),
 });
 export type Waiting = z.infer<typeof Waiting>;
 
@@ -454,6 +497,7 @@ export const Run = z
     progress: RunProgress.optional(),
     /** Set once the command exited: its exit code (128 + n when signal n ended it). */
     exit: z.object({ code: z.number().int().min(0).max(255), at: Time }).optional(),
+    dir: DirectoryHead.optional(),
   })
   .superRefine((r, ctx) => {
     if (Date.parse(r.at) < Date.parse(r.startedAt))
@@ -538,9 +582,15 @@ export const QuotaSnapshot = z.object({
       windows: z.array(QuotaWindow),
       /** Set when CodexBar failed for this provider. */
       error: z.string().max(1000).optional(),
+      /**
+       * With `error`: when `windows` were read, the last time CodexBar did not fail. The windows
+       * are stale then; without it, they were read at `takenAt`.
+       */
+      updatedAt: Time.optional(),
     }),
   ),
   alerts: z.array(QuotaAlert),
+  dir: DirectoryHead.optional(),
 });
 export type QuotaSnapshot = z.infer<typeof QuotaSnapshot>;
 

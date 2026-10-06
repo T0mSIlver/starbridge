@@ -8,6 +8,9 @@ import dev.starbridge.app.protocol.Directories
 import dev.starbridge.app.protocol.Directory
 import dev.starbridge.app.protocol.DirectoryEntry
 import dev.starbridge.app.protocol.Envelopes
+import dev.starbridge.app.protocol.DirectoryHead
+import dev.starbridge.app.protocol.Heads
+import dev.starbridge.app.protocol.ItemBody
 import dev.starbridge.app.protocol.JoinApprovalBody
 import dev.starbridge.app.protocol.JoinKeys
 import dev.starbridge.app.protocol.JoinRequestBody
@@ -76,8 +79,27 @@ interface Alerts {
     fun run(run: Run)
     /** Quota alerts the uploader newly raised; each shows once, if this phone opted in. */
     fun quota(notices: List<QuotaNotice>) {}
-    /** Signed out: every notification goes, since they show decrypted questions and commands. */
+    /**
+     * Signed out, or holding machines' items (#362): every notification goes, since they show
+     * decrypted questions and commands and let the owner answer.
+     */
     fun clearAll() {}
+    /** An answer went out: shows it in place of the buttons. */
+    fun answered(decision: Decision, answer: String) {}
+    /** An answer waits for a connection. */
+    fun queued(decision: Decision, answer: String) {}
+    /** An answer the server refused; the buttons come back. */
+    fun failed(decision: Decision, why: String) {}
+}
+
+/** What became of an answer: sent, waiting for a connection, answered elsewhere, or refused. */
+sealed interface Sent {
+    /** The server took this device's answer, now or before: a second tap lands here (#331). */
+    data class Answered(val answer: String) : Sent
+    /** Kept on the phone until the server can be reached; [AnswerWorker] sends it (#329). */
+    data class Queued(val answer: String) : Sent
+    data object Elsewhere : Sent
+    data class Failed(val why: String) : Sent
 }
 
 /** How long pull to refresh on Quotas waits for the machines' fresh snapshots. */
@@ -100,6 +122,8 @@ class ServerStore(
     private val defaultServer: String,
     private val fcmAvailable: Boolean,
     private val scope: CoroutineScope,
+    /** Asks for [flushAnswers] once a network is up; the app schedules [AnswerWorker]. */
+    private val wakeWhenOnline: () -> Unit = {},
 ) : Store {
     private val lock = Mutex()
     private var saved = disk.saved() ?: Saved(defaultServer)
@@ -128,7 +152,16 @@ class ServerStore(
     override val server = MutableStateFlow(saved.server)
     override val busy = MutableStateFlow(false)
     override val notice = MutableStateFlow<String?>(null)
+    private val headBook = Heads(directories)
+    /** The hold notice last shown, so it goes once the hold ends. */
+    @Volatile private var shownHold: String? = null
     override val sending = MutableStateFlow<Map<String, String>>(emptyMap())
+    override val recovery = MutableStateFlow<RecoveryUi?>(null)
+    override val replacing = MutableStateFlow<Replacing>(Replacing.Idle)
+    /** While a new recovery key is on screen: its key pair, and the current one. */
+    private var replacement: Pair<KeyPair, KeyPair>? = null
+    /** Answers tapped but not yet sealed into [Saved.outbox]: the lock may be busy. */
+    private val tapped = java.util.concurrent.ConcurrentHashMap<String, String>()
 
     init {
         directory = runCatching { verified(saved.entries) }.getOrNull()
@@ -164,20 +197,30 @@ class ServerStore(
         phase.value = when {
             secrets.session == null -> Phase.SignedOut
             saved.joining != null -> Phase.Joining(saved.joining!!, saved.joiningScanned)
-            saved.digitJoin != null -> Phase.JoiningByDigits(saved.digitJoin!!.digits)
+            saved.digitJoin != null -> Phase.JoiningByDigits(saved.digitJoin!!.digits, saved.digitJoin!!.matched)
             saved.me == null || saved.pin == null -> Phase.NoDevice(saved.accountExists)
             secrets.recoverySeed != null -> Phase.RecoveryKey(RecoveryKeys.shown(fromB64(secrets.recoverySeed!!), sodium))
             else -> Phase.Ready
         }
         server.value = saved.server
         push.value = push.value.copy(type = saved.pushType, registered = saved.push?.type == saved.pushType)
-        decisions.value = saved.decisions.map(::toUi)
-        prompts.value = saved.prompts.map(::toUi)
+        // While the server holds back entries a machine has seen, no machine's item shows (#362).
+        val held = withheld() != null
+        // A hold that ended takes its notice with it; only a confirmed one raises it.
+        if (!held && notice.value != null && notice.value == shownHold) notice.value = null
+        decisions.value = if (held) emptyList() else saved.decisions.map(::toUi)
+        prompts.value = if (held) emptyList() else saved.prompts.map(::toUi)
         // As the web: named once the account has more than one active machine.
         val named = (directory?.members?.values?.count { it.active && it.member.role == "machine" } ?: 0) > 1
-        windows.value = saved.quotas.flatMap { toUi(it, named) }
-        runs.value = saved.runs.map(::toUi)
+        windows.value = if (held) emptyList() else saved.quotas.flatMap { toUi(it, named) }
+        runs.value = if (held) emptyList() else saved.runs.map(::toUi)
         members.value = directory?.let(::toUi).orEmpty()
+        recovery.value = directory?.let(::recoveryUi)
+        showSending()
+    }
+
+    private fun showSending() {
+        sending.value = saved.outbox.associate { it.decisionId to it.answer } + tapped
     }
 
     fun setDistributors(list: List<String>) {
@@ -186,17 +229,31 @@ class ServerStore(
 
     /** Runs [block] off the caller, one at a time, and turns failures into a notice. */
     private fun run(showBusy: Boolean = true, block: suspend () -> Unit) {
-        scope.launch {
-            lock.withLock {
-                if (showBusy) busy.value = true
-                try {
-                    block()
-                } catch (e: Exception) {
-                    report(e)
-                } finally {
-                    busy.value = false
-                }
+        scope.launch { locked(showBusy, block) }
+    }
+
+    // A run the owner sees raises busy before it waits for the lock: a pull during a quiet sync
+    // shows at once. Quiet runs, such as the prompt poll, leave it alone.
+    private suspend fun locked(showBusy: Boolean = true, block: suspend () -> Unit) = shown(showBusy) {
+        lock.withLock {
+            try {
+                block()
+            } catch (e: Exception) {
+                report(e)
             }
+        }
+    }
+
+    /** Counts the shown runs under way; [busy] holds while any is. */
+    private var shownRuns = 0
+
+    private inline fun <T> shown(on: Boolean, block: () -> T): T {
+        if (!on) return block()
+        synchronized(this) { busy.value = ++shownRuns > 0 }
+        try {
+            return block()
+        } finally {
+            synchronized(this) { busy.value = --shownRuns > 0 }
         }
     }
 
@@ -221,6 +278,8 @@ class ServerStore(
             "closed" -> "That request was already answered or cancelled."
             else -> e.message ?: e.error
         }
+        // Another account's key, or this account's from before a replacement (#348).
+        is ProtocolException if e.code == "wrong-recovery-key" -> "This is a recovery key, but not this account's current one."
         is ProtocolException -> "Refused: the server sent something that does not check out (${e.code})."
         is IOException -> "Can't reach ${saved.server}: ${e.message}"
         else -> e.message ?: e.toString()
@@ -313,7 +372,7 @@ class ServerStore(
         if (me.member != null) throw IllegalStateException("This session already belongs to another device.")
         val exists = fresh.directory(0).isNotEmpty()
         persist(newSecrets = Secrets(session = session))
-        persist(saved.copy(account = me.account, accountExists = exists, me = null, pin = null, entries = emptyList()))
+        persist(saved.copy(account = me.account, accountExists = exists, me = null, pin = null, entries = emptyList(), heads = emptyMap()))
     }
 
     private fun newMember(): DirectoryMember {
@@ -455,6 +514,14 @@ class ServerStore(
         waitForDigitJoin()
     }
 
+    override fun confirmDigits() = run {
+        val dj = saved.digitJoin ?: return@run
+        if (dj.digits == null) return@run
+        persist(saved.copy(digitJoin = dj.copy(matched = true)))
+        // From the start: an approval that came before the owner confirmed is read again.
+        waitForDigitJoin()
+    }
+
     private fun clearDigitJoin() = persist(saved.copy(me = null, digitJoin = null), secrets.copy(joinPk = null, joinSk = null))
 
     private fun waitForDigitJoin() {
@@ -498,6 +565,8 @@ class ServerStore(
                     report(e)
                 }
             } catch (e: IllegalStateException) {
+                // A restarted wait cancels this one, which is no reason to drop the join.
+                if (e is CancellationException) throw e
                 lock.withLock {
                     clearDigitJoin()
                     notice.value = e.message
@@ -529,6 +598,9 @@ class ServerStore(
         val approval = view.approval ?: return false
         val keys = joins.joinerKeys(eph, approverKey, dj.request)
         val body = joins.openApproval(approval, keys, dj.id)
+        // The approval's MAC proves only that whoever sent the approver key approved, which may be
+        // the server: it counts once this phone's owner has seen the digits match (#355).
+        if (!dj.matched) return false
         if (body.account != saved.account) throw ProtocolException("wrong-account", body.account)
         val entries = api().directory(0)
         val dir = directories.verify(entries, saved.account, Pin(body.length, body.head))
@@ -541,8 +613,9 @@ class ServerStore(
     override fun recover(words: String) = run {
         val recovery = sodium.signSeedKeyPair(recoverySignSeed(RecoveryKeys.seed(words, sodium), sodium))
         val entries = api().directory(0)
-        // The chain's first entry must carry this key's own signature, which a server cannot fake.
-        val dir = directories.verify(entries, saved.account, recoveryPk = toB64(recovery.public))
+        // The chain's current recovery key must be this one, whose own signature a server cannot
+        // fake; a phone that was a device before keeps the server from serving it a shorter chain.
+        val dir = directories.verify(entries, saved.account, saved.pin, recoveryPk = toB64(recovery.public))
         // The keys made for an earlier attempt stay until the chain holds them: when its reply was
         // lost, the server has bound the session to that member, and a retry finds it there (#274).
         // Only while those keys are still this phone's, and the member was not revoked since.
@@ -551,7 +624,8 @@ class ServerStore(
         val all = if (dir.members[member.id]?.active == true) {
             entries
         } else {
-            val entry = directories.addEntry(dir, RECOVERY, recovery.secret, member, now())
+            // Revokes every other member: recovery means they are lost, or in someone else's hands (#363).
+            val entry = directories.recoverEntry(dir, recovery.secret, member, now())
             api().append(entry)
             entries + ProtocolJson.encodeToJsonElement(entry)
         }
@@ -571,25 +645,28 @@ class ServerStore(
 
     // --- Syncing -----------------------------------------------------------------
 
-    override fun refresh() = run { sync() }
+    override fun refresh(shown: Boolean) = run(showBusy = shown) { sync() }
 
     // Outside the lock: the machines take seconds to post, and answers must not wait on them.
     override fun refreshQuotas() {
         scope.launch {
-            busy.value = true
-            try {
-                if (phase.value == Phase.Ready) api().askQuota(QUOTA_ASK_SECONDS)
-            } catch (e: ApiException) {
-                // Asked too often, or a server without asks: the sync shows what it holds.
-            } catch (e: IOException) {
-                // Offline: the sync reports it.
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                // Nothing may escape this coroutine: it would end the app (#253).
-                Log.w("Starbridge", "quota ask failed: $e", e)
+            shown(true) {
+                try {
+                    if (phase.value == Phase.Ready) api().askQuota(QUOTA_ASK_SECONDS)
+                } catch (e: ApiException) {
+                    // Asked too often, or a server without asks: the sync shows what it holds.
+                } catch (e: IOException) {
+                    // Offline: the sync reports it.
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    // Nothing may escape this coroutine: it would end the app (#253).
+                    Log.w("Starbridge", "quota ask failed: $e", e)
+                }
+                // Not `run`: inside launch it resolves to the standard library's, which never
+                // clears busy and lets a failed sync escape (#303).
+                locked { sync() }
             }
-            run { sync() }
         }
     }
 
@@ -601,6 +678,7 @@ class ServerStore(
         syncPrompts()
         syncQuotas()
         syncRuns()
+        if (saved.outbox.isNotEmpty()) flushHeld()
         // The server answered, so a push route that failed to register gets another try.
         pendingPush?.let { runCatching { subscribeHeld(it) } }
     }
@@ -618,13 +696,73 @@ class ServerStore(
         persist(saved.copy(entries = all, pin = Pin(dir.length, dir.head)))
     }
 
+    /**
+     * Opens a machine's item and keeps the directory head it signed. Refuses every item while a
+     * head an active machine signed is missing from this phone's chain (#362).
+     */
     private fun open(item: SealedItem): Pair<String, Any>? = try {
-        val opened = envelopes.open(item, me.id, box, directory!!)
-        item.from to opened.body
+        // Null once a directory read found this phone removed (wipe).
+        val dir = directory ?: throw ProtocolException("no-directory", "")
+        val opened = envelopes.open(item, me.id, box, dir)
+        keepHead(item.from, (opened.body as? ItemBody)?.dir)
+        if (withheld() != null) null else item.from to opened.body
     } catch (e: ProtocolException) {
         // Not shown: an item that fails its checks is the server's or a stranger's.
         Log.w("Starbridge", "dropped ${item.kind} ${item.id}: ${e.message}")
         null
+    }
+
+    private fun keepHead(machine: String, head: DirectoryHead?) {
+        val heads = saved.heads.toMutableMap()
+        if (headBook.note(heads, machine, head, saved.entries, directory)) persist(saved.copy(heads = heads))
+    }
+
+    /**
+     * Why no machine's item counts: the server holds back entries a machine has seen. It names the
+     * machine and, for a head it passed on, the device; a compromised machine can name any device,
+     * the owner's own phone included, so the machine is the one to revoke first.
+     */
+    private fun withheld(): String? {
+        val dir = directory ?: return null
+        val held = headBook.withheldBy(saved.heads, dir, saved.entries) ?: return null
+        fun name(id: String) = dir.members[id]?.member?.name ?: id
+        val machine = name(held.id)
+        val seen = held.by?.let { "$machine says ${name(it)} has seen changes to your devices that the server is holding back." }
+            ?: "The server is holding back changes to your devices that $machine has seen."
+        return "$seen Nothing from your machines shows until it sends them. If this does not clear, revoke $machine first."
+    }
+
+    /**
+     * On the first sign of a hold, reads the directory once more: a machine may only have signed
+     * an entry made on another device since this phone's last read. True while the hold remains,
+     * which says why and closes the notifications, since they would still offer answers.
+     */
+    private suspend fun confirmHold(): Boolean {
+        if (withheld() == null) return false
+        syncDirectory()
+        // Removed from the devices: the wipe said why, and nothing more opens.
+        if (phase.value != Phase.Ready) return true
+        val why = withheld() ?: return false
+        notice.value = why
+        shownHold = why
+        alerts.clearAll()
+        return true
+    }
+
+    /** Keeps the heads of [items] before any counts, so the one that shows a gap holds back the rest. */
+    private suspend fun scan(items: List<SealedItem>): Boolean {
+        items.forEach { open(it) }
+        return confirmHold()
+    }
+
+    /**
+     * Before a pushed item opens: reads the directory when the sender is new to this phone, or
+     * when the head it signed shows entries the phone lacks.
+     */
+    private suspend fun catchUp(item: SealedItem) {
+        if (directory?.members?.containsKey(item.from) != true) syncDirectory()
+        open(item)
+        confirmHold()
     }
 
     private suspend fun syncDecisions() {
@@ -638,6 +776,8 @@ class ServerStore(
         val waits = mutableListOf<Pair<String, Waiting>>()
         while (true) {
             val page = api().items("decision,settled,waiting", cursor)
+            // Held: the cursor stays, so these items are read again once the hold ends.
+            if (scan(page.items.map { it.item })) return
             for (listed in page.items) {
                 if (listed.item.kind == "waiting") {
                     val (from, body) = open(listed.item) ?: continue
@@ -645,14 +785,15 @@ class ServerStore(
                     continue
                 }
                 if (listed.item.kind == "settled") {
-                    val (_, body) = open(listed.item) ?: continue
+                    val (from, body) = open(listed.item) ?: continue
                     body as Settled
-                    closings[body.itemId] = body.outcome to listed.receivedAt
+                    // Keyed by machine: a notice closes only the machine's own items (#362).
+                    closings["$from/${body.itemId}"] = body.outcome to listed.receivedAt
                     continue
                 }
                 // The notice that closed it arrived in the same write, so it carries the same time;
                 // a later one, after a device's answer, closed nothing.
-                val settled = closings[listed.item.id]?.takeIf { it.second == listed.answeredAt }?.first
+                fun settledBy(machine: String) = closings["$machine/${listed.item.id}"]?.takeIf { it.second == listed.answeredAt }?.first
                 val known = byId[listed.item.id]
                 if (known != null && reread && known.answeredAt == null && listed.answeredAt == null) {
                     val (from, body) = open(listed.item) ?: continue
@@ -661,6 +802,7 @@ class ServerStore(
                 }
                 if (known != null) {
                     // A settled push marked it answered already, without saying how.
+                    val settled = settledBy(known.from)
                     if (listed.answeredAt != null && (known.answeredAt == null || settled != null)) {
                         byId[known.body.id] = known.copy(answeredAt = listed.answeredAt, settled = settled ?: known.settled)
                         alerts.cancel(known.body.id)
@@ -668,7 +810,7 @@ class ServerStore(
                     continue
                 }
                 val (from, body) = open(listed.item) ?: continue
-                byId[listed.item.id] = SavedDecision(from, body as DecisionBody, listed.answeredAt, settled = settled)
+                byId[listed.item.id] = SavedDecision(from, body as DecisionBody, listed.answeredAt, settled = settledBy(from))
             }
             cursor = page.cursor
             if (page.items.size < 100) break
@@ -713,6 +855,7 @@ class ServerStore(
             cursor = page.cursor
             if (page.items.size < 100) break
         }
+        if (scan(read.map { it.item })) return
         // A settled prompt comes back after its notice, so prompts go first: a notice whose
         // prompt is new to this phone would otherwise find nothing to close.
         for (listed in read.sortedBy { if (it.item.kind == "permission") 0 else 1 }) takePrompt(listed.item, listed.answeredAt, byId)
@@ -799,6 +942,7 @@ class ServerStore(
      * asked. A deny is for this call only; a wider allow only for a scope the prompt offered.
      */
     suspend fun sendPrompt(id: String, allow: Boolean, scope: String, message: String?) {
+        withheld()?.let { throw IllegalStateException(it) }
         val p = saved.prompts.find { it.body.id == id } ?: throw IllegalStateException("No such prompt.")
         if (p.answeredAt != null || p.answer != null) throw IllegalStateException("Already answered.")
         val chosen = if (allow) scope else "once"
@@ -834,7 +978,9 @@ class ServerStore(
         lock.withLock { sendPrompt(id, allow, scope, null) }
 
     private suspend fun syncQuotas() {
-        val quotas = api().quota().mapNotNull { listed -> open(listed.item)?.let { (from, body) -> SavedQuota(from, body as QuotaSnapshot) } }
+        val listed = api().quota()
+        if (scan(listed.map { it.item })) return
+        val quotas = listed.mapNotNull { open(it.item)?.let { (from, body) -> SavedQuota(from, body as QuotaSnapshot) } }
         persist(saved.copy(quotas = quotas))
         alerts.quota(quotas.flatMap(::notices))
     }
@@ -860,6 +1006,7 @@ class ServerStore(
         val fresh = mutableListOf<SavedRun>()
         while (true) {
             val page = api().items("run", cursor)
+            if (scan(page.items.map { it.item })) return
             for (listed in page.items) open(listed.item)?.let { (from, body) -> fresh += SavedRun(from, body as RunBody) }
             cursor = page.cursor
             if (page.items.size < 100) break
@@ -889,26 +1036,42 @@ class ServerStore(
 
     // --- Answering ---------------------------------------------------------------
 
-    /** One answer per decision at a time: the decision stays locked until the server replies. */
+    /**
+     * One answer per decision: the decision stays locked until the server takes it, which may
+     * wait for a connection (#329).
+     */
     override fun answer(id: String, choice: String?, text: String?) {
         if (id in sending.value) return
-        sending.update { it + (id to (choice ?: text.orEmpty())) }
+        tapped[id] = choice ?: text.orEmpty()
+        showSending()
         run(showBusy = false) {
             try {
-                send(id, choice, text)
+                when (val sent = send(id, choice, text)) {
+                    is Sent.Queued -> notice.value = "No connection. ${sent.answer} will be sent when the phone is back online."
+                    Sent.Elsewhere -> notice.value = "Already answered on another device."
+                    is Sent.Failed -> notice.value = "Not sent: ${sent.why}"
+                    is Sent.Answered -> Unit
+                }
             } finally {
-                sending.update { it - id }
+                tapped.remove(id)
+                showSending()
             }
         }
     }
 
     /**
-     * Signs the answer and seals it to the machine that asked, the only recipient the server
-     * accepts. The notification's buttons call this too.
+     * Signs the answer, seals it to the machine that asked, the only recipient the server
+     * accepts, and keeps it in [Saved.outbox] before posting it, so an answer tapped offline is
+     * sent once the server can be reached. Tapping again repeats the first answer's outcome.
+     * The notification's buttons call this too.
      */
-    suspend fun send(id: String, choice: String?, text: String?) {
+    suspend fun send(id: String, choice: String?, text: String?): Sent {
+        // Not even an answer queued before: its machine may be the one the server keeps revoked.
+        withheld()?.let { return Sent.Failed(it) }
+        saved.outbox.find { it.decisionId == id }?.let { return post(it) }
         val d = saved.decisions.find { it.body.id == id } ?: throw IllegalStateException("No such decision.")
-        if (d.answeredAt != null || d.answer != null) throw IllegalStateException("Already answered.")
+        d.answer?.let { return Sent.Answered(it) }
+        if (d.answeredAt != null) return Sent.Elsewhere
         if (choice != null && choice !in d.body.options) throw IllegalArgumentException("Not one of the options.")
         val machine = directory?.members?.get(d.from)?.takeIf { it.active }?.member
             ?: throw IllegalStateException("The machine that asked is no longer in your directory.")
@@ -924,22 +1087,104 @@ class ServerStore(
             // Lets the machine notice a server holding back entries, such as a revocation.
             directory?.let { d -> putJsonObject("dir") { put("length", d.length); put("head", d.head) } }
         }
-        val item = envelopes.seal("answer", body, me.id, signKey, listOf(machine))
-        try {
-            api().postItem(item)
-        } catch (e: ApiException) {
-            if (e.error == "already-answered") markAnswered(id, null)
-            throw e
-        }
-        markAnswered(id, choice ?: text)
+        val queued = QueuedAnswer(id, choice ?: text!!, envelopes.seal("answer", body, me.id, signKey, listOf(machine)))
+        persist(saved.copy(outbox = saved.outbox + queued))
+        return post(queued)
     }
 
-    private fun markAnswered(id: String, answer: String?) {
-        persist(saved.copy(decisions = saved.decisions.map { if (it.body.id == id) it.copy(answeredAt = now(), answer = answer) else it }))
+    /** Posts a queued answer and settles it, or keeps it for [wakeWhenOnline] to send later. */
+    private suspend fun post(q: QueuedAnswer): Sent {
+        try {
+            api().postItem(q.item)
+        } catch (e: CancellationException) {
+            // Cut off mid-request, by the notification's time limit say: it may have landed.
+            keep(q, landed = true)
+            throw e
+        } catch (e: ApiException) {
+            return when {
+                e.error == "already-answered" -> {
+                    // A retry of an answer the server took before its reply was lost finds the
+                    // decision answered; the server can't say by whom, so this guesses ours.
+                    settle(q, if (q.mayHaveLanded) q.answer else null)
+                    if (q.mayHaveLanded) Sent.Answered(q.answer) else Sent.Elsewhere
+                }
+                // The session ended: report() asks to sign in again, and the answer waits for it.
+                e.status == 401 -> {
+                    keep(q, landed = false)
+                    throw e
+                }
+                e.status >= 500 || e.status == 429 -> {
+                    keep(q, landed = e.status != 502 && e.status != 503 && e.status != 429)
+                    Sent.Queued(q.answer)
+                }
+                else -> {
+                    persist(saved.copy(outbox = saved.outbox.filter { it.decisionId != q.decisionId }))
+                    Sent.Failed(describe(e))
+                }
+            }
+        } catch (e: IOException) {
+            // No route or no name: the request never left. Anything else may have reached it.
+            keep(q, landed = e !is java.net.ConnectException && e !is java.net.UnknownHostException && e !is java.net.NoRouteToHostException)
+            return Sent.Queued(q.answer)
+        }
+        settle(q, q.answer)
+        return Sent.Answered(q.answer)
+    }
+
+    private fun keep(q: QueuedAnswer, landed: Boolean) {
+        if (landed && !q.mayHaveLanded) {
+            persist(saved.copy(outbox = saved.outbox.map { if (it.decisionId == q.decisionId) it.copy(mayHaveLanded = true) else it }))
+        }
+        wakeWhenOnline()
+    }
+
+    /** Takes the answer out of the outbox and marks its decision answered, by this device when [answer] is set. */
+    private fun settle(q: QueuedAnswer, answer: String?) {
+        persist(
+            saved.copy(
+                outbox = saved.outbox.filter { it.decisionId != q.decisionId },
+                decisions = saved.decisions.map { if (it.body.id == q.decisionId) it.copy(answeredAt = now(), answer = answer) else it },
+            ),
+        )
     }
 
     /** For the notification's buttons: holds the lock like any other change. */
     suspend fun sendFromNotification(id: String, choice: String?, text: String?) = lock.withLock { send(id, choice, text) }
+
+    /** The answer waiting to be sent for decision [id], if any. */
+    fun queued(id: String): String? = saved.outbox.find { it.decisionId == id }?.answer
+
+    /**
+     * Sends the queued answers, oldest first, and tells the notifications how each ended. False
+     * while some still wait, so [AnswerWorker] tries again later.
+     */
+    suspend fun flushAnswers(): Boolean = lock.withLock {
+        if (phase.value != Phase.Ready) return@withLock true
+        try {
+            flushHeld() && saved.outbox.isEmpty()
+        } catch (e: IOException) {
+            report(e)
+            false
+        }
+    }
+
+    private suspend fun flushHeld(): Boolean {
+        // Kept, and tried again once the hold ends.
+        if (withheld() != null) return false
+        for (q in saved.outbox) {
+            val decision = decisions.value.find { it.id == q.decisionId }
+            when (val sent = post(q)) {
+                is Sent.Queued -> return false
+                is Sent.Answered -> decision?.let { alerts.answered(it, sent.answer) }
+                Sent.Elsewhere -> alerts.cancel(q.decisionId)
+                is Sent.Failed -> {
+                    notice.value = "Not sent: ${sent.why}"
+                    decision?.let { alerts.failed(it, sent.why) }
+                }
+            }
+        }
+        return true
+    }
 
     // --- Push --------------------------------------------------------------------
 
@@ -974,7 +1219,7 @@ class ServerStore(
                     api().item(id).also { answeredAt = it.answeredAt }.item
                 }
                 // A machine paired since the last sync is not in the cached chain yet.
-                if (directory?.members?.containsKey(item.from) != true) syncDirectory()
+                catchUp(item)
                 val (from, body) = open(item) ?: return@withLock
                 val saved1 = SavedDecision(from, body as DecisionBody, answeredAt)
                 persist(saved.copy(decisions = saved.decisions + saved1))
@@ -989,7 +1234,7 @@ class ServerStore(
                 } else {
                     api().item(id).also { answeredAt = it.answeredAt }.item
                 }
-                if (directory?.members?.containsKey(item.from) != true) syncDirectory()
+                catchUp(item)
                 val byId = saved.prompts.associateBy { it.body.id }.toMutableMap()
                 val added = takePrompt(item, answeredAt, byId)
                 keepPrompts(byId)
@@ -1005,7 +1250,7 @@ class ServerStore(
                 } else {
                     api().item(id).item
                 }
-                if (directory?.members?.containsKey(item.from) != true) syncDirectory()
+                catchUp(item)
                 val (from, body) = open(item) ?: return@withLock
                 body as Waiting
                 val d = saved.decisions.find { it.body.id == body.decisionId } ?: fetchDecision(body.decisionId) ?: return@withLock
@@ -1028,7 +1273,7 @@ class ServerStore(
                 } else {
                     api().item(id).item
                 }
-                if (directory?.members?.containsKey(item.from) != true) syncDirectory()
+                catchUp(item)
                 val (from, body) = open(item) ?: return@withLock
                 keepRuns(listOf(SavedRun(from, body as RunBody)))
             }
@@ -1296,6 +1541,111 @@ class ServerStore(
         persist(saved.copy(entries = all, pin = Pin(after.length, after.head)))
     }
 
+    // --- Replacing the recovery key (#348) -------------------------------------------------
+
+    override fun newRecoveryKey(currentKey: String) = run {
+        syncDirectory()
+        // Both keys sign, so neither a stolen phone nor a leaked key replaces it alone.
+        val typed = RecoveryKeys.seed(currentKey, sodium)
+        val signSeed = recoverySignSeed(typed, sodium)
+        val current = sodium.signSeedKeyPair(signSeed)
+        typed.fill(0)
+        signSeed.fill(0)
+        if (toB64(current.public) != directory!!.recoveryPk) {
+            current.secret.fill(0)
+            throw IllegalArgumentException("This isn't the account's current recovery key.")
+        }
+        val seed = sodium.random(16)
+        val nextSeed = recoverySignSeed(seed, sodium)
+        val next = sodium.signSeedKeyPair(nextSeed)
+        val shown = RecoveryKeys.shown(seed, sodium)
+        seed.fill(0)
+        nextSeed.fill(0)
+        dropReplacement()
+        replacement = next to current
+        replacing.value = Replacing.Shown(shown)
+    }
+
+    // The new key reaches the directory only now, once the owner says it is saved (#328).
+    override fun saveRecoveryKey() = run {
+        val shown = replacing.value as? Replacing.Shown ?: return@run
+        val (next, current) = replacement ?: return@run
+        replacing.value = shown.copy(saving = true)
+        try {
+            syncDirectory()
+            // A recovery or a revocation removed this phone: the sync wiped it and said so.
+            if (saved.me == null) {
+                dropReplacement()
+                replacing.value = Replacing.Idle
+                return@run
+            }
+            val nextPk = toB64(next.public)
+            // Another device replaced the key since it was typed: the confirmation could never verify.
+            if (directory!!.recoveryPk != nextPk && directory!!.recoveryPk != toB64(current.public)) {
+                throw IllegalStateException("Another device replaced the recovery key meanwhile. Start again.")
+            }
+            if (directory!!.recoveryPk != nextPk) {
+                // A retry after the proposal landed confirms it rather than proposing it again; one
+                // another proposal replaced meanwhile can never be posted again.
+                val pending = directory!!.pendingRecovery?.recoveryPk
+                if (pending != nextPk && nextPk in directory!!.recoveryPks) throw IllegalStateException("Another device proposed a new key meanwhile. Start again.")
+                if (pending != nextPk) appendEntry { directories.recoveryEntry(it, me.id, signKey, next, now()) }
+                appendEntry { directories.recoveryConfirmEntry(it, current.secret, nextPk, now()) }
+            }
+        } catch (e: Exception) {
+            replacing.value = shown
+            throw e
+        }
+        dropReplacement()
+        replacing.value = Replacing.Done
+    }
+
+    override fun closeRecoveryKey() {
+        // Not while a save signs with the keys: it ends in Done, or back on the key to retry.
+        if ((replacing.value as? Replacing.Shown)?.saving == true) return
+        dropReplacement()
+        replacing.value = Replacing.Idle
+    }
+
+    override fun dismissRecoveryNotice(seq: Int) = run(showBusy = false) { persist(saved.copy(recoverySeen = seq)) }
+
+    private fun dropReplacement() {
+        replacement?.let { (next, current) ->
+            next.secret.fill(0)
+            current.secret.fill(0)
+        }
+        replacement = null
+    }
+
+    /** Appends the entry [make] signs on the current chain, and moves the pin to it. */
+    private suspend fun appendEntry(make: (Directory) -> SignedEnvelope) {
+        val entry = make(directory!!)
+        api().append(entry)
+        val all = saved.entries + ProtocolJson.encodeToJsonElement(entry)
+        val after = directories.verify(all, saved.account, saved.pin)
+        directory = after
+        persist(saved.copy(entries = all, pin = Pin(after.length, after.head)))
+    }
+
+    private fun recoveryUi(dir: Directory): RecoveryUi {
+        val mine = saved.me?.id
+        fun name(id: String) = if (id == mine) "this phone" else dir.members[id]?.member?.name ?: id
+        val joined = saved.entries.indexOfFirst { raw ->
+            runCatching {
+                val env = ProtocolJson.decodeFromJsonElement(SignedEnvelope.serializer(), raw)
+                ProtocolJson.decodeFromString(DirectoryEntry.serializer(), env.body).let { (it.op == "add" || it.op == "recover") && it.member?.id == mine }
+            }.getOrDefault(false)
+        }
+        val set = dir.recoverySet
+        val fresh = set.seq > 0 && set.seq > joined && set.seq > saved.recoverySeen && set.by != mine
+        return RecoveryUi(
+            setAt = instant(set.at) ?: Instant.EPOCH,
+            setBy = name(set.by),
+            replaced = set.seq > 0,
+            notice = if (fresh) RecoveryNotice(set.seq, instant(set.at) ?: Instant.EPOCH, name(set.by)) else null,
+        )
+    }
+
     /** Removes this phone from the directory, ends the session and forgets every key. */
     override fun signOut() = run {
         if (phase.value == Phase.Ready) {
@@ -1373,10 +1723,10 @@ class ServerStore(
         return Prompt(
             id = b.id,
             tool = b.tool,
-            summary = b.summary,
-            description = b.description,
+            summary = visible(b.summary),
+            description = b.description?.let(::visible),
             input = b.input,
-            scopes = b.suggestions.map { PromptScope(it.scope, it.label, it.rule) },
+            scopes = b.suggestions.map { PromptScope(it.scope, it.label, visible(it.rule)) },
             source = Source(b.source.machine, b.source.project, b.source.session, b.source.sessionTitle, b.source.links.orEmpty().map { SessionLink(it.kind, it.url) }, b.source.machineKind),
             agent = b.agent,
             createdAt = instant(b.createdAt) ?: Instant.EPOCH,
@@ -1403,7 +1753,8 @@ class ServerStore(
                 steadyPercent = pace?.expectedUsedPercent?.roundToInt()?.coerceIn(0, 100),
                 windowMinutes = w.windowMinutes,
                 machine = if (named) directory?.members?.get(q.from)?.member?.name ?: q.from else null,
-                takenAt = instant(q.body.takenAt),
+                takenAt = instant(p.updatedAt ?: q.body.takenAt),
+                error = p.error,
             )
         }
     }

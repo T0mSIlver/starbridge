@@ -13,6 +13,7 @@ import {
 } from "@/lib/feed";
 import { matches, useFind } from "@/lib/find";
 import { clockTime } from "@/lib/format";
+import { closeItem, linkedItem, openItem, stackItem, useOpened } from "@/lib/opened";
 import { closedByPhrase, promptOutcome } from "@/lib/outcome";
 import { fitsRow } from "@/lib/permissionInput";
 import { type Prefs, usePref } from "@/lib/prefs";
@@ -28,6 +29,7 @@ import { ordered } from "./options";
 import { PhoneBar } from "./PhoneBar";
 import { PushBanner } from "./PushBanner";
 import { QuotaAside } from "./QuotaAside";
+import { RecoveryBanner } from "./RecoveryBanner";
 import { Resizer } from "./Resizer";
 import ui from "./ui.module.css";
 
@@ -54,8 +56,17 @@ const text = (e: Entry) =>
       : [e.item.run.title, e.item.run.reason];
 
 export function Inbox() {
-  const { inbox, prompts, runs, promptLog, loadPromptLog, answer, answerPrompt, deviceName } =
-    useApp();
+  const {
+    inbox,
+    inboxLoaded,
+    prompts,
+    runs,
+    promptLog,
+    loadPromptLog,
+    answer,
+    answerPrompt,
+    deviceName,
+  } = useApp();
   const [grouping, setGrouping] = usePref("grouping");
   const [historyOpen, setHistoryOpen] = usePref("historyOpen");
   // History's rows fade in when the owner opens it, not when the page loads with it open or the
@@ -93,7 +104,7 @@ export function Inbox() {
   const ids = [...needs, ...(showPast ? past.map((p) => p.entry) : [])].map((e) => e.id);
   const [picked, setPicked] = useState<string>();
   // Phones and narrow windows show the detail in place of the list once a row is tapped.
-  const [opened, setOpened] = useState<string>();
+  const opened = useOpened();
   // What this page answered, which may still be listed as open until the inbox reloads.
   const answeredHere = useRef(new Set<string>());
   const firstOpen = needs.find((e) => !answeredHere.current.has(e.id))?.id;
@@ -151,6 +162,30 @@ export function Inbox() {
 
   const pastOf = new Map(past.map((p) => [p.entry.id, p]));
   const entryOf = new Map(needs.map((e) => [e.id, e]));
+  // An item opened by a link or a reload is known once the inbox loaded, or the 7-day prompt
+  // log for a closed prompt; after one try at the log, an unknown id counts as answered.
+  const stillOpen = opened !== undefined && entryOf.has(opened);
+  const known = stillOpen || (opened !== undefined && pastOf.has(opened));
+  const [logTried, setLogTried] = useState(false);
+  const resolved = known || (inboxLoaded && (promptLog !== undefined || logTried));
+  useEffect(() => {
+    if (!opened || !inboxLoaded || known || promptLog !== undefined || logTried) return;
+    loadPromptLog()
+      .catch(() => {})
+      .finally(() => setLogTried(true));
+  }, [opened, inboxLoaded, known, promptLog, logTried, loadPromptLog]);
+  useEffect(() => {
+    if (opened && !wide) stackItem();
+  }, [opened, wide]);
+  // A wide window selects the item beside the list instead, opening History for a linked closed one.
+  useEffect(() => {
+    if (!wide || !opened || !resolved) return;
+    if (known) {
+      setPicked(opened);
+      if (!stillOpen && linkedItem()) setHistoryOpen(true);
+    }
+    closeItem();
+  }, [wide, opened, resolved, known, stillOpen, setHistoryOpen]);
   const detail = (id: string | undefined) => {
     if (!id) return null;
     const open = entryOf.get(id);
@@ -190,7 +225,7 @@ export function Inbox() {
         now={now}
         comfy={comfy}
         selected={wide && e.id === selected}
-        onSelect={() => (wide ? setPicked(e.id) : setOpened(e.id))}
+        onSelect={() => (wide ? setPicked(e.id) : openItem(e.id))}
         actions={
           comfy ? (
             <RowActions entry={e} onPrompt={answerOne} onQuestion={answerQuestion} />
@@ -235,7 +270,7 @@ export function Inbox() {
               by={p.entry.type === "question" ? closedByPhrase(p.entry.item) : ""}
               comfy={comfy}
               selected={wide && p.entry.id === selected}
-              onSelect={() => (wide ? setPicked(p.entry.id) : setOpened(p.entry.id))}
+              onSelect={() => (wide ? setPicked(p.entry.id) : openItem(p.entry.id))}
             />
           ))}
         </div>
@@ -253,6 +288,7 @@ export function Inbox() {
         </span>
         <ViewMenu grouping={grouping} setGrouping={setGrouping} />
       </header>
+      <RecoveryBanner />
       <PushBanner />
       {inbox.rejected.length > 0 && (
         <p className={`t-meta ${s.rejected}`} role="status">
@@ -330,9 +366,9 @@ export function Inbox() {
   if (!wide && opened) {
     return (
       <div className={s.single}>
-        <PhoneBar title="Inbox" back={() => setOpened(undefined)} always />
+        <PhoneBar title="Inbox" back={closeItem} always />
         <div className={`m-enter ${s.openDetail}`}>
-          {detail(opened) ?? <p className={`t-small ${s.empty}`}>Answered</p>}
+          {detail(opened) ?? (resolved && <p className={`t-small ${s.empty}`}>Answered</p>)}
         </div>
       </div>
     );

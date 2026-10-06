@@ -52,6 +52,11 @@ export const DEFAULT_LIMITS = {
   directoryEntries: 200,
   /** Devices the recovery key may still add past directoryEntries. */
   recoveryAdds: 20,
+  /**
+   * Recovery keys devices may still propose past directoryEntries, so a chain a stolen device
+   * filled still lets the owner replace the key; confirmations never outnumber proposals.
+   */
+  recoveryProposals: 20,
   /** One directory entry's JSON, in bytes. */
   entryBytes: 8 * 1024,
 
@@ -60,8 +65,16 @@ export const DEFAULT_LIMITS = {
   /** GitHub sign-ins finished per address. */
   githubCallbacks: [20, MINUTE] as RateWindow,
 
-  /** Pairings waiting on the whole server. */
-  pendingPairings: 5_000,
+  /**
+   * Pairings stored on the whole server, about 4 KB each: the disk bound. Filling it takes a
+   * thousand addresses at pairingsPerClient.
+   */
+  pendingPairings: 20_000,
+  /**
+   * Unapproved pairings per address, an IPv6 client counting as its /48. Approved ones do not
+   * count, so an office behind one NAT pairs as many members as it likes, 20 waiting at a time.
+   */
+  pairingsPerClient: 20,
 
   /** Push subscription writes per account. */
   pushSubscribes: [30, MINUTE] as RateWindow,
@@ -84,8 +97,8 @@ export const DEFAULT_LIMITS = {
 
 export type Limits = typeof DEFAULT_LIMITS;
 
-/** The caller's address as a rate-limit key; an IPv6 client counts as its /64. */
-export function ipKey(c: Context<Env>): string {
+/** The caller's address as a rate-limit key; an IPv6 client counts as its /64, or `prefix`. */
+export function ipKey(c: Context<Env>, prefix: 48 | 64 = 64): string {
   const ip = clientIp(c);
   if (!isIPv6(ip) || ip.includes(".")) return ip;
   const [head = "", tail = ""] = ip.split("::");
@@ -95,9 +108,9 @@ export function ipKey(c: Context<Env>): string {
     ? [...left, ...Array(8 - left.length - right.length).fill("0"), ...right]
     : left;
   return `${groups
-    .slice(0, 4)
+    .slice(0, prefix / 16)
     .map((g) => g.toLowerCase().replace(/^0+(?=.)/, ""))
-    .join(":")}::/64`;
+    .join(":")}::/${prefix}`;
 }
 
 /** Counts one call under `key`, or answers 429 `rate-limited` with Retry-After. */

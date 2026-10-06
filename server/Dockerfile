@@ -1,7 +1,7 @@
 # Build from the repository root: docker build -f server/Dockerfile .
 FROM oven/bun:1.4.2 AS bun
 
-FROM node:24-slim AS build
+FROM node:25-slim AS build
 COPY --from=bun /usr/local/bin/bun /usr/local/bin/bun
 RUN corepack enable
 WORKDIR /src

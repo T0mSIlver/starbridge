@@ -5,14 +5,43 @@
 //
 // Needs `npx playwright install firefox` once. Writes screenshots to web/screenshots.
 import { type ChildProcess, spawn, spawnSync } from "node:child_process";
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  appendFileSync,
+  cpSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { type BrowserContext, firefox, type Page } from "playwright";
+import { type Browser, type BrowserContext, firefox, type Page } from "playwright";
+import { layoutProblems, type Problem, zoomText } from "./layout.ts";
 
 const ROOT = resolve(import.meta.dirname, "../..");
 const WEB = join(ROOT, "web");
-const PORTS = { web: 3870, server: 3871, github: 3872, push: 3873 };
+/**
+ * Ports nothing else listens on, so runs on one machine (CI's runners share one) never collide.
+ * They come from below Linux's range for outgoing connections (32768 up), whose closed
+ * connections linger and keep a server from taking their port. Each stays held until `free`
+ * hands it to its process: the web build takes a minute, time enough to lose it otherwise.
+ */
+const held = new Map<number, ReturnType<typeof createServer>>();
+const hold = (): Promise<number> =>
+  new Promise((done) => {
+    const port = 20000 + Math.floor(Math.random() * 12000);
+    const s = createServer()
+      .once("error", () => done(hold()))
+      .listen(port, () => {
+        held.set(port, s);
+        done(port);
+      });
+  });
+const free = (...ports: number[]) =>
+  Promise.all(ports.map((p) => new Promise((done) => held.get(p)?.close(done))));
+const PORTS = { web: await hold(), server: await hold(), github: await hold(), push: await hold() };
 const ORIGIN = `http://localhost:${PORTS.web}`;
 const SHOTS = join(WEB, "screenshots");
 // Set to a folder to record the inbox's motion there, as one GIF per motion (needs ffmpeg).
@@ -62,7 +91,12 @@ function start(
   };
   p.stdout?.on("data", feed);
   p.stderr?.on("data", feed);
-  const exited = new Promise<number>((r) => p.on("exit", (code) => r(code ?? -1)));
+  const exited = new Promise<number>((r) =>
+    p.on("exit", (code, signal) => {
+      if (code !== 0 && !p.killed) console.log(`[${name}] exited ${signal ?? code}`);
+      r(code ?? -1);
+    }),
+  );
   return {
     proc: p,
     exited,
@@ -109,8 +143,27 @@ async function browser() {
       "dom.push.serverURL": `ws://localhost:${PORTS.push}/`,
       "dom.push.testing.allowInsecureServerURL": true,
       "permissions.default.desktop-notification": 1,
+      // Firefox queues past a few notifications that stay up until dismissed, and their
+      // showNotification never settles; the run leaves many up across its browsers.
+      "dom.webnotifications.requireinteraction.count": 100,
     },
   });
+}
+
+/** Content-Security-Policy violations on any page; the run fails on any (#312). */
+const violations: string[] = [];
+
+async function watchCsp(ctx: BrowserContext) {
+  await ctx.exposeBinding("cspViolation", ({ page }, v: string) => {
+    violations.push(`${page.url()}: ${v}`);
+  });
+  await ctx.addInitScript(() =>
+    document.addEventListener("securitypolicyviolation", (e) =>
+      (window as unknown as { cspViolation: (v: string) => void }).cspViolation(
+        `${e.violatedDirective} ${e.blockedURI}`,
+      ),
+    ),
+  );
 }
 
 /** The landing page's link, or the sign-in screen's. */
@@ -138,44 +191,90 @@ async function noWordsAsked(page: Page) {
   if (found) throw new Error(`the page says "${found[0]}"`);
 }
 
-/** Nothing runs past the window's width: a phone's browser would zoom the whole page out. */
-async function fitsWidth(page: Page, name: string) {
-  const [content, window] = (await page.evaluate(() => [
-    document.documentElement.scrollWidth,
-    innerWidth,
-  ])) as [number, number];
-  if (content > window)
-    throw new Error(`${name}: the page is ${content} px wide in a ${window} px window`);
+/** What fails the run; contrast is only listed. */
+const FAILS: Problem["kind"][] = ["page-width", "clipped", "spills", "offscreen", "overlap", "tap"];
+
+/** Fails on what a screenshot would show broken (layout.ts); AUDIT lists it instead. */
+async function fitsLayout(page: Page, name: string) {
+  const problems = await layoutProblems(page);
+  if (AUDIT) {
+    const at = await page.evaluate(() => `${innerWidth}`);
+    for (const p of problems)
+      appendFileSync(join(AUDIT, "problems.jsonl"), `${JSON.stringify({ name, at, ...p })}\n`);
+    return;
+  }
+  const broken = problems.filter((p) => FAILS.includes(p.kind));
+  if (broken.length)
+    throw new Error(
+      `${name} at ${page.viewportSize()?.width} px:\n${broken.map((p) => `  ${p.kind}: ${p.what}`).join("\n")}`,
+    );
 }
 
+// AUDIT=<folder> shoots every size into that folder, phones' text at 200% too, and writes what
+// the checks find to problems.jsonl there instead of failing.
+const AUDIT = process.env.AUDIT;
+const SIZES = AUDIT
+  ? ([
+      ...(
+        [
+          [320, 568],
+          [360, 780],
+          [390, 844],
+          [430, 932],
+          [768, 1024],
+          [1024, 768],
+          [1280, 800],
+          [1440, 900],
+          [1920, 1080],
+        ] as const
+      ).map(([width, height]) => [`${width}`, { width, height }, 1] as const),
+      ["390-text200", { width: 390, height: 844 }, 2] as const,
+    ] as const)
+  : ([
+      ["phone", { width: 390, height: 844 }, 1],
+      ["desktop", DESKTOP, 1],
+    ] as const);
+
 async function shoot(page: Page, name: string) {
-  for (const [size, viewport] of [
-    ["phone", { width: 390, height: 844 }],
-    ["desktop", { width: 1280, height: 860 }],
-  ] as const)
+  for (const [size, viewport, text] of SIZES)
     for (const scheme of ["light", "dark"] as const) {
       await page.setViewportSize(viewport);
-      await page.emulateMedia({ colorScheme: scheme });
+      // Without motion, so no row is caught sliding over another.
+      await page.emulateMedia({ colorScheme: scheme, reducedMotion: "reduce" });
       await page.waitForTimeout(150);
-      await fitsWidth(page, name);
+      const unzoom = text > 1 ? await zoomText(page, text) : undefined;
+      await fitsLayout(page, `${name} ${scheme}${unzoom ? " text 200%" : ""}`);
       // Firefox draws the phone layout's fixed bottom bar mid-page in a full-page capture.
       await page.screenshot({
-        path: join(SHOTS, `${name}-${size}-${scheme}.png`),
-        fullPage: size === "desktop",
+        path: join(AUDIT ?? SHOTS, `${name}-${size}-${scheme}.png`),
+        fullPage: AUDIT !== undefined || viewport.width >= 600,
       });
+      await unzoom?.();
     }
+  // The narrowest phones are checked too, without a shot.
+  if (!AUDIT) {
+    await page.setViewportSize({ width: 320, height: 568 });
+    await page.waitForTimeout(150);
+    await fitsLayout(page, name);
+  }
+  // The steps after a shot carry on at the desktop size, as the last of the default sizes leaves.
+  await page.setViewportSize(DESKTOP);
+  await page.emulateMedia({ reducedMotion: "no-preference" });
 }
 
 let failPage: Page | undefined;
+let ff: Browser | undefined;
 
 async function main() {
-  mkdirSync(SHOTS, { recursive: true });
+  mkdirSync(AUDIT ?? SHOTS, { recursive: true });
 
   step("services, server, web");
+  await free(PORTS.github, PORTS.push);
   const services = start("services", "bun", [join(WEB, "e2e/services.ts")], {
     env: { GITHUB_PORT: PORTS.github, PUSH_PORT: PORTS.push },
   });
   await services.waitFor(/"event":"ready"/);
+  await free(PORTS.server);
   const server = start("server", "bun", ["run", "server/src/main.ts"], {
     env: {
       PORT: PORTS.server,
@@ -206,23 +305,30 @@ async function main() {
   const standalone = join(WEB, ".next/standalone/web");
   cpSync(join(WEB, ".next/static"), join(standalone, ".next/static"), { recursive: true });
   cpSync(join(WEB, "public"), join(standalone, "public"), { recursive: true });
+  await free(PORTS.web);
   const web = start("web", "node", [join(standalone, "server.js")], {
     env: { ...env, PORT: String(PORTS.web), HOSTNAME: "127.0.0.1" },
   });
   await web.waitFor(/Ready|started server/i);
 
-  const ff = await browser();
+  ff = await browser();
   const a = await ff.newContext({
     permissions: ["notifications"],
     ...(MOTION_VIDEO ? { recordVideo: { dir: join(tmp, "video"), size: DESKTOP } } : {}),
   });
 
+  await watchCsp(a);
+
   step("a browser with no device lands on the landing page");
   const visitor = await a.newPage();
-  await visitor.goto(ORIGIN);
+  const landing = await visitor.goto(ORIGIN);
+  const policy = landing?.headers()["content-security-policy"] ?? "";
+  if (!policy.includes("'nonce-")) throw new Error(`expected a CSP with a nonce, got: ${policy}`);
   await visitor.getByRole("heading", { name: /Your agents ask/ }).waitFor();
   await shoot(visitor, "landing");
   for (const [path, name] of [
+    ["/docs", "docs"],
+    ["/docs/tell-your-agents", "docs-tell-your-agents"],
     ["/privacy", "privacy"],
     ["/terms", "terms"],
     ["/no-such-page", "not-found"],
@@ -230,6 +336,8 @@ async function main() {
     await visitor.goto(ORIGIN + path);
     await shoot(visitor, name);
   }
+  for (const path of ["/docs", "/docs/cli", "/docs/tell-your-agents", "/docs/self-host", "/sample"])
+    await visitor.goto(ORIGIN + path, { waitUntil: "networkidle" });
   await visitor.close();
 
   step("sign in with GitHub (stub) and set up the first device");
@@ -237,7 +345,15 @@ async function main() {
   failPage = page;
   await page.getByRole("button", { name: "Create the keys" }).click();
   await page.getByRole("heading", { name: "Save your recovery key" }).waitFor();
+  const unsaved = ((await page.getByTestId("recovery-key").textContent()) ?? "").trim();
+
+  step("a reload before the key is saved offers a new key, not the inbox (#328)");
+  await page.reload();
+  await page.getByText(/so that key was never used/).waitFor();
+  await page.getByRole("button", { name: "Create the keys" }).click();
+  await page.getByRole("heading", { name: "Save your recovery key" }).waitFor();
   const key = ((await page.getByTestId("recovery-key").textContent()) ?? "").trim();
+  if (key === unsaved) throw new Error("expected a new recovery key after the reload");
   if (!/^([0-9A-Z]{4}){7}$/.test(key)) throw new Error(`expected a recovery key, got: ${key}`);
   await noWordsAsked(page);
   await shoot(page, "setup");
@@ -246,6 +362,7 @@ async function main() {
   await page.getByLabel(/I wrote this key down/).check();
   await page.getByRole("button", { name: "Continue" }).click();
   await page.getByRole("heading", { name: "Inbox" }).waitFor();
+  await shoot(page, "inbox-empty");
 
   step("turn on Web Push");
   await page.getByRole("button", { name: "Turn on notifications" }).click();
@@ -280,7 +397,9 @@ async function main() {
   other.proc.kill();
 
   step("upload a quota snapshot");
-  const real = spawnSync("codexbar", ["--version"], { encoding: "utf8" }).status === 0;
+  // CI uploads the fixture: a runner's own CodexBar would read whoever's accounts it has.
+  const real =
+    !process.env.CI && spawnSync("codexbar", ["--version"], { encoding: "utf8" }).status === 0;
   const quota = cli(
     "quota",
     [
@@ -309,10 +428,6 @@ async function main() {
       "Run it",
       "--option",
       "Wait for tonight",
-      "--default",
-      "Wait for tonight",
-      "--default-at",
-      "2h",
       "--project",
       "starbridge",
       "--session",
@@ -406,8 +521,6 @@ async function main() {
       "Merge now",
       "--option",
       "Hold",
-      "--default",
-      "Hold until the owner is back",
       "--project",
       "starbridge",
       "--session",
@@ -469,6 +582,95 @@ async function main() {
     if (!(await row.evaluate((el) => el.contains(document.activeElement))))
       throw new Error(`after ${key}, focus is not on the selected row`);
   }
+  step("on a phone, Back closes an open question first; a reload and a link keep it (#347)");
+  {
+    const MERGE = "Merge #19 (server) before the web PR rebases?";
+    const merge = await page
+      .locator("[data-row]", { hasText: MERGE })
+      .first()
+      .getAttribute("data-row");
+    const p = await a.newPage();
+    await p.setViewportSize({ width: 390, height: 844 });
+    const where = () => new URL(p.url()).pathname + new URL(p.url()).search;
+    const expectAt = async (path: string, showing: "list" | "detail", what: string) => {
+      await p
+        .waitForURL((u) => u.pathname + u.search === path, { timeout: 10_000 })
+        .catch(() => {});
+      const back = p.getByRole("button", { name: "Back", exact: true });
+      const open = (await back.count()) > 0;
+      if (where() !== path || open !== (showing === "detail"))
+        throw new Error(`${what}: at ${where()} showing the ${open ? "detail" : "list"}`);
+    };
+    await p.goto(`${ORIGIN}/quotas`);
+    await p.getByRole("link", { name: "Inbox" }).first().click();
+    await p.locator(`button[data-id="${merge}"]`).click();
+    await expectAt(`/?item=${merge}`, "detail", "a tapped question");
+    await p.getByRole("heading", { name: MERGE }).waitFor();
+    await p.goBack();
+    await expectAt("/", "list", "Back from the open question");
+    // The in-page way back steps back through history, so it leaves no entry behind; a quick
+    // second tap does not step back twice.
+    await p.locator(`button[data-id="${merge}"]`).click();
+    await expectAt(`/?item=${merge}`, "detail", "the question tapped again");
+    await p.getByRole("button", { name: "Back", exact: true }).dblclick();
+    await expectAt("/", "list", "a double tap on the in-page Back");
+    await p.goBack();
+    await expectAt("/quotas", "list", "Back from the inbox");
+    await p.goForward();
+    await p.goForward();
+    await expectAt(`/?item=${merge}`, "detail", "Forward to the question");
+    await p.reload();
+    await p.getByRole("heading", { name: MERGE }).waitFor({ timeout: 30_000 });
+    await expectAt(`/?item=${merge}`, "detail", "a reload with the question open");
+    await p.getByRole("button", { name: "Back", exact: true }).click();
+    await expectAt("/", "list", "the in-page Back after a reload");
+    await p.goBack();
+    await expectAt("/quotas", "list", "Back after the in-page Back");
+
+    // A window widened with the question open selects it beside the list, one step back.
+    await p.goForward();
+    await expectAt("/", "list", "Forward to the inbox");
+    await p.locator(`button[data-id="${merge}"]`).click();
+    await expectAt(`/?item=${merge}`, "detail", "the question tapped before widening");
+    await p.setViewportSize(DESKTOP);
+    const selected = p.locator('section[aria-label="Selected"] h2');
+    await p.waitForURL((u) => u.pathname === "/" && u.search === "", { timeout: 10_000 });
+    if ((await selected.innerText()) !== MERGE)
+      throw new Error(`a widened window selects "${await selected.innerText()}"`);
+    await p.goBack();
+    await p.waitForURL((u) => u.pathname === "/quotas", { timeout: 10_000 });
+
+    // A link opens the question, and Back from it returns to the list, not out of the app.
+    await p.setViewportSize({ width: 390, height: 844 });
+    await p.goto(`${ORIGIN}/?item=${merge}`);
+    await p.getByRole("heading", { name: MERGE }).waitFor({ timeout: 30_000 });
+    await p.goBack();
+    await expectAt("/", "list", "Back from a linked question");
+    // A link to an item this inbox no longer has says it was answered, once it has looked.
+    await p.goto(`${ORIGIN}/?item=d_gone`);
+    await p.getByText("Answered", { exact: true }).waitFor({ timeout: 30_000 });
+
+    // A desktop window selects a linked item beside the list and adds no history entry for
+    // it or for a pick.
+    await p.setViewportSize(DESKTOP);
+    await p.goto(`${ORIGIN}/?item=${merge}`);
+    await p.waitForURL((u) => u.pathname === "/" && u.search === "", { timeout: 30_000 });
+    await selected.filter({ hasText: MERGE }).waitFor();
+    const entries = await p.evaluate(() => history.length);
+    const closed = (await p.locator("button[data-id]").count()) < 2;
+    if (closed) await p.getByRole("button", { name: /History/ }).click();
+    await p.locator(`button[data-id]:not([data-id="${merge}"])`).first().click();
+    await p.waitForFunction(
+      (q) => document.querySelector('section[aria-label="Selected"] h2')?.textContent !== q,
+      MERGE,
+    );
+    if ((await p.evaluate(() => history.length)) !== entries || where() !== "/")
+      throw new Error(`picking on a desktop moved history: at ${where()}`);
+    // The next steps expect History as they left it.
+    if (closed) await p.getByRole("button", { name: /History/ }).click();
+    await p.close();
+  }
+
   step("inbox motion: an arrival, a flip to waiting, an answer, History, a phone's detail");
   {
     const m = await a.newPage();
@@ -585,7 +787,7 @@ async function main() {
         "--context",
         "Each layout is live in the artifact. Its buttons send your pick to the session.",
       ],
-      ...["--answer-in", artifact, "--default", "Ship the roomy layout"],
+      ...["--answer-in", artifact],
       ...["--project", "starbridge", "--session-title", "Settings screen (#88)"],
     ],
     machineHome,
@@ -616,6 +818,17 @@ async function main() {
   await page.locator("article").first().waitFor();
   await shoot(page, "quotas");
 
+  step("the refresh button asks the machines for fresh quotas, as Android's pull to refresh");
+  await page.setViewportSize(DESKTOP);
+  const refresh = page.getByRole("button", { name: "Refresh quotas" }).filter({ visible: true });
+  const asked = page.waitForRequest((r) => r.method() === "POST" && r.url().includes("/quota/ask"));
+  await refresh.click();
+  await asked;
+  // No agent runs in this test, so the server holds the ask its 15 s before it answers.
+  await page.waitForSelector('button[aria-label="Refresh quotas"][aria-busy="false"]:visible', {
+    timeout: 30_000,
+  });
+
   step("quota settings: remaining, clock times, workdays");
   await page
     .getByRole("navigation", { name: "Main" })
@@ -635,13 +848,18 @@ async function main() {
   step("a group pinned by running out first says why on a click (#296)");
   await page.setViewportSize(DESKTOP);
   await page.getByRole("button", { name: "Why codex is first" }).click();
-  const why = page.getByText("First because it runs out soonest.");
+  // Scoped to codex: depending on the hour, claude's group may be pinned and say so too.
+  const why = page
+    .getByRole("region", { name: "codex" })
+    .getByText("First because it runs out soonest.");
   await why.waitFor();
-  for (const scheme of ["light", "dark"] as const) {
-    await page.emulateMedia({ colorScheme: scheme });
-    await page.waitForTimeout(150);
-    await page.screenshot({ path: join(SHOTS, `quotas-pinned-${scheme}.png`) });
-  }
+  if (AUDIT) await shoot(page, "quotas-pinned");
+  else
+    for (const scheme of ["light", "dark"] as const) {
+      await page.emulateMedia({ colorScheme: scheme });
+      await page.waitForTimeout(150);
+      await page.screenshot({ path: join(SHOTS, `quotas-pinned-${scheme}.png`) });
+    }
   await page.keyboard.press("Escape");
   await why.waitFor({ state: "hidden" });
   await page.getByRole("button", { name: "Why codex is first" }).click();
@@ -682,7 +900,7 @@ async function main() {
     .getByRole("navigation", { name: "Main" })
     .getByRole("link", { name: "Settings" })
     .click();
-  // 12-hour times are the longest: "Will run out at Oct 12, 12:02 AM".
+  // 12-hour times are the longest: "Will run out on Oct 12 at 12:02 AM".
   await page.getByLabel("12-hour", { exact: true }).check({ force: true });
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.getByRole("link", { name: "Inbox" }).click();
@@ -696,7 +914,7 @@ async function main() {
   for (const scheme of ["light", "dark"] as const) {
     await page.emulateMedia({ colorScheme: scheme });
     await page.waitForTimeout(150);
-    await page.screenshot({ path: join(SHOTS, `inbox-aside-wide-${scheme}.png`) });
+    await page.screenshot({ path: join(AUDIT ?? SHOTS, `inbox-aside-wide-${scheme}.png`) });
   }
 
   step("a newly raised quota alert notifies a browser that opted in to its provider");
@@ -746,6 +964,28 @@ async function main() {
   if (again.output().includes("(new)"))
     throw new Error("the second snapshot raised its alerts again");
 
+  step("a failed probe keeps the provider's last windows, stale, with its failure (#397)");
+  const timedOut = [
+    { provider: "e2e", source: "auto", error: { message: "Claude usage probe timed out." } },
+  ];
+  writeFileSync(fakeBar, `#!/bin/sh\ncat <<'EOF'\n${JSON.stringify(timedOut)}\nEOF\nexit 1\n`);
+  const failedPush = cli(
+    "quota-failed",
+    ["quota", "push", "--once", "--codexbar", fakeBar, "--provider", "e2e"],
+    machineHome,
+  );
+  if ((await failedPush.exited) !== 0) throw new Error("quota push failed");
+  await page.getByRole("link", { name: "Settings" }).first().click();
+  await page.getByRole("link", { name: "Quotas" }).click();
+  const group = page.getByRole("region", { name: "e2e" });
+  await group.getByText("Claude usage probe timed out.").waitFor();
+  await group.getByText(/^Updated /).waitFor();
+  if ((await group.getByRole("article").count()) === 0)
+    throw new Error("the failed provider lost its windows");
+  if ((await page.getByText("e2e on ").count()) > 0)
+    throw new Error("the failure shows as a line above the table");
+  await shoot(page, "quotas-failed");
+
   step("the Quotas table fits its longest reset times, phone to desktop (#294)");
   // Local clock times: "tomorrow 21:59", "tomorrow 12:59 PM" and a date five days out.
   const local = (days: number, h: number, m: number) => {
@@ -782,6 +1022,7 @@ async function main() {
     await page.getByRole("link", { name: "Quotas" }).click();
     const resets = page.locator("article span", { hasText: /^tomorrow \d/ });
     await resets.first().waitFor();
+    if (AUDIT) await shoot(page, `quotas-long-resets-${clock}`);
     for (const [size, viewport] of [
       ["desktop", { width: 1440, height: 900 }],
       // About the narrowest window with the table, where its columns are at their minimums.
@@ -792,10 +1033,10 @@ async function main() {
       await page.emulateMedia({ colorScheme: "light" });
       await page.waitForTimeout(150);
       await page.screenshot({
-        path: join(SHOTS, `quotas-long-resets-${clock}-${size}.png`),
+        path: join(AUDIT ?? SHOTS, `quotas-long-resets-${clock}-${size}.png`),
         fullPage: size !== "phone",
       });
-      await fitsWidth(page, `quotas at ${viewport.width} px`);
+      await fitsLayout(page, "quotas");
       for (const cell of await resets.all()) {
         const { text, scroll, client, lines } = await cell.evaluate((el) => ({
           text: el.textContent,
@@ -815,8 +1056,194 @@ async function main() {
     }
   }
 
+  step("worst-case content: long names, unbroken words, many items, a prompt and a run");
+  await page.setViewportSize(DESKTOP);
+  const farHome = join(tmp, "far");
+  const MACHINE = "build-runner-in-the-basement-rack-02.internal.example.org";
+  const PROJECT = "a-monorepo-whose-name-runs-on-past-any-column";
+  const farPair = cli("pair-far", ["pair", "--name", MACHINE], farHome);
+  const farCode = (await farPair.waitFor(/Pairing code: (\S+)/))[1] as string;
+  await page
+    .getByRole("navigation", { name: "Main" })
+    .getByRole("link", { name: "Settings" })
+    .click();
+  await page.getByRole("link", { name: "Add a device" }).click();
+  await page.getByLabel("Pair a machine or device").fill(farCode);
+  await page.getByRole("button", { name: "Check code" }).click();
+  await page.getByRole("button", { name: "Approve" }).click();
+  if ((await farPair.exited) !== 0) throw new Error("pair of the long-named machine failed");
+  // The audit also shoots device names of about 10, 25, 40 and 70 characters, with and without
+  // dots and hyphens, to see where each breaks in Settings: three at a time, as an account
+  // holds at most five machines, each batch revoked before the next.
+  const NAMES = [
+    "mac-studio",
+    "buildhost7",
+    "runner02.eu-west.example",
+    "Tomsmacbookprofromtheoffice",
+    "runner02.eu-west.internal.example.org",
+    "buildrunnerinthebasementrackzerotwoeuwest",
+    "build-runner-in-the-basement-rack-02.ci.internal.example-company.org",
+    "averyveryverylongmachinenamewithnobreaksatallthatkeepsongoingforseventy",
+  ];
+  for (let b = 0; AUDIT && b < NAMES.length; b += 3) {
+    const batch = NAMES.slice(b, b + 3);
+    for (const name of batch) {
+      const pair = cli(`pair-${name}`, ["pair", "--name", name], join(tmp, `name-${name}`));
+      const code = (await pair.waitFor(/Pairing code: (\S+)/))[1] as string;
+      await page.getByLabel("Pair a machine or device").fill(code);
+      await page.getByRole("button", { name: "Check code" }).click();
+      await page.getByText(`Let ${name} post decisions and quotas?`).waitFor();
+      await page.getByRole("button", { name: "Approve" }).click();
+      if ((await pair.exited) !== 0) throw new Error(`pair of ${name} failed`);
+    }
+    await page
+      .getByRole("navigation", { name: "Main" })
+      .getByRole("link", { name: "Settings" })
+      .click();
+    const devices = page.getByRole("region", { name: "Devices" });
+    await devices.getByText(batch.at(-1) as string).waitFor();
+    await shoot(page, `settings-names-${b / 3 + 1}`);
+    for (const name of batch) {
+      await devices
+        .locator('[class*="__device"]')
+        .filter({ hasText: name })
+        .getByRole("button", { name: "Revoke" })
+        .click();
+      await page.getByRole("dialog").getByRole("button", { name: "Revoke" }).click();
+      await page.getByRole("dialog").waitFor({ state: "detached" });
+    }
+    await page.getByRole("link", { name: "Add a device" }).click();
+  }
+  if ((await cli("perm-on", ["config", "permissions", "on"], farHome).exited) !== 0)
+    throw new Error("config permissions on failed");
+  const farQuota = cli(
+    "quota-far",
+    ["quota", "push", "--once", "--codexbar", fakeBar, "--provider", "e2e"],
+    farHome,
+  );
+  if ((await farQuota.exited) !== 0)
+    throw new Error("quota push from the long-named machine failed");
+  const BRANCH = "refs/heads/t/rename-every-provider-id-to-codexbar-names-and-keep-aliases";
+  for (let i = 1; i <= 24; i++) {
+    const asked = cli(
+      `ask-many-${i}`,
+      [
+        "ask",
+        "--question",
+        i % 3
+          ? `Question ${i}: rebase ${BRANCH} onto main and force-push it before the reviewers wake up, or wait for their pass on the old base first?`
+          : `Ship ${i}?`,
+        ...(i % 4 === 0
+          ? [
+              "--context",
+              `See ${BRANCH} and https://github.com/T0mSIlver/starbridge/pull/${i}/files#diff-${"0123456789abcdef".repeat(4)}`,
+            ]
+          : []),
+        "--option",
+        i % 2 ? "Rebase and force-push now, then ask the reviewers again in the morning" : "Yes",
+        "--option",
+        i % 2 ? `Wait for ${BRANCH}` : "No",
+        ...(i % 5 === 0 ? ["--waiting"] : []),
+        "--project",
+        PROJECT,
+        "--session",
+        `worst-case-session-${i}-${"x".repeat(40)}`,
+        "--session-title",
+        `Rename every provider id to CodexBar's names and keep the old ones as aliases (${i})`,
+      ],
+      i % 2 ? farHome : machineHome,
+    );
+    if ((await asked.exited) !== 0) throw new Error(`ask ${i} failed`);
+  }
+  const prompt = spawn(
+    "bun",
+    ["run", join(ROOT, "cli/src/main.ts"), "hook", "permission", "--agent", "claude-code"],
+    {
+      env: {
+        ...process.env,
+        STARBRIDGE_CONFIG_DIR: farHome,
+        STARBRIDGE_SERVER: `http://localhost:${PORTS.server}`,
+      },
+      stdio: ["pipe", "ignore", "inherit"],
+    },
+  );
+  children.push(prompt);
+  prompt.on("exit", (code) => {
+    if (!prompt.killed) console.log(`[prompt] exited ${code} before it was answered`);
+  });
+  prompt.stdin?.end(
+    JSON.stringify({
+      session_id: "worst-case-prompt",
+      cwd: `/home/dev/work/${PROJECT}`,
+      tool_name: "Bash",
+      tool_input: {
+        command: `git push --force-with-lease origin ${BRANCH} && gh pr edit 305 --body-file /home/dev/work/${PROJECT}/.scratch/pr-body-with-a-long-name.md`,
+      },
+    }),
+  );
+  const longRun = cli(
+    "run-long",
+    [
+      ...["run", "--title", `Nightly eval of every provider on ${MACHINE}`],
+      ...["--reason", `Checks ${BRANCH} against the recorded answers`, "--", "sleep", "600"],
+    ],
+    farHome,
+  );
+  await page.getByRole("link", { name: "Inbox" }).click();
+  await page.locator("button[data-id]").nth(24).waitFor({ timeout: 30_000 });
+  await page
+    .getByText(/^Nightly eval/)
+    .first()
+    .waitFor({ timeout: 30_000 });
+  await page
+    .getByText(/^git push --force-with-lease/)
+    .first()
+    .waitFor({ timeout: 30_000 });
+  await shoot(page, "inbox-full");
+  for (const [view, name] of [
+    ["Group by machine", "inbox-by-machine"],
+    ["Group by waiting", "inbox-by-waiting"],
+    ["One feed", ""],
+  ] as const) {
+    await page.getByRole("button", { name: "View", exact: true }).click();
+    await page.getByRole("menuitemradio", { name: view }).click();
+    if (name) await shoot(page, name);
+  }
+  await page.getByRole("button", { name: /History/ }).click();
+  await shoot(page, "inbox-history");
+  await page.getByRole("button", { name: /History/ }).click();
+  await page
+    .getByRole("button", { name: /^Waiting for you.*git push/ })
+    .first()
+    .click();
+  await shoot(page, "inbox-prompt");
+  await page.setViewportSize({ width: 390, height: 844 });
+  // A phone's row carries its options; its meta line opens it.
+  await page
+    .locator("button[data-id]")
+    .nth(3)
+    .click({ position: { x: 80, y: 12 } });
+  await page.getByRole("button", { name: /Back/ }).waitFor();
+  await shoot(page, "inbox-detail");
+  await page.setViewportSize(DESKTOP);
+  await page.getByLabel("Find").fill("rebase");
+  await shoot(page, "inbox-search");
+  await page.getByLabel("Find").fill("");
+  await page.getByRole("link", { name: "Quotas" }).click();
+  await page.locator("article").first().waitFor();
+  await shoot(page, "quotas-machines");
+  await page
+    .getByRole("navigation", { name: "Main" })
+    .getByRole("link", { name: "Settings" })
+    .click();
+  await page.getByRole("heading", { name: "Settings" }).waitFor();
+  await shoot(page, "settings-full");
+  prompt.kill();
+  longRun.proc.kill();
+
   step("add a second browser by pairing code");
-  const b = await ff.newContext();
+  const b = await ff.newContext({ permissions: ["notifications"] });
+  await watchCsp(b);
   const pageB = await signIn(b);
   await pageB.getByTestId("pairing-code").waitFor({ timeout: 10_000 });
   await shoot(pageB, "join-browser");
@@ -861,20 +1288,36 @@ async function main() {
   await shoot(pageB, "inbox-banner");
   // The new device sees decisions sealed after it joined; the open one predates it.
 
-  step("recover a third browser with the recovery key");
-  const c = await ff.newContext();
-  const pageC = await signIn(c);
-  await pageC.getByRole("button", { name: "Use the recovery key" }).click();
-  const entry = pageC.getByLabel("Your recovery key");
-  await noWordsAsked(pageC);
-  await entry.fill(`${key.slice(0, 9)}U`);
-  await pageC.getByText('Character 10, "U", is not in a recovery key.').waitFor();
-  await shoot(pageC, "recovery-typo");
-  // Lower case, in groups split by spaces: the key reads all the same.
-  await entry.fill(key.toLowerCase().match(/.{4}/g)?.join(" ") ?? "");
-  await pageC.getByText("28 of 28 characters").waitFor();
-  await pageC.getByRole("button", { name: "Recover" }).click();
-  await pageC.getByRole("heading", { name: "Inbox" }).waitFor({ timeout: 30_000 });
+  step("replace the recovery key with the current one; the second browser says so once (#348)");
+  await page.goto(`${ORIGIN}/settings`);
+  const recoveryRow = page.getByRole("region", { name: "Devices" });
+  await recoveryRow.getByText(/^Set .* on this browser$/).waitFor();
+  await recoveryRow.getByRole("link", { name: "Replace" }).click();
+  await page.getByRole("heading", { name: "Replace the recovery key" }).waitFor();
+  await page
+    .getByText("Lost it? Without the current key it can't be replaced.", { exact: false })
+    .waitFor();
+  await page.getByLabel("Your current recovery key").fill(key);
+  await page.getByText("28 of 28 characters").waitFor();
+  await shoot(page, "recovery-key-replace");
+  await page.getByRole("button", { name: "Make a new key" }).click();
+  await page.getByRole("heading", { name: "Save your new recovery key" }).waitFor();
+  const newKey = ((await page.getByTestId("new-recovery-key").textContent()) ?? "").trim();
+  if (newKey === key || !/^([0-9A-Z]{4}){7}$/.test(newKey))
+    throw new Error(`expected a new recovery key, got: ${newKey}`);
+  await shoot(page, "recovery-key-new");
+  await page.getByLabel(/I wrote this key down/).check();
+  await page.getByRole("button", { name: "Save the new key" }).click();
+  await page.getByRole("heading", { name: "Recovery key replaced" }).waitFor();
+  await pageB.goto(ORIGIN);
+  await pageB.getByText(/^Recovery key replaced on .+, .+\.$/).waitFor({ timeout: 30_000 });
+  await shoot(pageB, "inbox-recovery-notice");
+  await pageB.getByRole("button", { name: "OK" }).click();
+  await pageB.getByText(/^Recovery key replaced on /).waitFor({ state: "detached" });
+
+  await page.goto(`${ORIGIN}/settings`);
+  await recoveryRow.getByText(/^Replaced .* on this browser$/).waitFor();
+  await shoot(page, "devices-recovery");
 
   step("revoke the second browser");
   await page
@@ -884,14 +1327,43 @@ async function main() {
   const devices = page.getByRole("region", { name: "Devices" });
   await devices.getByText("Device · this browser").waitFor();
   // Devices list this browser, then the others by when they joined: the second browser first.
-  // The list may still gain the recovered browser, so the second browser's sign-out below,
-  // not a count, proves the revocation.
   await devices.getByRole("button", { name: "Revoke" }).first().click();
   await page.getByRole("dialog").getByRole("button", { name: "Revoke" }).click();
   await page.getByRole("dialog").waitFor({ state: "detached" });
+  // A notification left from before: the server's refusal closes it.
+  await pageB.evaluate(() =>
+    Promise.race([
+      navigator.serviceWorker.ready.then((r) =>
+        r.showNotification("Left over", { tag: "e2e-left", requireInteraction: true }),
+      ),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("the left-over notification hung")), 10_000),
+      ),
+    ]),
+  );
+  if (!(await pageB.evaluate(NOTIFICATIONS)).some((n) => n.tag === "e2e-left"))
+    throw new Error("the left-over notification did not show");
   await pageB.reload();
-  // A browser whose device was revoked is a visitor again: the landing page, not sign-in.
-  await pageB.getByRole("heading", { name: /Your agents ask/ }).waitFor();
+  // The server's 401 alone is unsigned: the browser keeps its keys and shows the refusal (#310).
+  await pageB.getByText("The server says this browser was revoked.").waitFor();
+  if ((await pageB.evaluate(NOTIFICATIONS)).length > 0)
+    throw new Error("the refusal left notifications on screen");
+  // Another one, so the device list's verdict, not the refusal, has to close it.
+  await pageB.evaluate(() =>
+    Promise.race([
+      navigator.serviceWorker.ready.then((r) =>
+        r.showNotification("Left over", { tag: "e2e-left", requireInteraction: true }),
+      ),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("the left-over notification hung")), 10_000),
+      ),
+    ]),
+  );
+  await pageB.getByRole("link", { name: SIGN_IN }).click();
+  // Signed in, the device list confirms the revocation.
+  await pageB.getByRole("heading", { name: /was revoked$/ }).waitFor({ timeout: 30_000 });
+  if ((await pageB.evaluate(NOTIFICATIONS)).length > 0)
+    throw new Error("a revoked browser still shows notifications");
   await page.emulateMedia({ colorScheme: "light" });
   await shoot(page, "devices");
 
@@ -920,17 +1392,61 @@ async function main() {
   await page.getByTestId("shown-code").waitFor();
   await shoot(page, "add-device");
 
+  step(
+    "recover a third browser with the new key: the old one is refused, every other member goes (#348, #363)",
+  );
+  const c = await ff.newContext({ permissions: ["notifications"] });
+  await watchCsp(c);
+  const pageC = await signIn(c);
+  await pageC.getByRole("button", { name: "Use the recovery key" }).click();
+  const entry = pageC.getByLabel("Your recovery key");
+  await noWordsAsked(pageC);
+  await entry.fill(`${key.slice(0, 9)}U`);
+  await pageC.getByText('Character 10, "U", is not in a recovery key.').waitFor();
+  await shoot(pageC, "recovery-typo");
+  // The key replaced above: a recovery key, but no longer this account's.
+  await entry.fill(key);
+  await pageC.getByRole("button", { name: "Recover" }).click();
+  await pageC.getByText("This is a recovery key, but not this account's current one.").waitFor();
+  // Lower case, in groups split by spaces: the key reads all the same.
+  await entry.fill(newKey.toLowerCase().match(/.{4}/g)?.join(" ") ?? "");
+  await pageC.getByText("28 of 28 characters").waitFor();
+  await pageC.getByRole("button", { name: "Recover" }).click();
+  await pageC.getByRole("heading", { name: "Inbox" }).waitFor({ timeout: 30_000 });
+  // Recovery keeps no earlier device. The server's 401 is unsigned, so the first browser keeps
+  // its keys and shows the refusal; signed in, the device list confirms it (#310).
+  await page.goto(ORIGIN);
+  await page.getByText("The server says this browser was revoked.").waitFor({ timeout: 30_000 });
+  await page.getByRole("link", { name: SIGN_IN }).click();
+  await page.getByRole("heading", { name: /was revoked$/ }).waitFor({ timeout: 30_000 });
+
   step("sign out the recovered browser: it leaves the devices and forgets its keys");
   await pageC
     .getByRole("navigation", { name: "Main" })
     .getByRole("link", { name: "Settings" })
     .click();
+  await pageC.evaluate(() =>
+    Promise.race([
+      navigator.serviceWorker.ready.then((r) =>
+        r.showNotification("Left over", { tag: "e2e-left", requireInteraction: true }),
+      ),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("the left-over notification hung")), 10_000),
+      ),
+    ]),
+  );
+  if (!(await pageC.evaluate(NOTIFICATIONS)).some((n) => n.tag === "e2e-left"))
+    throw new Error("the left-over notification did not show");
   await pageC.getByRole("button", { name: "Sign out" }).click();
   await pageC.getByRole("dialog").getByRole("button", { name: "Sign out" }).click();
   // With no keys left, the browser is a visitor: the landing page, not "Sign in to Starbridge".
   await pageC.getByRole("heading", { name: /Your agents ask/ }).waitFor({ timeout: 30_000 });
+  // Notifications hold decrypted questions: none outlive the sign-out (#311).
+  if ((await pageC.evaluate(NOTIFICATIONS)).length > 0)
+    throw new Error("signing out left notifications on screen");
 
   await ff.close();
+  if (violations.length) throw new Error(`CSP violations:\n${violations.join("\n")}`);
   console.log("\nE2E PASSED");
 }
 
@@ -953,11 +1469,10 @@ try {
   }
   process.exitCode = 1;
 } finally {
-  await failPage
-    ?.context()
-    .browser()
-    ?.close()
-    .catch(() => {});
+  await ff?.close().catch(() => {});
   for (const p of children) p.kill();
+  for (const s of held.values()) s.close();
   rmSync(tmp, { recursive: true, force: true });
+  // A browser that would not close keeps Node running: a CI job would hang until its timeout.
+  process.exit();
 }

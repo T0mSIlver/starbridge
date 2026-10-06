@@ -4,10 +4,17 @@ import {
   addEntry,
   type Directory,
   generateMemberKeys,
+  generateRecoverySeed,
+  open,
   publicKeys,
+  recoveryConfirmEntry,
+  recoveryEntry,
+  recoveryKeyPair,
   revokeEntry,
+  type SealedItem,
   type SignedEnvelope,
   seal,
+  toB64,
   verifyDirectory,
 } from "@starbridge/protocol";
 import { LiveServer } from "@starbridge/server/test-support";
@@ -84,7 +91,7 @@ test("two processes refreshing at once never roll back a revocation", async () =
   expect(a.store.machine()?.pin.length).toBe(dirA.length);
 
   // The next ask seals to the phone only.
-  expect(await run(["ask", "--question", "Q?", "--default", "x"], a)).toBe(0);
+  expect(await run(["ask", "--question", "Q?"], a)).toBe(0);
   const [d] = await server.opened("decision");
   expect(d?.to).toEqual(["phone"]);
 });
@@ -196,6 +203,47 @@ test("a revocation the server withholds stops counting once another device answe
   expect(ctx.errors.at(-1)).toContain("revoked");
 });
 
+test("the machine signs into its items the longest head it knows, a device's while held back (#362)", async () => {
+  const { ctx, laptop, ids, answer, serve, known } = await withholding();
+  // What the machine posts, opened as the laptop reads it.
+  const posted: SealedItem[] = [];
+  let inner = globalThis.fetch;
+  const record = () => {
+    inner = globalThis.fetch;
+    globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+      if (String(url).endsWith("/v1/items") && init?.method === "POST")
+        posted.push(JSON.parse(init.body as string));
+      return inner(url, init);
+    }) as typeof fetch;
+  };
+  record();
+  const lastDecision = async () => {
+    await run(
+      ["ask", "--question", "Ship?", "--option", "Yes", "--option", "No", "--session", "s"],
+      ctx,
+    );
+    const item = posted.at(-1) as SealedItem & { kind: "decision" };
+    return open(item, { id: laptop.id, box: laptop.keys.box }, await laptopChain(laptop)).body.dir;
+  };
+  try {
+    const own = verifyDirectory(ctx.store.directory());
+    expect(await lastDecision()).toEqual({ length: own.length, head: own.head });
+    // The laptop revokes the phone; the server hides that from the machine, but the laptop's
+    // answer names the chain it holds.
+    await laptopAppends(laptop, (dir) =>
+      revokeEntry(dir, { id: laptop.id, signKey: laptop.keys.sign.privateKey }, "phone", now()),
+    );
+    const full = await laptopChain(laptop);
+    serve(known);
+    record();
+    answer(laptop, ids[0], "No", { length: full.length, head: full.head });
+    await poll(ctx, session(ctx), { cursor: ctx.store.state().cursor, seconds: 1, shared: true });
+    expect(await lastDecision()).toEqual({ length: full.length, head: full.head, by: laptop.id });
+  } finally {
+    serve(undefined);
+  }
+});
+
 test("replaying a device's older answer does not lift the refusal", async () => {
   const { ctx, laptop, ids, answer, delivered, serve, known } = await withholding();
   const signer = { id: laptop.id, signKey: laptop.keys.sign.privateKey };
@@ -225,4 +273,17 @@ test("replaying a device's older answer does not lift the refusal", async () => 
   } finally {
     serve(undefined);
   }
+});
+
+test("a machine follows a recovery key replacement and still seals to the devices (#348)", async () => {
+  const a = await paired(server);
+  const fresh = recoveryKeyPair(generateRecoverySeed());
+  await phoneAppends((dir, signer) => recoveryEntry(dir, signer, fresh, now()));
+  await phoneAppends((dir) =>
+    recoveryConfirmEntry(dir, server.owner.recovery.privateKey, toB64(fresh.publicKey), now()),
+  );
+  const dir = await refreshDirectory(a, session(a));
+  expect(dir.recoveryPk).toBe(toB64(fresh.publicKey));
+  expect(dir.recoverySet.by).toBe("phone");
+  expect(dir.members.get("phone")?.active).toBe(true);
 });

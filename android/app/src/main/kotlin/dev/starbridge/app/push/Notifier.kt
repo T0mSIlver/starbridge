@@ -8,9 +8,13 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import dev.starbridge.app.data.Source
+import android.graphics.Typeface
 import android.text.SpannableString
 import android.text.SpannableStringBuilder
 import android.text.Spanned
+import android.text.TextPaint
+import android.text.TextUtils
+import android.util.TypedValue
 import android.text.style.TypefaceSpan
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -122,12 +126,7 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
         }
     }
 
-    // POST_NOTIFICATIONS exists from Android 13; before that the app's notification setting rules.
-    private fun allowed() = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-        context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
-    } else {
-        manager.areNotificationsEnabled()
-    }
+    private fun allowed() = notificationsAllowed(context)
 
     private fun tag(id: String) = id.hashCode()
 
@@ -278,7 +277,7 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
     }
 
     /** Replaces the buttons with the answer, then clears itself. */
-    fun answered(decision: Decision, answer: String) {
+    override fun answered(decision: Decision, answer: String) {
         if (!allowed()) return
         @Suppress("MissingPermission")
         manager.notify(
@@ -287,8 +286,15 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
         )
     }
 
+    /** Replaces the buttons with the answer and says it waits for a connection. */
+    override fun queued(decision: Decision, answer: String) {
+        if (!allowed()) return
+        @Suppress("MissingPermission")
+        manager.notify(tag(decision.id), base(decision).setContentText("$answer · waiting to send").setStyle(null).setSilent(true).build())
+    }
+
     /** Keeps the buttons and says why the answer did not go through. */
-    fun failed(decision: Decision, why: String) = post(decision, "Not sent: $why")
+    override fun failed(decision: Decision, why: String) = post(decision, "Not sent: $why")
 
     override fun cancel(id: String) = manager.cancel(tag(id))
 
@@ -304,31 +310,58 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
 
     private fun promptTag(p: Prompt) = "p:${p.source.machine}/${p.source.session}".hashCode()
 
-    private fun promptIntent(p: Prompt, allow: Boolean, scope: String, request: Int): PendingIntent = PendingIntent.getBroadcast(
+    private fun promptIntent(p: Prompt, allow: Boolean, scope: String, request: Int, locked: Boolean = false): PendingIntent = PendingIntent.getBroadcast(
         context,
         request,
         Intent(context, PromptReceiver::class.java)
             .setAction(PromptReceiver.ACTION)
-            .setData(Uri.Builder().scheme("starbridge-prompt").authority(if (allow) "allow" else "deny").appendPath(p.id).appendPath(scope).build())
+            .setData(Uri.Builder().scheme("starbridge-prompt").authority(if (allow) "allow" else "deny").appendPath(p.id).appendPath(scope).apply { if (locked) appendPath("locked") }.build())
             .putExtra(PromptReceiver.EXTRA_ID, p.id)
+            .putExtra(PromptReceiver.EXTRA_LOCKED, locked)
             .putExtra(PromptReceiver.EXTRA_ALLOW, allow)
             .putExtra(PromptReceiver.EXTRA_SCOPE, scope),
         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
     )
 
-    /** The command in mono, the one thing to judge from the shade; the app shows the agent's words (#182). */
-    private fun command(p: Prompt): CharSequence = SpannableString(p.summary).apply { setSpan(TypefaceSpan("monospace"), 0, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE) }
+    /**
+     * The command in mono, the one thing to judge from the shade; the app shows the agent's words
+     * (#182). The whole input when it fits, which Allow then covers (#356).
+     */
+    private fun command(p: Prompt): CharSequence = SpannableString(if (p.fitsRow) p.fullInput else p.summary).apply { setSpan(TypefaceSpan("monospace"), 0, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE) }
 
     /** [actions] go on the public version too, as a question's do. A tap opens the prompt's sheet. */
-    private fun promptBase(p: Prompt, actions: List<NotificationCompat.Action> = emptyList()): NotificationCompat.Builder {
+    /** Opens the prompt's sheet. */
+    private fun openPrompt(p: Prompt): PendingIntent = PendingIntent.getActivity(
+        context,
+        promptTag(p),
+        Intent(context, MainActivity::class.java).putExtra(MainActivity.EXTRA_PROMPT, p.id).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
+        PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+    )
+
+    /**
+     * Whether the whole input fits the one line a collapsed or heads-up notification shows: its
+     * text at 14 sp in the width the template leaves, the icon and the expand button taken off
+     * with room to spare (#356, the owner's rule).
+     */
+    fun fitsLine(p: Prompt): Boolean {
+        if (!p.fitsRow) return false
+        val metrics = context.resources.displayMetrics
+        // Monospace, as the command's span asks: wider than the template's sans, so it errs short.
+        val paint = TextPaint().apply {
+            typeface = Typeface.MONOSPACE
+            textSize = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 14f, metrics)
+        }
+        val width = metrics.widthPixels - TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 160f, metrics)
+        return paint.measureText(p.fullInput) <= width
+    }
+
+    /** Whether a notification's Allow sends at once, the lock screen's ([locked]) or the shade's (#390). */
+    fun allowSends(p: Prompt, locked: Boolean = false): Boolean = prefs.allowUnseen.value || (!locked && fitsLine(p))
+
+    private fun promptBase(p: Prompt, actions: List<NotificationCompat.Action> = emptyList(), locked: List<NotificationCompat.Action> = actions): NotificationCompat.Builder {
         // A prompt always blocks: its ticking header says so, the title is the tool alone (#191).
         val title = p.tool
-        val open = PendingIntent.getActivity(
-            context,
-            promptTag(p),
-            Intent(context, MainActivity::class.java).putExtra(MainActivity.EXTRA_PROMPT, p.id).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-        )
+        val open = openPrompt(p)
         return NotificationCompat.Builder(context, PROMPTS)
             .setSortKey(ORDER_QUESTION)
             .setSmallIcon(R.drawable.ic_notification)
@@ -355,7 +388,7 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
                     .setShowWhen(true)
                     .setUsesChronometer(true)
                     .setContentIntent(open)
-                    .apply { actions.forEach(::addAction) }
+                    .apply { locked.forEach(::addAction) }
                     .build(),
             )
             .setContentIntent(open)
@@ -368,23 +401,29 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
 
     /**
      * Allow and Deny, as in the inbox. Deny works from the lock screen; Allow asks for the unlock
-     * first (the owner's choice, SPEC.md). The wider grants need the app.
+     * first (the owner's choice, SPEC.md). It sends at once only when the whole input fits the
+     * collapsed line; else, and always on the lock screen, which hides the command, it opens the
+     * prompt's sheet, which shows it whole (#356), unless the owner turned on sending unseen
+     * (#390). The wider grants need the app.
      */
     override fun prompt(prompt: Prompt) = postPrompt(prompt, null)
 
     private fun postPrompt(prompt: Prompt, note: String?) {
         if (!allowed()) return
         val tag = promptTag(prompt)
-        val actions = listOf(
-            NotificationCompat.Action.Builder(0, "Allow", promptIntent(prompt, true, "once", tag * 31))
+        // The lock screen's Allow is its own intent, so the receiver applies the lock screen's rule.
+        val allow = { locked: Boolean ->
+            val sends = allowSends(prompt, locked)
+            NotificationCompat.Action.Builder(0, "Allow", if (sends) promptIntent(prompt, true, "once", tag * 31 + if (locked) 1 else 0, locked) else openPrompt(prompt))
                 .setAuthenticationRequired(true)
-                .build(),
-            NotificationCompat.Action.Builder(0, "Deny", promptIntent(prompt, false, "once", tag * 31 + 2))
-                .setAuthenticationRequired(false)
-                .build(),
-        )
-        val b = promptBase(prompt, actions)
-        if (note != null) b.setContentText(note).setStyle(NotificationCompat.BigTextStyle().bigText(note)).setSilent(true)
+                .build()
+        }
+        val deny = NotificationCompat.Action.Builder(0, "Deny", promptIntent(prompt, false, "once", tag * 31 + 2))
+            .setAuthenticationRequired(false)
+            .build()
+        val b = promptBase(prompt, listOf(allow(false), deny), locked = listOf(allow(true), deny))
+        // The note goes above the command, so Allow still shows what it covers.
+        if (note != null) b.setContentText(note).setStyle(NotificationCompat.BigTextStyle().bigText(TextUtils.concat(note, "\n", command(prompt)))).setSilent(true)
         shown[tag] = prompt.id
         @Suppress("MissingPermission")
         manager.notify(tag, b.build())
@@ -529,4 +568,11 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
         /** Wide enough for an expanded notification on any phone, small enough for its bitmap limit. */
         private const val PICTURE_EDGE = 1024
     }
+}
+
+// POST_NOTIFICATIONS exists from Android 13; before that the app's notification setting rules.
+fun notificationsAllowed(context: Context) = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+    context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+} else {
+    NotificationManagerCompat.from(context).areNotificationsEnabled()
 }

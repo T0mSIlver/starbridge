@@ -1,7 +1,7 @@
 ---
 name: starbridge
 description: "Reach your user through Starbridge. They are often away from the terminal, and Starbridge is how you reach them: a card on their phone and web page that they answer with one tap, sent back into this session. Use it, instead of asking in chat or with AskUserQuestion, whenever you need a decision that is theirs to make, and before ending a turn on work that waits on them (a PR to review or merge, a failure only they can fix); and wrap in `starbridge run`, unasked, any command that blocks them or that their instructions ask you to report. Covers when to post, how to write a card they can answer cold, what never to post, and what to do with the answer."
-compatibility: The `starbridge` CLI on PATH, paired with `starbridge pair`. Answers come back as prompts in Claude Code with the Starbridge plugin, in interactive Pi sessions with the Starbridge Pi package, and in Codex CLI sessions when `starbridge agent` runs; elsewhere the agent waits for them with `starbridge wait`.
+compatibility: The `starbridge` CLI on PATH, paired with `starbridge pair`. Answers come back as prompts in Claude Code with the Starbridge plugin, in interactive Pi sessions with the Starbridge Pi package, in the opencode TUI with the Starbridge plugin, and in Codex CLI sessions when `starbridge agent` runs; elsewhere the agent waits for them with `starbridge wait`.
 ---
 
 # Reach your user through Starbridge
@@ -77,8 +77,8 @@ starbridge ask --question "How should I proceed with the PRs?" \
 
 Flags: `--question`, `--context` or `--context-file`, `--option` (2 to 4),
 `--recommended`, `--image` (up to 4 PNG or JPEG files), `--link` (up to 4 HTTPS URLs),
-`--answer-in`, `--waiting`, and `--agent` (Claude Code, Codex and Pi are
-detected). Or `--json card.json` with `question`, `context`, `options`,
+`--answer-in`, `--waiting`, and `--agent` (Claude Code, Codex, Pi and opencode
+are detected). Or `--json card.json` with `question`, `context`, `options`,
 `recommended`, `images`, `links`. It prints the
 decision id, such as `d_Xk3…`, and adds this session's title and links on its
 own.
@@ -90,8 +90,7 @@ own.
 - Ask what you can decide yourself.
 - Post several cards where one would do.
 - Post a wall of text, or links for reference.
-- Act on a question's behalf. No answer means you keep waiting; leave out
-  `--default`.
+- Act on a question's behalf. No answer means you keep waiting.
 - Block on an answer that comes back as a prompt: no `--wait`, no
   `starbridge wait`.
 

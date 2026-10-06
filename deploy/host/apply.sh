@@ -54,7 +54,6 @@ $compose stop $live
 # long-polls and exits, and Caddy holds requests until the new one answers. --remove-orphans
 # drops the single `web` of releases before two copies.
 $compose up -d --remove-orphans server umami umami-db caddy
-docker image prune -f >/dev/null
 
 healthy http://127.0.0.1:8080/healthz server
 # Umami migrates its database on its first start.
@@ -63,3 +62,9 @@ healthy http://127.0.0.1:3001/api/heartbeat umami 120
 # /healthz/backup fails until a first backup ran; run one now rather than wait for the night.
 [ -e "$(docker volume inspect -f '{{.Mountpoint}}' starbridge_data)/last-backup" ] ||
   systemctl start starbridge-backup.service
+
+# Cleanup last, and never a reason to fail a deploy that is already serving. Each build leaves
+# about 0.9 GB of cache; unpruned, a day of deploys left 27 GB of it on the 38 GB disk (#301).
+# The newest 3 GB keep the next build fast.
+docker image prune -f >/dev/null || true
+docker builder prune -f --keep-storage 3GB >/dev/null || true
