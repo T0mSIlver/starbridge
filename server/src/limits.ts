@@ -22,8 +22,12 @@ export const DEFAULT_LIMITS = {
    * the other machines room, and devices have theirs, so the owner's answers always pass (#583).
    */
   items: [120, MINUTE] as RateWindow,
-  /** Item posts per machine, within the account's items. */
-  machineItems: [60, MINUTE] as RateWindow,
+  /**
+   * Item posts per machine, within the account's items. A live run posts 6 a minute, so ten
+   * runs at once and the machine's own questions fit (#583). It counts before the account's
+   * window, so a looping machine's refused posts never spend the other machines' share.
+   */
+  machineItems: [90, MINUTE] as RateWindow,
   /** Item posts per device (answers, settles), apart from the machines' window. */
   deviceItems: [60, MINUTE] as RateWindow,
   /** Stored decisions per account, open or answered. */

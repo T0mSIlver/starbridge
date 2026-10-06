@@ -467,7 +467,7 @@ server whose disk is full answers writes 503 `storage-full` with `Retry-After`; 
 
 | What | Limit |
 |---|---|
-| `POST /items` | from machines: 60 a minute per machine and 120 per account, and 16 MB of boxes a minute per account, items that replace earlier ones included; from devices: 60 a minute per device |
+| `POST /items` | from machines: 90 a minute per machine and 120 per account, and 16 MB of boxes a minute per account, items that replace earlier ones included; from devices: 60 a minute per device |
 | Stored decisions, open or answered | 10000 per account: 409 `too-many-items` |
 | Stored permission prompts, open or settled | 10000 per account: 409 `too-many-items` |
 | Stored runs | 500 per account: 409 `too-many-items` for a new run; updates still pass |
