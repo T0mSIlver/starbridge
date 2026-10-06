@@ -150,7 +150,9 @@ provider plugins add providers, not panels.
   unsigned, so the page keeps its keys. Once the chain shows it revoked, the browser deletes its
   keys, answers and push subscription, keeps the pin, and says which device removed it (#343).
   Android wipes only on a verified chain that revokes the phone (#44). A revoked machine gets 401
-  on its next long-poll (#353).
+  on its next long-poll (#353). A machine drops the answers of a device the chain revokes that its
+  sessions have not taken yet, on every poll and before `answers` or `wait` hands one out, against
+  a fresh directory or, out of reach of the server, the saved one (#491).
 - **Android keys** (#9) sit in files wrapped by a Keystore AES key usable while the screen is
   locked, so lock-screen buttons can sign. Signing out revokes the phone unless it is the last
   device.

@@ -15,6 +15,7 @@ import {
   type SessionLink,
   type Settled,
   seal,
+  verifyDirectory,
   type Waiting,
   withheldBy,
 } from "@starbridge/protocol";
@@ -609,14 +610,7 @@ export async function poll(
         ctx.err(`starbridge: holding ${st.held.length} answers: ${behind}`);
       } else {
         delete st.behind;
-        // Answers accepted but not yet delivered may be from a device the chain since revoked,
-        // such as one accepted while the server withheld that revocation.
-        const revoked = (device: string | undefined) =>
-          device !== undefined && !dir.members.get(device)?.active;
-        for (const [id, a] of Object.entries(st.answers))
-          if (!a.seen && revoked(a.device)) delete st.answers[id];
-        for (const p of Object.values(st.permissions ?? {}))
-          if (p.answer && !p.settled && revoked(p.answer.device)) delete p.answer;
+        dropRevoked(st, dir);
         for (const raw of items) {
           try {
             // Machines' inboxes hold answers to decisions and to permission prompts (#57).
@@ -643,6 +637,11 @@ export async function poll(
       if (opts.shared && st.cursor === opts.cursor && page.cursor !== undefined)
         st.cursor = page.cursor;
     });
+  } else {
+    // A revocation brings no answer, but voids those still waiting for their session (#491).
+    // `before` is a fresh read, so trying on it costs no write when nothing is dropped.
+    const dir = directory;
+    if (dropRevoked(before, dir)) ctx.store.updateState((st) => dropRevoked(st, dir));
   }
   await announce(ctx, s, directory);
   // A device that joined since reads nothing this machine sealed before: re-seal it.
@@ -701,6 +700,50 @@ async function announce(ctx: Ctx, s: Session, dir: Directory): Promise<void> {
 }
 
 /** Drops a closed decision's body, so its plaintext does not stay on disk. */
+/**
+ * Drops the answers accepted but not yet delivered whose device the chain now revokes, such as
+ * one accepted while the server withheld that revocation, or before the owner revoked a stolen
+ * device: a revoked device's answer never reaches a session.
+ */
+function dropRevoked(st: State, dir: Directory): boolean {
+  const revoked = (device: string | undefined) =>
+    device !== undefined && !dir.members.get(device)?.active;
+  let dropped = false;
+  for (const [id, a] of Object.entries(st.answers))
+    if (!a.seen && revoked(a.device)) {
+      delete st.answers[id];
+      dropped = true;
+    }
+  for (const p of Object.values(st.permissions ?? {}))
+    if (p.answer && !p.settled && revoked(p.answer.device)) {
+      delete p.answer;
+      dropped = true;
+    }
+  return dropped;
+}
+
+/**
+ * Before a saved answer is handed out without a poll: drops those from devices revoked since,
+ * against the directory as the server has it now, else as this machine last verified it. Only
+ * when there is an undelivered answer from a device, so a call with nothing to hand out stays
+ * offline.
+ */
+async function dropRevokedNow(ctx: Ctx) {
+  const st = ctx.store.state();
+  if (!Object.values(st.answers).some((a) => !a.seen && a.device)) return;
+  const s = session(ctx);
+  let dir: Directory;
+  try {
+    dir = await refreshDirectory(ctx, s, ctx.signal);
+  } catch {
+    dir = verifyDirectory(ctx.store.directory(), {
+      account: s.machine.account,
+      pin: s.machine.pin,
+    });
+  }
+  if (dropRevoked(st, dir)) ctx.store.updateState((fresh) => dropRevoked(fresh, dir));
+}
+
 function forget(a: State["asked"][string]) {
   delete a.body;
   delete a.images;
@@ -873,6 +916,7 @@ export async function wait(
     return 0;
   };
 
+  await dropRevokedNow(ctx);
   const already = takeAnswer(ctx.store, target, opts.session);
   if (already) return report(already);
   if (target) await markWaiting(ctx, () => postWaiting(ctx, s, target, "waiting"));
@@ -984,6 +1028,7 @@ export async function answers(
     return 0;
   }
   const seconds = opts.wait === undefined ? undefined : waitSeconds(opts.wait);
+  await dropRevokedNow(ctx);
   const first = sessionLines(ctx.store.state(), target);
   for (const l of first) printLine(ctx, l);
   if (first.length > 0 || seconds === undefined) return 0;
