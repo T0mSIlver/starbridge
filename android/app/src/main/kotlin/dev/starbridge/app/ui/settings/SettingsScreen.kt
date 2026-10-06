@@ -190,7 +190,7 @@ fun SettingsScreen(
             LinkRow(
                 0, 3,
                 if (notificationsOff) "Notifications are off" else "Notification settings",
-                if (notificationsOff) "Questions arrive silently. Turn them on in Android's settings." else null,
+                if (notificationsOff) "Questions only show in the app. Turn notifications on in Android's settings." else null,
                 Sym.Chevron,
             ) { openNotificationSettings(context) }
         }

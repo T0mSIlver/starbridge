@@ -26,7 +26,7 @@ import java.time.Instant
 class NotificationsOffTest {
     @get:Rule val compose = createComposeRule()
 
-    @Test fun dismissingHidesTheLineAcrossLaunches() {
+    @Test fun dismissingHidesTheLineForGood() {
         val prefs = Prefs(ApplicationProvider.getApplicationContext<Application>())
         compose.setContent {
             val view by prefs.inbox.collectAsState()
