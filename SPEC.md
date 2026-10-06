@@ -347,6 +347,13 @@ provider plugins add providers, not panels.
   was sealed to, only while it is open, and for an `answerIn` question only a Done, when it asked
   for one (#539). A settled question's
   answer is never delivered, since a server could hold an answer back until the agent moved on.
+- **Following every answer** (#629). `answers --all --follow` gives an orchestrator the owner's
+  answers to every session's questions, so it no longer depends on each session relaying them or
+  reads the state file. It is an observer: it marks no answer seen and no decision waiting, so
+  each answer still reaches its session. The machine keeps each decision's project and session
+  title, like its question, after the answer drops its body. `decisions --open` lists the
+  questions still open, so one question has one asker: the orchestrator checks it before
+  asking, since the owner once got the same question from it and from a session.
 - **Pairing a machine.** `pair` uses starbridge.run unless `--server` or `STARBRIDGE_SERVER` says
   otherwise (#154). `pair --force` keeps the machine's server and name (#245) and leaves the old
   pairing active, so Devices shows the added time on rows that share a name (#287). `pair` and
