@@ -1,7 +1,7 @@
 # Build from the repository root: docker build -f web/Dockerfile .
 FROM oven/bun:1.4.2 AS bun
 
-FROM node:24-slim AS build
+FROM node:25-slim AS build
 COPY --from=bun /usr/local/bin/bun /usr/local/bin/bun
 RUN corepack enable
 WORKDIR /src
@@ -21,7 +21,7 @@ COPY server/README.md server/README.md
 ENV STARBRIDGE_SERVER=http://127.0.0.1:8080 NEXT_TELEMETRY_DISABLED=1
 RUN cd web && bun run build
 
-FROM node:24-slim
+FROM node:25-slim
 WORKDIR /app
 COPY --from=build /src/web/.next/standalone ./
 COPY --from=build /src/web/.next/static web/.next/static
