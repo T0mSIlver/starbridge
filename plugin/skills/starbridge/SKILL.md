@@ -36,8 +36,8 @@ They decide from the card alone, without opening this session.
 - **Context:** two to five short lines. First the fact that forces the
   choice (the error, the number, the cost). Then one line per option, starting
   with its label: what picking it does and what it costs. When the options
-  are designs, say how they differ ("9 rows per screen, tighter"), even with
-  images. Leave out what the card already shows and your own process. Line
+  are designs, say how they differ, with numbers ("9 rows per screen instead
+  of 6"), even with images. Leave out what the card already shows and your own process. Line
   breaks and `code` render; other Markdown shows as typed.
 - **Options:** two to four short labels that differ at a glance; the one you
   would pick first, or named with `--recommended`.
@@ -65,9 +65,8 @@ answer comes back.
 
 ## After you post
 
-Go on with the work that does not depend on the answer. When both options are
-cheap to build, build both and ask which to keep. Then do what `ask`'s last
-line says:
+Go on with the work that does not depend on the answer, then do what `ask`'s
+last line says:
 
 - **"The answer will come back into this session as a new prompt."** Never
   wait for it (no `--wait`, no `starbridge wait`). If only the answer
