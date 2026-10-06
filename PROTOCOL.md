@@ -59,7 +59,9 @@ server.
   carries every image, and the 2 MB cap in Limits covers them once per device.
   A decision with `answerIn` is answered on that page (a claude.ai artifact whose button wakes
   the agent), never in Starbridge: it has no options, devices show the page and no answer
-  field, and it closes when the machine posts `settled` for it.
+  field, and it closes when the machine posts `settled` for it. When it also sets `done: true`,
+  devices offer Done beside the page: an answer with `done: true` in place of a choice or text,
+  saying the owner answered there, which closes it like any answer (#539).
 
 ## Versions
 
@@ -414,10 +416,10 @@ the server started. A machine that sends back `directory=<n>&quotaAsked=<time>` 
 knows gets a reply at once when the directory is longer or a device asked since, and every
 directory append ends its open waits. So the machine's agent re-reads the directory as soon as a
 device joins and posts a fresh snapshot sealed to it, and posts one when a device asks.
-A machine checks that an answer's `decisionId` is one it asked, still open and without
-`answerIn`, that its signer is one of the devices the decision was sealed to, and that its
+A machine checks that an answer's `decisionId` is one it asked, still open, and with
+`answerIn` exactly when the answer is `done`, that its signer is one of the devices the decision was sealed to, and that its
 `choice`, if any, is one of the decision's options. It never delivers an answer to a decision it
-settled, even one it accepted before, since the server could have held it back until then. An answer carries `choice` or `text`: a decision with options that sets
+settled, even one it accepted before, since the server could have held it back until then. An answer carries one of `choice`, `text` and `done`: a decision with options that sets
 `replies: true` also takes a typed `text` reply, which clients offer as "Reply" under the
 options; machines from before it leave `replies` out. For permission answers, see below.
 
@@ -552,7 +554,7 @@ first answer wins.
   machine applied, with `behavior` saying whether it allowed or denied. For a decision,
   `elsewhere` means it was answered outside Starbridge and `withdrawn` that the agent no longer
   needs it; `device`, posted once the machine accepts a device's answer, names that device and
-  repeats its `choice` or `text`. An answer is sealed only to the machine, so this notice is how
+  repeats its `choice` or `text`, neither for a Done. An answer is sealed only to the machine, so this notice is how
   the other devices learn which answer won, for instance when two answered at once. Devices
   show it after the decision is answered, whenever it arrives; clients that predate the two
   fields ignore them.
