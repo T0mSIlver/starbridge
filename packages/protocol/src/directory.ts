@@ -66,6 +66,11 @@ export function verifyDirectory(entries: unknown[], opts: VerifyOptions = {}): D
   return result;
 }
 
+/** Whether `entries` hold the chain `head` names: as long at least, and the same entry there. */
+export function holdsHead(entries: unknown[], head: Pin): boolean {
+  return head.length <= entries.length && hashAt(entries, head.length - 1) === head.head;
+}
+
 function hashAt(entries: unknown[], i: number): string | undefined {
   const env = SignedEnvelope.safeParse(entries[i]);
   return env.success ? entryHash(env.data.body) : undefined;

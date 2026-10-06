@@ -52,6 +52,7 @@ import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonObject
 import okhttp3.OkHttpClient
 import java.io.IOException
 import dev.starbridge.app.ui.span
@@ -814,6 +815,8 @@ class ServerStore(
             put("scope", chosen)
             put("inputHash", p.body.inputHash)
             if (!allow) message?.trim()?.takeIf { it.isNotEmpty() }?.let { put("message", it.take(500)) }
+            // Lets the machine notice a server holding back entries, such as a revocation.
+            directory?.let { d -> putJsonObject("dir") { put("length", d.length); put("head", d.head) } }
         }
         val item = envelopes.seal("permission-answer", body, me.id, signKey, listOf(machine))
         try {
@@ -918,6 +921,8 @@ class ServerStore(
             put("answeredAt", now())
             choice?.let { put("choice", it) }
             text?.let { put("text", it) }
+            // Lets the machine notice a server holding back entries, such as a revocation.
+            directory?.let { d -> putJsonObject("dir") { put("length", d.length); put("head", d.head) } }
         }
         val item = envelopes.seal("answer", body, me.id, signKey, listOf(machine))
         try {

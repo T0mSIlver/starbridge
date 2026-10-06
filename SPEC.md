@@ -1177,6 +1177,16 @@ so the mod is the first path.
   grouping, then "History · N" with the matching answered items, History open or not. A
   History item also matches by its answer. Matched words show bold on `surface2`, never in
   amber; Escape in the box clears it. Android's search waits for the owner's pick.
+- 2026-10-06. Withheld revocations (#260 P1, from the Codex audit). A machine cannot tell a
+  current directory from one the server cut short: the pin only stops rollback past what the
+  machine saw, and any freshness statement the machine could ask for, the revoked device's own
+  key can sign. So the rule is detection on contact: devices sign the directory head they hold
+  into each answer (`dir`), the machine keeps the longest head per device, and it refuses every
+  device answer while a device active in its chain has signed a head that chain lacks. A
+  withheld revocation then holds only until another device answers that machine; after that the
+  server must drop all of the owner's other devices' answers to it. Closing the gap fully needs a
+  channel the server does not carry. Answers without `dir`, from clients before this, are still
+  accepted.
 - 2026-10-06. The web's Reply, as Android's (#254, owner). Reply in the web detail is Material 3's
   filled text field, one line that grows with the text, with its send icon button inside,
   centred on the field's line, as #264 made it on Android. The "Default" label is gone on both
