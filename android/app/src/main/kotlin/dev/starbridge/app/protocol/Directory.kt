@@ -53,7 +53,7 @@ class Directories(private val sodium: Sodium, private val envelopes: Envelopes) 
      * Replays the chain and checks every rule packages/protocol checks: a self-signed genesis
      * co-signed by the recovery key it names; each later entry signed by an active device or the
      * recovery key, with the next `seq` and the previous hash; machines sign nothing, the
-     * recovery key adds a device, revoking every other one, and confirms its own replacement
+     * recovery key adds a device, revoking every other member, and confirms its own replacement
      * ([SIGNED_BY]); keys and ids are never reused, revoked members stay revoked.
      */
     fun verify(entries: List<JsonElement>, account: String? = null, pin: Pin? = null, recoveryPk: String? = null): Directory {
@@ -135,9 +135,9 @@ class Directories(private val sodium: Sodium, private val envelopes: Envelopes) 
             "recover" -> {
                 val m = body.member!!
                 if (m.role != "device") throw ProtocolException("signer-not-allowed", "entry $i: recovery adds devices only")
-                // Every device is lost, or in someone else's hands: none stays, so a chain a server
-                // cut short of a revocation cannot bring a revoked device back (#363).
-                for ((id, e) in dir.members) if (e.active && e.member.role == "device") members[id] = DirectoryMember(e.member, false)
+                // Every device is lost, or in someone else's hands: no member stays, machines included,
+                // so a chain a server cut short of a revocation cannot bring a revoked one back (#363).
+                for ((id, e) in dir.members) if (e.active) members[id] = DirectoryMember(e.member, false)
                 addDevice(m)
                 pending = null
             }
@@ -158,7 +158,7 @@ class Directories(private val sodium: Sodium, private val envelopes: Envelopes) 
             }
             "recovery-confirm" -> {
                 val p = pending
-                if (p == null || body.proposal != p.seq) throw ProtocolException("bad-recovery", "entry $i: no pending proposal ${body.proposal}")
+                if (p == null || body.proposal != p.seq || body.recoveryPk != p.recoveryPk) throw ProtocolException("bad-recovery", "entry $i: no pending proposal ${body.proposal}")
                 recoveryPk = p.recoveryPk
                 recoverySet = RecoveryChange(i, p.recoveryPk, p.by, body.at)
                 pending = null
@@ -203,13 +203,17 @@ class Directories(private val sodium: Sodium, private val envelopes: Envelopes) 
         return env.copy(recoverySig = toB64(recoverySig))
     }
 
-    /** Confirms the pending proposal with the current recovery private key. */
-    fun recoveryConfirmEntry(dir: Directory, recoveryKey: ByteArray, at: String): SignedEnvelope {
-        val pending = dir.pendingRecovery ?: throw ProtocolException("bad-recovery", "no pending proposal")
-        return envelopes.sign("directory", entryBase(dir, at, "recovery-confirm") { put("proposal", pending.seq) }, RECOVERY, recoveryKey)
+    /**
+     * Confirms the pending proposal of [recoveryPk] with the current recovery private key; refuses
+     * when another proposal replaced it, so the owner never confirms a key they did not make.
+     */
+    fun recoveryConfirmEntry(dir: Directory, recoveryKey: ByteArray, recoveryPk: String, at: String): SignedEnvelope {
+        val pending = dir.pendingRecovery
+        if (pending?.recoveryPk != recoveryPk) throw ProtocolException("bad-recovery", "the pending proposal is not this key")
+        return envelopes.sign("directory", entryBase(dir, at, "recovery-confirm") { put("proposal", pending.seq); put("recoveryPk", recoveryPk) }, RECOVERY, recoveryKey)
     }
 
-    /** Adds [member], a device, with the recovery private key, and revokes every other device. */
+    /** Adds [member], a device, with the recovery private key, and revokes every other member. */
     fun recoverEntry(dir: Directory, recoveryKey: ByteArray, member: Member, at: String): SignedEnvelope =
         envelopes.sign("directory", entryBase(dir, at, "recover") { put("member", memberJson(member)) }, RECOVERY, recoveryKey)
 

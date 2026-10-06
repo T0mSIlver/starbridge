@@ -186,7 +186,9 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
       make(verifyDirectory(entries)),
     ];
     const proposed = with_(chain, (d) => recoveryEntry(d, signer(phone), newRec, T(10)));
-    const byOldKey = with_(proposed, (d) => recoveryConfirmEntry(d, recovery.privateKey, T(10, 1)));
+    const byOldKey = with_(proposed, (d) =>
+      recoveryConfirmEntry(d, recovery.privateKey, newRecPk, T(10, 1)),
+    );
     const replaced = verifyDirectory(byOldKey);
     const proposalBody = (d: Directory, pk: string) =>
       nextBody(d, { op: "recovery", recoveryPk: pk });
@@ -196,8 +198,8 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
         sodium.crypto_sign_detached(signatureMessage("directory", RECOVERY, env.body), key),
       ),
     });
-    const confirmBody = (d: Directory, proposal: number) =>
-      nextBody(d, { op: "recovery-confirm", proposal });
+    const confirmBody = (d: Directory, proposal: number, pk = newRecPk) =>
+      nextBody(d, { op: "recovery-confirm", proposal, recoveryPk: pk });
     const proposedByPhone2 = with_(chain, (d) => recoveryEntry(d, signer(phone2), newRec, T(10)));
     const revokedProposer = with_(proposedByPhone2, (d) =>
       revokeEntry(d, signer(phone), "phone2", T(10, 1)),
@@ -352,17 +354,33 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
         expect: { error: "signer-not-allowed" },
       },
       {
+        name: "confirmation naming another key than the pending proposal",
+        entries: [
+          ...proposed,
+          signRaw(
+            confirmBody(
+              verifyDirectory(proposed),
+              next.length,
+              toB64(recoveryKeyPair(seed(31)).publicKey),
+            ),
+            RECOVERY,
+            recovery.privateKey,
+          ),
+        ],
+        expect: { error: "bad-recovery" },
+      },
+      {
         name: "confirmation with no proposal",
         entries: [...chain, signRaw(confirmBody(next, 1), RECOVERY, recovery.privateKey)],
         expect: { error: "bad-recovery" },
       },
       {
-        name: "recovery revokes every other device",
+        name: "recovery revokes every other member, machines too",
         entries: recovered,
         expect: ok(verifyDirectory(recovered)),
       },
       {
-        name: "recovery onto a chain cut short of a revocation keeps that device revoked",
+        name: "recovery onto a chain cut short of a revocation keeps that member revoked",
         entries: cutShort,
         expect: ok(verifyDirectory(cutShort)),
       },

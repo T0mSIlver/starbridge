@@ -352,7 +352,7 @@ export async function recover(account: string, name: string, typed: string): Pro
         throw new Error("This is a recovery key, but not this account's current one.");
       throw e;
     }
-    // Revokes every other device: recovery means they are lost, or in someone else's hands (#363).
+    // Revokes every other member: recovery means they are lost, or in someone else's hands (#363).
     const entry = recoverEntry(dir, recovery.privateKey, member, now());
     const next = verifyDirectory([...entries, entry], { account });
     // Pending until the append lands: a failed one must not replace keys that still work (#283).
@@ -768,7 +768,7 @@ export function devices(ctx: Ctx): Device[] {
   const addedAt = new Map<string, string>();
   for (const env of ctx.entries) {
     const body = DirectoryEntry.parse(JSON.parse(env.body));
-    if (body.op === "add") addedAt.set(body.member.id, body.at);
+    if (body.op === "add" || body.op === "recover") addedAt.set(body.member.id, body.at);
   }
   return [...ctx.dir.members.values()].map(({ member, active }) => ({
     ...member,

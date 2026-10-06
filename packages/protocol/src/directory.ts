@@ -56,7 +56,7 @@ export interface VerifyOptions {
  * - entry 0 adds a device, is signed by that device's own key and by the recovery key it names;
  * - each later entry is signed by an active device or by the recovery key, has the next `seq`
  *   and the previous entry's hash as `prev`;
- * - machines sign no entries; the recovery key adds a device, revoking every other one, and
+ * - machines sign no entries; the recovery key adds a device, revoking every other member, and
  *   confirms its own replacement, nothing else (`SIGNED_BY`);
  * - a new recovery key is proposed by a device, signed by itself, and confirmed by the current
  *   recovery key; from then on only the new key counts;
@@ -175,10 +175,9 @@ function applyEntry(dir: Directory, env: SignedEnvelope, i: number): Directory {
     case "recover": {
       if (body.member.role !== "device")
         throw new ProtocolError("signer-not-allowed", `entry ${i}: recovery adds devices only`);
-      // Every device is lost, or in someone else's hands: none stays, so a chain a server cut
-      // short of a revocation cannot bring a revoked device back (#363).
-      for (const [id, e] of dir.members)
-        if (e.active && e.member.role === "device") members.set(id, { ...e, active: false });
+      // Every device is lost, or in someone else's hands: no member stays, machines included, so
+      // a chain a server cut short of a revocation cannot bring a revoked one back (#363).
+      for (const [id, e] of dir.members) if (e.active) members.set(id, { ...e, active: false });
       addDevice(body.member);
       next.pendingRecovery = undefined;
       return next;
@@ -203,7 +202,7 @@ function applyEntry(dir: Directory, env: SignedEnvelope, i: number): Directory {
     }
     case "recovery-confirm": {
       const pending = dir.pendingRecovery;
-      if (!pending || body.proposal !== pending.seq)
+      if (!pending || body.proposal !== pending.seq || body.recoveryPk !== pending.recoveryPk)
         throw new ProtocolError("bad-recovery", `entry ${i}: no pending proposal ${body.proposal}`);
       next.recoveryPk = pending.recoveryPk;
       next.recoverySet = { seq: i, by: pending.by, at: body.at };
@@ -279,7 +278,7 @@ type Change =
   | { op: "revoke"; id: string }
   | { op: "recover"; member: Member }
   | { op: "recovery"; recoveryPk: string }
-  | { op: "recovery-confirm"; proposal: number };
+  | { op: "recovery-confirm"; proposal: number; recoveryPk: string };
 
 function nextBody(dir: Directory, at: string, change: Change): DirectoryEntry {
   return { v: 1, account: dir.account, seq: dir.length, prev: dir.head, at, ...change };
@@ -327,7 +326,7 @@ export function revokeEntryAsync(
   return signAsync("directory", nextBody(dir, at, { op: "revoke", id }), signer.id, signer.sign);
 }
 
-/** Adds `member`, a device, with the recovery private key, and revokes every other device. */
+/** Adds `member`, a device, with the recovery private key, and revokes every other member. */
 export function recoverEntry(
   dir: Directory,
   recoveryKey: Uint8Array,
@@ -335,12 +334,6 @@ export function recoverEntry(
   at: string,
 ): SignedEnvelope {
   return sign("directory", nextBody(dir, at, { op: "recover", member }), RECOVERY, recoveryKey);
-}
-
-/** The pending proposal's seq, which a confirmation names. */
-function pendingSeq(dir: Directory): number {
-  if (!dir.pendingRecovery) throw new ProtocolError("bad-recovery", "no pending proposal");
-  return dir.pendingRecovery.seq;
 }
 
 /**
@@ -370,12 +363,19 @@ export function recoveryEntry(
   return withRecoverySig(env, recovery.privateKey);
 }
 
-/** Confirms the pending proposal with the current recovery private key. */
+/**
+ * Confirms the pending proposal of `recoveryPk` with the current recovery private key; refuses
+ * when another proposal replaced it, so the owner never confirms a key they did not make.
+ */
 export function recoveryConfirmEntry(
   dir: Directory,
   recoveryKey: Uint8Array,
+  recoveryPk: string,
   at: string,
 ): SignedEnvelope {
-  const change = { op: "recovery-confirm", proposal: pendingSeq(dir) } as const;
+  const pending = dir.pendingRecovery;
+  if (pending?.recoveryPk !== recoveryPk)
+    throw new ProtocolError("bad-recovery", "the pending proposal is not this key");
+  const change = { op: "recovery-confirm", proposal: pending.seq, recoveryPk } as const;
   return sign("directory", nextBody(dir, at, change), RECOVERY, recoveryKey);
 }

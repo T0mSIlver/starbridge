@@ -236,7 +236,9 @@ test("a machine follows a recovery key replacement and still seals to the device
   const a = await paired(server);
   const fresh = recoveryKeyPair(generateRecoverySeed());
   await phoneAppends((dir, signer) => recoveryEntry(dir, signer, fresh, now()));
-  await phoneAppends((dir) => recoveryConfirmEntry(dir, server.owner.recovery.privateKey, now()));
+  await phoneAppends((dir) =>
+    recoveryConfirmEntry(dir, server.owner.recovery.privateKey, toB64(fresh.publicKey), now()),
+  );
   const dir = await refreshDirectory(a, session(a));
   expect(dir.recoveryPk).toBe(toB64(fresh.publicKey));
   expect(dir.recoverySet.by).toBe("phone");

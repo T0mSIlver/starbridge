@@ -284,7 +284,7 @@ private fun Recover(busy: Boolean, actions: SetupActions, modifier: Modifier, on
             Column(Modifier.padding(start = Spacing.s4, end = Spacing.s4, top = 48.dp), verticalArrangement = Arrangement.spacedBy(Spacing.s4)) {
                 Title("Recovery key")
                 Text(
-                    "Recovering removes every other device from the account. Add the ones you still have again from this phone afterwards.",
+                    "Recovering removes every other device and machine from the account. Pair the ones you still have again from this phone afterwards.",
                     style = StarbridgeTheme.type.body,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

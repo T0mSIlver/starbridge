@@ -47,8 +47,8 @@ export const RevokeEntry = z.object({
 
 /**
  * Recovery, when every device is lost: signed by the recovery key, it adds `member`, a device,
- * and revokes every other device, so a chain a server cut short of a revocation cannot bring a
- * revoked device back (#363).
+ * and revokes every other member, machines included, so a chain a server cut short of a
+ * revocation cannot bring a revoked one back (#363).
  */
 export const RecoverEntry = z.object({
   ...EntryBase,
@@ -67,8 +67,9 @@ export const RecoveryEntry = z.object({
 export const RecoveryConfirmEntry = z.object({
   ...EntryBase,
   op: z.literal("recovery-confirm"),
-  /** The proposal's `seq`. */
+  /** The proposal's `seq`, and the key it proposed, so a confirmation names what it approves. */
   proposal: z.number().int().nonnegative(),
+  recoveryPk: B64,
 });
 
 export const DirectoryEntry = z.discriminatedUnion("op", [

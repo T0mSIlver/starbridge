@@ -9,6 +9,7 @@ import {
   recoveryKey,
   recoveryKeyPair,
   type SignedEnvelope,
+  toB64,
   verifyDirectory,
 } from "@starbridge/protocol";
 import { LiveServer } from "@starbridge/server/test-support";
@@ -63,7 +64,14 @@ test("once the key is replaced, the old one recovers nothing; the new one does, 
   const now = new Date().toISOString();
   const phone = { id: live.owner.device.id, signKey: live.owner.device.keys.sign.privateKey };
   await phoneAppends((d) => recoveryEntry(d, phone, recoveryKeyPair(seed), now));
-  await phoneAppends((d) => recoveryConfirmEntry(d, live.owner.recovery.privateKey, now));
+  await phoneAppends((d) =>
+    recoveryConfirmEntry(
+      d,
+      live.owner.recovery.privateKey,
+      toB64(recoveryKeyPair(seed).publicKey),
+      now,
+    ),
+  );
 
   await expect(
     device.recover(account, "Thief", recoveryKey(live.owner.recoverySeed)),

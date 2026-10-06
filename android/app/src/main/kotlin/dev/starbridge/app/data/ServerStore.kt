@@ -544,8 +544,9 @@ class ServerStore(
     override fun recover(words: String) = run {
         val recovery = sodium.signSeedKeyPair(recoverySignSeed(RecoveryKeys.seed(words, sodium), sodium))
         val entries = api().directory(0)
-        // The chain's current recovery key must be this one, whose own signature a server cannot fake.
-        val dir = directories.verify(entries, saved.account, recoveryPk = toB64(recovery.public))
+        // The chain's current recovery key must be this one, whose own signature a server cannot
+        // fake; a phone that was a device before keeps the server from serving it a shorter chain.
+        val dir = directories.verify(entries, saved.account, saved.pin, recoveryPk = toB64(recovery.public))
         // The keys made for an earlier attempt stay until the chain holds them: when its reply was
         // lost, the server has bound the session to that member, and a retry finds it there (#274).
         // Only while those keys are still this phone's, and the member was not revoked since.
@@ -554,7 +555,7 @@ class ServerStore(
         val all = if (dir.members[member.id]?.active == true) {
             entries
         } else {
-            // Revokes every other device: recovery means they are lost, or in someone else's hands (#363).
+            // Revokes every other member: recovery means they are lost, or in someone else's hands (#363).
             val entry = directories.recoverEntry(dir, recovery.secret, member, now())
             api().append(entry)
             entries + ProtocolJson.encodeToJsonElement(entry)

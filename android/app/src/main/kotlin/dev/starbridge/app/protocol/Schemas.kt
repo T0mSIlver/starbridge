@@ -100,7 +100,11 @@ data class DirectoryEntry(
                 schema(recoveryPk != null, "recoveryPk")
                 b64(recoveryPk!!, "recoveryPk")
             }
-            "recovery-confirm" -> schema(proposal != null && proposal >= 0, "proposal")
+            "recovery-confirm" -> {
+                schema(proposal != null && proposal >= 0, "proposal")
+                schema(recoveryPk != null, "recoveryPk")
+                b64(recoveryPk!!, "recoveryPk")
+            }
             // An op this client does not know: refused, since skipping a recovery confirmation
             // would keep a replaced key trusted (PROTOCOL.md, "Directory").
             else -> schema(false, "op")

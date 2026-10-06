@@ -52,7 +52,7 @@ entries. An entry's `op` is one of:
 |---|---|---|
 | `add` | an active device | adds a member (older clients also recovered with an `add` signed by the recovery key, which still verifies) |
 | `revoke` | an active device | revokes a member |
-| `recover` | the recovery key | adds a device and revokes every other device ("Recovery") |
+| `recover` | the recovery key | adds a device and revokes every other member, machines included ("Recovery") |
 | `recovery` | an active device | proposes a new recovery key ("Replacing the recovery key") |
 | `recovery-confirm` | the recovery key | makes the proposed key current |
 
@@ -155,11 +155,11 @@ words from the eighth.
 When every device is lost, a new device turns the key or words into the recovery key pair,
 verifies the chain with that public key (it must be the chain's current recovery key, whose
 `recoverySig` checks against it, which a copied public key cannot fake), and signs a `recover`
-entry with it, which adds the new device and revokes every other one. A recovering device holds
-no pin, so the server can serve it a chain cut short of a revocation; since `recover` revokes
-every earlier device, a fork made that way cannot bring a revoked one back. The owner adds the
-devices they still have again from the recovered one, through a pairing or join that pins its
-chain. Machines stay.
+entry with it, which adds the new device and revokes every other member, machines included. A
+recovering device holds no pin unless it was a device of the account before, so the server can
+serve it a chain cut short of a revocation; since `recover` revokes every earlier member, a fork
+made that way cannot bring a revoked one back. The owner pairs the devices and machines they
+still have again from the recovered device, through pairings or joins that pin its chain.
 
 ### Replacing the recovery key
 
@@ -171,14 +171,19 @@ key, in two entries:
    as on entry 0. Its `recoveryPk` is no member's key and no recovery key the chain named before,
    current, proposed or retired. A later proposal replaces a pending one, and revoking the
    proposing device drops its proposal.
-2. `{op: "recovery-confirm", proposal}` names the pending proposal's `seq` and makes its key the
-   chain's recovery key. The current recovery key signs it.
+2. `{op: "recovery-confirm", proposal, recoveryPk}` names the pending proposal's `seq` and key,
+   and makes that key the chain's recovery key. The current recovery key signs it. Naming the key
+   means a proposal slipped in after the owner's, by a stolen device not yet revoked, cannot be
+   the one confirmed.
 
 Both keys sign, so neither a stolen device nor a leaked key can replace the key alone: the key is
 what gets the owner back after a theft, so a thief must not be able to take it over. An owner who
 lost the key cannot replace it; their devices keep working, and the app says so.
 
-From the confirming entry on, the old key signs nothing. Every other device shows the
+From the confirming entry on, the old key signs nothing on any chain that holds the
+confirmation. A device that holds no pin can still be served a chain cut short of it, where the
+old key still recovers; the owner's devices, which pin their chain, refuse such a fork, and
+recovering with the new key on it fails with `wrong-recovery-key`. Every other device shows the
 replacement once, as "Recovery key replaced on <proposing device>, <time of the confirming
 entry>".
 

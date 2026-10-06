@@ -1404,9 +1404,11 @@ so the mod is the first path.
 - 2026-10-06. Recovery revokes every other device, and the recovery key revokes no one (#363,
   #364, found by the protocol audit). A recovering device holds no pin, so a server could serve
   it a chain cut short of a revocation, and its `add` made a fork where a stolen, revoked phone
-  was active again. A new `recover` entry adds the device and revokes every other one, so no
-  fork keeps an earlier device; the owner adds the ones they still have again from the
-  recovered device. A plain `add` signed by the recovery key still verifies, since older chains
+  was active again. A new `recover` entry adds the device and revokes every other member,
+  machines included (a revoked machine came back the same way, review of #368), so no fork keeps
+  an earlier one; the owner pairs the devices and machines they still have again from the
+  recovered device. A confirmation names the key it confirms, so a stolen device's later
+  proposal cannot take the owner's confirmation. A plain `add` signed by the recovery key still verifies, since older chains
   hold it, but clients no longer write it. The recovery key could also sign a `revoke`, against
   PROTOCOL.md; verifiers now refuse it.
 

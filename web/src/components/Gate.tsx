@@ -313,8 +313,8 @@ function Join({ account, stale }: { account: string; stale: boolean }) {
         >
           <NameField value={name} onChange={setName} />
           <p className={`t-small ${s.lede}`}>
-            Recovering removes every other device from the account. Add the ones you still have
-            again from this browser afterwards.
+            Recovering removes every other device and machine from the account. Pair the ones you
+            still have again from this browser afterwards.
           </p>
           <label className={`t-meta ${s.dim}`} htmlFor="recovery-key">
             Your recovery key

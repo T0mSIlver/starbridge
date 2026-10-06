@@ -186,9 +186,13 @@ test("replacing the recovery key: the old key confirms, then signs nothing more 
     append(s, token, make(await directory(s, token)));
 
   expect((await step((d) => recoveryEntry(d, phone, newRecovery, at))).status).toBe(201);
-  expect((await step((d) => recoveryConfirmEntry(d, acct.recovery.privateKey, at))).status).toBe(
-    201,
-  );
+  expect(
+    (
+      await step((d) =>
+        recoveryConfirmEntry(d, acct.recovery.privateKey, toB64(newRecovery.publicKey), at),
+      )
+    ).status,
+  ).toBe(201);
   expect((await directory(s, token)).recoveryPk).toBe(toB64(newRecovery.publicKey));
 
   const refused = await step((d) => addEntry(d, oldKey, memberOf("thief").member, at));
@@ -230,6 +234,7 @@ test("only the recovery key confirms a replacement, and it revokes no one (#348,
       at,
       op: "recovery-confirm",
       proposal: proposed.pendingRecovery?.seq as number,
+      recoveryPk: proposed.pendingRecovery?.recoveryPk as string,
     },
     laptop.id,
     laptop.keys.sign.privateKey,
@@ -252,10 +257,11 @@ test("only the recovery key confirms a replacement, and it revokes no one (#348,
   expect(r.json.error).toBe("revoked-signer");
 });
 
-test("recovery revokes every other device and ends their sessions (#363)", async () => {
+test("recovery revokes every other member, machines too, and ends their sessions (#363)", async () => {
   const s = await makeServer();
   const acct = await setupAccount(s);
   const laptop = await pair(s, acct, "laptop", "device", await signIn(s));
+  const devbox = await pair(s, acct, "devbox", "machine");
   const fresh = await signIn(s);
   const { member } = memberOf("new-phone");
   const r = await append(
@@ -266,5 +272,6 @@ test("recovery revokes every other device and ends their sessions (#363)", async
   expect(r.status).toBe(201);
   expect((await s.call("GET", "/v1/me", { token: fresh })).json.member).toBe("new-phone");
   expect((await s.call("GET", "/v1/me", { token: laptop.token })).status).toBe(401);
+  expect((await s.call("GET", "/v1/me", { token: devbox.token })).status).toBe(401);
   expect((await s.call("GET", "/v1/me", { token: acct.device.token })).status).toBe(401);
 });
