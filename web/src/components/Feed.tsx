@@ -137,6 +137,8 @@ const TAIL = 12;
 /** The session's name, cut in the middle, and where to open it (DESIGN.md, "Rules"). */
 export function SessionLine({ source, agent }: { source: Source; agent?: string }) {
   const name = source.sessionTitle || source.session;
+  // A title is words; only a bare session id is set as code (#563).
+  const code = source.sessionTitle ? "" : "t-snippet";
   const links = source.links ?? [];
   const app = agentName(agent);
   const link = app ? (links.find((l) => l.kind !== "desktop") ?? links[0]) : undefined;
@@ -148,8 +150,8 @@ export function SessionLine({ source, agent }: { source: Source; agent?: string 
           Session
           {/* Cut in the middle only when the line runs out of room: the head shrinks, the tail
               stays (#172). */}
-          <span className={`t-snippet ${s.sessionHead}`}>{name.slice(0, -TAIL)}</span>
-          <span className={`t-snippet ${s.sessionTail}`}>{name.slice(-TAIL)}</span>
+          <span className={`${code} ${s.sessionHead}`}>{name.slice(0, -TAIL)}</span>
+          <span className={`${code} ${s.sessionTail}`}>{name.slice(-TAIL)}</span>
         </span>
       )}
       {link && (

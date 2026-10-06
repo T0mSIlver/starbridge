@@ -53,6 +53,33 @@ const Bounded = PairingMessage.refine(
 export const pairingRoutes = new Hono<Env>();
 
 /**
+ * Who posted each pairing, an IPv6 client as its /48, to cap the unapproved pairings per address.
+ * It lives in memory, as every per-address limit does, so no address reaches the disk (#575); a
+ * restart forgets it, as it forgets the rate limits.
+ */
+export class PairingClients {
+  private readonly posted = new Map<string, { client: string; at: number }>();
+
+  add(rendezvous: string, client: string, now: number): void {
+    this.posted.set(rendezvous, { client, at: now });
+  }
+
+  /** The rendezvous ids `client` posted within a pairing's lifetime. */
+  of(client: string, now: number): string[] {
+    const ids: string[] = [];
+    for (const [rendezvous, p] of this.posted)
+      if (p.client === client && now - p.at <= LIFETIME_MS) ids.push(rendezvous);
+    return ids;
+  }
+
+  /** Forgets the pairings past their lifetime, which the database has swept too. */
+  sweep(now: number): void {
+    for (const [rendezvous, p] of this.posted)
+      if (now - p.at > LIFETIME_MS) this.posted.delete(rendezvous);
+  }
+}
+
+/**
  * Deletes expired pairings, and with them any machine token still held for a retried result,
  * so no plaintext token outlives the pairing's 10 minutes.
  */
@@ -91,13 +118,15 @@ pairingRoutes.post("/pairings", async (c) => {
     const { n } = db.query("SELECT COUNT(*) AS n FROM pairings").get() as { n: number };
     if (n >= limits.pendingPairings) fail(429, "busy", "too many pairings waiting; retry later");
     const mine = db
-      .query("SELECT COUNT(*) AS n FROM pairings WHERE client = ? AND approval IS NULL")
-      .get(client) as { n: number };
+      .query(
+        "SELECT COUNT(*) AS n FROM pairings WHERE approval IS NULL AND rendezvous IN (SELECT value FROM json_each(?))",
+      )
+      .get(JSON.stringify(c.var.pairingClients.of(client, Date.now()))) as { n: number };
     if (mine.n >= limits.pairingsPerClient)
       fail(429, "too-many-pairings", "this address has too many pairings waiting; retry later");
     db.query(
-      `INSERT INTO pairings (rendezvous, request, role, member_id, box_pk, sign_pk, claim_hash, created_at, client)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO pairings (rendezvous, request, role, member_id, box_pk, sign_pk, claim_hash, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       body.rendezvous,
       JSON.stringify(request),
@@ -107,8 +136,8 @@ pairingRoutes.post("/pairings", async (c) => {
       body.signPk,
       claim,
       Date.now(),
-      client,
     );
+    c.var.pairingClients.add(body.rendezvous, client, Date.now());
     return true;
   })();
   if (!created) fail(409, "taken", "rendezvous id in use; make a new code");

@@ -32,14 +32,14 @@ server.
 - **Signed envelope** `{v, kind, signer, body, sig}`: `body` is JSON text kept exactly as signed;
   `sig` is Ed25519 over `"starbridge/v1/<kind>" NUL signer NUL body`. Verifiers check the
   signature before they parse `body`.
-- **Sealed item** `{v, kind, id, from, re?, quiet?, reseal?, boxes: [{to, box}]}`: a signed envelope sealed
-  with `crypto_box_seal` to each recipient. `kind`, `id`, `from`, `re` and `to` are routing hints
-  for the server; clients reject an item whose hints disagree with the signed body. `quiet: true`
-  asks the server to store the item without pushing it.
+- **Sealed item** `{v, kind, id, from, re?, wakeAt?, quiet?, reseal?, boxes: [{to, box}]}`: a
+  signed envelope sealed with `crypto_box_seal` to each recipient. `kind`, `id`, `from`, `re`,
+  `wakeAt` and `to` are routing hints for the server; clients reject an item whose hints disagree
+  with the signed body. `quiet: true` asks the server to store the item without pushing it.
 - Each sealed kind has one signing role (`ITEM_KINDS` in `packages/protocol/src/schemas.ts`).
   A machine's items are sealed to every active device; a device's items are sealed to the one
-  machine they answer. A kind that refers to an earlier item names it in a body field, which
-  `re` repeats:
+  machine they answer, and a `snooze` to every active device too. A kind that refers to an
+  earlier item names it in a body field, which `re` repeats:
 
   | Kind | Signed by | Refers to (`re`) |
   |---|---|---|
@@ -51,6 +51,7 @@ server.
   | `settled` | machine | `itemId`, a permission or a decision the same machine posted |
   | `run` | machine | |
   | `waiting` | machine | `decisionId`, an open decision the same machine posted |
+  | `snooze` | device | `decisionId`, an open decision |
 
 - Every machine-signed body names its `source` (machine, project, session, and optionally the
   session's title and links, and `machineKind`: `server`, `desktop`, `laptop` or `cloud`, for
@@ -365,7 +366,7 @@ createdAt, expiresAt, version}`; `state` is `open`, `comparing`, `approved` or `
 | Route | Who | What |
 |---|---|---|
 | `POST /items` | the kind's signing role | store a sealed item and push it to each recipient; 409 on a reused id; 409 `too-many-items` and 413 `too-large` past the caps in Limits |
-| `GET /items?kind=<kinds>&after=<cursor>&open=1` | device | items with only the caller's box, and `cursor`; `kinds` is a comma-separated list of machine-signed kinds, all of them when left out; `open=1` keeps only unanswered decisions and permissions still in their answer window |
+| `GET /items?kind=<kinds>&after=<cursor>&open=1` | device | items with only the caller's box, and `cursor`; `kinds` is a comma-separated list of machine-signed kinds and `snooze`, the machine-signed ones when left out; `open=1` keeps only unanswered decisions and permissions still in their answer window |
 | `GET /items/:id` | device, machine | one item, the caller's box only; push points here when the item is over the inline limit (3 KB by default) |
 | `GET /quota` | device | the latest quota item from each machine |
 | `POST /quota/ask?wait=<s>` | device | ask every machine for a fresh quota snapshot → `{askedAt, behind}`; with `wait`, holds until each active machine that has a snapshot posted a newer one; `behind` counts those that have not |
@@ -380,27 +381,31 @@ answered decision or permission is 409 `already-answered`. Cursors are opaque st
 without `after`, a list starts at the first item. An item with `re` marks the item it names
 answered, so every device moves it out of the open inbox: an answer its decision, a permission
 answer its permission, a settled notice the permission or decision it closes. A `waiting` item
-is the exception: it describes its decision and closes nothing.
+and a `snooze` are the exceptions: they describe their decision and close nothing.
 
 Lists return `{items: [{item, cursor, receivedAt, answeredAt?}], cursor}`, 100 at a time, where
-`item` holds only the caller's box and `answeredAt` is set on answered decisions and permissions.
+`item` holds only the caller's box and its routing hints as posted, `wakeAt` included, and `answeredAt` is set on answered decisions and permissions.
 Marking an item answered moves it past every cursor, so devices listing after their cursor see it
 again, answered.
 The server keeps only the latest quota item from each machine, and drops old items as Limits says. Refusals: 403 when the caller's
 role may not post this kind or `from` is not the caller; 400 `unknown-recipient` when a box goes
-to anyone but active devices (machine-signed kinds) or the asking machine (device-signed kinds);
+to anyone but active devices (machine-signed kinds) or the asking machine (device-signed kinds;
+a `snooze` goes to the asking machine and every active device);
 404 when `re` names no such item, one sealed to another device, or one another machine posted;
 409 `already-answered` when the item `re` names is answered or settled, 409 `expired` for a
 permission answered more than 10 minutes after it arrived, 409 `already-settled` for a second
 settled notice, 409 `duplicate-id` for a `waiting` item under another id than its decision's
-first one.
+first one, 400 `bad-schema` for a `wakeAt` on any kind but `snooze`, or a `snooze` without one or
+with one more than 7 days ahead.
 
 ### Answers for machines (long-poll)
 
-`GET /answers?after=<cursor>&wait=<seconds>` (machine). The server replies at once with
-`{items, cursor}` when device-signed items (answers and permission answers) addressed to the
-machine came after `cursor`, else holds the request
-until one arrives or `wait` (at most 300) passes and replies `{items: [], cursor}`. The Claude Code
+`GET /answers?after=<cursor>&wait=<seconds>&kinds=<kinds>` (machine). The server replies at once
+with `{items, cursor}` when device-signed items addressed to the machine came after `cursor`,
+else holds the request
+until one arrives or `wait` (at most 300) passes and replies `{items: [], cursor}`. `kinds` is a
+comma-separated list of device-signed kinds; left out, it is `answer` and `permission-answer`, so
+a machine from before `snooze` never reads one. The Claude Code
 mod keeps one such request open and re-opens it on every reply; the CLI's `wait` does the same.
 
 Each reply also carries `directory`, the number of entries in the account's directory, and
@@ -425,11 +430,12 @@ options; machines from before it leave `replies` out. For permission answers, se
 | `GET /push/vapid` | anyone | `{publicKey}`: the VAPID key a browser subscribes with (the relay's when this server forwards Web Push) |
 | `POST /relay` | another server | relay mode only: `{type: "fcm" \| "webpush", endpoint, keys?, payload}` → `{result: "ok" \| "gone" \| "failed" \| "no-route"}`; rate-limited per IP |
 
-A push payload is JSON text: `{v, kind, id, from, re?, box?}` for a new item, with the device's
+A push payload is JSON text: `{v, kind, id, from, re?, wakeAt?, box?}` for a new item, with the device's
 own box when the payload stays within 3 KB, else without it and the device fetches
 `GET /items/:id`; `{v, kind: "answered", id}` to every device a decision or permission was
 sealed to once a device answers it; `{v, kind: "join", id}` to every device when a join is posted.
-A settled notice and a `waiting` item are pushed as new items. FCM gets it as data field `p`; Web Push and UnifiedPush
+A settled notice, a `waiting` item and a `snooze` are pushed as new items; a `snooze` once more
+at its `wakeAt` ("Snoozing"). FCM gets it as data field `p`; Web Push and UnifiedPush
 encrypt it per RFC 8291.
 
 A quota snapshot asks for a push only when it raises an alert: the uploader marks that alert
@@ -440,7 +446,7 @@ settings whether to show it.
 Quota snapshots and runs go to FCM and UnifiedPush only. Browsers expect every Web Push to show a
 notification and drop a subscription that keeps showing none (Firefox after 16), so the web page
 fetches `GET /quota` and `GET /items?kind=run` instead. Decisions, permissions, settled notices,
-waiting states and `answered` still go to Web Push.
+waiting states, snoozes and `answered` still go to Web Push.
 
 The server checks that a push URL's host resolves only to public addresses, then connects to the
 address it checked, with SNI and the certificate check still on the host name, so a DNS answer
@@ -465,6 +471,7 @@ server whose disk is full answers writes 503 `storage-full` with `Retry-After`; 
 | Stored decisions, open or answered | 10000 per account: 409 `too-many-items` |
 | Stored permission prompts, open or settled | 10000 per account: 409 `too-many-items` |
 | Stored runs | 500 per account: 409 `too-many-items` for a new run; updates still pass |
+| A snooze | until at most 7 days after it is posted (`SNOOZE_MAX_MS`), since an unanswered decision drops after 30: 400 `bad-schema` |
 | Stored items | 128 MB per account, counting each item's boxes plus 512 bytes for the item and for each box, of which machine-signed items may fill all but the last 8 MB: 409 `too-many-items`; 2 MB per machine-signed item (all its boxes), 32 KB per run update and 32 KB per answer or permission answer: 413 `too-large` |
 | `POST /directory` | 30 an hour per account |
 | Directory entries | from entry 200 on, a device's `add`: 409 `directory-full`; revocations and confirmations always pass, the recovery key may add 20 more devices, and devices may propose 20 more recovery keys; 8 KB per entry: 413 `too-large` |
@@ -487,7 +494,7 @@ through the operator.
 
 Answers skip the decision count and may use the last 8 MB, so a full account can still answer. An hourly sweep drops answered
 decisions and their answers 7 days after the answer, permissions, permission answers and settled
-notices 7 days after they arrived, runs a day after their last update, a decision's waiting state with its decision, unanswered decisions and quota snapshots 30
+notices 7 days after they arrived, runs a day after their last update, a decision's waiting state and snooze with its decision, unanswered decisions and quota snapshots 30
 days after they arrived, quota snapshots of revoked machines, and expired sessions. Each kind's
 period is its `keep` in `ITEM_KINDS`, which every new kind must name. Clients that want a longer
 history keep their own copy.
@@ -508,6 +515,28 @@ shows whether its agent is blocked on it: working on other things, or waiting fo
   `GET /items/:id`.
 - A client that does not know the kind never lists it (lists name their kinds) and ignores
   its push.
+
+## Snoozing
+
+The owner can put an open decision off until a time (#571): "not now, show me this again at
+18:00". A snooze is not an answer. For the agent it means what no answer means, and it closes
+nothing.
+
+- `snooze` `{v, id, decisionId, to, until, at, dir?}`: a device signs it, under a new id each
+  time, and seals it to the machine that asked and to every active device, so each one hides the
+  decision. The latest `at`, compared as instants, wins, whichever device sent it, and the server
+  keeps only the latest per decision. `until` at or before `at` brings the decision back now.
+- The item's `wakeAt` hint repeats `until`, so the server learns that some decision was put off
+  until then, and nothing else. At `wakeAt` it pushes the snooze once more to every device, which
+  shows the decision's notification again, once. Until then it pushes no `waiting` item of that
+  decision: the agent's flips are silent. An answer, Done or a settled notice cancels the push.
+- The server refuses a snooze once its decision is answered or settled (409 `already-answered`),
+  and one whose `wakeAt` is more than 7 days ahead.
+- Devices list `snooze` with the machine-signed kinds. A device that does not know the kind never
+  lists it and ignores its push, so it shows the decision as open; a machine reads it only when
+  it asks for it in `GET /answers?kinds=`.
+- On the machine, `starbridge waiting <id>` and `starbridge wait <id>` say when the decision is
+  snoozed (`wait` exits 3, once per snooze); nothing wakes the agent.
 
 ## Runs
 
@@ -645,8 +674,8 @@ for an unknown route or decision, 502 when the server refused or failed (`detail
 |---|---|
 | `GET /status` | `{version, api, pid, startedAt, socket, machine?, server: {reachable, lastOkAt?, lastError?}, quota: {providers, intervalSeconds, lastPostAt?, lastError?}, sessions}` |
 | `POST /decisions` | `{input}` with `ask`'s fields (`question`, `options`, `waiting`, `agent`, `project`, `session`, …); the client fills `project`, `session`, title and links from its own process, for Codex `codex` (`{home, bin}`: its `CODEX_HOME` and `codex` binary), and for Pi `piAnswers: true` while the Starbridge Pi extension runs in the session, for `claude -p` `headless: true` → `{id, delivery}`: `prompt` when the answer will come back into the session as a prompt (Claude Code's mod, when that session's mod called the agent within 45 s, which `claude -p` never does; the Pi extension; Codex, which the agent reaches with `codex queue` while the session's app-server daemon listens; that message names the decision and `starbridge wait <id>`, never its text, since process arguments are readable by other local users), else `wait` |
-| `POST /decisions/:id/waiting` | `{state: "working" \| "waiting"}` → `{posted}`: post the decision's waiting state, `posted: false` when it already had it; 404 `unknown-decision`, 400 when it is answered. `starbridge waiting`, `working` |
-| `POST /answers/next` | `{id?, session?, wait?}`: the answer to decision `id`, or the first answer no `wait` printed to a decision session `session` asked, marked printed → `{answer?, question?}`; 404 `unknown-decision`. `starbridge wait` |
+| `POST /decisions/:id/waiting` | `{state: "working" \| "waiting"}` → `{posted, snoozedUntil?}`: post the decision's waiting state, `posted: false` when it already had it; `snoozedUntil` while the owner has snoozed it; 404 `unknown-decision`, 400 when it is answered. `starbridge waiting`, `working` |
+| `POST /answers/next` | `{id?, session?, wait?}`: the answer to decision `id`, or the first answer no `wait` printed to a decision session `session` asked, marked printed → `{answer?, question?, snoozedUntil?}`; with `id` and no answer, `snoozedUntil` once per snooze while the owner has snoozed it; 404 `unknown-decision`. `starbridge wait` |
 | `POST /quota` | `{providers?}`: run CodexBar and post a snapshot now → `{snapshot}` |
 | `POST /runs` | `{run}`: seal one update of a `starbridge run` to every device and post it; `run` is `{id, title, reason, startedAt, at, progress?, exit?, project, session, sessionTitle?, links?}` → `{id}` |
 | `POST /sessions/:id/hello` | `{pid?, cwd?, title?, replaces?}`: a session starts → `{version}`; `replaces` names the id it had before a `/clear`, which the agent no longer counts as having a mod (#537) |

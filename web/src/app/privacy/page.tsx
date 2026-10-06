@@ -123,15 +123,24 @@ export default function Privacy() {
 
       <h2 className="t-heading">Page analytics</h2>
       <p>
-        The landing page, this page and the terms count visits with Umami, which runs on the same
-        server; the signed-in app and the Android app do not. For each view Umami records the page,
-        its title, the referring site, your browser, operating system, device type, screen size and
-        language, and the country, region and city it looks up from your IP address. Copying an
-        install command records which one. Umami sets no cookie, stores nothing in your browser and
-        does not store your IP address: it tells visitors apart by a hash of the IP address, the
-        browser and a salt that changes every day, so a visit cannot be traced back to you or linked
-        to your visits on other days. A browser that sends Do Not Track is not counted. The records
-        stay until the operator deletes them, and the nightly backups keep them for 14 days more.
+        The landing page, the docs, this page and the terms count visits with Umami, which runs on
+        the same server; the Android app does not. For each view Umami records the page, its title,
+        the referring site, your browser, operating system, device type, screen size and language,
+        and the country, region and city it looks up from your IP address. On the landing page,
+        clicking a sign-in button, a docs link or a way to get the app, or copying an install
+        command, records which one. The signed-in app counts no views. It records which error screen
+        it showed, if any, and when it is installed as an app. Only in a browser that just created
+        an account does it also record, once each, these steps: the first sign-in, the recovery key
+        saved, the first machine paired, a second device added and the first answer sent, with
+        whether that answer was a choice, a typed reply or Done. Nothing about the account, its
+        machines or its content goes with them; the app (not Umami) keeps a note of the steps left
+        in that browser for two days. Since the server knows when each account was created, the
+        operator could match that first sign-in to your account, and so to the visit Umami recorded.
+        Umami sets no cookie, stores nothing in your browser and does not store your IP address: it
+        tells visitors apart by a hash of the IP address, the browser and a salt that changes every
+        day, so a visit cannot be traced back to you or linked to your visits on other days. A
+        browser that sends Do Not Track is not counted. The records stay until the operator deletes
+        them, and the nightly backups keep them for 14 days more.
       </p>
 
       <h2 className="t-heading">Deletion</h2>

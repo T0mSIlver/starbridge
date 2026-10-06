@@ -22,9 +22,8 @@ Launch week: [known issues](https://github.com/T0mSIlver/starbridge/issues?q=is%
   or add the repository to [Obtainium](https://apps.obtainium.imranr.dev/redirect?r=obtainium://add/https://github.com/T0mSIlver/starbridge)
   to get updates. The APK is signed with the same key as the Google Play build, so a Play install
   later updates it in place.
-- **Google Play:** in closed testing. Google needs 12 testers for 14 days before the app can be
-  public. To help, join [the testers group](https://groups.google.com/g/starbridge-testers) with
-  your phone's Google account, then [become a tester](https://play.google.com/apps/testing/dev.starbridge.app).
+- **Google Play:** coming. The tester sign-up opens once Google's review passes; until then, use
+  the APK above, which a Play install will update in place.
 - **iPhone:** web app, native app is planned. Open [starbridge.run](https://starbridge.run) in
   Safari and add it to the Home Screen to get notifications.
 - **Any browser:** [starbridge.run](https://starbridge.run).

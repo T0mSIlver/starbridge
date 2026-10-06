@@ -4,6 +4,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { outdated } from "@/lib/api";
 import type { FirstDevice as PreparedDevice, RecoveryEntry } from "@/lib/device";
+import { firstSignIn, reach, send } from "@/lib/funnel";
 import { hasPairCode, holdPairCode } from "@/lib/pairLink";
 import { useApp } from "./AppProvider";
 import { Icon } from "./icons";
@@ -83,6 +84,9 @@ export function SignIn({
   const [own, setOwn] = useState(ownServer);
   const [token, setToken] = useState("");
   const { busy, error, run } = useAction();
+  useEffect(() => {
+    if (refused) send("error-screen", { screen: "sign-in-refused" });
+  }, [refused]);
   return (
     <FirstRunPage centered>
       <h1 className="t-heading">Sign in to Starbridge</h1>
@@ -138,6 +142,8 @@ function FirstDevice({ account, unsaved }: { account: string; unsaved?: string }
   const [name, setName] = useDefaultName(unsaved);
   const [prepared, setPrepared] = useState<PreparedDevice>();
   const { busy, error, run } = useAction();
+  // Only a new account has no device yet: its first sign-in, for the launch funnel (#559).
+  useEffect(() => firstSignIn(account), [account]);
   if (prepared)
     return (
       <Setup
@@ -146,6 +152,7 @@ function FirstDevice({ account, unsaved }: { account: string; unsaved?: string }
         // The genesis goes to the server only now, so a reload before this shows a new key.
         onContinue={async () => {
           await prepared.commit();
+          reach(account, (step) => step === "first-keys");
           await reload();
         }}
       />
@@ -417,8 +424,20 @@ function Revoked({ by }: { by: string }) {
   );
 }
 
-function Problem({ title, text, error }: { title: string; text: string; error: string }) {
+function Problem({
+  screen,
+  title,
+  text,
+  error,
+}: {
+  /** Its name in Umami's error-screen event, which carries nothing else (#590). */
+  screen: string;
+  title: string;
+  text: string;
+  error: string;
+}) {
   const { reload } = useApp();
+  useEffect(() => send("error-screen", { screen }), [screen]);
   return (
     <FirstRunPage>
       <h1 className="t-heading">{title}</h1>
@@ -472,6 +491,7 @@ export function Gate({ children }: { children: React.ReactNode }) {
     case "error":
       return (
         <Problem
+          screen="cannot-load"
           title="Cannot load your account"
           text="The server did not answer as expected."
           error={boot.error}
@@ -491,6 +511,7 @@ export function Gate({ children }: { children: React.ReactNode }) {
     case "broken":
       return (
         <Problem
+          screen="unverified"
           title="The device list did not verify"
           text="The server sent a device list that does not extend the one this browser trusts, so nothing was decrypted."
           error={boot.error}

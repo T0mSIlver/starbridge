@@ -383,6 +383,11 @@ export class Push {
       status = await this.pinned(url, address, out, this.config.pushTimeoutMs);
     }
     if (status === 404 || status === 410) return "gone";
+    // A push service refuses a VAPID signature whose key didn't make the subscription with 403
+    // (RFC 8292, section 4.2; Chrome's FCM does; Firefox's autopush answers 404). The browser
+    // subscribes again with the server's key when its page next opens (#567). A distributor's 403
+    // is its own access control, so a UnifiedPush target stays.
+    if (status === 403 && vapid) return "gone";
     return status >= 200 && status < 300 ? "ok" : "failed";
   }
 

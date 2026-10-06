@@ -225,9 +225,11 @@ provider plugins add providers, not panels.
   `starbridge://auth`. Chrome asks "Continue to Starbridge?" before following a `starbridge://`
   redirect that no tap started; after a tap it does not. Self-hosted servers keep
   `starbridge://auth`, since the APK can bind only starbridge.run.
-- `assetlinks.json` lists the release key, which Play App Signing also uses, and the dev box's
-  debug key, so dogfood builds verify too. That key never leaves the dev box, and a caught code is
-  useless without the verifier.
+- `assetlinks.json` lists only the release key, which Play App Signing also uses. A debug
+  keystore's password is public, and an app signed with it would verify as the App Link handler
+  (#569). Dogfood builds sign with the release key instead, opted into by a gitignored
+  `local.properties` line on the maintainer's machine and refused under CI; other debug builds keep
+  the debug key, and their sign-in falls back to the `starbridge://auth` button.
 
 ## Server
 
@@ -252,6 +254,8 @@ provider plugins add providers, not panels.
 - **Pairings** (#309). Each address may hold 20 unapproved pairings (IPv6 counted per /48 on this
   route), on top of 10 a minute; the server-wide cap of 20000 is the disk bound. Mobile carriers
   that hand out /64s from one /48 share 20, a smaller blast radius than the whole server.
+  The server counts them in memory, as every per-address limit, so no address reaches the
+  database, and a restart resets the counts (#575).
 - **Long-polls** identify their caller again after the wait and answer 401 if the session or token
   was revoked meanwhile (#260). A directory append ends every machine's answer long-poll, and the
   reply carries the directory's length (#158). On SIGTERM the server ends every long-poll as if
@@ -292,6 +296,13 @@ provider plugins add providers, not panels.
 - Caps (#27, #36, #37): 10 subscriptions a device, 30 an account; 4 pushes in flight and 200
   waiting per account, 10 s each. A push connects to the exact address that passed the
   private-range check, and is sent only if its subscription and device are still active (#260).
+- A server's VAPID key can change, as when a self-hoster leaves the relay for their own keys
+  (#567). Each page boot compares the browser's subscription key with the server's and subscribes
+  again when they differ. The server drops a Web Push subscription its push service refuses with
+  403, as RFC 8292 has it for a key mismatch; a UnifiedPush 403 is the distributor's access control
+  and keeps the target. The cost: a 403 for another reason, such as a server clock hours off, drops
+  the account's browser subscriptions too, and each comes back only when its page opens. Those
+  pushes were failing anyway.
 - An Android app in front syncs every 10 s until a push has reached it (#445), since a server
   without a relay or UnifiedPush pushes nothing and cannot tell.
 
@@ -382,7 +393,8 @@ provider plugins add providers, not panels.
   the same file; a `-light` one comes with its `-dark` twin, shown by the page's theme (#558). The Overview's Start ends at a
   first question answered from an agent, and the FAQ page holds the launch questions (#558).
 - **The CLI's agent-facing contract is stable from 0.1.0** (#475, #551): the commands, flags,
-  output lines and exit codes under "What agents parse" in `cli/README.md`, pinned by
+  output lines and exit codes in `cli/CONTRACT.md`, kept apart from the user-facing CLI page
+  (#565), pinned by
   `cli/test/contract.test.ts`. A release may add to it; changing or removing anything listed comes
   only after a release that deprecates it, since the plugins, the Pi extension and agents'
   instructions update apart from the CLI. `--json` always means an output format (`wait --json`); `ask` reads its input with
@@ -401,7 +413,9 @@ provider plugins add providers, not panels.
 
 An agent posts a question, keeps working and ends its turn; the answer arrives as a new prompt.
 Where nothing can deliver a prompt, the agent runs `starbridge wait <id> --timeout 5m` before
-ending its turn. `ask` prints which of the two applies (#203). A `wait` without an id, run in an
+ending its turn. `ask` prints which of the two applies (#203). `wait <id>` marks the decision
+waiting, which notifies the owner once more; `wait --no-mark` collects the answer to a question
+that blocks nothing yet, such as one for tomorrow, without that (#603). A `wait` without an id, run in an
 agent's session, takes only that session's answers (#324). `ask` promises a prompt in Claude Code
 only when that session's mod called the local agent within the last 45 s (#537); after `/clear` the mod's
 hello under the new id names the old one (`replaces`), which then no longer counts. An installed plugin is no proof,
@@ -620,12 +634,20 @@ first window, so a provider with a window running out leads.
 - **Answer buttons** (#138, #166): "Answer buttons on questions", Always (default), When the agent
   waits, or Never, applies under 1100 px. More than two options, or a label over 18 characters,
   stack. `answerIn` and typed-only questions have no buttons.
+- **Typed answers** (#562): Enter sends, Shift+Enter starts a new line, on the web and with an
+  Android hardware keyboard. An Enter that ends an input method's composition only commits it.
 - **Context** renders line breaks and code, inline and fenced. Other Markdown shows as typed; the
   skill says so rather than the clients growing a renderer.
 - **Revoked machines.** Their items leave the Inbox and their notifications close (#344).
 - **Clock** (#161): System, 12-hour or 24-hour, per device. UI words stay English.
 - **Images** open a full-screen viewer (zoom, pan, swipe or arrow keys between images) and carry
   an expand badge, since nothing else tells a touch screen they open (#170).
+- **Image rows** (#536). A question's images go two to a row, both at one height and each as wide
+  as its shape asks, together filling the row (at most `size.media` tall): no grey bands, no
+  crop, no frame. With one image per option, two or more, each image sits over its option's
+  button in equal columns, in the agent's order: its own shape, no wider than the button and at
+  most `size.pick` tall, the row's images centred on one midline so the buttons line up. The owner
+  chose both from mockups. "Reply" sits under them, as under plain options.
 - **Signed out.** A browser that holds no device of the account it last signed in to gets the
   landing page at `/`, as does a revoked browser (#209); one with a device gets sign-in.
 - **Restarts go unnoticed** (#250). Clients retry a 502, 503 or refused connection quietly for
@@ -741,8 +763,9 @@ Tokens, type and components: `DESIGN.md`.
 
 - **Stack** (`deploy/`): Docker Compose with Caddy on the host network, so rate limits see real
   client addresses. Caddy keeps connections to the server open (`keepalive 25s`, below the
-  server's 30 s idle close) so TIME-WAIT sockets don't use up ports (#376). Nightly SQLite backups,
-  kept 14 days.
+  server's 30 s idle close) so TIME-WAIT sockets don't use up ports (#376). Caddy compresses every
+  response and the web app none: Next's gzip ran on its one thread and filled it near 18 landing
+  page visitors a second (#593). Nightly SQLite backups, kept 14 days.
 - **Capacity** (#301). A load test of the production stack on two cores held 2000 simulated users
   at a 194 ms p99. On the production VPS, Caddy's memory runs out first, near 8000 users (each held
   long-poll costs about 96 KB in Caddy and 13 KB in the server); CPU near 10,000.
@@ -750,9 +773,21 @@ Tokens, type and components: `DESIGN.md`.
   `server/src/db.ts`, retention in `server/src/limits.ts`, logs and backups in `deploy/`. A change
   to what is stored changes the page, and the Play data-safety form. Contact is
   privacy@starbridge.run; abuse@ appears only in `/terms`.
-- **Analytics** (#141). Umami, self-hosted, on the landing page, `/privacy` and `/terms` only, never
-  the app. No cookie, no stored IP, a daily salt, Do Not Track honoured, so no consent banner.
-  Caddy rate-limits its open endpoint, and a timer caps its tables, so it cannot fill the disk.
+- **Analytics** (#141). Umami, self-hosted, on the landing page, the docs, `/privacy` and `/terms`
+  only. No cookie, no stored IP, a daily salt, Do Not Track honoured, so no consent banner. The
+  Android app has none (Play data safety form). Caddy rate-limits its open endpoint, and a timer
+  caps its tables, so it cannot fill the disk.
+- **Launch funnel** (#559, #590). Landing view, a sign-in click, first sign-in, recovery key
+  saved, first machine, first answer (with its kind: choice, text or Done); a second device is
+  counted beside it. The signed-in app loads no tracker: the browser that created an account posts
+  those events itself, once each, with `/` as the page and nothing about the account
+  (`web/src/lib/funnel.ts`); Umami joins them to the landing visit by address, browser and day.
+  For every signed-in user it sends only which error screen showed and an install as an app.
+  The first sign-in's time matches the account's creation, so the operator could link the two;
+  `/privacy` says so.
+  It sees machines and answers from any device, so a pairing or answer made on the phone counts
+  once this browser sees them. Owner's view: an Umami share link on `stats.starbridge.run`,
+  where Caddy passes only GET requests and blocks the login.
 - **Demo server** (#423). Play reviewers cannot pass GitHub's new-device check and cannot be given
   a recovery key, so `demo.starbridge.run` is a self-hosted server with an owner token, and
   `demo/` is its first device and machine. It approves every join by digits without comparing,

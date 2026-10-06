@@ -1,0 +1,75 @@
+import { afterEach, beforeEach, expect, test } from "bun:test";
+import { FUNNEL_KEY, firstSignIn, reach } from "./funnel";
+
+const sent: string[] = [];
+const store = new Map<string, string>();
+const realFetch = globalThis.fetch;
+const before = process.env.NEXT_PUBLIC_ANALYTICS;
+const globals = ["localStorage", "location", "screen"] as const;
+const realGlobals = globals.map((k) => Object.getOwnPropertyDescriptor(globalThis, k));
+
+beforeEach(() => {
+  sent.length = 0;
+  store.clear();
+  process.env.NEXT_PUBLIC_ANALYTICS = "umami";
+  Object.assign(globalThis, {
+    localStorage: {
+      getItem: (k: string) => store.get(k) ?? null,
+      setItem: (k: string, v: string) => store.set(k, v),
+      removeItem: (k: string) => store.delete(k),
+    },
+    location: { hostname: "starbridge.run" },
+    screen: { width: 412, height: 915 },
+  });
+  globalThis.fetch = (async (_url: string, init: RequestInit) => {
+    const { name, data } = JSON.parse(init.body as string).payload;
+    sent.push(data ? `${name} ${JSON.stringify(data)}` : name);
+    return new Response();
+  }) as typeof fetch;
+});
+afterEach(() => {
+  globalThis.fetch = realFetch;
+  globals.forEach((k, i) => {
+    const d = realGlobals[i];
+    if (d) Object.defineProperty(globalThis, k, d);
+    else Reflect.deleteProperty(globalThis, k);
+  });
+  if (before === undefined) delete process.env.NEXT_PUBLIC_ANALYTICS;
+  else process.env.NEXT_PUBLIC_ANALYTICS = before;
+});
+
+test("a new account's steps are each sent once, in the order they happen", () => {
+  firstSignIn("a", 0);
+  firstSignIn("a", 1000); // the setup screen shown again
+  reach("a", () => false, 2000);
+  reach("a", (s) => s === "first-keys", 3000);
+  reach("a", (s) => s === "first-machine", 4000);
+  reach("a", (s) => (s === "first-answer" ? { kind: "done" } : s === "second-device"), 5000);
+  reach("a", () => true, 6000);
+  expect(sent).toEqual([
+    "first-sign-in",
+    "first-keys",
+    "first-machine",
+    "second-device",
+    'first-answer {"kind":"done"}',
+  ]);
+  expect(store.has(FUNNEL_KEY)).toBe(false);
+});
+
+test("steps reached after two days, or by another account, are not sent", () => {
+  firstSignIn("a", 0);
+  reach("a", () => true, 2 * 24 * 3600 * 1000);
+  firstSignIn("b", 0);
+  reach("c", () => true, 1000);
+  reach("b", () => true, 2000);
+  expect(sent).toEqual(["first-sign-in", "first-sign-in"]);
+  expect(store.has(FUNNEL_KEY)).toBe(false);
+});
+
+test("a self-hosted build sends nothing and keeps no note", () => {
+  delete process.env.NEXT_PUBLIC_ANALYTICS;
+  firstSignIn("a", 0);
+  reach("a", () => true, 1000);
+  expect(sent).toEqual([]);
+  expect(store.size).toBe(0);
+});
