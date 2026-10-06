@@ -39,7 +39,6 @@ function decision(): SealedItem {
     context: "",
     options: ["yes", "no"],
     recommended: "yes",
-    default: { action: "keep testing" },
     source: { machine: "devbox", project: "starbridge", session: "s1" },
   };
   return seal("decision", body, key(devbox), [phone.member]);

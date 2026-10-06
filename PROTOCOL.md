@@ -40,6 +40,15 @@ code cannot show: the HTTP API and the flows.
   the agent), never in Starbridge: it has no options, devices show the page and no answer
   field, and it closes when the machine posts `settled` for it.
 
+## Versions
+
+The protocol version is the `v: 1` in every signed body, the `starbridge/v1/` prefix of every
+signed or hashed string, and the `/v1` of every route. It names the algorithms too: keys are bare
+X25519 and Ed25519, boxes are `crypto_box_seal`, hashes BLAKE2b-256, with no algorithm tag or
+suite id. Changing any of them is version 2 (`v: 2`, `starbridge/v2/...`, `/v2` routes), and
+members re-pair; nothing changes an algorithm in place. A member's keys change only by revoking it
+and adding new ones.
+
 ## Directory
 
 The account's directory is a hash chain of signed entries listing each member's X25519 and
@@ -50,7 +59,7 @@ entries. An entry's `op` is one of:
 
 | `op` | Signed by | Does |
 |---|---|---|
-| `add` | an active device | adds a member (older clients also recovered with an `add` signed by the recovery key, which still verifies) |
+| `add` | an active device | adds a member |
 | `revoke` | an active device | revokes a member |
 | `recover` | the recovery key | adds a device and revokes every other member, machines included ("Recovery") |
 | `recovery` | an active device | proposes a new recovery key ("Replacing the recovery key") |
@@ -178,16 +187,11 @@ bits written as 28 Crockford base32 characters in seven groups of four (`recover
 recovery key pair is `crypto_sign_seed_keypair` of BLAKE2b-256 of "starbridge/v1/recovery-seed",
 NUL, the seed (`recoveryKeyPair`).
 
-Older accounts were shown BIP-39 words: 24 for a 32-byte seed, which is the Ed25519 seed itself,
-or 12 for a 16-byte seed. `readRecoveryKey` takes either. A key is read in any case, with or
-without dashes and spaces, O as 0 and I or L as 1; it names the first character no key holds,
-else a length other than 28, else a failed check. Text reads as words when it holds a run of 5
-to 8 letters ended by a separator, 8 runs of 3 letters or more, or 12 or more letter runs all on
-the word list however they are separated; words split on anything that is not a letter. While
-typing, a U in a word from the list, or the start of one, waits, since words only read as
-words from the eighth.
+`readRecoveryKey` reads a key in any case, with or without dashes and spaces, O as 0 and I or L
+as 1; it names the first character no key holds, else a length other than 28, else a failed
+check. The length is the format's version: a future format uses another length.
 
-When every device is lost, a new device turns the key or words into the recovery key pair,
+When every device is lost, a new device turns the key into the recovery key pair,
 verifies the chain with that public key (it must be the chain's current recovery key, whose
 `recoverySig` checks against it, which a copied public key cannot fake), and signs a `recover`
 entry with it, which adds the new device and revokes every other member, machines included. A
@@ -229,6 +233,13 @@ entry>".
 
 Base path `/v1`. JSON bodies. Errors are `{error, detail?}` with an HTTP status; protocol
 errors use the codes in `packages/protocol/src/sodium.ts`.
+
+Every request names its client and release in `starbridge-client: <name>/<version>`, `name`
+one of `cli`, `android`, `web` and `mod`, `version` MAJOR.MINOR.PATCH with an optional
+pre-release that comparisons ignore (`cli/1.0.0`, `android/1.2.0-rc.1`). The server counts the
+releases in use, and keeps a minimum release per client name: below it, any route answers 426
+`{error: "client-too-old", detail, client, minimum}`, and the client asks its owner to update. A
+request without the header, or with one the server cannot read, is served.
 
 ### Auth
 
@@ -469,7 +480,7 @@ first answer wins.
 - `permission` `{v, id, to, createdAt, agent, tool, summary, description?, input, inputHash,
   suggestions, expiresAt, source}`: `input` is the tool input as JSON text, redacted on the
   machine (provider token patterns, PEM private keys, `Authorization` headers, URL passwords, and
-  `*_KEY`, `*_TOKEN` or `*_PASSWORD` values) and at most 8000 characters; `inputHash` is `hashInput` of the input before redaction (BLAKE2b-256), keyed under the machine's signing key so a device cannot test guesses for a redacted value; `expiresAt`
+  `*_KEY`, `*_TOKEN` or `*_PASSWORD` values) and at most 8000 characters; `inputHash` is `hashInput` of the input before redaction: BLAKE2b-256 keyed with BLAKE2b-256 of `"starbridge/v1/input-hash"` keyed with the machine's signing key, so a device cannot test guesses for a redacted value; `expiresAt`
   is at most 10 minutes after `createdAt`. Each of the at most 2 `suggestions`
   `{label, rule, scope: "session" | "project"}` shows the exact rule a wider allow would add.
 - `permission-answer` `{v, id, permissionId, to, answeredAt, behavior: "allow" | "deny", scope:

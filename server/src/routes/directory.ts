@@ -138,11 +138,9 @@ directoryRoutes.post("/directory", requireCaller("device"), async (c) => {
           `a full directory takes ${recoveryProposals} recovery proposals`,
         );
     }
-    // A recovery adds with `recover` (older clients with `add`, signed by the recovery key).
-    const adds = (o: unknown) => o === "add" || o === "recover";
-    if (entries.length >= cap && adds(op)) {
-      const recovered = entries.slice(cap).filter((e) => e.signer === RECOVERY && adds(entryOp(e)));
-      if (entry.signer !== RECOVERY || recovered.length >= recoveryAdds)
+    if (entries.length >= cap && (op === "add" || op === "recover")) {
+      const recovered = entries.slice(cap).filter((e) => entryOp(e) === "recover");
+      if (op !== "recover" || recovered.length >= recoveryAdds)
         fail(409, "directory-full", `a directory adds members in its first ${cap} entries only`);
     }
     // Only to refuse garbage early: clients verify the chain themselves and trust nothing here.
@@ -165,7 +163,7 @@ directoryRoutes.post("/directory", requireCaller("device"), async (c) => {
       JSON.stringify(entry),
     );
     syncMembers(db, caller.account, dir);
-    // The device that wrote the genesis, or recovered with the words, is this session's device.
+    // The device that wrote the genesis, or recovered, is this session's device.
     const body = JSON.parse(entry.body) as { op: string; member?: { id: string } };
     if ((genesis || entry.signer === RECOVERY) && caller.member === null && body.member) {
       db.query("UPDATE sessions SET member_id = ? WHERE token_hash = ?").run(

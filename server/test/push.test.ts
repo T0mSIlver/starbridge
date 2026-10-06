@@ -148,7 +148,6 @@ function decision(devbox: Actor, phone: Actor, id: string, context = "") {
     context,
     options: ["yes", "no"],
     recommended: "yes",
-    default: { action: "ship" },
     source: { machine: "devbox", project: "p", session: "s" },
   };
   return seal("decision", body, { id: devbox.id, signKey: devbox.keys.sign.privateKey }, [
@@ -504,7 +503,6 @@ test("a queued push is dropped once its device is revoked", async () => {
     context: "",
     options: ["yes", "no"],
     recommended: "yes",
-    default: { action: "ship" },
     source: { machine: "devbox", project: "p", session: "s" },
   };
   const d = seal("decision", body, { id: devbox.id, signKey: devbox.keys.sign.privateKey }, [

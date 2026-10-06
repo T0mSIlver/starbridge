@@ -2,7 +2,6 @@ package dev.starbridge.app
 
 import com.goterl.lazysodium.LazySodiumJava
 import com.goterl.lazysodium.SodiumJava
-import dev.starbridge.app.protocol.Bip39
 import dev.starbridge.app.protocol.Directories
 import dev.starbridge.app.protocol.Envelopes
 import dev.starbridge.app.protocol.JoinRequestBody
@@ -228,44 +227,19 @@ class ProtocolVectorsTest {
     }
 
     @Test
-    fun recoveryWords() {
-        for (name in listOf("recovery", "recovery12")) {
-            val recovery = keys.getValue(name).jsonObject
-            assertEquals(recovery.str("seed"), toB64(Bip39.mnemonicToEntropy(recovery.str("words"))))
-            assertEquals(recovery.str("words"), Bip39.entropyToMnemonic(fromB64(recovery.str("seed"))))
-            assertEquals(recovery.str("signPk"), toB64(sodium.signSeedKeyPair(recoverySignSeed(fromB64(recovery.str("seed")), sodium)).public))
-        }
-    }
-
-    @Test
     fun recoveryKey() {
-        val recovery = keys.getValue("recovery12").jsonObject
+        val recovery = keys.getValue("recovery").jsonObject
         val key = recovery.str("key")
         assertEquals(key, RecoveryKeys.encode(fromB64(recovery.str("seed")), sodium))
-        for (typed in listOf(key, key.lowercase(), key.replace("-", ""), key.replace("-", " "), key.replace('0', 'O').replace('1', 'l'), recovery.str("words"))) {
+        assertEquals(recovery.str("signPk"), toB64(sodium.signSeedKeyPair(recoverySignSeed(fromB64(recovery.str("seed")), sodium)).public))
+        for (typed in listOf(key, key.lowercase(), key.replace("-", ""), key.replace("-", " "), key.replace('0', 'O').replace('1', 'l'))) {
             assertEquals(recovery.str("seed"), toB64(RecoveryKeys.seed(typed, sodium)))
         }
         assertEquals("Character 5, \"U\", is not in a recovery key.", RecoveryKeys.read(key.take(5) + "U" + key.drop(6)).problem)
         assertEquals("A character is wrong. Check each group against what you wrote down.", RecoveryKeys.read(key.take(5) + (if (key[5] == '2') '3' else '2') + key.drop(6), sodium).problem)
         assertEquals(null, RecoveryKeys.read(key.take(9)).problem)
         assertEquals("A recovery key has 28 characters; this has 8.", RecoveryKeys.read(key.take(9), sodium).problem)
-        assertEquals(true, RecoveryKeys.read(keys.getValue("recovery").jsonObject.str("words")).words)
-        assertEquals(recovery.str("seed"), toB64(RecoveryKeys.seed(recovery.str("words").replace(" ", "1"), sodium)))
-        assertEquals(null, RecoveryKeys.read("cup run").problem)
-        assertEquals(null, RecoveryKeys.read("1cup2run").problem)
         assertEquals("Character 4, \"U\", is not in a recovery key.", RecoveryKeys.read("7KQU").problem)
-    }
-
-    @Test
-    fun recoveryWordEntry() {
-        val words = keys.getValue("recovery12").jsonObject.str("words").split(" ")
-        for (typed in listOf(words.joinToString("-"), words.joinToString(", "), words.mapIndexed { i, w -> "${i + 1}. $w" }.joinToString("\n"), words.joinToString("  ").uppercase())) {
-            assertEquals(words, Bip39.split(typed))
-            assertEquals(null, Bip39.problem(Bip39.split(typed)))
-        }
-        assertEquals("Word 3, \"mountian\", is not on the word list.", Bip39.problem(words.toMutableList().also { it[2] = "mountian" }))
-        assertEquals("Older accounts recover with 12 or 24 words; this has 11.", Bip39.problem(words.drop(1)))
-        assertEquals("One word is wrong, or two are swapped. Check each word and the order.", Bip39.problem(listOf(words[1], words[0]) + words.drop(2)))
     }
 
     /** Entries this client writes pass its own verifier, and so the vectors' rules. */
