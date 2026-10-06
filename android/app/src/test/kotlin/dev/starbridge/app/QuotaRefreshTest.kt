@@ -8,6 +8,7 @@ import dev.starbridge.app.data.Disk
 import dev.starbridge.app.data.Prompt
 import dev.starbridge.app.data.Run
 import dev.starbridge.app.data.Saved
+import dev.starbridge.app.data.SavedQuota
 import dev.starbridge.app.data.Secrets
 import dev.starbridge.app.data.ServerStore
 import dev.starbridge.app.data.Vault
@@ -17,6 +18,9 @@ import dev.starbridge.app.protocol.Joins
 import dev.starbridge.app.protocol.Member
 import dev.starbridge.app.protocol.Pairings
 import dev.starbridge.app.protocol.Pin
+import dev.starbridge.app.protocol.QuotaProvider
+import dev.starbridge.app.protocol.QuotaSnapshot
+import dev.starbridge.app.protocol.QuotaWindow
 import dev.starbridge.app.protocol.Sodium
 import dev.starbridge.app.protocol.envelopeJson
 import dev.starbridge.app.protocol.toB64
@@ -25,6 +29,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.add
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -91,6 +96,36 @@ class QuotaRefreshTest {
         assertNull(store.notice.value)
     }
 
+    @Test
+    fun aSnapshotThatFailsToOpenKeepsTheMachinesLastGoodOne() {
+        // A newer machine's snapshot this app cannot open (#472): the windows stay as they were.
+        val bad = buildJsonObject {
+            put("items", buildJsonArray {
+                add(buildJsonObject {
+                    put("item", buildJsonObject {
+                        put("v", 1); put("kind", "quota"); put("id", "q_new"); put("from", "m_box")
+                        put("boxes", buildJsonArray { add(buildJsonObject { put("to", "phone"); put("box", "AAAA") }) })
+                    })
+                    put("cursor", "1"); put("receivedAt", "2026-10-06T12:05:00Z")
+                })
+            })
+        }
+        val good = QuotaSnapshot(
+            1, "q_old", listOf("phone"), "2026-10-06T12:00:00Z",
+            listOf(QuotaProvider("zai", windows = listOf(QuotaWindow("primary", "5h", 20.0, 300, null, null)))),
+            emptyList(),
+        )
+        val store = readyStore(listOf(SavedQuota("m_box", good))) { path ->
+            when (path) {
+                "/v1/quota/ask" -> MockResponse(404, okhttp3.Headers.headersOf(), "")
+                "/v1/quota" -> json(bad)
+                else -> null
+            }
+        }
+        refreshAndWait(store)
+        assertEquals(listOf("zai"), store.windows.value.map { it.provider })
+    }
+
     private fun refreshAndWait(store: ServerStore) {
         store.refreshQuotas()
         // Busy holds from the ask to the end of the sync, so it clears only once both ran.
@@ -98,7 +133,7 @@ class QuotaRefreshTest {
     }
 
     /** A phone in an account with one machine; [route] answers first, else empty lists. */
-    private fun readyStore(route: (String) -> MockResponse?): ServerStore {
+    private fun readyStore(quotas: List<SavedQuota> = emptyList(), route: (String) -> MockResponse?): ServerStore {
         val account = "acct"
         val at = "2026-10-06T12:00:00Z"
         val signKeys = sodium.signKeyPair()
@@ -127,7 +162,7 @@ class QuotaRefreshTest {
         }
         val disk = Disk(Files.createTempDirectory("starbridge").toFile(), identity)
         val server = http.url("/").toString().trimEnd('/')
-        disk.save(Saved(server, account = account, accountExists = true, me = phone, pin = Pin(dir.length, dir.head), entries = entries.toList()))
+        disk.save(Saved(server, account = account, accountExists = true, me = phone, pin = Pin(dir.length, dir.head), entries = entries.toList(), quotas = quotas))
         disk.save(Secrets(session = "s", boxPk = toB64(boxKeys.public), boxSk = toB64(boxKeys.secret), signPk = toB64(signKeys.public), signSk = toB64(signKeys.secret)))
         val alerts = object : Alerts {
             override fun decision(decision: Decision, silent: Boolean) {}

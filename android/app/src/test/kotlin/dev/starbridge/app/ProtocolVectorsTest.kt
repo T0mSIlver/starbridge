@@ -19,12 +19,20 @@ import dev.starbridge.app.protocol.SignedEnvelope
 import dev.starbridge.app.protocol.Sodium
 import dev.starbridge.app.protocol.fromB64
 import dev.starbridge.app.protocol.parseBody
+import dev.starbridge.app.protocol.Decision
+import dev.starbridge.app.protocol.QuotaSnapshot
+import dev.starbridge.app.protocol.Run
+import dev.starbridge.app.protocol.Settled
+import dev.starbridge.app.protocol.Waiting
 import dev.starbridge.app.protocol.parseJsonText
 import dev.starbridge.app.protocol.codeFromLink
 import dev.starbridge.app.protocol.pairingLink
 import dev.starbridge.app.protocol.parsePairingCode
 import dev.starbridge.app.protocol.toB64
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.boolean
 import kotlinx.serialization.json.encodeToJsonElement
@@ -33,6 +41,7 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
 
@@ -213,17 +222,34 @@ class ProtocolVectorsTest {
     @Test
     fun schemas() {
         val v = load("schemas.json")
-        for (kind in listOf("decision", "answer", "permission", "permission-answer", "settled", "waiting", "run")) {
+        for (kind in listOf("decision", "answer", "permission", "permission-answer", "settled", "waiting", "run", "quota")) {
             for (case in v.getValue(kind).jsonArray.map { it.jsonObject }) {
-                val valid = try {
+                val body = try {
                     parseBody(kind, case.getValue("body").toString())
-                    true
                 } catch (e: ProtocolException) {
-                    false
+                    null
                 }
-                assertEquals("$kind: ${case.str("name")}", case.getValue("valid").jsonPrimitive.boolean, valid)
+                assertEquals("$kind: ${case.str("name")}", case.getValue("valid").jsonPrimitive.boolean, body != null)
+                case["read"]?.let { assertTrue("$kind: ${case.str("name")} reads", reads(it, encoded(body!!))) }
             }
         }
+    }
+
+    private fun encoded(body: Any): JsonElement = when (body) {
+        is Decision -> ProtocolJson.encodeToJsonElement(Decision.serializer(), body)
+        is Settled -> ProtocolJson.encodeToJsonElement(Settled.serializer(), body)
+        is Waiting -> ProtocolJson.encodeToJsonElement(Waiting.serializer(), body)
+        is Run -> ProtocolJson.encodeToJsonElement(Run.serializer(), body)
+        is QuotaSnapshot -> ProtocolJson.encodeToJsonElement(QuotaSnapshot.serializer(), body)
+        else -> error("no read vectors for ${body::class.simpleName}")
+    }
+
+    /** Whether [actual] holds [expected]: objects by their keys, arrays whole, null as absent. */
+    private fun reads(expected: JsonElement, actual: JsonElement?): Boolean = when (expected) {
+        is JsonNull -> actual == null || actual is JsonNull
+        is JsonArray -> actual is JsonArray && actual.size == expected.size && expected.indices.all { reads(expected[it], actual[it]) }
+        is JsonObject -> actual is JsonObject && expected.all { (k, e) -> reads(e, actual[k]) }
+        else -> expected.jsonPrimitive.content == (actual as? JsonPrimitive)?.content && actual !is JsonNull
     }
 
     @Test

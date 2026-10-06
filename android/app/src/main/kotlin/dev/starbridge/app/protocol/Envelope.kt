@@ -95,9 +95,9 @@ class Envelopes(private val sodium: Sodium) {
     }
 }
 
-/** Parses a body whose signature was already checked. */
+/** Parses a body whose signature was already checked, as a reader ([readable]). */
 fun parseBody(kind: String, text: String): Any {
-    val json = parseJsonText(text)
+    val json = readable(kind, parseJsonText(text))
     return when (kind) {
         "directory" -> parseJson(DirectoryEntry.serializer(), json).also { it.check() }
         "decision" -> parseJson(Decision.serializer(), json).also { it.check() }

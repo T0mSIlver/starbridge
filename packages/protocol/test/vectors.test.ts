@@ -21,6 +21,7 @@ import {
   ProtocolError,
   pairingKey,
   parsePairingCode,
+  readable,
   ready,
   recoveryKey,
   recoveryKeyPair,
@@ -239,17 +240,40 @@ describe("schemas.json", () => {
     "permission",
     "permission-answer",
     "settled",
+    "waiting",
     "run",
+    "quota",
   ] as const;
   for (const kind of kinds) {
     const schema = BODY_SCHEMAS[kind];
-    for (const c of v[kind]) {
+    for (const c of v[kind] as { name: string; body: unknown; valid: boolean; read?: unknown }[]) {
       test(`${kind}: ${c.name}`, () => {
-        expect(schema.safeParse(c.body).success).toBe(c.valid);
+        // As a reader parses it (`parseBody`).
+        const r = schema.safeParse(readable(kind, c.body));
+        expect(r.success).toBe(c.valid);
+        if (c.read !== undefined) expect(reads(c.read, r.data)).toBe(true);
       });
     }
   }
 });
+
+/** Whether `actual` holds `expected`: objects by their keys, arrays whole, null as absent. */
+function reads(expected: unknown, actual: unknown): boolean {
+  if (expected === null) return actual === null || actual === undefined;
+  if (Array.isArray(expected))
+    return (
+      Array.isArray(actual) &&
+      actual.length === expected.length &&
+      expected.every((e, i) => reads(e, actual[i]))
+    );
+  if (typeof expected === "object")
+    return (
+      typeof actual === "object" &&
+      actual !== null &&
+      Object.entries(expected).every(([k, e]) => reads(e, (actual as Record<string, unknown>)[k]))
+    );
+  return expected === actual;
+}
 
 test("the recovery key reads back to its seed and signing key", () => {
   const { recovery } = V.keys;

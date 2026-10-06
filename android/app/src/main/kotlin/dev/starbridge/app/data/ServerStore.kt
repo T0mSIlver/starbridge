@@ -1037,7 +1037,10 @@ class ServerStore(
     private suspend fun syncQuotas() {
         val listed = api().quota()
         if (scan(listed.map { it.item })) return
-        val quotas = listed.mapNotNull { open(it.item)?.let { (from, body) -> SavedQuota(from, body as QuotaSnapshot) } }
+        // A snapshot this app cannot open keeps that machine's last good one, rather than blanking it.
+        val quotas = listed.mapNotNull { l ->
+            open(l.item)?.let { (from, body) -> SavedQuota(from, body as QuotaSnapshot) } ?: saved.quotas.find { it.from == l.item.from }
+        }
         persist(saved.copy(quotas = quotas))
         alerts.quota(quotas.flatMap(::notices))
     }

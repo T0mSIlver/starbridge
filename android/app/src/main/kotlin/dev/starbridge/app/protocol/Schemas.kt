@@ -201,6 +201,8 @@ data class SealedItem(
 // --- Decisions and answers ---------------------------------------------------
 
 val MACHINE_KINDS = setOf("server", "desktop", "laptop", "cloud")
+val SETTLED_OUTCOMES = setOf("keyboard", "timeout", "device", "elsewhere", "withdrawn")
+val WAITING_STATES = setOf("working", "waiting")
 /**
  * An agent as items carry it (AgentName in schemas.ts): a known one or one a newer machine sends,
  * which this app shows as none rather than refusing the item.
@@ -474,7 +476,7 @@ data class Settled(
         id(itemId, "itemId")
         schema(to.isNotEmpty(), "to")
         to.forEach { id(it, "to") }
-        outcome?.let { schema(it in setOf("keyboard", "timeout", "device", "elsewhere", "withdrawn"), "outcome") }
+        outcome?.let { schema(it in SETTLED_OUTCOMES, "outcome") }
         device?.let { id(it, "device") }
         time(at, "at")
         schema((outcome == "device") == (device != null), "device is set exactly when outcome is device")
@@ -510,7 +512,7 @@ data class Waiting(
         schema(to.isNotEmpty(), "to")
         to.forEach { id(it, "to") }
         time(at, "at")
-        schema(state == "working" || state == "waiting", "state")
+        schema(state in WAITING_STATES, "state")
     }
 }
 
@@ -519,6 +521,8 @@ data class Waiting(
 /** RUN_HEARTBEAT_MS and RUN_STALE_MS in schemas.ts. */
 const val RUN_HEARTBEAT_MS = 60_000L
 const val RUN_STALE_MS = 3 * RUN_HEARTBEAT_MS
+
+val RUN_UNITS = setOf("step", "percent")
 
 @Serializable
 data class RunProgress(val done: Int, val total: Int, val unit: String)
@@ -557,7 +561,7 @@ data class Run(
         val started = instantOf(startedAt)
         schema(!instantOf(at).isBefore(started), "at: not before startedAt")
         progress?.let { p ->
-            schema(p.unit in setOf("step", "percent"), "progress.unit")
+            schema(p.unit in RUN_UNITS, "progress.unit")
             schema(p.total >= 1 && p.done in 0..p.total, "done is at most total")
             schema(p.unit == "step" || p.total == 100, "a percent is out of 100")
         }
@@ -570,6 +574,9 @@ data class Run(
 }
 
 // --- Quotas ------------------------------------------------------------------
+
+val PACE_STAGES = setOf("ahead", "on-track", "behind", "unknown")
+val ALERT_KINDS = setOf("unused-headroom", "runs-out", "low")
 
 @Serializable
 data class Pace(
@@ -642,7 +649,7 @@ data class QuotaSnapshot(
                 w.windowMinutes?.let { schema(it > 0, "windowMinutes") }
                 w.resetsAt?.let { time(it, "resetsAt") }
                 w.pace?.let { pace ->
-                    schema(pace.stage in setOf("ahead", "on-track", "behind", "unknown"), "pace.stage")
+                    schema(pace.stage in PACE_STAGES, "pace.stage")
                     pace.runsOutAt?.let { time(it, "runsOutAt") }
                 }
             }
