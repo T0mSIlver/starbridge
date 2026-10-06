@@ -1667,6 +1667,9 @@ so the mod is the first path.
   allow. Reviewers cannot pass GitHub's new-device email check, so they need a demo server
   that signs in with an owner token and a demo machine that posts after their phone joins
   (#423, below).
+- 2026-10-06. The images install pnpm with `npm install -g` at package.json's
+  `packageManager` version, not corepack: the node:24-slim the VPS pulled on 2026-10-06 ships
+  no corepack, and every deploy from c836266a on failed at `corepack enable`.
 - 2026-10-06. Demo server for Play reviewers (#423). A reviewer has no GitHub account we can
   give them (GitHub mails a new-device code) and no recovery key we can give them (recovering
   revokes every other member, #363). So `https://demo.starbridge.run` is a self-hosted server
