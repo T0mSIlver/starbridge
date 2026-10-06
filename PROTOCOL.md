@@ -194,7 +194,7 @@ never rely on that check.
 
 | Route | Who | What |
 |---|---|---|
-| `POST /pairings` | new member | `{request, claimHash}`: the request message and BLAKE2b-256 of a random claim secret's text (`claimHash`); 409 if the rendezvous id is taken; 429 `busy` when the server holds 5000 waiting pairings |
+| `POST /pairings` | new member | `{request, claimHash}`: the request message and BLAKE2b-256 of a random claim secret's text (`claimHash`); 409 if the rendezvous id is taken; 429 `too-many-pairings` when the caller's address holds 20 unapproved pairings, 429 `busy` when the server holds 20000 pairings |
 | `GET /pairings/:rendezvous?wait=<s>` | device | `{request}`; with `wait`, holds until the new member posts and answers 204 if `wait` passes first |
 | `POST /pairings/:rendezvous/approve` | device | `{approval}`; the directory must already hold the new member's entry; 409 `already-paired` when that member already holds a session or token |
 | `GET /pairings/:rendezvous/result?wait=<s>` | new member, with `X-Claim: <secret>` | long-poll: `{approval, token?}` once approved, `token` for machines only; 204 when `wait` passes |
@@ -320,6 +320,7 @@ code below. Per-address limits count an IPv6 client as its /64.
 | Directory entries | from entry 200 on, a device's `add`: 409 `directory-full`; revocations always pass, and the recovery key may add 20 more devices; 8 KB per entry: 413 `too-large` |
 | Sessions | 50 per account; signing in past that ends the oldest, unpaired ones first |
 | `GET /auth/github/callback` | 20 a minute per address |
+| `POST /pairings` | 10 a minute per address; 20 unapproved pairings per address, an IPv6 client counting as its /48: 429 `too-many-pairings` |
 | Pairing messages | 4 KB each: 400 `bad-schema` |
 | `GET /pairings/:rendezvous/result` and `GET /pairings/:rendezvous?wait=` waiting | 4 per pairing: 429 `too-many-waits` |
 | `POST /joins` | 10 a minute per account; request text 4 KB: 400 `bad-schema` |
