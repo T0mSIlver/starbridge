@@ -167,7 +167,7 @@ const val FORMAT = 1
 
 /**
  * [Saved] without the items whose kept text this app no longer reads, so a body never throws when
- * a screen reads it; the server still holds each one.
+ * a screen reads it. Reading them again would not help: the server holds the same signed text.
  */
 fun Saved.readable(): Saved {
     fun ok(read: () -> Any?) = runCatching { read() }.onFailure { Log.w("Starbridge", "dropped a saved item: ${it.message}") }.isSuccess
