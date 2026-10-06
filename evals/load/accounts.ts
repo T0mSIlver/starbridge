@@ -25,8 +25,10 @@ export interface Via {
   server: string;
   /** The fake services' URL as the server reaches them. */
   fake: string;
-  /** Sent as X-Forwarded-For; only the server direct takes it, Caddy puts the real one. */
+  /** The caller's address: sent as X-Forwarded-For to the server direct, as X-Sim-IP through Caddy. */
   ip?: string;
+  /** Through Caddy, which replaces X-Forwarded-For with X-Sim-IP (stack.sh). */
+  viaCaddy?: boolean;
   /** Told of each 429 before the call waits Retry-After and tries again, as a patient user. */
   limited?: (path: string, seconds: number) => void;
 }
@@ -44,7 +46,7 @@ export async function makeUser(n: number, via: Via): Promise<User> {
   ) {
     for (;;) {
       const headers: Record<string, string> = { ...opts.headers };
-      if (via.ip) headers["x-forwarded-for"] = via.ip;
+      if (via.ip) headers[via.viaCaddy ? "x-sim-ip" : "x-forwarded-for"] = via.ip;
       if (opts.token) headers.authorization = `Bearer ${opts.token}`;
       if (opts.cookie) headers.cookie = opts.cookie;
       if (opts.body !== undefined) headers["content-type"] = "application/json";
