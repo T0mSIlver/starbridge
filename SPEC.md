@@ -365,6 +365,15 @@ provider plugins add providers, not panels.
   and offers, each after asking, Codex's skill, the Pi package and opencode's plugin and skill,
   from copies the CLI carries so versions match. The local agent rewrites outdated copies when
   it starts.
+- **The CLI's path** (#612). Hooks and plugins start the CLI from an agent whose PATH may lack
+  the install folder: on macOS `~/.local/bin` is not on the default PATH, and Claude Code opened
+  from the Dock has no shell profile. So setup and `update` record the binary's absolute path in
+  the config folder (`cli-path`); the Claude Code hooks (`plugin/hooks/cli.sh`), the mod, and the
+  Pi and opencode plugins start that one, else `starbridge` on the PATH, and `cli.sh` then tries
+  the installers' folders. When the binary's folder is not on the PATH, setup offers to add it to
+  the shell's startup file, and its last lines say to open a new terminal or what to add, since
+  install.sh's own hint scrolls away under setup. Windows gets the folder on the PATH from
+  install.ps1.
 - **Files setup writes into other tools** (#474) start with one marker line, ``Written by
   starbridge <version>; `starbridge uninstall` removes it.``, in the file's comment syntax: the
   systemd unit, the launchd plist, the Codex rule, the opencode entry and the copied skills (a YAML
