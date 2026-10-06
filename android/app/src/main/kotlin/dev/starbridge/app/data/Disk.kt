@@ -185,9 +185,11 @@ class Disk(private val dir: File, private val vault: Vault) {
         check(tmp.renameTo(File(dir, name)))
     }
 
-    /** The saved state as it is on disk now, or null; moves nothing. */
+    /** The saved state as it is on disk now, or null; moves nothing ([load] does). */
     fun saved(): Saved? = read("state.bin", Saved.serializer()) { it.v }.getOrNull()
     fun save(saved: Saved) = write("state.bin", Saved.serializer(), saved)
+    /** The secrets as they are on disk now, or none; moves nothing. */
+    fun secrets(): Secrets = read("secrets.bin", Secrets.serializer()) { it.v }.getOrNull() ?: Secrets()
     fun save(secrets: Secrets) = write("secrets.bin", Secrets.serializer(), secrets)
 
     fun wipe() {
