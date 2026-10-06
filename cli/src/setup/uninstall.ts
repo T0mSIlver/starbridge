@@ -53,7 +53,7 @@ export async function uninstall(sys: Sys, opts: UninstallOpts): Promise<number> 
       session: "",
     };
     // The id and the hint `ask` prints are for agents, not for someone uninstalling.
-    const quiet = { ...ctx, out: () => {} };
+    const quiet = { ...ctx, out: () => {}, err: () => {} };
     try {
       await withAgent(
         quiet,
