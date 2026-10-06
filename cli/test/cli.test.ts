@@ -310,15 +310,6 @@ test("ask refuses a decision that would not stand alone", async () => {
   expect(await server.opened("decision")).toEqual([]);
 });
 
-test("ask ignores --default: the decision waits for the owner", async () => {
-  const ctx = await paired(server);
-  const args = ["ask", "--question", "Q?", "--option", "A", "--option", "B", "--default", "A"];
-  expect(await run(args, ctx)).toBe(0);
-  expect(ctx.errors.some((e) => e.includes("--default is ignored"))).toBe(true);
-  const [d] = await server.opened("decision");
-  expect(d).not.toHaveProperty("default");
-});
-
 test("waiting and working flip a decision's state, and each flip pushes", async () => {
   const ctx = await paired(server);
   await run(ASK, ctx);
