@@ -18,7 +18,12 @@ concurrency:
 
 jobs:
   lockfile:
-    if: github.actor == 'dependabot[bot]' && startsWith(github.head_ref, 'dependabot/npm_and_yarn/')
+    # A fork can run Dependabot on its own branch and open a pull request from it, which makes
+    # the actor dependabot[bot] too: only this repository's branches qualify.
+    if: >-
+      github.actor == 'dependabot[bot]' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      startsWith(github.head_ref, 'dependabot/npm_and_yarn/')
     runs-on: ${{ vars.RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 10
     # A workflow that Dependabot starts gets a read-only token unless it asks for more.
@@ -32,7 +37,9 @@ jobs:
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
         with:
           dest: ${{ runner.temp }}/setup-pnpm
-      - run: pnpm install --lockfile-only --no-frozen-lockfile
+      # Resolves versions from the registry's metadata: it downloads no package and runs no script
+      # or pnpmfile hook.
+      - run: pnpm install --lockfile-only --no-frozen-lockfile --ignore-scripts --ignore-pnpmfile
         timeout-minutes: 5
         env:
           pnpm_config_store_dir: ${{ runner.tool_cache }}/pnpm-store
