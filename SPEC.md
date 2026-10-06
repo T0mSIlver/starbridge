@@ -1293,6 +1293,11 @@ so the mod is the first path.
   read process arguments; `wait <id>` prints a delivered answer from local state. The npm bundle
   runs under Node, so the CLI uses no Bun global without a guard; a test runs it there.
 
+- 2026-10-06. `ask --default` is gone from the help and the skill (#352): no client shows it, so
+  an agent that passed one believed the owner saw it. Like `--default-at`, it is accepted and
+  ignored with a warning, so older commands still post; the CLI always sends "Waits for your
+  answer" for clients from before 2026-10-05. `ask --help` now lists `--timeout`.
+
 ## Encryption, with existing libraries
 
 - libsodium sealed boxes (`crypto_box_seal`, X25519 + XSalsa20-Poly1305): an

@@ -62,7 +62,7 @@ function session(socket: string, id: string) {
 
 async function ask(c: TestCtx, ...extra: string[]): Promise<string> {
   const before = c.lines.length;
-  const code = await run([...ASK, "--default", "Merge at 18:00", ...extra], c);
+  const code = await run([...ASK, ...extra], c);
   if (code !== 0) throw new Error(c.errors.join("\n"));
   return c.lines[before] as string;
 }
@@ -237,7 +237,7 @@ test("the CLI goes to the server itself when no agent runs, or when the agent ca
   const dead = createServer();
   await new Promise<void>((r) => dead.listen(stale, r));
   await new Promise<void>((r) => dead.close(() => r()));
-  expect(await run([...ASK, "--default", "x", "--session", "s1"], ctx)).toBe(0);
+  expect(await run([...ASK, "--session", "s1"], ctx)).toBe(0);
 
   // An agent from another release.
   const old = createServer((_req, res) => {
@@ -246,7 +246,7 @@ test("the CLI goes to the server itself when no agent runs, or when the agent ca
   });
   await new Promise<void>((r) => old.listen(stale, r));
   try {
-    expect(await run([...ASK, "--default", "x", "--session", "s1"], ctx)).toBe(0);
+    expect(await run([...ASK, "--session", "s1"], ctx)).toBe(0);
     expect(ctx.errors).toContain("starbridge: update the agent; going to the server directly");
   } finally {
     await new Promise<void>((r) => old.close(() => r()));
@@ -339,7 +339,7 @@ test("once the agent posted the decision, a 426 on the wait never posts it again
   });
   await new Promise<void>((r) => fake.listen(socket, r));
   try {
-    expect(await run([...ASK, "--default", "x", "--wait"], ctx)).toBe(1);
+    expect(await run([...ASK, "--wait"], ctx)).toBe(1);
     expect(ctx.lines).toEqual(["d_fake"]);
     expect(ctx.errors.at(-1)).toBe("starbridge: update it");
   } finally {
