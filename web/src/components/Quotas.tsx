@@ -11,6 +11,7 @@ import {
   type QuotaSettings,
   reorder,
   runningOut,
+  runsOutSoonest,
 } from "@/lib/quotaSettings";
 import type { QuotaCardData } from "@/lib/types";
 import { useApp } from "./AppProvider";
@@ -100,6 +101,7 @@ function Groups({
     settings.runningOutFirst && !!g.cards[0] && runningOut(g.cards[0].window, now);
   const first = list.filter(leads).length;
   const leading = new Set(list.slice(0, first).map((g) => g.provider));
+  const soonest = runsOutSoonest(list.slice(0, first), now);
   const units: Unit[] = list.slice(0, first).map((g) => ({
     id: `lead/${key(g)}`,
     provider: g.provider,
@@ -142,7 +144,7 @@ function Groups({
                 comfy
                 handle={
                   i === 0 && n < first ? (
-                    <Pinned provider={u.provider} />
+                    <Pinned provider={u.provider} soonest={u.groups[0] === soonest} />
                   ) : i === 0 ? (
                     <button type="button" {...reorderer.handle(u.id)}>
                       <Icon name="drag" size={18} />
@@ -168,7 +170,7 @@ function Groups({
  * in the top layer, since the table's rows clip what overflows them, and not a `title`, which
  * phones never show (#285). It closes on Escape, a click outside, or a scroll.
  */
-function Pinned({ provider }: { provider: string }) {
+function Pinned({ provider, soonest }: { provider: string; soonest: boolean }) {
   const id = useId();
   const pin = useRef<HTMLButtonElement>(null);
   const pop = useRef<HTMLDivElement>(null);
@@ -191,13 +193,13 @@ function Pinned({ provider }: { provider: string }) {
         ref={pin}
         className={s.pin}
         popoverTarget={id}
-        aria-label={`Why ${provider} is first`}
+        aria-label={`Why ${provider} is up top`}
       >
         <Icon name="pin" size={18} />
       </button>
       <div id={id} ref={pop} popover="auto" className={`t-meta ${s.why}`} onToggle={toggled}>
-        First because it runs out soonest. Change in{" "}
-        <Link href="/settings#running-out-first">Settings</Link>.
+        {soonest ? "Up top because it runs out soonest." : "Up top because it's running out."}{" "}
+        Change in <Link href="/settings#running-out-first">Settings</Link>.
       </div>
     </>
   );

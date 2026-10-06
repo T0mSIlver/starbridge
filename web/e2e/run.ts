@@ -634,8 +634,8 @@ async function main() {
 
   step("a group pinned by running out first says why on a click (#296)");
   await page.setViewportSize(DESKTOP);
-  await page.getByRole("button", { name: "Why codex is first" }).click();
-  const why = page.getByText("First because it runs out soonest.");
+  await page.getByRole("button", { name: "Why codex is up top" }).click();
+  const why = page.getByText(/^Up top because it/);
   await why.waitFor();
   for (const scheme of ["light", "dark"] as const) {
     await page.emulateMedia({ colorScheme: scheme });
@@ -644,7 +644,7 @@ async function main() {
   }
   await page.keyboard.press("Escape");
   await why.waitFor({ state: "hidden" });
-  await page.getByRole("button", { name: "Why codex is first" }).click();
+  await page.getByRole("button", { name: "Why codex is up top" }).click();
   await why.getByRole("link", { name: "Settings" }).click();
   await page.waitForURL(/\/settings#running-out-first$/);
   await page.getByRole("switch", { name: "Running out first" }).waitFor();

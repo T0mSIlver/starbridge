@@ -126,6 +126,23 @@ export function groups(arranged: QuotaCardData[]): QuotaGroup[] {
   return [...byKey.values()];
 }
 
+/**
+ * Of the groups that lead while "Running out first" is on, the one with the window that runs out
+ * soonest (#351): they lead in the provider order, so it need not be the first.
+ */
+export function runsOutSoonest(lead: QuotaGroup[], now: Date): QuotaGroup | undefined {
+  const at = (g: QuotaGroup) =>
+    Math.min(
+      ...g.cards
+        .filter((c) => runningOut(c.window, now))
+        .map((c) => Date.parse(c.window.pace?.runsOutAt ?? "") || Infinity),
+    );
+  return lead.reduce<QuotaGroup | undefined>(
+    (best, g) => (!best || at(g) < at(best) ? g : best),
+    undefined,
+  );
+}
+
 /** The alerts this browser shows a notification for: newly raised, of providers it opted in. */
 export function toNotify(alerts: QuotaAlert[], s: QuotaSettings): QuotaAlert[] {
   return alerts.filter(

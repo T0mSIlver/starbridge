@@ -1292,6 +1292,14 @@ so the mod is the first path.
   since `codex queue` (0.160) takes the message only as an argument and other local users can
   read process arguments; `wait <id>` prints a delivered answer from local state. The npm bundle
   runs under Node, so the CLI uses no Bun global without a guard; a test runs it there.
+- 2026-10-06. A prompt in History says how and where it was answered, as a question does (#349):
+  "Denied · on Pixel", "Allowed for this session · on this browser", and no separator when nobody
+  answered ("Expired"). Answers are sealed to the asking machine, so other devices learn the
+  allow or deny from the machine's settled notice, which now carries `behavior` beside `device`;
+  a notice from an older machine reads "Answered".
+- 2026-10-06. "Running out first" pins every leading group, in the provider order, so only the
+  group whose window runs out soonest says so (#351): "Up top because it runs out soonest."; the
+  others say "Up top because it's running out.", each followed by "Change in Settings."
 
 ## Encryption, with existing libraries
 
