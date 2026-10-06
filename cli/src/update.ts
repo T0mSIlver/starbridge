@@ -18,8 +18,14 @@ import { defaults, makeSys } from "./setup/sys";
 import { VERSION } from "./version";
 
 const MANAGED = {
-  brew: { update: "brew upgrade starbridge", remove: "brew uninstall starbridge" },
-  npm: { update: "npm i -g starbridge@latest", remove: "npm rm -g starbridge" },
+  brew: {
+    update: "brew upgrade starbridge, then starbridge setup --refresh",
+    remove: "brew uninstall starbridge",
+  },
+  npm: {
+    update: "npm i -g starbridge@latest, then starbridge setup --refresh",
+    remove: "npm rm -g starbridge",
+  },
 };
 
 const PLUGINS = ["starbridge@starbridge", "starbridge-mod@starbridge"];
@@ -110,7 +116,18 @@ async function updateSelf(ctx: Ctx, install: InstallKind, pubkey: string) {
   chmodSync(next, 0o755);
   renameSync(next, install.path);
   ctx.out(`Updated starbridge ${VERSION} to ${latest}.`);
-  restartAgent(ctx);
+  // The new binary brings the files setup wrote to its version, and restarts the agent.
+  const r = spawnSync(install.path, ["setup", "--refresh"], {
+    env: ctx.env as NodeJS.ProcessEnv,
+    encoding: "utf8",
+    timeout: 120_000,
+  });
+  for (const line of `${r.stdout ?? ""}`.split("\n").filter(Boolean)) ctx.out(line);
+  if (r.status !== 0) {
+    const why = `${r.stderr ?? ""}`.trim() || r.error?.message || `ended by ${r.signal}`;
+    ctx.out(`Could not update the files setup wrote: ${why}`);
+    restartAgent(ctx);
+  }
   updatePlugins(ctx);
   movePiPackage(ctx, latest);
 }

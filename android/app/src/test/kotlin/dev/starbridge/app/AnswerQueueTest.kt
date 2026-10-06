@@ -123,7 +123,7 @@ class AnswerQueueTest {
         disk.save(
             Saved(
                 http.url("/").toString().trimEnd('/'), account = account, accountExists = true, me = phone,
-                pin = Pin(dir.length, dir.head), entries = entries.toList(), decisions = listOf(SavedDecision(machine.id, decision)),
+                pin = Pin(dir.length, dir.head), entries = entries.toList(), decisions = listOf(SavedDecision(machine.id, ProtocolJson.encodeToString(DecisionBody.serializer(), decision))),
             ),
         )
         disk.save(Secrets(session = "s", boxPk = toB64(boxKeys.public), boxSk = toB64(boxKeys.secret), signPk = toB64(signKeys.public), signSk = toB64(signKeys.secret)))

@@ -1,14 +1,7 @@
 import { homedir } from "node:os";
 import { type Ctx, parseDuration } from "../context";
 import { dropOldPiRules, piPermissionConfig } from "../pi";
-import {
-  codexSkill,
-  codexSkillDir,
-  installCodexSkill,
-  installOpencode,
-  opencodeDir,
-  opencodeState,
-} from "../setup/harnesses";
+import { refreshFiles } from "../setup/harnesses";
 import { socketPath } from "./api";
 import { Decisions } from "./decisions";
 import { Permissions } from "./permissions";
@@ -43,25 +36,9 @@ export function makeAgent(ctx: Ctx, opts: AgentOpts = {}): Agent {
 export async function runAgent(ctx: Ctx, opts: AgentOpts): Promise<number> {
   const agent = makeAgent(ctx, opts);
   await agent.start();
-  // `starbridge update` restarts the agent, so a new binary brings Codex its skill, and opencode
-  // its skill and plugin, here; it also takes Pi's pre-#488 bash allow patterns out.
-  const home = { ctx, home: ctx.env.HOME ?? homedir() };
-  if (codexSkill(home) === "outdated") {
-    try {
-      installCodexSkill(home);
-      agent.log(`updated the Codex skill in ${codexSkillDir(home)}`);
-    } catch (e) {
-      agent.log(`could not update the Codex skill: ${(e as Error).message}`);
-    }
-  }
-  if (opencodeState(home) === "outdated") {
-    try {
-      installOpencode(home, true);
-      agent.log(`updated the opencode skill and plugin in ${opencodeDir(home)}`);
-    } catch (e) {
-      agent.log(`could not update the opencode skill and plugin: ${(e as Error).message}`);
-    }
-  }
+  // A new binary brings Codex and opencode their files here too, after a brew or npm upgrade;
+  // it also takes Pi's pre-#488 bash allow patterns out.
+  for (const line of refreshFiles({ ctx, home: ctx.env.HOME ?? homedir() })) agent.log(line);
   try {
     if (dropOldPiRules(ctx.env))
       agent.log(

@@ -18,12 +18,21 @@ import { makeAgent } from "../src/agent/main";
 import type { Agent } from "../src/agent/server";
 import { REMOVED } from "../src/api";
 import { installTarball, updateCodexbar } from "../src/setup/codexbar";
-import { installOpencode, opencodeState, PI_PACKAGE, removeOpencode } from "../src/setup/harnesses";
+import {
+  CODEX_RULE,
+  installOpencode,
+  opencodeState,
+  PI_PACKAGE,
+  removeOpencode,
+} from "../src/setup/harnesses";
+import { markedSkill } from "../src/setup/marker";
 import opencodeFiles from "../src/setup/opencode-files.js";
-import { setup } from "../src/setup/setup";
+import { withInstalledPlaces } from "../src/setup/service";
+import { refresh, setup } from "../src/setup/setup";
 import { status } from "../src/setup/status";
 import { defaults, failure, type Sys } from "../src/setup/sys";
 import { uninstall } from "../src/setup/uninstall";
+import { VERSION } from "../src/version";
 import { paired, type TestCtx, testCtx, until } from "./helpers";
 
 setDefaultTimeout(30_000);
@@ -122,7 +131,12 @@ test("setup --yes installs the agent, the plugins and the skills, and uploads a 
   // Codex gets the skill this CLI carries; Pi gets the Starbridge package.
   const skill = readFileSync(join(m.home, ".codex/skills/starbridge/SKILL.md"), "utf8");
   expect(skill).toBe(
-    readFileSync(join(import.meta.dir, "../../plugin/skills/starbridge/SKILL.md"), "utf8"),
+    markedSkill(
+      readFileSync(join(import.meta.dir, "../../plugin/skills/starbridge/SKILL.md"), "utf8"),
+    ),
+  );
+  expect(skill.split("\n")[1]).toBe(
+    `# Written by starbridge ${VERSION}; \`starbridge uninstall\` removes it.`,
   );
   expect(m.calls()).toContain(`pi install ${PI_PACKAGE}`);
   expect(readFileSync(join(m.home, ".codex/rules/starbridge.rules"), "utf8")).toContain(
@@ -192,6 +206,62 @@ test("a second setup changes nothing", async () => {
   writeFileSync(pi, JSON.stringify({ packages: ["git:github.com/T0mSIlver/starbridge@v0.9.0"] }));
   await setup(m.sys, { yes: true, readyTimeoutMs: 2_000 });
   expect(JSON.parse(readFileSync(pi, "utf8")).packages).toEqual([PI_PACKAGE]);
+});
+
+test("refresh brings what setup wrote to this release and leaves the rest alone", async () => {
+  const m = await machine();
+  await startAgent(m.ctx);
+  await setup(m.sys, { yes: true, readyTimeoutMs: 2_000 });
+  const rule = join(m.home, ".codex/rules/starbridge.rules");
+  const skill = join(m.home, ".codex/skills/starbridge/SKILL.md");
+  const entry = join(m.home, ".config/opencode/plugins/starbridge.ts");
+  const unit = join(m.units, "starbridge-agent.service");
+  const want = readFileSync(unit, "utf8");
+  // As an earlier release wrote them, with its markers; the skill is another one the owner put there.
+  writeFileSync(rule, "# Written by starbridge setup: questions need the network.\nold\n");
+  writeFileSync(entry, "// Written by starbridge setup: answers.\nold\n");
+  writeFileSync(unit, "# Written by `starbridge setup`; `starbridge uninstall` removes it.\nold\n");
+  writeFileSync(skill, "---\nname: mine\n---\nmine\n");
+  const done = await refresh(m.sys);
+  expect(readFileSync(rule, "utf8")).toBe(CODEX_RULE);
+  expect(readFileSync(entry, "utf8")).toStartWith(`// Written by starbridge ${VERSION};`);
+  expect(readFileSync(unit, "utf8")).toBe(want);
+  expect(readFileSync(skill, "utf8")).toBe("---\nname: mine\n---\nmine\n");
+  expect(done.some((l) => l.startsWith("Restarted the agent"))).toBe(true);
+  // Again: nothing to update; the agent restarts on the binary that runs it.
+  expect(await refresh(m.sys)).toEqual([`Restarted the agent (${unit}).`]);
+});
+
+test("setup leaves a Codex rule, a skill or a unit it did not write alone", async () => {
+  const m = await machine();
+  const rule = join(m.home, ".codex/rules/starbridge.rules");
+  const skill = join(m.home, ".codex/skills/starbridge/SKILL.md");
+  const unit = join(m.units, "starbridge-agent.service");
+  mkdirSync(dirname(rule), { recursive: true });
+  mkdirSync(dirname(skill), { recursive: true });
+  writeFileSync(rule, "# mine\n");
+  writeFileSync(skill, "---\nname: mine\n---\nmine\n");
+  writeFileSync(unit, "[Service]\nExecStart=/usr/bin/true\n");
+  await setup(m.sys, { yes: true, readyTimeoutMs: 500 });
+  const out = m.ctx.lines.join("\n");
+  expect(readFileSync(rule, "utf8")).toBe("# mine\n");
+  expect(readFileSync(skill, "utf8")).toBe("---\nname: mine\n---\nmine\n");
+  expect(readFileSync(unit, "utf8")).toBe("[Service]\nExecStart=/usr/bin/true\n");
+  expect(out).toContain("was not written by setup");
+  expect(await refresh(m.sys)).toEqual([]);
+  await uninstall(m.sys, {});
+  expect(existsSync(rule) && existsSync(skill) && existsSync(unit)).toBe(true);
+});
+
+test("a refresh keeps the places the installed unit points the agent at", () => {
+  const unit = `${"# Written by starbridge 1.0.0"}\nEnvironment=PATH=/usr/bin\nEnvironment="STARBRIDGE_CONFIG_DIR=/srv/a b"\nEnvironment=CODEX_HOME=/c\n`;
+  expect(
+    withInstalledPlaces({ PATH: "/x", CODEX_HOME: "/other", XDG_CONFIG_HOME: "/y" }, unit),
+  ).toEqual({
+    PATH: "/x",
+    STARBRIDGE_CONFIG_DIR: "/srv/a b",
+    CODEX_HOME: "/c",
+  });
 });
 
 test("status reports the agent, the service and the plugins", async () => {
@@ -461,11 +531,11 @@ test("opencode files someone else wrote stay, and so does the code a changed ent
   installOpencode(sys, true);
   expect(readFileSync(join(oc, "plugins/starbridge.ts"), "utf8")).toBe("// mine\n");
 
-  // An entry setup wrote and the owner edited keeps its code at uninstall.
+  // An entry the owner took over (its marker gone) keeps its code at uninstall.
   rmSync(join(oc, "plugins/starbridge.ts"));
   installOpencode(sys);
   const entry = readFileSync(join(oc, "plugins/starbridge.ts"), "utf8");
-  writeFileSync(join(oc, "plugins/starbridge.ts"), `${entry}// tweaked\n`);
+  writeFileSync(join(oc, "plugins/starbridge.ts"), entry.split("\n").slice(1).join("\n"));
   removeOpencode(sys);
   expect(existsSync(join(oc, "starbridge/mod/opencode/starbridge.ts"))).toBe(true);
   expect(existsSync(join(oc, "skills/starbridge"))).toBe(false);

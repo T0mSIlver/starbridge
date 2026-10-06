@@ -5,6 +5,7 @@ import { AgentError, Interrupted, withAgent } from "./agent/client";
 import { answersVia, askVia, quotaVia, waitingVia, waitVia } from "./agent/commands";
 import { runAgent } from "./agent/main";
 import { ApiError, sandboxHint, Unreachable } from "./api";
+import { StateFileError } from "./config";
 import { type Ctx, UsageError } from "./context";
 import { type AskInput, answers, ask, resolveSource, settle, setWaiting, wait } from "./decisions";
 import { hookAskUser, hookPermission, hookQuestion, hookSettle } from "./hook";
@@ -13,7 +14,7 @@ import { pushOnce, quotaPush } from "./quota";
 import { installKind, ReleaseError } from "./release";
 import { runCommand } from "./run";
 import { configCommand } from "./settings";
-import { setup } from "./setup/setup";
+import { refresh, setup } from "./setup/setup";
 import { status } from "./setup/status";
 import { defaults, makeSys, type Prompt, terminalPrompt } from "./setup/sys";
 import { uninstall } from "./setup/uninstall";
@@ -24,12 +25,14 @@ const HELP = `starbridge: post decisions to your devices, report runs, upload qu
 
   starbridge setup [--yes] [--server <url>] [--name <name>] [--providers <a,b>]
                    [--no-quota] [--no-service] [--no-plugin]
+  starbridge setup --refresh
       Set this machine up, or check and repair it: pair it, find or install CodexBar and pick
       the providers to upload, install the agent as a user service (systemd or launchd), install
       Starbridge in each agent found (the Claude Code plugins, the Codex skill, the Pi package;
       --no-plugin skips them), and upload a first quota snapshot. Each step asks first; --yes
-      takes every default, which installs CodexBar when it is missing, the plugins, and replaces
-      a hand-written \`starbridge quota push\` unit and manual mod or skill installs.
+      takes every default, which installs CodexBar when it is missing, and the plugins.
+      --refresh only brings the files setup wrote into other tools (the service, the Codex skill
+      and rule, the opencode skill and plugin) to this version, and restarts the agent.
 
   starbridge status
       Print the versions, the pairing, the agent and its service, the server, each provider, the
@@ -144,9 +147,10 @@ const HELP = `starbridge: post decisions to your devices, report runs, upload qu
       terminal answered) settles the questions still open.
 
   starbridge update [--codexbar <version>]
-      Install the latest release once its signature checks out (brew and npm installs: use
-      their manager), then CodexBar's latest release if setup installed it. --codexbar installs
-      that CodexBar release instead, and only that.
+      Install the latest release once its signature checks out, then \`setup --refresh\` (brew
+      and npm installs: use their manager, then \`starbridge setup --refresh\`); then CodexBar's
+      latest release if setup installed it. --codexbar installs that CodexBar release instead,
+      and only that.
 
   starbridge --version
 
@@ -347,8 +351,13 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
             "no-quota": { type: "boolean" },
             "no-service": { type: "boolean" },
             "no-plugin": { type: "boolean" },
+            refresh: { type: "boolean" },
           },
         });
+        if (v.refresh) {
+          for (const line of await refresh(makeSys(ctx, defaults))) ctx.out(line);
+          return 0;
+        }
         const sys = makeSys(ctx, v.yes ? defaults : interactive());
         return await setup(sys, {
           ...(v.yes ? { yes: true } : {}),
@@ -449,7 +458,8 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
       e instanceof ApiError ||
       e instanceof ProtocolError ||
       e instanceof ReleaseError ||
-      e instanceof AgentError
+      e instanceof AgentError ||
+      e instanceof StateFileError
     ) {
       ctx.err(`starbridge: ${e.message}`);
       return 1;

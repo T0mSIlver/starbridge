@@ -7,6 +7,7 @@ import { LiveServer } from "@starbridge/server/test-support";
 import jpeg from "jpeg-js";
 import jsQR from "jsqr";
 import { PNG } from "pngjs";
+import { makeAgent } from "../src/agent/main";
 import { run } from "../src/cli";
 import { session } from "../src/context";
 import { poll } from "../src/decisions";
@@ -42,6 +43,23 @@ test("pair joins the directory and keeps the keys private", async () => {
     expect(statSync(join(ctx.store.dir, f)).mode & 0o777).toBe(0o600);
   expect(await run(["pair", "--server", server.url], ctx)).toBe(1);
   expect(ctx.errors.at(-1)).toContain("already paired");
+});
+
+test("state files carry their format, and one the CLI cannot read stays as it is", async () => {
+  const ctx = await paired(server);
+  for (const f of ["machine.json", "directory.json", "state.json"])
+    expect(JSON.parse(readFileSync(join(ctx.store.dir, f), "utf8")).v).toBe(1);
+  const path = join(ctx.store.dir, "state.json");
+  for (const [text, says] of [
+    ["{ not json", "is not valid JSON"],
+    ['{"v": 2, "asked": {}}', "from a newer starbridge"],
+    ["[]", "move it away"],
+  ] as const) {
+    writeFileSync(path, text);
+    expect(await run(["waiting", "d_1"], ctx)).toBe(1);
+    expect(ctx.errors.at(-1)).toContain(says);
+    expect(readFileSync(path, "utf8")).toBe(text);
+  }
 });
 
 /** Reads a terminal QR back: each character is two modules, upper and lower, 4 px square. */
@@ -630,6 +648,33 @@ test("a revoked device's undelivered answer is not handed to its session (#491)"
   expect(await run(["answers", "--session", "s", "--wait", "0"], ctx)).toBe(0);
   expect(ctx.lines.join("\n")).not.toContain("Merge");
   expect(ctx.store.state().answers[id]).toBeUndefined();
+});
+
+test("a decision whose answer came from a device revoked since is closed (#515)", async () => {
+  const { ctx, id, cursor } = await revokedAnswer();
+  await poll(ctx, session(ctx), { cursor, seconds: 0, shared: true });
+  expect(ctx.store.state().asked[id]).toMatchObject({ settled: true, revoked: true });
+  // `wait` says so at once instead of timing out; the agent can ask again.
+  expect(await run(["wait", id, "--timeout", "5s"], ctx)).toBe(1);
+  expect(ctx.errors.join("\n")).toContain("removed since");
+  // `settle` posts no notice the server would contradict: it holds the decision answered.
+  const posts = server.log.filter((c) => c === "POST /items").length;
+  expect(await run(["settle", id], ctx)).toBe(0);
+  expect(server.log.filter((c) => c === "POST /items").length).toBe(posts);
+});
+
+test("through the local agent, wait says too that a revoked device answered (#515)", async () => {
+  const { ctx, id } = await revokedAnswer();
+  const agent = makeAgent(ctx, { socket: join(ctx.store.dir, "agent.sock"), noQuota: true });
+  await agent.start();
+  try {
+    const started = Date.now();
+    expect(await run(["wait", id, "--timeout", "20s"], ctx)).toBe(1);
+    expect(ctx.errors.join("\n")).toContain("removed since");
+    expect(Date.now() - started).toBeLessThan(10_000);
+  } finally {
+    await agent.stop();
+  }
 });
 
 test("a poll that brings no answer drops a revoked device's undelivered one (#491)", async () => {

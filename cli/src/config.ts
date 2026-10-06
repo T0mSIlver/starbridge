@@ -32,6 +32,21 @@ export function configDir(env: Record<string, string | undefined>): string {
   return join(env.XDG_CONFIG_HOME || join(homedir(), ".config"), "starbridge");
 }
 
+/**
+ * The file `plugin/hooks/settle.sh` reads in the config folder before it starts the CLI: written
+ * with the state, `open` while a permission prompt is unsettled and unexpired, else empty (#517).
+ * Missing, the CLI is older or has not written since: the hook starts it.
+ */
+export const PROMPTS_OPEN = "permissions-open";
+
+/** What `PROMPTS_OPEN` holds for state `s`. */
+export function promptsMark(s: State, now = Date.now()): string {
+  const open = Object.values(s.permissions ?? {}).some(
+    (p) => !p.settled && Date.parse(p.permission.expiresAt) > now,
+  );
+  return open ? "open" : "";
+}
+
 /** This machine's identity. Holds the private keys and the machine token: mode 0600. */
 export interface Machine {
   server: string;
@@ -56,8 +71,13 @@ export interface State {
       askedAt: string;
       /** Answered on its `answerIn` page instead of Starbridge. */
       answerIn?: boolean;
-      /** Closed with `settle`: no answer will follow. */
+      /** Closed with `settle`, or by `revoked`: no answer will follow. */
       settled?: boolean;
+      /**
+       * Answered by a device the chain revoked since: the machine dropped that answer, and the
+       * server takes no other (#515).
+       */
+      revoked?: boolean;
       /** The devices it was sealed to, the only ones whose answer counts. */
       to?: string[];
       /** The decision as signed, without its images, to re-seal it to devices that join. */
@@ -160,33 +180,16 @@ export interface AgentConfig {
 }
 
 /**
- * `agent.json`: what `starbridge agent` runs with, written by `starbridge setup`; the agent's
- * flags override it.
+ * The format of every file in the config folder, written as `v` (#473). A file without `v` is
+ * version 1, the format 1.0.0 shipped; a later format raises it and reads the ones before.
  */
-export interface AgentConfig {
-  quota?: {
-    /** The CodexBar providers to upload; none means no timer. */
-    providers?: string[];
-    /** A duration such as "5m". */
-    interval?: string;
-    /** The `codexbar` binary; default `$STARBRIDGE_CODEXBAR`, else `codexbar` on the PATH. */
-    codexbar?: string;
-  };
-}
+export const STATE_VERSION = 1;
 
-/**
- * `agent.json`: what `starbridge agent` runs with, written by `starbridge setup`; the agent's
- * flags override it.
- */
-export interface AgentConfig {
-  quota?: {
-    /** The CodexBar providers to upload; none means no timer. */
-    providers?: string[];
-    /** A duration such as "5m". */
-    interval?: string;
-    /** The `codexbar` binary; default `$STARBRIDGE_CODEXBAR`, else `codexbar` on the PATH. */
-    codexbar?: string;
-  };
+/** A file this CLI cannot read. It stays as it is: nothing overwrites it with defaults. */
+export class StateFileError extends Error {
+  constructor(path: string, why: string) {
+    super(`${path} ${why}; it is left as it is`);
+  }
 }
 
 /** Every holder lets go within milliseconds; this long means a lock nobody can break. */
@@ -280,7 +283,24 @@ export class Store {
   private read<T>(name: string): T | undefined {
     const p = this.path(name);
     if (!existsSync(p)) return undefined;
-    return JSON.parse(readFileSync(p, "utf8")) as T;
+    let value: unknown;
+    try {
+      value = JSON.parse(readFileSync(p, "utf8"));
+    } catch (e) {
+      throw new StateFileError(p, `is not valid JSON (${(e as Error).message}): fix or remove it`);
+    }
+    if (typeof value !== "object" || value === null || Array.isArray(value))
+      throw new StateFileError(
+        p,
+        name === "directory.json"
+          ? "is not in this starbridge's format (from before 1.0.0?): remove it, the server's copy is read again"
+          : "is not in this starbridge's format (from before 1.0.0?): move it away, then run `starbridge pair`",
+      );
+    const v = (value as { v?: unknown }).v ?? 1;
+    if (v !== STATE_VERSION)
+      throw new StateFileError(p, `has format ${v}, from a newer starbridge: update starbridge`);
+    const { v: _, ...rest } = value as Record<string, unknown>;
+    return rest as T;
   }
 
   /** Writes through a temporary file, so a crash or a concurrent reader never sees half a file. */
@@ -288,7 +308,9 @@ export class Store {
     mkdirSync(this.dir, { recursive: true, mode: 0o700 });
     chmodSync(this.dir, 0o700);
     const tmp = this.path(`.${name}.${process.pid}.tmp`);
-    writeFileSync(tmp, `${JSON.stringify(value, null, 2)}\n`, { mode: 0o600 });
+    writeFileSync(tmp, `${JSON.stringify({ v: STATE_VERSION, ...(value as object) }, null, 2)}\n`, {
+      mode: 0o600,
+    });
     chmodSync(tmp, 0o600);
     renameSync(tmp, this.path(name));
   }
@@ -302,11 +324,11 @@ export class Store {
   }
 
   directory(): unknown[] {
-    return this.read<unknown[]>("directory.json") ?? [];
+    return this.read<{ entries: unknown[] }>("directory.json")?.entries ?? [];
   }
 
   saveDirectory(entries: unknown[]) {
-    this.write("directory.json", entries);
+    this.write("directory.json", { entries });
   }
 
   agentConfig(): AgentConfig {
@@ -327,8 +349,35 @@ export class Store {
       const s = this.state();
       fn(s);
       this.write("state.json", s);
+      this.markPromptsOpen(s);
       return s;
     });
+  }
+
+  /**
+   * Keeps `PROMPTS_OPEN` in step with the state: non-empty exactly while a permission prompt is
+   * open, so the Claude Code plugin's `PostToolUse` hook starts `starbridge hook settle` only
+   * then (#517).
+   */
+  /**
+   * Whether `PROMPTS_OPEN` disagrees with the saved state `s`, missing or stale, so an update
+   * would fix it. False without a saved state, which an update would create.
+   */
+  promptsMarkStale(s: State): boolean {
+    return existsSync(this.path("state.json")) && this.readMark() !== promptsMark(s);
+  }
+
+  private readMark(): string | undefined {
+    try {
+      return readFileSync(this.path(PROMPTS_OPEN), "utf8");
+    } catch {
+      return undefined;
+    }
+  }
+
+  private markPromptsOpen(s: State) {
+    const mark = promptsMark(s);
+    if (this.readMark() !== mark) writeFileSync(this.path(PROMPTS_OPEN), mark, { mode: 0o600 });
   }
 }
 

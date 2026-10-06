@@ -1,6 +1,7 @@
 /** The agent's user service: a systemd user unit on Linux, a launchd agent on macOS. */
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { delimiter, dirname, join } from "node:path";
+import { marker, ours } from "./marker";
 import { failure, run, type Sys } from "./sys";
 
 export const UNIT = "starbridge-agent.service";
@@ -49,18 +50,41 @@ export function servicePathVar(sys: Sys): string {
  * Environment the agent needs to find the same config directory and socket as the CLI, and the
  * Codex home whose skill it keeps current.
  */
+const PLACES = [
+  "STARBRIDGE_CONFIG_DIR",
+  "XDG_CONFIG_HOME",
+  "STARBRIDGE_AGENT_SOCKET",
+  "CODEX_HOME",
+];
+
 function serviceEnv(sys: Sys): Record<string, string> {
   const env: Record<string, string> = { PATH: servicePathVar(sys) };
-  for (const k of [
-    "STARBRIDGE_CONFIG_DIR",
-    "XDG_CONFIG_HOME",
-    "STARBRIDGE_AGENT_SOCKET",
-    "CODEX_HOME",
-  ]) {
+  for (const k of PLACES) {
     const v = sys.ctx.env[k];
     if (v) env[k] = v;
   }
   return env;
+}
+
+/**
+ * `env` with the places an installed unit or plist (`text`) points the agent at, in place of the
+ * current shell's: a refresh from another shell must not move the agent to another config folder.
+ */
+export function withInstalledPlaces(
+  env: Record<string, string | undefined>,
+  text: string,
+): Record<string, string | undefined> {
+  const out = { ...env };
+  for (const k of PLACES) {
+    delete out[k];
+    const unit = new RegExp(`^Environment="?${k}=((?:[^"\\\\\\n]|\\\\.)*)"?$`, "m").exec(text);
+    const plist = new RegExp(`<key>${k}</key>\\s*<string>([^<]*)</string>`).exec(text);
+    const v =
+      unit?.[1]?.replace(/\\(.)/g, "$1") ??
+      plist?.[1]?.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
+    if (v) out[k] = v;
+  }
+  return out;
 }
 
 /** systemd quotes arguments with spaces in double quotes. */
@@ -71,7 +95,7 @@ export function unitText(sys: Sys): string {
   const env = Object.entries(serviceEnv(sys))
     .map(([k, v]) => `Environment=${sdQuote(`${k}=${v}`)}`)
     .join("\n");
-  return `# Written by \`starbridge setup\`; \`starbridge uninstall\` removes it.
+  return `${marker("#")}
 [Unit]
 Description=Starbridge agent
 After=network-online.target
@@ -95,7 +119,7 @@ export function plistText(sys: Sys): string {
     .join("\n");
   const log = join(sys.home, "Library/Logs/starbridge-agent.log");
   return `<?xml version="1.0" encoding="UTF-8"?>
-<!-- Written by \`starbridge setup\`; \`starbridge uninstall\` removes it. -->
+${marker("<!--", "-->")}
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
@@ -161,6 +185,9 @@ export async function installService(
   restart: boolean,
 ): Promise<{ path: string; restarted: boolean }> {
   const path = servicePath(sys) as string;
+  const before = readText(path);
+  if (before !== undefined && !ours(before))
+    throw new Error(`${path} was not written by setup: remove it to install the agent`);
   mkdirSync(dirname(path), { recursive: true });
   const text = kind(sys) === "systemd" ? unitText(sys) : plistText(sys);
   const changed = readText(path) !== text;
@@ -192,6 +219,7 @@ export async function installService(
 export async function removeService(sys: Sys): Promise<boolean> {
   const path = servicePath(sys);
   if (!path || !existsSync(path)) return false;
+  if (!ours(readText(path))) throw new Error(`${path} was not written by setup`);
   if (kind(sys) === "systemd") {
     await stopUnit(sys, UNIT);
     rmSync(path, { force: true });

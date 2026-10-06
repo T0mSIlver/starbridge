@@ -38,13 +38,29 @@ type Records = {
   heads: Heads;
 };
 
+/** Every record kind kept per account, so signing out can remove them all. */
+const PER_ACCOUNT: Record<Exclude<keyof Records, "current">, true> = {
+  device: true,
+  pending: true,
+  pin: true,
+  answers: true,
+  promptAnswers: true,
+  recoverySeen: true,
+  probe: true,
+  heads: true,
+};
+export const ACCOUNT_KINDS = Object.keys(PER_ACCOUNT) as Exclude<keyof Records, "current">[];
+
+/** The database's version is the records' format (#473): a newer one fails to open here. */
 const DB = "starbridge";
 const STORE = "kv";
 
 function db(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(DB, 1);
-    req.onupgradeneeded = () => req.result.createObjectStore(STORE);
+    req.onupgradeneeded = () => {
+      if (!req.result.objectStoreNames.contains(STORE)) req.result.createObjectStore(STORE);
+    };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
   });
