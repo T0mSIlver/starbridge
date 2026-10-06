@@ -66,7 +66,7 @@ class FirstDeviceTest {
     @Test
     fun theFirstEntryWaitsForTheConfirmedKey() {
         val account = "acct"
-        val entries = mutableListOf<JsonElement>()
+        val entries = java.util.concurrent.CopyOnWriteArrayList<JsonElement>()
         http.dispatcher = object : Dispatcher() {
             override fun dispatch(request: RecordedRequest): MockResponse {
                 val path = request.url.encodedPath

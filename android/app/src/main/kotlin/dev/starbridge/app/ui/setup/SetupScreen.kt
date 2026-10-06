@@ -119,7 +119,7 @@ fun SetupScreen(phase: Phase, server: String, busy: Boolean, actions: SetupActio
         is Phase.NoDevice -> if (phase.accountExists) Join(busy, actions, modifier) else FirstDevice(busy, actions, modifier)
         is Phase.Joining -> Waiting("Approve this phone", if (phase.scanned) "Approve it on the device that shows the QR code." else "Type this code on a device you already use: ${phase.code}", null, actions.cancelJoin, modifier)
         is Phase.JoiningByDigits -> Waiting("Compare digits", "Approve on your other device if the digits match.", phase.digits, actions.cancelJoin, modifier)
-        is Phase.RecoveryKey -> Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = Spacing.s4, end = Spacing.s4, bottom = Spacing.s10), verticalArrangement = Arrangement.spacedBy(Spacing.s4)) { RecoveryKey(phase.shown, actions.saved) }
+        is Phase.RecoveryKey -> Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = Spacing.s4, end = Spacing.s4, bottom = Spacing.s10), verticalArrangement = Arrangement.spacedBy(Spacing.s4)) { RecoveryKey(phase.shown, busy, actions) }
         Phase.Ready -> Unit
     }
 }
@@ -351,7 +351,7 @@ private fun Waiting(title: String, text: String, digits: String?, onCancel: () -
 }
 
 @Composable
-private fun RecoveryKey(shown: String, onDone: () -> Unit) {
+private fun RecoveryKey(shown: String, busy: Boolean, actions: SetupActions) {
     SecureWindow()
     var saved by rememberSaveable { mutableStateOf(false) }
     Title("Your recovery key", Modifier.padding(top = 48.dp))
@@ -376,7 +376,9 @@ private fun RecoveryKey(shown: String, onDone: () -> Unit) {
         Spacer(Modifier.width(Spacing.s3))
         Text("I wrote this key down", style = StarbridgeTheme.type.body, color = MaterialTheme.colorScheme.onSurface)
     }
-    Primary("Continue", busy = false, enabled = saved, onClick = onDone)
+    // Continue posts the account's first entry (#370): it can take a moment, or fail and stay here.
+    Primary("Continue", busy, enabled = saved, onClick = actions.saved)
+    Link("Sign out", actions.signOut)
 }
 
 /** While shown, the window stays out of screenshots, screen sharing and the recents screen. */
