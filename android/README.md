@@ -13,8 +13,8 @@ Jetpack Compose, Material 3 Expressive, Hilt and Navigation 3.
 - `push/`: FCM (data field `p`) or UnifiedPush, picked under Devices; the
   notification's buttons sign and send the answer.
 
-Colours, type and spacing come from `ui/theme/Tokens.kt`, generated from the repo's `DESIGN.md`; don't
-edit it, run `bun web/scripts/tokens.ts`. Icons are Material Symbols Rounded (Apache
+Colours, type and spacing come from `ui/theme/Tokens.kt`, generated from the
+repo's `DESIGN.md`; don't edit it, run `bun web/scripts/tokens.ts`. Icons are Material Symbols Rounded (Apache
 2.0), tuned to Google Sans Flex in `ui/Symbols.kt`; the bundled font holds only the glyphs the
 app uses, and `scripts/subset-symbols.sh` rebuilds it.
 

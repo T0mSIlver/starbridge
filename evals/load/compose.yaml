@@ -2,7 +2,8 @@
 # sized like the Hetzner CX23 that runs prod: every container shares the same two cores, and the
 # memory caps add up to its 4 GB less about 600 MB for the OS (web-b runs only during a deploy).
 # Prod sets no caps: these split the box's memory where the load test found it goes. Ports move
-# to 1xxxx so nothing collides with what the machine already runs, and the secrets come from fakes made by stack.sh.
+# to 1xxxx so nothing collides with what the machine already runs, and the secrets come from
+# fakes made by stack.sh.
 x-cx23: &cx23
   cpuset: ${LOAD_CPUS:-8,9}
 

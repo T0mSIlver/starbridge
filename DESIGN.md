@@ -371,13 +371,13 @@ clients share colours, type and spacing. Change a value here, then run
 
 ## The look
 
-Direction C, "Beacon" (SPEC.md). Soft black and
-neutral greys with no hue, large type, round cards, airy spacing. One
+Direction C, "Beacon" (SPEC.md, "Brand"). Soft black and neutral greys
+with no hue, large type, round cards, airy spacing. One
 accent: the amber of the icon's climber, which means "needs you" and nothing
 else. Everything else is black, white and grey, except the quota bars, which
 fill in each provider's lab colour.
 
-Design v2 (SPEC.md) gives each surface a job: the landing page shows the
+Design v2 (SPEC.md, "Brand") gives each surface a job: the landing page shows the
 product (direction B), the web app is a quiet, dense control surface for any
 browser (A), and Android is full Material 3 Expressive (C).
 
@@ -529,8 +529,8 @@ a decision's context, a permission prompt's command and a session's name.
 
 The web moves only where motion shows what changed, and never makes an
 action wait. Views and selections switch at once and a read row changes in
-place, as in quiet dashboards such as Linear's; durations and the easing come from Material 3, so the web
-and Android move alike.
+place, as in quiet dashboards such as Linear's; durations and the easing
+come from Material 3, so the web and Android move alike.
 
 - Two durations and one easing: `motion.fast` (150 ms) for hover, press, a
   switch and anything leaving; `motion.state` (250 ms) for something
@@ -623,8 +623,7 @@ just far enough to reach it. Web: `--provider-<id>`; Android:
 
 The web draws its own icon set to the mark: 24-unit grid, 1.75 strokes,
 round caps and joins, no fills. Android uses Material Symbols Rounded tuned to
-Google Sans Flex. Every
-platform has the same icons by job: laptop, desktop, server and cloud (a
+Google Sans Flex. Every platform has the same icons by job: laptop, desktop, server and cloud (a
 machine's kind), permission prompt, question, run, quota, history, settings,
 devices, open in the agent, waiting, inbox, send, expand (an image opens full
 screen).

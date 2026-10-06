@@ -33,7 +33,7 @@ code cannot show: the HTTP API and the flows.
 
 - Every machine-signed body names its `source` (machine, project, session, and optionally the
   session's title and links, and `machineKind`: `server`, `desktop`, `laptop` or `cloud`, for
-  its icon). A decision or a permission may name its `agent`: `claude-code`, `codex`, `pi` or `opencode`. Clients accept any agent name (lowercase letters, digits and dashes, at most 40), so a newer machine's agent never makes an item unreadable; an agent a client does not know gets no "Open in" link.
+  its icon). A decision or a permission may name its `agent`, such as `claude-code`, `codex`, `pi` or `opencode`. Clients accept any agent name (lowercase letters, digits and dashes, at most 40), so a newer machine's agent never makes an item unreadable; an agent a client does not know gets no "Open in" link.
 - A decision's images (PNG or JPEG) and links (HTTPS) are part of its signed body, so each box
   carries every image, and the 2 MB cap in Limits covers them once per device.
   A decision with `answerIn` is answered on that page (a claude.ai artifact whose button wakes
@@ -232,9 +232,9 @@ entry>".
 ## HTTP API
 
 Base path `/v1`. JSON bodies. Errors are `{error, detail?}` with an HTTP status; protocol
-errors use the codes in `packages/protocol/src/sodium.ts`. Outside it, `GET /healthz`,
-`/healthz/backup` and `/healthz/disk` answer anyone with `ok`, or 503 when the last backup is
-stale or the disk runs low.
+errors use the codes in `packages/protocol/src/sodium.ts`. Outside `/v1`, `GET /healthz`
+answers anyone with `ok`; `/healthz/backup` and `/healthz/disk` answer `ok`, or 503 when the
+last backup is stale or the disk runs low.
 
 Every request names its client and release in `starbridge-client: <name>/<version>`, `name`
 one of `cli`, `android`, `web` and `mod`, `version` MAJOR.MINOR.PATCH with an optional

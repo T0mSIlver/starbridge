@@ -34,8 +34,8 @@ export function socketPath(env: Record<string, string | undefined>, storeDir: st
 
 /**
  * Something the agent hands one session, oldest first, until the session confirms it with
- * `POST /v1/sessions/:id/ack` and the event's `ack`: answers and default-time notices. A client
- * skips types it does not know and confirms nothing for them, so a new `type` breaks no client.
+ * `POST /v1/sessions/:id/ack` and the event's `ack`. Only answers today. A client skips types it
+ * does not know and confirms nothing for them, so a new `type` breaks no client.
  */
 export interface SessionEvent {
   type: string;

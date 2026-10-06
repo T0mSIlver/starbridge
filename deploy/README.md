@@ -1,7 +1,7 @@
 # deploy
 
-The hosted instance at https://starbridge.run: `starbridge-1`, a Hetzner CX23 on Ubuntu 26.04
-(accounts in `SPEC.md`, "Accounts"). Docker Compose runs the server, with `RELAY_MODE` on so the
+The hosted instance at https://starbridge.run: `starbridge-1`, a Hetzner CX23 on Ubuntu 26.04.
+Docker Compose runs the server, with `RELAY_MODE` on so the
 same process is the push relay, and the web page, both behind Caddy, which gets the TLS
 certificate. Caddy sends `/v1/*` and `/healthz` to the server and everything else to the page,
 so both share one origin.
@@ -28,7 +28,7 @@ deploy/deploy.sh                 # origin/main
 It unpacks the ref into `/opt/starbridge`, builds the server and web images on the box and rolls them
 out (`deploy/host/apply.sh`). The previous release stays in `/opt/starbridge.old`.
 
-No request fails during a deploy (`SPEC.md`). The page runs as two copies, `web-a` (port
+No request fails during a deploy (`SPEC.md`, "Releases, deploys and CI"). The page runs as two copies, `web-a` (port
 3010) and `web-b` (3011): the deploy starts the idle one, waits for its health, then stops the
 other, and Caddy sends requests to the first healthy copy. The server restarts in place; Caddy
 holds requests for up to 30 s meanwhile. Each deploy loads the Caddyfile into the running Caddy
@@ -62,7 +62,7 @@ through its admin API on `127.0.0.1:2019`.
 
 ## Analytics
 
-Umami counts visits to the public pages (`SPEC.md`, "Page analytics"). Its dashboard listens on
+Umami counts visits to the public pages (`SPEC.md`, "The hosted instance"). Its dashboard listens on
 the box's `127.0.0.1:3001` only:
 
 ```bash
@@ -86,7 +86,7 @@ and start `umami`.
 
 ## Demo server
 
-`https://demo.starbridge.run` lets Play reviewers try the app (`SPEC.md`): the server with
+`https://demo.starbridge.run` lets Play reviewers try the app (`SPEC.md`, "The hosted instance"): the server with
 `DEMO=1` and the demo program (`demo/`) in one container, Compose project `starbridge-demo`, on
 `127.0.0.1:8090`, with no volume, so each restart is a fresh account. Prod's Caddy serves it.
 `deploy/demo/deploy.sh [ref]` deploys it from the operator's machine, with the owner token from
