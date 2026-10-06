@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { addedLabels } from "@/lib/format";
 import { AGENTS_GUIDE } from "@/lib/links";
 import { applyTheme, type Prefs, usePref } from "@/lib/prefs";
 import { providerOrder, type QuotaSettings } from "@/lib/quotaSettings";
@@ -336,14 +337,27 @@ function Providers({
   );
 }
 
-const added = (iso: string) =>
-  new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short" });
+/**
+ * A device's name with a break allowed after each dot, so a host name wraps between its labels,
+ * as it does after a hyphen; `.rowText` breaks inside a word only when nothing else fits.
+ */
+function HostName({ name }: { name: string }) {
+  const parts = name.split(/(?<=\.)/);
+  return parts.map((part, i) => (
+    // biome-ignore lint/suspicious/noArrayIndexKey: the parts of one fixed string.
+    <span key={i}>
+      {part}
+      {i < parts.length - 1 && <wbr />}
+    </span>
+  ));
+}
 
 function DeviceSection() {
   const { update, boot, sampleDevices } = useApp();
   const ctx = boot.state === "ready" ? boot.ctx : undefined;
   const [all, setAll] = useState<Device[] | undefined>(sampleDevices);
   const [revoking, setRevoking] = useState<Device>();
+  const [clock] = usePref("clock");
   useEffect(() => {
     if (ctx)
       load()
@@ -354,6 +368,7 @@ function DeviceSection() {
   const shown = (all ?? [])
     .filter((d) => d.status === "active")
     .sort((a, b) => order(a) - order(b) || a.addedAt.localeCompare(b.addedAt));
+  const added = addedLabels(shown, clock);
   return (
     <Section title="Devices">
       {!all && <Pending rows={2} />}
@@ -363,10 +378,12 @@ function DeviceSection() {
             <Icon name={d.role === "machine" ? "desktop" : "devices"} size={18} />
           </span>
           <div className={s.rowText}>
-            <div className="t-small">{d.name}</div>
+            <div className="t-small">
+              <HostName name={d.name} />
+            </div>
             <div className={`t-meta ${s.sub}`}>
               {d.role === "machine" ? "Machine" : "Device"}
-              {d.self ? " · this browser" : d.addedAt ? ` · added ${added(d.addedAt)}` : ""}
+              {d.self ? " · this browser" : d.addedAt ? ` · ${added.get(d.id)}` : ""}
             </div>
           </div>
           {d.self ? (

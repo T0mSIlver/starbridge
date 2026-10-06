@@ -78,6 +78,22 @@ interface Alerts {
     fun quota(notices: List<QuotaNotice>) {}
     /** Signed out: every notification goes, since they show decrypted questions and commands. */
     fun clearAll() {}
+    /** An answer went out: shows it in place of the buttons. */
+    fun answered(decision: Decision, answer: String) {}
+    /** An answer waits for a connection. */
+    fun queued(decision: Decision, answer: String) {}
+    /** An answer the server refused; the buttons come back. */
+    fun failed(decision: Decision, why: String) {}
+}
+
+/** What became of an answer: sent, waiting for a connection, answered elsewhere, or refused. */
+sealed interface Sent {
+    /** The server took this device's answer, now or before: a second tap lands here (#331). */
+    data class Answered(val answer: String) : Sent
+    /** Kept on the phone until the server can be reached; [AnswerWorker] sends it (#329). */
+    data class Queued(val answer: String) : Sent
+    data object Elsewhere : Sent
+    data class Failed(val why: String) : Sent
 }
 
 /** How long pull to refresh on Quotas waits for the machines' fresh snapshots. */
@@ -100,6 +116,8 @@ class ServerStore(
     private val defaultServer: String,
     private val fcmAvailable: Boolean,
     private val scope: CoroutineScope,
+    /** Asks for [flushAnswers] once a network is up; the app schedules [AnswerWorker]. */
+    private val wakeWhenOnline: () -> Unit = {},
 ) : Store {
     private val lock = Mutex()
     private var saved = disk.saved() ?: Saved(defaultServer)
@@ -129,6 +147,8 @@ class ServerStore(
     override val busy = MutableStateFlow(false)
     override val notice = MutableStateFlow<String?>(null)
     override val sending = MutableStateFlow<Map<String, String>>(emptyMap())
+    /** Answers tapped but not yet sealed into [Saved.outbox]: the lock may be busy. */
+    private val tapped = java.util.concurrent.ConcurrentHashMap<String, String>()
 
     init {
         directory = runCatching { verified(saved.entries) }.getOrNull()
@@ -178,6 +198,11 @@ class ServerStore(
         windows.value = saved.quotas.flatMap { toUi(it, named) }
         runs.value = saved.runs.map(::toUi)
         members.value = directory?.let(::toUi).orEmpty()
+        showSending()
+    }
+
+    private fun showSending() {
+        sending.value = saved.outbox.associate { it.decisionId to it.answer } + tapped
     }
 
     fun setDistributors(list: List<String>) {
@@ -186,16 +211,19 @@ class ServerStore(
 
     /** Runs [block] off the caller, one at a time, and turns failures into a notice. */
     private fun run(showBusy: Boolean = true, block: suspend () -> Unit) {
-        scope.launch {
-            lock.withLock {
-                if (showBusy) busy.value = true
-                try {
-                    block()
-                } catch (e: Exception) {
-                    report(e)
-                } finally {
-                    busy.value = false
-                }
+        scope.launch { locked(showBusy, block) }
+    }
+
+    private suspend fun locked(showBusy: Boolean = true, block: suspend () -> Unit) {
+        lock.withLock {
+            if (showBusy) busy.value = true
+            try {
+                block()
+            } catch (e: Exception) {
+                report(e)
+            } finally {
+                // A quiet run, such as the prompt poll, leaves another's spinner alone.
+                if (showBusy) busy.value = false
             }
         }
     }
@@ -578,18 +606,24 @@ class ServerStore(
         scope.launch {
             busy.value = true
             try {
-                if (phase.value == Phase.Ready) api().askQuota(QUOTA_ASK_SECONDS)
-            } catch (e: ApiException) {
-                // Asked too often, or a server without asks: the sync shows what it holds.
-            } catch (e: IOException) {
-                // Offline: the sync reports it.
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                // Nothing may escape this coroutine: it would end the app (#253).
-                Log.w("Starbridge", "quota ask failed: $e", e)
+                try {
+                    if (phase.value == Phase.Ready) api().askQuota(QUOTA_ASK_SECONDS)
+                } catch (e: ApiException) {
+                    // Asked too often, or a server without asks: the sync shows what it holds.
+                } catch (e: IOException) {
+                    // Offline: the sync reports it.
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    // Nothing may escape this coroutine: it would end the app (#253).
+                    Log.w("Starbridge", "quota ask failed: $e", e)
+                }
+                // Not `run`: inside launch it resolves to the standard library's, which never
+                // clears busy and lets a failed sync escape (#303).
+                locked { sync() }
+            } finally {
+                busy.value = false
             }
-            run { sync() }
         }
     }
 
@@ -601,6 +635,7 @@ class ServerStore(
         syncPrompts()
         syncQuotas()
         syncRuns()
+        if (saved.outbox.isNotEmpty()) flushHeld()
         // The server answered, so a push route that failed to register gets another try.
         pendingPush?.let { runCatching { subscribeHeld(it) } }
     }
@@ -645,14 +680,15 @@ class ServerStore(
                     continue
                 }
                 if (listed.item.kind == "settled") {
-                    val (_, body) = open(listed.item) ?: continue
+                    val (from, body) = open(listed.item) ?: continue
                     body as Settled
-                    closings[body.itemId] = body.outcome to listed.receivedAt
+                    // Keyed by machine: a notice closes only the machine's own items (#362).
+                    closings["$from/${body.itemId}"] = body.outcome to listed.receivedAt
                     continue
                 }
                 // The notice that closed it arrived in the same write, so it carries the same time;
                 // a later one, after a device's answer, closed nothing.
-                val settled = closings[listed.item.id]?.takeIf { it.second == listed.answeredAt }?.first
+                fun settledBy(machine: String) = closings["$machine/${listed.item.id}"]?.takeIf { it.second == listed.answeredAt }?.first
                 val known = byId[listed.item.id]
                 if (known != null && reread && known.answeredAt == null && listed.answeredAt == null) {
                     val (from, body) = open(listed.item) ?: continue
@@ -661,6 +697,7 @@ class ServerStore(
                 }
                 if (known != null) {
                     // A settled push marked it answered already, without saying how.
+                    val settled = settledBy(known.from)
                     if (listed.answeredAt != null && (known.answeredAt == null || settled != null)) {
                         byId[known.body.id] = known.copy(answeredAt = listed.answeredAt, settled = settled ?: known.settled)
                         alerts.cancel(known.body.id)
@@ -668,7 +705,7 @@ class ServerStore(
                     continue
                 }
                 val (from, body) = open(listed.item) ?: continue
-                byId[listed.item.id] = SavedDecision(from, body as DecisionBody, listed.answeredAt, settled = settled)
+                byId[listed.item.id] = SavedDecision(from, body as DecisionBody, listed.answeredAt, settled = settledBy(from))
             }
             cursor = page.cursor
             if (page.items.size < 100) break
@@ -889,26 +926,40 @@ class ServerStore(
 
     // --- Answering ---------------------------------------------------------------
 
-    /** One answer per decision at a time: the decision stays locked until the server replies. */
+    /**
+     * One answer per decision: the decision stays locked until the server takes it, which may
+     * wait for a connection (#329).
+     */
     override fun answer(id: String, choice: String?, text: String?) {
         if (id in sending.value) return
-        sending.update { it + (id to (choice ?: text.orEmpty())) }
+        tapped[id] = choice ?: text.orEmpty()
+        showSending()
         run(showBusy = false) {
             try {
-                send(id, choice, text)
+                when (val sent = send(id, choice, text)) {
+                    is Sent.Queued -> notice.value = "No connection. ${sent.answer} will be sent when the phone is back online."
+                    Sent.Elsewhere -> notice.value = "Already answered on another device."
+                    is Sent.Failed -> notice.value = "Not sent: ${sent.why}"
+                    is Sent.Answered -> Unit
+                }
             } finally {
-                sending.update { it - id }
+                tapped.remove(id)
+                showSending()
             }
         }
     }
 
     /**
-     * Signs the answer and seals it to the machine that asked, the only recipient the server
-     * accepts. The notification's buttons call this too.
+     * Signs the answer, seals it to the machine that asked, the only recipient the server
+     * accepts, and keeps it in [Saved.outbox] before posting it, so an answer tapped offline is
+     * sent once the server can be reached. Tapping again repeats the first answer's outcome.
+     * The notification's buttons call this too.
      */
-    suspend fun send(id: String, choice: String?, text: String?) {
+    suspend fun send(id: String, choice: String?, text: String?): Sent {
+        saved.outbox.find { it.decisionId == id }?.let { return post(it) }
         val d = saved.decisions.find { it.body.id == id } ?: throw IllegalStateException("No such decision.")
-        if (d.answeredAt != null || d.answer != null) throw IllegalStateException("Already answered.")
+        d.answer?.let { return Sent.Answered(it) }
+        if (d.answeredAt != null) return Sent.Elsewhere
         if (choice != null && choice !in d.body.options) throw IllegalArgumentException("Not one of the options.")
         val machine = directory?.members?.get(d.from)?.takeIf { it.active }?.member
             ?: throw IllegalStateException("The machine that asked is no longer in your directory.")
@@ -924,22 +975,102 @@ class ServerStore(
             // Lets the machine notice a server holding back entries, such as a revocation.
             directory?.let { d -> putJsonObject("dir") { put("length", d.length); put("head", d.head) } }
         }
-        val item = envelopes.seal("answer", body, me.id, signKey, listOf(machine))
-        try {
-            api().postItem(item)
-        } catch (e: ApiException) {
-            if (e.error == "already-answered") markAnswered(id, null)
-            throw e
-        }
-        markAnswered(id, choice ?: text)
+        val queued = QueuedAnswer(id, choice ?: text!!, envelopes.seal("answer", body, me.id, signKey, listOf(machine)))
+        persist(saved.copy(outbox = saved.outbox + queued))
+        return post(queued)
     }
 
-    private fun markAnswered(id: String, answer: String?) {
-        persist(saved.copy(decisions = saved.decisions.map { if (it.body.id == id) it.copy(answeredAt = now(), answer = answer) else it }))
+    /** Posts a queued answer and settles it, or keeps it for [wakeWhenOnline] to send later. */
+    private suspend fun post(q: QueuedAnswer): Sent {
+        try {
+            api().postItem(q.item)
+        } catch (e: CancellationException) {
+            // Cut off mid-request, by the notification's time limit say: it may have landed.
+            keep(q, landed = true)
+            throw e
+        } catch (e: ApiException) {
+            return when {
+                e.error == "already-answered" -> {
+                    // A retry of an answer the server took before its reply was lost finds the
+                    // decision answered; the server can't say by whom, so this guesses ours.
+                    settle(q, if (q.mayHaveLanded) q.answer else null)
+                    if (q.mayHaveLanded) Sent.Answered(q.answer) else Sent.Elsewhere
+                }
+                // The session ended: report() asks to sign in again, and the answer waits for it.
+                e.status == 401 -> {
+                    keep(q, landed = false)
+                    throw e
+                }
+                e.status >= 500 || e.status == 429 -> {
+                    keep(q, landed = e.status != 502 && e.status != 503 && e.status != 429)
+                    Sent.Queued(q.answer)
+                }
+                else -> {
+                    persist(saved.copy(outbox = saved.outbox.filter { it.decisionId != q.decisionId }))
+                    Sent.Failed(describe(e))
+                }
+            }
+        } catch (e: IOException) {
+            // No route or no name: the request never left. Anything else may have reached it.
+            keep(q, landed = e !is java.net.ConnectException && e !is java.net.UnknownHostException && e !is java.net.NoRouteToHostException)
+            return Sent.Queued(q.answer)
+        }
+        settle(q, q.answer)
+        return Sent.Answered(q.answer)
+    }
+
+    private fun keep(q: QueuedAnswer, landed: Boolean) {
+        if (landed && !q.mayHaveLanded) {
+            persist(saved.copy(outbox = saved.outbox.map { if (it.decisionId == q.decisionId) it.copy(mayHaveLanded = true) else it }))
+        }
+        wakeWhenOnline()
+    }
+
+    /** Takes the answer out of the outbox and marks its decision answered, by this device when [answer] is set. */
+    private fun settle(q: QueuedAnswer, answer: String?) {
+        persist(
+            saved.copy(
+                outbox = saved.outbox.filter { it.decisionId != q.decisionId },
+                decisions = saved.decisions.map { if (it.body.id == q.decisionId) it.copy(answeredAt = now(), answer = answer) else it },
+            ),
+        )
     }
 
     /** For the notification's buttons: holds the lock like any other change. */
     suspend fun sendFromNotification(id: String, choice: String?, text: String?) = lock.withLock { send(id, choice, text) }
+
+    /** The answer waiting to be sent for decision [id], if any. */
+    fun queued(id: String): String? = saved.outbox.find { it.decisionId == id }?.answer
+
+    /**
+     * Sends the queued answers, oldest first, and tells the notifications how each ended. False
+     * while some still wait, so [AnswerWorker] tries again later.
+     */
+    suspend fun flushAnswers(): Boolean = lock.withLock {
+        if (phase.value != Phase.Ready) return@withLock true
+        try {
+            flushHeld() && saved.outbox.isEmpty()
+        } catch (e: IOException) {
+            report(e)
+            false
+        }
+    }
+
+    private suspend fun flushHeld(): Boolean {
+        for (q in saved.outbox) {
+            val decision = decisions.value.find { it.id == q.decisionId }
+            when (val sent = post(q)) {
+                is Sent.Queued -> return false
+                is Sent.Answered -> decision?.let { alerts.answered(it, sent.answer) }
+                Sent.Elsewhere -> alerts.cancel(q.decisionId)
+                is Sent.Failed -> {
+                    notice.value = "Not sent: ${sent.why}"
+                    decision?.let { alerts.failed(it, sent.why) }
+                }
+            }
+        }
+        return true
+    }
 
     // --- Push --------------------------------------------------------------------
 
@@ -1373,10 +1504,10 @@ class ServerStore(
         return Prompt(
             id = b.id,
             tool = b.tool,
-            summary = b.summary,
-            description = b.description,
+            summary = visible(b.summary),
+            description = b.description?.let(::visible),
             input = b.input,
-            scopes = b.suggestions.map { PromptScope(it.scope, it.label, it.rule) },
+            scopes = b.suggestions.map { PromptScope(it.scope, it.label, visible(it.rule)) },
             source = Source(b.source.machine, b.source.project, b.source.session, b.source.sessionTitle, b.source.links.orEmpty().map { SessionLink(it.kind, it.url) }, b.source.machineKind),
             agent = b.agent,
             createdAt = instant(b.createdAt) ?: Instant.EPOCH,

@@ -59,6 +59,9 @@ android {
             it.jvmArgs("--add-exports=java.base/jdk.internal.access=ALL-UNNAMED", "--add-opens=java.base/java.io=ALL-UNNAMED")
             // The protocol's test vectors, at the repo root (packages/protocol, #1).
             it.systemProperty("starbridge.vectors", rootProject.file("../packages/protocol/vectors").absolutePath)
+            // Screenshots render clock times in UTC whichever test runs first: a screenshot class
+            // setting the zone in its own init lost it once another Robolectric test ran before it.
+            it.systemProperty("user.timezone", "UTC")
         }
     }
 }
@@ -83,6 +86,7 @@ dependencies {
     implementation(libs.adaptive.navigation3)
     implementation(libs.navigation.suite)
     implementation(libs.okhttp)
+    implementation(libs.work.runtime)
     implementation(libs.browser)
     implementation(libs.firebase.messaging)
     implementation(libs.unifiedpush)

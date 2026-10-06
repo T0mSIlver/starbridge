@@ -37,7 +37,7 @@ export class LiveServer {
   readonly log: string[] = [];
   /**
    * The next HTTP requests to these paths fail with 503, once each: the real server has no
-   * outage on demand.
+   * outage on demand. In these three lists, "POST /path" matches that method only.
    */
   readonly failures: string[] = [];
   /** The next HTTP requests to these paths fail with 500, which clients do not retry, once each. */
@@ -79,22 +79,16 @@ export class LiveServer {
 
   private handle(req: Request, server: BunServer<undefined>) {
     const path = new URL(req.url).pathname.replace(/^\/v1/, "");
-    this.log.push(`${req.method} ${path}`);
-    const fail = this.failures.indexOf(path);
-    if (fail >= 0) {
-      this.failures.splice(fail, 1);
-      return Response.json({ error: "unavailable" }, { status: 503 });
-    }
-    const error = this.errors.indexOf(path);
-    if (error >= 0) {
-      this.errors.splice(error, 1);
-      return Response.json({ error: "internal" }, { status: 500 });
-    }
-    const stall = this.stalls.indexOf(path);
-    if (stall >= 0) {
-      this.stalls.splice(stall, 1);
-      return new Promise<Response>(() => {});
-    }
+    const call = `${req.method} ${path}`;
+    this.log.push(call);
+    const take = (list: string[]) => {
+      const i = list.findIndex((p) => p === path || p === call);
+      if (i >= 0) list.splice(i, 1);
+      return i >= 0;
+    };
+    if (take(this.failures)) return Response.json({ error: "unavailable" }, { status: 503 });
+    if (take(this.errors)) return Response.json({ error: "internal" }, { status: 500 });
+    if (take(this.stalls)) return new Promise<Response>(() => {});
     return this.s.app.fetch(req, { server });
   }
 
