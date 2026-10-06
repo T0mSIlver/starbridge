@@ -1,0 +1,119 @@
+{
+  "agent": "opencode",
+  "model": "zai-coding-plan/glm-5.3-flash",
+  "arm": "after",
+  "scenario": "delivery-prompt",
+  "rep": 2,
+  "turns": [
+    {
+      "commands": [
+        "gh pr view 12 --json number,title,state,mergeable,mergeStateStatus,files,headRefName && echo --- && gh pr view 13 --json number,title,state,mergeable,mergeStateStatus,files,headRefName",
+        "gh pr view 12 --json mergeable,mergeStateStatus && gh pr view 13 --json mergeable,mergeStateStatus",
+        "git fetch origin main pull/12/head pull/13/head 2>&1 && git worktree add /tmp/opencode/testmerge main 2>&1",
+        "gh pr view 12 --json headRefName --jq .headRefName; gh pr view 13 --json headRefName --jq .headRefName; git remote -v",
+        "git ls-remote origin",
+        "git branch -a && git log --oneline -5 main",
+        "starbridge ask --waiting \\\n  --question 'PRs #12 and #13 both touch src/api.ts — which merges first?' \\\n  --context 'Both are green; after one merges, the other conflicts in src/api.ts and must be rebased.\n#12 first: resumable uploads land on main in time for tonight's 20:00 CLI release; #13 rebased after.\n#13 first: slow-link timeout fix reaches users sooner (3 lost-edit reports this week); #12 rebased after, risking the release window.' \\\n  --recommended \\\n  --option '#12 first' \\\n  --option '#13 first' \\\n  --link https://github.com/acme/notes/pull/12 \\\n  --link https://github.com/acme/notes/pull/13",
+        "starbridge ask --waiting \\\n  --question 'PRs #12 and #13 both touch src/api.ts — which merges first?' \\\n  --context 'Both are green; after one merges, the other conflicts in src/api.ts and must be rebased.\n#12 first: resumable uploads land on main in time for tonight’s 20:00 CLI release; #13 rebased after.\n#13 first: slow-link timeout fix reaches users sooner (3 lost-edit reports this week); #12 rebased after, risking the release window.' \\\n  --recommended \\\n  --option '#12 first' \\\n  --option '#13 first' \\\n  --link https://github.com/acme/notes/pull/12 \\\n  --link https://github.com/acme/notes/pull/13",
+        "starbridge ask --waiting \\\n  --question 'PRs #12 and #13 both touch src/api.ts — which merges first?' \\\n  --context 'Both are green; after one merges, the other conflicts in src/api.ts and must be rebased.\n#12 first: resumable uploads land on main in time for tonight’s 20:00 CLI release; #13 rebased after.\n#13 first: slow-link timeout fix reaches users sooner (3 lost-edit reports this week); #12 rebased after, risking the release window.' \\\n  --option '#12 first' \\\n  --option '#13 first' \\\n  --recommended='#12 first' \\\n  --link https://github.com/acme/notes/pull/12 \\\n  --link https://github.com/acme/notes/pull/13"
+      ],
+      "final": "Card posted to your phone (`d_YgqIF8Yv5er7W8Sg`): **which of #12/#13 merges first?** Both are green but both modify `src/api.ts`, so the second will conflict and need a rebase — and per your AGENTS.md rule, the order is your call, not mine. I marked **#12 first** as recommended since it's \"needed for tonight's 20:00 CLI release,\" but the tap decides.\n\nThe merge is blocked on that card; I'll squash-merge both (`gh pr merge <n> --squash`) in your chosen order as soon as your answer arrives, and rebase the second if it conflicts.",
+      "exit": 0,
+      "seconds": 532.98,
+      "delivery": [
+        "The answer will come back into this session as a new prompt."
+      ],
+      "background": [],
+      "tools": [
+        "skill"
+      ]
+    },
+    {
+      "commands": [
+        "gh pr merge 12 --squash",
+        "gh pr merge 13 --squash",
+        "gh pr view 12 --json state && gh pr view 13 --json state && git fetch origin && git log --oneline -5 origin/main",
+        "gh pr list --state merged 2>&1; gh pr list 2>&1"
+      ],
+      "final": "Both PRs are merged in the order you picked:\n\n1. **#12** (CLI uploader: resumable uploads) — squash-merged first ✓\n2. **#13** (Server: sync timeout fix) — squash-merged after, no conflict surfaced during the merge ✓\n\nOne note on verification: `gh pr view`/`gh pr list` in this environment keep returning the same pre-merge listings (they've ignored every query flag all session, and the remote never exposed the PR branches to git), so the merge confirmations from `gh pr merge` are the authoritative signal — both reported success, in your chosen order. Main is now in place for tonight's 20:00 CLI release.",
+      "exit": 0,
+      "seconds": 532.98,
+      "delivery": [],
+      "background": [],
+      "tools": []
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_YgqIF8Yv5er7W8Sg",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-06T22:52:24Z",
+      "question": "PRs #12 and #13 both touch src/api.ts — which merges first?",
+      "context": "Both are green; after one merges, the other conflicts in src/api.ts and must be rebased.\n#12 first: resumable uploads land on main in time for tonight’s 20:00 CLI release; #13 rebased after.\n#13 first: slow-link timeout fix reaches users sooner (3 lost-edit reports this week); #12 rebased after, risking the release window.",
+      "options": [
+        "#12 first",
+        "#13 first"
+      ],
+      "recommended": "#12 first",
+      "agent": "opencode",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "ses_eec960c1cffey0cCtOmQ2UH320",
+        "sessionTitle": "Merging green PRs #12 and #13"
+      },
+      "links": [
+        {
+          "url": "https://github.com/acme/notes/pull/12"
+        },
+        {
+          "url": "https://github.com/acme/notes/pull/13"
+        }
+      ],
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "5dFAkWFX2q_Nw7ejH2Ed67XWyFgUHLNEzdBpWrzbS5s"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [
+    "gh pr view 12 --json number,title,state,mergeable,mergeStateStatus,files,headRefName",
+    "gh pr view 13 --json number,title,state,mergeable,mergeStateStatus,files,headRefName",
+    "gh pr view 12 --json mergeable,mergeStateStatus",
+    "gh pr view 13 --json mergeable,mergeStateStatus",
+    "gh pr view 12 --json headRefName --jq .headRefName",
+    "gh pr view 13 --json headRefName --jq .headRefName",
+    "gh pr merge 12 --squash",
+    "gh pr merge 13 --squash",
+    "gh pr view 12 --json state",
+    "gh pr view 13 --json state",
+    "gh pr list --state merged",
+    "gh pr list"
+  ],
+  "answered": "Answer to d_YgqIF8Yv5er7W8Sg (PRs #12 and #13 both touch src/api.ts — which merges first?): #12 first",
+  "prompted": true,
+  "waiting": [
+    {
+      "v": 1,
+      "id": "w_mYNwG4t5lQHEMazR",
+      "decisionId": "d_YgqIF8Yv5er7W8Sg",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-06T22:52:24Z",
+      "state": "waiting",
+      "dir": {
+        "length": 2,
+        "head": "5dFAkWFX2q_Nw7ejH2Ed67XWyFgUHLNEzdBpWrzbS5s"
+      }
+    }
+  ],
+  "permissions": []
+}
