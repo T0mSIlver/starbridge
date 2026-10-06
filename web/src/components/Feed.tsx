@@ -67,7 +67,7 @@ export function MetaRow({
   return (
     <div className={`${size === "dense" ? "t-meta" : "t-small"} ${s.meta}`}>
       <Icon name={machineIcon(kind)} size={size === "dense" ? 16 : 17} />
-      <span>
+      <span className={s.machine}>
         <Hit text={machine} />
       </span>
       {repo && (

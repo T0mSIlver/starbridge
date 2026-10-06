@@ -5,15 +5,23 @@
   align-items: center;
   gap: var(--s1h);
   min-width: 0;
-  height: 20px;
+  min-height: 20px;
   color: var(--fg2);
   white-space: nowrap;
   overflow: hidden;
 }
 
+/* Long machine and repo names give way with an ellipsis; the icon and the time keep their size. */
+.machine,
 .repo {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.meta > svg,
+.time {
+  flex: none;
 }
 
 .time {
