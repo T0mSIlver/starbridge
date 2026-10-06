@@ -265,6 +265,31 @@ private fun Join(busy: Boolean, actions: SetupActions, modifier: Modifier) {
     )
 }
 
+/**
+ * The server refuses this release (#497): it needs [minimum] or later, this phone has
+ * [current]. Nothing else works until the app is updated, so this is the only screen.
+ */
+@Composable
+fun UpdateRequired(minimum: String, current: String, fromPlay: Boolean, update: () -> Unit, modifier: Modifier = Modifier) {
+    Step(
+        modifier,
+        top = {
+            Column(Modifier.padding(start = Spacing.s4, end = Spacing.s4, top = 48.dp, bottom = Spacing.s6), verticalArrangement = Arrangement.spacedBy(Spacing.s3)) {
+                Title("Update Starbridge")
+                Text(
+                    "Your server needs Starbridge $minimum or later. This phone has $current.",
+                    style = StarbridgeTheme.type.body,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Tile(Sym.Phone)
+        },
+        bottom = {
+            Primary(if (fromPlay) "Update on Google Play" else "Get the latest release", busy = false, onClick = update)
+        },
+    )
+}
+
 /** An empty account: this phone creates its keys. */
 @Composable
 private fun FirstDevice(busy: Boolean, actions: SetupActions, modifier: Modifier) {
