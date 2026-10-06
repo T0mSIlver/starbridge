@@ -199,7 +199,10 @@ export async function boot(): Promise<Boot> {
     if (await store.get("pin", account))
       return { state: "broken", account, error: "rollback: the server sent an empty directory" };
     // Keys saved before a genesis that never reached the server: the page closed before the
-    // owner saved the recovery key, so that key was never used (#328).
+    // owner saved the recovery key, so that key was never used (#328). Once the genesis may
+    // have gone out, only the server could make the directory empty: the keys stay (#371).
+    if (device?.posted)
+      return { state: "broken", account, error: "the server sent an empty directory" };
     if (device) await store.del("device", account);
     return { state: "first-device", account, ...(device ? { unsaved: device.name } : {}) };
   }
@@ -337,6 +340,7 @@ export async function prepareFirstDevice(account: string, name: string): Promise
     const held = await store.get("device", account);
     if (held?.id !== record.id || held.signPk !== record.signPk)
       throw new Error("Another tab started the setup over, so this key was never used. Reload.");
+    await store.put("device", { ...record, posted: true }, account);
     try {
       await api.append(entry);
     } catch (e) {
