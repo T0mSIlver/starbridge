@@ -1556,6 +1556,13 @@ so the mod is the first path.
   the web and Android clients, well past one small PR, so it goes in that order as separate PRs.
   Until then PROTOCOL.md states the device-side limit. Now, a `settled` notice closes only the
   signing machine's decisions on the web and Android, which applied it by item id alone.
+- 2026-10-06. Devices detect a withheld machine revocation before launch (#362, the owner's
+  ruling). Three PRs: the protocol (an optional `dir` on every machine-signed body, and
+  `noteHead`, `withheldBy` and `headToSign` with their Kotlin twin), then the CLI signing heads,
+  then the web and Android holding items. A machine signs the longest head it knows, a device's
+  included, so a machine the server also keeps behind still passes on what a device told it. The
+  head is optional so that older machines' items keep opening; they only add no evidence. Older
+  devices drop the field and run without the check, as before.
 
 - 2026-10-06. opencode is the fourth harness (#300; research below, opencode 1.18.31). Its
   plugins get an SDK client bound to the running server, so the Starbridge opencode plugin

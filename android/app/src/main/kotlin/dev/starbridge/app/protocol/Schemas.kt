@@ -128,6 +128,21 @@ val SIGNER_ROLE = mapOf(
 val ITEM_KINDS = SIGNER_ROLE.keys
 val KINDS = setOf("directory") + ITEM_KINDS
 
+/**
+ * A directory its signer vouches for (DirectoryHead in schemas.ts): machines sign the longest
+ * they know into every item, and devices hold items while one an active machine signed is
+ * missing from their chain.
+ */
+@Serializable
+data class DirectoryHead(val length: Int, val head: String, val by: String? = null) {
+    fun check() {
+        schema(length in 1..100_000, "dir.length")
+        b64(head, "dir.head")
+        schema(head.length == 43, "dir.head")
+        by?.let { id(it, "dir.by") }
+    }
+}
+
 /** A sealed item's body: its id, the item its `re` hint names, and the members it is sealed to. */
 interface ItemBody {
     val id: String
@@ -283,10 +298,12 @@ data class Decision(
     val answerIn: DecisionLink? = null,
     /** The machine takes a typed reply in place of an option (#201); older machines omit it. */
     val replies: Boolean? = null,
+    val dir: DirectoryHead? = null,
 ) : ItemBody {
     override val recipients get() = to
 
     fun check() {
+        dir?.check()
         schema(v == 1, "v")
         id(id, "id")
         schema(to.isNotEmpty(), "to")
@@ -374,10 +391,12 @@ data class Permission(
     val suggestions: List<PermissionSuggestion>,
     val expiresAt: String,
     val source: Source,
+    val dir: DirectoryHead? = null,
 ) : ItemBody {
     override val recipients get() = to
 
     fun check() {
+        dir?.check()
         schema(v == 1, "v")
         id(id, "id")
         schema(to.isNotEmpty(), "to")
@@ -442,11 +461,13 @@ data class Settled(
     val at: String,
     val outcome: String? = null,
     val device: String? = null,
+    val dir: DirectoryHead? = null,
 ) : ItemBody {
     override val re get() = itemId
     override val recipients get() = to
 
     fun check() {
+        dir?.check()
         schema(v == 1, "v")
         id(id, "id")
         id(itemId, "itemId")
@@ -471,11 +492,13 @@ data class Waiting(
     val to: List<String>,
     val at: String,
     val state: String,
+    val dir: DirectoryHead? = null,
 ) : ItemBody {
     override val re get() = decisionId
     override val recipients get() = to
 
     fun check() {
+        dir?.check()
         schema(v == 1, "v")
         id(id, "id")
         id(decisionId, "decisionId")
@@ -511,10 +534,12 @@ data class Run(
     val at: String,
     val progress: RunProgress? = null,
     val exit: RunExit? = null,
+    val dir: DirectoryHead? = null,
 ) : ItemBody {
     override val recipients get() = to
 
     fun check() {
+        dir?.check()
         schema(v == 1, "v")
         id(id, "id")
         schema(to.isNotEmpty(), "to")
@@ -591,10 +616,12 @@ data class QuotaSnapshot(
     val takenAt: String,
     val providers: List<QuotaProvider>,
     val alerts: List<QuotaAlert>,
+    val dir: DirectoryHead? = null,
 ) : ItemBody {
     override val recipients get() = to
 
     fun check() {
+        dir?.check()
         schema(v == 1, "v")
         id(id, "id")
         schema(to.isNotEmpty(), "to")

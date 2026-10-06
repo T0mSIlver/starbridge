@@ -1376,10 +1376,34 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
     alt: "The settings screen, cropped",
   };
   const artifact = { url: "https://claude.ai/public/artifacts/0b3f0e7c", title: "Both mockups" };
+  // Machines sign the directory head they know into every item (#362).
+  const withHead = (body: object) => [
+    {
+      name: "with a directory head",
+      body: { ...body, dir: { length: 4, head: "A".repeat(43) } },
+      valid: true,
+    },
+    {
+      name: "with a cut directory head",
+      body: { ...body, dir: { length: 4, head: "A".repeat(42) } },
+      valid: false,
+    },
+    {
+      name: "with a device's directory head",
+      body: { ...body, dir: { length: 4, head: "A".repeat(43), by: "phone" } },
+      valid: true,
+    },
+    {
+      name: "with a directory head by a bad id",
+      body: { ...body, dir: { length: 4, head: "A".repeat(43), by: "a phone" } },
+      valid: false,
+    },
+  ];
   const schemas = {
     note: "Bodies that must pass or fail schema validation.",
     decision: [
       { name: "valid", body: decisionBody, valid: true },
+      ...withHead(decisionBody),
       {
         name: "with agent and machine kind",
         body: {
@@ -1548,6 +1572,7 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
     ],
     permission: [
       { name: "valid", body: permissionBody, valid: true },
+      ...withHead(permissionBody),
       {
         name: "no suggestions, no description",
         body: { ...permissionBody, suggestions: [], description: undefined },
@@ -1632,6 +1657,7 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
     ],
     settled: [
       { name: "by a device", body: settledBody, valid: true },
+      ...withHead(settledBody),
       {
         name: "at the keyboard",
         body: { ...settledBody, outcome: "keyboard", device: undefined },
@@ -1670,6 +1696,7 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
     ],
     run: [
       { name: "running with steps", body: runBody, valid: true },
+      ...withHead(runBody),
       {
         name: "running, no progress",
         body: { ...runBody, progress: undefined },
@@ -1711,6 +1738,7 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
     ],
     waiting: [
       { name: "waiting", body: waitingBody, valid: true },
+      ...withHead(waitingBody),
       { name: "working", body: { ...waitingBody, state: "working" }, valid: true },
       { name: "an unknown state", body: { ...waitingBody, state: "blocked" }, valid: false },
       { name: "no decision", body: { ...waitingBody, decisionId: undefined }, valid: false },
