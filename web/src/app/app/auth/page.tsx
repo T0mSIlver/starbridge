@@ -16,15 +16,28 @@ export default async function AppSignIn({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const { code, state } = await searchParams;
+  const { code, error, state } = await searchParams;
+  const word = (v: unknown): v is string => typeof v === "string" && v !== "";
+  // GitHub's code, or its error when the owner turned it down, goes on to the app with the state.
+  const passed: Record<string, string> | undefined = word(code)
+    ? { code, ...(word(state) && { state }) }
+    : word(error) && word(state)
+      ? { error, state }
+      : undefined;
   return (
     <FirstRunPage>
-      {typeof code === "string" && code ? (
+      {passed ? (
         <>
-          <h1 className="t-heading">Back to the app</h1>
-          <p className={`t-small ${s.lede}`}>You signed in with GitHub. Finish in the app.</p>
+          <h1 className="t-heading">
+            {"code" in passed ? "Back to the app" : "Sign-in didn't finish"}
+          </h1>
+          <p className={`t-small ${s.lede}`}>
+            {"code" in passed
+              ? "You signed in with GitHub. Finish in the app."
+              : "GitHub didn't sign you in. Try again from the app."}
+          </p>
           <a
-            href={`starbridge://auth?${new URLSearchParams({ code, ...(typeof state === "string" && { state }) })}`}
+            href={`starbridge://auth?${new URLSearchParams(passed)}`}
             className={`t-label ${ui.btn} ${ui.lg} ${ui.fill}`}
           >
             Open Starbridge
