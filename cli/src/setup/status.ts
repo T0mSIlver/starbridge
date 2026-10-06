@@ -16,7 +16,7 @@ import {
 import { autoUpdate, hasClaude, PLUGINS, pluginState } from "./plugins";
 import { lingering, serviceState } from "./service";
 import { probeLines } from "./setup";
-import type { Sys } from "./sys";
+import { otherCopies, type Sys } from "./sys";
 
 async function agentStatus(sys: Sys): Promise<Status | string> {
   const agent = AgentClient.for(sys.ctx);
@@ -32,6 +32,7 @@ export async function status(sys: Sys): Promise<number> {
   const { ctx } = sys;
   const out = ctx.out;
   out(`starbridge ${VERSION} (${sys.self.join(" ")})`);
+  for (const line of await otherCopies(sys)) out(line);
 
   const machine = ctx.store.machine();
   out(
@@ -88,7 +89,7 @@ export async function status(sys: Sys): Promise<number> {
   if (!hasClaude(sys)) out("Claude Code: not on the PATH");
   else {
     const p = await pluginState(sys);
-    if (!p) out("Claude Code: `claude plugin list` failed");
+    if (typeof p === "string") out(`Claude Code: ${p}`);
     else {
       out(
         `Claude Code marketplace: ${p.marketplace ? "added" : "not added"}${autoUpdate(sys) ? ", auto-update on" : ""}`,

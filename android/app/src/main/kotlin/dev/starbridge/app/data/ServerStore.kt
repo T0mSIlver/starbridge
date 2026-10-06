@@ -296,7 +296,7 @@ class ServerStore(
 
     private fun explain(e: Exception): String = when (e) {
         is ApiException -> when (e.error) {
-            "machine-cap" -> "This account already has its maximum number of machines. Revoke one first."
+            "machine-cap" -> "This account already has its maximum number of machines; phones and browsers don't count. Revoke one first."
             "already-answered" -> "Already answered on another device."
             "rate-limited" -> "Too many tries. Wait a minute."
             "taken" -> "Another of your devices is already comparing digits for it."

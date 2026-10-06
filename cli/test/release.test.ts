@@ -309,13 +309,32 @@ describe("update", () => {
   }
   const ctx = () => testCtx({ HOME: dir, PATH: "", STARBRIDGE_RELEASES_URL: release?.url ?? "" });
 
+  test("offline, names what it could not reach and still checks CodexBar (#617)", async () => {
+    const codexbar = join(dir, "codexbar");
+    writeFileSync(codexbar, "#!/bin/sh\n", { mode: 0o755 });
+    const c = testCtx({
+      HOME: dir,
+      PATH: "",
+      STARBRIDGE_RELEASES_URL: "http://127.0.0.1:1",
+      STARBRIDGE_CODEXBAR: codexbar,
+    });
+    expect(await update(c, { kind: "binary", path: installed() })).toBe(1);
+    expect(c.lines[0]).toStartWith(
+      "Could not update starbridge: cannot reach http://127.0.0.1:1/latest (",
+    );
+    expect(c.lines[1]).toStartWith(`CodexBar at ${codexbar} was not installed by starbridge`);
+  });
+
   test("replaces the binary with the newer signed release", async () => {
     release = fakeReleases("99.0.0");
     const path = installed();
     const c = ctx();
     expect(await update(c, { kind: "binary", path }, release.pubkey)).toBe(0);
     // Then what the new binary printed for `setup --refresh` (the fake prints its version).
-    expect(c.lines).toEqual([`Updated starbridge ${VERSION} to 99.0.0.`, "starbridge 99.0.0"]);
+    expect(c.lines).toEqual([
+      `Updated starbridge ${VERSION} to 99.0.0 in ${path}.`,
+      "starbridge 99.0.0",
+    ]);
     expect(spawnSync(path, ["--version"], { encoding: "utf8" }).stdout).toBe("starbridge 99.0.0\n");
   });
 

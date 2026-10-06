@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { readFileSync, statSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { LiveServer } from "@starbridge/server/test-support";
 import { run } from "../../cli/src/cli";
 import { paired, type TestCtx, until } from "../../cli/test/helpers";
@@ -264,4 +266,41 @@ test("a session that does not poll also keeps an answer through a /clear", async
   a.get().id = "s-a";
   await until(() => a.get().submitted.length === 1);
   expect(polling(a)).toBe(0);
+});
+
+test("the poller starts the CLI setup recorded, and `starbridge` once that binary is gone (#612)", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "starbridge-mod-cli-"));
+  const binary = join(dir, "starbridge");
+  writeFileSync(binary, "");
+  writeFileSync(join(dir, "cli-path"), `${binary}\n`);
+  const runs: string[][] = [];
+  const host: Host = {
+    sessionId: async () => "s1",
+    run: async (argv) => {
+      runs.push(argv);
+      return { exitCode: 0, stdout: "", stderr: "" };
+    },
+    read: async (path) => readFileSync(path, "utf8"),
+    write: async (path, text) => writeFileSync(path, text),
+    mtime: async (path) => {
+      try {
+        return statSync(path).mtimeMs;
+      } catch {
+        return undefined;
+      }
+    },
+    now: async () => Date.now(),
+    sleep: (ms) => Bun.sleep(ms),
+    submit: () => {},
+    status: () => {},
+    log: () => {},
+  };
+  const poller = new Poller(host, dir, undefined, FAST);
+  pollers.push(poller);
+  await until(() => runs.length > 0);
+  expect(runs[0]?.[0]).toBe(binary);
+  rmSync(binary);
+  const seen = runs.length;
+  await until(() => runs.length > seen);
+  expect(runs.at(-1)?.[0]).toBe("starbridge");
 });

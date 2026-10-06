@@ -49,6 +49,25 @@ What each user does, from the clients' code:
 | page | `GET /joins?wait=25` long-poll | always one open |
 | page | loads `/` | every 5 min |
 
+## Launch spike
+
+`spike.ts` adds what a front-page post brings on top of `load.ts`'s users: visitors arriving at
+`--rates` per second, one stage each, who load the landing page as a browser does (the page,
+its scripts, styles, fonts and pictures, `/v1/me`, Umami's script and one event). A share
+starts the GitHub sign-in (`--signin`) and a share sets Starbridge up through Caddy
+(`--signup`), then tries it: a first question with a picture, more every `--every` s, each
+answered after about 20 s. Each visitor sends its own address in `X-Sim-IP`, which the test
+Caddyfile hands on as the client's, so the per-address limits see one address per visitor;
+`--nat` of them share `--nat-ips` addresses. A stage fails when the page's p99 passes `--slow`
+ms or over 1% of requests fail.
+
+```bash
+evals/load/stack.sh load --ramp 1000 --until /load/stop --procs 4 &   # the earlier users
+evals/load/stack.sh spike --rates 2,5,10,20,40 --stage 120
+```
+
+`LOAD_CLIENT_CPUS` pins either client container to other cores than the stack's.
+
 ## Failure tests
 
 Each runs `load.ts` with `--until FILE`: it keeps its users going until FILE exists, then drains

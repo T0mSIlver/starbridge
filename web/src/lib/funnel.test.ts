@@ -22,7 +22,8 @@ beforeEach(() => {
     screen: { width: 412, height: 915 },
   });
   globalThis.fetch = (async (_url: string, init: RequestInit) => {
-    sent.push(JSON.parse(init.body as string).payload.name);
+    const { name, data } = JSON.parse(init.body as string).payload;
+    sent.push(data ? `${name} ${JSON.stringify(data)}` : name);
     return new Response();
   }) as typeof fetch;
 });
@@ -41,10 +42,17 @@ test("a new account's steps are each sent once, in the order they happen", () =>
   firstSignIn("a", 0);
   firstSignIn("a", 1000); // the setup screen shown again
   reach("a", () => false, 2000);
-  reach("a", (s) => s === "first-machine", 3000);
-  reach("a", () => true, 4000);
-  reach("a", () => true, 5000);
-  expect(sent).toEqual(["first-sign-in", "first-machine", "first-answer"]);
+  reach("a", (s) => s === "first-keys", 3000);
+  reach("a", (s) => s === "first-machine", 4000);
+  reach("a", (s) => (s === "first-answer" ? { kind: "done" } : s === "second-device"), 5000);
+  reach("a", () => true, 6000);
+  expect(sent).toEqual([
+    "first-sign-in",
+    "first-keys",
+    "first-machine",
+    "second-device",
+    'first-answer {"kind":"done"}',
+  ]);
   expect(store.has(FUNNEL_KEY)).toBe(false);
 });
 

@@ -12,6 +12,8 @@ tmp=$(mktemp /etc/starbridge/server.env.XXXXXX)
   # The App Link the app verifies against web/public/.well-known/assetlinks.json (#527).
   printf '%s\n' "APP_REDIRECT_URI='https://starbridge.run/app/auth'"
   printf '%s\n' "RELAY_MODE='1'"
+  # Machines per hosted account; phones and browsers don't count (#658).
+  printf '%s\n' "MAX_MACHINES='3'"
   printf '%s\n' "GITHUB_CLIENT_ID='Ov23liEVyfnca8hO548x'"
   printf '%s\n' "GITHUB_CLIENT_SECRET='$(tr -d '\n' < $s/github-oauth-client-secret)'"
   printf '%s\n' "FCM_PROJECT_ID='$(jq -r .project_id $fcm)'"

@@ -6,7 +6,10 @@ that asked. You also follow the runs that affect you, such as a release or heavy
 machine.
 
 Your phone, browsers and machines encrypt everything they send each other, so the server stores
-only ciphertext. Use the free server at starbridge.run, or [host your own](../server/README.md).
+your content only as ciphertext; it still sees who sent each item, to which
+devices, its kind, size and times.
+[What the server sees](faq.md#what-does-the-server-see) has the details and the limits. Use the
+free server at starbridge.run, or [host your own](../server/README.md).
 
 ## Start
 
@@ -92,7 +95,7 @@ Run the command in the session's own directory, since the last session is per di
 - **Permission prompts.** Allow or deny, from your phone, the calls Claude Code, opencode and Pi
   ask permission for. Off until you turn them on.
 
-Starbridge works with Claude Code, Codex, Pi and opencode.
+Starbridge works with Claude Code 2.1.287 or later, Codex, Pi and opencode.
 [Agent instructions](tell-your-agents.md#what-each-agent-supports) lists what each one supports.
 
 ## Recovery key

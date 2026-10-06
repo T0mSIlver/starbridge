@@ -6,17 +6,19 @@ import type { Ctx } from "./context";
 import { resolveCommand, spawnable } from "./platform";
 import {
   compareVersions,
+  DownloadError,
   downloadVerified,
   type InstallKind,
   latestVersion,
   platformAsset,
   RELEASE_KEY,
   RELEASES_URL,
+  ReleaseError,
 } from "./release";
 import { updateCodexbar } from "./setup/codexbar";
 import { piPackage, piSource } from "./setup/harnesses";
 import { installedService, kind, restartTask } from "./setup/service";
-import { defaults, makeSys } from "./setup/sys";
+import { defaults, makeSys, otherCopies } from "./setup/sys";
 import { VERSION } from "./version";
 
 const MANAGED = {
@@ -110,8 +112,18 @@ export async function update(
   const sys = makeSys(ctx, defaults);
   const configured = ctx.store.agentConfig().quota?.codexbar;
   if (codexbar !== undefined) return updateCodexbar(sys, configured, codexbar);
-  await updateSelf(ctx, install, pubkey);
-  return updateCodexbar(sys, configured);
+  // CodexBar comes from elsewhere: a download that failed here, offline or cut short, does not
+  // hold it back (#617). A release that does not check out stops everything.
+  let self = 0;
+  try {
+    await updateSelf(ctx, install, pubkey);
+  } catch (e) {
+    if (e instanceof ReleaseError && !(e instanceof DownloadError)) throw e;
+    ctx.out(`Could not update starbridge: ${(e as Error).message}`);
+    self = 1;
+  }
+  for (const line of await otherCopies(sys)) ctx.out(line);
+  return Math.max(self, await updateCodexbar(sys, configured));
 }
 
 async function updateSelf(ctx: Ctx, install: InstallKind, pubkey: string) {
@@ -131,7 +143,7 @@ async function updateSelf(ctx: Ctx, install: InstallKind, pubkey: string) {
   writeFileSync(next, bytes, { mode: 0o755 });
   chmodSync(next, 0o755);
   replaceBinary(next, install.path);
-  ctx.out(`Updated starbridge ${VERSION} to ${latest}.`);
+  ctx.out(`Updated starbridge ${VERSION} to ${latest} in ${install.path}.`);
   // The new binary brings the files setup wrote to its version, and restarts the agent.
   const r = spawnSync(install.path, ["setup", "--refresh"], {
     env: ctx.env as NodeJS.ProcessEnv,

@@ -39,6 +39,12 @@ export function configDir(env: Record<string, string | undefined>): string {
  */
 export const PROMPTS_OPEN = "permissions-open";
 
+/**
+ * The file in the config folder that holds this CLI's absolute path, one line, for the hooks and
+ * plugins that start it when their PATH lacks it (`plugin/hooks/cli.sh`, the mod; #612).
+ */
+export const CLI_PATH = "cli-path";
+
 /** What `PROMPTS_OPEN` holds for state `s`. */
 export function promptsMark(s: State, now = Date.now()): string {
   const open = Object.values(s.permissions ?? {}).some(
@@ -96,6 +102,9 @@ export interface State {
       cursor?: string;
       /** The Claude Code session that asked; the mod delivers the answer there only. */
       session?: string;
+      /** The asking session's title and project, for `answers --all` once `body` is gone. */
+      sessionTitle?: string;
+      project?: string;
       /** The Codex session that asked, which the agent queues the answer into. */
       codex?: CodexSession;
       /** Told its answer comes back as a prompt from the Pi extension or the opencode plugin. */

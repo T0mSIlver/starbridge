@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { LiveServer } from "@starbridge/server/test-support";
 import { PNG } from "pngjs";
 import { proof, type SessionEvent, type Status } from "../src/agent/api";
-import { AgentClient, AgentError, Interrupted } from "../src/agent/client";
+import { AgentClient, AgentError, Interrupted, NoAgent } from "../src/agent/client";
 import { makeAgent } from "../src/agent/main";
 import type { Agent } from "../src/agent/server";
 import { run } from "../src/cli";
@@ -647,4 +647,99 @@ test("on loopback TCP (Windows), only a call that proves the port file's token g
   // A port file left by an agent that died: its pid runs no more, so nothing is sent.
   writeFileSync(socket, JSON.stringify({ ...file, pid: 2 ** 22 + 1 }));
   await expect(new AgentClient(socket).call("GET", "/v1/status")).rejects.toThrow("no agent");
+});
+
+test("answers --all through the agent follows every session's answers and takes none", async () => {
+  const { socket } = await machine();
+  const c = client(socket);
+  const s1 = session(socket, "s1");
+  await s1.hello();
+  const first = await ask(c, "--project", "p", "--session", "s1");
+  await server.answer(first, { choice: "Merge" });
+  await until(async () => (await s1.events()).length === 1);
+
+  const controller = new AbortController();
+  const observer = { ...client(socket), signal: controller.signal };
+  const following = run(["answers", "--all", "--follow"], observer);
+  await until(() => observer.lines.length === 1);
+  expect(JSON.parse(observer.lines[0] as string)).toMatchObject({
+    decisionId: first,
+    question: "Merge #12 now?",
+    choice: "Merge",
+    session: "s1",
+    project: "p",
+  });
+  const second = await ask(c, "--project", "q", "--session", "s2");
+  await server.answer(second, { choice: "Wait" });
+  await until(() => observer.lines.length === 2);
+  expect(JSON.parse(observer.lines[1] as string)).toMatchObject({
+    decisionId: second,
+    project: "q",
+  });
+  controller.abort();
+  expect(await following).toBe(130);
+
+  // Still each session's to take, and nothing went waiting.
+  expect((await s1.events()).map((e) => e.decisionId)).toEqual([first]);
+  expect(await run(["wait", second, "--timeout", "1s"], c)).toBe(0);
+  expect(await server.opened("waiting")).toEqual([]);
+});
+
+test("ask promises a prompt only once the agent has seen this session's mod (#537)", async () => {
+  const { socket } = await machine();
+  const c = client(socket);
+  c.env.CLAUDECODE = "1";
+  const prompt = "The answer will come back into this session as a new prompt.";
+  await ask(c, "--session", "s-mod");
+  expect(c.errors.at(-1)).toContain("run `starbridge wait");
+
+  const s = session(socket, "s-mod");
+  await s.events();
+  await ask(c, "--session", "s-mod");
+  expect(c.errors.at(-1)).toBe(prompt);
+  // Another session's mod is no promise for this one.
+  await ask(c, "--session", "s-other");
+  expect(c.errors.at(-1)).toContain("run `starbridge wait");
+
+  // A /clear: the same process greets under a new id, and the old one has no mod any more.
+  const http = new AgentClient(socket, "starbridge-mod/test");
+  await http.call("POST", "/v1/sessions/s-cleared/hello", { cwd: "/work/x", replaces: "s-mod" });
+  await ask(c, "--session", "s-mod");
+  expect(c.errors.at(-1)).toContain("run `starbridge wait");
+  await ask(c, "--session", "s-cleared");
+  expect(c.errors.at(-1)).toBe(prompt);
+
+  await s.events();
+  await s.bye();
+  await ask(c, "--session", "s-mod");
+  expect(c.errors.at(-1)).toContain("run `starbridge wait");
+});
+
+test("a mod silent for longer than one events cycle no longer counts (#537)", async () => {
+  const { socket, ctx } = await machine();
+  const c = client(socket);
+  c.env.CLAUDECODE = "1";
+  await session(socket, "s-quiet").events();
+  const start = Date.now();
+  ctx.now = () => new Date(start + 46_000);
+  await ask(c, "--session", "s-quiet");
+  expect(c.errors.at(-1)).toContain("run `starbridge wait");
+});
+
+test("through the agent, wait --no-mark leaves the decision as it was (#603)", async () => {
+  const { socket } = await machine();
+  const c = client(socket);
+  const id = await ask(c, "--project", "p");
+  expect(await run(["wait", id, "--no-mark", "--timeout", "1s"], c)).toBe(2);
+  expect(await server.opened("waiting")).toEqual([]);
+  expect(await run(["wait", id, "--timeout", "1s"], c)).toBe(2);
+  expect((await server.opened("waiting")).map((w) => w.state)).toEqual(["waiting"]);
+});
+
+test("a socket path too long for a unix socket: clients fall back and say why (#622)", async () => {
+  const ctx = await paired(server);
+  const socket = join(ctx.store.dir, "x".repeat(120), "agent.sock");
+  const call = new AgentClient(socket).call("GET", "/v1/status");
+  await expect(call).rejects.toBeInstanceOf(NoAgent);
+  await expect(call).rejects.toThrow("too long for a unix socket");
 });

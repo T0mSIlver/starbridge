@@ -186,6 +186,15 @@ CREATE TABLE IF NOT EXISTS usage_days (
 );
 `;
 
+/** Pairings no longer keep their poster's address: the per-address cap counts in memory (#575). */
+const V2 = "ALTER TABLE pairings DROP COLUMN client;";
+
+/**
+ * Why the server refused a pairing's new member, such as `machine-cap`, so the new machine's
+ * result poll ends at once with it instead of at the pairing's expiry (#615).
+ */
+const V3 = "ALTER TABLE pairings ADD COLUMN refused TEXT;";
+
 /**
  * Schema changes, in order; `PRAGMA user_version` counts those a database has run. Append only:
  * a shipped migration never changes. A migration changes the schema and never rewrites rows, so
@@ -196,13 +205,13 @@ CREATE TABLE IF NOT EXISTS usage_days (
  * Snoozes (#571): `wake_at` keeps an item's `wakeAt` hint as sent, which clients check against
  * its body; `wake_due` is the same time in UTC while its push is still to come.
  */
-const V2 = `
+const V4 = `
 ALTER TABLE items ADD COLUMN wake_at TEXT;
 ALTER TABLE items ADD COLUMN wake_due TEXT;
 CREATE INDEX items_wake_due ON items (wake_due) WHERE wake_due IS NOT NULL;
 `;
 
-const MIGRATIONS = [V1, V2];
+const MIGRATIONS = [V1, V2, V3, V4];
 
 export function openDb(path: string): Database {
   if (path !== ":memory:") mkdirSync(dirname(path), { recursive: true });

@@ -42,8 +42,11 @@ test("ask --input reads the fields from a file; ask prints the id, then how the 
   expect(JSON.parse(ctx.lines[1] as string)).toMatchObject({ decisionId: id, choice: "Merge" });
 
   const prompt = "The answer will come back into this session as a new prompt.";
+  // Claude Code with no agent to see its mod: nothing promises the answer comes back (#537).
+  ctx.env = { CLAUDECODE: "1" };
+  expect(await run(["ask", "--question", "Ship?"], ctx)).toBe(0);
+  expect(ctx.errors.at(-1)).toContain("run `starbridge wait");
   for (const env of [
-    { CLAUDECODE: "1" },
     { PI_SESSION_ID: "p1", STARBRIDGE_PI_ANSWERS: "p1" },
     { STARBRIDGE_OPENCODE_SESSION: "o1", STARBRIDGE_OPENCODE_ANSWERS: "o1" },
   ]) {
@@ -72,4 +75,93 @@ test("ask --json is an unknown flag: --input replaced it before the first releas
   expect(await run(["ask", "--json", "-"], ctx)).toBe(1);
   expect(ctx.errors.at(-1)).toStartWith("starbridge: ");
   expect(ctx.errors.at(-1)).toContain("--json");
+});
+
+test("answers --all prints every answer as JSON lines and leaves each to its session", async () => {
+  const ctx = await paired(server);
+  const asked = ["--session", "s1", "--session-title", "Fix login", "--project", "web"];
+  expect(
+    await run(
+      ["ask", "--question", "Merge #12?", "--option", "Merge", "--option", "Wait", ...asked],
+      ctx,
+    ),
+  ).toBe(0);
+  const id = ctx.lines[0] as string;
+  await server.answer(id, { choice: "Merge" });
+  ctx.lines.length = 0;
+  expect(await run(["answers", "--all"], ctx)).toBe(0);
+  expect(ctx.lines.map((l) => JSON.parse(l))).toEqual([
+    {
+      decisionId: id,
+      question: "Merge #12?",
+      choice: "Merge",
+      answeredAt: expect.any(String),
+      session: "s1",
+      sessionTitle: "Fix login",
+      project: "web",
+    },
+  ]);
+  ctx.lines.length = 0;
+  expect(await run(["answers", "--session", "s1"], ctx)).toBe(0);
+  expect(ctx.lines).toHaveLength(1);
+
+  ctx.lines.length = 0;
+  expect(await run(["answers", "--all", "--since", "1h"], ctx)).toBe(0);
+  expect(ctx.lines).toHaveLength(1);
+  ctx.lines.length = 0;
+  expect(await run(["answers", "--all", "--since", "2999-01-01T00:00:00Z"], ctx)).toBe(0);
+  expect(ctx.lines).toEqual([]);
+
+  // --follow prints the answers so far, then each new one, until interrupted.
+  const controller = new AbortController();
+  const follower = { ...ctx, lines: [] as string[], signal: controller.signal };
+  follower.out = (l: string) => follower.lines.push(l);
+  const following = run(["answers", "--all", "--follow"], follower);
+  await until(() => follower.lines.length === 1);
+  expect(await run(["ask", "--question", "Why?", "--session", "s2"], ctx)).toBe(0);
+  const second = ctx.lines.at(-1) as string;
+  await server.answer(second, { text: "Because" });
+  await until(() => follower.lines.length === 2);
+  expect(JSON.parse(follower.lines[1] as string)).toMatchObject({
+    decisionId: second,
+    text: "Because",
+    session: "s2",
+  });
+  controller.abort();
+  expect(await following).toBe(130);
+});
+
+test("decisions --open lists the open questions as JSON lines, until answered or settled", async () => {
+  const ctx = await paired(server);
+  const asked = ["--session", "s1", "--session-title", "Fix login", "--project", "web"];
+  expect(
+    await run(
+      ["ask", "--question", "Merge #12?", "--option", "Merge", "--option", "Wait", ...asked],
+      ctx,
+    ),
+  ).toBe(0);
+  const id = ctx.lines[0] as string;
+  expect(await run(["ask", "--question", "Ship?", "--waiting", "--session", "s2"], ctx)).toBe(0);
+  const other = ctx.lines[1] as string;
+  ctx.lines.length = 0;
+  expect(await run(["decisions", "--open"], ctx)).toBe(0);
+  expect(ctx.lines.map((l) => JSON.parse(l))).toEqual([
+    {
+      decisionId: id,
+      question: "Merge #12?",
+      options: ["Merge", "Wait"],
+      askedAt: expect.any(String),
+      waiting: false,
+      session: "s1",
+      sessionTitle: "Fix login",
+      project: "web",
+    },
+    expect.objectContaining({ decisionId: other, waiting: true, session: "s2" }),
+  ]);
+  await server.answer(id, { choice: "Merge" });
+  expect(await run(["wait", id], ctx)).toBe(0);
+  expect(await run(["settle", other, "--outcome", "withdrawn"], ctx)).toBe(0);
+  ctx.lines.length = 0;
+  expect(await run(["decisions", "--open"], ctx)).toBe(0);
+  expect(ctx.lines).toEqual([]);
 });
