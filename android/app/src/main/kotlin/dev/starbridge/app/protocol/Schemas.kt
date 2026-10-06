@@ -109,21 +109,22 @@ val SIGNER_ROLE = mapOf(
 val ITEM_KINDS = SIGNER_ROLE.keys
 val KINDS = setOf("directory") + ITEM_KINDS
 
-/** A sealed item's body: its id, the item its `re` hint names, and the members it is sealed to. */
 /**
  * A directory its signer vouches for (DirectoryHead in schemas.ts): machines sign the longest
  * they know into every item, and devices hold items while one an active machine signed is
  * missing from their chain.
  */
 @Serializable
-data class DirectoryHead(val length: Int, val head: String) {
+data class DirectoryHead(val length: Int, val head: String, val by: String? = null) {
     fun check() {
         schema(length in 1..100_000, "dir.length")
         b64(head, "dir.head")
         schema(head.length == 43, "dir.head")
+        by?.let { id(it, "dir.by") }
     }
 }
 
+/** A sealed item's body: its id, the item its `re` hint names, and the members it is sealed to. */
 interface ItemBody {
     val id: String
     val re: String? get() = null

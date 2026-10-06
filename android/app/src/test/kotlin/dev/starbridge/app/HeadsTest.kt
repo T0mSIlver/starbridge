@@ -49,5 +49,12 @@ class HeadsTest {
         val revoked = mapOf("m" to DirectoryHead(full.length + 5, "A".repeat(43)))
         assertNull(heads.withheldBy(revoked, full, truth))
         assertEquals("m", heads.withheldBy(revoked, mine, seenByA)?.first)
+
+        // A forged head an honest machine passed on from device b ends with b's revocation.
+        val relayed = mutableMapOf<String, DirectoryHead>()
+        heads.note(relayed, "m2", DirectoryHead(99, "A".repeat(43), by = "b"), seenByA)
+        assertEquals("b", heads.withheldBy(relayed, mine, seenByA)?.first)
+        val withoutB = seenByA + envelopeJson(directories.revokeEntry(mine, "a", sign.getValue("a").secret, "b", at))
+        assertNull(heads.withheldBy(relayed, directories.verify(withoutB), withoutB))
     }
 }

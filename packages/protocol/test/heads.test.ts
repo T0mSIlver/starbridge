@@ -118,10 +118,33 @@ test("a machine signs the longest head it knows, a device's when its own chain i
   const mine = verifyDirectory(seenByA);
   const deviceHead = head(verifyDirectory(truth));
   expect(headToSign({}, mine, seenByA)).toEqual(head(mine));
-  expect(headToSign({ b: deviceHead }, mine, seenByA)).toEqual(deviceHead);
+  expect(headToSign({ b: deviceHead }, mine, seenByA)).toEqual({ ...deviceHead, by: "b" });
+  // Not a head a member its chain revoked signed.
+  const inflated = { length: 99, head: "A".repeat(43) };
+  expect(headToSign({ m: inflated }, verifyDirectory(truth), truth)).toEqual(deviceHead);
   // Not a fork's head of the same length, and not a head its chain holds.
   expect(headToSign({ b: { ...head(mine), head: "A".repeat(43) } }, mine, seenByA)).toEqual(
     head(mine),
   );
   expect(headToSign({ b: deviceHead }, verifyDirectory(truth), truth)).toEqual(deviceHead);
+});
+
+test("a forged head a machine passed on ends with its forger's revocation", () => {
+  // Device B, compromised, signs an inflated head into an answer; honest M2 passes it on.
+  const mine = verifyDirectory(seenByA);
+  const forged = { length: 99, head: "A".repeat(43) };
+  const relayed = headToSign({ b: forged }, mine, seenByA);
+  expect(relayed).toEqual({ ...forged, by: "b" });
+  const heads: Heads = {};
+  noteHead(heads, "m2", relayed, seenByA);
+  expect(withheldBy(heads, mine, seenByA)?.id).toBe("b");
+  // The owner revokes B: the head it vouched for counts no more, and M2's own head holds.
+  const chain = [
+    ...seenByA,
+    revokeEntry(mine, { id: "a", signKey: keys.a.sign.privateKey }, "b", at),
+  ];
+  const after = verifyDirectory(chain);
+  expect(withheldBy(heads, after, chain)).toBeUndefined();
+  noteHead(heads, "m2", head(after), chain);
+  expect(withheldBy(heads, after, chain)).toBeUndefined();
 });

@@ -4,7 +4,8 @@ import kotlinx.serialization.json.JsonElement
 
 /**
  * Detecting a withheld directory entry from the heads machines sign into their items (heads.ts,
- * PROTOCOL.md "Directory"). Heads are kept by member id.
+ * PROTOCOL.md "Directory"). Heads are kept by signer, or by "signer/by" for a head the signer
+ * passed on from member `by`.
  */
 class Heads(private val directories: Directories) {
     /** Whether [entries] hold the chain [head] names: as long at least, and the same entry there. */
@@ -20,13 +21,22 @@ class Heads(private val directories: Directories) {
      */
     fun note(heads: MutableMap<String, DirectoryHead>, signer: String, head: DirectoryHead?, entries: List<JsonElement>): Boolean {
         if (head == null) return false
-        val known = heads[signer]
+        val key = if (head.by != null && head.by != signer) "$signer/${head.by}" else signer
+        val known = heads[key]
         val replace = known == null || head.length > known.length || (holds(entries, known) && !holds(entries, head))
-        if (replace) heads[signer] = head
+        if (replace) heads[key] = head
         return replace
     }
 
-    /** A member active in [dir] that signed a head [entries] lack, with that head; null while none has. */
-    fun withheldBy(heads: Map<String, DirectoryHead>, dir: Directory, entries: List<JsonElement>): Pair<String, DirectoryHead>? =
-        heads.entries.firstOrNull { (id, head) -> dir.members[id]?.active == true && !holds(entries, head) }?.toPair()
+    /**
+     * A kept head [entries] lack while every member it counts on (its signer, and the member it
+     * came from) is active in [dir], with the member it names; null while none counts.
+     */
+    fun withheldBy(heads: Map<String, DirectoryHead>, dir: Directory, entries: List<JsonElement>): Pair<String, DirectoryHead>? {
+        for ((key, head) in heads) {
+            val ids = key.split("/")
+            if (ids.all { dir.members[it]?.active == true } && !holds(entries, head)) return ids.last() to head
+        }
+        return null
+    }
 }

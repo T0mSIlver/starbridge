@@ -1126,6 +1126,16 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
       body: { ...body, dir: { length: 4, head: "A".repeat(42) } },
       valid: false,
     },
+    {
+      name: "with a device's directory head",
+      body: { ...body, dir: { length: 4, head: "A".repeat(43), by: "phone" } },
+      valid: true,
+    },
+    {
+      name: "with a directory head by a bad id",
+      body: { ...body, dir: { length: 4, head: "A".repeat(43), by: "a phone" } },
+      valid: false,
+    },
   ];
   const schemas = {
     note: "Bodies that must pass or fail schema validation.",

@@ -72,18 +72,22 @@ answers that never arrive. A machine cannot detect a revocation that no device h
 since the server is its only channel; the revoked device's key can sign any stale head itself.
 
 Devices run the same check on machines (#362). A machine signs into every item it posts the
-longest head it knows, `dir: {length, head}`: its own, or a longer one an active device signed
-into an answer that its chain lacks (`headToSign`). A device keeps the longest head each machine
-signed (`noteHead`) and, while a machine active in its chain has signed a head that chain does not
-hold (`withheldBy`), refuses every machine's items and says the server is holding back directory
-entries. It reads them again once the server serves those entries, or once its chain revokes that
-machine. Reading the directory and revoking keep working meanwhile.
+longest head it knows, `dir: {length, head, by?}`: its own, or a longer one an active device
+signed into an answer that its chain lacks, naming that device as `by` (`headToSign`). A device
+keeps the longest head each machine signed, apart for each `by` (`noteHead`). While a head its
+chain does not hold counts, it refuses every machine's items and says the server is holding back
+directory entries; a head counts while its machine, and its `by` if any, are active in the
+device's chain (`withheldBy`). The device reads the items again once the server serves those
+entries, or once its chain revokes either. Reading the directory and revoking keep working
+meanwhile.
 
 So one machine that holds a withheld revocation, or has seen the head of the device that made it,
-exposes it to every device it posts to. A server that withholds it from every machine, and drops
-the revoking device's answers, keeps it hidden, as it does from a device that hears only from the
-revoked machine. A machine that is compromised but not yet revoked can sign a false long head and
-hold every device's items until the owner revokes it, which the owner sees.
+exposes it to every device whose items from that machine the server delivers. A server that
+withholds it from every machine, and drops the revoking device's answers, keeps it hidden, as it
+does from a device that gets items only from the revoked machine. A member that is compromised
+but not yet revoked can sign a false long head and hold every device's items until the owner
+revokes it, which the owner sees; a machine that passed the head on names it as `by`, so
+revoking the forger ends the hold. The server itself can always hold items back.
 
 The head is optional, and both sides fail safe. A machine from before it signs no head: its items
 open as before and count neither for nor against a hold. A device from before it drops the field
