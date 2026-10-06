@@ -21,15 +21,8 @@ import {
   removeOpencode,
   removePiPackage,
 } from "./harnesses";
-import {
-  hasClaude,
-  legacyInstalls,
-  pluginState,
-  removeAllowRules,
-  removePlugins,
-  settingsPath,
-} from "./plugins";
-import { legacyUnits, removeLegacy, removeService } from "./service";
+import { hasClaude, pluginState, removeAllowRules, removePlugins, settingsPath } from "./plugins";
+import { removeService } from "./service";
 import type { Sys } from "./sys";
 
 export interface UninstallOpts {
@@ -78,16 +71,6 @@ export async function uninstall(sys: Sys, opts: UninstallOpts): Promise<number> 
     stopped = false;
     ctx.out(`Could not stop the agent service, so it stays: ${(e as Error).message}`);
   }
-  for (const unit of legacyUnits(sys))
-    if (await prompt.confirm(`Also stop and remove ${unit.name} (starbridge quota push)?`, true)) {
-      try {
-        await removeLegacy(sys, unit);
-        ctx.out(`Removed ${unit.path}.`);
-      } catch (e) {
-        stopped = false;
-        ctx.out(`Could not stop ${unit.name}: ${(e as Error).message}`);
-      }
-    }
 
   if (hasClaude(sys)) {
     const state = await pluginState(sys);
@@ -98,11 +81,6 @@ export async function uninstall(sys: Sys, opts: UninstallOpts): Promise<number> 
       );
     if (removeAllowRules(sys))
       ctx.out(`Removed the starbridge allow rules from ${settingsPath(sys)}.`);
-    for (const old of legacyInstalls(sys))
-      if (await prompt.confirm(`Also remove ${old.what}?`, true)) {
-        old.remove();
-        ctx.out(`Removed ${old.what}.`);
-      }
   }
 
   if (removeCodexSkill(sys)) ctx.out(`Removed ${codexSkillDir(sys)}.`);

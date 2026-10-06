@@ -5,8 +5,8 @@ import { REMOVED } from "../api";
 import { VERSION } from "../version";
 import { findCodexbar, listProviders, probe } from "./codexbar";
 import { codexSkill, hasCodex, hasOpencode, hasPi, opencodeState, piPackage } from "./harnesses";
-import { autoUpdate, hasClaude, legacyInstalls, PLUGINS, pluginState } from "./plugins";
-import { legacyUnits, lingering, serviceState } from "./service";
+import { autoUpdate, hasClaude, PLUGINS, pluginState } from "./plugins";
+import { lingering, serviceState } from "./service";
 import { probeLines } from "./setup";
 import type { Sys } from "./sys";
 
@@ -64,8 +64,6 @@ export async function status(sys: Sys): Promise<number> {
   );
   if ((await lingering(sys)) === false)
     out("  Lingering is off: the agent stops when your last login session ends.");
-  for (const u of legacyUnits(sys))
-    out(`  Old uploader ${u.path} still exists: \`starbridge setup\` replaces it.`);
 
   const cfg = ctx.store.agentConfig().quota;
   const found = findCodexbar(sys, cfg?.codexbar);
@@ -90,7 +88,6 @@ export async function status(sys: Sys): Promise<number> {
         );
       }
     }
-    for (const old of legacyInstalls(sys)) out(`  Manual install left: ${old.what}`);
   }
   if (hasCodex(sys)) {
     const state = codexSkill(sys);

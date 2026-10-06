@@ -52,20 +52,12 @@ import {
   foreignMarketplace,
   hasClaude,
   installPlugins,
-  legacyInstalls,
   missingAllowRules,
   PLUGINS,
   pluginState,
   settingsPath,
 } from "./plugins";
-import {
-  enableLinger,
-  installService,
-  legacyUnits,
-  lingering,
-  removeLegacy,
-  unavailable,
-} from "./service";
+import { enableLinger, installService, lingering, unavailable } from "./service";
 import type { Sys } from "./sys";
 
 export interface SetupOpts {
@@ -167,8 +159,7 @@ async function codexbarStep(sys: Sys, opts: SetupOpts): Promise<Quota | undefine
   const { ctx, prompt } = sys;
   section(ctx, "CodexBar");
   const cfg = ctx.store.agentConfig();
-  const legacy = legacyUnits(sys)[0];
-  let found: Found | undefined = findCodexbar(sys, cfg.quota?.codexbar ?? legacy?.codexbar);
+  let found: Found | undefined = findCodexbar(sys, cfg.quota?.codexbar);
   if (!found) {
     const how = sys.platform === "darwin" ? "the CodexBar app" : "the CodexBar CLI";
     if (
@@ -199,7 +190,7 @@ async function codexbarStep(sys: Sys, opts: SetupOpts): Promise<Quota | undefine
   }
 
   const list = await listProviders(sys, found.path);
-  const prior = opts.providers ?? cfg.quota?.providers ?? legacy?.providers;
+  const prior = opts.providers ?? cfg.quota?.providers;
   const probes = await probe(found.path, probeSet(sys, list, prior ?? []), list);
   for (const line of probeLines(sys, probes)) ctx.out(line);
 
@@ -219,7 +210,7 @@ async function codexbarStep(sys: Sys, opts: SetupOpts): Promise<Quota | undefine
     ...cfg.quota,
     providers,
     codexbar: found.path,
-    interval: cfg.quota?.interval ?? legacy?.interval ?? "5m",
+    interval: cfg.quota?.interval ?? "5m",
   };
   ctx.store.saveAgentConfig({ ...cfg, quota: q });
   ctx.out(
@@ -274,17 +265,6 @@ async function serviceStep(sys: Sys, opts: SetupOpts, configChanged: boolean) {
       "Run `starbridge agent` yourself to keep one running; commands talk to the server themselves meanwhile.",
     );
     return;
-  }
-  for (const unit of legacyUnits(sys)) {
-    const q = `${unit.name} runs \`starbridge quota push\`, which the agent now does. Stop and remove it?`;
-    if (await prompt.confirm(q, true)) {
-      try {
-        await removeLegacy(sys, unit);
-        ctx.out(`Removed ${unit.path}.`);
-      } catch (e) {
-        ctx.out(`Could not stop ${unit.name}: ${(e as Error).message}`);
-      }
-    } else ctx.out(`Kept ${unit.name}: it and the agent both upload quotas.`);
   }
   // After a brew or npm upgrade the agent still runs the old binary.
   const running = await agentVersion(ctx);
@@ -400,12 +380,6 @@ async function pluginStep(sys: Sys) {
         ? `Allowed ${ALLOW_RULES.join(", ")} in ${settingsPath(sys)}.`
         : `${settingsPath(sys)} is not valid JSON, so it stays as it is; add ${ALLOW_RULES.join(", ")} to permissions.allow there.`,
     );
-  }
-  for (const old of legacyInstalls(sys)) {
-    if (await prompt.confirm(`Remove ${old.what}? The plugins replace it.`, true)) {
-      old.remove();
-      ctx.out(`Removed ${old.what}.`);
-    } else ctx.out(`Kept ${old.what}: sessions may load Starbridge twice.`);
   }
 }
 

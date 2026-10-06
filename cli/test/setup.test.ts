@@ -41,18 +41,9 @@ afterEach(async () => {
   server.stop();
 });
 
-/** The dev box's hand-written uploader, as in its dotfiles. */
-const LEGACY_UNIT = `[Unit]
-Description=Starbridge quota uploader (codexbar -> starbridge.run)
-
-[Service]
-ExecStart=%h/.local/bin/starbridge quota push --provider codex --provider zai --provider broken --provider signedout --interval 5m
-Restart=on-failure
-`;
-
 /**
  * A paired machine in a throwaway HOME, with fake systemctl, loginctl, claude and codexbar on
- * the PATH, and the manual installs the owner's dev box has.
+ * the PATH.
  */
 async function machine() {
   const ctx = await paired(server);
@@ -68,20 +59,9 @@ async function machine() {
   });
   const units = join(home, ".config/systemd/user");
   mkdirSync(units, { recursive: true });
-  writeFileSync(join(units, "starbridge-quota.service"), LEGACY_UNIT);
-  const mod = join(home, ".claude/mods/starbridge");
-  mkdirSync(join(mod, ".claude-plugin"), { recursive: true });
-  writeFileSync(join(mod, ".claude-plugin/plugin.json"), '{"name":"starbridge"}');
   const settings = join(home, ".claude/settings.json");
-  writeFileSync(
-    settings,
-    JSON.stringify({ model: "opus", env: { CLAUDE_CODE_PLUGIN_DIRS: `/x/other-mod:${mod}` } }),
-  );
-  const md = join(home, ".claude/CLAUDE.md");
-  writeFileSync(
-    md,
-    "# Me\nWhenever you need me to decide something, use the `starbridge` skill.\nBe blunt.\n",
-  );
+  mkdirSync(dirname(settings), { recursive: true });
+  writeFileSync(settings, JSON.stringify({ model: "opus" }));
   const sys: Sys = {
     ctx,
     home,
@@ -92,7 +72,7 @@ async function machine() {
     self: [SELF],
   };
   const calls = () => (existsSync(log) ? readFileSync(log, "utf8").trim().split("\n") : []);
-  return { ctx, sys, home, units, mod, settings, md, calls };
+  return { ctx, sys, home, units, settings, calls };
 }
 
 /** Starts the agent in-process, as the fake systemctl's `restart` would. */
@@ -102,13 +82,17 @@ async function startAgent(ctx: TestCtx) {
   agents.push(agent);
 }
 
-test("setup --yes replaces the dev box's manual installs and uploads a first snapshot", async () => {
+test("setup --yes installs the agent, the plugins and the skills, and uploads a first snapshot", async () => {
   const m = await machine();
   await startAgent(m.ctx);
+  // An earlier setup's providers: two still work, two now need a sign-in.
+  m.ctx.store.saveAgentConfig({
+    quota: { providers: ["codex", "zai", "broken", "signedout"], interval: "5m" },
+  });
   expect(await setup(m.sys, { yes: true, readyTimeoutMs: 2_000 })).toBe(0);
   const out = m.ctx.lines.join("\n");
 
-  // Providers: the old unit's that work now; `broken` needs a sign-in and is left out.
+  // Providers: the earlier ones that work now; `broken` needs a sign-in and is left out.
   expect(out).toContain("needs sign-in: No available fetch strategy for signedout.");
   expect(out).toContain("needs sign-in: Error: provider not configured");
   expect(m.ctx.store.agentConfig().quota).toEqual({
@@ -117,28 +101,20 @@ test("setup --yes replaces the dev box's manual installs and uploads a first sna
     interval: "5m",
   });
 
-  // The old uploader is stopped before the agent starts, so nothing uploads twice.
-  expect(existsSync(join(m.units, "starbridge-quota.service"))).toBe(false);
   const unit = readFileSync(join(m.units, "starbridge-agent.service"), "utf8");
   expect(unit).toContain(`ExecStart=${SELF} agent`);
   expect(unit).toContain("Environment=PATH=");
   const sd = m.calls().filter((c) => c.startsWith("systemctl"));
-  expect(sd.indexOf("systemctl --user disable --now starbridge-quota.service")).toBeLessThan(
-    sd.indexOf("systemctl --user restart starbridge-agent.service"),
-  );
   expect(sd).toContain("systemctl --user enable starbridge-agent.service");
 
-  // Plugins from the marketplace; the copied mod, its PLUGIN_DIRS entry and the rule go.
+  // Plugins from the marketplace, auto-updated, with the allow rules.
   expect(m.calls()).toContain("claude plugin marketplace add T0mSIlver/starbridge");
   expect(m.calls()).toContain("claude plugin install starbridge@starbridge --scope user");
   expect(m.calls()).toContain("claude plugin install starbridge-mod@starbridge --scope user");
   const settings = JSON.parse(readFileSync(m.settings, "utf8"));
-  expect(settings.env.CLAUDE_CODE_PLUGIN_DIRS).toBe("/x/other-mod");
   expect(settings.model).toBe("opus");
   expect(settings.extraKnownMarketplaces.starbridge.autoUpdate).toBe(true);
   expect(settings.permissions.allow).toContain("Bash(starbridge ask:*)");
-  expect(existsSync(m.mod)).toBe(false);
-  expect(readFileSync(m.md, "utf8")).toBe("# Me\nBe blunt.\n");
 
   // Codex gets the skill this CLI carries; Pi gets the Starbridge package.
   const skill = readFileSync(join(m.home, ".codex/skills/starbridge/SKILL.md"), "utf8");
@@ -180,7 +156,7 @@ test("a second setup changes nothing", async () => {
     again.filter((c) => /install|marketplace add|disable|restart|daemon-reload/.test(c)),
   ).toEqual([]);
   expect(readFileSync(join(m.units, "starbridge-agent.service"), "utf8")).toBe(unit);
-  expect(m.ctx.store.agentConfig().quota?.providers).toEqual(["codex", "zai"]);
+  expect(m.ctx.store.agentConfig().quota?.providers).toEqual(["codex", "claude"]);
   expect(m.ctx.lines.join("\n")).toContain("plugins are installed");
 
   // A Codex skill from an older CLI is offered as an update.
@@ -224,7 +200,6 @@ test("status reports the agent, the service and the plugins", async () => {
   expect(out).toContain("Codex skill: installed");
   expect(out).toContain("Pi package: installed");
   expect(out).toContain("opencode skill and plugin: installed");
-  expect(out).not.toContain("Manual install left");
 });
 
 test("status says at once that the owner removed this machine, and how to pair it again", async () => {
