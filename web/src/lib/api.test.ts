@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
-import { ApiError, api } from "./api";
+import { ApiError, api, pairingError } from "./api";
 
 const real = globalThis.fetch;
 afterEach(() => {
@@ -40,4 +40,16 @@ test("other errors reach the caller at once", async () => {
   const calls = serve(500);
   await expect(api.challenge()).rejects.toBeInstanceOf(ApiError);
   expect(calls).toHaveLength(1);
+});
+
+test("a pairing error reads as a sentence, without the API's code (#289)", () => {
+  expect(pairingError(new ApiError(404, "not-found", "no such pairing, or it expired"))).toBe(
+    "No pairing with this code, or it expired.",
+  );
+  expect(pairingError(new ApiError(409, "already-approved"))).toBe(
+    "Another device already approved this code.",
+  );
+  expect(pairingError(new ApiError(429, "busy", "too many pairings waiting; retry later"))).toBe(
+    "Too many pairings waiting; retry later.",
+  );
 });
