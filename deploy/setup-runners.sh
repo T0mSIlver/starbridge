@@ -25,6 +25,7 @@ TAR=$BASE/actions-runner-linux-x64-$VER.tar.gz
 i=0
 for r in $RUNNERS; do
   i=$((i + 1))
+  [[ $r == ?*:?* ]] || { echo "RUNNERS entry '$r' is not name:labels" >&2; exit 1; }
   name=${r%%:*} labels=${r#*:}
   d=$BASE/starbridge-$i
   if [ ! -f "$d/.runner" ]; then
