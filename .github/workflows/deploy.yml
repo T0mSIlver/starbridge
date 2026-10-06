@@ -49,6 +49,9 @@ jobs:
             https://starbridge.run/healthz | tr -d '\r' |
             awk -F': ' 'tolower($1) == "x-starbridge-revision" { print $2 }')
           [ -n "$got" ] || { echo "starbridge.run names no revision"; exit 1; }
+          # It goes into an API path: only a commit id, as starbridge-deploy takes.
+          case $got in *[!0-9a-f]*) got= ;; esac
+          [ ${#got} -eq 40 ] || { echo "starbridge.run names no commit id"; exit 1; }
           status=$(gh api "repos/$GITHUB_REPOSITORY/compare/$REV...$got" -q .status)
           case $status in
             identical | ahead) echo "starbridge.run runs $got" ;;
