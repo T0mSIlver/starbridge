@@ -384,7 +384,7 @@ answer its permission, a settled notice the permission or decision it closes. A 
 and a `snooze` are the exceptions: they describe their decision and close nothing.
 
 Lists return `{items: [{item, cursor, receivedAt, answeredAt?}], cursor}`, 100 at a time, where
-`item` holds only the caller's box and `answeredAt` is set on answered decisions and permissions.
+`item` holds only the caller's box and its routing hints as posted, `wakeAt` included, and `answeredAt` is set on answered decisions and permissions.
 Marking an item answered moves it past every cursor, so devices listing after their cursor see it
 again, answered.
 The server keeps only the latest quota item from each machine, and drops old items as Limits says. Refusals: 403 when the caller's
@@ -430,7 +430,7 @@ options; machines from before it leave `replies` out. For permission answers, se
 | `GET /push/vapid` | anyone | `{publicKey}`: the VAPID key a browser subscribes with (the relay's when this server forwards Web Push) |
 | `POST /relay` | another server | relay mode only: `{type: "fcm" \| "webpush", endpoint, keys?, payload}` → `{result: "ok" \| "gone" \| "failed" \| "no-route"}`; rate-limited per IP |
 
-A push payload is JSON text: `{v, kind, id, from, re?, box?}` for a new item, with the device's
+A push payload is JSON text: `{v, kind, id, from, re?, wakeAt?, box?}` for a new item, with the device's
 own box when the payload stays within 3 KB, else without it and the device fetches
 `GET /items/:id`; `{v, kind: "answered", id}` to every device a decision or permission was
 sealed to once a device answers it; `{v, kind: "join", id}` to every device when a join is posted.
@@ -522,10 +522,10 @@ The owner can put an open decision off until a time (#571): "not now, show me th
 18:00". A snooze is not an answer. For the agent it means what no answer means, and it closes
 nothing.
 
-- `snooze` `{v, id, decisionId, to, until, at}`: a device signs it, under a new id each time, and
-  seals it to the machine that asked and to every active device, so each one hides the decision.
-  The latest `at` wins, whichever device sent it, and the server keeps only the latest per
-  decision. `until` at or before `at` brings the decision back now.
+- `snooze` `{v, id, decisionId, to, until, at, dir?}`: a device signs it, under a new id each
+  time, and seals it to the machine that asked and to every active device, so each one hides the
+  decision. The latest `at`, compared as instants, wins, whichever device sent it, and the server
+  keeps only the latest per decision. `until` at or before `at` brings the decision back now.
 - The item's `wakeAt` hint repeats `until`, so the server learns that some decision was put off
   until then, and nothing else. At `wakeAt` it pushes the snooze once more to every device, which
   shows the decision's notification again, once. Until then it pushes no `waiting` item of that

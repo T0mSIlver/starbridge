@@ -2984,6 +2984,54 @@
       "valid": false
     },
     {
+      "name": "an until without seconds",
+      "body": {
+        "v": 1,
+        "id": "snz_1",
+        "decisionId": "dec_1",
+        "to": [
+          "devbox",
+          "phone",
+          "phone2"
+        ],
+        "until": "2026-10-04T18:00Z",
+        "at": "2026-10-04T10:25:00Z"
+      },
+      "valid": false
+    },
+    {
+      "name": "an until with an offset",
+      "body": {
+        "v": 1,
+        "id": "snz_1",
+        "decisionId": "dec_1",
+        "to": [
+          "devbox",
+          "phone",
+          "phone2"
+        ],
+        "until": "2026-10-04T20:00:00+02:00",
+        "at": "2026-10-04T10:25:00Z"
+      },
+      "valid": true
+    },
+    {
+      "name": "an offset without its colon",
+      "body": {
+        "v": 1,
+        "id": "snz_1",
+        "decisionId": "dec_1",
+        "to": [
+          "devbox",
+          "phone",
+          "phone2"
+        ],
+        "until": "2026-10-04T20:00:00+0200",
+        "at": "2026-10-04T10:25:00Z"
+      },
+      "valid": false
+    },
+    {
       "name": "no decision",
       "body": {
         "v": 1,

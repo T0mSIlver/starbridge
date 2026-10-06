@@ -21,7 +21,7 @@ const val RECOVERY = "recovery"
 private val B64_RE = Regex("^[A-Za-z0-9_-]+$")
 private val ID_RE = Regex("^[A-Za-z0-9_-]{1,64}$")
 // zod's iso.datetime({ offset: true }).
-private val TIME_RE = Regex("""^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})$""")
+private val TIME_RE = Regex("""^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$""")
 
 internal fun schema(ok: Boolean, what: String) {
     if (!ok) throw ProtocolException("bad-schema", what)

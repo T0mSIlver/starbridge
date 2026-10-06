@@ -1853,6 +1853,21 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
         body: { ...snoozeBody, until: "18:00" },
         valid: false,
       },
+      {
+        name: "an until without seconds",
+        body: { ...snoozeBody, until: "2026-10-04T18:00Z" },
+        valid: false,
+      },
+      {
+        name: "an until with an offset",
+        body: { ...snoozeBody, until: "2026-10-04T20:00:00+02:00" },
+        valid: true,
+      },
+      {
+        name: "an offset without its colon",
+        body: { ...snoozeBody, until: "2026-10-04T20:00:00+0200" },
+        valid: false,
+      },
       { name: "no decision", body: { ...snoozeBody, decisionId: undefined }, valid: false },
       { name: "no recipients", body: { ...snoozeBody, to: [] }, valid: false },
       { name: "a directory head that is null", body: { ...snoozeBody, dir: null }, valid: false },
