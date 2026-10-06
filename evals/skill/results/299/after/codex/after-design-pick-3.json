@@ -1,0 +1,74 @@
+{
+  "agent": "codex",
+  "model": "default",
+  "arm": "after",
+  "scenario": "design-pick",
+  "rep": 3,
+  "turns": [
+    {
+      "commands": [
+        "/usr/bin/zsh -lc 'cat /var/tmp/skill-eval-osxkMr/after-design-pick-3/cfg/skills/starbridge/SKILL.md'",
+        "/usr/bin/zsh -lc 'git status --short; git branch --list; rg --files shots'",
+        "/usr/bin/zsh -lc 'git log --oneline --all -5; git diff --stat main..settings-compact; git diff --stat main..settings-roomy'",
+        "/usr/bin/zsh -lc \"starbridge ask --question 'Which settings-screen design should I merge into main?' --context 'Both variants are complete and pass the tests.\nCompact: 9 rows visible, with tighter spacing.\nRoomy: 6 rows visible, with more space between settings.\nYour pick will be shipped by merging its branch into main.' --option 'Compact' --option 'Roomy' --image shots/compact.png --image shots/roomy.png --waiting\"",
+        "/usr/bin/zsh -lc 'starbridge wait d_X3KPeFKUfElqPew9 --timeout 5m'",
+        "/usr/bin/zsh -lc 'starbridge wait d_X3KPeFKUfElqPew9 --timeout 5m'"
+      ],
+      "final": "The phone card remains open for Compact or Roomy. Your selection is the only step needed before shipping.",
+      "session": "01a1107e-b4ae-7451-b56f-9f7d017571d3",
+      "exit": 143,
+      "seconds": 720.048
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_X3KPeFKUfElqPew9",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-06T09:15:18Z",
+      "question": "Which settings-screen design should I merge into main?",
+      "context": "Both variants are complete and pass the tests.\nCompact: 9 rows visible, with tighter spacing.\nRoomy: 6 rows visible, with more space between settings.\nYour pick will be shipped by merging its branch into main.",
+      "options": [
+        "Compact",
+        "Roomy"
+      ],
+      "recommended": "Compact",
+      "agent": "codex",
+      "default": {
+        "action": "Waits for your answer"
+      },
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "01a1107e-b4ae-7451-b56f-9f7d017571d3"
+      },
+      "images": [
+        {
+          "type": "image/png",
+          "width": 360,
+          "height": 640
+        },
+        {
+          "type": "image/png",
+          "width": 360,
+          "height": 640
+        }
+      ],
+      "replies": true
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "judge": {
+    "cold": true,
+    "consequences": false,
+    "terminal": false,
+    "links": null,
+    "plain": true,
+    "notes": "The card describes each variant's layout (9 rows vs 6 rows) but not what shipping it changes for users, and it gives no reason for recommending Compact."
+  }
+}

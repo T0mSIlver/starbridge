@@ -1,0 +1,62 @@
+{
+  "agent": "codex",
+  "model": "default",
+  "arm": "after",
+  "scenario": "answer-in",
+  "rep": 2,
+  "turns": [
+    {
+      "commands": [
+        "/usr/bin/zsh -lc 'cat /tmp/skill-eval-JQLTf3/after-answer-in-2/cfg/skills/starbridge/SKILL.md'",
+        "/usr/bin/zsh -lc \"pwd; rg --files -g '\"'!node_modules'\"' -g '\"'!'\"\\\\.git'\"",
+        "/usr/bin/zsh -lc 'cat NOTES.md src/pricing.html; git status --short'",
+        "/usr/bin/zsh -lc \"starbridge ask --question 'Which tier-name set should I use to finish the pricing page?' --context 'The pricing page has three tiers at \"'$0, $8, and $20.\nThe last session’s artifact compares three naming sets; its Pick buttons send your choice here.\nPick a set there and I will apply it to src/pricing.html.'\"' --answer-in https://claude.ai/artifact/7c1e9a52-0d3b-4f6e-9a21-5b8c3d2e1f00\"",
+        "/usr/bin/zsh -lc 'starbridge wait d_b6cWmqnB51yMc9Bh --timeout 5m'",
+        "/usr/bin/zsh -lc 'starbridge --help'",
+        "/usr/bin/zsh -lc 'starbridge waiting d_b6cWmqnB51yMc9Bh'"
+      ],
+      "final": "The page’s only TODO is the tier names. I sent a Starbridge card linking to the comparison artifact and marked it as waiting. Pick a set in the artifact, and I’ll apply it to `src/pricing.html`.",
+      "session": "01a11064-bb42-7ce2-8050-79dd5e865e91",
+      "tokens": 124830,
+      "exit": 0,
+      "seconds": 37.65
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_b6cWmqnB51yMc9Bh",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-06T08:46:58Z",
+      "question": "Which tier-name set should I use to finish the pricing page?",
+      "context": "The pricing page has three tiers at $0, $8, and $20.\nThe last session’s artifact compares three naming sets; its Pick buttons send your choice here.\nPick a set there and I will apply it to src/pricing.html.",
+      "options": [],
+      "agent": "codex",
+      "default": {
+        "action": "Waits for your answer"
+      },
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "01a11064-bb42-7ce2-8050-79dd5e865e91"
+      },
+      "answerIn": {
+        "url": "https://claude.ai/artifact/7c1e9a52-0d3b-4f6e-9a21-5b8c3d2e1f00"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "judge": {
+    "cold": true,
+    "consequences": true,
+    "terminal": false,
+    "links": null,
+    "plain": true,
+    "notes": "Minor: the card doesn't name the three tier-name sets or say what picking changes beyond applying it to the page, but it does send the user to the artifact to answer with no options, as intended."
+  }
+}

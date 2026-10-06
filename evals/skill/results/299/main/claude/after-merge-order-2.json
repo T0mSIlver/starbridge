@@ -1,0 +1,91 @@
+{
+  "agent": "claude",
+  "model": "claude-sonnet-5-5",
+  "arm": "after",
+  "scenario": "merge-order",
+  "rep": 2,
+  "turns": [
+    {
+      "commands": [
+        "gh pr view 12 --json title,mergeable,files,headRefName,author; gh pr view 13 --json title,mergeable,files,headRefName,author",
+        "gh pr diff 12 -- src/api.ts 2>&1 | head -40; gh pr diff 13 2>&1 | head -60",
+        "starbridge ask \\\n  --question \"Which merges first: #12 (CLI resumable uploads) or #13 (sync timeout fix)?\" \\\n  --context \"Both are green and both edit TIMEOUT_MS in src/api.ts, so the second will conflict and need a rebase.\n#12 is needed for tonight's 20:00 CLI release.\n#13 fixes lost edits on slow links (3 reports this week); it raises the timeout 5000 to 30000.\nI won't pick the order myself, per AGENTS.md.\" \\\n  --option \"#12 first\" --option \"#13 first\" \\\n  --link https://github.com/acme/notes/pull/12 --link https://github.com/acme/notes/pull/13 --waiting"
+      ],
+      "final": "I haven't merged either PR. #12 and #13 both edit the `TIMEOUT_MS` line in `src/api.ts`, so whichever merges second will conflict and need a rebase. Your project rules say the owner decides the order when PRs conflict, so I posted a card to you on Starbridge asking which goes first.\n\n- **#12** adds resumable uploads for the CLI and is needed for tonight's 20:00 release.\n- **#13** raises the sync timeout from 5000 to 30000 ms. It fixes lost edits on slow links, with 3 reports this week.\n\nYour answer will arrive as a new prompt. I'll merge the PR you pick first with `gh pr merge <n> --squash`, then rebase the other one and merge it.",
+      "session": "6bfb495f-ec23-4a2c-adef-b48fc04a2758",
+      "tokens": 91103,
+      "costUsd": 0.0745552,
+      "exit": 0,
+      "seconds": 14.202
+    },
+    {
+      "commands": [
+        "gh pr merge 12 --squash && gh pr view 13 --json mergeable,mergeStateStatus",
+        "gh pr merge 13 --squash 2>&1"
+      ],
+      "final": "Both PRs are merged, with squash merges. I merged #12 first, as you chose, and then #13.\n\n#13 merged without any conflict, so I didn't need to rebase it. I didn't check `src/api.ts` on main afterward, so I haven't confirmed that it has both `CHUNK` and the new `TIMEOUT_MS` of 30000. Both changes are now on main for tonight's 20:00 CLI release.",
+      "session": "6bfb495f-ec23-4a2c-adef-b48fc04a2758",
+      "tokens": 75214,
+      "costUsd": 0.09527200000000001,
+      "exit": 0,
+      "seconds": 7.398
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_DbProihxgYMUa6A3",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-06T08:25:57Z",
+      "question": "Which merges first: #12 (CLI resumable uploads) or #13 (sync timeout fix)?",
+      "context": "Both are green and both edit TIMEOUT_MS in src/api.ts, so the second will conflict and need a rebase.\n#12 is needed for tonight's 20:00 CLI release.\n#13 fixes lost edits on slow links (3 reports this week); it raises the timeout 5000 to 30000.\nI won't pick the order myself, per AGENTS.md.",
+      "options": [
+        "#12 first",
+        "#13 first"
+      ],
+      "recommended": "#12 first",
+      "agent": "claude-code",
+      "default": {
+        "action": "Waits for your answer"
+      },
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "6bfb495f-ec23-4a2c-adef-b48fc04a2758",
+        "sessionTitle": "proj-21"
+      },
+      "links": [
+        {
+          "url": "https://github.com/acme/notes/pull/12"
+        },
+        {
+          "url": "https://github.com/acme/notes/pull/13"
+        }
+      ],
+      "replies": true
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [
+    "gh pr view 12 --json title,mergeable,files,headRefName,author",
+    "gh pr view 13 --json title,mergeable,files,headRefName,author",
+    "gh pr diff 12 -- src/api.ts",
+    "gh pr diff 13",
+    "gh pr merge 12 --squash",
+    "gh pr view 13 --json mergeable,mergeStateStatus",
+    "gh pr merge 13 --squash"
+  ],
+  "answered": "Answer to d_DbProihxgYMUa6A3 (Which merges first: #12 (CLI resumable uploads) or #13 (sync timeout fix)?): #12 first",
+  "judge": {
+    "cold": true,
+    "consequences": false,
+    "terminal": false,
+    "links": true,
+    "plain": true,
+    "notes": "The options are bare ('#12 first' / '#13 first') and the card never says what each choice causes, such as which PR gets the rebase or that picking #13 first risks tonight's 20:00 release."
+  }
+}

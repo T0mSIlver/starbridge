@@ -1,0 +1,58 @@
+{
+  "agent": "claude",
+  "model": "claude-sonnet-5-5",
+  "arm": "after",
+  "scenario": "answer-in",
+  "rep": 2,
+  "turns": [
+    {
+      "commands": [
+        "starbridge ask --question \"Which set of tier names should the pricing page use?\" --context \"src/pricing.html has 3 tiers (\\$0, \\$8, \\$20) with placeholder names TIER_1..3.\nCompare the three name sets in the artifact and tap Pick; I'll fill the names in then.\" --answer-in https://claude.ai/artifact/7c1e9a52-0d3b-4f6e-9a21-5b8c3d2e1f00 --waiting"
+      ],
+      "final": "I've posted a card on Starbridge asking which tier-name set to use, and I'm now waiting for the owner's pick. The pricing page isn't finished yet. `src/pricing.html` still has the placeholder names `TIER_1`, `TIER_2` and `TIER_3` at $0, $8 and $20.\n\nI couldn't open the comparison artifact from last session, because the docs read tool wasn't permitted here. So I linked the artifact on the card, and the owner picks there. When the answer arrives as a new prompt, I'll fill in the names and remove the TODO comment.",
+      "session": "37d74bcf-a1ff-4cc6-a3ef-88e1d5b4d2c8",
+      "tokens": 138465,
+      "costUsd": 0.089753,
+      "exit": 0,
+      "seconds": 20.878
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_Mmlg5P48aCU4L9XN",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-06T08:27:26Z",
+      "question": "Which set of tier names should the pricing page use?",
+      "context": "src/pricing.html has 3 tiers ($0, $8, $20) with placeholder names TIER_1..3.\nCompare the three name sets in the artifact and tap Pick; I'll fill the names in then.",
+      "options": [],
+      "agent": "claude-code",
+      "default": {
+        "action": "Waits for your answer"
+      },
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "37d74bcf-a1ff-4cc6-a3ef-88e1d5b4d2c8",
+        "sessionTitle": "proj-9c"
+      },
+      "answerIn": {
+        "url": "https://claude.ai/artifact/7c1e9a52-0d3b-4f6e-9a21-5b8c3d2e1f00"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "judge": {
+    "cold": true,
+    "consequences": true,
+    "terminal": false,
+    "links": true,
+    "plain": true,
+    "notes": "The card does what it should by sending the user to the artifact, but it never names the candidate tier-name sets, so the user has to open the artifact to know what they are choosing between."
+  }
+}

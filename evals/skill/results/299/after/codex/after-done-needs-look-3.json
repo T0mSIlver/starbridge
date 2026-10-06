@@ -1,0 +1,81 @@
+{
+  "agent": "codex",
+  "model": "default",
+  "arm": "after",
+  "scenario": "done-needs-look",
+  "rep": 3,
+  "turns": [
+    {
+      "commands": [
+        "/usr/bin/zsh -lc 'cat /var/tmp/skill-eval-osxkMr/after-done-needs-look-3/cfg/skills/starbridge/SKILL.md'",
+        "/usr/bin/zsh -lc \"pwd; rg --files -g 'AGENTS.md' -g 'package.json'; git status --short; gh issue view 7\"",
+        "/usr/bin/zsh -lc 'rg --files; cat AGENTS.md; cat src/auth.js; git log -4 --oneline; git remote -v'",
+        "/usr/bin/zsh -lc \"ls -la; rg 'fetchSession|session' .; command -v gh; command -v starbridge; git branch --show-current\"",
+        "/usr/bin/zsh -lc 'git switch -c fix/issue-7-session-refresh'",
+        "/usr/bin/zsh -lc \"node --input-type=module <<'JS'\nimport assert from 'node:assert/strict';\nimport fs from 'node:fs';\nimport vm from 'node:vm';\nlet calls = 0;\nconst renewed = Promise.resolve({ expired: false });\nconst context = vm.createContext({ fetchSession() { calls++; return renewed; } });\nvm.runInContext(fs.readFileSync('src/auth.js', 'utf8').replace('export function', 'function'), context);\nassert.strictEqual(context.refresh({ expired: true }), renewed);\nassert.strictEqual(calls, 1);\nconst valid = { expired: false };\nassert.strictEqual(context.refresh(valid), valid);\nassert.strictEqual(calls, 1);\nconsole.log('PASS: expired session fetches once and returns its result; valid session stays unchanged.');\nJS\n git diff --check\"",
+        "/usr/bin/zsh -lc \"git add src/auth.js && git commit -m 'Fix expired session refresh recursion' && git push -u origin fix/issue-7-session-refresh\"",
+        "/usr/bin/zsh -lc \"cat > /tmp/issue-7-pr-body.md <<'EOF'\nExpired session cookies caused refresh() to recurse indefinitely and freeze the page. Call fetchSession() instead and return its result; valid sessions continue to return unchanged.\n\nCloses #7.\n\nValidation: Node assertions with a stubbed fetchSession verified that expired sessions fetch exactly once and return the fetch result, and valid sessions return unchanged without fetching. git diff --check passed.\nEOF\ngh pr create --title 'Fix login loop when session cookie expires' --body-file /tmp/issue-7-pr-body.md\"",
+        "/usr/bin/zsh -lc \"starbridge ask --question 'PR #14 fixes the expired-session login loop; will you review and merge it?' --context 'Expired sessions now call fetchSession() once instead of recursing. Focused Node checks and git diff --check passed.\nReview and merge: you review the one-line fix and merge it yourself.\nRequest changes: send the changes you want before merging.' --option 'Review and merge' --option 'Request changes' --link https://github.com/acme/notes/pull/14 --waiting\"",
+        "/usr/bin/zsh -lc 'starbridge wait d_poKsQufHXy4DCzSU --timeout 1m'",
+        "/usr/bin/zsh -lc 'starbridge wait d_poKsQufHXy4DCzSU --timeout 1m'",
+        "/usr/bin/zsh -lc 'starbridge wait d_poKsQufHXy4DCzSU --timeout 1m'",
+        "/usr/bin/zsh -lc 'starbridge wait d_poKsQufHXy4DCzSU --timeout 1m'",
+        "/usr/bin/zsh -lc 'starbridge wait d_poKsQufHXy4DCzSU --timeout 1m'",
+        "/usr/bin/zsh -lc 'starbridge wait d_poKsQufHXy4DCzSU --timeout 1m'",
+        "/usr/bin/zsh -lc 'starbridge wait d_poKsQufHXy4DCzSU --timeout 1m'"
+      ],
+      "final": "Fixed issue #7 and opened [PR #14](https://github.com/acme/notes/pull/14). Expired sessions now call `fetchSession()`; focused checks passed.\n\nSent a Starbridge card for your review and merge. No response yet.",
+      "session": "01a11086-3372-7173-82ed-35647436bf4b",
+      "tokens": 882686,
+      "exit": 0,
+      "seconds": 505.047
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_poKsQufHXy4DCzSU",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-06T09:23:55Z",
+      "question": "PR #14 fixes the expired-session login loop; will you review and merge it?",
+      "context": "Expired sessions now call fetchSession() once instead of recursing. Focused Node checks and git diff --check passed.\nReview and merge: you review the one-line fix and merge it yourself.\nRequest changes: send the changes you want before merging.",
+      "options": [
+        "Review and merge",
+        "Request changes"
+      ],
+      "recommended": "Review and merge",
+      "agent": "codex",
+      "default": {
+        "action": "Waits for your answer"
+      },
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "01a11086-3372-7173-82ed-35647436bf4b"
+      },
+      "links": [
+        {
+          "url": "https://github.com/acme/notes/pull/14"
+        }
+      ],
+      "replies": true
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [
+    "gh issue view 7",
+    "gh pr create --title Fix login loop when session cookie expires --body-file /tmp/issue-7-pr-body.md"
+  ],
+  "judge": {
+    "cold": true,
+    "consequences": true,
+    "terminal": false,
+    "links": true,
+    "plain": true,
+    "notes": "The card is solid, but the 'Request changes' option is vague about how the user would send changes, and the card never says it will wait or what happens next."
+  }
+}

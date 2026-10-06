@@ -25,3 +25,6 @@ that the agent acts on it.
 `grade.ts` scores each run: eleven checks read the record, five ask Claude Sonnet through
 `claude -p` in a throwaway config dir (stored in the record, so grading again is free). `render.ts` shows cards in the real web
 inbox (headless Chromium) and saves a screenshot of each.
+
+`results/299` holds the records behind the table in SPEC.md's research log entry for #299:
+`main` is the skill and rule before that change, `after` after it.

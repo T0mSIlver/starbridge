@@ -1,0 +1,80 @@
+{
+  "agent": "codex",
+  "model": "default",
+  "arm": "after",
+  "scenario": "design-pick",
+  "rep": 1,
+  "turns": [
+    {
+      "commands": [
+        "/usr/bin/zsh -lc 'cat /tmp/skill-eval-JQLTf3/after-design-pick-1/cfg/skills/starbridge/SKILL.md'",
+        "/usr/bin/zsh -lc 'git status --short; git branch; rg --files shots'",
+        "/usr/bin/zsh -lc 'git log --oneline --all -5; git diff --stat main..settings-compact; git diff --stat main..settings-roomy'",
+        "/usr/bin/zsh -lc 'starbridge ask --question \"Which settings-screen design should I merge into main?\" --context \"Both variants are finished and pass the tests.\nCompact (first image): all nine settings fit on screen.\nRoomy (second image): larger spacing, with six settings visible.\nYour choice will be shipped by merging its branch into main.\" --option \"Compact\" --option \"Roomy\" --image shots/compact.png --image shots/roomy.png --waiting'",
+        "/usr/bin/zsh -lc 'starbridge wait d_k44RI__XT4AHhFB5 --timeout 50s'",
+        "/usr/bin/zsh -lc 'starbridge wait d_k44RI__XT4AHhFB5 --timeout 50s'",
+        "/usr/bin/zsh -lc 'starbridge wait d_k44RI__XT4AHhFB5 --timeout 50s'",
+        "/usr/bin/zsh -lc 'starbridge wait d_k44RI__XT4AHhFB5 --timeout 50s'",
+        "/usr/bin/zsh -lc 'starbridge wait d_k44RI__XT4AHhFB5 --timeout 50s'",
+        "/usr/bin/zsh -lc 'starbridge wait d_k44RI__XT4AHhFB5 --timeout 50s'",
+        "/usr/bin/zsh -lc 'starbridge wait d_k44RI__XT4AHhFB5 --timeout 50s'"
+      ],
+      "final": "Sent both screenshots to Starbridge for your design choice. Shipping is pending that answer; main is unchanged.",
+      "session": "01a11053-3dee-7402-8c20-7a416f67fc32",
+      "tokens": 927119,
+      "exit": 0,
+      "seconds": 442.027
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_k44RI__XT4AHhFB5",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-06T08:27:52Z",
+      "question": "Which settings-screen design should I merge into main?",
+      "context": "Both variants are finished and pass the tests.\nCompact (first image): all nine settings fit on screen.\nRoomy (second image): larger spacing, with six settings visible.\nYour choice will be shipped by merging its branch into main.",
+      "options": [
+        "Compact",
+        "Roomy"
+      ],
+      "recommended": "Compact",
+      "agent": "codex",
+      "default": {
+        "action": "Waits for your answer"
+      },
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "01a11053-3dee-7402-8c20-7a416f67fc32"
+      },
+      "images": [
+        {
+          "type": "image/png",
+          "width": 360,
+          "height": 640
+        },
+        {
+          "type": "image/png",
+          "width": 360,
+          "height": 640
+        }
+      ],
+      "replies": true
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "judge": {
+    "cold": true,
+    "consequences": true,
+    "terminal": false,
+    "links": null,
+    "plain": true,
+    "notes": "Card is solid; minor weakness is that it doesn't say which image is which beyond order, and the recommendation has no stated reason."
+  }
+}
