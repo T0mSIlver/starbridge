@@ -20,13 +20,14 @@ type KindRule = {
   signer: "device" | "machine";
   re?: { field: string; kinds: readonly ItemKind[]; open?: true };
   updates?: true;
-  latest?: true;
   toDevices?: true;
   wake?: string;
 };
 
 /** How far a device's clock may run ahead of the server's when it names a time. */
 const CLOCK_SKEW_MS = 5 * 60_000;
+/** Snoozes the server keeps per decision; each owner tap adds one (#571). */
+const SNOOZES_PER_DECISION = 50;
 
 /** How long after it arrives an item can still be answered; unlisted kinds have no limit. */
 const ANSWERABLE_FOR: Partial<Record<ItemKind, number>> = { permission: PERMISSION_TTL_MS };
@@ -267,6 +268,17 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
         if (!target || target.from_id !== machine || !mine)
           fail(404, "not-found", `no such ${rule.re.kinds.join(" or ")} for this device`);
         if (target.answered_at) fail(409, "already-answered");
+        if (rule.wake && item.wakeAt !== undefined) {
+          // Its return must come before the sweep drops the question it brings back.
+          const drops = Date.parse(target.received_at) + c.var.config.limits.staleRetention;
+          if (Date.parse(item.wakeAt) >= drops)
+            fail(400, "bad-schema", "the question is dropped before wakeAt");
+          const { n } = db
+            .query("SELECT COUNT(*) AS n FROM items WHERE account_id = ? AND kind = ? AND re = ?")
+            .get(caller.account, item.kind, item.re) as { n: number };
+          if (n >= SNOOZES_PER_DECISION)
+            fail(409, "too-many-items", `a decision keeps at most ${SNOOZES_PER_DECISION} snoozes`);
+        }
         if (!rule.re.open) {
           const ttl = ANSWERABLE_FOR[target.kind];
           if (ttl !== undefined && now.getTime() > Date.parse(target.received_at) + ttl)
@@ -289,12 +301,14 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
           // item, re-posted under its id, until the item is answered.
           if (target.answered_at) fail(409, "already-answered");
           if (other) fail(409, "duplicate-id", `${item.re} has a ${item.kind} under another id`);
-          snoozed = !!db
+          // By the snooze that came last; the devices order them by their signed `at`.
+          const last = db
             .query(
-              `SELECT 1 FROM items WHERE account_id = ? AND kind = 'snooze' AND re = ?
-               AND wake_due IS NOT NULL`,
+              `SELECT wake_due FROM items WHERE account_id = ? AND kind = 'snooze' AND re = ?
+               ORDER BY seq DESC LIMIT 1`,
             )
-            .get(caller.account, item.re);
+            .get(caller.account, item.re) as { wake_due: string | null } | null;
+          snoozed = !!last?.wake_due;
         } else if (other) {
           // A machine's notice that one of its own items is over (a settled prompt, a withdrawn
           // decision): one each.
@@ -334,15 +348,6 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
       db.query("DELETE FROM items WHERE account_id = ? AND id = ?").run(caller.account, item.id);
     }
 
-    if (rule.latest) {
-      // Only the latest note on an item matters, whichever device sent it: a new snooze
-      // replaces the last one, and its push.
-      db.query("DELETE FROM items WHERE account_id = ? AND kind = ? AND re = ?").run(
-        caller.account,
-        item.kind,
-        item.re ?? null,
-      );
-    }
     if (item.kind === "quota") {
       // Only the latest snapshot from each machine matters.
       db.query("DELETE FROM items WHERE account_id = ? AND kind = 'quota' AND from_id = ?").run(
