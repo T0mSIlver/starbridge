@@ -206,3 +206,21 @@ jobs:
         run: |
           docker image rm -f starbridge-server:$TAG starbridge-web:$TAG starbridge-demo:$TAG starbridge-caddy:$TAG >/dev/null 2>&1 || true
           docker builder prune -f --keep-storage 3GB >/dev/null || true
+
+  # A pull request lists only the checks of runs its own events started, so a dispatched run's
+  # checks never show on it; a commit status does. dependabot-lockfile.yml set it to pending.
+  status:
+    name: status
+    needs: [checks, e2e, images-scope, images]
+    if: always() && github.event_name == 'workflow_dispatch'
+    runs-on: ${{ vars.RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 5
+    permissions:
+      statuses: write
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          STATE: ${{ (contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') || contains(needs.*.result, 'skipped')) && 'failure' || 'success' }}
+        run: >-
+          gh api "repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA" -f context=CI -f state="$STATE"
+          -f target_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"

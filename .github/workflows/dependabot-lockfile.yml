@@ -4,7 +4,8 @@ name: Dependabot lockfile
 # updates pnpm-lock.yaml. A security update instead runs in the folder of the manifest its alert
 # names, such as /web, finds no lockfile there and changes package.json alone, so CI's frozen
 # install fails (#426). This job writes the lockfile into such a pull request. Its push, made
-# with GITHUB_TOKEN, starts no workflow, so it starts CI itself.
+# with GITHUB_TOKEN, starts no workflow, so it starts CI itself, which reports to the pull request
+# through the commit status CI.
 on:
   pull_request:
     types: [opened, synchronize, reopened]
@@ -30,6 +31,7 @@ jobs:
     permissions:
       contents: write
       actions: write
+      statuses: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -55,4 +57,5 @@ jobs:
           git config user.email '41898599+github-actions[bot]@users.noreply.github.com'
           git commit -m 'Update pnpm-lock.yaml [dependabot skip]' pnpm-lock.yaml
           git push origin "HEAD:$BRANCH"
+          gh api "repos/$GITHUB_REPOSITORY/statuses/$(git rev-parse HEAD)" -f context=CI -f state=pending
           gh workflow run ci.yml --ref "$BRANCH"

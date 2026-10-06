@@ -1541,7 +1541,8 @@ so the mod is the first path.
   (`/web` for next's GHSA-vcvr-r3jv-pc5j), logs "missing lockfile" and changes `package.json`
   alone. No `dependabot.yml` option moves it: `exclude-paths` skips security updates
   (dependabot-core#14408). A push with `GITHUB_TOKEN` starts no workflow, a dispatch does, so
-  the fix needs no new credential. The dispatched run checks the branch, not its merge with
+  the fix needs no new credential. A PR lists only checks from runs its own events started, so
+  the dispatched run reports through the commit status `CI`. It checks the branch, not its merge with
   main. The commit says `[dependabot skip]`, so Dependabot still rebases the PR over it.
 - 2026-10-06. Both screens confirm a join by digits (#355, from the #366 audit). Only the
   approver's owner compared the digits; the joining device acted on the first approval it got.
