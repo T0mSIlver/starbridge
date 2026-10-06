@@ -153,6 +153,8 @@ class ServerStore(
     override val busy = MutableStateFlow(false)
     override val notice = MutableStateFlow<String?>(null)
     private val headBook = Heads(directories)
+    /** The hold notice last shown, so it goes once the hold ends. */
+    @Volatile private var shownHold: String? = null
     override val sending = MutableStateFlow<Map<String, String>>(emptyMap())
     /** Answers tapped but not yet sealed into [Saved.outbox]: the lock may be busy. */
     private val tapped = java.util.concurrent.ConcurrentHashMap<String, String>()
@@ -199,7 +201,9 @@ class ServerStore(
         server.value = saved.server
         push.value = push.value.copy(type = saved.pushType, registered = saved.push?.type == saved.pushType)
         // While the server holds back entries a machine has seen, no machine's item shows (#362).
-        val held = withheld()?.also { if (notice.value == null) notice.value = it } != null
+        val held = withheld() != null
+        // A hold that ended takes its notice with it; only a confirmed one raises it.
+        if (!held && notice.value != null && notice.value == shownHold) notice.value = null
         decisions.value = if (held) emptyList() else saved.decisions.map(::toUi)
         prompts.value = if (held) emptyList() else saved.prompts.map(::toUi)
         // As the web: named once the account has more than one active machine.
@@ -350,7 +354,7 @@ class ServerStore(
         if (me.member != null) throw IllegalStateException("This session already belongs to another device.")
         val exists = fresh.directory(0).isNotEmpty()
         persist(newSecrets = Secrets(session = session))
-        persist(saved.copy(account = me.account, accountExists = exists, me = null, pin = null, entries = emptyList()))
+        persist(saved.copy(account = me.account, accountExists = exists, me = null, pin = null, entries = emptyList(), heads = emptyMap()))
     }
 
     private fun newMember(): DirectoryMember {
@@ -677,28 +681,54 @@ class ServerStore(
     }
 
     private fun keepHead(machine: String, head: DirectoryHead?) {
-        // A `by` this phone's chain does not hold would only add a key that never counts.
-        if (head == null || (head.by != null && directory?.members?.containsKey(head.by) != true)) return
         val heads = saved.heads.toMutableMap()
-        if (headBook.note(heads, machine, head, saved.entries)) persist(saved.copy(heads = heads))
+        if (headBook.note(heads, machine, head, saved.entries, directory)) persist(saved.copy(heads = heads))
     }
 
-    /** Why no machine's item counts: the server holds back entries a machine has seen. */
+    /**
+     * Why no machine's item counts: the server holds back entries a machine has seen. It names the
+     * machine and, for a head it passed on, the device; a compromised machine can name any device,
+     * the owner's own phone included, so the machine is the one to revoke first.
+     */
     private fun withheld(): String? {
         val dir = directory ?: return null
-        val (id, _) = headBook.withheldBy(saved.heads, dir, saved.entries) ?: return null
-        val name = dir.members[id]?.member?.name ?: id
-        return "The server is holding back changes to your devices that $name has seen. Nothing from your machines shows until it sends them."
+        val held = headBook.withheldBy(saved.heads, dir, saved.entries) ?: return null
+        fun name(id: String) = dir.members[id]?.member?.name ?: id
+        val machine = name(held.id)
+        val seen = held.by?.let { "$machine says ${name(it)} has seen changes to your devices that the server is holding back." }
+            ?: "The server is holding back changes to your devices that $machine has seen."
+        return "$seen Nothing from your machines shows until it sends them. If this does not clear, revoke $machine first."
+    }
+
+    /**
+     * On the first sign of a hold, reads the directory once more: a machine may only have signed
+     * an entry made on another device since this phone's last read. True while the hold remains,
+     * which says why and closes the notifications, since they would still offer answers.
+     */
+    private suspend fun confirmHold(): Boolean {
+        if (withheld() == null) return false
+        syncDirectory()
+        val why = withheld() ?: return false
+        notice.value = why
+        shownHold = why
+        alerts.clearAll()
+        return true
     }
 
     /** Keeps the heads of [items] before any counts, so the one that shows a gap holds back the rest. */
-    private fun scan(items: List<SealedItem>): Boolean {
+    private suspend fun scan(items: List<SealedItem>): Boolean {
         items.forEach { open(it) }
-        val why = withheld() ?: return false
-        notice.value = why
-        // Notifications already up would still let the owner answer from them.
-        alerts.clearAll()
-        return true
+        return confirmHold()
+    }
+
+    /**
+     * Before a pushed item opens: reads the directory when the sender is new to this phone, or
+     * when the head it signed shows entries the phone lacks.
+     */
+    private suspend fun catchUp(item: SealedItem) {
+        if (directory?.members?.containsKey(item.from) != true) syncDirectory()
+        open(item)
+        confirmHold()
     }
 
     private suspend fun syncDecisions() {
@@ -1155,7 +1185,7 @@ class ServerStore(
                     api().item(id).also { answeredAt = it.answeredAt }.item
                 }
                 // A machine paired since the last sync is not in the cached chain yet.
-                if (directory?.members?.containsKey(item.from) != true) syncDirectory()
+                catchUp(item)
                 val (from, body) = open(item) ?: return@withLock
                 val saved1 = SavedDecision(from, body as DecisionBody, answeredAt)
                 persist(saved.copy(decisions = saved.decisions + saved1))
@@ -1170,7 +1200,7 @@ class ServerStore(
                 } else {
                     api().item(id).also { answeredAt = it.answeredAt }.item
                 }
-                if (directory?.members?.containsKey(item.from) != true) syncDirectory()
+                catchUp(item)
                 val byId = saved.prompts.associateBy { it.body.id }.toMutableMap()
                 val added = takePrompt(item, answeredAt, byId)
                 keepPrompts(byId)
@@ -1186,7 +1216,7 @@ class ServerStore(
                 } else {
                     api().item(id).item
                 }
-                if (directory?.members?.containsKey(item.from) != true) syncDirectory()
+                catchUp(item)
                 val (from, body) = open(item) ?: return@withLock
                 body as Waiting
                 val d = saved.decisions.find { it.body.id == body.decisionId } ?: fetchDecision(body.decisionId) ?: return@withLock
@@ -1209,7 +1239,7 @@ class ServerStore(
                 } else {
                     api().item(id).item
                 }
-                if (directory?.members?.containsKey(item.from) != true) syncDirectory()
+                catchUp(item)
                 val (from, body) = open(item) ?: return@withLock
                 keepRuns(listOf(SavedRun(from, body as RunBody)))
             }

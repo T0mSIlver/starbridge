@@ -1528,6 +1528,15 @@ so the mod is the first path.
   it carries Codex's skill, so the versions match, and the agent rewrites outdated files when it
   starts. opencode's own `question` tool (on in the TUI, off in `opencode run`) is not
   intercepted, as in Pi; the skill already tells agents to avoid tools that ask the user.
+- 2026-10-06. Fable's review of #362's heads (#391, #395, #396). A device reads the directory
+  once more before it holds: the phone opened pushed items against the chain of its last sync,
+  so any device added elsewhere made every pushed question from an up-to-date machine read as
+  withheld, and vanish. A head a machine passes on from a device the chain does not list now
+  counts, kept in one slot per machine; it is dropped only once the chain lists that device as
+  revoked, since its `add` may be what the server holds back, as when the owner revokes from a
+  new phone. The hold names the machine and that device, and says to revoke the machine first:
+  a compromised machine can name the owner's own phone. Re-sealed items carry the current head,
+  and switching account clears the phone's heads.
 
 ## Encryption, with existing libraries
 

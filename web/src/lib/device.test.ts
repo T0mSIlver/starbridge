@@ -397,3 +397,59 @@ test("a machine's head exposes a revocation the server withholds, and holds ever
     globalThis.fetch = served;
   }
 });
+
+test("a head from an entry made elsewhere since the last read refreshes rather than holds (#362)", async () => {
+  const at = "2026-10-06T12:00:00Z";
+  const phone = { id: "phone", signKey: live.owner.device.keys.sign.privateKey };
+  const post = async (entry: unknown) =>
+    realFetch(`${live.url}/v1/directory`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${live.owner.device.token}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ entry }),
+    });
+  const keys = generateMemberKeys();
+  const machine = { id: "m_fresh", role: "machine" as const, name: "fresh", ...publicKeys(keys) };
+  await post(addEntry(await live.directory(), phone, machine, at));
+  const stale = (await device.deviceContext(ctx.account)) as device.Ctx;
+  // The owner adds a device from the phone; the machine reads it and signs the new head.
+  const tablet = {
+    id: "tablet",
+    role: "device" as const,
+    name: "Tablet",
+    ...publicKeys(generateMemberKeys()),
+  };
+  await post(addEntry(await live.directory(), phone, tablet, at));
+  const full = await live.directory();
+  const { id, name, boxPk, signPk } = stale.device;
+  const item = seal(
+    "decision",
+    {
+      v: 1,
+      id: "d_fresh",
+      to: [id],
+      createdAt: at,
+      question: "Deploy?",
+      context: "",
+      options: ["Yes", "No"],
+      recommended: "Yes",
+      source: { machine: "fresh", project: "p", session: "s" },
+      dir: { length: full.length, head: full.head },
+    },
+    { id: machine.id, signKey: keys.sign.privateKey },
+    [{ id, role: "device", name, boxPk, signPk }],
+  );
+  const served = globalThis.fetch;
+  globalThis.fetch = (async (input: string, init?: RequestInit) =>
+    input.startsWith("/v1/items?kind=decision")
+      ? Response.json({ items: [{ item, cursor: "1", receivedAt: at }], cursor: "1" })
+      : served(input, init)) as typeof fetch;
+  try {
+    const inbox = await device.loadInbox(stale);
+    expect(inbox.items.map((i) => i.decision.id)).toContain("d_fresh");
+  } finally {
+    globalThis.fetch = served;
+  }
+});

@@ -916,8 +916,8 @@ function expectKind<K extends SealedItem["kind"]>(item: SealedItem, kind: K) {
 export class Withheld extends Error {}
 
 /**
- * Opens a machine's item and keeps the directory head it signed, the longest per machine (and
- * per device it names as `by`, when that device is in this browser's chain).
+ * Opens a machine's item and keeps the directory head it signed, the longest per machine and per
+ * device it names as `by` (one slot per machine for a `by` this browser's chain does not list).
  */
 async function openMachine<K extends SealedItem["kind"]>(
   ctx: Ctx,
@@ -926,10 +926,10 @@ async function openMachine<K extends SealedItem["kind"]>(
 ): ReturnType<typeof openAsync<K>> {
   const opened = await openAsync(expectKind(item, kind), me(ctx), ctx.dir);
   const head = (opened.body as { dir?: DirectoryHead }).dir;
-  if (head && (!head.by || ctx.dir.members.has(head.by)))
+  if (head)
     await store.update("heads", ctx.account, (old) => {
       const heads = { ...old };
-      noteHead(heads, opened.signer.id, head, ctx.entries);
+      noteHead(heads, opened.signer.id, head, ctx.entries, ctx.dir);
       return heads;
     });
   return opened;
@@ -938,15 +938,28 @@ async function openMachine<K extends SealedItem["kind"]>(
 /**
  * Throws `Withheld` while a head a machine active in this browser's chain signed is missing
  * from it. Loaders call it once they kept the heads of what they opened, so the item that shows
- * the gap holds back the others it came with.
+ * the gap holds back the others it came with. It reads the directory once more first: a machine
+ * may only have signed an entry made on another device since this page read it.
  */
 async function hold(ctx: Ctx): Promise<void> {
-  const by = withheldBy((await store.get("heads", ctx.account)) ?? {}, ctx.dir, ctx.entries);
-  if (!by) return;
-  const name = ctx.dir.members.get(by.id)?.member.name ?? by.id;
-  throw new Withheld(
-    `The server is holding back changes to your devices that ${name} has seen. Nothing from your machines shows until it sends them.`,
-  );
+  const heads = (await store.get("heads", ctx.account)) ?? {};
+  if (!withheldBy(heads, ctx.dir, ctx.entries)) return;
+  const fresh = await refresh(ctx);
+  const held = withheldBy(heads, fresh.dir, fresh.entries);
+  if (held) throw new Withheld(heldText(fresh.dir, held));
+}
+
+/**
+ * Names the machine and, for a head it passed on, the device: a compromised machine can name any
+ * device, the owner's own phone included, so the machine is the one to revoke first.
+ */
+export function heldText(dir: Directory, held: { id: string; by?: string }): string {
+  const name = (id: string) => dir.members.get(id)?.member.name ?? id;
+  const machine = name(held.id);
+  const seen = held.by
+    ? `${machine} says ${name(held.by)} has seen changes to your devices that the server is holding back.`
+    : `The server is holding back changes to your devices that ${machine} has seen.`;
+  return `${seen} Nothing from your machines shows until it sends them. If this does not clear, revoke ${machine} first.`;
 }
 
 /** How each item a settled notice closed was closed, by item id, with the time it closed. */

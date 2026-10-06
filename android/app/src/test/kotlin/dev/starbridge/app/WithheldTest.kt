@@ -148,6 +148,62 @@ class WithheldTest {
         until { store.decisions.value.any { it.id == "d_honest" } }
     }
 
+    @Test
+    fun aPushedQuestionSignedWithAnEntryMadeElsewhereStillNotifies() {
+        val account = "acct"
+        val at = "2026-10-06T12:00:00Z"
+        val signKeys = sodium.signKeyPair()
+        val boxKeys = sodium.boxKeyPair()
+        val phone = Member("phone", "device", "Phone", toB64(boxKeys.public), toB64(signKeys.public))
+        val machineSign = sodium.signKeyPair()
+        val machine = Member("m_box", "machine", "box", toB64(sodium.boxKeyPair().public), toB64(machineSign.public))
+        val entries = mutableListOf<JsonElement>(envelopeJson(directories.genesisEntry(account, phone, signKeys.secret, sodium.signKeyPair(), at)))
+        entries += envelopeJson(directories.addEntry(directories.verify(entries, account, null), "phone", signKeys.secret, machine, at))
+        val known = directories.verify(entries, account, null)
+        // The owner adds a tablet from the web while the phone sleeps; the machine reads it.
+        val tablet = Member("tablet", "device", "Tablet", toB64(sodium.boxKeyPair().public), toB64(sodium.signKeyPair().public))
+        val full = entries + envelopeJson(directories.addEntry(known, "phone", signKeys.secret, tablet, at))
+        val fullDir = directories.verify(full, account, null)
+        val item = envelopes.seal("decision", buildJsonObject {
+            put("v", 1); put("id", "d_pushed"); putJsonArray("to") { add("phone") }; put("createdAt", at)
+            put("question", "Deploy?"); put("context", ""); putJsonArray("options") { add("Yes"); add("No") }; put("recommended", "Yes")
+            putJsonObject("source") { put("machine", "box"); put("project", "p"); put("session", "s") }
+            putJsonObject("dir") { put("length", fullDir.length); put("head", fullDir.head) }
+        }, machine.id, machineSign.secret, listOf(phone))
+
+        http.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse = when (request.url.encodedPath) {
+                "/v1/directory" -> json(buildJsonObject { put("entries", buildJsonArray { full.drop(request.url.queryParameter("from")!!.toInt()).forEach { add(it) } }) })
+                else -> MockResponse(404, okhttp3.Headers.headersOf(), "")
+            }
+        }
+        http.start()
+
+        val identity = object : Vault {
+            override fun wrap(plain: ByteArray) = plain
+            override fun unwrap(wrapped: ByteArray) = wrapped
+        }
+        val disk = Disk(Files.createTempDirectory("starbridge").toFile(), identity)
+        val server = http.url("/").toString().trimEnd('/')
+        disk.save(Saved(server, account = account, accountExists = true, me = phone, pin = Pin(known.length, known.head), entries = entries.toList()))
+        disk.save(Secrets(session = "s", boxPk = toB64(boxKeys.public), boxSk = toB64(boxKeys.secret), signPk = toB64(signKeys.public), signSk = toB64(signKeys.secret)))
+        val notified = mutableListOf<String>()
+        val alerts = object : Alerts {
+            override fun decision(decision: Decision, silent: Boolean) { notified += decision.id }
+            override fun cancel(id: String) {}
+            override fun join(id: String, name: String) {}
+            override fun prompt(prompt: Prompt) {}
+            override fun cancelPrompt(prompt: Prompt) {}
+            override fun run(run: Run) {}
+        }
+        val store = ServerStore(disk, OkHttpClient(), sodium, envelopes, directories, Pairings(sodium), Joins(sodium), alerts, "Phone", server, false, scope)
+        until { store.phase.value == dev.starbridge.app.data.Phase.Ready }
+        val payload = buildJsonObject { put("v", 1); put("kind", "decision"); put("id", item.id); put("from", item.from); put("box", item.boxes.single().box) }
+        runBlocking { store.onPush(payload.toString()) }
+        assertEquals(listOf("d_pushed"), notified)
+        assertEquals(null, store.notice.value)
+    }
+
     private fun until(pred: () -> Boolean) {
         val end = System.currentTimeMillis() + 10_000
         while (!pred()) {
