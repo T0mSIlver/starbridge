@@ -1294,9 +1294,10 @@ so the mod is the first path.
   runs under Node, so the CLI uses no Bun global without a guard; a test runs it there.
 - 2026-10-06. Harness integrations audit (#298), each finding reproduced in a throwaway HOME
   with Claude Code 2.1.289, Codex CLI 0.160.0 and Pi 1.0.4 with pi-permission-system 39.1.0.
-  Fixed here: `ask` takes Codex or Pi over Claude Code when both are set, since an agent passes
-  its variables to the agents it starts and a `codex exec` run from a Claude Code shell posted
-  as that Claude session, whose mod then got the answer (#319). A Codex sub-agent asks under its
+  Fixed here: an agent passes its variables to the agents it starts, and a `codex exec` run
+  from a Claude Code shell posted as that Claude session, whose mod then got the answer (#319).
+  So `ask` takes Codex or Pi over Claude Code when both are set, unless Claude Code runs as
+  `claude -p`, the only way Codex and Pi, which run commands without a terminal, can start it. A Codex sub-agent asks under its
   root thread, read from its rollout's `session_id`, since `codex queue` refuses sub-agent
   threads (#320). `claude -p` (`CLAUDE_CODE_SESSION_ATTENDED=0`) is told to `wait`, since the
   mod runs only in interactive sessions (#321). Filed post-launch: Pi needs allow rules for the

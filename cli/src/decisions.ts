@@ -179,16 +179,19 @@ export function buildDecision(input: AskInput, ctx: Ctx, machine: string, to: st
 }
 
 /**
- * `--agent`, else Codex, Pi or Claude Code when it runs this command: Codex gives every command
- * its session id in CODEX_THREAD_ID, Pi in PI_SESSION_ID, and Claude Code sets CLAUDECODE=1. An
- * agent passes these on to the agents it starts, so Codex or Pi beside CLAUDECODE was started
- * from a Claude Code session (a `codex exec` review, a script) and is the one asking.
+ * `--agent`, else the agent that runs this command: Claude Code sets CLAUDECODE=1, Codex gives
+ * every command its session id in CODEX_THREAD_ID, Pi in PI_SESSION_ID. An agent passes these
+ * on to the agents it starts, so two can be set. Codex and Pi run commands without a terminal,
+ * so a Claude Code they started runs as `claude -p` (CLAUDE_CODE_SESSION_ATTENDED=0); otherwise
+ * Codex or Pi was started from a Claude Code session (a `codex exec` review, a script) and asks.
  */
 function agentOf(input: AskInput, env: Ctx["env"]): { agent?: Agent } {
   if (input.agent !== undefined) return { agent: input.agent };
+  const claude = env.CLAUDECODE === "1";
+  if (claude && env.CLAUDE_CODE_SESSION_ATTENDED === "0") return { agent: "claude-code" };
   if (env.CODEX_THREAD_ID) return { agent: "codex" };
   if (env.PI_SESSION_ID) return { agent: "pi" };
-  return env.CLAUDECODE === "1" ? { agent: "claude-code" } : {};
+  return claude ? { agent: "claude-code" } : {};
 }
 
 function checked(decision: unknown): Decision {
