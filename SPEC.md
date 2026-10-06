@@ -1292,6 +1292,12 @@ so the mod is the first path.
   since `codex queue` (0.160) takes the message only as an argument and other local users can
   read process arguments; `wait <id>` prints a delivered answer from local state. The npm bundle
   runs under Node, so the CLI uses no Bun global without a guard; a test runs it there.
+- 2026-10-06. Dragging a question's sheet by its image stuttered on Android (#246). In a
+  Robolectric test, a drag from the image moves the sheet exactly as one from the text. The one
+  difference: a finger that rests over 100 ms before it drags counts as a press on the image, so
+  its ripple starts, then cancels while the sheet moves. Images, in the sheet and on inbox cards,
+  now have no ripple; a tap still opens the viewer, which is feedback enough. Only a real phone
+  can confirm the stutter is gone, as the emulator renders in software.
 - 2026-10-06. Android posts the account's first directory entry only once the recovery key is
   confirmed (#370), as the web does since #337. "Create the keys" writes the keys, the seed and
   the signed entry to the app's encrypted store; "I wrote this key down" posts the entry, then
