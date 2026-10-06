@@ -17,10 +17,13 @@ const noop = async () => {};
 export function SampleProvider({
   landing = false,
   empty = false,
+  noQuotas = false,
   children,
 }: {
   landing?: boolean;
   empty?: boolean;
+  /** No snapshot yet, as on a device that just joined (#661). */
+  noQuotas?: boolean;
   children: React.ReactNode;
 }) {
   const [quotaSettings, setQuotaSettings] = useState(DEFAULT_SETTINGS);
@@ -40,6 +43,7 @@ export function SampleProvider({
         runs: { items: [], rejected: [] },
         quotas: undefined,
       }),
+      ...(noQuotas && { quotas: { cards: [], errors: [], rejected: [] } }),
       sampleDevices: empty ? devices.filter((d) => d.role !== "machine") : devices,
       reload: noop,
       answer: noop,
@@ -52,6 +56,6 @@ export function SampleProvider({
       loadPromptLog: noop,
       deviceName: (id) => id,
     };
-  }, [landing, empty, quotaSettings]);
+  }, [landing, empty, noQuotas, quotaSettings]);
   return <StoreContext.Provider value={store}>{children}</StoreContext.Provider>;
 }
