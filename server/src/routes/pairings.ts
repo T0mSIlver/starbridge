@@ -91,22 +91,21 @@ export function sweepPairings(db: Database): void {
 /**
  * Marks refused, with error code `reason`, the waiting pairings of a machine whose directory entry
  * the server refused, and wakes their result polls. Matched by the member's id and both keys,
- * which only the pairing's request carries.
+ * which only the pairing's request carries, so only a device shown its code can end it.
  */
 export function refusePairings(
   c: { var: Env["Variables"] },
-  account: string,
   member: { id: string; boxPk: string; signPk: string },
   reason: string,
 ): void {
   const rows = c.var.db
     .query(
-      `UPDATE pairings SET refused = ?, account_id = ?
+      `UPDATE pairings SET refused = ?
        WHERE member_id = ? AND box_pk = ? AND sign_pk = ? AND role = 'machine'
          AND approval IS NULL AND account_id IS NULL
        RETURNING rendezvous`,
     )
-    .all(reason, account, member.id, member.boxPk, member.signPk) as { rendezvous: string }[];
+    .all(reason, member.id, member.boxPk, member.signPk) as { rendezvous: string }[];
   for (const r of rows) c.var.pairings.wake(r.rendezvous);
 }
 
@@ -216,6 +215,8 @@ pairingRoutes.post("/pairings/:rendezvous/approve", requireCaller("paired-device
     recheck(c);
     const p = load(c, rendezvous);
     if (p.approval) fail(409, "already-approved");
+    // The new machine was told and gave up: a token minted now would reach nobody.
+    if (p.refused) fail(409, p.refused, "this pairing was refused; pair again");
     const m = activeMember(db, caller.account, p.member_id, p.role);
     if (!m || m.box_pk !== p.box_pk || m.sign_pk !== p.sign_pk)
       fail(409, "not-in-directory", "append the new member's entry to the directory first");

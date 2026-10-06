@@ -182,7 +182,7 @@ directoryRoutes.post("/directory", requireCaller("device"), async (c) => {
     const { member } = JSON.parse(entry.body) as {
       member?: { id: string; boxPk: string; signPk: string };
     };
-    if (member) refusePairings(c, caller.account, member, "machine-cap");
+    if (member) refusePairings(c, member, "machine-cap");
     fail(403, "machine-cap", `an account holds at most ${config.maxMachines} machines`);
   }
   // Machines seal to the directory's devices, so each re-reads it: a new device gets their
