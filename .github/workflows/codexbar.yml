@@ -20,7 +20,7 @@ permissions:
 jobs:
   check:
     # Always Linux, whatever vars.RUNNER says: Linux is where setup installs the tarball.
-    runs-on: ${{ vars.RUNNER || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
