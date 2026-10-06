@@ -20,6 +20,8 @@ export type SentAnswers = Record<string, Reply & { answeredAt: string }>;
 
 type Records = {
   device: DeviceRecord;
+  /** Keys a join generated, until a device approves it: an active device's keys stay put (#274). */
+  pending: DeviceRecord;
   pin: Pin;
   answers: SentAnswers;
   /** What this browser answered to permission prompts, by permission id. */

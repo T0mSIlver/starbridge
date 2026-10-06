@@ -373,8 +373,7 @@ accent: the amber of the icon's climber, which means "needs you" and nothing
 else. Everything else is black, white and grey, except the quota bars, which
 fill in each provider's lab colour.
 
-Design v2 (2026-10-05, SPEC.md) gives each surface a job, and the mockups in
-https://claude.ai/artifact/4Esy3goyohvLThcPVCKaEf are the source for every
+Design v2 (2026-10-05, SPEC.md) gives each surface a job, and the owner's mockups are the source for every
 screen: the landing page shows the product (direction B), the web app is a
 quiet, dense control surface for any browser (A), and Android is full
 Material 3 Expressive (C).
@@ -462,16 +461,32 @@ a decision's context, a permission prompt's command and a session's name.
   terminal icon, the exact command in mono, Allow and Deny,
   and how long it has waited. A question shows its text as the title, then
   its options, its default (the first) filled.
-- An item that blocks an agent is filled; one it works around is hollow. A
-  prompt, and a question whose agent waits on it: `accent-soft` behind the
-  whole item, its kind icon in `accent` on that ground with no tile of its
-  own, its title at weight 500, and in the
-  meta row's time slot a clock ticking m:ss in `accent`, weight 500. A
-  question its agent works around: no ground, an outlined card on Android
-  (`line-strong`), its icon in `fg2` (on the web, in an outlined tile), its
-  title at weight 400, its age in the
-  time slot. No line of text says which; screen readers get it in the item's
-  label. Fill, weight and the clock keep it readable without colour.
+- Allow covers what the owner saw. A prompt's detail shows the whole tool
+  input, never the one-line summary: a command in full, else the input as
+  indented JSON. Allow, by button, key or a wider grant, waits until the
+  input's end has been on screen. A row carries Allow only when its input fits
+  on one line of 200 characters, shown whole; otherwise only Deny, and the
+  detail allows. A wider grant (this session, this project) shows its exact
+  rule in mono beside its label, never only in a tooltip.
+- Every inbox item is the same container (#248): on Android a filled card
+  (`surface`) with no border and no shadow; on the web a box as its settings
+  rows are (`surface`, a `line` border, `radius.sm`). An item that blocks an
+  agent (a prompt, and a question whose agent waits on it) differs by its
+  fill alone: the amber fill
+  (`accent-soft` over `surface`), its kind icon in `accent`, its title at
+  weight 500, and in the meta row's time slot a clock ticking m:ss in
+  `accent`, weight 500. A question its agent works around keeps the plain
+  card, its icon in `fg2`, its title at weight 400 and its age in the time
+  slot. Kind icons sit on the card, with no tile. No line of text says which;
+  screen readers get it in the item's label. Fill, weight and the clock keep
+  it readable without colour.
+- In One feed each item stands apart, `s2` from the next. Under a grouping's
+  header (Group by machine, Group by waiting) the group's items are joined,
+  and History with them: on Android a segmented group (2 dp apart, rounded
+  outside as a card and `radius.xs` inside, Material 3 Expressive); on the
+  web one box with hairline dividers.
+- On Android, secondary buttons and the command box on a card are tonal:
+  `surface2`, or `surface` on an amber card. Nothing on a card is outlined.
 - Every item opens with one meta row of facts Starbridge knows: the machine's
   kind icon and name, the repo, and the time right-aligned. The agent's own
   words come below it. Details end with the session name, truncated in the
@@ -492,9 +507,11 @@ a decision's context, a permission prompt's command and a session's name.
 - Labels are sentence case, never uppercase.
 - Shapes follow the Material 3 scale: cards `radius.xl`, buttons `radius.pill`
   (round ends in a connected group, inner corners `radius.sm`), inset areas
-  such as code `radius.lg`, inputs `radius.xs` on top. Cards on the dark
-  ground are filled (`surface`), with no border and no shadow, except a
-  question its agent works around, which is outlined.
+  such as code `radius.lg`, inputs `radius.xs` on top. Android's cards are
+  filled (`surface`), with no border and no shadow; its inbox cards are
+  `radius.xl` with 20 dp inside, 16 dp from the screen's edges; one-line
+  cards (History's rows) round at 20 dp. The web keeps its own dense shapes
+  and takes none of Material's: its inbox items are `radius.sm` boxes.
 - Quota tracks are `size.track` thick on Android and `size.track-dense` on
   the web.
 
@@ -502,7 +519,7 @@ a decision's context, a permission prompt's command and a session's name.
 
 Decided 2026-10-05: the web moves only where motion shows what changed,
 and never makes an action wait. It follows the quiet dashboards in the
-design research (https://claude.ai/artifact/43JkSwnLEVmakivuuoZqXw: Linear,
+design research (Linear,
 Vercel, Tailscale), where views and selections switch at once and a read row
 changes in place; durations and the easing come from Material 3, so the web
 and Android move alike.
@@ -611,6 +628,8 @@ The PNG and ICO files are rendered from the SVG; redraw them when the mark
 changes.
 
 The product name has no wordmark: it is "Starbridge" in the sans, weight 500.
+In the lockup, the name's baseline sits on the mark's bottom edge, the planet's ground line, with
+a gap of 0.4 of the mark (Android: `ui/Lockup.kt`).
 
 ## Roles
 

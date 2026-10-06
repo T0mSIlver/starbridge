@@ -178,6 +178,7 @@ joinRoutes.get("/joins", requireCaller("paired-device"), async (c) => {
       fail(429, "too-many-waits", "this account already has its join long-polls open");
     holdOpen(c);
     await c.var.joins.wait(`account:${account}`, seconds, c.req.raw.signal);
+    recheck(c);
     out = read();
   }
   return c.json({ joins: out.joins, cursor: String(out.cursor) });
@@ -188,7 +189,7 @@ joinRoutes.get("/joins/:id", async (c) => {
   const { db } = c.var;
   const id = c.req.param("id");
   let r = load(db, id);
-  party(c, r);
+  const was = party(c, r);
   const after = Number(c.req.query("after") ?? 0) || 0;
   const seconds = waitSeconds(c);
   if (r.version <= after && seconds > 0) {
@@ -197,6 +198,10 @@ joinRoutes.get("/joins/:id", async (c) => {
     holdOpen(c);
     await c.var.joins.wait(`join:${id}`, seconds, c.req.raw.signal);
     r = load(db, id);
+    // The caller may have been revoked meanwhile. The joiner's session may instead have become
+    // the new device's, so it is checked as a party again rather than as the same member.
+    if (!identify(c)) fail(401, "unauthenticated", "credentials changed during the request");
+    if (party(c, r) !== was) fail(401, "unauthenticated", "credentials changed during the request");
   }
   return c.json({ join: view(r) });
 });
