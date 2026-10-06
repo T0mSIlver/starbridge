@@ -1302,6 +1302,11 @@ so the mod is the first path.
   adopts a pending record the directory lists as active even when an older device is stored, so a
   recovery or join cut off after it landed is not lost to the older keys.
 
+- 2026-10-06. Add a device on the web says a failed pairing in the app's words, as Android does,
+  not the API's code (#289): an expired or unknown code reads "No pairing with this code, or it
+  expired."; a code already approved, a removed browser and an expired sign-in have their own
+  sentence; any other error reads as the server's sentence, capitalised, without its code.
+
 ## Encryption, with existing libraries
 
 - libsodium sealed boxes (`crypto_box_seal`, X25519 + XSalsa20-Poly1305): an
