@@ -85,17 +85,18 @@ export function Inbox() {
     const from = historyFrom.current;
     historyFrom.current = undefined;
     if (!el || from === undefined) return;
+    // A toggle mid-glide: where it lands is measured without the glide still running.
+    for (const a of el.getAnimations()) a.cancel();
     const by = from - el.getBoundingClientRect().top;
-    if (Math.abs(by) < 1) return;
-    el.style.transition = "none";
-    el.style.transform = `translateY(${by}px)`;
-    el.getBoundingClientRect();
-    el.style.transition = "transform var(--t-state) var(--ease)";
-    el.style.transform = "";
-    const done = () => {
-      el.style.transition = "";
-    };
-    el.addEventListener("transitionend", done, { once: true });
+    if (Math.abs(by) < 1 || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const root = getComputedStyle(document.documentElement);
+    // The browser may give the token back in seconds ("0.25s") or milliseconds.
+    const t = root.getPropertyValue("--t-state").trim();
+    const ms = Number.parseFloat(t) * (t.endsWith("ms") ? 1 : 1000);
+    el.animate([{ transform: `translateY(${by}px)` }, { transform: "none" }], {
+      duration: ms || 250,
+      easing: root.getPropertyValue("--ease").trim() || "ease-out",
+    });
   }, [historyOpen]);
   const find = useFind();
   // Find searches History too, so its prompt log loads once a query starts, not per keystroke.
