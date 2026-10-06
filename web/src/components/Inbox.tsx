@@ -85,32 +85,13 @@ export function Inbox() {
   const [historyOpen, setHistoryOpen] = usePref("historyOpen");
   const [snoozedOpen, setSnoozedOpen] = usePref("snoozedOpen");
   const [clock] = usePref("clock");
-  // History's rows fade in when the owner opens it, not when the page loads with it open or the
+  // A section's rows fade in when the owner opens it, not when the page loads with it open or the
   // list comes back.
   const [historyToggled, setHistoryToggled] = useState(false);
-  // History glides between the list's bottom and its place under the items (#662): where it was
-  // before the toggle, played back to where it lands (FLIP). Reduced motion makes it a jump.
+  const [snoozedToggled, setSnoozedToggled] = useState(false);
+  const snoozedRef = useRef<HTMLDivElement>(null);
   const historyRef = useRef<HTMLDivElement>(null);
-  const historyFrom = useRef<number>(undefined);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: runs after each toggle's render.
-  useLayoutEffect(() => {
-    const el = historyRef.current;
-    const from = historyFrom.current;
-    historyFrom.current = undefined;
-    if (!el || from === undefined) return;
-    // A toggle mid-glide: where it lands is measured without the glide still running.
-    for (const a of el.getAnimations()) a.cancel();
-    const by = from - el.getBoundingClientRect().top;
-    if (Math.abs(by) < 1 || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    const root = getComputedStyle(document.documentElement);
-    // The browser may give the token back in seconds ("0.25s") or milliseconds.
-    const t = root.getPropertyValue("--t-state").trim();
-    const ms = Number.parseFloat(t) * (t.endsWith("ms") ? 1 : 1000);
-    el.animate([{ transform: `translateY(${by}px)` }, { transform: "none" }], {
-      duration: ms || 250,
-      easing: root.getPropertyValue("--ease").trim() || "ease-out",
-    });
-  }, [historyOpen]);
+  const beforeToggle = useGlide([snoozedRef, historyRef], [snoozedOpen, historyOpen]);
   const find = useFind();
   // Find searches History too, so its prompt log loads once a query starts, not per keystroke.
   const finding = find.trim() !== "";
@@ -323,10 +304,21 @@ export function Inbox() {
           open={snoozedOpen}
           count={snoozed.length}
           comfy={comfy}
-          onToggle={() => setSnoozedOpen(!snoozedOpen)}
+          onToggle={() => {
+            beforeToggle();
+            setSnoozedOpen(!snoozedOpen);
+            setSnoozedToggled(true);
+          }}
         />
       )}
-      {showSnoozed && snoozed.map(snoozedRow)}
+      {showSnoozed && (
+        <div
+          className={snoozedToggled ? "m-appear" : undefined}
+          onAnimationEnd={() => setSnoozedToggled(false)}
+        >
+          {snoozed.map(snoozedRow)}
+        </div>
+      )}
     </>
   );
   const historyPart = (
@@ -339,7 +331,7 @@ export function Inbox() {
           count={closedToday(past, now)}
           comfy={comfy}
           onToggle={() => {
-            historyFrom.current = historyRef.current?.getBoundingClientRect().top;
+            beforeToggle();
             setHistoryOpen(!historyOpen);
             setHistoryToggled(true);
           }}
@@ -448,13 +440,18 @@ export function Inbox() {
         ) : past.length === 0 && snoozed.length === 0 ? (
           <p className={`t-small ${s.empty}`}>Nothing matches</p>
         ) : null)}
+      {/* Closed, Snoozed waits just above History at the bottom (#682). Only the first of them
+          down takes the space, so they sit together. */}
       {snoozedPart && (
-        <>
+        <div ref={snoozedRef} className={showSnoozed || showPast ? undefined : s.down}>
           <div className={s.gap} />
           {grouped ? seg(snoozedPart) : snoozedPart}
-        </>
+        </div>
       )}
-      <div ref={historyRef} className={showPast ? undefined : s.down}>
+      <div
+        ref={historyRef}
+        className={showPast || (snoozedPart && !showSnoozed) ? undefined : s.down}
+      >
         <div className={s.gap} />
         {grouped ? seg(historyPart) : historyPart}
       </div>
@@ -553,6 +550,44 @@ function Panes({ list, children }: { list: React.ReactNode; children: React.Reac
       <QuotaAside />
     </div>
   );
+}
+
+/**
+ * Snoozed and History glide between the list's bottom and their place under the items (#662,
+ * #682): call the returned function before a toggle, and each element is played back from where
+ * it was to where it lands (FLIP). Reduced motion makes it a jump.
+ */
+function useGlide(els: React.RefObject<HTMLElement | null>[], toggles: boolean[]): () => void {
+  const from = useRef<(number | undefined)[]>(undefined);
+  const toggled = toggles.join();
+  // biome-ignore lint/correctness/useExhaustiveDependencies: runs after each toggle's render.
+  useLayoutEffect(() => {
+    const tops = from.current;
+    from.current = undefined;
+    if (!tops) return;
+    const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const root = getComputedStyle(document.documentElement);
+    // The browser may give the token back in seconds ("0.25s") or milliseconds.
+    const t = root.getPropertyValue("--t-state").trim();
+    const duration = Number.parseFloat(t) * (t.endsWith("ms") ? 1 : 1000) || 250;
+    const easing = root.getPropertyValue("--ease").trim() || "ease-out";
+    els.forEach((ref, i) => {
+      const el = ref.current;
+      const top = tops[i];
+      if (!el || top === undefined) return;
+      // A toggle mid-glide: where it lands is measured without the glide still running.
+      for (const a of el.getAnimations()) a.cancel();
+      const by = top - el.getBoundingClientRect().top;
+      if (Math.abs(by) < 1 || reduce) return;
+      el.animate([{ transform: `translateY(${by}px)` }, { transform: "none" }], {
+        duration,
+        easing,
+      });
+    });
+  }, [toggled]);
+  return () => {
+    from.current = els.map((ref) => ref.current?.getBoundingClientRect().top);
+  };
 }
 
 // Items listed this soon after the list shows came with the page, so they don't fade in.

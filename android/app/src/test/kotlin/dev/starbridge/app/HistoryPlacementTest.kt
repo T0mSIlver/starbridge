@@ -66,4 +66,43 @@ class HistoryPlacementTest {
         val open = compose.onNodeWithText("History").getBoundsInRoot().top
         assertTrue("opened History under the items: $open, was $closed", open < height * 0.5f)
     }
+
+    // Closed, Snoozed waits just above History; opened, it rises under the items while History
+    // stays down (#682). Its frames and end states land in build/snoozed-glide/.
+    @Test fun closedSnoozedWaitsAboveHistoryAndRisesWhenOpened() {
+        val now = Instant.parse("2026-10-04T14:00:00Z")
+        val fake = Fake(now)
+        var view by mutableStateOf(InboxView())
+        compose.setContent {
+            StarbridgeTheme {
+                Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+                    InboxScreen(fake.decisions.filterNot { it.isOpen } + fake.snoozed, now, DecisionActions({ _, _, _ -> }, {}), view = view, onView = { view = it })
+                }
+            }
+        }
+        val frames = File("build/snoozed-glide").apply { mkdirs() }
+        fun shot(name: String) {
+            val bitmap = compose.onRoot().captureToImage().asAndroidBitmap()
+            File(frames, "$name.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        }
+        shot("closed")
+        val height = compose.onRoot().getBoundsInRoot().bottom
+        val snoozed = compose.onNodeWithText("Snoozed").getBoundsInRoot()
+        val history = compose.onNodeWithText("History").getBoundsInRoot()
+        assertTrue("closed Snoozed at the bottom: ${snoozed.top} of $height", snoozed.top > height * 0.75f)
+        assertTrue("Snoozed just above History: ${snoozed.top}, ${history.top}", snoozed.top < history.top)
+
+        compose.mainClock.autoAdvance = false
+        compose.onNodeWithText("Snoozed").performClick()
+        repeat(10) { i ->
+            compose.mainClock.advanceTimeBy(40)
+            shot("frame-$i")
+        }
+        compose.mainClock.autoAdvance = true
+        compose.waitForIdle()
+        shot("open")
+        val open = compose.onNodeWithText("Snoozed").getBoundsInRoot().top
+        assertTrue("opened Snoozed under the items: $open, was ${snoozed.top}", open < height * 0.5f)
+        assertTrue("History stays at the bottom", compose.onNodeWithText("History").getBoundsInRoot().top > height * 0.75f)
+    }
 }

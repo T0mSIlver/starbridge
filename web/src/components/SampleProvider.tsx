@@ -25,7 +25,7 @@ export function SampleProvider({
   empty?: boolean;
   /** No snapshot yet, as on a device that just joined (#661). */
   noQuotas?: boolean;
-  /** Nothing open, History only: the quiet inbox (#662). */
+  /** Nothing open, Snoozed and History only: the quiet inbox (#662, #682). */
   quiet?: boolean;
   children: React.ReactNode;
 }) {
@@ -54,7 +54,7 @@ export function SampleProvider({
       }),
       ...(noQuotas && { quotas: { cards: [], errors: [], rejected: [] } }),
       ...(quiet && {
-        inbox: { ...s.inbox, items: s.inbox.items.filter((i) => i.answeredAt) },
+        inbox: { ...s.inbox, items: s.inbox.items.filter((i) => i.answeredAt || i.snoozedUntil) },
         prompts: [],
         runs: { ...s.runs, items: [] },
       }),
