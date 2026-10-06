@@ -347,11 +347,26 @@ provider plugins add providers, not panels.
   was sealed to, only while it is open, and for an `answerIn` question only a Done, when it asked
   for one (#539). A settled question's
   answer is never delivered, since a server could hold an answer back until the agent moved on.
+- **Following every answer** (#629). `answers --all --follow` gives an orchestrator the owner's
+  answers to every session's questions, so it no longer depends on each session relaying them or
+  reads the state file. It is an observer: it marks no answer seen and no decision waiting, so
+  each answer still reaches its session. The machine keeps each decision's project and session
+  title, like its question, after the answer drops its body. `decisions --open` lists the
+  questions still open, so one question has one asker: the orchestrator checks it before
+  asking, since the owner once got the same question from it and from a session.
 - **Pairing a machine.** `pair` uses starbridge.run unless `--server` or `STARBRIDGE_SERVER` says
   otherwise (#154). `pair --force` keeps the machine's server and name (#245) and leaves the old
   pairing active, so Devices shows the added time on rows that share a name (#287). `pair` and
   `setup` guess `machineKind` (cloud, laptop with a battery, server with no display, else desktop);
   `config machine-kind` corrects it.
+- **The pairing link** `https://starbridge.run/pair#CODE`, which `pair` prints and shows as a QR
+  code, is also an App Link (#611): setup says to scan it with the camera, and a phone's camera
+  hands links to apps, not to a browser that would first ask to become a device itself. The app
+  opens Add a device with the code looked up, once the phone is in the account; a phone signed in
+  but not in the account yet joins with it instead, as another device's "Scan with the new phone"
+  code asks. Without the app,
+  or on a self-hosted server, which the APK cannot claim, the link opens the web page as before;
+  where both the installed web app and the app claim it, Android opens the verified app.
 - **Setup** (`cli/src/setup/`; #68, #239, #245) installs CodexBar's latest release, taking the
   static musl build where the glibc one would not start. Only the repository is pinned, since
   CodexBar ships almost daily (#530): the tarball must match the `.sha256` of the same release,
@@ -770,7 +785,9 @@ Tokens, type and components: `DESIGN.md`.
 
 - **Stack** (`deploy/`): Docker Compose with Caddy on the host network, so rate limits see real
   client addresses. Caddy keeps connections to the server open (`keepalive 25s`, below the
-  server's 30 s idle close) so TIME-WAIT sockets don't use up ports (#376). Caddy compresses every
+  server's 30 s idle close) so TIME-WAIT sockets don't use up ports (#376). A client has 10 s for
+  its TLS handshake and its HTTP/1.1 request headers, since every open connection costs Caddy
+  memory, the VPS's first limit (#587). Caddy compresses every
   response and the web app none: Next's gzip ran on its one thread and filled it near 18 landing
   page visitors a second (#593). Nightly SQLite backups, kept 14 days.
 - **Capacity** (#301, #625). On the production stack capped to the VPS's two cores and 4 GB,
@@ -806,7 +823,9 @@ Tokens, type and components: `DESIGN.md`.
   `/privacy` says so.
   It sees machines and answers from any device, so a pairing or answer made on the phone counts
   once this browser sees them. Owner's view: an Umami share link on `stats.starbridge.run`,
-  where Caddy passes only GET requests and blocks the login.
+  where Caddy passes only GET requests and blocks the login. A password (user `tom`) guards the
+  whole host, since the link alone would open it to whoever saw it; bcrypt cost 10 and a limit of
+  300 requests a minute per address keep its checks from spending the box's CPU (#595).
 - **Demo server** (#423). Play reviewers cannot pass GitHub's new-device check and cannot be given
   a recovery key, so `demo.starbridge.run` is a self-hosted server with an owner token, and
   `demo/` is its first device and machine. It approves every join by digits without comparing,

@@ -53,8 +53,8 @@ export class LiveServer {
     private readonly http: ReturnType<typeof Bun.serve>,
   ) {}
 
-  static async start(): Promise<LiveServer> {
-    const s = await makeServer();
+  static async start(over: Parameters<typeof makeServer>[0] = {}): Promise<LiveServer> {
+    const s = await makeServer(over);
     const owner = await setupAccount(s, "phone");
     let live: LiveServer | undefined;
     const http = Bun.serve({

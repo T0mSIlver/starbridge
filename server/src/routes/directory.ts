@@ -13,6 +13,7 @@ import { fail, recheck, requireCaller } from "../auth";
 import type { Env } from "../env";
 import { json } from "../http";
 import { rateLimit } from "../limits";
+import { refusePairings } from "./pairings";
 
 export function loadEntries(db: Database, account: string, from = 0): SignedEnvelope[] {
   const rows = db
@@ -162,8 +163,7 @@ directoryRoutes.post("/directory", requireCaller("device"), async (c) => {
         "SELECT COUNT(*) AS n FROM members WHERE account_id = ? AND role = 'machine' AND active = 1",
       )
       .get(caller.account) as { n: number };
-    if (machines > config.maxMachines && machines > before.n)
-      fail(403, "machine-cap", `an account holds at most ${config.maxMachines} machines`);
+    if (machines > config.maxMachines && machines > before.n) return undefined;
 
     db.query("INSERT INTO directory (account_id, seq, entry) VALUES (?, ?, ?)").run(
       caller.account,
@@ -185,6 +185,18 @@ directoryRoutes.post("/directory", requireCaller("device"), async (c) => {
     }
     return { length: dir.length, head: dir.head };
   })();
+  if (!result) {
+    // The new machine waits on its pairing: it learns why at once, not at the expiry (#615).
+    const { member } = JSON.parse(entry.body) as {
+      member?: { id: string; boxPk: string; signPk: string };
+    };
+    if (member) refusePairings(c, member, "machine-cap");
+    fail(
+      403,
+      "machine-cap",
+      `an account holds at most ${config.maxMachines} machines; phones and browsers don't count`,
+    );
+  }
   // Machines seal to the directory's devices, so each re-reads it: a new device gets their
   // next items, and their latest quota snapshot again.
   wakeMachines(c, caller.account);
