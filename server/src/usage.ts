@@ -35,7 +35,9 @@ export class Usage {
     // whatever the request stored has committed.
     try {
       this.db
-        .query("INSERT OR IGNORE INTO usage_events (day, metric, subject, value) VALUES (?, ?, ?, ?)")
+        .query(
+          "INSERT OR IGNORE INTO usage_events (day, metric, subject, value) VALUES (?, ?, ?, ?)",
+        )
         .run(day, metric, subject, value);
     } catch (e) {
       if (!diskFull(e)) throw e;
