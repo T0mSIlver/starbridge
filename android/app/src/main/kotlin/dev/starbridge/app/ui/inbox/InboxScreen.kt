@@ -525,7 +525,10 @@ fun DecisionSheet(decision: Decision, now: Instant, onAnswer: (String, String?, 
                     Images(decision.images, maxHeight = 360.dp)
                     Outcome(decision, now, arrived = wasOpen)
                 }
-                paired -> Picks(decision, sending, send)
+                paired -> {
+                    Picks(decision, sending, send)
+                    if (decision.replies) Reply(decision.id, replies, sending != null) { send(null, it) }
+                }
                 else -> {
                     Images(decision.images, maxHeight = 360.dp)
                     val page = decision.answerIn

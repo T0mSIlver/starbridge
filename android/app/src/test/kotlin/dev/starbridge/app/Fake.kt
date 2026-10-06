@@ -172,7 +172,7 @@ class Fake(private val now: Instant) {
         images = listOf(Image(toB64(javaClass.getResourceAsStream("/fake/phone-inbox.png")!!.readBytes()), 1236, 2676, alt = "Inbox, dark")),
     )
 
-    /** A desktop and a phone layout over their options: the slots share the phone's height (#536). */
+    /** A desktop and a phone layout over their options, "Reply" under them: the slots share the phone's height (#536). */
     val layouts = Decision(
         id = "d9",
         question = "Which layout should the inbox lead with?",
@@ -182,6 +182,7 @@ class Fake(private val now: Instant) {
         source = devBox,
         createdAt = ago(6),
         agent = "claude-code",
+        replies = true,
         images = listOf(
             Image(toB64(javaClass.getResourceAsStream("/fake/hero-a.png")!!.readBytes()), 340, 210, alt = "Desktop layout"),
             Image(toB64(javaClass.getResourceAsStream("/fake/phone-inbox.png")!!.readBytes()), 1236, 2676, alt = "Phone layout"),

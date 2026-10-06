@@ -573,7 +573,7 @@ first window, so a provider with a window running out leads.
 - **Picks** (#536). A question with one image per option, two or more, shows each image over its
   option, two to a row, in the agent's order. A row's images share the tallest one's height (at
   most `size.pick`), each centred on the inset colour, so the row's buttons line up and a phone
-  screenshot beside a desktop one does not grow the row.
+  screenshot beside a desktop one does not grow the row. "Reply" sits under them, as under plain options.
 - **Signed out.** A browser that holds no device of the account it last signed in to gets the
   landing page at `/`, as does a revoked browser (#209); one with a device gets sign-in.
 - **Restarts go unnoticed** (#250). Clients retry a 502, 503 or refused connection quietly for
