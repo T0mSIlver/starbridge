@@ -610,19 +610,25 @@ export async function poll(
 }
 
 /**
- * The answer to decision `id`, or without `id` the first answer no `wait` printed yet, marked
- * printed. Undefined when there is none yet.
+ * The answer to decision `id`, or without `id` the first answer no `wait` printed yet to a
+ * decision session `session` asked (any session's when undefined), marked printed. Undefined
+ * when there is none yet.
  */
 export function takeAnswer(
   store: Ctx["store"],
   id: string | undefined,
+  session?: string,
 ): { answer: Answer; question?: string } | undefined {
+  const mine = (st: State, d: string) =>
+    session === undefined || (st.asked[d]?.session ?? "") === session;
   const found = (st: State) =>
     id
       ? deliverable(st, id)
         ? st.answers[id]
         : undefined
-      : Object.values(st.answers).find((a) => !a.seen && deliverable(st, a.answer.decisionId));
+      : Object.values(st.answers).find(
+          (a) => !a.seen && deliverable(st, a.answer.decisionId) && mine(st, a.answer.decisionId),
+        );
   if (!found(store.state())) return undefined;
   let taken: { answer: Answer; question?: string } | undefined;
   store.updateState((st) => {
@@ -642,7 +648,7 @@ export function takeAnswer(
  */
 export async function wait(
   ctx: Ctx,
-  opts: { id?: string; timeout?: string; json?: boolean },
+  opts: { id?: string; session?: string; timeout?: string; json?: boolean },
   s: Session = session(ctx),
   dir?: Directory,
 ): Promise<number> {
@@ -658,7 +664,7 @@ export async function wait(
     return 0;
   };
 
-  const already = takeAnswer(ctx.store, target);
+  const already = takeAnswer(ctx.store, target, opts.session);
   if (already) return report(already);
   if (target) await markWaiting(ctx, () => postWaiting(ctx, s, target, "waiting"));
 
@@ -691,7 +697,7 @@ export async function wait(
       await ctx.sleep(Math.min(RETRY_MS, Math.max(0, left)));
       continue;
     }
-    const found = takeAnswer(ctx.store, target);
+    const found = takeAnswer(ctx.store, target, opts.session);
     if (found) return report(found);
   }
 }
