@@ -126,7 +126,7 @@ class ServerStore(
 ) : Store {
     private val lock = Mutex()
     private val loaded = disk.load()
-    private var saved = loaded.first ?: Saved(defaultServer)
+    private var saved = loaded.first?.readable() ?: Saved(defaultServer)
     private var secrets = loaded.second
     private var directory: Directory? = null
     private var pending: Pair<PairingCode, PairingRequestBody>? = null
@@ -736,12 +736,15 @@ class ServerStore(
      * Opens a machine's item and keeps the directory head it signed. Refuses every item while a
      * head an active machine signed is missing from this phone's chain (#362).
      */
-    private fun open(item: SealedItem): Pair<String, Any>? = try {
+    /** An item that opened: its signer, its body, and the body's signed text, which is what is kept. */
+    private data class Item(val from: String, val body: Any, val text: String)
+
+    private fun open(item: SealedItem): Item? = try {
         // Null once a directory read found this phone removed (wipe).
         val dir = directory ?: throw ProtocolException("no-directory", "")
         val opened = envelopes.open(item, me.id, box, dir)
         keepHead(item.from, (opened.body as? ItemBody)?.dir)
-        if (withheld() != null) null else item.from to opened.body
+        if (withheld() != null) null else Item(item.from, opened.body, opened.bodyText)
     } catch (e: ProtocolException) {
         // Not shown: an item that fails its checks is the server's or a stranger's.
         Log.w("Starbridge", "dropped ${item.kind} ${item.id}: ${e.message}")
@@ -802,9 +805,7 @@ class ServerStore(
     }
 
     private suspend fun syncDecisions() {
-        // Saved by an app that dropped fields it did not know: read every open one again.
-        val reread = saved.decisionFields < DECISION_FIELDS
-        var cursor = if (reread) "" else saved.cursor
+        var cursor = saved.cursor
         val byId = saved.decisions.associateBy { it.body.id }.toMutableMap()
         // How each item a settled notice closed was closed, with the time: the notice lists before
         // the decision it closed, which moved past it.
@@ -834,11 +835,6 @@ class ServerStore(
                 // a later one, after a device's answer, closed nothing.
                 fun settledBy(machine: String) = closings["$machine/${listed.item.id}"]?.takeIf { it.second == listed.answeredAt }?.first
                 val known = byId[listed.item.id]
-                if (known != null && reread && known.answeredAt == null && listed.answeredAt == null) {
-                    val (from, body) = open(listed.item) ?: continue
-                    if (from == known.from) byId[known.body.id] = known.copy(body = body as DecisionBody)
-                    continue
-                }
                 if (known != null) {
                     // A settled push marked it answered already, without saying how.
                     val settled = settledBy(known.from)
@@ -848,8 +844,8 @@ class ServerStore(
                     }
                     continue
                 }
-                val (from, body) = open(listed.item) ?: continue
-                byId[listed.item.id] = SavedDecision(from, body as DecisionBody, listed.answeredAt, settled = settledBy(from))
+                val (from, _, text) = open(listed.item) ?: continue
+                byId[listed.item.id] = SavedDecision(from, text, listed.answeredAt, settled = settledBy(from))
             }
             cursor = page.cursor
             if (page.items.size < 100) break
@@ -857,7 +853,7 @@ class ServerStore(
         // An update may list before the decision it is about, so they apply once all are read.
         for ((from, w) in waits) byId[w.decisionId]?.let { d -> wait(d, from, w)?.let { byId[w.decisionId] = it } }
         for ((from, n) in wins) byId[n.itemId]?.let { d -> won(d, from, n)?.let { byId[n.itemId] = it } }
-        persist(saved.copy(cursor = cursor, decisions = byId.values.sortedBy { it.body.createdAt }.takeLast(500), decisionFields = DECISION_FIELDS))
+        persist(saved.copy(cursor = cursor, decisions = byId.values.sortedBy { it.body.createdAt }.takeLast(500)))
     }
 
     /**
@@ -868,8 +864,8 @@ class ServerStore(
     private suspend fun fetchDecision(id: String): SavedDecision? {
         val listed = api().item(id)
         if (directory?.members?.containsKey(listed.item.from) != true) syncDirectory()
-        val (from, body) = open(listed.item) ?: return null
-        val d = SavedDecision(from, body as DecisionBody, listed.answeredAt)
+        val (from, _, text) = open(listed.item) ?: return null
+        val d = SavedDecision(from, text, listed.answeredAt)
         persist(saved.copy(decisions = saved.decisions + d))
         return d
     }
@@ -914,11 +910,11 @@ class ServerStore(
                     }
                     return null
                 }
-                val (from, body) = open(item) ?: return null
-                return SavedPrompt(from, body as Permission, answeredAt).also { byId[item.id] = it }
+                val (from, _, text) = open(item) ?: return null
+                return SavedPrompt(from, text, answeredAt).also { byId[item.id] = it }
             }
             "settled" -> {
-                val (from, body) = open(item) ?: return null
+                val (from, body, text) = open(item) ?: return null
                 val notice = body as Settled
                 val p = byId[notice.itemId]
                 if (p == null) {
@@ -926,7 +922,7 @@ class ServerStore(
                     return null
                 }
                 if (p.from != from) return null
-                byId[p.body.id] = p.copy(settled = notice, answeredAt = p.answeredAt ?: notice.at)
+                byId[p.body.id] = p.copy(settledText = text, answeredAt = p.answeredAt ?: notice.at)
                 alerts.cancelPrompt(toUi(p))
             }
         }
@@ -1042,7 +1038,7 @@ class ServerStore(
         if (scan(listed.map { it.item })) return
         // A snapshot this app cannot open keeps that machine's last good one, rather than blanking it.
         val quotas = listed.mapNotNull { l ->
-            open(l.item)?.let { (from, body) -> SavedQuota(from, body as QuotaSnapshot) } ?: saved.quotas.find { it.from == l.item.from }
+            open(l.item)?.let { SavedQuota(it.from, it.text) } ?: saved.quotas.find { it.from == l.item.from }
         }
         persist(saved.copy(quotas = quotas))
         alerts.quota(quotas.flatMap(::notices))
@@ -1070,7 +1066,7 @@ class ServerStore(
         while (true) {
             val page = api().items("run", cursor)
             if (scan(page.items.map { it.item })) return
-            for (listed in page.items) open(listed.item)?.let { (from, body) -> fresh += SavedRun(from, body as RunBody) }
+            for (listed in page.items) open(listed.item)?.let { fresh += SavedRun(it.from, it.text) }
             cursor = page.cursor
             if (page.items.size < 100) break
         }
@@ -1298,8 +1294,8 @@ class ServerStore(
                 }
                 // A machine paired since the last sync is not in the cached chain yet.
                 catchUp(item)
-                val (from, body) = open(item) ?: return@withLock
-                val saved1 = SavedDecision(from, body as DecisionBody, answeredAt)
+                val (from, _, text) = open(item) ?: return@withLock
+                val saved1 = SavedDecision(from, text, answeredAt)
                 persist(saved.copy(decisions = saved.decisions + saved1))
                 if (answeredAt == null) alerts.decision(toUi(saved1))
             }
@@ -1352,8 +1348,8 @@ class ServerStore(
                     api().item(id).item
                 }
                 catchUp(item)
-                val (from, body) = open(item) ?: return@withLock
-                keepRuns(listOf(SavedRun(from, body as RunBody)))
+                val opened = open(item) ?: return@withLock
+                keepRuns(listOf(SavedRun(opened.from, opened.text)))
             }
         }
     }

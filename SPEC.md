@@ -172,9 +172,13 @@ provider plugins add providers, not panels.
   strict for writers: a missing field or a value of another type still refuses the item on every
   client. Values that gate behaviour stay closed. Reader-side content limits stay until the
   screens cope with longer text. Android keeps a machine's last good quota snapshot when a new
-  one fails to open. Two checks stay that are not about old clients: Android re-reads open
-  questions when it learns a new question field (`DECISION_FIELDS`), until clients store the
-  signed body text (#476), and re-checks Allow when a notification's button is tapped.
+  one fails to open. Android re-checks Allow when a notification's button is tapped, which is not
+  about old clients: the owner may turn off sending unseen commands after the post.
+- **Signed text is the record** (#476). Android keeps each item's body as the text its machine
+  signed and parses it on read; the parsed body is a cache, never written back, so a field a later
+  app learns is already in what the phone kept, and nothing re-reads open questions. An item
+  whose text no longer parses is dropped at load. The web stores no bodies; the CLI stores only
+  bodies it wrote.
 - **Nulls** (#505). A `null` in a field the schema does not make nullable refuses the item on every
   client, as zod does. Android, whose classes read null as absent, checks each declared field
   after `readable()` and ignores fields it does not declare, as zod strips them.
