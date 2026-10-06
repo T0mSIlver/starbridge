@@ -15,8 +15,8 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 import java.io.File
 
-/** 1: images, links and answerIn (#62). 2: replies (#201). */
-const val DECISION_FIELDS = 2
+/** 1: images, links and answerIn (#62). 2: replies (#201). 3: theirAnswer and answeredBy (#330). */
+const val DECISION_FIELDS = 3
 
 /** A decision this device opened and verified, and what became of it. */
 @Serializable

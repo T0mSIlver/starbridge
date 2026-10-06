@@ -1391,6 +1391,9 @@ async function main() {
       ),
     ]),
   );
+  // In the background since the race above, Firefox paints this window no more frames, and a
+  // click waits for one.
+  await pageB.bringToFront();
   await pageB.getByRole("link", { name: SIGN_IN }).click();
   // Signed in, the device list confirms the revocation.
   await pageB
