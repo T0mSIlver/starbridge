@@ -1867,7 +1867,7 @@ so the mod is the first path.
   pain the owner named: you don't notice that an agent is blocked. The shots below it still show
   the web app beside the phone, so the page keeps saying both clients do the same.
 - 2026-10-06. The release is the unit (#471). `bun cli/scripts/version.ts <version>` stamps one
-  version into `cli/package.json`, both `plugin.json`, the mod's `VERSION`, the Android default
+  version into `cli/package.json`, `web/package.json`, both `plugin.json`, the mod's `VERSION`, the Android default
   `versionName` and the marketplace's two `ref`s, in a PR; the owner tags the merged commit, and
   the release workflow refuses a tag that disagrees (`--check`, also run by `cli/test/version.test.ts`
   on every PR). The marketplace lists both plugins as `git-subdir` sources of

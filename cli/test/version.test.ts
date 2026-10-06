@@ -9,6 +9,7 @@ const FILES = [
   "cli/package.json",
   "plugin/.claude-plugin/plugin.json",
   "mod/.claude-plugin/plugin.json",
+  "web/package.json",
   "mod/hooks/agent.ts",
   "android/app/build.gradle.kts",
   ".claude-plugin/marketplace.json",
