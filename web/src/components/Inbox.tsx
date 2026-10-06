@@ -13,7 +13,7 @@ import {
 } from "@/lib/feed";
 import { matches, useFind } from "@/lib/find";
 import { clockTime } from "@/lib/format";
-import { closeItem, openItem, stackItem, useOpened } from "@/lib/opened";
+import { closeItem, linkedItem, openItem, stackItem, useOpened } from "@/lib/opened";
 import { closedByPhrase, promptOutcome } from "@/lib/outcome";
 import { fitsRow } from "@/lib/permissionInput";
 import { type Prefs, usePref } from "@/lib/prefs";
@@ -162,22 +162,26 @@ export function Inbox() {
   const pastOf = new Map(past.map((p) => [p.entry.id, p]));
   const entryOf = new Map(needs.map((e) => [e.id, e]));
   // An item opened by a link or a reload is known once the inbox loaded, or the 7-day prompt
-  // log for a closed prompt.
+  // log for a closed prompt; after one try at the log, an unknown id counts as answered.
   const stillOpen = opened !== undefined && entryOf.has(opened);
   const known = stillOpen || (opened !== undefined && pastOf.has(opened));
-  const resolved = known || (inboxLoaded && promptLog !== undefined);
+  const [logTried, setLogTried] = useState(false);
+  const resolved = known || (inboxLoaded && (promptLog !== undefined || logTried));
   useEffect(() => {
-    if (opened && inboxLoaded && !known && promptLog === undefined) loadPromptLog().catch(() => {});
-  }, [opened, inboxLoaded, known, promptLog, loadPromptLog]);
+    if (!opened || !inboxLoaded || known || promptLog !== undefined || logTried) return;
+    loadPromptLog()
+      .catch(() => {})
+      .finally(() => setLogTried(true));
+  }, [opened, inboxLoaded, known, promptLog, logTried, loadPromptLog]);
   useEffect(() => {
     if (opened && !wide) stackItem();
   }, [opened, wide]);
-  // A wide window selects the item beside the list instead, opening History for a closed one.
+  // A wide window selects the item beside the list instead, opening History for a linked closed one.
   useEffect(() => {
     if (!wide || !opened || !resolved) return;
     if (known) {
       setPicked(opened);
-      if (!stillOpen) setHistoryOpen(true);
+      if (!stillOpen && linkedItem()) setHistoryOpen(true);
     }
     closeItem();
   }, [wide, opened, resolved, known, stillOpen, setHistoryOpen]);

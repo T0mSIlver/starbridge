@@ -639,6 +639,9 @@ async function main() {
     await p.getByRole("heading", { name: MERGE }).waitFor({ timeout: 30_000 });
     await p.goBack();
     await expectAt("/", "list", "Back from a linked question");
+    // A link to an item this inbox no longer has says it was answered, once it has looked.
+    await p.goto(`${ORIGIN}/?item=d_gone`);
+    await p.getByText("Answered", { exact: true }).waitFor({ timeout: 30_000 });
 
     // A desktop window selects a linked item beside the list and adds no history entry for
     // it or for a pick.

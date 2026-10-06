@@ -1297,7 +1297,8 @@ so the mod is the first path.
   item shown in place of the list sits in the address as `/?item=<id>`, pushed as its own history
   entry, so Back, Android's back gesture and an installed app's Back return to the list; a reload
   keeps the item open, and a link to `/?item=<id>` opens it with the list's entry put behind it, so
-  Back from a link also returns to the list. The in-page way back steps back through history, so
+  Back from a link also returns to the list (Chrome may skip that entry on its own Back, as no tap
+  added it; the in-page way back always reaches it). The in-page way back steps back through history, so
   it leaves no entry behind. A wide window pushes nothing: once the inbox loaded, it selects a
   linked item beside the list (opening History for a closed one) and drops `?item`. Image and confirm dialogs are modal `<dialog>`s,
   which Chrome on Android closes on the back gesture before it leaves the page.

@@ -44,21 +44,35 @@ export function openItem(id: string) {
   changed();
 }
 
-const ours = (id: string) => (history.state as { item?: string } | null)?.item === id;
+type Mark = { item?: string; linked?: boolean } | null;
+const ours = (id: string) => (history.state as Mark)?.item === id;
+
+/** The open item came from a link or a cold start, not a tap in this inbox. */
+export function linkedItem(): boolean {
+  const id = inAddress();
+  return id !== undefined && (!ours(id) || !!(history.state as Mark)?.linked);
+}
 
 /**
  * Gives an item a link or a cold start opened the list's entry behind it, so Back returns to
- * the list instead of leaving the app.
+ * the list instead of leaving the app. Chrome may skip that entry on its own Back, since no tap
+ * added it; the in-page way back always reaches it.
  */
 export function stackItem() {
   const id = inAddress();
   if (id === undefined || ours(id)) return;
   history.replaceState({ item: undefined }, "", address(undefined));
-  history.pushState({ item: id }, "", address(id));
+  history.pushState({ item: id, linked: true }, "", address(id));
 }
 
-// Set from `history.back()` until its popstate, so a second tap does not step back twice.
+// Set from `history.back()` until its popstate, so a second tap does not step back twice; also
+// cleared when the browser shows the page again from its cache, where no popstate comes.
 let leaving = false;
+const left = () => {
+  leaving = false;
+  removeEventListener("popstate", left);
+  removeEventListener("pageshow", left);
+};
 
 /** Back to the list: a step back through history when the entry is ours, else in place. */
 export function closeItem() {
@@ -66,7 +80,8 @@ export function closeItem() {
   if (id === undefined || leaving) return;
   if (ours(id)) {
     leaving = true;
-    addEventListener("popstate", () => (leaving = false), { once: true });
+    addEventListener("popstate", left);
+    addEventListener("pageshow", left);
     history.back();
     return;
   }
