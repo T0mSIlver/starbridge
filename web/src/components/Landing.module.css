@@ -82,17 +82,6 @@
   margin: var(--s10) 0 var(--s5);
 }
 
-/* "Get the app" is the third choice, not a third equal one: no border, dimmer text. */
-.actions .quiet {
-  color: var(--fg2);
-}
-
-@media (hover: hover) {
-  .actions .quiet:hover {
-    color: var(--fg);
-  }
-}
-
 .apps {
   display: grid;
   grid-auto-flow: column;
@@ -103,9 +92,25 @@
   text-align: left;
 }
 
+.app {
+  padding: var(--s6);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  text-align: center;
+}
+
+.app h3 {
+  font-weight: 500;
+}
+
+.app p {
+  margin-top: var(--s1h);
+}
+
 .appLinks {
   display: flex;
   flex-wrap: wrap;
+  justify-content: center;
   gap: var(--s4);
   margin-top: var(--s3);
 }

@@ -174,7 +174,7 @@ export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
           <a href="#install" className={`t-action ${ui.btn} ${ui.lg}`}>
             Install the CLI
           </a>
-          <a href="#get-the-app" className={`t-action ${ui.btn} ${ui.lg} ${ui.ghost} ${s.quiet}`}>
+          <a href="#get-the-app" className={`t-action ${ui.btn} ${ui.lg}`}>
             <Icon name="phone" size={18} />
             Get the app
           </a>
@@ -254,7 +254,7 @@ export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
       <section id="get-the-app" className={s.installSection}>
         <h2 className="t-title">Get the app</h2>
         <div className={s.apps}>
-          <div className={s.feature}>
+          <div className={s.app}>
             <h3 className="t-prose">Android</h3>
             <p className={`t-reading ${s.dim}`}>
               The signed APK, for Android 12 and later. Add it to Obtainium to get updates.
@@ -269,7 +269,7 @@ export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
             </div>
           </div>
           {PLAY_TEST_OPEN && (
-            <div className={s.feature}>
+            <div className={s.app}>
               <h3 className="t-prose">Google Play</h3>
               <p className={`t-reading ${s.dim}`}>
                 In closed testing. Google needs 12 testers for 14 days before the app can be public.
@@ -291,7 +291,7 @@ export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
               </div>
             </div>
           )}
-          <div className={s.feature}>
+          <div className={s.app}>
             <h3 className="t-prose">iPhone</h3>
             <p className={`t-reading ${s.dim}`}>
               Web app, native app is planned. Add starbridge.run to the Home Screen from Safari to
