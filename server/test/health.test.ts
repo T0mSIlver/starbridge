@@ -47,3 +47,12 @@ test("a full database refuses writes with 503 storage-full and keeps answering r
   expect(r.headers.get("retry-after")).toBe("60");
   expect((await s.app.request("/healthz")).status).toBe(200);
 });
+
+test("/healthz names the commit the server was built from", async () => {
+  const built = await makeServer({ revision: "1759d0885f86369ec35c52c95b0ca81a93114457" });
+  const res = await built.app.request("/healthz");
+  expect(res.headers.get("x-starbridge-revision")).toBe("1759d0885f86369ec35c52c95b0ca81a93114457");
+  expect(
+    (await (await makeServer()).app.request("/healthz")).headers.has("x-starbridge-revision"),
+  ).toBe(false);
+});

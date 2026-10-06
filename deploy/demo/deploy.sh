@@ -25,7 +25,7 @@ printf "OWNER_TOKEN='%s'\n" "$(tr -d '\n' < "$token")" | ssh -i "$key" "$host" "
   cat > /etc/starbridge-demo/demo.env
 '"
 git archive --format=tar "$rev" | ssh -i "$key" "$host" "sudo sh -euc '
-  # Shares prod deploys' lock, so the two image builds never compete for the disk.
+  # Shares the lock with the prod deploys, so the two image builds never compete for the disk.
   exec 9>/run/starbridge-deploy.lock
   flock 9
   rm -rf /opt/starbridge-demo.new

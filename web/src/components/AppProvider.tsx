@@ -122,37 +122,63 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   inboxRef.current = inbox;
   const ctx = boot.state === "ready" ? boot.ctx : undefined;
 
+  /** Bumped by `forget`: a load started before it keeps nothing it read. */
+  const generation = useRef(0);
+  /** Set to `reload` below; loads call it when the server ends the session. */
+  const reloadRef = useRef<() => Promise<void>>(async () => {});
+
+  /** Drops every machine's item the page holds in memory. */
+  const forget = useCallback(() => {
+    generation.current++;
+    setInbox({ items: [], rejected: [] });
+    setPrompts([]);
+    setPromptLog(undefined);
+    setQuotas(undefined);
+    setRuns(undefined);
+  }, []);
+
   /**
    * Runs a load of machines' items. While the server holds back directory entries a machine has
    * seen, every machine's items are hidden and the reason shows instead (#362).
    */
-  const holding = useCallback(async <T,>(read: () => Promise<T>): Promise<T | undefined> => {
-    const d = await load();
-    try {
-      const got = await read();
-      setWithheld(undefined);
-      return got;
-    } catch (e) {
-      if (!(e instanceof d.Withheld)) throw e;
-      setWithheld(e.message);
-      // Their buttons would still offer answers the hold refuses.
-      const reg = await navigator.serviceWorker?.getRegistration("/").catch(() => undefined);
-      for (const n of (await reg?.getNotifications().catch(() => [])) ?? []) n.close();
-      // From the start once the hold ends: the cursor moved past what is hidden now.
-      setInbox({ items: [], rejected: [] });
-      setPrompts([]);
-      setPromptLog(undefined);
-      setQuotas(undefined);
-      setRuns(undefined);
-      return undefined;
-    }
-  }, []);
+  const holding = useCallback(
+    async <T,>(read: () => Promise<T>): Promise<T | undefined> => {
+      const d = await load();
+      const gen = generation.current;
+      try {
+        const got = await read();
+        if (gen !== generation.current) return undefined;
+        setWithheld(undefined);
+        return got;
+      } catch (e) {
+        // The server ended this session: revoked, signed out elsewhere or expired. Boot says which.
+        if (e instanceof d.ApiError && e.status === 401) {
+          reloadRef.current();
+          return undefined;
+        }
+        if (!(e instanceof d.Withheld)) throw e;
+        setWithheld(e.message);
+        // Their buttons would still offer answers the hold refuses.
+        const reg = await navigator.serviceWorker?.getRegistration("/").catch(() => undefined);
+        for (const n of (await reg?.getNotifications().catch(() => [])) ?? []) n.close();
+        // From the start once the hold ends: the cursor moved past what is hidden now.
+        forget();
+        return undefined;
+      }
+    },
+    [forget],
+  );
 
-  const reload = useCallback(async () => {
+  const boot1 = useCallback(async (): Promise<Store["boot"]["state"]> => {
     try {
       const d = await load();
       const b = await d.boot();
       setBoot(b);
+      // Signed out, revoked or broken: nothing decrypted stays behind the page that says so.
+      if (b.state !== "ready") {
+        forget();
+        settledRef.current = { byKey: new Map() };
+      }
       if (b.state === "ready") {
         const loaded = await holding(() => d.loadInbox(b.ctx));
         if (loaded) setInbox(loaded);
@@ -161,10 +187,36 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         push.registerWorker();
         push.resubscribe().catch(() => {});
       }
+      return b.state;
     } catch (e) {
       setBoot({ state: "error", error: e instanceof Error ? e.message : String(e) });
+      return "error";
     }
-  }, [holding]);
+  }, [forget, holding]);
+
+  // One boot at a time: every poller that meets a 401 asks for one, and a second boot after the
+  // first deleted a revoked browser's keys would replace "removed by" with Join. A request during
+  // a boot that ended ready boots once more.
+  const reloading = useRef<Promise<void>>(undefined);
+  const again = useRef(false);
+  const reload = useCallback(() => {
+    if (reloading.current) {
+      again.current = true;
+      return reloading.current;
+    }
+    const run = async () => {
+      let state: Store["boot"]["state"];
+      do {
+        again.current = false;
+        state = await boot1();
+      } while (again.current && state === "ready");
+    };
+    reloading.current = run().finally(() => {
+      reloading.current = undefined;
+    });
+    return reloading.current;
+  }, [boot1]);
+  reloadRef.current = reload;
 
   useEffect(() => {
     reload();
@@ -177,7 +229,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const was = ctxRef.current;
     if (!was) return undefined;
     const d = await load();
-    const fresh = await d.reverify(was);
+    let fresh: Awaited<ReturnType<typeof d.reverify>>;
+    try {
+      fresh = await d.reverify(was);
+    } catch (e) {
+      // The server ended this session: revoked, signed out elsewhere or expired. Boot says which.
+      if (!(e instanceof d.ApiError && e.status === 401)) throw e;
+      reload();
+      return undefined;
+    }
     if (!fresh) {
       // Revoked from another device: boot shows why.
       await reload();
@@ -356,12 +416,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         );
       } catch (e) {
         // Settled at the keyboard or answered elsewhere meanwhile: show where.
+        if (e instanceof d.ApiError && e.status === 401) reload();
         if (e instanceof d.ApiError && (e.code === "already-answered" || e.code === "expired"))
           await refreshPrompts();
         else throw e;
       }
     },
-    [ctx, refreshPrompts],
+    [ctx, refreshPrompts, reload],
   );
 
   const loadPromptLog = useCallback(async () => {
@@ -391,13 +452,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           ),
         }));
       } catch (e) {
+        if (e instanceof d.ApiError && e.status === 401) reload();
         if (!(e instanceof d.ApiError && e.code === "already-answered")) throw e;
         // Answered on another device in the meantime: show it answered, and that this one lost.
         await refreshInbox();
         throw new AnsweredFirst();
       }
     },
-    [ctx, refreshInbox],
+    [ctx, refreshInbox, reload],
   );
 
   const update = useCallback((next: Ctx) => setBoot({ state: "ready", ctx: next }), []);

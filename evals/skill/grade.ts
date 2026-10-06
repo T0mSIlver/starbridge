@@ -7,7 +7,7 @@
  * Most checks read the records. Five need judgement (marked "judge"); GLM grades them through
  * `opencode run`, and the verdict is stored in the record, so grading again costs nothing.
  */
-import { mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
@@ -121,6 +121,14 @@ Answer with only a JSON object, no prose around it:
 
 async function judge(r: Rec, s: Scenario): Promise<Verdict | undefined> {
   const dir = mkdtempSync(join(tmpdir(), "judge-"));
+  try {
+    return await ask(dir, r, s);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+async function ask(dir: string, r: Rec, s: Scenario): Promise<Verdict | undefined> {
   for (let attempt = 0; attempt < 2; attempt++) {
     const p = Bun.spawn(
       ["opencode", "run", "-m", opt["judge-model"] as string, "--format", "json", judgePrompt(r, s)],

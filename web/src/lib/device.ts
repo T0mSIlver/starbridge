@@ -98,7 +98,8 @@ export type Boot =
   | { state: "first-device"; account: string; unsaved?: string }
   /** The account has devices and this browser is not one of them (or lost its binding). */
   | { state: "join"; account: string; stale: boolean }
-  | { state: "revoked"; account: string; name: string }
+  /** `by`: the device that revoked this one, or the recovery key. */
+  | { state: "revoked"; account: string; name: string; by: string }
   /** The directory failed verification: the server, or someone holding it, broke the chain. */
   | { state: "broken"; account: string; error: string }
   | { state: "ready"; ctx: Ctx };
@@ -269,8 +270,14 @@ export async function boot(): Promise<Boot> {
     return { state: "join", account, stale: false };
   }
   if (!entry.active) {
+    // The chain says so, unlike a 401: this browser's keys and what it answered go, as Android's
+    // wipe does. The pin stays, so the server still cannot roll the chain back.
+    const reg = await registration();
+    await (await reg?.pushManager.getSubscription())?.unsubscribe().catch(() => {});
+    for (const kind of ["device", "answers", "promptAnswers"] as const)
+      await store.del(kind, account);
     await closeNotifications();
-    return { state: "revoked", account, name: device.name };
+    return { state: "revoked", account, name: device.name, by: removedBy(verified, device.id) };
   }
   if (me.member === null && !(await bind(account, device))) {
     return { state: "join", account, stale: true };
@@ -278,6 +285,19 @@ export async function boot(): Promise<Boot> {
     return { state: "join", account, stale: true };
   }
   return { state: "ready", ctx: { account, device, ...verified } };
+}
+
+/** Who removed member `id`: the device that signed its revocation, or the recovery key. */
+function removedBy(chain: { dir: Directory; entries: SignedEnvelope[] }, id: string): string {
+  let added = false;
+  for (const env of chain.entries) {
+    const body = JSON.parse(env.body) as { op: string; id?: string; member?: { id: string } };
+    if (body.member?.id === id) added = true;
+    else if (added && body.op === "recover") return "your recovery key";
+    else if (added && body.op === "revoke" && body.id === id)
+      return chain.dir.members.get(env.signer)?.member.name ?? env.signer;
+  }
+  return "another device";
 }
 
 /**

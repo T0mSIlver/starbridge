@@ -440,6 +440,8 @@ export const Settled = z
     choice: z.string().max(100).optional(),
     text: z.string().max(4000).optional(),
     dir: DirectoryHead.optional(),
+    /** With outcome "device" on a permission: what that device answered (#349). */
+    behavior: z.enum(["allow", "deny"]).optional(),
   })
   .refine((s) => s.device !== undefined || (s.choice === undefined && s.text === undefined), {
     message: "choice and text come only with a device's outcome",

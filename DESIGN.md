@@ -500,6 +500,9 @@ a decision's context, a permission prompt's command and a session's name.
 - Find (the web rail's box) lists the matching open items, then "History · N"
   with the matching answered ones, answers included. A matched word is bold
   on `surface2`, never amber.
+- An image on a question opens the full-screen viewer, and says so: an expand
+  badge in its bottom right corner, `s2` in, a `s8` circle of `surface` at 72%
+  with the expand icon (`s5`) in `fg`. Touch screens show no zoom cursor.
 - Destructive actions are neutral text buttons on the row; only the confirm
   button in their dialog is red (`bad`).
 - Copy inside the UI is labels and states only, never a sentence explaining
@@ -622,7 +625,8 @@ round caps and joins, no fills. Android uses Material Symbols Rounded tuned to
 Google Sans Flex; a native iOS app, if one comes, would use SF Symbols. Every
 platform has the same icons by job: laptop, desktop, server and cloud (a
 machine's kind), permission prompt, question, run, quota, history, settings,
-devices, open in the agent, waiting, inbox, send.
+devices, open in the agent, waiting, inbox, send, expand (an image opens full
+screen).
 
 ## The mark
 
