@@ -47,9 +47,7 @@ export async function pair(
   // keeps the last poll from finding the pairing gone (#623).
   const deadline = ctx.now().getTime() + CODE_LIFETIME_MS;
   const expired = () =>
-    new UsageError(
-      `the pairing code expired after 10 minutes; run \`${opts.again ?? "starbridge pair"}\` again`,
-    );
+    new UsageError(`the pairing code expired; run \`${opts.again ?? "starbridge pair"}\` again`);
   let code = newPairingCode();
   for (let attempt = 0; ; attempt++) {
     const request = {
