@@ -21,10 +21,12 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
 import java.time.Instant
 
 // What the shade and the lock screen get, which no screenshot shows (#182, #183, #184).
 @RunWith(RobolectricTestRunner::class)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [36])
 class NotifierTest {
     private val context = ApplicationProvider.getApplicationContext<Application>()
@@ -46,15 +48,23 @@ class NotifierTest {
         assertEquals(p.id, shadowOf(n.contentIntent).savedIntent.getStringExtra(MainActivity.EXTRA_PROMPT))
     }
 
-    // A command longer than the shade shows gets Deny only: its sheet shows it whole and takes the allow (#356).
+    // Allow sends at once only for a command the collapsed line shows whole; else it opens the sheet (#356).
     @Test
-    fun aPromptWhoseInputRunsPastTheSummaryOffersNoAllow() {
-        val p = fake.longPrompt
-        assertFalse(p.fitsRow)
-        notifier.prompt(p)
-        val n = posted()
-        assertEquals(listOf("Deny"), n.actions.map { it.title.toString() })
-        assertEquals(listOf("Deny"), n.publicVersion.actions.map { it.title.toString() })
+    fun allowSendsOnlyWhatTheCollapsedLineShows() {
+        val short = fake.prompts.first()
+        val mid = short.copy(id = "p4", source = short.source.copy(session = "s4"), summary = "x".repeat(90), input = """{"command":"${"x".repeat(90)}"}""")
+        assertTrue(mid.fitsRow)
+        for ((p, sends) in listOf(short to true, mid to false, fake.longPrompt to false)) {
+            notifier.clearAll()
+            notifier.prompt(p)
+            val n = posted()
+            for (allow in listOf(n.actions.first(), n.publicVersion.actions.first())) {
+                assertEquals("Allow", allow.title.toString())
+                val intent = shadowOf(allow.actionIntent)
+                assertEquals(p.id, sends, intent.isBroadcastIntent)
+                if (!sends) assertEquals(p.id, intent.savedIntent.getStringExtra(MainActivity.EXTRA_PROMPT))
+            }
+        }
     }
 
     // Trojan Source: the bidi controls show as escapes, so the text reads in the order it runs (#357).

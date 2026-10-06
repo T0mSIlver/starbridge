@@ -11,7 +11,9 @@ import dev.starbridge.app.data.Source
 import android.text.SpannableString
 import android.text.SpannableStringBuilder
 import android.text.Spanned
+import android.text.TextPaint
 import android.text.TextUtils
+import android.util.TypedValue
 import android.text.style.TypefaceSpan
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -242,8 +244,7 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
         if (!allowed()) return
         val b = base(decision, actions(decision))
         if (silent) b.setSilent(true)
-        // The note goes above the command, so Allow still shows what it covers.
-        if (note != null) b.setContentText(note).setStyle(NotificationCompat.BigTextStyle().bigText(TextUtils.concat(note, "\n", command(prompt)))).setSilent(true)
+        if (note != null) b.setContentText(note).setStyle(NotificationCompat.BigTextStyle().bigText(note)).setSilent(true)
         @Suppress("MissingPermission")
         manager.notify(tag(decision.id), b.build())
     }
@@ -332,15 +333,31 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
     private fun command(p: Prompt): CharSequence = SpannableString(if (p.fitsRow) p.fullInput else p.summary).apply { setSpan(TypefaceSpan("monospace"), 0, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE) }
 
     /** [actions] go on the public version too, as a question's do. A tap opens the prompt's sheet. */
+    /** Opens the prompt's sheet. */
+    private fun openPrompt(p: Prompt): PendingIntent = PendingIntent.getActivity(
+        context,
+        promptTag(p),
+        Intent(context, MainActivity::class.java).putExtra(MainActivity.EXTRA_PROMPT, p.id).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
+        PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+    )
+
+    /**
+     * Whether the whole input fits the one line a collapsed or heads-up notification shows: its
+     * text at 14 sp in the width the template leaves, the icon and the expand button taken off
+     * with room to spare (#356, the owner's rule).
+     */
+    fun fitsLine(p: Prompt): Boolean {
+        if (!p.fitsRow) return false
+        val metrics = context.resources.displayMetrics
+        val paint = TextPaint().apply { textSize = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 14f, metrics) }
+        val width = metrics.widthPixels - TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 160f, metrics)
+        return paint.measureText(p.fullInput) <= width
+    }
+
     private fun promptBase(p: Prompt, actions: List<NotificationCompat.Action> = emptyList()): NotificationCompat.Builder {
         // A prompt always blocks: its ticking header says so, the title is the tool alone (#191).
         val title = p.tool
-        val open = PendingIntent.getActivity(
-            context,
-            promptTag(p),
-            Intent(context, MainActivity::class.java).putExtra(MainActivity.EXTRA_PROMPT, p.id).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-        )
+        val open = openPrompt(p)
         return NotificationCompat.Builder(context, PROMPTS)
             .setSortKey(ORDER_QUESTION)
             .setSmallIcon(R.drawable.ic_notification)
@@ -380,25 +397,26 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
 
     /**
      * Allow and Deny, as in the inbox. Deny works from the lock screen; Allow asks for the unlock
-     * first (the owner's choice, SPEC.md), and shows only when the whole input does: else the
-     * prompt's sheet takes it (#356). The wider grants need the app.
+     * first (the owner's choice, SPEC.md). It sends at once only when the whole input fits the
+     * collapsed line; else it opens the prompt's sheet, which shows it whole (#356). The wider
+     * grants need the app.
      */
     override fun prompt(prompt: Prompt) = postPrompt(prompt, null)
 
     private fun postPrompt(prompt: Prompt, note: String?) {
         if (!allowed()) return
         val tag = promptTag(prompt)
-        val actions = listOfNotNull(
-            NotificationCompat.Action.Builder(0, "Allow", promptIntent(prompt, true, "once", tag * 31))
+        val actions = listOf(
+            NotificationCompat.Action.Builder(0, "Allow", if (fitsLine(prompt)) promptIntent(prompt, true, "once", tag * 31) else openPrompt(prompt))
                 .setAuthenticationRequired(true)
-                .build()
-                .takeIf { prompt.fitsRow },
+                .build(),
             NotificationCompat.Action.Builder(0, "Deny", promptIntent(prompt, false, "once", tag * 31 + 2))
                 .setAuthenticationRequired(false)
                 .build(),
         )
         val b = promptBase(prompt, actions)
-        if (note != null) b.setContentText(note).setStyle(NotificationCompat.BigTextStyle().bigText(note)).setSilent(true)
+        // The note goes above the command, so Allow still shows what it covers.
+        if (note != null) b.setContentText(note).setStyle(NotificationCompat.BigTextStyle().bigText(TextUtils.concat(note, "\n", command(prompt)))).setSilent(true)
         shown[tag] = prompt.id
         @Suppress("MissingPermission")
         manager.notify(tag, b.build())

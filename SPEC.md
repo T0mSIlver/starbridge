@@ -1458,9 +1458,10 @@ so the mod is the first path.
   landing page as #219 wants, and on sign-in the verified chain shows whether it was revoked. A
   tab still offering a first key cannot replace a device whose genesis went out.
 - 2026-10-06. Android allows only what the owner saw whole, as the web does since #276 (#356). A
-  notification and an inbox card carry Allow only when the whole input fits one line of 200
-  characters; otherwise the notification offers Deny alone and the card's Allow opens the sheet.
-  The sheet shows the whole input and enables Allow once its end has been on screen.
+  notification's Allow sends at once only when the whole input fits the one line a collapsed or
+  heads-up notification shows (owner's rule); otherwise it opens the prompt's sheet. A card's
+  Allow sends only when the card shows the whole input uncut, else it opens the sheet too. The
+  sheet shows the whole input and enables Allow once its end has been on screen.
 - 2026-10-06. Permission text shows control and format characters as escapes (`\u202E`), on the
   machine before sealing and again in every client, so a bidi override cannot reorder the
   command the owner allows (#357).
