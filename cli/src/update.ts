@@ -15,8 +15,14 @@ import {
 import { VERSION } from "./version";
 
 const MANAGED = {
-  brew: { update: "brew upgrade starbridge", remove: "brew uninstall starbridge" },
-  npm: { update: "npm i -g starbridge@latest", remove: "npm rm -g starbridge" },
+  brew: {
+    update: "brew upgrade starbridge, then starbridge setup --refresh",
+    remove: "brew uninstall starbridge",
+  },
+  npm: {
+    update: "npm i -g starbridge@latest, then starbridge setup --refresh",
+    remove: "npm rm -g starbridge",
+  },
 };
 
 const PLUGINS = ["starbridge@starbridge", "starbridge-mod@starbridge"];
@@ -84,7 +90,16 @@ export async function update(
   chmodSync(next, 0o755);
   renameSync(next, install.path);
   ctx.out(`Updated starbridge ${VERSION} to ${latest}.`);
-  restartAgent(ctx);
+  // The new binary brings the files setup wrote to its version, and restarts the agent.
+  const r = spawnSync(install.path, ["setup", "--refresh"], {
+    env: ctx.env as NodeJS.ProcessEnv,
+    encoding: "utf8",
+  });
+  if (r.status === 0) for (const line of r.stdout.split("\n").filter(Boolean)) ctx.out(line);
+  else {
+    ctx.out(`Could not update the files setup wrote: ${`${r.stderr ?? ""}`.trim() || r.error}`);
+    restartAgent(ctx);
+  }
   updatePlugins(ctx);
   return 0;
 }

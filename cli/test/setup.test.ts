@@ -17,12 +17,14 @@ import { makeAgent } from "../src/agent/main";
 import type { Agent } from "../src/agent/server";
 import { REMOVED } from "../src/api";
 import { installTarball, linkIntoLocalBin } from "../src/setup/codexbar";
-import { installOpencode, opencodeState, removeOpencode } from "../src/setup/harnesses";
+import { CODEX_RULE, installOpencode, opencodeState, removeOpencode } from "../src/setup/harnesses";
+import { markedSkill } from "../src/setup/marker";
 import opencodeFiles from "../src/setup/opencode-files.js";
-import { setup } from "../src/setup/setup";
+import { refresh, setup } from "../src/setup/setup";
 import { status } from "../src/setup/status";
 import { defaults, failure, type Sys } from "../src/setup/sys";
 import { uninstall } from "../src/setup/uninstall";
+import { VERSION } from "../src/version";
 import { paired, type TestCtx, testCtx, until } from "./helpers";
 
 setDefaultTimeout(30_000);
@@ -119,7 +121,12 @@ test("setup --yes installs the agent, the plugins and the skills, and uploads a 
   // Codex gets the skill this CLI carries; Pi gets the Starbridge package.
   const skill = readFileSync(join(m.home, ".codex/skills/starbridge/SKILL.md"), "utf8");
   expect(skill).toBe(
-    readFileSync(join(import.meta.dir, "../../plugin/skills/starbridge/SKILL.md"), "utf8"),
+    markedSkill(
+      readFileSync(join(import.meta.dir, "../../plugin/skills/starbridge/SKILL.md"), "utf8"),
+    ),
+  );
+  expect(skill.split("\n")[1]).toBe(
+    `# Written by starbridge ${VERSION}; \`starbridge uninstall\` removes it.`,
   );
   expect(m.calls()).toContain("pi install git:github.com/T0mSIlver/starbridge");
   expect(readFileSync(join(m.home, ".codex/rules/starbridge.rules"), "utf8")).toContain(
@@ -183,6 +190,30 @@ test("a second setup changes nothing", async () => {
   );
   // Declined: nothing written.
   expect(readFileSync(join(m.home, ".codex/skills/starbridge/SKILL.md"), "utf8")).toContain("old");
+});
+
+test("refresh brings what setup wrote to this release and leaves the rest alone", async () => {
+  const m = await machine();
+  await startAgent(m.ctx);
+  await setup(m.sys, { yes: true, readyTimeoutMs: 2_000 });
+  const rule = join(m.home, ".codex/rules/starbridge.rules");
+  const skill = join(m.home, ".codex/skills/starbridge/SKILL.md");
+  const entry = join(m.home, ".config/opencode/plugins/starbridge.ts");
+  const unit = join(m.units, "starbridge-agent.service");
+  const want = readFileSync(unit, "utf8");
+  // As an earlier release wrote them, with its markers; the skill is one the owner wrote.
+  writeFileSync(rule, "# Written by starbridge setup: questions need the network.\nold\n");
+  writeFileSync(entry, "// Written by starbridge setup: answers.\nold\n");
+  writeFileSync(unit, "# Written by `starbridge setup`; `starbridge uninstall` removes it.\nold\n");
+  writeFileSync(skill, "---\nname: starbridge\n---\nmine\n");
+  const done = await refresh(m.sys);
+  expect(readFileSync(rule, "utf8")).toBe(CODEX_RULE);
+  expect(readFileSync(entry, "utf8")).toStartWith(`// Written by starbridge ${VERSION};`);
+  expect(readFileSync(unit, "utf8")).toBe(want);
+  expect(readFileSync(skill, "utf8")).toBe("---\nname: starbridge\n---\nmine\n");
+  expect(done.some((l) => l.startsWith("Restarted the agent"))).toBe(true);
+  // Again: nothing to update; the agent restarts on the binary that runs it.
+  expect(await refresh(m.sys)).toEqual([`Restarted the agent (${unit}).`]);
 });
 
 test("status reports the agent, the service and the plugins", async () => {
@@ -396,11 +427,11 @@ test("opencode files someone else wrote stay, and so does the code a changed ent
   installOpencode(sys, true);
   expect(readFileSync(join(oc, "plugins/starbridge.ts"), "utf8")).toBe("// mine\n");
 
-  // An entry setup wrote and the owner edited keeps its code at uninstall.
+  // An entry the owner took over (its marker gone) keeps its code at uninstall.
   rmSync(join(oc, "plugins/starbridge.ts"));
   installOpencode(sys);
   const entry = readFileSync(join(oc, "plugins/starbridge.ts"), "utf8");
-  writeFileSync(join(oc, "plugins/starbridge.ts"), `${entry}// tweaked\n`);
+  writeFileSync(join(oc, "plugins/starbridge.ts"), entry.split("\n").slice(1).join("\n"));
   removeOpencode(sys);
   expect(existsSync(join(oc, "starbridge/mod/opencode/starbridge.ts"))).toBe(true);
   expect(existsSync(join(oc, "skills/starbridge"))).toBe(false);

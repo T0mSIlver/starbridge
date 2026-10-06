@@ -4,6 +4,7 @@
  * Every step shows what it found, so a rerun changes only what is missing.
  */
 
+import { readFileSync } from "node:fs";
 import type { QuotaSnapshot } from "@starbridge/protocol";
 import type { Status } from "../agent/api";
 import { AgentClient, withAgent } from "../agent/client";
@@ -28,11 +29,11 @@ import {
   probeSet,
 } from "./codexbar";
 import {
+  codexRule,
   codexRulePath,
   codexSkill,
   codexSkillDir,
   hasCodex,
-  hasCodexRule,
   hasOpencode,
   hasPi,
   installCodexRule,
@@ -43,7 +44,9 @@ import {
   opencodeState,
   PI_PACKAGE,
   piPackage,
+  refreshFiles,
 } from "./harnesses";
+import { ours } from "./marker";
 import {
   ALLOW_RULES,
   addAllowRules,
@@ -57,7 +60,7 @@ import {
   pluginState,
   settingsPath,
 } from "./plugins";
-import { enableLinger, installService, lingering, unavailable } from "./service";
+import { enableLinger, installService, lingering, servicePath, unavailable } from "./service";
 import type { Sys } from "./sys";
 
 export interface SetupOpts {
@@ -87,6 +90,28 @@ async function checkServer(server: string): Promise<void> {
     throw new UsageError(
       `${server} does not look like a Starbridge server (GET /v1/me: ${res.status})`,
     );
+}
+
+/**
+ * Brings every file setup wrote into another tool to this release's version (`refreshFiles`),
+ * and the agent's service too, which then restarts. `starbridge update` runs it with the new
+ * binary (`setup --refresh`). Returns what it did, one line each.
+ */
+export async function refresh(sys: Sys): Promise<string[]> {
+  const done = refreshFiles(sys);
+  const path = servicePath(sys);
+  let text: string | undefined;
+  try {
+    text = path ? readFileSync(path, "utf8") : undefined;
+  } catch {}
+  if (path && ours(text))
+    try {
+      const { restarted } = await installService(sys, true);
+      if (restarted) done.push(`Restarted the agent (${path}).`);
+    } catch (e) {
+      done.push(`Could not restart the agent: ${(e as Error).message}`);
+    }
+  return done;
 }
 
 function section(ctx: Ctx, title: string) {
@@ -403,8 +428,12 @@ async function codexStep(sys: Sys) {
     } else ctx.out("Codex sessions won't know the skill: rerun setup to install it.");
   }
   const rule = codexRulePath(sys);
-  if (hasCodexRule(sys)) ctx.out(`The starbridge rule is in ${rule}.`);
-  else if (
+  const ruleState = codexRule(sys);
+  if (ruleState === "current") ctx.out(`The starbridge rule is in ${rule}.`);
+  else if (ruleState === "outdated") {
+    installCodexRule(sys);
+    ctx.out(`Updated ${rule}.`);
+  } else if (
     await prompt.confirm(
       "Let `starbridge ask`, `waiting`, `wait` and `settle` run outside Codex's sandbox, which has no network?",
       true,

@@ -1,6 +1,7 @@
 /** The agent's user service: a systemd user unit on Linux, a launchd agent on macOS. */
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { delimiter, dirname, join } from "node:path";
+import { marker } from "./marker";
 import { failure, run, type Sys } from "./sys";
 
 export const UNIT = "starbridge-agent.service";
@@ -71,7 +72,7 @@ export function unitText(sys: Sys): string {
   const env = Object.entries(serviceEnv(sys))
     .map(([k, v]) => `Environment=${sdQuote(`${k}=${v}`)}`)
     .join("\n");
-  return `# Written by \`starbridge setup\`; \`starbridge uninstall\` removes it.
+  return `${marker("#")}
 [Unit]
 Description=Starbridge agent
 After=network-online.target
@@ -95,7 +96,7 @@ export function plistText(sys: Sys): string {
     .join("\n");
   const log = join(sys.home, "Library/Logs/starbridge-agent.log");
   return `<?xml version="1.0" encoding="UTF-8"?>
-<!-- Written by \`starbridge setup\`; \`starbridge uninstall\` removes it. -->
+${marker("<!--", "-->")}
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>

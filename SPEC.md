@@ -1917,6 +1917,17 @@ so the mod is the first path.
   logged and replaced at the next change, since it holds only display choices. IndexedDB's own
   version is the records' format: `onupgradeneeded` creates the store only when missing, and
   sign-out removes every record kind of the account, `heads`, `pending` and `recoverySeen` too.
+- 2026-10-06. Files setup writes into other tools start with one marker line, `Written by
+  starbridge <version>; \`starbridge uninstall\` removes it.`, in the file's comment syntax
+  (#474): the systemd unit, the launchd plist, the Codex rule, the opencode entry, and the skill
+  copied to Codex and opencode (a YAML comment first in its front matter). A file is Starbridge's
+  when it has the marker, so setup replaces it when it differs from this release's and uninstall
+  removes it; the markers of earlier releases ("Written by starbridge setup") match too, and an
+  owner who deletes the line keeps the file as theirs. `starbridge update` runs the new binary's
+  `setup --refresh`, which rewrites the marked files that differ and restarts the agent; brew and
+  npm installs run it themselves, and the agent refreshes the skills and rule when it starts. The
+  Pi package and Claude Code's allow rules keep their own recognisers: Pi's updates through `pi`,
+  and the allow rules are the frozen command names.
 
 ## Encryption, with existing libraries
 
