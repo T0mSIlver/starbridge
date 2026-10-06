@@ -40,8 +40,6 @@ export interface AskInput {
   context?: string;
   options?: string[];
   recommended?: string;
-  /** What the agent does meanwhile; clients from before 2026-10-05 require one. */
-  default?: string;
   /** Post it already `waiting`: the agent has nothing else to do. */
   waiting?: boolean;
   /** The coding agent asking; default: Claude Code, Codex or Pi when it runs the command. */
@@ -168,7 +166,7 @@ export function buildDecision(input: AskInput, ctx: Ctx, machine: string, to: st
     context: input.context ?? "",
     options,
     ...(options.length > 0 ? { recommended: input.recommended ?? options[0] } : {}),
-    default: { action: input.default || NO_DEFAULT },
+    default: { action: NO_DEFAULT },
     ...agentOf(input, ctx.env),
     source: sourceFor(input, ctx, machine),
     ...(links.length > 0 ? { links } : {}),

@@ -14,28 +14,34 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { type AddressInfo, createServer } from "node:net";
+import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { type BrowserContext, firefox, type Page } from "playwright";
+import { type Browser, type BrowserContext, firefox, type Page } from "playwright";
 import { layoutProblems, type Problem, zoomText } from "./layout.ts";
 
 const ROOT = resolve(import.meta.dirname, "../..");
 const WEB = join(ROOT, "web");
-/** A port nothing listens on, so runs on one machine (CI's runners share one) never collide. */
-const freePort = () =>
-  new Promise<number>((done) => {
-    const s = createServer().listen(0, "127.0.0.1", () => {
-      const { port } = s.address() as AddressInfo;
-      s.close(() => done(port));
-    });
+/**
+ * Ports nothing else listens on, so runs on one machine (CI's runners share one) never collide.
+ * They come from below Linux's range for outgoing connections (32768 up), whose closed
+ * connections linger and keep a server from taking their port. Each stays held until `free`
+ * hands it to its process: the web build takes a minute, time enough to lose it otherwise.
+ */
+const held = new Map<number, ReturnType<typeof createServer>>();
+const hold = (): Promise<number> =>
+  new Promise((done) => {
+    const port = 20000 + Math.floor(Math.random() * 12000);
+    const s = createServer()
+      .once("error", () => done(hold()))
+      .listen(port, () => {
+        held.set(port, s);
+        done(port);
+      });
   });
-const PORTS = {
-  web: await freePort(),
-  server: await freePort(),
-  github: await freePort(),
-  push: await freePort(),
-};
+const free = (...ports: number[]) =>
+  Promise.all(ports.map((p) => new Promise((done) => held.get(p)?.close(done))));
+const PORTS = { web: await hold(), server: await hold(), github: await hold(), push: await hold() };
 const ORIGIN = `http://localhost:${PORTS.web}`;
 const SHOTS = join(WEB, "screenshots");
 // Set to a folder to record the inbox's motion there, as one GIF per motion (needs ffmpeg).
@@ -157,6 +163,19 @@ async function watchCsp(ctx: BrowserContext) {
   );
 }
 
+/** A context whose pages record what their Content-Security-Policy blocks (#325). */
+async function context(ff: Browser, opts: Parameters<Browser["newContext"]>[0] = {}) {
+  const ctx = await ff.newContext(opts);
+  await ctx.addInitScript(() => {
+    const w = window as unknown as { cspBlocked: string[] };
+    w.cspBlocked = [];
+    document.addEventListener("securitypolicyviolation", (e) =>
+      w.cspBlocked.push(`${e.violatedDirective} blocked ${e.blockedURI || "inline"}`),
+    );
+  });
+  return ctx;
+}
+
 /** The landing page's link, or the sign-in screen's. */
 const SIGN_IN = /^(Sign in|Continue) with GitHub$/;
 
@@ -183,11 +202,24 @@ async function noWordsAsked(page: Page) {
 }
 
 /** What fails the run; the rest is for AUDIT's list. */
-const FAILS: Problem["kind"][] = ["page-width", "clipped", "spills", "offscreen", "overlap"];
+const FAILS: (Problem["kind"] | "csp")[] = [
+  "page-width",
+  "clipped",
+  "spills",
+  "offscreen",
+  "overlap",
+  "csp",
+];
 
 /** Fails on what a screenshot would show broken (layout.ts); AUDIT lists it instead. */
 async function fitsLayout(page: Page, name: string) {
-  const problems = await layoutProblems(page);
+  const blocked = (await page.evaluate(
+    () => (window as unknown as { cspBlocked?: string[] }).cspBlocked ?? [],
+  )) as string[];
+  const problems = [
+    ...(await layoutProblems(page)),
+    ...blocked.map((what) => ({ kind: "csp" as const, what })),
+  ];
   if (AUDIT) {
     const at = await page.evaluate(() => `${innerWidth}`);
     for (const p of problems)
@@ -259,10 +291,12 @@ async function main() {
   mkdirSync(AUDIT ?? SHOTS, { recursive: true });
 
   step("services, server, web");
+  await free(PORTS.github, PORTS.push);
   const services = start("services", "bun", [join(WEB, "e2e/services.ts")], {
     env: { GITHUB_PORT: PORTS.github, PUSH_PORT: PORTS.push },
   });
   await services.waitFor(/"event":"ready"/);
+  await free(PORTS.server);
   const server = start("server", "bun", ["run", "server/src/main.ts"], {
     env: {
       PORT: PORTS.server,
@@ -293,13 +327,14 @@ async function main() {
   const standalone = join(WEB, ".next/standalone/web");
   cpSync(join(WEB, ".next/static"), join(standalone, ".next/static"), { recursive: true });
   cpSync(join(WEB, "public"), join(standalone, "public"), { recursive: true });
+  await free(PORTS.web);
   const web = start("web", "node", [join(standalone, "server.js")], {
     env: { ...env, PORT: String(PORTS.web), HOSTNAME: "127.0.0.1" },
   });
   await web.waitFor(/Ready|started server/i);
 
   const ff = await browser();
-  const a = await ff.newContext({
+  const a = await context(ff, {
     permissions: ["notifications"],
     ...(MOTION_VIDEO ? { recordVideo: { dir: join(tmp, "video"), size: DESKTOP } } : {}),
   });
@@ -415,10 +450,6 @@ async function main() {
       "Run it",
       "--option",
       "Wait for tonight",
-      "--default",
-      "Wait for tonight",
-      "--default-at",
-      "2h",
       "--project",
       "starbridge",
       "--session",
@@ -512,8 +543,6 @@ async function main() {
       "Merge now",
       "--option",
       "Hold",
-      "--default",
-      "Hold until the owner is back",
       "--project",
       "starbridge",
       "--session",
@@ -691,7 +720,7 @@ async function main() {
         "--context",
         "Each layout is live in the artifact. Its buttons send your pick to the session.",
       ],
-      ...["--answer-in", artifact, "--default", "Ship the roomy layout"],
+      ...["--answer-in", artifact],
       ...["--project", "starbridge", "--session-title", "Settings screen (#88)"],
     ],
     machineHome,
@@ -1068,7 +1097,7 @@ async function main() {
   longRun.proc.kill();
 
   step("add a second browser by pairing code");
-  const b = await ff.newContext();
+  const b = await context(ff);
   await watchCsp(b);
   const pageB = await signIn(b);
   await pageB.getByTestId("pairing-code").waitFor({ timeout: 10_000 });
@@ -1115,7 +1144,7 @@ async function main() {
   // The new device sees decisions sealed after it joined; the open one predates it.
 
   step("recover a third browser with the recovery key");
-  const c = await ff.newContext();
+  const c = await context(ff);
   await watchCsp(c);
   const pageC = await signIn(c);
   await pageC.getByRole("button", { name: "Use the recovery key" }).click();
@@ -1214,5 +1243,6 @@ try {
     ?.close()
     .catch(() => {});
   for (const p of children) p.kill();
+  for (const s of held.values()) s.close();
   rmSync(tmp, { recursive: true, force: true });
 }

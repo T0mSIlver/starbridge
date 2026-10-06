@@ -172,7 +172,7 @@ const askedBy = (session: string, question: string) =>
 /** Posts a decision for `session` with the CLI, as an agent's `starbridge ask` does. */
 async function ask(session: string, question: string, extra: string[] = []): Promise<string> {
   const r =
-    await $`starbridge ask --session ${session} --question ${question} --option Alpha --option Beta --default Alpha ${extra}`
+    await $`starbridge ask --session ${session} --question ${question} --option Alpha --option Beta ${extra}`
       .env({ ...process.env, ...env })
       .quiet();
   return r.stdout.toString().trim();

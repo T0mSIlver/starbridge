@@ -84,7 +84,7 @@ test("two processes refreshing at once never roll back a revocation", async () =
   expect(a.store.machine()?.pin.length).toBe(dirA.length);
 
   // The next ask seals to the phone only.
-  expect(await run(["ask", "--question", "Q?", "--default", "x"], a)).toBe(0);
+  expect(await run(["ask", "--question", "Q?"], a)).toBe(0);
   const [d] = await server.opened("decision");
   expect(d?.to).toEqual(["phone"]);
 });

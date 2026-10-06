@@ -90,8 +90,7 @@ own.
 - Ask what you can decide yourself.
 - Post several cards where one would do.
 - Post a wall of text, or links for reference.
-- Act on a question's behalf. No answer means you keep waiting; leave out
-  `--default`.
+- Act on a question's behalf. No answer means you keep waiting.
 - Block on an answer that comes back as a prompt: no `--wait`, no
   `starbridge wait`.
 
