@@ -12,11 +12,12 @@ import {
   deliveryLine,
   EXIT_TIMEOUT,
   markWaiting,
+  type ObservedAnswer,
   resolveSource,
   waitSeconds,
 } from "../decisions";
 import { MAX_HOLD_SECONDS, type SessionEvent } from "./api";
-import { type AgentClient, AgentLost, Interrupted, NoAgent } from "./client";
+import { type AgentClient, AgentError, AgentLost, Interrupted, NoAgent } from "./client";
 
 /** Exit code on Ctrl-C, as a shell reports SIGINT. */
 const EXIT_INTERRUPTED = 130;
@@ -166,6 +167,60 @@ export async function answersVia(
     ctx.out(JSON.stringify({ decisionId: e.decisionId, ack: e.ack, line: e.line }));
   }
   return 0;
+}
+
+/**
+ * `answers --all` through the agent: every answer it holds, then with `follow` each new one, in
+ * held requests until interrupted. An agent that stops and stays away RESTART_MS leaves the rest
+ * to `direct`, the server path, with the ids already printed.
+ */
+export async function answersAllVia(
+  ctx: Ctx,
+  agent: AgentClient,
+  opts: { follow?: boolean; since?: number },
+  direct: (printed: Set<string>) => Promise<number>,
+): Promise<number> {
+  const printed = new Set<string>();
+  let wait = 0;
+  let lost: number | undefined;
+  for (;;) {
+    if (ctx.signal?.aborted) return EXIT_INTERRUPTED;
+    let r: { answers: ObservedAnswer[] };
+    try {
+      r = await agent.call<{ answers: ObservedAnswer[] }>(
+        "POST",
+        "/v1/answers/all",
+        {
+          ...(opts.since !== undefined ? { since: opts.since } : {}),
+          known: [...printed],
+          wait,
+        },
+        wait * 1000 + SLACK_MS,
+        ctx.signal,
+      );
+    } catch (e) {
+      // An agent from before this route: the server path does the same.
+      if (e instanceof AgentError && e.status === 404 && !agent.answered) return direct(printed);
+      const restarted = e instanceof AgentLost || (e instanceof NoAgent && agent.answered);
+      if (!opts.follow || !restarted) throw e;
+      const now = ctx.now().getTime();
+      lost ??= now;
+      if (now - lost >= RESTART_MS) {
+        ctx.err("starbridge: the agent stopped and did not come back; following at the server");
+        return direct(printed);
+      }
+      await ctx.sleep(1000);
+      continue;
+    }
+    lost = undefined;
+    for (const a of r.answers) {
+      if (printed.has(a.decisionId)) continue;
+      printed.add(a.decisionId);
+      ctx.out(JSON.stringify(a));
+    }
+    if (!opts.follow) return 0;
+    wait = MAX_HOLD_SECONDS;
+  }
 }
 
 /** One quota snapshot, run and posted by the agent. */

@@ -73,3 +73,59 @@ test("ask --json is an unknown flag: --input replaced it before the first releas
   expect(ctx.errors.at(-1)).toStartWith("starbridge: ");
   expect(ctx.errors.at(-1)).toContain("--json");
 });
+
+test("answers --all prints every answer as JSON lines and leaves each to its session", async () => {
+  const ctx = await paired(server);
+  const asked = ["--session", "s1", "--session-title", "Fix login", "--project", "web"];
+  expect(
+    await run(
+      ["ask", "--question", "Merge #12?", "--option", "Merge", "--option", "Wait", ...asked],
+      ctx,
+    ),
+  ).toBe(0);
+  const id = ctx.lines[0] as string;
+  await server.answer(id, { choice: "Merge" });
+  // The session's own path fetches it; --all only reads it.
+  expect(await run(["answers", "--session", "s1", "--wait", "1"], ctx)).toBe(0);
+  ctx.lines.length = 0;
+  expect(await run(["answers", "--all"], ctx)).toBe(0);
+  expect(ctx.lines.map((l) => JSON.parse(l))).toEqual([
+    {
+      decisionId: id,
+      question: "Merge #12?",
+      choice: "Merge",
+      answeredAt: expect.any(String),
+      session: "s1",
+      sessionTitle: "Fix login",
+      project: "web",
+    },
+  ]);
+  ctx.lines.length = 0;
+  expect(await run(["answers", "--session", "s1"], ctx)).toBe(0);
+  expect(ctx.lines).toHaveLength(1);
+
+  ctx.lines.length = 0;
+  expect(await run(["answers", "--all", "--since", "1h"], ctx)).toBe(0);
+  expect(ctx.lines).toHaveLength(1);
+  ctx.lines.length = 0;
+  expect(await run(["answers", "--all", "--since", "2999-01-01T00:00:00Z"], ctx)).toBe(0);
+  expect(ctx.lines).toEqual([]);
+
+  // --follow prints the answers so far, then each new one, until interrupted.
+  const controller = new AbortController();
+  const follower = { ...ctx, lines: [] as string[], signal: controller.signal };
+  follower.out = (l: string) => follower.lines.push(l);
+  const following = run(["answers", "--all", "--follow"], follower);
+  await until(() => follower.lines.length === 1);
+  expect(await run(["ask", "--question", "Why?", "--session", "s2"], ctx)).toBe(0);
+  const second = ctx.lines.at(-1) as string;
+  await server.answer(second, { text: "Because" });
+  await until(() => follower.lines.length === 2);
+  expect(JSON.parse(follower.lines[1] as string)).toMatchObject({
+    decisionId: second,
+    text: "Because",
+    session: "s2",
+  });
+  controller.abort();
+  expect(await following).toBe(130);
+});

@@ -91,6 +91,9 @@ export interface State {
       cursor?: string;
       /** The Claude Code session that asked; the mod delivers the answer there only. */
       session?: string;
+      /** The asking session's title and project, for `answers --all` once `body` is gone. */
+      sessionTitle?: string;
+      project?: string;
       /** The Codex session that asked, which the agent queues the answer into. */
       codex?: CodexSession;
       /** Told its answer comes back as a prompt from the Pi extension or the opencode plugin. */

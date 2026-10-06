@@ -153,6 +153,18 @@ starbridge ask --question "Does this reach my phone?" --option Yes --option No -
 When the agent runs out of other work, `starbridge waiting <id>` shows "Waiting for you" on
 every device and notifies you once more. `starbridge working <id>` clears it; the question stays open.
 
+### Follow every answer
+
+An orchestrator that supervises other sessions can follow your answers to all of them:
+
+```bash
+starbridge answers --all --follow
+```
+
+It prints one JSON line per answer, with the question, the session and the project that asked,
+then each new one until interrupted. `--since 2h` or `--since 2026-10-06T21:00Z` skips older ones.
+It only reads: each answer still comes back into the session that asked.
+
 ### Runs
 
 `starbridge run` wraps a command you want to follow: a build, a release, an eval, heavy work on

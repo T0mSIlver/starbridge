@@ -13,6 +13,7 @@ import {
   deliverable,
   delivery,
   dropRevokedNow,
+  observedAnswers,
   poll,
   postDecision,
   postWaiting,
@@ -117,6 +118,30 @@ export class Decisions implements Feature {
           found = takeAnswer(this.ctx.store, id, from);
         }
         return found ?? {};
+      },
+    },
+    {
+      method: "POST",
+      path: "/v1/answers/all",
+      handle: async (req: { body: unknown; signal: AbortSignal }) => {
+        const b = (req.body ?? {}) as { since?: unknown; known?: unknown; wait?: unknown };
+        const since = typeof b.since === "number" ? b.since : undefined;
+        if (
+          b.known !== undefined &&
+          !(Array.isArray(b.known) && b.known.every((k) => typeof k === "string"))
+        )
+          throw new HttpError(400, "bad-request", "known takes [decision id]");
+        const known = new Set((b.known ?? []) as string[]);
+        const wait = holdSeconds(b.wait === undefined ? undefined : String(b.wait));
+        const end = Date.now() + wait * 1000;
+        await this.beforeEvents();
+        // An observer: it reads the answers and marks none seen, so each still reaches its session.
+        let found = observedAnswers(this.ctx.store.state(), { since, known });
+        while (found.length === 0 && !req.signal.aborted && Date.now() < end) {
+          await this.hub.changed(end - Date.now(), req.signal);
+          found = observedAnswers(this.ctx.store.state(), { since, known });
+        }
+        return { answers: found };
       },
     },
   ];
