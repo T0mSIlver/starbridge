@@ -1301,6 +1301,12 @@ so the mod is the first path.
   keys alone; one that landed with its reply lost counts once the directory lists the entry. Boot
   adopts a pending record the directory lists as active even when an older device is stored, so a
   recovery or join cut off after it landed is not lost to the older keys.
+- 2026-10-06. Only the verified directory revokes a browser (#310, as Android decides). A 401
+  `revoked` is unsigned, so the page keeps its keys and shows the refusal on the sign-in screen;
+  after sign-in, boot reads the chain and shows "was revoked" only if the chain says so.
+- 2026-10-06. The web page closes every notification the service worker shows when it signs out,
+  when the chain shows its device revoked, and after a recovery (#311, as #282 on Android). They
+  stay up until dismissed and hold decrypted questions.
 
 ## Encryption, with existing libraries
 

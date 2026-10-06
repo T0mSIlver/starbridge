@@ -889,9 +889,20 @@ async function main() {
   await devices.getByRole("button", { name: "Revoke" }).first().click();
   await page.getByRole("dialog").getByRole("button", { name: "Revoke" }).click();
   await page.getByRole("dialog").waitFor({ state: "detached" });
+  // A notification left from before: the revocation closes it.
+  await pageB.evaluate(() =>
+    navigator.serviceWorker.ready.then((r) =>
+      r.showNotification("Left over", { tag: "e2e-left", requireInteraction: true }),
+    ),
+  );
   await pageB.reload();
-  // A browser whose device was revoked is a visitor again: the landing page, not sign-in.
-  await pageB.getByRole("heading", { name: /Your agents ask/ }).waitFor();
+  // The server's 401 alone is unsigned: the browser keeps its keys and shows the refusal (#310).
+  await pageB.getByText("The server says this browser was revoked.").waitFor();
+  await pageB.getByRole("link", { name: SIGN_IN }).click();
+  // Signed in, the device list confirms the revocation.
+  await pageB.getByRole("heading", { name: /was revoked$/ }).waitFor({ timeout: 30_000 });
+  if ((await pageB.evaluate(NOTIFICATIONS)).length > 0)
+    throw new Error("a revoked browser still shows notifications");
   await page.emulateMedia({ colorScheme: "light" });
   await shoot(page, "devices");
 
@@ -925,10 +936,18 @@ async function main() {
     .getByRole("navigation", { name: "Main" })
     .getByRole("link", { name: "Settings" })
     .click();
+  await pageC.evaluate(() =>
+    navigator.serviceWorker.ready.then((r) =>
+      r.showNotification("Left over", { tag: "e2e-left", requireInteraction: true }),
+    ),
+  );
   await pageC.getByRole("button", { name: "Sign out" }).click();
   await pageC.getByRole("dialog").getByRole("button", { name: "Sign out" }).click();
   // With no keys left, the browser is a visitor: the landing page, not "Sign in to Starbridge".
   await pageC.getByRole("heading", { name: /Your agents ask/ }).waitFor({ timeout: 30_000 });
+  // Notifications hold decrypted questions: none outlive the sign-out (#311).
+  if ((await pageC.evaluate(NOTIFICATIONS)).length > 0)
+    throw new Error("signing out left notifications on screen");
 
   await ff.close();
   console.log("\nE2E PASSED");

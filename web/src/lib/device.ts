@@ -83,8 +83,11 @@ export interface Ctx {
 }
 
 export type Boot =
-  /** `known`: this browser holds a device of the account it last signed in to. */
-  | { state: "signed-out"; known: boolean }
+  /**
+   * `known`: this browser holds a device of the account it last signed in to. `refused`: the
+   * server's reason for ending the session, unsigned, so the keys stay until the chain agrees.
+   */
+  | { state: "signed-out"; known: boolean; refused?: string }
   | { state: "first-device"; account: string }
   /** The account has devices and this browser is not one of them (or lost its binding). */
   | { state: "join"; account: string; stale: boolean }
@@ -157,9 +160,13 @@ export async function boot(): Promise<Boot> {
   } catch (e) {
     if (e instanceof ApiError && e.status === 401) {
       const last = await store.get("current");
-      // Its device was revoked: this browser is a visitor again, not a device signing back in.
-      if (last && e.code === "revoked") await store.del("device", last);
-      return { state: "signed-out", known: !!last && !!(await store.get("device", last)) };
+      // A "revoked" here is the server's word only: the keys stay, and the next sign-in reads
+      // the chain, which alone revokes a device (#310).
+      return {
+        state: "signed-out",
+        known: !!last && !!(await store.get("device", last)),
+        ...(e.code === "revoked" ? { refused: e.code } : {}),
+      };
     }
     throw e;
   }
@@ -203,7 +210,10 @@ export async function boot(): Promise<Boot> {
     await store.del("device", account);
     return { state: "join", account, stale: false };
   }
-  if (!entry.active) return { state: "revoked", account, name: device.name };
+  if (!entry.active) {
+    await closeNotifications();
+    return { state: "revoked", account, name: device.name };
+  }
   if (me.member === null && !(await bind(account, device))) {
     return { state: "join", account, stale: true };
   } else if (me.member !== null && me.member !== device.id) {
@@ -357,6 +367,7 @@ export async function recover(account: string, name: string, typed: string): Pro
     }
     await adopt(account, record);
     await pinTo(account, [...entries, entry], next);
+    await closeNotifications();
   } finally {
     seed.fill(0);
     recovery.privateKey.fill(0);
@@ -823,6 +834,19 @@ export function revoke(ctx: Ctx, id: string): Promise<Ctx> {
  * is the last one (which would leave only the recovery key), ends its session, drops its push
  * subscription and forgets its keys and what it answered.
  */
+const registration = () =>
+  navigator.serviceWorker?.getRegistration("/").catch(() => undefined) ??
+  Promise.resolve(undefined);
+
+/**
+ * Closes every notification the service worker shows. They stay up until dismissed and carry
+ * decrypted questions, so they go when this browser stops being the device that read them (#311).
+ */
+async function closeNotifications(): Promise<void> {
+  const reg = await registration();
+  for (const n of (await reg?.getNotifications().catch(() => [])) ?? []) n.close();
+}
+
 export async function signOut(stale: Ctx): Promise<void> {
   // Count devices on the directory as it is now, as Android does: another one may have been
   // revoked since this page loaded. Undefined: this browser was revoked already.
@@ -832,8 +856,9 @@ export async function signOut(stale: Ctx): Promise<void> {
   );
   if (ctx && others.length > 0) await revoke(ctx, ctx.device.id).catch(() => {});
   await api.logout().catch(() => {});
-  const reg = await navigator.serviceWorker?.getRegistration("/").catch(() => undefined);
+  const reg = await registration();
   await (await reg?.pushManager.getSubscription())?.unsubscribe().catch(() => {});
+  await closeNotifications();
   for (const kind of ["device", "pin", "answers", "promptAnswers"] as const)
     await store.del(kind, stale.account);
   await store.del("current");

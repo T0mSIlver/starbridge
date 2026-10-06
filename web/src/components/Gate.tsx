@@ -70,7 +70,14 @@ function useDefaultName(): [string, (v: string) => void] {
 }
 
 /** GitHub sign-in; self-hosting sits behind "Use your own server" (SPEC.md, design v2). */
-export function SignIn({ ownServer = false }: { ownServer?: boolean }) {
+export function SignIn({
+  ownServer = false,
+  refused,
+}: {
+  ownServer?: boolean;
+  /** Why the server ended the last session; only the device list can confirm a revocation. */
+  refused?: string;
+}) {
   const { reload } = useApp();
   const [own, setOwn] = useState(ownServer);
   const [token, setToken] = useState("");
@@ -78,6 +85,12 @@ export function SignIn({ ownServer = false }: { ownServer?: boolean }) {
   return (
     <FirstRunPage centered>
       <h1 className="t-heading">Sign in to Starbridge</h1>
+      {refused === "revoked" && (
+        <p className={`t-small ${s.lede}`}>
+          The server says this browser was revoked. It keeps its keys until your device list
+          confirms that: sign in to check.
+        </p>
+      )}
       <a href="/v1/auth/github" className={`t-label ${ui.btn} ${ui.lg} ${ui.fill} ${s.go}`}>
         <Icon name="github" size={18} />
         Continue with GitHub
@@ -408,7 +421,7 @@ export function Gate({ children }: { children: React.ReactNode }) {
       // Visitors land on the landing page; a browser with a device signs in to its Inbox.
       if (path === "/" && !boot.known && !ownServer)
         return <Landing onOwnerToken={() => setOwnServer(true)} />;
-      return <SignIn ownServer={ownServer} />;
+      return <SignIn ownServer={ownServer} refused={boot.refused} />;
     case "first-device":
       return <FirstDevice account={boot.account} />;
     case "join":
