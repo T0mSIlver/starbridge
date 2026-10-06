@@ -144,14 +144,16 @@ export async function collect(
   log: (line: string) => void,
   run: typeof runCodexbar = runCodexbar,
 ): Promise<ProviderQuota[]> {
-  const out: ProviderQuota[] = [];
-  for (const p of providers.length > 0 ? providers : [undefined]) {
+  // Providers are read at once, so a snapshot takes as long as the slowest one: a device's
+  // refresh waits for it (#450). The rows keep the providers' order.
+  const one = async (p: string | undefined): Promise<ProviderQuota[]> => {
     let first = await once(bin, p, now, run);
     if ("failed" in first && first.retry) {
       log(`codexbar all: ${first.failed}; retrying`);
       first = await once(bin, p, now, run);
     }
     if ("failed" in first) throw new Error(`codexbar: ${first.failed}`);
+    const out: ProviderQuota[] = [];
     for (const row of first.rows) {
       if (!row.error || !first.retry) {
         if (row.error) log(`codexbar ${row.provider}: ${row.error}`);
@@ -164,7 +166,9 @@ export async function collect(
       for (const x of rows) if (x.error) log(`codexbar ${x.provider}: ${x.error}`);
       out.push(...rows);
     }
-  }
+    return out;
+  };
+  const out = (await Promise.all((providers.length > 0 ? providers : [undefined]).map(one))).flat();
   // The log above keeps each error whole; devices get it in words for the owner.
   return out.map((r) => (r.error ? { ...r, error: shortError(r.error) } : r));
 }

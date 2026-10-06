@@ -93,6 +93,28 @@ test("a provider that fails is asked once more before its failure counts", async
   expect(calls).toEqual(["claude", "claude", "claude", "claude"]);
 });
 
+test("providers are read at once, and their rows keep the order asked", async () => {
+  let open = 0;
+  let most = 0;
+  const run = async (_bin: string, p: string | undefined): Promise<RunResult> => {
+    open++;
+    most = Math.max(most, open);
+    await new Promise((r) => setTimeout(r, p === "claude" ? 30 : 10));
+    open--;
+    const row = { provider: p, usage: { primary: { usedPercent: 10 } } };
+    return { code: 0, stdout: JSON.stringify([row]), stderr: "" };
+  };
+  const rows = await collect(
+    "codexbar",
+    ["claude", "codex", "zai"],
+    () => NOW,
+    () => {},
+    run,
+  );
+  expect(most).toBe(3);
+  expect(rows.map((r) => r.provider)).toEqual(["claude", "codex", "zai"]);
+});
+
 test("devices get a provider's error short; the log keeps it whole", async () => {
   const raw = 'Mistral API error: HTTP 500: {"detail":"Internal server error"}';
   const failed: RunResult = {

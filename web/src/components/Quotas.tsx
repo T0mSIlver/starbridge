@@ -94,7 +94,7 @@ export function Quotas() {
 
 /**
  * Asks every machine to read CodexBar again and loads what they post, as Android's pull to
- * refresh does; the icon turns until then, up to the 15 s the server holds the ask. The phone
+ * refresh does; the icon turns until then, up to the 25 s the server holds the ask. The phone
  * bar's and the header's buttons share one `busy`, so either shows a refresh the other started.
  */
 function Refresh({ busy, run, size }: { busy: boolean; run: () => void; size: number }) {

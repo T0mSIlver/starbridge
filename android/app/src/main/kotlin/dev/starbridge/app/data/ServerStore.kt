@@ -103,7 +103,7 @@ sealed interface Sent {
 }
 
 /** How long pull to refresh on Quotas waits for the machines' fresh snapshots. */
-private const val QUOTA_ASK_SECONDS = 15
+private const val QUOTA_ASK_SECONDS = 25
 
 /**
  * The app's state against the server. Everything it shows was verified here first: the
