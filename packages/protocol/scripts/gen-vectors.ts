@@ -1436,6 +1436,11 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
       },
       { name: "an agent that is null", body: { ...decisionBody, agent: null }, valid: false },
       {
+        name: "a null under a field it does not know",
+        body: { ...decisionBody, later: null },
+        valid: true,
+      },
+      {
         name: "a machine kind that is no string",
         body: { ...decisionBody, source: { ...decisionBody.source, machineKind: 5 } },
         valid: false,
@@ -1782,7 +1787,7 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
         body: {
           ...quotaBody,
           alerts: [
-            { kind: "burst", share: 0.5 },
+            { kind: "burst", share: 0.5, resetsAt: null },
             { kind: "low", provider: "zai", window: "primary", resetsAt: T(12, 30), threshold: 10 },
           ],
         },

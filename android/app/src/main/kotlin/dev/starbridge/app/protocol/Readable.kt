@@ -1,5 +1,9 @@
 package dev.starbridge.app.protocol
 
+import kotlinx.serialization.ExperimentalSerializationApi
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.descriptors.StructureKind
+import kotlinx.serialization.encoding.CompositeDecoder
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
@@ -20,17 +24,24 @@ private fun withSource(body: JsonObject): JsonObject {
 private val NULLABLE = setOf("prev", "projectedUsedPercent", "runsOutAt", "windowMinutes", "resetsAt", "pace")
 
 /**
- * Refuses a null anywhere else, as zod does (#505): this app's classes take a null for an absent
- * optional field, so without this an item with `"progress": null` would show here and nowhere else.
+ * Refuses a null under any field [descriptor] declares that schemas.ts does not make nullable, as
+ * zod does (#505): this app's classes take a null for an absent optional field, so an item with
+ * `"progress": null` would otherwise show here and nowhere else. A field it does not declare is
+ * left alone, as zod strips it.
  */
-private fun refuseNulls(json: JsonElement) {
-    when (json) {
-        is JsonObject -> json.forEach { (k, v) ->
-            if (v is JsonNull && k !in NULLABLE) throw ProtocolException("bad-schema", "$k: null")
-            refuseNulls(v)
-        }
-        is JsonArray -> json.forEach(::refuseNulls)
-        else -> {}
+@OptIn(ExperimentalSerializationApi::class)
+fun refuseNulls(json: JsonElement, descriptor: SerialDescriptor) {
+    if (json is JsonArray && descriptor.kind == StructureKind.LIST) {
+        json.forEach { refuseNulls(it, descriptor.getElementDescriptor(0)) }
+        return
+    }
+    if (json !is JsonObject || descriptor.kind != StructureKind.CLASS) return
+    for ((k, v) in json) {
+        val i = descriptor.getElementIndex(k)
+        if (i == CompositeDecoder.UNKNOWN_NAME) continue
+        if (v is JsonNull) {
+            if (k !in NULLABLE) throw ProtocolException("bad-schema", "$k: null")
+        } else refuseNulls(v, descriptor.getElementDescriptor(i))
     }
 }
 
@@ -41,7 +52,6 @@ private fun refuseNulls(json: JsonElement) {
  * missing field, or a value of another type, is left for the schema to refuse.
  */
 fun readable(kind: String, json: JsonElement): JsonElement {
-    refuseNulls(json)
     val body = json as? JsonObject ?: return json
     return when (kind) {
         "decision", "permission" -> withSource(body)

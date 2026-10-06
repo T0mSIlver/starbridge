@@ -307,6 +307,32 @@
       "valid": false
     },
     {
+      "name": "a null under a field it does not know",
+      "body": {
+        "v": 1,
+        "id": "dec_1",
+        "to": [
+          "phone",
+          "phone2"
+        ],
+        "createdAt": "2026-10-04T10:00:00Z",
+        "question": "Run inference on the Mac while you are away?",
+        "context": "The bench needs the GPU for about 40 minutes. No: it waits for tonight.",
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "recommended": "Yes",
+        "source": {
+          "machine": "dev box",
+          "project": "localvoxtral",
+          "session": "s_42"
+        },
+        "later": null
+      },
+      "valid": true
+    },
+    {
       "name": "a machine kind that is no string",
       "body": {
         "v": 1,
@@ -2859,7 +2885,8 @@
         "alerts": [
           {
             "kind": "burst",
-            "share": 0.5
+            "share": 0.5,
+            "resetsAt": null
           },
           {
             "kind": "low",
