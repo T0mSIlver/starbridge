@@ -56,7 +56,7 @@ import {
   verifyDirectory,
   type Waiting,
 } from "@starbridge/protocol";
-import { ApiError, api, type Stored } from "./api";
+import { ApiError, api, backoff, type Stored } from "./api";
 import { generateDeviceKeys, sealOpener, signer } from "./crypto/keys";
 import * as store from "./store";
 import type {
@@ -586,7 +586,8 @@ export async function watchJoins(signal: AbortSignal, onChange: (asks: JoinAsk[]
       onChange(page.joins.flatMap((v) => toAsk(v) ?? []));
     } catch {
       if (signal.aborted) return;
-      await new Promise((r) => setTimeout(r, 5_000));
+      // At most every 5 s, and not before the server's backoff ends (#332).
+      await new Promise((r) => setTimeout(r, Math.max(5_000, backoff.until - Date.now())));
     }
   }
 }

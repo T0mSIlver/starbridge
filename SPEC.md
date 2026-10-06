@@ -1340,6 +1340,15 @@ so the mod is the first path.
   after a device allowed it. The Starbridge link now defers such asks at once, by the gate's
   surface, instead of sending the devices a prompt whose Allow is dropped. Letting a link allow
   them needs pi-permission-system to make the excluded families configurable (its #620).
+- 2026-10-06. The web backs off together while the server is unreachable (#332). Each poller's
+  call retried on its own every 250 ms to 4 s, so an offline page sent about two requests a
+  second, and every open tab did the same to a server coming back up. Now every call in a page
+  shares one backoff: 250 ms doubling to 30 s, with jitter between 50 and 100% of the step, ended
+  by any answer and by the browser's online event. Pollers skip their turn during a wait, while
+  every other call's first try goes out, since an answer, a push or a sign-in may be the one that
+  finds the server back; only retries wait. A call that
+  gets no answer throws "You're offline." or "Can't reach the Starbridge server." instead of
+  the browser's "Failed to fetch". An offline banner waits for the owner's ruling on the mockup.
 - 2026-10-06. Security headers (#312, after #302). Next sets the page's Content-Security-Policy
   in `web/src/proxy.ts`, because only it can put a fresh nonce on each request and on its own
   scripts: scripts need the nonce or `'strict-dynamic'` (so Umami's tracker, which Next's
