@@ -10,7 +10,8 @@ import { PNG } from "pngjs";
 import { run } from "../src/cli";
 import { session } from "../src/context";
 import { NO_DEFAULT, poll } from "../src/decisions";
-import { offerPiChain } from "../src/settings";
+import { piAllow, piPermissionConfig } from "../src/pi";
+import { configCommand, offerPiChain } from "../src/settings";
 import { FAKE_CODEXBAR, paired, testCtx, until } from "./helpers";
 
 let server: LiveServer;
@@ -401,6 +402,19 @@ test("permissions on offers to name the Starbridge link in pi-permission-system'
     },
   });
   expect(ctx.lines.length).toBe(before);
+});
+
+test("permissions on after installing pi-permission-system lets Starbridge's own calls through", async () => {
+  const ctx = await paired(server);
+  ctx.env.HOME = mkdtempSync(join(tmpdir(), "starbridge-pi-home-"));
+  // Installed after setup, as setup's hint says: setup had no config to add the rules to.
+  mkdirSync(join(ctx.env.HOME, ".pi/agent/extensions/pi-permission-system"), { recursive: true });
+  const yes = { confirm: async () => true, text: async (_q: string, d: string) => d };
+  expect(await configCommand(ctx, ["permissions", "on"], yes)).toBe(0);
+  const config = JSON.parse(readFileSync(piPermissionConfig(ctx.env), "utf8"));
+  expect(config.authorizerChain).toEqual(["starbridge"]);
+  expect(Object.keys(config.permission)).toEqual(["bash", "skill", "read"]);
+  expect(piAllow(ctx.env).state).toBe("allowed");
 });
 
 test("ask --wait prints the answer the phone sends", async () => {

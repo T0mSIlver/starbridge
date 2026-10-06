@@ -7,7 +7,7 @@ import { existsSync, readdirSync } from "node:fs";
 import { MachineKind } from "@starbridge/protocol";
 import { type Ctx, UsageError } from "./context";
 import { permissionsEnabled } from "./permissions";
-import { chainPiLink, PI_LINK, piChain } from "./pi";
+import { allowPiRules, chainPiLink, PI_LINK, piAllow, piChain, piRulesText } from "./pi";
 import { type Prompt, which } from "./setup/sys";
 
 /**
@@ -84,12 +84,51 @@ export async function offerPiChain(ctx: Ctx, prompt: Prompt | undefined) {
   } else ctx.out(`Pi: its prompts stay in Pi; to send them later, ${how}.`);
 }
 
+/**
+ * With pi-permission-system, offers to let Pi read the Starbridge skill and run the starbridge
+ * commands without a prompt, as Claude Code's allow rules and Codex's rule do. `quiet` skips the
+ * line saying they are there already. Without a terminal to ask on, it says what to add instead.
+ */
+export async function offerPiAllow(ctx: Ctx, prompt: Prompt | undefined, quiet = false) {
+  const { state, file } = piAllow(ctx.env);
+  if (state === "absent") return;
+  const how = `add ${piRulesText(ctx.env)} to "permission" in ${file}`;
+  if (state === "allowed") {
+    if (!quiet)
+      ctx.out(
+        `Pi: pi-permission-system lets Pi read the skill and run the starbridge commands (${file}).`,
+      );
+    return;
+  }
+  if (state === "unreadable" || !prompt) {
+    ctx.out(`Pi: to read the skill and run the starbridge commands without a prompt, ${how}.`);
+    return;
+  }
+  if (
+    await prompt.confirm(
+      `Let Pi read the Starbridge skill and run \`starbridge ask\`, \`waiting\`, \`working\`, \`wait\` and \`settle\` without a pi-permission-system prompt? This adds them to "permission" in ${file}.`,
+      true,
+    )
+  ) {
+    try {
+      allowPiRules(ctx.env);
+      ctx.out(`Pi: allowed them in ${file}.`);
+    } catch (e) {
+      ctx.out(`Pi: could not write ${file}: ${(e as Error).message}`);
+    }
+  } else
+    ctx.out(
+      `Pi: pi-permission-system will ask before each \`starbridge ask\`; to allow them later, ${how}.`,
+    );
+}
+
 const USAGE =
   "usage: starbridge config [permissions on|off] [machine-kind server|desktop|laptop|cloud]";
 
 /**
  * `starbridge config [<key> <value>]`: sets one setting, then prints them all. Turning permission
- * prompts on also offers to send Pi's, asking on `prompt` when there is a terminal.
+ * prompts on also offers to send Pi's and to let the starbridge commands through, asking on
+ * `prompt` when there is a terminal.
  */
 export async function configCommand(ctx: Ctx, args: string[], prompt?: Prompt): Promise<number> {
   const [key, value, ...extra] = args;
@@ -97,7 +136,11 @@ export async function configCommand(ctx: Ctx, args: string[], prompt?: Prompt): 
   if (key === "permissions") {
     if (value !== "on" && value !== "off") throw new UsageError(USAGE);
     setPermissions(ctx, value === "on");
-    if (value === "on") await offerPiChain(ctx, prompt);
+    if (value === "on") {
+      await offerPiChain(ctx, prompt);
+      // pi-permission-system is often installed after setup, which then had no rules to add.
+      await offerPiAllow(ctx, prompt, true);
+    }
   } else if (key === "machine-kind") {
     const kind = MachineKind.safeParse(value);
     if (!kind.success) throw new UsageError(USAGE);
