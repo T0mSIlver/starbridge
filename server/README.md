@@ -45,6 +45,8 @@ them. Its routes are in `PROTOCOL.md`.
 
    ```caddyfile
    starbridge.example {
+     # The web image leaves compression to the proxy.
+     encode zstd gzip
      # The web image sets the page's Content-Security-Policy; the proxy sets the rest.
      header {
        Strict-Transport-Security "max-age=31536000"
