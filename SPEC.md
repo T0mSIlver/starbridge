@@ -1876,6 +1876,21 @@ so the mod is the first path.
   permission, your phone tells you. Answer with one tap and it gets back to work." It sells the
   pain the owner named: you don't notice that an agent is blocked. The shots below it still show
   the web app beside the phone, so the page keeps saying both clients do the same.
+- 2026-10-06. The release is the unit (#471). `bun cli/scripts/version.ts <version>` stamps one
+  version into `cli/package.json`, `web/package.json`, both `plugin.json`, the mod's `VERSION`, the Android default
+  `versionName` and the marketplace's two `ref`s, in a PR; the owner tags the merged commit, and
+  the release workflow refuses a tag that disagrees (`--check`, also run by `cli/test/version.test.ts`
+  on every PR). The marketplace lists both plugins as `git-subdir` sources of
+  `https://github.com/T0mSIlver/starbridge.git` at that tag, so a hook flag merged on `main` no
+  longer reaches Claude Code users before the CLI that has it; the https URL clones without a
+  GitHub SSH key. A release candidate moves every version but the marketplace refs, so only
+  pinned installs get it. Setup installs the Pi package at its own CLI's tag
+  (`git:github.com/T0mSIlver/starbridge@v<version>`) and moves an install at another ref to it,
+  as `starbridge update` does to the new release's tag; `status` names a package at another ref;
+  Pi keeps a tag through `pi update` and `pi install` with a new ref rewrites the one entry
+  (Pi 0.87.1, `core/package-manager.js:618-639,1502-1512`). The mod keeps its own copy of the
+  agent API revision: Claude Code installs only `mod/`, so it cannot import the CLI's, and
+  `mod/test/agent.test.ts` runs it against the CLI's agent, which answers 426 outside its range.
 - 2026-10-06. 1.0.0 is the compatibility floor (#469, Tom: "reset and delete"). Protocol side:
   decisions carry no `default`, a recovery is a `recover` entry only (an `add` signed by the
   recovery key is refused, with a vector for it), and a recovery key is the 28-character key only:
