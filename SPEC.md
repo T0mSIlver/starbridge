@@ -763,10 +763,10 @@ Tokens, type and components: `DESIGN.md`.
   server's 30 s idle close) so TIME-WAIT sockets don't use up ports (#376). Caddy compresses every
   response and the web app none: Next's gzip ran on its one thread and filled it near 18 landing
   page visitors a second (#593). Nightly SQLite backups, kept 14 days.
-- **Per-address reads** (#582). Caddy counts every `/v1` request per address, 1200 a minute
+- **Per-address reads** (#582). Caddy counts every `/v1` request per address, 3000 a minute
   (IPv6 per /64): most reads count against no account, so this keeps a looping client or script
-  to about 1% of a core. A person with the page, the phone and three machines makes about 60 a
-  minute, so 20 can share an office's address.
+  to about 2% of a core. A visible page with a prompt waiting and a run live makes about 200 a
+  minute and a heavy user about 600, so five heavy users can share an office's address.
 - **Capacity** (#301). A load test of the production stack on two cores held 2000 simulated users
   at a 194 ms p99. On the production VPS, Caddy's memory runs out first, near 8000 users (each held
   long-poll costs about 96 KB in Caddy and 13 KB in the server); CPU near 10,000.
