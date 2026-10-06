@@ -7,7 +7,16 @@ import { existsSync, readdirSync } from "node:fs";
 import { MachineKind } from "@starbridge/protocol";
 import { type Ctx, UsageError } from "./context";
 import { permissionsEnabled } from "./permissions";
-import { allowPiRules, chainPiLink, PI_LINK, piAllow, piChain, piRulesText } from "./pi";
+import {
+  allowPiRules,
+  chainPiLink,
+  oldPiRulesStuck,
+  PI_LINK,
+  piAllow,
+  piBashDenies,
+  piChain,
+  piRulesText,
+} from "./pi";
 import { type Prompt, which } from "./setup/sys";
 
 /**
@@ -86,31 +95,42 @@ export async function offerPiChain(ctx: Ctx, prompt: Prompt | undefined) {
 
 /**
  * With pi-permission-system, offers to let Pi read the Starbridge skill and run the starbridge
- * commands without a prompt, as Claude Code's allow rules and Codex's rule do. `quiet` skips the
- * line saying they are there already. Without a terminal to ask on, it says what to add instead.
+ * commands without a prompt, as Claude Code's allow rules and Codex's rule do: rules for the
+ * skill, and the Starbridge link, which allows a lone starbridge command (#488). `quiet` skips
+ * the line saying they are there already. Without a terminal to ask on, it says what to add
+ * instead.
  */
 export async function offerPiAllow(ctx: Ctx, prompt: Prompt | undefined, quiet = false) {
   const { state, file, plain } = piAllow(ctx.env);
   if (state === "absent") return;
-  const how = `add ${piRulesText(ctx.env)} to "permission" in ${file}`;
+  const how = `add ${piRulesText(ctx.env)} to "permission" and "${PI_LINK}" to "authorizerChain" in ${file}`;
   for (const s of plain)
     ctx.out(
       `Pi: "permission.${s}" is a plain level, which Starbridge leaves to you; to let its calls through, make it a map that ends with ${piRulesText(ctx.env, [s])}.`,
     );
+  const denied = state !== "unreadable" && piBashDenies(ctx.env);
+  if (denied)
+    ctx.out(
+      `Pi: "permission.bash" denies by default in ${file}, so Pi cannot run the starbridge commands; add "starbridge *": "ask" to it, and the Starbridge link lets them through.`,
+    );
   if (state === "allowed") {
-    if (!quiet && plain.length === 0)
+    if (!quiet && plain.length === 0 && !denied)
       ctx.out(
         `Pi: pi-permission-system lets Pi read the skill and run the starbridge commands (${file}).`,
       );
     return;
   }
+  if (oldPiRulesStuck(ctx.env))
+    ctx.out(
+      `Pi: take the "starbridge … *" bash patterns out of ${file} by hand: they can let other commands run without a prompt (#488).`,
+    );
   if (state === "unreadable" || !prompt) {
     ctx.out(`Pi: to read the skill and run the starbridge commands without a prompt, ${how}.`);
     return;
   }
   if (
     await prompt.confirm(
-      `Let Pi read the Starbridge skill and run \`starbridge ask\`, \`waiting\`, \`working\`, \`wait\` and \`settle\` without a pi-permission-system prompt? This adds them to "permission" in ${file}.`,
+      `Let Pi read the Starbridge skill and run \`starbridge ask\`, \`waiting\`, \`working\`, \`wait\` and \`settle\` without a pi-permission-system prompt? This adds rules to "permission" and "${PI_LINK}" to "authorizerChain" in ${file}${permissionsEnabled(ctx) ? ", which also sends Pi's other permission prompts to your devices" : ""}.`,
       true,
     )
   ) {

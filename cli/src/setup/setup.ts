@@ -5,7 +5,7 @@
  */
 
 import { readFileSync } from "node:fs";
-import type { QuotaSnapshot } from "@starbridge/protocol";
+import { CLIENT_HEADER, clientHeader, type QuotaSnapshot } from "@starbridge/protocol";
 import type { Status } from "../agent/api";
 import { AgentClient, withAgent } from "../agent/client";
 import { askVia, quotaVia } from "../agent/commands";
@@ -88,6 +88,7 @@ async function checkServer(server: string): Promise<void> {
   let res: Response;
   try {
     res = await fetch(`${server.replace(/\/+$/, "")}/v1/me`, {
+      headers: { [CLIENT_HEADER]: clientHeader("cli", VERSION) },
       signal: AbortSignal.timeout(15_000),
     });
   } catch (e) {

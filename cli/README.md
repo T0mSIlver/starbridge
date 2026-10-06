@@ -177,7 +177,8 @@ every prompt at once, so none reaches your devices.
 Pi's prompts come from pi-permission-system (`pi install npm:@gotgenes/pi-permission-system`).
 With the Starbridge Pi package installed, the same command offers to add `starbridge` to its
 `authorizerChain`, which it needs as well. It also offers allow rules, so that Pi reads the
-Starbridge skill and runs the commands above without a prompt. Your devices then allow a call once
+Starbridge skill without a prompt; the link runs the commands above without one when they stand
+alone, never chained to another command. Your devices then allow a call once
 or deny it, and "Answer here" in Pi brings back pi-permission-system's own prompt. Asks from its
 `path` and `external_directory` rules stay at the keyboard, since it lets no link allow those.
 
@@ -205,6 +206,35 @@ the machine is not paired or the server doesn't answer, it lets the question thr
 opencode plugin runs `starbridge hook question --agent opencode` on each call of opencode's
 `question` tool: it posts each question to your devices and prints the answers for opencode,
 or nothing if the terminal answers first or the server can't be reached.
+
+## What agents parse
+
+Agents, the Starbridge skill, the Claude Code plugins, the Pi extension and the opencode plugin
+read the commands below and their output. The plugins update apart from the CLI, so this list is
+frozen for every 1.x release: a release may add commands, flags, variables, fields and lines, but
+changing or removing anything here takes a new major version. `cli/test/contract.test.ts` pins
+the lines; the hook outputs are pinned in `cli/test/permissions.test.ts`.
+
+| Command | Contract |
+|---|---|
+| `ask` | Flags `--question`, `--context`, `--context-file`, `--option`, `--recommended`, `--waiting`, `--agent`, `--project`, `--session`, `--session-title`, `--session-link`, `--image`, `--link`, `--answer-in`, `--input <path>` (a JSON file with the same fields, `-` for stdin), `--wait`, `--timeout`. Prints the decision id alone on stdout: `d_` and 16 characters from `A-Z a-z 0-9 _ -`. With `--wait`, then what `wait` prints; without it, one line on stderr, either `The answer will come back into this session as a new prompt.` or ``Nothing brings the answer into this session: when only the answer is left, run `starbridge wait <id> --timeout 5m` (again on exit 2).`` |
+| `wait [<id>]` | Flags `--timeout`, `--json`. Prints `Answer to <id> (<question>): <choice or text>`, or with `--json` the answer as one JSON object with `decisionId` and `choice` or `text`. Exits 2 when `--timeout` passed. |
+| `waiting <id>`, `working <id>` | No output on success. |
+| `settle <id>` | Flag `--outcome elsewhere\|withdrawn`. |
+| `answers --session <id>` | Flags `--wait <seconds>`, `--ack <ack>`. Prints one JSON object per line: `{"decisionId", "ack", "line"}`, where `line` is the `Answer to` line above. |
+| `run` | Flags `--title`, `--reason`, then `--` and the command. Exits with the command's code: 127 when it cannot start, 128 plus the signal when a signal ends it. |
+| `hook permission` | Flags `--agent claude-code\|pi\|opencode`, `--wait`. Reads the hook's JSON on stdin and prints the output its harness defines, or nothing to leave the prompt to the keyboard. SIGTERM means the keyboard answered. Exits 0. |
+| `hook settle` | Flag `--agent claude-code`. Reads the hook's JSON on stdin. Exits 0. |
+| `hook ask-user` | Reads the hook's JSON on stdin; prints a PreToolUse output that answers each question with an instruction to use `starbridge ask` (a denial when it cannot read the input), or nothing to let the question through. Exits 0. |
+| `pair` | Prints `Pairing code: <code>` first. |
+
+Codex sessions receive ``Starbridge has the owner's answer to <id>: run `starbridge wait <id>` to read it.``
+as a queued prompt. The plugins set `STARBRIDGE_PI_ANSWERS`, `STARBRIDGE_OPENCODE_SESSION`,
+`STARBRIDGE_OPENCODE_TITLE` and `STARBRIDGE_OPENCODE_ANSWERS` for the commands their agents run,
+and read `STARBRIDGE_CONFIG_DIR`, `STARBRIDGE_AGENT_SOCKET` and `STARBRIDGE_NO_AGENT`.
+
+The hooks exit 1 only when stdin cannot be read. Every other command exits 0 on success and 1 on an error, with the error on stderr after
+`starbridge: `. Ctrl-C exits 130.
 
 ## Release
 

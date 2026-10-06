@@ -124,7 +124,7 @@ export function requireCaller(...needs: Need[]): MiddlewareHandler<Env> {
     const ok = needs.some((n) => admits[n]);
     if (!ok) fail(403, "forbidden", `needs ${needs.join(" or ")}`);
     c.set("caller", caller);
-    c.var.usage.seen(caller);
+    c.var.usage.seen(caller, c.var.client);
     await next();
   };
 }

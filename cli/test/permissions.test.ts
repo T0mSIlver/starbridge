@@ -405,6 +405,13 @@ const build = (tool: string, input: unknown, suggestions: unknown[] = []) =>
     },
   ).permission;
 
+test("an opencode edit reaches the devices as its path and its diff (#489)", () => {
+  const diff = '--- a/package.json\n+++ b/package.json\n@@ -1 +1 @@\n-{}\n+{"x":1}\n';
+  const permission = build("edit", { file_path: "/w/package.json", diff });
+  expect(permission.summary).toBe("/w/package.json");
+  expect(JSON.parse(permission.input)).toEqual({ file_path: "/w/package.json", diff });
+});
+
 test("secrets are redacted before sealing; the hash covers the input as received, keyed", () => {
   const input = {
     command:
@@ -432,6 +439,24 @@ test("secrets are redacted before sealing; the hash covers the input as received
   expect(redactText("-----BEGIN RSA PRIVATE KEY-----\nAAAA \nMIIE\n")).toBe(
     "-----BEGIN RSA PRIVATE KEY-----\n[redacted]",
   );
+  // In a diff each line carries its `-`, `+` or space (#489).
+  const diff = [
+    "--- a/deploy.pem",
+    "+++ b/deploy.pem",
+    "@@ -1,4 +1,1 @@",
+    "------BEGIN OPENSSH PRIVATE KEY-----",
+    "-b3BlbnNzaC1rZXktdjEAAAA",
+    "-QyNTUxOQAAACBVq7",
+    "------END OPENSSH PRIVATE KEY-----",
+    "+gone",
+    " -----BEGIN RSA PRIVATE KEY-----",
+    " Proc-Type: 4,ENCRYPTED",
+    " MIIEowIBAAKCAQEA",
+  ].join("\n");
+  const shown = redactText(diff);
+  for (const body of ["b3BlbnNzaC1rZXk", "QyNTUxOQ", "MIIEowIBAAKC"])
+    expect(shown).not.toContain(body);
+  expect(shown).toContain(" Proc-Type: 4,ENCRYPTED");
   const mention = 'echo "-----BEGIN RSA PRIVATE KEY-----" > out';
   expect(redactText(mention)).toBe(mention);
   expect(redactText("Authorization: OAuth jd9e33 x")).toBe("Authorization: OAuth [redacted] x");

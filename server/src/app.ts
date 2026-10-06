@@ -6,6 +6,7 @@ import { bodyLimit } from "hono/body-limit";
 import { getCookie } from "hono/cookie";
 import { HTTPException } from "hono/http-exception";
 import { SESSION_COOKIE } from "./auth";
+import { clientVersion } from "./clients";
 import type { Config } from "./config";
 import { openDb } from "./db";
 import type { Deps, Env } from "./env";
@@ -67,6 +68,7 @@ export async function createApp(config: Config, fetchFn: typeof fetch = fetch) {
   setInterval(hourly, 3_600_000).unref();
 
   const v1 = new Hono<Env>()
+    .use(clientVersion)
     .route("/", authRoutes)
     .route("/", bindRoutes)
     .route("/", directoryRoutes)
