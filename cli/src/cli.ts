@@ -52,12 +52,13 @@ const HELP = `starbridge: post decisions to your devices, report runs, upload qu
       --option <text>         2 to 4 times; none asks for a free-text answer
       --recommended <text>    one of the options (default: the first)
       --waiting               you have nothing else to do: post it as waiting for the owner
-      --agent <name>          claude-code, codex or pi (default: the one that runs the
-                              command)
+      --agent <name>          claude-code, codex, pi or opencode (default: the one that
+                              runs the command)
       --project <name>        default: the current directory's name
       --session <id>          default: the agent's session ($CLAUDE_CODE_SESSION_ID,
-                              $CODEX_THREAD_ID, $PI_SESSION_ID)
-      --session-title <text>  default: the Claude Code or Pi session's name
+                              $CODEX_THREAD_ID, $PI_SESSION_ID,
+                              $STARBRIDGE_OPENCODE_SESSION)
+      --session-title <text>  default: the Claude Code, Pi or opencode session's name
       --image <path>          a PNG or JPEG to show with the question, up to 4 times;
                               scaled down to fit the server's size cap
       --link <url>            an https page to open, such as a claude.ai artifact,
@@ -124,12 +125,12 @@ const HELP = `starbridge: post decisions to your devices, report runs, upload qu
       starbridge plugin's permission hook exits at once. machine-kind: the icon devices
       show, detected by setup.
 
-  starbridge hook permission --agent claude-code|pi [--wait 570s]
+  starbridge hook permission --agent claude-code|pi|opencode [--wait 570s]
   starbridge hook settle --agent claude-code
       For Claude Code's PermissionRequest hook, and for its PostToolUse, PermissionDenied,
       Stop and SessionEnd hooks: hook JSON on stdin; prints the hook's decision, or nothing
       to leave the prompt to the keyboard. The Starbridge Pi extension runs it with --agent pi
-      for pi-permission-system's prompts.
+      for pi-permission-system's prompts, the opencode plugin with --agent opencode.
 
   starbridge hook ask-user
       For Claude Code's PreToolUse hook on AskUserQuestion: hook JSON on stdin; answers each

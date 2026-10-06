@@ -56,7 +56,7 @@ through its admin API on `127.0.0.1:2019`.
 | Backups | `/var/backups/starbridge/starbridge-YYYYMMDD.db` and `umami-YYYYMMDD.dump`, nightly at 03:15 UTC, 14 days; Hetzner backups cover the rest |
 | Analytics | Umami (`umami`, `umami-db`), volume `starbridge_umami-db`; secrets in `/etc/starbridge/umami.env` and `umami-db.env`, made on the first deploy |
 | Analytics limits | Caddy (built with the `rate_limit` module, `caddy.Dockerfile`) takes 30 events a minute per address and 300 in all, 8 KB each; `starbridge-umami-trim.timer` keeps each table to 180 days and a million rows, hourly |
-| Uptime | `.github/workflows/uptime.yml` checks `/healthz` and `/healthz/backup` (503 once the last backup is over 26 h old) hourly and opens an `outage` issue on failure |
+| Uptime | `.github/workflows/uptime.yml` checks `/healthz`, `/healthz/backup` (503 once the last backup is over 26 h old) and `/healthz/disk` (503 under 2 GB free) hourly and opens an `outage` issue on failure |
 | FCM check | `sudo /opt/starbridge/deploy/host/check-fcm.sh` mints a token with the service account |
 | Usage counts | `sudo docker compose -p starbridge -f /opt/starbridge/deploy/compose.yaml exec server bun server.js usage 14` prints the last 14 days (`server/src/usage.ts`) |
 
