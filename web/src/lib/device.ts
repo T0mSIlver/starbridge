@@ -1164,21 +1164,13 @@ async function openDecision(
   const reply = sent[body.id];
   const closing = closings.get(`${machine.id}/${body.id}`);
   const notice = closing?.notice;
-  // The machine names the device whose answer it took, whenever its notice comes (#330).
-  const by = notice?.outcome === "device" ? notice.device : undefined;
-  const theirs =
-    notice?.choice !== undefined
-      ? { choice: notice.choice }
-      : notice?.text !== undefined
-        ? { text: notice.text }
-        : undefined;
-  const answeredBy =
-    by && theirs && by !== ctx.device.id
-      ? { device: ctx.dir.members.get(by)?.member.name ?? by, reply: theirs }
-      : undefined;
+  const answeredBy = notice && wonBy(ctx, notice);
   // Any other notice that closed it arrived in the same write, so it carries the same time; a
   // later one, after a device's answer, closed nothing.
-  const settled = notice && !by && closing.at === s.answeredAt ? notice.outcome : undefined;
+  const settled =
+    notice && notice.outcome !== "device" && closing.at === s.answeredAt
+      ? notice.outcome
+      : undefined;
   return {
     decision: body as Decision,
     machine,
@@ -1189,6 +1181,22 @@ async function openDecision(
       ? { reply: "choice" in reply ? { choice: reply.choice } : { text: reply.text } }
       : {}),
   };
+}
+
+/**
+ * Another device's answer the asking machine took, from its settled notice (#330): undefined for
+ * any other notice, or one naming this browser.
+ */
+function wonBy(ctx: Ctx, notice: Settled): InboxItem["answeredBy"] {
+  const by = notice.outcome === "device" ? notice.device : undefined;
+  if (!by || by === ctx.device.id) return undefined;
+  const reply =
+    notice.choice !== undefined
+      ? { choice: notice.choice }
+      : notice.text !== undefined
+        ? { text: notice.text }
+        : undefined;
+  return reply && { device: ctx.dir.members.get(by)?.member.name ?? by, reply };
 }
 
 /** Opens a decision a push carried (or named, when it did not fit). */
@@ -1265,6 +1273,14 @@ export async function loadInbox(ctx: Ctx, inbox: Inbox = { items: [], rejected: 
     for (const s of page.items) await take(s, false);
     cursor = page.cursor;
     if (page.items.length < 100) break;
+  }
+  // The machine names the winner after the answer, so its notice often lists without the
+  // decision, which an earlier read already holds.
+  for (const [key, { notice }] of closings) {
+    const item = byId.get(notice.itemId);
+    const answeredBy = wonBy(ctx, notice);
+    if (item && answeredBy && !item.reply && key === `${item.machine.id}/${notice.itemId}`)
+      byId.set(notice.itemId, { ...item, answeredBy });
   }
   // Only the machine that asked can say its agent waits on the question.
   const items = [...byId.values()].map((i) => {

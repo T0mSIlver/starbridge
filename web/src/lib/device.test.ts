@@ -344,8 +344,14 @@ test("a machine's settled notice closes only that machine's decisions (#362)", a
     expect(
       (await device.loadInbox(fresh)).items.find((i) => i.decision.id === "d_asked")?.answeredBy,
     ).toBeUndefined();
-    items[0] = told(asks, "No");
-    const won = (await device.loadInbox(fresh)).items.find((i) => i.decision.id === "d_asked");
+    // Read before the notice came: a later read lists the notice alone, and it still counts.
+    items.splice(0, 1);
+    const before = await device.loadInbox(fresh);
+    items.length = 0;
+    items.push(told(asks, "No"));
+    const won = (await device.loadInbox(fresh, before)).items.find(
+      (i) => i.decision.id === "d_asked",
+    );
     const phone = fresh.dir.members.get("phone")?.member.name;
     expect(won?.answeredBy).toEqual({ device: phone as string, reply: { choice: "No" } });
     expect(won?.settled).toBeUndefined();

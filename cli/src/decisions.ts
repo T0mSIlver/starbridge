@@ -663,7 +663,8 @@ async function announce(ctx: Ctx, s: Session, dir: Directory): Promise<void> {
   if (st.behind) return;
   const due = Object.entries(st.answers).filter(([, a]) => a.announce && a.device);
   if (due.length === 0) return;
-  const to = devices(dir);
+  // No active device left: nobody to tell.
+  const to = activeMembers(dir, "device");
   for (const [id, { answer, device }] of due) {
     const body = {
       v: 1 as const,
@@ -677,15 +678,19 @@ async function announce(ctx: Ctx, s: Session, dir: Directory): Promise<void> {
       dir: signedHead(ctx, dir),
     } satisfies Settled;
     try {
-      await s.api.postItem(
-        seal("settled", body, { id: s.machine.id, signKey: s.keys.sign.privateKey }, to),
-      );
+      if (to.length > 0)
+        await s.api.postItem(
+          seal("settled", body, { id: s.machine.id, signKey: s.keys.sign.privateKey }, to),
+          ctx.signal,
+        );
     } catch (e) {
       // Settled already (withdrawn meanwhile, say) or gone: nothing left to tell.
       const done = e instanceof ApiError && (e.code === "already-settled" || e.status === 404);
       if (!done) {
         ctx.err(`starbridge: could not tell the devices which answer won: ${(e as Error).message}`);
-        return;
+        // Offline or cut off by a deadline: the rest would fail the same way.
+        if (!(e instanceof ApiError)) return;
+        continue;
       }
     }
     ctx.store.updateState((st) => {
