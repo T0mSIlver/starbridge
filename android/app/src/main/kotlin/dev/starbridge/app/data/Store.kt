@@ -46,7 +46,7 @@ interface Store {
     /** The owner saw the same digits on the device comparing them: its approval may count. */
     fun confirmDigits()
     fun cancelJoin()
-    fun recover(words: String)
+    fun recover(key: String)
 
     /** Syncs everything; [shown] false keeps [busy] down, for syncs the owner didn't ask for. */
     fun refresh(shown: Boolean = true)

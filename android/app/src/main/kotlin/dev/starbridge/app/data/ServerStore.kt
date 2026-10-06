@@ -1,7 +1,6 @@
 package dev.starbridge.app.data
 
 import android.util.Log
-import dev.starbridge.app.protocol.Bip39
 import dev.starbridge.app.protocol.RecoveryKeys
 import dev.starbridge.app.protocol.recoverySignSeed
 import dev.starbridge.app.protocol.Directories
@@ -207,7 +206,7 @@ class ServerStore(
             saved.joining != null -> Phase.Joining(saved.joining!!, saved.joiningScanned)
             saved.digitJoin != null -> Phase.JoiningByDigits(saved.digitJoin!!.digits, saved.digitJoin!!.matched)
             // Before the pin: the first entry waits on the server until the key is confirmed (#370).
-            secrets.recoverySeed != null -> Phase.RecoveryKey(RecoveryKeys.shown(fromB64(secrets.recoverySeed!!), sodium))
+            secrets.recoverySeed != null -> Phase.RecoveryKey(RecoveryKeys.encode(fromB64(secrets.recoverySeed!!), sodium))
             saved.me == null || saved.pin == null -> Phase.NoDevice(saved.accountExists)
             else -> Phase.Ready
         }
@@ -635,8 +634,8 @@ class ServerStore(
         return true
     }
 
-    override fun recover(words: String) = run {
-        val recovery = sodium.signSeedKeyPair(recoverySignSeed(RecoveryKeys.seed(words, sodium), sodium))
+    override fun recover(key: String) = run {
+        val recovery = sodium.signSeedKeyPair(recoverySignSeed(RecoveryKeys.seed(key, sodium), sodium))
         val entries = api().directory(0)
         // The chain's current recovery key must be this one, whose own signature a server cannot
         // fake; a phone that was a device before keeps the server from serving it a shorter chain.
@@ -1658,7 +1657,7 @@ class ServerStore(
         val seed = sodium.random(16)
         val nextSeed = recoverySignSeed(seed, sodium)
         val next = sodium.signSeedKeyPair(nextSeed)
-        val shown = RecoveryKeys.shown(seed, sodium)
+        val shown = RecoveryKeys.encode(seed, sodium)
         seed.fill(0)
         nextSeed.fill(0)
         dropReplacement()
@@ -1780,8 +1779,6 @@ class ServerStore(
             context = b.context,
             options = b.options,
             recommended = b.recommended,
-            default = b.fallback?.action,
-            defaultAt = instant(b.fallback?.at),
             source = Source(
                 b.source.machine,
                 b.source.project,

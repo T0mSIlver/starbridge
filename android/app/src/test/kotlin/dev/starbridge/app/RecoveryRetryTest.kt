@@ -74,7 +74,7 @@ class RecoveryRetryTest {
     fun aRetryAfterALostReplyKeepsTheFirstKeys() {
         val account = "acct"
         val seed = sodium.random(16)
-        val words = RecoveryKeys.shown(seed, sodium)
+        val key = RecoveryKeys.encode(seed, sodium)
         val lost = Member("lost", "device", "Lost phone", toB64(sodium.boxKeyPair().public), toB64(sodium.signKeyPair().public))
         val lostSign = sodium.signKeyPair()
         val genesis = directories.genesisEntry(account, lost.copy(signPk = toB64(lostSign.public)), lostSign.secret, sodium.signSeedKeyPair(recoverySignSeed(seed, sodium)), "2026-10-05T12:00:00Z")
@@ -124,9 +124,9 @@ class RecoveryRetryTest {
         }
         val store = ServerStore(disk, OkHttpClient(), sodium, envelopes, directories, Pairings(sodium), Joins(sodium), alerts, "Phone", server, false, scope)
 
-        store.recover(words)
+        store.recover(key)
         until { appends == 1 && !store.busy.value }
-        store.recover(words)
+        store.recover(key)
         until { store.phase.value == Phase.Ready }
 
         assertEquals(1, appends)

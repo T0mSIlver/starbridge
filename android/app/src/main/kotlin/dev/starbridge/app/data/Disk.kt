@@ -15,8 +15,8 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 import java.io.File
 
-/** 1: images, links and answerIn (#62). 2: replies (#201). 3: theirAnswer and answeredBy (#330). */
-const val DECISION_FIELDS = 3
+/** Raised when [SavedDecision]'s body gains a field, so open decisions saved without it are read again. */
+const val DECISION_FIELDS = 1
 
 /** A decision this device opened and verified, and what became of it. */
 @Serializable
@@ -128,7 +128,7 @@ data class Secrets(
     val boxSk: String? = null,
     val signPk: String? = null,
     val signSk: String? = null,
-    /** The first device's recovery seed, kept until the owner says the words are written down. */
+    /** The first device's recovery seed, kept until the owner says the key is written down. */
     val recoverySeed: String? = null,
     /** While joining: the claim secret that fetches the approval. */
     val claim: String? = null,

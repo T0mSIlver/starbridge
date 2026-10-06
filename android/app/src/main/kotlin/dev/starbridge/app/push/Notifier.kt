@@ -56,7 +56,6 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
         manager.createNotificationChannelGroup(NotificationChannelGroup(ACTIVITY, "Activity"))
         // A question its agent waits on alerts with a heads-up; one it works around makes a sound
         // only. New ids, since Android never lowers an existing channel's importance (#191).
-        manager.deleteNotificationChannel(OLD_DECISIONS)
         manager.createNotificationChannel(
             NotificationChannel(WAITING, "Waiting for you", NotificationManager.IMPORTANCE_HIGH).apply {
                 group = NEEDS_YOU
@@ -548,7 +547,6 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
     companion object {
         const val WAITING = "waiting"
         const val QUESTIONS = "questions"
-        private const val OLD_DECISIONS = "decisions"
         const val PROMPTS = "prompts"
         const val JOIN_CHANNEL = "joins"
         const val RUNS = "runs"

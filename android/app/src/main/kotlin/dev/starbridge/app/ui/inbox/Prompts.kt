@@ -105,7 +105,7 @@ fun <T> byMachine(runs: List<T>, needs: List<T>, machine: (T) -> String): List<L
 
 /** Open questions as the feed lists them (SPEC, Design v2 inbox): those whose agent waits first, each oldest first. */
 fun openQuestions(decisions: List<Decision>, now: Instant): List<Decision> = decisions
-    .filter { it.isOpen(now) }
+    .filter { it.isOpen }
     .sortedWith(compareByDescending<Decision> { it.waiting }.thenBy { it.createdAt })
 
 private val pretty = Json { prettyPrint = true }

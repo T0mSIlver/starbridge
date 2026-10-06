@@ -223,7 +223,7 @@ fun InboxScreen(
     val feed: List<Item> = runItems + needs
     val needYou = open.size + shown.count { it.waiting(at) }
     val running = shownRuns.count { it.state(now) == Run.State.Running }
-    val history = History(decisions.filterNot { it.isOpen(now) }, prompts.filter { !it.waiting(at) && it !in shown }, now)
+    val history = History(decisions.filterNot { it.isOpen }, prompts.filter { !it.waiting(at) && it !in shown }, now)
 
     Page(
         "Inbox",
@@ -502,10 +502,10 @@ fun Options(decision: Decision, sending: String?, height: Dp, other: Color, answ
 @Composable
 fun DecisionSheet(decision: Decision, now: Instant, onAnswer: (String, String?, String?) -> Unit, replies: Replies) {
     val scheme = MaterialTheme.colorScheme
-    val wasOpen = remember(decision.id) { decision.isOpen(now) }
+    val wasOpen = remember(decision.id) { decision.isOpen }
     val send = answer(decision, onAnswer)
     val sending = replies.sending[decision.id]
-    val open = decision.isOpen(now)
+    val open = decision.isOpen
     val since = decision.waitingSince?.takeIf { open }
     SheetBody(
         decision.source,
@@ -619,9 +619,8 @@ private fun AnswerElsewhere(page: Link) {
 }
 
 /** The answer, or how a question answered on another page closed. */
-internal fun outcome(decision: Decision, now: Instant) = decision.answer ?: decision.theirAnswer ?: when {
+internal fun outcome(decision: Decision) = decision.answer ?: decision.theirAnswer ?: when {
     decision.settled == "withdrawn" -> "Withdrawn"
-    decision.lapsed(now) -> "No answer by its default time"
     decision.answerIn != null -> "Answered in ${decision.answerIn.place()}"
     else -> "Answered"
 }
@@ -645,7 +644,7 @@ private fun Outcome(decision: Decision, now: Instant, arrived: Boolean) {
         Spacer(Modifier.width(Spacing.s2))
         Text(
             buildAnnotatedString {
-                withStyle(SpanStyle(color = MaterialTheme.colorScheme.onSurface)) { append(outcome(decision, now)) }
+                withStyle(SpanStyle(color = MaterialTheme.colorScheme.onSurface)) { append(outcome(decision)) }
                 append(" · on ${answeredBy(decision)}")
             },
             style = StarbridgeTheme.type.body,
@@ -680,7 +679,7 @@ private fun inline(text: String, background: Color): AnnotatedString = buildAnno
 /** What History holds: answered questions and ended prompts, newest first, and today's count. */
 internal class History(decisions: List<Decision>, prompts: List<Prompt>, now: Instant) {
     val rows: List<Pair<Instant, Any>> = (
-        decisions.map { (it.answeredAt ?: it.defaultAt ?: it.createdAt) to it } +
+        decisions.map { (it.answeredAt ?: it.createdAt) to it } +
             prompts.map { (it.endedAt ?: it.expiresAt) to it }
         ).sortedByDescending { it.first }
     private val today = now.atZone(ZoneId.systemDefault()).toLocalDate()
@@ -717,7 +716,7 @@ private fun LazyListScope.history(history: History, open: Boolean, onOpen: (Bool
         val shape = if (joined) segment(i + 1, count) else RoundedCornerShape(Spacing.s5)
         Box(Modifier.padding(top = if (joined) 0.dp else cardGap - groupGap)) {
             when (it) {
-                is Decision -> HistoryRow(it.source, it.question, false, closedHow(it, at), shape) { actions.open(it.id) }
+                is Decision -> HistoryRow(it.source, it.question, false, closedHow(it), shape) { actions.open(it.id) }
                 is Prompt -> HistoryRow(it.source, it.summary, true, closedHow(it), shape) { promptActions?.open?.invoke(it.id) }
             }
         }
@@ -725,7 +724,7 @@ private fun LazyListScope.history(history: History, open: Boolean, onOpen: (Bool
 }
 
 /** How a History row closed: the answer and who gave it, or how a prompt ended. */
-internal fun closedHow(decision: Decision, at: Instant) = "${outcome(decision, at)} · on ${answeredBy(decision)}"
+internal fun closedHow(decision: Decision) = "${outcome(decision)} · on ${answeredBy(decision)}"
 internal fun closedHow(prompt: Prompt) = prompt.ended ?: "Expired"
 
 /**

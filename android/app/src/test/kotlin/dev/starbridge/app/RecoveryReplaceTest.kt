@@ -122,7 +122,7 @@ class RecoveryReplaceTest {
         serve()
         val server = http.url("/").toString().trimEnd('/')
         val seed = sodium.random(16)
-        val oldKey = RecoveryKeys.shown(seed, sodium)
+        val oldKey = RecoveryKeys.encode(seed, sodium)
         val box = sodium.boxKeyPair()
         val sign = sodium.signKeyPair()
         val me = Member("phone", "device", "Pixel", toB64(box.public), toB64(sign.public))
@@ -136,7 +136,7 @@ class RecoveryReplaceTest {
         until { phone.phase.value == Phase.Ready }
 
         // A key that is not the chain's is refused before anything is made or posted.
-        phone.newRecoveryKey(RecoveryKeys.shown(sodium.random(16), sodium))
+        phone.newRecoveryKey(RecoveryKeys.encode(sodium.random(16), sodium))
         until { phone.notice.value != null }
         assertEquals("This isn't the account's current recovery key.", phone.notice.value)
         assertEquals(Replacing.Idle, phone.replacing.value)
