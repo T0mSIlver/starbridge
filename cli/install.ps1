@@ -18,6 +18,7 @@
 # A script block: under `iex` nothing it sets stays in the caller's session, and a failure throws
 # rather than `exit`, which would close the caller's window.
 & {
+  Set-StrictMode -Off
   $ErrorActionPreference = 'Stop'
   $ProgressPreference = 'SilentlyContinue'
 
@@ -28,12 +29,18 @@
   $MinisignSha256 = '37b600344e20c19314b2e82813db2bfdcc408b77b876f7727889dbd46d539479'
 
   $Releases = if ($env:STARBRIDGE_RELEASES_URL) { $env:STARBRIDGE_RELEASES_URL } else { 'https://github.com/T0mSIlver/starbridge/releases' }
-  $Dir = if ($env:STARBRIDGE_INSTALL_DIR) { $env:STARBRIDGE_INSTALL_DIR } else { Join-Path $HOME '.local\bin' }
+  $Dir = [IO.Path]::GetFullPath($(if ($env:STARBRIDGE_INSTALL_DIR) { $env:STARBRIDGE_INSTALL_DIR } else { Join-Path $HOME '.local\bin' }))
+  $onWindows = [Environment]::OSVersion.Platform -eq 'Win32NT'
 
   function Fail($why) { throw "starbridge install: $why" }
 
-  $os = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture
-  $arch = switch ("$os") { 'X64' { 'x64' } 'Arm64' { 'arm64' } default { Fail "no build for $os; try npm i -g starbridge" } }
+  # The machine's, not this PowerShell's, which may run emulated; .NET before 4.7.1 lacks the type.
+  $os = $env:PROCESSOR_ARCHITEW6432
+  if (-not $os) { $os = $env:PROCESSOR_ARCHITECTURE }
+  if ($os -ne 'ARM64') {
+    try { $os = "$([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture)" } catch {}
+  }
+  $arch = switch ($os) { { $_ -in 'X64', 'AMD64' } { 'x64' } 'Arm64' { 'arm64' } default { Fail "no build for $os; try npm i -g starbridge" } }
   $asset = "starbridge-windows-$arch.exe"
   $version = if ($env:STARBRIDGE_VERSION) { $env:STARBRIDGE_VERSION -replace '^v', '' }
   $base = if ($version) { "$Releases/download/v$version" } else { "$Releases/latest/download" }
@@ -63,17 +70,19 @@
 
     # -Q prints the trusted comment, which names the version the signature is for. Windows
     # PowerShell turns a native command's stderr into an error that 'Stop' would throw.
+    # A minisign that never started leaves the session's last exit code, maybe 0: set it first.
     $ErrorActionPreference = 'Continue'
-    $signed = & $minisign -VQ -P $PubKey -m (Join-Path $tmp 'SHA256SUMS') -x (Join-Path $tmp 'SHA256SUMS.minisig') 2>$null
+    $global:LASTEXITCODE = 1
+    $signed = try { & $minisign -VQ -P $PubKey -m (Join-Path $tmp 'SHA256SUMS') -x (Join-Path $tmp 'SHA256SUMS.minisig') 2>$null } catch { $null }
     $ok = $LASTEXITCODE -eq 0
     $ErrorActionPreference = 'Stop'
-    if (-not $ok) { Fail 'SHA256SUMS does not carry the release signature' }
     $signed = "$signed".Trim()
-    if ($version -and $signed -ne "starbridge v$version") { Fail "SHA256SUMS is signed for `"$signed`", not starbridge v$version" }
+    if (-not $ok -or $signed -cnotmatch '^starbridge v\S+$') { Fail 'SHA256SUMS does not carry the release signature' }
+    if ($version -and $signed -cne "starbridge v$version") { Fail "SHA256SUMS is signed for `"$signed`", not starbridge v$version" }
 
     $want = $null
     foreach ($line in Get-Content -LiteralPath (Join-Path $tmp 'SHA256SUMS')) {
-      if ($line -match '^([0-9a-f]{64}) [ *](.+)$' -and $Matches[2] -eq $asset) { $want = $Matches[1] }
+      if ($line -cmatch '^([0-9a-f]{64}) [ *](.+)$' -and $Matches[2] -ceq $asset) { $want = $Matches[1] }
     }
     if (-not $want) { Fail "SHA256SUMS lists no $asset" }
     if ((Get-Sha256 (Join-Path $tmp $asset)) -ne $want) { Fail "$asset does not match its hash in SHA256SUMS" }
@@ -82,31 +91,36 @@
     $exe = Join-Path $Dir 'starbridge.exe'
     $next = Join-Path $Dir '.starbridge.new'
     Move-Item -Force -LiteralPath (Join-Path $tmp $asset) -Destination $next
-    # Windows replaces no running .exe, such as the agent's, but lets it be renamed.
+    # Windows replaces no running .exe, such as the agent's, but lets it be renamed. A copy set
+    # aside before may still run too: then this one goes aside under another name.
     if (Test-Path -LiteralPath $exe) {
-      Remove-Item -Force -LiteralPath "$exe.old" -ErrorAction SilentlyContinue
-      Move-Item -Force -LiteralPath $exe -Destination "$exe.old"
+      $aside = "$exe.old"
+      Remove-Item -Force -LiteralPath $aside -ErrorAction SilentlyContinue
+      if (Test-Path -LiteralPath $aside) { $aside = "$exe.$([guid]::NewGuid()).old" }
+      Move-Item -LiteralPath $exe -Destination $aside
     }
     Move-Item -LiteralPath $next -Destination $exe
     # PowerShell on Linux or macOS, where its tests run.
-    if ($IsWindows -eq $false) { chmod 755 $exe }
-    Remove-Item -Force -LiteralPath "$exe.old" -ErrorAction SilentlyContinue
+    if (-not $onWindows) { chmod 755 $exe }
+    Get-ChildItem -LiteralPath $Dir -Filter 'starbridge.exe.*old' | Remove-Item -Force -ErrorAction SilentlyContinue
     Write-Host "Installed $(& $exe --version) to $exe"
   } finally {
     Remove-Item -Recurse -Force -LiteralPath $tmp -ErrorAction SilentlyContinue
   }
 
   # The user's PATH, read and written unexpanded so its %VARIABLES% survive.
-  $onPath = ($env:Path -split ';') -contains $Dir
-  if (-not $onPath -and $IsWindows -ne $false) {
+  $same = { param($entry) [Environment]::ExpandEnvironmentVariables($entry).TrimEnd('\') -eq $Dir.TrimEnd('\') }
+  $onPath = @($env:Path -split ';' | Where-Object { & $same $_ }).Count -gt 0
+  if (-not $onPath -and $onWindows) {
     $key = Get-Item -LiteralPath 'HKCU:\Environment'
     $userPath = $key.GetValue('Path', '', 'DoNotExpandEnvironmentNames')
-    if (($userPath -split ';') -notcontains $Dir) {
+    if (@($userPath -split ';' | Where-Object { & $same $_ }).Count -eq 0) {
       $joined = (@($Dir) + @($userPath -split ';' | Where-Object { $_ })) -join ';'
       Set-ItemProperty -LiteralPath 'HKCU:\Environment' -Name Path -Value $joined -Type ExpandString
       # Setting any user variable through .NET tells open programs the environment changed.
-      [Environment]::SetEnvironmentVariable('STARBRIDGE_INSTALL', '1', 'User')
-      [Environment]::SetEnvironmentVariable('STARBRIDGE_INSTALL', $null, 'User')
+      $nudge = "STARBRIDGE_$([guid]::NewGuid().ToString('N'))"
+      [Environment]::SetEnvironmentVariable($nudge, '1', 'User')
+      [Environment]::SetEnvironmentVariable($nudge, $null, 'User')
       Write-Host "Added $Dir to your PATH; terminals opened from now on find starbridge."
     }
     $env:Path = "$Dir;$env:Path"
@@ -115,6 +129,8 @@
   }
 
   if (-not $env:STARBRIDGE_NO_SETUP -and ((& $exe --help) -match '^  starbridge setup')) {
-    & $exe setup
+    # Its own process on this console: run inside this script block, its output would go
+    # through a pipe, holding back a question until its line ends.
+    Start-Process -FilePath $exe -ArgumentList 'setup' -NoNewWindow -Wait
   }
 }

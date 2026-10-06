@@ -208,7 +208,12 @@ describe.each(verifiers)("install.sh checking with %s", (verifier) => {
 const pwsh = spawnSync("pwsh", ["-v"]).status === 0 && process.platform !== "win32";
 describe.skipIf(!pwsh || !hasMinisign)("install.ps1", () => {
   const asset = platformAsset("win32", process.arch);
-  async function installPs(url: string, pubkey: string, version?: string) {
+  async function installPs(
+    url: string,
+    pubkey: string,
+    version?: string,
+    opts: { minisign?: string; iex?: boolean } = {},
+  ) {
     const script = join(dir, "install.ps1");
     writeFileSync(
       script,
@@ -217,16 +222,22 @@ describe.skipIf(!pwsh || !hasMinisign)("install.ps1", () => {
         `  $PubKey = '${pubkey}'`,
       ),
     );
-    const p = Bun.spawn(["pwsh", "-NoProfile", "-NonInteractive", "-File", script], {
+    // As `irm | iex` runs it: in a session whose last native command exited 0.
+    const iex = `cmd /c exit 0 2>$null; $global:LASTEXITCODE = 0; Get-Content -Raw '${script}' | Invoke-Expression`;
+    const args = opts.iex ? ["-Command", iex] : ["-File", script];
+    const p = Bun.spawn(["pwsh", "-NoProfile", "-NonInteractive", ...args], {
       env: {
         PATH: process.env.PATH ?? "",
         HOME: dir,
         STARBRIDGE_RELEASES_URL: url,
         STARBRIDGE_INSTALL_DIR: join(dir, "bin"),
-        STARBRIDGE_MINISIGN: spawnSync("sh", ["-c", "command -v minisign"], {
-          encoding: "utf8",
-        }).stdout.trim(),
+        STARBRIDGE_MINISIGN:
+          opts.minisign ??
+          spawnSync("sh", ["-c", "command -v minisign"], {
+            encoding: "utf8",
+          }).stdout.trim(),
         STARBRIDGE_NO_SETUP: "1",
+        NO_COLOR: "1",
         ...(version ? { STARBRIDGE_VERSION: version } : {}),
       },
       stdout: "pipe",
@@ -237,10 +248,8 @@ describe.skipIf(!pwsh || !hasMinisign)("install.ps1", () => {
       new Response(p.stderr).text(),
       p.exited,
     ]);
-    // PowerShell colours an error and wraps it at the console width.
-    const text = `${out}${err}`
-      .replace(/\x1b\[[0-9;]*m/g, "")
-      .replace(/\s*\n\s*\|\s*/g, " ");
+    // PowerShell wraps an error at the console width.
+    const text = `${out}${err}`.replace(/\s*\n\s*\|\s*/g, " ");
     return { code, out: text, bin: join(dir, "bin", "starbridge.exe") };
   }
 
@@ -265,6 +274,21 @@ describe.skipIf(!pwsh || !hasMinisign)("install.ps1", () => {
     r = await installPs(release.url, release.pubkey);
     expect(r.out).toContain("SHA256SUMS does not carry the release signature");
     expect(existsSync(r.bin)).toBe(false);
+  });
+
+  test("under iex, a minisign that cannot start fails closed", async () => {
+    release = fakeReleases("9.9.9", { asset });
+    const r = await installPs(release.url, release.pubkey, undefined, {
+      minisign: join(dir, "missing-minisign"),
+      iex: true,
+    });
+    expect(r.out).toContain("SHA256SUMS does not carry the release signature");
+    expect(existsSync(r.bin)).toBe(false);
+  });
+
+  test("is plain ASCII, which Windows PowerShell reads right without a BOM", () => {
+    const text = readFileSync(join(CLI, "install.ps1"), "utf8");
+    expect([...text].every((c) => (c.codePointAt(0) ?? 0) < 128)).toBe(true);
   });
 
   test("refuses an older signed release served as the version asked for", async () => {
