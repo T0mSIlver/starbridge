@@ -204,7 +204,9 @@ provider plugins add providers, not panels.
   device joins, the machine re-signs its open questions and prompts to the full recipient list and
   re-posts them (`reseal`). The server takes a re-post only from the machine that posted the item,
   only while it is open, keeps its arrival time and pushes only the new recipients. Nothing is
-  re-sealed while the machine finds the directory behind.
+  re-sealed while the machine finds the directory behind. A re-post that fails is tried again on
+  the next poll, prompts included: a prompt keeps the devices that hold it apart from those whose
+  answers count.
 - **Fresh quotas** (#158, #450). The local agent posts a snapshot once its directory holds a new device.
   `POST /quota/ask` wakes the machines and holds until each posted, up to 25 s, under the 30 s at
   which proxies cut long polls; 6 a minute per account, since each runs CodexBar on every machine.
@@ -314,7 +316,9 @@ agent's session, takes only that session's answers (#324).
   answer loop (`agent.ts`, `poller.ts`, `switch.ts`). opencode gives commands no session id, so
   its plugin sets `STARBRIDGE_OPENCODE_SESSION` through `shell.env`. After opencode restarts, the
   plugin resumes the loops of sessions still expecting an answer (#398); two processes showing one
-  session claim each answer with an exclusive file before submitting (#399).
+  session claim each answer with an exclusive file before submitting (#399). A loop confirms an
+  answer only once opencode took it, and a claim never marked submitted, left by a process that
+  died, is taken over after a minute.
 
 ### Skill and rule
 

@@ -7,6 +7,8 @@ import { AgentClient } from "../src/agent/client";
 import { makeAgent } from "../src/agent/main";
 import type { Agent } from "../src/agent/server";
 import { run } from "../src/cli";
+import { session } from "../src/context";
+import { poll } from "../src/decisions";
 import {
   ASK_USER_REASON,
   hookAskUser,
@@ -125,8 +127,12 @@ for (const viaAgent of [true, false]) {
 test("a prompt reaches a device that joins while it waits, which can answer it", async () => {
   const ctx = await machine();
   const { out, permission } = await ask(ctx);
+  // The directory append wakes the agent's answer poll, which re-seals the prompt. That post
+  // fails; the next poll tries again.
+  server.failures.push("POST /items");
   const laptop = await server.addDevice("laptop");
-  // The directory append wakes the agent's answer poll, which re-seals the prompt.
+  await until(() => server.failures.length === 0);
+  await poll(ctx, session(ctx), { seconds: 0, shared: false });
   const to = () => ctx.store.state().permissions?.[permission.id]?.sealedTo;
   await until(() => !!to()?.includes(laptop.id));
   await server.answerPermission(
