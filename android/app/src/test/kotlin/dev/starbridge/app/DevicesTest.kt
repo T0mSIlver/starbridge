@@ -9,6 +9,8 @@ import dev.starbridge.app.data.Member
 import dev.starbridge.app.ui.devices.DeviceActions
 import dev.starbridge.app.ui.devices.DevicesScreen
 import dev.starbridge.app.ui.theme.StarbridgeTheme
+import org.junit.After
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -24,8 +26,13 @@ import java.util.TimeZone
 class DevicesTest {
     @get:Rule val compose = createComposeRule()
 
+    private val zone = TimeZone.getDefault()
+
+    @Before fun utc() = TimeZone.setDefault(TimeZone.getTimeZone("UTC"))
+
+    @After fun restore() = TimeZone.setDefault(zone)
+
     @Test fun aMachinePairedAgainReadsApartFromItsOldPairing() {
-        TimeZone.setDefault(TimeZone.getTimeZone("UTC"))
         val members = listOf(
             Member("m1", "sandbox", Kind.Machine, Instant.parse("2026-10-06T09:32:00Z")),
             Member("m2", "sandbox", Kind.Machine, Instant.parse("2026-10-06T10:32:00Z")),

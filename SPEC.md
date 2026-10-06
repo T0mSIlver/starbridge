@@ -1311,8 +1311,8 @@ so the mod is the first path.
 - 2026-10-06. Devices tells apart rows that share a name (#287). `pair --force` adds a new machine
   and leaves the old one active, and every machine defaults to the hostname, so Devices listed
   identical rows. A row whose name another shares now adds the time it was added ("added Oct 6,
-  10:32") on web and Android, and `pair --force` names the old pairing that way instead of by an
-  id no client shows. Revoking the old machine in the approval itself (a `replaces` field in the
+  10:32") on web and Android, and `pair --force` names the old pairing as the earlier row, with
+  its time and zone, instead of by an id no client shows. Revoking the old machine in the approval itself (a `replaces` field in the
   pairing request) would remove the twin but changes the protocol; not done.
 
 ## Encryption, with existing libraries

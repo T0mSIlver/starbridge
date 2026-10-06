@@ -103,7 +103,7 @@ test("pair --force names the old pairing as Devices shows it, not by its id (#28
   await server.approve(ctx.lines[0]?.replace("Pairing code: ", "") as string);
   expect(await done).toBe(0);
   expect(ctx.lines.at(-1)).toMatch(
-    /^Devices still lists the old pairing, "devbox" added [A-Z][a-z]{2} \d+, \d\d:\d\d( [AP]M)?; revoke it there\.$/,
+    /^Devices still lists the old pairing as the earlier "devbox", added [A-Z][a-z]{2} \d+, \d\d:\d\d( [AP]M)? \S+\. Revoke it there\.$/,
   );
 });
 

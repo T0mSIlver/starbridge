@@ -116,14 +116,14 @@ export async function pair(
     // Named as Devices shows it: the id appears in no client (#287).
     const at = addedAt(entries, previous.id);
     ctx.out(
-      `Devices still lists the old pairing, "${previous.name}"${at ? ` added ${at}` : ""}; revoke it there.`,
+      `Devices still lists the old pairing as the earlier "${previous.name}"${at ? `, added ${at}` : ""}. Revoke it there.`,
     );
   }
   rememberMachineKind(ctx);
   return 0;
 }
 
-/** When the directory added member `id`, as "Oct 6, 10:32 AM" in the local zone. */
+/** When the directory added member `id`, as "Oct 6, 10:32 AM UTC", in this machine's zone. */
 function addedAt(entries: unknown[], id: string): string | undefined {
   for (const e of entries as { body: string }[]) {
     const body = JSON.parse(e.body) as { op: string; at: string; member?: { id: string } };
@@ -133,6 +133,8 @@ function addedAt(entries: unknown[], id: string): string | undefined {
         day: "numeric",
         hour: "2-digit",
         minute: "2-digit",
+        // A sandbox or container often runs in UTC while Devices shows the viewer's zone.
+        timeZoneName: "short",
       });
   }
 }
