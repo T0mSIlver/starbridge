@@ -2,6 +2,7 @@ package dev.starbridge.app.protocol
 
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 
@@ -15,6 +16,24 @@ private fun withSource(body: JsonObject): JsonObject {
     return if (source["machineKind"].newer(MACHINE_KINDS)) body.with("source", source.with("machineKind", null)) else body
 }
 
+/** The fields that are null by design (`.nullable()` in schemas.ts). */
+private val NULLABLE = setOf("prev", "projectedUsedPercent", "runsOutAt", "windowMinutes", "resetsAt", "pace")
+
+/**
+ * Refuses a null anywhere else, as zod does (#505): this app's classes take a null for an absent
+ * optional field, so without this an item with `"progress": null` would show here and nowhere else.
+ */
+private fun refuseNulls(json: JsonElement) {
+    when (json) {
+        is JsonObject -> json.forEach { (k, v) ->
+            if (v is JsonNull && k !in NULLABLE) throw ProtocolException("bad-schema", "$k: null")
+            refuseNulls(v)
+        }
+        is JsonArray -> json.forEach(::refuseNulls)
+        else -> {}
+    }
+}
+
 /**
  * What a reader makes of a body before it is decoded and checked, as `readable` in
  * packages/protocol (PROTOCOL.md, "What a reader keeps"): a string it only displays and does
@@ -22,6 +41,7 @@ private fun withSource(body: JsonObject): JsonObject {
  * missing field, or a value of another type, is left for the schema to refuse.
  */
 fun readable(kind: String, json: JsonElement): JsonElement {
+    refuseNulls(json)
     val body = json as? JsonObject ?: return json
     return when (kind) {
         "decision", "permission" -> withSource(body)

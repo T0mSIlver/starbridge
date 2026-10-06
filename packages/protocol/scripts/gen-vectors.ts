@@ -1434,6 +1434,7 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
         valid: true,
         read: { source: { machineKind: null } },
       },
+      { name: "an agent that is null", body: { ...decisionBody, agent: null }, valid: false },
       {
         name: "a machine kind that is no string",
         body: { ...decisionBody, source: { ...decisionBody.source, machineKind: 5 } },
@@ -1729,6 +1730,7 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
         body: { ...runBody, progress: { done: 8, total: 7, unit: "step" } },
         valid: false,
       },
+      { name: "progress that is null", body: { ...runBody, progress: null }, valid: false },
       {
         name: "an unknown progress unit",
         body: { ...runBody, progress: { done: 3_000_000_000, total: 4_000_000_000, unit: "byte" } },
@@ -1758,6 +1760,7 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
         read: { state: "working" },
       },
       { name: "no state", body: { ...waitingBody, state: undefined }, valid: false },
+      { name: "a directory head that is null", body: { ...waitingBody, dir: null }, valid: false },
       { name: "no decision", body: { ...waitingBody, decisionId: undefined }, valid: false },
       { name: "no recipients", body: { ...waitingBody, to: [] }, valid: false },
     ],
@@ -1789,6 +1792,11 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
             { kind: "low", provider: "zai", window: "primary", resetsAt: T(12, 30), threshold: 10 },
           ],
         },
+      },
+      {
+        name: "a window without its pace yet",
+        body: { ...quotaBody, providers: [{ provider: "zai", windows: [{ ...win, pace: null }] }] },
+        valid: true,
       },
       {
         name: "a pace without its stage",
