@@ -27,9 +27,9 @@
  * config folder with the repository's layout, and opencode loads it with Bun. The types below are
  * the part of opencode's plugin API it uses, so it needs no dependency on opencode.
  */
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { AgentLoop, socketPath } from "../hooks/agent.ts";
@@ -224,18 +224,63 @@ export function waitingSessions(state: unknown, now: number): string[] {
 
 /**
  * Claims answer `line` for session `id`, so that of two opencode processes showing the same
- * session only one submits it. False when the other already did.
+ * session only one submits it: "mine", with the token to release it by; "sent" once a process
+ * submitted it, which any of them may confirm; "held" while another is submitting. A claim not
+ * marked sent within `STALE_MS`, left by a process that died, is taken over: a rename only one
+ * process can win moves it aside first.
  */
-export async function claim(dir: string, id: string, line: string): Promise<boolean> {
-  try {
-    await mkdir(join(dir, "opencode-claims"), { recursive: true });
-    await writeFile(claimFile(dir, id, line), "", { flag: "wx" });
-    return true;
-  } catch (e) {
-    // Unwritable: submitting twice beats never.
-    return (e as { code?: string }).code !== "EEXIST";
-  }
+export async function claim(
+  dir: string,
+  id: string,
+  line: string,
+  now = Date.now(),
+): Promise<{ state: "mine"; token: string } | { state: "sent" | "held" }> {
+  const file = claimFile(dir, id, line);
+  const token = `${process.pid}-${randomBytes(6).toString("hex")}`;
+  const take = async () => {
+    try {
+      await writeFile(file, token, { flag: "wx" });
+      return true;
+    } catch (e) {
+      // Unwritable: submitting twice beats never.
+      return (e as { code?: string }).code !== "EEXIST";
+    }
+  };
+  await mkdir(join(dir, "opencode-claims"), { recursive: true }).catch(() => {});
+  if (await take()) return { state: "mine", token };
+  const [text, info] = await Promise.all([
+    readFile(file, "utf8").catch(() => undefined),
+    stat(file).catch(() => undefined),
+  ]);
+  if (text === SENT) return { state: "sent" };
+  if (!info || now - info.mtimeMs < STALE_MS) return { state: "held" };
+  const aside = `${file}.${token}`;
+  if (
+    !(await rename(file, aside).then(
+      () => true,
+      () => false,
+    ))
+  )
+    return { state: "held" };
+  await rm(aside, { force: true }).catch(() => {});
+  return (await take()) ? { state: "mine", token } : { state: "held" };
 }
+
+/** Marks a claimed answer submitted: any process showing the session may then confirm it. */
+export const submitted = (dir: string, id: string, line: string) =>
+  writeFile(claimFile(dir, id, line), SENT).catch(() => {});
+
+/** Releases a claim this process still holds, so another may submit the answer. */
+async function unclaim(dir: string, id: string, line: string, token: string) {
+  const file = claimFile(dir, id, line);
+  if ((await readFile(file, "utf8").catch(() => undefined)) === token)
+    await rm(file, { force: true }).catch(() => {});
+}
+
+const SENT = "sent";
+
+/** How long a submit may take before its claim counts as abandoned. */
+const STALE_MS = 60_000;
 
 const claimFile = (dir: string, id: string, line: string) =>
   join(
@@ -243,9 +288,6 @@ const claimFile = (dir: string, id: string, line: string) =>
     "opencode-claims",
     createHash("sha256").update(`${id}\n${line}`).digest("hex").slice(0, 32),
   );
-
-const unclaim = (dir: string, id: string, line: string) =>
-  rm(claimFile(dir, id, line), { force: true }).catch(() => {});
 
 /** Drops claims older than `CLAIM_MS`. */
 async function pruneClaims(dir: string, now: number) {
@@ -287,21 +329,22 @@ async function server({ client, directory }: Input) {
   const loop = (id: string) => {
     if (!answers || loops.has(id)) return;
     const sessionId = async () => id;
-    // The loop confirms an answer once submitted, so a refused submit is tried again a few
-    // times; the answer also stays in the CLI's state, where `starbridge wait` finds it.
-    const submit = (line: string) => {
-      void (async () => {
-        if (!(await claim(dir, id, line))) return;
-        for (let i = 0; i < 4; i++) {
-          const r = await client.session
-            .promptAsync({ path: { id }, body: { parts: [{ type: "text", text: line }] } })
-            .catch((e: unknown) => ({ error: e }));
-          if (!r.error) return;
-          await sleep(5_000 * 2 ** i);
-        }
-        // Another process showing the session may still submit it.
-        await unclaim(dir, id, line);
-      })();
+    // The loop confirms an answer only once opencode took it: a refused submit leaves it
+    // unconfirmed, and the loop's next cycle tries again. A line another process is submitting
+    // stays unconfirmed here until that process marks it sent.
+    const submit = async (line: string) => {
+      const c = await claim(dir, id, line);
+      if (c.state !== "mine") return c.state === "sent";
+      const r = await client.session
+        .promptAsync({ path: { id }, body: { parts: [{ type: "text", text: line }] } })
+        .catch((e: unknown) => ({ error: e }));
+      if (!r.error) {
+        await submitted(dir, id, line);
+        return true;
+      }
+      log(`starbridge: opencode refused an answer, trying again: ${String(r.error)}`);
+      await unclaim(dir, id, line, c.token);
+      return false;
     };
     loops.set(
       id,
