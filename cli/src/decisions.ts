@@ -681,7 +681,11 @@ export async function poll(
       delete st.held;
       // Every head first: a withheld entry any answer names holds back the whole page.
       const signers = new Map(items.map((raw) => [raw, noteHead(raw, s, dir, entries, st)]));
-      const answers = items.filter((raw) => signers.get(raw) !== undefined);
+      // Snoozes wait with the answers (#571): a device's word, to read once nothing is withheld.
+      const answers = items.filter(
+        (raw) =>
+          signers.get(raw) !== undefined || (raw as { kind?: unknown } | null)?.kind === "snooze",
+      );
       const behind = behindBy(st, dir, entries);
       if (behind) {
         // Kept, not dropped: the device's client counts them sent, and the server takes no other.
