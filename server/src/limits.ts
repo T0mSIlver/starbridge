@@ -29,6 +29,19 @@ export const DEFAULT_LIMITS = {
    * images, so this is what lets a phone screenshot reach three or four devices at full size.
    */
   itemBytes: 2 * 1024 * 1024,
+  /**
+   * Sealed boxes of one quota snapshot, in bytes. A real one is about 8 KB per device (six
+   * providers with three windows each), and pages count as devices, so this leaves room for
+   * over a hundred (#581).
+   */
+  quotaBytes: 1024 * 1024,
+  /**
+   * Bytes of boxes an account's machines may post a minute, counting items that replace
+   * earlier ones (quota snapshots, runs), which the stored-bytes cap never sees: eight 2 MB
+   * questions a minute is more than an agent asks, and it keeps one looping uploader from
+   * writing 4 MB a second into the database. Answers never count (#581).
+   */
+  postedBytes: [16 * 1024 * 1024, MINUTE] as RateWindow,
   /** Sealed box of one answer, in bytes: an answer's text is at most 4000 characters. */
   answerBytes: 32 * 1024,
   /** Stored permission prompts per account, open or settled; each lives answeredRetention. */
@@ -134,13 +147,17 @@ export function ipKey(c: Context<Env>, prefix: 48 | 64 = 64): string {
     .join(":")}::/${prefix}`;
 }
 
-/** Counts one call under `key`, or answers 429 `rate-limited` with Retry-After. */
-export function rateLimit(c: Context<Env>, key: string, [calls, ms]: RateWindow) {
-  const wait = c.var.limiter.retryAfter(key, calls, ms);
+/**
+ * Counts one call under `key`, or `bytes` of a byte budget, or answers 429 `rate-limited` with
+ * Retry-After.
+ */
+export function rateLimit(c: Context<Env>, key: string, [calls, ms]: RateWindow, bytes?: number) {
+  const wait = c.var.limiter.retryAfter(key, calls, ms, bytes);
   if (wait === 0) return;
+  const most = bytes === undefined ? `${calls}` : `${calls / 1024 / 1024} MB`;
   throw new HTTPException(429, {
     res: Response.json(
-      { error: "rate-limited", detail: `at most ${calls} per ${ms / 1000} s; retry later` },
+      { error: "rate-limited", detail: `at most ${most} per ${ms / 1000} s; retry later` },
       { status: 429, headers: { "retry-after": String(wait) } },
     ),
   });
