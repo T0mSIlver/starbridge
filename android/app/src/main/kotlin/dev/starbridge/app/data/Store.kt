@@ -22,6 +22,11 @@ interface Store {
     val server: StateFlow<String>
     /** A setup step or a sync is running. */
     val busy: StateFlow<Boolean>
+    /**
+     * The release the server needs, once it refused this one (#497): the app shows only the
+     * screen that updates it. An updated app starts without it.
+     */
+    val tooOld: StateFlow<String?>
     /** The last thing that went wrong, in words for the owner. */
     val notice: StateFlow<String?>
     /** Answers going out or waiting for a connection, by decision id: the choice or the text, until the server takes them. */

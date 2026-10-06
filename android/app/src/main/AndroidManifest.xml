@@ -69,4 +69,9 @@
             android:name="firebase_analytics_collection_enabled"
             android:value="false" />
     </application>
+    <!-- The update screen opens Obtainium when it installed the app (#497). -->
+    <queries>
+        <package android:name="dev.imranr.obtainium" />
+        <package android:name="dev.imranr.obtainium.fdroid" />
+    </queries>
 </manifest>
