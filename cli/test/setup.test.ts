@@ -17,6 +17,9 @@ import { LiveServer } from "@starbridge/server/test-support";
 import { makeAgent } from "../src/agent/main";
 import type { Agent } from "../src/agent/server";
 import { REMOVED } from "../src/api";
+import { run } from "../src/cli";
+import { session } from "../src/context";
+import { poll } from "../src/decisions";
 import { installTarball, updateCodexbar } from "../src/setup/codexbar";
 import {
   CODEX_RULE,
@@ -281,6 +284,30 @@ test("status reports the agent, the service and the plugins", async () => {
   expect(out).toContain("Codex skill: installed");
   expect(out).toContain("Pi package: installed");
   expect(out).toContain("opencode skill and plugin: installed");
+});
+
+test("status lists the answers no session has taken, until a wait prints them (#557)", async () => {
+  const m = await machine();
+  const ask = ["ask", "--question", "Merge #12?", "--option", "Merge", "--option", "Wait"];
+  expect(await run([...ask, "--session", "s1"], m.ctx)).toBe(0);
+  const id = m.ctx.lines.at(-1) as string;
+  await server.answer(id, { choice: "Merge" });
+  // The agent's poll stores the answer; the session's wait had died.
+  await poll(m.ctx, session(m.ctx), {
+    cursor: m.ctx.store.state().cursor,
+    seconds: 0,
+    shared: true,
+  });
+  m.ctx.lines.length = 0;
+  await status(m.sys);
+  expect(m.ctx.lines).toContain("Answers no session has taken: 1");
+  expect(m.ctx.lines).toContain(
+    `  ${id} (Merge #12?) from session s1: \`starbridge wait ${id}\` prints it`,
+  );
+  expect(await run(["wait", id, "--timeout", "5s"], m.ctx)).toBe(0);
+  m.ctx.lines.length = 0;
+  await status(m.sys);
+  expect(m.ctx.lines.join("\n")).not.toContain("no session has taken");
 });
 
 test("status lists every starbridge on the PATH, and how to remove the others (#621)", async () => {
@@ -641,10 +668,20 @@ test("opencode files someone else wrote stay, and so does the code a changed ent
   expect(readFileSync(join(oc, "plugins/starbridge.ts"), "utf8")).toBe("// mine\n");
   expect(existsSync(join(oc, "starbridge"))).toBe(false);
   expect(existsSync(join(oc, "skills/starbridge/SKILL.md"))).toBe(true);
-  // The agent's update leaves them alone too.
-  expect(opencodeState(sys)).toBe("outdated");
+  // Status says so rather than "outdated" forever (#541), and the agent's update leaves them alone.
+  expect(opencodeState(sys)).toBe("foreign");
   installOpencode(sys, true);
   expect(readFileSync(join(oc, "plugins/starbridge.ts"), "utf8")).toBe("// mine\n");
+  // A setup skill gone stale still reads as outdated beside the foreign entry.
+  writeFileSync(join(oc, "skills/starbridge/SKILL.md"), "# Written by starbridge 0.0.1\n");
+  expect(opencodeState(sys)).toBe("outdated");
+  // Someone else's skill beside a current plugin: the same.
+  rmSync(join(oc, "plugins/starbridge.ts"));
+  rmSync(join(oc, "skills/starbridge/SKILL.md"));
+  installOpencode(sys);
+  writeFileSync(join(oc, "skills/starbridge/SKILL.md"), "---\nname: starbridge\n---\n");
+  expect(opencodeState(sys)).toBe("foreign");
+  rmSync(join(oc, "skills/starbridge/SKILL.md"));
 
   // An entry the owner took over (its marker gone) keeps its code at uninstall.
   rmSync(join(oc, "plugins/starbridge.ts"));

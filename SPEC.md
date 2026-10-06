@@ -270,7 +270,8 @@ provider plugins add providers, not panels.
   only while it is open, keeps its arrival time and pushes only the new recipients. Nothing is
   re-sealed while the machine finds the directory behind. A re-post that fails is tried again on
   the next poll, prompts included: a prompt keeps the devices that hold it apart from those whose
-  answers count.
+  answers count. Re-sealing stops at its first 429 and waits its Retry-After, so the rest of the
+  machine's rate window goes to its own asks (#650).
 - **Fresh quotas** (#158, #450). The local agent posts a snapshot once its directory holds a new device.
   `POST /quota/ask` wakes the machines and holds until each posted, up to 25 s, under the 30 s at
   which proxies cut long polls; 6 a minute per account, since each runs CodexBar on every machine.
@@ -321,7 +322,9 @@ provider plugins add providers, not panels.
   answered it never falls back, so nothing posts twice. `wait` is the exception (#548): the agent
   marks an answer seen only for a client still listening, so when it restarts under a wait, the
   wait asks the new one, and after 30 s with no agent it waits at the server. Answers stay in the CLI's state file,
-  so both paths share one store.
+  so both paths share one store. A session with no mod whose wait died still never notices its
+  answer; `starbridge status` lists the answers no session has taken, with the `wait` that prints
+  each (#557).
 - **Files** in `~/.config/starbridge` (or `$XDG_CONFIG_HOME`, `$STARBRIDGE_CONFIG_DIR`): 0600 in a
   0700 directory. A `.lock` guards every read-modify-write (#33). A directory refresh keeps the
   longer of the fetched and saved chains, each required to extend the other's pin.

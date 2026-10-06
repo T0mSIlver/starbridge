@@ -6,6 +6,9 @@ export const REMOVED =
   "this machine was removed from your Starbridge account: run `starbridge pair --force` to add it again";
 
 export class ApiError extends Error {
+  /** With a 429, the seconds the server's Retry-After asks to wait. */
+  retryAfter?: number;
+
   constructor(
     readonly status: number,
     readonly code: string,
@@ -80,7 +83,10 @@ export class Api {
       // The server drops a machine's token when the directory revokes the machine.
       if (res.status === 401 && this.token)
         throw new ApiError(401, e.error ?? res.statusText, e.detail, REMOVED);
-      throw new ApiError(res.status, e.error ?? res.statusText, e.detail);
+      const err = new ApiError(res.status, e.error ?? res.statusText, e.detail);
+      const wait = Number(res.headers.get("retry-after"));
+      if (res.status === 429 && wait > 0) err.retryAfter = wait;
+      throw err;
     }
     return { status: res.status, json };
   }

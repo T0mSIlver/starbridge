@@ -898,9 +898,16 @@ const RESEAL_MS = 29 * 24 * 3600_000;
  * pushes only the new devices. Revoked devices get nothing, and nothing is re-sealed while the
  * server may be withholding directory entries.
  */
+/**
+ * When each store's re-seal may run again after a 429: until then the machine's rate window is
+ * left to its own asks (#650).
+ */
+const resealPaused = new WeakMap<object, number>();
+
 async function reseal(ctx: Ctx, s: Session, known: Directory): Promise<void> {
   const st = ctx.store.state();
   const now = ctx.now().getTime();
+  if ((resealPaused.get(ctx.store) ?? 0) > now) return;
   // A decision's recipients are those of its body as last posted; `to`, whose answers count, may
   // hold more: a post whose reply was lost could have reached the server.
   const decisions = Object.entries(st.asked).flatMap(([id, a]) =>
@@ -924,7 +931,8 @@ async function reseal(ctx: Ctx, s: Session, known: Directory): Promise<void> {
   const signer = { id: s.machine.id, signKey: s.keys.sign.privateKey };
   /**
    * Posts a re-sealed item: "posted", "closed" when the server holds it answered or no longer
-   * holds it, or undefined after an error, which the next poll tries again.
+   * holds it, "limited" after a 429, which pauses the re-seal for its Retry-After, or undefined
+   * after another error. The next poll tries the rest again.
    */
   const post = async (item: () => SealedItem) => {
     let sealed: SealedItem | undefined;
@@ -935,6 +943,10 @@ async function reseal(ctx: Ctx, s: Session, known: Directory): Promise<void> {
     } catch (e) {
       if (e instanceof ApiError && ["already-answered", "not-found"].includes(e.code))
         return "closed";
+      if (e instanceof ApiError && e.status === 429) {
+        resealPaused.set(ctx.store, ctx.now().getTime() + (e.retryAfter ?? 60) * 1000);
+        return "limited";
+      }
       ctx.err(`starbridge: could not re-send ${sealed?.id ?? ""}: ${(e as Error).message}`);
     }
   };
@@ -961,6 +973,7 @@ async function reseal(ctx: Ctx, s: Session, known: Directory): Promise<void> {
         const x = st.asked[id];
         if (x) forget(x);
       });
+    if (posted === "limited") return;
     if (posted !== "posted") continue;
     // Done once its waiting state went too; else the next poll re-sends both.
     if (a.waiting?.state === "waiting") {
@@ -973,7 +986,9 @@ async function reseal(ctx: Ctx, s: Session, known: Directory): Promise<void> {
         state: a.waiting.state,
         dir: signedHead(ctx, dir),
       } satisfies Waiting;
-      if (!(await post(() => ({ ...seal("waiting", w, signer, to), quiet: true })))) continue;
+      const sent = await post(() => ({ ...seal("waiting", w, signer, to), quiet: true }));
+      if (sent === "limited") return;
+      if (!sent) continue;
     }
     ctx.store.updateState((st) => {
       const x = st.asked[id];
@@ -992,11 +1007,12 @@ async function reseal(ctx: Ctx, s: Session, known: Directory): Promise<void> {
       x.permission.to = [...new Set([...x.permission.to, ...ids])];
     });
     // Closed: answered or gone on the server, so no device needs it any more.
-    if (
-      (await post(() => ({ ...seal("permission", permission, signer, to), reseal: true }))) ===
-      undefined
-    )
-      continue;
+    const sent = await post(() => ({
+      ...seal("permission", permission, signer, to),
+      reseal: true,
+    }));
+    if (sent === "limited") return;
+    if (sent === undefined) continue;
     ctx.store.updateState((st) => {
       const x = st.permissions?.[permission.id];
       if (x) x.sealedTo = ids;
