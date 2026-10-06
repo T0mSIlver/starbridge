@@ -13,7 +13,10 @@ if (!ownerToken) throw new Error("OWNER_TOKEN is not set");
 const device = new DemoDevice(server, ownerToken);
 // The server starts beside this program.
 for (let i = 0; ; i++) {
-  const up = await fetch(`${server}/healthz`).then((r) => r.ok, () => false);
+  const up = await fetch(`${server}/healthz`).then(
+    (r) => r.ok,
+    () => false,
+  );
   if (up) break;
   if (i === 60) throw new Error(`${server} is not up`);
   await Bun.sleep(500);

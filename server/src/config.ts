@@ -129,7 +129,8 @@ export function configFromEnv(env: Env = process.env): Config {
 export function checkDemo(config: Config): void {
   const host = new URL(config.publicUrl).hostname;
   const problem =
-    (host === "starbridge.run" || host.endsWith(".starbridge.run")) && host !== "demo.starbridge.run"
+    (host === "starbridge.run" || host.endsWith(".starbridge.run")) &&
+    host !== "demo.starbridge.run"
       ? `PUBLIC_URL ${config.publicUrl}`
       : config.github
         ? "GitHub sign-in"

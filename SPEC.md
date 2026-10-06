@@ -1643,7 +1643,7 @@ so the mod is the first path.
   interactions), none shared; content is exempt as end-to-end encrypted, which Play's rules
   allow. Reviewers cannot pass GitHub's new-device email check, so they need a demo server
   that signs in with an owner token and a demo machine that posts after their phone joins
-  (open).
+  (#423, below).
 - 2026-10-06. Demo server for Play reviewers (#423). A reviewer has no GitHub account we can
   give them (GitHub mails a new-device code) and no recovery key we can give them (recovering
   revokes every other member, #363). So `https://demo.starbridge.run` is a self-hosted server
@@ -1669,8 +1669,9 @@ so the mod is the first path.
     directory nears its 200-entry cap; reviewers then sign in again.
   - **Isolation**: its own Compose project, `starbridge-demo`, with no volume, a 384 MB memory
     cap and its port on 127.0.0.1:8090; prod's Caddy serves `demo.starbridge.run` to it with the
-    API routes only, no web page. No push credentials: the reviewer watches the open app, which
-    long-polls.
+    API routes only, no web page. It pushes through prod's relay (`RELAY_URL`), as any
+    self-hosted server does: the app shows a new item on a push, or on resume and pull to
+    refresh, and does not poll while open.
 
 ## Encryption, with existing libraries
 

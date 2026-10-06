@@ -14,6 +14,9 @@ services:
     environment:
       PUBLIC_URL: https://demo.starbridge.run
       TRUST_PROXY: "1"
+      # Pushes go through prod's relay, as on any self-hosted server: the app shows new items
+      # on a push. The relay counts them in prod's daily usage rows.
+      RELAY_URL: https://starbridge.run
     # No volume: the database and the demo machine's keys live here and go with each restart.
     tmpfs:
       - /tmp:uid=1000,gid=1000,mode=700,size=64m

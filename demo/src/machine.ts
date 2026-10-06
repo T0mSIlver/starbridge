@@ -3,6 +3,7 @@
  * demo device, runs the agent with a scripted CodexBar for quota windows, keeps one question
  * open and a run going.
  */
+import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { Broken, type DemoDevice } from "./device";
 
@@ -69,8 +70,9 @@ export class DemoMachine {
     this.log = opts.log ?? console.log;
   }
 
-  private spawn(args: string[], stdout: "pipe" | "inherit" = "inherit") {
+  private spawn(args: string[], stdout: "pipe" | "inherit" = "inherit", cwd?: string) {
     const child = Bun.spawn([...this.opts.cli, ...args], {
+      cwd,
       // HOME too: the agent installs agent integrations (the Codex skill) under it.
       env: {
         ...process.env,
@@ -156,16 +158,23 @@ export class DemoMachine {
 
   /** Keeps a run going: a two-minute suite that prints its progress, again and again. */
   async runs(signal: AbortSignal): Promise<void> {
+    // A run's project is its directory's name.
+    const project = join(this.opts.dir, "billing-api");
+    mkdirSync(project, { recursive: true });
     while (!signal.aborted) {
-      await this.spawn([
-        "run",
-        "--title",
-        "Nightly e2e",
-        "--reason",
-        "uses the shared staging database",
-        "--",
-        ...(this.opts.runCommand ?? RUN),
-      ]).exited;
+      await this.spawn(
+        [
+          "run",
+          "--title",
+          "Nightly e2e",
+          "--reason",
+          "uses the shared staging database",
+          "--",
+          ...(this.opts.runCommand ?? RUN),
+        ],
+        "inherit",
+        project,
+      ).exited;
       await Bun.sleep(20_000);
     }
   }

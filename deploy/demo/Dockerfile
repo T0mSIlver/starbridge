@@ -15,7 +15,8 @@ RUN pnpm install --frozen-lockfile --filter @starbridge/demo... --filter @starbr
 COPY packages/protocol packages/protocol
 COPY server server
 COPY cli cli
-COPY plugin/skills plugin/skills
+COPY plugin plugin
+COPY mod mod
 COPY demo demo
 RUN bun build server/src/main.ts --target bun --outfile /out/server.js \
  && bun build cli/src/main.ts --target bun --outfile /out/starbridge.js \
