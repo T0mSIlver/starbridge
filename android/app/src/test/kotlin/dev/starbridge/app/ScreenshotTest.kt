@@ -109,9 +109,11 @@ class ScreenshotTest(private val dark: Boolean) {
     @Test fun inbox() = capture("inbox") { Phone(Tab.Inbox, 4) { Inbox() } }
 
     // Find over the inbox: open matches under "Needs you", answered ones under "History", the words marked.
-    @Test fun find() = capture("find") { Phone(null, 0) { FindScreen(fake.decisions, fake.prompts, now, {}, {}, {}, initial = "starbridge") } }
+    @Test fun find() = capture("find", { find("starbridge") }) { Phone(null, 0) { Entry { FindScreen(fake.decisions, fake.prompts, now, {}, {}, {}) } } }
 
-    @Test fun findNothing() = capture("find-nothing") { Phone(null, 0) { FindScreen(fake.decisions, fake.prompts, now, {}, {}, {}, initial = "kubernetes") } }
+    @Test fun findNothing() = capture("find-nothing", { find("kubernetes") }) { Phone(null, 0) { Entry { FindScreen(fake.decisions, fake.prompts, now, {}, {}, {}) } } }
+
+    private fun find(query: String) = compose.onNode(hasSetTextAction()).performTextInput(query)
 
     // The landing page's hero phone: no prompt, so the question with images shows (#210).
     @Test fun inboxLanding() = capture("inbox-landing") { Phone(Tab.Inbox, 3) { InboxScreen(fake.decisions, now, decisionActions, runs = fake.runs) } }
