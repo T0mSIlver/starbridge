@@ -475,8 +475,10 @@ export function noteHead(
   } catch {
     return undefined;
   }
+  // A device vouches for its own head only: a `by` in an answer would add a key per id it names.
+  const head = opened.body.dir && { length: opened.body.dir.length, head: opened.body.dir.head };
   st.heads ??= {};
-  keepHead(st.heads, opened.signer.id, opened.body.dir, entries);
+  keepHead(st.heads, opened.signer.id, head, entries);
   return opened.signer.id;
 }
 
