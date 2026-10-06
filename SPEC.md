@@ -718,6 +718,8 @@ Tokens, type and components: `DESIGN.md`.
   answer. The signed-in app loads no tracker: the browser that created an account posts those
   three events itself, once each, with `/` as the page and nothing about the account
   (`web/src/lib/funnel.ts`); Umami joins them to the landing visit by address, browser and day.
+  The first sign-in's time matches the account's creation, so the operator could link the two;
+  `/privacy` says so.
   It sees machines and answers from any device, so a pairing or answer made on the phone counts
   once this browser sees them. Owner's view: an Umami share link on `stats.starbridge.run`,
   where Caddy passes only GET requests and blocks the login.

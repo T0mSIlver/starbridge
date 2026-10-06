@@ -11,7 +11,7 @@ const KEEP_MS = 2 * 24 * 3600 * 1000;
 
 export type Step = "first-machine" | "first-answer";
 
-type Left = { since: number; steps: Step[] };
+type Left = { account: string; since: number; steps: Step[] };
 
 function read(): Left | null {
   let raw: string | null = null;
@@ -19,8 +19,9 @@ function read(): Left | null {
     raw = localStorage.getItem(FUNNEL_KEY);
   } catch {}
   const v = readStored(FUNNEL_KEY, raw) as Partial<Left> | null;
-  if (!v || typeof v.since !== "number" || !Array.isArray(v.steps)) return null;
-  return { since: v.since, steps: v.steps };
+  if (!v || typeof v.account !== "string" || typeof v.since !== "number" || !Array.isArray(v.steps))
+    return null;
+  return { account: v.account, since: v.since, steps: v.steps };
 }
 
 function write(left: Left | null) {
@@ -30,11 +31,15 @@ function write(left: Left | null) {
   } catch {}
 }
 
+/** Umami's tracker's own opt-outs: its localStorage switch, and Do Not Track as browsers send it. */
 function optedOut(): boolean {
   try {
     if (localStorage.getItem("umami.disabled")) return true;
   } catch {}
-  return navigator.doNotTrack === "1";
+  const nav = navigator as Navigator & { msDoNotTrack?: string };
+  const dnt =
+    (globalThis as { doNotTrack?: string }).doNotTrack ?? nav.doNotTrack ?? nav.msDoNotTrack;
+  return dnt === "1" || dnt === "yes";
 }
 
 /**
@@ -62,21 +67,22 @@ export function send(name: string) {
 }
 
 /** A new account's first screen: counts the sign-in once, and waits for the next two steps. */
-export function firstSignIn(now = Date.now()) {
+export function firstSignIn(account: string, now = Date.now()) {
   if (!analyticsOn()) return;
   const left = read();
-  if (left && now - left.since < KEEP_MS) return;
-  write({ since: now, steps: ["first-machine", "first-answer"] });
+  if (left?.account === account && now - left.since < KEEP_MS) return;
+  write({ account, since: now, steps: ["first-machine", "first-answer"] });
   send("first-sign-in");
 }
 
-/** Sends each step `reached` of those this browser waits for, once. */
-export function reach(reached: (step: Step) => boolean, now = Date.now()) {
+/** Sends each step `reached` of those this browser waits for on `account`, once. */
+export function reach(account: string, reached: (step: Step) => boolean, now = Date.now()) {
   const left = read();
   if (!left) return;
-  if (now - left.since >= KEEP_MS) return write(null);
+  // Another account signed in here, or the setup was left: the note is spent.
+  if (left.account !== account || now - left.since >= KEEP_MS) return write(null);
   const done = left.steps.filter(reached);
   if (!done.length) return;
   for (const step of done) send(step);
-  write({ since: left.since, steps: left.steps.filter((s) => !done.includes(s)) });
+  write({ ...left, steps: left.steps.filter((s) => !done.includes(s)) });
 }

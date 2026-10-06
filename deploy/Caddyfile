@@ -111,7 +111,8 @@ stats.starbridge.run {
 	@share {
 		method GET HEAD
 		path /share/* /_next/static/* /images/* /intl/* /ip3/* /datamaps.world.json /favicon.ico /api/config /api/share/* /api/websites/f3741d82-c450-47d3-8845-646cddbe392f /api/websites/f3741d82-c450-47d3-8845-646cddbe392f/*
-		not path /api/websites/*/export* /api/websites/*/replays* /api/websites/*/recorder*
+		# One visit's records (city, device, pages), which the share token would also open.
+		not path_regexp ^/api/websites/[^/]+/sessions/[0-9a-f-]{36}
 	}
 	handle @share {
 		reverse_proxy 127.0.0.1:3001

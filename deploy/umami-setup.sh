@@ -57,7 +57,8 @@ auth() {
 # The steps the pages send (web/src/components/Landing.tsx, web/src/lib/funnel.ts). The window is
 # a day: Umami's daily salt splits a visit at midnight UTC anyway.
 funnel='Launch'
-if [ "$(auth funnels | jq --arg n "$funnel" '[.data[] | select(.name == $n)] | length')" = 0 ]; then
+funnels=$(auth funnels)
+if [ "$(echo "$funnels" | jq --arg n "$funnel" '[.data[] | select(.name == $n)] | length')" = 0 ]; then
   auth funnels -H 'content-type: application/json' -d "$(jq -n --arg n "$funnel" '{name: $n,
     description: "Landing view, sign-in click, first sign-in, first machine, first answer",
     parameters: {window: 1440, steps: [
@@ -70,9 +71,12 @@ if [ "$(auth funnels | jq --arg n "$funnel" '[.data[] | select(.name == $n)] | l
 fi
 # Read-only views for the owner's phone; the link holds the only secret.
 share='Owner'
-slug=$(auth shares | jq -r --arg n "$share" '[.data[] | select(.name == $n)][0].slug // empty')
+shares=$(auth shares)
+slug=$(echo "$shares" | jq -r --arg n "$share" '[.data[] | select(.name == $n)][0].slug // empty')
 if [ -z "$slug" ]; then
-  slug=$(auth shares -H 'content-type: application/json' -d "$(jq -n --arg n "$share" '{name: $n,
-    parameters: {overview: true, events: true, funnels: true}}')" | jq -r .slug)
+  made=$(auth shares -H 'content-type: application/json' -d "$(jq -n --arg n "$share" '{name: $n,
+    parameters: {overview: true, events: true, funnels: true}}')")
+  slug=$(echo "$made" | jq -r '.slug // empty')
+  [ -n "$slug" ] || { echo "Umami made no share link: $made" >&2; exit 1; }
 fi
 echo "share link: https://stats.starbridge.run/share/$slug"

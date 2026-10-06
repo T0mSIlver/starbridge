@@ -129,10 +129,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // The launch funnel's signed-in steps, in the browser that created the account (#559).
   useEffect(() => {
     if (!ctx) return;
-    reach((step) =>
+    reach(ctx.account, (step) =>
       step === "first-machine"
         ? [...ctx.dir.members.values()].some((m) => m.active && m.member.role === "machine")
-        : inbox.items.some((i) => i.answeredAt),
+        : // Answered by a device, not closed by its machine (a timeout, the keyboard).
+          inbox.items.some((i) => i.answeredAt && !i.settled),
     );
   }, [ctx, inbox]);
 

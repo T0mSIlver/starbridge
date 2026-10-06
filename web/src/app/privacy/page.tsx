@@ -131,7 +131,9 @@ export default function Privacy() {
         command, records which one. The signed-in app counts no views. Only in a browser that just
         created an account does it record, once each, three steps: the first sign-in, the first
         machine paired and the first answer sent, with nothing about the account, its machines or
-        its content; that browser keeps a note of the steps left for two days. Umami sets no cookie,
+        its content; the app (not Umami) keeps a note of the steps left in that browser for two
+        days. Since the server knows when each account was created, the operator could match that
+        first sign-in to your account, and so to the visit Umami recorded. Umami sets no cookie,
         stores nothing in your browser and does not store your IP address: it tells visitors apart
         by a hash of the IP address, the browser and a salt that changes every day, so a visit
         cannot be traced back to you or linked to your visits on other days. A browser that sends Do

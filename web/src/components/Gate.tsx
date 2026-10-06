@@ -140,7 +140,7 @@ function FirstDevice({ account, unsaved }: { account: string; unsaved?: string }
   const [prepared, setPrepared] = useState<PreparedDevice>();
   const { busy, error, run } = useAction();
   // Only a new account has no device yet: its first sign-in, for the launch funnel (#559).
-  useEffect(() => firstSignIn(), []);
+  useEffect(() => firstSignIn(account), [account]);
   if (prepared)
     return (
       <Setup

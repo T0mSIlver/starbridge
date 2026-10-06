@@ -38,27 +38,30 @@ afterEach(() => {
 });
 
 test("a new account's steps are each sent once, in the order they happen", () => {
-  firstSignIn(0);
-  firstSignIn(1000); // the setup screen shown again
-  reach(() => false, 2000);
-  reach((s) => s === "first-machine", 3000);
-  reach(() => true, 4000);
-  reach(() => true, 5000);
+  firstSignIn("a", 0);
+  firstSignIn("a", 1000); // the setup screen shown again
+  reach("a", () => false, 2000);
+  reach("a", (s) => s === "first-machine", 3000);
+  reach("a", () => true, 4000);
+  reach("a", () => true, 5000);
   expect(sent).toEqual(["first-sign-in", "first-machine", "first-answer"]);
   expect(store.has(FUNNEL_KEY)).toBe(false);
 });
 
-test("steps reached after two days are not sent", () => {
-  firstSignIn(0);
-  reach(() => true, 2 * 24 * 3600 * 1000);
-  expect(sent).toEqual(["first-sign-in"]);
+test("steps reached after two days, or by another account, are not sent", () => {
+  firstSignIn("a", 0);
+  reach("a", () => true, 2 * 24 * 3600 * 1000);
+  firstSignIn("b", 0);
+  reach("c", () => true, 1000);
+  reach("b", () => true, 2000);
+  expect(sent).toEqual(["first-sign-in", "first-sign-in"]);
   expect(store.has(FUNNEL_KEY)).toBe(false);
 });
 
 test("a self-hosted build sends nothing and keeps no note", () => {
   delete process.env.NEXT_PUBLIC_ANALYTICS;
-  firstSignIn(0);
-  reach(() => true, 1000);
+  firstSignIn("a", 0);
+  reach("a", () => true, 1000);
   expect(sent).toEqual([]);
   expect(store.size).toBe(0);
 });
