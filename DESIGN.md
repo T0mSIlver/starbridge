@@ -642,8 +642,9 @@ notification icon) draw all three shapes in one colour.
 | Web favicon and install icons | `web/src/app/favicon.ico` (16, 32, 48 px), `apple-icon.png` (180 px), `web/public/icon-*.png`, `manifest.ts` |
 
 The tab icon is the mark as the page's rail draws it, with no ground, in
-`fg` and `accent` of the browser's scheme, so the tab matches the page on a
-light or a dark tab strip. The other web icons stand on the launcher's ground,
+`fg` and `accent` of the system's scheme, with a thin halo in the other
+scheme's `fg` so it stays legible on a tab strip that does not follow the
+system. The other web icons stand on the launcher's ground,
 since a home screen, or a browser that skips the SVG, shows them on any
 colour; `node web/scripts/icons.ts` renders them.
 

@@ -1,6 +1,6 @@
 // Renders the mark's raster icons (DESIGN.md, "The mark") with Firefox through Playwright:
 //
-//   node web/scripts/icons.ts      (Node 22.6+ runs this TypeScript as is)
+//   node web/scripts/icons.ts      (Node 22.18+ runs this TypeScript as is)
 //
 // They draw the mark on its own ground, as the Android launcher icon does, since a home screen or
 // a browser that ignores icon.svg shows them on any colour. icon.svg is the tab icon and follows
