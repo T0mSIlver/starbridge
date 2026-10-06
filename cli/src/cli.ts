@@ -4,7 +4,7 @@ import { ProtocolError, ready, type SessionLink } from "@starbridge/protocol";
 import { AgentError, Interrupted, withAgent } from "./agent/client";
 import { answersVia, askVia, quotaVia, waitingVia, waitVia } from "./agent/commands";
 import { runAgent } from "./agent/main";
-import { ApiError, Unreachable } from "./api";
+import { ApiError, sandboxHint, Unreachable } from "./api";
 import { type Ctx, UsageError } from "./context";
 import { type AskInput, answers, ask, settle, setWaiting, wait } from "./decisions";
 import { hookAskUser, hookPermission, hookSettle } from "./hook";
@@ -426,11 +426,8 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
     }
     if (e instanceof Unreachable) {
       ctx.err(`starbridge: ${e.message}`);
-      // Codex runs commands without network unless a rule lets them out of its sandbox.
-      if (ctx.env.CODEX_SANDBOX_NETWORK_DISABLED === "1")
-        ctx.err(
-          "starbridge: Codex's sandbox has no network. `starbridge setup` adds the rule that lets starbridge out of it.",
-        );
+      const hint = sandboxHint(ctx.env);
+      if (hint) ctx.err(`starbridge: ${hint}`);
       return 1;
     }
     if (e instanceof TypeError && (e as { code?: string }).code?.startsWith("ERR_PARSE_ARGS")) {
