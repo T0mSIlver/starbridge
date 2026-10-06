@@ -515,6 +515,7 @@ export async function startDigitJoin(account: string, name: string): Promise<Dig
               if (!(e instanceof ApiError && e.code === "already-revealed")) throw e;
             }),
           );
+          if (abort.signal.aborted) throw new Error("cancelled");
           shown(derived.digits);
         }
         if (derived && join.approval !== undefined) {

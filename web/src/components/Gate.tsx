@@ -223,13 +223,19 @@ function Join({ account, stale }: { account: string; stale: boolean }) {
     setCode(undefined);
     setDigits(undefined);
     setMatched(false);
+    confirm.current = undefined;
     setMode(next);
     if (next === "digits")
       run(async () => {
         const join = await begin(async () => (await load()).startDigitJoin(account, name.trim()));
         if (!join) return;
         confirm.current = join.confirm;
-        join.digits.then(setDigits, () => {});
+        // A join the owner moved on from shows no digits, so they confirm only this one's.
+        const mine = started.current;
+        join.digits.then(
+          (d) => mine === started.current && setDigits(d),
+          () => {},
+        );
         await join.done;
         await reload();
       });
@@ -311,6 +317,7 @@ function Join({ account, stale }: { account: string; stale: boolean }) {
             onClick={() => {
               started.current++;
               cancel.current?.();
+              confirm.current = undefined;
               setMode("code");
             }}
           >
