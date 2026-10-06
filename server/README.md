@@ -119,7 +119,7 @@ Delivered through.
 
 <dl>
 <dt><code>RELAY_URL</code></dt>
-<dd>The relay's origin, such as <code>https://starbridge.run</code>. Without it, and without your own Firebase or VAPID keys, Android and Web Push notifications don't go out. Unset by default.</dd>
+<dd>The relay's origin, such as <code>https://starbridge.run</code>. Without it, and without your own Firebase or VAPID keys, Android and Web Push notifications don't go out: the open app and web page still update, the app every 10 s, but nothing reaches a phone whose app is closed. UnifiedPush works without it. Unset by default.</dd>
 <dt><code>FCM_PROJECT_ID</code>, <code>FCM_CLIENT_EMAIL</code>, <code>FCM_PRIVATE_KEY</code></dt>
 <dd>A service account of the Android app's own Firebase project, which only starbridge.run holds. Self-hosters use the relay or UnifiedPush instead. Unset by default.</dd>
 <dt><code>VAPID_PUBLIC_KEY</code>, <code>VAPID_PRIVATE_KEY</code>, <code>VAPID_SUBJECT</code></dt>
