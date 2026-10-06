@@ -1,7 +1,4 @@
 import { expect, test } from "bun:test";
-import { mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import {
   type Answer,
   addEntry,
@@ -23,7 +20,6 @@ import {
   seal,
   toB64,
 } from "@starbridge/protocol";
-import { nextSeq, openDb } from "../src/db";
 import { DEFAULT_LIMITS, type Limits } from "../src/limits";
 import { RateLimiter } from "../src/ratelimit";
 import { sweepStorage } from "../src/retention";
