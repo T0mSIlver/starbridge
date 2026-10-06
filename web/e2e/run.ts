@@ -921,7 +921,7 @@ async function main() {
   await devices.getByRole("button", { name: "Revoke" }).first().click();
   await page.getByRole("dialog").getByRole("button", { name: "Revoke" }).click();
   await page.getByRole("dialog").waitFor({ state: "detached" });
-  // A notification left from before: the revocation closes it.
+  // A notification left from before: the server's refusal closes it.
   await pageB.evaluate(() =>
     navigator.serviceWorker.ready.then((r) =>
       r.showNotification("Left over", { tag: "e2e-left", requireInteraction: true }),
@@ -932,6 +932,14 @@ async function main() {
   await pageB.reload();
   // The server's 401 alone is unsigned: the browser keeps its keys and shows the refusal (#310).
   await pageB.getByText("The server says this browser was revoked.").waitFor();
+  if ((await pageB.evaluate(NOTIFICATIONS)).length > 0)
+    throw new Error("the refusal left notifications on screen");
+  // Another one, so the device list's verdict, not the refusal, has to close it.
+  await pageB.evaluate(() =>
+    navigator.serviceWorker.ready.then((r) =>
+      r.showNotification("Left over", { tag: "e2e-left", requireInteraction: true }),
+    ),
+  );
   await pageB.getByRole("link", { name: SIGN_IN }).click();
   // Signed in, the device list confirms the revocation.
   await pageB.getByRole("heading", { name: /was revoked$/ }).waitFor({ timeout: 30_000 });

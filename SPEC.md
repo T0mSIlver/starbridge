@@ -1393,8 +1393,10 @@ so the mod is the first path.
   `revoked` is unsigned, so the page keeps its keys and shows the refusal on the sign-in screen;
   after sign-in, boot reads the chain and shows "was revoked" only if the chain says so.
 - 2026-10-06. The web page closes every notification the service worker shows when it signs out,
-  when the chain shows its device revoked, and after a recovery (#311, as #282 on Android). They
-  stay up until dismissed and hold decrypted questions.
+  when the chain shows its device revoked, and when it adopts new keys after a recovery or a join
+  (#311, as #282 on Android). They stay up until dismissed and hold decrypted questions. The
+  service worker checks the keys are still there before and after it shows one, so a push it was
+  opening during a sign-out leaves nothing on screen.
 
 ## Encryption, with existing libraries
 

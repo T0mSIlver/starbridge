@@ -28,8 +28,11 @@ const realFetch = globalThis.fetch;
 const realGenerateKey = crypto.subtle.generateKey;
 /** Answers in the server's place: a compromised server can send anything unsigned. */
 let forge: ((path: string) => Response | undefined) | undefined;
-/** The notifications the service worker shows, and which of them the page closed. */
-const shown = { open: 0, closed: 0 };
+/**
+ * The notifications the service worker shows, how many of them the page closed, and whether the
+ * keys were still stored when it last listed them.
+ */
+const shown = { open: 0, closed: 0, keys: false };
 
 beforeAll(async () => {
   live = await LiveServer.start();
@@ -48,12 +51,14 @@ beforeAll(async () => {
   device.retryDelay.ms = 10;
   const registration = {
     pushManager: { getSubscription: async () => null },
-    getNotifications: async () =>
-      Array.from({ length: shown.open }, () => ({
+    getNotifications: async () => {
+      shown.keys = !!(await store.get("device", ctx.account));
+      return Array.from({ length: shown.open }, () => ({
         close: () => {
           shown.closed++;
         },
-      })),
+      }));
+    },
   };
   Object.defineProperty(navigator, "serviceWorker", {
     configurable: true,
@@ -254,4 +259,6 @@ test("signing out closes the notifications (#311)", async () => {
   shown.closed = 0;
   await device.signOut(mine);
   expect(shown.closed).toBe(3);
+  // Closed after the keys went, so a push the service worker was opening finds none.
+  expect(shown.keys).toBe(false);
 });
