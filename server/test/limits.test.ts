@@ -12,7 +12,7 @@ import {
   pairingRequest,
   publicKeys,
   type QuotaSnapshot,
-  RECOVERY,
+  recoverEntry,
   recoveryEntry,
   recoveryKeyPair,
   type SealedItem,
@@ -56,7 +56,6 @@ function decision(from: Actor, to: Actor): SealedItem {
     context: "",
     options: ["yes", "no"],
     recommended: "yes",
-    default: { action: "ship" },
     source: { machine: from.id, project: "starbridge", session: "s1" },
   };
   return seal("decision", body, { id: from.id, signKey: from.keys.sign.privateKey }, [to.member]);
@@ -236,45 +235,51 @@ test("the sweep drops answered decisions after a week and the rest after 30 days
   expect(await exists(s, phone, kept.id)).toBe(false);
 });
 
-test("a full directory refuses device-signed adds but takes revocations and recovery adds", async () => {
+test("a full directory refuses device-signed adds but takes revocations and recoveries", async () => {
   const { s, acct } = await setup({ directoryEntries: 2, recoveryAdds: 1, recoveryProposals: 1 });
-  const add = async (signer: { id: string; signKey: Uint8Array }, id: string) => {
+  const device = (id: string) => {
     const keys = generateMemberKeys();
-    const member = { id, role: "device" as const, name: id, ...publicKeys(keys) };
-    return append(
-      s,
-      acct.device.token,
-      addEntry(await directory(s, acct.device.token), signer, member, at),
-    );
+    return { keys, member: { id, role: "device" as const, name: id, ...publicKeys(keys) } };
   };
   const phoneSigner = { id: acct.device.id, signKey: acct.device.keys.sign.privateKey };
-  const recovery = { id: RECOVERY, signKey: acct.recovery.privateKey };
 
-  const full = await add(phoneSigner, "tablet");
+  const full = await append(
+    s,
+    acct.device.token,
+    addEntry(await directory(s, acct.device.token), phoneSigner, device("tablet").member, at),
+  );
   expect(full.status).toBe(409);
   expect(full.json.error).toBe("directory-full");
   expect((await revoke(s, acct, "devbox")).status).toBe(201);
-  expect((await add(recovery, "new-phone")).status).toBe(201);
-  const more = await add(recovery, "newer-phone");
+
+  const fresh = await signIn(s);
+  const recover = async (id: string) => {
+    const { keys, member } = device(id);
+    const entry = recoverEntry(await directory(s, fresh), acct.recovery.privateKey, member, at);
+    return { keys, r: await append(s, fresh, entry) };
+  };
+  const recovered = await recover("new-phone");
+  expect(recovered.r.status).toBe(201);
+  const more = (await recover("newer-phone")).r;
   expect(more.status).toBe(409);
   expect(more.json.error).toBe("directory-full");
-  expect((await revoke(s, acct, "new-phone")).status).toBe(201);
-  const proposal = recoveryEntry(
-    await directory(s, acct.device.token),
-    phoneSigner,
-    recoveryKeyPair(generateRecoverySeed()),
-    at,
-  );
+
   // A full directory still takes a few proposals, so a thief who filled it cannot stop the
   // owner replacing the key (Fable review of #368).
-  expect((await append(s, acct.device.token, proposal)).status).toBe(201);
-  const again = recoveryEntry(
-    await directory(s, acct.device.token),
-    phoneSigner,
-    recoveryKeyPair(generateRecoverySeed()),
-    at,
-  );
-  const refused = await append(s, acct.device.token, again);
+  const newPhone = { id: "new-phone", signKey: recovered.keys.sign.privateKey };
+  const propose = async () =>
+    append(
+      s,
+      fresh,
+      recoveryEntry(
+        await directory(s, fresh),
+        newPhone,
+        recoveryKeyPair(generateRecoverySeed()),
+        at,
+      ),
+    );
+  expect((await propose()).status).toBe(201);
+  const refused = await propose();
   expect(refused.status).toBe(409);
   expect(refused.json.error).toBe("directory-full");
 });

@@ -57,7 +57,7 @@ const at = "2026-10-04T12:00:00Z";
 describe("signing", () => {
   const phone = member("phone");
   const browser = member("browser");
-  const recovery = recoveryKeyPair(new Uint8Array(32).fill(7));
+  const recovery = recoveryKeyPair(new Uint8Array(16).fill(7));
   const genesis = genesisEntry({
     account: "acct",
     device: pub(phone),

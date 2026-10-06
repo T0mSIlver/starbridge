@@ -47,7 +47,7 @@ export interface VerifyOptions {
   account?: string;
   /** A chain seen before: this chain must extend it. */
   pin?: Pin;
-  /** The recovery public key derived from the key or words, when recovering: the chain's current one. */
+  /** The recovery public key derived from the recovery key, when recovering: the chain's current one. */
   recoveryPk?: string;
 }
 
@@ -118,12 +118,11 @@ function genesis(env: SignedEnvelope, opts: VerifyOptions): Directory {
 }
 
 /**
- * Who signs each op: an active device, the recovery key, or either. The recovery key adds a
- * device and confirms its own replacement, nothing else (#364); older clients recovered with a
- * plain `add`, which still verifies.
+ * Who signs each op: an active device or the recovery key. The recovery key adds a
+ * device and confirms its own replacement, nothing else (#364).
  */
 const SIGNED_BY = {
-  add: "either",
+  add: "device",
   revoke: "device",
   recover: "recovery",
   recovery: "device",
@@ -150,7 +149,7 @@ function applyEntry(dir: Directory, env: SignedEnvelope, i: number): Directory {
   if (env.recoverySig !== undefined && body.op !== "recovery")
     throw new ProtocolError("bad-chain", `entry ${i}: only entry 0 and proposals have recoverySig`);
   const allowed = SIGNED_BY[body.op];
-  if (allowed !== "either" && (env.signer === RECOVERY) !== (allowed === "recovery"))
+  if ((env.signer === RECOVERY) !== (allowed === "recovery"))
     throw new ProtocolError(
       "signer-not-allowed",
       `entry ${i}: a ${body.op} is signed by the ${allowed}`,
@@ -167,8 +166,6 @@ function applyEntry(dir: Directory, env: SignedEnvelope, i: number): Directory {
     case "add": {
       if (body.recoveryPk !== undefined)
         throw new ProtocolError("bad-chain", `entry ${i}: only entry 0 names the recovery key`);
-      if (env.signer === RECOVERY && body.member.role !== "device")
-        throw new ProtocolError("signer-not-allowed", `entry ${i}: recovery adds devices only`);
       addDevice(body.member);
       return next;
     }
@@ -234,7 +231,7 @@ export function activeMembers(dir: Directory, role: Member["role"]): Member[] {
 interface GenesisArgs {
   account: string;
   device: Member;
-  /** The recovery key pair, used here once and then shown as words and dropped. */
+  /** The recovery key pair, used here once and then shown as a recovery key and dropped. */
   recovery: { publicKey: Uint8Array; privateKey: Uint8Array };
   at: string;
 }
@@ -284,10 +281,7 @@ function nextBody(dir: Directory, at: string, change: Change): DirectoryEntry {
   return { v: 1, account: dir.account, seq: dir.length, prev: dir.head, at, ...change };
 }
 
-/**
- * `signer.id` is an active device's id. RECOVERY with the recovery private key still verifies,
- * as older clients recovered so; new ones write `recoverEntry`.
- */
+/** `signer.id` is an active device's id. */
 export function addEntry(
   dir: Directory,
   signer: { id: string; signKey: Uint8Array },

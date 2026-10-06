@@ -1,7 +1,7 @@
 # Skill eval
 
 Checks that agents reach their user through Starbridge the way the `starbridge` skill and the
-SessionStart rule say (issue #121). Real Claude Code, Codex, Pi and opencode sessions work through nine
+SessionStart rule say. Real Claude Code, Codex, Pi and opencode sessions work through nine
 scripted situations (`scenarios.ts`), once with the plugin at a git ref and once with this
 checkout's, and a rubric scores the cards they post.
 
@@ -41,5 +41,5 @@ runs can fill a small /tmp.
 provider's error, such as a rate limit, makes the run a failed run rather than a score.
 `render.ts` shows cards in the real web inbox (headless Chromium) and saves a screenshot of each.
 
-`results/299` holds the records behind #299's entry in SPEC.md's research log, one folder per
+`results/299` holds the records behind #299's entry in SPEC.md, "Platform facts", one folder per
 text the agents ran: `main`, `rev3`, `heredoc` and `final`.

@@ -33,12 +33,21 @@ code cannot show: the HTTP API and the flows.
 
 - Every machine-signed body names its `source` (machine, project, session, and optionally the
   session's title and links, and `machineKind`: `server`, `desktop`, `laptop` or `cloud`, for
-  its icon). A decision may name its `agent`, `claude-code`, `codex`, `pi` or `opencode`, as a permission does. Clients accept any agent name (lowercase letters, digits and dashes, at most 40), so a newer machine's agent never makes an item unreadable; an agent a client does not know gets no "Open in" link.
+  its icon). A decision or a permission may name its `agent`, such as `claude-code`, `codex`, `pi` or `opencode`. Clients accept any agent name (lowercase letters, digits and dashes, at most 40), so a newer machine's agent never makes an item unreadable; an agent a client does not know gets no "Open in" link.
 - A decision's images (PNG or JPEG) and links (HTTPS) are part of its signed body, so each box
   carries every image, and the 2 MB cap in Limits covers them once per device.
   A decision with `answerIn` is answered on that page (a claude.ai artifact whose button wakes
   the agent), never in Starbridge: it has no options, devices show the page and no answer
   field, and it closes when the machine posts `settled` for it.
+
+## Versions
+
+The protocol version is the `v: 1` in every signed body, the `starbridge/v1/` prefix of every
+signed or hashed string, and the `/v1` of every route. It names the algorithms too: keys are bare
+X25519 and Ed25519, boxes are `crypto_box_seal`, hashes BLAKE2b-256, with no algorithm tag or
+suite id. Changing any of them is version 2 (`v: 2`, `starbridge/v2/...`, `/v2` routes), and
+members re-pair; nothing changes an algorithm in place. A member's keys change only by revoking it
+and adding new ones.
 
 ## Directory
 
@@ -50,7 +59,7 @@ entries. An entry's `op` is one of:
 
 | `op` | Signed by | Does |
 |---|---|---|
-| `add` | an active device | adds a member (older clients also recovered with an `add` signed by the recovery key, which still verifies) |
+| `add` | an active device | adds a member |
 | `revoke` | an active device | revokes a member |
 | `recover` | the recovery key | adds a device and revokes every other member, machines included ("Recovery") |
 | `recovery` | an active device | proposes a new recovery key ("Replacing the recovery key") |
@@ -178,16 +187,11 @@ bits written as 28 Crockford base32 characters in seven groups of four (`recover
 recovery key pair is `crypto_sign_seed_keypair` of BLAKE2b-256 of "starbridge/v1/recovery-seed",
 NUL, the seed (`recoveryKeyPair`).
 
-Older accounts were shown BIP-39 words: 24 for a 32-byte seed, which is the Ed25519 seed itself,
-or 12 for a 16-byte seed. `readRecoveryKey` takes either. A key is read in any case, with or
-without dashes and spaces, O as 0 and I or L as 1; it names the first character no key holds,
-else a length other than 28, else a failed check. Text reads as words when it holds a run of 5
-to 8 letters ended by a separator, 8 runs of 3 letters or more, or 12 or more letter runs all on
-the word list however they are separated; words split on anything that is not a letter. While
-typing, a U in a word from the list, or the start of one, waits, since words only read as
-words from the eighth.
+`readRecoveryKey` reads a key in any case, with or without dashes and spaces, O as 0 and I or L
+as 1; it names the first character no key holds, else a length other than 28, else a failed
+check. The length is the format's version: a future format uses another length.
 
-When every device is lost, a new device turns the key or words into the recovery key pair,
+When every device is lost, a new device turns the key into the recovery key pair,
 verifies the chain with that public key (it must be the chain's current recovery key, whose
 `recoverySig` checks against it, which a copied public key cannot fake), and signs a `recover`
 entry with it, which adds the new device and revokes every other member, machines included. A
@@ -228,7 +232,16 @@ entry>".
 ## HTTP API
 
 Base path `/v1`. JSON bodies. Errors are `{error, detail?}` with an HTTP status; protocol
-errors use the codes in `packages/protocol/src/sodium.ts`.
+errors use the codes in `packages/protocol/src/sodium.ts`. Outside `/v1`, `GET /healthz`
+answers anyone with `ok`; `/healthz/backup` and `/healthz/disk` answer `ok`, or 503 when the
+last backup is stale or the disk runs low.
+
+Every request names its client and release in `starbridge-client: <name>/<version>`, `name`
+one of `cli`, `android`, `web` and `mod`, `version` MAJOR.MINOR.PATCH with an optional
+pre-release, which comes before its release (`cli/1.0.0`, `android/1.2.0-rc.1`). The server counts the
+releases in use, and keeps a minimum release per client name: below it, any route answers 426
+`{error: "client-too-old", detail, client, minimum}`, and the client asks its owner to update. A
+request without the header, or with one the server cannot read, is served.
 
 ### Auth
 
@@ -302,7 +315,7 @@ createdAt, expiresAt, version}`; `state` is `open`, `comparing`, `approved` or `
 |---|---|---|
 | `POST /items` | the kind's signing role | store a sealed item and push it to each recipient; 409 on a reused id; 409 `too-many-items` and 413 `too-large` past the caps in Limits |
 | `GET /items?kind=<kinds>&after=<cursor>&open=1` | device | items with only the caller's box, and `cursor`; `kinds` is a comma-separated list of machine-signed kinds, all of them when left out; `open=1` keeps only unanswered decisions and permissions still in their answer window |
-| `GET /items/:id` | device, machine | one item, the caller's box only; push points here when the item exceeds 4 KB |
+| `GET /items/:id` | device, machine | one item, the caller's box only; push points here when the item is over the inline limit (3 KB by default) |
 | `GET /quota` | device | the latest quota item from each machine |
 | `POST /quota/ask?wait=<s>` | device | ask every machine for a fresh quota snapshot → `{askedAt, behind}`; with `wait`, holds until each active machine that has a snapshot posted a newer one; `behind` counts those that have not |
 
@@ -384,7 +397,7 @@ that changes in between cannot point the push inward. Each account has at most 4
 flight and 200 waiting; each request gives up after 10 s.
 
 A server with FCM credentials or VAPID keys pushes directly. One without them posts to the relay
-set in `RELAY_URL` (the owner's hosted server runs with `RELAY_MODE=1`), which pushes with its
+set in `RELAY_URL` (starbridge.run runs with `RELAY_MODE=1`), which pushes with its
 own credentials; the payload is already ciphertext or an id. UnifiedPush always goes direct.
 `gone` from a push service drops the subscription.
 
@@ -424,8 +437,9 @@ through the operator.
 Answers skip the decision count and may use the last 8 MB, so a full account can still answer. An hourly sweep drops answered
 decisions and their answers 7 days after the answer, permissions, permission answers and settled
 notices 7 days after they arrived, runs a day after their last update, a decision's waiting state with its decision, unanswered decisions and quota snapshots 30
-days after they arrived, quota snapshots of revoked machines, and expired sessions. Clients that
-want a longer history keep their own copy.
+days after they arrived, quota snapshots of revoked machines, and expired sessions. Each kind's
+period is its `keep` in `ITEM_KINDS`, which every new kind must name. Clients that want a longer
+history keep their own copy.
 
 ## Waiting state
 
@@ -469,7 +483,7 @@ first answer wins.
 - `permission` `{v, id, to, createdAt, agent, tool, summary, description?, input, inputHash,
   suggestions, expiresAt, source}`: `input` is the tool input as JSON text, redacted on the
   machine (provider token patterns, PEM private keys, `Authorization` headers, URL passwords, and
-  `*_KEY`, `*_TOKEN` or `*_PASSWORD` values) and at most 8000 characters; `inputHash` is `hashInput` of the input before redaction (BLAKE2b-256), keyed under the machine's signing key so a device cannot test guesses for a redacted value; `expiresAt`
+  `*_KEY`, `*_TOKEN` or `*_PASSWORD` values) and at most 8000 characters; `inputHash` is `hashInput` of the input before redaction: BLAKE2b-256 keyed with BLAKE2b-256 of `"starbridge/v1/input-hash"` keyed with the machine's signing key, so a device cannot test guesses for a redacted value; `expiresAt`
   is at most 10 minutes after `createdAt`. Each of the at most 2 `suggestions`
   `{label, rule, scope: "session" | "project"}` shows the exact rule a wider allow would add.
 - `permission-answer` `{v, id, permissionId, to, answeredAt, behavior: "allow" | "deny", scope:
@@ -543,6 +557,7 @@ input (Claude Code's `PermissionRequest` input carries no `tool_use_id`), and on
 `SessionEnd`, settling every waiting prompt of the session. The waiting hook then exits at
 once through the agent, or within 5 s on its own path. At the deadline the hook prints nothing,
 so the dialog decides, and posts `settled: timeout`.
+
 ## Local agent API
 
 `starbridge agent` runs once per machine as a user service. It holds the machine's keys and its

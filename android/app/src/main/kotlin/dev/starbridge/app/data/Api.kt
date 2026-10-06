@@ -1,5 +1,6 @@
 package dev.starbridge.app.data
 
+import dev.starbridge.app.BuildConfig
 import dev.starbridge.app.protocol.PairingMessage
 import dev.starbridge.app.protocol.ProtocolException
 import dev.starbridge.app.protocol.ProtocolJson
@@ -105,6 +106,7 @@ class Api(private val http: OkHttpClient, private val server: String, private va
                 // OkHttp refuses a POST without a body; a bodiless ask sends an empty one (#253).
                 .method(method, body?.toString()?.toRequestBody(json) ?: if (method == "GET" || method == "DELETE") null else ByteArray(0).toRequestBody())
                 .apply {
+                    header("starbridge-client", "android/${BuildConfig.VERSION_NAME}")
                     session?.let { header("Authorization", "Bearer $it") }
                     headers.forEach { (k, v) -> header(k, v) }
                 }
@@ -113,7 +115,10 @@ class Api(private val http: OkHttpClient, private val server: String, private va
             val parsed = text.takeIf { it.isNotBlank() }?.let { runCatching { ProtocolJson.parseToJsonElement(it) }.getOrNull() }
             if (code !in 200..299) {
                 val o = parsed as? JsonObject
-                throw ApiException(code, o?.get("error")?.jsonPrimitive?.content ?: "http-$code", o?.get("detail")?.jsonPrimitive?.content)
+                val error = o?.get("error")?.jsonPrimitive?.content ?: "http-$code"
+                // The server no longer serves this release (PROTOCOL.md, "HTTP API").
+                if (code == 426) throw ApiException(code, error, "update Starbridge from Google Play: this server needs ${o?.get("minimum")?.jsonPrimitive?.content ?: "a newer release"} or later")
+                throw ApiException(code, error, o?.get("detail")?.jsonPrimitive?.content)
             }
             code to parsed
         }

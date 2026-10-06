@@ -4,7 +4,7 @@
  * Every step shows what it found, so a rerun changes only what is missing.
  */
 
-import type { QuotaSnapshot } from "@starbridge/protocol";
+import { CLIENT_HEADER, clientHeader, type QuotaSnapshot } from "@starbridge/protocol";
 import type { Status } from "../agent/api";
 import { AgentClient, withAgent } from "../agent/client";
 import { askVia, quotaVia } from "../agent/commands";
@@ -86,6 +86,7 @@ async function checkServer(server: string): Promise<void> {
   let res: Response;
   try {
     res = await fetch(`${server.replace(/\/+$/, "")}/v1/me`, {
+      headers: { [CLIENT_HEADER]: clientHeader("cli", VERSION) },
       signal: AbortSignal.timeout(15_000),
     });
   } catch (e) {
@@ -456,8 +457,19 @@ async function piStep(sys: Sys) {
 
 async function piPackageStep(sys: Sys) {
   const { ctx, prompt } = sys;
-  if (piPackage(sys)) {
+  const installed = piPackage(sys);
+  if (installed === PI_PACKAGE) {
     ctx.out("The Starbridge Pi package is installed.");
+    return;
+  }
+  // Installed at another ref, or none: Pi moves the one entry to this CLI's tag.
+  if (installed) {
+    try {
+      await installPiPackage(sys);
+      ctx.out(`Moved the Starbridge Pi package to v${VERSION}.`);
+    } catch (e) {
+      ctx.out(`Could not move the Starbridge Pi package to v${VERSION}: ${(e as Error).message}`);
+    }
     return;
   }
   if (

@@ -2,6 +2,7 @@
   "extends": "../../tsconfig.json",
   "compilerOptions": {
     "lib": ["esnext", "webworker"],
+    "types": [],
     "plugins": [],
     "incremental": false
   },

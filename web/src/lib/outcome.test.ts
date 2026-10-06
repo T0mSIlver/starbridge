@@ -20,7 +20,7 @@ test("a prompt says how and where it was answered", () => {
     by: "on sdk_gphone64_x86_64",
   });
   expect(promptOutcome(prompt({ settled: byDevice("allow") }), name).outcome).toBe("Allowed");
-  // A machine from before #349 doesn't say.
+  // An older machine doesn't say.
   expect(promptOutcome(prompt({ settled: byDevice() }), name).outcome).toBe("Answered");
   expect(promptOutcome(prompt({ reply: { behavior: "allow", scope: "session" } }), name)).toEqual({
     outcome: "Allowed for this session",
