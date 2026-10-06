@@ -46,7 +46,10 @@ The account's directory is a hash chain of signed entries listing each member's 
 Ed25519 public keys. Entry 0 adds the first device, names the recovery public key, and is signed
 both by that device and by the recovery key (`recoverySig`). Each later entry carries `seq` and `prev` (BLAKE2b-256 of the previous
 entry's body), and is signed by an active device or by the recovery key. Machines sign no
-entries; the recovery key adds only devices. Revoking is an entry too.
+entries; the recovery key adds only devices and confirms a new recovery key ("Replacing the
+recovery key" below). Revoking is an entry too. An entry's `op` is `add`, `revoke`, `recovery` or
+`recovery-confirm`; a verifier refuses a chain holding an `op` it does not know, rather than
+skipping the entry, since a skipped `recovery-confirm` would leave it trusting a replaced key.
 
 Clients replay the chain with `verifyDirectory` and keep a pin `{length, head}`. A later fetch
 must extend the pin, so the server can neither insert a key, nor roll back a revocation, nor serve
@@ -141,8 +144,28 @@ typing, a U in a word from the list, or the start of one, waits, since words onl
 words from the eighth.
 
 When every device is lost, a new device turns the key or words into the recovery key pair,
-verifies the chain with that public key (entry 0's `recoverySig` must check against it, which a copied public key cannot
-fake), and signs its own `add` entry with it.
+verifies the chain with that public key (it must be the chain's current recovery key, whose
+`recoverySig` checks against it, which a copied public key cannot fake), and signs its own `add`
+entry with it.
+
+### Replacing the recovery key
+
+An owner who lost the key, or thinks someone saw it, replaces it in two entries, since the chain
+is the only channel the account's devices share:
+
+1. `{op: "recovery", recoveryPk}` proposes a new key. An active device signs it, and the
+   envelope's `recoverySig` is the new key's signature over the same body, as signer "recovery",
+   as on entry 0. Its `recoveryPk` differs from the current one and from every member's keys. A
+   later proposal replaces a pending one, and revoking the proposing device drops its proposal.
+2. `{op: "recovery-confirm", proposal}` names the pending proposal's `seq` and makes its key the
+   chain's recovery key. It is signed by the current recovery key, when the owner still has it,
+   or by an active device other than the one that proposed, when the owner lost it. A device on
+   its own, stolen or not, cannot replace the key.
+
+From the confirming entry on, the old key signs nothing: neither `add` nor `recovery-confirm`.
+A device shows a confirmed replacement once, as "Recovery key replaced on <proposing device>,
+<time of the confirming entry>", unless it made the replacement itself, and shows a pending one
+with Confirm, so a second device can approve it.
 
 ## HTTP API
 

@@ -1389,6 +1389,19 @@ so the mod is the first path.
   session, takes only answers to that session's decisions, so it cannot take one that another
   session's mod or `wait` is due; outside an agent's session it still takes any. Checked with Pi 1.0.4 and pi-permission-system 39.1.0: `starbridge ask` ran
   without a dialog while `touch` still asked, and uninstall left no config behind.
+- 2026-10-06. The recovery key can be replaced (#348, owner ruling after #328). Entry 0 fixed it
+  for good, so an owner who lost the paper or thinks the key leaked had no fix short of a new
+  account. Two new directory entries replace it: `recovery` proposes a key, signed by a device
+  and by the new key; `recovery-confirm` makes it current, signed by the old key or by a second
+  device (PROTOCOL.md, "Replacing the recovery key"). Two entries, not one carrying both
+  signatures, because a second device can only see a request through the chain: no new route,
+  and the server still only stores entries. A device alone cannot replace the key, so a stolen
+  phone cannot lock the owner out of recovery; an owner with one device and no key adds a second
+  device first. Clients refuse a chain with an `op` they do not know rather than skip the entry,
+  since skipping a confirmation would keep the old key trusted; so web, Android, the CLI and
+  machines must all update before anyone replaces a key. There is no Devices history to put the
+  change in, so the Recovery key row in Devices says when the key was last set and on which
+  device, and every other device shows the change once.
 
 ## Encryption, with existing libraries
 
