@@ -150,11 +150,15 @@ class LayoutAuditTest(private val shot: String, private val look: Look) {
             // Controls the design sizes under 48 dp: the sheet's 36 dp handle, 40 dp buttons and
             // toggles, underlined text links.
             Regex("""^tap target \d{3}x36 dp: ""$"""),
-            Regex("""^tap target \d+x40 dp: "(More answers|Allow|Deny|Used|Left|Resets.*|Off|7 days|\d)"$"""),
+            Regex("""^tap target \d+x40 dp: "(More answers|Used|Left|Resets.*|Off|7 days|\d)"$"""),
+            // Allow and Deny: 40 dp, taller as the font grows.
+            Regex("""^tap target \d+x4[0-7] dp: "(Allow|Deny)"$"""),
             Regex("""^tap target \d+x4[1-4] dp: "Open in (Claude|Codex)"$"""),
             Regex("""^tap target \d+x(28|35|45) dp: "(Sign out|Back|Use the recovery key|Use starbridge\.run|Can't scan\? Compare digits)"$"""),
             // A page title beside its trailing text: the title gives way at 2x on a small phone.
             Regex("""^lines cut off: "(Quotas|Settings|Inbox)" \((4\d|[5-9]\d) sp\)$"""),
+            // A quota's pace beside its reset time: the reset time takes the row at 2x on a small phone.
+            Regex("""^wider than its box: "(On pace|Will run out.*|Headroom unused|Ran out.*|Too early to tell)"$"""),
             // The rail's badge on the Inbox symbol reaches its label at large font sizes.
             Regex("""^text over text: "12" and "Inbox"$"""),
         )
