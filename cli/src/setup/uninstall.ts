@@ -74,11 +74,9 @@ export async function uninstall(sys: Sys, opts: UninstallOpts): Promise<number> 
 
   if (hasClaude(sys)) {
     const state = await pluginState(sys);
-    if (state) for (const line of await removePlugins(sys, state)) ctx.out(line);
-    else
-      ctx.out(
-        "`claude plugin list` failed: remove the Starbridge plugins with `claude plugin uninstall`.",
-      );
+    if (typeof state !== "string")
+      for (const line of await removePlugins(sys, state)) ctx.out(line);
+    else ctx.out(`${state}. Remove the Starbridge plugins with \`claude plugin uninstall\`.`);
     if (removeAllowRules(sys))
       ctx.out(`Removed the starbridge allow rules from ${settingsPath(sys)}.`);
   }

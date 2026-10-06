@@ -88,13 +88,14 @@ Your plan credentials stay on the machine, and only the encrypted snapshot goes 
 
 Nothing. starbridge.run is a small VPS the author pays for. The [terms](https://starbridge.run/terms)
 promise 60 days' notice before any price and 30 days' notice before a shutdown. Each account
-takes up to 5 machines. Self-hosting is free, under the MIT licence.
+takes up to 3 machines, the computers that run your agents, and any number of phones and
+browsers. Self-hosting is free, under the MIT licence.
 
 ## What's kept, and for how long?
 
 The server deletes answered questions and their answers 7 days after the answer, permission
 prompts 7 days after they arrive, runs a day after their last update, and unanswered questions
-and quota snapshots after 30 days. Nightly backups keep 14 days. The
+and quota snapshots after 30 days. Backups keep deleted data for up to 3 weeks. The
 [privacy page](https://starbridge.run/privacy) says how to delete your account.
 
 ## Why GitHub sign-in?

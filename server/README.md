@@ -41,10 +41,13 @@ them. Its routes are in `PROTOCOL.md`.
    docker compose -f server/compose.yaml up -d --build
    ```
 
-4. Route both through your reverse proxy. With Caddy, which also gets the TLS certificate:
+4. Route both through your reverse proxy. The web app sends its pages and scripts uncompressed,
+   so have the proxy compress them. With Caddy, which also gets the TLS certificate:
 
    ```caddyfile
    starbridge.example {
+     # The web image leaves compression to the proxy.
+     encode zstd gzip
      # The web image sets the page's Content-Security-Policy; the proxy sets the rest.
      header {
        Strict-Transport-Security "max-age=31536000"
@@ -184,7 +187,7 @@ release, restore the copy you made before upgrading.
 
 <dl>
 <dt><code>MAX_MACHINES</code></dt>
-<dd>Machines per account. Default: 5.</dd>
+<dd>Machines per account; phones and browsers don't count. Default: 5. starbridge.run sets 3.</dd>
 <dt><code>MAX_WAIT_SECONDS</code></dt>
 <dd>The longest an answer or pairing long-poll waits. Default: 300.</dd>
 </dl>

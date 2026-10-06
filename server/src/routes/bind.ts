@@ -28,7 +28,7 @@ export const bindRoutes = new Hono<Env>();
 bindRoutes.get("/auth/challenge", requireCaller("device"), (c) => {
   const caller = c.var.caller;
   if (caller.role !== "device") fail(403, "forbidden");
-  rateLimit(c, `bind:${caller.account}`, [20, 60_000]);
+  rateLimit(c, `bind:${caller.account}`, c.var.config.limits.challenges);
   const now = Date.now();
   for (const [k, v] of nonces) if (v.expires <= now) nonces.delete(k);
   // Two tabs of one browser share the session: both get the outstanding nonce, so the first
