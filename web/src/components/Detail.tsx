@@ -118,6 +118,14 @@ function FreeText({
           // biome-ignore lint/a11y/noAutofocus: opened by the Reply button, to type at once
           autoFocus={focus}
           onChange={(e) => setText(e.target.value)}
+          // Enter sends and Shift+Enter starts a new line (#562); an Enter that ends an input
+          // method's composition only commits it.
+          onKeyDown={(e) => {
+            if (e.key !== "Enter" || e.shiftKey || e.nativeEvent.isComposing || e.keyCode === 229)
+              return;
+            e.preventDefault();
+            e.currentTarget.form?.requestSubmit();
+          }}
         />
         <button
           type="submit"

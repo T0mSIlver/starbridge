@@ -172,14 +172,14 @@ class Fake(private val now: Instant) {
         images = listOf(Image(toB64(javaClass.getResourceAsStream("/fake/phone-inbox.png")!!.readBytes()), 1236, 2676, alt = "Inbox, dark")),
     )
 
-    /** A desktop and a phone layout over their options, "Reply" under them: the slots share the phone's height (#536). */
+    /** A desktop and a phone layout over their options, "Reply" under them (#536), in a titled session (#563). */
     val layouts = Decision(
         id = "d9",
         question = "Which layout should the inbox lead with?",
         context = "",
         options = listOf("Desktop layout", "Phone layout"),
         recommended = "Phone layout",
-        source = devBox,
+        source = devBox.copy(session = "b81f3c2e-4a5d-4e8a-9f0b-2c3d4e5f6a7b", title = "Port the Starbridge CLI before launch"),
         createdAt = ago(6),
         agent = "claude-code",
         replies = true,

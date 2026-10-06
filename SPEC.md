@@ -564,6 +564,8 @@ first window, so a provider with a window running out leads.
 - **Answer buttons** (#138, #166): "Answer buttons on questions", Always (default), When the agent
   waits, or Never, applies under 1100 px. More than two options, or a label over 18 characters,
   stack. `answerIn` and typed-only questions have no buttons.
+- **Typed answers** (#562): Enter sends, Shift+Enter starts a new line, on the web and with an
+  Android hardware keyboard. An Enter that ends an input method's composition only commits it.
 - **Context** renders line breaks and code, inline and fenced. Other Markdown shows as typed; the
   skill says so rather than the clients growing a renderer.
 - **Revoked machines.** Their items leave the Inbox and their notifications close (#344).

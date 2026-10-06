@@ -12,6 +12,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -134,19 +136,25 @@ fun SessionLine(source: Source, agent: String?, modifier: Modifier = Modifier) {
     val app = agentName(agent, source)
     if (name.isBlank() && link == null) return
     Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s3)) {
-        Text(
+        // A title is words; only a bare session id is set as code (#563).
+        val nameStyle = if (source.title.isNullOrBlank()) SpanStyle(color = scheme.onSurface, fontFamily = StarbridgeTheme.type.code.fontFamily, fontSize = StarbridgeTheme.type.meta.fontSize)
+        else SpanStyle(color = scheme.onSurface)
+        val line = { max: Int ->
             buildAnnotatedString {
                 if (name.isNotBlank()) {
                     append("Session ")
-                    withStyle(SpanStyle(color = scheme.onSurface, fontFamily = StarbridgeTheme.type.code.fontFamily, fontSize = StarbridgeTheme.type.meta.fontSize)) { append(middle(name, 26)) }
+                    withStyle(nameStyle) { append(middle(name, max)) }
                 }
-            },
-            style = StarbridgeTheme.type.small,
-            color = scheme.onSurfaceVariant,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f),
-        )
+            }
+        }
+        val measurer = rememberTextMeasurer()
+        val style = StarbridgeTheme.type.small
+        BoxWithConstraints(Modifier.weight(1f)) {
+            // Cut in the middle only when the line runs out of room, as on the web (#172).
+            val room = constraints.maxWidth
+            val max = (name.length downTo 8).firstOrNull { measurer.measure(line(it), style, maxLines = 1).size.width <= room } ?: 8
+            Text(line(max), style = style, color = scheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
         if (link != null && app != null) {
             Text(
                 "Open in $app",

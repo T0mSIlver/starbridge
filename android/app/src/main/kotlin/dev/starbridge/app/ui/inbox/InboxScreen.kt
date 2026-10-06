@@ -60,6 +60,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.isShiftPressed
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -615,7 +621,13 @@ private fun FreeText(text: String, onText: (String) -> Unit, sending: Boolean, f
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
         keyboardActions = KeyboardActions(onSend = { send() }),
         colors = fieldColors(),
-        modifier = field.fillMaxWidth(),
+        // A hardware keyboard's Enter sends and Shift+Enter starts a new line, as on the web (#562).
+        modifier = field.fillMaxWidth().onPreviewKeyEvent {
+            if (it.key == Key.Enter && !it.isShiftPressed) {
+                if (it.type == KeyEventType.KeyDown) send()
+                true
+            } else false
+        },
     )
 }
 

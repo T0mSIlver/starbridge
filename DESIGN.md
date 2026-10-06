@@ -284,7 +284,7 @@ typography:
     weight: 400
     lineHeight: 28
     letterSpacing: 0
-  snippet: # a command or a session name in the web's dense rows
+  snippet: # a command or a session id in the web's dense rows
     font: mono
     size: 13
     weight: 400
@@ -434,7 +434,8 @@ Google Sans Flex sets everything a person reads, numbers included, with
 tabular figures where they line up. It is the face of Google's own apps and
 open source (OFL) since November 2025, so a Material app reads native in it
 where Roboto reads stock. Google Sans Code is for code only: Markdown code in
-a decision's context, a permission prompt's command and a session's name.
+a decision's context, a permission prompt's command and a session's id when
+it has no title. A session's title is words, in the reading face (#563).
 
 ## Rules
 
@@ -698,4 +699,4 @@ phone top bar) is unchanged.
 | `caption` | body small | group names in a list, footnotes, navigation bar labels |
 | `key` | label small | keyboard hints, counts in badges |
 | `figure` | headline small | a large number, such as used percent |
-| `code`, `command`, `snippet` | | Markdown code; a permission prompt's command; a command or session name in a dense row; the only mono |
+| `code`, `command`, `snippet` | | Markdown code; a permission prompt's command; a command or session id in a dense row; the only mono |

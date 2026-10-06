@@ -580,7 +580,17 @@ async function main() {
       await page.screenshot({ path: join(SHOTS, `picks-phone-${scheme}.png`) });
     }
     await page.emulateMedia({ reducedMotion: "no-preference" });
-    await page.getByRole("button", { name: /^Phone layout/ }).click();
+    // "Reply" is under the picks too; in it, Shift+Enter starts a new line and Enter sends (#562).
+    await page.getByRole("button", { name: "Reply", exact: true }).click();
+    const reply = page.getByRole("textbox", { name: "Your answer" });
+    await reply.pressSequentially("Phone layout");
+    await reply.press("Shift+Enter");
+    await reply.pressSequentially("on narrow screens");
+    if ((await reply.inputValue()) !== "Phone layout\non narrow screens")
+      throw new Error(
+        `Shift+Enter did not start a new line: ${JSON.stringify(await reply.inputValue())}`,
+      );
+    await reply.press("Enter");
     await picks.waitFor(/Answer to d_\S+ .*: Phone layout/);
     if ((await picks.exited) !== 0) throw new Error("ask --wait for the picks failed");
     await page.setViewportSize(DESKTOP);
