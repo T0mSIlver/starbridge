@@ -613,7 +613,15 @@ export async function poll(
     const dir = directory;
     const entries = ctx.store.directory();
     ctx.store.updateState((st) => {
-      const items = [...(st.held ?? []), ...page.items];
+      // Two processes polling from their own cursors fetch the same items: keep one of each.
+      const ids = new Set<unknown>();
+      const items = [...(st.held ?? []), ...page.items].filter((raw) => {
+        const id = (raw as { id?: unknown } | null)?.id;
+        if (id === undefined) return true;
+        if (ids.has(id)) return false;
+        ids.add(id);
+        return true;
+      });
       delete st.held;
       // Every head first: a withheld entry any answer names holds back the whole page.
       const signers = new Map(items.map((raw) => [raw, noteHead(raw, s, dir, entries, st)]));
@@ -1097,6 +1105,9 @@ export function waitSeconds(text: string): number {
   return seconds;
 }
 
+/** How long each server poll of `answers --all --follow` holds. */
+const FOLLOW_POLL_SECONDS = 30;
+
 /** One line of `answers --all`: an answer to a decision this machine asked, with who asked. */
 export interface ObservedAnswer {
   decisionId: string;
@@ -1125,9 +1136,7 @@ export function observedAnswers(
     const asked = st.asked[id];
     if (!asked || !deliverable(st, id) || opts.known?.has(id)) continue;
     if (opts.since !== undefined && Date.parse(answer.answeredAt) < opts.since) continue;
-    const session = asked.session ?? asked.body?.source.session;
-    const sessionTitle = asked.sessionTitle ?? asked.body?.source.sessionTitle;
-    const project = asked.project ?? asked.body?.source.project;
+    const { session, sessionTitle, project } = asked;
     lines.push({
       decisionId: id,
       question: asked.question,
@@ -1143,9 +1152,9 @@ export function observedAnswers(
   return lines.sort((a, b) => a.answeredAt.localeCompare(b.answeredAt));
 }
 
-/** `--since`: a time (`2026-10-06T21:00Z`), or a duration back from now (`2h`). */
+/** `--since`: a time (`2026-10-06T21:00Z`), or a duration with its unit back from now (`2h`). */
 export function sinceTime(text: string, now: Date): number {
-  if (/^\d+(\.\d+)?\s*[smhd]?$/.test(text.trim())) return now.getTime() - parseDuration(text);
+  if (/^\d+(\.\d+)?\s*[smhd]$/.test(text.trim())) return now.getTime() - parseDuration(text);
   const t = Date.parse(text);
   if (Number.isNaN(t)) throw new UsageError(`--since takes a time or a duration, not ${text}`);
   return t;
@@ -1168,6 +1177,7 @@ export async function answersAll(
     }
   };
   await dropRevokedNow(ctx);
+  if (ctx.signal?.aborted) return EXIT_INTERRUPTED;
   flush();
   if (!opts.follow) return 0;
   const s = session(ctx);
@@ -1177,7 +1187,8 @@ export async function answersAll(
     try {
       ({ cursor, directory } = await poll(ctx, s, {
         cursor,
-        seconds: MAX_POLL_SECONDS,
+        // Short holds: another process may release answers this poll never fetches.
+        seconds: FOLLOW_POLL_SECONDS,
         shared: false,
         directory,
       }));
