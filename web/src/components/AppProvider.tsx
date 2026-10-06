@@ -4,7 +4,7 @@ import type { Settled } from "@starbridge/protocol";
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { api, backingOff } from "@/lib/api";
 import type { Boot, Ctx, Inbox, Quotas, Runs } from "@/lib/device";
-import { reach } from "@/lib/funnel";
+import { reach, send } from "@/lib/funnel";
 import { newestWins } from "@/lib/newest";
 import { AnsweredFirst } from "@/lib/outcome";
 import {
@@ -126,16 +126,33 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const inboxRead = useRef(newestWins());
   const ctx = boot.state === "ready" ? boot.ctx : undefined;
 
-  // The launch funnel's signed-in steps, in the browser that created the account (#559).
+  // The launch funnel's signed-in steps, in the browser that created the account (#559, #590).
   useEffect(() => {
     if (!ctx) return;
-    reach(ctx.account, (step) =>
-      step === "first-machine"
-        ? [...ctx.dir.members.values()].some((m) => m.active && m.member.role === "machine")
-        : // Answered by a device, not closed by its machine (a timeout, the keyboard).
-          inbox.items.some((i) => i.answeredAt && !i.settled),
-    );
+    const active = (role: string) =>
+      [...ctx.dir.members.values()].filter((m) => m.active && m.member.role === role).length;
+    reach(ctx.account, (step) => {
+      if (step === "first-machine") return active("machine") > 0;
+      if (step === "second-device") return active("device") > 1;
+      if (step !== "first-answer") return false;
+      // Answered by a device, not closed by its machine (a timeout, the keyboard).
+      const item = inbox.items
+        .filter((i) => i.answeredAt && !i.settled)
+        .sort((x, y) => (x.answeredAt ?? "").localeCompare(y.answeredAt ?? ""))[0];
+      if (!item) return false;
+      // Another device's answer shows here only once its machine took it: until then, no kind.
+      const reply = item.reply ?? item.answeredBy?.reply;
+      if (!reply) return true;
+      return { kind: "choice" in reply ? "choice" : "text" in reply ? "text" : "done" };
+    });
   }, [ctx, inbox]);
+
+  // Installed as an app from the landing page or the app, signed in or not (#590).
+  useEffect(() => {
+    const installed = () => send("pwa-install");
+    window.addEventListener("appinstalled", installed);
+    return () => window.removeEventListener("appinstalled", installed);
+  }, []);
 
   /** Bumped by `forget`: a load started before it keeps nothing it read. */
   const generation = useRef(0);

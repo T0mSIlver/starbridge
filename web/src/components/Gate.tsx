@@ -4,7 +4,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { outdated } from "@/lib/api";
 import type { FirstDevice as PreparedDevice, RecoveryEntry } from "@/lib/device";
-import { firstSignIn } from "@/lib/funnel";
+import { firstSignIn, reach, send } from "@/lib/funnel";
 import { hasPairCode, holdPairCode } from "@/lib/pairLink";
 import { useApp } from "./AppProvider";
 import { Icon } from "./icons";
@@ -71,19 +71,57 @@ function useDefaultName(initial = ""): [string, (v: string) => void] {
   return [name, setName];
 }
 
+/** What the server's `signin` says when GitHub sign-in failed (PROTOCOL.md, "Auth"). */
+const SIGN_IN_FAILED: Record<string, string> = {
+  declined: "GitHub didn't sign you in.",
+  expired:
+    "Sign-in could not be matched to this browser: it took over an hour, or started elsewhere.",
+  failed: "GitHub didn't answer as expected.",
+  off: "This server has no GitHub sign-in. Sign in with its owner token.",
+};
+
+/**
+ * Why the last GitHub sign-in failed, from the address the server sent the browser back to,
+ * until this browser is signed in.
+ */
+function useSignInFailure(signedOut: boolean): string | undefined {
+  const [why, setWhy] = useState<string>();
+  useEffect(() => {
+    if (!signedOut) setWhy(undefined);
+  }, [signedOut]);
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const v = url.searchParams.get("signin");
+    if (!v) return;
+    // Read once, so a reload does not say it again.
+    url.searchParams.delete("signin");
+    window.history.replaceState(window.history.state, "", url);
+    if (v in SIGN_IN_FAILED) setWhy(v);
+  }, []);
+  return why;
+}
+
 /** GitHub sign-in; self-hosting sits behind "Use your own server" (SPEC.md, "Clients"). */
 export function SignIn({
   ownServer = false,
   refused,
+  failed,
 }: {
   ownServer?: boolean;
   /** Why the server ended the last session; only the device list can confirm a revocation. */
   refused?: string;
+  /** Why the last GitHub sign-in failed, a key of SIGN_IN_FAILED. */
+  failed?: string;
 }) {
   const { reload } = useApp();
-  const [own, setOwn] = useState(ownServer);
+  const off = failed === "off";
+  const [own, setOwn] = useState(ownServer || off);
   const [token, setToken] = useState("");
   const { busy, error, run } = useAction();
+  useEffect(() => {
+    if (refused) send("error-screen", { screen: "sign-in-refused" });
+    else if (failed) send("error-screen", { screen: "sign-in-failed" });
+  }, [refused, failed]);
   return (
     <FirstRunPage centered>
       <h1 className="t-heading">Sign in to Starbridge</h1>
@@ -93,10 +131,13 @@ export function SignIn({
           confirms that: sign in to check.
         </p>
       )}
-      <a href="/v1/auth/github" className={`t-label ${ui.btn} ${ui.lg} ${ui.fill} ${s.go}`}>
-        <Icon name="github" size={18} />
-        Continue with GitHub
-      </a>
+      {failed && <p className={`t-small ${s.lede}`}>{SIGN_IN_FAILED[failed]}</p>}
+      {!off && (
+        <a href="/v1/auth/github" className={`t-label ${ui.btn} ${ui.lg} ${ui.fill} ${s.go}`}>
+          <Icon name="github" size={18} />
+          {failed ? "Sign in again" : "Continue with GitHub"}
+        </a>
+      )}
       {own ? (
         <form
           className={s.field}
@@ -149,6 +190,7 @@ function FirstDevice({ account, unsaved }: { account: string; unsaved?: string }
         // The genesis goes to the server only now, so a reload before this shows a new key.
         onContinue={async () => {
           await prepared.commit();
+          reach(account, (step) => step === "first-keys");
           await reload();
         }}
       />
@@ -420,8 +462,20 @@ function Revoked({ by }: { by: string }) {
   );
 }
 
-function Problem({ title, text, error }: { title: string; text: string; error: string }) {
+function Problem({
+  screen,
+  title,
+  text,
+  error,
+}: {
+  /** Its name in Umami's error-screen event, which carries nothing else (#590). */
+  screen: string;
+  title: string;
+  text: string;
+  error: string;
+}) {
   const { reload } = useApp();
+  useEffect(() => send("error-screen", { screen }), [screen]);
   return (
     <FirstRunPage>
       <h1 className="t-heading">{title}</h1>
@@ -460,6 +514,7 @@ export function Gate({ children }: { children: React.ReactNode }) {
     () => false,
   );
   const [ownServer, setOwnServer] = useState(false);
+  const failed = useSignInFailure(boot.state === "signed-out");
   const router = useRouter();
   const path = usePathname();
   // A pairing link opened before sign-in or setup: keep its code, and go back to it after.
@@ -475,6 +530,7 @@ export function Gate({ children }: { children: React.ReactNode }) {
     case "error":
       return (
         <Problem
+          screen="cannot-load"
           title="Cannot load your account"
           text="The server did not answer as expected."
           error={boot.error}
@@ -482,9 +538,9 @@ export function Gate({ children }: { children: React.ReactNode }) {
       );
     case "signed-out":
       // Visitors land on the landing page; a browser with a device signs in to its Inbox.
-      if (path === "/" && !boot.known && !ownServer)
+      if (path === "/" && !boot.known && !ownServer && !failed)
         return <Landing onOwnerToken={() => setOwnServer(true)} />;
-      return <SignIn ownServer={ownServer} refused={boot.refused} />;
+      return <SignIn ownServer={ownServer} refused={boot.refused} failed={failed} />;
     case "first-device":
       return <FirstDevice account={boot.account} unsaved={boot.unsaved} />;
     case "join":
@@ -494,6 +550,7 @@ export function Gate({ children }: { children: React.ReactNode }) {
     case "broken":
       return (
         <Problem
+          screen="unverified"
           title="The device list did not verify"
           text="The server sent a device list that does not extend the one this browser trusts, so nothing was decrypted."
           error={boot.error}

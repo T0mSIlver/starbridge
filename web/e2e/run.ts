@@ -191,6 +191,47 @@ async function noWordsAsked(page: Page) {
   if (found) throw new Error(`the page says "${found[0]}"`);
 }
 
+/**
+ * #630: a session name cut into a head and a tail keeps the space at the cut. Each half is a
+ * flex item, whose line would drop it ("Starbridgeorchestrator"). Measures the gap between the
+ * glyphs on either side of the cut; skips a head shown with an ellipsis.
+ */
+async function keepsSessionSpace(page: Page, at: string) {
+  const found = await page.evaluate(() => {
+    const glyph = (node: Node, i: number) => {
+      const r = document.createRange();
+      r.setStart(node, i);
+      r.setEnd(node, i + 1);
+      return r.getBoundingClientRect();
+    };
+    const rows: { name: string; gap: number | null }[] = [];
+    for (const el of document.querySelectorAll("[title]")) {
+      const [head, tail] = [...el.children] as HTMLElement[];
+      const name = el.getAttribute("title") ?? "";
+      if (el.children.length !== 2 || !head || !tail) continue;
+      if (`${head.textContent}${tail.textContent}` !== name) continue;
+      const h = head.firstChild;
+      const t = tail.firstChild;
+      const cut = head.textContent?.length ?? 0;
+      if (!h || !t || !/\s/.test(`${name[cut - 1]}${name[cut]}`)) continue;
+      if (head.scrollWidth > head.clientWidth) {
+        rows.push({ name, gap: null });
+        continue;
+      }
+      const last = (head.textContent ?? "").trimEnd().length - 1;
+      const first = (tail.textContent ?? "").length - (tail.textContent ?? "").trimStart().length;
+      if (last < 0 || first >= (tail.textContent ?? "").length) continue;
+      rows.push({ name, gap: glyph(t, first).left - glyph(h, last).right });
+    }
+    return rows;
+  });
+  const measured = found.filter((r) => r.gap !== null);
+  if (measured.length === 0) throw new Error(`no session name cut at a space to measure at ${at}`);
+  for (const r of measured)
+    if ((r.gap as number) < 2)
+      throw new Error(`"${r.name}" loses the space at its cut at ${at}: ${r.gap} px between words`);
+}
+
 /** What fails the run; contrast is only listed. */
 const FAILS: Problem["kind"][] = ["page-width", "clipped", "spills", "offscreen", "overlap", "tap"];
 
@@ -369,6 +410,8 @@ async function main() {
   await page.getByLabel(/I wrote this key down/).check();
   await page.getByRole("button", { name: "Continue" }).click();
   await page.getByRole("heading", { name: "Inbox" }).waitFor();
+  // No machine yet: the inbox says how to add one (#610).
+  await page.getByRole("heading", { name: "Add a machine" }).waitFor();
   await shoot(page, "inbox-empty");
 
   step("turn on Web Push");
@@ -392,6 +435,15 @@ async function main() {
   if ((await pair.exited) !== 0) throw new Error("pair failed");
   await page.getByRole("status", { name: "Pairing result" }).getByText("devbox joined").waitFor();
   await shoot(page, "pair-joined");
+  await page.goto(`${ORIGIN}/`);
+  await page.getByText("Nothing needs you").waitFor();
+  if (await page.getByRole("heading", { name: "Add a machine" }).count())
+    throw new Error("the inbox still says to add a machine after one joined");
+  await page
+    .getByRole("navigation", { name: "Main" })
+    .getByRole("link", { name: "Settings" })
+    .click();
+  await page.getByRole("link", { name: "Add a device" }).click();
 
   step("refuse a second pairing");
   const other = cli("pair-refused", ["pair", "--name", "stranger"], join(tmp, "stranger"));
@@ -901,6 +953,8 @@ async function main() {
     throw new Error("the decision does not link the artifact it is answered in");
   if ((await pane.locator("fieldset, textarea").count()) > 0)
     throw new Error("a decision answered in an artifact also offers an answer here");
+  // "Settings screen (#88)" is cut as "Settings " and "screen (#88)".
+  await keepsSessionSpace(page, "the artifact decision");
   await shoot(page, "answer-in");
   const settle = cli("settle", ["settle", pointerId as string], machineHome);
   if ((await settle.exited) !== 0) throw new Error("settle failed");

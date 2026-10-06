@@ -39,9 +39,22 @@ export class Interrupted extends Error {}
 
 /**
  * A connection error that proves the agent never saw the request, so falling back cannot do
- * anything twice: no socket file, nobody listening on it, or not a socket.
+ * anything twice: no socket file, nobody listening on it, not a socket, or a path too long for a
+ * socket, which no agent can listen on either (#622).
  */
-const NOT_LISTENING = new Set(["ENOENT", "ECONNREFUSED", "ENOTSOCK"]);
+const NOT_LISTENING = new Set(["ENOENT", "ECONNREFUSED", "ENOTSOCK", "EINVAL"]);
+
+/** The longest unix socket path: `sun_path` holds 108 bytes with the NUL on Linux, 104 elsewhere. */
+const MAX_SOCKET_PATH = process.platform === "linux" ? 107 : 103;
+
+/**
+ * Why `socket` cannot be a unix socket for this client, or undefined. Bun's agent listens on a
+ * longer path on Linux, which the mod reaches, but `connect` refuses it with EINVAL (#622).
+ */
+export function tooLong(socket: string): string | undefined {
+  if (Buffer.byteLength(socket) <= MAX_SOCKET_PATH) return undefined;
+  return `the agent's socket path ${socket} is over ${MAX_SOCKET_PATH} bytes, too long for a unix socket: set STARBRIDGE_AGENT_SOCKET to a shorter path, or STARBRIDGE_CONFIG_DIR to a shorter folder`;
+}
 /** A connection the agent closed under the call: it stopped or restarted. */
 const DROPPED = new Set(["ECONNRESET", "EPIPE"]);
 
@@ -150,7 +163,8 @@ export class AgentClient {
       req.on("close", () => signal?.removeEventListener("abort", onAbort));
       req.on("timeout", () => req.destroy(new Error(`agent: no answer within ${timeoutMs} ms`)));
       req.on("error", (e: NodeJS.ErrnoException) => {
-        if (e.code && NOT_LISTENING.has(e.code)) reject(new NoAgent(`no agent on ${this.socket}`));
+        if (e.code && NOT_LISTENING.has(e.code))
+          reject(new NoAgent(tooLong(this.socket) ?? `no agent on ${this.socket}`));
         else if (e.code && DROPPED.has(e.code))
           reject(new AgentLost(`the agent dropped the call: ${e.message}`));
         else reject(e);

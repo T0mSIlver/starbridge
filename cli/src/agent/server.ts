@@ -31,7 +31,7 @@ import {
   type SessionInfo,
   type Status,
 } from "./api";
-import { AgentClient, AgentError, NoAgent } from "./client";
+import { AgentClient, AgentError, NoAgent, tooLong } from "./client";
 
 export interface Request {
   params: Record<string, string>;
@@ -84,6 +84,8 @@ export interface Hub {
   /** Resolves on the next `notify`, after `ms`, or when `signal` aborts. */
   changed(ms: number, signal: AbortSignal): Promise<void>;
   log(line: string): void;
+  /** Whether session `id`'s client called within `ms`: its mod is there to take a prompt. */
+  seen(id: string, ms: number): boolean;
 }
 
 const SESSION_ID = /^[A-Za-z0-9_.:-]{1,200}$/;
@@ -193,6 +195,8 @@ export class Agent implements Hub {
     this.server = server;
     this.loops = this.features.flatMap((f) => (f.run ? [f.run(this.stopping.signal)] : []));
     this.log(`starbridge agent ${VERSION} listening on ${this.socket}`);
+    if (!isPortFile(this.socket) && tooLong(this.socket))
+      this.log(`${tooLong(this.socket)}: the starbridge commands cannot reach this agent`);
   }
 
   private async listenUnix(server: Server) {
@@ -207,6 +211,9 @@ export class Agent implements Hub {
         server.once("error", reject);
         server.listen(this.socket, () => resolve());
       });
+    } catch (e) {
+      const why = tooLong(this.socket);
+      throw why ? new UsageError(why) : e;
     } finally {
       process.umask(umask);
     }
@@ -376,6 +383,11 @@ export class Agent implements Hub {
     return info;
   }
 
+  seen(id: string, ms: number): boolean {
+    const at = this.sessions.get(id)?.lastSeenAt;
+    return at !== undefined && this.ctx.now().getTime() - Date.parse(at) <= ms;
+  }
+
   private async hello(req: Request) {
     const id = this.sessionId(req);
     const b = (req.body ?? {}) as Record<string, unknown>;
@@ -383,6 +395,10 @@ export class Agent implements Hub {
     const pid = pick<number>(b.pid, "number");
     const cwd = pick<string>(b.cwd, "string");
     const title = pick<string>(b.title, "string");
+    // After a `/clear` the mod greets under the new id and names the old one, which has no mod
+    // any more (#537). Its events stay held for a `/resume`.
+    const replaces = pick<string>(b.replaces, "string");
+    if (replaces !== undefined && replaces !== id) this.sessions.delete(replaces);
     this.touch(id, req, {
       helloAt: iso(this.ctx.now()),
       ...(pid !== undefined ? { pid } : {}),

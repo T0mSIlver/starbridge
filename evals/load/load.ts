@@ -66,6 +66,14 @@ async function worker(index: number, procs: number) {
     .slice(0, Math.max(...ramp))
     .filter((u) => u.n % procs === index);
 
+  // Each user's clients send from the user's own address (X-Sim-IP, stack.sh), so the
+  // per-address limits count each user apart, as they would in prod.
+  const ipOf = new Map<string, string>();
+  for (const u of all) {
+    const ip = `10.${(u.n >> 16) & 255}.${(u.n >> 8) & 255}.${u.n & 255}`;
+    for (const t of [u.machine, u.phone, u.web]) ipOf.set(t, ip);
+  }
+
   type Op = { hist: Hist; errors: Record<string, number> };
   let ops = new Map<string, Op>();
   let delivery = new Hist();
@@ -96,7 +104,7 @@ async function worker(index: number, procs: number) {
       const res = await fetch(`${TARGET}${path === "/" ? "" : "/v1"}${path}`, {
         method,
         headers: {
-          ...(token ? { authorization: `Bearer ${token}` } : {}),
+          ...(token ? { authorization: `Bearer ${token}`, "x-sim-ip": ipOf.get(token) ?? "" } : {}),
           ...(body ? { "content-type": "application/json" } : {}),
         },
         body: body ? JSON.stringify(body) : undefined,

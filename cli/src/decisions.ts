@@ -78,7 +78,7 @@ const IMAGE_BYTES = 384 * 1024;
 /** Exit code when nobody answered before `--timeout`. */
 export const EXIT_TIMEOUT = 2;
 /** Exit code on Ctrl-C, as a shell reports SIGINT. */
-const EXIT_INTERRUPTED = 130;
+export const EXIT_INTERRUPTED = 130;
 /** The server holds a long-poll at most this long (PROTOCOL.md). */
 const MAX_POLL_SECONDS = 300;
 /** Pause before retrying after a network or server error. */
@@ -292,6 +292,8 @@ export async function postDecision(ctx: Ctx, s: Session, input: AskInput): Promi
       ...(input.images ? { images: input.images } : {}),
       ...(cursor !== undefined ? { cursor } : {}),
       ...(decision.source.session && !input.held ? { session: decision.source.session } : {}),
+      ...(decision.source.sessionTitle ? { sessionTitle: decision.source.sessionTitle } : {}),
+      project: decision.source.project,
       ...(decision.answerIn ? { answerIn: true } : {}),
       ...(decision.done ? { done: true } : {}),
       ...(input.codex && decision.source.session ? { codex: input.codex } : {}),
@@ -313,7 +315,9 @@ export async function ask(
   const resolved = resolveSource(input, ctx.env, process.cwd());
   const decision = await postDecision(ctx, s, { ...resolved, waiting: input.waiting || opts.wait });
   ctx.out(decision.id);
-  if (!opts.wait) ctx.err(deliveryLine(decision.id, delivery(resolved, false)));
+  // With no agent, nothing tells which sessions run a mod: the poller's lease says only that one
+  // does (#537).
+  if (!opts.wait) ctx.err(deliveryLine(decision.id, delivery(resolved, false, false)));
   if (!opts.wait) return 0;
   return wait(ctx, { id: decision.id, timeout: opts.timeout, json: opts.json }, s);
 }
@@ -540,18 +544,27 @@ export function behindBy(st: State, dir: Directory, entries: unknown[]): string 
 export type Delivery = "prompt" | "wait";
 
 /**
- * With no agent running, Codex gets nothing back; the mod, the Pi extension and the opencode
- * plugin poll by themselves.
+ * A prompt only when something will submit it (#537): for Claude Code, a mod seen polling for
+ * this session (`modSeen`), which an installed plugin alone does not mean; for Pi and opencode,
+ * their extension, which says so itself; for Codex, its reachable app-server. With no agent
+ * running, Codex gets nothing back.
  */
 export function delivery(
   input: Pick<AskInput, "agent" | "extensionAnswers" | "headless">,
   codexReachable: boolean,
+  modSeen: boolean,
 ): Delivery {
-  if (input.agent === "claude-code") return input.headless ? "wait" : "prompt";
+  if (input.agent === "claude-code") return !input.headless && modSeen ? "prompt" : "wait";
   if (input.agent === "pi" || input.agent === "opencode")
     return input.extensionAnswers ? "prompt" : "wait";
   return input.agent === "codex" && codexReachable ? "prompt" : "wait";
 }
+
+/**
+ * How long after its last call the agent still counts a session's mod as there: one events call
+ * held 25 s, and the next one.
+ */
+export const MOD_SEEN_MS = 45_000;
 
 /** What `ask` prints after the id, on stderr, so the asking agent knows what to do next. */
 export function deliveryLine(id: string, d: Delivery): string {
@@ -611,7 +624,15 @@ export async function poll(
     const dir = directory;
     const entries = ctx.store.directory();
     ctx.store.updateState((st) => {
-      const items = [...(st.held ?? []), ...page.items];
+      // Two processes polling from their own cursors fetch the same items: keep one of each.
+      const ids = new Set<unknown>();
+      const items = [...(st.held ?? []), ...page.items].filter((raw) => {
+        const id = (raw as { id?: unknown } | null)?.id;
+        if (id === undefined) return true;
+        if (ids.has(id)) return false;
+        ids.add(id);
+        return true;
+      });
       delete st.held;
       // Every head first: a withheld entry any answer names holds back the whole page.
       const signers = new Map(items.map((raw) => [raw, noteHead(raw, s, dir, entries, st)]));
@@ -930,7 +951,7 @@ export function takeAnswer(
  */
 export async function wait(
   ctx: Ctx,
-  opts: { id?: string; session?: string; timeout?: string; json?: boolean },
+  opts: { id?: string; session?: string; timeout?: string; json?: boolean; "no-mark"?: boolean },
   s: Session = session(ctx),
   dir?: Directory,
 ): Promise<number> {
@@ -950,7 +971,8 @@ export async function wait(
   if (shut) throw shut;
   const already = takeAnswer(ctx.store, target, opts.session);
   if (already) return report(already);
-  if (target) await markWaiting(ctx, () => postWaiting(ctx, s, target, "waiting"));
+  if (target && !opts["no-mark"])
+    await markWaiting(ctx, () => postWaiting(ctx, s, target, "waiting"));
 
   let deadline = Number.POSITIVE_INFINITY;
   if (opts.timeout) deadline = ctx.now().getTime() + parseDuration(opts.timeout);
@@ -1093,4 +1115,154 @@ export function waitSeconds(text: string): number {
   if (!Number.isInteger(seconds) || seconds < 0 || seconds > MAX_CYCLE_SECONDS)
     throw new UsageError(`--wait takes whole seconds from 0 to ${MAX_CYCLE_SECONDS}`);
   return seconds;
+}
+
+/** How long each server poll of `answers --all --follow` holds. */
+const FOLLOW_POLL_SECONDS = 30;
+
+/** One line of `answers --all`: an answer to a decision this machine asked, with who asked. */
+export interface ObservedAnswer {
+  decisionId: string;
+  question: string;
+  choice?: string;
+  text?: string;
+  done?: true;
+  answeredAt: string;
+  session?: string;
+  sessionTitle?: string;
+  project?: string;
+}
+
+/**
+ * Every answer the machine accepted that its session may have, oldest first, from `since` (ms)
+ * on and leaving out the decision ids in `known`. Reads only: nothing is marked seen, so the
+ * session that asked still gets each one.
+ */
+export function observedAnswers(
+  st: State,
+  opts: { since?: number; known?: ReadonlySet<string> } = {},
+): ObservedAnswer[] {
+  if (st.behind) return [];
+  const lines: ObservedAnswer[] = [];
+  for (const [id, { answer }] of Object.entries(st.answers)) {
+    const asked = st.asked[id];
+    if (!asked || !deliverable(st, id) || opts.known?.has(id)) continue;
+    if (opts.since !== undefined && Date.parse(answer.answeredAt) < opts.since) continue;
+    const { session, sessionTitle, project } = asked;
+    lines.push({
+      decisionId: id,
+      question: asked.question,
+      ...(answer.choice !== undefined ? { choice: answer.choice } : {}),
+      ...(answer.text !== undefined ? { text: answer.text } : {}),
+      ...(answer.done ? { done: true as const } : {}),
+      answeredAt: answer.answeredAt,
+      ...(session ? { session } : {}),
+      ...(sessionTitle ? { sessionTitle } : {}),
+      ...(project !== undefined ? { project } : {}),
+    });
+  }
+  return lines.sort((a, b) => a.answeredAt.localeCompare(b.answeredAt));
+}
+
+/** `--since`: a time (`2026-10-06T21:00Z`), or a duration with its unit back from now (`2h`). */
+export function sinceTime(text: string, now: Date): number {
+  if (/^\d+(\.\d+)?\s*[smhd]$/.test(text.trim())) return now.getTime() - parseDuration(text);
+  const t = Date.parse(text);
+  if (Number.isNaN(t)) throw new UsageError(`--since takes a time or a duration, not ${text}`);
+  return t;
+}
+
+/**
+ * `answers --all` with no agent: prints every answer `observedAnswers` holds, then with `follow`
+ * polls the server from a cursor of its own, never the shared one, and prints each new answer
+ * until interrupted. `printed` carries over from an agent that stopped under it.
+ */
+export async function answersAll(
+  ctx: Ctx,
+  opts: { follow?: boolean; since?: number },
+  printed: Set<string> = new Set(),
+): Promise<number> {
+  const flush = () => {
+    for (const a of observedAnswers(ctx.store.state(), { since: opts.since, known: printed })) {
+      printed.add(a.decisionId);
+      ctx.out(JSON.stringify(a));
+    }
+  };
+  const s = session(ctx);
+  let cursor = ctx.store.state().cursor;
+  let directory: Directory | undefined;
+  // Nothing else may have fetched the server's answers yet: one poll that returns at once.
+  try {
+    ({ cursor, directory } = await poll(ctx, s, { cursor, seconds: 0, shared: false }));
+  } catch (e) {
+    if (e instanceof UsageError || e instanceof ProtocolError) throw e;
+    if (!ctx.signal?.aborted)
+      ctx.err(`starbridge: ${(e as Error).message}; printing what this machine has`);
+  }
+  if (ctx.signal?.aborted) return EXIT_INTERRUPTED;
+  flush();
+  if (!opts.follow) return 0;
+  while (!ctx.signal?.aborted) {
+    try {
+      ({ cursor, directory } = await poll(ctx, s, {
+        cursor,
+        // Short holds: another process may release answers this poll never fetches.
+        seconds: FOLLOW_POLL_SECONDS,
+        shared: false,
+        directory,
+      }));
+    } catch (e) {
+      if (e instanceof UsageError || e instanceof ProtocolError) throw e;
+      if (ctx.signal?.aborted) break;
+      ctx.err(`starbridge: ${(e as Error).message}; retrying`);
+      directory = undefined;
+      await ctx.sleep(RETRY_MS);
+      continue;
+    }
+    // The agent or a `wait` may have accepted answers this poll did not fetch.
+    flush();
+  }
+  return EXIT_INTERRUPTED;
+}
+
+/** One line of `decisions --open`: a question this machine asked that is still open. */
+export interface OpenDecision {
+  decisionId: string;
+  question: string;
+  options: string[];
+  askedAt: string;
+  waiting: boolean;
+  session?: string;
+  sessionTitle?: string;
+  project?: string;
+}
+
+/**
+ * The questions this machine asked that have no answer yet, are not settled and the server still
+ * holds (it drops them after 30 days), oldest first. Questions a hook waits on itself are left
+ * out: no session owns them.
+ */
+export function openDecisions(st: State, now: Date): OpenDecision[] {
+  const lines: OpenDecision[] = [];
+  for (const [id, a] of Object.entries(st.asked)) {
+    if (a.settled || a.held || st.answers[id]) continue;
+    if (now.getTime() - Date.parse(a.askedAt) >= RESEAL_MS) continue;
+    lines.push({
+      decisionId: id,
+      question: a.question,
+      options: a.options,
+      askedAt: a.askedAt,
+      waiting: a.waiting?.state === "waiting",
+      ...(a.session ? { session: a.session } : {}),
+      ...(a.sessionTitle ? { sessionTitle: a.sessionTitle } : {}),
+      ...(a.project !== undefined ? { project: a.project } : {}),
+    });
+  }
+  return lines.sort((x, y) => x.askedAt.localeCompare(y.askedAt));
+}
+
+/** `decisions --open`: prints `openDecisions` as JSON lines, from the state file both paths share. */
+export function decisionsOpen(ctx: Ctx): number {
+  for (const d of openDecisions(ctx.store.state(), ctx.now())) ctx.out(JSON.stringify(d));
+  return 0;
 }

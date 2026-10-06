@@ -59,7 +59,8 @@ what is missing:
 4. It installs Starbridge in each agent it finds: the Claude Code plugin at user scope, the
    skill in Codex's skills folder, the Starbridge Pi package, and the skill and plugin in
    opencode's config folder. A later setup updates the Codex and opencode files when the CLI
-   carries newer ones. Claude Code, Codex and Pi may then run `starbridge ask`, `waiting`,
+   carries newer ones. The Claude Code plugin needs Claude Code 2.1.287 or later; setup says
+   when it is older. Claude Code, Codex and Pi may then run `starbridge ask`, `waiting`,
    `working`, `wait` and `settle` without a permission prompt; `starbridge run` still asks, since
    the command it wraps can be anything. For Pi, setup adds these rules only when
    pi-permission-system is installed; `starbridge config permissions on` offers them later.
@@ -152,6 +153,23 @@ starbridge ask --question "Does this reach my phone?" --option Yes --option No -
 
 When the agent runs out of other work, `starbridge waiting <id>` shows "Waiting for you" on
 every device and notifies you once more. `starbridge working <id>` clears it; the question stays open.
+`starbridge wait <id>` marks the question waiting the same way; with `--no-mark` it only collects
+the answer, for a question that blocks nothing yet.
+
+### Follow every answer
+
+An orchestrator that supervises other sessions can follow your answers to all of them:
+
+```bash
+starbridge answers --all --follow
+```
+
+It prints one JSON line per answer, with the question, the session and the project that asked,
+then each new one until interrupted. `--since 2h` or `--since 2026-10-06T21:00Z` skips older ones.
+It only reads: each answer still comes back into the session that asked.
+
+`starbridge decisions --open` lists the questions still open, in the same form, so an orchestrator
+can check that no session already asked what it is about to ask.
 
 ### Runs
 

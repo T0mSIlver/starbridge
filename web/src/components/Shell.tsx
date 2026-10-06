@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef } from "react";
 import { needsYou } from "@/lib/feed";
 import { setFind, useFind } from "@/lib/find";
-import { useApp } from "./AppProvider";
+import { type Store, useApp } from "./AppProvider";
 import { Icon, type IconName, Mark } from "./icons";
 import s from "./Shell.module.css";
 import ui from "./ui.module.css";
@@ -31,13 +31,10 @@ export function Shell({ children }: { children: React.ReactNode }) {
       router.push(url.pathname + url.search);
     });
   }, [router]);
-  const { inbox, prompts, boot, withheld } = useApp();
+  const app = useApp();
+  const { inbox, prompts, withheld } = app;
   const open = needsYou(inbox.items, prompts, Date.now()).length;
-  const machines =
-    boot.state === "ready"
-      ? [...boot.ctx.dir.members.values()].filter((m) => m.member.role === "machine" && m.active)
-          .length
-      : 0;
+  const machines = pairedMachines(app) ?? 0;
   const q = useFind();
   const findRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
@@ -145,4 +142,13 @@ export function Shell({ children }: { children: React.ReactNode }) {
       </nav>
     </div>
   );
+}
+
+/** The account's active machines, or undefined until the directory has loaded. */
+export function pairedMachines({ boot, sampleDevices }: Store): number | undefined {
+  if (sampleDevices)
+    return sampleDevices.filter((d) => d.role === "machine" && d.status === "active").length;
+  if (boot.state !== "ready") return undefined;
+  return [...boot.ctx.dir.members.values()].filter((m) => m.member.role === "machine" && m.active)
+    .length;
 }

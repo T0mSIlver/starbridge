@@ -100,6 +100,9 @@
 .sessionHead,
 .sessionTail {
   color: var(--fg);
+  /* Each half is a flex item, whose line drops a space at its start or end: a space at the cut
+     would vanish, "Starbridge orchestrator" showing as "Starbridgeorchestrator" (#630). */
+  white-space: pre;
 }
 
 .sessionHead {
