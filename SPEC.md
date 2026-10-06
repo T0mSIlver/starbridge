@@ -1296,6 +1296,7 @@ so the mod is the first path.
 - 2026-10-06. The agent binds its socket under a 077 umask and restores the process's after
   (#95). Under the usual umask the socket took other users' connections between the bind and the
   chmod to 0600, and a connection accepted then stayed open.
+
 - 2026-10-06. Recovery with the words keeps its new keys under `pending` until the directory
   append lands, as a join does (#283, after #274). A failed append leaves the stored device's
   keys alone; one that landed with its reply lost counts once the directory lists the entry. Boot
@@ -1306,6 +1307,13 @@ so the mod is the first path.
   not the API's code (#289): an expired or unknown code reads "No pairing with this code, or it
   expired."; a code already approved, a removed browser and an expired sign-in have their own
   sentence; any other error reads as the server's sentence, capitalised, without its code.
+
+- 2026-10-06. Devices tells apart rows that share a name (#287). `pair --force` adds a new machine
+  and leaves the old one active, and every machine defaults to the hostname, so Devices listed
+  identical rows. A row whose name another shares now adds the time it was added ("added Oct 6,
+  10:32") on web and Android, and `pair --force` names the old pairing that way instead of by an
+  id no client shows. Revoking the old machine in the approval itself (a `replaces` field in the
+  pairing request) would remove the twin but changes the protocol; not done.
 
 ## Encryption, with existing libraries
 

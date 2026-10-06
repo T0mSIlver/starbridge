@@ -112,8 +112,27 @@ export async function pair(
     s.answers = {};
   });
   ctx.out(`Paired "${name}" (${id}). Keys are in ${ctx.store.dir}.`);
-  if (previous && dir.members.get(previous.id)?.active)
-    ctx.out(`The old pairing (${previous.id}) stays under Devices until you revoke it there.`);
+  if (previous && dir.members.get(previous.id)?.active) {
+    // Named as Devices shows it: the id appears in no client (#287).
+    const at = addedAt(entries, previous.id);
+    ctx.out(
+      `Devices still lists the old pairing, "${previous.name}"${at ? ` added ${at}` : ""}; revoke it there.`,
+    );
+  }
   rememberMachineKind(ctx);
   return 0;
+}
+
+/** When the directory added member `id`, as "Oct 6, 10:32 AM" in the local zone. */
+function addedAt(entries: unknown[], id: string): string | undefined {
+  for (const e of entries as { body: string }[]) {
+    const body = JSON.parse(e.body) as { op: string; at: string; member?: { id: string } };
+    if (body.op === "add" && body.member?.id === id)
+      return new Date(body.at).toLocaleString(undefined, {
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+  }
 }
