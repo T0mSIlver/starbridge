@@ -8,14 +8,14 @@ instruction files, in your words. Starbridge never writes to them.
 
 ## What each agent supports
 
-| | Claude Code | Codex | Pi |
-|---|---|---|---|
-| Questions | ✓ | ✓ | ✓ |
-| Answers into the live session | ✓ | ✓¹ | ✓³ |
-| "Waiting for you" | ✓ | ✓ | ✓ |
-| Runs | ✓ | ✓ | ✓ |
-| Permission prompts | Opt-in | No | Opt-in⁴ |
-| `AskUserQuestion` hook | ✓ | n/a² | n/a² |
+| | Claude Code | Codex | Pi | opencode |
+|---|---|---|---|---|
+| Questions | ✓ | ✓ | ✓ | ✓ |
+| Answers into the live session | ✓ | ✓¹ | ✓³ | ✓⁵ |
+| "Waiting for you" | ✓ | ✓ | ✓ | ✓ |
+| Runs | ✓ | ✓ | ✓ | ✓ |
+| Permission prompts | Opt-in | No | Opt-in⁴ | Opt-in⁶ |
+| `AskUserQuestion` hook | ✓ | n/a² | n/a² | No⁷ |
 
 ¹ In interactive sessions, when `starbridge agent` runs (Codex CLI 0.160 or
 later). In `codex exec`, the agent waits for the answer with `starbridge wait`
@@ -35,6 +35,17 @@ it; "Answer here" in Pi brings back its own prompt. Reading or writing a path th
 `external_directory` rule guards stays at the keyboard: pi-permission-system lets no link allow
 those.
 
+⁵ In the TUI and `opencode serve`, through `starbridge agent` or the CLI. In
+`opencode run`, the agent waits for the answer with `starbridge wait` before it
+ends its turn.
+
+⁶ Like Claude Code's: opencode's prompt stays open at the keyboard and the
+first answer wins. Your devices can allow a call once or deny it. `opencode run`
+rejects every prompt at once, so none reaches your devices.
+
+⁷ opencode's own `question` tool still asks in the terminal. The skill tells the
+agent to use `starbridge ask` instead.
+
 `starbridge setup` offers to install Starbridge in each agent it finds, and
 asks before each one:
 
@@ -51,6 +62,12 @@ asks before each one:
 - Pi: the Starbridge Pi package (`pi install
   git:github.com/T0mSIlver/starbridge`), which brings the skill, the rules and
   the extension that puts each answer into the session.
+- opencode: the skill, in `~/.config/opencode/skills/starbridge`, and the
+  Starbridge plugin, in `~/.config/opencode/plugins/starbridge.ts` with its code
+  in `~/.config/opencode/starbridge/`. The plugin brings the rules, puts each
+  answer into the session and sends permission prompts. A later setup, or the
+  agent once `starbridge update` restarts it, updates both when the CLI carries
+  newer ones.
 
 ## Where the lines go
 
@@ -64,17 +81,20 @@ committed, so lines there apply to everyone who works on the repo.
 <dd>Every repo: <code>~/.codex/AGENTS.md</code>. One repo: <code>AGENTS.override.md</code>.</dd>
 <dt>Pi</dt>
 <dd>Every repo: <code>~/.pi/agent/AGENTS.md</code>. One repo: <code>AGENTS.override.md</code>.</dd>
+<dt>opencode</dt>
+<dd>Every repo: <code>~/.config/opencode/AGENTS.md</code>. One repo: a file you name in <code>instructions</code> in <code>.opencode/opencode.json</code>, such as <code>["AGENTS.local.md"]</code>.</dd>
 </dl>
 
 The one-repo files go at the repo root. Add the file's name to
-`.git/info/exclude` to keep it out of git.
+`.git/info/exclude` to keep it out of git, and for opencode `.opencode/opencode.json`
+too.
 
 Claude Code reads `CLAUDE.local.md` in addition to the repo's `CLAUDE.md`.
 `AGENTS.override.md` replaces the repo's `AGENTS.md` instead, so in a repo that
 has an `AGENTS.md`, put your lines in the every-repo file.
 
 Checked on 2026-10-05 with Claude Code 2.1.289, Codex CLI 0.160.0 and Pi
-0.87.1.
+0.87.1, and on 2026-10-06 with opencode 1.18.31.
 
 ## Lines to copy
 

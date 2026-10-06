@@ -11,7 +11,7 @@ code cannot show: the HTTP API and the flows.
 - **Signed envelope** `{v, kind, signer, body, sig}`: `body` is JSON text kept exactly as signed;
   `sig` is Ed25519 over `"starbridge/v1/<kind>" NUL signer NUL body`. Verifiers check the
   signature before they parse `body`.
-- **Sealed item** `{v, kind, id, from, re?, quiet?, boxes: [{to, box}]}`: a signed envelope sealed
+- **Sealed item** `{v, kind, id, from, re?, quiet?, reseal?, boxes: [{to, box}]}`: a signed envelope sealed
   with `crypto_box_seal` to each recipient. `kind`, `id`, `from`, `re` and `to` are routing hints
   for the server; clients reject an item whose hints disagree with the signed body. `quiet: true`
   asks the server to store the item without pushing it.
@@ -33,7 +33,7 @@ code cannot show: the HTTP API and the flows.
 
 - Every machine-signed body names its `source` (machine, project, session, and optionally the
   session's title and links, and `machineKind`: `server`, `desktop`, `laptop` or `cloud`, for
-  its icon). A decision may name its `agent`, `claude-code`, `codex` or `pi`, as a permission does. Clients accept any agent name (lowercase letters, digits and dashes, at most 40), so a newer machine's agent never makes an item unreadable; an agent a client does not know gets no "Open in" link.
+  its icon). A decision may name its `agent`, `claude-code`, `codex`, `pi` or `opencode`, as a permission does. Clients accept any agent name (lowercase letters, digits and dashes, at most 40), so a newer machine's agent never makes an item unreadable; an agent a client does not know gets no "Open in" link.
 - A decision's images (PNG or JPEG) and links (HTTPS) are part of its signed body, so each box
   carries every image, and the 2 MB cap in Limits covers them once per device.
   A decision with `answerIn` is answered on that page (a claude.ai artifact whose button wakes
@@ -253,8 +253,12 @@ createdAt, expiresAt, version}`; `state` is `open`, `comparing`, `approved` or `
 | `POST /quota/ask?wait=<s>` | device | ask every machine for a fresh quota snapshot → `{askedAt, behind}`; with `wait`, holds until each active machine that has a snapshot posted a newer one; `behind` counts those that have not |
 
 Item ids are random, chosen by the sender. A machine re-posts a run under its id as it changes;
-the server replaces the earlier post and moves it past every cursor. Any other reused id, or a
-run id posted by another machine or as another kind, is 409 `duplicate-id`. Cursors are opaque strings;
+the server replaces the earlier post and moves it past every cursor. It also re-posts an open
+decision or permission under its id with `reseal: true`, re-signed to the active devices, when a
+device joined since it was posted; the server replaces it only while it holds it unanswered (404
+once dropped), keeps its `receivedAt`, and pushes only the devices that had no box yet. Any other reused id, or a
+reused id posted by another machine or as another kind, is 409 `duplicate-id`; re-posting an
+answered decision or permission is 409 `already-answered`. Cursors are opaque strings;
 without `after`, a list starts at the first item. An item with `re` marks the item it names
 answered, so every device moves it out of the open inbox: an answer its decision, a permission
 answer its permission, a settled notice the permission or decision it closes. A `waiting` item
@@ -334,7 +338,8 @@ own credentials; the payload is already ciphertext or an id. UnifiedPush always 
 
 These bound what one account, or one address, can make the server store or do. A rate limit
 answers 429 `rate-limited` with `Retry-After` in seconds; a cap answers 409, 413 or 429 with
-the code below. Per-address limits count an IPv6 client as its /64, unless the row says /48.
+the code below. Per-address limits count an IPv6 client as its /64, unless the row says /48. A
+server whose disk is full answers writes 503 `storage-full` with `Retry-After`; reads go on.
 
 | What | Limit |
 |---|---|
@@ -410,7 +415,7 @@ first answer wins.
 - `permission` `{v, id, to, createdAt, agent, tool, summary, description?, input, inputHash,
   suggestions, expiresAt, source}`: `input` is the tool input as JSON text, redacted on the
   machine (provider token patterns, PEM private keys, `Authorization` headers, URL passwords, and
-  `*_KEY`, `*_TOKEN` or `*_PASSWORD` values) and at most 8000 characters; `inputHash` is `hashInput` of the input before redaction (BLAKE2b-256); `expiresAt`
+  `*_KEY`, `*_TOKEN` or `*_PASSWORD` values) and at most 8000 characters; `inputHash` is `hashInput` of the input before redaction (BLAKE2b-256), keyed under the machine's signing key so a device cannot test guesses for a redacted value; `expiresAt`
   is at most 10 minutes after `createdAt`. Each of the at most 2 `suggestions`
   `{label, rule, scope: "session" | "project"}` shows the exact rule a wider allow would add.
 - `permission-answer` `{v, id, permissionId, to, answeredAt, behavior: "allow" | "deny", scope:
