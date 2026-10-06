@@ -62,6 +62,10 @@ secrets() {
     -e 's/127\.0\.0\.1:3010/web-a:3000/; s/127\.0\.0\.1:3011/web-b:3000/' \
     "$repo/deploy/Caddyfile" > "$LOAD_DIR/Caddyfile"
   chmod 644 "$LOAD_DIR/Caddyfile"
+  # The stats host's password block, with prod's fallback hash: nobody holds its password.
+  mkdir -p "$LOAD_DIR/caddy"
+  printf 'basic_auth {\n\ttom %s\n}\n' \
+    "$(sed -n "s/^hash='\(.*\)'\$/\1/p" "$repo/deploy/host/caddy-auth.sh")" > "$LOAD_DIR/caddy/stats-auth"
 }
 
 healthy() {

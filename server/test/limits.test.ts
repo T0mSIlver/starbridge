@@ -352,6 +352,14 @@ test("waiting pairings are capped per client, an IPv6 client counting as its /48
   expect((await request(s, "m", "203.0.113.7")).r.status).toBe(201);
 });
 
+test("a pairing request's address stays in memory, never in the database (#575)", async () => {
+  const s = await makeServer({ trustProxy: true });
+  expect((await request(s, "m", "203.0.113.7")).r.status).toBe(201);
+  const rows = s.deps.db.query("SELECT * FROM pairings").all();
+  expect(rows).toHaveLength(1);
+  expect(JSON.stringify(rows)).not.toContain("203.0.113");
+});
+
 test("approved pairings leave the client's cap, so one address can pair many members", async () => {
   const s = await makeServer({ limits: { ...DEFAULT_LIMITS, pairingsPerClient: 1 } });
   const acct = await setupAccount(s);

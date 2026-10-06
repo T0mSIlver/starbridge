@@ -79,6 +79,8 @@ last line says:
 - **"Nothing brings the answer into this session…"** Never end your turn
   with the card open. When only the answer is left, run
   `starbridge wait <id> --timeout 5m`, again on exit 2, as long as it takes.
+  `wait` marks the card waiting, which notifies them again: for a card that
+  blocks nothing yet, such as a question for tomorrow, add `--no-mark`.
   No answer is never a yes: don't withdraw the card or do what it asks.
 
 The user may type a reply instead of an option: act on it, and ask again only

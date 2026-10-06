@@ -97,7 +97,8 @@
   white-space: nowrap;
 }
 
-.sessionName :global(.t-snippet) {
+.sessionHead,
+.sessionTail {
   color: var(--fg);
 }
 

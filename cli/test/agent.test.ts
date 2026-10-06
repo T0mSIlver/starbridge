@@ -648,3 +648,13 @@ test("on loopback TCP (Windows), only a call that proves the port file's token g
   writeFileSync(socket, JSON.stringify({ ...file, pid: 2 ** 22 + 1 }));
   await expect(new AgentClient(socket).call("GET", "/v1/status")).rejects.toThrow("no agent");
 });
+
+test("through the agent, wait --no-mark leaves the decision as it was (#603)", async () => {
+  const { socket } = await machine();
+  const c = client(socket);
+  const id = await ask(c, "--project", "p");
+  expect(await run(["wait", id, "--no-mark", "--timeout", "1s"], c)).toBe(2);
+  expect(await server.opened("waiting")).toEqual([]);
+  expect(await run(["wait", id, "--timeout", "1s"], c)).toBe(2);
+  expect((await server.opened("waiting")).map((w) => w.state)).toEqual(["waiting"]);
+});

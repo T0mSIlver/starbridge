@@ -173,6 +173,23 @@ class Fake(private val now: Instant) {
         images = listOf(Image(toB64(javaClass.getResourceAsStream("/fake/phone-inbox.png")!!.readBytes()), 1236, 2676, alt = "Inbox, dark")),
     )
 
+    /** A desktop and a phone layout over their options, "Reply" under them (#536), in a titled session (#563). */
+    val layouts = Decision(
+        id = "d9",
+        question = "Which layout should the inbox lead with?",
+        context = "",
+        options = listOf("Desktop layout", "Phone layout"),
+        recommended = "Phone layout",
+        source = devBox.copy(session = "b81f3c2e-4a5d-4e8a-9f0b-2c3d4e5f6a7b", title = "Port the Starbridge CLI before launch"),
+        createdAt = ago(6),
+        agent = "claude-code",
+        replies = true,
+        images = listOf(
+            Image(toB64(javaClass.getResourceAsStream("/fake/hero-a.png")!!.readBytes()), 340, 210, alt = "Desktop layout"),
+            Image(toB64(javaClass.getResourceAsStream("/fake/phone-inbox.png")!!.readBytes()), 1236, 2676, alt = "Phone layout"),
+        ),
+    )
+
     /** No options: the sheet takes a reply. */
     val freeText = Decision(
         id = "d7",

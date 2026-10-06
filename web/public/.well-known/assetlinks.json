@@ -5,8 +5,7 @@
       "namespace": "android_app",
       "package_name": "dev.starbridge.app",
       "sha256_cert_fingerprints": [
-        "39:46:EF:C9:EA:F0:60:54:FA:70:57:EF:F8:6E:E8:17:00:1C:02:C6:75:B0:50:CF:DA:D1:32:B4:6B:D6:2D:6C",
-        "FB:F2:64:6A:18:F1:7A:1F:F8:17:6C:35:C7:5E:33:70:2C:F8:CC:EF:0F:4B:74:F5:9A:A4:95:C3:E5:17:C1:4C"
+        "39:46:EF:C9:EA:F0:60:54:FA:70:57:EF:F8:6E:E8:17:00:1C:02:C6:75:B0:50:CF:DA:D1:32:B4:6B:D6:2D:6C"
       ]
     }
   }
