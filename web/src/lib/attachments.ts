@@ -33,6 +33,7 @@ export function githubRef(link: string): string | undefined {
   } catch {
     return undefined;
   }
+  if (url.protocol !== "https:") return undefined;
   if (url.hostname !== "github.com" && url.hostname !== "www.github.com") return undefined;
   const m = url.pathname.match(/^\/([^/]+)\/([^/]+)\/(?:pull|issues)\/(\d+)(?:\/|$)/);
   return m ? `${m[1]}/${m[2]}#${m[3]}` : undefined;

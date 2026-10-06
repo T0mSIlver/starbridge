@@ -59,7 +59,7 @@ private val ARTIFACT_PATH = Regex("/artifacts?/")
 /** "owner/repo#123" for a GitHub pull request or issue, else null. */
 fun githubRef(url: String): String? {
     val uri = Uri.parse(url)
-    if (uri.scheme != "https" || uri.host !in setOf("github.com", "www.github.com")) return null
+    if (uri.scheme != "https" || uri.host?.lowercase() !in setOf("github.com", "www.github.com")) return null
     val m = GITHUB_ITEM.find(uri.path.orEmpty()) ?: return null
     return "${m.groupValues[1]}/${m.groupValues[2]}#${m.groupValues[3]}"
 }

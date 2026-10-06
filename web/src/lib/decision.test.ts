@@ -28,6 +28,9 @@ test("a link reads as its title, a GitHub reference, a Claude artifact, or its h
   expect(linkLabel({ url: "https://github.com/T0mSIlver/starbridge/issues/171" })).toBe(
     "T0mSIlver/starbridge#171",
   );
+  expect(linkLabel({ url: "https://GitHub.com/T0mSIlver/starbridge/pull/86" })).toBe(
+    "T0mSIlver/starbridge#86",
+  );
   expect(linkLabel({ url: "https://github.com/T0mSIlver/starbridge/pulls" })).toBe(
     "github.com/T0mSIlver/starbridge/pulls",
   );
