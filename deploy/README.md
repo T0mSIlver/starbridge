@@ -79,8 +79,8 @@ starbridge.run.
 
 To restore, stop the server, copy a backup over `starbridge.db` in the volume, delete
 `starbridge.db-wal` and `starbridge.db-shm`, `chown 1000:1000` it and start the server. Besides
-the nightly `starbridge-YYYYMMDD.db`, each deploy leaves `deploy-<time>.db`, taken just before the
-new server opened the database; the last five are kept.
+the nightly `starbridge-YYYYMMDD.db`, each deploy leaves `deploy-<time>.db`, taken while the old
+server still ran, seconds before the new one opened the database; the last five are kept.
 
 A server refuses a database whose schema is newer than its own (`PRAGMA user_version`), so
 rolling back past a release that migrated fails at start: restore that deploy's `deploy-<time>.db`

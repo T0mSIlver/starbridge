@@ -53,10 +53,13 @@ curl -fsS --retry 10 --retry-connrefused --retry-delay 1 -X POST \
 sleep 2
 $compose stop $live
 
-# A backup just before the new server opens the database and runs its migrations (#470), so a
-# bad one rolls back to this deploy's data rather than the night's. The last five are kept.
-db=$(docker volume inspect -f '{{.Mountpoint}}' starbridge_data 2>/dev/null)/starbridge.db
-if [ -f "$db" ]; then
+# A backup before the new server opens the database and runs its migrations (#470), so a bad one
+# rolls back to this deploy's data rather than the night's. The old server still runs, so writes
+# in the seconds until it stops are not in it. A failed backup stops the deploy before the server
+# is replaced: no migration runs without one. The last five are kept. A new host has no volume yet.
+mnt=$(docker volume inspect -f '{{.Mountpoint}}' starbridge_data 2>/dev/null) || mnt=
+db=$mnt/starbridge.db
+if [ -n "$mnt" ] && [ -f "$db" ]; then
   out=/var/backups/starbridge/deploy-$(date -u +%Y%m%dT%H%M%S).db
   mkdir -p /var/backups/starbridge
   (umask 077 && sqlite3 "$db" ".backup '$out.tmp'")

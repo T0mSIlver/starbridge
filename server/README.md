@@ -95,7 +95,7 @@ A new server brings its database's schema up to date when it starts. Copy the da
 with the server running:
 
 ```bash
-sqlite3 /var/lib/docker/volumes/starbridge/_data/starbridge.db ".backup 'starbridge-before.db'"
+sudo sqlite3 "$(docker volume inspect -f '{{.Mountpoint}}' starbridge)/starbridge.db" ".backup 'starbridge-before.db'"
 ```
 
 A server refuses a database a newer release has already upgraded, so to go back to an older
