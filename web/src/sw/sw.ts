@@ -10,6 +10,7 @@ import {
   openPushedPermission,
   openSettled,
   openWaiting,
+  Withheld,
 } from "../lib/device";
 import { answerPlace } from "../lib/outcome";
 import * as store from "../lib/store";
@@ -47,6 +48,9 @@ self.addEventListener("activate", (e) => e.waitUntil(self.clients.claim()));
 self.addEventListener("push", (e) => {
   e.waitUntil(
     onPush(e.data?.text() ?? "").catch(async (err) => {
+      // Held (#362): the notifications already up would still let the owner answer from them.
+      if (err instanceof Withheld)
+        for (const n of await self.registration.getNotifications()) n.close();
       // A push that fails to open or verify shows nothing; open pages log why.
       for (const c of await self.clients.matchAll({ type: "window" }))
         c.postMessage({ type: "starbridge:push-error", error: String(err) });

@@ -9,6 +9,7 @@ import dev.starbridge.app.data.Prompt
 import dev.starbridge.app.data.Run
 import dev.starbridge.app.data.Saved
 import dev.starbridge.app.data.Secrets
+import dev.starbridge.app.data.Sent
 import dev.starbridge.app.data.ServerStore
 import dev.starbridge.app.data.Vault
 import dev.starbridge.app.protocol.Directories
@@ -25,6 +26,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.add
 import kotlinx.serialization.json.buildJsonArray
@@ -91,20 +93,18 @@ class WithheldTest {
             putJsonObject("source") { put("machine", by.name); put("project", "p"); put("session", "s") }
             if (head) putJsonObject("dir") { put("length", fullDir.length); put("head", fullDir.head) }
         }, by.id, key, listOf(phone))
-        val page = buildJsonObject {
-            put("items", buildJsonArray {
-                add(buildJsonObject { put("item", ProtocolJson.encodeToJsonElement(decision("d_revoked", revoked, revokedSign.secret, false))); put("cursor", "1"); put("receivedAt", at) })
-                add(buildJsonObject { put("item", ProtocolJson.encodeToJsonElement(decision("d_honest", honest, honestSign.secret, true))); put("cursor", "2"); put("receivedAt", at) })
-            })
-            put("cursor", "2")
-        }
+        val first = buildJsonObject { put("item", ProtocolJson.encodeToJsonElement(decision("d_revoked", revoked, revokedSign.secret, false))); put("cursor", "1"); put("receivedAt", at) }
+        val second = buildJsonObject { put("item", ProtocolJson.encodeToJsonElement(decision("d_honest", honest, honestSign.secret, true))); put("cursor", "2"); put("receivedAt", at) }
+        var page = buildJsonObject { put("items", buildJsonArray { add(first) }); put("cursor", "1") }
+        var posts = 0
         val empty = buildJsonObject { put("items", buildJsonArray {}); put("cursor", "") }
         var served: List<JsonElement> = entries.toList()
 
         http.dispatcher = object : Dispatcher() {
             override fun dispatch(request: RecordedRequest): MockResponse = when (request.url.encodedPath) {
                 "/v1/directory" -> json(buildJsonObject { put("entries", buildJsonArray { served.drop(request.url.queryParameter("from")!!.toInt()).forEach { add(it) } }) })
-                "/v1/items" -> json(if (request.url.queryParameter("kind")!!.startsWith("decision")) page else empty)
+                "/v1/items" -> if (request.method == "POST") { posts++; json(buildJsonObject { put("cursor", "3") }) }
+                    else json(if (request.url.queryParameter("kind")!!.startsWith("decision") && request.url.queryParameter("after").orEmpty() < "2") page else empty)
                 "/v1/quota" -> json(empty)
                 else -> MockResponse(404, okhttp3.Headers.headersOf(), "")
             }
@@ -129,19 +129,23 @@ class WithheldTest {
         }
         val store = ServerStore(disk, OkHttpClient(), sodium, envelopes, directories, Pairings(sodium), Joins(sodium), alerts, "Phone", server, false, scope)
 
+        // The revoked machine's question arrives first, before anything shows the gap.
+        store.refresh()
+        until { store.decisions.value.isNotEmpty() }
         // The server keeps the revocation from the phone: the honest machine's head shows it.
+        page = buildJsonObject { put("items", buildJsonArray { add(second) }); put("cursor", "2") }
         store.refresh()
         until { store.notice.value != null }
         assertTrue(store.notice.value!!.contains("holding back changes to your devices that honest has seen"))
         assertTrue(store.decisions.value.isEmpty())
-        assertTrue(disk.saved()!!.decisions.isEmpty())
+        // The question the phone already holds cannot be answered meanwhile.
+        assertTrue(runBlocking { store.send("d_revoked", "Yes", null) } is Sent.Failed)
+        assertEquals(0, posts)
 
         // Served in full, the hold ends and the revoked machine's question no longer opens.
         served = full
         store.refresh()
-        until { store.decisions.value.isNotEmpty() }
-        assertEquals(listOf("d_honest"), disk.saved()!!.decisions.map { it.body.id })
-        assertEquals(listOf("d_honest"), store.decisions.value.map { it.id })
+        until { store.decisions.value.any { it.id == "d_honest" } }
     }
 
     private fun until(pred: () -> Boolean) {

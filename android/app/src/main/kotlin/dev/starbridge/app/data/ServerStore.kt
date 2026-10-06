@@ -79,7 +79,10 @@ interface Alerts {
     fun run(run: Run)
     /** Quota alerts the uploader newly raised; each shows once, if this phone opted in. */
     fun quota(notices: List<QuotaNotice>) {}
-    /** Signed out: every notification goes, since they show decrypted questions and commands. */
+    /**
+     * Signed out, or holding machines' items (#362): every notification goes, since they show
+     * decrypted questions and commands and let the owner answer.
+     */
     fun clearAll() {}
     /** An answer went out: shows it in place of the buttons. */
     fun answered(decision: Decision, answer: String) {}
@@ -196,7 +199,7 @@ class ServerStore(
         server.value = saved.server
         push.value = push.value.copy(type = saved.pushType, registered = saved.push?.type == saved.pushType)
         // While the server holds back entries a machine has seen, no machine's item shows (#362).
-        val held = withheld() != null
+        val held = withheld()?.also { if (notice.value == null) notice.value = it } != null
         decisions.value = if (held) emptyList() else saved.decisions.map(::toUi)
         prompts.value = if (held) emptyList() else saved.prompts.map(::toUi)
         // As the web: named once the account has more than one active machine.
@@ -693,6 +696,8 @@ class ServerStore(
         items.forEach { open(it) }
         val why = withheld() ?: return false
         notice.value = why
+        // Notifications already up would still let the owner answer from them.
+        alerts.clearAll()
         return true
     }
 
@@ -873,6 +878,7 @@ class ServerStore(
      * asked. A deny is for this call only; a wider allow only for a scope the prompt offered.
      */
     suspend fun sendPrompt(id: String, allow: Boolean, scope: String, message: String?) {
+        withheld()?.let { throw IllegalStateException(it) }
         val p = saved.prompts.find { it.body.id == id } ?: throw IllegalStateException("No such prompt.")
         if (p.answeredAt != null || p.answer != null) throw IllegalStateException("Already answered.")
         val chosen = if (allow) scope else "once"
@@ -996,6 +1002,8 @@ class ServerStore(
      * The notification's buttons call this too.
      */
     suspend fun send(id: String, choice: String?, text: String?): Sent {
+        // Not even an answer queued before: its machine may be the one the server keeps revoked.
+        withheld()?.let { return Sent.Failed(it) }
         saved.outbox.find { it.decisionId == id }?.let { return post(it) }
         val d = saved.decisions.find { it.body.id == id } ?: throw IllegalStateException("No such decision.")
         d.answer?.let { return Sent.Answered(it) }
@@ -1097,6 +1105,8 @@ class ServerStore(
     }
 
     private suspend fun flushHeld(): Boolean {
+        // Kept, and tried again once the hold ends.
+        if (withheld() != null) return false
         for (q in saved.outbox) {
             val decision = decisions.value.find { it.id == q.decisionId }
             when (val sent = post(q)) {
