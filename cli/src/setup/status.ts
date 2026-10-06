@@ -75,7 +75,11 @@ export async function status(sys: Sys): Promise<number> {
 
   const cfg = ctx.store.agentConfig().quota;
   const found = findCodexbar(sys, cfg?.codexbar);
-  out(`CodexBar: ${found?.path ?? "not found (`starbridge setup` installs it)"}`);
+  const missing =
+    sys.platform === "win32"
+      ? "none (no Windows build)"
+      : "not found (`starbridge setup` installs it)";
+  out(`CodexBar: ${found?.path ?? missing}`);
   if (found && cfg?.providers?.length) {
     const list = await listProviders(sys, found.path);
     for (const line of probeLines(sys, await probe(found.path, cfg.providers, list))) out(line);

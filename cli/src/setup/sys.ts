@@ -1,9 +1,11 @@
 import { spawn } from "node:child_process";
-import { accessSync, constants, realpathSync } from "node:fs";
+import { realpathSync } from "node:fs";
 import { homedir } from "node:os";
-import { delimiter, join } from "node:path";
 import { createInterface } from "node:readline/promises";
 import type { Ctx } from "../context";
+import { inBunfs, killTree, resolveCommand, spawnable, which } from "../platform";
+
+export { which };
 
 /** What setup, status and uninstall touch outside the config directory, so tests can fake it. */
 export interface Sys {
@@ -68,19 +70,6 @@ export function makeSys(ctx: Ctx, prompt: Prompt): Sys {
   };
 }
 
-/** The first executable `name` on `$PATH`. */
-export function which(env: Record<string, string | undefined>, name: string): string | undefined {
-  for (const dir of (env.PATH ?? "").split(delimiter)) {
-    if (!dir.startsWith("/")) continue;
-    const p = join(dir, name);
-    try {
-      accessSync(p, constants.X_OK);
-      return p;
-    } catch {}
-  }
-  return undefined;
-}
-
 const real = (p: string) => {
   try {
     return realpathSync(p);
@@ -97,7 +86,7 @@ const real = (p: string) => {
 export function selfCommand(env: Record<string, string | undefined>): string[] {
   const script = process.argv[1];
   // npm links the bundle as `bin/starbridge`, with no extension: any script but Bun's own.
-  const scripted = script !== undefined && !script.startsWith("/$bunfs");
+  const scripted = script !== undefined && !inBunfs(script);
   const running = scripted ? [process.execPath, real(script)] : [process.execPath];
   const onPath = which(env, "starbridge");
   if (onPath && real(onPath) === real(running.at(-1) as string)) return [onPath];
@@ -118,13 +107,25 @@ export function run(
   sys: Sys,
   cmd: string,
   args: string[],
-  opts: { timeoutMs?: number; input?: string; inherit?: boolean } = {},
+  opts: {
+    timeoutMs?: number;
+    input?: string;
+    inherit?: boolean;
+    env?: Record<string, string>;
+  } = {},
 ): Promise<RunOut | null> {
-  const bin = cmd.startsWith("/") ? cmd : which(sys.ctx.env, cmd);
+  const bin = resolveCommand(sys.ctx.env, cmd);
   if (!bin) return Promise.resolve(null);
   return new Promise((resolve) => {
-    const child = spawn(bin, args, {
-      env: sys.ctx.env as NodeJS.ProcessEnv,
+    let start: ReturnType<typeof spawnable>;
+    try {
+      start = spawnable(bin, args, sys.ctx.env);
+    } catch (e) {
+      return resolve({ code: null, stdout: "", stderr: (e as Error).message });
+    }
+    const child = spawn(start.file, start.args, {
+      windowsVerbatimArguments: start.windowsVerbatimArguments,
+      env: { ...sys.ctx.env, ...opts.env } as NodeJS.ProcessEnv,
       stdio: [
         opts.input === undefined ? "ignore" : "pipe",
         opts.inherit ? "inherit" : "pipe",
@@ -139,7 +140,7 @@ export function run(
     child.stderr?.on("data", (d) => {
       stderr += d;
     });
-    const timer = setTimeout(() => child.kill("SIGKILL"), opts.timeoutMs ?? 120_000);
+    const timer = setTimeout(() => killTree(child), opts.timeoutMs ?? 120_000);
     child.on("error", (e) => {
       clearTimeout(timer);
       resolve({ code: null, stdout, stderr: e.message });

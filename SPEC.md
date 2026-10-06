@@ -53,6 +53,12 @@ native app. No native iOS app until there is demand and a device to test on. A d
 one comes, is Tauri over Electron, to reuse the web code; a Mac surface may instead live in
 CodexBar's menu bar, upstream.
 
+The CLI runs on Linux, macOS and Windows (#552, decided 2026-10-06 for launch). On Windows,
+CodexBar has no build, so a Windows machine uploads no quotas and setup says so; questions,
+runs and permission prompts work as elsewhere. The CLI reads `Path` as `PATH`, takes `HOME` from
+`USERPROFILE`, finds commands by `PATHEXT`, and starts an npm `.cmd` shim through cmd.exe with
+every argument escaped as cross-spawn does it, so no argument runs as a command.
+
 ## Architecture
 
 ```
@@ -363,7 +369,10 @@ provider plugins add providers, not panels.
 - **Install and update.** `https://starbridge.run/install.sh` is `cli/install.sh`, prerendered by
   the web page, so each deploy serves its own revision's script. It checks `SHA256SUMS` with
   minisign, or OpenSSL 3 when minisign is missing. `starbridge update` replaces script installs
-  and points Homebrew and npm installs at their manager.
+  and points Homebrew and npm installs at their manager. Windows refuses to replace or delete a
+  running `.exe` but lets it be renamed, so `update` moves it aside to `starbridge.exe.old` and
+  the next update removes that; `uninstall` deletes the binary from a detached cmd.exe two seconds
+  after it exits (#552).
 
 ## Harnesses
 
@@ -657,7 +666,8 @@ Tokens, type and components: `DESIGN.md`.
 ## Releases, deploys and CI
 
 - **Releases** (#64). A `v1.2.3` or `v1.2.3-rc.4` tag runs `release.yml`: the APK and AAB signed
-  with the release key, four CLI binaries, `SHA256SUMS` signed with minisign in CI (public key in
+  with the release key, six CLI binaries (Linux and macOS, and Windows `.exe`, each x64 and
+  arm64, cross-compiled by Bun on Linux), `SHA256SUMS` signed with minisign in CI (public key in
   `cli/minisign.pub`), `install.sh`, and notes from merged PRs. `-rc` tags are prereleases and go
   to npm under `next`. Non-rc tags commit the formula to `T0mSIlver/homebrew-starbridge`. The npm
   step skips without `NPM_TOKEN` (#480). versionCode is `2000000 + MAJOR*1000000 + MINOR*10000 +
@@ -694,7 +704,10 @@ Tokens, type and components: `DESIGN.md`.
 - **CI** (#380). Main runs one at a time; a newer merge replaces the waiting run, and the head's
   deploy covers the merges in between. A pull request runs only the jobs its files can affect;
   skipped jobs still report success. The e2e runs under `.github/watchdog.sh`. Tests point
-  `TMPDIR` at one directory per run and remove it (`test-tmp.ts`, #313).
+  `TMPDIR` at one directory per run and remove it (`test-tmp.ts`, #313). A `windows-latest` job
+  (#552) runs the CLI's platform tests and starts a built `.exe`; the rest of the CLI suite runs
+  there without failing the job until it passes. A private repository skips it, since GitHub's
+  Windows runners need a public one or paid minutes.
 - **Monitoring.** `uptime.yml` checks `/healthz`, `/healthz/backup` (fails when the last nightly
   backup is over 26 h old) and `/healthz/disk` (under 2 GB free), and opens one `outage` issue.
 

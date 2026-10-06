@@ -1,8 +1,9 @@
-import { spawnSync } from "node:child_process";
-import { chmodSync, existsSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { spawn, spawnSync } from "node:child_process";
+import { chmodSync, existsSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import type { Ctx } from "./context";
+import { resolveCommand, spawnable } from "./platform";
 import {
   compareVersions,
   downloadVerified,
@@ -32,7 +33,14 @@ const PLUGINS = ["starbridge@starbridge", "starbridge-mod@starbridge"];
 
 /** Runs a command quietly; null when it is not on the PATH. */
 function sh(ctx: Ctx, cmd: string, args: string[]) {
-  const r = spawnSync(cmd, args, { env: ctx.env as NodeJS.ProcessEnv, encoding: "utf8" });
+  const bin = resolveCommand(ctx.env, cmd);
+  if (!bin) return null;
+  const start = spawnable(bin, args, ctx.env);
+  const r = spawnSync(start.file, start.args, {
+    env: ctx.env as NodeJS.ProcessEnv,
+    encoding: "utf8",
+    windowsVerbatimArguments: start.windowsVerbatimArguments,
+  });
   if (r.error) return null;
   return { ok: r.status === 0, out: `${r.stdout}${r.stderr}`.trim() };
 }
@@ -114,7 +122,7 @@ async function updateSelf(ctx: Ctx, install: InstallKind, pubkey: string) {
   const next = join(dirname(install.path), ".starbridge.new");
   writeFileSync(next, bytes, { mode: 0o755 });
   chmodSync(next, 0o755);
-  renameSync(next, install.path);
+  replaceBinary(next, install.path);
   ctx.out(`Updated starbridge ${VERSION} to ${latest}.`);
   // The new binary brings the files setup wrote to its version, and restarts the agent.
   const r = spawnSync(install.path, ["setup", "--refresh"], {
@@ -132,13 +140,64 @@ async function updateSelf(ctx: Ctx, install: InstallKind, pubkey: string) {
   movePiPackage(ctx, latest);
 }
 
+/**
+ * Moves `next` over `target`. Windows refuses to replace or delete a running `.exe` but lets it
+ * be renamed, so the old one goes aside first: the agent and this process may still run it. The
+ * next update removes it.
+ */
+export function replaceBinary(next: string, target: string, platform = process.platform) {
+  if (platform !== "win32") return renameSync(next, target);
+  let aside = `${target}.old`;
+  try {
+    rmSync(aside, { force: true });
+  } catch {
+    // Still running since the update before: another name.
+    aside = `${target}.${process.pid}.old`;
+  }
+  renameSync(target, aside);
+  try {
+    renameSync(next, target);
+  } catch (e) {
+    renameSync(aside, target);
+    throw e;
+  }
+  // This copy, and any a still-running one kept from an earlier update.
+  const dir = dirname(target);
+  const leftover = (f: string) => f.startsWith(`${basename(target)}.`) && f.endsWith(".old");
+  for (const f of readdirSync(dir).filter(leftover))
+    try {
+      rmSync(join(dir, f), { force: true });
+    } catch {}
+}
+
 /** Removes a script-installed binary; brew and npm installs are removed by their manager. */
 export function removeBinary(ctx: Ctx, install: InstallKind): number {
   if (install.kind !== "binary") {
     ctx.out(`starbridge was installed with ${install.kind}: run ${MANAGED[install.kind].remove}`);
     return 0;
   }
+  if (process.platform === "win32") return removeRunningExe(ctx, install.path);
   rmSync(install.path, { force: true });
   ctx.out(`Removed ${install.path}.`);
+  return 0;
+}
+
+/**
+ * Windows deletes no running `.exe`, and this one runs until uninstall returns: a detached
+ * cmd.exe deletes it, and an update's leftover, two seconds after.
+ */
+function removeRunningExe(ctx: Ctx, path: string): number {
+  if (/[%"^&]/.test(path)) {
+    ctx.out(`Delete ${path} once this command returns.`);
+    return 0;
+  }
+  const del = `ping -n 3 127.0.0.1 >nul & del /f /q "${path}" "${path}.old" "${path}.*.old"`;
+  spawn(ctx.env.ComSpec || "cmd.exe", ["/d", "/s", "/c", `"${del}"`], {
+    detached: true,
+    stdio: "ignore",
+    windowsHide: true,
+    windowsVerbatimArguments: true,
+  }).unref();
+  ctx.out(`${path} is deleted once this command returns; if it stays, a program still runs it.`);
   return 0;
 }

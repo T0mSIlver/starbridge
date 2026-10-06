@@ -194,6 +194,12 @@ async function codexbarStep(sys: Sys, opts: SetupOpts): Promise<Quota | undefine
   section(ctx, "CodexBar");
   const cfg = ctx.store.agentConfig();
   let found: Found | undefined = findCodexbar(sys, cfg.quota?.codexbar);
+  if (!found && sys.platform === "win32") {
+    ctx.out(
+      "CodexBar, which reads plan quotas, has no Windows build: this machine uploads none. Questions and runs work without it.",
+    );
+    return undefined;
+  }
   if (!found) {
     const how = sys.platform === "darwin" ? "the CodexBar app" : "the CodexBar CLI";
     if (
