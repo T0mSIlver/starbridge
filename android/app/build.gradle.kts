@@ -13,7 +13,7 @@ plugins {
 // buildSrc/src/main/kotlin/DogfoodSigning.kt: null on every build but the maintainer's dogfood ones.
 val dogfood = dogfoodKey(
     Properties().apply { rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use(::load) },
-    System.getenv(),
+    providers.environmentVariable("CI").orNull,
     File(System.getProperty("user.home")),
 )
 

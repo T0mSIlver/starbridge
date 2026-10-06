@@ -229,7 +229,7 @@ provider plugins add providers, not panels.
   keystore's password is public, and an app signed with it would verify as the App Link handler
   (#569). Dogfood builds sign with the release key instead, opted into by a gitignored
   `local.properties` line on the maintainer's machine and refused under CI; other debug builds keep
-  the debug key, and their App Links fall back to the `starbridge://auth` button.
+  the debug key, and their sign-in falls back to the `starbridge://auth` button.
 
 ## Server
 

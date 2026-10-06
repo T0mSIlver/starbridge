@@ -50,7 +50,9 @@ starbridge.dogfoodSigning=true
 
 The build then reads `~/.config/starbridge/secrets/release.jks` and the password in
 `release-keystore-password` beside it, and fails where `CI` is set. Without the line, debug builds
-sign with the debug key.
+sign with the debug key. A phone with a debug-signed build must uninstall it once before it takes a
+release-signed one, since Android refuses an update signed with another key. Keep release-signed
+APKs out of folders that CI runners can read.
 
 ## Pull requests
 
