@@ -143,6 +143,9 @@ async function browser() {
       "dom.push.serverURL": `ws://localhost:${PORTS.push}/`,
       "dom.push.testing.allowInsecureServerURL": true,
       "permissions.default.desktop-notification": 1,
+      // Firefox queues past a few notifications that stay up until dismissed, and their
+      // showNotification never settles; the run leaves many up across its browsers.
+      "dom.webnotifications.requireinteraction.count": 100,
     },
   });
 }
@@ -834,7 +837,10 @@ async function main() {
   step("a group pinned by running out first says why on a click (#296)");
   await page.setViewportSize(DESKTOP);
   await page.getByRole("button", { name: "Why codex is first" }).click();
-  const why = page.getByText("First because it runs out soonest.");
+  // Scoped to codex: depending on the hour, claude's group may be pinned and say so too.
+  const why = page
+    .getByRole("region", { name: "codex" })
+    .getByText("First because it runs out soonest.");
   await why.waitFor();
   if (AUDIT) await shoot(page, "quotas-pinned");
   else
@@ -1203,7 +1209,7 @@ async function main() {
   longRun.proc.kill();
 
   step("add a second browser by pairing code");
-  const b = await ff.newContext();
+  const b = await ff.newContext({ permissions: ["notifications"] });
   await watchCsp(b);
   const pageB = await signIn(b);
   await pageB.getByTestId("pairing-code").waitFor({ timeout: 10_000 });
@@ -1250,7 +1256,7 @@ async function main() {
   // The new device sees decisions sealed after it joined; the open one predates it.
 
   step("recover a third browser with the recovery key");
-  const c = await ff.newContext();
+  const c = await ff.newContext({ permissions: ["notifications"] });
   await watchCsp(c);
   const pageC = await signIn(c);
   await pageC.getByRole("button", { name: "Use the recovery key" }).click();
@@ -1280,9 +1286,14 @@ async function main() {
   await page.getByRole("dialog").waitFor({ state: "detached" });
   // A notification left from before: the server's refusal closes it.
   await pageB.evaluate(() =>
-    navigator.serviceWorker.ready.then((r) =>
-      r.showNotification("Left over", { tag: "e2e-left", requireInteraction: true }),
-    ),
+    Promise.race([
+      navigator.serviceWorker.ready.then((r) =>
+        r.showNotification("Left over", { tag: "e2e-left", requireInteraction: true }),
+      ),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("the left-over notification hung")), 10_000),
+      ),
+    ]),
   );
   if (!(await pageB.evaluate(NOTIFICATIONS)).some((n) => n.tag === "e2e-left"))
     throw new Error("the left-over notification did not show");
@@ -1293,9 +1304,14 @@ async function main() {
     throw new Error("the refusal left notifications on screen");
   // Another one, so the device list's verdict, not the refusal, has to close it.
   await pageB.evaluate(() =>
-    navigator.serviceWorker.ready.then((r) =>
-      r.showNotification("Left over", { tag: "e2e-left", requireInteraction: true }),
-    ),
+    Promise.race([
+      navigator.serviceWorker.ready.then((r) =>
+        r.showNotification("Left over", { tag: "e2e-left", requireInteraction: true }),
+      ),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("the left-over notification hung")), 10_000),
+      ),
+    ]),
   );
   await pageB.getByRole("link", { name: SIGN_IN }).click();
   // Signed in, the device list confirms the revocation.
@@ -1336,9 +1352,14 @@ async function main() {
     .getByRole("link", { name: "Settings" })
     .click();
   await pageC.evaluate(() =>
-    navigator.serviceWorker.ready.then((r) =>
-      r.showNotification("Left over", { tag: "e2e-left", requireInteraction: true }),
-    ),
+    Promise.race([
+      navigator.serviceWorker.ready.then((r) =>
+        r.showNotification("Left over", { tag: "e2e-left", requireInteraction: true }),
+      ),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("the left-over notification hung")), 10_000),
+      ),
+    ]),
   );
   if (!(await pageC.evaluate(NOTIFICATIONS)).some((n) => n.tag === "e2e-left"))
     throw new Error("the left-over notification did not show");
