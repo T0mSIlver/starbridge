@@ -249,12 +249,12 @@ test("the plugin's SessionStart hook adds the rule to reach the owner and the ru
   expect(text).not.toContain("inference");
 });
 
-test("an agent from before runs (404 on the route) is skipped: the run goes to the server", async () => {
+test("an agent of another API revision (426) is skipped: the run goes to the server", async () => {
   const machine = await paired(server);
   const socket = join(machine.store.dir, "old-agent.sock");
   const old = createServer((_req, res) => {
-    res.writeHead(404, { "content-type": "application/json" });
-    res.end(JSON.stringify({ error: "not-found", detail: "/v1/runs" }));
+    res.writeHead(426, { "content-type": "application/json" });
+    res.end(JSON.stringify({ error: "agent-too-old", detail: "update the agent" }));
   });
   await new Promise<void>((r) => old.listen(socket, r));
   try {
