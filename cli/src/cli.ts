@@ -146,9 +146,11 @@ const HELP = `starbridge: post decisions to your devices, report runs, upload qu
       {"answers": [[label], ...]} for opencode; prints nothing on any error. SIGTERM (the
       terminal answered) settles the questions still open.
 
-  starbridge update
+  starbridge update [--codexbar <version>]
       Install the latest release once its signature checks out, then \`setup --refresh\` (brew
-      and npm installs: use their manager, then \`starbridge setup --refresh\`).
+      and npm installs: use their manager, then \`starbridge setup --refresh\`); then CodexBar's
+      latest release if setup installed it. --codexbar installs that CodexBar release instead,
+      and only that.
 
   starbridge --version
 
@@ -429,9 +431,12 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
           "usage: starbridge hook permission|settle --agent claude-code, starbridge hook ask-user, or starbridge hook question --agent opencode",
         );
       }
-      case "update":
-        parseArgs({ args: rest, options: {} });
-        return await update(ctx, installKind());
+      case "update": {
+        const { values } = parseArgs({ args: rest, options: { codexbar: { type: "string" } } });
+        if (values.codexbar === "")
+          throw new UsageError("usage: starbridge update [--codexbar <version>]");
+        return await update(ctx, installKind(), undefined, values.codexbar);
+      }
       case "--version":
       case "-v":
         ctx.out(`starbridge ${VERSION}`);

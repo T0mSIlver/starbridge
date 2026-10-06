@@ -1,0 +1,70 @@
+name: codexbar
+
+# Setup and `starbridge update` install CodexBar's latest release, which ships almost daily, so
+# each day this installs it as they do and reads its output with the uploader's parser
+# (cli/scripts/codexbar-check.ts), with no credentials. On failure it opens one issue labelled
+# `codexbar`, or updates the open one, and closes it with a comment once the check passes.
+on:
+  schedule:
+    - cron: "41 6 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: codexbar
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    # Always Linux, whatever vars.RUNNER says: Linux is where setup installs the tarball.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          # Per job: runners on one machine would share ~/setup-pnpm and clobber each other.
+          dest: ${{ runner.temp }}/setup-pnpm
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.2
+      - run: pnpm install --frozen-lockfile
+        env:
+          pnpm_config_store_dir: ${{ runner.tool_cache }}/pnpm-store
+
+      - name: Check
+        id: check
+        working-directory: cli
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -o pipefail
+          bun run scripts/codexbar-check.ts 2>&1 | tee "$RUNNER_TEMP/check.log"
+
+      - name: Open, update or close the codexbar issue
+        if: ${{ !cancelled() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          OUTCOME: ${{ steps.check.outcome }}
+        run: |
+          now=$(date -u '+%Y-%m-%d %H:%M UTC')
+          issue=$(gh issue list --label codexbar --state open --json number --jq '.[0].number // empty')
+          # A failed checkout or install skips the check: the run fails, but no issue is opened.
+          if [ "$OUTCOME" = failure ]; then
+            body=$(printf "CodexBar's latest release failed the check, last seen %s:\n\n\`\`\`\n%s\n\`\`\`\n\nUntil it is fixed, \`starbridge update --codexbar <version>\` installs a release that works.\n\nRun: %s\n" \
+              "$now" "$(tail -20 "$RUNNER_TEMP/check.log" 2>/dev/null)" \
+              "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID")
+            if [ -z "$issue" ]; then
+              gh label create codexbar --color FBCA04 --description "Opened and closed by the codexbar workflow" 2>/dev/null || true
+              gh issue create --label codexbar --title "CodexBar's latest release fails the check since $now" --body "$body"
+            else
+              gh issue edit "$issue" --body "$body"
+            fi
+            exit 1
+          elif [ "$OUTCOME" = success ] && [ -n "$issue" ]; then
+            gh issue close "$issue" --comment "The check passes again at $now."
+          fi

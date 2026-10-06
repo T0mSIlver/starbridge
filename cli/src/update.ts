@@ -12,7 +12,9 @@ import {
   RELEASE_KEY,
   RELEASES_URL,
 } from "./release";
+import { updateCodexbar } from "./setup/codexbar";
 import { piPackage, piSource } from "./setup/harnesses";
+import { defaults, makeSys } from "./setup/sys";
 import { VERSION } from "./version";
 
 const MANAGED = {
@@ -79,22 +81,33 @@ function movePiPackage(ctx: Ctx, version: string) {
 
 /**
  * `starbridge update`: replaces a script-installed binary with the latest release once its
- * signature and hash check out, then restarts the agent and updates the plugins and the Pi package.
+ * signature and hash check out, then restarts the agent and updates the plugins and the Pi
+ * package; then moves a CodexBar that setup installed to its latest release. With `codexbar`, it
+ * only installs that CodexBar release, for when the latest one breaks.
  */
 export async function update(
   ctx: Ctx,
   install: InstallKind,
   pubkey = RELEASE_KEY,
+  codexbar?: string,
 ): Promise<number> {
+  const sys = makeSys(ctx, defaults);
+  const configured = ctx.store.agentConfig().quota?.codexbar;
+  if (codexbar !== undefined) return updateCodexbar(sys, configured, codexbar);
+  await updateSelf(ctx, install, pubkey);
+  return updateCodexbar(sys, configured);
+}
+
+async function updateSelf(ctx: Ctx, install: InstallKind, pubkey: string) {
   if (install.kind !== "binary") {
     ctx.out(`starbridge was installed with ${install.kind}: run ${MANAGED[install.kind].update}`);
-    return 0;
+    return;
   }
   const releases = ctx.env.STARBRIDGE_RELEASES_URL ?? RELEASES_URL;
   const latest = await latestVersion(releases);
   if (compareVersions(latest, VERSION) <= 0) {
     ctx.out(`starbridge ${VERSION} is up to date.`);
-    return 0;
+    return;
   }
   const bytes = await downloadVerified(latest, platformAsset(), { releases, pubkey });
   // Written next to the binary, then renamed over it: a running copy keeps its old inode.
@@ -117,7 +130,6 @@ export async function update(
   }
   updatePlugins(ctx);
   movePiPackage(ctx, latest);
-  return 0;
 }
 
 /** Removes a script-installed binary; brew and npm installs are removed by their manager. */

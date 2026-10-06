@@ -298,8 +298,14 @@ provider plugins add providers, not panels.
   pairing active, so Devices shows the added time on rows that share a name (#287). `pair` and
   `setup` guess `machineKind` (cloud, laptop with a battery, server with no display, else desktop);
   `config machine-kind` corrects it.
-- **Setup** (`cli/src/setup/`; #68, #239, #245) pins a CodexBar release and each tarball's SHA-256,
-  taking the static musl build where the glibc one would not start. A provider works when `usage
+- **Setup** (`cli/src/setup/`; #68, #239, #245) installs CodexBar's latest release, taking the
+  static musl build where the glibc one would not start. Only the repository is pinned, since
+  CodexBar ships almost daily (#530): the tarball must match the `.sha256` of the same release,
+  as Homebrew checks it, and `starbridge update` moves that install to the latest release too.
+  `update --codexbar <version>` installs one release, for when the latest breaks; a broken
+  CodexBar already shows as each provider's quota error, so there is no other rollback. A daily
+  workflow installs the latest release and reads its output without credentials, and opens an
+  issue when it breaks. A provider works when `usage
   --provider X` returns windows; CodexBar exits 1 with the reason in its JSON row, so setup reads
   the row. The unit runs the `starbridge` on the PATH when that is the running binary, since that
   path survives brew upgrades. Setup turns on plugin auto-update through `extraKnownMarketplaces`,

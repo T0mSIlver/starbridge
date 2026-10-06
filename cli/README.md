@@ -38,8 +38,9 @@ starbridge setup
 Setup asks before each step, and a rerun repairs only what is missing:
 
 1. It pairs the machine with your account.
-2. It finds CodexBar, or installs it (with Homebrew if you have it, else from the release
-   tarball, checked against pinned hashes, into `~/.local/opt/codexbar`).
+2. It finds CodexBar, or installs it: with Homebrew if you have it, else CodexBar's latest
+   release tarball from GitHub, checked against the `.sha256` that release publishes, into
+   `~/.local/opt/codexbar`. It installs nothing when the checksum is missing or does not match.
 3. It asks which providers' quotas to upload.
 4. It installs the background service, `starbridge agent`, as a systemd user unit or a launchd
    agent.
@@ -65,6 +66,12 @@ plugin) for the new version and restarts the agent. Homebrew and npm installs up
 their own manager; then run `starbridge setup --refresh`. Each of those files starts with a
 `Written by starbridge <version>` line: setup replaces and uninstall removes only files that have
 it, so remove the line from one to keep it as yours.
+
+`starbridge update` then moves a CodexBar that setup installed in `~/.local/opt/codexbar` to
+CodexBar's latest release, with the same checksum check; a CodexBar from Homebrew or the macOS
+app is left to them (`brew upgrade codexbar`). When a CodexBar release breaks, its providers show
+a quota error on your devices; `starbridge update --codexbar 0.71.1` installs that release
+instead, until a later `starbridge update` moves it to the latest again.
 
 `starbridge uninstall` removes the agent service, the plugin and the binary, and asks your
 devices to revoke the machine. It deletes the keys only when you say so, or with `--purge`.
