@@ -142,3 +142,62 @@ jobs:
           name: e2e-failure
           path: ${{ runner.temp }}/starbridge-e2e-failure.png
           if-no-files-found: ignore
+
+  # Builds the deployed images, without pushing them, when a pull request can change their base
+  # images or dependencies: a change that breaks a build fails here, not at the deploy (#430).
+  # Source changes outside these paths that a Dockerfile copies (docs/ for web, cli/ for the demo)
+  # are not covered. On a push, main's deploy builds them on the box. Only the dev box's runners
+  # (label `docker`) have Docker; a gate on the usual runners picks one only when there is
+  # something to build, so main's CI never waits on them.
+  images-scope:
+    name: images scope
+    runs-on: ${{ vars.RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 5
+    outputs:
+      build: ${{ steps.changes.outputs.images == 'true' }}
+    steps:
+      - id: changes
+        if: github.event_name == 'pull_request'
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        with:
+          filters: |
+            images:
+              - '**/Dockerfile'
+              - '**/*.Dockerfile'
+              - '.dockerignore'
+              - '**/package.json'
+              - 'pnpm-lock.yaml'
+              - 'pnpm-workspace.yaml'
+              - 'deploy/compose.yaml'
+              - 'deploy/demo/**'
+              - '.github/workflows/ci.yml'
+
+  images:
+    name: images
+    needs: images-scope
+    runs-on: ${{ needs.images-scope.outputs.build == 'true' && vars.DOCKER_RUNNER || vars.RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 30
+    env:
+      BUILD: ${{ needs.images-scope.outputs.build }}
+      # Tagged per run, so runs on one host never share a tag; removed after.
+      TAG: ci-${{ github.run_id }}
+    steps:
+      - if: env.BUILD == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # One step each, so one broken image does not hide another. --pull as the deploy does, so a
+      # stale local copy of a base image cannot pass here and fail there; Caddy's is not pulled
+      # there either.
+      - if: env.BUILD == 'true' && !cancelled()
+        run: docker build --pull -f server/Dockerfile -t starbridge-server:$TAG .
+      - if: env.BUILD == 'true' && !cancelled()
+        run: docker build --pull -f web/Dockerfile -t starbridge-web:$TAG .
+      - if: env.BUILD == 'true' && !cancelled()
+        run: docker build --pull -f deploy/demo/Dockerfile -t starbridge-demo:$TAG .
+      - if: env.BUILD == 'true' && !cancelled()
+        run: docker build -f deploy/caddy.Dockerfile -t starbridge-caddy:$TAG deploy
+      # The dev box's disk is shared with every session on it: keep the build cache to 3 GB, as
+      # deploy/host/apply.sh does on the server. BuildKit keeps records a running build uses.
+      - if: always() && env.BUILD == 'true'
+        run: |
+          docker image rm -f starbridge-server:$TAG starbridge-web:$TAG starbridge-demo:$TAG starbridge-caddy:$TAG >/dev/null 2>&1 || true
+          docker builder prune -f --keep-storage 3GB >/dev/null || true

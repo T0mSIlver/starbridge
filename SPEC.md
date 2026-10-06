@@ -1301,6 +1301,18 @@ so the mod is the first path.
   group whose window runs out soonest says so (#351): "Up top because it runs out soonest."; the
   others say "Up top because it's running out.", each followed by "Change in Settings."
 
+- 2026-10-06. Tests clean up their temp dirs (#313): a day of sessions left about 13,000 in the dev
+  box's 4 GB RAM-backed /tmp. Each package's `bun test` preloads `test-tmp.ts`, which points
+  `TMPDIR` at one dir per run and removes it after the last test, failed or not, and on exit or a
+  signal. Android's store tests use JUnit's `TemporaryFolder`. The
+  skill eval removes its homes on exit, after a throw or a signal too, and the judge its scratch dir.
+
+- 2026-10-06. A revoked browser stops showing its data (#343). Any 401 while the page runs sends
+  it back through boot, which drops the inbox, prompts, quotas and runs from memory; an unsigned
+  401 still only shows the refusal and keeps the keys (#310). Once the verified chain shows the
+  browser revoked, it deletes its keys, sent answers and push subscription, keeps the pin, and
+  says "This browser was removed from your account by <device>" (or "by your recovery key"), as
+  Tom worded it.
 - 2026-10-06. Android shows nothing from a machine its directory revokes (#344), as the web
   already did: its questions, prompts, quotas and runs leave the Inbox, and the notifications of
   its questions and prompts close, whether this phone or another device revoked it. They stay
