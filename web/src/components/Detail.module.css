@@ -78,6 +78,46 @@
   justify-items: start;
 }
 
+/* Material 3's filled field with a trailing icon button, centred on the field's line. */
+.field {
+  position: relative;
+  width: 100%;
+}
+
+.fieldInput {
+  display: block;
+  padding-right: calc(var(--size-tap) + var(--s1));
+  resize: none;
+  field-sizing: content;
+}
+
+.send {
+  position: absolute;
+  top: 50%;
+  right: var(--s1);
+  display: grid;
+  place-items: center;
+  width: var(--s10);
+  height: var(--s10);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: none;
+  color: var(--fg);
+  transform: translateY(-50%);
+  transition: background var(--t-fast) var(--ease);
+}
+
+.send:disabled {
+  color: var(--fg3);
+}
+
+@media (hover: hover) {
+  .send:not(:disabled):hover {
+    background: var(--surface);
+  }
+}
+
 .head {
   display: grid;
   gap: var(--s4);
