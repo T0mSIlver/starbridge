@@ -10,7 +10,6 @@ import {
   closedError,
   type Delivery,
   deliveryLine,
-  dropRevokedNow,
   EXIT_TIMEOUT,
   markWaiting,
   resolveSource,
@@ -76,8 +75,6 @@ export async function waitVia(
       wait * 1000 + SLACK_MS,
       ctx.signal,
     );
-  // As the direct path does, before a saved answer is handed out (#491).
-  await dropRevokedNow(ctx);
   let r = await next(0);
   const id = opts.id;
   // The agent's poll closes a decision a revoked device answered (#515).
@@ -116,7 +113,6 @@ export async function answersVia(
     return 0;
   }
   const wait = opts.wait === undefined ? 0 : waitSeconds(opts.wait);
-  await dropRevokedNow(ctx);
   const { events } = await agent.call<{ events: SessionEvent[] }>(
     "GET",
     `${path}/events?wait=${wait}`,
