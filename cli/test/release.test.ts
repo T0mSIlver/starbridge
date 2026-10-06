@@ -229,7 +229,7 @@ describe("update", () => {
     );
     c.env.FAKE_LOG = join(dir, "calls");
     expect(await update(c, { kind: "binary", path }, release.pubkey)).toBe(0);
-    expect(c.lines.at(-1)).toBe("Moved the Starbridge Pi package to v99.0.0.");
+    expect(c.lines).toContain("Moved the Starbridge Pi package to v99.0.0.");
     expect(JSON.parse(readFileSync(settings, "utf8")).packages).toEqual([piSource("99.0.0")]);
   });
 

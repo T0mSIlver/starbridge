@@ -8,33 +8,25 @@ import {
   lstatSync,
   mkdirSync,
   readdirSync,
+  readFileSync,
+  realpathSync,
   renameSync,
   rmSync,
   symlinkSync,
   unlinkSync,
   writeFileSync,
 } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { parseUsage, runCodexbar } from "../codexbar";
 import { failure, run, type Sys, which } from "./sys";
 
 /**
- * The CodexBar CLI release setup installs, with the SHA-256 of each tarball, checked when it
- * downloads one. Hashes taken 2026-10-05 from the downloaded files, which match the `.sha256`
- * files of the release.
+ * Only the source repository is pinned: setup and `starbridge update` install its latest release,
+ * or the one named, checked against the `.sha256` that release publishes beside each tarball.
  */
-export const CODEXBAR_RELEASE = {
-  version: "0.72.0",
-  sha256: {
-    "linux-aarch64": "e0a305dae0e45ff947f49913b17beed137fe2faf7c81068b245c3689d9db7eb5",
-    "linux-musl-aarch64": "e610b2896e031fe2632f20ed1ea5120d2201227a49da1dadabb9ab04d0c48e58",
-    "linux-musl-x86_64": "b9ee23b79a7f44e9bb92c1268412fb0b41406a703867e43b1daabfdf299feb00",
-    "linux-x86_64": "1772b5a2f4d68b959cd969a8997e4141474959f5cc89adff15b134d075b78b70",
-    "macos-arm64": "64d627747ad8c58c40ea2d1f1c30eafd2bdbcc9d50b0a81cf77bb5e5c21bc449",
-    "macos-x86_64": "97e432e1cf37d92b07d2e176a12032c100c54da36de97db9eada2865d0aae84b",
-  } as Record<string, string>,
-};
-const RELEASES = "https://github.com/steipete/CodexBar/releases/download";
+const REPO = "steipete/CodexBar";
+const API = `https://api.github.com/repos/${REPO}/releases`;
+const DOWNLOADS = `https://github.com/${REPO}/releases/download`;
 const PROBE_TIMEOUT_MS = 20_000;
 
 const APP_HELPERS = (home: string) => [
@@ -113,28 +105,58 @@ export function linkIntoLocalBin(sys: Sys, target: string): string | undefined {
   return link;
 }
 
-/**
- * Downloads the pinned tarball, checks its hash and unpacks it, with its bundle, to
- * `~/.local/opt/codexbar`. Returns the `codexbar` inside.
- */
-export async function installTarball(
-  sys: Sys,
-  key: string,
-  release = CODEXBAR_RELEASE,
-): Promise<string> {
-  const want = release.sha256[key];
-  if (!want) throw new Error(`no CodexBar build for ${key}`);
-  const base = sys.ctx.env.STARBRIDGE_CODEXBAR_RELEASES ?? RELEASES;
-  const name = `CodexBarCLI-v${release.version}-${key}.tar.gz`;
-  const res = await fetch(`${base}/v${release.version}/${name}`, {
-    signal: AbortSignal.timeout(10 * 60_000),
+/** Where a tarball install lives; `starbridge update` replaces only this one. */
+export const optDir = (sys: Sys) => join(sys.home, ".local/opt/codexbar");
+
+/** `0.72.0` from `v0.72.0` or `0.72.0`; throws on anything else, since it goes into a URL. */
+export function releaseVersion(v: string): string {
+  const m = /^v?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?)$/.exec(v.trim());
+  if (!m) throw new Error(`not a CodexBar version: ${v}`);
+  return m[1] as string;
+}
+
+/** The version of CodexBar's latest release, from the GitHub API. */
+export async function latestCodexbar(sys: Sys): Promise<string> {
+  const api = sys.ctx.env.STARBRIDGE_CODEXBAR_API ?? API;
+  const res = await fetch(`${api}/latest`, {
+    headers: { accept: "application/vnd.github+json" },
+    signal: AbortSignal.timeout(60_000),
   });
+  if (!res.ok) throw new Error(`finding CodexBar's latest release: ${res.status}`);
+  const tag = ((await res.json()) as { tag_name?: unknown }).tag_name;
+  return releaseVersion(typeof tag === "string" ? tag : "");
+}
+
+/** The version a tarball install says it is, from the `VERSION` file its tarball carries. */
+export function installedVersion(sys: Sys): string | undefined {
+  try {
+    return readFileSync(join(optDir(sys), "VERSION"), "utf8").trim() || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Downloads `version`'s tarball and the `.sha256` beside it in the same release, checks one
+ * against the other and unpacks the tarball, with its bundle, to `~/.local/opt/codexbar`.
+ * Installs nothing when the checksum is missing or differs. Returns the `codexbar` inside.
+ */
+export async function installTarball(sys: Sys, key: string, version: string): Promise<string> {
+  const base = sys.ctx.env.STARBRIDGE_CODEXBAR_RELEASES ?? DOWNLOADS;
+  const name = `CodexBarCLI-v${version}-${key}.tar.gz`;
+  const url = `${base}/v${version}/${name}`;
+  const signal = AbortSignal.timeout(10 * 60_000);
+  const sums = await fetch(`${url}.sha256`, { signal });
+  if (!sums.ok) throw new Error(`no checksum for ${name} (${sums.status}): not installed`);
+  const want = /^[0-9a-f]{64}\b/i.exec((await sums.text()).trim())?.[0].toLowerCase();
+  if (!want) throw new Error(`${name}.sha256 holds no SHA-256: not installed`);
+  const res = await fetch(url, { signal });
   if (!res.ok) throw new Error(`downloading ${name}: ${res.status}`);
   const bytes = new Uint8Array(await res.arrayBuffer());
   const got = createHash("sha256").update(bytes).digest("hex");
   if (got !== want) throw new Error(`${name} has SHA-256 ${got}, expected ${want}: not installed`);
-  const opt = join(sys.home, ".local/opt");
-  const dest = join(opt, "codexbar");
+  const dest = optDir(sys);
+  const opt = dirname(dest);
   const fresh = join(opt, `.codexbar.${process.pid}`);
   const file = `${fresh}.tar.gz`;
   mkdirSync(fresh, { recursive: true });
@@ -149,6 +171,18 @@ export async function installTarball(
     rmSync(fresh, { recursive: true, force: true });
   }
   return join(dest, "codexbar");
+}
+
+/** Installs `version`, else the latest release, from its tarball; logs what it did. */
+export async function installRelease(sys: Sys, version?: string): Promise<string> {
+  const key = tarballKey(sys);
+  if (!key) throw new Error(`no CodexBar build for ${sys.platform} ${sys.arch}`);
+  const v = version ? releaseVersion(version) : await latestCodexbar(sys);
+  sys.ctx.out(`Downloading CodexBar ${v} (${key})`);
+  const path = await installTarball(sys, key, v);
+  const link = linkIntoLocalBin(sys, path);
+  sys.ctx.out(`Installed CodexBar ${v} to ${optDir(sys)}${link ? `, linked as ${link}` : ""}.`);
+  return path;
 }
 
 /**
@@ -169,14 +203,7 @@ export async function installCodexbar(sys: Sys): Promise<Found> {
     if (!found) throw new Error("brew installed CodexBar but its CLI is nowhere to be found");
     return found;
   }
-  const key = tarballKey(sys);
-  if (!key) throw new Error(`no CodexBar build for ${sys.platform} ${sys.arch}`);
-  log(`Downloading CodexBar ${CODEXBAR_RELEASE.version} (${key})`);
-  const path = await installTarball(sys, key);
-  const link = linkIntoLocalBin(sys, path);
-  log(
-    `Installed CodexBar to ${join(sys.home, ".local/opt/codexbar")}${link ? `, linked as ${link}` : ""}.`,
-  );
+  const path = await installRelease(sys);
   return { path };
 }
 
@@ -256,4 +283,48 @@ export async function probe(
       }
     }),
   );
+}
+
+/**
+ * `starbridge update`'s CodexBar step: moves a tarball install to the latest release, or to
+ * `version` when one is named. Any other CodexBar, from Homebrew or the macOS app, is left to
+ * the way it was installed.
+ */
+export async function updateCodexbar(
+  sys: Sys,
+  configured: string | undefined,
+  version?: string,
+): Promise<number> {
+  const out = sys.ctx.out;
+  const found = findCodexbar(sys, configured);
+  if (!found) {
+    if (version) out("CodexBar is not installed: `starbridge setup` installs it.");
+    return version ? 1 : 0;
+  }
+  const real = (p: string) => {
+    try {
+      return realpathSync(p);
+    } catch {
+      return p;
+    }
+  };
+  if (!real(found.path).startsWith(`${real(optDir(sys))}/`)) {
+    out(
+      `CodexBar at ${found.path} was not installed by starbridge: left alone (if Homebrew installed it, run brew upgrade codexbar).`,
+    );
+    return version ? 1 : 0;
+  }
+  try {
+    const want = version ? releaseVersion(version) : await latestCodexbar(sys);
+    const have = installedVersion(sys);
+    if (have === want) {
+      out(`CodexBar ${have} is ${version ? "installed" : "up to date"}.`);
+      return 0;
+    }
+    await installRelease(sys, want);
+    return 0;
+  } catch (e) {
+    out(`Could not update CodexBar: ${(e as Error).message}`);
+    return 1;
+  }
 }

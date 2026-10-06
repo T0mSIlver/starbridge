@@ -8,6 +8,7 @@ import {
   readFileSync,
   readlinkSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -16,7 +17,7 @@ import { LiveServer } from "@starbridge/server/test-support";
 import { makeAgent } from "../src/agent/main";
 import type { Agent } from "../src/agent/server";
 import { REMOVED } from "../src/api";
-import { installTarball, linkIntoLocalBin } from "../src/setup/codexbar";
+import { installTarball, updateCodexbar } from "../src/setup/codexbar";
 import { installOpencode, opencodeState, PI_PACKAGE, removeOpencode } from "../src/setup/harnesses";
 import opencodeFiles from "../src/setup/opencode-files.js";
 import { setup } from "../src/setup/setup";
@@ -290,40 +291,89 @@ test("setup without a user systemd keeps going and says how to run the agent", a
   expect((await server.opened("quota")).length).toBe(1);
 });
 
-test("the CodexBar tarball installs only with the pinned hash", async () => {
-  const home = mkdtempSync(join(tmpdir(), "starbridge-home-"));
-  const src = mkdtempSync(join(tmpdir(), "codexbar-src-"));
-  writeFileSync(join(src, "CodexBarCLI"), "#!/bin/sh\necho 1.0\n", { mode: 0o755 });
-  const tar = Bun.spawnSync(["tar", "-czf", "-", "-C", src, "CodexBarCLI"]).stdout;
-  const tarball = new Uint8Array(tar);
-  const files = Bun.serve({ port: 0, fetch: () => new Response(tarball) });
-  try {
-    const ctx = testCtx({
-      PATH: "/usr/bin:/bin",
-      STARBRIDGE_CODEXBAR_RELEASES: files.url.href.replace(/\/$/, ""),
-    });
-    const sys: Sys = {
-      ctx,
-      home,
-      platform: "linux",
-      arch: "x64",
-      uid: 1000,
-      prompt: defaults,
-      self: [SELF],
-    };
-    const sha = createHash("sha256").update(tarball).digest("hex");
-    const tampered = { version: "9.9.9", sha256: { "linux-x86_64": "0".repeat(64) } };
-    await expect(installTarball(sys, "linux-x86_64", tampered)).rejects.toThrow("not installed");
-    expect(existsSync(join(home, ".local/opt/codexbar"))).toBe(false);
+/**
+ * CodexBar's releases as GitHub serves them: the API's latest tag, and each version's tarball
+ * with a `.sha256` beside it, which `sums` replaces or, when null, leaves out.
+ */
+function fakeCodexbarReleases(latest: string, sums: (v: string, sha: string) => string | null) {
+  const tarball = (v: string) => {
+    const src = mkdtempSync(join(tmpdir(), "codexbar-src-"));
+    writeFileSync(join(src, "CodexBarCLI"), "#!/bin/sh\n", { mode: 0o755 });
+    writeFileSync(join(src, "VERSION"), `${v}\n`);
+    symlinkSync("CodexBarCLI", join(src, "codexbar"));
+    return new Uint8Array(Bun.spawnSync(["tar", "-czf", "-", "-C", src, "."]).stdout);
+  };
+  const server = Bun.serve({
+    port: 0,
+    fetch(req) {
+      const path = new URL(req.url).pathname;
+      if (path === "/api/latest") return Response.json({ tag_name: `v${latest}` });
+      const m = /^\/dl\/v([^/]+)\/CodexBarCLI-v[^/]+-linux-x86_64\.tar\.gz(\.sha256)?$/.exec(path);
+      if (!m) return new Response("not found", { status: 404 });
+      const bytes = tarball(m[1] as string);
+      if (!m[2]) return new Response(bytes);
+      const text = sums(m[1] as string, createHash("sha256").update(bytes).digest("hex"));
+      return text === null ? new Response("not found", { status: 404 }) : new Response(text);
+    },
+  });
+  const env = {
+    PATH: "/usr/bin:/bin",
+    STARBRIDGE_CODEXBAR_API: `${server.url.href}api`,
+    STARBRIDGE_CODEXBAR_RELEASES: `${server.url.href}dl`,
+  };
+  return { server, env };
+}
 
-    const good = { version: "9.9.9", sha256: { "linux-x86_64": sha } };
-    const path = await installTarball(sys, "linux-x86_64", good);
-    expect(path).toBe(join(home, ".local/opt/codexbar/codexbar"));
-    expect(existsSync(join(home, ".local/opt/codexbar/CodexBarCLI"))).toBe(true);
-    const link = linkIntoLocalBin(sys, path);
-    expect(link && readlinkSync(link)).toBe(path);
+function linuxSys(ctx: TestCtx, home: string): Sys {
+  return { ctx, home, platform: "linux", arch: "x64", uid: 1000, prompt: defaults, self: [SELF] };
+}
+
+test("CodexBar installs only when its release's own checksum matches", async () => {
+  const home = mkdtempSync(join(tmpdir(), "starbridge-home-"));
+  const opt = join(home, ".local/opt/codexbar");
+  let sums: string | null = null;
+  const fake = fakeCodexbarReleases("9.9.9", () => sums);
+  try {
+    const sys = linuxSys(testCtx(fake.env), home);
+    await expect(installTarball(sys, "linux-x86_64", "9.9.9")).rejects.toThrow("no checksum");
+    sums = `${"0".repeat(64)}  CodexBarCLI-v9.9.9-linux-x86_64.tar.gz\n`;
+    await expect(installTarball(sys, "linux-x86_64", "9.9.9")).rejects.toThrow("not installed");
+    expect(existsSync(opt)).toBe(false);
   } finally {
-    files.stop();
+    fake.server.stop();
+  }
+});
+
+test("update moves setup's CodexBar to the latest release, or the one named", async () => {
+  const home = mkdtempSync(join(tmpdir(), "starbridge-home-"));
+  const fake = fakeCodexbarReleases(
+    "9.9.9",
+    (v, sha) => `${sha}  CodexBarCLI-v${v}-linux-x86_64.tar.gz\n`,
+  );
+  try {
+    const ctx = testCtx(fake.env);
+    const sys = linuxSys(ctx, home);
+    const path = await installTarball(sys, "linux-x86_64", "9.9.8");
+    expect(path).toBe(join(home, ".local/opt/codexbar/codexbar"));
+    expect(await updateCodexbar(sys, undefined)).toBe(0);
+    expect(await updateCodexbar(sys, undefined)).toBe(0);
+    expect(await updateCodexbar(sys, undefined, "v9.9.7")).toBe(0);
+    expect(ctx.lines).toEqual([
+      "Downloading CodexBar 9.9.9 (linux-x86_64)",
+      `Installed CodexBar 9.9.9 to ${join(home, ".local/opt/codexbar")}, linked as ${join(home, ".local/bin/codexbar")}.`,
+      "CodexBar 9.9.9 is up to date.",
+      "Downloading CodexBar 9.9.7 (linux-x86_64)",
+      `Installed CodexBar 9.9.7 to ${join(home, ".local/opt/codexbar")}, linked as ${join(home, ".local/bin/codexbar")}.`,
+    ]);
+    expect(readlinkSync(join(home, ".local/bin/codexbar"))).toBe(path);
+
+    const brew = join(home, "brew/codexbar");
+    mkdirSync(dirname(brew));
+    writeFileSync(brew, "#!/bin/sh\n", { mode: 0o755 });
+    expect(await updateCodexbar(sys, brew)).toBe(0);
+    expect(ctx.lines.at(-1)).toContain(`CodexBar at ${brew} was not installed by starbridge`);
+  } finally {
+    fake.server.stop();
   }
 });
 
