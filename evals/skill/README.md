@@ -1,7 +1,7 @@
 # Skill eval
 
 Checks that agents reach their user through Starbridge the way the `starbridge` skill and the
-SessionStart rule say (issue #121). Real Claude Code, Codex, Pi and opencode sessions work through nine
+SessionStart rule say. Real Claude Code, Codex, Pi and opencode sessions work through nine
 scripted situations (`scenarios.ts`), once with the plugin at a git ref and once with this
 checkout's, and a rubric scores the cards they post.
 

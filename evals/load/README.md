@@ -6,7 +6,7 @@ page. Results and their dates are in `SPEC.md`, "Research log". Nothing here tal
 starbridge.run.
 
 Needs Docker with Compose 2.24 or later, Bun, `jq` and `openssl`. Scratch files go to
-`$LOAD_DIR` (default `~/work/starbridge/.scratch/load`).
+`$LOAD_DIR` (default `.scratch/load` in the repository, which git ignores).
 
 ## Run
 

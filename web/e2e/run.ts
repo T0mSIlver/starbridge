@@ -1186,10 +1186,10 @@ async function main() {
   prompt.stdin?.end(
     JSON.stringify({
       session_id: "worst-case-prompt",
-      cwd: `/home/dev/work/${PROJECT}`,
+      cwd: `/home/me/work/${PROJECT}`,
       tool_name: "Bash",
       tool_input: {
-        command: `git push --force-with-lease origin ${BRANCH} && gh pr edit 305 --body-file /home/dev/work/${PROJECT}/.scratch/pr-body-with-a-long-name.md`,
+        command: `git push --force-with-lease origin ${BRANCH} && gh pr edit 305 --body-file /home/me/work/${PROJECT}/.scratch/pr-body-with-a-long-name.md`,
       },
     }),
   );
