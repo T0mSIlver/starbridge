@@ -296,6 +296,8 @@ class ServerStore(
     }
 
     private fun wipe(message: String?) {
+        // Another account or server may have no push: poll again until one arrives.
+        pushed = false
         joinJob?.cancel()
         showJob?.cancel()
         watchJob?.cancel()
@@ -1220,8 +1222,13 @@ class ServerStore(
      * A push payload (PROTOCOL.md, "Push"): a new item with this device's box when it fits, else
      * its id to fetch; or `answered` once a decision is answered anywhere.
      */
-    suspend fun onPush(payload: String) = lock.withLock {
+    suspend fun onPush(payload: String): Unit {
+        // Before the lock: a push that times out waiting for a poll still counts.
         pushed = true
+        onPushHeld(payload)
+    }
+
+    private suspend fun onPushHeld(payload: String) = lock.withLock {
         if (phase.value != Phase.Ready) return@withLock
         val p = ProtocolJson.parseToJsonElement(payload).jsonObject
         val kind = p["kind"]?.jsonPrimitive?.content
@@ -1339,6 +1346,8 @@ class ServerStore(
     }
 
     override fun setPushType(type: String) = run(showBusy = false) {
+        // A new route has yet to prove it delivers.
+        pushed = false
         persist(saved.copy(pushType = type))
     }
 
@@ -1467,7 +1476,8 @@ class ServerStore(
                     } catch (e: CancellationException) {
                         throw e
                     } catch (e: Exception) {
-                        Log.w("Starbridge", "poll failed: $e")
+                        // An ended session says so at once, and stops the reads that fail with it.
+                        if (e is ApiException && e.status == 401) report(e) else Log.w("Starbridge", "poll failed: $e")
                     }
                 }
             }
