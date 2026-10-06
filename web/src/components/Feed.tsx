@@ -396,7 +396,12 @@ export function PastRow({
         </div>
         <div className={`t-meta ${s.dim}`}>
           <Hit text={past.outcome} />
-          {past.by && ` · ${past.by}`}
+          {past.by && (
+            <>
+              {" · "}
+              <Hit text={past.by} />
+            </>
+          )}
         </div>
       </div>
     </div>

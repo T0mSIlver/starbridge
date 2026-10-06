@@ -188,4 +188,8 @@ test("runsOutSoonest: the leading group whose window runs out first, wherever it
   expect(lead.map((g) => g.provider)).toEqual(["claude", "codex", "zai"]);
   expect(runsOutSoonest(lead, now)?.provider).toBe("zai");
   expect(runsOutSoonest([], now)).toBeUndefined();
+  const unknown = win("codex", "Weekly", "runs-out");
+  const pace = unknown.window.pace as NonNullable<QuotaWindow["pace"]>;
+  const noTime = { ...unknown, window: { ...unknown.window, pace: { ...pace, runsOutAt: null } } };
+  expect(runsOutSoonest(groups([noTime]), now)).toBeUndefined();
 });

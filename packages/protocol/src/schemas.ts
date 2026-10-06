@@ -400,9 +400,6 @@ export const Settled = z
   })
   .refine((s) => (s.outcome === "device") === (s.device !== undefined), {
     message: "device is set exactly when outcome is device",
-  })
-  .refine((s) => s.behavior === undefined || s.outcome === "device", {
-    message: "behavior is for outcome device",
   });
 export type Settled = z.infer<typeof Settled>;
 

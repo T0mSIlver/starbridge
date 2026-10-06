@@ -137,8 +137,9 @@ export function runsOutSoonest(lead: QuotaGroup[], now: Date): QuotaGroup | unde
         .filter((c) => runningOut(c.window, now))
         .map((c) => Date.parse(c.window.pace?.runsOutAt ?? "") || Infinity),
     );
+  // None when no leading window says when it runs out.
   return lead.reduce<QuotaGroup | undefined>(
-    (best, g) => (!best || at(g) < at(best) ? g : best),
+    (best, g) => (at(g) < (best ? at(best) : Infinity) ? g : best),
     undefined,
   );
 }
