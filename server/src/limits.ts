@@ -35,10 +35,10 @@ export const DEFAULT_LIMITS = {
    */
   quotaBytes: 256 * 1024,
   /**
-   * Bytes of boxes an account may post a minute, counting items that replace earlier ones
-   * (quota snapshots, runs), which the stored-bytes cap never sees: eight 2 MB questions a
-   * minute is more than an agent asks, and it keeps one looping uploader from writing 4 MB a
-   * second into the database (#581).
+   * Bytes of boxes an account's machines may post a minute, counting items that replace
+   * earlier ones (quota snapshots, runs), which the stored-bytes cap never sees: eight 2 MB
+   * questions a minute is more than an agent asks, and it keeps one looping uploader from
+   * writing 4 MB a second into the database. Answers never count (#581).
    */
   postedBytes: [16 * 1024 * 1024, MINUTE] as RateWindow,
   /** Sealed box of one answer, in bytes: an answer's text is at most 4000 characters. */
