@@ -56,7 +56,7 @@ import {
   verifyDirectory,
   type Waiting,
 } from "@starbridge/protocol";
-import { ApiError, api, type Stored } from "./api";
+import { ApiError, api, backoff, type Stored } from "./api";
 import { generateDeviceKeys, sealOpener, signer } from "./crypto/keys";
 import * as store from "./store";
 import type {
@@ -85,7 +85,8 @@ export interface Ctx {
 export type Boot =
   /** `known`: this browser holds a device of the account it last signed in to. */
   | { state: "signed-out"; known: boolean }
-  | { state: "first-device"; account: string }
+  /** `unsaved`: the name of a first device whose page closed before its recovery key was saved. */
+  | { state: "first-device"; account: string; unsaved?: string }
   /** The account has devices and this browser is not one of them (or lost its binding). */
   | { state: "join"; account: string; stale: boolean }
   | { state: "revoked"; account: string; name: string }
@@ -172,9 +173,10 @@ export async function boot(): Promise<Boot> {
     // A browser that pinned a chain never accepts an empty one: that would be a rollback.
     if (await store.get("pin", account))
       return { state: "broken", account, error: "rollback: the server sent an empty directory" };
-    // Keys saved before a genesis that never reached the server.
+    // Keys saved before a genesis that never reached the server: the page closed before the
+    // owner saved the recovery key, so that key was never used (#328).
     if (device) await store.del("device", account);
-    return { state: "first-device", account };
+    return { state: "first-device", account, ...(device ? { unsaved: device.name } : {}) };
   }
   let verified: { dir: Directory; entries: SignedEnvelope[] };
   try {
@@ -182,21 +184,21 @@ export async function boot(): Promise<Boot> {
   } catch (e) {
     return { state: "broken", account, error: e instanceof Error ? e.message : String(e) };
   }
-  if (!device) {
-    // A join a device approved, cut off before its keys became the device: the directory
-    // already lists them, so they are, as they would have been had it finished (#274).
-    const pending = await store.get("pending", account);
-    const held = pending && verified.dir.members.get(pending.id);
-    if (
-      !pending ||
-      !held?.active ||
-      held.member.boxPk !== pending.boxPk ||
-      held.member.signPk !== pending.signPk
-    )
-      return { state: "join", account, stale: false };
+  // A join a device approved, or a recovery whose append landed, cut off before its keys became
+  // the device: the directory already lists them, so they are, as they would have been had it
+  // finished, even over an older device's (#274, #283).
+  const pending = await store.get("pending", account);
+  const held = pending && verified.dir.members.get(pending.id);
+  if (
+    pending &&
+    held?.active &&
+    held.member.boxPk === pending.boxPk &&
+    held.member.signPk === pending.signPk
+  ) {
     await adopt(account, pending);
     device = pending;
   }
+  if (!device) return { state: "join", account, stale: false };
   const entry = verified.dir.members.get(device.id);
   if (!entry || entry.member.boxPk !== device.boxPk || entry.member.signPk !== device.signPk) {
     // Saved before a pairing or recovery that never completed.
@@ -264,7 +266,7 @@ async function newDevice(account: string, name: string) {
   return { record, member };
 }
 
-/** A first device whose keys, genesis entry and recovery words exist, not yet on the server. */
+/** A first device whose keys, genesis entry and recovery key exist, not yet on the server. */
 export interface FirstDevice {
   recoveryKey: string;
   /** Posts the genesis; safe to call again after a failure, with the same keys and entry. */
@@ -273,8 +275,9 @@ export interface FirstDevice {
 
 /**
  * Makes this browser's keys and the account's genesis entry. The recovery seed is dropped once
- * the words exist, so the caller keeps this object until `commit` succeeds and the words are
- * shown; a retry reuses it rather than making new keys.
+ * the key exists, so the key is shown before `commit`, which runs once the owner says it is
+ * saved: a page closed before that posts no genesis, and boot offers a new key (#328). A retry
+ * of `commit` reuses this object rather than making new keys.
  */
 export async function prepareFirstDevice(account: string, name: string): Promise<FirstDevice> {
   await ready;
@@ -299,6 +302,11 @@ export async function prepareFirstDevice(account: string, name: string): Promise
   const dir = verifyDirectory([entry], { account });
   await store.put("device", record, account);
   const commit = async () => {
+    // Another tab's boot drops these keys as never used, or its setup replaces them: posting
+    // now would make an account whose device keys no browser holds.
+    const held = await store.get("device", account);
+    if (held?.id !== record.id || held.signPk !== record.signPk)
+      throw new Error("Another tab started the setup over, so this key was never used. Reload.");
     try {
       await api.append(entry);
     } catch (e) {
@@ -346,8 +354,16 @@ export async function recover(account: string, name: string, typed: string): Pro
     }
     const entry = addEntry(dir, { id: RECOVERY, signKey: recovery.privateKey }, member, now());
     const next = verifyDirectory([...entries, entry], { account });
-    await store.put("device", record, account);
-    await api.append(entry);
+    // Pending until the append lands: a failed one must not replace keys that still work (#283).
+    await store.put("pending", record, account);
+    try {
+      await api.append(entry);
+    } catch (e) {
+      // It may have landed with its response lost: it did if the directory holds it.
+      const landed = await api.directory().catch(() => []);
+      if (!landed.some((x) => x.sig === entry.sig)) throw e;
+    }
+    await adopt(account, record);
     await pinTo(account, [...entries, entry], next);
   } finally {
     seed.fill(0);
@@ -570,7 +586,8 @@ export async function watchJoins(signal: AbortSignal, onChange: (asks: JoinAsk[]
       onChange(page.joins.flatMap((v) => toAsk(v) ?? []));
     } catch {
       if (signal.aborted) return;
-      await new Promise((r) => setTimeout(r, 5_000));
+      // At most every 5 s, and not before the server's backoff ends (#332).
+      await new Promise((r) => setTimeout(r, Math.max(5_000, backoff.until - Date.now())));
     }
   }
 }

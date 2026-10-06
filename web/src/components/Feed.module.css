@@ -5,15 +5,23 @@
   align-items: center;
   gap: var(--s1h);
   min-width: 0;
-  height: 20px;
+  min-height: 20px;
   color: var(--fg2);
   white-space: nowrap;
   overflow: hidden;
 }
 
+/* Long machine and repo names give way with an ellipsis; the icon and the time keep their size. */
+.machine,
 .repo {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.meta > svg,
+.time {
+  flex: none;
 }
 
 .time {
@@ -279,10 +287,13 @@
   overflow-wrap: anywhere;
 }
 
+/* As a row's content: a long host name or branch in the title or reason wraps inside the card. */
 .run {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--s1);
   padding: var(--s3) var(--s4);
+  overflow-wrap: anywhere;
 }
 
 .run.comfy {

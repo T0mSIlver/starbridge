@@ -40,7 +40,9 @@ export async function askVia(
     { input: resolved },
   );
   ctx.out(id);
-  if (!opts.wait) ctx.err(deliveryLine(id, d ?? delivery(resolved, false)));
+  // An agent older than `headless` would say a `claude -p` session gets a prompt.
+  const how = resolved.headless ? "wait" : (d ?? delivery(resolved, false));
+  if (!opts.wait) ctx.err(deliveryLine(id, how));
   if (!opts.wait) return 0;
   return waitVia(ctx, agent, { id, timeout: opts.timeout, json: opts.json });
 }
@@ -61,13 +63,17 @@ export async function waitingVia(
 export async function waitVia(
   ctx: Ctx,
   agent: AgentClient,
-  opts: { id?: string; timeout?: string; json?: boolean },
+  opts: { id?: string; session?: string; timeout?: string; json?: boolean },
 ): Promise<number> {
   const next = (wait: number) =>
     agent.call<{ answer?: Answer; question?: string }>(
       "POST",
       "/v1/answers/next",
-      { ...(opts.id ? { id: opts.id } : {}), wait },
+      {
+        ...(opts.id ? { id: opts.id } : {}),
+        ...(opts.session ? { session: opts.session } : {}),
+        wait,
+      },
       wait * 1000 + SLACK_MS,
       ctx.signal,
     );

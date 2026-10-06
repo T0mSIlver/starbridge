@@ -8,9 +8,14 @@ const server = process.env.STARBRIDGE_SERVER ?? "http://localhost:8080";
 
 const nextConfig: NextConfig = {
   allowedDevOrigins: ["127.0.0.1"],
+  poweredByHeader: false,
   // A self-contained server for the deploy image; tracing starts at the monorepo root.
   output: "standalone",
   outputFileTracingRoot: join(import.meta.dirname, ".."),
+  // The docs render per request, for their CSP nonce (proxy.ts), from these Markdown files.
+  outputFileTracingIncludes: {
+    "/docs/**": ["../docs/*.md", "../cli/README.md", "../server/README.md"],
+  },
   // The protocol package ships TypeScript source.
   transpilePackages: ["@starbridge/protocol"],
   // Tests import workspace packages the deploy image leaves out; `pnpm typecheck` covers them.

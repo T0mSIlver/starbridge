@@ -2,6 +2,7 @@
 
 import type { Settled } from "@starbridge/protocol";
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { backingOff } from "@/lib/api";
 import type { Boot, Ctx, Inbox, Quotas, Runs } from "@/lib/device";
 import {
   DEFAULT_SETTINGS,
@@ -16,10 +17,31 @@ import type { Device, InboxItem, PromptItem, PromptReply, Reply } from "@/lib/ty
 
 // The protocol code and libsodium load here, after the first paint.
 const load = () => import("@/lib/device");
+/** Pollers read while the page is visible, and skip their turn while the server is away (#332). */
+const polling = () => document.visibilityState === "visible" && !backingOff();
+
+/**
+ * A poller's read that skips its turn while the last one is still running, so requests that hang
+ * rather than fail (a captive portal, a dead route) don't pile up before the backoff starts.
+ */
+function single(read: () => Promise<unknown>): () => void {
+  let running = false;
+  return () => {
+    if (running) return;
+    running = true;
+    read()
+      .catch(() => {})
+      .finally(() => {
+        running = false;
+      });
+  };
+}
 
 export type Store = {
   boot: Boot | { state: "loading" } | { state: "error"; error: string };
   inbox: Inbox;
+  /** The inbox came back once since boot: until then, an empty one means nothing yet. */
+  inboxLoaded: boolean;
   quotas?: Quotas;
   runs?: Runs;
   /** Runs boot again, after sign-in, setup, pairing or recovery. */
@@ -67,6 +89,7 @@ const QUOTA_JOIN_MS = 30_000;
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [boot, setBoot] = useState<Store["boot"]>({ state: "loading" });
   const [inbox, setInbox] = useState<Inbox>({ items: [], rejected: [] });
+  const [inboxLoaded, setInboxLoaded] = useState(false);
   const [quotas, setQuotas] = useState<Quotas>();
   const [quotaSettings, setSettingsState] = useState<QuotaSettings>(DEFAULT_SETTINGS);
   const settingsRef = useRef(quotaSettings);
@@ -95,6 +118,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setBoot(b);
       if (b.state === "ready") {
         setInbox(await d.loadInbox(b.ctx));
+        setInboxLoaded(true);
         const push = await import("@/lib/push");
         push.registerWorker();
         push.resubscribe().catch(() => {});
@@ -183,15 +207,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (!ctx) return;
     const started = Date.now();
     let soon: ReturnType<typeof setTimeout> | undefined;
+    const read = single(() =>
+      fetchQuotas().then((next) => {
+        clearTimeout(soon);
+        if (next?.cards.length === 0 && Date.now() - started < QUOTA_JOIN_MS)
+          soon = setTimeout(tick, QUOTA_JOIN_POLL_MS);
+      }),
+    );
     const tick = () => {
-      if (document.visibilityState === "visible" || settingsRef.current.notify.length > 0)
-        fetchQuotas()
-          .then((next) => {
-            clearTimeout(soon);
-            if (next?.cards.length === 0 && Date.now() - started < QUOTA_JOIN_MS)
-              soon = setTimeout(tick, QUOTA_JOIN_POLL_MS);
-          })
-          .catch(() => {});
+      if (backingOff()) return;
+      if (document.visibilityState === "visible" || settingsRef.current.notify.length > 0) read();
     };
     tick();
     const timer = setInterval(tick, QUOTA_POLL_MS);
@@ -211,8 +236,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const runLive = !!runs?.items.some((i) => runState(i.run, Date.now()) === "running");
   useEffect(() => {
     if (!ctx) return;
+    const read = single(refreshRuns);
     const tick = () => {
-      if (document.visibilityState === "visible") refreshRuns().catch(() => {});
+      if (polling()) read();
     };
     tick();
     const timer = setInterval(tick, runLive ? LIVE_RUNS_POLL_MS : RUNS_POLL_MS);
@@ -226,10 +252,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // Poll while the page is visible, and refresh as soon as the service worker sees a push.
   useEffect(() => {
     if (!ctx) return;
+    const readInbox = single(refreshInbox);
+    const readPrompts = single(refreshPrompts);
     const tick = () => {
-      if (document.visibilityState !== "visible") return;
-      refreshInbox().catch(() => {});
-      refreshPrompts().catch(() => {});
+      if (!polling()) return;
+      readInbox();
+      readPrompts();
     };
     const timer = setInterval(tick, POLL_MS);
     refreshPrompts().catch(() => {});
@@ -244,11 +272,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (e.data.kind !== "quota" && e.data.kind !== "permission") refreshInbox().catch(() => {});
     };
     document.addEventListener("visibilitychange", tick);
+    // Back online: read at once rather than at the next tick (lib/api.ts ends its backoff too).
+    window.addEventListener("online", tick);
     navigator.serviceWorker?.addEventListener("message", onMessage);
     unlockSound();
     return () => {
       clearInterval(timer);
       document.removeEventListener("visibilitychange", tick);
+      window.removeEventListener("online", tick);
       navigator.serviceWorker?.removeEventListener("message", onMessage);
     };
   }, [ctx, refreshInbox, refreshQuotas, refreshPrompts]);
@@ -257,8 +288,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const busy = prompts.length > 0;
   useEffect(() => {
     if (!ctx || !busy) return;
+    const read = single(refreshPrompts);
     const timer = setInterval(() => {
-      if (document.visibilityState === "visible") refreshPrompts().catch(() => {});
+      if (polling()) read();
     }, PROMPT_POLL_MS);
     return () => clearInterval(timer);
   }, [ctx, busy, refreshPrompts]);
@@ -326,6 +358,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       value={{
         boot,
         inbox,
+        inboxLoaded,
         quotas,
         runs,
         reload,

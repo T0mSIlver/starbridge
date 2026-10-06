@@ -6,7 +6,7 @@ import { answersVia, askVia, quotaVia, waitingVia, waitVia } from "./agent/comma
 import { runAgent } from "./agent/main";
 import { ApiError, sandboxHint, Unreachable } from "./api";
 import { type Ctx, UsageError } from "./context";
-import { type AskInput, answers, ask, settle, setWaiting, wait } from "./decisions";
+import { type AskInput, answers, ask, resolveSource, settle, setWaiting, wait } from "./decisions";
 import { hookAskUser, hookPermission, hookSettle } from "./hook";
 import { pair } from "./pair";
 import { pushOnce, quotaPush } from "./quota";
@@ -51,7 +51,6 @@ const HELP = `starbridge: post decisions to your devices, report runs, upload qu
       --context-file <path>   the same, from a file ("-" for stdin)
       --option <text>         2 to 4 times; none asks for a free-text answer
       --recommended <text>    one of the options (default: the first)
-      --default <text>        what you do if nobody answers (default: wait for the answer)
       --waiting               you have nothing else to do: post it as waiting for the owner
       --agent <name>          claude-code, codex or pi (default: the one that runs the
                               command)
@@ -72,6 +71,7 @@ const HELP = `starbridge: post decisions to your devices, report runs, upload qu
                               Code records for the session: Remote Control, Desktop)
       --json <path>           read these fields from a JSON file ("-" for stdin)
       --wait                  then wait for the answer, as \`wait\` does
+      --timeout <duration>    with --wait: give up then, as \`wait\` does
 
   starbridge waiting <decision id>
   starbridge working <decision id>
@@ -84,7 +84,8 @@ const HELP = `starbridge: post decisions to your devices, report runs, upload qu
       out of the inbox.
 
   starbridge wait [<decision id>] [--timeout <duration>] [--json]
-      Print the answer, or with no id the next answer to any decision from this machine.
+      Print the answer, or with no id the next answer to a decision this session asked (any
+      decision from this machine, outside an agent's session).
       With an id, marks the decision waiting first. Waits until --timeout, else forever;
       exits 2 when --timeout passed.
 
@@ -203,7 +204,9 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
             timeout: { type: "string" },
           },
         });
-        const fromJson: AskInput = v.json ? (JSON.parse(readText(v.json)) as AskInput) : {};
+        const { default: jsonDefault, ...fromJson }: AskInput & { default?: unknown } = v.json
+          ? JSON.parse(readText(v.json))
+          : {};
         const input: AskInput = {
           ...fromJson,
           ...(v.question !== undefined ? { question: v.question } : {}),
@@ -211,7 +214,6 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
           ...(v["context-file"] !== undefined ? { context: readText(v["context-file"]) } : {}),
           ...(v.option !== undefined ? { options: v.option } : {}),
           ...(v.recommended !== undefined ? { recommended: v.recommended } : {}),
-          ...(v.default !== undefined ? { default: v.default } : {}),
           ...(v.waiting ? { waiting: true } : {}),
           ...(v.agent !== undefined ? { agent: v.agent as AskInput["agent"] } : {}),
           ...(v.project !== undefined ? { project: v.project } : {}),
@@ -224,9 +226,13 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
           ...(v.link !== undefined ? { links: v.link } : {}),
           ...(v["answer-in"] !== undefined ? { answerIn: v["answer-in"] } : {}),
         };
-        // Accepted until the skill drops it: decisions have no default time any more (#122).
-        if (v["default-at"] !== undefined)
-          ctx.err("starbridge: --default-at is ignored: agents never answer for the owner");
+        // Accepted so older commands still post: decisions have no default (#122, #352).
+        for (const [flag, given] of [
+          ["--default", v.default ?? jsonDefault],
+          ["--default-at", v["default-at"]],
+        ] as const)
+          if (given !== undefined)
+            ctx.err(`starbridge: ${flag} is ignored: agents never answer for the owner`);
         if (v.wait && input.answerIn !== undefined)
           throw new UsageError("--answer-in takes no --wait: the answer comes from that page");
         const opts = { wait: v.wait, timeout: v.timeout };
@@ -262,7 +268,13 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
           allowPositionals: true,
           options: { timeout: { type: "string" }, json: { type: "boolean" } },
         });
-        const opts = { id: positionals[0], ...values };
+        const id = positionals[0];
+        // Without an id, in an agent's session, only that session's answers: the others are due
+        // to their own sessions. A script or terminal outside one still takes any.
+        const session = id
+          ? undefined
+          : resolveSource({}, ctx.env, process.cwd()).session || undefined;
+        const opts = { id, ...(session !== undefined ? { session } : {}), ...values };
         return await withAgent(
           ctx,
           (agent) => waitVia(ctx, agent, opts),

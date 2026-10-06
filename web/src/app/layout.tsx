@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
-import { THEME_SCRIPT } from "@/lib/themeScript";
+import { headers } from "next/headers";
+import { THEME_SCRIPT, ZOD_SCRIPT } from "@/lib/themeScript";
 import { mono, sans } from "@/styles/fonts";
 import "@/styles/tokens.css";
 import "@/styles/type.css";
@@ -25,13 +26,17 @@ export const viewport: Viewport = {
   ],
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+// Every page renders per request, so each gets the nonce of its Content-Security-Policy (proxy.ts).
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const nonce = (await headers()).get("x-nonce") ?? undefined;
   return (
     <html lang="en" className={`${sans.variable} ${mono.variable}`} suppressHydrationWarning>
       <head>
         {/* The Colours setting, before the first paint (lib/prefs.ts). */}
         {/* biome-ignore lint/security/noDangerouslySetInnerHtml: a fixed script from our own module */}
-        <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
+        <script nonce={nonce} dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
+        {/* biome-ignore lint/security/noDangerouslySetInnerHtml: a fixed script from our own module */}
+        <script nonce={nonce} dangerouslySetInnerHTML={{ __html: ZOD_SCRIPT }} />
       </head>
       <body>{children}</body>
     </html>

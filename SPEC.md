@@ -740,9 +740,9 @@ so the mod is the first path.
   --waiting` posts it already waiting, and `wait <id>` marks it waiting before it blocks. The CLI keeps each decision's waiting id
   and last state, posts nothing when the state is unchanged, and refuses once the decision is
   answered. The default-time machinery is gone: no `--default-at` (accepted and ignored, with a
-  warning, until the skill drops it), no `default` session event, no notice line, and `wait`
+  warning), no `default` session event, no notice line, and `wait`
   ends only at `--timeout`. `--default` is optional; without it the CLI sends "Waits for your
-  answer" for older clients. Decisions carry `agent` (`--agent`, else `claude-code` when Claude
+  answer" for older clients (since #352, it is always sent and `--default` is ignored). Decisions carry `agent` (`--agent`, else `claude-code` when Claude
   Code runs the CLI, which sets `CLAUDECODE=1`), and every source carries `machineKind`:
   `pair` and `setup` guess it (cloud session or codespace, a battery, Linux with no display,
   else desktop) and `starbridge config machine-kind` corrects it. `starbridge config
@@ -795,8 +795,8 @@ so the mod is the first path.
   question its options answer, two to five lines of context saying what each option changes,
   links and images only when they help decide, one question per card. Agents never answer for
   the owner: no default to apply when nobody answers; a blocked agent works on something else,
-  builds both options when cheap and asks which to keep, or waits (`ask --default` is optional,
-  and #127 made `default` optional in the protocol). A `PreToolUse` hook on `AskUserQuestion`
+  builds both options when cheap and asks which to keep, or waits (#127 made `default` optional in
+  the protocol, and #352 dropped `ask --default`). A `PreToolUse` hook on `AskUserQuestion`
   (`starbridge hook ask-user`) turns the question away towards `starbridge ask`, unless the
   machine is unpaired or the server does not answer within 3 s. The skill no longer covers
   permission prompts (#124). `evals/skill` checks all this with real Claude Code and Codex
@@ -1309,6 +1309,142 @@ so the mod is the first path.
   since a post whose reply is lost may have reached the server. A server that withholds a
   revocation no answer has revealed yet can still get an open item re-sealed to that device, as it
   can for a new question; re-sealing stretches that to the item's life.
+- 2026-10-06. Back on a phone's web page closes an open item first (#347). Under 1100 px, the
+  item shown in place of the list sits in the address as `/?item=<id>`, pushed as its own history
+  entry, so Back, Android's back gesture and an installed app's Back return to the list; a reload
+  keeps the item open, and a link to `/?item=<id>` opens it with the list's entry put behind it, so
+  Back from a link also returns to the list (Chrome may skip that entry on its own Back, as no tap
+  added it; the in-page way back always reaches it). The in-page way back steps back through history, so
+  it leaves no entry behind. A wide window pushes nothing: once the inbox loaded, it selects a
+  linked item beside the list (opening History for a closed one) and drops `?item`. Image and confirm dialogs are modal `<dialog>`s,
+  which Chrome on Android closes on the back gesture before it leaves the page.
+- 2026-10-06. An answer is never lost on Android (#329, #331). The app seals and signs an answer,
+  then keeps it on the phone before posting it, so an answer tapped offline waits there,
+  ciphertext only, until the server takes it. WorkManager sends it once a network is up, the app
+  closed or not, and every sync tries again. It ends answered, answered on another device, or
+  refused, with the server's reason shown and the buttons back. While it waits, the sheet keeps
+  the tapped option filled and the other options locked, as while sending; a snackbar says it goes
+  out when the phone is back online; a notification says "Hold · waiting to send". A tap on a
+  decision this phone answered, or whose answer waits, repeats that outcome instead of failing,
+  so a double tap on a notification button sends once and says "Answered". The server answers
+  `already-answered` to a retry of an answer it took before its reply was lost, and does not say
+  by whom; the app counts it as its own when an earlier attempt may have reached the server (the
+  connection cut after the request left, a 500, or the notification's 9 s limit), and as another
+  device's otherwise.
+- 2026-10-06. Harness integrations audit (#298), each finding reproduced in a throwaway HOME
+  with Claude Code 2.1.289, Codex CLI 0.160.0 and Pi 1.0.4 with pi-permission-system 39.1.0.
+  Fixed here: an agent passes its variables to the agents it starts, and a `codex exec` run
+  from a Claude Code shell posted as that Claude session, whose mod then got the answer (#319).
+  So `ask` takes Codex or Pi over Claude Code when both are set, unless Claude Code runs as
+  `claude -p`, the only way Codex and Pi, which run commands without a terminal, can start it. A Codex sub-agent asks under its
+  root thread, read from its rollout's `session_id`, since `codex queue` refuses sub-agent
+  threads (#320). `claude -p` (`CLAUDE_CODE_SESSION_ATTENDED=0`) is told to `wait`, since the
+  mod runs only in interactive sessions (#321). Filed post-launch: Pi needs allow rules for the
+  `starbridge` commands under pi-permission-system (#322), uninstall leaves `starbridge` in its
+  `authorizerChain` (#323), a bare `wait` takes any session's answer (#324). Checked and fine:
+  setup run twice changes nothing; Claude Code `--resume` and Pi `/new` then `/resume` get an
+  answer given meanwhile; Pi `/reload` keeps the permission link; `codex queue` starts the
+  daemon itself, so an answer given after a reboot still reaches the session. After the TUI
+  quits, Codex's daemon keeps running and runs the queued answer as a turn nobody watches,
+  which `codex resume` then shows.
+
+- 2026-10-06. The agent binds its socket under a 077 umask and restores the process's after
+  (#95). Under the usual umask the socket took other users' connections between the bind and the
+  chmod to 0600, and a connection accepted then stayed open.
+
+- 2026-10-06. Recovery with the words keeps its new keys under `pending` until the directory
+  append lands, as a join does (#283, after #274). A failed append leaves the stored device's
+  keys alone; one that landed with its reply lost counts once the directory lists the entry. Boot
+  adopts a pending record the directory lists as active even when an older device is stored, so a
+  recovery or join cut off after it landed is not lost to the older keys.
+- 2026-10-06. Waiting pairings are capped per address, not only server-wide (#309, after
+  #302). `POST /pairings` needs no account, and 500 IPv6 /64s, a sliver of one free /48, kept
+  the server's 5000 full so nobody could pair. Each address may now hold 20 unapproved
+  pairings, an IPv6 client counting as its /48 on this route; approved ones do not count, so an
+  office behind one NAT pairs everyone, 20 waiting at once on top of the 10-a-minute rate
+  limit. The server-wide cap, now 20000 (about 80 MB of 4 KB requests), stays as the disk
+  bound, and filling it takes a thousand addresses or /48s. The cost: subscribers of a mobile
+  carrier that hands out /64s from one /48 share its 20, so one of them can block pairing there
+  for 10 minutes, a far smaller blast radius than the whole server. Approving one's own
+  pairings frees the slots, but each approval needs a directory entry, 200 per account.
+
+- 2026-10-06. Add a device on the web says a failed pairing in the app's words, as Android does,
+  not the API's code (#289): an expired or unknown code reads "No pairing with this code, or it
+  expired."; a code already approved, a removed browser and an expired sign-in have their own
+  sentence; any other error reads as the server's sentence, capitalised, without its code.
+
+- 2026-10-06. Devices tells apart rows that share a name (#287). `pair --force` adds a new machine
+  and leaves the old one active, and every machine defaults to the hostname, so Devices listed
+  identical rows. A row whose name another shares now adds the time it was added ("added Oct 6,
+  10:32") on web and Android, and `pair --force` names the old pairing as the earlier row, with
+  its time and zone, instead of by an id no client shows. Revoking the old machine in the approval itself (a `replaces` field in the
+  pairing request) would remove the twin but changes the protocol; not done.
+- 2026-10-06. Pi's `path` and `external_directory` asks stay at the keyboard (#288).
+  pi-permission-system 39.1.0 caps every authorizer link's allow on those surface families to
+  defer (its delegation envelope, `src/authority/delegation-envelope.ts`, ADR 0007), so the
+  second gate of a read outside the project, `external_directory_read`, opened its dialog even
+  after a device allowed it. The Starbridge link now defers such asks at once, by the gate's
+  surface, instead of sending the devices a prompt whose Allow is dropped. Letting a link allow
+  them needs pi-permission-system to make the excluded families configurable (its #620).
+- 2026-10-06. The web backs off together while the server is unreachable (#332). Each poller's
+  call retried on its own every 250 ms to 4 s, so an offline page sent about two requests a
+  second, and every open tab did the same to a server coming back up. Now every call in a page
+  shares one backoff: 250 ms doubling to 30 s, with jitter between 50 and 100% of the step, ended
+  by any answer and by the browser's online event. Pollers skip their turn during a wait, while
+  every other call's first try goes out, since an answer, a push or a sign-in may be the one that
+  finds the server back; only retries wait. A call that
+  gets no answer throws "You're offline." or "Can't reach the Starbridge server." instead of
+  the browser's "Failed to fetch". An offline banner waits for the owner's ruling on the mockup.
+- 2026-10-06. Security headers (#312, after #302). Next sets the page's Content-Security-Policy
+  in `web/src/proxy.ts`, because only it can put a fresh nonce on each request and on its own
+  scripts: scripts need the nonce or `'strict-dynamic'` (so Umami's tracker, which Next's
+  bundle loads, passes), `'wasm-unsafe-eval'` lets libsodium's WebAssembly compile without
+  allowing JavaScript eval, and an inline script sets Zod's `jitless` before it builds its schemas,
+  since its `new Function` probe counts as a violation even when caught. Styles stay `'unsafe-inline'` since React writes style attributes,
+  images allow `data:` and `blob:` for questions, `worker-src 'self'` keeps the service worker,
+  and `frame-ancestors 'none'` refuses framing. Fonts are self-hosted, so nothing else is
+  allowed. A nonce needs a render per request, so every page is dynamic now, and the docs
+  read their Markdown at runtime from files the image ships (`outputFileTracingIncludes`).
+  Caddy sets what applies to every response, the API's included: HSTS for a year,
+  `nosniff` and `Referrer-Policy: same-origin`; the self-host example does the same. Next
+  stops sending `X-Powered-By`.
+- 2026-10-06. The web posts the account's first entry only once the owner confirms the recovery
+  key is saved (#328). The seed is dropped as soon as the key exists, so a page closed on "Save
+  your recovery key" had already posted an account whose key nobody saw, and could never show it
+  again. Now a reload before Continue finds an empty directory, says that key was never used,
+  and makes a new one; the key is never stored, in IndexedDB or elsewhere. Replacing the key
+  later needs a new directory entry kind, since entry 0 fixes the recovery public key; it waits
+  for the owner's ruling on the mockup.
+
+- 2026-10-06. Pi gets the allow rules Claude Code and Codex have (#322, #323, #324, from the #298
+  audit). With pi-permission-system installed, setup offers to add `"starbridge ask *"`,
+  `waiting`, `working`, `wait` and `settle` as `"allow"` to `permission.bash` in its config,
+  after the owner's own patterns since the last match wins. A plain level there (`"bash":
+  "ask"`) stays, and setup prints the lines to add instead: as `{"*": "ask"}` it would merge
+  with a project's bash map rather than give way to it. Before it, Pi stopped every `starbridge ask` at a
+  permission dialog. Uninstall takes out exactly those patterns and the `starbridge` link in
+  `authorizerChain`, which otherwise made pi-permission-system warn at every prompt, and
+  deletes the file when nothing else is left in it. A `wait` without an id, run in an agent's
+  session, takes only answers to that session's decisions, so it cannot take one that another
+  session's mod or `wait` is due; outside an agent's session it still takes any. Checked with Pi 1.0.4 and pi-permission-system 39.1.0: `starbridge ask` ran
+  without a dialog while `touch` still asked, and uninstall left no config behind.
+- 2026-10-06. Layout breakage fails CI (#305). Every e2e screenshot, at 390 and 1280 px and
+  checked again at 320, fails on a page wider than the window, a box that cuts its text without
+  an ellipsis, text past its box, anything past the window's edge, text drawn over text
+  (`web/e2e/layout.ts`), or anything the Content-Security-Policy (#325) blocked. Tap targets under 44 px and contrast under 3:1 are listed, not failed,
+  until the owner rules on them. The e2e now covers worst-case content (a host-length machine
+  name, unbroken branch names, 24 items, a permission prompt, a run) and runs in CI. It holds
+  its ports from below 32768 until each server starts, so runners on one machine do not
+  collide, and closing outgoing connections, which share the range above, do not block them. `AUDIT=<folder>` shoots every size from
+  320 to 1920 px in both themes, plus 200% text at 390, and lists what the checks find.
+- 2026-10-06. Workflows pin every action by commit SHA, with its version in a comment (#361). A
+  moved tag could otherwise run code in the release job before it writes the minisign key.
+  Dependabot proposes the updates in one grouped PR a month.
+
+- 2026-10-06. `ask --default` is gone from the help and the skill (#352): no client shows it, so
+  an agent that passed one believed the owner saw it. Like `--default-at`, it is accepted and
+  ignored with a warning, so older commands still post; the CLI always sends "Waits for your
+  answer" for clients from before 2026-10-05. `ask --help` now lists `--timeout`.
 
 ## Encryption, with existing libraries
 
@@ -1719,3 +1855,21 @@ goes in git.
   receives it twice. Only a connection that drops once the reply's
   headers are in reaches the app as a failure, and that is what
   `RecoveryRetryTest` scripts (MockWebServer's `onResponseBody`).
+- 2026-10-06: screenshot audit (#305), Firefox 1543 through Playwright 1.63, every e2e screen at
+  320, 360, 390, 430, 768, 1024, 1280, 1440 and 1920 px in both themes and at 200% text. Broken
+  and fixed: a long machine name pushed the time off inbox rows and ran under the repo name;
+  Settings was 338 px wide at 320 (its segmented control) and wider still with a long device
+  name; from 900 px, Settings squeezed a label to one word a line; a quota card's machine name
+  was cut without an ellipsis; at 200% text, run cards and Setup's fields widened the page and
+  the meta row cut its text. No text measured under 3:1 in either theme. The 200% text is
+  emulated by scaling each element's computed font size and line height, since the page sets
+  type in px; a browser that zooms the whole page instead is not covered.
+- 2026-10-06: Caddy's connections to the server (#301). By default Caddy
+  keeps 32 idle connections to an upstream and closes the rest. Every
+  long-poll that returns frees one, so at 1000 load-test users Caddy held
+  about 1200 TIME-WAIT sockets toward the server, in the host's port range
+  since Caddy runs on the host network. During a restart storm at 3000 users,
+  the dev box ran out of ports. With `keepalive 25s` and
+  `keepalive_idle_conns_per_host 4096` it held 3 to 120, with p99 unchanged.
+  25 s stays below the server's 30 s idle close, so Caddy never reuses a
+  connection the server is closing.
