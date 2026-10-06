@@ -1447,6 +1447,23 @@ so the mod is the first path.
   under the digits and hold any approval until the owner taps it, as Matrix SAS confirms on both
   sides. The CLI never joins by digits. On Android, a restarted wait no longer drops the join:
   its cancellation was caught as an `IllegalStateException`.
+- 2026-10-06. A browser trusts a served directory only against its pin (#354, from the #366
+  audit). On reload, the web adopted a join's or recovery's pending keys from whatever chain the
+  server served, and a browser with no pin accepts any chain, so a server could enrol it into a
+  chain of its own. Now a directory read with no pin trusts only a genesis its own device signed
+  (a first device cut off before it pinned); otherwise it drops the pending keys and shows Join
+  again. Joins and recovery pin before they save the device, so a device never exists without a
+  pin, and a pending record with a pin is still adopted on reload as #274 and #283 need.
+- 2026-10-06. Only the server could make the directory empty once a first device's genesis may
+  have gone out, so a browser's keys stay then (#371, from the #302 audit). After #354, the only
+  device a browser holds without a pin is a first device whose commit was cut off: joins and
+  recovery pin before they save the device. Commit now marks the device as posted before it posts
+  the genesis, and boot deletes a device's keys on an empty directory only when it is unmarked,
+  as #328 needs; a marked one shows the broken directory page and keeps its keys. A commit
+  whose post never reached the server, closed before the owner retried, also lands there. A
+  401 that says the device was revoked no longer deletes its keys either: the browser shows the
+  landing page as #219 wants, and on sign-in the verified chain shows whether it was revoked. A
+  tab still offering a first key cannot replace a device whose genesis went out.
 
 - 2026-10-06. Main's CI runs one at a time (#380). Each merge used to queue its own run, and
   deploys waited behind all of them: six main runs queued for up to 30 min with prod six merges
@@ -1458,6 +1475,11 @@ so the mod is the first path.
   an agent that passed one believed the owner saw it. Like `--default-at`, it is accepted and
   ignored with a warning, so older commands still post; the CLI always sends "Waits for your
   answer" for clients from before 2026-10-05. `ask --help` now lists `--timeout`.
+- 2026-10-06. A permission's `inputHash` is keyed under the machine's signing key (#359). Devices
+  only echo it, and the machine matches calls by it locally, so nothing else changes; unkeyed, a
+  device holding the redacted input could test guesses for a short redacted password. The
+  summary and description are cut from the input after `redactValue`, so secrets under a key's
+  name stay out of MCP and Task summaries too (#358).
 - 2026-10-06. Devices detecting a withheld machine revocation (#362, from the #366 audit). #280's
   check runs one way: machines read the heads devices sign into answers, but devices read no head
   from machines, so a server holding a revoked machine's key can keep one device answering it.
