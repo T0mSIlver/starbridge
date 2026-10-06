@@ -87,7 +87,7 @@ function start(
   p.stderr?.on("data", feed);
   const exited = new Promise<number>((r) =>
     p.on("exit", (code, signal) => {
-      if (code !== 0) console.log(`[${name}] exited ${signal ?? code}`);
+      if (code !== 0 && !p.killed) console.log(`[${name}] exited ${signal ?? code}`);
       r(code ?? -1);
     }),
   );
@@ -230,7 +230,8 @@ async function shoot(page: Page, name: string) {
   for (const [size, viewport, text] of SIZES)
     for (const scheme of ["light", "dark"] as const) {
       await page.setViewportSize(viewport);
-      await page.emulateMedia({ colorScheme: scheme });
+      // Without motion, so no row is caught sliding over another.
+      await page.emulateMedia({ colorScheme: scheme, reducedMotion: "reduce" });
       await page.waitForTimeout(150);
       const unzoom = text > 1 ? await zoomText(page, text) : undefined;
       await fitsLayout(page, `${name} ${scheme}${unzoom ? " text 200%" : ""}`);
@@ -249,6 +250,7 @@ async function shoot(page: Page, name: string) {
   }
   // The steps after a shot carry on at the desktop size, as the last of the default sizes leaves.
   await page.setViewportSize(DESKTOP);
+  await page.emulateMedia({ reducedMotion: "no-preference" });
 }
 
 let failPage: Page | undefined;
@@ -992,6 +994,9 @@ async function main() {
     },
   );
   children.push(prompt);
+  prompt.on("exit", (code) => {
+    if (!prompt.killed) console.log(`[prompt] exited ${code} before it was answered`);
+  });
   prompt.stdin?.end(
     JSON.stringify({
       session_id: "worst-case-prompt",
@@ -1012,6 +1017,10 @@ async function main() {
   );
   await page.getByRole("link", { name: "Inbox" }).click();
   await page.locator("button[data-id]").nth(24).waitFor({ timeout: 30_000 });
+  await page
+    .getByText(/^Nightly eval/)
+    .first()
+    .waitFor({ timeout: 30_000 });
   await page
     .getByText(/^git push --force-with-lease/)
     .first()

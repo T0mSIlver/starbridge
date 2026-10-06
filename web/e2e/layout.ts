@@ -51,6 +51,9 @@ function inspect(phone: boolean): Problem[] {
     }
     return false;
   };
+  // An ellipsis shows only where a block's own text runs out of room, not in a flex or grid box.
+  const ellipsis = (s: CSSStyleDeclaration) =>
+    s.textOverflow === "ellipsis" && /^(block|inline-block|list-item)$/.test(s.display);
   const block = (el: Element) => {
     let a: Element | null = el;
     while (a && /^(inline|contents)$/.test(css(a).display)) a = a.parentElement;
@@ -85,7 +88,7 @@ function inspect(phone: boolean): Problem[] {
     if (
       hasText &&
       /hidden|clip/.test(s.overflowX) &&
-      s.textOverflow !== "ellipsis" &&
+      !ellipsis(s) &&
       el.scrollWidth > el.clientWidth + 1
     )
       problems.push({
@@ -129,7 +132,7 @@ function inspect(phone: boolean): Problem[] {
         box &&
         b &&
         !scrollsAcross(el) &&
-        css(box).textOverflow !== "ellipsis" &&
+        !ellipsis(css(box)) &&
         (rect.right > b.right + 1 || rect.left < b.left - 1)
       )
         problems.push({
