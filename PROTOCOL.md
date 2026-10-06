@@ -155,12 +155,17 @@ is the only channel the account's devices share:
 
 1. `{op: "recovery", recoveryPk}` proposes a new key. An active device signs it, and the
    envelope's `recoverySig` is the new key's signature over the same body, as signer "recovery",
-   as on entry 0. Its `recoveryPk` differs from the current one and from every member's keys. A
-   later proposal replaces a pending one, and revoking the proposing device drops its proposal.
+   as on entry 0. Its `recoveryPk` is no member's key and no recovery key the chain named before,
+   current, proposed or retired. A later proposal replaces a pending one, and revoking the
+   proposing device drops its proposal.
 2. `{op: "recovery-confirm", proposal}` names the pending proposal's `seq` and makes its key the
    chain's recovery key. It is signed by the current recovery key, when the owner still has it,
-   or by an active device other than the one that proposed, when the owner lost it. A device on
-   its own, stolen or not, cannot replace the key.
+   or by an active device other than the one that proposed, when the owner lost it.
+
+The second path is weaker than it looks: any active device can add a device, so a stolen
+unlocked device, together with a sign-in to the owner's account for the device it adds, can
+replace the key and lock the owner out of recovery. Only the first path keeps the recovery key
+out of a thief's reach.
 
 From the confirming entry on, the old key signs nothing: neither `add` nor `recovery-confirm`.
 A device shows a confirmed replacement once, as "Recovery key replaced on <proposing device>,

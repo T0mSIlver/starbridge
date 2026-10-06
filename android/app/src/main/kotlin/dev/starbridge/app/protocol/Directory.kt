@@ -28,6 +28,8 @@ class Directory(
     val recoverySet: RecoveryChange,
     /** A proposed recovery key no confirmation has made current yet. */
     val pendingRecovery: RecoveryChange? = null,
+    /** Every recovery key the chain named or proposed, retired ones too: none is used again. */
+    val recoveryPks: Set<String> = setOf(recoveryPk),
 ) {
     fun active(role: String): List<Member> = members.values.filter { it.active && it.member.role == role }.map { it.member }
 }
@@ -138,13 +140,13 @@ class Directories(private val sodium: Sodium, private val envelopes: Envelopes) 
                 pending = null
             }
         }
-        return Directory(dir.account, recoveryPk, members, i + 1, entryHash(env.body), recoverySet, pending)
+        val named = if (body.op == "recovery") dir.recoveryPks + body.recoveryPk!! else dir.recoveryPks
+        return Directory(dir.account, recoveryPk, members, i + 1, entryHash(env.body), recoverySet, pending, named)
     }
 
-    /** Whether [pk] is any member's key, the recovery key or a proposed one: keys are never reused. */
+    /** Whether [pk] is any member's key or any recovery key the chain named, retired ones too: keys are never reused. */
     private fun keyInUse(dir: Directory, pk: String): Boolean =
-        pk == dir.recoveryPk || pk == dir.pendingRecovery?.recoveryPk ||
-            dir.members.values.any { it.member.signPk == pk || it.member.boxPk == pk }
+        pk in dir.recoveryPks || dir.members.values.any { it.member.signPk == pk || it.member.boxPk == pk }
 
     // --- Writing entries -------------------------------------------------------
 

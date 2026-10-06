@@ -322,6 +322,11 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
         expect: { error: "bad-recovery" },
       },
       {
+        name: "proposal bringing back a retired recovery key",
+        entries: with_(byOldKey, (d) => recoveryEntry(d, signer(phone), recovery, T(10, 2))),
+        expect: { error: "bad-recovery" },
+      },
+      {
         name: "recovery key proposes its successor",
         entries: [
           ...chain,

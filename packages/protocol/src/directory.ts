@@ -22,6 +22,8 @@ export interface Directory {
   recoverySet: { seq: number; by: string; at: string };
   /** A proposed recovery key no confirmation has made current yet. */
   pendingRecovery?: { seq: number; recoveryPk: string; by: string; at: string };
+  /** Every recovery key the chain named or proposed, retired ones too: none is used again. */
+  recoveryPks: Set<string>;
   members: Map<string, { member: Member; active: boolean }>;
   /** Number of entries replayed. */
   length: number;
@@ -107,6 +109,7 @@ function genesis(env: SignedEnvelope, opts: VerifyOptions): Directory {
     account: body.account,
     recoveryPk: body.recoveryPk,
     recoverySet: { seq: 0, by: body.member.id, at: body.at },
+    recoveryPks: new Set([body.recoveryPk]),
     members: new Map([[body.member.id, { member: body.member, active: true }]]),
     length: 1,
     head: entryHash(env.body),
@@ -172,6 +175,7 @@ function applyEntry(dir: Directory, env: SignedEnvelope, i: number): Directory {
       if (keyInUse(dir, body.recoveryPk))
         throw new ProtocolError("bad-recovery", `entry ${i}: the key is already in use`);
       next.pendingRecovery = { seq: i, recoveryPk: body.recoveryPk, by: env.signer, at: body.at };
+      next.recoveryPks = new Set([...dir.recoveryPks, body.recoveryPk]);
       return next;
     }
     case "recovery-confirm": {
@@ -192,11 +196,11 @@ function applyEntry(dir: Directory, env: SignedEnvelope, i: number): Directory {
 }
 
 /**
- * Whether `pk` is any member's key, the recovery key or a proposed one: keys are never reused,
- * across members and across roles.
+ * Whether `pk` is any member's key or any recovery key the chain named, current, proposed or
+ * retired: keys are never reused, across members and across roles.
  */
 function keyInUse(dir: Directory, pk: string): boolean {
-  if (pk === dir.recoveryPk || pk === dir.pendingRecovery?.recoveryPk) return true;
+  if (dir.recoveryPks.has(pk)) return true;
   for (const { member } of dir.members.values())
     if (member.signPk === pk || member.boxPk === pk) return true;
   return false;

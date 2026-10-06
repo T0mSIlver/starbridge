@@ -1961,6 +1961,73 @@
       }
     },
     {
+      "name": "proposal bringing back a retired recovery key",
+      "entries": [
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":0,\"prev\":null,\"at\":\"2026-10-04T09:00:00Z\",\"op\":\"add\",\"member\":{\"id\":\"phone\",\"role\":\"device\",\"name\":\"Pixel\",\"boxPk\":\"GxtY3VDqFLYNoXt5DNAnVNlwybq4ZOuzwPMBb-UdP1c\",\"signPk\":\"1i8Bah79Hk_feT60LNhEceG6nwzwTRKHtcxx9hYofLg\"},\"recoveryPk\":\"6kpsY-KcUgq-9VB7Ey7F-ZVHdq6-vnuSQh7qaRRG0iw\"}",
+          "sig": "XB355Sx3UVDHcQroBfYCkvBBt86Feva-wPpdt38lM3VJUZ0Iv5RlDEKln6tTF2a_YhQyGwUhdosu73mYGXyoCA",
+          "recoverySig": "6kxBKTB2pHB5WECOk7Sg3sJJTP1d_R3sqgInjHMiiopk0c3OkLVto46USPeSraTmC08ayZEKyRCrpXdldNTRAQ"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":1,\"prev\":\"_r28NJU5QECe884gP8hTtjZ1Gye-7epm7X4W6yQ_PHo\",\"at\":\"2026-10-04T09:05:00Z\",\"op\":\"add\",\"member\":{\"id\":\"browser\",\"role\":\"device\",\"name\":\"Firefox on the Mac\",\"boxPk\":\"YDRufJEaX2uhVBKRdMr-dbKUrDu9VUljL0jOxiZvhBA\",\"signPk\":\"NLTZBDFWy23PC-sKKUm3VZyUDSvLbb6MU6mzAnjjp0Y\"}}",
+          "sig": "1ZPZbyi29vcgGucK_jC48wESYogtfL4hQGzf8bbfkGnWwXGAf_7eorna9nQbHm-cjFuWi8BehdFoCOIA0Y0PAg"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":2,\"prev\":\"foEXSX4wWj63zP06zPcoPl34JEBywOuIJ-9gsEA9nOU\",\"at\":\"2026-10-04T09:10:00Z\",\"op\":\"add\",\"member\":{\"id\":\"devbox\",\"role\":\"machine\",\"name\":\"dev box\",\"boxPk\":\"deJw3ylSxXuoNnuoYYwXj5_lDbJ5nTBOdOkY2YVoYUY\",\"signPk\":\"EqQVksi3wX1AWeeym2Ho_5bHQV8vgDNI8vAX4Fueodo\"}}",
+          "sig": "4JkzuT3alCMZS4Yg-gOGDWV2WDoV_3w3fWTcmWJ3qufgoguwiHTJcvOg-h7Hon57Nzt97GKNxOjeiYcYW_YAAQ"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":3,\"prev\":\"MzdNtWB_p8ApTKowCNVtDIJ-bgpLzG-SG3ZIbl6O02o\",\"at\":\"2026-10-04T09:15:00Z\",\"op\":\"revoke\",\"id\":\"browser\"}",
+          "sig": "gVbjnsWe6gjLS4TYVkyLgZD5nGngWNb96Bc4PeZUAi-bRxXQsU304gL-XHFNpvevUqYtiQL1S-2Z4kpbVfuFBw"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "recovery",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":4,\"prev\":\"ChYVBenH4n_dei7ykNMH9QcGs-cn4i1FruNLU9lKkcE\",\"at\":\"2026-10-04T09:20:00Z\",\"op\":\"add\",\"member\":{\"id\":\"phone2\",\"role\":\"device\",\"name\":\"New Pixel\",\"boxPk\":\"7dA8regNKd5uoxOnSrNp9HMuyzZkkGa3i1st1mTLBBc\",\"signPk\":\"VLDYHQ-n0A5KfWAN-rpvKyIDWyL-M14X7fX5qluwUHQ\"}}",
+          "sig": "rOahki-se0kTzlRYeM7d1uQkZw8Qf5QOQ_NT9LGrTqQ25Ze9hgNog91P51kNi_vnNuVWpb2mobMEzfKSV6FVBw"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":5,\"prev\":\"mJX3hMUjQ_4Fhn7arYF7dnD9qfjt43mE6WD9UwxYTSU\",\"at\":\"2026-10-04T10:00:00Z\",\"op\":\"recovery\",\"recoveryPk\":\"rNsOKXQ_DMuGhtChBMuW4Fq-_sFTh2XnWVhp99yMSao\"}",
+          "sig": "RozGT7opkssNcWRkygCSFyu5wre2BZRshxLENWcNqkI4NvoCXEtcC2IDtddP-D9zbcS2kNSPdkQ5I-0ZNm5yDQ",
+          "recoverySig": "80nOZC1Bdyo74HetzVUJyFucdMiXaAju_4OYfHELe7ZSsHJoVSzTk5JyLApk5ZVw37ujTWmtfv5y0qBBTLI9Aw"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "recovery",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":6,\"prev\":\"HNRn0tYxYvUS3RySpvW9CWLdYpwYkazsjwTAeVf-JVk\",\"at\":\"2026-10-04T10:01:00Z\",\"op\":\"recovery-confirm\",\"proposal\":5}",
+          "sig": "2EqdTlcVegEhFEXdvU6vkkPuIWW5_SDJwNNDGrqyVr2vxgG_i3CAVUdDZjyofo2srHHdXG4S9x9FTeXyXmy9BQ"
+        },
+        {
+          "v": 1,
+          "kind": "directory",
+          "signer": "phone",
+          "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":7,\"prev\":\"QxBSux5AowlqZvbPBTBd9o9Rb9v8xNEzKRBOx0ZWFVc\",\"at\":\"2026-10-04T10:02:00Z\",\"op\":\"recovery\",\"recoveryPk\":\"6kpsY-KcUgq-9VB7Ey7F-ZVHdq6-vnuSQh7qaRRG0iw\"}",
+          "sig": "SbhPJm-Mz9Oku15kRzIcxs2dJidFyW4BEQGItW6AC6KKBj0XIDhbDKt9tsxm6sb47DDz4puuFDxhU4cmT4o-Dg",
+          "recoverySig": "teoYoHjUGZpiNM8sXrvQW4pon2iReAffqIQ6s2N3L8upUm7LplvgebrlIgqe2UY9o1zwx-2TT3jdEmMNU7NpAQ"
+        }
+      ],
+      "expect": {
+        "error": "bad-recovery"
+      }
+    },
+    {
       "name": "recovery key proposes its successor",
       "entries": [
         {

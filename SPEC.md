@@ -1395,9 +1395,10 @@ so the mod is the first path.
   and by the new key; `recovery-confirm` makes it current, signed by the old key or by a second
   device (PROTOCOL.md, "Replacing the recovery key"). Two entries, not one carrying both
   signatures, because a second device can only see a request through the chain: no new route,
-  and the server still only stores entries. A device alone cannot replace the key, so a stolen
-  phone cannot lock the owner out of recovery; an owner with one device and no key adds a second
-  device first. Clients refuse a chain with an `op` they do not know rather than skip the entry,
+  and the server still only stores entries. The second-device path is weak against theft (review
+  of #368): any device can add a device, so a stolen unlocked phone plus a sign-in to the owner's
+  GitHub account can confirm its own proposal and lock the owner out of recovery. Whether to keep
+  it or require the old key is the owner's call; it stays as asked meanwhile. Clients refuse a chain with an `op` they do not know rather than skip the entry,
   since skipping a confirmation would keep the old key trusted; so web, Android, the CLI and
   machines must all update before anyone replaces a key. There is no Devices history to put the
   change in, so the Recovery key row in Devices says when the key was last set and on which
