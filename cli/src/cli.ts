@@ -161,7 +161,20 @@ function parseSessionLink(text: string): SessionLink {
 }
 
 function readText(path: string): string {
-  return readFileSync(path === "-" ? 0 : path, "utf8");
+  try {
+    return readFileSync(path === "-" ? 0 : path, "utf8");
+  } catch (e) {
+    throw new UsageError(`cannot read ${path === "-" ? "stdin" : path}: ${(e as Error).message}`);
+  }
+}
+
+function readJson(path: string): unknown {
+  const text = readText(path);
+  try {
+    return JSON.parse(text);
+  } catch (e) {
+    throw new UsageError(`${path === "-" ? "stdin" : path} is not JSON: ${(e as Error).message}`);
+  }
 }
 
 export async function run(argv: string[], ctx: Ctx): Promise<number> {
@@ -206,7 +219,7 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
           },
         });
         const { default: jsonDefault, ...fromJson }: AskInput & { default?: unknown } = v.input
-          ? JSON.parse(readText(v.input))
+          ? (readJson(v.input) as AskInput & { default?: unknown })
           : {};
         const input: AskInput = {
           ...fromJson,

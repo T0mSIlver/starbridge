@@ -204,22 +204,30 @@ the machine is not paired or the server doesn't answer, it lets the question thr
 
 Agents, the Starbridge skill, the Claude Code plugins, the Pi extension and the opencode plugin
 read the commands below and their output. The plugins update apart from the CLI, so this list is
-frozen for every 1.x release: a release may add commands, flags, fields and lines, but changing or
-removing anything here takes a new major version. `cli/test/contract.test.ts` pins each string.
+frozen for every 1.x release: a release may add commands, flags, variables, fields and lines, but
+changing or removing anything here takes a new major version. `cli/test/contract.test.ts` pins
+the lines; the hook outputs are pinned in `cli/test/permissions.test.ts`.
 
 | Command | Contract |
 |---|---|
 | `ask` | Flags `--question`, `--context`, `--context-file`, `--option`, `--recommended`, `--waiting`, `--agent`, `--project`, `--session`, `--session-title`, `--session-link`, `--image`, `--link`, `--answer-in`, `--input <path>` (a JSON file with the same fields, `-` for stdin), `--wait`, `--timeout`. Prints the decision id alone on stdout: `d_` and 16 characters from `A-Z a-z 0-9 _ -`. With `--wait`, then what `wait` prints; without it, one line on stderr, either `The answer will come back into this session as a new prompt.` or ``Nothing brings the answer into this session: when only the answer is left, run `starbridge wait <id> --timeout 5m` (again on exit 2).`` |
-| `wait [<id>]` | Flags `--timeout`, `--json`. Prints `Answer to <id> (<question>): <choice or text>`, or with `--json` the answer as one JSON object. Exits 2 when `--timeout` passed. |
+| `wait [<id>]` | Flags `--timeout`, `--json`. Prints `Answer to <id> (<question>): <choice or text>`, or with `--json` the answer as one JSON object with `decisionId` and `choice` or `text`. Exits 2 when `--timeout` passed. |
 | `waiting <id>`, `working <id>` | No output on success. |
 | `settle <id>` | Flag `--outcome elsewhere\|withdrawn`. |
 | `answers --session <id>` | Flags `--wait <seconds>`, `--ack <ack>`. Prints one JSON object per line: `{"decisionId", "ack", "line"}`, where `line` is the `Answer to` line above. |
-| `run` | Flags `--title`, `--reason`, then `--` and the command. Exits with the command's code. |
-| `hook permission`, `hook settle`, `hook ask-user` | Flags `--agent claude-code\|pi\|opencode`, `--wait`. Read the hook's JSON on stdin and print the hook output its harness defines, or nothing. |
+| `run` | Flags `--title`, `--reason`, then `--` and the command. Exits with the command's code: 127 when it cannot start, 128 plus the signal when a signal ends it. |
+| `hook permission` | Flags `--agent claude-code\|pi\|opencode`, `--wait`. Reads the hook's JSON on stdin and prints the output its harness defines, or nothing to leave the prompt to the keyboard. SIGTERM means the keyboard answered. Exits 0. |
+| `hook settle` | Flag `--agent claude-code`. Reads the hook's JSON on stdin. Exits 0. |
+| `hook ask-user` | Reads the hook's JSON on stdin; prints a PreToolUse denial that tells the agent to use `starbridge ask`, or nothing. Exits 0. |
 | `pair` | Prints `Pairing code: <code>` first. |
 
-Every command exits 0 on success and 1 on an error, with the error on stderr after
-`starbridge: `.
+Codex sessions receive ``Starbridge has the owner's answer to <id>: run `starbridge wait <id>` to read it.``
+as a queued prompt. The plugins set `STARBRIDGE_PI_ANSWERS`, `STARBRIDGE_OPENCODE_SESSION`,
+`STARBRIDGE_OPENCODE_TITLE` and `STARBRIDGE_OPENCODE_ANSWERS` for the commands their agents run,
+and read `STARBRIDGE_CONFIG_DIR`, `STARBRIDGE_AGENT_SOCKET` and `STARBRIDGE_NO_AGENT`.
+
+Every other command exits 0 on success and 1 on an error, with the error on stderr after
+`starbridge: `. Ctrl-C exits 130.
 
 ## Release
 
