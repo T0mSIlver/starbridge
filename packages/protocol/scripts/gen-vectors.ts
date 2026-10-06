@@ -741,6 +741,14 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
     at: T(10, 20),
     state: "waiting" as const,
   };
+  const snoozeBody = {
+    v: 1 as const,
+    id: "snz_1",
+    decisionId: "dec_1",
+    to: ["devbox", "phone", "phone2"],
+    until: T(18),
+    at: T(10, 25),
+  };
   const now = new Date(T(12));
   const win = {
     id: "primary",
@@ -806,7 +814,8 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
     kind,
     id,
     from: env.signer,
-    ...(kind === "answer" ? { re: "dec_1" } : {}),
+    ...(kind === "answer" || kind === "snooze" ? { re: "dec_1" } : {}),
+    ...(kind === "snooze" ? { wakeAt: T(18) } : {}),
     ...(kind === "permission-answer" || kind === "settled" ? { re: "perm_1" } : {}),
     boxes: to.map((m) => ({
       to: m.id,
@@ -925,6 +934,52 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
       ),
       recipient: "devbox",
       expect: { error: "wrong-kind" },
+    },
+    {
+      name: "snooze for another device",
+      item: seal("snooze", snoozeBody, signer(phone), [devbox.member, ...devices]),
+      recipient: "phone2",
+      expect: { body: snoozeBody, signer: "phone" },
+    },
+    {
+      name: "snooze for the machine",
+      item: seal("snooze", snoozeBody, signer(phone), [devbox.member, ...devices]),
+      recipient: "devbox",
+      expect: { body: snoozeBody, signer: "phone" },
+    },
+    {
+      name: "snooze whose wakeAt is not its until",
+      item: {
+        ...seal("snooze", snoozeBody, signer(phone), [devbox.member, ...devices]),
+        wakeAt: T(9),
+      },
+      recipient: "phone2",
+      expect: { error: "id-mismatch" },
+    },
+    {
+      name: "snooze without wakeAt",
+      item: (({ wakeAt: _, ...rest }) => rest)(
+        seal("snooze", snoozeBody, signer(phone), [devbox.member, ...devices]),
+      ),
+      recipient: "phone2",
+      expect: { error: "id-mismatch" },
+    },
+    {
+      name: "decision with a wakeAt",
+      item: { ...decisionItem, wakeAt: T(18) },
+      recipient: "phone",
+      expect: { error: "id-mismatch" },
+    },
+    {
+      name: "snooze signed by a machine",
+      item: rawSeal(
+        "snooze",
+        "snz_1",
+        sign("snooze", snoozeBody, "devbox", devbox.keys.sign.privateKey),
+        [phone2.member],
+      ),
+      recipient: "phone2",
+      expect: { error: "signer-not-allowed" },
     },
     {
       name: "no box for this member",
@@ -1787,6 +1842,35 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
       { name: "a directory head that is null", body: { ...waitingBody, dir: null }, valid: false },
       { name: "no decision", body: { ...waitingBody, decisionId: undefined }, valid: false },
       { name: "no recipients", body: { ...waitingBody, to: [] }, valid: false },
+    ],
+    snooze: [
+      { name: "valid", body: snoozeBody, valid: true },
+      ...withHead(snoozeBody),
+      { name: "back now", body: { ...snoozeBody, until: snoozeBody.at }, valid: true },
+      { name: "no until", body: { ...snoozeBody, until: undefined }, valid: false },
+      {
+        name: "an until that is not a time",
+        body: { ...snoozeBody, until: "18:00" },
+        valid: false,
+      },
+      {
+        name: "an until without seconds",
+        body: { ...snoozeBody, until: "2026-10-04T18:00Z" },
+        valid: false,
+      },
+      {
+        name: "an until with an offset",
+        body: { ...snoozeBody, until: "2026-10-04T20:00:00+02:00" },
+        valid: true,
+      },
+      {
+        name: "an offset without its colon",
+        body: { ...snoozeBody, until: "2026-10-04T20:00:00+0200" },
+        valid: false,
+      },
+      { name: "no decision", body: { ...snoozeBody, decisionId: undefined }, valid: false },
+      { name: "no recipients", body: { ...snoozeBody, to: [] }, valid: false },
+      { name: "a directory head that is null", body: { ...snoozeBody, dir: null }, valid: false },
     ],
     quota: [
       { name: "valid", body: quotaBody, valid: true },

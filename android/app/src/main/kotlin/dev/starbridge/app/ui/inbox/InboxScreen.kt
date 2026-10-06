@@ -17,6 +17,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -59,6 +60,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.isShiftPressed
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -105,6 +112,7 @@ import dev.starbridge.app.ui.fieldColors
 import dev.starbridge.app.ui.groupGap
 import dev.starbridge.app.ui.groupShape
 import dev.starbridge.app.ui.theme.Radius
+import dev.starbridge.app.ui.theme.Sizes
 import dev.starbridge.app.ui.theme.Spacing
 import dev.starbridge.app.ui.theme.StarbridgeTheme
 import kotlinx.coroutines.delay
@@ -532,7 +540,10 @@ fun DecisionSheet(decision: Decision, now: Instant, onAnswer: (String, String?, 
                     Images(decision.images, maxHeight = 360.dp)
                     Outcome(decision, now, arrived = wasOpen)
                 }
-                paired -> Picks(decision, sending, send)
+                paired -> {
+                    Picks(decision, sending, send)
+                    if (decision.replies) Reply(decision.id, replies, sending != null) { send(null, it) }
+                }
                 else -> {
                     Images(decision.images, maxHeight = 360.dp)
                     val page = decision.answerIn
@@ -553,27 +564,39 @@ fun DecisionSheet(decision: Decision, now: Instant, onAnswer: (String, String?, 
     }
 }
 
-/** "Pick a result": each image over the option it stands for; picking one answers. */
+/**
+ * "Pick a result": each image over the option it stands for, two to a row; picking one answers.
+ * Each image keeps its own shape, no wider than its button, and the row's images are centred on
+ * one midline, so the buttons under them line up ([PickImages], #536).
+ */
 @Composable
 private fun Picks(decision: Decision, sending: String?, answer: (String?, String?) -> Unit) {
     val colors = StarbridgeTheme.colors
-    decision.images.zip(decision.options).chunked(2).forEach { row ->
-        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
-            row.forEach { (image, option) ->
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
-                    Images(listOf(image), maxHeight = 240.dp)
-                    val recommended = option == decision.proposal
-                    Button(
-                        onClick = { if (sending == null) answer(option, null) },
-                        colors = if (recommended) ButtonDefaults.buttonColors(containerColor = colors.accent, contentColor = colors.onAccent)
-                        else ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHighest, contentColor = MaterialTheme.colorScheme.onSurface),
-                        modifier = Modifier.fillMaxWidth().height(48.dp).semantics { if (recommended) stateDescription = "Default" },
-                    ) { Text(option, style = StarbridgeTheme.type.action, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+    var viewing by remember { mutableStateOf<Int?>(null) }
+    BoxWithConstraints {
+        val width = maxWidth
+        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            decision.images.indices.chunked(2).forEach { row ->
+                Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+                    PickImages(row.map { decision.images[it] }, width, Sizes.pick) { viewing = row[it] }
+                    Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+                        row.forEach { i ->
+                            val option = decision.options[i]
+                            val recommended = option == decision.proposal
+                            Button(
+                                onClick = { if (sending == null) answer(option, null) },
+                                colors = if (recommended) ButtonDefaults.buttonColors(containerColor = colors.accent, contentColor = colors.onAccent)
+                                else ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHighest, contentColor = MaterialTheme.colorScheme.onSurface),
+                                modifier = Modifier.weight(1f).height(48.dp).semantics { if (recommended) stateDescription = "Default" },
+                            ) { Text(option, style = StarbridgeTheme.type.action, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                        }
+                        if (row.size == 1) Spacer(Modifier.weight(1f))
+                    }
                 }
             }
-            if (row.size == 1) Spacer(Modifier.weight(1f))
         }
     }
+    viewing?.let { ImageViewer(decision.images, it) { viewing = null } }
 }
 
 /**
@@ -610,7 +633,13 @@ private fun FreeText(text: String, onText: (String) -> Unit, sending: Boolean, f
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
         keyboardActions = KeyboardActions(onSend = { send() }),
         colors = fieldColors(),
-        modifier = field.fillMaxWidth(),
+        // A hardware keyboard's Enter sends and Shift+Enter starts a new line, as on the web (#562).
+        modifier = field.fillMaxWidth().onPreviewKeyEvent {
+            if (it.key == Key.Enter && !it.isShiftPressed) {
+                if (it.type == KeyEventType.KeyDown) send()
+                true
+            } else false
+        },
     )
 }
 

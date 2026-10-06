@@ -1,4 +1,5 @@
 import groovy.json.JsonSlurper
+import java.util.Properties
 
 plugins {
     alias(libs.plugins.android.application)
@@ -8,6 +9,13 @@ plugins {
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
 }
+
+// buildSrc/src/main/kotlin/DogfoodSigning.kt: null on every build but the maintainer's dogfood ones.
+val dogfood = dogfoodKey(
+    Properties().apply { rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use(::load) },
+    providers.environmentVariable("CI").orNull,
+    File(System.getProperty("user.home")),
+)
 
 android {
     namespace = "dev.starbridge.app"
@@ -28,6 +36,13 @@ android {
     }
 
     signingConfigs {
+        create("dogfood") {
+            val key = dogfood ?: return@create
+            storeFile = key.store
+            storePassword = key.passwordFile.readText().trim()
+            keyAlias = key.alias
+            keyPassword = storePassword
+        }
         create("release") {
             val keystore = releaseKeystore() ?: return@create
             storeFile = keystore.file
@@ -38,6 +53,10 @@ android {
     }
 
     buildTypes {
+        // The debug key unless the maintainer's local.properties asks for the release key (DogfoodSigning.kt).
+        debug {
+            if (dogfood != null) signingConfig = signingConfigs.getByName("dogfood")
+        }
         release {
             isMinifyEnabled = true
             isShrinkResources = true

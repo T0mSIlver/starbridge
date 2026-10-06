@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -41,6 +40,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.DpSize
 import dev.starbridge.app.R
 import dev.starbridge.app.data.Link
 import dev.starbridge.app.data.bitmap
@@ -57,23 +57,26 @@ import kotlinx.coroutines.withContext
 import dev.starbridge.app.data.Image as Attached
 
 /**
- * The decision's images, two to a row so a pair of mockups sits side by side, each at most
- * [maxHeight] tall. A lone image takes its own shape, so a phone screenshot is not a thumbnail in
- * an empty band; with [crop] it fills the card's width instead and shows its top. A tap opens it
- * full screen.
+ * The decision's images, two to a row so a pair of mockups sits side by side, each row at most
+ * [maxHeight] tall (see [ImageRow]); with [crop], each fills its half of the card, or the whole
+ * card when alone, and shows its top. A tap opens it full screen.
  */
 @Composable
 fun Images(images: List<Attached>, maxHeight: Dp, modifier: Modifier = Modifier, crop: Boolean = false) {
     if (images.isEmpty()) return
     var viewing by remember { mutableStateOf<Int?>(null) }
-    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
-        images.chunked(2).forEachIndexed { r, row ->
-            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
-                row.forEachIndexed { c, image ->
-                    ImageBox(image, maxHeight, wide = crop || images.size > 1, crop = crop, Modifier.weight(1f)) { viewing = r * 2 + c }
+    BoxWithConstraints(modifier.fillMaxWidth()) {
+        val width = maxWidth
+        Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+            images.indices.chunked(2).forEach { row ->
+                if (crop) {
+                    val cell = if (images.size > 1) (width - Spacing.s2) / 2 else width
+                    Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+                        row.forEach { i -> ImageBox(images[i], DpSize(cell, minOf(maxHeight, cell * images[i].height / images[i].width)), crop = true) { viewing = i } }
+                    }
+                } else {
+                    ImageRow(row.map { images[it] }, width, maxHeight) { viewing = row[it] }
                 }
-                // A lone image in a later row keeps the column width.
-                if (images.size > 1 && row.size == 1) Spacer(Modifier.weight(1f))
             }
         }
     }
@@ -81,56 +84,78 @@ fun Images(images: List<Attached>, maxHeight: Dp, modifier: Modifier = Modifier,
 }
 
 /**
- * One image, at most [maxHeight] tall: its own shape from the start, or [wide] across its column,
- * where [crop] fills it from the top and else the inset colour bands it.
+ * A row of images at one height, each as wide as its shape asks, together filling [width] (#536):
+ * none is banded or cropped, so a phone screenshot beside a desktop one is narrow, not boxed. The
+ * row is at most [maxHeight] tall, and narrower when that caps it.
  */
 @Composable
-private fun ImageBox(image: Attached, maxHeight: Dp, wide: Boolean, crop: Boolean, modifier: Modifier, onOpen: () -> Unit) {
-    val edge = with(LocalDensity.current) { maxHeight.roundToPx() * 2 }
+fun ImageRow(images: List<Attached>, width: Dp, maxHeight: Dp, onOpen: (Int) -> Unit) {
+    val shape = images.sumOf { it.width.toDouble() / it.height }.toFloat()
+    val height = minOf(maxHeight, (width - Spacing.s2 * (images.size - 1)) / shape)
+    Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+        images.forEachIndexed { i, image -> ImageBox(image, DpSize(height * image.width / image.height, height), crop = false) { onOpen(i) } }
+    }
+}
+
+/**
+ * A row of images over their options (#536): each in an equal column of [width], at its own shape,
+ * no wider than its column and at most [maxHeight] tall, the row's images centred on one midline.
+ */
+@Composable
+fun PickImages(images: List<Attached>, width: Dp, maxHeight: Dp, onOpen: (Int) -> Unit) {
+    val column = (width - Spacing.s2) / 2
+    val sizes = images.map { val h = minOf(maxHeight, column * it.height / it.width); DpSize(h * it.width / it.height, h) }
+    val height = sizes.maxOf { it.height }
+    Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+        images.forEachIndexed { i, image ->
+            Box(Modifier.size(column, height), contentAlignment = Alignment.Center) { ImageBox(image, sizes[i], crop = false) { onOpen(i) } }
+        }
+    }
+}
+
+/** One image at [size]: its own shape, or with [crop] filled from the top. */
+@Composable
+private fun ImageBox(image: Attached, size: DpSize, crop: Boolean, onOpen: () -> Unit) {
+    val edge = with(LocalDensity.current) { maxOf(size.width, size.height).roundToPx() * 2 }
     // Decoded off the main thread, so a list of image decisions scrolls smoothly; the inset
     // colour shows until it lands.
     val bitmap by produceState<ImageBitmap?>(null, image.data, edge) {
         value = withContext(Dispatchers.Default) { image.bitmap(edge)?.asImageBitmap() }
     }
-    BoxWithConstraints(modifier) {
-        val natural = maxWidth * image.height / image.width
-        val height = minOf(maxHeight, natural)
-        val width = if (wide) maxWidth else minOf(maxWidth, height * image.width / image.height)
+    Box(
+        Modifier
+            .size(size)
+            .clip(RoundedCornerShape(Radius.lg))
+            .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+            // No ripple: a finger that rests on the image before it drags the sheet would press
+            // it, and the ripple starting and cancelling as the sheet moves is the one thing a
+            // drag from the image did that one from the text did not (#246).
+            .clickable(interactionSource = null, indication = null, onClickLabel = "View full screen", onClick = onOpen)
+            // Labelled before the bitmap lands.
+            .semantics { image.alt?.let { contentDescription = it } },
+    ) {
+        val loaded = bitmap
+        if (loaded != null) {
+            Image(
+                loaded,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                alignment = if (crop) Alignment.TopCenter else Alignment.Center,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+        // Says the image opens full screen, since nothing else on a touch screen does (#170).
         Box(
             Modifier
-                .size(width, height)
-                .clip(RoundedCornerShape(Radius.lg))
-                .background(MaterialTheme.colorScheme.surfaceContainerHighest)
-                // No ripple: a finger that rests on the image before it drags the sheet would press
-                // it, and the ripple starting and cancelling as the sheet moves is the one thing a
-                // drag from the image did that one from the text did not (#246).
-                .clickable(interactionSource = null, indication = null, onClickLabel = "View full screen", onClick = onOpen)
-                // Labelled before the bitmap lands.
-                .semantics { image.alt?.let { contentDescription = it } },
+                .align(Alignment.BottomEnd)
+                .padding(Spacing.s2)
+                .size(Spacing.s8)
+                .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.72f), CircleShape)
+                // The glyph is text; keep it out of the image's label.
+                .clearAndSetSemantics {},
+            contentAlignment = Alignment.Center,
         ) {
-            val loaded = bitmap
-            if (loaded != null) {
-                Image(
-                    loaded,
-                    contentDescription = null,
-                    contentScale = if (crop) ContentScale.Crop else ContentScale.Fit,
-                    alignment = if (crop) Alignment.TopCenter else Alignment.Center,
-                    modifier = Modifier.fillMaxSize(),
-                )
-            }
-            // Says the image opens full screen, since nothing else on a touch screen does (#170).
-            Box(
-                Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(Spacing.s2)
-                    .size(Spacing.s8)
-                    .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.72f), CircleShape)
-                    // The glyph is text; keep it out of the image's label.
-                    .clearAndSetSemantics {},
-                contentAlignment = Alignment.Center,
-            ) {
-                Symbol(Sym.Expand, size = Spacing.s5, tint = MaterialTheme.colorScheme.onSurface)
-            }
+            Symbol(Sym.Expand, size = Spacing.s5, tint = MaterialTheme.colorScheme.onSurface)
         }
     }
 }

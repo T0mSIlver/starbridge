@@ -515,6 +515,95 @@ async function main() {
   if ((await long.exited) !== 0) throw new Error("ask --wait for the long options failed");
   await page.setViewportSize(DESKTOP);
 
+  step("images over their options share a height, so a phone's option buttons line up (#536)");
+  {
+    const LAYOUTS = "Which layout should the inbox lead with?";
+    const picks = cli(
+      "ask-picks",
+      [
+        "ask",
+        "--question",
+        LAYOUTS,
+        "--option",
+        "Desktop layout",
+        "--option",
+        "Phone layout",
+        "--recommended",
+        "Phone layout",
+        "--image",
+        image("a"),
+        "--image",
+        join(ROOT, "android/app/src/test/resources/fake/phone-inbox.png"),
+        "--project",
+        "starbridge",
+        "--session",
+        "e2e-picks",
+        "--wait",
+      ],
+      machineHome,
+    );
+    await picks.waitFor(/^d_\S+$/m);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page
+      .locator("[data-row]", { hasText: LAYOUTS })
+      .first()
+      .locator("button[data-id]")
+      .click();
+    await page.getByRole("heading", { name: LAYOUTS }).waitFor({ timeout: 30_000 });
+    // Each image its own shape (no band), no wider than its button, both centred on one midline;
+    // both buttons on one line.
+    const rects = async (sel: string) =>
+      page.locator(sel).evaluateAll((els) =>
+        els.map((e) => {
+          const r = e.getBoundingClientRect();
+          const img = e.querySelector("img");
+          const shape = img ? img.naturalWidth / img.naturalHeight : 0;
+          return {
+            top: Math.round(r.top),
+            middle: Math.round(r.top + r.height / 2),
+            width: r.width,
+            off: r.width / r.height - shape,
+          };
+        }),
+      );
+    await page.waitForFunction(() => {
+      const imgs = [...document.querySelectorAll("fieldset img")] as HTMLImageElement[];
+      return imgs.length === 2 && imgs.every((i) => i.complete && i.naturalWidth > 0);
+    });
+    const images = await rects('fieldset button[aria-label^="View"]');
+    const buttons = await rects('fieldset button:not([aria-label^="View"])');
+    if (
+      images.length !== 2 ||
+      Math.abs(images[0].middle - images[1].middle) > 1 ||
+      images.some((r, i) => Math.abs(r.off) > 0.02 || r.width > buttons[i].width + 0.5) ||
+      buttons[0].top !== buttons[1].top
+    )
+      throw new Error(
+        `the picks do not line up: images ${JSON.stringify(images)}, buttons ${JSON.stringify(buttons)}`,
+      );
+    for (const scheme of ["light", "dark"] as const) {
+      await page.emulateMedia({ colorScheme: scheme, reducedMotion: "reduce" });
+      await page.waitForTimeout(150);
+      await fitsLayout(page, `picks ${scheme}`);
+      await page.screenshot({ path: join(SHOTS, `picks-phone-${scheme}.png`) });
+    }
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    // "Reply" is under the picks too; in it, Shift+Enter starts a new line and Enter sends (#562).
+    await page.getByRole("button", { name: "Reply", exact: true }).click();
+    const reply = page.getByRole("textbox", { name: "Your answer" });
+    await reply.pressSequentially("Phone layout");
+    await reply.press("Shift+Enter");
+    await reply.pressSequentially("on narrow screens");
+    if ((await reply.inputValue()) !== "Phone layout\non narrow screens")
+      throw new Error(
+        `Shift+Enter did not start a new line: ${JSON.stringify(await reply.inputValue())}`,
+      );
+    await reply.press("Enter");
+    await picks.waitFor(/Answer to d_\S+ .*: Phone layout/);
+    if ((await picks.exited) !== 0) throw new Error("ask --wait for the picks failed");
+    await page.setViewportSize(DESKTOP);
+  }
+
   step("leave one open decision for the screenshots");
   const open = cli(
     "ask-open",

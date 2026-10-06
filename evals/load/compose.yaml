@@ -53,6 +53,7 @@ services:
     ports: ["127.0.0.1:18000:18000", "127.0.0.1:12019:2019"]
     volumes: !override
       - ${LOAD_DIR}/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ${LOAD_DIR}/caddy:/etc/caddy/secrets:ro
       - caddy-data:/data
       - caddy-config:/config
     # Caddy takes about 100 KB for every long-poll it holds, a connection each way: 3000 users

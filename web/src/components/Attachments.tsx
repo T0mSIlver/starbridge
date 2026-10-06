@@ -1,40 +1,78 @@
 "use client";
 
-import { useState } from "react";
+import { type CSSProperties, type ReactNode, useState } from "react";
 import { githubRef, imageSrc, linkLabel } from "@/lib/attachments";
 import type { Decision } from "@/lib/types";
 import s from "./Attachments.module.css";
 import { Icon } from "./icons";
 import { Viewer } from "./Viewer";
 
-/** The decision's images, side by side when there are several; each opens the viewer. */
+type Image = NonNullable<Decision["images"]>[number];
+
+/** Indexes of `n` images in rows of two, in order. */
+export const rows = (n: number) =>
+  Array.from({ length: Math.ceil(n / 2) }, (_, r) => [2 * r, 2 * r + 1].filter((i) => i < n));
+
+/** The decision's images, two to a row; each opens the viewer. */
 export function Images({ d }: { d: Decision }) {
   const images = d.images ?? [];
   const [open, setOpen] = useState<number>();
   if (images.length === 0) return null;
   return (
-    <div className={`${s.images} ${images.length > 1 ? s.grid : ""}`}>
-      {images.map((img, i) => (
-        <button
-          // biome-ignore lint/suspicious/noArrayIndexKey: images have no id, and never reorder
-          key={i}
-          type="button"
-          className={s.image}
-          onClick={() => setOpen(i)}
-          aria-label={img.alt ? `View ${img.alt}` : "View image"}
-        >
-          {/* biome-ignore lint/performance/noImgElement: decrypted data, nothing for next/image to fetch */}
-          <img src={imageSrc(img)} alt={img.alt ?? ""} width={img.width} height={img.height} />
-          {/* Says the image opens full screen; touch screens show no zoom cursor (#170). */}
-          <span className={s.expand}>
-            <Icon name="expand" size={20} />
-          </span>
-        </button>
+    <div className={s.images}>
+      {rows(images.length).map((row) => (
+        <ImageRow key={row[0]} images={row.map((i) => images[i])}>
+          {row.map((i) => (
+            <ImageButton key={i} img={images[i]} onOpen={() => setOpen(i)} />
+          ))}
+        </ImageRow>
       ))}
       {open !== undefined && (
         <Viewer images={images} start={open} onClose={() => setOpen(undefined)} />
       )}
     </div>
+  );
+}
+
+/**
+ * A row of images at one height, each as wide as its shape asks, together filling the row (#536):
+ * no image is banded or cropped. The row is at most `--row-max` tall, narrower when that caps it.
+ */
+export function ImageRow({ images, children }: { images: Image[]; children: ReactNode }) {
+  const shape = images.reduce((sum, i) => sum + i.width / i.height, 0);
+  const style = { "--shape": shape, "--n": images.length } as CSSProperties;
+  return (
+    <div className={s.row} style={style}>
+      {children}
+    </div>
+  );
+}
+
+/** One image at its own shape, opening the viewer. */
+export function ImageButton({
+  img,
+  onOpen,
+  className = "",
+}: {
+  img: Image;
+  onOpen: () => void;
+  className?: string;
+}) {
+  return (
+    <button
+      type="button"
+      className={`${s.image} ${className}`}
+      style={{ "--r": img.width / img.height } as CSSProperties}
+      onClick={onOpen}
+      aria-label={img.alt ? `View ${img.alt}` : "View image"}
+    >
+      {/* biome-ignore lint/performance/noImgElement: decrypted data, nothing for next/image to fetch */}
+      <img src={imageSrc(img)} alt={img.alt ?? ""} width={img.width} height={img.height} />
+      {/* Says the image opens full screen; touch screens show no zoom cursor (#170). */}
+      <span className={s.expand}>
+        <Icon name="expand" size={20} />
+      </span>
+    </button>
   );
 }
 

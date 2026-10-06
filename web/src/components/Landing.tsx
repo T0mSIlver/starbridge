@@ -52,7 +52,8 @@ function Phone({ name, alt }: { name: string; alt: string }) {
   );
 }
 
-// Turn on once the Play closed test's opt-in link works (Google's review has passed).
+// Turn on once the Play closed test's opt-in link works (Google's review has passed), and give
+// README.md's Google Play line the testers group and opt-in links at the same time (#576).
 const PLAY_TEST_OPEN = false;
 
 const OBTAINIUM = `https://apps.obtainium.imranr.dev/redirect?r=obtainium://add/${REPO}`;
@@ -67,10 +68,11 @@ const FEATURES = [
   ["Permission prompts", "Allow or deny a command away from the keyboard. Off by default."],
 ] as const;
 
+/** Label, command, and the method the copy event reports, kept as first named. */
 const INSTALL = [
-  ["Script", "curl -fsSL https://starbridge.run/install.sh | sh"],
-  ["Homebrew", "brew install T0mSIlver/starbridge/starbridge"],
-  ["npm", "npm i -g starbridge"],
+  ["macOS / Linux", "curl -fsSL https://starbridge.run/install.sh | sh", "Script"],
+  ["Homebrew", "brew install T0mSIlver/starbridge/starbridge", "Homebrew"],
+  ["npm", "npm i -g starbridge", "npm"],
 ] as const;
 
 /** Docs opened from the landing page; the docs pages count their own views. */
@@ -79,7 +81,7 @@ const openDocs = (page: string) => () => track("open-docs", { page });
 function Install() {
   const [at, setAt] = useState(0);
   const [copied, setCopied] = useState(false);
-  const [method, cmd] = INSTALL[at] ?? ["", ""];
+  const [, cmd, method] = INSTALL[at] ?? ["", "", ""];
   const onCopied = () => track("copy-install", { method });
   return (
     <div className={s.install}>

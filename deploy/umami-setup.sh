@@ -54,29 +54,34 @@ auth() {
   shift
   curl -fsS "$url/api/websites/$id/$path" -H "authorization: Bearer $token" "$@"
 }
-# The steps the pages send (web/src/components/Landing.tsx, web/src/lib/funnel.ts). The window is
-# a day: Umami's daily salt splits a visit at midnight UTC anyway.
-funnel='Launch'
+# The steps the pages send (web/src/components/Landing.tsx, web/src/lib/funnel.ts), made or brought
+# up to date. The window is a day: Umami's daily salt splits a visit at midnight UTC anyway.
+funnel=$(jq -n '{name: "Launch",
+  description: "Landing view, sign-in click, first sign-in, recovery key, first machine, first answer",
+  parameters: {window: 1440, steps: [
+    {type: "path", value: "/"},
+    {type: "event", value: "sign-in"},
+    {type: "event", value: "first-sign-in"},
+    {type: "event", value: "first-keys"},
+    {type: "event", value: "first-machine"},
+    {type: "event", value: "first-answer"}]}}')
 funnels=$(auth funnels)
-if [ "$(echo "$funnels" | jq --arg n "$funnel" '[.data[] | select(.name == $n)] | length')" = 0 ]; then
-  auth funnels -H 'content-type: application/json' -d "$(jq -n --arg n "$funnel" '{name: $n,
-    description: "Landing view, sign-in click, first sign-in, first machine, first answer",
-    parameters: {window: 1440, steps: [
-      {type: "path", value: "/"},
-      {type: "event", value: "sign-in"},
-      {type: "event", value: "first-sign-in"},
-      {type: "event", value: "first-machine"},
-      {type: "event", value: "first-answer"}]}}')" >/dev/null
-  echo "funnel $funnel added"
-fi
+fid=$(echo "$funnels" | jq -r '[.data[] | select(.name == "Launch")][0].id // empty')
+auth "funnels${fid:+/$fid}" -H 'content-type: application/json' -d "$funnel" >/dev/null
+if [ -n "$fid" ]; then echo "funnel Launch updated"; else echo "funnel Launch added"; fi
+
 # Read-only views for the owner's phone; the link holds the only secret.
-share='Owner'
+views='{overview: true, events: true, funnels: true, journeys: true}'
 shares=$(auth shares)
-slug=$(echo "$shares" | jq -r --arg n "$share" '[.data[] | select(.name == $n)][0].slug // empty')
-if [ -z "$slug" ]; then
-  made=$(auth shares -H 'content-type: application/json' -d "$(jq -n --arg n "$share" '{name: $n,
-    parameters: {overview: true, events: true, funnels: true}}')")
-  slug=$(echo "$made" | jq -r '.slug // empty')
-  [ -n "$slug" ] || { echo "Umami made no share link: $made" >&2; exit 1; }
+share=$(echo "$shares" | jq -c '[.data[] | select(.name == "Owner")][0] // empty')
+if [ -z "$share" ]; then
+  share=$(auth shares -H 'content-type: application/json' \
+    -d "$(jq -n "{name: \"Owner\", parameters: $views}")")
+else
+  share=$(curl -fsS "$url/api/share/id/$(echo "$share" | jq -r .id)" \
+    -H "authorization: Bearer $token" -H 'content-type: application/json' \
+    -d "$(echo "$share" | jq "{name, slug, parameters: $views}")")
 fi
+slug=$(echo "$share" | jq -r '.slug // empty')
+[ -n "$slug" ] || { echo "Umami made no share link: $share" >&2; exit 1; }
 echo "share link: https://stats.starbridge.run/share/$slug"
