@@ -51,3 +51,30 @@ test("a database at schema 3, as the hosted one is before #571, gains the snooze
   expect(columns).toContain("wake_at");
   expect(columns).toContain("wake_due");
 });
+
+test("a write that reads first waits for another connection's write lock", async () => {
+  const path = join(mkdtempSync(join(tmpdir(), "sb-db-")), "db.sqlite");
+  const db = openDb(path);
+  const holder = Bun.spawn(
+    [
+      process.execPath,
+      "-e",
+      `import { Database } from "bun:sqlite";
+       const db = new Database(${JSON.stringify(path)});
+       db.run("BEGIN IMMEDIATE");
+       console.log("locked");
+       Bun.sleepSync(300);
+       db.run("ROLLBACK");`,
+    ],
+    { stdout: "pipe" },
+  );
+  const reader = holder.stdout.getReader();
+  expect(new TextDecoder().decode((await reader.read()).value)).toContain("locked");
+  const n = db.transaction(() => {
+    const { n } = db.query("SELECT n FROM item_seq").get() as { n: number };
+    db.run("UPDATE item_seq SET n = ?", [n + 1]);
+    return n + 1;
+  })();
+  expect(n).toBe(1);
+  expect(await holder.exited).toBe(0);
+});
