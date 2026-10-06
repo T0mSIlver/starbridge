@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import type { QuotaSnapshot } from "@starbridge/protocol";
-import { raise } from "../src/quota";
+import { keepLast, raise } from "../src/quota";
 
 const snap = (alerts: QuotaSnapshot["alerts"]): QuotaSnapshot => ({
   v: 1,
@@ -64,4 +64,22 @@ test("an alert that lapses and returns within the cycle stays raised", () => {
   const gone = raise(snap([]), first.raised, at("2026-10-05T12:05:00Z"));
   const back = raise(snap([low(50)]), gone.raised, at("2026-10-05T12:10:00Z"));
   expect(back.snap.alerts[0]?.notify).toBeUndefined();
+});
+
+test("a failed probe keeps the provider's last windows, marked with when they were read", () => {
+  const read = snap([]).providers;
+  const timedOut = { provider: "zai", windows: [], error: "Claude usage probe timed out." };
+  const failed = [timedOut];
+  const one = keepLast(read, {}, at("2026-10-05T12:00:00Z"));
+  expect(one.providers).toEqual(read);
+  const two = keepLast(failed, one.last, at("2026-10-05T12:05:00Z"));
+  expect(two.providers).toEqual([
+    { ...timedOut, windows: read[0]?.windows ?? [], updatedAt: "2026-10-05T12:00:00Z" },
+  ]);
+  // A second failure still says when the windows were read, not when they were last kept.
+  const three = keepLast(failed, two.last, at("2026-10-05T12:10:00Z"));
+  expect(three.providers[0]?.updatedAt).toBe("2026-10-05T12:00:00Z");
+  expect(keepLast(read, three.last, at("2026-10-05T12:15:00Z")).providers).toEqual(read);
+  // With nothing read before, the failure goes out alone.
+  expect(keepLast(failed, {}, at("2026-10-05T12:00:00Z")).providers).toEqual(failed);
 });

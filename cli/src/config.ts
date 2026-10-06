@@ -19,6 +19,7 @@ import {
   type Permission,
   type PermissionAnswer,
   type Pin,
+  type QuotaWindow,
   toB64,
   type Waiting,
 } from "@starbridge/protocol";
@@ -86,6 +87,14 @@ export interface State {
   permissions?: Record<string, PendingPermission>;
   /** Quota alerts already raised, by `alertKey`: the reset of the cycle they were raised in. */
   alerts?: Record<string, string>;
+  /** Each provider's last windows read without an error, and when, for the rounds CodexBar fails. */
+  quotas?: Record<string, LastQuota>;
+}
+
+export interface LastQuota {
+  at: string;
+  account?: string;
+  windows: QuotaWindow[];
 }
 
 /**

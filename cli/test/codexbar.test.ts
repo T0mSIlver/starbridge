@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { parseUsage } from "../src/codexbar";
+import { collect, parseUsage, type RunResult } from "../src/codexbar";
 import { snapshot } from "../src/quota";
 
 // The fixtures were recorded on the dev box at 19:09 UTC.
@@ -57,4 +57,31 @@ test("schema drift: unknown fields ignored, malformed windows skipped, errors ke
 test("a provider codexbar does not know is filtered out, not mislabelled", () => {
   expect(parseUsage(fixture("all"), "nosuch", NOW)).toEqual([]);
   expect(() => parseUsage('{"provider":"x"}', undefined, NOW)).toThrow("not a JSON array");
+});
+
+test("a provider that fails is asked once more before its failure counts", async () => {
+  const timedOut = JSON.stringify([
+    { provider: "claude", error: { message: "Claude usage probe timed out." } },
+  ]);
+  const ok = JSON.stringify([{ provider: "claude", usage: { primary: { usedPercent: 40 } } }]);
+  const calls: (string | undefined)[] = [];
+  const replies: RunResult[] = [
+    { code: 1, stdout: timedOut, stderr: "" },
+    { code: 0, stdout: ok, stderr: "" },
+    { code: 1, stdout: timedOut, stderr: "" },
+    { code: 1, stdout: timedOut, stderr: "" },
+  ];
+  const run = async (_bin: string, p: string | undefined) => {
+    calls.push(p);
+    return replies.shift() as RunResult;
+  };
+  const log: string[] = [];
+  const round = () => collect("codexbar", ["claude"], () => NOW, (l) => log.push(l), run);
+  const first = await round();
+  expect(first.map((r) => [r.windows.length, r.error])).toEqual([[1, undefined]]);
+  expect(log).toEqual(["codexbar claude: Claude usage probe timed out.; retrying"]);
+  const second = await round();
+  expect(second.map((r) => r.error)).toEqual(["Claude usage probe timed out."]);
+  expect(log.at(-1)).toBe("codexbar claude: Claude usage probe timed out.");
+  expect(calls).toEqual(["claude", "claude", "claude", "claude"]);
 });
