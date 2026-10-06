@@ -814,7 +814,13 @@ async function one(s: Scenario, arm: string, rep: number): Promise<RunRecord> {
     for (const b of s.name === "design-pick" ? ["settings-roomy", "settings-compact"] : [])
       sh("git", ["branch", b], proj, env);
 
-    type Card = { id: string; question: string; recommended?: string; options: string[] };
+    type Card = {
+      id: string;
+      question: string;
+      recommended?: string;
+      options: string[];
+      answerIn?: { url: string } | null;
+    };
     const choiceFor = (c: Card) => c.recommended ?? c.options[0] ?? "Go ahead";
     // The owner's reply: the recommended option, or Done on an `--answer-in` card, after the
     // page took the pick (#539).
@@ -823,6 +829,10 @@ async function one(s: Scenario, arm: string, rep: number): Promise<RunRecord> {
         writeFileSync(join(root, "page-pick"), "Picked: Starter, Plus, Studio\n");
         await live.answer(c.id, { done: true });
         rec.answered = `Answer to ${c.id} (${c.question}): answered on its page; read the answer there`;
+      } else if (c.options.length === 0 && !c.answerIn) {
+        // A card with no options takes a typed reply.
+        await live.answer(c.id, { text: "Lantern" });
+        rec.answered = `Answer to ${c.id} (${c.question}): Lantern`;
       } else {
         await live.answer(c.id, { choice: choiceFor(c) });
         rec.answered = `Answer to ${c.id} (${c.question}): ${choiceFor(c)}`;
