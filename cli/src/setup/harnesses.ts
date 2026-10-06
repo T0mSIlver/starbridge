@@ -5,12 +5,15 @@
  * download and installs the version that matches the CLI.
  */
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import skill from "../../../plugin/skills/starbridge/SKILL.md" with { type: "text" };
 import { failure, run, type Sys, which } from "./sys";
 
+/** What the Codex skill steps need: the agent has no prompt. */
+type Home = Pick<Sys, "ctx" | "home">;
+
 /** `$CODEX_HOME/skills/starbridge`, which Codex reads skills from. */
-export function codexSkillDir(sys: Sys): string {
+export function codexSkillDir(sys: Home): string {
   return join(sys.ctx.env.CODEX_HOME || join(sys.home, ".codex"), "skills", "starbridge");
 }
 
@@ -19,7 +22,7 @@ export function hasCodex(sys: Sys): boolean {
 }
 
 /** Whether Codex has the skill, and whether it is this CLI's version of it. */
-export function codexSkill(sys: Sys): "missing" | "current" | "outdated" {
+export function codexSkill(sys: Home): "missing" | "current" | "outdated" {
   try {
     return readFileSync(join(codexSkillDir(sys), "SKILL.md"), "utf8") === skill
       ? "current"
@@ -29,7 +32,7 @@ export function codexSkill(sys: Sys): "missing" | "current" | "outdated" {
   }
 }
 
-export function installCodexSkill(sys: Sys) {
+export function installCodexSkill(sys: Home) {
   const dir = codexSkillDir(sys);
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, "SKILL.md"), skill);
@@ -46,6 +49,39 @@ export function removeCodexSkill(sys: Sys): boolean {
   }
   if (!/^name: starbridge$/m.test(text)) return false;
   rmSync(dir, { recursive: true, force: true });
+  return true;
+}
+
+/**
+ * Codex runs commands in a sandbox with no network. This rule runs the commands that post a
+ * question and read its answer outside it, as Claude Code's allow rules let them skip the prompt.
+ */
+export const CODEX_RULE = `# Written by starbridge setup: questions to your devices need the network.
+prefix_rule(pattern = ["starbridge", ["ask", "waiting", "working", "wait", "settle"]], decision = "allow")
+`;
+
+export function codexRulePath(sys: Home): string {
+  return join(sys.ctx.env.CODEX_HOME || join(sys.home, ".codex"), "rules", "starbridge.rules");
+}
+
+export function hasCodexRule(sys: Home): boolean {
+  try {
+    return readFileSync(codexRulePath(sys), "utf8") === CODEX_RULE;
+  } catch {
+    return false;
+  }
+}
+
+export function installCodexRule(sys: Home) {
+  const path = codexRulePath(sys);
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, CODEX_RULE);
+}
+
+/** Removes the rule file, only when setup wrote it. */
+export function removeCodexRule(sys: Home): boolean {
+  if (!hasCodexRule(sys)) return false;
+  rmSync(codexRulePath(sys), { force: true });
   return true;
 }
 

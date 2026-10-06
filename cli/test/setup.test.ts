@@ -131,6 +131,7 @@ test("setup --yes replaces the dev box's manual installs and uploads a first sna
   expect(settings.env.CLAUDE_CODE_PLUGIN_DIRS).toBe("/x/other-mod");
   expect(settings.model).toBe("opus");
   expect(settings.extraKnownMarketplaces.starbridge.autoUpdate).toBe(true);
+  expect(settings.permissions.allow).toContain("Bash(starbridge ask:*)");
   expect(existsSync(m.mod)).toBe(false);
   expect(readFileSync(m.md, "utf8")).toBe("# Me\nBe blunt.\n");
 
@@ -140,6 +141,9 @@ test("setup --yes replaces the dev box's manual installs and uploads a first sna
     readFileSync(join(import.meta.dir, "../../plugin/skills/starbridge/SKILL.md"), "utf8"),
   );
   expect(m.calls()).toContain("pi install git:github.com/T0mSIlver/starbridge");
+  expect(readFileSync(join(m.home, ".codex/rules/starbridge.rules"), "utf8")).toContain(
+    '"starbridge", ["ask"',
+  );
 
   const [snap] = await server.opened("quota");
   expect(snap?.providers.map((p) => p.provider)).toEqual(["codex", "zai"]);
@@ -217,7 +221,11 @@ test("uninstall removes the service and plugins, asks the devices to revoke, kee
   expect(m.calls()).toContain("systemctl --user disable --now starbridge-agent.service");
   expect(m.calls()).toContain("claude plugin uninstall starbridge-mod@starbridge --scope user");
   expect(m.calls()).toContain("claude plugin marketplace remove starbridge");
+  expect(
+    JSON.parse(readFileSync(join(m.home, ".claude/settings.json"), "utf8")).permissions.allow,
+  ).toEqual([]);
   expect(existsSync(join(m.home, ".codex/skills/starbridge"))).toBe(false);
+  expect(existsSync(join(m.home, ".codex/rules/starbridge.rules"))).toBe(false);
   expect(m.calls()).toContain("pi remove git:github.com/T0mSIlver/starbridge");
   const [d] = await server.opened("decision");
   expect(d?.question).toBe("Revoke devbox? It was uninstalled.");

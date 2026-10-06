@@ -96,8 +96,8 @@ const real = (p: string) => {
  */
 export function selfCommand(env: Record<string, string | undefined>): string[] {
   const script = process.argv[1];
-  const scripted =
-    script !== undefined && /\.(m?js|ts)$/.test(script) && !script.startsWith("/$bunfs");
+  // npm links the bundle as `bin/starbridge`, with no extension: any script but Bun's own.
+  const scripted = script !== undefined && !script.startsWith("/$bunfs");
   const running = scripted ? [process.execPath, real(script)] : [process.execPath];
   const onPath = which(env, "starbridge");
   if (onPath && real(onPath) === real(running.at(-1) as string)) return [onPath];

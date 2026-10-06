@@ -4,7 +4,7 @@ import { ProtocolError, ready, type SessionLink } from "@starbridge/protocol";
 import { AgentError, Interrupted, withAgent } from "./agent/client";
 import { answersVia, askVia, quotaVia, waitingVia, waitVia } from "./agent/commands";
 import { runAgent } from "./agent/main";
-import { ApiError } from "./api";
+import { ApiError, sandboxHint, Unreachable } from "./api";
 import { type Ctx, UsageError } from "./context";
 import { type AskInput, answers, ask, settle, setWaiting, wait } from "./decisions";
 import { hookAskUser, hookPermission, hookSettle } from "./hook";
@@ -422,6 +422,12 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
       e instanceof AgentError
     ) {
       ctx.err(`starbridge: ${e.message}`);
+      return 1;
+    }
+    if (e instanceof Unreachable) {
+      ctx.err(`starbridge: ${e.message}`);
+      const hint = sandboxHint(ctx.env);
+      if (hint) ctx.err(`starbridge: ${hint}`);
       return 1;
     }
     if (e instanceof TypeError && (e as { code?: string }).code?.startsWith("ERR_PARSE_ARGS")) {

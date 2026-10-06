@@ -45,7 +45,8 @@ Setup asks before each step, and a rerun repairs only what is missing:
    agent.
 5. It installs Starbridge in each agent it finds: the Claude Code plugin at user scope, the
    skill in Codex's skills folder (updated when the CLI carries a newer one), and the Starbridge
-   Pi package.
+   Pi package. Claude Code may then run `starbridge ask`, `waiting`, `wait` and `settle` without
+   a permission prompt; `starbridge run` still asks, since the command it wraps can be anything.
 6. It uploads a first quota snapshot.
 
 `--yes` takes every default. `--no-quota`, `--no-service` and `--no-plugin` skip a step;
@@ -54,8 +55,10 @@ Setup asks before each step, and a rerun repairs only what is missing:
 
 ### Update and uninstall
 
-`starbridge update` installs the latest release over a script install. Homebrew and npm installs
-update through their own manager.
+`starbridge update` installs the latest release over a script install, restarts the agent and
+updates the Claude Code plugins; the agent brings the Codex skill up to date when it starts.
+Homebrew and npm installs update through their own manager; then run `starbridge setup`, which
+restarts the agent on the new version.
 
 `starbridge uninstall` removes the agent service, the plugin and the binary, and asks your
 devices to revoke the machine. It deletes the keys only when you say so, or with `--purge`.
@@ -155,7 +158,9 @@ starbridge config permissions on
 ```
 
 Then each prompt also goes to your devices, where you allow or deny it. The prompt stays open at
-the keyboard, and the first answer wins.
+the keyboard, and the first answer wins. Only prompts Claude Code still shows reach your devices:
+in auto mode, its default, it settles most calls itself. When the keyboard answers first, the
+device's card closes once the tool has run, since Claude Code reports the call only then.
 
 Pi's prompts come from pi-permission-system. With the Starbridge Pi package installed, the same
 command offers to add `starbridge` to its `authorizerChain`, which it needs as well. Your devices then allow a call

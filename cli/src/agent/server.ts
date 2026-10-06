@@ -9,7 +9,7 @@ import { chmodSync, lstatSync, mkdirSync, unlinkSync } from "node:fs";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { dirname } from "node:path";
 import { ProtocolError } from "@starbridge/protocol";
-import { ApiError } from "../api";
+import { ApiError, Unreachable } from "../api";
 import { type Ctx, iso, UsageError } from "../context";
 import { VERSION } from "../version";
 import {
@@ -260,7 +260,7 @@ export class Agent implements Hub {
       if (res.writableEnded) return;
       if (e instanceof HttpError) return fail(e.status, { error: e.code, detail: e.message });
       if (e instanceof UsageError) return fail(400, { error: "bad-request", detail: e.message });
-      if (e instanceof ApiError || e instanceof ProtocolError)
+      if (e instanceof ApiError || e instanceof ProtocolError || e instanceof Unreachable)
         return fail(502, { error: "server", detail: e.message });
       this.log(`${req.method} ${url.pathname}: ${(e as Error).stack ?? e}`);
       fail(500, { error: "internal", detail: (e as Error).message });

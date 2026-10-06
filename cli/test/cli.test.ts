@@ -85,10 +85,10 @@ test("pair uses the hosted server unless --server or STARBRIDGE_SERVER names ano
     throw new Error("offline");
   }) as unknown as typeof fetch;
   try {
-    await expect(run(["pair"], testCtx())).rejects.toThrow("offline");
-    await expect(
-      run(["pair"], testCtx({ STARBRIDGE_SERVER: "https://self.example" })),
-    ).rejects.toThrow("offline");
+    const hosted = testCtx();
+    expect(await run(["pair"], hosted)).toBe(1);
+    expect(hosted.errors.at(-1)).toBe("starbridge: cannot reach https://starbridge.run: offline");
+    expect(await run(["pair"], testCtx({ STARBRIDGE_SERVER: "https://self.example" }))).toBe(1);
   } finally {
     globalThis.fetch = real;
   }
