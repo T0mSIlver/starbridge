@@ -597,7 +597,8 @@ with the rail), one table up to `size.page` wide, as dense as the inbox: the
 provider (and its machine) in a column of `size.quota-provider`, then one
 line per window with its name, meter, figure, state and reset in columns. A
 handle before the provider's name reorders providers there; providers that
-lead while "Running out first" is on keep their place, and a provider with a leading
+lead while "Running out first" is on keep their place, with a pin in the
+handle's place whose tap or click says why, and a provider with a leading
 row is a barrier the others don't cross. Narrow screens reorder
 in Settings.
 

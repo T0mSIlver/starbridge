@@ -632,6 +632,28 @@ async function main() {
     throw new Error("the bars do not show what is left");
   await shoot(page, "quotas-tuned");
 
+  step("a group pinned by running out first says why on a click (#296)");
+  await page.setViewportSize(DESKTOP);
+  await page.getByRole("button", { name: "Why codex is first" }).click();
+  const why = page.getByText("First because it runs out soonest.");
+  await why.waitFor();
+  for (const scheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme: scheme });
+    await page.waitForTimeout(150);
+    await page.screenshot({ path: join(SHOTS, `quotas-pinned-${scheme}.png`) });
+  }
+  await page.keyboard.press("Escape");
+  await why.waitFor({ state: "hidden" });
+  await page.getByRole("button", { name: "Why codex is first" }).click();
+  await why.getByRole("link", { name: "Settings" }).click();
+  await page.waitForURL(/\/settings#running-out-first$/);
+  await page.getByRole("switch", { name: "Running out first" }).waitFor();
+  const inView = await page.locator("#running-out-first").evaluate((el) => {
+    const r = el.getBoundingClientRect();
+    return r.top >= 0 && r.bottom <= innerHeight;
+  });
+  if (!inView) throw new Error("the pin's Settings link does not scroll to the setting");
+
   step("quota settings: the order set holds over running out first");
   await page
     .getByRole("navigation", { name: "Main" })

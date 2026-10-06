@@ -108,6 +108,7 @@ const PATHS = {
     </>
   ),
   drag: <path d="M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01" />,
+  pin: <path d="M9 4h6M10 4v5l-3 4h10l-3-4V4M12 13v7" />,
   prev: <path d="m15 6-6 6 6 6" />,
   chev: <path d="m9 6 6 6-6 6" />,
   down: <path d="m6 9 6 6 6-6" />,

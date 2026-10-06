@@ -27,18 +27,21 @@ export function Section({ title, children }: { title: string; children: React.Re
 }
 
 export function Row({
+  id,
   label,
   sub,
   children,
   muted,
 }: {
+  /** A target for links to this setting. */
+  id?: string;
   label: React.ReactNode;
   sub?: React.ReactNode;
   children?: React.ReactNode;
   muted?: boolean;
 }) {
   return (
-    <div className={`${s.row} ${muted ? s.muted : ""}`}>
+    <div id={id} className={`${s.row} ${muted ? s.muted : ""}`}>
       <div className={s.rowText}>
         <div className="t-small">{label}</div>
         {sub && <div className={`t-meta ${s.sub}`}>{sub}</div>}
@@ -204,7 +207,7 @@ function QuotaSection() {
           />
         </Row>
       )}
-      <Row label="Running out first">
+      <Row id="running-out-first" label="Running out first">
         <Switch
           label="Running out first"
           checked={q.runningOutFirst}
