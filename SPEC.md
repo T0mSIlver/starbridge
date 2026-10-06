@@ -1293,6 +1293,22 @@ so the mod is the first path.
   read process arguments; `wait <id>` prints a delivered answer from local state. The npm bundle
   runs under Node, so the CLI uses no Bun global without a guard; a test runs it there.
 
+- 2026-10-06. A device that joins later reads the questions already waiting (#340), as #158 did
+  for quotas. Decisions and permission prompts are sealed and signed to the devices in the
+  directory when asked, so a new phone, a browser that signed in again or a recovery read none
+  of them. Each answer poll now checks the machine's open decisions and prompts against the
+  active devices; when one lacks a device, the machine re-signs it with the full recipient list
+  and posts it again under its own id, with the decision's waiting state. The server takes such
+  a re-post only from the machine that posted the item and only while it is open, keeps its
+  arrival time, so a prompt's 10 minutes do not restart, and pushes only the devices that were
+  not recipients yet. Revoked devices are not active, so they get nothing, and nothing is
+  re-sealed while the machine finds the directory behind (#280). A decision keeps its signed body
+  in the state (0600, like the rest) for this, only until it is answered or withdrawn; its images
+  are read again from their files, and one moved since is left out. A re-post says `reseal`, and the server refuses one for an item it no longer holds, so a
+  dropped decision never comes back. The machine counts the new devices' answers before it posts,
+  since a post whose reply is lost may have reached the server. A server that withholds a
+  revocation no answer has revealed yet can still get an open item re-sealed to that device, as it
+  can for a new question; re-sealing stretches that to the item's life.
 - 2026-10-06. Back on a phone's web page closes an open item first (#347). Under 1100 px, the
   item shown in place of the list sits in the address as `/?item=<id>`, pushed as its own history
   entry, so Back, Android's back gesture and an installed app's Back return to the list; a reload
@@ -1421,14 +1437,80 @@ so the mod is the first path.
   its ports from below 32768 until each server starts, so runners on one machine do not
   collide, and closing outgoing connections, which share the range above, do not block them. `AUDIT=<folder>` shoots every size from
   320 to 1920 px in both themes, plus 200% text at 390, and lists what the checks find.
+- 2026-10-06. Android samples an image by its real size, read with `inJustDecodeBounds`, not the
+  size the machine declares, drops one larger than declared or than 8192 px a side, and holds
+  at most 4096² pixels in any decode (#360).
 - 2026-10-06. Workflows pin every action by commit SHA, with its version in a comment (#361). A
   moved tag could otherwise run code in the release job before it writes the minisign key.
   Dependabot proposes the updates in one grouped PR a month.
+- 2026-10-06. A browser trusts a served directory only against its pin (#354, from the #366
+  audit). On reload, the web adopted a join's or recovery's pending keys from whatever chain the
+  server served, and a browser with no pin accepts any chain, so a server could enrol it into a
+  chain of its own. Now a directory read with no pin trusts only a genesis its own device signed
+  (a first device cut off before it pinned); otherwise it drops the pending keys and shows Join
+  again. Joins and recovery pin before they save the device, so a device never exists without a
+  pin, and a pending record with a pin is still adopted on reload as #274 and #283 need.
+- 2026-10-06. Only the server could make the directory empty once a first device's genesis may
+  have gone out, so a browser's keys stay then (#371, from the #302 audit). After #354, the only
+  device a browser holds without a pin is a first device whose commit was cut off: joins and
+  recovery pin before they save the device. Commit now marks the device as posted before it posts
+  the genesis, and boot deletes a device's keys on an empty directory only when it is unmarked,
+  as #328 needs; a marked one shows the broken directory page and keeps its keys. A commit
+  whose post never reached the server, closed before the owner retried, also lands there. A
+  401 that says the device was revoked no longer deletes its keys either: the browser shows the
+  landing page as #219 wants, and on sign-in the verified chain shows whether it was revoked. A
+  tab still offering a first key cannot replace a device whose genesis went out.
+- 2026-10-06. Android allows only what the owner saw whole, as the web does since #276 (#356). A
+  notification's Allow sends at once only when the whole input fits the one line a collapsed or
+  heads-up notification shows (owner's rule); otherwise it opens the prompt's sheet. A card's
+  Allow sends only when the card shows the whole input uncut, else it opens the sheet too. The
+  sheet shows the whole input and enables Allow once its end has been on screen.
+- 2026-10-06. Lock-screen Allow opens the command first (owner's ruling on #389, replaces the
+  lock-screen Allow of #57 and #182). It still asks for the unlock, then opens the prompt's sheet
+  with the whole command, Allow one tap away; it no longer sends. Deny still answers from the
+  lock screen.
+- 2026-10-06. Permission text shows control and format characters as escapes (`\u202E`), on the
+  machine before sealing and again in every client, so a bidi override cannot reorder the
+  command the owner allows (#357).
 
+- 2026-10-06. Main's CI runs one at a time (#380). Each merge used to queue its own run, and
+  deploys waited behind all of them: six main runs queued for up to 30 min with prod six merges
+  behind. Now one runs and only the newest merge waits; a newer merge replaces it, and a replaced
+  run deploys nothing, so merges in between are deployed with the head. Deploy's own queue is on
+  its job, so a deploy skipped for a cancelled run cannot replace one that is waiting. A
+  re-run by hand of an older main run replaces the waiting head the same way.
+- 2026-10-06. Faster CI on the dev box's runners (#380). Over CI's first 199 runs, jobs waited
+  longer for a runner (e2e: 7.2 min median, 17 min p90) than they ran (4.3 min). A pull request
+  now runs only the jobs its files can affect: no checks for an Android-only change (unless it
+  edits `Tokens.kt`, which web's tests compare with DESIGN.md), no e2e for Android, evals or
+  Markdown that no page renders. Such a job still starts and passes in seconds, so its check
+  reports success; main runs everything. pnpm's store and Next's `.next/cache` stay on each
+  runner (`$RUNNER_TOOL_CACHE`); the store used to sit in the job's temp folder, so every install
+  downloaded every package, and setup-node uploaded it to GitHub's cache after every e2e, ~50 s.
+  The e2e runs under `.github/watchdog.sh`, which after 10 min prints its processes (Firefox
+  included, which Playwright starts in a session of its own) and their sockets, then stops them.
+  The runners are system units in `ci.slice` at CPU weight 400 to `user.slice`'s 100, where the
+  agent sessions build: `pnpm typecheck` on the loaded box took 8.7 s there against 14.3 s as a
+  user unit at Nice=5. "test, typecheck, lint" stays one job: split, it would install three times
+  and take three runners, which are what is short.
 - 2026-10-06. `ask --default` is gone from the help and the skill (#352): no client shows it, so
   an agent that passed one believed the owner saw it. Like `--default-at`, it is accepted and
   ignored with a warning, so older commands still post; the CLI always sends "Waits for your
   answer" for clients from before 2026-10-05. `ask --help` now lists `--timeout`.
+- 2026-10-06. A permission's `inputHash` is keyed under the machine's signing key (#359). Devices
+  only echo it, and the machine matches calls by it locally, so nothing else changes; unkeyed, a
+  device holding the redacted input could test guesses for a short redacted password. The
+  summary and description are cut from the input after `redactValue`, so secrets under a key's
+  name stay out of MCP and Task summaries too (#358).
+- 2026-10-06. Devices detecting a withheld machine revocation (#362, from the #366 audit). #280's
+  check runs one way: machines read the heads devices sign into answers, but devices read no head
+  from machines, so a server holding a revoked machine's key can keep one device answering it.
+  The fix mirrors #280: machines sign `dir: {length, head}` into every item, and a device refuses
+  every machine's items while an active machine has signed a head its chain lacks. It needs a
+  schema change in `packages/protocol` and its Kotlin twin, signing in the CLI, and the hold in
+  the web and Android clients, well past one small PR, so it goes in that order as separate PRs.
+  Until then PROTOCOL.md states the device-side limit. Now, a `settled` notice closes only the
+  signing machine's decisions on the web and Android, which applied it by item id alone.
 
 - 2026-10-06. opencode is the fourth harness (#300; research below, opencode 1.18.31). Its
   plugins get an SDK client bound to the running server, so the Starbridge opencode plugin
@@ -1937,3 +2019,62 @@ goes in git.
   `keepalive_idle_conns_per_host 4096` it held 3 to 120, with p99 unchanged.
   25 s stays below the server's 30 s idle close, so Caddy never reuses a
   connection the server is closing.
+- 2026-10-06: load and failure test (#301, `evals/load/`). Prod's stack ran
+  from `deploy/compose.yaml` on the dev box. Its containers shared two cores,
+  with memory caps adding up to a CX23's 4 GB less the OS. Simulated users
+  went through Caddy, each with a machine on the answers long-poll, a phone,
+  and an open web page (its polls and the join long-poll), plus 6 decisions,
+  4 runs of 6 updates and 12 quota snapshots an hour; pushes went to fakes.
+  The launch week expects a few hundred users, so 3000 is ten times that.
+
+  | Users | Requests/s | p99 | Answer reaches machine, p99 | Server | Caddy |
+  |---|---|---|---|---|---|
+  | 300 | 102 | 29 ms | 93 ms | 67 MB, 5% CPU | 102 MB, 4% CPU |
+  | 1000 | 344 | 23 ms | 32 ms | 76 MB, 11% | 275 MB, 10% |
+  | 2000 | 684 | 194 ms | 176 ms | 133 MB, 18% | 571 MB, 18% |
+  | 3000 | 1024 | 0.1–0.7 s; 6.2 s with a 45 s stall | 8.3 s (stall) | 180 MB, 27% | 857 MB, 35% |
+
+  CPU is a share of one core. The stall came from the dev box, not the
+  stack: emulators and builds of other sessions shared the two cores (load
+  average up to 60 on 10 cores), and Caddy spent 126 s of that run waiting
+  for a core. Prod's disk syncs a write in about 1 ms, where the dev box's
+  took up to 176 ms, so SQLite's commits, which block the server's event
+  loop, cost little there. No run lost or duplicated an answer or a decision; answers
+  the server took but no machine got within the run's end were all stored,
+  only late.
+  Each held long-poll costs about 96 KB in Caddy and 13 KB in the server, and
+  a user about 285 KB and 35 KB. By extrapolation, Caddy's memory runs out
+  first on a CX23, near 8000 users (about 2.8 GB free beside Umami and the
+  OS). CPU follows near 10,000, where the server's one thread fills a core.
+  Bun's fetch runs at most 256 requests at once by default
+  (`BUN_CONFIG_MAX_HTTP_REQUESTS`), which first throttled the load script, not
+  the server.
+  What broke: the VPS's disk was 84% full of Docker build cache, about 0.9 GB
+  per deploy (pruned by hand; #326 prunes after each deploy). A full disk
+  answered every write 500 with a stack trace while `/healthz` stayed green;
+  writes now get 503 `storage-full` with `Retry-After`, logged once a minute.
+  Usage counts and housekeeping skip while the disk is full, so a stored item
+  still gets its 201 and its push, a caller's first read of the day still
+  answers, and a sweep cannot crash the server. The uptime check calls
+  `/healthz/disk`, which fails under 2 GB free.
+  Caddy closed most connections to the server after each request, and their
+  TIME-WAIT sockets used up the shared machine's ports at 3000 users (#376
+  keeps them open).
+  Failures, at 1000 users: killing the server brought it back in 2 s. The
+  940 answer long-polls open at the time got 502 and reconnected on the
+  agent's 2 s backoff, and a probe loading `/` and `/healthz` every 100 ms
+  saw no failure (slowest 2.9 s). A deploy swapped the web copies and
+  restarted the server with no failed probe (slowest 2.6 s). Two POSTs got a
+  502, sent on a connection the old server closed. Writes on a full disk were
+  refused and went through once space was freed; nothing was lost.
+  Twenty users behind one address meet no per-address limit in use. Setting
+  up within the same minute, 15 of 20 met `POST /pairings`' 10 a minute or
+  the GitHub callback's 20 a minute, and the slowest waited 165 s; over ten
+  minutes, 2 waited up to 29 s. The CLI and the web page show that 429 as an
+  error rather than waiting it out. The office's page views past 30 a minute
+  are dropped as designed (Umami only). The server holds at most 5000
+  pairings from the last 10 minutes, approved ones included, so past 500
+  pairings a minute new ones get 429 `busy`.
+  Restore drill: the 2026-10-06 backup, copied read-only from the VPS and
+  restored as `deploy/README.md` says, passed `integrity_check`, started and
+  served. Umami's dump restored too. The copies were deleted afterwards.

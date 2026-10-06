@@ -337,6 +337,21 @@ function Providers({
   );
 }
 
+/**
+ * A device's name with a break allowed after each dot, so a host name wraps between its labels,
+ * as it does after a hyphen; `.rowText` breaks inside a word only when nothing else fits.
+ */
+function HostName({ name }: { name: string }) {
+  const parts = name.split(/(?<=\.)/);
+  return parts.map((part, i) => (
+    // biome-ignore lint/suspicious/noArrayIndexKey: the parts of one fixed string.
+    <span key={i}>
+      {part}
+      {i < parts.length - 1 && <wbr />}
+    </span>
+  ));
+}
+
 function DeviceSection() {
   const { update, boot, sampleDevices } = useApp();
   const ctx = boot.state === "ready" ? boot.ctx : undefined;
@@ -363,7 +378,9 @@ function DeviceSection() {
             <Icon name={d.role === "machine" ? "desktop" : "devices"} size={18} />
           </span>
           <div className={s.rowText}>
-            <div className="t-small">{d.name}</div>
+            <div className="t-small">
+              <HostName name={d.name} />
+            </div>
             <div className={`t-meta ${s.sub}`}>
               {d.role === "machine" ? "Machine" : "Device"}
               {d.self ? " · this browser" : d.addedAt ? ` · ${added.get(d.id)}` : ""}

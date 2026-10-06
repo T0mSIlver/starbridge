@@ -63,6 +63,30 @@ button {
   outline-offset: 2px;
 }
 
+/* On a phone every link and button takes a tap at least `size.tap` across, however small it is
+   drawn: an invisible area centred on it (DESIGN.md, "Rules"). A link inside a sentence keeps
+   the size of its text, as WCAG 2.5.8 allows; Docs' copy buttons and heading anchors draw their
+   own pseudo-elements and stay as they are. Zero specificity: a component's own position wins. */
+@media (max-width: 599px) {
+  :where(a[href], button, summary, label:has(input)):not(
+    :where(p a, dd a, td a, h2 a, h3 a, [data-copy])
+  ) {
+    position: relative;
+  }
+
+  :where(a[href], button, summary, label:has(input)):not(
+    :where(p a, dd a, td a, h2 a, h3 a, [data-copy])
+  )::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: max(100%, var(--size-tap));
+    height: max(100%, var(--size-tap));
+    transform: translate(-50%, -50%);
+  }
+}
+
 /* Reduced motion: every change still happens, at once. `.no-motion` is set for the frame a theme
    changes, so colours switch together instead of each fading at its own pace. */
 @media (prefers-reduced-motion: reduce) {

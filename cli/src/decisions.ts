@@ -3,6 +3,7 @@ import { basename, resolve } from "node:path";
 import {
   type Agent,
   type Answer,
+  activeMembers,
   Decision,
   type DecisionLink,
   type Directory,
@@ -274,12 +275,15 @@ export async function postDecision(ctx: Ctx, s: Session, input: AskInput): Promi
   const cursor = ctx.store.state().cursor;
   // Asked already waiting, its waiting state pushes instead, so the notification says so.
   await s.api.postItem(input.waiting ? { ...item, quiet: true } : item);
+  const { images: _, ...body } = decision;
   ctx.store.updateState((st) => {
     st.asked[decision.id] = {
       question: decision.question,
       options: decision.options,
       askedAt: decision.createdAt,
       to: decision.to,
+      body,
+      ...(input.images ? { images: input.images } : {}),
       ...(cursor !== undefined ? { cursor } : {}),
       ...(decision.source.session ? { session: decision.source.session } : {}),
       ...(decision.answerIn ? { answerIn: true } : {}),
@@ -382,7 +386,10 @@ export async function settle(ctx: Ctx, opts: { id?: string; outcome?: string }):
   // Closed here first: from now on no answer to it is accepted or delivered, even if the post fails.
   ctx.store.updateState((st) => {
     const a = st.asked[id];
-    if (a) a.settled = true;
+    if (a) {
+      a.settled = true;
+      forget(a);
+    }
   });
   const to = devices(await refreshDirectory(ctx, s));
   const body = {
@@ -614,6 +621,8 @@ export async function poll(
             const a = checkAnswer(raw, s, dir, st.asked);
             const device = signers.get(raw);
             st.answers[a.decisionId] ??= { answer: a, seen: false, ...(device ? { device } : {}) };
+            const asked = st.asked[a.decisionId];
+            if (asked) forget(asked);
           } catch (e) {
             ctx.err(`starbridge: ignored an answer: ${(e as Error).message}`);
           }
@@ -623,7 +632,127 @@ export async function poll(
         st.cursor = page.cursor;
     });
   }
+  // A device that joined since reads nothing this machine sealed before: re-seal it.
+  await reseal(ctx, s, directory).catch((e) =>
+    ctx.err(`starbridge: could not re-send open questions: ${(e as Error).message}`),
+  );
   return { cursor: page.cursor ?? opts.cursor, directory, ...quotaAsked };
+}
+
+/** Drops a closed decision's body, so its plaintext does not stay on disk. */
+function forget(a: State["asked"][string]) {
+  delete a.body;
+  delete a.images;
+}
+
+/** The server drops an unanswered decision after 30 days; one re-sealed later would come back. */
+const RESEAL_MS = 29 * 24 * 3600_000;
+
+/**
+ * Re-seals this machine's open decisions, with their waiting state, and permission prompts to
+ * the active devices of the verified directory when one of those was not among their
+ * recipients. They keep their ids, so a device that had them sees no second copy, and the server
+ * pushes only the new devices. Revoked devices get nothing, and nothing is re-sealed while the
+ * server may be withholding directory entries.
+ */
+async function reseal(ctx: Ctx, s: Session, known: Directory): Promise<void> {
+  const st = ctx.store.state();
+  const now = ctx.now().getTime();
+  // A decision's recipients are those of its body as last posted; `to`, whose answers count, may
+  // hold more: a post whose reply was lost could have reached the server.
+  const decisions = Object.entries(st.asked).flatMap(([id, a]) =>
+    a.body && a.to && !a.settled && !st.answers[id] && now - Date.parse(a.askedAt) < RESEAL_MS
+      ? [{ id, a, body: a.body }]
+      : [],
+  );
+  const prompts = Object.values(st.permissions ?? {}).filter(
+    (p) => !p.settled && !p.answer && Date.parse(p.permission.expiresAt) > now,
+  );
+  const lacking = (to: string[], dir: Directory) =>
+    activeMembers(dir, "device").some((d) => !to.includes(d.id));
+  const all = [
+    ...decisions.map((d) => d.body.to),
+    ...prompts.map((p) => p.sealedTo ?? p.permission.to),
+  ];
+  if (st.behind || !all.some((to) => lacking(to, known))) return;
+  const dir = await refreshDirectory(ctx, s, ctx.signal);
+  const to = activeMembers(dir, "device");
+  const ids = to.map((d) => d.id);
+  const signer = { id: s.machine.id, signKey: s.keys.sign.privateKey };
+  /**
+   * Posts a re-sealed item: "posted", "closed" when the server holds it answered or no longer
+   * holds it, or undefined after an error, which the next poll tries again.
+   */
+  const post = async (item: () => SealedItem) => {
+    let sealed: SealedItem | undefined;
+    try {
+      sealed = item();
+      await s.api.postItem(sealed);
+      return "posted";
+    } catch (e) {
+      if (e instanceof ApiError && ["already-answered", "not-found"].includes(e.code))
+        return "closed";
+      ctx.err(`starbridge: could not re-send ${sealed?.id ?? ""}: ${(e as Error).message}`);
+    }
+  };
+  for (const { id, a, body } of decisions) {
+    if (!lacking(body.to, dir)) continue;
+    ctx.store.updateState((st) => {
+      const x = st.asked[id];
+      if (x) x.to = [...new Set([...(x.to ?? []), ...ids])];
+    });
+    const pictures = (a.images ?? []).flatMap((i) => {
+      try {
+        return [typeof i === "string" ? loadPicture(i) : loadPicture(i.path, i.alt)];
+      } catch {
+        return []; // Moved or deleted since: the re-sealed copy goes without it.
+      }
+    });
+    const posted = await post(() => ({
+      ...sealWithPictures({ ...body, to: ids }, pictures, signer, to).item,
+      reseal: true,
+    }));
+    if (posted === "closed")
+      ctx.store.updateState((st) => {
+        const x = st.asked[id];
+        if (x) forget(x);
+      });
+    if (posted !== "posted") continue;
+    // Done once its waiting state went too; else the next poll re-sends both.
+    if (a.waiting?.state === "waiting") {
+      const w = {
+        v: 1 as const,
+        id: a.waiting.id,
+        decisionId: id,
+        to: ids,
+        at: iso(ctx.now()),
+        state: a.waiting.state,
+      } satisfies Waiting;
+      if (!(await post(() => ({ ...seal("waiting", w, signer, to), quiet: true })))) continue;
+    }
+    ctx.store.updateState((st) => {
+      const x = st.asked[id];
+      if (x?.body) x.body.to = ids;
+    });
+  }
+  for (const p of prompts) {
+    if (!lacking(p.sealedTo ?? p.permission.to, dir)) continue;
+    const permission = { ...p.permission, to: ids };
+    // As for decisions: answers count from the new devices before the post.
+    ctx.store.updateState((st) => {
+      const x = st.permissions?.[permission.id];
+      if (x) x.permission.to = [...new Set([...x.permission.to, ...ids])];
+    });
+    if (
+      (await post(() => ({ ...seal("permission", permission, signer, to), reseal: true }))) !==
+      "posted"
+    )
+      continue;
+    ctx.store.updateState((st) => {
+      const x = st.permissions?.[permission.id];
+      if (x) x.sealedTo = ids;
+    });
+  }
 }
 
 /**
