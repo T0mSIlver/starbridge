@@ -28,6 +28,12 @@
   background: var(--bg);
 }
 
+.home {
+  display: grid;
+  flex: none;
+  border-radius: var(--radius-dense);
+}
+
 .icon {
   display: grid;
   place-items: center;

@@ -32,6 +32,7 @@
   /* The name stands on the mark's ground: its baseline on the mark's bottom edge (DESIGN.md). */
   align-items: baseline;
   gap: var(--s2);
+  text-decoration: none;
 }
 
 .nav {

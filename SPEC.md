@@ -1780,6 +1780,10 @@ so the mod is the first path.
   "owner/repo#123" instead of its host and path, and its chip leads with the GitHub mark, on the
   web and Android; "Answer in" uses the same label. Every other link is unchanged. Android's
   untitled chips now start with "Open" too, as the web's and the #171 entry above do.
+- 2026-10-06. The lockup links home (#439, owner). In the signed-in web app the Starbridge mark
+  and name (the rail's top, the phone top bar's mark) link to the Inbox, named "Starbridge,
+  Inbox" for screen readers; on the public pages (landing, docs, privacy, terms) and first run
+  the lockup links to `/`. Nothing changes at rest but the pointer and the focus ring.
 - 2026-10-06. Pull to refresh belongs to the screen that was pulled (owner): the store counts
   every sync the owner asked for, so a pull on Quotas showed the indicator on the Inbox too. Each
   screen now shows it only for its own pull, until that sync ends. The theme option "Match
