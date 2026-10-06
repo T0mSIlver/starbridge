@@ -85,8 +85,6 @@ test("answers --all prints every answer as JSON lines and leaves each to its ses
   ).toBe(0);
   const id = ctx.lines[0] as string;
   await server.answer(id, { choice: "Merge" });
-  // The session's own path fetches it; --all only reads it.
-  expect(await run(["answers", "--session", "s1", "--wait", "1"], ctx)).toBe(0);
   ctx.lines.length = 0;
   expect(await run(["answers", "--all"], ctx)).toBe(0);
   expect(ctx.lines.map((l) => JSON.parse(l))).toEqual([

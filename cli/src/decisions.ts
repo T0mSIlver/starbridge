@@ -1176,13 +1176,20 @@ export async function answersAll(
       ctx.out(JSON.stringify(a));
     }
   };
-  await dropRevokedNow(ctx);
-  if (ctx.signal?.aborted) return EXIT_INTERRUPTED;
-  flush();
-  if (!opts.follow) return 0;
   const s = session(ctx);
   let cursor = ctx.store.state().cursor;
   let directory: Directory | undefined;
+  // Nothing else may have fetched the server's answers yet: one poll that returns at once.
+  try {
+    ({ cursor, directory } = await poll(ctx, s, { cursor, seconds: 0, shared: false }));
+  } catch (e) {
+    if (e instanceof UsageError || e instanceof ProtocolError) throw e;
+    if (!ctx.signal?.aborted)
+      ctx.err(`starbridge: ${(e as Error).message}; printing what this machine has`);
+  }
+  if (ctx.signal?.aborted) return EXIT_INTERRUPTED;
+  flush();
+  if (!opts.follow) return 0;
   while (!ctx.signal?.aborted) {
     try {
       ({ cursor, directory } = await poll(ctx, s, {
