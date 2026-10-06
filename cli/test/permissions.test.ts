@@ -406,7 +406,7 @@ const build = (tool: string, input: unknown, suggestions: unknown[] = []) =>
   ).permission;
 
 test("an opencode edit reaches the devices as its path and its diff (#489)", () => {
-  const diff = "--- a/package.json\n+++ b/package.json\n@@ -1 +1 @@\n-{}\n+{\"x\":1}\n";
+  const diff = '--- a/package.json\n+++ b/package.json\n@@ -1 +1 @@\n-{}\n+{"x":1}\n';
   const permission = build("edit", { file_path: "/w/package.json", diff });
   expect(permission.summary).toBe("/w/package.json");
   expect(JSON.parse(permission.input)).toEqual({ file_path: "/w/package.json", diff });
