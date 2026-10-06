@@ -479,6 +479,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const d = await load();
       try {
         const z = await d.snooze(ctx, item, until);
+        // The server pushes the other devices; this browser closes its own notification.
+        if (Date.parse(z.until) > Date.now()) {
+          const reg = await navigator.serviceWorker?.getRegistration("/").catch(() => undefined);
+          const tag = `d:${item.decision.id}`;
+          for (const n of (await reg?.getNotifications({ tag }).catch(() => [])) ?? []) n.close();
+        }
         // As an answer: a read in flight must not land without it.
         inboxRead.current()();
         setInbox((all) => ({

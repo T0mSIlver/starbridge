@@ -50,6 +50,7 @@ import dev.starbridge.app.ui.inbox.DecisionSheet
 import dev.starbridge.app.data.Colours
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performTextInput
@@ -108,6 +109,19 @@ class ScreenshotTest(private val dark: Boolean) {
         Thread.sleep(300)
         compose.waitForIdle()
         compose.onRoot().captureRoboImage("screenshots/$name-${if (dark) "dark" else "light"}.png")
+    }
+
+    /** The whole screen, popups and dialogs included, which [capture]'s root leaves out. */
+    @OptIn(com.github.takahirom.roborazzi.ExperimentalRoborazziApi::class)
+    private fun captureScreen(name: String, before: () -> Unit = {}, content: @Composable () -> Unit) {
+        compose.setContent {
+            StarbridgeTheme(darkTheme = dark) {
+                Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) { content() }
+            }
+        }
+        before()
+        compose.waitForIdle()
+        com.github.takahirom.roborazzi.captureScreenRoboImage("screenshots/$name-${if (dark) "dark" else "light"}.png")
     }
 
     private val promptActions = PromptActions({ _, _, _, _ -> })
@@ -188,6 +202,32 @@ class ScreenshotTest(private val dark: Boolean) {
     // A question answered on its own page: the link and Done on its card (#539).
     @Test fun inboxAnswerIn() = capture("inbox-answer-in") {
         Phone(Tab.Inbox, 2) { InboxScreen(listOf(fake.answerIn, fake.answerIn.copy(id = "d6w", waiting = true, waitingSince = now.minusSeconds(95))), now, decisionActions) }
+    }
+
+    // Snoozing (#571): the Snoozed group open at the end of the inbox, the sheet's Snooze and its
+    // times, a snoozed question's sheet, and the day and time pickers.
+    @Test fun inboxSnoozed() = capture("inbox-snoozed", before = { compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasText("Snoozed")) }) {
+        Phone(Tab.Inbox, 4) { InboxScreen(fake.decisions + fake.snoozed, now, decisionActions, prompts = fake.prompts, promptActions = promptActions, runs = fake.runs, view = InboxView(snoozedOpen = true)) }
+    }
+
+    @Test fun inboxSnoozedClosed() = capture("inbox-snoozed-closed", before = { compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasText("Snoozed")) }) {
+        Phone(Tab.Inbox, 4) { InboxScreen(fake.decisions + fake.snoozed, now, decisionActions, prompts = fake.prompts, promptActions = promptActions, runs = fake.runs) }
+    }
+
+    @Test fun sheetSnoozeMenu() = capture("sheet-snooze-menu", before = { compose.onNodeWithText("Pick a time").performScrollTo() }) {
+        Sheet({ QuotasScreen(fake.windows, now) }) { DecisionSheet(fake.decisions.first { it.id == "d1" }, now, { _, _, _ -> }, Replies(rememberDrafts(), emptyMap()), onSnooze = {}, snoozeOpen = true) }
+    }
+
+    @Test fun sheetSnoozed() = capture("sheet-snoozed") {
+        Sheet({ QuotasScreen(fake.windows, now) }) { DecisionSheet(fake.snoozed[1], now, { _, _, _ -> }, Replies(rememberDrafts(), emptyMap()), onSnooze = {}) }
+    }
+
+    @Test fun sheetSnoozePickDay() = captureScreen("sheet-snooze-pick-day", before = { compose.onNodeWithText("Pick a time").performScrollTo().performClick() }) {
+        Sheet({ QuotasScreen(fake.windows, now) }) { DecisionSheet(fake.decisions.first { it.id == "d1" }, now, { _, _, _ -> }, Replies(rememberDrafts(), emptyMap()), onSnooze = {}, snoozeOpen = true) }
+    }
+
+    @Test fun sheetSnoozePickTime() = captureScreen("sheet-snooze-pick-time", before = { compose.onNodeWithText("Pick a time").performScrollTo().performClick(); compose.waitForIdle(); compose.onNodeWithText("Next").performClick() }) {
+        Sheet({ QuotasScreen(fake.windows, now) }) { DecisionSheet(fake.decisions.first { it.id == "d1" }, now, { _, _, _ -> }, Replies(rememberDrafts(), emptyMap()), onSnooze = {}, snoozeOpen = true) }
     }
 
     @Test fun sheetFreeText() = capture("sheet-free-text") { QuestionSheet(fake.freeText) }

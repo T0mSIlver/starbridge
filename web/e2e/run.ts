@@ -1498,8 +1498,10 @@ async function main() {
   await pageB.reload();
   await pageB.getByRole("button", { name: /^Snoozed\s*1/ }).waitFor({ timeout: 30_000 });
   if (await probe(pageB).count()) throw new Error("the snoozed question is still listed open");
-  for (let i = 0; i < 50 && (await probes(pageB)).length > 0; i++) await pageB.waitForTimeout(200);
-  if ((await probes(pageB)).length > 0) throw new Error("the snooze left its notification up");
+  for (const p of [page, pageB]) {
+    for (let i = 0; i < 50 && (await probes(p)).length > 0; i++) await p.waitForTimeout(200);
+    if ((await probes(p)).length > 0) throw new Error("the snooze left its notification up");
+  }
   await shoot(pageB, "inbox-snoozed");
   // The agent hears of it when it would block.
   const snoozeWait = cli(
