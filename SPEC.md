@@ -1344,8 +1344,9 @@ so the mod is the first path.
   call retried on its own every 250 ms to 4 s, so an offline page sent about two requests a
   second, and every open tab did the same to a server coming back up. Now every call in a page
   shares one backoff: 250 ms doubling to 30 s, with jitter between 50 and 100% of the step, ended
-  by any answer and by the browser's online event. A read started during a wait fails at once
-  without a request; a write always tries once, since the owner just asked for it. A call that
+  by any answer and by the browser's online event. Pollers skip their turn during a wait, while
+  every other call's first try goes out, since an answer, a push or a sign-in may be the one that
+  finds the server back; only retries wait. A call that
   gets no answer throws "You're offline." or "Can't reach the Starbridge server." instead of
   the browser's "Failed to fetch". An offline banner waits for the owner's ruling on the mockup.
 - 2026-10-06. Security headers (#312, after #302). Next sets the page's Content-Security-Policy

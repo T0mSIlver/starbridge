@@ -2,6 +2,7 @@
 
 import type { Settled } from "@starbridge/protocol";
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { backingOff } from "@/lib/api";
 import type { Boot, Ctx, Inbox, Quotas, Runs } from "@/lib/device";
 import {
   DEFAULT_SETTINGS,
@@ -16,6 +17,8 @@ import type { Device, InboxItem, PromptItem, PromptReply, Reply } from "@/lib/ty
 
 // The protocol code and libsodium load here, after the first paint.
 const load = () => import("@/lib/device");
+/** Pollers read while the page is visible, and skip their turn while the server is away (#332). */
+const polling = () => document.visibilityState === "visible" && !backingOff();
 
 export type Store = {
   boot: Boot | { state: "loading" } | { state: "error"; error: string };
@@ -184,6 +187,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const started = Date.now();
     let soon: ReturnType<typeof setTimeout> | undefined;
     const tick = () => {
+      if (backingOff()) return;
       if (document.visibilityState === "visible" || settingsRef.current.notify.length > 0)
         fetchQuotas()
           .then((next) => {
@@ -212,7 +216,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!ctx) return;
     const tick = () => {
-      if (document.visibilityState === "visible") refreshRuns().catch(() => {});
+      if (polling()) refreshRuns().catch(() => {});
     };
     tick();
     const timer = setInterval(tick, runLive ? LIVE_RUNS_POLL_MS : RUNS_POLL_MS);
@@ -227,7 +231,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!ctx) return;
     const tick = () => {
-      if (document.visibilityState !== "visible") return;
+      if (!polling()) return;
       refreshInbox().catch(() => {});
       refreshPrompts().catch(() => {});
     };
@@ -261,7 +265,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!ctx || !busy) return;
     const timer = setInterval(() => {
-      if (document.visibilityState === "visible") refreshPrompts().catch(() => {});
+      if (polling()) refreshPrompts().catch(() => {});
     }, PROMPT_POLL_MS);
     return () => clearInterval(timer);
   }, [ctx, busy, refreshPrompts]);

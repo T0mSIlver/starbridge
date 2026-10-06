@@ -49,15 +49,18 @@ const offline = () => typeof navigator !== "undefined" && navigator.onLine === f
 
 /**
  * One backoff for every call in this page (or the service worker) while the server does not
- * answer, so its pollers wait together instead of each retrying twice a second (#332). The wait
- * doubles from 250 ms to 30 s, with jitter so open tabs spread out, and ends on any answer and on
- * the browser's online event. A deploy restarts the server in a few seconds (#150), so a call
- * meanwhile retries quietly for `retryForMs` before the caller hears of it (#250); a read that
- * starts during a wait fails at once without a request, while a write, which the owner just asked
- * for, always tries once.
+ * answer, so they wait together instead of each retrying twice a second (#332). The wait doubles
+ * from 250 ms to 30 s, with jitter so open tabs spread out, and ends on any answer and on the
+ * browser's online event. A deploy restarts the server in a few seconds (#150), so a call retries
+ * quietly on this backoff for `retryForMs` before the caller hears of it (#250). Each call's first
+ * try always goes out, since an answer, a push or a sign-in may be the one that finds the server
+ * back; pollers skip their turn while `backingOff()` instead.
  */
 export const backoff = { failures: 0, until: 0, retryForMs: 20_000 };
 const wakers = new Set<() => void>();
+
+/** Whether calls are waiting for the server: a poller skips its turn meanwhile. */
+export const backingOff = () => Date.now() < backoff.until;
 
 function answered() {
   backoff.failures = 0;
@@ -105,10 +108,9 @@ async function call<T>(
   const started = Date.now();
   let res: Response;
   for (let first = true; ; first = false) {
-    const wait = backoff.until - Date.now();
-    if (wait > 0 && !(first && method !== "GET")) {
-      if (first || Date.now() - started + wait > backoff.retryForMs)
-        throw new Unreachable(offline());
+    if (!first) {
+      const wait = Math.max(0, backoff.until - Date.now());
+      if (Date.now() - started + wait > backoff.retryForMs) throw new Unreachable(offline());
       await pause(wait, opts.signal);
     }
     try {
