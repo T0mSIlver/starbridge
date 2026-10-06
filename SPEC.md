@@ -1461,6 +1461,19 @@ so the mod is the first path.
   it carries Codex's skill, so the versions match, and the agent rewrites outdated files when it
   starts. opencode's own `question` tool (on in the TUI, off in `opencode run`) is not
   intercepted, as in Pi; the skill already tells agents to avoid tools that ask the user.
+- 2026-10-06. opencode integration audit (#298), reproduced with opencode 1.18.31 on
+  glm-5.3-flash in a throwaway HOME. A session's loop started only at its first command, so after
+  opencode restarted, a session waiting for its answer never got it (#398). The plugin now starts
+  a loop, when it loads, for each session of its project (`projectID`, not a subagent's) with a
+  question open or an answer undelivered in the CLI's state. Two opencode processes can show one
+  session (`opencode -c` in a second terminal), and each submitted every answer (#399). The
+  plugin now claims an answer before submitting it, with a file in
+  `<config>/opencode-claims` created exclusively and kept 7 days; whoever loses the claim skips
+  it. A permission card outlived the agent that asked: a closed terminal killed the hook before it
+  settled the card, and `kill -9` left it orphaned; either way a later Allow was accepted and
+  nothing ran (#400). The agent now settles a prompt at the keyboard when its hook hangs up
+  mid-hold and holds no more within 5 s, and the hook stops once its parent process is gone. This
+  covers every harness's hook.
 
 ## Encryption, with existing libraries
 

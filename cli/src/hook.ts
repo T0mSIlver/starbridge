@@ -46,12 +46,37 @@ function agentName(text: string | undefined): Permission["agent"] {
   throw new UsageError(`--agent: claude-code, pi or opencode (got ${text ?? "nothing"})`);
 }
 
+/** How often the hook checks that the agent that ran it is still there. */
+const PARENT_CHECK_MS = 2_000;
+
+/**
+ * `signal`, also aborted once the hook's parent is gone: an agent killed outright leaves it
+ * orphaned, holding a prompt whose answer nobody would apply.
+ */
+export function untilOrphaned(
+  signal: AbortSignal | undefined,
+  ppid: () => number = () => process.ppid,
+): { signal: AbortSignal; stop: () => void } {
+  const parent = ppid();
+  const orphaned = new AbortController();
+  const timer = setInterval(() => {
+    if (ppid() !== parent) orphaned.abort();
+  }, PARENT_CHECK_MS);
+  timer.unref();
+  return {
+    signal: signal ? AbortSignal.any([signal, orphaned.signal]) : orphaned.signal,
+    stop: () => clearInterval(timer),
+  };
+}
+
 /** `starbridge hook permission --agent claude-code [--wait 570s]`, hook JSON on stdin. */
 export async function hookPermission(
-  ctx: Ctx,
+  outer: Ctx,
   stdin: string,
   opts: { agent?: string; wait?: string },
 ): Promise<number> {
+  const watch = untilOrphaned(outer.signal);
+  const ctx = { ...outer, signal: watch.signal };
   try {
     if (!permissionsEnabled(ctx)) return 0;
     const agent = agentName(opts.agent);
@@ -67,6 +92,8 @@ export async function hookPermission(
     if (output !== undefined) ctx.out(JSON.stringify(output));
   } catch (e) {
     ctx.err(`starbridge: permission prompt not sent: ${(e as Error).message}`);
+  } finally {
+    watch.stop();
   }
   return 0;
 }

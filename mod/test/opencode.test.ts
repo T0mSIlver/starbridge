@@ -1,5 +1,8 @@
 import { expect, test } from "bun:test";
-import { isRun } from "../opencode/starbridge.ts";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { claim, isRun, waitingSessions } from "../opencode/starbridge.ts";
 
 test("only `opencode run` counts as run, whatever flags come first", () => {
   const exe = ["/usr/bin/opencode", "/$bunfs/root/src/index.js"];
@@ -8,4 +11,31 @@ test("only `opencode run` counts as run, whatever flags come first", () => {
   // The TUI's plugins run in a worker that sees no command.
   expect(isRun(["/usr/bin/opencode", "/$bunfs/root/src/cli/tui/worker.js"])).toBe(false);
   expect(isRun([...exe, "serve", "--port", "4096"])).toBe(false);
+});
+
+test("after a restart, the sessions with an open question or an undelivered answer get a loop", () => {
+  const asked = (session: string, more = {}) => ({ session, question: "q", ...more });
+  const state = {
+    asked: {
+      d_open: asked("ses_a"),
+      d_unseen: asked("ses_b"),
+      d_seen: asked("ses_c"),
+      d_settled: asked("ses_d", { settled: true }),
+      d_artifact: asked("ses_e", { answerIn: "https://claude.ai/code/artifact/x" }),
+      d_none: { question: "q" },
+    },
+    answers: { d_unseen: { seen: false }, d_seen: { seen: true } },
+  };
+  expect(waitingSessions(state).sort()).toEqual(["ses_a", "ses_b"]);
+  expect(waitingSessions({})).toEqual([]);
+});
+
+test("of two processes showing a session, only the first to claim an answer submits it", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "sb-claims-"));
+  const line = "Answer to d_1 (Merge?): Yes";
+  const both = await Promise.all([claim(dir, "ses_a", line), claim(dir, "ses_a", line)]);
+  expect(both.sort()).toEqual([false, true]);
+  expect(await claim(dir, "ses_b", line)).toBe(true);
+  expect(await claim(dir, "ses_a", "Answer to d_2 (Push?): No")).toBe(true);
+  rmSync(dir, { recursive: true, force: true });
 });
