@@ -74,15 +74,15 @@
   },
   "approval": {
     "message": {
-      "body": "{\"v\":1,\"rendezvous\":\"008J4CT4\",\"account\":\"acct_tom\",\"length\":3,\"head\":\"MzdNtWB_p8ApTKowCNVtDIJ-bgpLzG-SG3ZIbl6O02o\",\"approver\":\"phone\"}",
-      "mac": "zNkfc5uxWY2t5h6cgHaJjH0MmzqBil37gCc1L_6j1do"
+      "body": "{\"v\":1,\"rendezvous\":\"008J4CT4\",\"account\":\"acct_tom\",\"length\":3,\"head\":\"7OyCVHlHQpUdwWliiRO8ZMV5EGZgh3IK4cMh0WqaWBA\",\"approver\":\"phone\"}",
+      "mac": "AovfTQ5OU88XzmMRB7v9YL8ceRdmUkKGqc0W-ilxncM"
     },
     "body": {
       "v": 1,
       "rendezvous": "008J4CT4",
       "account": "acct_tom",
       "length": 3,
-      "head": "MzdNtWB_p8ApTKowCNVtDIJ-bgpLzG-SG3ZIbl6O02o",
+      "head": "7OyCVHlHQpUdwWliiRO8ZMV5EGZgh3IK4cMh0WqaWBA",
       "approver": "phone"
     }
   },
@@ -111,8 +111,8 @@
       "name": "approval for the server's own directory",
       "kind": "approval",
       "message": {
-        "body": "{\"v\":1,\"rendezvous\":\"008J4CT4\",\"account\":\"acct_tom\",\"length\":3,\"head\":\"fKkaTH-zl4d6_AUxOqN6W03-hmwI0oZZsFxgmyy7hvQ\",\"approver\":\"phone\"}",
-        "mac": "zNkfc5uxWY2t5h6cgHaJjH0MmzqBil37gCc1L_6j1do"
+        "body": "{\"v\":1,\"rendezvous\":\"008J4CT4\",\"account\":\"acct_tom\",\"length\":3,\"head\":\"shZVxPsBapSgnZafeWSGI5A0i_OfdDOtt8uoafwxTgo\",\"approver\":\"phone\"}",
+        "mac": "AovfTQ5OU88XzmMRB7v9YL8ceRdmUkKGqc0W-ilxncM"
       },
       "code": "008J-4CT4-ANK7-F24S-NAXW-SQFE",
       "expect": "bad-mac"

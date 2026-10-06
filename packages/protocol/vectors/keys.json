@@ -69,14 +69,8 @@
     }
   ],
   "recovery": {
-    "seed": "BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc",
-    "words": "alpha deal scrub asthma idea logic bright thought alpha deal scrub asthma idea logic bright thought alpha deal scrub asthma idea logic bright truly",
-    "signPk": "6kpsY-KcUgq-9VB7Ey7F-ZVHdq6-vnuSQh7qaRRG0iw"
-  },
-  "recovery12": {
-    "note": "A 16-byte seed, as 12 words and as a recovery key (the seed and 12 bits of BLAKE2b-256 of \"starbridge/v1/recovery-check\", NUL, the seed, in Crockford base32): the signing seed is BLAKE2b-256 of \"starbridge/v1/recovery-seed\", NUL, the seed.",
+    "note": "A 16-byte seed as a recovery key (the seed and 12 bits of BLAKE2b-256 of \"starbridge/v1/recovery-check\", NUL, the seed, in Crockford base32): the signing seed is BLAKE2b-256 of \"starbridge/v1/recovery-seed\", NUL, the seed.",
     "seed": "CQkJCQkJCQkJCQkJCQkJCQ",
-    "words": "animal embark drastic bamboo mountain loyal category cancel animal embark drastic bamboo",
     "key": "144G-J289-144G-J289-144G-J289-153S",
     "signPk": "JznWHYgiTwfyW3QHRuQQMAeZO0KtraqUwaucN6lQ0Yw"
   }

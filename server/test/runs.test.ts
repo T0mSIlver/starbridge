@@ -74,7 +74,6 @@ test("only the machine that posted a run updates it, and no other kind takes its
     question: "Ship it?",
     context: "",
     options: [],
-    default: { action: "ship" },
     source: { machine: devbox.id, project: "starbridge", session: "s1" },
   };
   const reused = await s.call("POST", "/v1/items", {

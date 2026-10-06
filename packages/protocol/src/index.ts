@@ -1,3 +1,4 @@
+export * from "./client";
 export * from "./directory";
 export * from "./envelope";
 export * from "./heads";

@@ -1541,6 +1541,16 @@ so the mod is the first path.
 - 2026-10-06. Workflows pin every action by commit SHA, with its version in a comment (#361). A
   moved tag could otherwise run code in the release job before it writes the minisign key.
   Dependabot proposes the updates in one grouped PR a month.
+- 2026-10-06. A workflow writes `pnpm-lock.yaml` into Dependabot's npm PRs, then starts CI by
+  `workflow_dispatch` (#426). Dependabot updates a pnpm workspace only from its root, as the
+  monthly update does, but a security update runs in the folder of the manifest its alert names
+  (`/web` for next's GHSA-vcvr-r3jv-pc5j), logs "missing lockfile" and changes `package.json`
+  alone. No `dependabot.yml` option moves it: `exclude-paths` skips security updates
+  (dependabot-core#14408). A push with `GITHUB_TOKEN` starts no workflow, a dispatch does, so
+  the fix needs no new credential. A PR lists only checks from runs its own events started, so
+  the dispatched run reports through the commit status `CI`. It checks the branch, not its
+  merge with main. The commit says `[dependabot skip]`, so Dependabot still rebases the PR
+  over it.
 - 2026-10-06. Both screens confirm a join by digits (#355, from the #366 audit). Only the
   approver's owner compared the digits; the joining device acted on the first approval it got.
   A server in the middle that sends the joiner its own approver key derives the same MAC key and
@@ -1866,12 +1876,34 @@ so the mod is the first path.
   permission, your phone tells you. Answer with one tap and it gets back to work." It sells the
   pain the owner named: you don't notice that an agent is blocked. The shots below it still show
   the web app beside the phone, so the page keeps saying both clients do the same.
+- 2026-10-06. 1.0.0 is the compatibility floor (#469, Tom: "reset and delete"). Protocol side:
+  decisions carry no `default`, a recovery is a `recover` entry only (an `add` signed by the
+  recovery key is refused, with a vector for it), and a recovery key is the 28-character key only:
+  the BIP-39 word readers and 32-byte recovery seeds are gone, with `@scure/bip39`. The hosted
+  database is reset at launch, so no account holds words. From 1.0.0 on, a compatibility branch
+  names the minimum client release that lets it go (`// until min cli >= 1.2`).
+- 2026-10-06. Crypto agility is by protocol version only (#478): an algorithm changes with `v: 2`,
+  `starbridge/v2/...` and `/v2` routes, and members re-pair; keys change only by revoke and add;
+  the recovery key's length is its format version. The permission input hash's key is now derived
+  under `starbridge/v1/input-hash`, the one string that lacked the prefix (was `starbridge input
+  hash`); no machine needs the old one after the reset.
+- 2026-10-06. Clients name themselves in `starbridge-client: <name>/<version>` (#468), `name` one
+  of `cli`, `android`, `web`, `mod`. Every client sends its release as MAJOR.MINOR.PATCH, the web
+  too (its package version, stamped at release) rather than a git revision, so one comparison
+  serves the minimum-release table. A request without the header is served: curl and scripts
+  keep working, and a minimum only refuses clients that say they are older.
 - 2026-10-06. The release's npm publish step keeps its `env.NODE_AUTH_TOKEN != ''` gate (#480).
   The audit suspected it never skips; it does skip without `NPM_TOKEN`. See the research log.
 - 2026-10-06. The live revision starbridge.run names in `x-starbridge-revision` is refused unless
   it is 40 lowercase hex characters (#467), as `starbridge-deploy` refuses its argument: the deploy
   workflow puts it in a `gh api` path, and `deploy/deploy.sh` now fails instead of comparing or
   printing anything else. An empty header still only warns there, for commits from before it.
+- 2026-10-06. Retention comes from `ITEM_KINDS` (#477). Each kind names its `keep`: a day, a
+  week or a month after it was received, answered or left unanswered, or `withRe` (it goes with
+  the item it refers to) and `fromActive` (it goes when its machine is revoked). The hourly sweep
+  builds its deletes from that table, and a kind without `keep` fails typecheck, so a new kind
+  can no longer be stored and never dropped. The periods stay server limits, so tests and
+  self-hosters set their length.
 
 ## Encryption, with existing libraries
 

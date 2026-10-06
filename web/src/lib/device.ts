@@ -474,17 +474,10 @@ export function readRecoveryEntry(text: string): RecoveryEntry {
   const reading = readRecoveryKey(text, { typing: true });
   const problem = problemText(reading);
   if (problem) return { complete: false, status: "", problem };
-  if (reading.format === "words") {
-    const of = reading.count > 12 ? 24 : 12;
-    return {
-      complete: reading.count === 12 || reading.count === 24,
-      status: `${reading.count} of ${of} words`,
-    };
-  }
   return { complete: reading.count === 28, status: `${reading.count} of 28 characters` };
 }
 
-function problemText({ format, problem }: RecoveryKeyReading): string | undefined {
+function problemText({ problem }: RecoveryKeyReading): string | undefined {
   switch (problem?.kind) {
     case undefined:
       return undefined;
@@ -492,14 +485,8 @@ function problemText({ format, problem }: RecoveryKeyReading): string | undefine
       return `Character ${problem.index + 1}, "${problem.char}", is not in a recovery key.`;
     case "length":
       return `A recovery key has 28 characters; this has ${problem.count}.`;
-    case "unknown-word":
-      return `Word ${problem.index + 1}, "${problem.word}", is not on the word list.`;
-    case "word-count":
-      return `Older accounts recover with 12 or 24 words; this has ${problem.count}.`;
     case "checksum":
-      return format === "key"
-        ? "A character is wrong. Check each group against what you wrote down."
-        : "One word is wrong, or two are swapped. Check each word and the order.";
+      return "A character is wrong. Check each group against what you wrote down.";
   }
 }
 
