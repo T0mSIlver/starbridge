@@ -10,7 +10,7 @@ const nextConfig: NextConfig = {
   allowedDevOrigins: ["127.0.0.1"],
   poweredByHeader: false,
   // Caddy compresses every response (deploy/Caddyfile). Next's own gzip runs on its one thread
-  // and cost it about 37 ms of CPU per new visitor, the landing page's scripts and styles, so a
+  // and cost it about 40 ms of CPU per new visitor, the landing page's scripts and styles, so a
   // launch spike filled that thread near 18 visitors a second (#593).
   compress: false,
   // A self-contained server for the deploy image; tracing starts at the monorepo root.

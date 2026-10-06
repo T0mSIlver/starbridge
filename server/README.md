@@ -41,7 +41,8 @@ them. Its routes are in `PROTOCOL.md`.
    docker compose -f server/compose.yaml up -d --build
    ```
 
-4. Route both through your reverse proxy. With Caddy, which also gets the TLS certificate:
+4. Route both through your reverse proxy. The web app sends its pages and scripts uncompressed,
+   so have the proxy compress them. With Caddy, which also gets the TLS certificate:
 
    ```caddyfile
    starbridge.example {
