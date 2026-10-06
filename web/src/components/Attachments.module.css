@@ -42,16 +42,6 @@
   color: var(--fg);
 }
 
-.thumb {
-  flex: none;
-  align-self: flex-start;
-  width: var(--s10);
-  height: var(--s10);
-  border-radius: var(--radius-sm);
-  object-fit: cover;
-  background: var(--surface2);
-}
-
 .links {
   display: flex;
   flex-wrap: wrap;

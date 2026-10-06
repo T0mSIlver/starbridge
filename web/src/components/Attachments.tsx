@@ -38,14 +38,6 @@ export function Images({ d }: { d: Decision }) {
   );
 }
 
-/** The first image, small, beside a decision in the list. */
-export function Thumb({ d }: { d: Decision }) {
-  const img = d.images?.[0];
-  if (!img) return null;
-  // biome-ignore lint/performance/noImgElement: decrypted data, nothing for next/image to fetch
-  return <img className={s.thumb} src={imageSrc(img)} alt="" width={40} height={40} />;
-}
-
 /**
  * Pages the agent attached for the owner to see before answering, such as a Claude artifact it
  * built (SPEC 2026-10-05, links on questions): labelled as the agent's, each opening a new tab.

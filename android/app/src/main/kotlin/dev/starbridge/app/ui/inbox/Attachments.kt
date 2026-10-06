@@ -34,6 +34,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
@@ -116,7 +117,9 @@ private fun ImageBox(image: Attached, maxHeight: Dp, wide: Boolean, crop: Boolea
                     .align(Alignment.BottomEnd)
                     .padding(Spacing.s2)
                     .size(Spacing.s8)
-                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.72f), CircleShape),
+                    .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.72f), CircleShape)
+                    // The glyph is text; keep it out of the image's label.
+                    .clearAndSetSemantics {},
                 contentAlignment = Alignment.Center,
             ) {
                 Symbol(Sym.Expand, size = Spacing.s5, tint = MaterialTheme.colorScheme.onSurface)

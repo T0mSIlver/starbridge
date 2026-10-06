@@ -1699,8 +1699,8 @@ so the mod is the first path.
   display page). On a touch screen nothing showed that a tap on an image opens the viewer, as the
   zoom cursor needs a mouse. Every image that opens the viewer (Android's cards and sheet, the
   web's detail) now carries an expand badge in its bottom right corner: a `s8` circle of
-  `surface` at 72% with the expand icon in `fg`. The web's 40 px list thumbnail opens the
-  question, not the viewer, so it has none.
+  `surface` at 72% with the expand icon in `fg`. The web list's thumbnails open the question, not
+  the viewer, so they have none.
 
 ## Encryption, with existing libraries
 
