@@ -143,7 +143,8 @@ fun SessionLine(source: Source, agent: String?, modifier: Modifier = Modifier) {
             },
             style = StarbridgeTheme.type.small,
             color = scheme.onSurfaceVariant,
-            maxLines = 1, overflow = TextOverflow.Ellipsis,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
         if (link != null && app != null) {

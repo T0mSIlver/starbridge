@@ -149,11 +149,12 @@ class LayoutAuditTest(private val shot: String, private val look: Look) {
         private val KNOWN = listOf(
             // Controls the design sizes under 48 dp: the sheet's 36 dp handle, 40 dp buttons and
             // toggles, underlined text links.
-            Regex("""^tap target \d+x36 dp: ""$"""),
-            Regex("""^tap target .*: "(More answers|Allow|Deny|Open in Claude|Open in Codex|Sign out|Back|Use the recovery key|Use starbridge\.run|Can't scan\? Compare digits)"$"""),
-            Regex("""^tap target \d+x40 dp: "(Used|Left|Resets.*|Off|7 days|\d)"$"""),
+            Regex("""^tap target \d{3}x36 dp: ""$"""),
+            Regex("""^tap target \d+x40 dp: "(More answers|Allow|Deny|Used|Left|Resets.*|Off|7 days|\d)"$"""),
+            Regex("""^tap target \d+x4[1-4] dp: "Open in (Claude|Codex)"$"""),
+            Regex("""^tap target \d+x(28|35|45) dp: "(Sign out|Back|Use the recovery key|Use starbridge\.run|Can't scan\? Compare digits)"$"""),
             // A page title beside its trailing text: the title gives way at 2x on a small phone.
-            Regex("""^lines cut off: "(Quotas|Settings|Inbox)"$"""),
+            Regex("""^lines cut off: "(Quotas|Settings|Inbox)" \((4\d|[5-9]\d) sp\)$"""),
             // The rail's badge on the Inbox symbol reaches its label at large font sizes.
             Regex("""^text over text: "12" and "Inbox"$"""),
         )
@@ -319,8 +320,10 @@ class LayoutAuditTest(private val shot: String, private val look: Look) {
         shot.before()
         // Images decode off the main thread: let them land.
         compose.waitForIdle()
-        Thread.sleep(300)
-        compose.waitForIdle()
+        if ("image" in this.shot) {
+            Thread.sleep(300)
+            compose.waitForIdle()
+        }
         val problems = check()
         audit?.let { dir ->
             val name = "${this.shot}-$look"
@@ -409,11 +412,12 @@ class LayoutAuditTest(private val shot: String, private val look: Look) {
             if ((c.left > u.left + 1 || c.right < u.right - 1) && !n.inScroll(horizontal = true)) out += "cut at the side: $name (${u.width.toInt()} px wide, ${c.width.toInt()} shown)"
             if ((c.top > u.top + 1 || c.bottom < u.bottom - 1) && !n.inScroll(horizontal = false)) out += "cut at the top or bottom: $name"
             val l = layout(n)
-            if (l == null || (0 until l.lineCount).any { l.isLineEllipsized(it) }) continue
-            // Google Sans Flex draws past its line height by a few pixels: count whole lines only.
+            if (l == null) continue
             val widest = (0 until l.lineCount).maxOfOrNull { l.getLineRight(it) - l.getLineLeft(it) } ?: 0f
             if (widest > l.size.width + 2) out += "wider than its box: $name"
-            if (l.multiParagraph.didExceedMaxLines) out += "lines cut off: $name"
+            val ellipsized = (0 until l.lineCount).any { l.isLineEllipsized(it) }
+            // The size tells a page title from a tab label with the same words.
+            if (l.multiParagraph.didExceedMaxLines && !ellipsized) out += "lines cut off: $name (${l.layoutInput.style.fontSize.value.toInt()} sp)"
             else if (l.lineCount > 0) {
                 val last = l.lineCount - 1
                 // A figure pinned to its line height overflows it by a fifth: a quarter cuts the glyphs.
@@ -476,6 +480,7 @@ class LayoutAuditTest(private val shot: String, private val look: Look) {
             val large = sp >= 24 || (sp >= 18.5f && (style?.fontWeight ?: FontWeight.Normal) >= FontWeight.Bold)
             if (r < if (large) 3.0 else 4.5) out += "contrast ${"%.2f".format(r)}: \"${label(n).take(60)}\""
         }
+        screen.recycle()
         return out.distinct()
     }
 

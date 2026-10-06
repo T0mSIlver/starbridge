@@ -136,24 +136,26 @@ private fun AllowDeny(height: Dp, enabled: Boolean, ground: Color, onAllow: () -
     val end = height / 2
     // [height] at the default font size, taller when the labels need it; never padded to 48 dp,
     // as the design sets them under it.
-    CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) { Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-        Button(
-            onClick = onAllow,
-            enabled = enabled,
-            shape = RoundedCornerShape(topStart = end, bottomStart = end, topEnd = 8.dp, bottomEnd = 8.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = colors.accent, contentColor = colors.onAccent, disabledContainerColor = colors.accent, disabledContentColor = colors.onAccent),
-            modifier = Modifier.weight(1f).heightIn(min = height),
-        ) { Text("Allow", style = if (height > 48.dp) StarbridgeTheme.type.action else StarbridgeTheme.type.label) }
-        val last = trailing == null
-        Button(
-            onClick = onDeny,
-            enabled = enabled,
-            shape = RoundedCornerShape(topStart = 8.dp, bottomStart = 8.dp, topEnd = if (last) end else 8.dp, bottomEnd = if (last) end else 8.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = ground, contentColor = MaterialTheme.colorScheme.onSurface),
-            modifier = Modifier.weight(1f).heightIn(min = height),
-        ) { Text("Deny", style = if (height > 48.dp) StarbridgeTheme.type.action else StarbridgeTheme.type.label) }
-        trailing?.invoke()
-    } }
+    CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
+        Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+            Button(
+                onClick = onAllow,
+                enabled = enabled,
+                shape = RoundedCornerShape(topStart = end, bottomStart = end, topEnd = 8.dp, bottomEnd = 8.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = colors.accent, contentColor = colors.onAccent, disabledContainerColor = colors.accent, disabledContentColor = colors.onAccent),
+                modifier = Modifier.weight(1f).heightIn(min = height),
+            ) { Text("Allow", style = if (height > 48.dp) StarbridgeTheme.type.action else StarbridgeTheme.type.label) }
+            val last = trailing == null
+            Button(
+                onClick = onDeny,
+                enabled = enabled,
+                shape = RoundedCornerShape(topStart = 8.dp, bottomStart = 8.dp, topEnd = if (last) end else 8.dp, bottomEnd = if (last) end else 8.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = ground, contentColor = MaterialTheme.colorScheme.onSurface),
+                modifier = Modifier.weight(1f).heightIn(min = height),
+            ) { Text("Deny", style = if (height > 48.dp) StarbridgeTheme.type.action else StarbridgeTheme.type.label) }
+            trailing?.invoke()
+        }
+    }
 }
 
 /**

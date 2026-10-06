@@ -173,7 +173,7 @@ private fun ProviderCard(windows: List<QuotaWindow>, now: Instant, settings: Quo
         Column(Modifier.padding(Spacing.s4)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(first.provider, style = StarbridgeTheme.type.subtitle, color = scheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                first.machine?.let { Text(it, style = StarbridgeTheme.type.meta, color = scheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false)) }
+                first.machine?.let { Text(it, style = StarbridgeTheme.type.meta, color = scheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis) }
             }
             windows.forEachIndexed { i, w ->
                 if (i > 0) HorizontalDivider(color = scheme.outlineVariant, modifier = Modifier.padding(top = Spacing.s4))
@@ -202,7 +202,8 @@ private fun WindowRow(window: QuotaWindow, now: Instant, settings: QuotaSettings
                 window.window,
                 style = type.body,
                 color = scheme.onSurface,
-                maxLines = 1, overflow = TextOverflow.Ellipsis,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f),
             )
             Text(
@@ -222,7 +223,8 @@ private fun WindowRow(window: QuotaWindow, now: Instant, settings: QuotaSettings
                 window.resetsAt?.let { if (ended) "Reset ${ago(now, it)}" else if (settings.absoluteResets) "Resets ${resetClock(it, now, h24)}" else "Resets in ${span(now, it)}" } ?: "Reset time unknown",
                 style = type.meta,
                 color = scheme.onSurfaceVariant,
-                maxLines = 1, overflow = TextOverflow.Ellipsis,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
         }
     }
