@@ -10,8 +10,23 @@ import { type AskInput, ask } from "../decisions";
 import type { InstallKind } from "../release";
 import { removeBinary } from "../update";
 import { findCodexbar } from "./codexbar";
-import { codexSkillDir, hasPi, piPackage, removeCodexSkill, removePiPackage } from "./harnesses";
-import { hasClaude, legacyInstalls, pluginState, removePlugins } from "./plugins";
+import {
+  codexRulePath,
+  codexSkillDir,
+  hasPi,
+  piPackage,
+  removeCodexRule,
+  removeCodexSkill,
+  removePiPackage,
+} from "./harnesses";
+import {
+  hasClaude,
+  legacyInstalls,
+  pluginState,
+  removeAllowRules,
+  removePlugins,
+  settingsPath,
+} from "./plugins";
 import { legacyUnits, removeLegacy, removeService } from "./service";
 import type { Sys } from "./sys";
 
@@ -37,13 +52,15 @@ export async function uninstall(sys: Sys, opts: UninstallOpts): Promise<number> 
       project: "starbridge",
       session: "",
     };
+    // The id and the hint `ask` prints are for agents, not for someone uninstalling.
+    const quiet = { ...ctx, out: () => {}, err: () => {} };
     try {
       await withAgent(
-        ctx,
-        (agent) => askVia(ctx, agent, input, {}),
-        () => ask(ctx, input, {}),
+        quiet,
+        (agent) => askVia(quiet, agent, input, {}),
+        () => ask(quiet, input, {}),
       );
-      ctx.out(`Asked your devices to revoke "${machine.name}" (the id above).`);
+      ctx.out(`Posted "${input.question}" to your devices.`);
     } catch (e) {
       ctx.out(`Could not post the revoke reminder: ${(e as Error).message}`);
     }
@@ -78,6 +95,8 @@ export async function uninstall(sys: Sys, opts: UninstallOpts): Promise<number> 
       ctx.out(
         "`claude plugin list` failed: remove the Starbridge plugins with `claude plugin uninstall`.",
       );
+    if (removeAllowRules(sys))
+      ctx.out(`Removed the starbridge allow rules from ${settingsPath(sys)}.`);
     for (const old of legacyInstalls(sys))
       if (await prompt.confirm(`Also remove ${old.what}?`, true)) {
         old.remove();
@@ -86,6 +105,7 @@ export async function uninstall(sys: Sys, opts: UninstallOpts): Promise<number> 
   }
 
   if (removeCodexSkill(sys)) ctx.out(`Removed ${codexSkillDir(sys)}.`);
+  if (removeCodexRule(sys)) ctx.out(`Removed ${codexRulePath(sys)}.`);
   const piSource = hasPi(sys) ? piPackage(sys) : undefined;
   if (piSource)
     try {

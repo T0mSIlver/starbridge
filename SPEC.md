@@ -1177,6 +1177,30 @@ so the mod is the first path.
   grouping, then "History · N" with the matching answered items, History open or not. A
   History item also matches by its answer. Matched words show bold on `surface2`, never in
   amber; Escape in the box clears it. Android's search waits for the owner's pick.
+- 2026-10-06. Answers on the machine (#260, from the Codex audit). A machine accepts a
+  decision's answer only from a device the decision was sealed to (it keeps each decision's
+  recipients), only while the decision is open, and never for an `answerIn` decision. A settled
+  decision's answer is never delivered, even one accepted before the settle, because the server
+  could hold a signed answer back until the agent moved on. `settle` closes the decision locally
+  before it posts, and `wait` on a settled decision fails at once. Decisions asked before this
+  change have no recipients on record and take no answer; the agent asks again.
+- 2026-10-06. A stalled server never holds a permission prompt (#260, from the Codex audit).
+  The hook's deadline and SIGTERM cut every request it makes, the prompt's post included, on
+  both paths; the agent cuts its post when the hook hangs up or the hook's wait passes. A SIGTERM
+  that lands while the prompt is being posted settles it by its call's input hash, and a post
+  that fails leaves the prompt settled on the machine, so no later answer applies. The Pi link
+  stops the CLI after 600 s and gives a stopped CLI 10 s before it defers and kills it, so "Answer
+  here" always reaches pi-permission-system's dialog.
+- 2026-10-06. Withheld revocations (#260 P1, from the Codex audit). A machine cannot tell a
+  current directory from one the server cut short: the pin only stops rollback past what the
+  machine saw, and any freshness statement the machine could ask for, the revoked device's own
+  key can sign. So the rule is detection on contact: devices sign the directory head they hold
+  into each answer (`dir`), the machine keeps the longest head per device, and it refuses every
+  device answer while a device active in its chain has signed a head that chain lacks. A
+  withheld revocation then holds only until another device answers that machine; after that the
+  server must drop all of the owner's other devices' answers to it. Closing the gap fully needs a
+  channel the server does not carry. Answers without `dir`, from clients before this, are still
+  accepted.
 - 2026-10-06. The web's Reply, as Android's (#254, owner). Reply in the web detail is Material 3's
   filled text field, one line that grows with the text, with its send icon button inside,
   centred on the field's line, as #264 made it on Android. The "Default" label is gone on both
@@ -1238,6 +1262,22 @@ so the mod is the first path.
   its keys. A decision's notification stores the account
   it was shown for, and its actions answer for that account only; one from before carries none
   and opens the page instead of answering.
+
+- 2026-10-06. A new user's first question needs no prompt and no sandbox flag (#245, launch
+  walk). In Claude Code's default mode `starbridge ask` stopped at a permission prompt before
+  the question existed, and in Codex's default sandbox it had no network. Setup now asks to
+  allow `starbridge ask`, `waiting`, `working`, `wait` and `settle`: Claude Code allow rules in
+  `~/.claude/settings.json`, and a Codex execpolicy file, `~/.codex/rules/starbridge.rules`, whose
+  `allow` runs them outside the sandbox. `starbridge run` stays out of both, since the command
+  it wraps is the agent's own. Uninstall removes both.
+- 2026-10-06. A `codex exec` session gets its answer through `wait` (#245). `codex queue`
+  accepts a message for an exec thread, but nothing runs it once exec returns. The CLI reads the
+  thread's rollout (`$CODEX_HOME/sessions/YYYY/MM/DD`, dated by the UUIDv7 thread id): an
+  `originator` of `codex_exec` or a `source` of `exec` means `ask` says to `wait`.
+- 2026-10-06. `pair --force` stays on the machine's server and name (#245); before, it paired a
+  self-hosted machine with starbridge.run under its hostname. Setup restarts an agent running
+  another version (a brew or npm upgrade), and the agent rewrites an outdated Codex skill when
+  it starts, so `starbridge update` also brings Codex the new skill.
 
 ## Encryption, with existing libraries
 
@@ -1640,3 +1680,11 @@ goes in git.
   setup script that runs the install script and pairs. Whether cloud
   sessions should get a machine at all is open, since the agent can read
   its key.
+- 2026-10-06: a lost reply, as Android's tests can script it (#292).
+  Since #270 the app retries a 502 or 503 quietly, so a 503 no longer
+  stands for a reply the phone never got. OkHttp (5.5, the default
+  `retryOnConnectionFailure`) also sends a POST again when the connection
+  drops before the reply starts, so a server that committed the first one
+  receives it twice. Only a connection that drops once the reply's
+  headers are in reaches the app as a failure, and that is what
+  `RecoveryRetryTest` scripts (MockWebServer's `onResponseBody`).

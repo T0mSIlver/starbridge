@@ -29,14 +29,18 @@ export async function pair(
   ctx: Ctx,
   opts: { server?: string; name?: string; force?: boolean },
 ): Promise<number> {
-  const server = opts.server ?? ctx.env.STARBRIDGE_SERVER ?? DEFAULT_SERVER;
-  if (ctx.store.machine() && !opts.force)
-    throw new UsageError("this machine is already paired; pass --force to pair it again");
+  const previous = ctx.store.machine();
+  if (previous && !opts.force)
+    throw new UsageError(
+      `this machine is already paired as "${previous.name}" on ${previous.server}; \`starbridge pair --force\` pairs it again with new keys`,
+    );
+  // Pairing again stays on the same server, under the same name, unless told otherwise.
+  const server = opts.server ?? ctx.env.STARBRIDGE_SERVER ?? previous?.server ?? DEFAULT_SERVER;
 
   const api = new Api(server);
   const keys = generateMemberKeys();
   const id = `m_${randomBytes(9).toString("base64url")}`;
-  const name = opts.name ?? hostname();
+  const name = opts.name ?? previous?.name ?? hostname();
   const claim = newClaimSecret();
 
   let code = newPairingCode();
@@ -71,9 +75,15 @@ export async function pair(
   const deadline = ctx.now().getTime() + CODE_LIFETIME_MS;
   let result: { approval: unknown; token?: string } | undefined;
   while (!result) {
-    if (ctx.signal?.aborted || ctx.now().getTime() >= deadline)
+    if (ctx.signal?.aborted) return 130;
+    if (ctx.now().getTime() >= deadline)
       throw new UsageError("the pairing code expired; run `starbridge pair` again");
-    result = await api.pairingResult(code.rendezvous, claim, POLL_SECONDS);
+    try {
+      result = await api.pairingResult(code.rendezvous, claim, POLL_SECONDS, ctx.signal);
+    } catch (e) {
+      if (ctx.signal?.aborted) return 130;
+      throw e;
+    }
   }
 
   const approval = openPairingApproval(result.approval, code);
@@ -102,6 +112,8 @@ export async function pair(
     s.answers = {};
   });
   ctx.out(`Paired "${name}" (${id}). Keys are in ${ctx.store.dir}.`);
+  if (previous && dir.members.get(previous.id)?.active)
+    ctx.out(`The old pairing (${previous.id}) stays under Devices until you revoke it there.`);
   rememberMachineKind(ctx);
   return 0;
 }

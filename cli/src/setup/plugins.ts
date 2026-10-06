@@ -2,7 +2,7 @@
  * Setup's Claude Code step: the Starbridge marketplace and its two plugins, at user scope, and
  * the manual installs they replace (a copied mod, a copied skill, the CLAUDE.md rule).
  */
-import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { failure, run, type Sys, which } from "./sys";
 
@@ -98,10 +98,11 @@ export async function removePlugins(sys: Sys, state: PluginState): Promise<strin
 
 type Settings = Record<string, unknown> & {
   env?: Record<string, string>;
+  permissions?: Record<string, unknown> & { allow?: unknown };
   extraKnownMarketplaces?: Record<string, Record<string, unknown>>;
 };
 
-function settingsPath(sys: Sys) {
+export function settingsPath(sys: Sys) {
   return join(claudeDir(sys), "settings.json");
 }
 
@@ -129,6 +130,55 @@ export function enableAutoUpdate(sys: Sys): boolean {
   const entry = s?.extraKnownMarketplaces?.[MARKETPLACE];
   if (!s || !entry) return false;
   entry.autoUpdate = true;
+  writeSettings(sys, s);
+  return true;
+}
+
+/**
+ * The commands that post a question and read its answer. Each would otherwise stop at a
+ * permission prompt before the question reaches the owner. `starbridge run` stays out: the
+ * command it wraps is the agent's own.
+ */
+export const ALLOW_RULES = [
+  "Bash(starbridge ask:*)",
+  "Bash(starbridge waiting:*)",
+  "Bash(starbridge working:*)",
+  "Bash(starbridge wait:*)",
+  "Bash(starbridge settle:*)",
+];
+
+function allowList(s: Settings | undefined): string[] {
+  const allow = s?.permissions?.allow;
+  return Array.isArray(allow) ? allow.filter((r): r is string => typeof r === "string") : [];
+}
+
+/** The rules of ALLOW_RULES missing from user settings. */
+export function missingAllowRules(sys: Sys): string[] {
+  const have = new Set(allowList(readSettings(sys)));
+  return ALLOW_RULES.filter((r) => !have.has(r));
+}
+
+/** False, writing nothing, when settings.json exists but does not parse. */
+export function addAllowRules(sys: Sys): boolean {
+  const read = readSettings(sys);
+  if (!read && existsSync(settingsPath(sys))) return false;
+  const s: Settings = read ?? {};
+  const allow = allowList(s);
+  s.permissions = {
+    ...s.permissions,
+    allow: [...allow, ...ALLOW_RULES.filter((r) => !allow.includes(r))],
+  };
+  mkdirSync(claudeDir(sys), { recursive: true });
+  writeSettings(sys, s);
+  return true;
+}
+
+/** Removes ALLOW_RULES from user settings. False when none was there. */
+export function removeAllowRules(sys: Sys): boolean {
+  const s = readSettings(sys);
+  const allow = allowList(s);
+  if (!s?.permissions || !allow.some((r) => ALLOW_RULES.includes(r))) return false;
+  s.permissions.allow = allow.filter((r) => !ALLOW_RULES.includes(r));
   writeSettings(sys, s);
   return true;
 }

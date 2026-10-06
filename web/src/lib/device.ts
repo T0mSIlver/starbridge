@@ -981,6 +981,8 @@ export async function answer(ctx: Ctx, item: InboxItem, reply: Reply): Promise<s
       to: machine.member.id,
       answeredAt,
       ...reply,
+      // Lets the machine notice a server holding back entries, such as a revocation.
+      dir: { length: fresh.dir.length, head: fresh.dir.head },
     },
     me(fresh),
     [machine.member],
@@ -1120,6 +1122,8 @@ export async function answerPermission(
       answeredAt,
       inputHash: item.permission.inputHash,
       ...reply,
+      // Lets the machine notice a server holding back entries, such as a revocation.
+      dir: { length: fresh.dir.length, head: fresh.dir.head },
     },
     me(fresh),
     [machine.member],

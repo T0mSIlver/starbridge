@@ -5,6 +5,7 @@
  * agent delivers answers to Codex sessions that way, as the Claude Code mod submits them.
  */
 import { spawn } from "node:child_process";
+import { closeSync, openSync, readdirSync, readSync } from "node:fs";
 import { createConnection } from "node:net";
 import { delimiter, join } from "node:path";
 import type { Ctx } from "./context";
@@ -16,11 +17,58 @@ export interface CodexSession {
   bin: string;
 }
 
-/** Where the asking Codex session runs, read from the environment Codex gives its commands. */
+/**
+ * Where the asking Codex session runs, read from the environment Codex gives its commands.
+ * Undefined for a `codex exec` session: `codex queue` accepts a message for it, but nothing runs
+ * that message once exec has returned.
+ */
 export function codexSession(env: Ctx["env"]): CodexSession | undefined {
   const home = env.CODEX_HOME || (env.HOME ? join(env.HOME, ".codex") : undefined);
   const bin = which("codex", env.PATH);
-  return home && bin ? { home, bin } : undefined;
+  if (!home || !bin) return undefined;
+  if (env.CODEX_THREAD_ID && codexOrigin(home, env.CODEX_THREAD_ID) === "exec") return undefined;
+  return { home, bin };
+}
+
+/**
+ * How Codex started thread `id`, from the first line of its rollout: "exec" for `codex exec`,
+ * "interactive" for the TUI or an IDE. Undefined when the rollout is not found. Thread ids are
+ * UUIDv7, so the id dates the `sessions/YYYY/MM/DD` folder (local time) the rollout is in.
+ */
+export function codexOrigin(home: string, id: string): "exec" | "interactive" | undefined {
+  const ms = Number.parseInt(id.replace(/-/g, "").slice(0, 12), 16);
+  if (!Number.isFinite(ms)) return undefined;
+  for (const offset of [0, -1, 1]) {
+    const d = new Date(ms + offset * 86_400_000);
+    const dir = join(
+      home,
+      "sessions",
+      String(d.getFullYear()),
+      String(d.getMonth() + 1).padStart(2, "0"),
+      String(d.getDate()).padStart(2, "0"),
+    );
+    let name: string | undefined;
+    try {
+      name = readdirSync(dir).find((f) => f.endsWith(`-${id}.jsonl`));
+    } catch {}
+    if (!name) continue;
+    // The session_meta line can hold long instructions; its first fields are enough.
+    const head = Buffer.alloc(8192);
+    let n = 0;
+    try {
+      const fd = openSync(join(dir, name), "r");
+      n = readSync(fd, head, 0, head.length, 0);
+      closeSync(fd);
+    } catch {
+      return undefined;
+    }
+    const text = head.subarray(0, n).toString("utf8");
+    const origin = /"originator":"([^"]*)"/.exec(text)?.[1];
+    const source = /"source":"([^"]*)"/.exec(text)?.[1];
+    if (origin === undefined && source === undefined) return undefined;
+    return source === "exec" || origin === "codex_exec" ? "exec" : "interactive";
+  }
+  return undefined;
 }
 
 function which(name: string, path: string | undefined): string | undefined {

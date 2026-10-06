@@ -2,13 +2,14 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fromB64 } from "@starbridge/protocol";
+import { type Answer, fromB64, seal } from "@starbridge/protocol";
 import { LiveServer } from "@starbridge/server/test-support";
 import jpeg from "jpeg-js";
 import jsQR from "jsqr";
 import { PNG } from "pngjs";
 import { run } from "../src/cli";
-import { NO_DEFAULT } from "../src/decisions";
+import { session } from "../src/context";
+import { NO_DEFAULT, poll } from "../src/decisions";
 import { offerPiChain } from "../src/settings";
 import { FAKE_CODEXBAR, paired, testCtx, until } from "./helpers";
 
@@ -85,10 +86,10 @@ test("pair uses the hosted server unless --server or STARBRIDGE_SERVER names ano
     throw new Error("offline");
   }) as unknown as typeof fetch;
   try {
-    await expect(run(["pair"], testCtx())).rejects.toThrow("offline");
-    await expect(
-      run(["pair"], testCtx({ STARBRIDGE_SERVER: "https://self.example" })),
-    ).rejects.toThrow("offline");
+    const hosted = testCtx();
+    expect(await run(["pair"], hosted)).toBe(1);
+    expect(hosted.errors.at(-1)).toBe("starbridge: cannot reach https://starbridge.run: offline");
+    expect(await run(["pair"], testCtx({ STARBRIDGE_SERVER: "https://self.example" }))).toBe(1);
   } finally {
     globalThis.fetch = real;
   }
@@ -404,6 +405,65 @@ test("wait ignores forged or foreign answers and keeps the good one", async () =
   expect(JSON.parse(ctx.lines[1] as string)).toMatchObject({ decisionId: id, choice: "Merge" });
   expect(ctx.errors.filter((e) => e.includes("ignored an answer"))).toHaveLength(2);
   expect(ctx.errors.filter((e) => e.includes("retrying"))).toHaveLength(2);
+});
+
+test("an answer to a withdrawn or answerIn decision is neither accepted nor delivered", async () => {
+  const ctx = await paired(server);
+  await run([...ASK, "--session", "s"], ctx);
+  const late = ctx.lines.at(-1) as string;
+  await run([...ASK, "--session", "s"], ctx);
+  const early = ctx.lines.at(-1) as string;
+  const page = "https://claude.ai/artifact/2ig2MyNRD484b7oZea5vkZ";
+  await run(["ask", "--question", "Pick?", "--answer-in", page, "--session", "s"], ctx);
+  const pointer = ctx.lines.at(-1) as string;
+  // Accepted before the agent withdrew it, still unread: it is never delivered.
+  await server.answer(early, { choice: "Merge" });
+  await poll(ctx, session(ctx), { cursor: ctx.store.state().cursor, seconds: 1, shared: true });
+  expect(ctx.store.state().answers[early]).toBeDefined();
+  await run(["settle", early], ctx);
+  await run(["settle", late], ctx);
+  // A compromised server held these signed answers and releases them now.
+  await server.forge(
+    { decisionId: late, reply: { choice: "Merge" } },
+    { decisionId: pointer, reply: { text: "Roomy" } },
+  );
+  ctx.lines.length = 0;
+  expect(await run(["answers", "--session", "s", "--wait", "1"], ctx)).toBe(0);
+  expect(ctx.lines).toEqual([]);
+  expect(ctx.store.state().answers[late]).toBeUndefined();
+  expect(ctx.store.state().answers[pointer]).toBeUndefined();
+  expect(ctx.errors.filter((e) => e.includes("ignored an answer"))).toHaveLength(2);
+  expect(await run(["wait", "--timeout", "1s"], ctx)).toBe(2);
+  expect(await run(["wait", early, "--timeout", "1s"], ctx)).toBe(1);
+});
+
+test("a device the decision was not sealed to cannot answer it", async () => {
+  const ctx = await paired(server);
+  await run([...ASK, "--session", "s"], ctx);
+  const id = ctx.lines.at(-1) as string;
+  // Paired after the decision: a compromised server hands it the id, and it answers.
+  const laptop = await server.addDevice("laptop");
+  const machine = (await server.directory()).members.get(ctx.store.machine()?.id as string);
+  const body: Answer = {
+    v: 1,
+    id: `a_${crypto.randomUUID()}`,
+    decisionId: id,
+    to: machine?.member.id as string,
+    answeredAt: `${new Date().toISOString().slice(0, 19)}Z`,
+    text: "Force-push main",
+  };
+  server.inject(
+    seal("answer", body, { id: laptop.id, signKey: laptop.keys.sign.privateKey }, [
+      machine?.member as NonNullable<typeof machine>["member"],
+    ]),
+  );
+  ctx.lines.length = 0;
+  expect(await run(["answers", "--session", "s", "--wait", "1"], ctx)).toBe(0);
+  expect(ctx.lines).toEqual([]);
+  expect(ctx.errors.at(-1)).toContain("not sent to laptop");
+  // The phone, which it was sealed to, still can.
+  await server.answer(id, { choice: "Wait" });
+  expect(await run(["wait", id, "--timeout", "5s"], ctx)).toBe(0);
 });
 
 test("wait with no id returns each answer once, then times out with exit 2", async () => {

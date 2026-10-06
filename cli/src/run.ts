@@ -257,7 +257,9 @@ export class Reporter {
         // Not paired, or a bad title: no later update can fare better.
         if (e instanceof UsageError) this.off = true;
         if (!this.warned || this.off)
-          this.ctx.err(`starbridge: the run was not reported: ${e.message}`);
+          this.ctx.err(
+            `starbridge: the run was not reported: ${e.message}${this.ctx.env.CODEX_SANDBOX_NETWORK_DISABLED === "1" ? ". Codex's sandbox has no network: runs reach your devices when Codex runs the command outside it" : ""}`,
+          );
         this.warned = true;
       })
       .finally(() => {

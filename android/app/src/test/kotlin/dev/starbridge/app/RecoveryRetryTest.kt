@@ -36,6 +36,7 @@ import mockwebserver3.Dispatcher
 import mockwebserver3.MockResponse
 import mockwebserver3.MockWebServer
 import mockwebserver3.RecordedRequest
+import mockwebserver3.SocketEffect
 import okhttp3.OkHttpClient
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -90,9 +91,11 @@ class RecoveryRetryTest {
                         val entry = ProtocolJson.parseToJsonElement(request.body!!.utf8()).jsonObject.getValue("entry")
                         entries += entry
                         val dir = directories.verify(entries, account, null)
-                        // The first append commits, but its reply never reaches the phone.
-                        if (appends == 1) MockResponse(503, okhttp3.Headers.headersOf(), "")
-                        else json(buildJsonObject { put("length", dir.length); put("head", dir.head) }, 201)
+                        val reply = json(buildJsonObject { put("length", dir.length); put("head", dir.head) }, 201)
+                        // The first append commits, but the connection drops in the middle of its
+                        // reply. Not a 503, which clients retry quietly (#250), and not before the
+                        // reply starts, which OkHttp retries: either way the phone never sees it fail.
+                        if (appends == 1) reply.newBuilder().onResponseBody(SocketEffect.ShutdownConnection).build() else reply
                     }
                     else -> MockResponse(404, okhttp3.Headers.headersOf(), "")
                 }

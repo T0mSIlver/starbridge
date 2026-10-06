@@ -52,6 +52,25 @@ Clients replay the chain with `verifyDirectory` and keep a pin `{length, head}`.
 must extend the pin, so the server can neither insert a key, nor roll back a revocation, nor serve
 a chain of its own.
 
+A pin cannot show that a chain is current: a server can hold back entries it has, such as a
+revocation, and serve a shorter chain that still extends the pin. Devices therefore sign the
+head they hold, `dir: {length, head}`, into each answer and permission answer. A machine keeps
+the longest head each device signed, and refuses every device's answer while a device active in
+its chain has signed a head that chain does not hold (`holdsHead`): the server is withholding
+entries, or serving that device another chain. It reads every answer's head in a reply before it
+accepts any, never lets a shorter head replace a longer one, and while refusing delivers nothing it
+accepted earlier either; once it stops refusing, it drops undelivered answers whose device the
+chain now revokes. It keeps the refused answers, since their devices count them sent, and
+checks them again once the server serves the missing entries, or once the machine's chain revokes
+that device.
+
+This bounds the attack rather than ending it. A server that withholds a phone's revocation from a
+machine can relay that phone's answers only until any other device answers that machine (the ones
+a session has not taken by then never reach it); from
+then on it must drop every message from the owner's other devices to it, which the owner sees as
+answers that never arrive. A machine cannot detect a revocation that no device has told it about,
+since the server is its only channel; the revoked device's key can sign any stale head itself.
+
 ## Pairing
 
 A new member (a machine, or a second device) makes its keys and shows a 24-character code: 8
@@ -241,8 +260,10 @@ the server started. A machine that sends back `directory=<n>&quotaAsked=<time>` 
 knows gets a reply at once when the directory is longer or a device asked since, and every
 directory append ends its open waits. So the machine's agent re-reads the directory as soon as a
 device joins and posts a fresh snapshot sealed to it, and posts one when a device asks.
-A machine checks that an answer's `decisionId` is one it asked and its `choice`, if any, one of
-the decision's options. An answer carries `choice` or `text`: a decision with options that sets
+A machine checks that an answer's `decisionId` is one it asked, still open and without
+`answerIn`, that its signer is one of the devices the decision was sealed to, and that its
+`choice`, if any, is one of the decision's options. It never delivers an answer to a decision it
+settled, even one it accepted before, since the server could have held it back until then. An answer carries `choice` or `text`: a decision with options that sets
 `replies: true` also takes a typed `text` reply, which clients offer as "Reply" under the
 options; machines from before it leave `replies` out. For permission answers, see below.
 
@@ -388,7 +409,8 @@ Answering a permission from a phone is a trust decision, so:
   permission once it is settled. It dies with the prompt, at most 10 minutes; the server refuses
   later answers with 409 `expired`.
 - **The machine refreshes the directory before it accepts an allow**, so a revoked device's
-  answers are refused as soon as the revocation is in the chain.
+  answers are refused as soon as the revocation is in the chain, and refuses every answer while
+  another device has signed a longer chain than the server serves it (Directory, above).
 - **The device chooses only a scope, never a rule.** The machine keeps the rule behind each
   suggestion; "always" writes only Claude Code's local project settings
   (`.claude/settings.local.json`), never user settings.
@@ -417,7 +439,10 @@ or `deny` with the message, or with one saying the owner denied it when the answ
 only when their rules fit the 500-character `rule` in full; `setMode` and other suggestions stay
 at the keyboard. Before printing, the machine marks the prompt settled, then posts `settled:
 device`; without an agent it gives that post 5 s, and SIGTERM or the deadline during it still end
-the hook with no answer.
+the hook with no answer. Every request the hook makes, the prompt's own post included, ends at SIGTERM or the
+deadline, through the agent or not, so a stalled server never holds the agent's dialog back. The
+Pi extension stops a CLI that ran 600 s, kills one still running 10 s after it was stopped, and
+defers either way.
 
 The keyboard can answer first. Esc or No sends the hook SIGTERM; it posts `settled: keyboard`
 and exits. A keyboard Yes sends no signal, so `starbridge hook settle` runs on `PostToolUse` and
