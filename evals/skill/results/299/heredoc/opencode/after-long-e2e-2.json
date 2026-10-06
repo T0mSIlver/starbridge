@@ -1,0 +1,50 @@
+{
+  "agent": "opencode",
+  "model": "zai-coding-plan/glm-5.3-flash",
+  "arm": "after",
+  "scenario": "long-e2e",
+  "rep": 2,
+  "turns": [
+    {
+      "commands": [
+        "starbridge run --title 'iOS e2e suite' --reason 'takes over your screen and keyboard for about ten minutes' -- make e2e"
+      ],
+      "final": "e2e suite passed: all 4 onboarding flow tests green — your copy change in `src/onboarding.txt` didn't break anything.",
+      "session": "ses_eee765b2cffeLHVbcmaoNGNAum",
+      "tokens": 8978,
+      "exit": 0,
+      "seconds": 36.938
+    }
+  ],
+  "decisions": [],
+  "laterDecisions": [],
+  "runs": [
+    {
+      "v": 1,
+      "id": "r_MKCTpe2SHpqLa0NY",
+      "to": [
+        "phone"
+      ],
+      "title": "iOS e2e suite",
+      "reason": "takes over your screen and keyboard for about ten minutes",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": ""
+      },
+      "startedAt": "2026-10-06T14:07:02Z",
+      "at": "2026-10-06T14:07:06Z",
+      "progress": {
+        "done": 4,
+        "total": 4,
+        "unit": "step"
+      },
+      "exit": {
+        "code": 0,
+        "at": "2026-10-06T14:07:06Z"
+      }
+    }
+  ],
+  "gh": []
+}
