@@ -602,7 +602,10 @@ async function main() {
         throw new Error(`${what}: at ${where()} showing the ${open ? "detail" : "list"}`);
     };
     await p.goto(`${ORIGIN}/quotas`);
-    await p.getByRole("link", { name: /^Inbox/ }).first().click();
+    await p
+      .getByRole("link", { name: /^Inbox/ })
+      .first()
+      .click();
     await p.locator(`button[data-id="${merge}"]`).click();
     await expectAt(`/?item=${merge}`, "detail", "a tapped question");
     await p.getByRole("heading", { name: MERGE }).waitFor();
