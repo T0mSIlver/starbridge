@@ -62,7 +62,8 @@ async function machine() {
   Object.assign(ctx.env, {
     HOME: home,
     // The fake claude runs bun, which CI does not keep in /usr/bin.
-    PATH: `${FAKE_BIN}:${dirname(process.execPath)}:/usr/bin:/bin`,
+    // SELF's folder too, so setup's PATH step has nothing to add.
+    PATH: `${FAKE_BIN}:${dirname(SELF)}:${dirname(process.execPath)}:/usr/bin:/bin`,
     USER: "dev",
     FAKE_LOG: log,
     FAKE_STATE: join(home, "fake-state"),

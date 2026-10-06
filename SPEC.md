@@ -371,7 +371,7 @@ provider plugins add providers, not panels.
   the config folder (`cli-path`); the Claude Code hooks (`plugin/hooks/cli.sh`), the mod, and the
   Pi and opencode plugins start that one, else `starbridge` on the PATH, and `cli.sh` then tries
   the installers' folders. When the binary's folder is not on the PATH, setup offers to add it to
-  the shell's startup file, and its last lines say to open a new terminal or what to add, since
+  the shell's startup file (`--yes` adds it), and its last lines say to open a new terminal or what to add, since
   install.sh's own hint scrolls away under setup. Windows gets the folder on the PATH from
   install.ps1.
 - **Files setup writes into other tools** (#474) start with one marker line, ``Written by

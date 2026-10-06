@@ -13,12 +13,12 @@ import type { Sys } from "./sys";
 /**
  * Records where this CLI is, in the config folder, for the hooks and plugins that start it
  * from an agent whose PATH may lack it: Claude Code opened from the Dock has no
- * `~/.local/bin` on macOS (#612). An npm bundle off the PATH needs its runtime too, which one
- * path cannot say: those fall back to the PATH.
+ * `~/.local/bin` on macOS (#612). An npm bundle starts through `#!/usr/bin/env node`, which
+ * needs the PATH anyway: it records nothing, and the hooks use the PATH.
  */
 export function recordSelf(sys: Sys): void {
   const file = join(sys.ctx.store.dir, CLI_PATH);
-  if (sys.self.length !== 1) {
+  if (sys.self.length !== 1 || script(sys.self[0] as string)) {
     rmSync(file, { force: true });
     return;
   }
@@ -28,12 +28,30 @@ export function recordSelf(sys: Sys): void {
   writeFileSync(file, `${sys.platform === "win32" ? self.replace(/\\/g, "/") : self}\n`);
 }
 
+/** Whether `path` is a script (npm's bundle, a checkout's entry), not a compiled binary. */
+function script(path: string): boolean {
+  try {
+    const fd = openSync(path, "r");
+    const head = Buffer.alloc(2);
+    readSync(fd, head, 0, 2, 0);
+    closeSync(fd);
+    return head.toString() === "#!";
+  } catch {
+    return false;
+  }
+}
+
 /** The folder of the installed binary when the PATH does not hold it. */
 function missingDir(sys: Sys): string | undefined {
   if (sys.self.length !== 1) return undefined;
   const dir = dirname(sys.self[0] as string);
-  const path = (sys.ctx.env.PATH ?? "").split(delimiter).map((p) => p.replace(/[/\\]+$/, ""));
-  return path.includes(dir.replace(/[/\\]+$/, "")) ? undefined : dir;
+  // Windows paths ignore case.
+  const norm = (p: string) => {
+    const bare = p.replace(/[/\\]+$/, "");
+    return sys.platform === "win32" ? bare.toLowerCase() : bare;
+  };
+  const path = (sys.ctx.env.PATH ?? "").split(delimiter).map(norm);
+  return path.includes(norm(dir)) ? undefined : dir;
 }
 
 /** The startup file of the owner's shell, and the line there that puts `dir` on the PATH. */
@@ -45,12 +63,13 @@ export function shellProfile(sys: Sys, dir: string): { file: string; line: strin
     return { file: join(sys.home, ".config", "fish", "config.fish"), line: `fish_add_path ${dir}` };
   if (shell === "zsh")
     return { file: join(sys.ctx.env.ZDOTDIR || sys.home, ".zshrc"), line: exported };
-  // Terminal on macOS starts login shells, which read .bash_profile and not .bashrc.
-  if (shell === "bash")
-    return {
-      file: join(sys.home, sys.platform === "darwin" ? ".bash_profile" : ".bashrc"),
-      line: exported,
-    };
+  if (shell === "bash") {
+    if (sys.platform !== "darwin") return { file: join(sys.home, ".bashrc"), line: exported };
+    // Terminal on macOS starts login shells, which read the first of these that exists; creating
+    // .bash_profile would hide a .profile that other tools write to.
+    const login = [".bash_profile", ".bash_login"].map((f) => join(sys.home, f)).find(existsSync);
+    return { file: login ?? join(sys.home, ".profile"), line: exported };
+  }
   return { file: join(sys.home, ".profile"), line: exported };
 }
 
@@ -74,7 +93,10 @@ export async function pathStep(sys: Sys): Promise<string[]> {
   const { file, line } = shellProfile(sys, dir);
   const shown = file.startsWith(`${sys.home}/`) ? `~${file.slice(sys.home.length)}` : file;
   const text = existsSync(file) ? readFileSync(file, "utf8") : "";
-  const has = text.includes(dir) || text.includes(line);
+  const rest = dir.startsWith(`${sys.home}/`) ? dir.slice(sys.home.length) : undefined;
+  const has = [dir, line, ...(rest ? [`$HOME${rest}`, `\${HOME}${rest}`, `~${rest}`] : [])].some(
+    (spelled) => text.includes(spelled),
+  );
   if (!has && (await prompt.confirm(`Add ${dir} to your PATH in ${shown}?`, true))) {
     mkdirSync(dirname(file), { recursive: true });
     appendFileSync(

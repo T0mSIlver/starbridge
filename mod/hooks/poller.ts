@@ -130,10 +130,11 @@ export class Poller {
   private async cli(): Promise<string> {
     if (this.command) return this.command;
     try {
-      return (await this.host.read(this.cliPath)).trim() || "starbridge";
-    } catch {
-      return "starbridge";
-    }
+      const recorded = (await this.host.read(this.cliPath)).trim();
+      // A binary removed since setup recorded it: the PATH may still hold another.
+      if (recorded && (await this.host.mtime(recorded)) !== undefined) return recorded;
+    } catch {}
+    return "starbridge";
   }
 
   private async loop() {

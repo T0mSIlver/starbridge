@@ -51,7 +51,7 @@ test("the PATH step says nothing when the folder is on the PATH, and the line to
   const s = sys({ SHELL: "/bin/bash", PATH: "/usr/bin" }, [], no);
   const lines = await pathStep({ ...s, self: [join(s.home, ".local/bin/starbridge")] });
   expect(lines).toEqual([
-    "One more step: `starbridge` is not on your PATH. Add this line to ~/.bash_profile:",
+    "One more step: `starbridge` is not on your PATH. Add this line to ~/.profile:",
     '  export PATH="$HOME/.local/bin:$PATH"',
   ]);
   expect(existsSync(join(s.home, ".bash_profile"))).toBe(false);
@@ -85,4 +85,17 @@ test("the plugin's hooks start the CLI setup recorded, else the one on the PATH,
   const none = run("/usr/bin:/bin");
   expect(none.code).toBe(1);
   expect(none.err).toContain("run `starbridge setup`");
+});
+
+test("on macOS, bash's line goes where its login shell reads it, and a $HOME spelling counts as there (#612)", async () => {
+  const s = sys({ SHELL: "/bin/bash", PATH: "/usr/bin" }, []);
+  writeFileSync(
+    join(s.home, ".profile"),
+    '. "$HOME/.cargo/env"\nexport PATH="$HOME/.local/bin:$PATH"\n',
+  );
+  const asked: string[] = [];
+  const prompt = { ...defaults, confirm: async (q: string) => !!asked.push(q) };
+  await pathStep({ ...s, prompt, self: [join(s.home, ".local/bin/starbridge")] });
+  expect(asked).toEqual([]);
+  expect(existsSync(join(s.home, ".bash_profile"))).toBe(false);
 });

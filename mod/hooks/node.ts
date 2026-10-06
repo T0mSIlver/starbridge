@@ -4,7 +4,7 @@
  * never keep the harness from exiting.
  */
 import { spawn } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { request } from "node:http";
 import { HEADERS, isPortFile, PROOF_HEADER, portTarget, signCall } from "./agent.ts";
 import { configDir } from "./poller.ts";
@@ -20,14 +20,15 @@ const plain = (cmd: string, args: string[]) =>
 
 /**
  * The CLI to start: the path setup recorded in the config folder, since an agent's PATH may lack
- * the install folder (#612), else `starbridge` on the PATH.
+ * the install folder (#612), while that binary exists; else `starbridge` on the PATH.
  */
 export function cli(env: Record<string, string | undefined> = process.env): string {
   try {
-    return readFileSync(`${configDir(env)}/cli-path`, "utf8").trim() || "starbridge";
-  } catch {
-    return "starbridge";
-  }
+    const recorded = readFileSync(`${configDir(env)}/cli-path`, "utf8").trim();
+    // A binary removed since setup recorded it: the PATH may still hold another.
+    if (recorded && existsSync(recorded)) return recorded;
+  } catch {}
+  return "starbridge";
 }
 
 /** The mod's host aborts a call after 30 s; the loop is built around that limit. */
