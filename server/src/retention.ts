@@ -32,16 +32,16 @@ export function sweepStorage(db: Database, limits: Limits, now = Date.now()): vo
   const withRe = kinds("withRe");
   const fromActive = kinds("fromActive");
   db.transaction(() => {
-    db.query(`DELETE FROM items WHERE ${aged.join(" OR ")}`).run(...params);
-    // After the aged ones, so an item goes in the same sweep as the one it refers to.
-    db.query(
-      `DELETE FROM items WHERE kind IN (${marks(withRe)}) AND NOT EXISTS (SELECT 1 FROM items d
-         WHERE d.account_id = items.account_id AND d.id = items.re)`,
-    ).run(...withRe);
+    if (aged.length > 0) db.query(`DELETE FROM items WHERE ${aged.join(" OR ")}`).run(...params);
     db.query(
       `DELETE FROM items WHERE kind IN (${marks(fromActive)}) AND NOT EXISTS (SELECT 1 FROM members m
          WHERE m.account_id = items.account_id AND m.id = items.from_id AND m.active = 1)`,
     ).run(...fromActive);
+    // Last, so an item goes in the same sweep as the one it refers to.
+    db.query(
+      `DELETE FROM items WHERE kind IN (${marks(withRe)}) AND NOT EXISTS (SELECT 1 FROM items d
+         WHERE d.account_id = items.account_id AND d.id = items.re)`,
+    ).run(...withRe);
     db.query("DELETE FROM sessions WHERE expires_at < ?").run(new Date(now).toISOString());
     db.query("DELETE FROM revoked_sessions WHERE expires_at < ?").run(new Date(now).toISOString());
     db.query("DELETE FROM app_codes WHERE expires_at < ?").run(now);
