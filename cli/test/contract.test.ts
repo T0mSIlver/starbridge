@@ -1,4 +1,4 @@
-// Pins what agents and the plugins parse ("What agents parse" in cli/README.md): stable from 0.1.0.
+// Pins what agents and the plugins parse (cli/CONTRACT.md): stable from 0.1.0.
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";

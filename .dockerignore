@@ -4,3 +4,5 @@ android
 .git
 .claude
 **/data
+# A self-hoster's settings, such as server/.env, stay out of the build.
+**/.env

@@ -15,31 +15,30 @@ them. Its routes are in `PROTOCOL.md`.
 ## Set it up
 
 1. With Docker installed, clone the latest release of this repository (replace `v0.1.0` with
-   its tag) and build the two images:
+   its tag):
 
    ```bash
    git clone --branch v0.1.0 https://github.com/T0mSIlver/starbridge
    cd starbridge
-   docker build -f server/Dockerfile -t starbridge-server .
-   docker build -f web/Dockerfile -t starbridge-web .
    ```
 
-2. Start the server. Pick a long random owner token; it signs you in to the server's one
-   account.
+2. Write the server's settings in `server/.env`. The owner token signs you in to the server's
+   one account; make it long and random, for example with `openssl rand -hex 32`.
 
-   ```bash
-   docker run -d -p 8080:8080 -v starbridge:/data \
-     -e OWNER_TOKEN=change-me \
-     -e PUBLIC_URL=https://starbridge.example \
-     -e RELAY_URL=https://starbridge.run \
-     -e TRUST_PROXY=1 \
-     starbridge-server
+   ```
+   PUBLIC_URL=https://starbridge.example
+   OWNER_TOKEN=change-me
+   RELAY_URL=https://starbridge.run
    ```
 
-3. Start the web app:
+   `RELAY_URL` sends Android and browser notifications through starbridge.run, which sees only
+   ciphertext and ids. To keep every notification on your own servers, leave it out and follow
+   [Without the relay](#without-the-relay). [Environment](#environment) lists the other settings.
+
+3. Build and start the server, on `127.0.0.1:8080`, and the web app, on `127.0.0.1:3000`:
 
    ```bash
-   docker run -d -p 3000:3000 starbridge-web
+   docker compose -f server/compose.yaml up -d --build
    ```
 
 4. Route both through your reverse proxy. With Caddy, which also gets the TLS certificate:
@@ -74,23 +73,49 @@ them. Its routes are in `PROTOCOL.md`.
    starbridge setup --server https://starbridge.example
    ```
 
-   Or set `STARBRIDGE_SERVER` before you run `starbridge pair`.
+   Or set `STARBRIDGE_SERVER` before you run `starbridge pair`. Setup ends with a test question:
+   close the app first to check that notifications reach the phone.
 
 ## Notifications
 
 Android notifications go through Firebase, whose credentials belong to the app's project. With
-`RELAY_URL=https://starbridge.run`, your server sends them through the hosted relay, which sees
-only ciphertext and ids. To keep Google out, use UnifiedPush with ntfy or another distributor;
-the server pushes to it directly.
-
-Web Push also goes through the relay unless you set your own VAPID keys.
+`RELAY_URL`, your server sends them through the hosted relay, which sees only ciphertext and ids.
+Web Push goes through the relay too, unless you set your own VAPID keys.
 
 Without the relay or UnifiedPush, the Android app gets no pushes: while it is open it checks for
 new items every 10 seconds, and nothing reaches the phone while it is closed. The web page still
-updates on its own. For notifications on Android, set `RELAY_URL`, or install a UnifiedPush
-distributor such as ntfy and pick UnifiedPush in the app under Settings → Notifications →
-Delivered through. For an ntfy on your own network or on plain HTTP, set
-`ALLOW_PRIVATE_PUSH_ENDPOINTS=1`.
+updates on its own.
+
+### Without the relay
+
+UnifiedPush delivers to the Android app through your own ntfy, with nothing through Google's
+Firebase or starbridge.run. Your VAPID keys send browser notifications without starbridge.run;
+each browser's own push service still carries them, encrypted, such as Google's for Chrome.
+
+1. In `server/.env`, remove `RELAY_URL` and add Web Push keys. Make them with
+   `bunx web-push generate-vapid-keys`:
+
+   ```
+   VAPID_PUBLIC_KEY=...
+   VAPID_PRIVATE_KEY=...
+   ```
+
+   If your ntfy is on a private address or plain HTTP, add `ALLOW_PRIVATE_PUSH_ENDPOINTS=1`. Then
+   restart: `docker compose -f server/compose.yaml up -d`. A browser that turned notifications on
+   through the relay keeps the relay's key and gets no more: sign it out, sign in again, and approve
+   it from another device.
+
+2. On an ntfy server with access control, let anyone publish to UnifiedPush topics, which the
+   ntfy app names `up` and a random id, and sign the ntfy app in as a user who can read them:
+
+   ```bash
+   ntfy access everyone 'up*' write-only
+   ```
+
+3. On the phone, install the ntfy app and set its default server to yours. In Starbridge, pick
+   UnifiedPush under Settings → Notifications → Delivered through.
+
+The phone must reach your ntfy, and your Starbridge server must reach it too.
 
 ## Upgrade
 
@@ -98,7 +123,14 @@ A new server brings its database's schema up to date when it starts. Copy the da
 with the server running:
 
 ```bash
-sudo sqlite3 "$(docker volume inspect -f '{{.Mountpoint}}' starbridge)/starbridge.db" ".backup 'starbridge-before.db'"
+sudo sqlite3 "$(docker volume inspect -f '{{.Mountpoint}}' starbridge_data)/starbridge.db" ".backup 'starbridge-before.db'"
+```
+
+Then check out the new release's tag, such as `v0.1.1`, and rebuild:
+
+```bash
+git fetch --tags && git checkout v0.1.1
+docker compose -f server/compose.yaml up -d --build
 ```
 
 A server refuses a database a newer release has already upgraded, so to go back to an older
