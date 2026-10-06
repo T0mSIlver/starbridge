@@ -269,7 +269,7 @@ export function refreshFiles(sys: Home): string[] {
   if (opencodeState(sys) === "outdated") {
     const before = opencodeSnapshot(sys);
     step(`the opencode skill and plugin in ${opencodeDir(sys)}`, () => installOpencode(sys, true));
-    if (opencodeSnapshot(sys) === before) done.pop();
+    if (opencodeSnapshot(sys) === before && done.at(-1)?.startsWith("Updated")) done.pop();
   }
   return done;
 }
