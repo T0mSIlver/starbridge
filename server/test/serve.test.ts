@@ -22,7 +22,6 @@ test("over real HTTP, an answer long-poll outlives the idle timeout and complete
         question: "Ship it?",
         context: "",
         options: [],
-        default: { action: "ship" },
         source: { machine: "devbox", project: "p", session: "s" },
       },
       { id: "devbox", signKey: devbox.keys.sign.privateKey },

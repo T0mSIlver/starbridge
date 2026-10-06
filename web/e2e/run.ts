@@ -50,7 +50,7 @@ const DESKTOP = { width: 1280, height: 860 };
 const tmp = mkdtempSync(join(tmpdir(), "starbridge-e2e-"));
 const children: ChildProcess[] = [];
 
-/** Two PNGs to attach to a decision: the sample data's pair of landing heroes (lib/sample.ts). */
+/** Two PNGs to attach to a decision: the sample data's pair of layouts (lib/sample.ts). */
 function image(which: "a" | "b"): string {
   const shots = JSON.parse(readFileSync(join(WEB, "src/lib/sample-shots.json"), "utf8"));
   const path = join(tmp, `hero-${which}.png`);
@@ -324,7 +324,7 @@ async function main() {
   const landing = await visitor.goto(ORIGIN);
   const policy = landing?.headers()["content-security-policy"] ?? "";
   if (!policy.includes("'nonce-")) throw new Error(`expected a CSP with a nonce, got: ${policy}`);
-  await visitor.getByRole("heading", { name: /Your agents ask/ }).waitFor();
+  await visitor.getByRole("heading", { name: /Know the moment your agent is stuck/ }).waitFor();
   await shoot(visitor, "landing");
   for (const [path, name] of [
     ["/docs", "docs"],
@@ -1370,11 +1370,8 @@ async function main() {
     .click();
   const devices = page.getByRole("region", { name: "Devices" });
   await devices.getByText("Device · this browser").waitFor();
-  // Devices list this browser, then the others by when they joined: the second browser first.
-  await devices.getByRole("button", { name: "Revoke" }).first().click();
-  await page.getByRole("dialog").getByRole("button", { name: "Revoke" }).click();
-  await page.getByRole("dialog").waitFor({ state: "detached" });
-  // A notification left from before: the server's refusal closes it.
+  // A notification left from before: the server's refusal closes it. Shown before the revoke,
+  // since the directory append wakes the second browser's poll, which can be refused at once.
   await pageB.evaluate(() =>
     Promise.race([
       navigator.serviceWorker.ready.then((r) =>
@@ -1387,13 +1384,24 @@ async function main() {
   );
   if (!(await pageB.evaluate(NOTIFICATIONS)).some((n) => n.tag === "e2e-left"))
     throw new Error("the left-over notification did not show");
+  // Devices list this browser, then the others by when they joined: the second browser first.
+  await devices.getByRole("button", { name: "Revoke" }).first().click();
+  await page.getByRole("dialog").getByRole("button", { name: "Revoke" }).click();
+  await page.getByRole("dialog").waitFor({ state: "detached" });
   // Without a reload: the page's next poll gets the 401 and drops what it showed (#343). The
   // server's 401 alone is unsigned: the browser keeps its keys and shows the refusal (#310).
   await pageB.getByText("The server says this browser was revoked.").waitFor({ timeout: 25_000 });
   if ((await pageB.getByRole("heading", { name: "Inbox" }).count()) > 0)
     throw new Error("the revoked browser still shows its inbox");
-  if ((await pageB.evaluate(NOTIFICATIONS)).length > 0)
-    throw new Error("the refusal left notifications on screen");
+  await pageB
+    .waitForFunction(
+      () => navigator.serviceWorker.ready.then((r) => r.getNotifications()).then((n) => !n.length),
+      undefined,
+      { timeout: 5_000 },
+    )
+    .catch(() => {
+      throw new Error("the refusal left notifications on screen");
+    });
   // Another one, so the device list's verdict, not the refusal, has to close it.
   await pageB.evaluate(() =>
     Promise.race([
@@ -1495,7 +1503,9 @@ async function main() {
   await pageC.getByRole("button", { name: "Sign out" }).click();
   await pageC.getByRole("dialog").getByRole("button", { name: "Sign out" }).click();
   // With no keys left, the browser is a visitor: the landing page, not "Sign in to Starbridge".
-  await pageC.getByRole("heading", { name: /Your agents ask/ }).waitFor({ timeout: 30_000 });
+  await pageC
+    .getByRole("heading", { name: /Know the moment your agent is stuck/ })
+    .waitFor({ timeout: 30_000 });
   // Notifications hold decrypted questions: none outlive the sign-out (#311).
   if ((await pageC.evaluate(NOTIFICATIONS)).length > 0)
     throw new Error("signing out left notifications on screen");

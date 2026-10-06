@@ -38,7 +38,6 @@ import {
   recoveryEntry,
   recoveryKey,
   recoveryKeyPair,
-  recoveryWords,
   revokeEntry,
   type SealedItem,
   type SignedEnvelope,
@@ -52,6 +51,8 @@ import { sodium, utf8 } from "../src/sodium";
 
 const seed = (n: number) => new Uint8Array(32).fill(n);
 const ACCOUNT = "acct_tom";
+/** A recovery seed is 16 bytes. */
+const recoverySeedOf = (n: number) => new Uint8Array(16).fill(n);
 const T = (h: number, m = 0) =>
   `2026-10-04T${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:00Z`;
 
@@ -77,11 +78,9 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
   const phone2 = who("phone2", "device", "New Pixel", 4);
   const evil = who("evil", "device", "Injected", 5);
   const evilMachine = who("evilbox", "machine", "Injected machine", 6);
-  const recoverySeed = seed(7);
-  const recovery12Seed = new Uint8Array(16).fill(9);
+  const recoverySeed = recoverySeedOf(9);
   const recovery = recoveryKeyPair(recoverySeed);
   const recoveryPk = toB64(recovery.publicKey);
-  const rec = { id: RECOVERY, signKey: recovery.privateKey };
 
   // --- keys.json ---
   const keys = {
@@ -93,13 +92,11 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
       boxSk: toB64(w.keys.box.privateKey),
       signSk: toB64(w.keys.sign.privateKey),
     })),
-    recovery: { seed: toB64(recoverySeed), words: recoveryWords(recoverySeed), signPk: recoveryPk },
-    recovery12: {
-      note: 'A 16-byte seed, as 12 words and as a recovery key (the seed and 12 bits of BLAKE2b-256 of "starbridge/v1/recovery-check", NUL, the seed, in Crockford base32): the signing seed is BLAKE2b-256 of "starbridge/v1/recovery-seed", NUL, the seed.',
-      seed: toB64(recovery12Seed),
-      words: recoveryWords(recovery12Seed),
-      key: recoveryKey(recovery12Seed),
-      signPk: toB64(recoveryKeyPair(recovery12Seed).publicKey),
+    recovery: {
+      note: 'A 16-byte seed as a recovery key (the seed and 12 bits of BLAKE2b-256 of "starbridge/v1/recovery-check", NUL, the seed, in Crockford base32): the signing seed is BLAKE2b-256 of "starbridge/v1/recovery-seed", NUL, the seed.',
+      seed: toB64(recoverySeed),
+      key: recoveryKey(recoverySeed),
+      signPk: recoveryPk,
     },
   };
 
@@ -119,7 +116,7 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
   extend((d) => addEntry(d, signer(phone), browser.member, T(9, 5)));
   extend((d) => addEntry(d, signer(phone), devbox.member, T(9, 10)));
   extend((d) => revokeEntry(d, signer(phone), "browser", T(9, 15)));
-  extend((d) => addEntry(d, rec, phone2.member, T(9, 20)));
+  extend((d) => addEntry(d, signer(phone), phone2.member, T(9, 20)));
   const full = verifyDirectory(chain);
   const at3 = verifyDirectory(chain.slice(0, 3));
 
@@ -132,7 +129,7 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
     account: ACCOUNT,
     device: evil.member,
     signKey: evil.keys.sign.privateKey,
-    recovery: recoveryKeyPair(seed(8)),
+    recovery: recoveryKeyPair(recoverySeedOf(8)),
     at: T(9),
   });
   const fakeChain = [otherGenesis];
@@ -179,7 +176,7 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
   // phone and phone2 active, browser revoked, devbox a machine.
   function recoveryCases(): Case[] {
     const next = verifyDirectory(chain);
-    const newRec = recoveryKeyPair(seed(30));
+    const newRec = recoveryKeyPair(recoverySeedOf(30));
     const newRecPk = toB64(newRec.publicKey);
     const with_ = (entries: SignedEnvelope[], make: (d: Directory) => SignedEnvelope) => [
       ...entries,
@@ -205,7 +202,7 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
       revokeEntry(d, signer(phone), "phone2", T(10, 1)),
     );
     const secondProposal = with_(proposed, (d) =>
-      recoveryEntry(d, signer(phone2), recoveryKeyPair(seed(31)), T(10, 1)),
+      recoveryEntry(d, signer(phone2), recoveryKeyPair(recoverySeedOf(31)), T(10, 1)),
     );
     const recovered = with_(chain, (d) => recoverEntry(d, recovery.privateKey, evil.member, T(10)));
     // The server serves the chain cut short of browser's revocation (#363).
@@ -361,7 +358,7 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
             confirmBody(
               verifyDirectory(proposed),
               next.length,
-              toB64(recoveryKeyPair(seed(31)).publicKey),
+              toB64(recoveryKeyPair(recoverySeedOf(31)).publicKey),
             ),
             RECOVERY,
             recovery.privateKey,
@@ -530,6 +527,14 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
       expect: { error: "revoked-signer" },
     },
     {
+      name: "recovery key adds a device with add, not recover",
+      entries: [
+        ...chain,
+        signRaw(nextBody(full, { op: "add", member: evil.member }), RECOVERY, recovery.privateKey),
+      ],
+      expect: { error: "signer-not-allowed" },
+    },
+    {
       name: "recovery key adds a machine",
       entries: [
         ...chain,
@@ -661,7 +666,6 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
     context: "The bench needs the GPU for about 40 minutes. No: it waits for tonight.",
     options: ["Yes", "No"],
     recommended: "Yes",
-    default: { action: "Wait for tonight" },
     source: { machine: "dev box", project: "localvoxtral", session: "s_42" },
   };
   const answerBody = {
@@ -1428,12 +1432,6 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
         name: "an unknown machine kind",
         body: { ...decisionBody, source: { ...decisionBody.source, machineKind: "phone" } },
         valid: false,
-      },
-      { name: "no default", body: { ...decisionBody, default: undefined }, valid: true },
-      {
-        name: "a default time from an older machine, ignored",
-        body: { ...decisionBody, default: { action: "Wait for tonight", at: T(11) } },
-        valid: true,
       },
       {
         name: "free text",

@@ -42,11 +42,15 @@ function session(id: string, opts: { gated?: boolean; timing?: Timing } = {}) {
     afterRun: undefined as ((stdout: string) => void) | undefined,
     /** Set while a gated session waits at the gate. */
     parked: undefined as (() => void) | undefined,
+    /** The state file's mtime at each look: a run that neither polls nor confirms. */
+    looks: [] as (number | undefined)[],
+    lastMtime: undefined as number | undefined,
   };
   const host: Host = {
     sessionId: async () => s.id,
     run: async (argv) => {
       s.runs.push(argv);
+      if (!argv.includes("--wait") && !argv.includes("--ack")) s.looks.push(s.lastMtime);
       const out: string[] = [];
       const err: string[] = [];
       const exitCode = await run(argv.slice(1), {
@@ -66,10 +70,11 @@ function session(id: string, opts: { gated?: boolean; timing?: Timing } = {}) {
           s.parked = resolve;
         });
       try {
-        return statSync(path).mtimeMs;
+        s.lastMtime = statSync(path).mtimeMs;
       } catch {
-        return undefined;
+        s.lastMtime = undefined;
       }
+      return s.lastMtime;
     },
     now: async () => Date.now(),
     sleep: (ms) => Bun.sleep(ms),
@@ -137,10 +142,17 @@ test("each answer reaches the session that asked, once, through one poller", asy
   expect(c.get().submitted).toEqual([]);
   // One session holds the lease and polls; the others only read the state file.
   expect([polling(a), polling(b), polling(c)].filter((n) => n > 0)).toHaveLength(1);
-  // The others ran the CLI only when the state file changed: one look at the stored answers,
-  // the confirm of their own, one look at the state their confirm wrote.
-  const local = [a, b, c].map((s) => s.get().runs.length - polling(s));
-  expect(Math.max(...local)).toBeLessThanOrEqual(3);
+  // The others ran the CLI only when the state file changed. How often it changed depends on
+  // the poller, whose own polls write it too, so each look must be at a new mtime.
+  for (const s of all) {
+    if (s === poller) continue;
+    const { looks } = s.get();
+    expect(looks.length).toBeGreaterThan(0);
+    expect(new Set(looks).size).toBe(looks.length);
+  }
+  // Each session confirmed its own answer, once.
+  const acks = (s: Session) => s.get().runs.filter((x) => x.includes("--ack")).length;
+  expect([acks(a), acks(b), acks(c)]).toEqual([1, 1, 0]);
 });
 
 test("a forged answer is never submitted", async () => {

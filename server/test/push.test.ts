@@ -33,7 +33,6 @@ let rsa: CryptoKeyPair;
 let pem: string;
 const vapid = webpush.generateVAPIDKeys();
 const base = () => `http://localhost:${fake.port}`;
-const slow = { now: 0, max: 0 };
 
 beforeAll(async () => {
   rsa = (await crypto.subtle.generateKey(
@@ -82,14 +81,11 @@ beforeAll(async () => {
       }
       if (url.pathname === "/wp/gone") return new Response("", { status: 410 });
       if (url.pathname.startsWith("/slow/")) {
-        slow.now += 1;
-        slow.max = Math.max(slow.max, slow.now);
         // Holds the request for 400 ms, or until the server gives up on it.
         await new Promise((r) => {
           setTimeout(r, 400);
           req.signal.addEventListener("abort", r);
         });
-        slow.now -= 1;
         return new Response("", { status: 201 });
       }
       if (url.pathname.startsWith("/wp/")) return new Response("", { status: 201 });
@@ -131,8 +127,8 @@ function browserSubscription(path: string) {
   };
 }
 
-async function setup(over: Partial<Config>) {
-  const s = await makeServer(over);
+async function setup(over: Partial<Config>, fetchFn: typeof fetch = fetch) {
+  const s = await makeServer(over, fetchFn);
   const acct = await setupAccount(s);
   const devbox = await pair(s, acct, "devbox", "machine");
   return { s, acct, devbox };
@@ -148,7 +144,6 @@ function decision(devbox: Actor, phone: Actor, id: string, context = "") {
     context,
     options: ["yes", "no"],
     recommended: "yes",
-    default: { action: "ship" },
     source: { machine: "devbox", project: "p", session: "s" },
   };
   return seal("decision", body, { id: devbox.id, signKey: devbox.keys.sign.privateKey }, [
@@ -468,16 +463,31 @@ test("a device holds at most 10 push subscriptions, an account 30", async () => 
 });
 
 test("an account has at most 4 pushes in flight, and a stuck push service times out", async () => {
-  const { s, acct, devbox } = await setup({ pushTimeoutMs: 200 });
+  // Counted where the server sends, not where the service receives: the service hears of a
+  // request the server gave up on only later, when the second can already have started.
+  const flight = { now: 0, max: 0 };
+  const counted: typeof fetch = Object.assign(
+    async (input: RequestInfo | URL, init?: RequestInit) => {
+      flight.now += 1;
+      flight.max = Math.max(flight.max, flight.now);
+      try {
+        return await fetch(input, init);
+      } finally {
+        flight.now -= 1;
+      }
+    },
+    { preconnect: fetch.preconnect },
+  );
+  const { s, acct, devbox } = await setup({ pushTimeoutMs: 200 }, counted);
   for (let i = 0; i < 10; i++)
     await s.call("POST", "/v1/push/subscriptions", {
       token: acct.device.token,
       body: { type: "unifiedpush", endpoint: `${base()}/slow/${i}` },
     });
-  slow.max = 0;
+  flight.max = 0;
   const started = Date.now();
   await postDecision(s, acct, devbox, "d1");
-  expect(slow.max).toBe(4);
+  expect(flight.max).toBe(4);
   // Each request gives up at 200 ms rather than waiting the service's 400 ms.
   expect(Date.now() - started).toBeLessThan(1200);
 });
@@ -504,7 +514,6 @@ test("a queued push is dropped once its device is revoked", async () => {
     context: "",
     options: ["yes", "no"],
     recommended: "yes",
-    default: { action: "ship" },
     source: { machine: "devbox", project: "p", session: "s" },
   };
   const d = seal("decision", body, { id: devbox.id, signKey: devbox.keys.sign.privateKey }, [

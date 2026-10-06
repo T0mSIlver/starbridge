@@ -1,6 +1,6 @@
 # Starbridge
 
-Your agents ask. You answer from anywhere.
+Know the moment your agent is stuck.
 
 When a coding agent needs a decision from you, Starbridge puts the question on your phone and in
 your browser. You answer with one tap, and the waiting session carries on with your answer as its
@@ -46,7 +46,7 @@ After Homebrew or npm, run `starbridge setup` yourself.
 | "Waiting for you" | ✓ | ✓ | ✓ | ✓ |
 | Runs | ✓ | ✓ | ✓ | ✓ |
 | Permission prompts | Opt-in | No | Opt-in³ | Opt-in |
-| `AskUserQuestion` hook | ✓ | n/a | n/a | No⁵ |
+| The agent's own ask tool | ✓ | n/a | n/a | ✓⁵ |
 
 ¹ In interactive sessions (Codex CLI 0.160 or later) while `starbridge agent` runs. In `codex exec`, the agent waits for the
 answer before it ends its turn.
@@ -63,8 +63,8 @@ so that reading the Starbridge skill and running its commands don't ask.
 ⁴ In the TUI and `opencode serve`, with the Starbridge plugin that `starbridge setup` installs. In
 `opencode run`, the agent waits for the answer before it ends its turn.
 
-⁵ opencode's `question` tool still asks in the terminal; the skill tells the agent to use
-`starbridge ask` instead.
+⁵ opencode's `question` tool asks on your devices too, and the first answer, there or in the
+terminal, goes back into the waiting call.
 
 ## Docs
 

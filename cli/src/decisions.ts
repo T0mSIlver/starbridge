@@ -54,6 +54,8 @@ export interface AskInput {
   extensionAnswers?: boolean;
   /** A `claude -p` session: the mod runs only in interactive ones, so nothing submits answers. */
   headless?: boolean;
+  /** For a hook that waits for the answer itself (`hook question`): no session gets it. */
+  held?: boolean;
   project?: string;
   session?: string;
   sessionTitle?: string;
@@ -74,8 +76,6 @@ const IMAGE_BYTES = 384 * 1024;
 
 /** Exit code when nobody answered before `--timeout`. */
 export const EXIT_TIMEOUT = 2;
-/** Sent as the default for clients from before 2026-10-05, which require one and show it. */
-export const NO_DEFAULT = "Waits for your answer";
 /** Exit code on Ctrl-C, as a shell reports SIGINT. */
 const EXIT_INTERRUPTED = 130;
 /** The server holds a long-poll at most this long (PROTOCOL.md). */
@@ -180,7 +180,6 @@ export function buildDecision(input: AskInput, ctx: Ctx, machine: string, to: st
     context: input.context ?? "",
     options,
     ...(options.length > 0 ? { recommended: input.recommended ?? options[0] } : {}),
-    default: { action: NO_DEFAULT },
     ...agentOf(input, ctx.env),
     source: sourceFor(input, ctx, machine),
     ...(links.length > 0 ? { links } : {}),
@@ -290,10 +289,11 @@ export async function postDecision(ctx: Ctx, s: Session, input: AskInput): Promi
       body,
       ...(input.images ? { images: input.images } : {}),
       ...(cursor !== undefined ? { cursor } : {}),
-      ...(decision.source.session ? { session: decision.source.session } : {}),
+      ...(decision.source.session && !input.held ? { session: decision.source.session } : {}),
       ...(decision.answerIn ? { answerIn: true } : {}),
       ...(input.codex && decision.source.session ? { codex: input.codex } : {}),
       ...(input.extensionAnswers && decision.source.session ? { extensionAnswers: true } : {}),
+      ...(input.held ? { held: true } : {}),
     };
   });
   if (input.waiting) await markWaiting(ctx, () => postWaiting(ctx, s, decision.id, "waiting"));
@@ -829,7 +829,7 @@ export function takeAnswer(
   session?: string,
 ): { answer: Answer; question?: string } | undefined {
   const mine = (st: State, d: string) =>
-    session === undefined || (st.asked[d]?.session ?? "") === session;
+    !st.asked[d]?.held && (session === undefined || (st.asked[d]?.session ?? "") === session);
   const found = (st: State) =>
     id
       ? deliverable(st, id)

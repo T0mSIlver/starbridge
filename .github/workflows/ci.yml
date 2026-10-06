@@ -4,13 +4,18 @@ on:
   push:
     branches: [main]
   pull_request:
+  # dependabot-lockfile.yml starts a run on a Dependabot branch after pushing its lockfile. Such
+  # a run checks everything, as a push to main does, on the branch itself rather than its merge
+  # with main.
+  workflow_dispatch:
 
 # A new push to a pull request cancels its older run. Main runs one at a time and never cancels
 # the running one; a newer merge replaces the one waiting, so only main's head waits. deploy.yml
-# deploys each run that passes, and the box refuses a revision older than the one it runs.
+# deploys each run that passes, and the box refuses a revision older than the one it runs. Other
+# runs, pull requests' and dispatched ones, cancel older runs for the same ref.
 concurrency:
-  group: ci-${{ github.event_name == 'pull_request' && github.ref || 'main' }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: ci-${{ github.event_name == 'push' && 'main' || github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'push' }}
 
 # pull-requests: the changed-files step reads a pull request's files from the API.
 permissions:
@@ -154,7 +159,7 @@ jobs:
     runs-on: ${{ vars.RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 5
     outputs:
-      build: ${{ steps.changes.outputs.images == 'true' }}
+      build: ${{ github.event_name == 'workflow_dispatch' || steps.changes.outputs.images == 'true' }}
     steps:
       - id: changes
         if: github.event_name == 'pull_request'
@@ -201,3 +206,21 @@ jobs:
         run: |
           docker image rm -f starbridge-server:$TAG starbridge-web:$TAG starbridge-demo:$TAG starbridge-caddy:$TAG >/dev/null 2>&1 || true
           docker builder prune -f --keep-storage 3GB >/dev/null || true
+
+  # A pull request lists only the checks of runs its own events started, so a dispatched run's
+  # checks never show on it; a commit status does. dependabot-lockfile.yml set it to pending.
+  status:
+    name: status
+    needs: [checks, e2e, images-scope, images]
+    if: always() && github.event_name == 'workflow_dispatch'
+    runs-on: ${{ vars.RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 5
+    permissions:
+      statuses: write
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          STATE: ${{ (contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') || contains(needs.*.result, 'skipped')) && 'failure' || 'success' }}
+        run: >-
+          gh api "repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA" -f context=CI -f state="$STATE"
+          -f target_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"

@@ -14,7 +14,6 @@
     "vectors": "bun run scripts/gen-vectors.ts"
   },
   "dependencies": {
-    "@scure/bip39": "^2.4.0",
     "libsodium-wrappers": "^0.8.4",
     "zod": "^4.6.5"
   },
