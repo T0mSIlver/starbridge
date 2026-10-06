@@ -589,8 +589,13 @@ test("a revocation the chain confirms shows as revoked and closes the notificati
   await api.ownerSignIn("owner-secret");
   shown.open = 2;
   shown.closed = 0;
-  expect((await device.boot()).state).toBe("revoked");
+  await store.put("promptAnswers", {}, ctx.account);
+  // Confirmed by the chain: its keys and what it answered go, and it says who removed it (#343).
+  expect(await device.boot()).toMatchObject({ state: "revoked", by: mine.device.name });
   expect(shown.closed).toBe(2);
+  expect(await store.get("device", ctx.account)).toBeUndefined();
+  expect(await store.get("promptAnswers", ctx.account)).toBeUndefined();
+  expect(await store.get("pin", ctx.account)).toBeDefined();
 });
 
 test("recovering closes the notifications (#311)", async () => {
