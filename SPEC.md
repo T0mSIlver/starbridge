@@ -283,13 +283,15 @@ provider plugins add providers, not panels.
   Version 1 is the 0.1.0 schema with `IF NOT EXISTS`, so it adopts a database made before versions
   were counted. A migration changes the schema and never rewrites rows, to stay within the 30 s
   Caddy holds requests; backfills run in the hourly sweep. `apply.sh` backs the database up just
-  before the new server starts and keeps the last five.
-- **Server-wide cap** (#586). Machines' items stop at 1.5 GB stored across accounts, with 503
+  before a new server that migrates further than the database's `user_version` starts, or when
+  either number can't be read, and keeps the last two (#586).
+- **Server-wide cap** (#586). Machines' items stop at 2 GB stored across accounts, with 503
   `storage-full` and a Retry-After of an hour; answers pass, so questions still close and expire.
-  The hosted disk (37 GB, 10 GB of it system and images, an alert at 2 GB free) holds the live
-  database plus 7 nightly and 5 per-deploy copies, 13 in all: 13 × 1.5 GB, plus SQLite's
-  overhead, stays near 21 GB of the 24 GB above the alert. Six accounts at their 256 MB fill it, a risk
-  taken over buying disk before launch.
+  The hosted disk (38 GB, about 10 GB of it system and Docker, an alert at 2 GB free) holds the
+  live database plus 7 nightly and 2 per-deploy copies, 10 in all. Copies are `VACUUM INTO`, so
+  free pages stay out: 10 × 2 GB, plus SQLite's overhead, is about 21 GB of the 26 GB above the
+  alert, the rest for a week of Docker builds between weekly prunes. Eight accounts at their
+  256 MB fill it, a risk taken over buying disk before launch.
 - **Full disk** (#301). Writes get 503 `storage-full` with `Retry-After`; usage counts and
   housekeeping skip, so a stored item still gets its push.
 - **Usage counts** (#140). `server/src/usage.ts` counts requests the server handles anyway. During

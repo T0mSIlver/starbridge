@@ -41,10 +41,10 @@ export const DEFAULT_LIMITS = {
   answerReserve: 8 * 1024 * 1024,
   /**
    * Stored bytes of every account together, past which machines' items get 503 `storage-full`
-   * while answers still pass. The hosted disk holds the live database and 12 backup copies of
-   * it (deploy/host), so this keeps all 13 under the disk alert (#586).
+   * while answers still pass. The hosted disk holds the live database and 9 backup copies of
+   * it (deploy/host), so this keeps all 10 under the disk alert (#586).
    */
-  serverBytes: 1536 * 1024 * 1024,
+  serverBytes: 2048 * 1024 * 1024,
   /**
    * Sealed boxes of one decision or quota snapshot, in bytes. Each box carries the decision's
    * images, so this is what lets a phone screenshot reach three or four devices at full size.

@@ -55,7 +55,8 @@ image is tagged by a hash of that file and built only when no image has the tag.
 |---|---|
 | Compose project | `sudo docker compose -p starbridge -f /opt/starbridge/deploy/compose.yaml` |
 | Database | volume `starbridge_data`, `/data/starbridge.db` in the container |
-| Backups | `/var/backups/starbridge/starbridge-YYYYMMDD.db` and `umami-YYYYMMDD.dump`, nightly at 03:15 UTC, 7 days; Hetzner backups cover the rest |
+| Backups | `/var/backups/starbridge/starbridge-YYYYMMDD.db` and `umami-YYYYMMDD.dump`, nightly at 03:15 UTC, 7 days; `deploy-*.db`, the last 2 deploys that ran a migration; both are `VACUUM INTO` copies. Hetzner backups cover the rest |
+| Docker prune | `starbridge-docker-prune.timer`, Sundays at 04:30 UTC: images no container uses and build cache, older than 7 days |
 | Analytics | Umami (`umami`, `umami-db`), volume `starbridge_umami-db`; secrets in `/etc/starbridge/umami.env` and `umami-db.env`, made on the first deploy |
 | Analytics limits | Caddy (built with the `rate_limit` module, `caddy.Dockerfile`) takes 30 events a minute per address and 300 in all, 8 KB each; `starbridge-umami-trim.timer` keeps each table to 180 days and a million rows, hourly |
 | Uptime | `.github/workflows/uptime.yml` checks `/healthz`, `/healthz/backup` (503 once the last backup is over 26 h old) and `/healthz/disk` (503 under 2 GB free) hourly and opens an `outage` issue on failure |
@@ -89,8 +90,8 @@ starbridge.run.
 
 To restore, stop the server, copy a backup over `starbridge.db` in the volume, delete
 `starbridge.db-wal` and `starbridge.db-shm`, `chown 1000:1000` it and start the server. Besides
-the nightly `starbridge-YYYYMMDD.db`, each deploy leaves `deploy-<time>.db`, taken while the old
-server still ran, seconds before the new one opened the database; the last five are kept.
+the nightly `starbridge-YYYYMMDD.db`, each deploy that runs a migration leaves `deploy-<time>.db`, taken while
+the old server still ran, seconds before the new one opened the database; the last two are kept.
 
 A server refuses a database whose schema is newer than its own (`PRAGMA user_version`), so
 rolling back past a release that migrated fails at start: restore that deploy's `deploy-<time>.db`

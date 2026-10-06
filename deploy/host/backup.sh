@@ -1,12 +1,13 @@
 #!/bin/sh
 # Copies the live SQLite file with `.backup`, dumps Umami's Postgres, and keeps 7 days of both:
-# 13 copies of the database (live, 7 nightly, 5 per deploy) must fit the disk (#586).
+# 10 copies of the database (live, 7 nightly, 2 per deploy) must fit the disk (#586).
 set -eu
 dir=/var/backups/starbridge
 db=$(docker volume inspect -f '{{.Mountpoint}}' starbridge_data)/starbridge.db
 out=$dir/starbridge-$(date -u +%Y%m%d).db
 umask 077
-sqlite3 "$db" ".backup '$out.tmp'"
+# VACUUM INTO reads one snapshot while the server writes, and leaves free pages out (#586).
+sqlite3 "$db" "VACUUM INTO '$out.tmp'"
 # sqlite3 runs as root: hand back any WAL or shared-memory file it created, or the server
 # could no longer write the database.
 chown --reference="$db" "$db"-wal "$db"-shm 2>/dev/null || true
