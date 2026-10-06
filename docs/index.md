@@ -52,8 +52,9 @@ The recovery key adds a new device to your account when you have lost every devi
 device you sign in on shows it once. Store it somewhere safe, away from your devices, such as a
 password manager or paper. A lost key can't be replaced, but you keep using the devices you have.
 
-To replace the key, open Settings → Devices → Recovery key → Replace on one of your devices.
-Replacing asks for the current key, and the old key stops working.
+To replace the key, pick Replace next to Recovery key: on the web under Settings → Devices, in the
+app under Settings → Devices and machines. Replacing asks for the current key, and the old key
+stops working.
 
 To recover, sign in on a new phone or browser and pick "Use the recovery key". Recovering removes
 every other device and machine from the account. Add your phones and browsers again from

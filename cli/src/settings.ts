@@ -90,11 +90,15 @@ export async function offerPiChain(ctx: Ctx, prompt: Prompt | undefined) {
  * line saying they are there already. Without a terminal to ask on, it says what to add instead.
  */
 export async function offerPiAllow(ctx: Ctx, prompt: Prompt | undefined, quiet = false) {
-  const { state, file } = piAllow(ctx.env);
+  const { state, file, plain } = piAllow(ctx.env);
   if (state === "absent") return;
   const how = `add ${piRulesText(ctx.env)} to "permission" in ${file}`;
+  for (const s of plain)
+    ctx.out(
+      `Pi: "permission.${s}" is a plain level, which Starbridge leaves to you; to let its calls through, make it a map that ends with ${piRulesText(ctx.env, [s])}.`,
+    );
   if (state === "allowed") {
-    if (!quiet)
+    if (!quiet && plain.length === 0)
       ctx.out(
         `Pi: pi-permission-system lets Pi read the skill and run the starbridge commands (${file}).`,
       );

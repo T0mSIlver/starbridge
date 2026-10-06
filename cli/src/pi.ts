@@ -115,9 +115,10 @@ export function piRules(env: Ctx["env"]): Record<string, string[]> {
   };
 }
 
-/** The rules as the JSON to add under `permission`, for the owner to paste. */
-export function piRulesText(env: Ctx["env"]): string {
+/** The rules of `surfaces` (all by default) as the JSON to add under `permission`, to paste. */
+export function piRulesText(env: Ctx["env"], surfaces?: string[]): string {
   return Object.entries(piRules(env))
+    .filter(([s]) => !surfaces || surfaces.includes(s))
     .map(([s, ps]) => `"${s}": {${ps.map((p) => `"${p}": "allow"`).join(", ")}}`)
     .join(", ");
 }
@@ -143,43 +144,53 @@ function writeConfig(file: string, config: Config) {
 }
 
 /**
- * Whether pi-permission-system lets the agent reach the owner: `absent` and `unreadable` as for
- * `piChain`, also `unreadable` when `permission` or one of its surfaces has a shape this command
- * does not rewrite.
+ * A surface this command leaves to the owner: a plain level other than `allow`. As
+ * `{"*": level}` it would merge with a project's map for that surface instead of giving way.
+ */
+const plainLevel = (rules: unknown) => rules !== undefined && rules !== "allow" && !isObject(rules);
+
+/**
+ * Whether pi-permission-system lets the agent reach the owner, on the surfaces this command may
+ * rewrite: `absent` and `unreadable` as for `piChain`, also `unreadable` when `permission` is
+ * not a map. `plain` names the surfaces left to the owner (plainLevel).
  */
 export function piAllow(env: Ctx["env"]): {
   state: "absent" | "allowed" | "missing" | "unreadable";
   file: string;
+  plain: string[];
 } {
   const { state, file } = piChain(env);
-  if (state === "absent" || state === "unreadable") return { state, file };
+  if (state === "absent" || state === "unreadable") return { state, file, plain: [] };
   const config = readConfig(file);
   const permission = config?.permission ?? {};
-  if (!isObject(permission)) return { state: "unreadable", file };
+  if (!isObject(permission)) return { state: "unreadable", file, plain: [] };
   let allowed = true;
+  const plain: string[] = [];
   for (const [surface, patterns] of Object.entries(piRules(env))) {
     const rules = permission[surface] ?? {};
     if (rules === "allow") continue;
-    // A plain level is left to the owner: as `{"*": level}` it would merge with a project's
-    // map for that surface instead of giving way to it.
-    if (!isObject(rules)) return { state: "unreadable", file };
+    if (!isObject(rules)) {
+      plain.push(surface);
+      continue;
+    }
     // Last, since the last match wins: a later pattern of the owner's could shadow them.
     const tail = Object.entries(rules).slice(-patterns.length);
     if (!patterns.every((p, i) => tail[i]?.[0] === p && tail[i]?.[1] === "allow")) allowed = false;
   }
-  return { state: allowed ? "allowed" : "missing", file };
+  return { state: allowed ? "allowed" : "missing", file, plain };
 }
 
 /**
  * Adds piRules to `permission`, each after the owner's own patterns for its surface since the
- * last match wins, keeping the rest of the file. A surface set to a plain `allow` needs none.
+ * last match wins, keeping the rest of the file. A surface set to a plain `allow` needs none,
+ * and one set to another plain level stays as it is (plainLevel).
  */
 export function allowPiRules(env: Ctx["env"]) {
   const file = piPermissionConfig(env);
   const config = readConfig(file) ?? {};
   const permission = isObject(config.permission) ? { ...config.permission } : {};
   for (const [surface, patterns] of Object.entries(piRules(env))) {
-    if (permission[surface] === "allow") continue;
+    if (permission[surface] === "allow" || plainLevel(permission[surface])) continue;
     const rules = isObject(permission[surface]) ? { ...permission[surface] } : {};
     for (const p of patterns) delete rules[p];
     for (const p of patterns) rules[p] = "allow";

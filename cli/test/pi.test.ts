@@ -44,7 +44,15 @@ test("the skill is allowed by name and by its own folder only; a plain allow nee
   expect(piSkillDir({ HOME: "/h", PI_CODING_AGENT_DIR: "/pi" })).toStartWith("/pi/git/");
 });
 
-test("a plain ask or deny level is left to the owner: as a map it would merge with a project's", () => {
-  expect(piAllow(home({ permission: { bash: "ask" } }).env).state).toBe("unreadable");
-  expect(piAllow(home({ permission: { read: "deny" } }).env).state).toBe("unreadable");
+test("a plain ask or deny level is left to the owner, and the other surfaces still get theirs", () => {
+  // As a map, a plain level would merge with a project's map instead of giving way to it.
+  const h = home({ permission: { bash: "ask", read: "deny" } });
+  expect(piAllow(h.env)).toMatchObject({ state: "missing", plain: ["bash", "read"] });
+  allowPiRules(h.env);
+  expect(h.read().permission).toEqual({
+    bash: "ask",
+    read: "deny",
+    skill: { starbridge: "allow" },
+  });
+  expect(piAllow(h.env)).toMatchObject({ state: "allowed", plain: ["bash", "read"] });
 });
