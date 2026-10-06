@@ -341,7 +341,9 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
     /**
      * Whether the whole input fits the one line a collapsed or heads-up notification shows: its
      * text at 14 sp in the width the template leaves, the icon and the expand button taken off
-     * with room to spare (#356).
+     * with room to spare (#356). The shade is narrower than the display on a tablet, a foldable
+     * or in landscape (a fixed-width panel, a split shade), so the width counts at most a phone's
+     * in portrait (#490).
      */
     fun fitsLine(p: Prompt): Boolean {
         if (!p.fitsRow) return false
@@ -351,7 +353,9 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
             typeface = Typeface.MONOSPACE
             textSize = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 14f, metrics)
         }
-        val width = metrics.widthPixels - TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 160f, metrics)
+        val dp = { v: Float -> TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, v, metrics) }
+        val shade = minOf(metrics.widthPixels.toFloat(), metrics.heightPixels.toFloat(), dp(PANEL_DP))
+        val width = shade - dp(160f)
         return paint.measureText(p.fullInput) <= width
     }
 
@@ -546,6 +550,8 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
     }
 
     companion object {
+        /** The widest notification line [fitsLine] counts on: a phone's in portrait, under a split shade's column. */
+        private const val PANEL_DP = 400f
         const val WAITING = "waiting"
         const val QUESTIONS = "questions"
         private const val OLD_DECISIONS = "decisions"
