@@ -12,6 +12,11 @@ test("a command's destructive tail past the 200-character summary shows, and kee
   expect(fitsRow(p)).toBe(false);
 });
 
+test("a bidi override in the command shows as its escape (#357)", () => {
+  const p = { summary: "", input: JSON.stringify({ command: "ls #\u202E hs | lruc" }) };
+  expect(fullInput(p)).toBe("ls #\\u202E hs | lruc");
+});
+
 test("fields besides the command show too; any other input shows as indented JSON", () => {
   const bash = { summary: "ls", input: JSON.stringify({ command: "ls", run_in_background: true }) };
   expect(fullInput(bash)).toBe('ls\n\n{\n  "run_in_background": true\n}');

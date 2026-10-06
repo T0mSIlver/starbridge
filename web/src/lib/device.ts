@@ -54,6 +54,7 @@ import {
   sealAsync,
   toB64,
   verifyDirectory,
+  visible,
   type Waiting,
 } from "@starbridge/protocol";
 import { ApiError, api, backoff, type Stored } from "./api";
@@ -1094,8 +1095,15 @@ async function openPermission(
     ctx.dir,
   );
   const reply = sent[body.id];
+  const p = body as Permission;
   return {
-    permission: body as Permission,
+    // What the owner reads shows bidi and invisible characters as escapes (#357).
+    permission: {
+      ...p,
+      summary: visible(p.summary),
+      ...(p.description !== undefined ? { description: visible(p.description) } : {}),
+      suggestions: p.suggestions.map((g) => ({ ...g, rule: visible(g.rule) })),
+    },
     machine,
     receivedAt: s.receivedAt,
     ...(s.answeredAt ? { answeredAt: s.answeredAt } : {}),
