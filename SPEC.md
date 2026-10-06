@@ -1751,6 +1751,14 @@ so the mod is the first path.
   0 and posts nothing, since devices would hold both the answer and a withdrawal. An answer
   accepted but not yet delivered can still be withdrawn. The skill says only `--answer-in` cards
   need `settle`.
+- 2026-10-06. A provider with no windows to keep (#450). #406 keeps a failed provider's last
+  windows, but one that fails before any good read, or whose kept windows have all reset, has
+  none. It used to be a line above the Quotas table on the web, and nothing on Android. Both
+  now show its group with only the error: on the web table in the windows' column, after the
+  other providers. The CLI logs CodexBar's error whole and sends devices a short one: an HTTP
+  failure reads "Mistral's usage API failed (500)", and a quoted JSON or HTML body is cut off.
+  The loose Mistral line the owner saw came from the dev box's CLI, built before #406, which had
+  saved no windows.
 
 ## Encryption, with existing libraries
 
