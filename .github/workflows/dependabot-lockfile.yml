@@ -11,6 +11,11 @@ on:
 
 permissions: {}
 
+# Two quick pushes from Dependabot: the newer run writes the lockfile.
+concurrency:
+  group: dependabot-lockfile-${{ github.head_ref }}
+  cancel-in-progress: true
+
 jobs:
   lockfile:
     if: github.actor == 'dependabot[bot]' && startsWith(github.head_ref, 'dependabot/npm_and_yarn/')
@@ -35,10 +40,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           BRANCH: ${{ github.head_ref }}
+        # [dependabot skip] lets Dependabot rebase over this commit; it otherwise stops rebasing a
+        # pull request someone else pushed to. Its push then runs this job again.
         run: |
           if git diff --quiet pnpm-lock.yaml; then exit 0; fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898599+github-actions[bot]@users.noreply.github.com'
-          git commit -m 'Update pnpm-lock.yaml' pnpm-lock.yaml
+          git commit -m 'Update pnpm-lock.yaml [dependabot skip]' pnpm-lock.yaml
           git push origin "HEAD:$BRANCH"
           gh workflow run ci.yml --ref "$BRANCH"

@@ -5,12 +5,14 @@ on:
     branches: [main]
   pull_request:
   # dependabot-lockfile.yml starts a run on a Dependabot branch after pushing its lockfile. Such
-  # a run checks everything, as a push to main does.
+  # a run checks everything, as a push to main does, on the branch itself rather than its merge
+  # with main.
   workflow_dispatch:
 
 # A new push to a pull request cancels its older run. Main runs one at a time and never cancels
 # the running one; a newer merge replaces the one waiting, so only main's head waits. deploy.yml
-# deploys each run that passes, and the box refuses a revision older than the one it runs.
+# deploys each run that passes, and the box refuses a revision older than the one it runs. Other
+# runs, pull requests' and dispatched ones, cancel older runs for the same ref.
 concurrency:
   group: ci-${{ github.event_name == 'push' && 'main' || github.ref }}
   cancel-in-progress: ${{ github.event_name != 'push' }}
