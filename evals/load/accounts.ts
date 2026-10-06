@@ -130,7 +130,7 @@ export async function makeUser(n: number, via: Via): Promise<User> {
       { v: 1, rendezvous: code.rendezvous, role, id, name: id, ...publicKeys(keys), at },
       code,
     );
-    // 429 `busy` too: the server holds at most 5000 pairings from the last 10 minutes,
+    // 429 `busy` too: the server holds at most 20000 pairings from the last 10 minutes,
     // approved ones included.
     must(
       await call("POST", "/pairings", { body: { request, claimHash: claimHash(claim) } }),

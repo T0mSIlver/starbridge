@@ -252,13 +252,14 @@ provider plugins add providers, not panels.
 - **Permission answers** are refused 10 minutes after the prompt arrived, since the server cannot
   read its `expiresAt`.
 - **Pairings** (#309, #619). Each address may hold 50 unapproved pairings (IPv6 counted per /48
-  on this route), on top of 30 a minute, and finish 60 GitHub sign-ins a minute; the server-wide
-  cap of 20000 is the disk bound. An office or carrier NAT puts many people behind one IPv4
-  address, so the limits leave room for a launch-day crowd behind it; at one a second they stay
-  far below the 10 sign-ups and visitors a second the load test held. Mobile carriers that hand out /64s from one /48 share 50,
-  a smaller blast radius than the whole server.
-  The server counts them in memory, as every per-address limit, so no address reaches the
-  database, and a restart resets the counts (#575).
+  on this route), on top of 30 a minute; the server-wide cap of 20000 is the disk bound. Mobile
+  carriers that hand out /64s from one /48 share 50, a smaller blast radius than the whole
+  server. The server counts them in memory, as every per-address limit, so no address reaches
+  the database, and a restart resets the counts (#575).
+- **Per-address sign-up limits** (#619). An office or carrier NAT puts many people behind one
+  IPv4 address, so the pairing limits above and the 60 GitHub sign-ins a minute leave room for a
+  launch-day crowd behind it; at one a second they stay far below the 10 sign-ups and visitors a
+  second the load test held.
 - **Long-polls** identify their caller again after the wait and answer 401 if the session or token
   was revoked meanwhile (#260). A directory append ends every machine's answer long-poll, and the
   reply carries the directory's length (#158). On SIGTERM the server ends every long-poll as if
