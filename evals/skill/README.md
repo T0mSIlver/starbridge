@@ -16,7 +16,7 @@ bun evals/skill/render.ts --out evals/skill/cards evals/skill/results/claude/aft
 ```
 
 `run.ts` gives every run a throwaway home, a throwaway `CLAUDE_CONFIG_DIR`, `CODEX_HOME`,
-`PI_CODING_AGENT_DIR` or opencode XDG folders holding a copy of the login, the real server app on a random port with the
+`PI_CODING_AGENT_DIR` or opencode XDG folders holding the login, the real server app on a random port with the
 CLI paired to it, a git project with a bare remote, and a `gh` that prints canned output. Nothing
 touches your own `~/.claude`, `~/.codex`, `~/.pi` or opencode config. Claude Code loads the plugin with
 `--plugin-dir`; Codex gets the skill in `$CODEX_HOME/skills` and the rule in
@@ -26,8 +26,10 @@ and uses the providers in `~/.pi/agent`. Anthropic bills a Claude subscription u
 extra usage, so Pi runs on another model. Situations with a follow-up answer the card with its
 recommended option, in the line the mod submits, and check that the agent acts on it.
 
-Each run's copy of a login may refresh its token on its own; a provider that rotates refresh
-tokens could then sign you out of the original. `TMPDIR` must be outside your home, where an
+Claude Code, the judge and `tokens.ts` run on a long-lived token from `claude setup-token`, in
+`CLAUDE_CODE_OAUTH_TOKEN` or `~/.config/starbridge/secrets/claude-eval-token`: copies of
+`~/.claude/.credentials.json` each refresh on their own, and a rotated refresh token signs the
+original out. `TMPDIR` must be outside your home, where an
 ancestor's `AGENTS.md` or `CLAUDE.md` would reach the agent. A Codex home is 60 MB, so parallel
 runs can fill a small /tmp.
 

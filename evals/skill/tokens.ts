@@ -9,10 +9,11 @@
  * piece appended to the system prompt, minus that of the same call with "." appended.
  */
 import { spawnSync } from "node:child_process";
-import { copyFileSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
-import { homedir, tmpdir } from "node:os";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
+import { claudeToken } from "./login.ts";
 
 const { values: opt } = parseArgs({
   args: process.argv.slice(2),
@@ -42,13 +43,13 @@ const pieces: Record<string, string> = {
 };
 
 const dir = mkdtempSync(join(tmpdir(), "tokens-"));
-copyFileSync(join(homedir(), ".claude/.credentials.json"), join(dir, ".credentials.json"));
+const token = claudeToken();
 function input(extra: string): number {
   const r = spawnSync(
     "claude",
     ["-p", "Reply with ok.", "--model", opt.model as string, "--tools", "", "--setting-sources", "",
       "--output-format", "json", "--append-system-prompt", extra],
-    { cwd: dir, env: { ...process.env, CLAUDE_CONFIG_DIR: dir }, encoding: "utf8" },
+    { cwd: dir, env: { ...process.env, CLAUDE_CONFIG_DIR: dir, CLAUDE_CODE_OAUTH_TOKEN: token }, encoding: "utf8" },
   );
   const u = JSON.parse(r.stdout).usage;
   return u.input_tokens + u.cache_creation_input_tokens + u.cache_read_input_tokens;

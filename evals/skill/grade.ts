@@ -8,11 +8,12 @@
  * `claude -p` in a throwaway config dir, and the verdict is stored in the record, so grading again
  * costs nothing.
  */
-import { copyFileSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { homedir, tmpdir } from "node:os";
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
 import { NO_DEFAULT } from "../../cli/src/decisions.ts";
+import { claudeToken } from "./login.ts";
 import type { RunRecord } from "./run.ts";
 import { type Scenario, scenarios } from "./scenarios.ts";
 
@@ -121,9 +122,8 @@ Answer with only a JSON object, no prose around it:
 }
 
 async function judge(r: Rec, s: Scenario): Promise<Verdict | undefined> {
-  // A throwaway config dir holding only the login, so none of the owner's instructions reach it.
+  // A throwaway config dir, so none of the owner's instructions reach it.
   const dir = mkdtempSync(join(tmpdir(), "judge-"));
-  copyFileSync(join(homedir(), ".claude/.credentials.json"), join(dir, ".credentials.json"));
   try {
   for (let attempt = 0; attempt < 2; attempt++) {
     const p = Bun.spawn(
@@ -131,7 +131,7 @@ async function judge(r: Rec, s: Scenario): Promise<Verdict | undefined> {
         "--setting-sources", "", "--output-format", "json"],
       {
         cwd: dir,
-        env: { ...process.env, CLAUDE_CONFIG_DIR: dir },
+        env: { ...process.env, CLAUDE_CONFIG_DIR: dir, CLAUDE_CODE_OAUTH_TOKEN: token },
         stdout: "pipe",
         stderr: "pipe",
         stdin: "ignore",
@@ -233,6 +233,7 @@ function score(r: Rec, s: Scenario): Record<string, boolean | null> {
   };
 }
 
+const token = opt["no-judge"] ? "" : claudeToken();
 const byName = new Map(scenarios.map((s) => [s.name, s]));
 if (!opt["no-judge"]) {
   const todo = records.filter((r) => !r.judge && !r.error && byName.has(r.scenario));

@@ -7,7 +7,7 @@
  *                          [--out evals/skill/results/<agent>]
  *
  * Each run gets its own throwaway world: a home folder, a Claude Code config dir (or CODEX_HOME,
- * or PI_CODING_AGENT_DIR) holding only a copy of the login, the real server app on a random port
+ * or PI_CODING_AGENT_DIR) holding only the login, the real server app on a random port
  * with the CLI paired to it, a git project with a bare remote, and a `gh` that prints canned
  * output. Nothing is written to the owner's own config. Claude Code loads the plugin with
  * `--plugin-dir`; Codex gets the skill in `$CODEX_HOME/skills` and the SessionStart rule in
@@ -33,6 +33,7 @@ import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
 import { LiveServer } from "../../server/test-support/index.ts";
+import { claudeToken } from "./login.ts";
 import { type Scenario, scenarios } from "./scenarios.ts";
 
 const { values: opt } = parseArgs({
@@ -421,10 +422,12 @@ async function one(s: Scenario, arm: string, rep: number): Promise<RunRecord> {
   );
   chmodSync(join(bin, "starbridge"), 0o755);
 
-  // The agent's login, copied into its throwaway config; the plugin or skill under test.
+  // The agent's login (Claude's long-lived token, else a copy in its throwaway config); the
+  // plugin or skill under test.
   const armDir = arms[arm] as string;
   const plugin = join(armDir, "plugin");
-  if (agent === "claude") copyFileSync(join(homedir(), ".claude/.credentials.json"), join(cfg, ".credentials.json"));
+  const login: Record<string, string> = {};
+  if (agent === "claude") login.CLAUDE_CODE_OAUTH_TOKEN = claudeToken();
   else if (agent === "pi") {
     for (const f of ["models.json", "auth.json"])
       if (existsSync(join(homedir(), ".pi/agent", f)))
@@ -471,6 +474,7 @@ async function one(s: Scenario, arm: string, rep: number): Promise<RunRecord> {
         OPENCODE_DISABLE_AUTOUPDATE: "1",
       },
     }[agent],
+    ...login,
   };
 
   const live = await LiveServer.start();
