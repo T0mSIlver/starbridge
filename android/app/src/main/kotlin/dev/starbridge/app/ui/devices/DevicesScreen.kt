@@ -64,6 +64,8 @@ import dev.starbridge.app.ui.groupGap
 import dev.starbridge.app.ui.groupShape
 import dev.starbridge.app.ui.pairing.QrWays
 import dev.starbridge.app.ui.pairing.rememberScanner
+import dev.starbridge.app.ui.LocalClock24
+import dev.starbridge.app.ui.clock
 import dev.starbridge.app.ui.day
 import dev.starbridge.app.ui.pairing.ShowingQr
 import dev.starbridge.app.ui.listPadding
@@ -121,9 +123,11 @@ fun DevicesScreen(
     val scan = rememberScanner(onResult = onScan, onError = { onAdd() })
     // Devices first, then machines, each in the order the directory added them.
     val rows = members.sortedBy { it.kind != Kind.Device }
+    // A name two rows share, such as a machine paired again, adds the time to tell them apart (#287).
+    val twins = members.groupingBy { it.name }.eachCount().filterValues { it > 1 }.keys
     var revoking by rememberSaveable { mutableStateOf<String?>(null) }
     Page("Devices", modifier, onBack = onBack, titleGap = Spacing.s4) {
-        itemsIndexed(rows, key = { _, it -> it.id }) { i, it -> MemberRow(it, now, groupShape(i, rows.size, outer = Spacing.s5)) { revoking = it.id } }
+        itemsIndexed(rows, key = { _, it -> it.id }) { i, it -> MemberRow(it, it.name in twins, groupShape(i, rows.size, outer = Spacing.s5)) { revoking = it.id } }
         item {
             FilledTonalButton(
                 onClick = scan,
@@ -277,7 +281,7 @@ fun PairCard(approval: Approval, actions: DeviceActions, otherWays: @Composable 
 
 /** A member: its kind's icon, name and when it joined; Revoke is a neutral text button. */
 @Composable
-private fun MemberRow(member: Member, now: Instant, shape: Shape, onRevoke: () -> Unit) {
+private fun MemberRow(member: Member, twin: Boolean, shape: Shape, onRevoke: () -> Unit) {
     val scheme = MaterialTheme.colorScheme
     Surface(Modifier.fillMaxWidth(), shape = shape, color = scheme.surfaceContainer) {
         Row(Modifier.padding(Spacing.s4), verticalAlignment = Alignment.CenterVertically) {
@@ -285,7 +289,8 @@ private fun MemberRow(member: Member, now: Instant, shape: Shape, onRevoke: () -
             Spacer(Modifier.width(Spacing.s4))
             Column(Modifier.weight(1f)) {
                 Text(member.name, style = StarbridgeTheme.type.body, color = scheme.onSurface)
-                val added = "added ${day(member.addedAt)}"
+                val h24 = LocalClock24.current
+                val added = "added ${day(member.addedAt)}" + if (twin) ", ${clock(member.addedAt, h24)}" else ""
                 Text(
                     when {
                         member.current -> "This phone"

@@ -55,7 +55,8 @@ git:github.com/T0mSIlver/starbridge`). In `pi -p`, the agent waits for the answe
 its turn.
 
 ³ With pi-permission-system, once its `authorizerChain` names `starbridge`: your devices allow a
-call once or deny it.
+call once or deny it. Asks from its `path` and `external_directory` rules stay at the keyboard,
+since it lets no link allow those.
 
 ⁴ In the TUI and `opencode serve`, with the Starbridge plugin that `starbridge setup` installs. In
 `opencode run`, the agent waits for the answer before it ends its turn.

@@ -96,6 +96,17 @@ test("pair uses the hosted server unless --server or STARBRIDGE_SERVER names ano
   expect(asked).toEqual(["https://starbridge.run/v1/pairings", "https://self.example/v1/pairings"]);
 });
 
+test("pair --force names the old pairing as Devices shows it, not by its id (#287)", async () => {
+  const ctx = await paired(server);
+  const done = run(["pair", "--force"], ctx);
+  await until(() => ctx.lines.some((l) => l.startsWith("Pairing code: ")));
+  await server.approve(ctx.lines[0]?.replace("Pairing code: ", "") as string);
+  expect(await done).toBe(0);
+  expect(ctx.lines.at(-1)).toMatch(
+    /^Devices still lists the old pairing as the earlier "devbox", added [A-Z][a-z]{2} \d+, \d\d:\d\d( [AP]M)? \S+\. Revoke it there\.$/,
+  );
+});
+
 test("a machine the owner removed says so and how to pair it again", async () => {
   const ctx = await paired(server);
   await server.revoke(ctx.store.machine()?.id as string);
@@ -322,6 +333,26 @@ test("a decision names its agent and the machine's kind, which config sets", asy
   expect(d?.agent).toBe("claude-code");
   expect(d?.source.machineKind).toBe("laptop");
   expect(await run(["config", "machine-kind", "phone"], ctx)).toBe(1);
+});
+
+test("a claude -p session is told to wait, since no mod brings its answer back", async () => {
+  const ctx = await paired(server);
+  ctx.env.CLAUDECODE = "1";
+  await run(ASK, ctx);
+  expect(ctx.errors.at(-1)).toBe("The answer will come back into this session as a new prompt.");
+  ctx.env.CLAUDE_CODE_SESSION_ATTENDED = "0";
+  await run(ASK, ctx);
+  expect(ctx.errors.at(-1)).toContain("run `starbridge wait");
+  // Started from a Pi session, it inherits Pi's variables, and still asks as itself.
+  ctx.env.PI_SESSION_ID = "p1";
+  ctx.env.STARBRIDGE_PI_ANSWERS = "p1";
+  await run(ASK, ctx);
+  expect(ctx.errors.at(-1)).toContain("run `starbridge wait");
+  expect((await server.opened("decision")).map((d) => d.agent)).toEqual([
+    "claude-code",
+    "claude-code",
+    "claude-code",
+  ]);
 });
 
 test("config turns permission prompts on and off", async () => {

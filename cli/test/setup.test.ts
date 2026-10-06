@@ -229,7 +229,21 @@ test("status reports the agent, the service and the plugins", async () => {
 test("uninstall removes the service and plugins, asks the devices to revoke, keeps the keys", async () => {
   const m = await machine();
   await startAgent(m.ctx);
+  // pi-permission-system with the owner's own policy, and the link `config permissions on` adds.
+  const pps = join(m.home, ".pi/agent/extensions/pi-permission-system/config.json");
+  mkdirSync(dirname(pps), { recursive: true });
+  const own = { permission: { bash: { "*": "ask" } }, authorizerChain: ["judge", "starbridge"] };
+  writeFileSync(pps, JSON.stringify(own));
   await setup(m.sys, { yes: true, readyTimeoutMs: 2_000 });
+  // The starbridge commands run without a prompt, after the owner's rules: the last match wins.
+  expect(JSON.parse(readFileSync(pps, "utf8")).permission.bash).toEqual({
+    "*": "ask",
+    "starbridge ask *": "allow",
+    "starbridge waiting *": "allow",
+    "starbridge working *": "allow",
+    "starbridge wait *": "allow",
+    "starbridge settle *": "allow",
+  });
   m.ctx.lines.length = 0;
   expect(await uninstall(m.sys, {})).toBe(0);
   expect(existsSync(join(m.units, "starbridge-agent.service"))).toBe(false);
@@ -244,6 +258,10 @@ test("uninstall removes the service and plugins, asks the devices to revoke, kee
   expect(m.calls()).toContain("pi remove git:github.com/T0mSIlver/starbridge");
   expect(readdirSync(join(m.home, ".config/opencode")).sort()).toEqual(["plugins", "skills"]);
   expect(readdirSync(join(m.home, ".config/opencode/plugins"))).toEqual([]);
+  expect(JSON.parse(readFileSync(pps, "utf8"))).toEqual({
+    permission: { bash: { "*": "ask" } },
+    authorizerChain: ["judge"],
+  });
   const [d] = await server.opened("decision");
   expect(d?.question).toBe("Revoke devbox? It was uninstalled.");
   expect(existsSync(join(m.ctx.store.dir, "machine.json"))).toBe(true);

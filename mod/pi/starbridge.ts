@@ -22,7 +22,15 @@ import { AgentLoop, socketPath } from "../hooks/agent.ts";
 import { permissionHook, runCommand, sleep, socketFetch } from "../hooks/node.ts";
 import { configDir, Poller } from "../hooks/poller.ts";
 import { Switch } from "../hooks/switch.ts";
-import { type AskDetails, authorize, hookInput, LINK, permissionsService } from "./permissions.ts";
+import {
+  type AskDetails,
+  authorize,
+  hookInput,
+  keyboardOnly,
+  LINK,
+  permissionsService,
+  type Verdict,
+} from "./permissions.ts";
 
 interface Ctx {
   hasUI: boolean;
@@ -120,6 +128,19 @@ export default function starbridge(pi: PiApi) {
       service.registerAuthorizer(LINK, (details: AskDetails) => {
         const ctx = current;
         if (!ctx) return Promise.resolve({ kind: "defer" });
+        if (keyboardOnly(details)) {
+          if (!ctx.hasUI) return Promise.resolve({ kind: "defer" });
+          // The defer opens pi-permission-system's dialog, so it waits its turn among the
+          // "Answer here" dialogs and holds it until the ask is decided.
+          const decided = untilDecided(details.requestId, ended.signal);
+          return new Promise<Verdict>((resolve) => {
+            const turn = () => {
+              resolve({ kind: "defer" });
+              return decided;
+            };
+            dialogs = dialogs.then(turn, turn);
+          });
+        }
         const file = ctx.sessionManager.getSessionFile();
         const stdin = JSON.stringify(
           hookInput(details, ctx.sessionManager.getSessionId(), ctx.cwd),

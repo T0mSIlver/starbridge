@@ -31,7 +31,9 @@ ends its turn.
 ⁴ With [pi-permission-system](https://github.com/gotgenes/pi-packages/tree/main/packages/pi-permission-system):
 `starbridge config permissions on` offers to add `starbridge` to its
 `authorizerChain` (in `~/.pi/agent/extensions/pi-permission-system/config.json`). Your devices can allow a call once or deny
-it; "Answer here" in Pi brings back its own prompt.
+it; "Answer here" in Pi brings back its own prompt. Reading or writing a path that a `path` or
+`external_directory` rule guards stays at the keyboard: pi-permission-system lets no link allow
+those.
 
 ⁵ In the TUI and `opencode serve`, through `starbridge agent` or the CLI. In
 `opencode run`, the agent waits for the answer with `starbridge wait` before it
