@@ -101,6 +101,11 @@ starbridge.run {
 # web/src/lib/analytics.ts.
 stats.starbridge.run {
 	encode zstd gzip
+	# The share link alone would open it; the password keeps it to the owner. The hash comes from
+	# Caddy's environment (deploy/host/caddy-env.sh).
+	basic_auth {
+		tom {$STATS_PASSWORD_HASH}
+	}
 	header {
 		Strict-Transport-Security "max-age=31536000"
 		X-Content-Type-Options nosniff

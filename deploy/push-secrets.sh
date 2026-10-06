@@ -1,10 +1,11 @@
 #!/bin/sh
-# Copies the secrets from this machine to /etc/starbridge/secrets (root, 0700) on starbridge-1.
+# Copies the secrets from this machine to /etc/starbridge/secrets (root, 0700) on starbridge-1:
+# the files named as arguments, or all of them.
 set -eu
 host=${STARBRIDGE_HOST:-deploy@starbridge.run}
 key=$HOME/.ssh/starbridge_ed25519
 src=$HOME/.config/starbridge/secrets
-files="github-oauth-client-secret fcm-service-account.json vapid-public-key vapid-private-key"
+files=${*:-github-oauth-client-secret fcm-service-account.json vapid-public-key vapid-private-key stats-password-hash}
 staging=$(ssh -i "$key" "$host" 'umask 077; mktemp -d')
 trap 'ssh -i "$key" "$host" "rm -rf $staging"' EXIT
 (cd "$src" && scp -q -i "$key" $files "$host:$staging/")
