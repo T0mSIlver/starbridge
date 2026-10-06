@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, setDefaultTimeout, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { createServer, type IncomingMessage, request } from "node:http";
-import { createServer as createNetServer } from "node:net";
+import { createServer, Server as HttpServer, type IncomingMessage, request } from "node:http";
+import { createServer as createHttpServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { LiveServer } from "@starbridge/server/test-support";
@@ -371,7 +371,7 @@ test("a call whose signal already aborted is interrupted without opening a reque
 async function codexHome(fail = false) {
   const home = mkdtempSync(join(tmpdir(), "starbridge-codex-"));
   mkdirSync(join(home, "app-server-control"));
-  const daemon = createNetServer();
+  const daemon = createHttpServer();
   await new Promise<void>((r) =>
     daemon.listen(join(home, "app-server-control", "app-server-control.sock"), r),
   );
@@ -468,4 +468,33 @@ test("a Pi session with the extension gets its answer as an event, titled from i
   });
   await ask(bare, "--project", "p");
   expect(bare.errors.at(-1)).toContain("run `starbridge wait");
+});
+
+test("the socket is never open to other users, even between bind and chmod (#95)", async () => {
+  const ctx = await paired(server);
+  ctx.env.STARBRIDGE_CODEXBAR = FAKE_CODEXBAR;
+  const socket = join(ctx.store.dir, "agent.sock");
+  // The mode the socket has the moment it can take connections, before start() returns.
+  let bound: number | undefined;
+  const listen = HttpServer.prototype.listen;
+  HttpServer.prototype.listen = function (this: HttpServer, ...args: unknown[]) {
+    const done = args.pop() as () => void;
+    return listen.call(this, ...(args as []), () => {
+      bound = statSync(socket).mode & 0o777;
+      done();
+    });
+  } as typeof listen;
+  const umask = process.umask(0o002);
+  try {
+    const agent = makeAgent(ctx, { socket });
+    await agent.start();
+    agents.push(agent);
+  } finally {
+    HttpServer.prototype.listen = listen;
+    process.umask(umask);
+  }
+  expect(bound).toBeDefined();
+  expect((bound as number) & 0o077).toBe(0);
+  expect(statSync(socket).mode & 0o777).toBe(0o600);
+  expect(process.umask()).toBe(umask);
 });
