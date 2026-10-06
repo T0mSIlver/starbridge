@@ -71,7 +71,7 @@ const HELP = `starbridge: post decisions to your devices, report runs, upload qu
                               where to open the session, up to 3 times; kind is
                               remote-control, desktop or web (default: what Claude
                               Code records for the session: Remote Control, Desktop)
-      --json <path>           read these fields from a JSON file ("-" for stdin)
+      --input <path>          read these fields from a JSON file ("-" for stdin)
       --wait                  then wait for the answer, as \`wait\` does
       --timeout <duration>    with --wait: give up then, as \`wait\` does
 
@@ -168,7 +168,20 @@ function parseSessionLink(text: string): SessionLink {
 }
 
 function readText(path: string): string {
-  return readFileSync(path === "-" ? 0 : path, "utf8");
+  try {
+    return readFileSync(path === "-" ? 0 : path, "utf8");
+  } catch (e) {
+    throw new UsageError(`cannot read ${path === "-" ? "stdin" : path}: ${(e as Error).message}`);
+  }
+}
+
+function readJson(path: string): unknown {
+  const text = readText(path);
+  try {
+    return JSON.parse(text);
+  } catch (e) {
+    throw new UsageError(`${path === "-" ? "stdin" : path} is not JSON: ${(e as Error).message}`);
+  }
 }
 
 export async function run(argv: string[], ctx: Ctx): Promise<number> {
@@ -205,13 +218,13 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
             image: { type: "string", multiple: true },
             link: { type: "string", multiple: true },
             "answer-in": { type: "string" },
-            json: { type: "string" },
+            input: { type: "string" },
             wait: { type: "boolean" },
             timeout: { type: "string" },
           },
         });
-        const fromJson: AskInput & { default?: unknown } = v.json
-          ? JSON.parse(readText(v.json))
+        const fromJson: AskInput & { default?: unknown } = v.input
+          ? (readJson(v.input) as AskInput & { default?: unknown })
           : {};
         if (fromJson.default !== undefined)
           throw new UsageError("a decision has no default: agents never answer for the owner");

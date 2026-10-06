@@ -53,6 +53,23 @@ curl -fsS --retry 10 --retry-connrefused --retry-delay 1 -X POST \
 sleep 2
 $compose stop $live
 
+# A backup before the new server opens the database and runs its migrations (#470), so a bad one
+# rolls back to this deploy's data rather than the night's. The old server still runs, so writes
+# in the seconds until it stops are not in it. A failed backup stops the deploy before the server
+# is replaced: no migration runs without one. The last five are kept. A new host has no volume yet.
+mnt=$(docker volume inspect -f '{{.Mountpoint}}' starbridge_data 2>/dev/null) || mnt=
+db=$mnt/starbridge.db
+if [ -n "$mnt" ] && [ -f "$db" ]; then
+  out=/var/backups/starbridge/deploy-$(date -u +%Y%m%dT%H%M%S).db
+  mkdir -p /var/backups/starbridge
+  (umask 077 && sqlite3 "$db" ".backup '$out.tmp'")
+  # As in backup.sh: sqlite3 runs as root, so hand back any WAL or shared-memory file it made.
+  chown --reference="$db" "$db"-wal "$db"-shm 2>/dev/null || true
+  sqlite3 "$out.tmp" 'PRAGMA integrity_check' | grep -qx ok
+  mv "$out.tmp" "$out"
+  ls -t /var/backups/starbridge/deploy-*.db | tail -n +6 | xargs -r rm -f
+fi
+
 # The server stays one instance: it holds the long-polls and SQLite. On SIGTERM it ends its
 # long-polls and exits, and Caddy holds requests until the new one answers. --remove-orphans
 # drops the single `web` of releases before two copies.

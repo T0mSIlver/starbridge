@@ -77,7 +77,13 @@ export interface Asked {
   sessionID: string;
   permission: string;
   patterns?: string[];
-  metadata?: { command?: unknown };
+  /**
+   * What opencode shows at the keyboard: `command` for `bash`; `filepath` and `diff` for `edit`,
+   * which its edit, write and apply_patch tools ask, and apply_patch's `files` with their moves;
+   * `command` and `directories` for an `external_directory` ask from its shell tool; the repeated
+   * input of a `doom_loop`, and so on.
+   */
+  metadata?: Record<string, unknown>;
 }
 
 /** A `question.asked` event's properties: one call of the `question` tool. */
@@ -148,15 +154,44 @@ export function answersOf(stdout: string, count: number): string[][] | undefined
   return undefined;
 }
 
-/** The hook input `starbridge hook permission` reads, in Claude Code's shape. */
+/**
+ * The hook input `starbridge hook permission` reads, in Claude Code's shape. The devices show its
+ * `tool_input` before Allow, so it carries what opencode's own dialog shows: an edit's diff and
+ * where each file goes (#489), the command beside the directories it reaches, and any other
+ * permission's metadata. The path comes first, which the CLI takes as the summary.
+ */
 export function hookInput(p: Asked, cwd: string) {
-  const command = p.metadata?.command;
-  return {
-    session_id: p.sessionID,
-    cwd,
-    tool_name: p.permission,
-    tool_input: typeof command === "string" ? { command } : { path: (p.patterns ?? []).join(", ") },
-  };
+  const { command, filepath, diff, directories, files, ...rest } = p.metadata ?? {};
+  const patterns = p.patterns ?? [];
+  const path = patterns.join(", ");
+  const strings = (v: unknown) =>
+    Array.isArray(v) ? v.filter((d): d is string => typeof d === "string") : [];
+  let tool_input: Record<string, unknown>;
+  if (typeof diff === "string") {
+    const moved = Array.isArray(files) ? files.map((f, i) => fileLabel(f, patterns[i])) : [];
+    const file_path = moved.length > 0 && !moved.includes(undefined) ? moved.join(", ") : undefined;
+    tool_input = { file_path: file_path ?? (typeof filepath === "string" ? filepath : path), diff };
+  } else if (typeof command === "string" && p.permission === "external_directory")
+    tool_input = { path: strings(directories).join(", ") || path, command };
+  else if (typeof command === "string") tool_input = { command };
+  else
+    tool_input = {
+      // An MCP tool asks for `*`, which says nothing; its name is the permission.
+      ...(path && path !== "*" ? { path } : {}),
+      ...(typeof filepath === "string" ? { file_path: filepath } : {}),
+      ...rest,
+    };
+  return { session_id: p.sessionID, cwd, tool_name: p.permission, tool_input };
+}
+
+/** One file of an apply_patch: its path, where a move takes it, or that it goes. */
+function fileLabel(f: unknown, from: string | undefined): string | undefined {
+  const { relativePath, type, movePath } = (f ?? {}) as Record<string, unknown>;
+  if (typeof relativePath !== "string") return undefined;
+  // A move's relativePath is where it goes; `patterns` hold where it comes from.
+  if (typeof movePath === "string" && from !== undefined && from !== relativePath)
+    return `${from} → ${relativePath}`;
+  return type === "delete" ? `${relativePath} (deleted)` : relativePath;
 }
 
 /**
