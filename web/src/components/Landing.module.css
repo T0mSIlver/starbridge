@@ -288,16 +288,19 @@
   background: var(--surface);
 }
 
+/* Four tabs wrap on a narrow phone; each side keeps room for the copy button, centred on the row. */
 .tabs {
   position: relative;
   display: flex;
+  flex-wrap: wrap;
   justify-content: center;
   gap: var(--s1);
-  padding: var(--s2);
+  padding: var(--s2) var(--s10);
   border-bottom: 1px solid var(--line);
 }
 
 .tab {
+  white-space: nowrap;
   padding: var(--s1h) var(--s3);
   border: 0;
   border-radius: var(--radius-pill);
