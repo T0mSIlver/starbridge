@@ -101,6 +101,21 @@ test("item posts past the account's rate get 429 with Retry-After", async () => 
   expect(Number(r.headers.get("retry-after"))).toBeGreaterThan(0);
 });
 
+test("machines' items spend a byte budget a minute, replaced and stored ones only", async () => {
+  const probe = await setup();
+  const size = quota(probe.devbox, probe.phone).boxes.reduce((n, b) => n + b.box.length, 0);
+  const { s, phone, devbox } = await setup({ postedBytes: [Math.floor(size * 1.5), 60_000] });
+  const first = quota(devbox, phone);
+  expect((await post(s, devbox, first)).status).toBe(201);
+  // Refused posts spend nothing.
+  for (let i = 0; i < 3; i++) expect((await post(s, devbox, first)).status).toBe(409);
+  // Snapshots replace each other, so the stored-bytes cap never sees them; the budget does.
+  expect((await post(s, devbox, quota(devbox, phone))).status).toBe(201);
+  const r = await post(s, devbox, quota(devbox, phone));
+  expect(r.status).toBe(429);
+  expect(r.json.detail).toContain("MB");
+});
+
 test("a full account refuses new decisions but still takes answers and replaced quotas", async () => {
   const { s, phone, devbox } = await setup({ decisions: 2 });
   const first = decision(devbox, phone);
@@ -184,7 +199,7 @@ test("stored bytes are capped per account, keeping room for answers, and per ite
   expect(r.json.error).toBe("too-many-items");
   expect((await post(s, phone, a)).status).toBe(201);
 
-  s.deps.config.limits = { ...DEFAULT_LIMITS, itemBytes: boxes(q) - 1, answerBytes: boxes(a) - 1 };
+  s.deps.config.limits = { ...DEFAULT_LIMITS, quotaBytes: boxes(q) - 1, answerBytes: boxes(a) - 1 };
   const big = await post(s, devbox, quota(devbox, phone));
   expect(big.status).toBe(413);
   expect(big.json.error).toBe("too-large");
@@ -428,7 +443,7 @@ test("the GitHub callback is rate-limited per address", async () => {
   const statuses = [];
   for (let i = 0; i < 21; i++)
     statuses.push((await s.call("GET", "/v1/auth/github/callback?code=x&state=y")).status);
-  expect(statuses.slice(0, 20).every((st) => st === 400)).toBe(true);
+  expect(statuses.slice(0, 20).every((st) => st === 302)).toBe(true);
   expect(statuses[20]).toBe(429);
 });
 

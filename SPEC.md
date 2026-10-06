@@ -356,6 +356,11 @@ provider plugins add providers, not panels.
   static musl build where the glibc one would not start. Only the repository is pinned, since
   CodexBar ships almost daily (#530): the tarball must match the `.sha256` of the same release,
   as Homebrew checks it, and `starbridge update` moves that install to the latest release too.
+  The latest version comes from where `releases/latest` redirects, not GitHub's API, which allows
+  60 unauthenticated requests an hour per address, few behind a shared NAT on launch day; the
+  download says its size and how far it got every 5 s, since the Linux tarball is 170 MB (#618).
+  `update` goes on to CodexBar when its own download fails, offline say, but not when a release
+  does not check out (#617).
   `update --codexbar <version>` installs one release, for when the latest breaks; a broken
   CodexBar already shows as each provider's quota error, so there is no other rollback. A daily
   workflow installs the latest release and reads its output without credentials, and opens an

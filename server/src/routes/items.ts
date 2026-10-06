@@ -164,8 +164,15 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
     ? limits.answerBytes
     : item.kind === "run"
       ? limits.runBytes * item.boxes.length
-      : limits.itemBytes;
+      : item.kind === "quota"
+        ? limits.quotaBytes
+        : limits.itemBytes;
   if (size > most) fail(413, "too-large", `a ${item.kind}'s boxes hold at most ${most} bytes`);
+  // Answers are small and the owner's; only machines' items spend the byte budget, so a looping
+  // machine never blocks an answer. A post is refused once the budget is spent, and only a
+  // stored one spends it.
+  const budget = `bytes:${caller.account}`;
+  if (!fromDevice) rateLimit(c, budget, limits.postedBytes, 0);
 
   // Devices the referred item was sealed to, told once a device answers it.
   let answeredDevices: string[] = [];
@@ -306,6 +313,7 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
       ).run(iso, nextSeq(db), caller.account, item.re);
     return seq;
   })();
+  if (!fromDevice) c.var.limiter.retryAfter(budget, ...limits.postedBytes, size);
 
   c.var.usage.record(`items.${item.kind}`);
   if (answered && caller.role === "device") {

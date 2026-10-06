@@ -313,6 +313,29 @@
   color: var(--fg);
 }
 
+/* The ways to install on the chosen platform, under its tab. */
+.methods {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--s1);
+  padding: var(--s3) var(--s2) 0;
+}
+
+.method {
+  white-space: nowrap;
+  padding: var(--s1) var(--s2h);
+  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
+  background: none;
+  color: var(--fg2);
+}
+
+.method[aria-selected="true"] {
+  border-color: var(--line);
+  color: var(--fg);
+}
+
 .copy {
   position: absolute;
   right: var(--s2);
