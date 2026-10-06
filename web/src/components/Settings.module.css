@@ -1,4 +1,6 @@
-/* Settings on the web (direction A): sections of rows in bordered boxes. */
+/* Settings on the web (direction A): sections of rows in bordered boxes. From 900 px each
+   section's name stands in a column beside its box, so the page uses its width while the rows
+   keep `size.content`, where a switch stays near its label. */
 
 .page {
   display: grid;
@@ -11,6 +13,23 @@
 .section {
   display: grid;
   gap: var(--s3);
+}
+
+@media (min-width: 900px) {
+  .page {
+    max-width: calc(var(--size-settings-label) + var(--s10) + var(--size-content) + 2 * var(--s16));
+  }
+
+  .section {
+    grid-template-columns: var(--size-settings-label) minmax(0, var(--size-content));
+    column-gap: var(--s10);
+    align-items: start;
+  }
+
+  /* The name's first line sits level with the box's first row. */
+  .section > h2 {
+    padding-top: var(--s3);
+  }
 }
 
 .box {
@@ -60,25 +79,10 @@
   padding-block: var(--s2h);
 }
 
-.dragging {
-  opacity: 0.5;
-}
-
-.handle {
-  display: grid;
-  place-items: center;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--fg3);
-  cursor: grab;
-  transition: color var(--t-fast) var(--ease);
-}
-
-@media (hover: hover) {
-  .handle:hover {
-    color: var(--fg);
-  }
+/* The provider rows sit in their own wrapper, so the reorder's live region stays out of the box's
+   dividers. */
+.providers > div:not(:last-of-type) {
+  border-bottom: 1px solid var(--line);
 }
 
 .providerName {
@@ -203,7 +207,11 @@
 }
 
 .linkRow {
+  width: 100%;
+  border: 0;
+  background: none;
   color: inherit;
+  text-align: left;
   text-decoration: none;
   justify-content: space-between;
 }

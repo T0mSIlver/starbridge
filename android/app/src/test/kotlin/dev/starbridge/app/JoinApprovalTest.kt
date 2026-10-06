@@ -127,7 +127,7 @@ class JoinApprovalTest {
                     }
                     path == "/v1/joins/$id/approve" -> {
                         approvals++
-                        if (approvals == 1) json(buildJsonObject { put("error", "unavailable") }, 503)
+                        if (approvals == 1) json(buildJsonObject { put("error", "internal") }, 500)
                         else json(buildJsonObject { put("approved", true) })
                     }
                     else -> MockResponse(404, okhttp3.Headers.headersOf(), "")

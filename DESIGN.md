@@ -330,6 +330,9 @@ size:
   aside: 320 # the web inbox's quota windows
   pane-head: 48 # the head of each web inbox pane
   content: 720
+  settings-label: 220 # the column of section names beside Settings' boxes, from 900 px
+  quota-provider: 200 # the provider's column on the Quotas table
+  quota-table-from: 840 # the Quotas page's own width from which it is one table
   # Quota meters. The pace tick and the overrun's red cap stand `s1` beyond
   # the track on each side; the overrun is hatched at -45°, `tick`-wide
   # stripes every `hatch`.
@@ -546,6 +549,7 @@ and Android move alike.
 | A status line ("Pixel joined.", "Refused …") | fades in at `state`, stays until the next action |
 | Pressing a button | its fill steps one tone darker while pressed; no scale, no ripple |
 | A switch | the knob slides at `fast` |
+| Dragging a row by its handle (the Quotas table's providers, Settings' providers) | the row follows the pointer, mouse, pen or touch, with no transition; the rows it passes slide aside at `state`; on release it settles into its place at `state`, landing with the rows it passed; Escape puts it back. The arrow keys, Home and End on a focused handle move it at once |
 | The theme changing | at once: transitions are off for that frame, so nothing fades at its own pace |
 
 Never animated: page and tab changes, moving the selection (J, K or a click),
@@ -583,7 +587,18 @@ error) share one rhythm: the page title in `heading`, sections `s10` apart
 `size.tap` tall). An empty section says what is missing in one line of
 `fg2`, with its action if it has one. First-run, not found and error pages
 use the first-run frame: the brand top left, one 400 px column, legal links
-at the foot.
+at the foot. From 900 px, Settings sets each section's name in a column
+(`size.settings-label`) beside its box, and the rows keep `size.content`.
+
+**Quotas page** (web). Narrower, a card per provider, as on Android.
+Once the page itself is `size.quota-table-from` wide (a window about 1210 px wide,
+with the rail), one table up to `size.page` wide, as dense as the inbox: the
+provider (and its machine) in a column of `size.quota-provider`, then one
+line per window with its name, meter, figure, state and reset in columns. A
+handle before the provider's name reorders providers there; providers that
+lead while "Running out first" is on keep their place, and a provider with a leading
+row is a barrier the others don't cross. Narrow screens reorder
+in Settings.
 
 ## Provider colours
 
@@ -627,9 +642,14 @@ notification icon) draw all three shapes in one colour.
 The PNG and ICO files are rendered from the SVG; redraw them when the mark
 changes.
 
-The product name has no wordmark: it is "Starbridge" in the sans, weight 500.
-In the lockup, the name's baseline sits on the mark's bottom edge, the planet's ground line, with
-a gap of 0.4 of the mark (Android: `ui/Lockup.kt`).
+The product name has no wordmark: it is "Starbridge" in the sans, weight 500. Beside the mark,
+the name stands on the mark's ground: its baseline sits on the mark's bottom
+edge (y 90 of the grid, where the planet's edge ends), and its "g" descends
+below. The gap is 0.4 × the mark's size (`s2` at 20 px). The web aligns them
+with `align-items: baseline`, since a mark's synthesized baseline is its
+bottom edge; Android with `alignBy` (the mark at its height, the name at
+`LastBaseline`), in `ui/Lockup.kt`. The mark alone (favicon, app and notification icons, the
+phone top bar) is unchanged.
 
 ## Roles
 
