@@ -225,6 +225,9 @@ data class QuotaWindow(
     val error: String? = null,
 )
 
+/** A provider CodexBar failed for with no windows to keep: its card says only why (#450). */
+data class QuotaFailure(val provider: String, val error: String, val machine: String? = null)
+
 enum class Kind { Device, Machine }
 
 /** An active member of the account's directory: a device (phone, browser) or a machine. */

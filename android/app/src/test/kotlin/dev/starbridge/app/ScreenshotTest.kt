@@ -88,6 +88,7 @@ class ScreenshotTest(private val dark: Boolean) {
 
     private val now = Instant.parse("2026-10-04T14:00:00Z")
     private val fake = Fake(now)
+    private val showcase = Showcase(now)
     private val decisionActions = DecisionActions({ _, _, _ -> }, {})
     private val deviceActions = DeviceActions({}, {}, {}, {}, {})
     private val settingsActions = SettingsActions({}, {}, {}, {}, {}, {})
@@ -124,7 +125,7 @@ class ScreenshotTest(private val dark: Boolean) {
     private fun find(query: String) = compose.onNode(hasSetTextAction()).performTextInput(query)
 
     // The landing page's hero phone: no prompt, so the question with images shows (#210).
-    @Test fun inboxLanding() = capture("inbox-landing") { Phone(Tab.Inbox, 3) { InboxScreen(fake.decisions, now, decisionActions, runs = fake.runs) } }
+    @Test fun inboxLanding() = capture("inbox-landing") { Phone(Tab.Inbox, 3) { InboxScreen(showcase.decisions, now, decisionActions, runs = showcase.runs) } }
 
     @Config(qualifiers = "w412dp-h1400dp-xxhdpi")
     @Test fun inboxByMachine() = capture("inbox-by-machine") { Phone(Tab.Inbox, 4) { Inbox(InboxView(grouping = Grouping.Machine)) } }
@@ -171,7 +172,7 @@ class ScreenshotTest(private val dark: Boolean) {
     // "Reply" opened under the options: a typed answer in place of them (#201).
     @Test fun sheetReply() = capture("sheet-reply", before = { compose.onNodeWithText("Reply").performClick() }) { QuestionSheet(fake.decisions.first { it.id == "d2" }) }
 
-    @Test fun sheetPick() = capture("sheet-pick") { QuestionSheet(fake.decisions.first { it.id == "d3" }) }
+    @Test fun sheetPick() = capture("sheet-pick") { QuestionSheet(showcase.pick) }
 
     @Test fun sheetScreenshot() = capture("sheet-screenshot") { QuestionSheet(fake.screenshot) }
 
@@ -239,7 +240,7 @@ class ScreenshotTest(private val dark: Boolean) {
     @Test fun quotasEmpty() = capture("quotas-empty") { QuotasScreen(emptyList(), now) }
 
     @Test fun quotasStale() = capture("quotas-stale") { QuotasScreen(fake.staleWindows, now) }
-    @Test fun quotasFailed() = capture("quotas-failed") { QuotasScreen(fake.failedWindows, now) }
+    @Test fun quotasFailed() = capture("quotas-failed") { QuotasScreen(fake.failedWindows, now, failures = fake.failures) }
 
     @Test fun devices() = capture("devices") { Phone(null, 0) { DevicesScreen(fake.members, now, deviceActions) } }
 

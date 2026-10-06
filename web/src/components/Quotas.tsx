@@ -37,6 +37,15 @@ export function Quotas() {
       .finally(() => setBusy(false));
   };
   const cards = arrange(quotas?.cards ?? [], settings, now);
+  // Providers with no windows to show come after the others, under their name with why.
+  const failed: Group[] = (quotas?.errors ?? [])
+    .filter((e) => !settings.hidden.includes(e.provider))
+    .map((e) => ({
+      provider: e.provider,
+      machine: e.machine,
+      cards: [],
+      stale: { error: e.error },
+    }));
   return (
     <>
       <PhoneBar
@@ -57,16 +66,13 @@ export function Quotas() {
             A snapshot failed verification and is hidden: {quotas.rejected[0]?.error}
           </p>
         ) : null}
-        {quotas?.errors.map((e) => (
-          <p key={`${e.machine}/${e.provider}`} className={`t-meta ${s.dim}`}>
-            {e.provider} on {e.machine}: {e.error}
-          </p>
-        ))}
-        {quotas === undefined ? null : cards.length === 0 && quotas.cards.length > 0 ? (
+        {quotas === undefined ? null : cards.length === 0 &&
+          failed.length === 0 &&
+          quotas.cards.length + quotas.errors.length > 0 ? (
           <p className={`t-small ${s.empty}`}>
             Every provider is hidden. <Link href="/settings">Settings</Link>
           </p>
-        ) : cards.length === 0 ? (
+        ) : cards.length === 0 && failed.length === 0 ? (
           <p className={`t-small ${s.empty}`}>
             No quota windows yet: run <code className="t-snippet">starbridge setup</code> on a
             machine with CodexBar.
@@ -75,6 +81,7 @@ export function Quotas() {
           <Groups
             all={quotas.cards}
             cards={cards}
+            failed={failed}
             settings={settings}
             now={now}
             setOrder={(order) => setQuotaSettings({ ...settings, order })}
@@ -87,7 +94,7 @@ export function Quotas() {
 
 /**
  * Asks every machine to read CodexBar again and loads what they post, as Android's pull to
- * refresh does; the icon turns until then, up to the 15 s the server holds the ask. The phone
+ * refresh does; the icon turns until then, up to the 25 s the server holds the ask. The phone
  * bar's and the header's buttons share one `busy`, so either shows a refresh the other started.
  */
 function Refresh({ busy, run, size }: { busy: boolean; run: () => void; size: number }) {
@@ -118,12 +125,14 @@ type Unit = { id: string; provider: string; groups: Group[] };
 function Groups({
   all,
   cards,
+  failed,
   settings,
   now,
   setOrder,
 }: {
   all: QuotaCardData[];
   cards: QuotaCardData[];
+  failed: Group[];
   settings: QuotaSettings;
   now: Date;
   setOrder: (order: string[]) => void;
@@ -190,6 +199,16 @@ function Groups({
           </div>
         );
       })}
+      {failed.map((g) => (
+        <QuotaGroup
+          key={`failed/${key(g)}`}
+          g={g}
+          settings={settings}
+          now={now}
+          comfy
+          handle={<span className={s.handleSpace} />}
+        />
+      ))}
       <p className="sr-only" aria-live="polite">
         {reorderer.said}
       </p>

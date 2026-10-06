@@ -50,7 +50,7 @@ const DESKTOP = { width: 1280, height: 860 };
 const tmp = mkdtempSync(join(tmpdir(), "starbridge-e2e-"));
 const children: ChildProcess[] = [];
 
-/** Two PNGs to attach to a decision: the sample data's pair of landing heroes (lib/sample.ts). */
+/** Two PNGs to attach to a decision: the sample data's pair of layouts (lib/sample.ts). */
 function image(which: "a" | "b"): string {
   const shots = JSON.parse(readFileSync(join(WEB, "src/lib/sample-shots.json"), "utf8"));
   const path = join(tmp, `hero-${which}.png`);
@@ -324,7 +324,7 @@ async function main() {
   const landing = await visitor.goto(ORIGIN);
   const policy = landing?.headers()["content-security-policy"] ?? "";
   if (!policy.includes("'nonce-")) throw new Error(`expected a CSP with a nonce, got: ${policy}`);
-  await visitor.getByRole("heading", { name: /Your agents ask/ }).waitFor();
+  await visitor.getByRole("heading", { name: /Know the moment your agent is stuck/ }).waitFor();
   await shoot(visitor, "landing");
   for (const [path, name] of [
     ["/docs", "docs"],
@@ -414,7 +414,7 @@ async function main() {
   if ((await quota.exited) !== 0) throw new Error("quota push failed");
 
   step("answer `starbridge ask --wait` from the inbox, with a Web Push for it");
-  await page.getByRole("link", { name: "Inbox" }).click();
+  await page.getByRole("link", { name: /^Inbox/ }).click();
   const pushesBefore = (services.output().match(/"event":"push"/g) ?? []).length;
   const ask = cli(
     "ask",
@@ -602,7 +602,10 @@ async function main() {
         throw new Error(`${what}: at ${where()} showing the ${open ? "detail" : "list"}`);
     };
     await p.goto(`${ORIGIN}/quotas`);
-    await p.getByRole("link", { name: "Inbox" }).first().click();
+    await p
+      .getByRole("link", { name: /^Inbox/ })
+      .first()
+      .click();
     await p.locator(`button[data-id="${merge}"]`).click();
     await expectAt(`/?item=${merge}`, "detail", "a tapped question");
     await p.getByRole("heading", { name: MERGE }).waitFor();
@@ -824,9 +827,9 @@ async function main() {
   const asked = page.waitForRequest((r) => r.method() === "POST" && r.url().includes("/quota/ask"));
   await refresh.click();
   await asked;
-  // No agent runs in this test, so the server holds the ask its 15 s before it answers.
+  // No agent runs in this test, so the server holds the ask its 25 s before it answers.
   await page.waitForSelector('button[aria-label="Refresh quotas"][aria-busy="false"]:visible', {
-    timeout: 30_000,
+    timeout: 40_000,
   });
 
   step("quota settings: remaining, clock times, workdays");
@@ -901,7 +904,7 @@ async function main() {
   // 12-hour times are the longest: "Will run out on Oct 12 at 12:02 AM".
   await page.getByLabel("12-hour", { exact: true }).check({ force: true });
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.getByRole("link", { name: "Inbox" }).click();
+  await page.getByRole("link", { name: /^Inbox/ }).click();
   const aside = page.getByRole("complementary", { name: "Quota windows" });
   await aside.locator("article").first().waitFor();
   const { scroll, client } = await aside.evaluate((el) => ({
@@ -962,26 +965,37 @@ async function main() {
   if (again.output().includes("(new)"))
     throw new Error("the second snapshot raised its alerts again");
 
-  step("a failed probe keeps the provider's last windows, stale, with its failure (#397)");
+  step(
+    "a failed probe keeps the last windows, stale; with none to keep, a short error (#397, #450)",
+  );
   const timedOut = [
     { provider: "e2e", source: "auto", error: { message: "Claude usage probe timed out." } },
+    {
+      provider: "e2e2",
+      source: "web",
+      error: { message: 'Mistral API error: HTTP 500: {"detail":"Internal server error"}' },
+    },
   ];
   writeFileSync(fakeBar, `#!/bin/sh\ncat <<'EOF'\n${JSON.stringify(timedOut)}\nEOF\nexit 1\n`);
   const failedPush = cli(
     "quota-failed",
-    ["quota", "push", "--once", "--codexbar", fakeBar, "--provider", "e2e"],
+    ["quota", "push", "--once", "--codexbar", fakeBar, "--provider", "e2e", "--provider", "e2e2"],
     machineHome,
   );
   if ((await failedPush.exited) !== 0) throw new Error("quota push failed");
   await page.getByRole("link", { name: "Settings" }).first().click();
   await page.getByRole("link", { name: "Quotas" }).click();
-  const group = page.getByRole("region", { name: "e2e" });
+  const group = page.getByRole("region", { name: "e2e", exact: true });
   await group.getByText("Claude usage probe timed out.").waitFor();
   await group.getByText(/^Updated /).waitFor();
   if ((await group.getByRole("article").count()) === 0)
     throw new Error("the failed provider lost its windows");
-  if ((await page.getByText("e2e on ").count()) > 0)
+  if ((await page.getByText(/^e2e2? on /).count()) > 0)
     throw new Error("the failure shows as a line above the table");
+  const empty = page.getByRole("region", { name: "e2e2", exact: true });
+  await empty.getByText("Mistral's usage API failed (500)").waitFor();
+  if ((await page.getByText("Internal server error").count()) > 0)
+    throw new Error("the provider's raw error reached the page");
   await shoot(page, "quotas-failed");
 
   step("the Quotas table fits its longest reset times, phone to desktop (#294)");
@@ -1187,7 +1201,7 @@ async function main() {
     ],
     farHome,
   );
-  await page.getByRole("link", { name: "Inbox" }).click();
+  await page.getByRole("link", { name: /^Inbox/ }).click();
   await page.locator("button[data-id]").nth(24).waitFor({ timeout: 30_000 });
   await page
     .getByText(/^Nightly eval/)
@@ -1481,7 +1495,9 @@ async function main() {
   await pageC.getByRole("button", { name: "Sign out" }).click();
   await pageC.getByRole("dialog").getByRole("button", { name: "Sign out" }).click();
   // With no keys left, the browser is a visitor: the landing page, not "Sign in to Starbridge".
-  await pageC.getByRole("heading", { name: /Your agents ask/ }).waitFor({ timeout: 30_000 });
+  await pageC
+    .getByRole("heading", { name: /Know the moment your agent is stuck/ })
+    .waitFor({ timeout: 30_000 });
   // Notifications hold decrypted questions: none outlive the sign-out (#311).
   if ((await pageC.evaluate(NOTIFICATIONS)).length > 0)
     throw new Error("signing out left notifications on screen");

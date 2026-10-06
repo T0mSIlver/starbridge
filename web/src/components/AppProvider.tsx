@@ -94,7 +94,7 @@ const QUOTA_POLL_MS = 60_000;
 const QUOTA_JOIN_POLL_MS = 3_000;
 const QUOTA_JOIN_MS = 30_000;
 /** How long a refresh holds for the machines' new snapshots, as Android's QUOTA_ASK_SECONDS. */
-const QUOTA_ASK_SECONDS = 15;
+const QUOTA_ASK_SECONDS = 25;
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [boot, setBoot] = useState<Store["boot"]>({ state: "loading" });

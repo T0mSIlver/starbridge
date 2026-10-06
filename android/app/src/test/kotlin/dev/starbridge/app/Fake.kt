@@ -10,6 +10,7 @@ import dev.starbridge.app.data.Pace
 import dev.starbridge.app.data.Prompt
 import dev.starbridge.app.data.PromptScope
 import dev.starbridge.app.data.PushSetting
+import dev.starbridge.app.data.QuotaFailure
 import dev.starbridge.app.data.QuotaWindow
 import dev.starbridge.app.data.Run
 import dev.starbridge.app.data.SessionLink
@@ -245,9 +246,12 @@ class Fake(private val now: Instant) {
     )
 
     /** CodexBar failed for claude 12 minutes ago: its last windows, with the failure. */
-    val failedWindows = windows.map {
+    val failedWindows = windows.filter { it.provider != "mistral" }.map {
         if (it.provider == "claude") it.copy(takenAt = ago(12), error = "Claude usage probe timed out.") else it
     }
+
+    /** A provider that failed with no windows to keep (#450). */
+    val failures = listOf(QuotaFailure("mistral", "Mistral's usage API failed (500)"))
 
     val members = listOf(
         Member("m1", "Pixel 11 Pro", Kind.Device, ago(60 * 24 * 23), current = true),

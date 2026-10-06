@@ -13,6 +13,8 @@ import ui from "./ui.module.css";
 //                    on the question with images
 //   android-inbox-*, android-question-*  Roborazzi shots of the app: `inbox-landing`, `sheet-pick`
 //   android-lock-*   the design v2 mockups' lock screen, which Roborazzi cannot render
+// All show the Play Store screenshots' neutral data (#448): lib/sample.ts, and Showcase.kt for
+// Android; the lock screen carries the same machines, projects and question.
 // Each comes dark and light; `<picture>` picks the one the browser asks for.
 function Shot({
   name,
@@ -139,14 +141,13 @@ export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
     <div className={s.page}>
       <Analytics />
       <header className={`t-small ${s.top}`}>
-        <span className={`t-subtitle ${s.brand}`}>
+        <a href="/" className={`t-subtitle ${s.brand}`}>
           <Mark size={22} />
           Starbridge
-        </span>
+        </a>
         <nav className={s.nav} aria-label="Site">
           <a href="#features">Features</a>
           <a href="/docs">Docs</a>
-          <a href={SELF_HOST}>Self-host</a>
           <a href={REPO}>GitHub</a>
         </nav>
         <a href="/v1/auth/github" className={`t-label ${ui.btn} ${ui.fill} ${s.signIn}`}>
@@ -155,15 +156,10 @@ export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
       </header>
 
       <section className={s.hero}>
-        <h1 className="t-hero">
-          Your agents ask.
-          <br />
-          You answer from anywhere.
-        </h1>
+        <h1 className={`t-hero ${s.headline}`}>Know the moment your agent is stuck</h1>
         <p className={`t-lead ${s.dim} ${s.lead}`}>
-          Answer your coding agents with one tap
-          <span className={s.wideOnly}> on your phone or in a browser</span>, and the waiting
-          session carries on. You also follow the runs that affect you until they pass or fail.
+          When a coding agent stops for a question or a permission, your phone tells you. Answer
+          with one tap and it gets back to work.
         </p>
         <div className={s.actions}>
           <a href="/v1/auth/github" className={`t-action ${ui.btn} ${ui.lg} ${ui.fill}`}>
@@ -236,13 +232,13 @@ export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
 
       <section id="install" className={s.installSection}>
         <h2 className="t-title">Install on each machine that runs agents</h2>
-        <p className={`t-prose ${s.dim} ${s.wideOnly}`}>
-          <code>starbridge setup</code> pairs the machine and installs the Claude Code plugin. The
-          script runs it; after Homebrew or npm, run it yourself.
+        <p className={`t-small ${s.dim} ${s.wideOnly}`}>
+          After Homebrew or npm, run <code className={s.inlineCode}>starbridge setup</code> to pair
+          the machine and install the Claude Code plugin. The script runs it for you.
         </p>
         <Install />
         <p className={`t-meta ${s.faint}`}>
-          Works best with Claude Code; Codex, Pi and opencode supported.
+          Works best with Claude Code. Codex, Pi and opencode are supported.
         </p>
       </section>
 

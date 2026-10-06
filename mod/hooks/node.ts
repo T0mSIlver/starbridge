@@ -77,8 +77,18 @@ export function permissionHook(
   signal: AbortSignal,
   env: Record<string, string> = {},
 ) {
+  return hookCommand(["permission", "--agent", agent], stdin, signal, env);
+}
+
+/** `starbridge hook <args>` with `stdin`; resolves to what it printed. An abort sends SIGTERM. */
+export function hookCommand(
+  args: string[],
+  stdin: string,
+  signal: AbortSignal,
+  env: Record<string, string> = {},
+) {
   return new Promise<string>((resolve) => {
-    const child = spawn("starbridge", ["hook", "permission", "--agent", agent], {
+    const child = spawn("starbridge", ["hook", ...args], {
       env: { ...process.env, ...env },
       stdio: ["pipe", "pipe", "ignore"],
     });

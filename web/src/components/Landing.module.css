@@ -32,6 +32,7 @@
   /* The name stands on the mark's ground: its baseline on the mark's bottom edge (DESIGN.md). */
   align-items: baseline;
   gap: var(--s2);
+  text-decoration: none;
 }
 
 .nav {
@@ -60,6 +61,12 @@
   justify-items: center;
   padding-top: var(--s30);
   text-align: center;
+}
+
+/* Two even lines on a wide screen, not one long one over a short one. */
+.headline {
+  max-width: 14ch;
+  text-wrap: balance;
 }
 
 .lead {
@@ -281,6 +288,16 @@
   border: 0;
   background: none;
   color: var(--fg2);
+}
+
+/* The docs' inline code: Google Sans Code on a chip, kept on one line. */
+.inlineCode {
+  padding: 1px var(--s1h);
+  border-radius: var(--radius-xs);
+  background: var(--surface2);
+  font-family: var(--mono);
+  font-size: 0.875em;
+  white-space: nowrap;
 }
 
 .cmd {

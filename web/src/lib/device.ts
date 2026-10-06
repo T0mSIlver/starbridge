@@ -1478,7 +1478,8 @@ export async function answerPermission(
 export interface Quotas {
   cards: QuotaCardData[];
   takenAt?: string;
-  errors: { provider: string; machine: string; error: string }[];
+  /** Providers CodexBar failed for with no windows to keep (#450). */
+  errors: { provider: string; machine?: string; error: string }[];
   rejected: { id: string; error: string }[];
 }
 
@@ -1497,9 +1498,14 @@ export async function loadQuotas(ctx: Ctx): Promise<Quotas> {
     const { signer: machine, body } = opened;
     if (!out.takenAt || body.takenAt > out.takenAt) out.takenAt = body.takenAt;
     for (const p of body.providers) {
-      // A failure with windows is said on their group; one with nothing to show, on its own.
+      // A failure with windows is said on their group; one with nothing to show, on a group of
+      // its own.
       if (p.error && p.windows.length === 0)
-        out.errors.push({ provider: p.provider, machine: machine.name, error: p.error });
+        out.errors.push({
+          provider: p.provider,
+          ...(machines > 1 ? { machine: machine.name } : {}),
+          error: p.error,
+        });
       const stale = p.error
         ? { updatedAt: p.updatedAt ?? body.takenAt, error: p.error }
         : undefined;
