@@ -1304,7 +1304,11 @@ so the mod is the first path.
   not recipients yet. Revoked devices are not active, so they get nothing, and nothing is
   re-sealed while the machine finds the directory behind (#280). A decision keeps its signed body
   in the state (0600, like the rest) for this, only until it is answered or withdrawn; its images
-  are read again from their files, and one moved since is left out. Decisions older than 29 days are not re-sealed, since the server drops them at 30.
+  are read again from their files, and one moved since is left out. A re-post says `reseal`, and the server refuses one for an item it no longer holds, so a
+  dropped decision never comes back. The machine counts the new devices' answers before it posts,
+  since a post whose reply is lost may have reached the server. A server that withholds a
+  revocation no answer has revealed yet can still get an open item re-sealed to that device, as it
+  can for a new question; re-sealing stretches that to the item's life.
 
 ## Encryption, with existing libraries
 

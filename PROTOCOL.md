@@ -11,7 +11,7 @@ code cannot show: the HTTP API and the flows.
 - **Signed envelope** `{v, kind, signer, body, sig}`: `body` is JSON text kept exactly as signed;
   `sig` is Ed25519 over `"starbridge/v1/<kind>" NUL signer NUL body`. Verifiers check the
   signature before they parse `body`.
-- **Sealed item** `{v, kind, id, from, re?, quiet?, boxes: [{to, box}]}`: a signed envelope sealed
+- **Sealed item** `{v, kind, id, from, re?, quiet?, reseal?, boxes: [{to, box}]}`: a signed envelope sealed
   with `crypto_box_seal` to each recipient. `kind`, `id`, `from`, `re` and `to` are routing hints
   for the server; clients reject an item whose hints disagree with the signed body. `quiet: true`
   asks the server to store the item without pushing it.
@@ -227,9 +227,9 @@ createdAt, expiresAt, version}`; `state` is `open`, `comparing`, `approved` or `
 
 Item ids are random, chosen by the sender. A machine re-posts a run under its id as it changes;
 the server replaces the earlier post and moves it past every cursor. It also re-posts an open
-decision or permission under its id, re-signed to the active devices, when a device joined
-since it was posted; the server replaces it only while it is unanswered, keeps its `receivedAt`,
-and pushes only the devices that had no box yet. Any other reused id, or a
+decision or permission under its id with `reseal: true`, re-signed to the active devices, when a
+device joined since it was posted; the server replaces it only while it holds it unanswered (404
+once dropped), keeps its `receivedAt`, and pushes only the devices that had no box yet. Any other reused id, or a
 reused id posted by another machine or as another kind, is 409 `duplicate-id`; re-posting an
 answered decision or permission is 409 `already-answered`. Cursors are opaque strings;
 without `after`, a list starts at the first item. An item with `re` marks the item it names

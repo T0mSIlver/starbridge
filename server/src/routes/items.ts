@@ -20,8 +20,8 @@ type KindRule = {
 const ANSWERABLE_FOR: Partial<Record<ItemKind, number>> = { permission: PERMISSION_TTL_MS };
 
 /**
- * Kinds a machine re-seals under their id while open, to the devices active now: a device that
- * joined since reads them too.
+ * Kinds a machine re-seals (`reseal`) under their id while open, to the devices active now: a
+ * device that joined since reads them too. Only an item the server still holds is re-sealed.
  */
 const RESEALED: readonly ItemKind[] = ["decision", "permission"];
 
@@ -245,9 +245,11 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
       answered_at: string | null;
     } | null;
     let receivedAt = now.toISOString();
+    const resealed = item.reseal === true;
+    if (resealed && (!RESEALED.includes(item.kind) || !earlier))
+      fail(404, "not-found", `no ${item.kind} ${item.id} to re-seal`);
     if (earlier) {
       // A kind with updates is re-posted under its id as it changes: the latest replaces it.
-      const resealed = RESEALED.includes(item.kind);
       if (!(rule.updates || resealed) || earlier.kind !== item.kind || earlier.from_id !== me)
         fail(409, "duplicate-id");
       if (resealed) {

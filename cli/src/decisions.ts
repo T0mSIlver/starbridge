@@ -631,9 +631,11 @@ const RESEAL_MS = 29 * 24 * 3600_000;
 async function reseal(ctx: Ctx, s: Session, known: Directory): Promise<void> {
   const st = ctx.store.state();
   const now = ctx.now().getTime();
+  // A decision's recipients are those of its body as last posted; `to`, whose answers count, may
+  // hold more: a post whose reply was lost could have reached the server.
   const decisions = Object.entries(st.asked).flatMap(([id, a]) =>
     a.body && a.to && !a.settled && !st.answers[id] && now - Date.parse(a.askedAt) < RESEAL_MS
-      ? [{ id, a, body: a.body, to: a.to }]
+      ? [{ id, a, body: a.body }]
       : [],
   );
   const prompts = Object.values(st.permissions ?? {}).filter(
@@ -641,26 +643,34 @@ async function reseal(ctx: Ctx, s: Session, known: Directory): Promise<void> {
   );
   const lacking = (to: string[], dir: Directory) =>
     activeMembers(dir, "device").some((d) => !to.includes(d.id));
-  const all = [...decisions.map((d) => d.to), ...prompts.map((p) => p.permission.to)];
+  const all = [...decisions.map((d) => d.body.to), ...prompts.map((p) => p.permission.to)];
   if (st.behind || !all.some((to) => lacking(to, known))) return;
   const dir = await refreshDirectory(ctx, s, ctx.signal);
   const to = activeMembers(dir, "device");
   const ids = to.map((d) => d.id);
   const signer = { id: s.machine.id, signKey: s.keys.sign.privateKey };
-  // Recorded once posted, or once closed meanwhile; a failed post is tried again next poll.
-  const post = async (item: SealedItem, record: (st: State, closed: boolean) => void) => {
-    let closed = false;
+  /**
+   * Posts a re-sealed item: "posted", "closed" when the server holds it answered or no longer
+   * holds it, or undefined after an error, which the next poll tries again.
+   */
+  const post = async (item: () => SealedItem) => {
+    let sealed: SealedItem | undefined;
     try {
-      await s.api.postItem(item);
+      sealed = item();
+      await s.api.postItem(sealed);
+      return "posted";
     } catch (e) {
-      closed = e instanceof ApiError && e.code === "already-answered";
-      if (!closed)
-        return ctx.err(`starbridge: could not re-send ${item.id}: ${(e as Error).message}`);
+      if (e instanceof ApiError && ["already-answered", "not-found"].includes(e.code))
+        return "closed";
+      ctx.err(`starbridge: could not re-send ${sealed?.id ?? ""}: ${(e as Error).message}`);
     }
-    ctx.store.updateState((st) => record(st, closed));
   };
   for (const { id, a, body } of decisions) {
-    if (!lacking(a.to ?? [], dir)) continue;
+    if (!lacking(body.to, dir)) continue;
+    ctx.store.updateState((st) => {
+      const x = st.asked[id];
+      if (x) x.to = [...new Set([...(x.to ?? []), ...ids])];
+    });
     const pictures = (a.images ?? []).flatMap((i) => {
       try {
         return [typeof i === "string" ? loadPicture(i) : loadPicture(i.path, i.alt)];
@@ -668,13 +678,16 @@ async function reseal(ctx: Ctx, s: Session, known: Directory): Promise<void> {
         return []; // Moved or deleted since: the re-sealed copy goes without it.
       }
     });
-    const { item } = sealWithPictures({ ...body, to: ids }, pictures, signer, to);
-    await post(item, (st, closed) => {
+    const posted = await post(() => ({
+      ...sealWithPictures({ ...body, to: ids }, pictures, signer, to).item,
+      reseal: true,
+    }));
+    ctx.store.updateState((st) => {
       const x = st.asked[id];
-      if (x) x.to = ids;
-      if (x && closed) forget(x);
+      if (posted === "posted" && x?.body) x.body.to = ids;
+      if (posted === "closed" && x) forget(x);
     });
-    if (a.waiting?.state !== "waiting") continue;
+    if (posted !== "posted" || a.waiting?.state !== "waiting") continue;
     const w = {
       v: 1 as const,
       id: a.waiting.id,
@@ -683,12 +696,17 @@ async function reseal(ctx: Ctx, s: Session, known: Directory): Promise<void> {
       at: iso(ctx.now()),
       state: a.waiting.state,
     } satisfies Waiting;
-    await post({ ...seal("waiting", w, signer, to), quiet: true }, () => {});
+    await post(() => ({ ...seal("waiting", w, signer, to), quiet: true }));
   }
   for (const p of prompts) {
     if (!lacking(p.permission.to, dir)) continue;
     const permission = { ...p.permission, to: ids };
-    await post(seal("permission", permission, signer, to), (st) => {
+    if (
+      (await post(() => ({ ...seal("permission", permission, signer, to), reseal: true }))) !==
+      "posted"
+    )
+      continue;
+    ctx.store.updateState((st) => {
       const x = st.permissions?.[permission.id];
       if (x) x.permission = permission;
     });
