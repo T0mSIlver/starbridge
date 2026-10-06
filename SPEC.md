@@ -387,6 +387,15 @@ provider plugins add providers, not panels.
   and offers, each after asking, Codex's skill, the Pi package and opencode's plugin and skill,
   from copies the CLI carries so versions match. The local agent rewrites outdated copies when
   it starts.
+- **The CLI's path** (#612). Hooks and plugins start the CLI from an agent whose PATH may lack
+  the install folder: on macOS `~/.local/bin` is not on the default PATH, and Claude Code opened
+  from the Dock has no shell profile. So setup and `update` record the binary's absolute path in
+  the config folder (`cli-path`); the Claude Code hooks (`plugin/hooks/cli.sh`), the mod, and the
+  Pi and opencode plugins start that one, else `starbridge` on the PATH, and `cli.sh` then tries
+  the installers' folders. When the binary's folder is not on the PATH, setup offers to add it to
+  the shell's startup file (`--yes` adds it), and its last lines say to open a new terminal or what to add, since
+  install.sh's own hint scrolls away under setup. Windows gets the folder on the PATH from
+  install.ps1.
 - **Files setup writes into other tools** (#474) start with one marker line, ``Written by
   starbridge <version>; `starbridge uninstall` removes it.``, in the file's comment syntax: the
   systemd unit, the launchd plist, the Codex rule, the opencode entry and the copied skills (a YAML
@@ -790,6 +799,10 @@ Tokens, type and components: `DESIGN.md`.
   memory, the VPS's first limit (#587). Caddy compresses every
   response and the web app none: Next's gzip ran on its one thread and filled it near 18 landing
   page visitors a second (#593). Nightly SQLite backups, kept 14 days.
+- **Per-address reads** (#582). Caddy counts every `/v1` request per address, 3000 a minute
+  (IPv6 per /64): most reads count against no account, so this keeps a looping client or script
+  to about 2% of a core. A visible page with a prompt waiting and a run live makes about 200 a
+  minute and a heavy user about 600, so five heavy users can share an office's address.
 - **Capacity** (#301, #625). On the production stack capped to the VPS's two cores and 4 GB,
   memory runs out first: each signed-in user with a machine and an open page holds two
   long-polls, which cost about 300 KB in Caddy, 60 KB in the server and 55 KB in docker-proxy

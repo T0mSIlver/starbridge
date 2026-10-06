@@ -50,6 +50,20 @@ starbridge.run {
 					events 600
 					window 1m
 				}
+				# Most reads count against no account, so a looping client or script could hold a
+				# core. A visible web page with a prompt waiting and a run live makes about 200
+				# requests a minute, a heavy user with the phone and five busy machines about 600;
+				# 3000 lets five such users share an office's address, and holds one address to
+				# about 2% of a core (#582).
+				zone v1_address {
+					match {
+						path /v1/*
+					}
+					key {http.request.remote.host}
+					ipv6_prefix 64
+					events 3000
+					window 1m
+				}
 			}
 			reverse_proxy 127.0.0.1:8080 {
 				lb_try_duration 30s
