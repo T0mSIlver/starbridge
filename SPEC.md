@@ -1293,6 +1293,22 @@ so the mod is the first path.
   read process arguments; `wait <id>` prints a delivered answer from local state. The npm bundle
   runs under Node, so the CLI uses no Bun global without a guard; a test runs it there.
 
+- 2026-10-06. A device that joins later reads the questions already waiting (#340), as #158 did
+  for quotas. Decisions and permission prompts are sealed and signed to the devices in the
+  directory when asked, so a new phone, a browser that signed in again or a recovery read none
+  of them. Each answer poll now checks the machine's open decisions and prompts against the
+  active devices; when one lacks a device, the machine re-signs it with the full recipient list
+  and posts it again under its own id, with the decision's waiting state. The server takes such
+  a re-post only from the machine that posted the item and only while it is open, keeps its
+  arrival time, so a prompt's 10 minutes do not restart, and pushes only the devices that were
+  not recipients yet. Revoked devices are not active, so they get nothing, and nothing is
+  re-sealed while the machine finds the directory behind (#280). A decision keeps its signed body
+  in the state (0600, like the rest) for this, only until it is answered or withdrawn; its images
+  are read again from their files, and one moved since is left out. A re-post says `reseal`, and the server refuses one for an item it no longer holds, so a
+  dropped decision never comes back. The machine counts the new devices' answers before it posts,
+  since a post whose reply is lost may have reached the server. A server that withholds a
+  revocation no answer has revealed yet can still get an open item re-sealed to that device, as it
+  can for a new question; re-sealing stretches that to the item's life.
 - 2026-10-06. Back on a phone's web page closes an open item first (#347). Under 1100 px, the
   item shown in place of the list sits in the address as `/?item=<id>`, pushed as its own history
   entry, so Back, Android's back gesture and an installed app's Back return to the list; a reload

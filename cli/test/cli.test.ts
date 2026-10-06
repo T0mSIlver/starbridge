@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { type Answer, fromB64, seal } from "@starbridge/protocol";
+import { type Answer, fromB64, open, type SealedItem, seal } from "@starbridge/protocol";
 import { LiveServer } from "@starbridge/server/test-support";
 import jpeg from "jpeg-js";
 import jsQR from "jsqr";
@@ -490,6 +490,61 @@ test("a device the decision was not sealed to cannot answer it", async () => {
   // The phone, which it was sealed to, still can.
   await server.answer(id, { choice: "Wait" });
   expect(await run(["wait", id, "--timeout", "5s"], ctx)).toBe(0);
+});
+
+test("open decisions reach a device that joins later, which can answer them", async () => {
+  const ctx = await paired(server);
+  await run([...ASK, "--session", "s", "--waiting"], ctx);
+  const id = ctx.lines.at(-1) as string;
+  await run(["ask", "--question", "Done?", "--session", "s"], ctx);
+  await run(["settle", ctx.lines.at(-1) as string], ctx);
+  await server.addDevice("old");
+  await server.revoke("old");
+  const laptop = await server.addDevice("laptop");
+  const machine = ctx.store.machine()?.id as string;
+  const call = async (path: string, init?: RequestInit) =>
+    fetch(`${server.url}/v1${path}`, {
+      ...init,
+      headers: { authorization: `Bearer ${laptop.token}`, "content-type": "application/json" },
+    });
+  const opened = async () => {
+    const { items } = (await (await call("/items?kind=decision,waiting")).json()) as {
+      items: { item: SealedItem & { kind: "decision" | "waiting" } }[];
+    };
+    const dir = await server.directory();
+    return items.map((i) => open(i.item, { id: laptop.id, box: laptop.keys.box }, dir).body);
+  };
+  expect(await opened()).toEqual([]);
+  server.pushed.length = 0;
+  // Any answer poll re-seals; a second one, with nothing new, posts nothing.
+  for (let i = 0; i < 2; i++)
+    await poll(ctx, session(ctx), { cursor: ctx.store.state().cursor, seconds: 0, shared: true });
+  // Pushed to the laptop only; the revoked device gets no box, which the server would refuse.
+  expect(server.pushed).toEqual(["decision"]);
+  expect(ctx.errors.filter((e) => e.includes("re-send"))).toEqual([]);
+  expect((await opened()).map((b) => b.id)).toEqual([
+    id,
+    ctx.store.state().asked[id]?.waiting?.id as string,
+  ]);
+  // The phone, which had it, still holds one copy.
+  expect((await server.opened("decision", "&open=1")).map((d) => d.id)).toEqual([id]);
+  const answer: Answer = {
+    v: 1,
+    id: `a_${crypto.randomUUID()}`,
+    decisionId: id,
+    to: machine,
+    answeredAt: `${new Date().toISOString().slice(0, 19)}Z`,
+    choice: "Merge",
+  };
+  const member = (await server.directory()).members.get(machine)?.member;
+  const sealed = seal("answer", answer, { id: laptop.id, signKey: laptop.keys.sign.privateKey }, [
+    member as NonNullable<typeof member>,
+  ]);
+  expect((await call("/items", { method: "POST", body: JSON.stringify(sealed) })).status).toBe(201);
+  expect(await run(["wait", id, "--timeout", "5s"], ctx)).toBe(0);
+  expect(ctx.lines.at(-1)).toBe(`Answer to ${id} (Merge #12 now?): Merge`);
+  // Answered or withdrawn, a decision's plaintext leaves the state.
+  expect(Object.values(ctx.store.state().asked).map((a) => a.body)).toEqual([undefined, undefined]);
 });
 
 test("wait with no id returns each answer once, then times out with exit 2", async () => {
