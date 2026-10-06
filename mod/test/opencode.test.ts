@@ -2,7 +2,14 @@ import { expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { answersOf, claim, hookInput, isRun, waitingSessions } from "../opencode/starbridge.ts";
+import {
+  answersOf,
+  claim,
+  hookInput,
+  isRun,
+  submitted,
+  waitingSessions,
+} from "../opencode/starbridge.ts";
 
 test("only `opencode run` counts as run, whatever flags come first", () => {
   const exe = ["/usr/bin/opencode", "/$bunfs/root/src/index.js"];
@@ -42,9 +49,19 @@ test("of two processes showing a session, only the first to claim an answer subm
   const dir = mkdtempSync(join(tmpdir(), "sb-claims-"));
   const line = "Answer to d_1 (Merge?): Yes";
   const both = await Promise.all([claim(dir, "ses_a", line), claim(dir, "ses_a", line)]);
-  expect(both.sort()).toEqual([false, true]);
-  expect(await claim(dir, "ses_b", line)).toBe(true);
-  expect(await claim(dir, "ses_a", "Answer to d_2 (Push?): No")).toBe(true);
+  expect(both.map((c) => c.state).sort()).toEqual(["held", "mine"]);
+  expect((await claim(dir, "ses_b", line)).state).toBe("mine");
+  expect((await claim(dir, "ses_a", "Answer to d_2 (Push?): No")).state).toBe("mine");
+  // A claim never marked sent, left by a process that died, goes to one taker after a minute.
+  const later = Date.now() + 61_000;
+  const takers = await Promise.all([
+    claim(dir, "ses_a", line, later),
+    claim(dir, "ses_a", line, later),
+  ]);
+  expect(takers.map((c) => c.state).sort()).toEqual(["held", "mine"]);
+  // Once sent, any process may confirm it, and nobody takes it over.
+  await submitted(dir, "ses_a", line);
+  expect((await claim(dir, "ses_a", line, later)).state).toBe("sent");
   rmSync(dir, { recursive: true, force: true });
 });
 

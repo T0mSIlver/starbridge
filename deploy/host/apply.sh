@@ -16,8 +16,16 @@ install -m 755 host/deploy-rev.sh /usr/local/sbin/starbridge-deploy
 host/server-env.sh
 host/umami-env.sh
 $compose build --pull server web-a
-# Not pulled: Caddy's image changes only when caddy.Dockerfile does.
-$compose build caddy
+# Caddy's image changes only when caddy.Dockerfile does: a new image recreates the container,
+# which drops every open connection. Its build is not reproducible (xcaddy fetches and compiles
+# afresh once the build cache is pruned), so it is tagged by a hash of the Dockerfile, which pins
+# every input, and built only when no image has that tag.
+caddy=starbridge-caddy:$(sha256sum caddy.Dockerfile | cut -c1-16)
+if ! docker image inspect "$caddy" >/dev/null 2>&1; then
+  $compose build caddy
+  docker tag starbridge-caddy:latest "$caddy"
+fi
+docker tag "$caddy" starbridge-caddy:latest
 
 # healthy URL SERVICE [SECONDS]
 healthy() {
@@ -87,4 +95,6 @@ healthy http://127.0.0.1:3001/api/heartbeat umami 120
 # about 0.9 GB of cache; unpruned, a day of deploys left 27 GB of it on the 38 GB disk (#301).
 # The newest 3 GB keep the next build fast.
 docker image prune -f >/dev/null || true
+docker image ls starbridge-caddy --format '{{.Repository}}:{{.Tag}}' | grep -vx -e starbridge-caddy:latest -e "$caddy" |
+  xargs -r docker image rm >/dev/null || true
 docker builder prune -f --keep-storage 3GB >/dev/null || true

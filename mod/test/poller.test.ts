@@ -78,7 +78,9 @@ function session(id: string, opts: { gated?: boolean; timing?: Timing } = {}) {
     },
     now: async () => Date.now(),
     sleep: (ms) => Bun.sleep(ms),
-    submit: (text) => s.submitted.push(text),
+    submit: (text) => {
+      s.submitted.push(text);
+    },
     status: (text) => {
       s.status = text;
     },
