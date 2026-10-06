@@ -83,6 +83,7 @@ dependencies {
     implementation(libs.adaptive.navigation3)
     implementation(libs.navigation.suite)
     implementation(libs.okhttp)
+    implementation(libs.work.runtime)
     implementation(libs.browser)
     implementation(libs.firebase.messaging)
     implementation(libs.unifiedpush)
