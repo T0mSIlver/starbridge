@@ -138,13 +138,28 @@ test("a snooze reaches every device and the machine, and leaves its decision ope
   ]);
 });
 
-test("the latest snooze replaces the last, whichever device sent it", async () => {
+test("every snooze is kept, each returns at its time, and none can be replayed", async () => {
   const d = decision();
   await post(devbox, d);
-  await post(phone, snooze(d, inHours(3)));
+  const first = snooze(d, inHours(3));
+  await post(phone, first);
   const later = snooze(d, inHours(5), web);
   expect((await post(web, later)).status).toBe(201);
-  expect((await list(phone, "kind=snooze")).map((x) => x.item.id)).toEqual([later.id]);
+  expect((await list(phone, "kind=snooze")).map((x) => x.item.id)).toEqual([first.id, later.id]);
+  expect((await post(phone, first)).json.error).toBe("duplicate-id");
+  sent = [];
+  wake(6);
+  expect(sent.map((p) => p.payload.id)).toEqual([first.id, later.id]);
+});
+
+test("a snooze must return before the question is dropped", async () => {
+  const d = decision();
+  await post(devbox, d);
+  s.deps.db
+    .query("UPDATE items SET received_at = ? WHERE id = ?")
+    .run(new Date(Date.now() - 29 * 24 * HOUR).toISOString(), d.id);
+  expect((await post(phone, snooze(d, inHours(23)))).status).toBe(201);
+  expect((await post(phone, snooze(d, inHours(25)))).json.error).toBe("bad-schema");
 });
 
 test("a snooze is refused when it goes astray, has no time, runs past 7 days or comes late", async () => {
@@ -177,18 +192,20 @@ test("at its time a snooze is pushed to every device once", async () => {
   expect(sent).toHaveLength(1);
 });
 
-test("an answer, or back now, cancels the push", async () => {
+test("an answer cancels every pending push; back now leaves them to the devices", async () => {
   const answered = decision();
   await post(devbox, answered);
   await post(phone, snooze(answered, inHours(2)));
   expect((await post(phone, answer(answered))).status).toBe(201);
   const back = decision();
   await post(devbox, back);
-  await post(phone, snooze(back, inHours(2)));
+  const first = snooze(back, inHours(2));
+  await post(phone, first);
   await post(phone, snooze(back, new Date().toISOString()));
   sent = [];
   wake(3);
-  expect(sent).toEqual([]);
+  // Only the earlier snooze of the question brought back: devices know a newer one and drop it.
+  expect(sent.map((p) => p.payload.id)).toEqual([first.id]);
 });
 
 test("a waiting flip on a snoozed decision pushes nothing", async () => {
