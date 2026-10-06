@@ -1307,7 +1307,10 @@ so the mod is the first path.
   pairings, an IPv6 client counting as its /48 on this route; approved ones do not count, so an
   office behind one NAT pairs everyone, 20 waiting at once on top of the 10-a-minute rate
   limit. The server-wide cap, now 20000 (about 80 MB of 4 KB requests), stays as the disk
-  bound, and filling it takes a thousand addresses or /48s.
+  bound, and filling it takes a thousand addresses or /48s. The cost: subscribers of a mobile
+  carrier that hands out /64s from one /48 share its 20, so one of them can block pairing there
+  for 10 minutes, a far smaller blast radius than the whole server. Approving one's own
+  pairings frees the slots, but each approval needs a directory entry, 200 per account.
 
 ## Encryption, with existing libraries
 

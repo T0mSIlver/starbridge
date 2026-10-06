@@ -336,7 +336,7 @@ test("approved pairings leave the client's cap, so one address can pair many mem
   await pair(s, acct, "a", "machine");
   await pair(s, acct, "b", "machine");
   expect((await request(s)).r.status).toBe(201);
-  expect((await request(s)).r.status).toBe(429);
+  expect((await request(s)).r.json.error).toBe("too-many-pairings");
 });
 
 test("pairings bound their message size, their number and their long-polls", async () => {

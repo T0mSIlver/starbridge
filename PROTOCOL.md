@@ -306,8 +306,8 @@ own credentials; the payload is already ciphertext or an id. UnifiedPush always 
 ### Limits
 
 These bound what one account, or one address, can make the server store or do. A rate limit
-answers 429 `rate-limited` with `Retry-After` in seconds; a cap answers 409 or 413 with the
-code below. Per-address limits count an IPv6 client as its /64.
+answers 429 `rate-limited` with `Retry-After` in seconds; a cap answers 409, 413 or 429 with
+the code below. Per-address limits count an IPv6 client as its /64, unless the row says /48.
 
 | What | Limit |
 |---|---|
