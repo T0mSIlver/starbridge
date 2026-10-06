@@ -8,7 +8,7 @@
  * `claude -p` in a throwaway config dir, and the verdict is stored in the record, so grading again
  * costs nothing.
  */
-import { copyFileSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
@@ -124,6 +124,7 @@ async function judge(r: Rec, s: Scenario): Promise<Verdict | undefined> {
   // A throwaway config dir holding only the login, so none of the owner's instructions reach it.
   const dir = mkdtempSync(join(tmpdir(), "judge-"));
   copyFileSync(join(homedir(), ".claude/.credentials.json"), join(dir, ".credentials.json"));
+  try {
   for (let attempt = 0; attempt < 2; attempt++) {
     const p = Bun.spawn(
       ["claude", "-p", judgePrompt(r, s), "--model", opt["judge-model"] as string, "--tools", "",
@@ -148,6 +149,9 @@ async function judge(r: Rec, s: Scenario): Promise<Verdict | undefined> {
     } catch {}
   }
   return undefined;
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 }
 
 function score(r: Rec, s: Scenario): Record<string, boolean | null> {

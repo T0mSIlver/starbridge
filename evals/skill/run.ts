@@ -28,7 +28,7 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { homedir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
 import { LiveServer } from "../../server/test-support/index.ts";
@@ -58,8 +58,8 @@ const out = opt.out ?? join(import.meta.dir, "results", agent);
 mkdirSync(out, { recursive: true });
 // Never under the owner's home: Claude Code walks up from the project and would load
 // ~/.claude/CLAUDE.md as an ancestor's. Not in the scratchpad either: a path naming Starbridge
-// would hint the agent. Each run's folder goes once its record is written (a Codex home is 60 MB).
-const work = mkdtempSync("/tmp/skill-eval-");
+// would hint the agent. Set TMPDIR to put it off a small /tmp. Each run's folder goes once its record is written (a Codex home is 60 MB).
+const work = mkdtempSync(join(tmpdir(), "skill-eval-"));
 const bun = process.execPath;
 const which = (cmd: string) => {
   const r = spawnSync("sh", ["-c", `command -v ${cmd}`], { encoding: "utf8" });

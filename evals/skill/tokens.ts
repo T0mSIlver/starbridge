@@ -9,7 +9,7 @@
  * piece appended to the system prompt, minus that of the same call without it.
  */
 import { spawnSync } from "node:child_process";
-import { copyFileSync, mkdtempSync, readFileSync } from "node:fs";
+import { copyFileSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
@@ -64,3 +64,4 @@ for (const [name, text] of Object.entries(pieces)) {
   console.log(`| ${name} | ${n} |`);
 }
 console.log(`| In every session (rule and list entry) | ${always} |`);
+rmSync(dir, { recursive: true, force: true });
