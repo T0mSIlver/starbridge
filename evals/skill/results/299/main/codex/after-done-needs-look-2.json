@@ -1,0 +1,77 @@
+{
+  "agent": "codex",
+  "model": "default",
+  "arm": "after",
+  "scenario": "done-needs-look",
+  "rep": 2,
+  "turns": [
+    {
+      "commands": [
+        "/usr/bin/zsh -lc 'cat /tmp/skill-eval-JQLTf3/after-done-needs-look-2/cfg/skills/starbridge/SKILL.md'",
+        "/usr/bin/zsh -lc \"pwd && rg --files -g 'AGENTS.md' -g 'package.json' -g '*lock*' -g 'README*' && git status --short && gh issue view 7\"",
+        "/usr/bin/zsh -lc 'cat AGENTS.md && rg --files && cat src/auth.js && git status --short && git remote -v'",
+        "/usr/bin/zsh -lc 'git log -5 --oneline && git branch --show-current && ls -la && command -v starbridge && command -v node && gh issue view 7 --json title,body,url'",
+        "/usr/bin/zsh -lc 'git switch -c fix/issue-7-session-refresh'",
+        "/usr/bin/zsh -lc \"node --input-type=module <<'JS'\nimport assert from 'node:assert/strict';\nimport fs from 'node:fs';\nimport vm from 'node:vm';\nconst source = fs.readFileSync('src/auth.js', 'utf8').replace('export function', 'function');\nlet calls = 0;\nconst fresh = { expired: false };\nconst context = vm.createContext({ fetchSession() { calls++; return fresh; } });\nvm.runInContext(source, context);\nconst active = { expired: false };\nassert.equal(context.refresh(active), active);\nassert.equal(calls, 0);\nassert.equal(context.refresh({ expired: true }), fresh);\nassert.equal(calls, 1);\nconsole.log('PASS: active session preserved; expired session fetched once.');\nJS\n git diff --check && git diff\"",
+        "/usr/bin/zsh -lc \"git add src/auth.js && git commit -m 'Fix expired session refresh recursion' && git push -u origin fix/issue-7-session-refresh\"",
+        "/usr/bin/zsh -lc \"cat > /tmp/issue-7-pr-body.md <<'EOF'\nExpired session cookies caused refresh() to call itself indefinitely, freezing the page. Call fetchSession() instead so an expired session is renewed; active sessions are still returned unchanged.\n\nCloses #7.\n\nValidation: Node assertions confirmed an expired session calls fetchSession() exactly once and returns its result, while an active session is returned unchanged without fetching. \"'`git diff --check` passed.\nEOF\ngh pr create --title '\"'Fix login loop when session cookie expires' --body-file /tmp/issue-7-pr-body.md\"",
+        "/usr/bin/zsh -lc \"starbridge ask --question 'PR #14 fixes the expired-cookie login loop; will you review and merge it on GitHub?' --context 'refresh() now calls fetchSession() instead of recursing forever.\nFocused Node checks passed for expired and active sessions; diff check passed.\nYou review and merge every PR yourself. Review now, or leave it for later.' --option 'Review on GitHub' --option 'Review later' --link https://github.com/acme/notes/pull/14 --waiting\"",
+        "/usr/bin/zsh -lc 'starbridge wait d_tGWkjirBq4k8KLhC --timeout 50s'",
+        "/usr/bin/zsh -lc 'starbridge wait d_tGWkjirBq4k8KLhC --timeout 50s'"
+      ],
+      "final": "Fixed #7 and opened [PR #14](https://github.com/acme/notes/pull/14).\n\nExpired sessions now call `fetchSession()` instead of recursing. Focused checks passed. Review request sent through Starbridge; the PR awaits your review and merge.",
+      "session": "01a1105d-43cf-7573-8f2c-071b5361c030",
+      "tokens": 639606,
+      "exit": 0,
+      "seconds": 225.758
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_tGWkjirBq4k8KLhC",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-06T08:39:04Z",
+      "question": "PR #14 fixes the expired-cookie login loop; will you review and merge it on GitHub?",
+      "context": "refresh() now calls fetchSession() instead of recursing forever.\nFocused Node checks passed for expired and active sessions; diff check passed.\nYou review and merge every PR yourself. Review now, or leave it for later.",
+      "options": [
+        "Review on GitHub",
+        "Review later"
+      ],
+      "recommended": "Review on GitHub",
+      "agent": "codex",
+      "default": {
+        "action": "Waits for your answer"
+      },
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "01a1105d-43cf-7573-8f2c-071b5361c030"
+      },
+      "links": [
+        {
+          "url": "https://github.com/acme/notes/pull/14"
+        }
+      ],
+      "replies": true
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [
+    "gh issue view 7",
+    "gh issue view 7 --json title,body,url",
+    "gh pr create --title Fix login loop when session cookie expires --body-file /tmp/issue-7-pr-body.md"
+  ],
+  "judge": {
+    "cold": true,
+    "consequences": false,
+    "terminal": false,
+    "links": true,
+    "plain": true,
+    "notes": "The options say nothing about what each changes: 'Review on GitHub' vs 'Review later' doesn't clarify what happens next, and the default 'Waits for your answer' is vague about whether the PR sits unmerged."
+  }
+}

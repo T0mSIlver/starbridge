@@ -1,0 +1,92 @@
+{
+  "agent": "codex",
+  "model": "default",
+  "arm": "after",
+  "scenario": "merge-order",
+  "rep": 1,
+  "turns": [
+    {
+      "commands": [
+        "/usr/bin/zsh -lc 'cat /tmp/skill-eval-JQLTf3/after-merge-order-1/cfg/skills/starbridge/SKILL.md'",
+        "/usr/bin/zsh -lc 'gh pr view 12 --json number,title,mergeable,mergeStateStatus,headRefName,baseRefName,body && gh pr view 13 --json number,title,mergeable,mergeStateStatus,headRefName,baseRefName,body'",
+        "/usr/bin/zsh -lc 'gh pr diff 12 && gh pr diff 13'",
+        "/usr/bin/zsh -lc 'git status --short && gh pr view 12 --json mergeable && gh pr view 13 --json mergeable && ls -a'",
+        "/usr/bin/zsh -lc \"starbridge ask --question 'Which PR should merge first: #12 for resumable CLI uploads or #13 for the sync timeout fix?' --context 'Both PRs have four passing checks, but their edits conflict on TIMEOUT_MS in src/api.ts.\n#12 first: land resumable uploads needed for tonight’s 20:00 CLI release, then reconcile #13.\n#13 first: land the slow-link timeout fix affecting users losing edits (3 reports this week), then reconcile #12.\nProject rules require you to choose the order.' --option '#12 first' --option '#13 first' --link https://github.com/acme/notes/pull/12 --link https://github.com/acme/notes/pull/13 --waiting\"",
+        "/usr/bin/zsh -lc 'starbridge wait d_QvOdGzxKRUT_EzsE --timeout 1m'"
+      ],
+      "final": "Squash-merged [#12](https://github.com/acme/notes/pull/12) first, as you chose in Starbridge, then [#13](https://github.com/acme/notes/pull/13). Both merges succeeded.",
+      "session": "01a11051-9d3e-7cd1-be56-047f49448baa",
+      "tokens": 178703,
+      "exit": 0,
+      "seconds": 43.106
+    },
+    {
+      "commands": [
+        "/usr/bin/zsh -lc 'gh pr merge 12 --squash'",
+        "/usr/bin/zsh -lc 'gh pr merge 13 --squash'"
+      ],
+      "final": "Squash-merged [#12](https://github.com/acme/notes/pull/12) first, as you chose in Starbridge, then [#13](https://github.com/acme/notes/pull/13). Both merges succeeded.",
+      "session": "01a11051-9d3e-7cd1-be56-047f49448baa",
+      "tokens": 178703,
+      "exit": 0,
+      "seconds": 43.106
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_QvOdGzxKRUT_EzsE",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-06T08:26:05Z",
+      "question": "Which PR should merge first: #12 for resumable CLI uploads or #13 for the sync timeout fix?",
+      "context": "Both PRs have four passing checks, but their edits conflict on TIMEOUT_MS in src/api.ts.\n#12 first: land resumable uploads needed for tonight’s 20:00 CLI release, then reconcile #13.\n#13 first: land the slow-link timeout fix affecting users losing edits (3 reports this week), then reconcile #12.\nProject rules require you to choose the order.",
+      "options": [
+        "#12 first",
+        "#13 first"
+      ],
+      "recommended": "#12 first",
+      "agent": "codex",
+      "default": {
+        "action": "Waits for your answer"
+      },
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "01a11051-9d3e-7cd1-be56-047f49448baa"
+      },
+      "links": [
+        {
+          "url": "https://github.com/acme/notes/pull/12"
+        },
+        {
+          "url": "https://github.com/acme/notes/pull/13"
+        }
+      ],
+      "replies": true
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [
+    "gh pr view 12 --json number,title,mergeable,mergeStateStatus,headRefName,baseRefName,body",
+    "gh pr view 13 --json number,title,mergeable,mergeStateStatus,headRefName,baseRefName,body",
+    "gh pr diff 12",
+    "gh pr diff 13",
+    "gh pr view 12 --json mergeable",
+    "gh pr view 13 --json mergeable",
+    "gh pr merge 12 --squash",
+    "gh pr merge 13 --squash"
+  ],
+  "answered": "Answer to d_QvOdGzxKRUT_EzsE (Which PR should merge first: #12 for resumable CLI uploads or #13 for the sync timeout fix?): #12 first",
+  "judge": {
+    "cold": true,
+    "consequences": true,
+    "terminal": false,
+    "links": true,
+    "plain": true,
+    "notes": "The card is clear and well-formed; the only minor weakness is that it says 'then reconcile' without stating who resolves the conflict or what that costs."
+  }
+}

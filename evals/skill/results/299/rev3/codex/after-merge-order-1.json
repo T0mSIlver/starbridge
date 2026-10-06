@@ -1,0 +1,91 @@
+{
+  "agent": "codex",
+  "model": "default",
+  "arm": "after",
+  "scenario": "merge-order",
+  "rep": 1,
+  "turns": [
+    {
+      "commands": [
+        "/usr/bin/zsh -lc 'cat /var/tmp/skill-eval-osxkMr/after-merge-order-1/cfg/skills/starbridge/SKILL.md'",
+        "/usr/bin/zsh -lc 'gh pr view 12 --json number,title,mergeable,mergeStateStatus,headRefName,baseRefName,url && gh pr view 13 --json number,title,mergeable,mergeStateStatus,headRefName,baseRefName,url'",
+        "/usr/bin/zsh -lc 'gh pr diff 12'",
+        "/usr/bin/zsh -lc 'gh pr diff 13'",
+        "/usr/bin/zsh -lc 'git status --short'",
+        "/usr/bin/zsh -lc \"starbridge ask --question 'Which should merge first: PR #12 for CLI resumable uploads or PR #13 for the sync timeout fix?' --context 'Both PRs are green but conflict in src/api.ts; project rules leave merge order to you.\n#12 first: prioritizes resumable uploads for tonight’s 20:00 CLI release; #13 then needs conflict resolution.\n#13 first: prioritizes the fix for slow-link edit loss (3 reports this week); #12 then needs conflict resolution before the release.' --option '#12 first' --option '#13 first' --link https://github.com/acme/notes/pull/12 --link https://github.com/acme/notes/pull/13 --waiting\"",
+        "/usr/bin/zsh -lc 'starbridge wait d_BmNjPb08gvfSPbrx --timeout 5m'"
+      ],
+      "final": "Squash-merged PR #12 first, as you chose through Starbridge, then PR #13. Both merges succeeded.",
+      "session": "01a11073-b8d5-7f61-966b-832fdac3ff61",
+      "tokens": 152872,
+      "exit": 0,
+      "seconds": 44.72
+    },
+    {
+      "commands": [
+        "/usr/bin/zsh -lc 'gh pr merge 12 --squash'",
+        "/usr/bin/zsh -lc 'gh pr merge 13 --squash'"
+      ],
+      "final": "Squash-merged PR #12 first, as you chose through Starbridge, then PR #13. Both merges succeeded.",
+      "session": "01a11073-b8d5-7f61-966b-832fdac3ff61",
+      "tokens": 152872,
+      "exit": 0,
+      "seconds": 44.72
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_BmNjPb08gvfSPbrx",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-06T09:03:19Z",
+      "question": "Which should merge first: PR #12 for CLI resumable uploads or PR #13 for the sync timeout fix?",
+      "context": "Both PRs are green but conflict in src/api.ts; project rules leave merge order to you.\n#12 first: prioritizes resumable uploads for tonight’s 20:00 CLI release; #13 then needs conflict resolution.\n#13 first: prioritizes the fix for slow-link edit loss (3 reports this week); #12 then needs conflict resolution before the release.",
+      "options": [
+        "#12 first",
+        "#13 first"
+      ],
+      "recommended": "#12 first",
+      "agent": "codex",
+      "default": {
+        "action": "Waits for your answer"
+      },
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "01a11073-b8d5-7f61-966b-832fdac3ff61"
+      },
+      "links": [
+        {
+          "url": "https://github.com/acme/notes/pull/12"
+        },
+        {
+          "url": "https://github.com/acme/notes/pull/13"
+        }
+      ],
+      "replies": true
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [
+    "gh pr view 12 --json number,title,mergeable,mergeStateStatus,headRefName,baseRefName,url",
+    "gh pr view 13 --json number,title,mergeable,mergeStateStatus,headRefName,baseRefName,url",
+    "gh pr diff 12",
+    "gh pr diff 13",
+    "gh pr merge 12 --squash",
+    "gh pr merge 13 --squash"
+  ],
+  "answered": "Answer to d_BmNjPb08gvfSPbrx (Which should merge first: PR #12 for CLI resumable uploads or PR #13 for the sync timeout fix?): #12 first",
+  "judge": {
+    "cold": true,
+    "consequences": true,
+    "terminal": false,
+    "links": true,
+    "plain": true,
+    "notes": "The card is good, but the final message claims the user chose through Starbridge although the card shows only a default of waiting, so the answer may be fabricated."
+  }
+}

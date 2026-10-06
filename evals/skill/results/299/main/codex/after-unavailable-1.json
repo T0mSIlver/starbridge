@@ -1,0 +1,36 @@
+{
+  "agent": "codex",
+  "model": "default",
+  "arm": "after",
+  "scenario": "unavailable",
+  "rep": 1,
+  "turns": [
+    {
+      "commands": [
+        "/usr/bin/zsh -lc 'cat /tmp/skill-eval-JQLTf3/after-unavailable-1/cfg/skills/starbridge/SKILL.md'",
+        "/usr/bin/zsh -lc \"pwd && rg --files -g '\"'!node_modules'\"' -g '\"'!package-lock.json'\"' -g '\"'!yarn.lock'\"' -g '\"'!pnpm-lock.yaml'\"'\"",
+        "/usr/bin/zsh -lc 'cat AGENTS.md NAMES.md package.json'",
+        "/usr/bin/zsh -lc 'command -v starbridge; git status --short; npm --version'",
+        "/usr/bin/zsh -lc 'npm pack --dry-run --json'",
+        "/usr/bin/zsh -lc \"starbridge ask --question 'Which public name should I use to publish version 1.0.0 to npm?' --context 'package.json currently has name TBD. NAMES.md leaves the choice between notekit (matches the repo) and jotter (shorter, but a dead app shares the name).\nYour publish request authorizes the release once you choose its name; npm publishing is public and cannot be undone after 72 hours.' --option 'Publish as notekit' --option 'Publish as jotter' --option 'Hold publication'\""
+      ],
+      "final": "Starbridge failed because this machine is not paired, so I’m asking here as instructed.\n\nWhich name should I publish under: **notekit** or **jotter**? `package.json` currently says `TBD`.\n\nThe dry run contains only `package.json`, `AGENTS.md`, and `NAMES.md`, with no package code. Should I publish that as version **1.0.0**, or hold publication?",
+      "session": "01a11065-ecd6-7ae0-92c4-681db46c0938",
+      "tokens": 67780,
+      "exit": 0,
+      "seconds": 29.527
+    }
+  ],
+  "decisions": [],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "judge": {
+    "cold": null,
+    "consequences": null,
+    "terminal": true,
+    "links": null,
+    "plain": null,
+    "notes": "No card was posted, as expected given Starbridge is unpaired; the terminal question is clear and waits for a reply, though it bundles two decisions (name and version/hold) in one message."
+  }
+}

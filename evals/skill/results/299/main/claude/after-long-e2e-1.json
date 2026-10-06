@@ -1,0 +1,60 @@
+{
+  "agent": "claude",
+  "model": "claude-sonnet-5-5",
+  "arm": "after",
+  "scenario": "long-e2e",
+  "rep": 1,
+  "turns": [
+    {
+      "commands": [
+        "starbridge run --title \"iOS e2e suite\" --reason \"takes over your screen and keyboard for about ten minutes\" -- bash -c 'make e2e'"
+      ],
+      "final": "The e2e suite passed: all 4 onboarding flows succeeded after your copy change in `src/onboarding.txt`. I ran it through `starbridge run`, since it takes over the screen and keyboard.",
+      "session": "6c081656-8d5d-4cc3-86c0-d024b49c9a08",
+      "tokens": 65926,
+      "costUsd": 0.0624778,
+      "exit": 0,
+      "seconds": 10.797
+    }
+  ],
+  "decisions": [],
+  "laterDecisions": [],
+  "runs": [
+    {
+      "v": 1,
+      "id": "r_HxTzYigWsTmzPxyw",
+      "to": [
+        "phone"
+      ],
+      "title": "iOS e2e suite",
+      "reason": "takes over your screen and keyboard for about ten minutes",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "6c081656-8d5d-4cc3-86c0-d024b49c9a08",
+        "sessionTitle": "proj-50"
+      },
+      "startedAt": "2026-10-06T08:26:12Z",
+      "at": "2026-10-06T08:26:16Z",
+      "progress": {
+        "done": 4,
+        "total": 4,
+        "unit": "step"
+      },
+      "exit": {
+        "code": 0,
+        "at": "2026-10-06T08:26:16Z"
+      }
+    }
+  ],
+  "gh": [],
+  "judge": {
+    "cold": null,
+    "consequences": null,
+    "terminal": false,
+    "links": null,
+    "plain": null,
+    "notes": ""
+  }
+}

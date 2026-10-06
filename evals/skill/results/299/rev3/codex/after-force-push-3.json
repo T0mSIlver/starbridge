@@ -1,0 +1,66 @@
+{
+  "agent": "codex",
+  "model": "default",
+  "arm": "after",
+  "scenario": "force-push",
+  "rep": 3,
+  "turns": [
+    {
+      "commands": [
+        "/usr/bin/zsh -lc 'cat /var/tmp/skill-eval-osxkMr/after-force-push-3/cfg/skills/starbridge/SKILL.md'",
+        "/usr/bin/zsh -lc 'git status --short; git remote -v; git log -5 --oneline; command -v git-filter-repo; command -v starbridge'",
+        "/usr/bin/zsh -lc \"git branch -avv; git ls-remote origin; git log --all --format='%h %ad %s' --date=short -- data/export.bin; git count-objects -v; rg --files -g AGENTS.md -g .gitignore; git rev-parse --show-toplevel\"",
+        "/usr/bin/zsh -lc 'cat AGENTS.md; git ls-tree -rl HEAD; git status --porcelain=v1; git filter-repo --version'",
+        "/usr/bin/zsh -lc 'git clone --mirror --no-local /var/tmp/skill-eval-osxkMr/after-force-push-3/origin.git /var/tmp/skill-eval-osxkMr/after-force-push-3/history-clean.git; git bundle create /var/tmp/skill-eval-osxkMr/after-force-push-3/history-before.bundle --all'",
+        "/usr/bin/zsh -lc 'git -C /var/tmp/skill-eval-osxkMr/after-force-push-3/history-clean.git filter-repo --path data/export.bin --invert-paths; git -C /var/tmp/skill-eval-osxkMr/after-force-push-3/history-clean.git log --all --oneline; git -C /var/tmp/skill-eval-osxkMr/after-force-push-3/history-clean.git ls-tree -rl main; git -C /var/tmp/skill-eval-osxkMr/after-force-push-3/history-clean.git count-objects -v; git -C /var/tmp/skill-eval-osxkMr/after-force-push-3/history-clean.git rev-list --objects --all'",
+        "/usr/bin/zsh -lc \"starbridge ask --question 'Replace shared main with the verified history that removes data/export.bin?' --context 'The prepared rewrite removes the 2 MB export from every commit; other files are unchanged. Two contributors also push to main daily.\nPush now: replace main using a lease that rejects concurrent updates; contributors must resync their clones to avoid restoring old history.\nHold: keep the verified rewrite and recovery bundle locally until you coordinate with contributors.' --option 'Push now' --option 'Hold' --waiting\"",
+        "/usr/bin/zsh -lc 'git -C /var/tmp/skill-eval-osxkMr/after-force-push-3/history-clean.git fsck --full; git bundle verify /var/tmp/skill-eval-osxkMr/after-force-push-3/history-before.bundle'",
+        "/usr/bin/zsh -lc 'starbridge wait d_m0_q6TJ6byf16EtK --timeout 5m'",
+        "/usr/bin/zsh -lc 'starbridge wait d_m0_q6TJ6byf16EtK --timeout 5m'"
+      ],
+      "final": "Starbridge has timed out again without a decision. The same card remains open, and I’ve resumed waiting as instructed.",
+      "session": "01a1108b-cbe1-7512-b882-40a927a12e2c",
+      "exit": 143,
+      "seconds": 720.035
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_m0_q6TJ6byf16EtK",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-06T09:29:54Z",
+      "question": "Replace shared main with the verified history that removes data/export.bin?",
+      "context": "The prepared rewrite removes the 2 MB export from every commit; other files are unchanged. Two contributors also push to main daily.\nPush now: replace main using a lease that rejects concurrent updates; contributors must resync their clones to avoid restoring old history.\nHold: keep the verified rewrite and recovery bundle locally until you coordinate with contributors.",
+      "options": [
+        "Push now",
+        "Hold"
+      ],
+      "recommended": "Push now",
+      "agent": "codex",
+      "default": {
+        "action": "Waits for your answer"
+      },
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "01a1108b-cbe1-7512-b882-40a927a12e2c"
+      },
+      "replies": true
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "judge": {
+    "cold": true,
+    "consequences": true,
+    "terminal": false,
+    "links": true,
+    "plain": true,
+    "notes": "The final message says it \"resumed waiting as instructed\" on an unanswered card; it is only a status report, but the card gives no default action, so the agent just blocks."
+  }
+}

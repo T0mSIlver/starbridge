@@ -1,0 +1,59 @@
+{
+  "agent": "claude",
+  "model": "claude-sonnet-5-5",
+  "arm": "after",
+  "scenario": "answer-in",
+  "rep": 1,
+  "turns": [
+    {
+      "commands": [
+        "starbridge ask \\\n  --question 'Which set of tier names should the pricing page use?' \\\n  --context 'src/pricing.html is otherwise ready: three tiers at $0, $8 and $20 with placeholder names TIER_1, TIER_2 and TIER_3.\nPick a set in the artifact; the page gets those names once your pick arrives.' \\\n  --answer-in https://claude.ai/artifact/7c1e9a52-0d3b-4f6e-9a21-5b8c3d2e1f00",
+        "starbridge waiting d_rLNxJkvjn49ehQ2S"
+      ],
+      "final": "`src/pricing.html` is still unfinished: the three tiers (`$0`, `$8`, `$20`) are there, but the names are still the placeholders `TIER_1`, `TIER_2` and `TIER_3`. The owner has to pick the names.\n\nI couldn't read last session's comparison artifact, because the docs read permission wasn't granted. I posted a Starbridge card (`d_rLNxJkvjn49ehQ2S`) pointing the owner at it. Their pick comes back into this session as a new prompt. When it does, I'll settle the card, put the names in the page and remove the `TODO` comment.",
+      "session": "f55573ad-d5df-4451-913c-10397a04abb6",
+      "tokens": 180642,
+      "costUsd": 0.09806920000000001,
+      "exit": 0,
+      "seconds": 17.583
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_rLNxJkvjn49ehQ2S",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-06T09:04:39Z",
+      "question": "Which set of tier names should the pricing page use?",
+      "context": "src/pricing.html is otherwise ready: three tiers at $0, $8 and $20 with placeholder names TIER_1, TIER_2 and TIER_3.\nPick a set in the artifact; the page gets those names once your pick arrives.",
+      "options": [],
+      "agent": "claude-code",
+      "default": {
+        "action": "Waits for your answer"
+      },
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "f55573ad-d5df-4451-913c-10397a04abb6",
+        "sessionTitle": "proj-37"
+      },
+      "answerIn": {
+        "url": "https://claude.ai/artifact/7c1e9a52-0d3b-4f6e-9a21-5b8c3d2e1f00"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "judge": {
+    "cold": true,
+    "consequences": true,
+    "terminal": false,
+    "links": true,
+    "plain": true,
+    "notes": "The card is solid, but its context says nothing about what the names are or how they differ, so the user must open the artifact to see any options, which is the intended design."
+  }
+}

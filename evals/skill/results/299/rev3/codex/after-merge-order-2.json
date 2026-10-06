@@ -1,0 +1,94 @@
+{
+  "agent": "codex",
+  "model": "default",
+  "arm": "after",
+  "scenario": "merge-order",
+  "rep": 2,
+  "turns": [
+    {
+      "commands": [
+        "/usr/bin/zsh -lc 'cat /var/tmp/skill-eval-osxkMr/after-merge-order-2/cfg/skills/starbridge/SKILL.md'",
+        "/usr/bin/zsh -lc 'gh pr view 12 --json number,title,mergeable,mergeStateStatus,headRefName,baseRefName; gh pr view 13 --json number,title,mergeable,mergeStateStatus,headRefName,baseRefName'",
+        "/usr/bin/zsh -lc 'gh pr diff 12; gh pr diff 13'",
+        "/usr/bin/zsh -lc 'git status --short; gh pr merge 12 --help'",
+        "/usr/bin/zsh -lc 'gh pr view 12; gh pr view 13'",
+        "/usr/bin/zsh -lc \"starbridge ask --question 'Which should merge first: PR #12 or PR #13?' --context 'Both PRs are green, but their edits to src/api.ts conflict; your project rules reserve the merge order for you.\n#12 first: prioritizes resumable CLI uploads for tonight’s 20:00 release; #13 then needs its conflict resolved.\n#13 first: prioritizes the sync timeout fix for slow-link users losing edits; #12 then needs its conflict resolved.' --option '#12 first' --option '#13 first' --link https://github.com/acme/notes/pull/12 --link https://github.com/acme/notes/pull/13 --waiting\"",
+        "/usr/bin/zsh -lc 'starbridge wait d_ggfvhYIARcnHplOl --timeout 5m'"
+      ],
+      "final": "Squash-merged #12, then #13, following your Starbridge choice. Both merge commands succeeded.",
+      "session": "01a11073-b811-79e2-95a3-486036f16ad6",
+      "tokens": 188218,
+      "exit": 0,
+      "seconds": 46.698
+    },
+    {
+      "commands": [
+        "/usr/bin/zsh -lc 'gh pr merge 12 --squash'",
+        "/usr/bin/zsh -lc 'gh pr merge 13 --squash'"
+      ],
+      "final": "Squash-merged #12, then #13, following your Starbridge choice. Both merge commands succeeded.",
+      "session": "01a11073-b811-79e2-95a3-486036f16ad6",
+      "tokens": 188218,
+      "exit": 0,
+      "seconds": 46.698
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_ggfvhYIARcnHplOl",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-06T09:03:24Z",
+      "question": "Which should merge first: PR #12 or PR #13?",
+      "context": "Both PRs are green, but their edits to src/api.ts conflict; your project rules reserve the merge order for you.\n#12 first: prioritizes resumable CLI uploads for tonight’s 20:00 release; #13 then needs its conflict resolved.\n#13 first: prioritizes the sync timeout fix for slow-link users losing edits; #12 then needs its conflict resolved.",
+      "options": [
+        "#12 first",
+        "#13 first"
+      ],
+      "recommended": "#12 first",
+      "agent": "codex",
+      "default": {
+        "action": "Waits for your answer"
+      },
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "01a11073-b811-79e2-95a3-486036f16ad6"
+      },
+      "links": [
+        {
+          "url": "https://github.com/acme/notes/pull/12"
+        },
+        {
+          "url": "https://github.com/acme/notes/pull/13"
+        }
+      ],
+      "replies": true
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [
+    "gh pr view 12 --json number,title,mergeable,mergeStateStatus,headRefName,baseRefName",
+    "gh pr view 13 --json number,title,mergeable,mergeStateStatus,headRefName,baseRefName",
+    "gh pr diff 12",
+    "gh pr diff 13",
+    "gh pr merge 12 --help",
+    "gh pr view 12",
+    "gh pr view 13",
+    "gh pr merge 12 --squash",
+    "gh pr merge 13 --squash"
+  ],
+  "answered": "Answer to d_ggfvhYIARcnHplOl (Which should merge first: PR #12 or PR #13?): #12 first",
+  "judge": {
+    "cold": true,
+    "consequences": true,
+    "terminal": false,
+    "links": true,
+    "plain": true,
+    "notes": "Minor: the card's context is a bit dense, and the recommendation isn't explained beyond the release date, but the user could still decide from it alone."
+  }
+}

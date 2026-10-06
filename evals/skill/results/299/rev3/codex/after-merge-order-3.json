@@ -1,0 +1,92 @@
+{
+  "agent": "codex",
+  "model": "default",
+  "arm": "after",
+  "scenario": "merge-order",
+  "rep": 3,
+  "turns": [
+    {
+      "commands": [
+        "/usr/bin/zsh -lc 'cat /var/tmp/skill-eval-osxkMr/after-merge-order-3/cfg/skills/starbridge/SKILL.md'",
+        "/usr/bin/zsh -lc 'git status --short; gh pr view 12 --json number,title,mergeable,mergeStateStatus,headRefName,baseRefName; gh pr view 13 --json number,title,mergeable,mergeStateStatus,headRefName,baseRefName'",
+        "/usr/bin/zsh -lc 'gh pr diff 12; gh pr diff 13; ls -a'",
+        "/usr/bin/zsh -lc 'git branch -a; git log --oneline --all -6; cat AGENTS.md; gh pr view 12 --json mergeable; gh pr view 13 --json mergeable'",
+        "/usr/bin/zsh -lc \"starbridge ask --question 'Which PR should merge first, #12 or #13?' --context 'Both PRs are green but have overlapping edits to src/api.ts; project rules reserve merge order for you.\n#12 first: prioritize resumable CLI uploads for tonight’s 20:00 release, then resolve and merge #13.\n#13 first: prioritize the sync timeout fix for slow links (3 reports of lost edits this week), then resolve and merge #12.' --option '#12 first' --option '#13 first' --link https://github.com/acme/notes/pull/12 --link https://github.com/acme/notes/pull/13 --waiting\"",
+        "/usr/bin/zsh -lc 'starbridge wait d_MdPvnZOs-rJEkolJ --timeout 5m'"
+      ],
+      "final": "Squash-merged [#12](https://github.com/acme/notes/pull/12) first, per your Starbridge decision, then [#13](https://github.com/acme/notes/pull/13). Both merges succeeded.",
+      "session": "01a11073-b938-70f1-ac3f-fd2cce4030b1",
+      "tokens": 171912,
+      "exit": 0,
+      "seconds": 43.571
+    },
+    {
+      "commands": [
+        "/usr/bin/zsh -lc 'gh pr merge 12 --squash'",
+        "/usr/bin/zsh -lc 'gh pr merge 13 --squash'"
+      ],
+      "final": "Squash-merged [#12](https://github.com/acme/notes/pull/12) first, per your Starbridge decision, then [#13](https://github.com/acme/notes/pull/13). Both merges succeeded.",
+      "session": "01a11073-b938-70f1-ac3f-fd2cce4030b1",
+      "tokens": 171912,
+      "exit": 0,
+      "seconds": 43.571
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_MdPvnZOs-rJEkolJ",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-06T09:03:20Z",
+      "question": "Which PR should merge first, #12 or #13?",
+      "context": "Both PRs are green but have overlapping edits to src/api.ts; project rules reserve merge order for you.\n#12 first: prioritize resumable CLI uploads for tonight’s 20:00 release, then resolve and merge #13.\n#13 first: prioritize the sync timeout fix for slow links (3 reports of lost edits this week), then resolve and merge #12.",
+      "options": [
+        "#12 first",
+        "#13 first"
+      ],
+      "recommended": "#12 first",
+      "agent": "codex",
+      "default": {
+        "action": "Waits for your answer"
+      },
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "01a11073-b938-70f1-ac3f-fd2cce4030b1"
+      },
+      "links": [
+        {
+          "url": "https://github.com/acme/notes/pull/12"
+        },
+        {
+          "url": "https://github.com/acme/notes/pull/13"
+        }
+      ],
+      "replies": true
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [
+    "gh pr view 12 --json number,title,mergeable,mergeStateStatus,headRefName,baseRefName",
+    "gh pr view 13 --json number,title,mergeable,mergeStateStatus,headRefName,baseRefName",
+    "gh pr diff 12",
+    "gh pr diff 13",
+    "gh pr view 12 --json mergeable",
+    "gh pr view 13 --json mergeable",
+    "gh pr merge 12 --squash",
+    "gh pr merge 13 --squash"
+  ],
+  "answered": "Answer to d_MdPvnZOs-rJEkolJ (Which PR should merge first, #12 or #13?): #12 first",
+  "judge": {
+    "cold": true,
+    "consequences": true,
+    "terminal": false,
+    "links": true,
+    "plain": true,
+    "notes": "The card is solid; the final message reports merging per a 'Starbridge decision' with no terminal question, though the card's default was to wait, so the claim of a user answer is unverified."
+  }
+}

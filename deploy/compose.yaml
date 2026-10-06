@@ -28,6 +28,9 @@ services:
     build:
       context: ..
       dockerfile: web/Dockerfile
+      # The public pages load Umami (below); a self-hosted build leaves it out.
+      args:
+        ANALYTICS: umami
     image: starbridge-web:latest
     restart: unless-stopped
     ports:

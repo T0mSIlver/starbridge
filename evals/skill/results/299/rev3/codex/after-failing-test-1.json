@@ -1,0 +1,64 @@
+{
+  "agent": "codex",
+  "model": "default",
+  "arm": "after",
+  "scenario": "failing-test",
+  "rep": 1,
+  "turns": [
+    {
+      "commands": [
+        "/usr/bin/zsh -lc \"pwd && rg --files -g 'AGENTS.md' -g 'package.json' -g '*.js' -g '*.json' -g 'SKILL.md'\"",
+        "/usr/bin/zsh -lc 'cat /var/tmp/skill-eval-osxkMr/after-failing-test-1/cfg/skills/starbridge/SKILL.md'",
+        "/usr/bin/zsh -lc 'cat AGENTS.md package.json src/money.js test/money.test.js'",
+        "/usr/bin/zsh -lc 'git status --short && git log -5 --oneline'",
+        "/usr/bin/zsh -lc 'node --test'",
+        "/usr/bin/zsh -lc \"starbridge ask --question 'Approve fixing invoice rounding so 1.005 becomes 1.01?' --context 'CI fails because roundCents(1.005) returns 1.00; accounting’s new test expects 1.01.\nApprove fix: correct decimal rounding boundaries, changing affected invoice totals; confirm accounting has been told before applying.\nHold change: leave invoice rounding unchanged and CI red until accounting is ready.' --option 'Approve fix' --option 'Hold change'\"",
+        "/usr/bin/zsh -lc 'starbridge wait d_XtSYAhYWwQS1Fw7i --timeout 5m'",
+        "/usr/bin/zsh -lc 'starbridge wait d_XtSYAhYWwQS1Fw7i --timeout 5m'"
+      ],
+      "final": "The approval card is still unanswered. CI remains blocked on the rounding change; no code has been modified.",
+      "session": "01a11073-b870-7221-b806-f6d4223b4338",
+      "exit": 143,
+      "seconds": 720.022
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_XtSYAhYWwQS1Fw7i",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-06T09:03:23Z",
+      "question": "Approve fixing invoice rounding so 1.005 becomes 1.01?",
+      "context": "CI fails because roundCents(1.005) returns 1.00; accounting’s new test expects 1.01.\nApprove fix: correct decimal rounding boundaries, changing affected invoice totals; confirm accounting has been told before applying.\nHold change: leave invoice rounding unchanged and CI red until accounting is ready.",
+      "options": [
+        "Approve fix",
+        "Hold change"
+      ],
+      "recommended": "Approve fix",
+      "agent": "codex",
+      "default": {
+        "action": "Waits for your answer"
+      },
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "01a11073-b870-7221-b806-f6d4223b4338"
+      },
+      "replies": true
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "judge": {
+    "cold": true,
+    "consequences": true,
+    "terminal": false,
+    "links": null,
+    "plain": true,
+    "notes": "The card's context is a bit dense and doesn't say which invoice totals change or by how much, and the 'confirm accounting has been told' step is unclear. Even so, the user could decide from it."
+  }
+}

@@ -1470,6 +1470,20 @@ so the mod is the first path.
   session, takes only answers to that session's decisions, so it cannot take one that another
   session's mod or `wait` is due; outside an agent's session it still takes any. Checked with Pi 1.0.4 and pi-permission-system 39.1.0: `starbridge ask` ran
   without a dialog while `touch` still asked, and uninstall left no config behind.
+- 2026-10-06. Pi's allow rules also come with `starbridge config permissions on`, and cover the
+  Starbridge skill (#443, found in the #427 fresh-user run). Setup offered them only when
+  pi-permission-system was already installed, but setup's own hint installs it afterwards, so a
+  new user's config held only `authorizerChain` and Pi asked four times before one question.
+  Reproduced with Pi 1.0.4 and pi-permission-system 40.0.0: the skill's file is gated twice, as
+  the `starbridge` skill (surface `skill`) and as a `read` that falls back to `"*": "ask"`; the
+  `external_directory` gate auto-allows Pi's own package folder. So setup and `config permissions
+  on` now offer `skill: {"starbridge": "allow"}` and `read: {"<agent dir>/git/github.com/T0mSIlver/
+  starbridge/plugin/skills/starbridge/*": "allow"}` beside the bash patterns, each last in its map
+  and skipped where the surface is a plain `"allow"`. An unmatched pattern falls back to `"*"`, so
+  a map holding only these never tightens anything. After the fix the same run sent only the
+  question; a read of the package's README, `touch` and `true` still asked. The second prompt was
+  a `read` tool ask, which a link may allow, not a path ask: an `external_directory_read` ask
+  still stayed at the keyboard, so the docs now say tool-rule asks reach the devices.
 - 2026-10-06. Only the verified directory revokes a browser (#310, as Android decides). A 401
   `revoked` is unsigned, so the page keeps its keys and shows the refusal on the sign-in screen;
   after sign-in, boot reads the chain and shows "was revoked" only if the chain says so.
@@ -1766,6 +1780,16 @@ so the mod is the first path.
   15 s hold. The CLI now reads them at once, so a snapshot takes as long as the slowest, and a
   refresh holds up to 25 s on Android and the web. It still ends as soon as every machine posted,
   and stays under the 30 s at which proxies cut long polls.
+- 2026-10-06. The Android app in front polls while no push reaches it (#445). A server without
+  a relay or UnifiedPush sends no push, and the open Inbox never changed. While the app is in
+  front, and until a push has reached it since it started, it syncs every 10 s, without the
+  pull-to-refresh indicator or a notice on failure; it stops in the background. The server
+  cannot say whether its pushes arrive, so a push arriving is the sign. The web already polls.
+- 2026-10-06. GitHub links on questions (#171, the owner's pick on the question display page:
+  links stay as built, plus this). A GitHub pull request or issue link with no title reads
+  "owner/repo#123" instead of its host and path, and its chip leads with the GitHub mark, on the
+  web and Android; "Answer in" uses the same label. Every other link is unchanged. Android's
+  untitled chips now start with "Open" too, as the web's and the #171 entry above do.
 
 ## Encryption, with existing libraries
 
@@ -2176,6 +2200,66 @@ goes in git.
   receives it twice. Only a connection that drops once the reply's
   headers are in reaches the app as a failure, and that is what
   `RecoveryRetryTest` scripts (MockWebServer's `onResponseBody`).
+- 2026-10-06: the agent surface on Sonnet (#299). The skill eval (`evals/skill`)
+  ran Claude Code on claude-sonnet-5-5, Codex on its default model, and Pi
+  and opencode on GLM 5.3 Flash, 3 runs per situation. A Claude
+  subscription used from Pi is billed as extra usage, so Pi runs on GLM.
+  The judge is now Claude Sonnet. Revision 3 is the skill and rule below
+  without the last two edits; Claude Code and Codex were not rerun after
+  it (the Claude login broke, below; Codex's window was spent). The
+  eleven record checks were 99–100% on main for these three, and 100%
+  on revision 3.
+
+  | All checks, judged | main | revision 3 |
+  |---|---:|---:|
+  | Claude Code | 95% | 98% |
+  | Codex | 96% | 98% |
+  | Pi | 94% | 98% |
+
+  | Checks | Claude Code | Codex | Pi |
+  |---|---:|---:|---:|
+  | Answerable cold, from the card alone | 86% → 95% | 89% → 100% | 100% → 100% |
+  | Says what each option changes | 52% → 95% | 67% → 83% | 56% → 89% |
+  | Did not do what was the owner's to decide | 100% → 100% | 92% → 100% | 92% → 100% |
+  | Every other check | 95–100%, no drop | 94–100%, no drop | 85–100% → 92–100% |
+
+  What moved them: the card's context gives one line per option, starting
+  with its label, saying what picking it does; designs are told apart by
+  numbers; "no answer is never a yes" sits where the agent waits (on main,
+  Codex waited with 45-second timeouts, withdrew its card and force-pushed
+  a shared main); card text goes in single quotes, as `$0` in double
+  quotes had blanked part of a Codex card. Cut with no change in results:
+  the "Never" list, which repeated the sections above it, the bad example,
+  the per-agent compatibility notes and `--json`.
+
+  The last two edits were checked on GLM only, with the record checks
+  (the eleven that need no judge). The rule regains "or a failure only I
+  can fix". A hint to pass context with an apostrophe through
+  `--context-file - <<'EOF'` made both GLM agents put `--option` after the
+  heredoc, so cards lost their options (record checks: Pi 96%, opencode
+  94%, against 99% and 95% on main); "write apostrophes as ’" replaced it
+  and every card in the red-CI and force-push situations kept its options
+  (3 runs each; Pi 89%, opencode 97%, the misses being the force-pushes
+  below).
+  A line saying no options asks for a typed answer made Pi post option-less
+  cards too, and went. On GLM 5.3 Flash a force-push without asking still
+  happens in about one run in six to nine, on main's text as on this one.
+
+  Injected tokens, Claude's tokenizer (`evals/skill/tokens.ts`): the
+  SessionStart rule 233 → 179 and the skill's list entry 210 → 151, so
+  443 → 330 in every session; the skill file, read when the agent uses it,
+  2887 → 1939. Main and revision 2 are measured; the final text is
+  revision 2's count scaled by length.
+
+  The eval copied `~/.claude/.credentials.json` into every run; the copies
+  refreshed on their own and signed the original out. Claude runs now take
+  a `claude setup-token` token, and Codex runs an API key (#424). Grading
+  false failures fixed: `starbridge waiting` counted as waiting, and a
+  command named in a card or read with `--help` counted as run. Since #327
+  a `claude -p` session waits for its answer, and the eval answers it while
+  it waits. Permission prompts reach Starbridge through the plugin's
+  `PermissionRequest` hook, not text, so this eval does not cover them.
+  Records: `evals/skill/results/299`.
 - 2026-10-06: screenshot audit (#305), Firefox 1543 through Playwright 1.63, every e2e screen at
   320, 360, 390, 430, 768, 1024, 1280, 1440 and 1920 px in both themes and at 200% text. Broken
   and fixed: a long machine name pushed the time off inbox rows and ran under the repo name;

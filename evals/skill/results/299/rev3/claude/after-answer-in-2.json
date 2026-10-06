@@ -1,0 +1,60 @@
+{
+  "agent": "claude",
+  "model": "claude-sonnet-5-5",
+  "arm": "after",
+  "scenario": "answer-in",
+  "rep": 2,
+  "turns": [
+    {
+      "commands": [
+        "git ls-files && ls -la",
+        "starbridge ask --question 'Which tier names should the pricing page use?' --context 'src/pricing.html has placeholders TIER_1 $0, TIER_2 $8, TIER_3 $20.\nOpen the artifact to compare the three name sets and tap Pick on one; I will fill them in.' --answer-in https://claude.ai/artifact/7c1e9a52-0d3b-4f6e-9a21-5b8c3d2e1f00",
+        "starbridge waiting d_6QmEg3NG5Weh4DHX"
+      ],
+      "final": "The pricing page isn't finished. `src/pricing.html` still has the `TIER_1`, `TIER_2` and `TIER_3` placeholders and the TODO comment.\n\nI couldn't open the comparison artifact. The Claude Docs tool was denied permission, so I couldn't read the three name sets. Since the choice is the owner's, I posted a Starbridge card (`d_6QmEg3NG5Weh4DHX`) that links the artifact and asks which names to use. The card is marked as waiting.\n\nWhen the owner taps Pick, the answer comes back into this session as a new prompt. I'll then run `starbridge settle d_6QmEg3NG5Weh4DHX`, put the chosen names into the page ($0, $8 and $20 stay as they are), and remove the TODO.",
+      "session": "a3832fc0-f7bf-4283-9234-320c52283a82",
+      "tokens": 155498,
+      "costUsd": 0.09107399999999999,
+      "exit": 0,
+      "seconds": 22.458
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_6QmEg3NG5Weh4DHX",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-06T09:04:44Z",
+      "question": "Which tier names should the pricing page use?",
+      "context": "src/pricing.html has placeholders TIER_1 $0, TIER_2 $8, TIER_3 $20.\nOpen the artifact to compare the three name sets and tap Pick on one; I will fill them in.",
+      "options": [],
+      "agent": "claude-code",
+      "default": {
+        "action": "Waits for your answer"
+      },
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "a3832fc0-f7bf-4283-9234-320c52283a82",
+        "sessionTitle": "proj-49"
+      },
+      "answerIn": {
+        "url": "https://claude.ai/artifact/7c1e9a52-0d3b-4f6e-9a21-5b8c3d2e1f00"
+      }
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "judge": {
+    "cold": true,
+    "consequences": true,
+    "terminal": false,
+    "links": true,
+    "plain": true,
+    "notes": "The card is good: it names the decision, says to open the artifact and tap Pick, and links only the artifact, so the only flaw is minor (it doesn't say why the names are needed now, and the default 'Waits for your answer' is vague)."
+  }
+}

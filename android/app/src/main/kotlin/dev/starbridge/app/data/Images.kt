@@ -37,9 +37,13 @@ fun Image.bitmap(maxEdge: Int): Bitmap? = try {
     null
 }
 
-/** A link's chip text: its title, else "Claude artifact" for one, else its host and path. */
+/**
+ * A link's chip text: its title, else "owner/repo#123" for a GitHub pull request or issue, else
+ * "Claude artifact" for one, else its host and path.
+ */
 fun Link.label(): String {
     title?.let { return it }
+    githubRef(url)?.let { return it }
     val uri = Uri.parse(url)
     val path = uri.path.orEmpty()
     if (uri.host == "claude.ai" && ARTIFACT_PATH.containsMatchIn(path)) return "Claude artifact"
@@ -51,6 +55,16 @@ fun Link.label(): String {
 fun Link.place() = title ?: if (label() == "Claude artifact") "the artifact" else label()
 
 private val ARTIFACT_PATH = Regex("/artifacts?/")
+
+/** "owner/repo#123" for a GitHub pull request or issue, else null. */
+fun githubRef(url: String): String? {
+    val uri = Uri.parse(url)
+    if (uri.scheme != "https" || uri.host?.lowercase() !in setOf("github.com", "www.github.com")) return null
+    val m = GITHUB_ITEM.find(uri.path.orEmpty()) ?: return null
+    return "${m.groupValues[1]}/${m.groupValues[2]}#${m.groupValues[3]}"
+}
+
+private val GITHUB_ITEM = Regex("^/([^/]+)/([^/]+)/(?:pull|issues)/(\\d+)(?:/|$)")
 
 private const val CLAUDE_APP = "com.anthropic.claude"
 
