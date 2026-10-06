@@ -4,6 +4,7 @@ import type { Settled } from "@starbridge/protocol";
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { api, backingOff } from "@/lib/api";
 import type { Boot, Ctx, Inbox, Quotas, Runs } from "@/lib/device";
+import { AnsweredFirst } from "@/lib/outcome";
 import {
   DEFAULT_SETTINGS,
   loadSettings,
@@ -451,10 +452,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           ),
         }));
       } catch (e) {
-        // Answered on another device in the meantime: show it answered.
         if (e instanceof d.ApiError && e.status === 401) reload();
-        if (e instanceof d.ApiError && e.code === "already-answered") await refreshInbox();
-        else throw e;
+        if (!(e instanceof d.ApiError && e.code === "already-answered")) throw e;
+        // Answered on another device in the meantime: show it answered, and that this one lost.
+        await refreshInbox();
+        throw new AnsweredFirst();
       }
     },
     [ctx, refreshInbox, reload],

@@ -27,7 +27,7 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import java.time.Instant
 
-// The screens with the most roles under "Match wallpaper", on a warm, a cool and a low-chroma
+// The screens with the most roles under "Material You", on a warm, a cool and a low-chroma
 // wallpaper, light and dark. Written to app/screenshots/wallpaper/.
 @RunWith(ParameterizedRobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -66,7 +66,7 @@ class WallpaperScreenshotTest(private val wallpaper: Wallpaper, private val dark
         Phone(Tab.Inbox, 4) { InboxScreen(fake.decisions, now, DecisionActions({ _, _, _ -> }, {}), prompts = fake.prompts, promptActions = PromptActions({ _, _, _, _ -> }), runs = fake.runs) }
     }
 
-    // The mockup's "Match wallpaper" quotas, notifying on.
+    // The mockup's "Material You" quotas, notifying on.
     @Config(qualifiers = "w412dp-h1060dp-xxhdpi")
     @Test fun quotas() = capture("quotas") { Phone(Tab.Quotas, 4) { QuotasScreen(fake.windows, now, settings = QuotaSettings(notify = listOf("claude"))) } }
 

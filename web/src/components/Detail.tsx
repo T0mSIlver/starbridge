@@ -3,7 +3,7 @@
 import type { DecisionLink } from "@starbridge/protocol";
 import { useEffect, useRef, useState } from "react";
 import type { MachineKind } from "@/lib/feed";
-import { answerPlace } from "@/lib/outcome";
+import { AnsweredFirst, answeredFirstText, answerPlace } from "@/lib/outcome";
 import { fullInput } from "@/lib/permissionInput";
 import type { InboxItem, PromptItem, PromptReply, Reply } from "@/lib/types";
 import { Images, Links } from "./Attachments";
@@ -21,6 +21,8 @@ const agentOf = (d: object) => (d as { agent?: string }).agent;
 function useSend<T>(onAnswer: (reply: T) => Promise<void>) {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string>();
+  /** Another device answered first (#330): the item says with what, once the machine tells. */
+  const [lost, setLost] = useState(false);
   const busy = useRef(false);
   const send = async (reply: T) => {
     if (busy.current) return;
@@ -30,13 +32,14 @@ function useSend<T>(onAnswer: (reply: T) => Promise<void>) {
     try {
       await onAnswer(reply);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      if (e instanceof AnsweredFirst) setLost(true);
+      else setError(e instanceof Error ? e.message : String(e));
     } finally {
       busy.current = false;
       setSending(false);
     }
   };
-  return { send, sending, error };
+  return { send, sending, error, lost };
 }
 
 /** Keys for the selected item, ignored while typing or with a modifier. */
@@ -164,7 +167,7 @@ export function QuestionDetail({
   onAnswer: (reply: Reply) => Promise<void>;
 }) {
   const d = item.decision;
-  const { send, sending, error } = useSend(onAnswer);
+  const { send, sending, error, lost } = useSend(onAnswer);
   const [replying, setReplying] = useState(false);
   const options = closed || d.answerIn ? [] : ordered(d);
   useKeys(keys && options.length > 0, (key) => {
@@ -233,6 +236,11 @@ export function QuestionDetail({
             Reply
           </button>
         ))}
+      {lost && (
+        <p className={ui.error} role="alert">
+          {answeredFirstText(item)}
+        </p>
+      )}
       {error && (
         <p className={ui.error} role="alert">
           Not sent: {error}

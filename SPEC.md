@@ -1567,8 +1567,8 @@ so the mod is the first path.
   lock-screen Allow of #57 and #182). It still asks for the unlock, then opens the prompt's sheet
   with the whole command, Allow one tap away; it no longer sends. Deny still answers from the
   lock screen.
-- 2026-10-06. One opt-in skips both (owner, #390): Settings, Notifications, "Allow from
-  notifications without seeing the whole command", off by default and labelled unsafe. On, a
+- 2026-10-06. One opt-in skips both (owner, #390): Settings, Notifications, "Quick Allow"
+  ("Allow from a notification without seeing the whole command. Unsafe."), off by default. On, a
   notification's Allow sends right after the unlock on the lock screen, and at once from a
   collapsed or heads-up notification whose command does not fit its line.
 - 2026-10-06. Permission text shows control and format characters as escapes (`\u202E`), on the
@@ -1779,6 +1779,31 @@ so the mod is the first path.
   and name (the rail's top, the phone top bar's mark) link to the Inbox, named "Starbridge,
   Inbox" for screen readers; on the public pages (landing, docs, privacy, terms) and first run
   the lockup links to `/`. Nothing changes at rest but the pointer and the focus ring.
+- 2026-10-06. Pull to refresh belongs to the screen that was pulled (owner): the store counts
+  every sync the owner asked for, so a pull on Quotas showed the indicator on the Inbox too. Each
+  screen now shows it only for its own pull, until that sync ends. The theme option "Match
+  wallpaper" is now "Material You", the name power users know (owner).
+
+- 2026-10-06. A revoked machine learns at once (#353). A directory append wakes every machine's
+  long-poll, revoked ones included, so the revoked machine's next request gets 401 instead of
+  waiting out its 60 s poll; `status` then prints `Server: reachable, but this machine was
+  removed …` with the `pair --force` hint, rather than "not reachable".
+
+- 2026-10-06. `settle` never withdraws a decision whose answer reached the agent (#405): it exits
+  0 and posts nothing, since devices would hold both the answer and a withdrawal. An answer
+  accepted but not yet delivered can still be withdrawn. The skill says only `--answer-in` cards
+  need `settle`.
+
+- 2026-10-06. Which answer won a race reaches every device (#330), as Tom chose over sealing
+  answers to every device. An answer is sealed only to the machine that asked, so a device whose
+  answer the server refused (409 `already-answered`) could not say what won. Once the machine
+  accepts a device's answer, it posts a `settled` notice with `outcome: "device"`, that device,
+  and its `choice` or `text`; the notice is signed by the asking machine, sealed to every active
+  device and checked like any other. Devices show "Later · on Pixel" in History and Find matches
+  it; the device that lost says "Answered on Pixel: Later" (until the notice lands, "Already
+  answered on another device."). The machine keeps the notice due until the server takes it,
+  skips it while behind on the directory, and stops at `already-settled` (withdrawn meanwhile).
+  Older clients ignore the two new fields.
 
 ## Encryption, with existing libraries
 

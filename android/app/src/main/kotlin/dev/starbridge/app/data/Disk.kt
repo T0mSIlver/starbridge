@@ -15,8 +15,8 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 import java.io.File
 
-/** 1: images, links and answerIn (#62). 2: replies (#201). */
-const val DECISION_FIELDS = 2
+/** 1: images, links and answerIn (#62). 2: replies (#201). 3: theirAnswer and answeredBy (#330). */
+const val DECISION_FIELDS = 3
 
 /** A decision this device opened and verified, and what became of it. */
 @Serializable
@@ -29,6 +29,9 @@ data class SavedDecision(
     val answer: String? = null,
     /** How the machine closed it, when its settled notice did rather than an answer. */
     val settled: String? = null,
+    /** Another device's answer the machine took, and that device's id, from its notice (#330). */
+    val theirAnswer: String? = null,
+    val answeredBy: String? = null,
     /** The agent's latest waiting state for it, "working" or "waiting", and when it flipped. */
     val waiting: String? = null,
     val waitingAt: String? = null,
