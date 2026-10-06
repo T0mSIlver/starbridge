@@ -242,7 +242,9 @@ export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
           the machine and install the Claude Code plugin. The script runs it for you.
         </p>
         <Install />
-        <p className={`t-meta ${s.faint}`}>Works best with Claude Code. Codex, Pi and opencode are supported.</p>
+        <p className={`t-meta ${s.faint}`}>
+          Works best with Claude Code. Codex, Pi and opencode are supported.
+        </p>
       </section>
 
       <footer className={`t-small ${s.foot}`}>
