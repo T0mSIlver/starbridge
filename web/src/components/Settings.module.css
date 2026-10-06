@@ -59,7 +59,8 @@
   height: var(--s3);
 }
 
-/* A name too long for the row, such as a machine's host name, breaks rather than widening it. */
+/* A name too long for the row, such as a machine's host name, breaks rather than widening it:
+   after a dot or a hyphen first (HostName), inside a word only when it has neither. */
 .rowText {
   flex: 1;
   min-width: 0;
