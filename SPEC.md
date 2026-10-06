@@ -1745,6 +1745,11 @@ so the mod is the first path.
   0 and posts nothing, since devices would hold both the answer and a withdrawal. An answer
   accepted but not yet delivered can still be withdrawn. The skill says only `--answer-in` cards
   need `settle`.
+- 2026-10-06. Settings labels (#449). The link to `/docs/tell-your-agents` reads "Agent
+  instructions" in Settings (web and Android), the docs and the landing footer: two words that
+  name what the page holds, the rules agents get and what to add to their instruction files.
+  "Answer buttons on questions" says "On narrow screens", since it applies to any window under
+  1100 px, not only phones.
 
 ## Encryption, with existing libraries
 
