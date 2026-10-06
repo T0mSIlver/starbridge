@@ -19,7 +19,8 @@ permissions:
 
 jobs:
   check:
-    runs-on: ${{ vars.RUNNER || 'ubuntu-latest' }}
+    # Always Linux, whatever vars.RUNNER says: Linux is where setup installs the tarball.
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -52,7 +53,8 @@ jobs:
         run: |
           now=$(date -u '+%Y-%m-%d %H:%M UTC')
           issue=$(gh issue list --label codexbar --state open --json number --jq '.[0].number // empty')
-          if [ "$OUTCOME" != success ]; then
+          # A failed checkout or install skips the check: the run fails, but no issue is opened.
+          if [ "$OUTCOME" = failure ]; then
             body=$(printf "CodexBar's latest release failed the check, last seen %s:\n\n\`\`\`\n%s\n\`\`\`\n\nUntil it is fixed, \`starbridge update --codexbar <version>\` installs a release that works.\n\nRun: %s\n" \
               "$now" "$(tail -20 "$RUNNER_TEMP/check.log" 2>/dev/null)" \
               "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID")
@@ -63,6 +65,6 @@ jobs:
               gh issue edit "$issue" --body "$body"
             fi
             exit 1
-          elif [ -n "$issue" ]; then
+          elif [ "$OUTCOME" = success ] && [ -n "$issue" ]; then
             gh issue close "$issue" --comment "The check passes again at $now."
           fi

@@ -9,7 +9,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { collect } from "../src/codexbar";
 import { Store } from "../src/config";
-import { installRelease, listProviders, releaseVersion } from "../src/setup/codexbar";
+import { installRelease, listProviders, NoChecksum, releaseVersion } from "../src/setup/codexbar";
 import { defaults, type Sys } from "../src/setup/sys";
 
 const home = mkdtempSync(join(tmpdir(), "codexbar-check-"));
@@ -46,7 +46,14 @@ if (process.env.GITHUB_TOKEN) {
   if (!res.ok) fail(`finding CodexBar's latest release: ${res.status}`);
   version = releaseVersion(((await res.json()) as { tag_name: string }).tag_name);
 }
-const bin = await installRelease(sys, version).catch((e: Error) => fail(e.message));
+const bin = await installRelease(sys, version).catch((e: Error) => {
+  // A release whose tarballs are still uploading; tomorrow's run checks it.
+  if (e instanceof NoChecksum) {
+    console.log(`Not checked: ${e.message}`);
+    process.exit(0);
+  }
+  return fail(e.message);
+});
 
 const providers = (await listProviders(sys, bin)).map((p) => p.provider);
 for (const p of ["claude", "codex"])

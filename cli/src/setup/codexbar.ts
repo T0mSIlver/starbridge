@@ -137,6 +137,12 @@ export function installedVersion(sys: Sys): string | undefined {
 }
 
 /**
+ * A release without this tarball's checksum. CodexBar marks a release latest some minutes before
+ * its CLI tarballs and their checksums are uploaded.
+ */
+export class NoChecksum extends Error {}
+
+/**
  * Downloads `version`'s tarball and the `.sha256` beside it in the same release, checks one
  * against the other and unpacks the tarball, with its bundle, to `~/.local/opt/codexbar`.
  * Installs nothing when the checksum is missing or differs. Returns the `codexbar` inside.
@@ -147,7 +153,7 @@ export async function installTarball(sys: Sys, key: string, version: string): Pr
   const url = `${base}/v${version}/${name}`;
   const signal = AbortSignal.timeout(10 * 60_000);
   const sums = await fetch(`${url}.sha256`, { signal });
-  if (!sums.ok) throw new Error(`no checksum for ${name} (${sums.status}): not installed`);
+  if (!sums.ok) throw new NoChecksum(`no checksum for ${name} (${sums.status}): not installed`);
   const want = /^[0-9a-f]{64}\b/i.exec((await sums.text()).trim())?.[0].toLowerCase();
   if (!want) throw new Error(`${name}.sha256 holds no SHA-256: not installed`);
   const res = await fetch(url, { signal });
@@ -159,16 +165,19 @@ export async function installTarball(sys: Sys, key: string, version: string): Pr
   const opt = dirname(dest);
   const fresh = join(opt, `.codexbar.${process.pid}`);
   const file = `${fresh}.tar.gz`;
+  const old = `${fresh}.old`;
   mkdirSync(fresh, { recursive: true });
   try {
     writeFileSync(file, bytes);
     const r = await run(sys, "tar", ["-xzf", file, "-C", fresh]);
     if (r?.code !== 0) throw new Error(`unpacking ${name}: ${failure(r)}`);
-    rmSync(dest, { recursive: true, force: true });
+    // Renames rather than deletes first, so `codexbar` is missing only between two renames.
+    if (existsSync(dest)) renameSync(dest, old);
     renameSync(fresh, dest);
   } finally {
     rmSync(file, { force: true });
     rmSync(fresh, { recursive: true, force: true });
+    rmSync(old, { recursive: true, force: true });
   }
   return join(dest, "codexbar");
 }
@@ -314,9 +323,10 @@ export async function updateCodexbar(
     );
     return version ? 1 : 0;
   }
+  const have = installedVersion(sys);
+  let want: string | undefined;
   try {
-    const want = version ? releaseVersion(version) : await latestCodexbar(sys);
-    const have = installedVersion(sys);
+    want = version ? releaseVersion(version) : await latestCodexbar(sys);
     if (have === want) {
       out(`CodexBar ${have} is ${version ? "installed" : "up to date"}.`);
       return 0;
@@ -324,6 +334,12 @@ export async function updateCodexbar(
     await installRelease(sys, want);
     return 0;
   } catch (e) {
+    if (!version && e instanceof NoChecksum) {
+      out(
+        `CodexBar ${want}'s build for this machine is not published yet: kept ${have ?? "the installed one"}.`,
+      );
+      return 0;
+    }
     out(`Could not update CodexBar: ${(e as Error).message}`);
     return 1;
   }

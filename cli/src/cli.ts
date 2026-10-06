@@ -424,6 +424,8 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
       }
       case "update": {
         const { values } = parseArgs({ args: rest, options: { codexbar: { type: "string" } } });
+        if (values.codexbar === "")
+          throw new UsageError("usage: starbridge update [--codexbar <version>]");
         return await update(ctx, installKind(), undefined, values.codexbar);
       }
       case "--version":

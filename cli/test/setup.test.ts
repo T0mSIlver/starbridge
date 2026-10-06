@@ -293,9 +293,11 @@ test("setup without a user systemd keeps going and says how to run the agent", a
 
 /**
  * CodexBar's releases as GitHub serves them: the API's latest tag, and each version's tarball
- * with a `.sha256` beside it, which `sums` replaces or, when null, leaves out.
+ * with a `.sha256` beside it, which `sums` replaces or, when null, leaves out. `latest` may
+ * be changed while it serves.
  */
 function fakeCodexbarReleases(latest: string, sums: (v: string, sha: string) => string | null) {
+  const state = { latest };
   const tarball = (v: string) => {
     const src = mkdtempSync(join(tmpdir(), "codexbar-src-"));
     writeFileSync(join(src, "CodexBarCLI"), "#!/bin/sh\n", { mode: 0o755 });
@@ -307,7 +309,7 @@ function fakeCodexbarReleases(latest: string, sums: (v: string, sha: string) => 
     port: 0,
     fetch(req) {
       const path = new URL(req.url).pathname;
-      if (path === "/api/latest") return Response.json({ tag_name: `v${latest}` });
+      if (path === "/api/latest") return Response.json({ tag_name: `v${state.latest}` });
       const m = /^\/dl\/v([^/]+)\/CodexBarCLI-v[^/]+-linux-x86_64\.tar\.gz(\.sha256)?$/.exec(path);
       if (!m) return new Response("not found", { status: 404 });
       const bytes = tarball(m[1] as string);
@@ -321,7 +323,7 @@ function fakeCodexbarReleases(latest: string, sums: (v: string, sha: string) => 
     STARBRIDGE_CODEXBAR_API: `${server.url.href}api`,
     STARBRIDGE_CODEXBAR_RELEASES: `${server.url.href}dl`,
   };
-  return { server, env };
+  return { server, env, state };
 }
 
 function linuxSys(ctx: TestCtx, home: string): Sys {
@@ -348,7 +350,8 @@ test("update moves setup's CodexBar to the latest release, or the one named", as
   const home = mkdtempSync(join(tmpdir(), "starbridge-home-"));
   const fake = fakeCodexbarReleases(
     "9.9.9",
-    (v, sha) => `${sha}  CodexBarCLI-v${v}-linux-x86_64.tar.gz\n`,
+    // 10.0.0 is a release whose tarballs are still uploading.
+    (v, sha) => (v === "10.0.0" ? null : `${sha}  CodexBarCLI-v${v}-linux-x86_64.tar.gz\n`),
   );
   try {
     const ctx = testCtx(fake.env);
@@ -366,6 +369,11 @@ test("update moves setup's CodexBar to the latest release, or the one named", as
       `Installed CodexBar 9.9.7 to ${join(home, ".local/opt/codexbar")}, linked as ${join(home, ".local/bin/codexbar")}.`,
     ]);
     expect(readlinkSync(join(home, ".local/bin/codexbar"))).toBe(path);
+    fake.state.latest = "10.0.0";
+    expect(await updateCodexbar(sys, undefined)).toBe(0);
+    expect(ctx.lines.at(-1)).toBe(
+      "CodexBar 10.0.0's build for this machine is not published yet: kept 9.9.7.",
+    );
 
     const brew = join(home, "brew/codexbar");
     mkdirSync(dirname(brew));
