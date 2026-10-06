@@ -4,6 +4,7 @@ import type { Settled } from "@starbridge/protocol";
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { api, backingOff } from "@/lib/api";
 import type { Boot, Ctx, Inbox, Quotas, Runs } from "@/lib/device";
+import { reach } from "@/lib/funnel";
 import { newestWins } from "@/lib/newest";
 import { AnsweredFirst } from "@/lib/outcome";
 import {
@@ -124,6 +125,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // Inbox reads overlap (a load, pushes, polls): only the newest to start may land (#547).
   const inboxRead = useRef(newestWins());
   const ctx = boot.state === "ready" ? boot.ctx : undefined;
+
+  // The launch funnel's signed-in steps, in the browser that created the account (#559).
+  useEffect(() => {
+    if (!ctx) return;
+    reach(ctx.account, (step) =>
+      step === "first-machine"
+        ? [...ctx.dir.members.values()].some((m) => m.active && m.member.role === "machine")
+        : // Answered by a device, not closed by its machine (a timeout, the keyboard).
+          inbox.items.some((i) => i.answeredAt && !i.settled),
+    );
+  }, [ctx, inbox]);
 
   /** Bumped by `forget`: a load started before it keeps nothing it read. */
   const generation = useRef(0);

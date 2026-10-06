@@ -4,6 +4,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { outdated } from "@/lib/api";
 import type { FirstDevice as PreparedDevice, RecoveryEntry } from "@/lib/device";
+import { firstSignIn } from "@/lib/funnel";
 import { hasPairCode, holdPairCode } from "@/lib/pairLink";
 import { useApp } from "./AppProvider";
 import { Icon } from "./icons";
@@ -138,6 +139,8 @@ function FirstDevice({ account, unsaved }: { account: string; unsaved?: string }
   const [name, setName] = useDefaultName(unsaved);
   const [prepared, setPrepared] = useState<PreparedDevice>();
   const { busy, error, run } = useAction();
+  // Only a new account has no device yet: its first sign-in, for the launch funnel (#559).
+  useEffect(() => firstSignIn(account), [account]);
   if (prepared)
     return (
       <Setup

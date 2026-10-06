@@ -73,6 +73,9 @@ const INSTALL = [
   ["npm", "npm i -g starbridge"],
 ] as const;
 
+/** Docs opened from the landing page; the docs pages count their own views. */
+const openDocs = (page: string) => () => track("open-docs", { page });
+
 function Install() {
   const [at, setAt] = useState(0);
   const [copied, setCopied] = useState(false);
@@ -152,10 +155,16 @@ export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
         </a>
         <nav className={s.nav} aria-label="Site">
           <a href="#features">Features</a>
-          <a href="/docs">Docs</a>
+          <a href="/docs" onClick={openDocs("/docs")}>
+            Docs
+          </a>
           <a href={REPO}>GitHub</a>
         </nav>
-        <a href="/v1/auth/github" className={`t-label ${ui.btn} ${ui.fill} ${s.signIn}`}>
+        <a
+          href="/v1/auth/github"
+          className={`t-label ${ui.btn} ${ui.fill} ${s.signIn}`}
+          onClick={() => track("sign-in", { via: "header" })}
+        >
           Sign in
         </a>
       </header>
@@ -167,7 +176,11 @@ export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
           with one tap and it gets back to work.
         </p>
         <div className={s.actions}>
-          <a href="/v1/auth/github" className={`t-action ${ui.btn} ${ui.lg} ${ui.fill}`}>
+          <a
+            href="/v1/auth/github"
+            className={`t-action ${ui.btn} ${ui.lg} ${ui.fill}`}
+            onClick={() => track("sign-in", { via: "hero" })}
+          >
             <Icon name="github" size={18} />
             Sign in with GitHub
           </a>
@@ -322,11 +335,15 @@ export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
         <div className={s.footCol}>
           <span>Source</span>
           <a href={REPO}>GitHub, MIT licence</a>
-          <a href={SELF_HOST}>Self-host</a>
+          <a href={SELF_HOST} onClick={openDocs(SELF_HOST)}>
+            Self-host
+          </a>
           <button type="button" className={s.textButton} onClick={onOwnerToken}>
             Use your own server
           </button>
-          <a href={AGENTS_GUIDE}>Agent instructions</a>
+          <a href={AGENTS_GUIDE} onClick={openDocs(AGENTS_GUIDE)}>
+            Agent instructions
+          </a>
           <a href={`${REPO}/releases`}>Changelog</a>
         </div>
         <div className={s.footCol}>
@@ -336,8 +353,12 @@ export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
         </div>
         <nav className={s.footInline} aria-label="Links">
           <a href={REPO}>GitHub</a>
-          <a href={SELF_HOST}>Self-host</a>
-          <a href={AGENTS_GUIDE}>Agent instructions</a>
+          <a href={SELF_HOST} onClick={openDocs(SELF_HOST)}>
+            Self-host
+          </a>
+          <a href={AGENTS_GUIDE} onClick={openDocs(AGENTS_GUIDE)}>
+            Agent instructions
+          </a>
           <a href="/privacy">Privacy</a>
           <a href="/terms">Terms</a>
         </nav>

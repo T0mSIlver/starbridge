@@ -753,8 +753,18 @@ Tokens, type and components: `DESIGN.md`.
   `server/src/db.ts`, retention in `server/src/limits.ts`, logs and backups in `deploy/`. A change
   to what is stored changes the page, and the Play data-safety form. Contact is
   privacy@starbridge.run; abuse@ appears only in `/terms`.
-- **Analytics** (#141). Umami, self-hosted, on the landing page, `/privacy` and `/terms` only, never
-  the app. No cookie, no stored IP, a daily salt, Do Not Track honoured, so no consent banner.
+- **Analytics** (#141). Umami, self-hosted, on the landing page, the docs, `/privacy` and `/terms`
+  only. No cookie, no stored IP, a daily salt, Do Not Track honoured, so no consent banner. The
+  Android app has none (Play data safety form).
+- **Launch funnel** (#559). Landing view, a sign-in click, first sign-in, first machine, first
+  answer. The signed-in app loads no tracker: the browser that created an account posts those
+  three events itself, once each, with `/` as the page and nothing about the account
+  (`web/src/lib/funnel.ts`); Umami joins them to the landing visit by address, browser and day.
+  The first sign-in's time matches the account's creation, so the operator could link the two;
+  `/privacy` says so.
+  It sees machines and answers from any device, so a pairing or answer made on the phone counts
+  once this browser sees them. Owner's view: an Umami share link on `stats.starbridge.run`,
+  where Caddy passes only GET requests and blocks the login.
   Caddy rate-limits its open endpoint, and a timer caps its tables, so it cannot fill the disk.
 - **Demo server** (#423). Play reviewers cannot pass GitHub's new-device check and cannot be given
   a recovery key, so `demo.starbridge.run` is a self-hosted server with an owner token, and
