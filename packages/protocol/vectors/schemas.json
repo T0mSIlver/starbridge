@@ -2837,6 +2837,245 @@
       "valid": false
     }
   ],
+  "snooze": [
+    {
+      "name": "valid",
+      "body": {
+        "v": 1,
+        "id": "snz_1",
+        "decisionId": "dec_1",
+        "to": [
+          "devbox",
+          "phone",
+          "phone2"
+        ],
+        "until": "2026-10-04T18:00:00Z",
+        "at": "2026-10-04T10:25:00Z"
+      },
+      "valid": true
+    },
+    {
+      "name": "with a directory head",
+      "body": {
+        "v": 1,
+        "id": "snz_1",
+        "decisionId": "dec_1",
+        "to": [
+          "devbox",
+          "phone",
+          "phone2"
+        ],
+        "until": "2026-10-04T18:00:00Z",
+        "at": "2026-10-04T10:25:00Z",
+        "dir": {
+          "length": 4,
+          "head": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        }
+      },
+      "valid": true
+    },
+    {
+      "name": "with a cut directory head",
+      "body": {
+        "v": 1,
+        "id": "snz_1",
+        "decisionId": "dec_1",
+        "to": [
+          "devbox",
+          "phone",
+          "phone2"
+        ],
+        "until": "2026-10-04T18:00:00Z",
+        "at": "2026-10-04T10:25:00Z",
+        "dir": {
+          "length": 4,
+          "head": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        }
+      },
+      "valid": false
+    },
+    {
+      "name": "with a device's directory head",
+      "body": {
+        "v": 1,
+        "id": "snz_1",
+        "decisionId": "dec_1",
+        "to": [
+          "devbox",
+          "phone",
+          "phone2"
+        ],
+        "until": "2026-10-04T18:00:00Z",
+        "at": "2026-10-04T10:25:00Z",
+        "dir": {
+          "length": 4,
+          "head": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "by": "phone"
+        }
+      },
+      "valid": true
+    },
+    {
+      "name": "with a directory head by a bad id",
+      "body": {
+        "v": 1,
+        "id": "snz_1",
+        "decisionId": "dec_1",
+        "to": [
+          "devbox",
+          "phone",
+          "phone2"
+        ],
+        "until": "2026-10-04T18:00:00Z",
+        "at": "2026-10-04T10:25:00Z",
+        "dir": {
+          "length": 4,
+          "head": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "by": "a phone"
+        }
+      },
+      "valid": false
+    },
+    {
+      "name": "back now",
+      "body": {
+        "v": 1,
+        "id": "snz_1",
+        "decisionId": "dec_1",
+        "to": [
+          "devbox",
+          "phone",
+          "phone2"
+        ],
+        "until": "2026-10-04T10:25:00Z",
+        "at": "2026-10-04T10:25:00Z"
+      },
+      "valid": true
+    },
+    {
+      "name": "no until",
+      "body": {
+        "v": 1,
+        "id": "snz_1",
+        "decisionId": "dec_1",
+        "to": [
+          "devbox",
+          "phone",
+          "phone2"
+        ],
+        "at": "2026-10-04T10:25:00Z"
+      },
+      "valid": false
+    },
+    {
+      "name": "an until that is not a time",
+      "body": {
+        "v": 1,
+        "id": "snz_1",
+        "decisionId": "dec_1",
+        "to": [
+          "devbox",
+          "phone",
+          "phone2"
+        ],
+        "until": "18:00",
+        "at": "2026-10-04T10:25:00Z"
+      },
+      "valid": false
+    },
+    {
+      "name": "an until without seconds",
+      "body": {
+        "v": 1,
+        "id": "snz_1",
+        "decisionId": "dec_1",
+        "to": [
+          "devbox",
+          "phone",
+          "phone2"
+        ],
+        "until": "2026-10-04T18:00Z",
+        "at": "2026-10-04T10:25:00Z"
+      },
+      "valid": false
+    },
+    {
+      "name": "an until with an offset",
+      "body": {
+        "v": 1,
+        "id": "snz_1",
+        "decisionId": "dec_1",
+        "to": [
+          "devbox",
+          "phone",
+          "phone2"
+        ],
+        "until": "2026-10-04T20:00:00+02:00",
+        "at": "2026-10-04T10:25:00Z"
+      },
+      "valid": true
+    },
+    {
+      "name": "an offset without its colon",
+      "body": {
+        "v": 1,
+        "id": "snz_1",
+        "decisionId": "dec_1",
+        "to": [
+          "devbox",
+          "phone",
+          "phone2"
+        ],
+        "until": "2026-10-04T20:00:00+0200",
+        "at": "2026-10-04T10:25:00Z"
+      },
+      "valid": false
+    },
+    {
+      "name": "no decision",
+      "body": {
+        "v": 1,
+        "id": "snz_1",
+        "to": [
+          "devbox",
+          "phone",
+          "phone2"
+        ],
+        "until": "2026-10-04T18:00:00Z",
+        "at": "2026-10-04T10:25:00Z"
+      },
+      "valid": false
+    },
+    {
+      "name": "no recipients",
+      "body": {
+        "v": 1,
+        "id": "snz_1",
+        "decisionId": "dec_1",
+        "to": [],
+        "until": "2026-10-04T18:00:00Z",
+        "at": "2026-10-04T10:25:00Z"
+      },
+      "valid": false
+    },
+    {
+      "name": "a directory head that is null",
+      "body": {
+        "v": 1,
+        "id": "snz_1",
+        "decisionId": "dec_1",
+        "to": [
+          "devbox",
+          "phone",
+          "phone2"
+        ],
+        "until": "2026-10-04T18:00:00Z",
+        "at": "2026-10-04T10:25:00Z",
+        "dir": null
+      },
+      "valid": false
+    }
+  ],
   "quota": [
     {
       "name": "valid",

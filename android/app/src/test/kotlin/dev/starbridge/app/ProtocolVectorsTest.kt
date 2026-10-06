@@ -222,7 +222,7 @@ class ProtocolVectorsTest {
     @Test
     fun schemas() {
         val v = load("schemas.json")
-        for (kind in listOf("decision", "answer", "permission", "permission-answer", "settled", "waiting", "run", "quota")) {
+        for (kind in listOf("decision", "answer", "permission", "permission-answer", "settled", "waiting", "snooze", "run", "quota")) {
             for (case in v.getValue(kind).jsonArray.map { it.jsonObject }) {
                 val body = try {
                     parseBody(kind, case.getValue("body").toString())
