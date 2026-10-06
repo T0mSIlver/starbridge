@@ -215,6 +215,19 @@ export function piAllow(env: Ctx["env"]): {
 }
 
 /**
+ * Whether pi-permission-system denies a starbridge command before the Starbridge link sees it: a
+ * bash level or `*` pattern of `deny`, or a global `*` of `deny` with no bash surface. The link
+ * only hears asks.
+ */
+export function piBashDenies(env: Ctx["env"]): boolean {
+  const permission = readConfig(piPermissionConfig(env))?.permission;
+  if (!isObject(permission)) return false;
+  const bash = permission.bash ?? permission["*"];
+  if (isObject(bash)) return bash["*"] === "deny" && !("starbridge *" in bash);
+  return bash === "deny";
+}
+
+/**
  * Adds piRules to `permission`, each after the owner's own patterns for its surface since the
  * last match wins, and the Starbridge link to the chain, keeping the rest of the file. A surface
  * set to a plain `allow` needs none, and one set to another plain level stays as it is

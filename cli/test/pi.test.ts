@@ -6,6 +6,7 @@ import {
   allowPiRules,
   dropOldPiRules,
   piAllow,
+  piBashDenies,
   piPermissionConfig,
   piRules,
   piSkillDir,
@@ -86,4 +87,15 @@ test("the bash patterns setup added before #488 are taken out, and offered no mo
   const left = home({ permission: { bash: { ...old, "starbridge settle *": "deny" } } });
   expect(removePiEntries(left.env)).toBe(true);
   expect(left.read().permission.bash).toEqual({ "starbridge settle *": "deny" });
+});
+
+test("a bash surface that denies stops the starbridge commands before the link hears them", () => {
+  for (const permission of [{ bash: "deny" }, { bash: { "*": "deny" } }, { "*": "deny" }])
+    expect(piBashDenies(home({ permission }).env)).toBe(true);
+  for (const permission of [
+    { bash: "ask" },
+    { bash: { "*": "deny", "starbridge *": "ask" } },
+    { "*": "deny", bash: { "*": "ask" } },
+  ])
+    expect(piBashDenies(home({ permission }).env)).toBe(false);
 });

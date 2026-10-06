@@ -7,7 +7,15 @@ import { existsSync, readdirSync } from "node:fs";
 import { MachineKind } from "@starbridge/protocol";
 import { type Ctx, UsageError } from "./context";
 import { permissionsEnabled } from "./permissions";
-import { allowPiRules, chainPiLink, PI_LINK, piAllow, piChain, piRulesText } from "./pi";
+import {
+  allowPiRules,
+  chainPiLink,
+  PI_LINK,
+  piAllow,
+  piBashDenies,
+  piChain,
+  piRulesText,
+} from "./pi";
 import { type Prompt, which } from "./setup/sys";
 
 /**
@@ -99,8 +107,13 @@ export async function offerPiAllow(ctx: Ctx, prompt: Prompt | undefined, quiet =
     ctx.out(
       `Pi: "permission.${s}" is a plain level, which Starbridge leaves to you; to let its calls through, make it a map that ends with ${piRulesText(ctx.env, [s])}.`,
     );
+  const denied = state !== "unreadable" && piBashDenies(ctx.env);
+  if (denied)
+    ctx.out(
+      `Pi: "permission.bash" denies by default in ${file}, so Pi cannot run the starbridge commands; add "starbridge *": "ask" to it, and the Starbridge link lets them through.`,
+    );
   if (state === "allowed") {
-    if (!quiet && plain.length === 0)
+    if (!quiet && plain.length === 0 && !denied)
       ctx.out(
         `Pi: pi-permission-system lets Pi read the skill and run the starbridge commands (${file}).`,
       );
