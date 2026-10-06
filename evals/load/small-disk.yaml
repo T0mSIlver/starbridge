@@ -1,0 +1,10 @@
+# The full-disk test (README.md): the server's /data on a 64 MB tmpfs instead of its volume.
+# LOAD_EXTRA=evals/load/small-disk.yaml evals/load/stack.sh compose up -d server
+services:
+  server:
+    volumes: !override
+      - type: tmpfs
+        target: /data
+        tmpfs:
+          size: 67108864
+          mode: 0777
