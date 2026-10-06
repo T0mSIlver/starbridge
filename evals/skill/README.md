@@ -40,5 +40,5 @@ runs can fill a small /tmp.
 provider's error, such as a rate limit, makes the run a failed run rather than a score.
 `render.ts` shows cards in the real web inbox (headless Chromium) and saves a screenshot of each.
 
-`results/299` holds the records behind the table in SPEC.md's research log entry for #299:
-`main` is the skill and rule before that change, `after` after it.
+`results/299` holds the records behind #299's entry in SPEC.md's research log, one folder per
+text the agents ran: `main`, `rev3`, `heredoc` and `final`.
