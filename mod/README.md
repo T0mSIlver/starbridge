@@ -77,10 +77,11 @@ call succeeds.
 ## Pi
 
 `pi/starbridge.ts` is the same answer loop as a Pi extension. It ships in the
-repository's Pi package with the `starbridge` skill:
+repository's Pi package with the `starbridge` skill. `starbridge setup` installs it at the
+release tag of the CLI it runs, which `starbridge --version` prints:
 
 ```bash
-pi install git:github.com/T0mSIlver/starbridge
+pi install git:github.com/T0mSIlver/starbridge@v1.0.0
 ```
 
 In an interactive or RPC Pi session it submits each answer as a user message,

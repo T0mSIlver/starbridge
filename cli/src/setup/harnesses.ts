@@ -9,6 +9,7 @@ import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import rule from "../../../plugin/hooks/rule.md" with { type: "text" };
 import skill from "../../../plugin/skills/starbridge/SKILL.md" with { type: "text" };
+import { VERSION } from "../version";
 import plugin from "./opencode-files.js";
 import { failure, run, type Sys, which } from "./sys";
 
@@ -88,8 +89,11 @@ export function removeCodexRule(sys: Home): boolean {
   return true;
 }
 
-/** The Starbridge Pi package, the repository's root `package.json`. */
-export const PI_PACKAGE = "git:github.com/T0mSIlver/starbridge";
+/**
+ * The Starbridge Pi package, the repository's root `package.json`, at this CLI's release tag so
+ * its extension calls the commands this CLI has. Pi keeps a tag pinned through `pi update`.
+ */
+export const PI_PACKAGE = `git:github.com/T0mSIlver/starbridge@v${VERSION}`;
 
 export function hasPi(sys: Sys): boolean {
   return which(sys.ctx.env, "pi") !== undefined;
