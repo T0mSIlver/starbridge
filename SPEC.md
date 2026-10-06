@@ -601,7 +601,9 @@ Tokens, type and components: `DESIGN.md`.
 - **Deploys** (#26, #150, #260). A merge to main deploys from Actions once CI passes, over SSH to a
   forced command that deploys only main's head or a commit on main containing the deployed one;
   the box fetches it itself. Rollbacks are manual (`deploy/deploy.sh`). The deploy fails unless the
-  live server reports that commit or a later one (`x-starbridge-revision`).
+  live server reports that commit or a later one (`x-starbridge-revision`). That header, and
+  `starbridge-deploy`'s argument, are refused unless they are 40 lowercase hex characters (#467),
+  since the workflow puts the revision in a `gh api` path.
 - **No downtime** (#150, #508). The page runs as two copies; a deploy starts the idle one, waits
   for its health, then stops the other, and Caddy sends every request to the first healthy copy.
   The server stays one instance, since it holds the long-polls and SQLite; Caddy holds requests up
