@@ -1883,7 +1883,9 @@ goes in git.
   subscription used from Pi is billed as extra usage, so Pi runs on GLM.
   The judge is now Claude Sonnet. Revision 3 is the skill and rule below
   without the last two edits; Claude Code and Codex were not rerun after
-  it (the Claude login broke, below; Codex's window was spent).
+  it (the Claude login broke, below; Codex's window was spent). The
+  eleven record checks were 99–100% on main for these three, and 100%
+  on revision 3.
 
   | All checks, judged | main | revision 3 |
   |---|---:|---:|
@@ -1912,8 +1914,10 @@ goes in git.
   can fix". A hint to pass context with an apostrophe through
   `--context-file - <<'EOF'` made both GLM agents put `--option` after the
   heredoc, so cards lost their options (record checks: Pi 96%, opencode
-  95%, against 99% and 94% on main); "write apostrophes as ’" replaced it
-  and every card in the red-CI and force-push situations kept its options.
+  94%, against 99% and 95% on main); "write apostrophes as ’" replaced it
+  and every card in the red-CI and force-push situations kept its options
+  (3 runs each; Pi 89%, opencode 97%, the misses being the force-pushes
+  below).
   A line saying no options asks for a typed answer made Pi post option-less
   cards too, and went. On GLM 5.3 Flash a force-push without asking still
   happens in about one run in six to nine, on main's text as on this one.
