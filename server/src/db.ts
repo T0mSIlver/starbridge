@@ -190,12 +190,24 @@ CREATE TABLE IF NOT EXISTS usage_days (
 const V2 = "ALTER TABLE pairings DROP COLUMN client;";
 
 /**
+ * Indexes for what the hourly sweep scans: items by kind and age, usage events by day and
+ * metric. And a device's list with no cursor reads its own account's items in order, not every
+ * account's (#585).
+ */
+const V3 = `
+CREATE INDEX items_kind_received ON items (kind, received_at);
+CREATE INDEX items_kind_answered ON items (kind, answered_at);
+CREATE INDEX items_account_seq ON items (account_id, seq);
+CREATE INDEX usage_events_day_metric ON usage_events (day, metric);
+`;
+
+/**
  * Schema changes, in order; `PRAGMA user_version` counts those a database has run. Append only:
  * a shipped migration never changes. A migration changes the schema and never rewrites rows, so
  * it runs well within the 30 s Caddy holds requests while the server restarts; a backfill runs in
  * the hourly sweep instead.
  */
-const MIGRATIONS = [V1, V2];
+const MIGRATIONS = [V1, V2, V3];
 
 export function openDb(path: string): Database {
   if (path !== ":memory:") mkdirSync(dirname(path), { recursive: true });

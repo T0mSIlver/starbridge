@@ -61,10 +61,13 @@ export async function createApp(config: Config, fetchFn: typeof fetch = fetch) {
     deps.pairingClients.sweep(Date.now());
     sweepJoins(db);
   });
-  const hourly = housekeep(() => {
-    sweepStorage(db, config.limits);
-    closeDays(db);
-  });
+  // The sweep deletes in batches and lets requests in between (#585).
+  const hourly = () =>
+    sweepStorage(db, config.limits)
+      .then(() => closeDays(db))
+      .catch((e) => {
+        if (!diskFull(e)) throw e;
+      });
   setInterval(minutely, 60_000).unref();
   hourly();
   setInterval(hourly, 3_600_000).unref();

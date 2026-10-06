@@ -116,8 +116,8 @@ test("runs are dropped a day after their last update", async () => {
   await s.call("POST", "/v1/items", { token: devbox.token, body: run(devbox, phone, "r1") });
   const count = async () =>
     (await s.call("GET", "/v1/items?kind=run", { token: phone.token })).json.items.length;
-  sweepStorage(s.deps.db, DEFAULT_LIMITS, Date.now() + 23 * 3_600_000);
+  await sweepStorage(s.deps.db, DEFAULT_LIMITS, Date.now() + 23 * 3_600_000);
   expect(await count()).toBe(1);
-  sweepStorage(s.deps.db, DEFAULT_LIMITS, Date.now() + 25 * 3_600_000);
+  await sweepStorage(s.deps.db, DEFAULT_LIMITS, Date.now() + 25 * 3_600_000);
   expect(await count()).toBe(0);
 });

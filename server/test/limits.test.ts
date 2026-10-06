@@ -218,19 +218,20 @@ test("the sweep drops answered decisions after a week and the rest after 30 days
     (s.deps.db.query("SELECT COUNT(*) AS n FROM sessions").get() as { n: number }).n;
   expect(sessions()).toBe(2);
 
-  sweepStorage(s.deps.db, DEFAULT_LIMITS);
+  await sweepStorage(s.deps.db, DEFAULT_LIMITS);
   expect(await exists(s, phone, gone.id)).toBe(false); // its machine was revoked
   expect(await exists(s, phone, answered.id)).toBe(true);
   expect(sessions()).toBe(1);
   expect((await s.call("GET", "/v1/me", { token: expired })).status).toBe(401);
 
-  sweepStorage(s.deps.db, DEFAULT_LIMITS, Date.now() + 8 * DAY);
+  // A batch of one: each delete loops until the aged items are gone.
+  await sweepStorage(s.deps.db, DEFAULT_LIMITS, Date.now() + 8 * DAY, 1);
   expect(await exists(s, phone, answered.id)).toBe(false);
   expect(await exists(s, devbox, reply.id)).toBe(false);
   expect(await exists(s, phone, open.id)).toBe(true);
   expect(await exists(s, phone, kept.id)).toBe(true);
 
-  sweepStorage(s.deps.db, DEFAULT_LIMITS, Date.now() + 31 * DAY);
+  await sweepStorage(s.deps.db, DEFAULT_LIMITS, Date.now() + 31 * DAY, 1);
   expect(await exists(s, phone, open.id)).toBe(false);
   expect(await exists(s, phone, kept.id)).toBe(false);
 });
