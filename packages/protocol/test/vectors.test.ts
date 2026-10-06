@@ -21,6 +21,7 @@ import {
   ProtocolError,
   pairingKey,
   parsePairingCode,
+  readable,
   ready,
   recoveryKey,
   recoveryKeyPair,
@@ -247,7 +248,8 @@ describe("schemas.json", () => {
     const schema = BODY_SCHEMAS[kind];
     for (const c of v[kind] as { name: string; body: unknown; valid: boolean; read?: unknown }[]) {
       test(`${kind}: ${c.name}`, () => {
-        const r = schema.safeParse(c.body);
+        // As a reader parses it (`parseBody`).
+        const r = schema.safeParse(readable(kind, c.body));
         expect(r.success).toBe(c.valid);
         if (c.read !== undefined) expect(reads(c.read, r.data)).toBe(true);
       });

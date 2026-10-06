@@ -202,6 +202,7 @@ data class SealedItem(
 
 val MACHINE_KINDS = setOf("server", "desktop", "laptop", "cloud")
 val SETTLED_OUTCOMES = setOf("keyboard", "timeout", "device", "elsewhere", "withdrawn")
+val WAITING_STATES = setOf("working", "waiting")
 /**
  * An agent as items carry it (AgentName in schemas.ts): a known one or one a newer machine sends,
  * which this app shows as none rather than refusing the item.
@@ -229,9 +230,6 @@ data class Source(
     /** server, desktop, laptop or cloud; older machines omit it (MachineKind in schemas.ts). */
     val machineKind: String? = null,
 ) {
-    /** A newer machine kind reads as none (`shown` in schemas.ts). */
-    fun read() = if (machineKind == null || machineKind in MACHINE_KINDS) this else copy(machineKind = null)
-
     fun check() {
         len(machine, 1, 100, "source.machine")
         machineKind?.let { schema(it in MACHINE_KINDS, "source.machineKind") }
@@ -302,8 +300,6 @@ data class Decision(
     override val dir: DirectoryHead? = null,
 ) : ItemBody {
     override val recipients get() = to
-
-    fun read() = copy(source = source.read())
 
     fun check() {
         dir?.check()
@@ -397,8 +393,6 @@ data class Permission(
 ) : ItemBody {
     override val recipients get() = to
 
-    fun read() = copy(source = source.read())
-
     fun check() {
         dir?.check()
         schema(v == 1, "v")
@@ -475,9 +469,6 @@ data class Settled(
     override val re get() = itemId
     override val recipients get() = to
 
-    /** A newer outcome reads as none. */
-    fun read() = if (outcome == null || outcome in SETTLED_OUTCOMES) this else copy(outcome = null)
-
     fun check() {
         dir?.check()
         schema(v == 1, "v")
@@ -513,9 +504,6 @@ data class Waiting(
     override val re get() = decisionId
     override val recipients get() = to
 
-    /** A newer state reads as working. */
-    fun read() = if (state == "working" || state == "waiting") this else copy(state = "working")
-
     fun check() {
         dir?.check()
         schema(v == 1, "v")
@@ -524,7 +512,7 @@ data class Waiting(
         schema(to.isNotEmpty(), "to")
         to.forEach { id(it, "to") }
         time(at, "at")
-        schema(state == "working" || state == "waiting", "state")
+        schema(state in WAITING_STATES, "state")
     }
 }
 
@@ -558,9 +546,6 @@ data class Run(
     override val dir: DirectoryHead? = null,
 ) : ItemBody {
     override val recipients get() = to
-
-    /** A newer progress unit reads as no progress. */
-    fun read() = copy(source = source.read(), progress = progress?.takeIf { it.unit in RUN_UNITS })
 
     fun check() {
         dir?.check()
@@ -648,14 +633,6 @@ data class QuotaSnapshot(
     override val dir: DirectoryHead? = null,
 ) : ItemBody {
     override val recipients get() = to
-
-    /** A newer pace stage reads as unknown; an alert of a newer kind is left out. */
-    fun read() = copy(
-        providers = providers.map { p ->
-            p.copy(windows = p.windows.map { w -> w.copy(pace = w.pace?.let { if (it.stage in PACE_STAGES) it else it.copy(stage = "unknown") }) })
-        },
-        alerts = alerts.filter { it.kind in ALERT_KINDS },
-    )
 
     fun check() {
         dir?.check()

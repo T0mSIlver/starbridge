@@ -281,6 +281,32 @@
       }
     },
     {
+      "name": "a machine kind that is no string",
+      "body": {
+        "v": 1,
+        "id": "dec_1",
+        "to": [
+          "phone",
+          "phone2"
+        ],
+        "createdAt": "2026-10-04T10:00:00Z",
+        "question": "Run inference on the Mac while you are away?",
+        "context": "The bench needs the GPU for about 40 minutes. No: it waits for tonight.",
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "recommended": "Yes",
+        "source": {
+          "machine": "dev box",
+          "project": "localvoxtral",
+          "session": "s_42",
+          "machineKind": 5
+        }
+      },
+      "valid": false
+    },
+    {
       "name": "free text",
       "body": {
         "v": 1,
@@ -2371,8 +2397,8 @@
         "startedAt": "2026-10-04T10:00:00Z",
         "at": "2026-10-04T10:02:00Z",
         "progress": {
-          "done": 3,
-          "total": 7,
+          "done": 3000000000,
+          "total": 4000000000,
           "unit": "byte"
         }
       },
@@ -2592,6 +2618,20 @@
       }
     },
     {
+      "name": "no state",
+      "body": {
+        "v": 1,
+        "id": "wait_1",
+        "decisionId": "dec_1",
+        "to": [
+          "phone",
+          "phone2"
+        ],
+        "at": "2026-10-04T10:20:00Z"
+      },
+      "valid": false
+    },
+    {
       "name": "no decision",
       "body": {
         "v": 1,
@@ -2755,9 +2795,7 @@
         "alerts": [
           {
             "kind": "burst",
-            "provider": "zai",
-            "window": "primary",
-            "resetsAt": "2026-10-04T12:30:00Z"
+            "share": 0.5
           },
           {
             "kind": "low",
@@ -2780,6 +2818,49 @@
           }
         ]
       }
+    },
+    {
+      "name": "a pace without its stage",
+      "body": {
+        "v": 1,
+        "id": "q_1",
+        "to": [
+          "phone",
+          "phone2"
+        ],
+        "takenAt": "2026-10-04T12:00:00Z",
+        "providers": [
+          {
+            "provider": "zai",
+            "windows": [
+              {
+                "id": "primary",
+                "label": "5h",
+                "usedPercent": 20,
+                "windowMinutes": 300,
+                "resetsAt": "2026-10-04T12:30:00Z",
+                "pace": {
+                  "expectedUsedPercent": 90,
+                  "deltaPercent": -70,
+                  "projectedUsedPercent": 22.2,
+                  "willLastToReset": true,
+                  "runsOutAt": null
+                }
+              }
+            ]
+          }
+        ],
+        "alerts": [
+          {
+            "kind": "unused-headroom",
+            "provider": "zai",
+            "window": "primary",
+            "resetsAt": "2026-10-04T12:30:00Z",
+            "unusedPercent": 77.8
+          }
+        ]
+      },
+      "valid": false
     },
     {
       "name": "no recipients",

@@ -218,25 +218,11 @@ export const AgentName = z.string().regex(/^[a-z0-9][a-z0-9-]{0,39}$/, "an agent
 export const MachineKind = z.enum(["server", "desktop", "laptop", "cloud"]);
 export type MachineKind = z.infer<typeof MachineKind>;
 
-/**
- * A value a client only displays (PROTOCOL.md, "Values a client only displays"): a newer one
- * reads as `neutral`, so an older client keeps the item instead of refusing it.
- */
-function shown<T extends z.ZodType>(schema: T, neutral: z.output<T>) {
-  return schema.catch(neutral);
-}
-
-/** Whether `value` is an object whose `key` is one of `known`. */
-const knownBy = (value: unknown, key: string, known: readonly string[]) =>
-  typeof value === "object" &&
-  value !== null &&
-  known.includes((value as Record<string, unknown>)[key] as string);
-
 /** The machine, project and session an item comes from. */
 export const Source = z.object({
   machine: z.string().min(1).max(100),
   /** Optional: older machines omit it. */
-  machineKind: shown(MachineKind.optional(), undefined),
+  machineKind: MachineKind.optional(),
   project: z.string().max(200),
   session: z.string().max(200),
   /** The session's name, as Claude Code shows it. Optional: older machines omit it. */
@@ -441,10 +427,7 @@ export const Settled = z
     itemId: Id,
     to: z.array(Id).min(1),
     at: Time,
-    outcome: shown(
-      z.enum(["keyboard", "timeout", "device", "elsewhere", "withdrawn"]).optional(),
-      undefined,
-    ),
+    outcome: z.enum(["keyboard", "timeout", "device", "elsewhere", "withdrawn"]).optional(),
     /** With outcome "device": the device whose answer the machine applied. */
     device: Id.optional(),
     /** With outcome "device" on a decision: the answer it applied, so every device can show it. */
@@ -476,7 +459,7 @@ export const Waiting = z.object({
   decisionId: Id,
   to: z.array(Id).min(1),
   at: Time,
-  state: shown(z.enum(["working", "waiting"]), "working"),
+  state: z.enum(["working", "waiting"]),
   dir: DirectoryHead.optional(),
 });
 export type Waiting = z.infer<typeof Waiting>;
@@ -488,14 +471,12 @@ export const RUN_HEARTBEAT_MS = 60 * 1000;
 /** A running run with no update for this long has lost its machine: devices stop showing it. */
 export const RUN_STALE_MS = 3 * RUN_HEARTBEAT_MS;
 
-const RUN_UNITS = ["step", "percent"] as const;
-
 /** What a command's output said of its progress: `[3/7]` as steps, `42%` or OSC 9;4 as percent. */
 export const RunProgress = z
   .object({
     done: z.number().int().min(0),
     total: z.number().int().min(1),
-    unit: z.enum(RUN_UNITS),
+    unit: z.enum(["step", "percent"]),
   })
   .refine((p) => p.done <= p.total, { message: "done is at most total" })
   .refine((p) => p.unit === "step" || p.total === 100, { message: "a percent is out of 100" });
@@ -518,11 +499,7 @@ export const Run = z
     startedAt: Time,
     /** When the machine sent this update. */
     at: Time,
-    /** A newer unit reads as no progress. */
-    progress: z.preprocess(
-      (p) => (p === undefined || knownBy(p, "unit", RUN_UNITS) ? p : undefined),
-      RunProgress.optional(),
-    ),
+    progress: RunProgress.optional(),
     /** Set once the command exited: its exit code (128 + n when signal n ended it). */
     exit: z.object({ code: z.number().int().min(0).max(255), at: Time }).optional(),
     dir: DirectoryHead.optional(),
@@ -543,7 +520,7 @@ export type PaceStage = z.infer<typeof PaceStage>;
 /** Where usage is heading at the current rate. Percent values are rounded to 0.1. */
 export const Pace = z.object({
   /** ahead: using faster than an even pace; behind: slower, headroom left. */
-  stage: shown(PaceStage, "unknown"),
+  stage: PaceStage,
   /** What an even pace would have used by now. */
   expectedUsedPercent: z.number(),
   /** usedPercent minus expectedUsedPercent. */
@@ -597,7 +574,6 @@ export const QuotaAlert = z.discriminatedUnion("kind", [
   }),
 ]);
 export type QuotaAlert = z.infer<typeof QuotaAlert>;
-const ALERT_KINDS: readonly string[] = QuotaAlert.options.map((o) => o.shape.kind.value);
 
 export const QuotaSnapshot = z.object({
   v: z.literal(1),
@@ -618,11 +594,7 @@ export const QuotaSnapshot = z.object({
       updatedAt: Time.optional(),
     }),
   ),
-  /** An alert of a newer kind is left out; the snapshot stays. */
-  alerts: z.preprocess(
-    (all) => (Array.isArray(all) ? all.filter((a) => knownBy(a, "kind", ALERT_KINDS)) : all),
-    z.array(QuotaAlert),
-  ),
+  alerts: z.array(QuotaAlert),
   dir: DirectoryHead.optional(),
 });
 export type QuotaSnapshot = z.infer<typeof QuotaSnapshot>;

@@ -1435,6 +1435,11 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
         read: { source: { machineKind: null } },
       },
       {
+        name: "a machine kind that is no string",
+        body: { ...decisionBody, source: { ...decisionBody.source, machineKind: 5 } },
+        valid: false,
+      },
+      {
         name: "free text",
         body: { ...decisionBody, options: [], recommended: undefined },
         valid: true,
@@ -1726,7 +1731,7 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
       },
       {
         name: "an unknown progress unit",
-        body: { ...runBody, progress: { done: 3, total: 7, unit: "byte" } },
+        body: { ...runBody, progress: { done: 3_000_000_000, total: 4_000_000_000, unit: "byte" } },
         valid: true,
         read: { progress: null },
       },
@@ -1752,6 +1757,7 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
         valid: true,
         read: { state: "working" },
       },
+      { name: "no state", body: { ...waitingBody, state: undefined }, valid: false },
       { name: "no decision", body: { ...waitingBody, decisionId: undefined }, valid: false },
       { name: "no recipients", body: { ...waitingBody, to: [] }, valid: false },
     ],
@@ -1773,7 +1779,7 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
         body: {
           ...quotaBody,
           alerts: [
-            { kind: "burst", provider: "zai", window: "primary", resetsAt: T(12, 30) },
+            { kind: "burst", share: 0.5 },
             { kind: "low", provider: "zai", window: "primary", resetsAt: T(12, 30), threshold: 10 },
           ],
         },
@@ -1783,6 +1789,16 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
             { kind: "low", provider: "zai", window: "primary", resetsAt: T(12, 30), threshold: 10 },
           ],
         },
+      },
+      {
+        name: "a pace without its stage",
+        body: {
+          ...quotaBody,
+          providers: [
+            { provider: "zai", windows: [{ ...win, pace: { ...pace, stage: undefined } }] },
+          ],
+        },
+        valid: false,
       },
       { name: "no recipients", body: { ...quotaBody, to: [] }, valid: false },
     ],

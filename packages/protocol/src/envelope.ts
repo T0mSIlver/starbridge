@@ -1,6 +1,7 @@
 import type { z } from "zod";
 import type { Directory } from "./directory";
 import type { KeyPair } from "./keys";
+import { readable } from "./readable";
 import {
   BODY_SCHEMAS,
   type BodyOf,
@@ -65,7 +66,7 @@ export function verify(env: SignedEnvelope, signPk: string): void {
   if (!ok) throw new ProtocolError("bad-signature", `signer ${env.signer}`);
 }
 
-/** Parses a body whose signature was already checked. */
+/** Parses a body whose signature was already checked, as a reader (`readable`). */
 export function parseBody<K extends Kind>(kind: K, body: string): BodyOf<K> {
   let json: unknown;
   try {
@@ -73,7 +74,7 @@ export function parseBody<K extends Kind>(kind: K, body: string): BodyOf<K> {
   } catch {
     throw new ProtocolError("bad-schema", "body is not JSON");
   }
-  return parseWith(BODY_SCHEMAS[kind], json) as BodyOf<K>;
+  return parseWith(BODY_SCHEMAS[kind], readable(kind, json)) as BodyOf<K>;
 }
 
 export function parseWith<T extends z.ZodType>(schema: T, value: unknown): z.infer<T> {
