@@ -33,6 +33,7 @@ import {
   publicKeys,
   RECOVERY,
   ready,
+  recoverEntry,
   recoveryConfirmEntry,
   recoveryEntry,
   recoveryKey,
@@ -185,10 +186,7 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
       make(verifyDirectory(entries)),
     ];
     const proposed = with_(chain, (d) => recoveryEntry(d, signer(phone), newRec, T(10)));
-    const byOldKey = with_(proposed, (d) => recoveryConfirmEntry(d, rec, T(10, 1)));
-    const bySecondDevice = with_(proposed, (d) =>
-      recoveryConfirmEntry(d, signer(phone2), T(10, 1)),
-    );
+    const byOldKey = with_(proposed, (d) => recoveryConfirmEntry(d, recovery.privateKey, T(10, 1)));
     const replaced = verifyDirectory(byOldKey);
     const proposalBody = (d: Directory, pk: string) =>
       nextBody(d, { op: "recovery", recoveryPk: pk });
@@ -207,13 +205,16 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
     const secondProposal = with_(proposed, (d) =>
       recoveryEntry(d, signer(phone2), recoveryKeyPair(seed(31)), T(10, 1)),
     );
+    const recovered = with_(chain, (d) => recoverEntry(d, recovery.privateKey, evil.member, T(10)));
+    // The server serves the chain cut short of browser's revocation (#363).
+    const cutShort = with_(chain.slice(0, 3), (d) =>
+      recoverEntry(d, recovery.privateKey, evil.member, T(10)),
+    );
+    const byNewKey = with_(byOldKey, (d) =>
+      recoverEntry(d, newRec.privateKey, evil.member, T(10, 2)),
+    );
     return [
       { name: "recovery key replaced with the old key", entries: byOldKey, expect: ok(replaced) },
-      {
-        name: "recovery key replaced with a second device",
-        entries: bySecondDevice,
-        expect: ok(verifyDirectory(bySecondDevice)),
-      },
       {
         name: "a pending proposal leaves the recovery key as it was",
         entries: proposed,
@@ -232,26 +233,39 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
         expect: { error: "wrong-recovery-key" },
       },
       {
-        name: "old recovery key adds a device after its replacement",
-        entries: with_(byOldKey, (d) => addEntry(d, rec, evil.member, T(10, 2))),
+        name: "old recovery key recovers after its replacement",
+        entries: with_(byOldKey, (d) =>
+          recoverEntry(d, recovery.privateKey, evil.member, T(10, 2)),
+        ),
         expect: { error: "bad-signature" },
       },
       {
-        name: "new recovery key adds a device",
-        entries: with_(byOldKey, (d) =>
-          addEntry(d, { id: RECOVERY, signKey: newRec.privateKey }, evil.member, T(10, 2)),
-        ),
-        expect: ok(
-          verifyDirectory(
-            with_(byOldKey, (d) =>
-              addEntry(d, { id: RECOVERY, signKey: newRec.privateKey }, evil.member, T(10, 2)),
-            ),
+        name: "new recovery key recovers",
+        entries: byNewKey,
+        expect: ok(verifyDirectory(byNewKey)),
+      },
+      {
+        name: "a device confirms a proposal",
+        entries: [
+          ...proposed,
+          signRaw(
+            confirmBody(verifyDirectory(proposed), next.length),
+            "phone2",
+            phone2.keys.sign.privateKey,
           ),
-        ),
+        ],
+        expect: { error: "signer-not-allowed" },
       },
       {
         name: "proposing device confirms its own proposal",
-        entries: with_(proposed, (d) => recoveryConfirmEntry(d, signer(phone), T(10, 1))),
+        entries: [
+          ...proposed,
+          signRaw(
+            confirmBody(verifyDirectory(proposed), next.length),
+            "phone",
+            phone.keys.sign.privateKey,
+          ),
+        ],
         expect: { error: "signer-not-allowed" },
       },
       {
@@ -266,21 +280,9 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
         expect: { error: "revoked-signer" },
       },
       {
-        name: "revoked device confirms a proposal",
-        entries: [
-          ...proposed,
-          signRaw(
-            confirmBody(verifyDirectory(proposed), next.length),
-            "browser",
-            browser.keys.sign.privateKey,
-          ),
-        ],
-        expect: { error: "revoked-signer" },
-      },
-      {
         name: "a proposal dies with its revoked proposer",
         entries: with_(revokedProposer, (d) =>
-          signRaw(confirmBody(d, next.length), "phone", phone.keys.sign.privateKey),
+          signRaw(confirmBody(d, next.length), RECOVERY, recovery.privateKey),
         ),
         expect: { error: "bad-recovery" },
       },
@@ -353,6 +355,48 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
         name: "confirmation with no proposal",
         entries: [...chain, signRaw(confirmBody(next, 1), RECOVERY, recovery.privateKey)],
         expect: { error: "bad-recovery" },
+      },
+      {
+        name: "recovery revokes every other device",
+        entries: recovered,
+        expect: ok(verifyDirectory(recovered)),
+      },
+      {
+        name: "recovery onto a chain cut short of a revocation keeps that device revoked",
+        entries: cutShort,
+        expect: ok(verifyDirectory(cutShort)),
+      },
+      {
+        name: "a device signs a recovery",
+        entries: [
+          ...chain,
+          signRaw(
+            nextBody(next, { op: "recover", member: evil.member }),
+            "phone",
+            phone.keys.sign.privateKey,
+          ),
+        ],
+        expect: { error: "signer-not-allowed" },
+      },
+      {
+        name: "recovery adds a machine",
+        entries: [
+          ...chain,
+          signRaw(
+            nextBody(next, { op: "recover", member: evilMachine.member }),
+            RECOVERY,
+            recovery.privateKey,
+          ),
+        ],
+        expect: { error: "signer-not-allowed" },
+      },
+      {
+        name: "recovery key revokes a member",
+        entries: [
+          ...chain,
+          signRaw(nextBody(next, { op: "revoke", id: "phone2" }), RECOVERY, recovery.privateKey),
+        ],
+        expect: { error: "signer-not-allowed" },
       },
       {
         name: "entry of an op the verifier does not know",

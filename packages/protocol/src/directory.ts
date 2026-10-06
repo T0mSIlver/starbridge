@@ -56,9 +56,10 @@ export interface VerifyOptions {
  * - entry 0 adds a device, is signed by that device's own key and by the recovery key it names;
  * - each later entry is signed by an active device or by the recovery key, has the next `seq`
  *   and the previous entry's hash as `prev`;
- * - machines sign no entries, the recovery key adds only devices and confirms its replacement;
+ * - machines sign no entries; the recovery key adds a device, revoking every other one, and
+ *   confirms its own replacement, nothing else (`SIGNED_BY`);
  * - a new recovery key is proposed by a device, signed by itself, and confirmed by the current
- *   recovery key or by another device; from then on only the new key counts;
+ *   recovery key; from then on only the new key counts;
  * - ids and public keys are never reused, and revoked members stay revoked.
  */
 export function verifyDirectory(entries: unknown[], opts: VerifyOptions = {}): Directory {
@@ -116,6 +117,19 @@ function genesis(env: SignedEnvelope, opts: VerifyOptions): Directory {
   };
 }
 
+/**
+ * Who signs each op: an active device, the recovery key, or either. The recovery key adds a
+ * device and confirms its own replacement, nothing else (#364); older clients recovered with a
+ * plain `add`, which still verifies.
+ */
+const SIGNED_BY = {
+  add: "either",
+  revoke: "device",
+  recover: "recovery",
+  recovery: "device",
+  "recovery-confirm": "recovery",
+} as const;
+
 function applyEntry(dir: Directory, env: SignedEnvelope, i: number): Directory {
   let signPk: string;
   if (env.signer === RECOVERY) {
@@ -135,24 +149,38 @@ function applyEntry(dir: Directory, env: SignedEnvelope, i: number): Directory {
   if (body.account !== dir.account) throw new ProtocolError("wrong-account", `entry ${i}`);
   if (env.recoverySig !== undefined && body.op !== "recovery")
     throw new ProtocolError("bad-chain", `entry ${i}: only entry 0 and proposals have recoverySig`);
+  const allowed = SIGNED_BY[body.op];
+  if (allowed !== "either" && (env.signer === RECOVERY) !== (allowed === "recovery"))
+    throw new ProtocolError(
+      "signer-not-allowed",
+      `entry ${i}: a ${body.op} is signed by the ${allowed}`,
+    );
 
   const members = new Map(dir.members);
   const next = { ...dir, members, length: i + 1, head: entryHash(env.body) };
+  const addDevice = (m: Member) => {
+    if (keyInUse(dir, m.signPk) || keyInUse(dir, m.boxPk) || members.has(m.id) || m.id === RECOVERY)
+      throw new ProtocolError("duplicate-member", `entry ${i}: ${m.id}`);
+    members.set(m.id, { member: m, active: true });
+  };
   switch (body.op) {
     case "add": {
       if (body.recoveryPk !== undefined)
         throw new ProtocolError("bad-chain", `entry ${i}: only entry 0 names the recovery key`);
-      const m = body.member;
-      if (env.signer === RECOVERY && m.role !== "device")
+      if (env.signer === RECOVERY && body.member.role !== "device")
         throw new ProtocolError("signer-not-allowed", `entry ${i}: recovery adds devices only`);
-      if (
-        keyInUse(dir, m.signPk) ||
-        keyInUse(dir, m.boxPk) ||
-        members.has(m.id) ||
-        m.id === RECOVERY
-      )
-        throw new ProtocolError("duplicate-member", `entry ${i}: ${m.id}`);
-      members.set(m.id, { member: m, active: true });
+      addDevice(body.member);
+      return next;
+    }
+    case "recover": {
+      if (body.member.role !== "device")
+        throw new ProtocolError("signer-not-allowed", `entry ${i}: recovery adds devices only`);
+      // Every device is lost, or in someone else's hands: none stays, so a chain a server cut
+      // short of a revocation cannot bring a revoked device back (#363).
+      for (const [id, e] of dir.members)
+        if (e.active && e.member.role === "device") members.set(id, { ...e, active: false });
+      addDevice(body.member);
+      next.pendingRecovery = undefined;
       return next;
     }
     case "revoke": {
@@ -164,11 +192,6 @@ function applyEntry(dir: Directory, env: SignedEnvelope, i: number): Directory {
       return next;
     }
     case "recovery": {
-      if (env.signer === RECOVERY)
-        throw new ProtocolError(
-          "signer-not-allowed",
-          `entry ${i}: a device proposes a recovery key`,
-        );
       if (!env.recoverySig)
         throw new ProtocolError("bad-recovery", `entry ${i}: missing the new key's recoverySig`);
       verify({ ...env, signer: RECOVERY, sig: env.recoverySig }, body.recoveryPk);
@@ -182,11 +205,6 @@ function applyEntry(dir: Directory, env: SignedEnvelope, i: number): Directory {
       const pending = dir.pendingRecovery;
       if (!pending || body.proposal !== pending.seq)
         throw new ProtocolError("bad-recovery", `entry ${i}: no pending proposal ${body.proposal}`);
-      if (env.signer === pending.by)
-        throw new ProtocolError(
-          "signer-not-allowed",
-          `entry ${i}: the proposing device cannot confirm its own proposal`,
-        );
       next.recoveryPk = pending.recoveryPk;
       next.recoverySet = { seq: i, by: pending.by, at: body.at };
       next.pendingRecovery = undefined;
@@ -259,6 +277,7 @@ export async function genesisEntryAsync(
 type Change =
   | { op: "add"; member: Member }
   | { op: "revoke"; id: string }
+  | { op: "recover"; member: Member }
   | { op: "recovery"; recoveryPk: string }
   | { op: "recovery-confirm"; proposal: number };
 
@@ -266,7 +285,10 @@ function nextBody(dir: Directory, at: string, change: Change): DirectoryEntry {
   return { v: 1, account: dir.account, seq: dir.length, prev: dir.head, at, ...change };
 }
 
-/** `signer.id` is an active device's id, or RECOVERY with the recovery private key. */
+/**
+ * `signer.id` is an active device's id. RECOVERY with the recovery private key still verifies,
+ * as older clients recovered so; new ones write `recoverEntry`.
+ */
 export function addEntry(
   dir: Directory,
   signer: { id: string; signKey: Uint8Array },
@@ -305,6 +327,16 @@ export function revokeEntryAsync(
   return signAsync("directory", nextBody(dir, at, { op: "revoke", id }), signer.id, signer.sign);
 }
 
+/** Adds `member`, a device, with the recovery private key, and revokes every other device. */
+export function recoverEntry(
+  dir: Directory,
+  recoveryKey: Uint8Array,
+  member: Member,
+  at: string,
+): SignedEnvelope {
+  return sign("directory", nextBody(dir, at, { op: "recover", member }), RECOVERY, recoveryKey);
+}
+
 /** The pending proposal's seq, which a confirmation names. */
 function pendingSeq(dir: Directory): number {
   if (!dir.pendingRecovery) throw new ProtocolError("bad-recovery", "no pending proposal");
@@ -338,25 +370,12 @@ export function recoveryEntry(
   return withRecoverySig(env, recovery.privateKey);
 }
 
-/**
- * Confirms the pending proposal. `signer.id` is RECOVERY with the current recovery private key,
- * or an active device other than the proposing one.
- */
+/** Confirms the pending proposal with the current recovery private key. */
 export function recoveryConfirmEntry(
   dir: Directory,
-  signer: { id: string; signKey: Uint8Array },
+  recoveryKey: Uint8Array,
   at: string,
 ): SignedEnvelope {
   const change = { op: "recovery-confirm", proposal: pendingSeq(dir) } as const;
-  return sign("directory", nextBody(dir, at, change), signer.id, signer.signKey);
-}
-
-/** `recoveryConfirmEntry` with an active device's `SignFn`. */
-export function recoveryConfirmEntryAsync(
-  dir: Directory,
-  signer: { id: string; sign: SignFn },
-  at: string,
-): Promise<SignedEnvelope> {
-  const change = { op: "recovery-confirm", proposal: pendingSeq(dir) } as const;
-  return signAsync("directory", nextBody(dir, at, change), signer.id, signer.sign);
+  return sign("directory", nextBody(dir, at, change), RECOVERY, recoveryKey);
 }

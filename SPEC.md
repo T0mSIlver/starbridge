@@ -1390,19 +1390,25 @@ so the mod is the first path.
   session's mod or `wait` is due; outside an agent's session it still takes any. Checked with Pi 1.0.4 and pi-permission-system 39.1.0: `starbridge ask` ran
   without a dialog while `touch` still asked, and uninstall left no config behind.
 - 2026-10-06. The recovery key can be replaced (#348, owner ruling after #328). Entry 0 fixed it
-  for good, so an owner who lost the paper or thinks the key leaked had no fix short of a new
-  account. Two new directory entries replace it: `recovery` proposes a key, signed by a device
-  and by the new key; `recovery-confirm` makes it current, signed by the old key or by a second
-  device (PROTOCOL.md, "Replacing the recovery key"). Two entries, not one carrying both
-  signatures, because a second device can only see a request through the chain: no new route,
-  and the server still only stores entries. The second-device path is weak against theft (review
-  of #368): any device can add a device, so a stolen unlocked phone plus a sign-in to the owner's
-  GitHub account can confirm its own proposal and lock the owner out of recovery. Whether to keep
-  it or require the old key is the owner's call; it stays as asked meanwhile. Clients refuse a chain with an `op` they do not know rather than skip the entry,
-  since skipping a confirmation would keep the old key trusted; so web, Android, the CLI and
-  machines must all update before anyone replaces a key. There is no Devices history to put the
-  change in, so the Recovery key row in Devices says when the key was last set and on which
-  device, and every other device shows the change once.
+  for good, so an owner who thought the key leaked had no fix short of a new account. Two new
+  directory entries replace it: `recovery` proposes a key, signed by a device and by the new key,
+  and `recovery-confirm` makes it current, signed by the current key (PROTOCOL.md, "Replacing the
+  recovery key"). The owner first asked for a second device to confirm when the key is lost; the
+  review of #368 showed that path lets a stolen phone, which can add a device of its own, take
+  the key over, and the owner dropped it: replacing always needs the current key, and an owner
+  who lost it keeps their devices and no key. Clients refuse a chain with an `op` they do not
+  know rather than skip the entry, since skipping one would keep a replaced key or a revoked
+  device trusted; so web, Android, the CLI and machines must all update before anyone replaces a
+  key. There is no Devices history, so the Recovery key row in Devices says when the key was last
+  set and on which device, and every other device shows the change once.
+- 2026-10-06. Recovery revokes every other device, and the recovery key revokes no one (#363,
+  #364, found by the protocol audit). A recovering device holds no pin, so a server could serve
+  it a chain cut short of a revocation, and its `add` made a fork where a stolen, revoked phone
+  was active again. A new `recover` entry adds the device and revokes every other one, so no
+  fork keeps an earlier device; the owner adds the ones they still have again from the
+  recovered device. A plain `add` signed by the recovery key still verifies, since older chains
+  hold it, but clients no longer write it. The recovery key could also sign a `revoke`, against
+  PROTOCOL.md; verifiers now refuse it.
 
 ## Encryption, with existing libraries
 

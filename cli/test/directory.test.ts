@@ -6,7 +6,6 @@ import {
   generateMemberKeys,
   generateRecoverySeed,
   publicKeys,
-  RECOVERY,
   recoveryConfirmEntry,
   recoveryEntry,
   recoveryKeyPair,
@@ -237,8 +236,7 @@ test("a machine follows a recovery key replacement and still seals to the device
   const a = await paired(server);
   const fresh = recoveryKeyPair(generateRecoverySeed());
   await phoneAppends((dir, signer) => recoveryEntry(dir, signer, fresh, now()));
-  const oldKey = { id: RECOVERY, signKey: server.owner.recovery.privateKey };
-  await phoneAppends((dir) => recoveryConfirmEntry(dir, oldKey, now()));
+  await phoneAppends((dir) => recoveryConfirmEntry(dir, server.owner.recovery.privateKey, now()));
   const dir = await refreshDirectory(a, session(a));
   expect(dir.recoveryPk).toBe(toB64(fresh.publicKey));
   expect(dir.recoverySet.by).toBe("phone");

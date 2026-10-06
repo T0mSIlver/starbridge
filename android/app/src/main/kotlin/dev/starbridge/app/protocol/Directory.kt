@@ -38,6 +38,13 @@ class Directory(
 @Serializable
 data class Pin(val length: Int, val head: String)
 
+/**
+ * Who signs each op: an active device, the recovery key, or either. The recovery key adds a
+ * device and confirms its own replacement, nothing else (#364); older clients recovered with a
+ * plain `add`, which still verifies.
+ */
+private val SIGNED_BY = mapOf("add" to "either", "revoke" to "device", "recover" to "recovery", "recovery" to "device", "recovery-confirm" to "recovery")
+
 class Directories(private val sodium: Sodium, private val envelopes: Envelopes) {
     /** BLAKE2b-256 of an entry's body text. */
     fun entryHash(body: String): String = toB64(sodium.hash(utf8(body)))
@@ -46,7 +53,8 @@ class Directories(private val sodium: Sodium, private val envelopes: Envelopes) 
      * Replays the chain and checks every rule packages/protocol checks: a self-signed genesis
      * co-signed by the recovery key it names; each later entry signed by an active device or the
      * recovery key, with the next `seq` and the previous hash; machines sign nothing, the
-     * recovery key adds only devices; keys and ids are never reused, revoked members stay revoked.
+     * recovery key adds a device, revoking every other one, and confirms its own replacement
+     * ([SIGNED_BY]); keys and ids are never reused, revoked members stay revoked.
      */
     fun verify(entries: List<JsonElement>, account: String? = null, pin: Pin? = null, recoveryPk: String? = null): Directory {
         if (entries.isEmpty()) throw ProtocolException("bad-genesis", "empty chain")
@@ -101,20 +109,37 @@ class Directories(private val sodium: Sodium, private val envelopes: Envelopes) 
         if (body.seq != i || body.prev != dir.head) throw ProtocolException("bad-chain", "entry $i: seq or prev")
         if (body.account != dir.account) throw ProtocolException("wrong-account", "entry $i")
         if (env.recoverySig != null && body.op != "recovery") throw ProtocolException("bad-chain", "entry $i: only entry 0 and proposals have recoverySig")
+        val allowed = SIGNED_BY.getValue(body.op)
+        if (allowed != "either" && (env.signer == RECOVERY) != (allowed == "recovery")) {
+            throw ProtocolException("signer-not-allowed", "entry $i: a ${body.op} is signed by the $allowed")
+        }
 
         val members = LinkedHashMap(dir.members)
         var recoveryPk = dir.recoveryPk
         var recoverySet = dir.recoverySet
         var pending = dir.pendingRecovery
+        var named = dir.recoveryPks
+        fun addDevice(m: Member) {
+            if (keyInUse(dir, m.signPk) || keyInUse(dir, m.boxPk) || members.containsKey(m.id) || m.id == RECOVERY) {
+                throw ProtocolException("duplicate-member", "entry $i: ${m.id}")
+            }
+            members[m.id] = DirectoryMember(m, true)
+        }
         when (body.op) {
             "add" -> {
                 if (body.recoveryPk != null) throw ProtocolException("bad-chain", "entry $i: only entry 0 names the recovery key")
                 val m = body.member!!
                 if (env.signer == RECOVERY && m.role != "device") throw ProtocolException("signer-not-allowed", "entry $i: recovery adds devices only")
-                if (keyInUse(dir, m.signPk) || keyInUse(dir, m.boxPk) || members.containsKey(m.id) || m.id == RECOVERY) {
-                    throw ProtocolException("duplicate-member", "entry $i: ${m.id}")
-                }
-                members[m.id] = DirectoryMember(m, true)
+                addDevice(m)
+            }
+            "recover" -> {
+                val m = body.member!!
+                if (m.role != "device") throw ProtocolException("signer-not-allowed", "entry $i: recovery adds devices only")
+                // Every device is lost, or in someone else's hands: none stays, so a chain a server
+                // cut short of a revocation cannot bring a revoked device back (#363).
+                for ((id, e) in dir.members) if (e.active && e.member.role == "device") members[id] = DirectoryMember(e.member, false)
+                addDevice(m)
+                pending = null
             }
             "revoke" -> {
                 val target = members[body.id!!]
@@ -124,23 +149,21 @@ class Directories(private val sodium: Sodium, private val envelopes: Envelopes) 
                 if (pending?.by == body.id) pending = null
             }
             "recovery" -> {
-                if (env.signer == RECOVERY) throw ProtocolException("signer-not-allowed", "entry $i: a device proposes a recovery key")
                 val sig = env.recoverySig ?: throw ProtocolException("bad-recovery", "entry $i: missing the new key's recoverySig")
                 val proposed = body.recoveryPk!!
                 envelopes.verify(env.copy(signer = RECOVERY, sig = sig), proposed)
                 if (keyInUse(dir, proposed)) throw ProtocolException("bad-recovery", "entry $i: the key is already in use")
                 pending = RecoveryChange(i, proposed, env.signer, body.at)
+                named = named + proposed
             }
             "recovery-confirm" -> {
                 val p = pending
                 if (p == null || body.proposal != p.seq) throw ProtocolException("bad-recovery", "entry $i: no pending proposal ${body.proposal}")
-                if (env.signer == p.by) throw ProtocolException("signer-not-allowed", "entry $i: the proposing device cannot confirm its own proposal")
                 recoveryPk = p.recoveryPk
                 recoverySet = RecoveryChange(i, p.recoveryPk, p.by, body.at)
                 pending = null
             }
         }
-        val named = if (body.op == "recovery") dir.recoveryPks + body.recoveryPk!! else dir.recoveryPks
         return Directory(dir.account, recoveryPk, members, i + 1, entryHash(env.body), recoverySet, pending, named)
     }
 
@@ -166,7 +189,7 @@ class Directories(private val sodium: Sodium, private val envelopes: Envelopes) 
         return env.copy(recoverySig = toB64(recoverySig))
     }
 
-    /** [signer] is an active device's id, or [RECOVERY] with the recovery private key. */
+    /** [signer] is an active device's id. ([RECOVERY] still verifies, as older clients recovered so; new ones write [recoverEntry].) */
     fun addEntry(dir: Directory, signer: String, signKey: ByteArray, member: Member, at: String): SignedEnvelope =
         envelopes.sign("directory", entryBase(dir, at, "add") { put("member", memberJson(member)) }, signer, signKey)
 
@@ -180,11 +203,15 @@ class Directories(private val sodium: Sodium, private val envelopes: Envelopes) 
         return env.copy(recoverySig = toB64(recoverySig))
     }
 
-    /** Confirms the pending proposal: [signer] is [RECOVERY] with the current key, or another active device. */
-    fun recoveryConfirmEntry(dir: Directory, signer: String, signKey: ByteArray, at: String): SignedEnvelope {
+    /** Confirms the pending proposal with the current recovery private key. */
+    fun recoveryConfirmEntry(dir: Directory, recoveryKey: ByteArray, at: String): SignedEnvelope {
         val pending = dir.pendingRecovery ?: throw ProtocolException("bad-recovery", "no pending proposal")
-        return envelopes.sign("directory", entryBase(dir, at, "recovery-confirm") { put("proposal", pending.seq) }, signer, signKey)
+        return envelopes.sign("directory", entryBase(dir, at, "recovery-confirm") { put("proposal", pending.seq) }, RECOVERY, recoveryKey)
     }
+
+    /** Adds [member], a device, with the recovery private key, and revokes every other device. */
+    fun recoverEntry(dir: Directory, recoveryKey: ByteArray, member: Member, at: String): SignedEnvelope =
+        envelopes.sign("directory", entryBase(dir, at, "recover") { put("member", memberJson(member)) }, RECOVERY, recoveryKey)
 
     private fun entryBase(dir: Directory, at: String, op: String, rest: kotlinx.serialization.json.JsonObjectBuilder.() -> Unit): JsonObject = buildJsonObject {
         put("v", 1)

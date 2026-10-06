@@ -45,6 +45,17 @@ export const RevokeEntry = z.object({
   id: Id,
 });
 
+/**
+ * Recovery, when every device is lost: signed by the recovery key, it adds `member`, a device,
+ * and revokes every other device, so a chain a server cut short of a revocation cannot bring a
+ * revoked device back (#363).
+ */
+export const RecoverEntry = z.object({
+  ...EntryBase,
+  op: z.literal("recover"),
+  member: Member,
+});
+
 /** Proposes a new recovery key: signed by an active device, and by the new key (`recoverySig`). */
 export const RecoveryEntry = z.object({
   ...EntryBase,
@@ -52,7 +63,7 @@ export const RecoveryEntry = z.object({
   recoveryPk: B64,
 });
 
-/** Makes the pending proposal's key the recovery key: signed by the old key or another device. */
+/** Makes the pending proposal's key the recovery key: signed by the current recovery key. */
 export const RecoveryConfirmEntry = z.object({
   ...EntryBase,
   op: z.literal("recovery-confirm"),
@@ -63,6 +74,7 @@ export const RecoveryConfirmEntry = z.object({
 export const DirectoryEntry = z.discriminatedUnion("op", [
   AddEntry,
   RevokeEntry,
+  RecoverEntry,
   RecoveryEntry,
   RecoveryConfirmEntry,
 ]);

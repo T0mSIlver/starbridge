@@ -3,7 +3,6 @@
 // first paint. Every read of the directory replays the chain against the pin kept in IndexedDB.
 import {
   activeMembers,
-  addEntry,
   addEntryAsync,
   approverKeys,
   bindMessage,
@@ -39,11 +38,11 @@ import {
   pairingLink,
   pairingRequest,
   parsePairingCode,
-  RECOVERY,
   RecoveryKeyError,
   type RecoveryKeyReading,
   readRecoveryKey,
   ready,
+  recoverEntry,
   recoveryKey,
   recoveryKeyPair,
   recoverySeedFromKey,
@@ -353,7 +352,8 @@ export async function recover(account: string, name: string, typed: string): Pro
         throw new Error("This is a recovery key, but not this account's current one.");
       throw e;
     }
-    const entry = addEntry(dir, { id: RECOVERY, signKey: recovery.privateKey }, member, now());
+    // Revokes every other device: recovery means they are lost, or in someone else's hands (#363).
+    const entry = recoverEntry(dir, recovery.privateKey, member, now());
     const next = verifyDirectory([...entries, entry], { account });
     // Pending until the append lands: a failed one must not replace keys that still work (#283).
     await store.put("pending", record, account);

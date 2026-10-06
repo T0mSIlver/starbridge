@@ -60,8 +60,8 @@ data class Member(val id: String, val role: String, val name: String, val boxPk:
 }
 
 /**
- * A directory entry: `member` (and `recoveryPk` on entry 0) on add, `id` on revoke, `recoveryPk`
- * on a recovery proposal, `proposal` on its confirmation.
+ * A directory entry: `member` (and `recoveryPk` on entry 0) on add and recover, `id` on revoke,
+ * `recoveryPk` on a recovery proposal, `proposal` on its confirmation.
  */
 @Serializable
 data class DirectoryEntry(
@@ -87,6 +87,10 @@ data class DirectoryEntry(
                 schema(member != null, "member")
                 member!!.check()
                 recoveryPk?.let { b64(it, "recoveryPk") }
+            }
+            "recover" -> {
+                schema(member != null, "member")
+                member!!.check()
             }
             "revoke" -> {
                 schema(id != null, "id")

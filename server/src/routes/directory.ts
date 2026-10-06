@@ -132,10 +132,10 @@ directoryRoutes.post("/directory", requireCaller("device"), async (c) => {
         "directory-full",
         `a directory proposes recovery keys in its first ${cap} entries only`,
       );
-    if (entries.length >= cap && op === "add") {
-      const recovered = entries
-        .slice(cap)
-        .filter((e) => e.signer === RECOVERY && entryOp(e) === "add");
+    // A recovery adds with `recover` (older clients with `add`, signed by the recovery key).
+    const adds = (o: unknown) => o === "add" || o === "recover";
+    if (entries.length >= cap && adds(op)) {
+      const recovered = entries.slice(cap).filter((e) => e.signer === RECOVERY && adds(entryOp(e)));
       if (entry.signer !== RECOVERY || recovered.length >= recoveryAdds)
         fail(409, "directory-full", `a directory adds members in its first ${cap} entries only`);
     }

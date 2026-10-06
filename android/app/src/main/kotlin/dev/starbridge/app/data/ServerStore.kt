@@ -554,7 +554,8 @@ class ServerStore(
         val all = if (dir.members[member.id]?.active == true) {
             entries
         } else {
-            val entry = directories.addEntry(dir, RECOVERY, recovery.secret, member, now())
+            // Revokes every other device: recovery means they are lost, or in someone else's hands (#363).
+            val entry = directories.recoverEntry(dir, recovery.secret, member, now())
             api().append(entry)
             entries + ProtocolJson.encodeToJsonElement(entry)
         }

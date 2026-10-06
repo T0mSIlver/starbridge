@@ -46,10 +46,19 @@ The account's directory is a hash chain of signed entries listing each member's 
 Ed25519 public keys. Entry 0 adds the first device, names the recovery public key, and is signed
 both by that device and by the recovery key (`recoverySig`). Each later entry carries `seq` and `prev` (BLAKE2b-256 of the previous
 entry's body), and is signed by an active device or by the recovery key. Machines sign no
-entries; the recovery key adds only devices and confirms a new recovery key ("Replacing the
-recovery key" below). Revoking is an entry too. An entry's `op` is `add`, `revoke`, `recovery` or
-`recovery-confirm`; a verifier refuses a chain holding an `op` it does not know, rather than
-skipping the entry, since a skipped `recovery-confirm` would leave it trusting a replaced key.
+entries. An entry's `op` is one of:
+
+| `op` | Signed by | Does |
+|---|---|---|
+| `add` | an active device | adds a member (older clients also recovered with an `add` signed by the recovery key, which still verifies) |
+| `revoke` | an active device | revokes a member |
+| `recover` | the recovery key | adds a device and revokes every other device ("Recovery") |
+| `recovery` | an active device | proposes a new recovery key ("Replacing the recovery key") |
+| `recovery-confirm` | the recovery key | makes the proposed key current |
+
+The recovery key signs nothing else; in particular it revokes no one. A verifier refuses a
+chain holding an `op` it does not know, rather than skipping the entry, since a skipped
+`recover` or `recovery-confirm` would leave it trusting a revoked device or a replaced key.
 
 Clients replay the chain with `verifyDirectory` and keep a pin `{length, head}`. A later fetch
 must extend the pin, so the server can neither insert a key, nor roll back a revocation, nor serve
@@ -145,13 +154,17 @@ words from the eighth.
 
 When every device is lost, a new device turns the key or words into the recovery key pair,
 verifies the chain with that public key (it must be the chain's current recovery key, whose
-`recoverySig` checks against it, which a copied public key cannot fake), and signs its own `add`
-entry with it.
+`recoverySig` checks against it, which a copied public key cannot fake), and signs a `recover`
+entry with it, which adds the new device and revokes every other one. A recovering device holds
+no pin, so the server can serve it a chain cut short of a revocation; since `recover` revokes
+every earlier device, a fork made that way cannot bring a revoked one back. The owner adds the
+devices they still have again from the recovered one, through a pairing or join that pins its
+chain. Machines stay.
 
 ### Replacing the recovery key
 
-An owner who lost the key, or thinks someone saw it, replaces it in two entries, since the chain
-is the only channel the account's devices share:
+An owner who thinks someone saw the key replaces it from one of their devices, with the current
+key, in two entries:
 
 1. `{op: "recovery", recoveryPk}` proposes a new key. An active device signs it, and the
    envelope's `recoverySig` is the new key's signature over the same body, as signer "recovery",
@@ -159,18 +172,15 @@ is the only channel the account's devices share:
    current, proposed or retired. A later proposal replaces a pending one, and revoking the
    proposing device drops its proposal.
 2. `{op: "recovery-confirm", proposal}` names the pending proposal's `seq` and makes its key the
-   chain's recovery key. It is signed by the current recovery key, when the owner still has it,
-   or by an active device other than the one that proposed, when the owner lost it.
+   chain's recovery key. The current recovery key signs it.
 
-The second path is weaker than it looks: any active device can add a device, so a stolen
-unlocked device, together with a sign-in to the owner's account for the device it adds, can
-replace the key and lock the owner out of recovery. Only the first path keeps the recovery key
-out of a thief's reach.
+Both keys sign, so neither a stolen device nor a leaked key can replace the key alone: the key is
+what gets the owner back after a theft, so a thief must not be able to take it over. An owner who
+lost the key cannot replace it; their devices keep working, and the app says so.
 
-From the confirming entry on, the old key signs nothing: neither `add` nor `recovery-confirm`.
-A device shows a confirmed replacement once, as "Recovery key replaced on <proposing device>,
-<time of the confirming entry>", unless it made the replacement itself, and shows a pending one
-with Confirm, so a second device can approve it.
+From the confirming entry on, the old key signs nothing. Every other device shows the
+replacement once, as "Recovery key replaced on <proposing device>, <time of the confirming
+entry>".
 
 ## HTTP API
 

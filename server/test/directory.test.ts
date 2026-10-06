@@ -7,10 +7,13 @@ import {
   genesisEntry,
   publicKeys,
   RECOVERY,
+  recoverEntry,
   recoveryConfirmEntry,
   recoveryEntry,
   recoveryKeyPair,
+  revokeEntry,
   type SignedEnvelope,
+  sign,
   toB64,
   verifyDirectory,
 } from "@starbridge/protocol";
@@ -183,7 +186,9 @@ test("replacing the recovery key: the old key confirms, then signs nothing more 
     append(s, token, make(await directory(s, token)));
 
   expect((await step((d) => recoveryEntry(d, phone, newRecovery, at))).status).toBe(201);
-  expect((await step((d) => recoveryConfirmEntry(d, oldKey, at))).status).toBe(201);
+  expect((await step((d) => recoveryConfirmEntry(d, acct.recovery.privateKey, at))).status).toBe(
+    201,
+  );
   expect((await directory(s, token)).recoveryPk).toBe(toB64(newRecovery.publicKey));
 
   const refused = await step((d) => addEntry(d, oldKey, memberOf("thief").member, at));
@@ -195,7 +200,7 @@ test("replacing the recovery key: the old key confirms, then signs nothing more 
   );
 });
 
-test("a second device confirms a replacement; a revoked one cannot propose (#348)", async () => {
+test("only the recovery key confirms a replacement, and it revokes no one (#348, #364)", async () => {
   const s = await makeServer();
   const acct = await setupAccount(s);
   const laptop = await pair(s, acct, "laptop", "device", await signIn(s));
@@ -204,37 +209,62 @@ test("a second device confirms a replacement; a revoked one cannot propose (#348
     id: a.id,
     signKey: a.keys.sign.privateKey,
   });
-  const newRecovery = recoveryKeyPair(generateRecoverySeed());
   const read = () => directory(s, acct.device.token);
-
-  expect(
-    (
-      await append(
-        s,
-        acct.device.token,
-        recoveryEntry(await read(), as(acct.device), newRecovery, at),
-      )
-    ).status,
-  ).toBe(201);
-  const own = await append(
-    s,
-    acct.device.token,
-    recoveryConfirmEntry(await read(), as(acct.device), at),
-  );
-  expect(own.json.error).toBe("signer-not-allowed");
-  expect(
-    (await append(s, laptop.token, recoveryConfirmEntry(await read(), as(laptop), at))).status,
-  ).toBe(201);
-  expect((await read()).recoveryPk).toBe(toB64(newRecovery.publicKey));
-
-  await revoke(s, acct, "tablet");
   const proposal = recoveryEntry(
     await read(),
-    as(tablet),
+    as(acct.device),
     recoveryKeyPair(generateRecoverySeed()),
     at,
   );
-  const r = await append(s, acct.device.token, proposal);
+  expect((await append(s, acct.device.token, proposal)).status).toBe(201);
+
+  // A second device cannot stand in for the key: a stolen phone could add one (review of #368).
+  const proposed = await read();
+  const byDevice = sign(
+    "directory",
+    {
+      v: 1,
+      account: acct.id,
+      seq: proposed.length,
+      prev: proposed.head,
+      at,
+      op: "recovery-confirm",
+      proposal: proposed.pendingRecovery?.seq as number,
+    },
+    laptop.id,
+    laptop.keys.sign.privateKey,
+  );
+  const refused = await append(s, laptop.token, byDevice);
+  expect(refused.json.error).toBe("signer-not-allowed");
+
+  const byKey = { id: RECOVERY, signKey: acct.recovery.privateKey };
+  const revoking = await append(
+    s,
+    acct.device.token,
+    revokeEntry(await read(), byKey, "laptop", at),
+  );
+  expect(revoking.json.error).toBe("signer-not-allowed");
+
+  await revoke(s, acct, "tablet");
+  const late = recoveryEntry(await read(), as(tablet), recoveryKeyPair(generateRecoverySeed()), at);
+  const r = await append(s, acct.device.token, late);
   expect(r.status).toBe(400);
   expect(r.json.error).toBe("revoked-signer");
+});
+
+test("recovery revokes every other device and ends their sessions (#363)", async () => {
+  const s = await makeServer();
+  const acct = await setupAccount(s);
+  const laptop = await pair(s, acct, "laptop", "device", await signIn(s));
+  const fresh = await signIn(s);
+  const { member } = memberOf("new-phone");
+  const r = await append(
+    s,
+    fresh,
+    recoverEntry(await directory(s, acct.device.token), acct.recovery.privateKey, member, at),
+  );
+  expect(r.status).toBe(201);
+  expect((await s.call("GET", "/v1/me", { token: fresh })).json.member).toBe("new-phone");
+  expect((await s.call("GET", "/v1/me", { token: laptop.token })).status).toBe(401);
+  expect((await s.call("GET", "/v1/me", { token: acct.device.token })).status).toBe(401);
 });
