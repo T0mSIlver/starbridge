@@ -1301,6 +1301,19 @@ so the mod is the first path.
   keys alone; one that landed with its reply lost counts once the directory lists the entry. Boot
   adopts a pending record the directory lists as active even when an older device is stored, so a
   recovery or join cut off after it landed is not lost to the older keys.
+- 2026-10-06. Security headers (#312, after #302). Next sets the page's Content-Security-Policy
+  in `web/src/proxy.ts`, because only it can put a fresh nonce on each request and on its own
+  scripts: scripts need the nonce or `'strict-dynamic'` (so Umami's tracker, which Next's
+  bundle loads, passes), `'wasm-unsafe-eval'` lets libsodium's WebAssembly compile without
+  allowing JavaScript eval, and an inline script sets Zod's `jitless` before the bundles load,
+  since its `new Function` probe counts as a violation even when caught. Styles stay `'unsafe-inline'` since React writes style attributes,
+  images allow `data:` and `blob:` for questions, `worker-src 'self'` keeps the service worker,
+  and `frame-ancestors 'none'` refuses framing. Fonts are self-hosted, so nothing else is
+  allowed. A nonce needs a render per request, so every page is dynamic now, and the docs
+  read their Markdown at runtime from files the image ships (`outputFileTracingIncludes`).
+  Caddy sets what applies to every response, the API's included: HSTS for a year,
+  `nosniff` and `Referrer-Policy: same-origin`; the self-host example does the same. Next
+  stops sending `X-Powered-By`.
 
 ## Encryption, with existing libraries
 

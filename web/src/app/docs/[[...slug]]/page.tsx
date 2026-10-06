@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { DocsPage } from "@/components/Docs";
 import { DOCS, renderDoc } from "@/lib/docs";
 
-// Every doc is rendered at build time; any other path under /docs is a 404.
+// Only these docs exist; any other path under /docs is a 404.
 export const dynamicParams = false;
 
 export function generateStaticParams() {
