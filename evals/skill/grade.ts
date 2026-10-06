@@ -214,7 +214,7 @@ function score(r: Rec, s: Scenario): Record<string, boolean | null> {
     cold: j && hasCard ? j.cold : null,
     consequences: j && hasCard ? j.consequences : null,
     surface: j ? (s.expect === "terminal" ? j.terminal : !j.terminal) : null,
-    relevant: j && hasCard ? j.links : null,
+    relevant: j && cards.some((c) => (c.links ?? []).length > 0) ? j.links : null,
     plain: j && hasCard ? j.plain : null,
   };
 }

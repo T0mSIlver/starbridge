@@ -58,8 +58,9 @@ Now: checkouts fail for those 4 minutes, at peak hour." \
   --link https://github.com/acme/shop/pull/41
 ```
 
-Other flags: `--image` (up to 4 PNG or JPEG), `--link` (up to 4 HTTPS URLs),
-`--context-file`, `--waiting`, `--answer-in`. Never set `--default`: with no
+Quote text in single quotes: in double quotes the shell expands `$` and
+backticks. Other flags: `--image` (up to 4 PNG or JPEG), `--link` (up to 4
+HTTPS URLs), `--context-file`, `--waiting`, `--answer-in`. Never set `--default`: with no
 answer, the card waits. `ask` prints the decision id (`d_Xk3…`) and how the
 answer comes back.
 
@@ -78,6 +79,7 @@ last line says:
 - **"Nothing brings the answer into this session…"** Never end your turn
   with the card open. When only the answer is left, run
   `starbridge wait <id> --timeout 5m`, again on exit 2, as long as it takes.
+  No answer is never a yes: don't withdraw the card or do what it asks.
 
 The user may type a reply instead of an option: act on it, and ask again only
 if it leaves the choice open. Act on the answer at once. Post again only when

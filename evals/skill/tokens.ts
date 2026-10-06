@@ -6,7 +6,7 @@
  *   bun evals/skill/tokens.ts [--ref origin/main] [--model claude-sonnet-5-5]
  *
  * Without `--ref` it reads this checkout. Each count is the input of a `claude -p` call with the
- * piece appended to the system prompt, minus that of the same call without it.
+ * piece appended to the system prompt, minus that of the same call with "." appended.
  */
 import { spawnSync } from "node:child_process";
 import { copyFileSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
@@ -45,21 +45,30 @@ function input(extra: string): number {
   const r = spawnSync(
     "claude",
     ["-p", "Reply with ok.", "--model", opt.model as string, "--tools", "", "--setting-sources", "",
-      "--output-format", "json", ...(extra ? ["--append-system-prompt", extra] : [])],
+      "--output-format", "json", "--append-system-prompt", extra],
     { cwd: dir, env: { ...process.env, CLAUDE_CONFIG_DIR: dir }, encoding: "utf8" },
   );
   const u = JSON.parse(r.stdout).usage;
   return u.input_tokens + u.cache_creation_input_tokens + u.cache_read_input_tokens;
 }
 
-// The first call in a fresh config dir carries more context than the ones after it.
-input("");
-const base = input("");
+// Claude Code's own part of the prompt varies from call to call, by a few tokens or by thousands.
+// Each count is taken between two baseline calls ("." appended, since appending anything changes
+// the prompt) that agree; counts below zero or over half the characters are thrown away. The
+// median of three remains.
+function cost(text: string): number {
+  const counts: number[] = [];
+  while (counts.length < 3) {
+    const before = input(".");
+    const n = input(text) - before;
+    if (Math.abs(input(".") - before) <= 5 && n > 0 && n < text.length / 2) counts.push(n);
+  }
+  return counts.sort((a, b) => a - b)[1] as number;
+}
 console.log(`| Piece (${opt.ref ?? "this checkout"}) | Tokens |`, "\n|---|---:|");
 let always = 0;
 for (const [name, text] of Object.entries(pieces)) {
-  // The separator `--append-system-prompt` adds costs a token or two; it is part of the piece.
-  const n = input(text) - base;
+  const n = cost(text);
   if (!name.startsWith("Skill body")) always += n;
   console.log(`| ${name} | ${n} |`);
 }
