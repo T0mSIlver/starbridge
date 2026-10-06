@@ -77,7 +77,12 @@ export interface Asked {
   sessionID: string;
   permission: string;
   patterns?: string[];
-  metadata?: { command?: unknown };
+  /**
+   * What opencode shows at the keyboard: `command` for `bash`; `filepath` and `diff` for `edit`,
+   * which its edit, write and apply_patch tools ask; `command` and `directories` for an
+   * `external_directory` ask from its shell tool.
+   */
+  metadata?: { command?: unknown; filepath?: unknown; diff?: unknown; directories?: unknown };
 }
 
 /** A `question.asked` event's properties: one call of the `question` tool. */
@@ -148,15 +153,27 @@ export function answersOf(stdout: string, count: number): string[][] | undefined
   return undefined;
 }
 
-/** The hook input `starbridge hook permission` reads, in Claude Code's shape. */
+/**
+ * The hook input `starbridge hook permission` reads, in Claude Code's shape. The devices show its
+ * `tool_input` before Allow, so it carries what opencode's own dialog shows: an edit's diff
+ * (#489), and the command beside the directories it reaches. The path comes first, which the CLI
+ * takes as the summary.
+ */
 export function hookInput(p: Asked, cwd: string) {
-  const command = p.metadata?.command;
-  return {
-    session_id: p.sessionID,
-    cwd,
-    tool_name: p.permission,
-    tool_input: typeof command === "string" ? { command } : { path: (p.patterns ?? []).join(", ") },
-  };
+  const { command, filepath, diff, directories } = p.metadata ?? {};
+  const path = (p.patterns ?? []).join(", ");
+  const dirs = Array.isArray(directories)
+    ? directories.filter((d): d is string => typeof d === "string").join(", ")
+    : "";
+  const tool_input =
+    typeof diff === "string"
+      ? { file_path: typeof filepath === "string" ? filepath : path, diff }
+      : typeof command === "string" && p.permission === "external_directory"
+        ? { path: dirs || path, command }
+        : typeof command === "string"
+          ? { command }
+          : { path };
+  return { session_id: p.sessionID, cwd, tool_name: p.permission, tool_input };
 }
 
 /**

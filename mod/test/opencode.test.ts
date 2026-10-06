@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { answersOf, claim, isRun, waitingSessions } from "../opencode/starbridge.ts";
+import { answersOf, claim, hookInput, isRun, waitingSessions } from "../opencode/starbridge.ts";
 
 test("only `opencode run` counts as run, whatever flags come first", () => {
   const exe = ["/usr/bin/opencode", "/$bunfs/root/src/index.js"];
@@ -55,4 +55,29 @@ test("the CLI's answers reach opencode only when there is one per question", () 
   // Nothing printed: the terminal answered, or the question never reached the devices.
   expect(answersOf("", 1)).toBeUndefined();
   expect(answersOf(JSON.stringify({ answers: [[1]] }), 1)).toBeUndefined();
+});
+
+test("the devices see what opencode's dialog shows: an edit's diff, a command's directories (#489)", () => {
+  const ask = (permission: string, patterns: string[], metadata: object) =>
+    hookInput({ id: "per_1", sessionID: "ses_1", permission, patterns, metadata }, "/w").tool_input;
+  const diff = '--- a/package.json\n+++ b/package.json\n@@ -1 +1 @@\n-{}\n+{"x":1}\n';
+  // edit, write and apply_patch all ask as `edit`; the path stays first, as the summary.
+  const edit = ask("edit", ["package.json"], { filepath: "/w/package.json", diff });
+  expect(edit).toEqual({ file_path: "/w/package.json", diff });
+  expect(Object.keys(edit)).toEqual(["file_path", "diff"]);
+  expect(ask("edit", ["a.ts", "b.ts"], { filepath: 1, diff })).toEqual({
+    file_path: "a.ts, b.ts",
+    diff,
+  });
+  expect(
+    ask("external_directory", ["/etc/*"], {
+      command: "cat /etc/hosts",
+      directories: ["/etc"],
+      patterns: ["/etc/*"],
+    }),
+  ).toEqual({ path: "/etc", command: "cat /etc/hosts" });
+  expect(ask("bash", ["git push"], { command: "git push" })).toEqual({ command: "git push" });
+  expect(ask("external_directory", ["/tmp/*"], { filepath: "/tmp/x", parentDir: "/tmp" })).toEqual({
+    path: "/tmp/*",
+  });
 });
