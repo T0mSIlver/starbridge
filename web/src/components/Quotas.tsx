@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect } from "react";
+import { useCallback, useEffect, useId, useRef } from "react";
 import { relative } from "@/lib/format";
 import {
   arrange,
@@ -129,7 +129,7 @@ function Groups({
   });
   return (
     <div className={`${s.rows} ${reorderer.list.className ?? ""}`}>
-      {units.map((u) => {
+      {units.map((u, n) => {
         const item = reorderer.item(u.id);
         return (
           <div key={u.id} ref={item.ref} style={item.style} className={item.className}>
@@ -141,7 +141,9 @@ function Groups({
                 now={now}
                 comfy
                 handle={
-                  i === 0 ? (
+                  i === 0 && n < first ? (
+                    <Pinned provider={u.provider} />
+                  ) : i === 0 ? (
                     <button type="button" {...reorderer.handle(u.id)}>
                       <Icon name="drag" size={18} />
                     </button>
@@ -158,5 +160,45 @@ function Groups({
         {reorderer.said}
       </p>
     </div>
+  );
+}
+
+/**
+ * In a pinned group's handle slot, a pin whose tap or click says why the group leads: a popover
+ * in the top layer, since the table's rows clip what overflows them, and not a `title`, which
+ * phones never show (#285). It closes on Escape, a click outside, or a scroll.
+ */
+function Pinned({ provider }: { provider: string }) {
+  const id = useId();
+  const pin = useRef<HTMLButtonElement>(null);
+  const pop = useRef<HTMLDivElement>(null);
+  const close = useCallback(() => pop.current?.hidePopover(), []);
+  useEffect(() => () => removeEventListener("scroll", close, true), [close]);
+  const toggled = (e: React.ToggleEvent<HTMLDivElement>) => {
+    removeEventListener("scroll", close, true);
+    const p = pop.current;
+    const b = pin.current?.getBoundingClientRect();
+    if (e.newState !== "open" || !p || !b) return;
+    const edge = 16;
+    p.style.top = `${b.bottom + 4}px`;
+    p.style.left = `${Math.max(edge, Math.min(b.left, innerWidth - p.offsetWidth - edge))}px`;
+    addEventListener("scroll", close, true);
+  };
+  return (
+    <>
+      <button
+        type="button"
+        ref={pin}
+        className={s.pin}
+        popoverTarget={id}
+        aria-label={`Why ${provider} is first`}
+      >
+        <Icon name="pin" size={18} />
+      </button>
+      <div id={id} ref={pop} popover="auto" className={`t-meta ${s.why}`} onToggle={toggled}>
+        First because it runs out soonest. Change in{" "}
+        <Link href="/settings#running-out-first">Settings</Link>.
+      </div>
+    </>
   );
 }

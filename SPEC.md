@@ -1219,6 +1219,11 @@ so the mod is the first path.
   they held among themselves; narrow screens reorder in Settings. The web gets Sign out under
   Settings, Account, as Android has: the browser leaves the account's devices unless it is the
   last one, ends its session, drops its push subscription and forgets its keys and answers.
+- 2026-10-06. A group pinned by "Running out first" shows a pin in its drag handle's place on
+  the Quotas table (owner, #296), so the column stays aligned and the missing handle is
+  explained. A tap or click opens a popover, not a `title` tooltip, which phones never show
+  (#285): "First because it runs out soonest. Change in Settings.", Settings linking to the
+  setting. Android's Quotas screen has no reorder handles, so it has no pin.
 - 2026-10-06. A prompt sheet's full input opens in place (#265): "Full input" is a full-width
   row with a chevron at the end of the sheet, and the JSON expands under it, as Material's
   expandable sections do. Nothing above the row moves, so Allow and Deny stay where they were.

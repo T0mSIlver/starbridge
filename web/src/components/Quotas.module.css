@@ -110,3 +110,30 @@
     display: block;
   }
 }
+
+/* A pinned group's pin (Quotas.tsx), in the handle's place, size and colour. */
+.pin {
+  display: grid;
+  place-items: center;
+  flex: none;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--fg3);
+}
+
+/* Its popover, drawn as the inbox's menus are, placed under the pin by script. */
+.why {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  max-width: min(320px, calc(100vw - 2 * var(--s4)));
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  box-shadow: 0 12px 32px var(--scrim);
+  color: var(--fg);
+  font-weight: 400;
+  white-space: normal;
+}
