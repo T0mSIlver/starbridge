@@ -1430,6 +1430,38 @@ so the mod is the first path.
   ignored with a warning, so older commands still post; the CLI always sends "Waits for your
   answer" for clients from before 2026-10-05. `ask --help` now lists `--timeout`.
 
+- 2026-10-06. opencode is the fourth harness (#300; research below, opencode 1.18.31). Its
+  plugins get an SDK client bound to the running server, so the Starbridge opencode plugin
+  (`mod/opencode/starbridge.ts`) submits each answer with `client.session.promptAsync`, through
+  the mod's answer loop (`agent.ts`, `poller.ts`, `switch.ts`) as in Pi. One opencode process
+  serves many sessions, so the plugin runs one loop per session, from the first command that
+  session runs. It sets `STARBRIDGE_OPENCODE_SESSION` (the session's id) and
+  `STARBRIDGE_OPENCODE_TITLE` for every command through the `shell.env` hook, since opencode
+  gives commands no session id of its own, and `STARBRIDGE_OPENCODE_ANSWERS` (the id again)
+  unless the process is `opencode run`, which exits once the session is idle, or the session is a
+  subagent's (it has a `parentID`), which ends with its task: there the agent waits. `ask` detects
+  opencode from the first variable and says the answer comes back as a prompt only when the third
+  matches it, as for Pi; the field that carries this to the agent, `piAnswers`, becomes
+  `extensionAnswers`. The plugin appends `plugin/hooks/rule.md` to the system prompt through
+  `experimental.chat.system.transform`, the only hook that adds to it. Permission prompts: the
+  `permission.ask` hook is declared but never called, but every prompt publishes a
+  `permission.asked` event, and a plugin can answer it with `POST /permission/{id}/reply`
+  (`once` or `reject` with a message) while the TUI shows its dialog. So the plugin runs
+  `starbridge hook permission --agent opencode` on each one, which does nothing while
+  `starbridge config permissions` is off (the default), and the first answer wins: a reply from
+  the keyboard (`permission.replied` with another reply than the plugin's) stops the CLI, which
+  settles the prompt on the devices, as does the session going idle with the prompt out (Esc).
+  opencode settles a session's other prompts itself when one is rejected; those show as answered
+  at the keyboard.
+  The devices offer Allow (this call) and Deny. `opencode run` rejects every prompt at once, so
+  nothing reaches the devices from it. `starbridge setup` offers, when `opencode` is on the PATH,
+  the skill in `~/.config/opencode/skills/starbridge` and the plugin in
+  `~/.config/opencode/plugins/starbridge.ts`, whose code sits in
+  `~/.config/opencode/starbridge/` with the repository's layout; the CLI carries every file, as
+  it carries Codex's skill, so the versions match, and the agent rewrites outdated files when it
+  starts. opencode's own `question` tool (on in the TUI, off in `opencode run`) is not
+  intercepted, as in Pi; the skill already tells agents to avoid tools that ask the user.
+
 ## Encryption, with existing libraries
 
 - libsodium sealed boxes (`crypto_box_seal`, X25519 + XSalsa20-Poly1305): an
@@ -1848,6 +1880,37 @@ goes in git.
   the meta row cut its text. No text measured under 3:1 in either theme. The 200% text is
   emulated by scaling each element's computed font size and line height, since the page sets
   type in px; a browser that zooms the whole page instead is not covered.
+- 2026-10-06: opencode 1.18.31 (#300), from `@opencode-ai/plugin`'s types, the strings of
+  the `/usr/bin/opencode` binary and a probe plugin in a throwaway HOME and XDG dirs, with
+  glm-5.3-flash on the Z.ai coding plan. Plugin hooks the binary calls: `event` (every bus
+  event), `chat.message`, `chat.params`, `chat.headers`, `command.execute.before`,
+  `tool.execute.before` and `after`, `shell.env`, `tool.definition` and the `experimental.*`
+  ones (`chat.system.transform`, `chat.messages.transform`, `session.compacting`,
+  `compaction.autocontinue`, `text.complete`). `permission.ask` is in the types but nothing
+  calls it, so the 2026-10-05 entry holds for the hook; the permission bus does not: each prompt
+  publishes `permission.asked` (`id`, `sessionID`, `permission` such as `bash`, `patterns`,
+  `metadata.command`, `always`), and `POST /permission/{requestID}/reply` with `reply`
+  (`once`, `always`, `reject`) and `message` answers it. From a plugin, the v1 client's
+  `postSessionIdPermissionsPermissionId` allows, and its `_client.post` reaches the reply route
+  with a message; in the TUI the dialog closed, and a reject's message reached the model, which
+  followed it. `permission.replied` reports every answer, the keyboard's too. `opencode run`
+  rejects prompts at once ("auto-rejecting"). Messages into a session: plugins get `client`
+  (`@opencode-ai/sdk` v1) bound in-process to the server, also in the TUI, whose server runs in
+  a worker; `client.session.promptAsync` (`POST /session/{id}/prompt_async`) starts a turn in
+  an idle session, and in a busy one the TUI shows the message at once and the running loop
+  takes it at its next step, in the same turn. `opencode serve` exposes the same routes over
+  HTTP. Instructions: `AGENTS.md` from the global config dir and up from the project, else
+  `CLAUDE.md` (`~/.claude/CLAUDE.md` too, unless `OPENCODE_DISABLE_CLAUDE_CODE_PROMPT`), and
+  `CONTEXT.md`; the config's `instructions` takes more paths, globs or URLs; a plugin can append
+  to the system prompt with `experimental.chat.system.transform`, checked with the probe.
+  Skills: `{skill,skills}/**/SKILL.md` in the config dirs (`~/.config/opencode`, `.opencode`),
+  plus `~/.claude/skills` and `~/.agents/skills` and their project copies. Plugins:
+  `{plugin,plugins}/*.{ts,js}` in the config dirs, loaded by Bun, or npm packages named in the
+  config's `plugin`. Session identity: opencode sets no session variable for commands, but
+  `shell.env` receives the `sessionID` of the bash call and returns variables for it; the probe
+  set one and the command printed it. The TUI's plugin process runs as
+  `src/cli/tui/worker.js`; `opencode run`'s argv names `run`. opencode also has a `question`
+  tool (ask the user), denied in `opencode run` sessions and allowed in the TUI.
 - 2026-10-06: Caddy's connections to the server (#301). By default Caddy
   keeps 32 idle connections to an upstream and closes the rest. Every
   long-poll that returns frees one, so at 1000 load-test users Caddy held

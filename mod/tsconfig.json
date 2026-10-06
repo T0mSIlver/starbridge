@@ -16,6 +16,8 @@
     "hooks/poller.ts",
     "hooks/agent.ts",
     "hooks/switch.ts",
+    "hooks/node.ts",
+    "opencode",
     "pi",
     "test",
     "e2e"
