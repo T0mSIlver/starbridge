@@ -51,8 +51,8 @@ After Homebrew or npm, run `starbridge setup` yourself.
 ¹ In interactive sessions (Codex CLI 0.160 or later) while `starbridge agent` runs. In `codex exec`, the agent waits for the
 answer before it ends its turn.
 
-² In the interactive TUI and RPC mode, with the Starbridge Pi package (`pi install
-git:github.com/T0mSIlver/starbridge`). In `pi -p`, the agent waits for the answer before it ends
+² In the interactive TUI and RPC mode, with the Starbridge Pi package, which `starbridge setup`
+installs at the CLI's release tag. In `pi -p`, the agent waits for the answer before it ends
 its turn.
 
 ³ With pi-permission-system, once its `authorizerChain` names `starbridge`: your devices allow a

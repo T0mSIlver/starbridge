@@ -17,7 +17,7 @@ import { makeAgent } from "../src/agent/main";
 import type { Agent } from "../src/agent/server";
 import { REMOVED } from "../src/api";
 import { installTarball, linkIntoLocalBin } from "../src/setup/codexbar";
-import { installOpencode, opencodeState, removeOpencode } from "../src/setup/harnesses";
+import { installOpencode, opencodeState, PI_PACKAGE, removeOpencode } from "../src/setup/harnesses";
 import opencodeFiles from "../src/setup/opencode-files.js";
 import { setup } from "../src/setup/setup";
 import { status } from "../src/setup/status";
@@ -145,7 +145,7 @@ test("setup --yes replaces the dev box's manual installs and uploads a first sna
   expect(skill).toBe(
     readFileSync(join(import.meta.dir, "../../plugin/skills/starbridge/SKILL.md"), "utf8"),
   );
-  expect(m.calls()).toContain("pi install git:github.com/T0mSIlver/starbridge");
+  expect(m.calls()).toContain(`pi install ${PI_PACKAGE}`);
   expect(readFileSync(join(m.home, ".codex/rules/starbridge.rules"), "utf8")).toContain(
     '"starbridge", ["ask"',
   );
@@ -207,6 +207,12 @@ test("a second setup changes nothing", async () => {
   );
   // Declined: nothing written.
   expect(readFileSync(join(m.home, ".codex/skills/starbridge/SKILL.md"), "utf8")).toContain("old");
+
+  // A Pi package at another release moves to this CLI's tag.
+  const pi = join(m.home, ".pi/agent/settings.json");
+  writeFileSync(pi, JSON.stringify({ packages: ["git:github.com/T0mSIlver/starbridge@v0.9.0"] }));
+  await setup(m.sys, { yes: true, readyTimeoutMs: 2_000 });
+  expect(JSON.parse(readFileSync(pi, "utf8")).packages).toEqual([PI_PACKAGE]);
 });
 
 test("status reports the agent, the service and the plugins", async () => {
@@ -274,7 +280,7 @@ test("uninstall removes the service and plugins, asks the devices to revoke, kee
   ).toEqual([]);
   expect(existsSync(join(m.home, ".codex/skills/starbridge"))).toBe(false);
   expect(existsSync(join(m.home, ".codex/rules/starbridge.rules"))).toBe(false);
-  expect(m.calls()).toContain("pi remove git:github.com/T0mSIlver/starbridge");
+  expect(m.calls()).toContain(`pi remove ${PI_PACKAGE}`);
   expect(readdirSync(join(m.home, ".config/opencode")).sort()).toEqual(["plugins", "skills"]);
   expect(readdirSync(join(m.home, ".config/opencode/plugins"))).toEqual([]);
   expect(JSON.parse(readFileSync(pps, "utf8"))).toEqual({
