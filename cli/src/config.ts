@@ -183,7 +183,7 @@ export interface AgentConfig {
 
 /**
  * The format of every file in the config folder, written as `v` (#473). A file without `v` is
- * version 1, the format 1.0.0 shipped; a later format raises it and reads the ones before.
+ * version 1, the format 0.1.0 shipped; a later format raises it and reads the ones before.
  */
 export const STATE_VERSION = 1;
 
@@ -295,8 +295,8 @@ export class Store {
       throw new StateFileError(
         p,
         name === "directory.json"
-          ? "is not in this starbridge's format (from before 1.0.0?): remove it, the server's copy is read again"
-          : "is not in this starbridge's format (from before 1.0.0?): move it away, then run `starbridge pair`",
+          ? "is not in this starbridge's format (from before the first release?): remove it, the server's copy is read again"
+          : "is not in this starbridge's format (from before the first release?): move it away, then run `starbridge pair`",
       );
     const v = (value as { v?: unknown }).v ?? 1;
     if (v !== STATE_VERSION)
