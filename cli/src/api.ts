@@ -1,4 +1,5 @@
-import type { SealedItem } from "@starbridge/protocol";
+import { CLIENT_HEADER, clientHeader, type SealedItem } from "@starbridge/protocol";
+import { VERSION } from "./version";
 
 /** What every command and `status` say once the owner revoked this machine. */
 export const REMOVED =
@@ -37,7 +38,10 @@ export class Api {
     path: string,
     opts: { body?: unknown; headers?: Record<string, string>; signal?: AbortSignal } = {},
   ): Promise<{ status: number; json: unknown }> {
-    const headers: Record<string, string> = { ...opts.headers };
+    const headers: Record<string, string> = {
+      [CLIENT_HEADER]: clientHeader("cli", VERSION),
+      ...opts.headers,
+    };
     if (this.token) headers.authorization = `Bearer ${this.token}`;
     if (opts.body !== undefined) headers["content-type"] = "application/json";
     const base = this.server.replace(/\/+$/, "");
@@ -65,7 +69,14 @@ export class Api {
       json = undefined;
     }
     if (res.status >= 400) {
-      const e = (json ?? {}) as { error?: string; detail?: string };
+      const e = (json ?? {}) as { error?: string; detail?: string; minimum?: string };
+      if (res.status === 426)
+        throw new ApiError(
+          426,
+          e.error ?? "client-too-old",
+          e.detail,
+          `this server needs starbridge ${e.minimum ?? "a newer release"} or later: run \`starbridge update\``,
+        );
       // The server drops a machine's token when the directory revokes the machine.
       if (res.status === 401 && this.token)
         throw new ApiError(401, e.error ?? res.statusText, e.detail, REMOVED);

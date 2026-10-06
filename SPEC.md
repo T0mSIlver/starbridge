@@ -1852,6 +1852,14 @@ so the mod is the first path.
   too (its package version, stamped at release) rather than a git revision, so one comparison
   serves the minimum-release table. A request without the header is served: curl and scripts
   keep working, and a minimum only refuses clients that say they are older.
+- 2026-10-06. What a client does with 426 `client-too-old` (#468). The minimum table is
+  `MINIMUM_RELEASES` in `server/src/clients.ts`, empty at launch and checked at start; a
+  pre-release counts below its release. The CLI says "run `starbridge update`" and exits 1; the
+  web page shows one "Starbridge was updated" screen with Reload, since a reload fetches the
+  current page; Android shows the refusal as an error that names Google Play, and a blocking
+  screen is a follow-up. The day's usage counts each member's first release once
+  (`active.clients.<name>.<major>.<minor>`), so a client cycling through made-up versions adds
+  one row a day.
 
 ## Encryption, with existing libraries
 

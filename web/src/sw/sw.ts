@@ -3,6 +3,7 @@
 // key, verifies them against the pinned directory, and shows the decision with its options as
 // notification actions where the browser supports them. Built to public/sw.js by `bun run sw`.
 import type { SealedItem } from "@starbridge/protocol";
+import { CLIENT } from "../lib/api";
 import {
   answer,
   deviceContext,
@@ -107,7 +108,9 @@ async function onPush(text: string): Promise<void> {
         boxes: [{ to: ctx.device.id, box: payload.box }],
       }
     : await (async () => {
-        const stored = await (await fetch(`/v1/items/${encodeURIComponent(payload.id)}`)).json();
+        const stored = await (
+          await fetch(`/v1/items/${encodeURIComponent(payload.id)}`, { headers: CLIENT })
+        ).json();
         answeredAt = stored.answeredAt;
         return stored.item;
       })();
@@ -130,7 +133,9 @@ async function onPush(text: string): Promise<void> {
     // Back to working, the notification loses its waiting line without a sound (#191).
     const { machine, waiting } = await openWaiting(ctx, item);
     if (answered.has(`${account}/${waiting.decisionId}`)) return;
-    const res = await fetch(`/v1/items/${encodeURIComponent(waiting.decisionId)}`);
+    const res = await fetch(`/v1/items/${encodeURIComponent(waiting.decisionId)}`, {
+      headers: CLIENT,
+    });
     if (!res.ok) return;
     const stored = await res.json();
     if (stored.answeredAt) return;

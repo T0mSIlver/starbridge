@@ -41,6 +41,7 @@ export function testConfig(over: Partial<Config> = {}): Config {
     relayMode: false,
     demo: false,
     limits: DEFAULT_LIMITS,
+    minimumReleases: {},
     ...over,
   };
 }
@@ -79,7 +80,7 @@ export interface Account {
   id: string;
   device: Actor;
   recovery: KeyPair;
-  /** The seed the recovery words encode, for clients that recover with them. */
+  /** The seed behind the recovery key, for tests that recover with it. */
   recoverySeed: Uint8Array;
 }
 
