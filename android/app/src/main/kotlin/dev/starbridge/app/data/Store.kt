@@ -43,7 +43,8 @@ interface Store {
     fun cancelJoin()
     fun recover(words: String)
 
-    fun refresh()
+    /** Syncs everything; [shown] false keeps [busy] down, for syncs the owner didn't ask for. */
+    fun refresh(shown: Boolean = true)
     /** Asks the machines for fresh quota snapshots, waits for them, then refreshes. */
     fun refreshQuotas()
     fun answer(id: String, choice: String?, text: String?)

@@ -81,7 +81,7 @@ class MainActivity : ComponentActivity() {
                     // The recovery key's screens keep themselves out of screenshots (SetupScreen).
                     if (phase == Phase.Ready) {
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) askNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
-                        store.refresh()
+                        store.refresh(shown = false)
                     }
                 }
                 if (phase == Phase.Ready) {
@@ -104,7 +104,8 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         system24.value = DateFormat.is24HourFormat(this)
-        if (store.phase.value == Phase.Ready) store.refresh()
+        // Pull to refresh shows its indicator; the syncs on launch and resume run without it.
+        if (store.phase.value == Phase.Ready) store.refresh(shown = false)
         // Join requests arrive live while the app is in front; a push covers the rest.
         store.watchJoins(true)
     }
