@@ -58,11 +58,7 @@ export const QUESTIONS: Question[] = [
 ];
 
 /** Twelve minutes, then three idle: finished runs stay few, so the question stays in view. */
-const RUN = [
-  "sh",
-  "-c",
-  'for i in $(seq 1 12); do echo "[$i/12] e2e suite"; sleep 60; done',
-];
+const RUN = ["sh", "-c", 'for i in $(seq 1 12); do echo "[$i/12] e2e suite"; sleep 60; done'];
 
 export class DemoMachine {
   private readonly log: (line: string) => void;
