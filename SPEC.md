@@ -765,8 +765,8 @@ Tokens, type and components: `DESIGN.md`.
   It sees machines and answers from any device, so a pairing or answer made on the phone counts
   once this browser sees them. Owner's view: an Umami share link on `stats.starbridge.run`,
   where Caddy passes only GET requests and blocks the login.
-  Caddy rate-limits its open endpoint, and a timer keeps each table to 180 days and a million
-  rows, so it cannot fill the disk; `/privacy` gives the 180 days (#574).
+  Caddy rate-limits its open endpoint, and an hourly timer keeps each table to 180 days and a
+  million rows, so it cannot fill the disk (#574).
 - **Demo server** (#423). Play reviewers cannot pass GitHub's new-device check and cannot be given
   a recovery key, so `demo.starbridge.run` is a self-hosted server with an owner token, and
   `demo/` is its first device and machine. It approves every join by digits without comparing,

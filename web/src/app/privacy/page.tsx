@@ -51,7 +51,8 @@ export default function Privacy() {
       <p>
         Your account, device list and push targets stay until you delete them (see Deletion). A
         nightly copy of the database is kept on the server for 14 days, and Hetzner keeps its own
-        backups of the server, so deleted data can remain in backups for up to 14 days.
+        backups of the server, with those copies, for 7 more, so deleted data can remain in backups
+        for up to 3 weeks.
       </p>
 
       <h2 className="t-heading">Logs</h2>
@@ -138,7 +139,7 @@ export default function Privacy() {
         by a hash of the IP address, the browser and a salt that changes every day, so a visit
         cannot be traced back to you or linked to your visits on other days. A browser that sends Do
         Not Track is not counted. Umami keeps its records for 180 days at most, and the nightly
-        backups keep them for 14 days more.
+        backups keep them for up to 3 weeks more.
       </p>
 
       <h2 className="t-heading">Deletion</h2>
@@ -148,7 +149,7 @@ export default function Privacy() {
         account, email <a href="mailto:privacy@starbridge.run">privacy@starbridge.run</a> with your
         GitHub login. To show the account is yours, you post a code the operator sends you in a
         public gist on that GitHub account. The operator deletes the account within 30 days of that,
-        and backups age out within 14 days after.
+        and backups age out within 3 weeks after.
       </p>
 
       <h2 className="t-heading">Your rights</h2>
