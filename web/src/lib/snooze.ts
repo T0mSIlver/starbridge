@@ -50,12 +50,7 @@ const sameDay = (a: Date, b: Date) => a.toDateString() === b.toDateString();
  * "18:00", "tomorrow 09:00", "Fri 09:00": when a snooze ends, short enough for a time slot.
  * `named` leaves out "tomorrow" for the menu, whose "Tomorrow morning" says it already.
  */
-export function snoozeTime(
-  until: Date,
-  now: Date,
-  clock?: Prefs["clock"],
-  named = false,
-): string {
+export function snoozeTime(until: Date, now: Date, clock?: Prefs["clock"], named = false): string {
   const time = clockTime(until, clock);
   if (sameDay(until, now)) return time;
   if (sameDay(until, at(now, 0, 1))) return named ? time : `tomorrow ${time}`;
@@ -67,4 +62,25 @@ export function snoozeTime(
       : {}),
   });
   return `${day} ${time}`;
+}
+
+/** Pick a time's days: today and the 7 after it, each at midnight in this device's zone. */
+export function pickDays(now: Date): Date[] {
+  return Array.from({ length: 8 }, (_, i) => at(now, 0, i));
+}
+
+/** "Today", "Tomorrow", "Thu 8": a day on Pick a time's chips. */
+export function dayLabel(day: Date, now: Date): string {
+  if (sameDay(day, now)) return "Today";
+  if (sameDay(day, at(now, 0, 1))) return "Tomorrow";
+  return day.toLocaleDateString(undefined, { weekday: "short", day: "numeric" });
+}
+
+/** Every half hour of `day` that a snooze may take: after now, at most 7 days ahead. */
+export function pickTimes(day: Date, now: Date): Date[] {
+  return Array.from({ length: 48 }, (_, i) => {
+    const d = new Date(day);
+    d.setHours(Math.floor(i / 2), (i % 2) * 30, 0, 0);
+    return d;
+  }).filter((d) => snoozeAllowed(d, now));
 }
