@@ -359,6 +359,14 @@ provider plugins add providers, not panels.
   pairing active, so Devices shows the added time on rows that share a name (#287). `pair` and
   `setup` guess `machineKind` (cloud, laptop with a battery, server with no display, else desktop);
   `config machine-kind` corrects it.
+- **The pairing link** `https://starbridge.run/pair#CODE`, which `pair` prints and shows as a QR
+  code, is also an App Link (#611): setup says to scan it with the camera, and a phone's camera
+  hands links to apps, not to a browser that would first ask to become a device itself. The app
+  opens Add a device with the code looked up, once the phone is in the account; a phone signed in
+  but not in the account yet joins with it instead, as another device's "Scan with the new phone"
+  code asks. Without the app,
+  or on a self-hosted server, which the APK cannot claim, the link opens the web page as before;
+  where both the installed web app and the app claim it, Android opens the verified app.
 - **Setup** (`cli/src/setup/`; #68, #239, #245) installs CodexBar's latest release, taking the
   static musl build where the glibc one would not start. Only the repository is pinned, since
   CodexBar ships almost daily (#530): the tarball must match the `.sha256` of the same release,
