@@ -142,3 +142,40 @@ jobs:
           name: e2e-failure
           path: ${{ runner.temp }}/starbridge-e2e-failure.png
           if-no-files-found: ignore
+
+  # Builds the deployed images, without pushing them, when a pull request can change them: a base
+  # image or lockfile change that breaks a build fails here, not at the deploy (#430). Only on pull
+  # requests; on a push, main's deploy builds them on the box. Docker runs on the dev box's
+  # runners (label `docker`), not on dell2's; without DOCKER_RUNNER it runs on GitHub's runners.
+  images:
+    name: images
+    runs-on: ${{ vars.DOCKER_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 20
+    steps:
+      - id: changes
+        if: github.event_name == 'pull_request'
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        with:
+          filters: |
+            images:
+              - '**/Dockerfile'
+              - '**/*.Dockerfile'
+              - '**/package.json'
+              - 'pnpm-lock.yaml'
+              - 'pnpm-workspace.yaml'
+              - 'deploy/**'
+      - if: steps.changes.outputs.images == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # Tagged per run, so runs on one host never share a tag, and removed after; the layer cache
+      # stays for the next run.
+      - if: steps.changes.outputs.images == 'true'
+        run: |
+          t=ci-${{ github.run_id }}
+          docker build -f server/Dockerfile -t starbridge-server:$t .
+          docker build -f web/Dockerfile -t starbridge-web:$t .
+          docker build -f deploy/demo/Dockerfile -t starbridge-demo:$t .
+          docker build -f deploy/caddy.Dockerfile -t starbridge-caddy:$t deploy
+      - if: always() && steps.changes.outputs.images == 'true'
+        run: |
+          t=ci-${{ github.run_id }}
+          docker image rm -f starbridge-server:$t starbridge-web:$t starbridge-demo:$t starbridge-caddy:$t >/dev/null 2>&1 || true
