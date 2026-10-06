@@ -300,8 +300,8 @@ provider plugins add providers, not panels.
   and offers, each after asking, Codex's skill, the Pi package and opencode's plugin and skill,
   from copies the CLI carries so versions match. The local agent rewrites outdated copies when
   it starts.
-- **Files setup writes into other tools** (#474) start with one marker line, `Written by
-  starbridge <version>; \`starbridge uninstall\` removes it.`, in the file's comment syntax: the
+- **Files setup writes into other tools** (#474) start with one marker line, ``Written by
+  starbridge <version>; `starbridge uninstall` removes it.``, in the file's comment syntax: the
   systemd unit, the launchd plist, the Codex rule, the opencode entry and the copied skills (a YAML
   comment first in the front matter). A file is Starbridge's when it has the marker (a skill also
   when its front matter names it `starbridge`); setup replaces it when it differs from this
