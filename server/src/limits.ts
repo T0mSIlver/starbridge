@@ -71,7 +71,7 @@ export const DEFAULT_LIMITS = {
 
   /** Pairing requests posted per address. */
   pairingPosts: [10, MINUTE] as RateWindow,
-  /** Pairing requests read per account, by the device that shows the QR code. */
+  /** Pairing requests read per account, by the device approving the pairing. */
   pairingReads: [30, MINUTE] as RateWindow,
   /** Pairing results read per address, by the member that posted the request. */
   pairingResults: [60, MINUTE] as RateWindow,
