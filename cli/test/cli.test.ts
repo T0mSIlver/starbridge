@@ -96,6 +96,17 @@ test("pair uses the hosted server unless --server or STARBRIDGE_SERVER names ano
   expect(asked).toEqual(["https://starbridge.run/v1/pairings", "https://self.example/v1/pairings"]);
 });
 
+test("pair --force names the old pairing as Devices shows it, not by its id (#287)", async () => {
+  const ctx = await paired(server);
+  const done = run(["pair", "--force"], ctx);
+  await until(() => ctx.lines.some((l) => l.startsWith("Pairing code: ")));
+  await server.approve(ctx.lines[0]?.replace("Pairing code: ", "") as string);
+  expect(await done).toBe(0);
+  expect(ctx.lines.at(-1)).toMatch(
+    /^Devices still lists the old pairing as the earlier "devbox", added [A-Z][a-z]{2} \d+, \d\d:\d\d( [AP]M)? \S+\. Revoke it there\.$/,
+  );
+});
+
 test("a machine the owner removed says so and how to pair it again", async () => {
   const ctx = await paired(server);
   await server.revoke(ctx.store.machine()?.id as string);

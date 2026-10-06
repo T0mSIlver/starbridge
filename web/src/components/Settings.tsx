@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { addedLabels } from "@/lib/format";
 import { AGENTS_GUIDE } from "@/lib/links";
 import { applyTheme, type Prefs, usePref } from "@/lib/prefs";
 import { providerOrder, type QuotaSettings } from "@/lib/quotaSettings";
@@ -336,14 +337,12 @@ function Providers({
   );
 }
 
-const added = (iso: string) =>
-  new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short" });
-
 function DeviceSection() {
   const { update, boot, sampleDevices } = useApp();
   const ctx = boot.state === "ready" ? boot.ctx : undefined;
   const [all, setAll] = useState<Device[] | undefined>(sampleDevices);
   const [revoking, setRevoking] = useState<Device>();
+  const [clock] = usePref("clock");
   useEffect(() => {
     if (ctx)
       load()
@@ -354,6 +353,7 @@ function DeviceSection() {
   const shown = (all ?? [])
     .filter((d) => d.status === "active")
     .sort((a, b) => order(a) - order(b) || a.addedAt.localeCompare(b.addedAt));
+  const added = addedLabels(shown, clock);
   return (
     <Section title="Devices">
       {!all && <Pending rows={2} />}
@@ -366,7 +366,7 @@ function DeviceSection() {
             <div className="t-small">{d.name}</div>
             <div className={`t-meta ${s.sub}`}>
               {d.role === "machine" ? "Machine" : "Device"}
-              {d.self ? " · this browser" : d.addedAt ? ` · added ${added(d.addedAt)}` : ""}
+              {d.self ? " · this browser" : d.addedAt ? ` · ${added.get(d.id)}` : ""}
             </div>
           </div>
           {d.self ? (
