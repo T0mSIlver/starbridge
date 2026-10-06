@@ -508,6 +508,63 @@ async function main() {
   if ((await long.exited) !== 0) throw new Error("ask --wait for the long options failed");
   await page.setViewportSize(DESKTOP);
 
+  step("images over their options share a height, so a phone's option buttons line up (#536)");
+  {
+    const LAYOUTS = "Which layout should the inbox lead with?";
+    const picks = cli(
+      "ask-picks",
+      [
+        "ask",
+        "--question",
+        LAYOUTS,
+        "--option",
+        "Desktop layout",
+        "--option",
+        "Phone layout",
+        "--recommended",
+        "Phone layout",
+        "--image",
+        image("a"),
+        "--image",
+        join(ROOT, "android/app/src/test/resources/fake/phone-inbox.png"),
+        "--project",
+        "starbridge",
+        "--session",
+        "e2e-picks",
+        "--wait",
+      ],
+      machineHome,
+    );
+    await picks.waitFor(/^d_\S+$/m);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page
+      .locator("[data-row]", { hasText: LAYOUTS })
+      .first()
+      .locator("button[data-id]")
+      .click();
+    await page.getByRole("heading", { name: LAYOUTS }).waitFor({ timeout: 30_000 });
+    const tops = async (sel: string) =>
+      page
+        .locator(sel)
+        .evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().top)));
+    await page.locator('fieldset button[aria-label^="View"] img').nth(1).waitFor();
+    const images = await tops('fieldset button[aria-label^="View"]');
+    const buttons = await tops('fieldset button:not([aria-label^="View"])');
+    if (images.length !== 2 || images[0] !== images[1] || buttons[0] !== buttons[1])
+      throw new Error(`the picks do not line up: images at ${images}, buttons at ${buttons}`);
+    for (const scheme of ["light", "dark"] as const) {
+      await page.emulateMedia({ colorScheme: scheme, reducedMotion: "reduce" });
+      await page.waitForTimeout(150);
+      await fitsLayout(page, `picks ${scheme}`);
+      await page.screenshot({ path: join(SHOTS, `picks-phone-${scheme}.png`) });
+    }
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    await page.getByRole("button", { name: /^Phone layout/ }).click();
+    await picks.waitFor(/Answer to d_\S+ .*: Phone layout/);
+    if ((await picks.exited) !== 0) throw new Error("ask --wait for the picks failed");
+    await page.setViewportSize(DESKTOP);
+  }
+
   step("leave one open decision for the screenshots");
   const open = cli(
     "ask-open",

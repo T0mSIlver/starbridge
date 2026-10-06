@@ -6,13 +6,14 @@ import type { MachineKind } from "@/lib/feed";
 import { AnsweredFirst, answeredFirstText, answerPlace } from "@/lib/outcome";
 import { fullInput } from "@/lib/permissionInput";
 import type { InboxItem, PromptItem, PromptReply, Reply } from "@/lib/types";
-import { Images, Links } from "./Attachments";
+import { ImageButton, Images, Links } from "./Attachments";
 import { Context } from "./Context";
 import s from "./Detail.module.css";
 import { KindTile, MetaRow, SessionLine, slotTime } from "./Feed";
 import { Icon } from "./icons";
 import { ordered } from "./options";
 import ui from "./ui.module.css";
+import { Viewer } from "./Viewer";
 
 const kindOf = (source: object) => (source as { machineKind?: MachineKind }).machineKind;
 const agentOf = (d: object) => (d as { agent?: string }).agent;
@@ -169,7 +170,10 @@ export function QuestionDetail({
   const d = item.decision;
   const { send, sending, error, lost } = useSend(onAnswer);
   const [replying, setReplying] = useState(false);
-  const options = closed || d.answerIn ? [] : ordered(d);
+  // One image per option: each image over the option it stands for, in the agent's order.
+  const paired =
+    !closed && !d.answerIn && (d.images?.length ?? 0) > 1 && d.images?.length === d.options.length;
+  const options = closed || d.answerIn ? [] : paired ? d.options : ordered(d);
   useKeys(keys && options.length > 0, (key) => {
     const choice = /^[1-4]$/.test(key) ? options[Number(key) - 1] : undefined;
     if (choice) send({ choice });
@@ -190,7 +194,7 @@ export function QuestionDetail({
         <h2 className="t-heading">{d.question}</h2>
       </Head>
       <Context text={d.context} className={`t-reading ${s.context}`} />
-      <Images d={d} />
+      {!paired && <Images d={d} />}
       <Links d={d} />
       {closed ? (
         <p className={`t-small ${s.closed}`}>{closed}</p>
@@ -198,6 +202,8 @@ export function QuestionDetail({
         <div className={s.actions}>
           <AnswerElsewhere page={d.answerIn} />
         </div>
+      ) : paired ? (
+        <Picks d={d} keys={keys} sending={sending} onPick={(choice) => send({ choice })} />
       ) : options.length > 0 ? (
         <fieldset className={`${s.actions} ${s.options}`}>
           <legend className="sr-only">Answer</legend>
@@ -248,6 +254,61 @@ export function QuestionDetail({
       )}
       <SessionLine source={d.source} agent={agentOf(d)} />
     </article>
+  );
+}
+
+/**
+ * "Pick a result": each image over the option it stands for; picking one answers. The images of a
+ * row share the tallest one's height, each centred on the inset colour, so the buttons line up
+ * and a phone screenshot beside a desktop one does not grow the row.
+ */
+function Picks({
+  d,
+  keys,
+  sending,
+  onPick,
+}: {
+  d: InboxItem["decision"];
+  keys: boolean;
+  sending: boolean;
+  onPick: (choice: string) => void;
+}) {
+  const images = d.images ?? [];
+  const [open, setOpen] = useState<number>();
+  // Two to a row: a row's images, then their buttons, so each row of the grid shares one height.
+  const rows = d.options.flatMap((_, i) =>
+    i % 2 ? [] : [[i, i + 1].filter((j) => j < images.length)],
+  );
+  return (
+    <fieldset className={`${s.actions} ${s.picks}`}>
+      <legend className="sr-only">Answer</legend>
+      {rows.map((row) => [
+        ...row.map((i) => (
+          <ImageButton key={`i${i}`} img={images[i]} className={s.pick} onOpen={() => setOpen(i)} />
+        )),
+        ...row.map((i) => {
+          const o = d.options[i];
+          const rec = o === d.recommended;
+          return (
+            <button
+              key={o}
+              type="button"
+              className={`t-label ${ui.btn} ${rec ? ui.rec : ""}`}
+              disabled={sending}
+              aria-keyshortcuts={keys && i < 4 ? String(i + 1) : undefined}
+              onClick={() => onPick(o)}
+            >
+              {o}
+              {rec && <span className="sr-only"> Default</span>}
+              {keys && i < 4 && <Kbd k={String(i + 1)} />}
+            </button>
+          );
+        }),
+      ])}
+      {open !== undefined && (
+        <Viewer images={images} start={open} onClose={() => setOpen(undefined)} />
+      )}
+    </fieldset>
   );
 }
 

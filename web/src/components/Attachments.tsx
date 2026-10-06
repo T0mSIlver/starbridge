@@ -15,26 +15,40 @@ export function Images({ d }: { d: Decision }) {
   return (
     <div className={`${s.images} ${images.length > 1 ? s.grid : ""}`}>
       {images.map((img, i) => (
-        <button
-          // biome-ignore lint/suspicious/noArrayIndexKey: images have no id, and never reorder
-          key={i}
-          type="button"
-          className={s.image}
-          onClick={() => setOpen(i)}
-          aria-label={img.alt ? `View ${img.alt}` : "View image"}
-        >
-          {/* biome-ignore lint/performance/noImgElement: decrypted data, nothing for next/image to fetch */}
-          <img src={imageSrc(img)} alt={img.alt ?? ""} width={img.width} height={img.height} />
-          {/* Says the image opens full screen; touch screens show no zoom cursor (#170). */}
-          <span className={s.expand}>
-            <Icon name="expand" size={20} />
-          </span>
-        </button>
+        // biome-ignore lint/suspicious/noArrayIndexKey: images have no id, and never reorder
+        <ImageButton key={i} img={img} onOpen={() => setOpen(i)} />
       ))}
       {open !== undefined && (
         <Viewer images={images} start={open} onClose={() => setOpen(undefined)} />
       )}
     </div>
+  );
+}
+
+/** One image, opening the viewer; the inset colour bands it where its shape leaves room. */
+export function ImageButton({
+  img,
+  onOpen,
+  className = "",
+}: {
+  img: NonNullable<Decision["images"]>[number];
+  onOpen: () => void;
+  className?: string;
+}) {
+  return (
+    <button
+      type="button"
+      className={`${s.image} ${className}`}
+      onClick={onOpen}
+      aria-label={img.alt ? `View ${img.alt}` : "View image"}
+    >
+      {/* biome-ignore lint/performance/noImgElement: decrypted data, nothing for next/image to fetch */}
+      <img src={imageSrc(img)} alt={img.alt ?? ""} width={img.width} height={img.height} />
+      {/* Says the image opens full screen; touch screens show no zoom cursor (#170). */}
+      <span className={s.expand}>
+        <Icon name="expand" size={20} />
+      </span>
+    </button>
   );
 }
 

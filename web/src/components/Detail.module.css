@@ -43,6 +43,30 @@
   text-align: center;
 }
 
+/* Images over their options, two to a row (#536). A grid row takes its tallest image, and the
+   other button stretches to it with its image centred, so the option buttons line up. */
+.picks {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: 0;
+}
+
+/* A later row's images stand apart from the buttons above them (the legend is child 1). */
+.picks > .pick:nth-child(n + 6) {
+  margin-top: var(--s2);
+}
+
+.picks .pick img {
+  max-height: var(--size-pick);
+}
+
+.picks > button:not(.pick) {
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .toolHead {
   display: flex;
   align-items: center;
