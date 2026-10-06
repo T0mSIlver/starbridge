@@ -97,7 +97,9 @@
   gap: var(--s2);
 }
 
+/* Fills its column; at a large text size its own width would push the page wider. */
 .input {
+  min-width: 0;
   height: var(--size-tap);
   padding: 0 var(--s3);
   border: 1px solid var(--line-strong);
