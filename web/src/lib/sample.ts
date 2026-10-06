@@ -1,5 +1,5 @@
-// The mockups' data (DESIGN.md, design v2), for the landing page's product shots and the
-// dev-only /sample pages that screenshots compare against. Times are relative to `now`.
+// Neutral data for the landing page's product shots and the dev-only /sample pages that
+// screenshots compare against, as on the Play Store's (#448). Times are relative to `now`.
 import type { Member } from "@starbridge/protocol";
 import type { Quotas, Runs } from "./device";
 import shots from "./sample-shots.json";
@@ -48,7 +48,6 @@ export function sample(now = Date.now()) {
       ...extra,
     }) as unknown as InboxItem["decision"];
 
-  // The Play Store screenshots' machines and projects (#421), so the landing and the listing match.
   const workstation = (s: string) => source("workstation", "desktop", "billing-api", s);
   const buildServer = (s: string) => source("build server", "server", "web-app", s);
   const laptop = (s: string) => source("laptop", "laptop", "web-app", s);

@@ -13,6 +13,8 @@ import ui from "./ui.module.css";
 //                    on the question with images
 //   android-inbox-*, android-question-*  Roborazzi shots of the app: `inbox-landing`, `sheet-pick`
 //   android-lock-*   the design v2 mockups' lock screen, which Roborazzi cannot render
+// All show the Play Store screenshots' neutral data (#448): lib/sample.ts, and Showcase.kt for
+// Android; the lock screen carries the same machines, projects and question.
 // Each comes dark and light; `<picture>` picks the one the browser asks for.
 function Shot({
   name,
