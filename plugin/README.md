@@ -6,7 +6,8 @@ act on, written so the owner can answer it cold, and `starbridge run` around
 any command that blocks them or needs them at the machine. A `SessionStart`
 hook adds the matching rule to every session's context. To tell agents more,
 such as which commands to report or which merges to ask about, put lines in
-their own instruction files: `docs/tell-your-agents.md` says where.
+their own instruction files: [Agent instructions](https://starbridge.run/docs/tell-your-agents)
+says where.
 
 A `PreToolUse` hook on `AskUserQuestion` runs `starbridge hook ask-user`, which
 answers the question with an instruction to post it with `starbridge ask`.
@@ -20,7 +21,7 @@ and `SessionEnd` run `starbridge hook settle`, which lets the waiting prompt go
 when the keyboard answers first. While it is off, both exit at once.
 
 The answers come back through the `starbridge-mod` plugin (`mod/README.md`).
-Both need the `starbridge` CLI on `PATH`, paired (`cli/README.md`).
+Both need the `starbridge` CLI on `PATH`, paired ([The CLI](https://starbridge.run/docs/cli)).
 
 ## Install
 
