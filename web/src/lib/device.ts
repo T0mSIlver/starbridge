@@ -85,7 +85,8 @@ export interface Ctx {
 export type Boot =
   /** `known`: this browser holds a device of the account it last signed in to. */
   | { state: "signed-out"; known: boolean }
-  | { state: "first-device"; account: string }
+  /** `unsaved`: the name of a first device whose page closed before its recovery key was saved. */
+  | { state: "first-device"; account: string; unsaved?: string }
   /** The account has devices and this browser is not one of them (or lost its binding). */
   | { state: "join"; account: string; stale: boolean }
   | { state: "revoked"; account: string; name: string }
@@ -172,9 +173,10 @@ export async function boot(): Promise<Boot> {
     // A browser that pinned a chain never accepts an empty one: that would be a rollback.
     if (await store.get("pin", account))
       return { state: "broken", account, error: "rollback: the server sent an empty directory" };
-    // Keys saved before a genesis that never reached the server.
+    // Keys saved before a genesis that never reached the server: the page closed before the
+    // owner saved the recovery key, so that key was never used (#328).
     if (device) await store.del("device", account);
-    return { state: "first-device", account };
+    return { state: "first-device", account, ...(device ? { unsaved: device.name } : {}) };
   }
   let verified: { dir: Directory; entries: SignedEnvelope[] };
   try {
@@ -264,7 +266,7 @@ async function newDevice(account: string, name: string) {
   return { record, member };
 }
 
-/** A first device whose keys, genesis entry and recovery words exist, not yet on the server. */
+/** A first device whose keys, genesis entry and recovery key exist, not yet on the server. */
 export interface FirstDevice {
   recoveryKey: string;
   /** Posts the genesis; safe to call again after a failure, with the same keys and entry. */
@@ -273,8 +275,9 @@ export interface FirstDevice {
 
 /**
  * Makes this browser's keys and the account's genesis entry. The recovery seed is dropped once
- * the words exist, so the caller keeps this object until `commit` succeeds and the words are
- * shown; a retry reuses it rather than making new keys.
+ * the key exists, so the key is shown before `commit`, which runs once the owner says it is
+ * saved: a page closed before that posts no genesis, and boot offers a new key (#328). A retry
+ * of `commit` reuses this object rather than making new keys.
  */
 export async function prepareFirstDevice(account: string, name: string): Promise<FirstDevice> {
   await ready;
