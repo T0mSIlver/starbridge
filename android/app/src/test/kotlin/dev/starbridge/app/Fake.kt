@@ -95,7 +95,7 @@ class Fake(private val now: Instant) {
             ),
             createdAt = ago(12),
             agent = "claude-code",
-            links = listOf(Link("https://claude.ai/artifact/4Esy3goyohvLThcPVCKaEf", "merge plan"), Link("https://github.com/T0mSIlver/starbridge/pull/86")),
+            links = listOf(Link("https://claude.ai/artifact/Xq7pLm2VnR4tBz9KcW1sYd", "merge plan"), Link("https://github.com/T0mSIlver/starbridge/pull/86")),
             replies = true,
         ),
         Decision(
@@ -149,7 +149,7 @@ class Fake(private val now: Instant) {
         defaultAt = null,
         source = devBox,
         createdAt = ago(6),
-        answerIn = Link("https://claude.ai/artifact/2ig2MyNRD484b7oZea5vkZ"),
+        answerIn = Link("https://claude.ai/artifact/Xq7pLm2VnR4tBz9KcW1sYd"),
     )
 
     /**

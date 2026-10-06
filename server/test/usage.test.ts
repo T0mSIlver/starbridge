@@ -148,3 +148,15 @@ test("`usage [days]` prints the counts from the database file", async () => {
   expect(out).toContain(dayOf(Date.now()).slice(5));
   expect(out).toMatch(/items\.decision +- +1/);
 });
+
+test("members with the same id in two accounts count as two", () => {
+  const db = openDb(":memory:");
+  const usage = new Usage(db);
+  usage.seen({ role: "machine", account: "a1", member: "devbox" });
+  usage.seen({ role: "machine", account: "a2", member: "devbox" });
+  for (const account of ["a1", "a2"])
+    usage.seen({ role: "device", account, member: "phone", session: account, client: "android" });
+  const day = aggregate(db, dayOf(Date.now()));
+  expect(day["active.machines"]).toBe(2);
+  expect(day["active.devices.android"]).toBe(2);
+});
