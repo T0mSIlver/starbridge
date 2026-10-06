@@ -24,8 +24,12 @@ export interface Host {
   mtime(path: string): Promise<number | undefined>;
   now(): Promise<number>;
   sleep(ms: number): Promise<void>;
-  /** Must not wait for the turn to start: a prompt submitted mid-turn waits for its own. */
-  submit(text: string): void;
+  /**
+   * Must not wait for the turn to start: a prompt submitted mid-turn waits for its own. A host
+   * that can tell the submit failed returns or resolves false, and the line stays unconfirmed for
+   * a later try.
+   */
+  submit(text: string): unknown;
   status(text: string | undefined): void;
   log(text: string): void;
 }
@@ -184,7 +188,7 @@ export class Poller {
         continue;
       }
       if (!this.unconfirmed.has(ack)) {
-        this.host.submit(line);
+        if ((await this.host.submit(line)) === false) continue;
         this.unconfirmed.add(ack);
         handed++;
       }

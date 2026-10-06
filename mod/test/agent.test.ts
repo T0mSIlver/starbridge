@@ -107,7 +107,9 @@ function session(id: string) {
     },
     now: async () => Date.now(),
     sleep: (ms) => Bun.sleep(ms),
-    submit: (text) => s.submitted.push(text),
+    submit: (text) => {
+      s.submitted.push(text);
+    },
     status: (text) => {
       s.status = text;
     },
@@ -152,6 +154,31 @@ test("the mod finds the socket where the CLI's agent listens", () => {
       env.STARBRIDGE_CONFIG_DIR ?? `${env.XDG_CONFIG_HOME ?? `${env.HOME}/.config`}/starbridge`;
     expect(socketPath(env)).toBe(cliSocketPath(env, dir));
   }
+});
+
+test("an answer the host refuses stays unconfirmed and comes back", async () => {
+  await startAgent();
+  const a = session("s-a");
+  let refuse = true;
+  const tries: string[] = [];
+  loop({
+    ...a.host,
+    submit: async (text) => {
+      tries.push(text);
+      if (refuse) return false;
+      a.s.submitted.push(text);
+      return true;
+    },
+  });
+  const d = await ask("Merge #12 now?", "s-a");
+  await until(() => a.s.calls.some((c) => c.startsWith("GET")));
+  await server.answer(d, { choice: "No" });
+  await until(() => tries.length >= 1);
+  expect(a.s.calls).not.toContain("POST /v1/sessions/s-a/ack");
+  refuse = false;
+  await until(() => a.s.submitted.length === 1);
+  await until(() => a.s.calls.includes("POST /v1/sessions/s-a/ack"));
+  expect(a.s.submitted).toEqual([`Answer to ${d} (Merge #12 now?): No`]);
 });
 
 test("each session gets its own answers through the agent, once, confirmed", async () => {
@@ -253,7 +280,9 @@ test("with no agent the CLI path delivers, and the switch follows the agent comi
             },
             now: async () => Date.now(),
             sleep: (ms) => Bun.sleep(ms),
-            submit: (t) => a.s.submitted.push(t),
+            submit: (t) => {
+              a.s.submitted.push(t);
+            },
             status: () => {},
             log: (t) => a.s.logs.push(t),
           },

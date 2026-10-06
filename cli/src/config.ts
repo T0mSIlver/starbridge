@@ -32,6 +32,21 @@ export function configDir(env: Record<string, string | undefined>): string {
   return join(env.XDG_CONFIG_HOME || join(homedir(), ".config"), "starbridge");
 }
 
+/**
+ * The file `plugin/hooks/settle.sh` reads in the config folder before it starts the CLI: written
+ * with the state, `open` while a permission prompt is unsettled and unexpired, else empty (#517).
+ * Missing, the CLI is older or has not written since: the hook starts it.
+ */
+export const PROMPTS_OPEN = "permissions-open";
+
+/** What `PROMPTS_OPEN` holds for state `s`. */
+export function promptsMark(s: State, now = Date.now()): string {
+  const open = Object.values(s.permissions ?? {}).some(
+    (p) => !p.settled && Date.parse(p.permission.expiresAt) > now,
+  );
+  return open ? "open" : "";
+}
+
 /** This machine's identity. Holds the private keys and the machine token: mode 0600. */
 export interface Machine {
   server: string;
@@ -327,8 +342,35 @@ export class Store {
       const s = this.state();
       fn(s);
       this.write("state.json", s);
+      this.markPromptsOpen(s);
       return s;
     });
+  }
+
+  /**
+   * Keeps `PROMPTS_OPEN` in step with the state: non-empty exactly while a permission prompt is
+   * open, so the Claude Code plugin's `PostToolUse` hook starts `starbridge hook settle` only
+   * then (#517).
+   */
+  /**
+   * Whether `PROMPTS_OPEN` disagrees with the saved state `s`, missing or stale, so an update
+   * would fix it. False without a saved state, which an update would create.
+   */
+  promptsMarkStale(s: State): boolean {
+    return existsSync(this.path("state.json")) && this.readMark() !== promptsMark(s);
+  }
+
+  private readMark(): string | undefined {
+    try {
+      return readFileSync(this.path(PROMPTS_OPEN), "utf8");
+    } catch {
+      return undefined;
+    }
+  }
+
+  private markPromptsOpen(s: State) {
+    const mark = promptsMark(s);
+    if (this.readMark() !== mark) writeFileSync(this.path(PROMPTS_OPEN), mark, { mode: 0o600 });
   }
 }
 
