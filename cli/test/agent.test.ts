@@ -736,9 +736,10 @@ test("through the agent, wait --no-mark leaves the decision as it was (#603)", a
   expect((await server.opened("waiting")).map((w) => w.state)).toEqual(["waiting"]);
 });
 
-test("a socket path too long for a unix socket: clients fall back, the agent says why (#622)", async () => {
+test("a socket path too long for a unix socket: clients fall back and say why (#622)", async () => {
   const ctx = await paired(server);
   const socket = join(ctx.store.dir, "x".repeat(120), "agent.sock");
-  await expect(new AgentClient(socket).call("GET", "/v1/status")).rejects.toBeInstanceOf(NoAgent);
-  await expect(makeAgent(ctx, { socket }).start()).rejects.toThrow("too long for a unix socket");
+  const call = new AgentClient(socket).call("GET", "/v1/status");
+  await expect(call).rejects.toBeInstanceOf(NoAgent);
+  await expect(call).rejects.toThrow("too long for a unix socket");
 });
