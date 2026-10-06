@@ -410,8 +410,9 @@ Codex prompts are not supported.
   machine before sealing and again in every client, so a bidi override cannot reorder the command.
   An input with two keys that read alike once redacted or escaped stays at the keyboard.
 - **Redaction** (#358, #359). The summary and description are cut from the input after
-  redaction. A private key's lines go also when they carry a diff's `+`, `-` or space (#489). `inputHash` is keyed under the machine's signing key, so a device holding the
-  redacted input cannot test guesses for a short redacted value.
+  redaction. A private key's lines go also when they carry a diff's `+`, `-` or space (#489).
+  `inputHash` is keyed under the machine's signing key, so a device holding the redacted input
+  cannot test guesses for a short redacted value.
 - History says how and where a prompt was answered ("Denied · on Pixel"), from the machine's
   `settled` notice (#349).
 
