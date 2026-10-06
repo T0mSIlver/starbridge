@@ -695,10 +695,14 @@ class ServerStore(
             wipe("This phone was removed from your devices.")
             return
         }
-        // Their notifications would still offer answers the machine can no longer take.
+        closeRevoked(dir)
+        persist(saved.copy(entries = all, pin = Pin(dir.length, dir.head)))
+    }
+
+    /** Closes the notifications of revoked machines' questions and prompts: no answer reaches them. */
+    private fun closeRevoked(dir: Directory) {
         for (d in saved.decisions) if (dir.members[d.from]?.active == false) alerts.cancel(d.body.id)
         for (p in saved.prompts) if (dir.members[p.from]?.active == false) alerts.cancelPrompt(toUi(p))
-        persist(saved.copy(entries = all, pin = Pin(dir.length, dir.head)))
     }
 
     /**
@@ -1543,6 +1547,7 @@ class ServerStore(
         val all = saved.entries + ProtocolJson.encodeToJsonElement(entry)
         val after = directories.verify(all, saved.account, saved.pin)
         directory = after
+        closeRevoked(after)
         persist(saved.copy(entries = all, pin = Pin(after.length, after.head)))
     }
 
