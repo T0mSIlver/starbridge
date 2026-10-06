@@ -31,6 +31,7 @@ import {
   UsageError,
 } from "./context";
 import { resolveSource } from "./decisions";
+import { resolveCommand, spawnable } from "./platform";
 
 /** Progress is reported at most this often; a heartbeat comes every RUN_HEARTBEAT_MS. */
 export const PROGRESS_MS = 10_000;
@@ -334,7 +335,12 @@ export async function runCommand(ctx: Ctx, opts: RunOpts): Promise<number> {
 
   const stdout = opts.stdout ?? process.stdout;
   const stderr = opts.stderr ?? process.stderr;
-  const child: ChildProcess = spawn(bin, args, { stdio: ["inherit", "pipe", "pipe"] });
+  // On Windows `npm` is `npm.cmd`, which spawn finds only by its full name.
+  const start = spawnable(resolveCommand(ctx.env, bin) ?? bin, args, ctx.env);
+  const child: ChildProcess = spawn(start.file, start.args, {
+    stdio: ["inherit", "pipe", "pipe"],
+    windowsVerbatimArguments: start.windowsVerbatimArguments,
+  });
   reporter.start();
   const update = (p: RunProgress | null) => reporter.update(p);
   pass(child.stdout, stdout, new ProgressParser(), update);

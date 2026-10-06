@@ -5,10 +5,11 @@
  * agent delivers answers to Codex sessions that way, as the Claude Code mod submits them.
  */
 import { spawn } from "node:child_process";
-import { closeSync, openSync, readdirSync, readSync, statSync } from "node:fs";
+import { closeSync, openSync, readdirSync, readSync } from "node:fs";
 import { createConnection } from "node:net";
-import { delimiter, join } from "node:path";
+import { join } from "node:path";
 import type { Ctx } from "./context";
+import { spawnable, which } from "./platform";
 
 export interface CodexSession {
   /** `CODEX_HOME` of the session, which holds the daemon's socket. */
@@ -24,7 +25,7 @@ export interface CodexSession {
  */
 export function codexSession(env: Ctx["env"]): CodexSession | undefined {
   const home = codexHome(env);
-  const bin = which("codex", env.PATH);
+  const bin = which(env, "codex");
   if (!home || !bin) return undefined;
   if (env.CODEX_THREAD_ID && codexThread(home, env.CODEX_THREAD_ID)?.origin === "exec")
     return undefined;
@@ -96,17 +97,6 @@ export function codexThread(
   return undefined;
 }
 
-function which(name: string, path: string | undefined): string | undefined {
-  for (const dir of (path ?? "").split(delimiter)) {
-    if (!dir) continue;
-    const p = join(dir, name);
-    try {
-      if (statSync(p).size > 0) return p;
-    } catch {}
-  }
-  return undefined;
-}
-
 const CONNECT_MS = 1_000;
 
 /** Whether the session's app-server daemon accepts connections, so `codex queue` can reach it. */
@@ -143,7 +133,9 @@ export function codexQueue(
   message: string,
 ): Promise<string | undefined> {
   return new Promise((resolve) => {
-    const child = spawn(s.bin, ["queue", "--thread", thread, "--message", message], {
+    const start = spawnable(s.bin, ["queue", "--thread", thread, "--message", message]);
+    const child = spawn(start.file, start.args, {
+      windowsVerbatimArguments: start.windowsVerbatimArguments,
       env: { ...process.env, CODEX_HOME: s.home },
       stdio: ["ignore", "ignore", "pipe"],
     });

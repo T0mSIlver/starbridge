@@ -2,6 +2,7 @@
 import { run } from "./cli";
 import { configDir, Store } from "./config";
 import type { Ctx } from "./context";
+import { normalEnv } from "./platform";
 
 const controller = new AbortController();
 process.on("SIGINT", () => {
@@ -26,9 +27,10 @@ const write = (stream: NodeJS.WriteStream, line: string) => {
     closedPipe(e);
   }
 };
+const env = normalEnv(process.env);
 const ctx: Ctx = {
-  env: process.env,
-  store: new Store(configDir(process.env)),
+  env,
+  store: new Store(configDir(env)),
   out: (l) => write(process.stdout, l),
   err: (l) => write(process.stderr, l),
   now: () => new Date(),
