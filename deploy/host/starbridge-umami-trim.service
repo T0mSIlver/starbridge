@@ -1,0 +1,8 @@
+[Unit]
+Description=Drop Umami's oldest analytics rows
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/starbridge/deploy/host/umami-trim.sh

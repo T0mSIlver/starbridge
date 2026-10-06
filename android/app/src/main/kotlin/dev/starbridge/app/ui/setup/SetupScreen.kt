@@ -47,6 +47,7 @@ import dev.starbridge.app.BuildConfig
 import dev.starbridge.app.data.Phase
 import dev.starbridge.app.data.Store
 import dev.starbridge.app.ui.Label
+import dev.starbridge.app.ui.Lockup
 import dev.starbridge.app.ui.Panel
 import dev.starbridge.app.ui.pairing.rememberScanner
 import dev.starbridge.app.protocol.formatDigits
@@ -65,7 +66,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
@@ -185,12 +185,7 @@ private fun SignIn(server: String, busy: Boolean, actions: SetupActions, openUrl
     Step(
         modifier,
         top = {
-            Column(Modifier.padding(start = Spacing.s6, top = 120.dp), verticalArrangement = Arrangement.spacedBy(Spacing.s8)) {
-                Box(Modifier.size(96.dp).clip(RoundedCornerShape(28.dp)).background(colorResource(R.color.icon_ground))) {
-                    Image(painterResource(R.drawable.ic_launcher_foreground), contentDescription = null, modifier = Modifier.fillMaxSize())
-                }
-                Text("Starbridge", style = StarbridgeTheme.type.display, color = MaterialTheme.colorScheme.onSurface)
-            }
+            Lockup(56.dp, 40.sp, Modifier.padding(start = Spacing.s6, top = 120.dp))
             if (selfHosted) {
                 Column(Modifier.padding(start = Spacing.s4, end = Spacing.s4, top = Spacing.s8), verticalArrangement = Arrangement.spacedBy(Spacing.s3)) {
                     TextField(
