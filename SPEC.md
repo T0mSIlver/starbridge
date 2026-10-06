@@ -316,9 +316,10 @@ provider plugins add providers, not panels.
 - **Files setup writes into other tools** (#474) start with one marker line, ``Written by
   starbridge <version>; `starbridge uninstall` removes it.``, in the file's comment syntax: the
   systemd unit, the launchd plist, the Codex rule, the opencode entry and the copied skills (a YAML
-  comment first in the front matter). A file is Starbridge's when it has the marker (a skill also
-  when its front matter names it `starbridge`); setup replaces it when it differs from this
-  release's, uninstall removes it, and any other file at those paths is left alone. An owner who
+  comment first in the front matter). A file is Starbridge's only when it has the marker: setup
+  replaces it when it differs from this release's, uninstall removes it, and any other file at
+  those paths is left alone, even a skill named `starbridge`, which another skill manager may have
+  installed (#538). An owner who
   deletes the line keeps the file. `starbridge update` runs the new binary's `setup --refresh`,
   which rewrites the marked files that differ and restarts the local agent; Homebrew and npm users
   run it after upgrading, and the local agent refreshes the skills and rule when it starts.
