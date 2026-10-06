@@ -72,6 +72,7 @@ beforeAll(async () => {
 afterAll(() => {
   globalThis.fetch = realFetch;
   crypto.subtle.generateKey = realGenerateKey;
+  Reflect.deleteProperty(navigator, "serviceWorker");
   live.stop();
 });
 
@@ -211,10 +212,14 @@ test("an unsigned 401 revoked from the server keeps the device's keys (#310)", a
     path === "/v1/me"
       ? new Response(JSON.stringify({ error: "revoked" }), { status: 401 })
       : undefined;
+  shown.open = 1;
+  shown.closed = 0;
   const b = await device.boot();
   forge = undefined;
   expect(b).toMatchObject({ state: "signed-out", known: true, refused: "revoked" });
   expect(await store.get("device", ctx.account)).toEqual(before as store.DeviceRecord);
+  // Its notifications close all the same: that loses nothing.
+  expect(shown.closed).toBe(1);
   // The chain still lists the device, and the session still works: nothing was lost.
   expect((await device.boot()).state).toBe("ready");
 });
@@ -223,7 +228,11 @@ test("a revocation the chain confirms shows as revoked and closes the notificati
   const mine = (await device.deviceContext(ctx.account)) as device.Ctx;
   await device.revoke(mine, mine.device.id);
   // The server ends the session; the keys stay until the chain says why.
-  expect(await device.boot()).toMatchObject({ state: "signed-out", known: true });
+  expect(await device.boot()).toMatchObject({
+    state: "signed-out",
+    known: true,
+    refused: "revoked",
+  });
   await api.ownerSignIn("owner-secret");
   shown.open = 2;
   shown.closed = 0;

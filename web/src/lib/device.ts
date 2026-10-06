@@ -153,6 +153,22 @@ async function trusted(account: string): Promise<{ dir: Directory; entries: Sign
   }
 }
 
+function registration() {
+  return (
+    navigator.serviceWorker?.getRegistration("/").catch(() => undefined) ??
+    Promise.resolve(undefined)
+  );
+}
+
+/**
+ * Closes every notification the service worker shows. They stay up until dismissed and carry
+ * decrypted questions, so they go when this browser stops being the device that read them (#311).
+ */
+async function closeNotifications(): Promise<void> {
+  const reg = await registration();
+  for (const n of (await reg?.getNotifications().catch(() => [])) ?? []) n.close();
+}
+
 export async function boot(): Promise<Boot> {
   let me: Awaited<ReturnType<typeof api.me>>;
   try {
@@ -161,7 +177,8 @@ export async function boot(): Promise<Boot> {
     if (e instanceof ApiError && e.status === 401) {
       const last = await store.get("current");
       // A "revoked" here is the server's word only: the keys stay, and the next sign-in reads
-      // the chain, which alone revokes a device (#310).
+      // the chain, which alone revokes a device (#310). Closing notifications loses nothing.
+      if (e.code === "revoked") await closeNotifications();
       return {
         state: "signed-out",
         known: !!last && !!(await store.get("device", last)),
@@ -367,7 +384,6 @@ export async function recover(account: string, name: string, typed: string): Pro
     }
     await adopt(account, record);
     await pinTo(account, [...entries, entry], next);
-    await closeNotifications();
   } finally {
     seed.fill(0);
     recovery.privateKey.fill(0);
@@ -442,9 +458,11 @@ export async function startJoin(account: string, name: string): Promise<Join> {
 }
 
 /** A join approved: its keys become this browser's device for the account. */
+/** New keys become this browser's device; notifications the older keys read go (#311). */
 async function adopt(account: string, record: store.DeviceRecord): Promise<void> {
   await store.put("device", record, account);
   await store.del("pending", account);
+  await closeNotifications();
 }
 
 async function finishJoin(
@@ -834,19 +852,6 @@ export function revoke(ctx: Ctx, id: string): Promise<Ctx> {
  * is the last one (which would leave only the recovery key), ends its session, drops its push
  * subscription and forgets its keys and what it answered.
  */
-const registration = () =>
-  navigator.serviceWorker?.getRegistration("/").catch(() => undefined) ??
-  Promise.resolve(undefined);
-
-/**
- * Closes every notification the service worker shows. They stay up until dismissed and carry
- * decrypted questions, so they go when this browser stops being the device that read them (#311).
- */
-async function closeNotifications(): Promise<void> {
-  const reg = await registration();
-  for (const n of (await reg?.getNotifications().catch(() => [])) ?? []) n.close();
-}
-
 export async function signOut(stale: Ctx): Promise<void> {
   // Count devices on the directory as it is now, as Android does: another one may have been
   // revoked since this page loaded. Undefined: this browser was revoked already.
@@ -858,10 +863,11 @@ export async function signOut(stale: Ctx): Promise<void> {
   await api.logout().catch(() => {});
   const reg = await registration();
   await (await reg?.pushManager.getSubscription())?.unsubscribe().catch(() => {});
-  await closeNotifications();
   for (const kind of ["device", "pin", "answers", "promptAnswers"] as const)
     await store.del(kind, stale.account);
   await store.del("current");
+  // Last: a push the service worker was still opening finds no keys now.
+  await closeNotifications();
 }
 
 // --- Decisions ------------------------------------------------------------------------------

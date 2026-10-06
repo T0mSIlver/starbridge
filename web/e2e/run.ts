@@ -895,6 +895,8 @@ async function main() {
       r.showNotification("Left over", { tag: "e2e-left", requireInteraction: true }),
     ),
   );
+  if (!(await pageB.evaluate(NOTIFICATIONS)).some((n) => n.tag === "e2e-left"))
+    throw new Error("the left-over notification did not show");
   await pageB.reload();
   // The server's 401 alone is unsigned: the browser keeps its keys and shows the refusal (#310).
   await pageB.getByText("The server says this browser was revoked.").waitFor();
@@ -941,6 +943,8 @@ async function main() {
       r.showNotification("Left over", { tag: "e2e-left", requireInteraction: true }),
     ),
   );
+  if (!(await pageC.evaluate(NOTIFICATIONS)).some((n) => n.tag === "e2e-left"))
+    throw new Error("the left-over notification did not show");
   await pageC.getByRole("button", { name: "Sign out" }).click();
   await pageC.getByRole("dialog").getByRole("button", { name: "Sign out" }).click();
   // With no keys left, the browser is a visitor: the landing page, not "Sign in to Starbridge".
