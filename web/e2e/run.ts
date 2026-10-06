@@ -163,19 +163,6 @@ async function watchCsp(ctx: BrowserContext) {
   );
 }
 
-/** A context whose pages record what their Content-Security-Policy blocks (#325). */
-async function context(ff: Browser, opts: Parameters<Browser["newContext"]>[0] = {}) {
-  const ctx = await ff.newContext(opts);
-  await ctx.addInitScript(() => {
-    const w = window as unknown as { cspBlocked: string[] };
-    w.cspBlocked = [];
-    document.addEventListener("securitypolicyviolation", (e) =>
-      w.cspBlocked.push(`${e.violatedDirective} blocked ${e.blockedURI || "inline"}`),
-    );
-  });
-  return ctx;
-}
-
 /** The landing page's link, or the sign-in screen's. */
 const SIGN_IN = /^(Sign in|Continue) with GitHub$/;
 
@@ -201,25 +188,12 @@ async function noWordsAsked(page: Page) {
   if (found) throw new Error(`the page says "${found[0]}"`);
 }
 
-/** What fails the run; the rest is for AUDIT's list. */
-const FAILS: (Problem["kind"] | "csp")[] = [
-  "page-width",
-  "clipped",
-  "spills",
-  "offscreen",
-  "overlap",
-  "csp",
-];
+/** What fails the run; contrast is only listed. */
+const FAILS: Problem["kind"][] = ["page-width", "clipped", "spills", "offscreen", "overlap", "tap"];
 
 /** Fails on what a screenshot would show broken (layout.ts); AUDIT lists it instead. */
 async function fitsLayout(page: Page, name: string) {
-  const blocked = (await page.evaluate(
-    () => (window as unknown as { cspBlocked?: string[] }).cspBlocked ?? [],
-  )) as string[];
-  const problems = [
-    ...(await layoutProblems(page)),
-    ...blocked.map((what) => ({ kind: "csp" as const, what })),
-  ];
+  const problems = await layoutProblems(page);
   if (AUDIT) {
     const at = await page.evaluate(() => `${innerWidth}`);
     for (const p of problems)
@@ -286,6 +260,7 @@ async function shoot(page: Page, name: string) {
 }
 
 let failPage: Page | undefined;
+let ff: Browser | undefined;
 
 async function main() {
   mkdirSync(AUDIT ?? SHOTS, { recursive: true });
@@ -333,8 +308,8 @@ async function main() {
   });
   await web.waitFor(/Ready|started server/i);
 
-  const ff = await browser();
-  const a = await context(ff, {
+  ff = await browser();
+  const a = await ff.newContext({
     permissions: ["notifications"],
     ...(MOTION_VIDEO ? { recordVideo: { dir: join(tmp, "video"), size: DESKTOP } } : {}),
   });
@@ -969,6 +944,48 @@ async function main() {
   await page.getByRole("button", { name: "Check code" }).click();
   await page.getByRole("button", { name: "Approve" }).click();
   if ((await farPair.exited) !== 0) throw new Error("pair of the long-named machine failed");
+  // The audit also shoots device names of about 10, 25, 40 and 70 characters, with and without
+  // dots and hyphens, to see where each breaks in Settings: three at a time, as an account
+  // holds at most five machines, each batch revoked before the next.
+  const NAMES = [
+    "mac-studio",
+    "buildhost7",
+    "runner02.eu-west.example",
+    "Tomsmacbookprofromtheoffice",
+    "runner02.eu-west.internal.example.org",
+    "buildrunnerinthebasementrackzerotwoeuwest",
+    "build-runner-in-the-basement-rack-02.ci.internal.example-company.org",
+    "averyveryverylongmachinenamewithnobreaksatallthatkeepsongoingforseventy",
+  ];
+  for (let b = 0; AUDIT && b < NAMES.length; b += 3) {
+    const batch = NAMES.slice(b, b + 3);
+    for (const name of batch) {
+      const pair = cli(`pair-${name}`, ["pair", "--name", name], join(tmp, `name-${name}`));
+      const code = (await pair.waitFor(/Pairing code: (\S+)/))[1] as string;
+      await page.getByLabel("Pair a machine or device").fill(code);
+      await page.getByRole("button", { name: "Check code" }).click();
+      await page.getByText(`Let ${name} post decisions and quotas?`).waitFor();
+      await page.getByRole("button", { name: "Approve" }).click();
+      if ((await pair.exited) !== 0) throw new Error(`pair of ${name} failed`);
+    }
+    await page
+      .getByRole("navigation", { name: "Main" })
+      .getByRole("link", { name: "Settings" })
+      .click();
+    const devices = page.getByRole("region", { name: "Devices" });
+    await devices.getByText(batch.at(-1) as string).waitFor();
+    await shoot(page, `settings-names-${b / 3 + 1}`);
+    for (const name of batch) {
+      await devices
+        .locator('[class*="__device"]')
+        .filter({ hasText: name })
+        .getByRole("button", { name: "Revoke" })
+        .click();
+      await page.getByRole("dialog").getByRole("button", { name: "Revoke" }).click();
+      await page.getByRole("dialog").waitFor({ state: "detached" });
+    }
+    await page.getByRole("link", { name: "Add a device" }).click();
+  }
   if ((await cli("perm-on", ["config", "permissions", "on"], farHome).exited) !== 0)
     throw new Error("config permissions on failed");
   const farQuota = cli(
@@ -1097,7 +1114,7 @@ async function main() {
   longRun.proc.kill();
 
   step("add a second browser by pairing code");
-  const b = await context(ff);
+  const b = await ff.newContext();
   await watchCsp(b);
   const pageB = await signIn(b);
   await pageB.getByTestId("pairing-code").waitFor({ timeout: 10_000 });
@@ -1144,7 +1161,7 @@ async function main() {
   // The new device sees decisions sealed after it joined; the open one predates it.
 
   step("recover a third browser with the recovery key");
-  const c = await context(ff);
+  const c = await ff.newContext();
   await watchCsp(c);
   const pageC = await signIn(c);
   await pageC.getByRole("button", { name: "Use the recovery key" }).click();
@@ -1237,12 +1254,10 @@ try {
   }
   process.exitCode = 1;
 } finally {
-  await failPage
-    ?.context()
-    .browser()
-    ?.close()
-    .catch(() => {});
+  await ff?.close().catch(() => {});
   for (const p of children) p.kill();
   for (const s of held.values()) s.close();
   rmSync(tmp, { recursive: true, force: true });
+  // A browser that would not close keeps Node running: a CI job would hang until its timeout.
+  process.exit();
 }
