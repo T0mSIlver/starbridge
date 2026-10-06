@@ -55,17 +55,35 @@ Each runs `load.ts` with `--until FILE`: it keeps its users going until FILE exi
 and reports what was lost or duplicated, plus a probe that loads `/` and `/healthz` every 100 ms.
 
 ```bash
-bun evals/load/load.ts --ramp 3000 --until $LOAD_DIR/stop --procs 6   # in one terminal
-docker kill starbridge-load-server-1                                    # kill the server
+bun evals/load/load.ts --ramp 1000 --until $LOAD_DIR/stop --procs 6   # in one terminal
+docker kill starbridge-load-server-1                                    # kill the server,
+docker start starbridge-load-server-1                                   # then start it again
 evals/load/stack.sh deploy                                              # or roll out, as prod does
 touch $LOAD_DIR/stop                                                    # then end the run
 ```
 
-Full disk: start the server on a 64 MB tmpfs, fill it, run load, then free it.
+`unless-stopped` does not bring back a container that `docker kill` stopped, as it does one that
+crashed or was OOM-killed, so the test starts it by hand.
+
+Full disk: `stack.sh small-disk 256` moves the server's data onto a 256 MB tmpfs (it needs
+`sudo`); fill it during a run, free it, then go back with `stack.sh big-disk`.
 
 ```bash
-LOAD_EXTRA=evals/load/small-disk.yaml evals/load/stack.sh compose up -d server
 docker exec starbridge-load-server-1 sh -c 'cat /dev/zero > /data/fill'
+docker exec starbridge-load-server-1 rm /data/fill
+```
+
+### Lost or late
+
+At the end, `load.ts` writes the ids of answers the server took but no machine got, and of
+decisions no page saw, to `$LOAD_DIR/lost.txt`. The ones the server holds were late, not lost:
+
+```bash
+docker exec -e IDS="$(paste -sd, $LOAD_DIR/lost.txt)" starbridge-load-server-1 bun -e '
+const db = new (require("bun:sqlite").Database)("/data/starbridge.db", { readonly: true });
+const q = db.query("SELECT COUNT(*) n FROM items WHERE id = ?");
+const ids = process.env.IDS.split(",");
+console.log(ids.reduce((n, id) => n + q.get(id).n, 0), "of", ids.length, "stored")'
 ```
 
 `nat.ts` has 20 users set up from one address within a minute, as an office would, and prints
@@ -77,3 +95,16 @@ bun evals/load/nat.ts --users 20 --spread 60
 
 `--idle K` holds K answer long-polls per machine and nothing else, to read the memory each open
 connection costs from the per-window memory lines.
+
+## Reading the numbers on a shared machine
+
+Each line's `cpu%` has a `wait` per container: the share of the window it spent waiting for a
+core. The containers are pinned to `LOAD_CPUS` but other processes are not kept off those
+cores, so a window with much waiting measures the machine, not the stack.
+
+## Restore drill
+
+`deploy/README.md`, "Restore", on this stack: stop the server, copy a backup over
+`starbridge.db` in the `starbridge-load_data` volume, delete `-wal` and `-shm`, `chown 1000:1000`,
+start it; then `pg_restore` Umami's dump into `umami-db`. Copy the database aside first and put
+it back after; delete the backup copies and the `starbridge-load_umami-db` volume when done.

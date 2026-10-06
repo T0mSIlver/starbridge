@@ -43,7 +43,13 @@ services:
 
   caddy:
     <<: *cx23
-    # Prod's Caddyfile with the site on http://:18000 and the 1xxxx upstream ports (stack.sh).
+    # Off the host's network, unlike prod: Caddy opens a connection to the server for many
+    # requests, and on this shared machine their TIME-WAIT sockets used up the port range that
+    # other processes need (#301). Its sockets stay in its own namespace here, and it reaches
+    # the upstreams by name (stack.sh rewrites the Caddyfile).
+    network_mode: !reset null
+    networks: [default, umami]
+    ports: ["127.0.0.1:18000:18000", "127.0.0.1:12019:2019"]
     volumes: !override
       - ${LOAD_DIR}/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data
@@ -52,3 +58,7 @@ services:
     # with the page open hold 6000.
     mem_limit: 1g
     memswap_limit: 1g
+
+networks:
+  default:
+  umami:

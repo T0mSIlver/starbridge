@@ -1,5 +1,5 @@
 /**
- * Load on the scratch stack through Caddy (http://127.0.0.1:18000), the way the clients make it:
+ * Load on the scratch stack through Caddy, the way the clients make it:
  *
  * - each user's machine holds the agent's answers long-poll (60 s), re-reads the directory every
  *   10 minutes, posts a decision now and then, a run with its updates, and a quota snapshot every
@@ -12,7 +12,7 @@
  * stopping early once a stage's p99 passes 1 s or the server dies. At the end it stops posting,
  * waits for the last answers and decisions, and counts what was lost or came twice.
  *
- *   bun evals/load/load.ts --ramp 300,1000,3000 --stage 120 --procs 4
+ *   evals/load/stack.sh load --ramp 300,1000,3000 --stage 120 --procs 4
  */
 import { readFileSync } from "node:fs";
 import { parseArgs } from "node:util";
@@ -42,6 +42,10 @@ const { values } = parseArgs({
 });
 
 const WINDOW_MS = 10_000;
+/** Caddy, as the load container reaches it on the stack's network (stack.sh load). */
+const TARGET = process.env.LOAD_TARGET ?? "http://caddy:18000";
+/** The host's cgroup tree, mounted into the load container. */
+const CGROUPS = process.env.LOAD_CGROUPS ?? "/sys/fs/cgroup";
 /** One operation's window as a worker sends it. */
 type WorkerOp = { hist: { counts: (number | null)[]; n: number }; errors: Record<string, number> };
 const ramp = values.ramp.split(",").map(Number);
@@ -70,6 +74,7 @@ async function worker(index: number, procs: number) {
   // Answers posted (id -> when) and received by machines; decisions posted and seen by pages.
   const answers = new Map<string, number>();
   const got = new Map<string, number>();
+  const acked = new Set<string>();
   const decisions = new Map<string, boolean>();
   let decisionsSeen = 0;
   let posting = true;
@@ -87,7 +92,7 @@ async function worker(index: number, procs: number) {
     const t = performance.now();
     try {
       const res = await fetch(
-        `http://127.0.0.${1 + (u.n % 4)}:18000${path === "/" ? "" : "/v1"}${path}`,
+        `${TARGET}${path === "/" ? "" : "/v1"}${path}`,
         {
           method,
           headers: {
@@ -199,7 +204,8 @@ async function worker(index: number, procs: number) {
     };
     // Counted from the first try: what the waiting session sees.
     answers.set(a, Date.now());
-    if (!(await post("post.answer", u, token, item))) answers.delete(a);
+    if (await post("post.answer", u, token, item)) acked.add(a);
+    else answers.delete(a);
   }
 
   async function quotas(u: User) {
@@ -354,15 +360,19 @@ async function worker(index: number, procs: number) {
       await pause(25_000);
       stopped = true;
       clearInterval(tick);
-      const lostIds = [...answers.keys()].filter((a) => !got.has(a));
+      // Lost: the server took it (201 or 409) and no machine got it. An answer still being
+      // retried when the run ends was never taken: it counts as unacked, not lost.
+      const lostIds = [...acked].filter((a) => !got.has(a));
       const lost = lostIds.length;
+      const unacked = [...answers.keys()].filter((a) => !acked.has(a)).length;
+      const unseenIds = [...decisions].filter(([, seen]) => !seen).map(([d]) => d);
       const dup = [...got.values()].filter((n) => n > 1).length;
-      const unseen = [...decisions.values()].filter((v) => !v).length;
+      const unseen = unseenIds.length;
       const pages = all.filter(
         (u) => started.has(u.n) && (u.n * 0.618) % 1 < Number(values.pages),
       ).length;
       process.stdout.write(
-        `${JSON.stringify({ final: { answers: answers.size, received: got.size, lost, dup, decisions: decisions.size, decisionsSeen, unseen, pages }, lostIds })}\n`,
+        `${JSON.stringify({ final: { answers: answers.size, unacked, received: got.size, lost, dup, decisions: decisions.size, decisionsSeen, unseen, pages }, lostIds, unseenIds })}\n`,
       );
       process.exit(0);
     }
@@ -417,7 +427,7 @@ async function parent() {
           buf = buf.slice(nl + 1);
           if (line.final) {
             finals.push(line.final);
-            lostIds.push(...line.lostIds);
+            lostIds.push(...line.lostIds, ...line.unseenIds);
             if (finals.length === procs) resolveFinal();
             continue;
           }
@@ -464,7 +474,7 @@ async function parent() {
   if (values.until)
     (async () => {
       while (true) {
-        for (const url of ["http://127.0.0.1:18000/", "http://127.0.0.1:18000/healthz"]) {
+        for (const url of [`${TARGET}/`, `${TARGET}/healthz`]) {
           const t = performance.now();
           const ok = await fetch(url).then(
             (r) => r.ok,
@@ -534,7 +544,8 @@ async function parent() {
     {} as Record<string, number>,
   );
   say(`FINAL ${JSON.stringify(total)}`);
-  // Answers no machine got: check whether the server holds them (README.md, "Lost or late").
+  // Answers no machine got and decisions no page saw: whether the server holds them tells late
+  // from lost (README.md, "Lost or late").
   await Bun.write(`${LOAD_DIR}/lost.txt`, lostIds.join("\n"));
   if (values.until)
     say(`PROBE ${JSON.stringify({ ...probe, slowest: Math.round(probe.slowest) })}`);
@@ -551,11 +562,24 @@ function fmt(m: Record<string, number>) {
 
 const NAMES = ["server", "caddy", "web-a", "web-b"];
 
+/** A container's state from the Docker API, through the socket stack.sh mounts. */
+async function inspect(name: string) {
+  const res = await fetch(`http://docker/containers/starbridge-load-${name}-1/json`, {
+    unix: "/var/run/docker.sock",
+  }).catch(() => undefined);
+  if (!res?.ok) return undefined;
+  return (await res.json()) as {
+    Id: string;
+    RestartCount: number;
+    State: { Status: string; OOMKilled: boolean };
+  };
+}
+
 async function containerIds(): Promise<Record<string, string>> {
   const out: Record<string, string> = {};
   for (const n of NAMES) {
-    const r = Bun.spawnSync(["docker", "inspect", "-f", "{{.Id}}", `starbridge-load-${n}-1`]);
-    if (r.exitCode === 0) out[n] = r.stdout.toString().trim();
+    const c = await inspect(n);
+    if (c) out[n] = c.Id;
   }
   return out;
 }
@@ -563,7 +587,7 @@ async function containerIds(): Promise<Record<string, string>> {
 async function cgroupRead(id: string, file: string): Promise<string | undefined> {
   // Bun.file reads cgroup files as empty: they report size 0.
   try {
-    return readFileSync(`/sys/fs/cgroup/system.slice/docker-${id}.scope/${file}`, "utf8");
+    return readFileSync(`${CGROUPS}/system.slice/docker-${id}.scope/${file}`, "utf8");
   } catch {
     return undefined;
   }
@@ -600,17 +624,11 @@ async function cpuUsage(ids: Record<string, string>): Promise<Record<string, num
 
 /** Why the server is down, if it is: OOM-killed, or no longer running. */
 async function died(): Promise<string | undefined> {
-  const r = Bun.spawnSync([
-    "docker",
-    "inspect",
-    "-f",
-    "{{.State.Status}} {{.State.OOMKilled}} {{.RestartCount}}",
-    "starbridge-load-server-1",
-  ]);
-  const [status, oom, restarts] = r.stdout.toString().trim().split(" ");
-  if (oom === "true") return "OOM-killed";
-  if (status !== "running") return status;
-  if (restarts !== "0") return `restarted ${restarts} times`;
+  const c = await inspect("server");
+  if (!c) return "gone";
+  if (c.State.OOMKilled) return "OOM-killed";
+  if (c.State.Status !== "running") return c.State.Status;
+  if (c.RestartCount) return `restarted ${c.RestartCount} times`;
   return undefined;
 }
 
