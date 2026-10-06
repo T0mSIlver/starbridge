@@ -22,8 +22,8 @@ permissions:
   contents: read
   pull-requests: read
 
-# Jobs run on GitHub-hosted runners by default. The repository variables RUNNER, ANDROID_RUNNER
-# and DOCKER_RUNNER point them at self-hosted runners instead, for a fork that has its own.
+# Jobs run on GitHub-hosted runners by default. The repository variable RUNNER points them at
+# self-hosted runners instead, and DOCKER_RUNNER the image builds below.
 #
 # A pull request runs only the jobs its files can affect. A job that cannot be affected still
 # starts and passes in seconds, so its check reports success, which a skipped workflow would
@@ -151,9 +151,9 @@ jobs:
   # Builds the deployed images, without pushing them, when a pull request can change their base
   # images or dependencies: a change that breaks a build fails here, not at the deploy (#430).
   # Source changes outside these paths that a Dockerfile copies (docs/ for web, cli/ for the demo)
-  # are not covered. On a push, main's deploy builds them on the server. When
-  # DOCKER_RUNNER names self-hosted runners with Docker, a gate on the usual runners picks one
-  # only when there is something to build, so main's CI never waits on them.
+  # are not covered. On a push, main's deploy builds them on the server. Set
+  # DOCKER_RUNNER when RUNNER's runners have no Docker: a gate on the usual runners picks one of
+  # its runners only when there is something to build, so main's CI never waits on them.
   images-scope:
     name: images scope
     runs-on: ${{ vars.RUNNER || 'ubuntu-latest' }}
