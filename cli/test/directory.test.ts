@@ -4,8 +4,10 @@ import {
   addEntry,
   type Directory,
   generateMemberKeys,
+  open,
   publicKeys,
   revokeEntry,
+  type SealedItem,
   type SignedEnvelope,
   seal,
   verifyDirectory,
@@ -194,6 +196,47 @@ test("a revocation the server withholds stops counting once another device answe
   expect(await delivered()).toEqual([second]);
   expect(ctx.store.state().answers[first]).toBeUndefined();
   expect(ctx.errors.at(-1)).toContain("revoked");
+});
+
+test("the machine signs into its items the longest head it knows, a device's while held back (#362)", async () => {
+  const { ctx, laptop, ids, answer, serve, known } = await withholding();
+  // What the machine posts, opened as the laptop reads it.
+  const posted: SealedItem[] = [];
+  let inner = globalThis.fetch;
+  const record = () => {
+    inner = globalThis.fetch;
+    globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+      if (String(url).endsWith("/v1/items") && init?.method === "POST")
+        posted.push(JSON.parse(init.body as string));
+      return inner(url, init);
+    }) as typeof fetch;
+  };
+  record();
+  const lastDecision = async () => {
+    await run(
+      ["ask", "--question", "Ship?", "--option", "Yes", "--option", "No", "--session", "s"],
+      ctx,
+    );
+    const item = posted.at(-1) as SealedItem & { kind: "decision" };
+    return open(item, { id: laptop.id, box: laptop.keys.box }, await laptopChain(laptop)).body.dir;
+  };
+  try {
+    const own = verifyDirectory(ctx.store.directory());
+    expect(await lastDecision()).toEqual({ length: own.length, head: own.head });
+    // The laptop revokes the phone; the server hides that from the machine, but the laptop's
+    // answer names the chain it holds.
+    await laptopAppends(laptop, (dir) =>
+      revokeEntry(dir, { id: laptop.id, signKey: laptop.keys.sign.privateKey }, "phone", now()),
+    );
+    const full = await laptopChain(laptop);
+    serve(known);
+    record();
+    answer(laptop, ids[0], "No", { length: full.length, head: full.head });
+    await poll(ctx, session(ctx), { cursor: ctx.store.state().cursor, seconds: 1, shared: true });
+    expect(await lastDecision()).toEqual({ length: full.length, head: full.head, by: laptop.id });
+  } finally {
+    serve(undefined);
+  }
 });
 
 test("replaying a device's older answer does not lift the refusal", async () => {

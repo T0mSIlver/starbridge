@@ -1,7 +1,15 @@
 import { randomBytes } from "node:crypto";
 import { alertsFor, type QuotaAlert, type QuotaSnapshot, seal } from "@starbridge/protocol";
 import { collect, type ProviderQuota } from "./codexbar";
-import { type Ctx, devices, iso, parseDuration, refreshDirectory, session } from "./context";
+import {
+  type Ctx,
+  devices,
+  iso,
+  parseDuration,
+  refreshDirectory,
+  session,
+  signedHead,
+} from "./context";
 
 export interface QuotaOpts {
   providers: string[];
@@ -81,7 +89,12 @@ export async function pushOnce(ctx: Ctx, opts: QuotaOpts): Promise<QuotaSnapshot
     ctx.store.state().alerts ?? {},
     now,
   );
-  const item = seal("quota", snap, { id: s.machine.id, signKey: s.keys.sign.privateKey }, to);
+  const item = seal(
+    "quota",
+    { ...snap, dir: signedHead(ctx, dir) },
+    { id: s.machine.id, signKey: s.keys.sign.privateKey },
+    to,
+  );
   // Only a snapshot that raises an alert asks for a push.
   await s.api.postItem(snap.alerts.some((a) => a.notify) ? item : { ...item, quiet: true });
   // Recorded once posted, so a failed post raises its alerts again next round.
