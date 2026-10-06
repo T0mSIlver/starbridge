@@ -1427,10 +1427,10 @@ so the mod is the first path.
 - 2026-10-06. A browser trusts a served directory only against its pin (#354, from the #366
   audit). On reload, the web adopted a join's or recovery's pending keys from whatever chain the
   server served, and a browser with no pin accepts any chain, so a server could enrol it into a
-  chain of its own. Now a directory read with no pin trusts only a genesis its own device signed (a first
-  device cut off before it pinned); otherwise it drops the pending keys and shows Join again.
-  Joins and recovery pin before they save the device, so a device never exists without a pin,
-  and a pending record with a pin is still adopted on reload as #274 and #283 need.
+  chain of its own. Now a directory read with no pin trusts only a genesis its own device signed
+  (a first device cut off before it pinned); otherwise it drops the pending keys and shows Join
+  again. Joins and recovery pin before they save the device, so a device never exists without a
+  pin, and a pending record with a pin is still adopted on reload as #274 and #283 need.
 
 - 2026-10-06. `ask --default` is gone from the help and the skill (#352): no client shows it, so
   an agent that passed one believed the owner saw it. Like `--default-at`, it is accepted and
