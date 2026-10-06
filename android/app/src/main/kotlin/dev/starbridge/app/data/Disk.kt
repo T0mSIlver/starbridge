@@ -10,6 +10,8 @@ import dev.starbridge.app.protocol.QuotaSnapshot
 import dev.starbridge.app.protocol.SealedItem
 import dev.starbridge.app.protocol.Settled
 import dev.starbridge.app.protocol.Run
+import kotlinx.serialization.EncodeDefault
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
@@ -73,6 +75,8 @@ data class SavedPush(val type: String, val id: String, val endpoint: String)
 @Serializable
 data class Saved(
     val server: String,
+    /** The file's format ([FORMAT]); written even at its default, so a later one can tell. */
+    @OptIn(ExperimentalSerializationApi::class) @EncodeDefault val v: Int = FORMAT,
     val account: String? = null,
     /** Another device already set the account up, so this one joins or recovers. */
     val accountExists: Boolean = false,
@@ -123,6 +127,7 @@ data class SavedDigitJoin(val id: String, val request: String, val approverKey: 
 /** Private keys and tokens. */
 @Serializable
 data class Secrets(
+    @OptIn(ExperimentalSerializationApi::class) @EncodeDefault val v: Int = FORMAT,
     val session: String? = null,
     val boxPk: String? = null,
     val boxSk: String? = null,
@@ -139,12 +144,30 @@ data class Secrets(
     val signInVerifier: String? = null,
 )
 
+/**
+ * The format of `state.bin` and `secrets.bin`, written as `v` (#473); a later format raises it
+ * and reads the ones before.
+ */
+const val FORMAT = 1
+
 /** Both files are wrapped by the [Vault], so nothing decrypted sits on the disk in the clear. */
 class Disk(private val dir: File, private val vault: Vault) {
-    private fun <T> read(name: String, serializer: KSerializer<T>): T? {
+    /**
+     * Files this app could not read, a newer app's or a damaged one: each was moved aside to
+     * `<name>.unreadable` rather than overwritten, and the app started without it.
+     */
+    val unreadable = mutableListOf<String>()
+
+    private fun <T> read(name: String, serializer: KSerializer<T>, format: (T) -> Int): T? {
         val file = File(dir, name)
         if (!file.isFile) return null
-        return runCatching { ProtocolJson.decodeFromString(serializer, vault.unwrap(file.readBytes()).decodeToString()) }.getOrNull()
+        val value = runCatching { ProtocolJson.decodeFromString(serializer, vault.unwrap(file.readBytes()).decodeToString()) }
+        if (value.getOrNull()?.let(format) == FORMAT) return value.getOrNull()
+        val kept = File(dir, "$name.unreadable")
+        kept.delete()
+        file.renameTo(kept)
+        unreadable += name
+        return null
     }
 
     private fun <T> write(name: String, serializer: KSerializer<T>, value: T) {
@@ -154,9 +177,9 @@ class Disk(private val dir: File, private val vault: Vault) {
         check(tmp.renameTo(File(dir, name)))
     }
 
-    fun saved(): Saved? = read("state.bin", Saved.serializer())
+    fun saved(): Saved? = read("state.bin", Saved.serializer()) { it.v }
     fun save(saved: Saved) = write("state.bin", Saved.serializer(), saved)
-    fun secrets(): Secrets = read("secrets.bin", Secrets.serializer()) ?: Secrets()
+    fun secrets(): Secrets = read("secrets.bin", Secrets.serializer()) { it.v } ?: Secrets()
     fun save(secrets: Secrets) = write("secrets.bin", Secrets.serializer(), secrets)
 
     fun wipe() {

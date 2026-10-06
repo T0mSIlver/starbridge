@@ -1904,6 +1904,19 @@ so the mod is the first path.
   closed. Android also keeps a machine's last good quota snapshot when a new one fails to open,
   where it used to blank that machine's quotas. Reader-side content limits stay as they are for
   now: loosening them needs the screens to cope with longer text first.
+- 2026-10-06. Every local state file carries its format, and one a client cannot read is kept,
+  never silently replaced (#473). The CLI writes `v: 1` into `machine.json`, `directory.json`
+  (now `{v, entries}`), `agent.json` and `state.json`; a file without `v` is format 1. A file
+  that is not JSON, not an object (a `directory.json` from before 1.0.0) or of a newer format
+  stops the command with the path and what to do, and stays as it is. Android writes `v` into
+  `state.bin` and `secrets.bin`, and a format byte ahead of the Keystore blob; a file it cannot
+  read moves to `<name>.unreadable`, the app starts without it and says so. A blob from before
+  1.0.0 has no format byte, so the owner's phone signs in again once, as the reset asks anyway.
+  Quota settings write their defaults, so a later default never changes a saved choice. The web
+  writes `v` into its localStorage values and leaves a newer format alone; a damaged one is
+  logged and replaced at the next change, since it holds only display choices. IndexedDB's own
+  version is the records' format: `onupgradeneeded` creates the store only when missing, and
+  sign-out removes every record kind of the account, `heads`, `pending` and `recoverySeen` too.
 
 ## Encryption, with existing libraries
 

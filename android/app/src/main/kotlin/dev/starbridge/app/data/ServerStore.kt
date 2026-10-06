@@ -158,7 +158,9 @@ class ServerStore(
     override val push = MutableStateFlow(PushSetting(saved.pushType, fcmAvailable, emptyList(), false))
     override val server = MutableStateFlow(saved.server)
     override val busy = MutableStateFlow(false)
-    override val notice = MutableStateFlow<String?>(null)
+    override val notice = MutableStateFlow(
+        disk.unreadable.takeIf { it.isNotEmpty() }?.let { "Could not read ${it.joinToString(" and ")}, kept beside it as .unreadable: sign in again." },
+    )
     private val headBook = Heads(directories)
     /** The hold notice last shown, so it goes once the hold ends. */
     @Volatile private var shownHold: String? = null
