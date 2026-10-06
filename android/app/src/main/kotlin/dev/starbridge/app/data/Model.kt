@@ -58,6 +58,9 @@ data class Decision(
     val answeredAt: Instant? = null,
     /** How the machine closed it, when its settled notice did: "withdrawn" or "elsewhere". */
     val settled: String? = null,
+    /** Another device's answer the machine took, and that device's name (#330). */
+    val theirAnswer: String? = null,
+    val answeredOn: String? = null,
     /** The machine takes a typed reply in place of an option (#201). */
     val replies: Boolean = false,
 ) {
@@ -85,7 +88,7 @@ data class PromptScope(val scope: String, val label: String, val rule: String)
 
 /**
  * An agent waiting at a permission prompt (#57). [input] is the tool's input as JSON text,
- * redacted on the machine. [ended] says how it ended once it did ("Answered on devbox").
+ * redacted on the machine. [ended] says how it ended once it did ("Denied · on Pixel").
  */
 data class Prompt(
     val id: String,

@@ -392,13 +392,13 @@ side on wide screens. Stock components take their colours from these tokens
 through the theme.
 
 Colours on Android are a setting, "Colours": "Starbridge" (the default) uses
-these tokens; "Match wallpaper" uses Material You dynamic colour. Screens
+these tokens; "Material You" uses dynamic colour from the wallpaper. Screens
 draw neutrals and components from Material's roles, not from the tokens, and
 the "Starbridge" scheme maps the tokens onto those roles (`bg` is `surface`,
 `surface` is `surfaceContainer`, `surface2` is `surfaceContainerHighest` and
 `secondaryContainer`, `fg` is `onSurface` and `primary`, `fg2` is
 `onSurfaceVariant` and `secondary`, `line` and `line-strong` are
-`outlineVariant` and `outline`). So under "Match wallpaper" every role
+`outlineVariant` and `outline`). So under "Material You" every role
 follows the wallpaper: grounds, cards, the navigation bar and rail, top app
 bars, buttons and button groups, text fields, the selected decision,
 progress tracks and loading indicators, dialogs, snackbars, the window behind
@@ -495,6 +495,10 @@ a decision's context, a permission prompt's command and a session's name.
   kind icon and name, the repo, and the time right-aligned. The agent's own
   words come below it. Details end with the session name, truncated in the
   middle, and "Open in Claude" or "Open in Codex" as text, with no logos.
+- Links the agent attaches sit under "Attached by the agent", each a chip with
+  "Open", the page's title (else its label) and an open-outside icon. A GitHub
+  pull request or issue reads "owner/repo#123" when it has no title and leads
+  with the GitHub mark.
 - An answered item goes to History, collapsed by default, as one line: the
   answer, the question, which device answered and when.
 - Find (the web rail's box) lists the matching open items, then "History · N"

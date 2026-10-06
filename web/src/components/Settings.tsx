@@ -129,7 +129,7 @@ function InboxSection() {
   const [sound, setSound] = usePref("sound");
   return (
     <Section title="Inbox">
-      <Row label="Answer buttons on questions" sub="On a phone">
+      <Row label="Answer buttons on questions" sub="On narrow screens">
         <Segmented<Prefs["rowAnswers"]>
           label="Answer buttons on questions"
           value={rowAnswers}
@@ -579,7 +579,7 @@ export function Settings() {
         <ClockSection />
         <Section title="Agents">
           <a className={s.linkRow} href={AGENTS_GUIDE} target="_blank" rel="noopener noreferrer">
-            <span className="t-small">How to tell your agents</span>
+            <span className="t-small">Agent instructions</span>
             <Icon name="open" size={16} />
           </a>
         </Section>

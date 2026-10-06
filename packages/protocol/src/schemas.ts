@@ -436,9 +436,18 @@ export const Settled = z
     outcome: z.enum(["keyboard", "timeout", "device", "elsewhere", "withdrawn"]).optional(),
     /** With outcome "device": the device whose answer the machine applied. */
     device: Id.optional(),
+    /** With outcome "device" on a decision: the answer it applied, so every device can show it. */
+    choice: z.string().max(100).optional(),
+    text: z.string().max(4000).optional(),
     dir: DirectoryHead.optional(),
     /** With outcome "device" on a permission: what that device answered (#349). */
     behavior: z.enum(["allow", "deny"]).optional(),
+  })
+  .refine((s) => s.device !== undefined || (s.choice === undefined && s.text === undefined), {
+    message: "choice and text come only with a device's outcome",
+  })
+  .refine((s) => s.choice === undefined || s.text === undefined, {
+    message: "at most one of choice and text",
   })
   .refine((s) => (s.outcome === "device") === (s.device !== undefined), {
     message: "device is set exactly when outcome is device",

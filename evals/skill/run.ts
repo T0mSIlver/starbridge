@@ -2,18 +2,20 @@
  * Runs real agents through the scripted situations in scenarios.ts, once with the skill and rule
  * of `--before` (a git ref) and once with this checkout's, and records what each posted.
  *
- *   bun evals/skill/run.ts [--agent claude|codex|opencode] [--model sonnet] [--reps 2] [--jobs 4]
+ *   bun evals/skill/run.ts [--agent claude|codex|pi|opencode] [--model claude-sonnet-5-5] [--reps 2] [--jobs 4]
  *                          [--only merge-order,...] [--arms before,after] [--before origin/main]
  *                          [--out evals/skill/results/<agent>]
  *
  * Each run gets its own throwaway world: a home folder, a Claude Code config dir (or CODEX_HOME,
- * or opencode's XDG config and data folders) holding only a copy of the login, the real server
- * app on a random port with the CLI paired to it, a git project with a bare remote, and a `gh`
- * that prints canned output. Nothing is written to the owner's own config. Claude Code loads the
- * plugin with `--plugin-dir`; Codex gets the skill in `$CODEX_HOME/skills` and the SessionStart
- * rule in `$CODEX_HOME/AGENTS.md`, opencode the same in its config folder.
+ * or PI_CODING_AGENT_DIR) holding only the login, the real server app on a random port
+ * with the CLI paired to it, a git project with a bare remote, and a `gh` that prints canned
+ * output. Nothing is written to the owner's own config. Claude Code loads the plugin with
+ * `--plugin-dir`; Codex gets the skill in `$CODEX_HOME/skills` and the SessionStart rule in
+ * `$CODEX_HOME/AGENTS.md`, opencode the same in its XDG config folder; Pi loads the Starbridge Pi
+ * extension and skill with `-e` and `--skill`.
  *
- * Writes one JSON record per run to `--out`; grade.ts scores them.
+ * Models: Claude Code defaults to claude-sonnet-5-5, Codex to its own default and Pi to
+ * zai/glm-5.3-flash (`provider/id`, with the providers of `~/.pi/agent`).
  */
 import { spawnSync } from "node:child_process";
 import {
@@ -31,6 +33,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
 import { LiveServer } from "../../server/test-support/index.ts";
+import { claudeToken, codexKey, tmpOutsideHome } from "./login.ts";
 import { type Scenario, scenarios } from "./scenarios.ts";
 
 const { values: opt } = parseArgs({
@@ -48,17 +51,23 @@ const { values: opt } = parseArgs({
   },
 });
 
-const agent = opt.agent as "claude" | "codex" | "opencode";
+const agent = opt.agent as "claude" | "codex" | "pi" | "opencode";
 const model =
   opt.model ??
-  { claude: "sonnet", codex: "gpt-6.1-sol", opencode: "zai-coding-plan/glm-5.3-flash" }[agent];
+  {
+    claude: "claude-sonnet-5-5",
+    codex: undefined,
+    pi: "zai/glm-5.3-flash",
+    opencode: "zai-coding-plan/glm-5.3-flash",
+  }[agent];
 const repo = join(import.meta.dir, "..", "..");
 const out = opt.out ?? join(import.meta.dir, "results", agent);
 mkdirSync(out, { recursive: true });
 // Never under the owner's home: Claude Code walks up from the project and would load
 // ~/.claude/CLAUDE.md as an ancestor's. Not in the scratchpad either: a path naming Starbridge
-// would hint the agent. Each run's folder goes once its record is written (a Codex home is 60 MB).
-const work = mkdtempSync("/tmp/skill-eval-");
+// would hint the agent. Set TMPDIR to put it off a small /tmp. Each run's folder goes once its
+// record is written (a Codex home is 60 MB).
+const work = mkdtempSync(join(tmpOutsideHome(), "skill-eval-"));
 // Also when a run throws: the homes go even if the eval dies (#313).
 process.on("exit", () => {
   if (!opt.keep) rmSync(work, { recursive: true, force: true });
@@ -73,18 +82,22 @@ const which = (cmd: string) => {
 };
 const agentBin = which(agent);
 
-// The two plugins under test: the skill and hook at `--before`, and this checkout's.
+// The two versions under test, `plugin` (and `mod`, the Pi extension, for Pi) at `--before` and
+// this checkout's.
+const parts = agent === "pi" ? ["plugin", "mod"] : ["plugin"];
 const arms: Record<string, string> = {};
 for (const arm of (opt.arms as string).split(",")) {
   const dir = join(work, "arms", arm);
   mkdirSync(dir, { recursive: true });
-  if (arm === "after") cpSync(join(repo, "plugin"), dir, { recursive: true });
+  if (arm === "after")
+    for (const d of parts) cpSync(join(repo, d), join(dir, d), { recursive: true });
   else {
-    const tar = spawnSync("git", ["-C", repo, "archive", opt.before as string, "plugin"], {
+    const tar = spawnSync("git", ["-C", repo, "archive", opt.before as string, ...parts], {
       maxBuffer: 1 << 26,
     });
     if (tar.status !== 0) throw new Error(`git archive ${opt.before}: ${tar.stderr}`);
-    spawnSync("tar", ["-x", "--strip-components=1", "-C", dir], { input: tar.stdout });
+    if (spawnSync("tar", ["-x", "-C", dir], { input: tar.stdout }).status !== 0)
+      throw new Error(`tar -x of ${opt.before}`);
   }
   arms[arm] = dir;
 }
@@ -144,9 +157,10 @@ async function turn(
   dir: string,
   env: Record<string, string>,
   prompt: string,
-  plugin: string,
+  arm: string,
   resume?: string,
 ): Promise<Turn & { session?: string }> {
+  const plugin = join(arm, "plugin");
   const t0 = Date.now();
   let args: string[];
   if (agent === "claude") {
@@ -160,11 +174,27 @@ async function turn(
       "--allowedTools",
       "Bash Write Edit Read Glob Grep",
       "--model",
-      model,
+      model as string,
       "--output-format",
       "stream-json",
       "--verbose",
       ...(resume ? ["--resume", resume] : []),
+    ];
+  } else if (agent === "pi") {
+    args = [
+      "--no-extensions",
+      "-e",
+      join(arm, "mod/pi/starbridge.ts"),
+      "--no-skills",
+      "--skill",
+      join(plugin, "skills/starbridge"),
+      "--model",
+      model as string,
+      "--mode",
+      "json",
+      ...(resume ? ["--session", resume] : []),
+      "-p",
+      prompt,
     ];
   } else if (agent === "opencode") {
     // `opencode run` rejects every permission prompt; `--auto` allows them, as Codex's bypass.
@@ -175,14 +205,14 @@ async function turn(
       "--format",
       "json",
       "-m",
-      model,
+      model as string,
       "--dir",
       dir,
       ...(resume ? ["--session", resume] : []),
       prompt,
     ];
   } else {
-    const common = ["--json", "--skip-git-repo-check", "-m", model];
+    const common = ["--json", "--skip-git-repo-check", ...(model ? ["-m", model] : [])];
     const bypass = "--dangerously-bypass-approvals-and-sandbox";
     args = resume
       ? ["exec", "resume", ...common, bypass, resume, prompt]
@@ -233,10 +263,26 @@ async function turn(
           (u.cache_read_input_tokens ?? 0) +
           (u.cache_creation_input_tokens ?? 0);
       }
+    } else if (agent === "pi") {
+      if (e.type === "session") session = e.id;
+      const m = e.message;
+      if (e.type === "message_end" && m?.role === "assistant") {
+        // A provider error Pi retried past is not the run's outcome.
+        if (final.startsWith("(error) ")) final = "";
+        for (const b of m.content ?? []) {
+          if (b.type === "toolCall" && b.name === "bash") commands.push(b.arguments?.command ?? "");
+          if (b.type === "text" && b.text) final = b.text;
+        }
+        if (m.errorMessage) final = `(error) ${m.errorMessage}`;
+        const u = m.usage ?? {};
+        tokens = (tokens ?? 0) + (u.input ?? 0) + (u.output ?? 0) + (u.cacheRead ?? 0) + (u.cacheWrite ?? 0);
+        costUsd = (costUsd ?? 0) + (u.cost?.total ?? 0);
+      }
     } else if (agent === "opencode") {
       session ??= e.sessionID;
       const part = e.part;
-      if (e.type === "tool_use" && part?.tool === "bash") commands.push(part.state?.input?.command ?? "");
+      if (e.type === "tool_use" && part?.tool === "bash")
+        commands.push(part.state?.input?.command ?? "");
       if (e.type === "text") final = part?.text ?? final;
       if (e.type === "step_finish" && part?.tokens)
         tokens = (tokens ?? 0) + (part.tokens.input ?? 0) + (part.tokens.output ?? 0);
@@ -263,9 +309,10 @@ async function interactiveTurn(
   dir: string,
   env: Record<string, string>,
   prompt: string,
-  plugin: string,
+  arm: string,
   cfg: string,
 ): Promise<Turn & { session?: string }> {
+  const plugin = join(arm, "plugin");
   const t0 = Date.now();
   const id = crypto.randomUUID();
   const tmux = `skill-eval-${id.slice(0, 8)}`;
@@ -278,10 +325,21 @@ async function interactiveTurn(
       projects: { [dir]: { hasTrustDialogAccepted: true } },
     }),
   );
+  // The environment goes through a private file, not argv, where `ps` would show the token.
+  const envFile = join(cfg, "env.sh");
+  writeFileSync(
+    envFile,
+    Object.entries({ ...env, TERM: "xterm-256color" })
+      .map(([k, v]) => `export ${k}='${v.replaceAll("'", "'\\''")}'\n`)
+      .join(""),
+    { mode: 0o600 },
+  );
   const cmd = [
     "env",
     "-i",
-    ...Object.entries({ ...env, TERM: "xterm-256color" }).map(([k, v]) => `${k}=${v}`),
+    "sh",
+    "-c",
+    `. '${envFile}'; exec "$0" "$@"`,
     agentBin,
     "--session-id",
     id,
@@ -292,7 +350,7 @@ async function interactiveTurn(
     "--allowedTools",
     "Bash Write Edit Read Glob Grep",
     "--model",
-    model,
+    model as string,
     prompt,
   ];
   spawnSync("tmux", ["new-session", "-d", "-s", tmux, "-x", "200", "-y", "50", "-c", dir, ...cmd]);
@@ -380,17 +438,33 @@ async function one(s: Scenario, arm: string, rep: number): Promise<RunRecord> {
   );
   chmodSync(join(bin, "starbridge"), 0o755);
 
-  // The agent's login, copied into its throwaway config; the plugin or skill under test.
-  const plugin = arms[arm] as string;
-  if (agent === "claude") copyFileSync(join(homedir(), ".claude/.credentials.json"), join(cfg, ".credentials.json"));
-  else {
+  // The agent's login (Claude's long-lived token, else a copy in its throwaway config); the
+  // plugin or skill under test.
+  const armDir = arms[arm] as string;
+  const plugin = join(armDir, "plugin");
+  const login: Record<string, string> = {};
+  if (agent === "claude") login.CLAUDE_CODE_OAUTH_TOKEN = claudeToken();
+  else if (agent === "pi") {
+    // Only the providers and their API keys: Pi's auth.json may hold OAuth logins that refresh.
+    copyFileSync(join(homedir(), ".pi/agent/models.json"), join(cfg, "models.json"));
+  } else {
     // opencode reads its config from `$XDG_CONFIG_HOME/opencode` and its login from
     // `$XDG_DATA_HOME/opencode/auth.json` (the Z.ai key).
     const conf = agent === "opencode" ? join(cfg, "opencode") : cfg;
     if (agent === "opencode") {
       mkdirSync(join(root, "data/opencode"), { recursive: true });
-      copyFileSync(join(homedir(), ".local/share/opencode/auth.json"), join(root, "data/opencode/auth.json"));
-    } else copyFileSync(join(homedir(), ".codex/auth.json"), join(cfg, "auth.json"));
+      copyFileSync(
+        join(homedir(), ".local/share/opencode/auth.json"),
+        join(root, "data/opencode/auth.json"),
+      );
+    } else {
+      const r = spawnSync(agentBin, ["login", "--with-api-key"], {
+        input: codexKey(),
+        env: { ...process.env, CODEX_HOME: cfg },
+        encoding: "utf8",
+      });
+      if (r.status !== 0) throw new Error(`codex login --with-api-key: ${r.stderr}`);
+    }
     cpSync(join(plugin, "skills/starbridge"), join(conf, "skills/starbridge"), { recursive: true });
     const hook = spawnSync("sh", [join(plugin, "hooks/session-start.sh")], {
       env: { STARBRIDGE_CONFIG_DIR: sb },
@@ -412,24 +486,23 @@ async function one(s: Scenario, arm: string, rep: number): Promise<RunRecord> {
     GIT_AUTHOR_EMAIL: "dev@example.com",
     GIT_COMMITTER_NAME: "dev",
     GIT_COMMITTER_EMAIL: "dev@example.com",
-    ...(agent === "claude"
-      ? { CLAUDE_CONFIG_DIR: cfg }
-      : agent === "codex"
-        ? { CODEX_HOME: cfg }
-        : {
-            XDG_CONFIG_HOME: cfg,
-            XDG_DATA_HOME: join(root, "data"),
-            XDG_STATE_HOME: join(root, "state"),
-            // Shared, so each run does not download the model list again.
-            XDG_CACHE_HOME: join(work, "cache"),
-            OPENCODE_DISABLE_AUTOUPDATE: "1",
-          }),
+    ...{ claude: { CLAUDE_CONFIG_DIR: cfg }, codex: { CODEX_HOME: cfg }, pi: { PI_CODING_AGENT_DIR: cfg },
+      opencode: {
+        XDG_CONFIG_HOME: cfg,
+        XDG_DATA_HOME: join(root, "data"),
+        XDG_STATE_HOME: join(root, "state"),
+        // Shared, so each run does not download the model list again.
+        XDG_CACHE_HOME: join(work, "cache"),
+        OPENCODE_DISABLE_AUTOUPDATE: "1",
+      },
+    }[agent],
+    ...login,
   };
 
   const live = await LiveServer.start();
   const rec: RunRecord = {
     agent,
-    model,
+    model: model ?? "default",
     arm,
     scenario: s.name,
     rep,
@@ -469,38 +542,46 @@ async function one(s: Scenario, arm: string, rep: number): Promise<RunRecord> {
 
     type Card = { id: string; question: string; recommended?: string; options: string[] };
     const choiceFor = (c: Card) => c.recommended ?? c.options[0] ?? "Go ahead";
-    // `codex exec` and `opencode run` get nothing back as a prompt: the agent waits within its
-    // turn (`starbridge wait`), so the owner answers the first card while the turn runs.
+    // In `claude -p`, `codex exec`, `pi -p` and `opencode run` nothing brings an answer back as a
+    // prompt: the agent waits within its turn (`starbridge wait`), so the owner answers the first
+    // card while it runs, whether or not the situation checks what it does with the answer.
     let answeredFirst: Record<string, unknown>[] | undefined;
     const answering =
-      agent !== "claude" && s.followUp && !s.unpaired
+      !s.interactive && !s.unpaired
         ? (async () => {
             while (!answeredFirst) {
               await Bun.sleep(2_000);
+              if (answeredFirst) break;
               const now = (await live.opened("decision")) as Record<string, unknown>[];
               const c = now[0] as Card | undefined;
               if (!c) continue;
               await Bun.sleep(15_000);
               if (answeredFirst) break;
+              const latest = (await live.opened("decision")) as Record<string, unknown>[];
               await live.answer(c.id, { choice: choiceFor(c) });
               rec.answered = `Answer to ${c.id} (${c.question}): ${choiceFor(c)}`;
-              answeredFirst = now;
+              answeredFirst = latest;
             }
-          })()
+          })().catch(() => {}) // the turn ended and the server stopped first
         : undefined;
     const first = s.interactive
-      ? await interactiveTurn(proj, env, s.prompt, plugin, cfg)
-      : await turn(proj, env, s.prompt, plugin);
+      ? await interactiveTurn(proj, env, s.prompt, armDir, cfg)
+      : await turn(proj, env, s.prompt, armDir);
     if (answering && !answeredFirst) answeredFirst = [];
     rec.turns.push(first);
+    // The model's provider failed (a rate limit): the run says nothing about the agent.
+    if (first.final.startsWith("(error) ")) throw new Error(first.final);
     const opened = s.unpaired ? [] : ((await live.opened("decision")) as Record<string, unknown>[]);
     if (answering) {
-      // Split the turn where the agent got the answer: what it ran after its last wait is what
-      // a second turn would hold.
+      // Split the turn where the agent got the answer: what it ran after its last wait on the
+      // answered card is what a second turn would hold.
       const before = rec.answered ? (answeredFirst ?? []) : opened;
       rec.decisions = strip(before);
       rec.laterDecisions = strip(opened.filter((d) => !before.some((o) => o.id === d.id)));
-      const i = first.commands.findLastIndex((c) => /starbridge wait/.test(c));
+      const id = /^Answer to (\S+)/.exec(rec.answered ?? "")?.[1] ?? "";
+      const cmds = first.commands.map((c) => c.replace(/\\\n\s*/g, " "));
+      let i = cmds.findLastIndex((c) => /starbridge\s+wait\b/.test(c) && c.includes(id));
+      if (i < 0) i = cmds.findLastIndex((c) => /starbridge\s+(wait\b|ask\b[\s\S]*--wait\b)/.test(c));
       if (rec.answered && i >= 0)
         rec.turns = [
           { ...first, commands: first.commands.slice(0, i + 1) },
@@ -511,7 +592,7 @@ async function one(s: Scenario, arm: string, rep: number): Promise<RunRecord> {
     if (s.followUp && card && first.session) {
       const choice = choiceFor(card);
       rec.answered = `Answer to ${card.id} (${card.question}): ${choice}`;
-      rec.turns.push(await turn(proj, env, rec.answered, plugin, first.session));
+      rec.turns.push(await turn(proj, env, rec.answered, armDir, first.session));
       const all = (await live.opened("decision")) as Record<string, unknown>[];
       rec.laterDecisions = strip(all.filter((d) => !opened.some((o) => o.id === d.id)));
     }

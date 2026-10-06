@@ -92,7 +92,10 @@ export function sample(now = Date.now()) {
             data: shots[v],
             alt: `Layout ${v}`,
           })),
-          links: [{ url: "https://claude.ai/artifact/Xq7pLm2VnR4tBz9KcW1sYd" }],
+          links: [
+            { url: "https://claude.ai/artifact/Xq7pLm2VnR4tBz9KcW1sYd" },
+            { url: "https://github.com/T0mSIlver/starbridge/pull/86" },
+          ],
         },
       ),
       machine: member("laptop"),

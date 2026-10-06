@@ -57,7 +57,8 @@ export const QUESTIONS: Question[] = [
   },
 ];
 
-const RUN = ["sh", "-c", 'for i in $(seq 1 12); do echo "[$i/12] e2e suite"; sleep 10; done'];
+/** Twelve minutes, then three idle: finished runs stay few, so the question stays in view. */
+const RUN = ["sh", "-c", 'for i in $(seq 1 12); do echo "[$i/12] e2e suite"; sleep 60; done'];
 
 export class DemoMachine {
   private readonly log: (line: string) => void;
@@ -156,7 +157,7 @@ export class DemoMachine {
     }
   }
 
-  /** Keeps a run going: a two-minute suite that prints its progress, again and again. */
+  /** Keeps a run going most of the time: a suite that prints its progress, again and again. */
   async runs(signal: AbortSignal): Promise<void> {
     // A run's project is its directory's name.
     const project = join(this.opts.dir, "billing-api");
@@ -175,7 +176,7 @@ export class DemoMachine {
         "inherit",
         project,
       ).exited;
-      await Bun.sleep(20_000);
+      await Bun.sleep(180_000);
     }
   }
 }

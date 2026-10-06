@@ -1,0 +1,35 @@
+{
+  "agent": "codex",
+  "model": "default",
+  "arm": "after",
+  "scenario": "unavailable",
+  "rep": 2,
+  "turns": [
+    {
+      "commands": [
+        "/usr/bin/zsh -lc 'cat /tmp/skill-eval-JQLTf3/after-unavailable-2/cfg/skills/starbridge/SKILL.md'",
+        "/usr/bin/zsh -lc \"pwd && rg --files -g '\"'!node_modules'\"' -g '\"'!package-lock.json'\"' -g '\"'!yarn.lock'\"' -g '\"'!pnpm-lock.yaml'\"'\"",
+        "/usr/bin/zsh -lc 'cat package.json NAMES.md AGENTS.md'",
+        "/usr/bin/zsh -lc 'git status --short; command -v starbridge'",
+        "/usr/bin/zsh -lc \"starbridge ask --question 'Which public npm name should I use to publish version 1.0.0?' --context 'package.json currently has name TBD. NAMES.md leaves the choice to you.\nnotekit matches the repository; jotter is shorter but shares a name with a dead app.\nYour choice authorizes publication under that name; publication cannot be undone after 72 hours.' --option 'Publish notekit' --option 'Publish jotter' --option 'Hold publication' --waiting\""
+      ],
+      "final": "Starbridge failed because this machine is not paired, so I’m asking here: publish version `1.0.0` as **notekit** or **jotter**?\n\n`package.json` still names it `TBD`, and [NAMES.md](/tmp/skill-eval-JQLTf3/after-unavailable-2/proj/NAMES.md) leaves the name open. I recommend **notekit** because it matches the repository. Nothing has been published.",
+      "session": "01a11066-6029-79d2-967a-b4d39c235947",
+      "tokens": 67312,
+      "exit": 0,
+      "seconds": 20.809
+    }
+  ],
+  "decisions": [],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "judge": {
+    "cold": null,
+    "consequences": null,
+    "terminal": true,
+    "links": null,
+    "plain": null,
+    "notes": "No card was posted (expected, since unpaired); the terminal question is clear and asks the user to pick a name, though it does not say what each name would change beyond a recommendation."
+  }
+}

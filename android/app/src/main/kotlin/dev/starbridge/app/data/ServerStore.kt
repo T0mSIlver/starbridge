@@ -133,6 +133,13 @@ class ServerStore(
     private var joinJob: Job? = null
     private var showJob: Job? = null
     private var watchJob: Job? = null
+    private var pollJob: Job? = null
+
+    /** A push reached this app since it started: the server can deliver, so nothing polls (#445). */
+    @Volatile private var pushed = false
+
+    /** How often the app in front reads the items while no push has arrived. */
+    internal var pollMs = 10_000L
     private var compareJob: Job? = null
     /** The join requests as last listed, by id, so comparing uses what was listed. */
     private var joinViews = mapOf<String, JoinView>()
@@ -198,8 +205,9 @@ class ServerStore(
             secrets.session == null -> Phase.SignedOut
             saved.joining != null -> Phase.Joining(saved.joining!!, saved.joiningScanned)
             saved.digitJoin != null -> Phase.JoiningByDigits(saved.digitJoin!!.digits, saved.digitJoin!!.matched)
-            saved.me == null || saved.pin == null -> Phase.NoDevice(saved.accountExists)
+            // Before the pin: the first entry waits on the server until the key is confirmed (#370).
             secrets.recoverySeed != null -> Phase.RecoveryKey(RecoveryKeys.shown(fromB64(secrets.recoverySeed!!), sodium))
+            saved.me == null || saved.pin == null -> Phase.NoDevice(saved.accountExists)
             else -> Phase.Ready
         }
         server.value = saved.server
@@ -288,6 +296,8 @@ class ServerStore(
     }
 
     private fun wipe(message: String?) {
+        // Another account or server may have no push: poll again until one arrives.
+        pushed = false
         joinJob?.cancel()
         showJob?.cancel()
         watchJob?.cancel()
@@ -388,24 +398,34 @@ class ServerStore(
     }
 
     /**
-     * The keys, the seed and the signed genesis reach the disk before the server sees the entry,
-     * so a lost response is retried with the same entry, and a chain that already starts with it
-     * is adopted instead of refused.
+     * Makes the keys, the seed and the signed first entry, all on disk, and shows the recovery key.
+     * The server sees the entry only once the owner confirms the key (#370, as the web since #337):
+     * data cleared before that leaves no account without a device, and a killed app shows the
+     * same key again.
      */
     override fun setUpFirstDevice() = run {
-        if (saved.pendingGenesis == null) {
-            if (api().directory(0).isNotEmpty()) throw IllegalStateException("This account already has devices. Join it instead.")
-            val member = newMember()
-            val seed = sodium.random(16)
-            val recovery = sodium.signSeedKeyPair(recoverySignSeed(seed, sodium))
-            val entry = ProtocolJson.encodeToJsonElement(directories.genesisEntry(saved.account!!, member, signKey, recovery, now()))
-            persist(saved.copy(me = member, pin = null, pendingGenesis = entry), secrets.copy(recoverySeed = toB64(seed)))
-        }
+        if (saved.pendingGenesis != null) return@run
+        if (api().directory(0).isNotEmpty()) throw IllegalStateException("This account already has devices. Join it instead.")
+        val member = newMember()
+        val seed = sodium.random(16)
+        val recovery = sodium.signSeedKeyPair(recoverySignSeed(seed, sodium))
+        val entry = ProtocolJson.encodeToJsonElement(directories.genesisEntry(saved.account!!, member, signKey, recovery, now()))
+        persist(saved.copy(me = member, pin = null, pendingGenesis = entry), secrets.copy(recoverySeed = toB64(seed)))
+    }
+
+    /**
+     * Posts the first entry kept on disk, so a lost response is retried with the same entry, and
+     * a chain that already starts with it is adopted instead of refused.
+     */
+    private suspend fun postFirstEntry() {
         val genesis: JsonElement = saved.pendingGenesis!!
         val existing = api().directory(0)
         if (existing.isEmpty()) api().append(ProtocolJson.decodeFromJsonElement(SignedEnvelope.serializer(), genesis))
-        else if (existing.first() != genesis) throw IllegalStateException("This account already has devices. Join it instead.")
-        else if (api().me().member == null) {
+        else if (existing.first() != genesis) {
+            // Another device set the account up meanwhile: this setup's key was never used.
+            persist(saved.copy(me = null, pendingGenesis = null, accountExists = true), Secrets(session = secrets.session))
+            throw IllegalStateException("This account already has devices. Join it instead.")
+        } else if (api().me().member == null) {
             // The server took the entry but the session that posted it is gone: bind this one.
             api().bind(me.id, toB64(sodium.sign(bindMessage(saved.account!!, me.id, api().challenge()), signKey)))
         }
@@ -416,6 +436,7 @@ class ServerStore(
     }
 
     override fun confirmRecoveryKey() = run {
+        if (saved.pendingGenesis != null) postFirstEntry()
         persist(newSecrets = secrets.copy(recoverySeed = null))
         sync()
     }
@@ -782,6 +803,8 @@ class ServerStore(
         // How each item a settled notice closed was closed, with the time: the notice lists before
         // the decision it closed, which moved past it.
         val closings = mutableMapOf<String, Pair<String?, String>>()
+        // Which device's answer each machine took, whenever its notice comes (#330).
+        val wins = mutableListOf<Pair<String, Settled>>()
         val waits = mutableListOf<Pair<String, Waiting>>()
         while (true) {
             val page = api().items("decision,settled,waiting", cursor)
@@ -796,8 +819,9 @@ class ServerStore(
                 if (listed.item.kind == "settled") {
                     val (from, body) = open(listed.item) ?: continue
                     body as Settled
+                    if (body.outcome == "device") wins += from to body
                     // Keyed by machine: a notice closes only the machine's own items (#362).
-                    closings["$from/${body.itemId}"] = body.outcome to listed.receivedAt
+                    else closings["$from/${body.itemId}"] = body.outcome to listed.receivedAt
                     continue
                 }
                 // The notice that closed it arrived in the same write, so it carries the same time;
@@ -826,6 +850,7 @@ class ServerStore(
         }
         // An update may list before the decision it is about, so they apply once all are read.
         for ((from, w) in waits) byId[w.decisionId]?.let { d -> wait(d, from, w)?.let { byId[w.decisionId] = it } }
+        for ((from, n) in wins) byId[n.itemId]?.let { d -> won(d, from, n)?.let { byId[n.itemId] = it } }
         persist(saved.copy(cursor = cursor, decisions = byId.values.sortedBy { it.body.createdAt }.takeLast(500), decisionFields = DECISION_FIELDS))
     }
 
@@ -891,7 +916,7 @@ class ServerStore(
                 val notice = body as Settled
                 val p = byId[notice.itemId]
                 if (p == null) {
-                    settleDecision(notice.itemId, from, notice.outcome)
+                    settleDecision(notice.itemId, from, notice)
                     return null
                 }
                 if (p.from != from) return null
@@ -904,11 +929,31 @@ class ServerStore(
 
     /** A settled notice may close one of the machine's decisions: it counts as answered. */
     /** A notice after a device's answer closed nothing, so only an open decision takes its [outcome]. */
-    private fun settleDecision(id: String, from: String, outcome: String?) {
+    private fun settleDecision(id: String, from: String, notice: Settled) {
         val d = saved.decisions.find { it.body.id == id && it.from == from } ?: return
         alerts.cancel(id)
-        if (d.answeredAt == null && d.answer == null) persist(saved.copy(decisions = saved.decisions.map { if (it === d) it.copy(answeredAt = now(), settled = outcome) else it }))
+        val updated = if (notice.outcome == "device") won(d, from, notice)
+        else if (d.answeredAt == null && d.answer == null) d.copy(answeredAt = now(), settled = notice.outcome)
+        else null
+        if (updated != null) persist(saved.copy(decisions = saved.decisions.map { if (it === d) updated else it }))
     }
+
+    /** Decisions this phone's answer lost to another device's, until the machine says which won. */
+    private val lost = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+
+    /**
+     * [d] answered with the other device's answer the asking machine's notice names, or null when
+     * the notice is not the asking machine's, names this phone, or carries no answer (#330).
+     */
+    private fun won(d: SavedDecision, from: String, n: Settled): SavedDecision? {
+        val answer = n.choice ?: n.text ?: return null
+        if (d.from != from || n.device == null || n.device == me.id || d.answer != null) return null
+        if (lost.remove(d.body.id)) notice.value = answeredFirst(answer, n.device)
+        return d.copy(answeredAt = d.answeredAt ?: now(), theirAnswer = answer, answeredBy = n.device)
+    }
+
+    private fun answeredFirst(answer: String, device: String) =
+        "Answered on ${directory?.members?.get(device)?.member?.name ?: device}: $answer"
 
     /** Keeps a week of prompts, the log's span, as the server does. */
     private fun keepPrompts(byId: Map<String, SavedPrompt>, cursor: String = saved.promptCursor) {
@@ -1057,7 +1102,16 @@ class ServerStore(
             try {
                 when (val sent = send(id, choice, text)) {
                     is Sent.Queued -> notice.value = "No connection. ${sent.answer} will be sent when the phone is back online."
-                    Sent.Elsewhere -> notice.value = "Already answered on another device."
+                    Sent.Elsewhere -> {
+                        val d = saved.decisions.find { it.body.id == id }
+                        val by = d?.answeredBy
+                        val theirs = d?.theirAnswer
+                        if (by != null && theirs != null) notice.value = answeredFirst(theirs, by)
+                        else {
+                            lost += id
+                            notice.value = "Already answered on another device."
+                        }
+                    }
                     is Sent.Failed -> notice.value = "Not sent: ${sent.why}"
                     is Sent.Answered -> Unit
                 }
@@ -1201,7 +1255,13 @@ class ServerStore(
      * A push payload (PROTOCOL.md, "Push"): a new item with this device's box when it fits, else
      * its id to fetch; or `answered` once a decision is answered anywhere.
      */
-    suspend fun onPush(payload: String) = lock.withLock {
+    suspend fun onPush(payload: String): Unit {
+        // Before the lock: a push that times out waiting for a poll still counts.
+        pushed = true
+        onPushHeld(payload)
+    }
+
+    private suspend fun onPushHeld(payload: String) = lock.withLock {
         if (phase.value != Phase.Ready) return@withLock
         val p = ProtocolJson.parseToJsonElement(payload).jsonObject
         val kind = p["kind"]?.jsonPrimitive?.content
@@ -1319,6 +1379,8 @@ class ServerStore(
     }
 
     override fun setPushType(type: String) = run(showBusy = false) {
+        // A new route has yet to prove it delivers.
+        pushed = false
         persist(saved.copy(pushType = type))
     }
 
@@ -1427,6 +1489,32 @@ class ServerStore(
     private fun listJoins(list: JoinList) {
         joinViews = list.joins.associateBy { it.id }
         joinAsks.value = list.joins.mapNotNull(::toAsk)
+    }
+
+    /**
+     * While the app is in front and no push has reached it, reads the items every [pollMs]: a
+     * server without a relay or UnifiedPush sends none, and the Inbox would never change (#445).
+     * Quiet: a failed read leaves no notice, since the next one, or the owner's pull, says why.
+     */
+    override fun foreground(on: Boolean) {
+        pollJob?.cancel()
+        if (!on) return
+        pollJob = scope.launch {
+            while (true) {
+                delay(pollMs)
+                if (pushed || phase.value != Phase.Ready) continue
+                lock.withLock {
+                    try {
+                        sync()
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        // An ended session says so at once, and stops the reads that fail with it.
+                        if (e is ApiException && e.status == 401) report(e) else Log.w("Starbridge", "poll failed: $e")
+                    }
+                }
+            }
+        }
     }
 
     override fun watchJoins(on: Boolean) {
@@ -1710,23 +1798,14 @@ class ServerStore(
             answer = d.answer,
             answeredAt = instant(d.answeredAt) ?: d.answer?.let { Instant.now() },
             settled = d.settled,
+            theirAnswer = d.theirAnswer,
+            answeredOn = d.answeredBy?.let { directory?.members?.get(it)?.member?.name ?: it },
             replies = b.replies == true,
         )
     }
 
     /** How a prompt ended, in words, from this device's answer or the machine's notice. */
-    private fun ended(p: SavedPrompt): String? {
-        p.answer?.let { return if (it.startsWith("allow")) "Allowed here" else "Denied here" }
-        val s = p.settled
-        return when {
-            s?.outcome == "keyboard" -> "Answered on ${p.body.source.machine}"
-            s?.outcome == "timeout" -> "Timed out: left to the keyboard"
-            s?.outcome == "device" && s.device == me.id -> "Answered here"
-            s?.outcome == "device" -> "Answered from ${directory?.members?.get(s.device)?.member?.name ?: "another device"}"
-            p.answeredAt != null -> "Answered on another device"
-            else -> null
-        }
-    }
+    private fun ended(p: SavedPrompt) = promptEnded(p.answer, p.settled, p.answeredAt, p.body.source.machine, me.id) { directory?.members?.get(it)?.member?.name }
 
     private fun toUi(p: SavedPrompt): Prompt {
         val b = p.body
@@ -1810,4 +1889,23 @@ internal fun paceOf(pace: dev.starbridge.app.protocol.Pace?, unusedAlert: Double
         pace.runsOutAt?.let { runCatching { OffsetDateTime.parse(it).toInstant() }.getOrNull() }?.let { Pace.RunsOut(it) } ?: Pace.Unknown
     unusedAlert != null -> Pace.Unused(unusedAlert.roundToInt())
     else -> Pace.Even
+}
+
+/**
+ * How a prompt ended and where, as the web's History puts it (#349): "Denied · on Pixel",
+ * "Allowed for this session · on this phone"; null while it waits.
+ */
+internal fun promptEnded(answer: String?, s: Settled?, answeredAt: String?, machine: String, me: String, name: (String) -> String?): String? {
+    val allowed = mapOf("once" to "Allowed once", "session" to "Allowed for this session", "project" to "Always allowed")
+    answer?.let { return "${if (it == "deny") "Denied" else allowed[it.removePrefix("allow:")] ?: "Allowed"} · on this phone" }
+    return when {
+        s?.outcome == "keyboard" -> "Answered · on $machine"
+        s?.outcome == "timeout" -> "Timed out: left to the keyboard"
+        s?.outcome == "device" && s.device != null -> {
+            val what = when (s.behavior) { "allow" -> "Allowed"; "deny" -> "Denied"; else -> "Answered" }
+            "$what · on ${if (s.device == me) "this phone" else name(s.device) ?: "another device"}"
+        }
+        answeredAt != null -> "Answered · on another device"
+        else -> null
+    }
 }

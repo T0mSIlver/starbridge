@@ -62,6 +62,12 @@
   text-align: center;
 }
 
+/* Two even lines on a wide screen, not one long one over a short one. */
+.headline {
+  max-width: 14ch;
+  text-wrap: balance;
+}
+
 .lead {
   max-width: var(--size-lead);
   margin-top: var(--s6);

@@ -1292,6 +1292,12 @@ so the mod is the first path.
   since `codex queue` (0.160) takes the message only as an argument and other local users can
   read process arguments; `wait <id>` prints a delivered answer from local state. The npm bundle
   runs under Node, so the CLI uses no Bun global without a guard; a test runs it there.
+- 2026-10-06. Android posts the account's first directory entry only once the recovery key is
+  confirmed (#370), as the web does since #337. "Create the keys" writes the keys, the seed and
+  the signed entry to the app's encrypted store; "I wrote this key down" posts the entry, then
+  drops the seed. The seed is stored exactly as long as before, and an app killed in between
+  shows the same key again. Data cleared before the confirmation leaves the server empty, so
+  signing in again starts the setup over instead of offering only "Add this phone".
 - 2026-10-06. A prompt in History says how and where it was answered, as a question does (#349):
   "Denied · on Pixel", "Allowed for this session · on this browser", and no separator when nobody
   answered ("Expired"). Answers are sealed to the asking machine, so other devices learn the
@@ -1464,6 +1470,20 @@ so the mod is the first path.
   session, takes only answers to that session's decisions, so it cannot take one that another
   session's mod or `wait` is due; outside an agent's session it still takes any. Checked with Pi 1.0.4 and pi-permission-system 39.1.0: `starbridge ask` ran
   without a dialog while `touch` still asked, and uninstall left no config behind.
+- 2026-10-06. Pi's allow rules also come with `starbridge config permissions on`, and cover the
+  Starbridge skill (#443, found in the #427 fresh-user run). Setup offered them only when
+  pi-permission-system was already installed, but setup's own hint installs it afterwards, so a
+  new user's config held only `authorizerChain` and Pi asked four times before one question.
+  Reproduced with Pi 1.0.4 and pi-permission-system 40.0.0: the skill's file is gated twice, as
+  the `starbridge` skill (surface `skill`) and as a `read` that falls back to `"*": "ask"`; the
+  `external_directory` gate auto-allows Pi's own package folder. So setup and `config permissions
+  on` now offer `skill: {"starbridge": "allow"}` and `read: {"<agent dir>/git/github.com/T0mSIlver/
+  starbridge/plugin/skills/starbridge/*": "allow"}` beside the bash patterns, each last in its map
+  and skipped where the surface is a plain `"allow"`. An unmatched pattern falls back to `"*"`, so
+  a map holding only these never tightens anything. After the fix the same run sent only the
+  question; a read of the package's README, `touch` and `true` still asked. The second prompt was
+  a `read` tool ask, which a link may allow, not a path ask: an `external_directory_read` ask
+  still stayed at the keyboard, so the docs now say tool-rule asks reach the devices.
 - 2026-10-06. Only the verified directory revokes a browser (#310, as Android decides). A 401
   `revoked` is unsigned, so the page keeps its keys and shows the refusal on the sign-in screen;
   after sign-in, boot reads the chain and shows "was revoked" only if the chain says so.
@@ -1547,8 +1567,8 @@ so the mod is the first path.
   lock-screen Allow of #57 and #182). It still asks for the unlock, then opens the prompt's sheet
   with the whole command, Allow one tap away; it no longer sends. Deny still answers from the
   lock screen.
-- 2026-10-06. One opt-in skips both (owner, #390): Settings, Notifications, "Allow from
-  notifications without seeing the whole command", off by default and labelled unsafe. On, a
+- 2026-10-06. One opt-in skips both (owner, #390): Settings, Notifications, "Quick Allow"
+  ("Allow from a notification without seeing the whole command. Unsafe."), off by default. On, a
   notification's Allow sends right after the unlock on the lock screen, and at once from a
   collapsed or heads-up notification whose command does not fit its line.
 - 2026-10-06. Permission text shows control and format characters as escapes (`\u202E`), on the
@@ -1745,6 +1765,46 @@ so the mod is the first path.
   0 and posts nothing, since devices would hold both the answer and a withdrawal. An answer
   accepted but not yet delivered can still be withdrawn. The skill says only `--answer-in` cards
   need `settle`.
+- 2026-10-06. Settings labels (#449). The link to `/docs/tell-your-agents` reads "Agent
+  instructions" in Settings (web and Android), the docs and the landing footer: two words that
+  name what the page holds, the rules agents get and what to add to their instruction files.
+  "Answer buttons on questions" says "On narrow screens", since it applies to any window under
+  1100 px, not only phones.
+- 2026-10-06. The Android app in front polls while no push reaches it (#445). A server without
+  a relay or UnifiedPush sends no push, and the open Inbox never changed. While the app is in
+  front, and until a push has reached it since it started, it syncs every 10 s, without the
+  pull-to-refresh indicator or a notice on failure; it stops in the background. The server
+  cannot say whether its pushes arrive, so a push arriving is the sign. The web already polls.
+- 2026-10-06. GitHub links on questions (#171, the owner's pick on the question display page:
+  links stay as built, plus this). A GitHub pull request or issue link with no title reads
+  "owner/repo#123" instead of its host and path, and its chip leads with the GitHub mark, on the
+  web and Android; "Answer in" uses the same label. Every other link is unchanged. Android's
+  untitled chips now start with "Open" too, as the web's and the #171 entry above do.
+- 2026-10-06. Pull to refresh belongs to the screen that was pulled (owner): the store counts
+  every sync the owner asked for, so a pull on Quotas showed the indicator on the Inbox too. Each
+  screen now shows it only for its own pull, until that sync ends. The theme option "Match
+  wallpaper" is now "Material You", the name power users know (owner).
+
+- 2026-10-06. A revoked machine learns at once (#353). A directory append wakes every machine's
+  long-poll, revoked ones included, so the revoked machine's next request gets 401 instead of
+  waiting out its 60 s poll; `status` then prints `Server: reachable, but this machine was
+  removed …` with the `pair --force` hint, rather than "not reachable".
+
+- 2026-10-06. `settle` never withdraws a decision whose answer reached the agent (#405): it exits
+  0 and posts nothing, since devices would hold both the answer and a withdrawal. An answer
+  accepted but not yet delivered can still be withdrawn. The skill says only `--answer-in` cards
+  need `settle`.
+
+- 2026-10-06. Which answer won a race reaches every device (#330), as Tom chose over sealing
+  answers to every device. An answer is sealed only to the machine that asked, so a device whose
+  answer the server refused (409 `already-answered`) could not say what won. Once the machine
+  accepts a device's answer, it posts a `settled` notice with `outcome: "device"`, that device,
+  and its `choice` or `text`; the notice is signed by the asking machine, sealed to every active
+  device and checked like any other. Devices show "Later · on Pixel" in History and Find matches
+  it; the device that lost says "Answered on Pixel: Later" (until the notice lands, "Already
+  answered on another device."). The machine keeps the notice due until the server takes it,
+  skips it while behind on the directory, and stops at `already-settled` (withdrawn meanwhile).
+  Older clients ignore the two new fields.
 - 2026-10-06. Landing page after the owner's review (#448). Its product shots use the Play Store
   screenshots' neutral data (machines workstation, build server and laptop; projects billing-api
   and web-app): `lib/sample.ts` on the web, `Showcase.kt` for the Roborazzi shots `inbox-landing`
@@ -1752,6 +1812,11 @@ so the mod is the first path.
   section's inline command is set in Google Sans Code on a chip, as in the docs; the browser's
   default monospace left a wide gap before "setup". Self-host leaves the top bar for the footer
   and the docs, since the hosted instance is the one to start with.
+- 2026-10-06. The landing page's hero (#448, the owner's pick from two rounds of options): "Know
+  the moment your agent is stuck", then "When a coding agent stops for a question or a
+  permission, your phone tells you. Answer with one tap and it gets back to work." It sells the
+  pain the owner named: you don't notice that an agent is blocked. The shots below it still show
+  the web app beside the phone, so the page keeps saying both clients do the same.
 
 ## Encryption, with existing libraries
 
@@ -2162,6 +2227,66 @@ goes in git.
   receives it twice. Only a connection that drops once the reply's
   headers are in reaches the app as a failure, and that is what
   `RecoveryRetryTest` scripts (MockWebServer's `onResponseBody`).
+- 2026-10-06: the agent surface on Sonnet (#299). The skill eval (`evals/skill`)
+  ran Claude Code on claude-sonnet-5-5, Codex on its default model, and Pi
+  and opencode on GLM 5.3 Flash, 3 runs per situation. A Claude
+  subscription used from Pi is billed as extra usage, so Pi runs on GLM.
+  The judge is now Claude Sonnet. Revision 3 is the skill and rule below
+  without the last two edits; Claude Code and Codex were not rerun after
+  it (the Claude login broke, below; Codex's window was spent). The
+  eleven record checks were 99–100% on main for these three, and 100%
+  on revision 3.
+
+  | All checks, judged | main | revision 3 |
+  |---|---:|---:|
+  | Claude Code | 95% | 98% |
+  | Codex | 96% | 98% |
+  | Pi | 94% | 98% |
+
+  | Checks | Claude Code | Codex | Pi |
+  |---|---:|---:|---:|
+  | Answerable cold, from the card alone | 86% → 95% | 89% → 100% | 100% → 100% |
+  | Says what each option changes | 52% → 95% | 67% → 83% | 56% → 89% |
+  | Did not do what was the owner's to decide | 100% → 100% | 92% → 100% | 92% → 100% |
+  | Every other check | 95–100%, no drop | 94–100%, no drop | 85–100% → 92–100% |
+
+  What moved them: the card's context gives one line per option, starting
+  with its label, saying what picking it does; designs are told apart by
+  numbers; "no answer is never a yes" sits where the agent waits (on main,
+  Codex waited with 45-second timeouts, withdrew its card and force-pushed
+  a shared main); card text goes in single quotes, as `$0` in double
+  quotes had blanked part of a Codex card. Cut with no change in results:
+  the "Never" list, which repeated the sections above it, the bad example,
+  the per-agent compatibility notes and `--json`.
+
+  The last two edits were checked on GLM only, with the record checks
+  (the eleven that need no judge). The rule regains "or a failure only I
+  can fix". A hint to pass context with an apostrophe through
+  `--context-file - <<'EOF'` made both GLM agents put `--option` after the
+  heredoc, so cards lost their options (record checks: Pi 96%, opencode
+  94%, against 99% and 95% on main); "write apostrophes as ’" replaced it
+  and every card in the red-CI and force-push situations kept its options
+  (3 runs each; Pi 89%, opencode 97%, the misses being the force-pushes
+  below).
+  A line saying no options asks for a typed answer made Pi post option-less
+  cards too, and went. On GLM 5.3 Flash a force-push without asking still
+  happens in about one run in six to nine, on main's text as on this one.
+
+  Injected tokens, Claude's tokenizer (`evals/skill/tokens.ts`): the
+  SessionStart rule 233 → 179 and the skill's list entry 210 → 151, so
+  443 → 330 in every session; the skill file, read when the agent uses it,
+  2887 → 1939. Main and revision 2 are measured; the final text is
+  revision 2's count scaled by length.
+
+  The eval copied `~/.claude/.credentials.json` into every run; the copies
+  refreshed on their own and signed the original out. Claude runs now take
+  a `claude setup-token` token, and Codex runs an API key (#424). Grading
+  false failures fixed: `starbridge waiting` counted as waiting, and a
+  command named in a card or read with `--help` counted as run. Since #327
+  a `claude -p` session waits for its answer, and the eval answers it while
+  it waits. Permission prompts reach Starbridge through the plugin's
+  `PermissionRequest` hook, not text, so this eval does not cover them.
+  Records: `evals/skill/results/299`.
 - 2026-10-06: screenshot audit (#305), Firefox 1543 through Playwright 1.63, every e2e screen at
   320, 360, 390, 430, 768, 1024, 1280, 1440 and 1920 px in both themes and at 200% text. Broken
   and fixed: a long machine name pushed the time off inbox rows and ran under the repo name;

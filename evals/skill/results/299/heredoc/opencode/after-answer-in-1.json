@@ -1,0 +1,13 @@
+{
+  "agent": "opencode",
+  "model": "zai-coding-plan/glm-5.3-flash",
+  "arm": "after",
+  "scenario": "answer-in",
+  "rep": 1,
+  "turns": [],
+  "decisions": [],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "error": "Error: starbridge pair exited without a code: "
+}

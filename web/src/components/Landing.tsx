@@ -156,15 +156,10 @@ export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
       </header>
 
       <section className={s.hero}>
-        <h1 className="t-hero">
-          Your agents ask.
-          <br />
-          You answer from anywhere.
-        </h1>
+        <h1 className={`t-hero ${s.headline}`}>Know the moment your agent is stuck</h1>
         <p className={`t-lead ${s.dim} ${s.lead}`}>
-          Answer your coding agents with one tap
-          <span className={s.wideOnly}> on your phone or in a browser</span>, and the waiting
-          session carries on. You also follow the runs that affect you until they pass or fail.
+          When a coding agent stops for a question or a permission, your phone tells you. Answer
+          with one tap and it gets back to work.
         </p>
         <div className={s.actions}>
           <a href="/v1/auth/github" className={`t-action ${ui.btn} ${ui.lg} ${ui.fill}`}>
@@ -272,7 +267,7 @@ export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
           <button type="button" className={s.textButton} onClick={onOwnerToken}>
             Use your own server
           </button>
-          <a href={AGENTS_GUIDE}>How to tell your agents</a>
+          <a href={AGENTS_GUIDE}>Agent instructions</a>
           <a href={`${REPO}/releases`}>Changelog</a>
         </div>
         <div className={s.footCol}>
@@ -283,7 +278,7 @@ export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
         <nav className={s.footInline} aria-label="Links">
           <a href={REPO}>GitHub</a>
           <a href={SELF_HOST}>Self-host</a>
-          <a href={AGENTS_GUIDE}>How to tell your agents</a>
+          <a href={AGENTS_GUIDE}>Agent instructions</a>
           <a href="/privacy">Privacy</a>
           <a href="/terms">Terms</a>
         </nav>

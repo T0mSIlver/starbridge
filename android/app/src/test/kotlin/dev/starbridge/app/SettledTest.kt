@@ -136,6 +136,28 @@ class SettledTest {
         assertEquals(asks.id, saved.from)
         assertNull(saved.settled)
 
+        // A device's answer the asking machine took: its notice says which, whenever it comes,
+        // and another machine's says nothing (#330).
+        fun took(by: Member, key: ByteArray, choice: String) = envelopes.seal("settled", buildJsonObject {
+            put("v", 1); put("id", "s_$choice"); put("itemId", "d_asked"); putJsonArray("to") { add("phone") }; put("at", at)
+            put("outcome", "device"); put("device", "tablet"); put("choice", choice)
+        }, by.id, key, listOf(phone))
+        // The other machine's notice lists last, so it would win were it counted.
+        served = buildJsonObject {
+            put("items", buildJsonArray {
+                for ((i, n) in listOf(took(asks, asksSign.secret, "No"), took(closes, closesSign.secret, "Yes")).withIndex())
+                    add(buildJsonObject { put("item", ProtocolJson.encodeToJsonElement(n)); put("cursor", "${i + 1}"); put("receivedAt", at) })
+                add(buildJsonObject { put("item", ProtocolJson.encodeToJsonElement(decision)); put("cursor", "3"); put("receivedAt", at); put("answeredAt", at) })
+            })
+            put("cursor", "3")
+        }
+        store.refresh()
+        until { store.decisions.value.single().theirAnswer != null }
+        val won = store.decisions.value.single()
+        assertEquals("No", won.theirAnswer)
+        assertEquals("tablet", won.answeredOn)
+        assertNull(won.settled)
+
         // The asking machine's own notice still closes it.
         served = page(envelopes.seal("settled", buildJsonObject {
             put("v", 1); put("id", "s_own"); put("itemId", "d_asked"); putJsonArray("to") { add("phone") }; put("at", at); put("outcome", "withdrawn")

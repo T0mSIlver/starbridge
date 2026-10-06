@@ -10,7 +10,8 @@ import { PNG } from "pngjs";
 import { run } from "../src/cli";
 import { session } from "../src/context";
 import { NO_DEFAULT, poll } from "../src/decisions";
-import { offerPiChain } from "../src/settings";
+import { piAllow, piPermissionConfig } from "../src/pi";
+import { configCommand, offerPiChain } from "../src/settings";
 import { FAKE_CODEXBAR, paired, testCtx, until } from "./helpers";
 
 let server: LiveServer;
@@ -273,6 +274,23 @@ test("ask --answer-in posts a pointer decision, and settle closes it", async () 
   expect(await run(["settle", "d_unknown"], ctx)).toBe(1);
 });
 
+test("the machine tells every device which answer it took, once (#330)", async () => {
+  const ctx = await paired(server);
+  expect(await run(ASK, ctx)).toBe(0);
+  const id = ctx.lines.at(-1) as string;
+  await server.answer(id, { choice: "Wait" });
+  expect(await run(["wait", id, "--timeout", "5s"], ctx)).toBe(0);
+  const phone = [...(await server.directory()).members.values()].find(
+    (m) => m.member.role === "device",
+  );
+  expect(await server.opened("settled")).toMatchObject([
+    { itemId: id, outcome: "device", device: phone?.member.id, choice: "Wait" },
+  ]);
+  // Told once: a later poll posts nothing more.
+  expect(await run(["answers", "--session", "s", "--wait", "1"], ctx)).toBe(0);
+  expect(await server.opened("settled")).toHaveLength(1);
+});
+
 test("settle leaves a decision whose answer reached the agent answered, not withdrawn", async () => {
   const ctx = await paired(server);
   expect(await run(ASK, ctx)).toBe(0);
@@ -280,7 +298,7 @@ test("settle leaves a decision whose answer reached the agent answered, not with
   await server.answer(id, { choice: "Merge" });
   expect(await run(["wait", id, "--timeout", "5s"], ctx)).toBe(0);
   expect(await run(["settle", id], ctx)).toBe(0);
-  expect(await server.opened("settled")).toEqual([]);
+  expect((await server.opened("settled")).map((n) => n.outcome)).toEqual(["device"]);
 });
 
 test("ask refuses a decision that would not stand alone", async () => {
@@ -401,6 +419,19 @@ test("permissions on offers to name the Starbridge link in pi-permission-system'
     },
   });
   expect(ctx.lines.length).toBe(before);
+});
+
+test("permissions on after installing pi-permission-system lets Starbridge's own calls through", async () => {
+  const ctx = await paired(server);
+  ctx.env.HOME = mkdtempSync(join(tmpdir(), "starbridge-pi-home-"));
+  // Installed after setup, as setup's hint says: setup had no config to add the rules to.
+  mkdirSync(join(ctx.env.HOME, ".pi/agent/extensions/pi-permission-system"), { recursive: true });
+  const yes = { confirm: async () => true, text: async (_q: string, d: string) => d };
+  expect(await configCommand(ctx, ["permissions", "on"], yes)).toBe(0);
+  const config = JSON.parse(readFileSync(piPermissionConfig(ctx.env), "utf8"));
+  expect(config.authorizerChain).toEqual(["starbridge"]);
+  expect(Object.keys(config.permission)).toEqual(["bash", "skill", "read"]);
+  expect(piAllow(ctx.env).state).toBe("allowed");
 });
 
 test("ask --wait prints the answer the phone sends", async () => {

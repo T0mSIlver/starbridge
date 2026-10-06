@@ -217,8 +217,10 @@ fun InboxScreen(
         }
     }
     val shownRuns = Run.shown(runs, now)
-    val open = decisions.filter { it.isOpen(now) }.sortedWith(compareByDescending<Decision> { it.waiting }.thenByDescending { it.createdAt })
-    val feed: List<Item> = shownRuns.map(Item::RunItem) + shown.map(Item::PromptItem) + open.map(Item::Question)
+    val open = openQuestions(decisions, now)
+    val runItems = shownRuns.map(Item::RunItem)
+    val needs: List<Item> = shown.map(Item::PromptItem) + open.map(Item::Question)
+    val feed: List<Item> = runItems + needs
     val needYou = open.size + shown.count { it.waiting(at) }
     val running = shownRuns.count { it.state(now) == Run.State.Running }
     val history = History(decisions.filterNot { it.isOpen(now) }, prompts.filter { !it.waiting(at) && it !in shown }, now)
@@ -242,8 +244,8 @@ fun InboxScreen(
             item(key = "empty") { Empty() }
         } else {
             when (view.grouping) {
-                Grouping.Machine -> feed.groupBy { it.machine.machine }.forEach { (machine, items) ->
-                    item(key = "machine/$machine") { MachineHeader(items.first().machine) }
+                Grouping.Machine -> byMachine(runItems, needs) { it.machine.machine }.forEach { items ->
+                    item(key = "machine/${items.first().machine.machine}") { MachineHeader(items.first().machine) }
                     cards(items, at, actions, replies, promptActions, view.buttons, segmented = true)
                 }
                 Grouping.Waiting -> {
@@ -617,7 +619,7 @@ private fun AnswerElsewhere(page: Link) {
 }
 
 /** The answer, or how a question answered on another page closed. */
-internal fun outcome(decision: Decision, now: Instant) = decision.answer ?: when {
+internal fun outcome(decision: Decision, now: Instant) = decision.answer ?: decision.theirAnswer ?: when {
     decision.settled == "withdrawn" -> "Withdrawn"
     decision.lapsed(now) -> "No answer by its default time"
     decision.answerIn != null -> "Answered in ${decision.answerIn.place()}"
@@ -627,6 +629,7 @@ internal fun outcome(decision: Decision, now: Instant) = decision.answer ?: when
 /** Who closed it: this phone, the agent (withdrawn, or for another page), or another device. */
 internal fun answeredBy(decision: Decision) = when {
     decision.answer != null -> "this phone"
+    decision.answeredOn != null -> decision.answeredOn
     decision.settled != null || decision.answerIn != null -> "the agent"
     else -> "another device"
 }

@@ -1,0 +1,73 @@
+{
+  "agent": "codex",
+  "model": "default",
+  "arm": "after",
+  "scenario": "design-pick",
+  "rep": 2,
+  "turns": [
+    {
+      "commands": [
+        "/usr/bin/zsh -lc 'cat /tmp/skill-eval-JQLTf3/after-design-pick-2/cfg/skills/starbridge/SKILL.md'",
+        "/usr/bin/zsh -lc \"pwd; git status --short; git branch; rg --files -g 'AGENTS.md' -g '*shots*'; ls shots\"",
+        "/usr/bin/zsh -lc \"git log --all --oneline -5; cat AGENTS.md; starbridge ask --question 'Which settings-screen design should I ship into main?' --context 'Both variants are complete and pass the tests.\nImage 1: Compact (settings-compact).\nImage 2: Roomy (settings-roomy).\nYour choice will be merged into main.' --option 'Compact' --option 'Roomy' --image shots/compact.png --image shots/roomy.png --waiting\"",
+        "/usr/bin/zsh -lc 'starbridge wait d_AWOiLrXfxeSWIocL --timeout 5m'",
+        "/usr/bin/zsh -lc 'starbridge wait d_AWOiLrXfxeSWIocL --timeout 5m'"
+      ],
+      "final": "The only remaining step is your design selection on Starbridge; the merge will follow that choice.",
+      "session": "01a11059-3055-79b1-a91d-bb5c3827750c",
+      "exit": 143,
+      "seconds": 720.045
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_AWOiLrXfxeSWIocL",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-06T08:34:14Z",
+      "question": "Which settings-screen design should I ship into main?",
+      "context": "Both variants are complete and pass the tests.\nImage 1: Compact (settings-compact).\nImage 2: Roomy (settings-roomy).\nYour choice will be merged into main.",
+      "options": [
+        "Compact",
+        "Roomy"
+      ],
+      "recommended": "Compact",
+      "agent": "codex",
+      "default": {
+        "action": "Waits for your answer"
+      },
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "01a11059-3055-79b1-a91d-bb5c3827750c"
+      },
+      "images": [
+        {
+          "type": "image/png",
+          "width": 360,
+          "height": 640
+        },
+        {
+          "type": "image/png",
+          "width": 360,
+          "height": 640
+        }
+      ],
+      "replies": true
+    }
+  ],
+  "laterDecisions": [],
+  "runs": [],
+  "gh": [],
+  "judge": {
+    "cold": false,
+    "consequences": false,
+    "terminal": false,
+    "links": null,
+    "plain": true,
+    "notes": "The card never says how Compact and Roomy differ or what each changes, and gives no reason for recommending Compact, so the user can only judge from the two images."
+  }
+}

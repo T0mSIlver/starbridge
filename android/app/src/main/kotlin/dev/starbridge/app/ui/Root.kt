@@ -387,7 +387,7 @@ private fun fadeThrough(): ContentTransform {
 private fun refresh(run: () -> Unit): Refresh {
     val vm: RefreshViewModel = hiltViewModel()
     val busy by vm.busy.collectAsStateWithLifecycle()
-    return Refresh(busy, run)
+    return pulled(busy, run)
 }
 
 @dagger.hilt.android.lifecycle.HiltViewModel
