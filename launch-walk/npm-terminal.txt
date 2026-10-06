@@ -1,0 +1,88 @@
+cat /home/dev/work/starbridge/.scratch/launch/proof/npm-terminal.clean; sleep 1000
+dev in 🌐 sandbox in mystifying-galileo-1c4264 on  launch/pi-web via  v24.18.0 
+⬢ [Systemd] ❯ cat /home/dev/work/starbridge/.scratch/launch/proof/npm-terminal.clean; sleep 1000
+Script started on 2026-10-06 01:40:34+02:00 [COMMAND="bash --norc" TERM="tmux-256color" TTY="/dev/pts/10" COLUMNS="160" LINES="50"]
+bash-5.2$ export PS1='newuser$ '; cd ~; starbridge setup --server http://127.0.0.1:3790
+Pairing
+Pairing code: TXNA-E040-NAEM-R32C-RTNQ-RF72
+Scan this with the Starbridge app or your phone's camera, or open http://127.0.0.1:3790/pair#TXNA-E040-NAEM-R32C-RTNQ-RF72
+  █▀▀▀▀▀█ ▀▀▀█▄███ █▄▄█▀▄▀  █▀▀▀▀▀█  
+  █ ███ █  ▀▄█ ▀█▄ ▄▄  ▀▀▀█ █ ███ █  
+  █ ▀▀▀ █  ▄▀█▀█▄▀ ▀▄ ▄ █▄█ █ ▀▀▀ █  
+  ▀▀▀▀▀▀▀ █▄▀ █ █ ▀ █▄▀ ▀▄█ ▀▀▀▀▀▀▀  
+  ▀█▄▀█ ▀▄ ▀▄ ▀▀█▀▀ ▄▄▄█▄▄ ▄▀ ▄  ▄▀  
+  ▄▀ ▄▄█▀▄▀▀  ▀ █▄ ▄▀ ▄ ██▄▄▀█▀█▄ ▀  
+   ▄▄█ ▀▀██▀█ ▄▀▀ ▀▄█▄▀▀ ▄▀▀▀▀ █ ▀▀  
+  ▄█▀▀▀▄▀▀▄ █ ▄▄███  ▀▀▀▀ ▄▀▀▀█▀▄ ▄  
+  ▄▀██ █▀█ ▀▀█▀  ███  █▄▄▀▀▄█ █▀ ██  
+  ▀ ▄██ ▀█ ▀ ▄▀█▀█▄ ██▄▀▄▀█▀▀█▄ ▄▄█  
+  ▄▄█ ██▀ █▄ ▀▄█ █▄  ▀ ▀▄▄ █ ▀▄▀▄▄   
+  █  █▄▄▀▀█▄▄█▄█ █ █▄▄█▀▀▀ ██▀▄▄█▀▀  
+  ▀▀▀▀ ▀▀ ▄▀▄▀▀█▄▀██▄▄▀ █ █▀▀▀█ ▄█   
+  █▀▀▀▀▀█  ▀ █▀▀ ██▀▄▀▀▀█▀█ ▀ █ ▄ ▄  
+  █ ███ █ █▀▀▄▄▄█▀▀█ █▀  ██▀▀█▀ ▄▄▄  
+  █ ▀▀▀ █ ▄ ▄▀▄ ▄▀▄▀▀██▀ █▀▄ ▀█ ▄██  
+  ▀▀▀▀▀▀▀ ▀   ▀▀▀ ▀▀▀▀▀ ▀ ▀          
+Or type the code under Devices in the Starbridge app or web page. It expires in 10 minutes.
+n
+Paired "sandbox" (m_ib6IC9UhVZcu). Keys are in /home/dev/work/starbridge/.scratch/launch/home-npm/.config/starbridge.
+Shown as a server (`starbridge config machine-kind` changes it).
+CodexBar
+CodexBar reads your plan quotas and is not installed. Install the CodexBar CLI? [Y/n] n
+No quotas without CodexBar; questions and runs work without it. `starbridge setup` installs it when you rerun it.
+Agent
+Started /home/dev/work/starbridge/.scratch/launch/home-npm/.config/systemd/user/starbridge-agent.service.
+The agent did not answer on its socket yet: `starbridge status` shows its state.
+Claude Code
+Install the Starbridge plugins for Claude Code (the skill and the mod)? [Y/n] node:internal/readline/interface:1331
+            this[kQuestionReject]?.(new AbortError('Aborted with Ctrl+C'));
+                                    ^
+AbortError: Aborted with Ctrl+C
+    at [_ttyWrite] (node:internal/readline/interface:1331:37)
+    at ReadStream.onkeypress (node:internal/readline/interface:284:20)
+    at ReadStream.emit (node:events:509:28)
+    at emitKeys (node:internal/readline/utils:371:14)
+    at emitKeys.next (<anonymous>)
+    at ReadStream.onData (node:internal/readline/emitKeypressEvents:64:36)
+    at ReadStream.emit (node:events:509:28)
+    at addChunk (node:internal/streams/readable:563:12)
+    at readableAddChunkPushByteMode (node:internal/streams/readable:514:3)
+    at Readable.push (node:internal/streams/readable:394:5) {
+  code: 'ABORT_ERR'
+}
+Node.js v24.18.0
+newuser$ clear; npm install -g /home/dev/work/starbridge/.scratch/launch/rel/v0.9.1/starbridge-0.9.1.tgz && starbridge setup --no-plugin --no-quota
+changed 1 package in 364ms
+Pairing
+Paired as "sandbox" (m_ib6IC9UhVZcu) on http://127.0.0.1:3790.
+Shown as a server (`starbridge config machine-kind` changes it).
+CodexBar
+Skipped (--no-quota): the agent uploads no quotas.
+Agent
+Started /home/dev/work/starbridge/.scratch/launch/home-npm/.config/systemd/user/starbridge-agent.service.
+Agent 0.9.1 runs (pid 3981355).
+Agents
+Skipped (--no-plugin).
+Permission prompts
+Also send Claude Code permission prompts to your devices? The Claude app already shows them for Remote Control sessions. [y/N] 
+They stay at the keyboard (`starbridge config permissions on` sends them).
+Check
+Send a test decision to your phone? [Y/n] node:internal/readline/interface:1331
+            this[kQuestionReject]?.(new AbortError('Aborted with Ctrl+C'));
+                                    ^
+AbortError: Aborted with Ctrl+C
+    at [_ttyWrite] (node:internal/readline/interface:1331:37)
+    at ReadStream.onkeypress (node:internal/readline/interface:284:20)
+    at ReadStream.emit (node:events:509:28)
+    at emitKeys (node:internal/readline/utils:371:14)
+    at emitKeys.next (<anonymous>)
+    at ReadStream.onData (node:internal/readline/emitKeypressEvents:64:36)
+    at ReadStream.emit (node:events:509:28)
+    at addChunk (node:internal/streams/readable:563:12)
+    at readableAddChunkPushByteMode (node:internal/streams/readable:514:3)
+    at Readable.push (node:internal/streams/readable:394:5) {
+  code: 'ABORT_ERR'
+}
+Node.js v24.18.0
+newuser$ clear; starbridge pair --force 2>&1 | grep 'Pairing code'
+Pairing code: C7VT-KXWY-09E5-B26J-GE8F-5AVY
