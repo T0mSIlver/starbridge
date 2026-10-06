@@ -169,3 +169,18 @@ test("a recovery whose directory append fails leaves the device's keys alone (#2
   expect((await store.get("pending", ctx.account))?.name).toBe("Recovered");
   await store.del("pending", ctx.account);
 });
+
+test("a recovery that landed but was cut off before adopting its keys resumes over an older device (#283)", async () => {
+  const before = (await store.get("device", ctx.account)) as store.DeviceRecord;
+  // A fresh sign-in, bound to no device: the server binds it to the recovered one.
+  await api.ownerSignIn("owner-secret");
+  await device.recover(ctx.account, "Recovered", recoveryKey(live.owner.recoverySeed));
+  const recovered = (await store.get("device", ctx.account)) as store.DeviceRecord;
+  // As the browser held it when the page closed after the append: the older device still stored.
+  await store.put("pending", recovered, ctx.account);
+  await store.put("device", before, ctx.account);
+  const b = await device.boot();
+  expect(b.state).toBe("ready");
+  expect(await store.get("device", ctx.account)).toEqual(recovered);
+  expect(await store.get("pending", ctx.account)).toBeUndefined();
+});

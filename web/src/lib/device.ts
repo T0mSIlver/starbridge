@@ -182,21 +182,21 @@ export async function boot(): Promise<Boot> {
   } catch (e) {
     return { state: "broken", account, error: e instanceof Error ? e.message : String(e) };
   }
-  if (!device) {
-    // A join a device approved, cut off before its keys became the device: the directory
-    // already lists them, so they are, as they would have been had it finished (#274).
-    const pending = await store.get("pending", account);
-    const held = pending && verified.dir.members.get(pending.id);
-    if (
-      !pending ||
-      !held?.active ||
-      held.member.boxPk !== pending.boxPk ||
-      held.member.signPk !== pending.signPk
-    )
-      return { state: "join", account, stale: false };
+  // A join a device approved, or a recovery whose append landed, cut off before its keys became
+  // the device: the directory already lists them, so they are, as they would have been had it
+  // finished, even over an older device's (#274, #283).
+  const pending = await store.get("pending", account);
+  const held = pending && verified.dir.members.get(pending.id);
+  if (
+    pending &&
+    held?.active &&
+    held.member.boxPk === pending.boxPk &&
+    held.member.signPk === pending.signPk
+  ) {
     await adopt(account, pending);
     device = pending;
   }
+  if (!device) return { state: "join", account, stale: false };
   const entry = verified.dir.members.get(device.id);
   if (!entry || entry.member.boxPk !== device.boxPk || entry.member.signPk !== device.signPk) {
     // Saved before a pairing or recovery that never completed.

@@ -1295,7 +1295,9 @@ so the mod is the first path.
 
 - 2026-10-06. Recovery with the words keeps its new keys under `pending` until the directory
   append lands, as a join does (#283, after #274). A failed append leaves the stored device's
-  keys alone; one that landed with its reply lost counts once the directory lists the entry.
+  keys alone; one that landed with its reply lost counts once the directory lists the entry. Boot
+  adopts a pending record the directory lists as active even when an older device is stored, so a
+  recovery or join cut off after it landed is not lost to the older keys.
 
 ## Encryption, with existing libraries
 
