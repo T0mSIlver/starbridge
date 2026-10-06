@@ -764,7 +764,9 @@ Tokens, type and components: `DESIGN.md`.
   `/privacy` says so.
   It sees machines and answers from any device, so a pairing or answer made on the phone counts
   once this browser sees them. Owner's view: an Umami share link on `stats.starbridge.run`,
-  where Caddy passes only GET requests and blocks the login.
+  where Caddy passes only GET requests and blocks the login. A password (user `tom`) guards the
+  whole host, since the link alone would open it to whoever saw it; bcrypt cost 10 and a limit of
+  300 requests a minute per address keep its checks from spending the box's CPU.
   Caddy rate-limits its open endpoint, and a timer caps its tables, so it cannot fill the disk.
 - **Demo server** (#423). Play reviewers cannot pass GitHub's new-device check and cannot be given
   a recovery key, so `demo.starbridge.run` is a self-hosted server with an owner token, and
