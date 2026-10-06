@@ -10,8 +10,9 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { delimiter, join } from "node:path";
+import { delimiter, dirname, join } from "node:path";
 import { compareVersions, platformAsset, RELEASE_KEY, verifyMinisign } from "../src/release";
+import { piSource } from "../src/setup/harnesses";
 import { update } from "../src/update";
 import { VERSION } from "../src/version";
 import { testCtx } from "./helpers";
@@ -214,6 +215,22 @@ describe("update", () => {
     expect(await update(c, { kind: "binary", path }, release.pubkey)).toBe(0);
     expect(c.lines).toEqual([`Updated starbridge ${VERSION} to 99.0.0.`]);
     expect(spawnSync(path, ["--version"], { encoding: "utf8" }).stdout).toBe("starbridge 99.0.0\n");
+  });
+
+  test("moves the Starbridge Pi package to the new release's tag", async () => {
+    release = fakeReleases("99.0.0");
+    const path = installed();
+    const settings = join(dir, ".pi/agent/settings.json");
+    mkdirSync(dirname(settings), { recursive: true });
+    writeFileSync(settings, JSON.stringify({ packages: [piSource(VERSION)] }));
+    const c = ctx();
+    c.env.PATH = [join(import.meta.dir, "fixtures", "fake-bin"), dirname(process.execPath)].join(
+      delimiter,
+    );
+    c.env.FAKE_LOG = join(dir, "calls");
+    expect(await update(c, { kind: "binary", path }, release.pubkey)).toBe(0);
+    expect(c.lines.at(-1)).toBe("Moved the Starbridge Pi package to v99.0.0.");
+    expect(JSON.parse(readFileSync(settings, "utf8")).packages).toEqual([piSource("99.0.0")]);
   });
 
   test("keeps the binary when the download does not check out", async () => {

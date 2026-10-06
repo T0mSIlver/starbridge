@@ -93,14 +93,15 @@ export function removeCodexRule(sys: Home): boolean {
  * The Starbridge Pi package, the repository's root `package.json`, at this CLI's release tag so
  * its extension calls the commands this CLI has. Pi keeps a tag pinned through `pi update`.
  */
-export const PI_PACKAGE = `git:github.com/T0mSIlver/starbridge@v${VERSION}`;
+export const piSource = (version: string) => `git:github.com/T0mSIlver/starbridge@v${version}`;
+export const PI_PACKAGE = piSource(VERSION);
 
 export function hasPi(sys: Sys): boolean {
   return which(sys.ctx.env, "pi") !== undefined;
 }
 
 /** The package source as Pi's settings list it, when installed (any ref or URL form). */
-export function piPackage(sys: Sys): string | undefined {
+export function piPackage(sys: Home): string | undefined {
   const dir = sys.ctx.env.PI_CODING_AGENT_DIR || join(sys.home, ".pi", "agent");
   let packages: unknown;
   try {

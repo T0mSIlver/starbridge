@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { cpSync, mkdtempSync, readFileSync } from "node:fs";
+import { cpSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { check, stamp } from "../scripts/version";
@@ -35,4 +35,6 @@ test("a release moves the marketplace to its tag; a release candidate leaves it"
   expect(check("7.1.0", dir)).toEqual([]);
   expect(ref().match(/"ref": "v7\.1\.0"/g)).toHaveLength(2);
   expect(check("7.1.1", dir)).toHaveLength(FILES.length + 1);
+  writeFileSync(join(dir, ".claude-plugin/marketplace.json"), ref().replaceAll('"ref"', '"tag"'));
+  expect(check("7.1.0", dir)).toEqual([".claude-plugin/marketplace.json: v(none), want v7.1.0"]);
 });

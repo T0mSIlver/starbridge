@@ -1845,7 +1845,8 @@ so the mod is the first path.
   longer reaches Claude Code users before the CLI that has it; the https URL clones without a
   GitHub SSH key. A release candidate moves every version but the marketplace refs, so only
   pinned installs get it. Setup installs the Pi package at its own CLI's tag
-  (`git:github.com/T0mSIlver/starbridge@v<version>`) and moves an install at another ref to it;
+  (`git:github.com/T0mSIlver/starbridge@v<version>`) and moves an install at another ref to it,
+  as `starbridge update` does to the new release's tag; `status` names a package at another ref;
   Pi keeps a tag through `pi update` and `pi install` with a new ref rewrites the one entry
   (Pi 0.87.1, `core/package-manager.js:618-639,1502-1512`). The mod keeps its own copy of the
   agent API revision: Claude Code installs only `mod/`, so it cannot import the CLI's, and

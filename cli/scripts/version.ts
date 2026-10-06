@@ -29,9 +29,10 @@ const PLACES: { file: string; pattern: RegExp; tag?: boolean }[] = [
 
 const isRc = (v: string) => v.includes("-rc.");
 
+/** Each version the pattern finds; `[""]` when it finds none, which check and stamp refuse. */
 function found(text: string, pattern: RegExp): string[] {
   const all = pattern.global ? [...text.matchAll(pattern)] : [text.match(pattern)];
-  return all.map((m) => m?.[1] ?? "");
+  return all.length ? all.map((m) => m?.[1] ?? "") : [""];
 }
 
 /** What disagrees with `version`, one line per place; empty when all agree. */
