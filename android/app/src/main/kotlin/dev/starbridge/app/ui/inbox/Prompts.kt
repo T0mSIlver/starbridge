@@ -144,6 +144,8 @@ private fun Label(text: String, height: Dp) {
 private fun AllowDeny(height: Dp, enabled: Boolean, ground: Color, onAllow: () -> Unit, onDeny: () -> Unit, trailing: (@Composable () -> Unit)? = null) {
     val colors = StarbridgeTheme.colors
     val end = height / 2
+    // Labels centred in a width the row sets: narrow sides leave them room on a small phone.
+    val padding = PaddingValues(horizontal = Spacing.s2, vertical = ButtonDefaults.ContentPadding.calculateTopPadding())
     // [height] at the default font size, taller when the labels need it; never padded to 48 dp,
     // as the design sets them under it.
     CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
@@ -153,8 +155,7 @@ private fun AllowDeny(height: Dp, enabled: Boolean, ground: Color, onAllow: () -
                 enabled = enabled,
                 shape = RoundedCornerShape(topStart = end, bottomStart = end, topEnd = 8.dp, bottomEnd = 8.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = colors.accent, contentColor = colors.onAccent, disabledContainerColor = colors.accent, disabledContentColor = colors.onAccent),
-                // Centred in a width the row sets: narrow sides leave the label room on a small phone.
-                contentPadding = PaddingValues(horizontal = Spacing.s2, vertical = ButtonDefaults.ContentPadding.calculateTopPadding()),
+                contentPadding = padding,
                 modifier = Modifier.weight(1f).heightIn(min = height).fillMaxHeight(),
             ) { Label("Allow", height) }
             val last = trailing == null
@@ -163,8 +164,7 @@ private fun AllowDeny(height: Dp, enabled: Boolean, ground: Color, onAllow: () -
                 enabled = enabled,
                 shape = RoundedCornerShape(topStart = 8.dp, bottomStart = 8.dp, topEnd = if (last) end else 8.dp, bottomEnd = if (last) end else 8.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = ground, contentColor = MaterialTheme.colorScheme.onSurface),
-                // Centred in a width the row sets: narrow sides leave the label room on a small phone.
-                contentPadding = PaddingValues(horizontal = Spacing.s2, vertical = ButtonDefaults.ContentPadding.calculateTopPadding()),
+                contentPadding = padding,
                 modifier = Modifier.weight(1f).heightIn(min = height).fillMaxHeight(),
             ) { Label("Deny", height) }
             trailing?.invoke()
