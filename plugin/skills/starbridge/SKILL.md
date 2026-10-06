@@ -50,11 +50,11 @@ They decide from the card alone, without opening this session.
 
 ```bash
 starbridge ask \
-  --question "Run the orders migration now, or after tonight's 18:00 backup?" \
-  --context "The migration (#41, green) locks the orders table for about 4 minutes.
+  --question 'Run the orders migration now, or after the 18:00 backup?' \
+  --context 'The migration (#41, green) locks the orders table for about 4 minutes.
 After the backup: done by 18:30, with a restore point if it goes wrong.
-Now: checkouts fail for those 4 minutes, at peak hour." \
-  --option "After the backup" --option "Now" \
+Now: checkouts fail for those 4 minutes, at peak hour.' \
+  --option 'After the backup' --option 'Now' \
   --link https://github.com/acme/shop/pull/41
 ```
 
