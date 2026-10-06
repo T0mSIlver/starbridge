@@ -20,6 +20,9 @@ COPY cli/README.md cli/README.md
 COPY server/README.md server/README.md
 # Caddy routes /v1 to the server; the rewrite only serves a request that reaches here anyway.
 ENV STARBRIDGE_SERVER=http://127.0.0.1:8080 NEXT_TELEMETRY_DISABLED=1
+# "umami" loads Umami's script on the public pages; only starbridge.run's compose file sets it.
+ARG ANALYTICS=
+ENV NEXT_PUBLIC_ANALYTICS=$ANALYTICS
 RUN cd web && bun run build
 
 FROM node:25-slim@sha256:81db02c4b671288a03915da9534dbd54f96d0e7c24d80ccc54f5b36b2e684370
