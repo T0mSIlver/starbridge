@@ -13,8 +13,10 @@ import {
   at,
   makeServer,
   pair,
+  revoke,
   type Server,
   setupAccount,
+  signIn,
   testConfig,
 } from "../test-support/app";
 
@@ -478,6 +480,42 @@ test("an account has at most 4 pushes in flight, and a stuck push service times 
   expect(slow.max).toBe(4);
   // Each request gives up at 200 ms rather than waiting the service's 400 ms.
   expect(Date.now() - started).toBeLessThan(1200);
+});
+
+test("a queued push is dropped once its device is revoked", async () => {
+  const { s, acct, devbox } = await setup({ pushTimeoutMs: 2_000 });
+  const tablet = await pair(s, acct, "tablet", "device", await signIn(s));
+  for (let i = 0; i < 4; i++)
+    await s.call("POST", "/v1/push/subscriptions", {
+      token: acct.device.token,
+      body: { type: "unifiedpush", endpoint: `${base()}/slow/r${i}` },
+    });
+  const r = await s.call("POST", "/v1/push/subscriptions", {
+    token: tablet.token,
+    body: { type: "unifiedpush", endpoint: `${base()}/wp/revoked-tablet` },
+  });
+  expect(r.status).toBe(201);
+  const body: Decision = {
+    v: 1,
+    id: "d-revoked",
+    to: [acct.device.id, tablet.id],
+    createdAt: at,
+    question: "Ship it?",
+    context: "",
+    options: ["yes", "no"],
+    recommended: "yes",
+    default: { action: "ship" },
+    source: { machine: "devbox", project: "p", session: "s" },
+  };
+  const d = seal("decision", body, { id: devbox.id, signKey: devbox.keys.sign.privateKey }, [
+    acct.device.member,
+    tablet.member,
+  ]);
+  // The phone's four slow pushes fill the account's slots; the tablet's waits behind them.
+  expect((await s.call("POST", "/v1/items", { token: devbox.token, body: d })).status).toBe(201);
+  expect((await revoke(s, acct, "tablet")).status).toBe(201);
+  await s.deps.push.idle();
+  expect(seen.some((x) => x.path === "/wp/revoked-tablet")).toBe(false);
 });
 
 test("quota snapshots and runs skip Web Push, which browsers drop when it shows nothing, and quiet items skip push", async () => {

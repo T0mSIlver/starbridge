@@ -34,7 +34,7 @@ enum class Sym(val code: Char) {
     Lock(''), Filter(''), History(''), Key(''), Devices(''),
     Open(''), Waiting(''), Send(''), Link(''),
     Up(''), Down(''), CheckCircle(''), Computer(''), Close(''),
-    Error(''), Copy(''), Visibility(''), Logout(''), Add(''), Pin(''),
+    Error(''), Copy(''), Visibility(''), Logout(''), Add(''), Pin(''), Search(''),
 }
 
 /**

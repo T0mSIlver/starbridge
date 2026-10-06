@@ -1,5 +1,5 @@
 #!/bin/sh
-# Copies the secrets from the dev box to /etc/starbridge/secrets (root, 0700) on starbridge-1.
+# Copies the secrets from this machine to /etc/starbridge/secrets (root, 0700) on starbridge-1.
 set -eu
 host=${STARBRIDGE_HOST:-deploy@starbridge.run}
 key=$HOME/.ssh/starbridge_ed25519

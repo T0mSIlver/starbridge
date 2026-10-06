@@ -44,6 +44,14 @@ export function activeMember(
   return m && (!role || m.role === role) ? m : null;
 }
 
+function entryOp(env: SignedEnvelope): unknown {
+  try {
+    return (JSON.parse(env.body) as { op?: unknown }).op;
+  } catch {
+    return undefined;
+  }
+}
+
 function seqOf(env: SignedEnvelope): number | undefined {
   try {
     const seq = (JSON.parse(env.body) as { seq?: unknown }).seq;
@@ -112,13 +120,18 @@ directoryRoutes.post("/directory", requireCaller("device"), async (c) => {
     const entries = loadEntries(db, caller.account);
     if (seqOf(entry) !== entries.length)
       fail(409, "not-next", `the next entry has seq ${entries.length}`);
-    // Every append and every client replays the whole chain, so its length is capped.
-    if (entries.length >= c.var.config.limits.directoryEntries)
-      fail(
-        409,
-        "directory-full",
-        `a directory holds at most ${c.var.config.limits.directoryEntries} entries`,
-      );
+    // Every append and every client replays the whole chain, so its length is capped. The cap
+    // stops devices adding members; revoking stays possible, and each member is revoked once, so
+    // revocations never outnumber adds. Recovery may still add a few devices, so an owner who
+    // lost every device gets back in.
+    const { directoryEntries: cap, recoveryAdds } = c.var.config.limits;
+    if (entries.length >= cap && entryOp(entry) === "add") {
+      const recovered = entries
+        .slice(cap)
+        .filter((e) => e.signer === RECOVERY && entryOp(e) === "add");
+      if (entry.signer !== RECOVERY || recovered.length >= recoveryAdds)
+        fail(409, "directory-full", `a directory adds members in its first ${cap} entries only`);
+    }
     // Only to refuse garbage early: clients verify the chain themselves and trust nothing here.
     let dir: Directory;
     try {
