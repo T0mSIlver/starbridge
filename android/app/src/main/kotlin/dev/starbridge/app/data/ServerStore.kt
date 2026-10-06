@@ -1504,10 +1504,10 @@ class ServerStore(
         return Prompt(
             id = b.id,
             tool = b.tool,
-            summary = b.summary,
-            description = b.description,
+            summary = visible(b.summary),
+            description = b.description?.let(::visible),
             input = b.input,
-            scopes = b.suggestions.map { PromptScope(it.scope, it.label, it.rule) },
+            scopes = b.suggestions.map { PromptScope(it.scope, it.label, visible(it.rule)) },
             source = Source(b.source.machine, b.source.project, b.source.session, b.source.sessionTitle, b.source.links.orEmpty().map { SessionLink(it.kind, it.url) }, b.source.machineKind),
             agent = b.agent,
             createdAt = instant(b.createdAt) ?: Instant.EPOCH,

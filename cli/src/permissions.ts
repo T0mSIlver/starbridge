@@ -10,6 +10,7 @@ import {
   type Directory,
   hashInput,
   type MachineKind,
+  type MemberKeys,
   open,
   PERMISSION_TTL_MS,
   type Permission,
@@ -21,6 +22,7 @@ import {
   SealedItem,
   type Settled,
   seal,
+  visible,
 } from "@starbridge/protocol";
 import { claudeSession } from "./claude";
 import type { PendingPermission, PermissionUpdate, State } from "./config";
@@ -160,7 +162,7 @@ export function redactValue(value: unknown): unknown {
 
 /** JSON text of `value` within `max` characters: the longest strings are cut until it fits. */
 export function fitJson(value: unknown, max = INPUT_MAX): string {
-  let v = value;
+  let v = visibleValue(value);
   let text = JSON.stringify(v) ?? "null";
   for (let round = 0; text.length > max && round < 64; round++) {
     const over = text.length - max;
@@ -190,6 +192,22 @@ export function fitJson(value: unknown, max = INPUT_MAX): string {
   return out;
 }
 
+/**
+ * Every string in a JSON value, keys included, through `visible`. Throws when two keys read alike
+ * once escaped (`x` + U+202E and `x\\u202E`): one would hide the other's value.
+ */
+function visibleValue(value: unknown): unknown {
+  if (typeof value === "string") return visible(value);
+  if (Array.isArray(value)) return value.map(visibleValue);
+  if (value && typeof value === "object") {
+    const entries = Object.entries(value).map(([k, v]) => [visible(k), visibleValue(v)] as const);
+    if (new Set(entries.map(([k]) => k)).size < entries.length)
+      throw new UsageError("the input has keys that read alike: it stays at the keyboard");
+    return Object.fromEntries(entries);
+  }
+  return value;
+}
+
 function setAt(v: unknown, path: (string | number)[], f: (s: string) => string): unknown {
   if (path.length === 0) return f(v as string);
   const [head, ...rest] = path as [string | number, ...(string | number)[]];
@@ -201,14 +219,17 @@ function setAt(v: unknown, path: (string | number)[], f: (s: string) => string):
 // --- Building the prompt ------------------------------------------------------
 
 const oneLine = (s: string, max: number) => {
-  const flat = s.replace(/\s+/g, " ").trim();
+  const flat = visible(s.replace(/\s+/g, " ").trim());
   return flat.length <= max ? flat : `${flat.slice(0, max - 1)}…`;
 };
 
 /** Claude Code's shell tool, or Pi's. */
 const isShell = (tool: string) => tool === "Bash" || tool === "bash";
 
-/** One line: the Bash command, the edited path, the URL; else the tool and its input. */
+/**
+ * One line: the Bash command, the edited path, the URL; else the tool and its input. `input` is
+ * redacted already (`redactValue`).
+ */
 export function summarize(tool: string, input: unknown): string {
   const o = (input && typeof input === "object" ? input : {}) as Record<string, unknown>;
   const pick = (...keys: string[]) =>
@@ -217,7 +238,7 @@ export function summarize(tool: string, input: unknown): string {
     ? pick("command")
     : (pick("file_path", "notebook_path", "path", "url", "query", "pattern", "preview") ??
       `${tool} ${JSON.stringify(input) ?? ""}`);
-  return oneLine(redactText(main ?? tool), SUMMARY_MAX) || tool;
+  return oneLine(main ?? tool, SUMMARY_MAX) || tool;
 }
 
 /**
@@ -256,7 +277,7 @@ export function ruleText(updates: PermissionUpdate[]): string {
       ? (u.rules ?? []).map((r) => (r.ruleContent ? `${r.toolName}(${r.ruleContent})` : r.toolName))
       : (u.directories ?? []).map((d) => `access to ${d}`),
   );
-  const text = parts.join(", ").replace(/\s+/g, " ").trim();
+  const text = visible(parts.join(", ").replace(/\s+/g, " ").trim());
   return text.length <= RULE_MAX && redactText(text) === text ? text : "";
 }
 
@@ -272,6 +293,11 @@ export function updatesFor(
   return updates.map((u) => ({ ...u, destination: DESTINATION[scope] }));
 }
 
+/** The `inputHash` of a call's input, keyed under the machine's signing key. */
+export function inputHashOf(keys: MemberKeys, input: unknown): string {
+  return hashInput(JSON.stringify(input), keys.sign.privateKey);
+}
+
 export function buildPermission(
   hook: PermissionHookInput,
   opts: {
@@ -279,6 +305,7 @@ export function buildPermission(
     source: PermissionSourceInput;
     machine: string;
     machineKind?: MachineKind;
+    keys: MemberKeys;
     to: string[];
     now: Date;
     waitMs: number;
@@ -293,7 +320,10 @@ export function buildPermission(
   const updates = usableUpdates(hook.permission_suggestions);
   const rule = ruleText(updates);
   const project = opts.source.project;
-  const description = (raw as { description?: unknown }).description;
+  // The summary and description come from the redacted input too: key-name redaction is
+  // `redactValue`'s alone.
+  const safe = redactValue(raw);
+  const description = (safe as { description?: unknown }).description;
   const ttl = Math.min(PERMISSION_TTL_MS, Math.max(1000, opts.waitMs));
   const permission = {
     v: 1 as const,
@@ -302,12 +332,12 @@ export function buildPermission(
     createdAt: iso(opts.now),
     agent: opts.agent,
     tool: tool.slice(0, 100),
-    summary: summarize(tool, raw),
+    summary: summarize(tool, safe),
     ...(typeof description === "string" && description.trim()
-      ? { description: oneLine(redactText(description), DESCRIPTION_MAX) }
+      ? { description: oneLine(description, DESCRIPTION_MAX) }
       : {}),
-    input: fitJson(redactValue(raw)),
-    inputHash: hashInput(JSON.stringify(raw)),
+    input: fitJson(safe),
+    inputHash: inputHashOf(opts.keys, raw),
     suggestions: rule
       ? [
           { label: "Allow for this session", rule, scope: "session" as const },
@@ -382,6 +412,7 @@ export async function postPermission(
     ...opts,
     machine: s.machine.name,
     ...machineKind(ctx),
+    keys: s.keys,
     to: to.map((d) => d.id),
     now: ctx.now(),
   });

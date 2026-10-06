@@ -7,7 +7,7 @@
  * Neither ever allows anything by itself: on any error, timeout or lost network they print
  * nothing and exit 0, and Claude Code's own dialog decides.
  */
-import { hashInput, type Permission } from "@starbridge/protocol";
+import type { Permission } from "@starbridge/protocol";
 import { MAX_HOLD_SECONDS } from "./agent/api";
 import { type AgentClient, Interrupted, withAgent } from "./agent/client";
 import type { PermissionWait } from "./agent/permissions";
@@ -16,6 +16,7 @@ import { poll } from "./decisions";
 import {
   DEFAULT_WAIT_MS,
   hookDecision,
+  inputHashOf,
   markSettled,
   type PermissionHookInput,
   permissionSource,
@@ -91,9 +92,14 @@ async function viaAgent(
   } catch (e) {
     if (!(e instanceof Interrupted)) throw e;
     // The keyboard answered while the prompt was being posted: settle it by its call.
-    const session = encodeURIComponent(ask.source.session);
-    const inputHash = hashInput(JSON.stringify(ask.hook.tool_input ?? {}));
-    await agent.call("POST", `/v1/sessions/${session}/permissions/settle`, { inputHash }, 5_000);
+    const inputHash = inputHashOf(session(ctx).keys, ask.hook.tool_input ?? {});
+    const sessionPath = encodeURIComponent(ask.source.session);
+    await agent.call(
+      "POST",
+      `/v1/sessions/${sessionPath}/permissions/settle`,
+      { inputHash },
+      5_000,
+    );
     return undefined;
   }
   const path = `/v1/permissions/${encodeURIComponent(id)}`;
@@ -191,11 +197,12 @@ export async function hookSettle(
     agentName(opts.agent);
     const hook = parseHook(stdin);
     const sessionId = typeof hook.session_id === "string" ? hook.session_id : "";
+    // Runs after every tool call: nothing waiting means no network and no agent call.
+    if (!sessionId || waitingFor(ctx.store.state(), sessionId).length === 0) return 0;
     // A tool that ran or was denied names its call; the end of a turn or session settles all.
     const inputHash =
-      hook.tool_input !== undefined ? hashInput(JSON.stringify(hook.tool_input)) : undefined;
-    // Runs after every tool call: nothing waiting means no network and no agent call.
-    if (!sessionId || waitingFor(ctx.store.state(), sessionId, inputHash).length === 0) return 0;
+      hook.tool_input !== undefined ? inputHashOf(session(ctx).keys, hook.tool_input) : undefined;
+    if (waitingFor(ctx.store.state(), sessionId, inputHash).length === 0) return 0;
     await withAgent(
       ctx,
       (a) =>
