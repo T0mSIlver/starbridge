@@ -216,7 +216,7 @@ fun SettingsScreen(
         }
 
         item { Section("Agents") }
-        item { LinkRow(0, 1, "How to tell your agents", null, Sym.Open) { openLink(context, GUIDE) } }
+        item { LinkRow(0, 1, "Agent instructions", null, Sym.Open) { openLink(context, GUIDE) } }
 
         item { Section("Account") }
         item { LinkRow(0, 2, "Server", server, null) {} }

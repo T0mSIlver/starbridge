@@ -589,7 +589,7 @@ function closedLine(p: Past): string {
 }
 
 /**
- * On a phone's row: Allow and Deny, or the question's options when the Answer buttons setting
+ * On a narrow screen's row: Allow and Deny, or the question's options when the Answer buttons setting
  * allows them (#138). Prompts keep theirs: their agent always waits.
  */
 function RowActions({
