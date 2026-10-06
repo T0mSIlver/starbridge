@@ -26,6 +26,8 @@ type Records = {
   answers: SentAnswers;
   /** What this browser answered to permission prompts, by permission id. */
   promptAnswers: Record<string, PromptReply & { answeredAt: string }>;
+  /** The last replacement of the recovery key whose notice this browser dismissed (its seq). */
+  recoverySeen: number;
   /** The last account signed in here: the service worker's default. */
   current: string;
   /** Keys written and read back once by `keeps`. */

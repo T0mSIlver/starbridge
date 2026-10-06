@@ -24,6 +24,9 @@ interface Store {
     val notice: StateFlow<String?>
     /** Answers going out, by decision id: the choice or the text, until the server replies. */
     val sending: StateFlow<Map<String, String>>
+    /** The recovery key's state, once the directory is known (#348). */
+    val recovery: StateFlow<RecoveryUi?>
+    val replacing: StateFlow<Replacing>
 
     /** The URL that starts GitHub sign-in; it ends at starbridge://auth?code=… */
     fun gitHubSignInUrl(server: String): String
@@ -65,6 +68,13 @@ interface Store {
     fun refuseJoin(id: String)
     fun closeComparison()
     fun revoke(memberId: String)
+
+    /** Makes a new recovery key to show, once [currentKey] proves to be the chain's. */
+    fun newRecoveryKey(currentKey: String)
+    /** Proposes the new key and confirms it with the current one. */
+    fun saveRecoveryKey()
+    fun closeRecoveryKey()
+    fun dismissRecoveryNotice(seq: Int)
 
     fun setPushType(type: String)
     fun signOut()

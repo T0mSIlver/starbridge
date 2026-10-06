@@ -92,6 +92,8 @@ data class Saved(
     val pendingGenesis: JsonElement? = null,
     /** While recovering: the member whose keys this phone made, until the chain holds it. */
     val recovering: Member? = null,
+    /** The last replacement of the recovery key whose notice this phone dismissed (its seq). */
+    val recoverySeen: Int = -1,
 )
 
 /**

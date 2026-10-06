@@ -1411,6 +1411,12 @@ so the mod is the first path.
   proposal cannot take the owner's confirmation. A plain `add` signed by the recovery key still verifies, since older chains
   hold it, but clients no longer write it. The recovery key could also sign a `revoke`, against
   PROTOCOL.md; verifiers now refuse it.
+- 2026-10-06. Replacing the recovery key on the web and Android (#348). Devices gains a Recovery
+  key row: when and on which device the key was set, with Replace. Replace asks for the current
+  key, then shows the new key as first run does; like the first device's (#328), it reaches the
+  directory only once the owner ticks the box. Without the current key the page says the key
+  can't be replaced and the devices keep working. Every other device shows the replacement once,
+  as a banner above the inbox, and remembers that it was dismissed.
 
 ## Encryption, with existing libraries
 

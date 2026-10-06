@@ -48,6 +48,7 @@ import dev.starbridge.app.ui.settings.SettingsScreen
 import dev.starbridge.app.ui.settings.SettingsActions
 import dev.starbridge.app.ui.devices.AddDeviceScreen
 import dev.starbridge.app.ui.devices.DevicesViewModel
+import dev.starbridge.app.ui.devices.RecoveryKeyScreen
 import dev.starbridge.app.ui.inbox.DecisionActions
 import dev.starbridge.app.ui.inbox.FindScreen
 import dev.starbridge.app.ui.inbox.InboxScreen
@@ -75,6 +76,7 @@ import java.time.Instant
 @Serializable data object SettingsKey : NavKey
 @Serializable data object DevicesKey : NavKey
 @Serializable data object AddDeviceKey : NavKey
+@Serializable data object RecoveryKeyKey : NavKey
 
 private val Tab.key: NavKey get() = when (this) {
     Tab.Inbox -> InboxKey
@@ -85,7 +87,7 @@ private val Tab.key: NavKey get() = when (this) {
 /** The tab a page belongs to. */
 private fun tabOf(key: NavKey?) = when (key) {
     QuotasKey -> Tab.Quotas
-    SettingsKey, DevicesKey, AddDeviceKey -> Tab.Settings
+    SettingsKey, DevicesKey, AddDeviceKey, RecoveryKeyKey -> Tab.Settings
     else -> Tab.Inbox
 }
 
@@ -233,6 +235,7 @@ fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> U
                         val prompts by vm.prompts.collectAsStateWithLifecycle()
                         val runs by vm.runs.collectAsStateWithLifecycle()
                         val view by vm.view.collectAsStateWithLifecycle()
+                        val recovery by vm.recovery.collectAsStateWithLifecycle()
                         InboxScreen(
                             decisions,
                             // A running run's timer, a lost run's "no news for" and the clock of
@@ -252,6 +255,8 @@ fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> U
                             view = view,
                             onView = vm::setView,
                             onFind = { backStack.add(FindKey) },
+                            recovery = recovery,
+                            dismissRecovery = vm::dismissRecovery,
                         )
                     }
                     entry<FindKey> {
@@ -313,7 +318,27 @@ fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> U
                     entry<DevicesKey> {
                         val vm: DevicesViewModel = hiltViewModel()
                         val members by vm.members.collectAsStateWithLifecycle()
-                        DevicesScreen(members, now, vm.actions, onBack = { backStack.removeAt(backStack.lastIndex) }, onAdd = { backStack.add(AddDeviceKey) }, onScan = { vm.actions.lookUp(it); backStack.add(AddDeviceKey) }, pollDirectory = vm::refreshDirectory)
+                        val recovery by vm.recovery.collectAsStateWithLifecycle()
+                        DevicesScreen(
+                            members, now, vm.actions,
+                            onBack = { backStack.removeAt(backStack.lastIndex) },
+                            onAdd = { backStack.add(AddDeviceKey) },
+                            onScan = { vm.actions.lookUp(it); backStack.add(AddDeviceKey) },
+                            pollDirectory = vm::refreshDirectory,
+                            recovery = recovery,
+                            onReplaceRecovery = { backStack.add(RecoveryKeyKey) },
+                        )
+                    }
+                    entry<RecoveryKeyKey> {
+                        val vm: DevicesViewModel = hiltViewModel()
+                        val replacing by vm.replacing.collectAsStateWithLifecycle()
+                        val busy by vm.busy.collectAsStateWithLifecycle()
+                        RecoveryKeyScreen(
+                            replacing,
+                            busy = busy,
+                            actions = vm.recoveryActions,
+                            onBack = { backStack.removeAt(backStack.lastIndex) },
+                        )
                     }
                     entry<AddDeviceKey> {
                         val vm: DevicesViewModel = hiltViewModel()

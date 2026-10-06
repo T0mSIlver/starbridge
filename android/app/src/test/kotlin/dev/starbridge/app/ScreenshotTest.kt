@@ -1,5 +1,10 @@
 package dev.starbridge.app
 
+import dev.starbridge.app.ui.devices.RecoveryKeyScreen
+import dev.starbridge.app.ui.devices.RecoveryActions
+import dev.starbridge.app.data.Replacing
+import dev.starbridge.app.data.RecoveryNotice
+import dev.starbridge.app.data.RecoveryUi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -213,6 +218,25 @@ class ScreenshotTest(private val dark: Boolean) {
     @Test fun quotasStale() = capture("quotas-stale") { QuotasScreen(fake.staleWindows, now) }
 
     @Test fun devices() = capture("devices") { Phone(null, 0) { DevicesScreen(fake.members, now, deviceActions) } }
+
+    // The recovery key under the members (#348): when and where it was set, with Replace.
+    private val recovery = RecoveryUi(now.minusSeconds(86_400 * 2), "this phone", replaced = false)
+    @Test fun devicesRecovery() = capture("devices-recovery") { Phone(null, 0) { DevicesScreen(fake.members, now, deviceActions, recovery = recovery) } }
+
+    private val recoveryActions = RecoveryActions({}, {}, {})
+    @Test fun recoveryKeyAsk() = capture("recovery-key-ask") { Phone(null, 0) { RecoveryKeyScreen(Replacing.Idle, busy = false, actions = recoveryActions) } }
+    @Test fun recoveryKeyShown() = capture("recovery-key-shown") {
+        Phone(null, 0) { RecoveryKeyScreen(Replacing.Shown("7K2M-QX9D-T4HR-8VNC-W3JP-F6BZ-0E5A"), busy = false, actions = recoveryActions) }
+    }
+    @Test fun recoveryKeyDone() = capture("recovery-key-done") { Phone(null, 0) { RecoveryKeyScreen(Replacing.Done, busy = false, actions = recoveryActions) } }
+
+    // Every other device says once that the key was replaced.
+    @Test fun inboxRecoveryNotice() = capture("inbox-recovery-notice") {
+        Phone(Tab.Inbox, 4) {
+            InboxScreen(fake.decisions, now, decisionActions, prompts = fake.prompts, promptActions = promptActions, runs = fake.runs,
+                recovery = recovery.copy(replaced = true, setBy = "Firefox on Linux", notice = RecoveryNotice(9, now.minusSeconds(600), "Firefox on Linux")))
+        }
+    }
 
     @Test fun devicesRevoke() = capture("devices-revoke", before = { compose.onAllNodesWithText("Revoke")[0].performClick() }) {
         Phone(null, 0) { DevicesScreen(fake.members, now, deviceActions) }

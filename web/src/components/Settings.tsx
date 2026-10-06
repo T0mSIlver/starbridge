@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { addedLabels } from "@/lib/format";
+import type { RecoveryState } from "@/lib/device";
+import { addedLabels, dayAndTime } from "@/lib/format";
 import { AGENTS_GUIDE } from "@/lib/links";
 import { applyTheme, type Prefs, usePref } from "@/lib/prefs";
 import { providerOrder, type QuotaSettings } from "@/lib/quotaSettings";
@@ -342,11 +343,15 @@ function DeviceSection() {
   const ctx = boot.state === "ready" ? boot.ctx : undefined;
   const [all, setAll] = useState<Device[] | undefined>(sampleDevices);
   const [revoking, setRevoking] = useState<Device>();
+  const [recovery, setRecovery] = useState<RecoveryState>();
   const [clock] = usePref("clock");
   useEffect(() => {
     if (ctx)
       load()
-        .then((d) => setAll(d.devices(ctx)))
+        .then(async (d) => {
+          setAll(d.devices(ctx));
+          setRecovery(await d.recoveryState(ctx));
+        })
         .catch(() => setAll([]));
   }, [ctx]);
   const order = (d: Device) => (d.self ? 0 : d.role === "device" ? 1 : 2);
@@ -382,6 +387,22 @@ function DeviceSection() {
           )}
         </div>
       ))}
+      {recovery && (
+        <div className={s.device}>
+          <span className={s.deviceIcon}>
+            <Icon name="key" size={18} />
+          </span>
+          <div className={s.rowText}>
+            <div className="t-small">Recovery key</div>
+            <div className={`t-meta ${s.sub}`}>
+              {`${recovery.set.replaced ? "Replaced" : "Set"} ${dayAndTime(recovery.set.at, clock)} on ${recovery.set.by}`}
+            </div>
+          </div>
+          <Link href="/settings/recovery-key" className={`t-meta ${ui.btn} ${ui.sm} ${ui.ghost}`}>
+            Replace
+          </Link>
+        </div>
+      )}
       <div className={s.foot}>
         <Link href="/settings/devices/add" className={`t-meta ${ui.btn} ${ui.sm}`}>
           Add a device

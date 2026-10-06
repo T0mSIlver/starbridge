@@ -136,14 +136,14 @@ private fun Step(modifier: Modifier, top: @Composable ColumnScope.() -> Unit, bo
 
 /** A setup step's headline. */
 @Composable
-private fun Title(text: String, modifier: Modifier = Modifier) {
+internal fun Title(text: String, modifier: Modifier = Modifier) {
     Text(text, style = StarbridgeTheme.type.title, color = MaterialTheme.colorScheme.onSurface, modifier = modifier)
 }
 
 /** The main action: filled in `fg`, 56 dp, the full width. */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-private fun Primary(text: String, busy: Boolean, enabled: Boolean = true, icon: (@Composable () -> Unit)? = null, onClick: () -> Unit) {
+internal fun Primary(text: String, busy: Boolean, enabled: Boolean = true, icon: (@Composable () -> Unit)? = null, onClick: () -> Unit) {
     Button(onClick = onClick, enabled = enabled && !busy, modifier = Modifier.fillMaxWidth().height(56.dp)) {
         if (busy) {
             LoadingIndicator(Modifier.size(Spacing.s6), color = MaterialTheme.colorScheme.onPrimary)
@@ -156,7 +156,7 @@ private fun Primary(text: String, busy: Boolean, enabled: Boolean = true, icon: 
 
 /** A quieter way: underlined text. */
 @Composable
-private fun Link(text: String, onClick: () -> Unit) {
+internal fun Link(text: String, onClick: () -> Unit) {
     Text(
         text,
         style = StarbridgeTheme.type.small.copy(textDecoration = TextDecoration.Underline),
@@ -355,16 +355,20 @@ private fun Waiting(title: String, text: String, digits: String?, onCancel: () -
     )
 }
 
+/** A recovery key to write down, and the box that enables [action]: first run, or a replacement (#348). */
 @Composable
-private fun RecoveryKey(shown: String, onDone: () -> Unit) {
+internal fun RecoveryKey(
+    shown: String,
+    onDone: () -> Unit,
+    title: String = "Your recovery key",
+    text: String = "Write this key down and keep it offline. If you lose every device, it adds a new one. This is the only time it is shown.",
+    action: String = "Continue",
+    busy: Boolean = false,
+) {
     SecureWindow()
     var saved by rememberSaveable { mutableStateOf(false) }
-    Title("Your recovery key", Modifier.padding(top = 48.dp))
-    Text(
-        "Write this key down and keep it offline. If you lose every device, it adds a new one. This is the only time it is shown.",
-        style = StarbridgeTheme.type.body,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
+    Title(title, Modifier.padding(top = 48.dp))
+    Text(text, style = StarbridgeTheme.type.body, color = MaterialTheme.colorScheme.onSurfaceVariant)
     Panel(Modifier.fillMaxWidth().padding(top = Spacing.s2)) {
         // Groups of four, two or three to a line, never split.
         FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.s4, Alignment.CenterHorizontally), verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
@@ -381,12 +385,12 @@ private fun RecoveryKey(shown: String, onDone: () -> Unit) {
         Spacer(Modifier.width(Spacing.s3))
         Text("I wrote this key down", style = StarbridgeTheme.type.body, color = MaterialTheme.colorScheme.onSurface)
     }
-    Primary("Continue", busy = false, enabled = saved, onClick = onDone)
+    Primary(action, busy = busy, enabled = saved, onClick = onDone)
 }
 
 /** While shown, the window stays out of screenshots, screen sharing and the recents screen. */
 @Composable
-private fun SecureWindow() {
+internal fun SecureWindow() {
     val window = LocalActivity.current?.window ?: return
     DisposableEffect(window) {
         window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)

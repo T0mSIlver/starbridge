@@ -1,5 +1,10 @@
 package dev.starbridge.app.ui.inbox
 
+import dev.starbridge.app.ui.Panel
+import dev.starbridge.app.ui.clock
+import dev.starbridge.app.ui.day
+import dev.starbridge.app.ui.LocalClock24
+import dev.starbridge.app.data.RecoveryUi
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.text.TextStyle
@@ -118,6 +123,8 @@ class InboxViewModel @Inject constructor(private val store: Store, private val p
     fun refreshPrompts() = store.refreshPrompts()
     fun answer(id: String, choice: String?, text: String?) = store.answer(id, choice, text)
     fun refresh() = store.refresh()
+    val recovery = store.recovery
+    fun dismissRecovery(seq: Int) = store.dismissRecoveryNotice(seq)
 }
 
 /** What a question can do: be answered with an option or text, or open in its sheet. */
@@ -186,6 +193,9 @@ fun InboxScreen(
     view: InboxView = InboxView(),
     onView: (InboxView) -> Unit = {},
     onFind: () -> Unit = {},
+    /** A replacement of the recovery key made on another device (#348), and how to dismiss it. */
+    recovery: RecoveryUi? = null,
+    dismissRecovery: (Int) -> Unit = {},
 ) {
     // While a prompt is on screen, read prompts every 1.5 s, so one settled elsewhere leaves
     // at once; the clock ticks with it for the 3 s a closed prompt stays.
@@ -224,6 +234,7 @@ fun InboxScreen(
         gap = groupGap,
         margin = Spacing.s4,
     ) {
+        recoveryBanner(recovery, dismissRecovery)
         if (feed.isEmpty()) {
             item(key = "empty") { Empty() }
         } else {
@@ -720,6 +731,28 @@ internal fun HistoryRow(
             MetaRow(source, time, clock = clock, words = words)
             Text(highlight(text, words, hit), style = if (prompt) StarbridgeTheme.type.code.copy(fontSize = 13.sp) else StarbridgeTheme.type.small, color = scheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (how.isNotEmpty()) Text(highlight(how, words, hit), style = StarbridgeTheme.type.meta, color = scheme.onSurfaceVariant, maxLines = 1)
+        }
+    }
+}
+
+/** A replacement of the recovery key made on another device (#348), said once. */
+private fun LazyListScope.recoveryBanner(recovery: RecoveryUi?, dismiss: (Int) -> Unit) {
+    val notice = recovery?.notice ?: return
+    item(key = "recovery") {
+        val scheme = MaterialTheme.colorScheme
+        val h24 = LocalClock24.current
+        Panel(Modifier.fillMaxWidth(), color = scheme.surfaceContainerHighest) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "Recovery key replaced on ${notice.by}, ${day(notice.at)}, ${clock(notice.at, h24)}.",
+                    style = StarbridgeTheme.type.body,
+                    color = scheme.onSurface,
+                    modifier = Modifier.weight(1f),
+                )
+                TextButton(onClick = { dismiss(notice.seq) }, colors = ButtonDefaults.textButtonColors(contentColor = scheme.onSurface)) {
+                    Text("OK", style = StarbridgeTheme.type.label)
+                }
+            }
         }
     }
 }

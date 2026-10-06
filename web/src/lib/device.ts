@@ -14,6 +14,7 @@ import {
   entryHash,
   formatPairingCode,
   fromB64,
+  generateRecoverySeed,
   genesisEntryAsync,
   claimHash as hashClaim,
   type JoinKeys,
@@ -43,6 +44,8 @@ import {
   readRecoveryKey,
   ready,
   recoverEntry,
+  recoveryConfirmEntry,
+  recoveryEntryAsync,
   recoveryKey,
   recoveryKeyPair,
   recoverySeedFromKey,
@@ -826,6 +829,88 @@ export async function approvePairing(ctx: Ctx, req: PairingRequest): Promise<Ctx
 
 export function revoke(ctx: Ctx, id: string): Promise<Ctx> {
   return append(ctx, (dir) => revokeEntryAsync(dir, me(ctx), id, now()));
+}
+
+// --- Replacing the recovery key (#348) ---------------------------------------------------
+
+/** The recovery key as Settings and the notices show it; device names, not ids. */
+export interface RecoveryState {
+  /** When the current key was set, on which device, and whether it replaced an earlier one. */
+  set: { at: string; by: string; replaced: boolean };
+  /** A replacement made on another device since this browser joined, to show once. */
+  notice?: { seq: number; at: string; by: string };
+}
+
+export async function recoveryState(ctx: Ctx): Promise<RecoveryState> {
+  const name = (id: string) =>
+    id === ctx.device.id ? "this browser" : (ctx.dir.members.get(id)?.member.name ?? id);
+  const set = ctx.dir.recoverySet;
+  const joined = ctx.entries.findIndex((env) => {
+    const body = DirectoryEntry.parse(JSON.parse(env.body));
+    return (body.op === "add" || body.op === "recover") && body.member.id === ctx.device.id;
+  });
+  const seen = (await store.get("recoverySeen", ctx.account)) ?? -1;
+  const fresh = set.seq > 0 && set.seq > joined && set.seq > seen && set.by !== ctx.device.id;
+  return {
+    set: { at: set.at, by: name(set.by), replaced: set.seq > 0 },
+    ...(fresh ? { notice: { seq: set.seq, at: set.at, by: name(set.by) } } : {}),
+  };
+}
+
+/** Hides the notice of the replacement at `seq` on this browser. */
+export function dismissRecoveryNotice(ctx: Ctx, seq: number): Promise<void> {
+  return store.put("recoverySeen", seq, ctx.account);
+}
+
+/** A new recovery key, shown before anything is posted. */
+export interface NewRecoveryKey {
+  recoveryKey: string;
+  /**
+   * Proposes the key and confirms it with the current one. Safe to call again after a failure:
+   * it picks up where it stopped.
+   */
+  replace: () => Promise<Ctx>;
+}
+
+/**
+ * Makes a new recovery key to show, once the owner typed the current one: both sign, so neither
+ * a stolen device nor a leaked key replaces it alone. Like the first device's key (#328), the
+ * new one reaches the directory only once the owner says it is saved.
+ */
+export async function prepareRecoveryKey(ctx: Ctx, currentKey: string): Promise<NewRecoveryKey> {
+  await ready;
+  let seed: Uint8Array;
+  try {
+    seed = recoverySeedFromKey(currentKey);
+  } catch (e) {
+    throw e instanceof RecoveryKeyError ? new Error(problemText(e.reading) ?? e.message) : e;
+  }
+  const current = recoveryKeyPair(seed);
+  seed.fill(0);
+  if (toB64(current.publicKey) !== ctx.dir.recoveryPk) {
+    current.privateKey.fill(0);
+    throw new Error("This isn't the account's current recovery key.");
+  }
+  const fresh = generateRecoverySeed();
+  const next = recoveryKeyPair(fresh);
+  const shown = recoveryKey(fresh);
+  fresh.fill(0);
+  const nextPk = toB64(next.publicKey);
+  const replace = async () => {
+    let latest = await refresh(ctx);
+    if (latest.dir.recoveryPk !== nextPk) {
+      // A retry after the proposal landed confirms it rather than proposing the same key again.
+      if (latest.dir.pendingRecovery?.recoveryPk !== nextPk)
+        latest = await append(latest, (dir) => recoveryEntryAsync(dir, me(latest), next, now()));
+      latest = await append(latest, async (dir) =>
+        recoveryConfirmEntry(dir, current.privateKey, nextPk, now()),
+      );
+    }
+    next.privateKey.fill(0);
+    current.privateKey.fill(0);
+    return latest;
+  };
+  return { recoveryKey: shown, replace };
 }
 
 /**

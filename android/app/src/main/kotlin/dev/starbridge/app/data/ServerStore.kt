@@ -129,6 +129,10 @@ class ServerStore(
     override val busy = MutableStateFlow(false)
     override val notice = MutableStateFlow<String?>(null)
     override val sending = MutableStateFlow<Map<String, String>>(emptyMap())
+    override val recovery = MutableStateFlow<RecoveryUi?>(null)
+    override val replacing = MutableStateFlow<Replacing>(Replacing.Idle)
+    /** While a new recovery key is on screen: its key pair, and the current one. */
+    private var replacement: Pair<KeyPair, KeyPair>? = null
 
     init {
         directory = runCatching { verified(saved.entries) }.getOrNull()
@@ -178,6 +182,7 @@ class ServerStore(
         windows.value = saved.quotas.flatMap { toUi(it, named) }
         runs.value = saved.runs.map(::toUi)
         members.value = directory?.let(::toUi).orEmpty()
+        recovery.value = directory?.let(::recoveryUi)
     }
 
     fun setDistributors(list: List<String>) {
@@ -224,6 +229,8 @@ class ServerStore(
             "closed" -> "That request was already answered or cancelled."
             else -> e.message ?: e.error
         }
+        // Another account's key, or this account's from before a replacement (#348).
+        is ProtocolException if e.code == "wrong-recovery-key" -> "This is a recovery key, but not this account's current one."
         is ProtocolException -> "Refused: the server sent something that does not check out (${e.code})."
         is IOException -> "Can't reach ${saved.server}: ${e.message}"
         else -> e.message ?: e.toString()
@@ -1305,6 +1312,90 @@ class ServerStore(
         val after = directories.verify(all, saved.account, saved.pin)
         directory = after
         persist(saved.copy(entries = all, pin = Pin(after.length, after.head)))
+    }
+
+    // --- Replacing the recovery key (#348) -------------------------------------------------
+
+    override fun newRecoveryKey(currentKey: String) = run {
+        syncDirectory()
+        // Both keys sign, so neither a stolen phone nor a leaked key replaces it alone.
+        val current = sodium.signSeedKeyPair(recoverySignSeed(RecoveryKeys.seed(currentKey, sodium), sodium))
+        if (toB64(current.public) != directory!!.recoveryPk) {
+            current.secret.fill(0)
+            throw IllegalArgumentException("This isn't the account's current recovery key.")
+        }
+        val seed = sodium.random(16)
+        val next = sodium.signSeedKeyPair(recoverySignSeed(seed, sodium))
+        val shown = RecoveryKeys.shown(seed, sodium)
+        seed.fill(0)
+        dropReplacement()
+        replacement = next to current
+        replacing.value = Replacing.Shown(shown)
+    }
+
+    // The new key reaches the directory only now, once the owner says it is saved (#328).
+    override fun saveRecoveryKey() = run {
+        val shown = replacing.value as? Replacing.Shown ?: return@run
+        val (next, current) = replacement ?: return@run
+        replacing.value = shown.copy(saving = true)
+        try {
+            syncDirectory()
+            val nextPk = toB64(next.public)
+            if (directory!!.recoveryPk != nextPk) {
+                // A retry after the proposal landed confirms it rather than proposing it again.
+                if (directory!!.pendingRecovery?.recoveryPk != nextPk) appendEntry { directories.recoveryEntry(it, me.id, signKey, next, now()) }
+                appendEntry { directories.recoveryConfirmEntry(it, current.secret, nextPk, now()) }
+            }
+        } catch (e: Exception) {
+            replacing.value = shown
+            throw e
+        }
+        dropReplacement()
+        replacing.value = Replacing.Done
+    }
+
+    override fun closeRecoveryKey() {
+        dropReplacement()
+        replacing.value = Replacing.Idle
+    }
+
+    override fun dismissRecoveryNotice(seq: Int) = run(showBusy = false) { persist(saved.copy(recoverySeen = seq)) }
+
+    private fun dropReplacement() {
+        replacement?.let { (next, current) ->
+            next.secret.fill(0)
+            current.secret.fill(0)
+        }
+        replacement = null
+    }
+
+    /** Appends the entry [make] signs on the current chain, and moves the pin to it. */
+    private suspend fun appendEntry(make: (Directory) -> SignedEnvelope) {
+        val entry = make(directory!!)
+        api().append(entry)
+        val all = saved.entries + ProtocolJson.encodeToJsonElement(entry)
+        val after = directories.verify(all, saved.account, saved.pin)
+        directory = after
+        persist(saved.copy(entries = all, pin = Pin(after.length, after.head)))
+    }
+
+    private fun recoveryUi(dir: Directory): RecoveryUi {
+        val mine = saved.me?.id
+        fun name(id: String) = if (id == mine) "this phone" else dir.members[id]?.member?.name ?: id
+        val joined = saved.entries.indexOfFirst { raw ->
+            runCatching {
+                val env = ProtocolJson.decodeFromJsonElement(SignedEnvelope.serializer(), raw)
+                ProtocolJson.decodeFromString(DirectoryEntry.serializer(), env.body).let { (it.op == "add" || it.op == "recover") && it.member?.id == mine }
+            }.getOrDefault(false)
+        }
+        val set = dir.recoverySet
+        val fresh = set.seq > 0 && set.seq > joined && set.seq > saved.recoverySeen && set.by != mine
+        return RecoveryUi(
+            setAt = instant(set.at) ?: Instant.EPOCH,
+            setBy = name(set.by),
+            replaced = set.seq > 0,
+            notice = if (fresh) RecoveryNotice(set.seq, instant(set.at) ?: Instant.EPOCH, name(set.by)) else null,
+        )
     }
 
     /** Removes this phone from the directory, ends the session and forgets every key. */
