@@ -1354,10 +1354,8 @@ async function main() {
     /Answer to d_\S+ \(Done probe: which layout\?\): answered on its page; read the answer there/,
   );
   if ((await doneWait.exited) !== 0) throw new Error("wait for the Done failed");
-  // The first browser lists it answered, and the machine's notice names the second. Reloaded:
-  // its reads that overlap the pushes can land out of order.
-  await page.reload();
-  // History lists only closed questions, and stays open once opened.
+  // The first browser hears by Web Push, without a reload, and the machine's notice names the
+  // second. History lists only closed questions, and stays open once opened.
   const historyHead = page.getByRole("button", { name: /History/ });
   await historyHead.waitFor();
   if ((await historyHead.getAttribute("aria-expanded")) !== "true") await historyHead.click();
