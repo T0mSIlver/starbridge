@@ -4,7 +4,7 @@
  *   bun evals/skill/render.ts --out <dir> <record.json>[:<decision index>]...
  *
  * Starts the stand-in GitHub, the server and the built web page as web/e2e/run.ts does, signs in
- * with headless Chromium, pairs a CLI, re-posts each card with `starbridge ask --json` and
+ * with headless Chromium, pairs a CLI, re-posts each card with `starbridge ask --input` and
  * screenshots the selected decision at desktop width. Writes `<record name>-d<index>.png`.
  */
 import { type ChildProcess, spawn, spawnSync } from "node:child_process";
@@ -127,7 +127,7 @@ try {
     };
     const json = join(tmp, `${name}.json`);
     writeFileSync(json, JSON.stringify(card));
-    const ask = cli(["ask", "--json", json, "--project", "notes", "--session", "eval", "--session-title", rec.scenario]);
+    const ask = cli(["ask", "--input", json, "--project", "notes", "--session", "eval", "--session-title", rec.scenario]);
     if ((await ask.exited) !== 0) throw new Error(`ask failed for ${spec}`);
     await page.getByText(d.question).first().click({ timeout: 30_000 });
     const pane = page.locator('section[aria-label="Selected decision"]');
