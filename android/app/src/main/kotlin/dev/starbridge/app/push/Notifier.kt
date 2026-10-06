@@ -273,7 +273,7 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
     }
 
     /** Replaces the buttons with the answer, then clears itself. */
-    fun answered(decision: Decision, answer: String) {
+    override fun answered(decision: Decision, answer: String) {
         if (!allowed()) return
         @Suppress("MissingPermission")
         manager.notify(
@@ -282,8 +282,15 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
         )
     }
 
+    /** Replaces the buttons with the answer and says it waits for a connection. */
+    override fun queued(decision: Decision, answer: String) {
+        if (!allowed()) return
+        @Suppress("MissingPermission")
+        manager.notify(tag(decision.id), base(decision).setContentText("$answer · waiting to send").setStyle(null).setSilent(true).build())
+    }
+
     /** Keeps the buttons and says why the answer did not go through. */
-    fun failed(decision: Decision, why: String) = post(decision, "Not sent: $why")
+    override fun failed(decision: Decision, why: String) = post(decision, "Not sent: $why")
 
     override fun cancel(id: String) = manager.cancel(tag(id))
 
