@@ -22,7 +22,7 @@ Needs bun, ffmpeg, adb and an Android phone or emulator with the Starbridge app.
 
 3. **Take.** The phone's lock screen must show nothing else. The scenario taps fixed points,
    measured on a 1080×2400 emulator at density 420; on another phone set `TAP_EXPAND` and
-   `TAP_ANSWER` to "x,y" of the notification's arrow and of "Back up first".
+   `TAP_ANSWER` to "x,y" of the notification's arrow and of "Standard".
 
    ```bash
    bunx playwright install chromium

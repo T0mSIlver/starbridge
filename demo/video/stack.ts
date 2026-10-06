@@ -51,8 +51,8 @@ if (import.meta.main) {
   const server = `http://127.0.0.1:${port}`;
   process.on("SIGTERM", () => process.exit(0));
   process.on("SIGINT", () => process.exit(0));
-  // Starts over only in an earlier stack's directory, never in one that holds anything else.
-  if (existsSync(dir) && readdirSync(dir).length > 0 && !existsSync(join(dir, "ready")))
+  // Starts over only in an earlier stack's directory (it holds the database), never in another.
+  if (existsSync(dir) && readdirSync(dir).length > 0 && !existsSync(join(dir, "starbridge.db")))
     throw new Error(`${dir} is not empty and holds no earlier stack`);
   rmSync(dir, { recursive: true, force: true });
   mkdirSync(dir, { recursive: true });
@@ -114,6 +114,5 @@ if (import.meta.main) {
     process.on("exit", () => agent.kill());
   }
   console.log(`demo stack on ${server}, owner token ${OWNER_TOKEN}, account ${device.account}`);
-  writeFileSync(join(dir, "ready"), server);
   await device.approveJoins(new AbortController().signal);
 }

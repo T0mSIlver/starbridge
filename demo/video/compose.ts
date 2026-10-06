@@ -13,8 +13,8 @@ import { chromium } from "playwright";
 
 const FPS = 30;
 const END_CARD = 3;
-/** The phone's screen in the frame: the recording without its status bar, 1080×2280. */
-const STATUS_BAR = 120;
+/** The status bar's share of the recording's height, cropped off (120 px of 2400). */
+const STATUS_BAR = 0.05;
 const PHONE = { x: 1385, y: 60, w: 455, h: 960 };
 
 /** What frame.html exposes. */
@@ -67,7 +67,7 @@ async function video(take: string) {
   const mp4 = join(take, "demo.mp4");
   const phone =
     `[1]fps=${FPS},trim=start=${offset},setpts=PTS-STARTPTS,` +
-    `crop=iw:ih-${STATUS_BAR}:0:${STATUS_BAR},` +
+    `crop=iw:ih*${1 - STATUS_BAR}:0:ih*${STATUS_BAR},` +
     `scale=${PHONE.w}:${PHONE.h}:flags=lanczos:force_original_aspect_ratio=increase,crop=${PHONE.w}:${PHONE.h}[p]`;
   const layers = `[0][p]overlay=${PHONE.x}:${PHONE.y}:eof_action=repeat[b];[b][2]overlay,format=yuv420p[v]`;
   await ffmpeg(

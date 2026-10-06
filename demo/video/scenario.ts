@@ -64,12 +64,18 @@ const key = (k: string) => adb("shell", "input", "keyevent", k);
 /** Clears notifications left by earlier takes, such as a finished run, with "Clear all". */
 async function clearNotifications() {
   await key("KEYCODE_WAKEUP");
-  await adb("shell", "cmd", "statusbar", "expand-notifications");
-  await Bun.sleep(1500);
-  const xml = await adb("exec-out", "uiautomator", "dump", "/dev/tty");
-  const b = /text="Clear all"[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"/.exec(xml);
-  if (b) await tap([(Number(b[1]) + Number(b[3])) / 2, (Number(b[2]) + Number(b[4])) / 2]);
-  await adb("shell", "cmd", "statusbar", "collapse");
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const left = await adb("shell", "dumpsys", "notification", "--noredact");
+    if (!left.includes(": pkg=dev.starbridge.app")) return;
+    await adb("shell", "cmd", "statusbar", "expand-notifications");
+    await Bun.sleep(2000);
+    const xml = await adb("exec-out", "uiautomator", "dump", "/dev/tty");
+    const b = /text="Clear all"[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"/.exec(xml);
+    if (b) await tap([(Number(b[1]) + Number(b[3])) / 2, (Number(b[2]) + Number(b[4])) / 2]);
+    await Bun.sleep(1000);
+    await adb("shell", "cmd", "statusbar", "collapse");
+  }
+  throw new Error("the phone still shows Starbridge notifications: withdraw open questions first");
 }
 
 const text = async (p: Bun.Subprocess<"ignore", "pipe", "inherit">) => {
@@ -109,12 +115,24 @@ if (import.meta.main) {
   ]);
   t0 = performance.now();
 
-  // A failed take stops the recording and the CLI, and withdraws its question.
+  // A failed or interrupted take stops the recording and the CLI, and withdraws its question.
   const children: Bun.Subprocess[] = [];
   let id = "";
   let answer = "";
   const lines: { t: number; text: string }[] = [];
+  const stop = async () => {
+    for (const child of children) child.kill();
+    if (id && !answer)
+      await cli(dir, "workstation", ["settle", id, "--outcome", "withdrawn"]).exited;
+    await adb("shell", "pkill", "-INT", "screenrecord");
+    await record.exited;
+  };
+  for (const signal of ["SIGINT", "SIGTERM"] as const)
+    process.on(signal, () => stop().finally(() => process.exit(130)));
   try {
+    // A notification left by an earlier take would be found at once, and the taps land early.
+    if ((await adb("shell", "dumpsys", "notification", "--noredact")).includes(QUESTION.question))
+      throw new Error("the phone still shows this question from an earlier take: withdraw it");
     await Bun.sleep(3000);
     mark("ask");
     // `ask --wait` in two steps, so a failed take knows which question to withdraw.
@@ -143,7 +161,10 @@ if (import.meta.main) {
     await Bun.sleep(3000);
     await tap(ANSWER);
     mark("tapped");
-    answer = await text(wait);
+    const missed = Bun.sleep(8000).then(() => {
+      throw new Error("no answer 8 s after the tap: it missed (see TAP_ANSWER), take again");
+    });
+    answer = await Promise.race([text(wait), missed]);
     mark("answered");
 
     await Bun.sleep(1500);
@@ -172,11 +193,7 @@ if (import.meta.main) {
     await Bun.sleep(4000);
     mark("end");
   } finally {
-    for (const child of children) child.kill();
-    if (id && !answer)
-      await cli(dir, "workstation", ["settle", id, "--outcome", "withdrawn"]).exited;
-    await adb("shell", "pkill", "-INT", "screenrecord");
-    await record.exited;
+    await stop();
   }
   await Bun.sleep(1000);
   await adb("pull", "/sdcard/demo.mp4", join(out, "phone.mp4"));
