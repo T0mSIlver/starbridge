@@ -3,12 +3,9 @@
 import { useState } from "react";
 import { track } from "@/lib/analytics";
 import { AGENTS_GUIDE, REPO, SELF_HOST } from "@/lib/links";
-import { DEFAULT_SETTINGS, groups } from "@/lib/quotaSettings";
-import { sample } from "@/lib/sample";
 import { Analytics } from "./Analytics";
 import { Icon, Mark } from "./icons";
 import s from "./Landing.module.css";
-import { QuotaGroup } from "./QuotaRow";
 import ui from "./ui.module.css";
 
 // Product shots in public/landing, at 1.5x for the web inbox and 2x for the phones:
@@ -54,10 +51,13 @@ function Phone({ name, alt }: { name: string; alt: string }) {
 }
 
 const FEATURES = [
-  ["Questions", "An agent asks, with code or images. Your tap becomes its next prompt."],
-  ["Runs", "Long commands that need you at the machine, live on your lock screen."],
-  ["Quota windows", "Every plan's limits on one screen, read from CodexBar."],
-  ["Permission prompts", "Off unless you turn them on: the exact command, Allow or Deny."],
+  ["Questions", "Decide from anywhere. Your tap becomes the agent's next prompt."],
+  ["Runs", "Builds, releases and heavy jobs stay on your lock screen until they end."],
+  [
+    "Quotas",
+    "What's left on each AI plan, from CodexBar, with an optional alert before a window runs out.",
+  ],
+  ["Permission prompts", "Allow or deny a command away from the keyboard. Off by default."],
 ] as const;
 
 const INSTALL = [
@@ -114,14 +114,11 @@ function Install() {
 function Section({
   title,
   text,
-  short,
   flip,
   children,
 }: {
   title: string;
   text: string;
-  /** The text on phones, when shorter. */
-  short?: string;
   flip?: boolean;
   children: React.ReactNode;
 }) {
@@ -129,8 +126,7 @@ function Section({
     <section className={`${s.section} ${flip ? s.flip : ""}`}>
       <div className={s.sectionText}>
         <h2 className="t-title">{title}</h2>
-        <p className={`t-prose ${s.dim} ${short ? s.wideOnly : ""}`}>{text}</p>
-        {short && <p className={`t-prose ${s.dim} ${s.narrowOnly}`}>{short}</p>}
+        <p className={`t-prose ${s.dim}`}>{text}</p>
       </div>
       <div className={s.box}>{children}</div>
     </section>
@@ -139,8 +135,6 @@ function Section({
 
 /** What a visitor without a device on this browser sees at `/` (design v2, direction B). */
 export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
-  const [quotas] = useState(() => sample().quotas.cards.slice(0, 4));
-  const now = new Date();
   return (
     <div className={s.page}>
       <Analytics />
@@ -167,9 +161,9 @@ export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
           You answer from anywhere.
         </h1>
         <p className={`t-lead ${s.dim} ${s.lead}`}>
-          Questions from every coding agent, with their code and images, answered with one tap
-          <span className={s.wideOnly}> and pushed back into the session</span>. Runs and quota
-          windows on the same screen.
+          Answer your coding agents with one tap
+          <span className={s.wideOnly}> on your phone or in a browser</span>, and the waiting
+          session carries on. You also follow the runs that affect you until they pass or fail.
         </p>
         <div className={s.actions}>
           <a href="/v1/auth/github" className={`t-action ${ui.btn} ${ui.lg} ${ui.fill}`}>
@@ -217,21 +211,8 @@ export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
       </div>
 
       <Section
-        title="See which window runs out first"
-        text="Each window fills in its provider's colour, with a tick where a steady pace would be now. The part you will use before the reset is hatched, and the status says when it runs out."
-        short="Each window fills in its provider's colour; the part you'll use before the reset is hatched."
-      >
-        <div className={s.quotas}>
-          {groups(quotas).map((g) => (
-            <QuotaGroup key={g.provider} g={g} settings={DEFAULT_SETTINGS} now={now} />
-          ))}
-        </div>
-      </Section>
-
-      <Section
-        flip
-        title="One tap, back in the session"
-        text="The agent asks and keeps working. Your answer reaches its session as the next prompt."
+        title="Answer in one tap, from anywhere"
+        text="An agent asks for a decision that is yours and works on something else meanwhile. Your answer lands in its session as the next prompt, so the work goes on while you are away from the terminal."
       >
         <div className={s.crop}>
           <Phone name="android-question" alt="A question with two images in Android's sheet" />
@@ -239,8 +220,9 @@ export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
       </Section>
 
       <Section
-        title="Runs that need you at the machine"
-        text="When an agent starts something that takes over your screen or keyboard, it says why, and the run's progress stays on your lock screen until it passes or fails."
+        flip
+        title="Follow the runs that affect you"
+        text="A release, an eval, heavy work on the machine you are using. When an agent starts something that affects you, it says why, and the progress stays on your lock screen until it passes or fails."
       >
         <div className={s.lock}>
           <Shot
@@ -253,9 +235,10 @@ export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
       </Section>
 
       <section id="install" className={s.installSection}>
-        <h2 className="t-title">Install on each machine</h2>
+        <h2 className="t-title">Install on each machine that runs agents</h2>
         <p className={`t-prose ${s.dim} ${s.wideOnly}`}>
-          The CLI sets up the agent service and the Claude Code plugin.
+          <code>starbridge setup</code> pairs the machine and installs the Claude Code plugin. The
+          script runs it; after Homebrew or npm, run it yourself.
         </p>
         <Install />
         <p className={`t-meta ${s.faint}`}>Works best with Claude Code; Codex and Pi supported.</p>
@@ -274,10 +257,10 @@ export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
         </div>
         <div className={s.footCol}>
           <span>Product</span>
-          <a href="#features">Quota windows</a>
           <a href="#features">Questions</a>
-          <a href="#features">Permission prompts</a>
           <a href="#features">Runs</a>
+          <a href="#features">Quotas</a>
+          <a href="#features">Permission prompts</a>
         </div>
         <div className={s.footCol}>
           <span>Source</span>

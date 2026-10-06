@@ -23,7 +23,14 @@ import { fileURLToPath } from "node:url";
 import { AgentLoop, HEADERS, socketPath } from "../hooks/agent.ts";
 import { configDir, Poller } from "../hooks/poller.ts";
 import { Switch } from "../hooks/switch.ts";
-import { type AskDetails, authorize, hookInput, LINK, permissionsService } from "./permissions.ts";
+import {
+  type AskDetails,
+  authorize,
+  hookInput,
+  LINK,
+  permissionsService,
+  STOP_MS,
+} from "./permissions.ts";
 
 interface Ctx {
   hasUI: boolean;
@@ -138,10 +145,18 @@ function permissionHook(stdin: string, signal: AbortSignal, sessionFile: string 
     child.stdout.on("data", (d) => {
       stdout += d;
     });
-    const stop = () => child.kill("SIGTERM");
+    // The link stops the CLI when the keyboard answers or it overran; one that ignores SIGTERM
+    // is killed.
+    let kill: ReturnType<typeof setTimeout> | undefined;
+    const stop = () => {
+      child.kill("SIGTERM");
+      kill = setTimeout(() => child.kill("SIGKILL"), STOP_MS);
+      kill.unref();
+    };
     signal.addEventListener("abort", stop);
     child.on("error", () => resolve(""));
     child.on("close", () => {
+      clearTimeout(kill);
       signal.removeEventListener("abort", stop);
       resolve(stdout);
     });
@@ -219,7 +234,12 @@ export default function starbridge(pi: PiApi) {
             ? {
                 keyboard: (signal: AbortSignal) =>
                   new Promise<void>((resolve) => {
-                    const what = details.command ?? details.path ?? details.toolName ?? "a tool";
+                    const what =
+                      details.command ??
+                      details.path ??
+                      details.target ??
+                      details.toolName ??
+                      "a tool";
                     const decided = untilDecided(details.requestId, ended.signal);
                     // Pi strands a dialog that another opens over it, so asks take turns, and a
                     // turn lasts until pi-permission-system decided the ask: after "Answer here"

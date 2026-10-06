@@ -1,16 +1,20 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import {
+  type Answer,
   addEntry,
   type Directory,
   generateMemberKeys,
   publicKeys,
   revokeEntry,
   type SignedEnvelope,
+  seal,
+  verifyDirectory,
 } from "@starbridge/protocol";
 import { LiveServer } from "@starbridge/server/test-support";
 import { run } from "../src/cli";
 import { Store } from "../src/config";
 import { refreshDirectory, session } from "../src/context";
+import { poll } from "../src/decisions";
 import { paired, testCtx, until } from "./helpers";
 
 let server: LiveServer;
@@ -18,6 +22,8 @@ beforeEach(async () => {
   server = await LiveServer.start();
 });
 afterEach(() => server.stop());
+
+type Actor = Awaited<ReturnType<LiveServer["addDevice"]>>;
 
 /** The owner's phone appends one directory entry. */
 async function phoneAppends(
@@ -81,4 +87,142 @@ test("two processes refreshing at once never roll back a revocation", async () =
   expect(await run(["ask", "--question", "Q?", "--default", "x"], a)).toBe(0);
   const [d] = await server.opened("decision");
   expect(d?.to).toEqual(["phone"]);
+});
+
+/** A chain read as the laptop, which the phone's revocation leaves signed in. */
+async function laptopChain(laptop: Actor) {
+  const r = await fetch(`${server.url}/v1/directory?from=0`, {
+    headers: { authorization: `Bearer ${laptop.token}` },
+  });
+  return verifyDirectory(((await r.json()) as { entries: unknown[] }).entries);
+}
+
+/** The laptop appends one entry. */
+async function laptopAppends(laptop: Actor, make: (dir: Directory) => SignedEnvelope) {
+  const r = await fetch(`${server.url}/v1/directory`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${laptop.token}`, "content-type": "application/json" },
+    body: JSON.stringify({ entry: make(await laptopChain(laptop)) }),
+  });
+  if (r.status !== 201) throw new Error(`append: ${r.status} ${await r.text()}`);
+}
+
+/**
+ * A paired machine with three open questions, a laptop beside the phone, and helpers: devices
+ * answer through a compromised server, which can serve the machine only the first `limit`
+ * directory entries.
+ */
+async function withholding() {
+  const ctx = await paired(server);
+  const laptop = await server.addDevice("laptop");
+  const ask = async () => {
+    await run(
+      ["ask", "--question", "Deploy?", "--option", "Yes", "--option", "No", "--session", "s"],
+      ctx,
+    );
+    return ctx.lines.at(-1) as string;
+  };
+  const ids = [await ask(), await ask(), await ask()] as const;
+  const machine = (await server.directory()).members.get(ctx.store.machine()?.id as string)?.member;
+  if (!machine) throw new Error("no machine");
+  const answer = (by: Actor, decisionId: string, choice: string, dir?: Answer["dir"]) => {
+    const body = {
+      v: 1,
+      id: `a_${crypto.randomUUID()}`,
+      decisionId,
+      to: machine.id,
+      answeredAt: now(),
+      choice,
+      ...(dir ? { dir } : {}),
+    } satisfies Answer;
+    server.inject(seal("answer", body, { id: by.id, signKey: by.keys.sign.privateKey }, [machine]));
+  };
+  const delivered = async () => {
+    ctx.lines.length = 0;
+    expect(await run(["answers", "--session", "s", "--wait", "1"], ctx)).toBe(0);
+    const got: string[] = ctx.lines.map((l) => JSON.parse(l).decisionId);
+    for (const id of got) await run(["answers", "--session", "s", "--ack", id], ctx);
+    return got;
+  };
+  const real = globalThis.fetch;
+  const serve = (limit: number | undefined) => {
+    globalThis.fetch = (
+      limit === undefined
+        ? real
+        : async (url: string | URL | Request, init?: RequestInit) => {
+            const res = await real(url, init);
+            const m = /\/v1\/directory\?from=(\d+)/.exec(String(url));
+            if (!m) return res;
+            const { entries } = (await res.json()) as { entries: unknown[] };
+            return Response.json({ entries: entries.slice(0, Math.max(0, limit - Number(m[1]))) });
+          }
+    ) as typeof fetch;
+  };
+  return { ctx, laptop, ids, answer, delivered, serve, known: ctx.store.directory().length };
+}
+
+test("a revocation the server withholds stops counting once another device answers", async () => {
+  const { ctx, laptop, ids, answer, delivered, serve, known } = await withholding();
+  const [first, second, third] = ids;
+  const phone = server.owner.device;
+  // The phone is lost and the laptop revokes it; a compromised server holding the phone's key
+  // hides that entry from the machine.
+  await laptopAppends(laptop, (dir) =>
+    revokeEntry(dir, { id: laptop.id, signKey: laptop.keys.sign.privateKey }, "phone", now()),
+  );
+  const full = await laptopChain(laptop);
+  serve(known);
+  try {
+    // Until another device answers, nothing tells the machine: the limit PROTOCOL.md states.
+    // This answer is accepted, but no session has taken it yet.
+    answer(phone, first, "Yes");
+    await poll(ctx, session(ctx), { cursor: ctx.store.state().cursor, seconds: 1, shared: true });
+    expect(ctx.store.state().answers[first]).toBeDefined();
+    // The phone answers again, then the laptop, naming the chain it holds, in the same page:
+    // the machine sees it is behind and accepts neither.
+    answer(phone, third, "Yes");
+    answer(laptop, second, "No", { length: full.length, head: full.head });
+    await poll(ctx, session(ctx), { cursor: ctx.store.state().cursor, seconds: 1, shared: true });
+    expect(ctx.errors.at(-1)).toContain("holding back directory entries");
+    // Nothing is delivered, not even the answer accepted before.
+    expect(await delivered()).toEqual([]);
+  } finally {
+    serve(undefined);
+  }
+  // Served in full, the chain revokes the phone: the laptop's held answer counts, neither of the
+  // phone's does.
+  expect(await delivered()).toEqual([second]);
+  expect(ctx.store.state().answers[first]).toBeUndefined();
+  expect(ctx.errors.at(-1)).toContain("revoked");
+});
+
+test("replaying a device's older answer does not lift the refusal", async () => {
+  const { ctx, laptop, ids, answer, delivered, serve, known } = await withholding();
+  const signer = { id: laptop.id, signKey: laptop.keys.sign.privateKey };
+  // The laptop adds a tablet, then revokes the phone. The server serves the tablet's entry only.
+  const tablet = {
+    id: "tablet",
+    role: "device" as const,
+    name: "Tablet",
+    ...publicKeys(generateMemberKeys()),
+  };
+  await laptopAppends(laptop, (dir) => addEntry(dir, signer, tablet, now()));
+  const older = await laptopChain(laptop);
+  await laptopAppends(laptop, (dir) => revokeEntry(dir, signer, "phone", now()));
+  const full = await laptopChain(laptop);
+  serve(known);
+  try {
+    answer(laptop, ids[0], "No", { length: full.length, head: full.head });
+    expect(await delivered()).toEqual([]);
+    // An answer the laptop signed before the revocation, released late; then the server
+    // serves the chain up to that answer's head, still without the revocation.
+    answer(laptop, ids[1], "No", { length: older.length, head: older.head });
+    expect(await delivered()).toEqual([]);
+    serve(older.length);
+    answer(server.owner.device, ids[2], "Yes");
+    expect(await delivered()).toEqual([]);
+    expect(ctx.errors.at(-1)).toContain("holding back directory entries");
+  } finally {
+    serve(undefined);
+  }
 });

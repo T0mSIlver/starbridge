@@ -18,6 +18,10 @@ export interface AskDetails {
   toolName?: string;
   command?: string;
   path?: string;
+  /** What a non-bash, non-path ask is about, such as the file a `read` gate checks. */
+  target?: string;
+  /** pi-permission-system's own one-line rendering of the call's input. */
+  toolInputPreview?: string;
   payload?: { request?: { surface?: string; toolName?: string; value?: string } };
 }
 
@@ -53,7 +57,11 @@ export function hookInput(details: AskDetails, session: string, cwd: string) {
       ? { command: details.command }
       : details.path !== undefined
         ? { path: details.path }
-        : { value: req?.value ?? "" };
+        : details.target !== undefined
+          ? { path: details.target }
+          : details.toolInputPreview !== undefined
+            ? { preview: details.toolInputPreview }
+            : { value: req?.value ?? "" };
   return { session_id: session, cwd, tool_name: tool, tool_input: input };
 }
 
@@ -82,11 +90,20 @@ export interface LinkDeps {
 /** How long the CLI gets to defer at once (Starbridge off, unpaired) before the dialog shows. */
 export const QUIET_MS = 1_000;
 
+/**
+ * How long the link waits for the CLI at most: its own wait (570 s) plus slack. A CLI stuck on a
+ * stalled server must never hold the prompt, nor the keyboard's dialog after it.
+ */
+export const HOOK_MS = 600_000;
+/** How long the CLI gets once stopped: it reports the prompt settled within 5 s. */
+export const STOP_MS = 10_000;
+
 /** Asks the devices, and the keyboard when there is one; the first to answer decides. */
 export async function authorize(
   stdin: string,
   deps: LinkDeps,
   quietMs = QUIET_MS,
+  limits = { hookMs: HOOK_MS, stopMs: STOP_MS },
 ): Promise<Verdict> {
   const devices = new AbortController();
   const here = new AbortController();
@@ -97,7 +114,7 @@ export async function authorize(
   if (deps.ended?.aborted) return { kind: "defer" };
   deps.ended?.addEventListener("abort", end);
   try {
-    return await decide(stdin, deps, quietMs, devices, here);
+    return await decide(stdin, deps, quietMs, limits, devices, here);
   } finally {
     deps.ended?.removeEventListener("abort", end);
   }
@@ -107,12 +124,22 @@ async function decide(
   stdin: string,
   deps: LinkDeps,
   quietMs: number,
+  limits: { hookMs: number; stopMs: number },
   devices: AbortController,
   here: AbortController,
 ): Promise<Verdict> {
-  const answered = deps
-    .hook(stdin, devices.signal)
-    .then(verdictOf, () => ({ kind: "defer" }) as Verdict);
+  const defer = { kind: "defer" } as Verdict;
+  const hook = deps.hook(stdin, devices.signal).then(verdictOf, () => defer);
+  /** The CLI's verdict, or defer once it overran `ms`; then it is stopped. */
+  const within = (ms: number) =>
+    Promise.race([
+      hook,
+      deps.sleep(ms).then(() => {
+        devices.abort();
+        return defer;
+      }),
+    ]);
+  const answered = within(limits.hookMs);
   const keyboard = deps.keyboard;
   if (!keyboard) return answered;
   const quick = await Promise.race([answered, deps.sleep(quietMs).then(() => undefined)]);
@@ -128,5 +155,5 @@ async function decide(
   // The CLI settles the prompt on the devices as answered at the keyboard and prints nothing,
   // unless a device's answer came first.
   devices.abort();
-  return answered;
+  return within(limits.stopMs);
 }

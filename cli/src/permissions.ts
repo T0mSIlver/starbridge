@@ -214,7 +214,7 @@ export function summarize(tool: string, input: unknown): string {
     keys.map((k) => o[k]).find((v): v is string => typeof v === "string" && v.length > 0);
   const main = isShell(tool)
     ? pick("command")
-    : (pick("file_path", "notebook_path", "path", "url", "query", "pattern") ??
+    : (pick("file_path", "notebook_path", "path", "url", "query", "pattern", "preview") ??
       `${tool} ${JSON.stringify(input) ?? ""}`);
   return oneLine(redactText(main ?? tool), SUMMARY_MAX) || tool;
 }
@@ -364,14 +364,16 @@ function prune(st: State, now: number) {
 /**
  * Seals the prompt to every active device, posts it and records it as waiting. Returns its id.
  * The answers cursor is read before the post, so a wait from it never misses the answer.
+ * `signal` cuts the requests: the hook's deadline, or the keyboard answering.
  */
 export async function postPermission(
   ctx: Ctx,
   s: Session,
   hook: PermissionHookInput,
   opts: { agent: Permission["agent"]; source: PermissionSourceInput; waitMs: number },
+  signal?: AbortSignal,
 ): Promise<string> {
-  const dir = await refreshDirectory(ctx, s);
+  const dir = await refreshDirectory(ctx, s, signal);
   const to = devices(dir);
   const { permission, updates } = buildPermission(hook, {
     ...opts,
@@ -397,7 +399,14 @@ export async function postPermission(
       ...(cursor !== undefined ? { cursor } : {}),
     };
   });
-  await s.api.postItem(item);
+  try {
+    await s.api.postItem(item, signal);
+  } catch (e) {
+    // No hook waits for it now: nothing may apply an answer that still comes.
+    const keyboard = signal?.aborted && (signal.reason as Error)?.name !== "TimeoutError";
+    markSettled(ctx, permission.id, keyboard ? "keyboard" : "timeout");
+    throw e;
+  }
   return permission.id;
 }
 
