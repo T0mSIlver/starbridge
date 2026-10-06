@@ -582,6 +582,11 @@ export const QuotaSnapshot = z.object({
       windows: z.array(QuotaWindow),
       /** Set when CodexBar failed for this provider. */
       error: z.string().max(1000).optional(),
+      /**
+       * With `error`: when `windows` were read, the last time CodexBar did not fail. The windows
+       * are stale then; without it, they were read at `takenAt`.
+       */
+      updatedAt: Time.optional(),
     }),
   ),
   alerts: z.array(QuotaAlert),

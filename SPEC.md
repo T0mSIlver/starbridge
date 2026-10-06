@@ -1612,6 +1612,17 @@ so the mod is the first path.
   mid-hold and holds no more within 5 s, and the hook stops once its parent process is gone. This
   covers every harness's hook, except one run through a shell that does not `exec` it and
   survives the agent.
+- 2026-10-06 (#397): a provider CodexBar fails for is asked once more, then
+  keeps its last windows. The uploader keeps each provider's last windows read
+  without an error and sends them with the error and `updatedAt`, when they
+  were read; the server keeps one snapshot per machine, so only the uploader
+  can. The web and Android show the failure and "Updated 12 min ago" under the
+  provider's name, on its group; only a provider with nothing to show yet keeps
+  the line above the table. Kept windows raise no alerts, since their pace is
+  old, and go once their reset passes. A run that hung until the timeout is
+  not retried, and a run for every provider that fails as a whole posts no
+  snapshot, so the last one stays. The run timeout went from 90 to 120 s,
+  above CodexBar's own worst case for Claude.
 - 2026-10-06. A permission whose input has two keys that read alike once redacted or escaped stays
   at the keyboard (#410, #357): devices would see one value for both keys.
 
@@ -2143,6 +2154,20 @@ goes in git.
   Restore drill: the 2026-10-06 backup, copied read-only from the VPS and
   restored as `deploy/README.md` says, passed `integrity_check`, started and
   served. Umami's dump restored too. The copies were deleted afterwards.
+- 2026-10-06: Claude's quota probe on the dev box (#397). "Claude usage
+  probe timed out." was CodexBar's error, not Starbridge's. CodexBar runs
+  `claude` in a terminal and reads its `/usage` panel; when that fails it runs
+  `claude /usage` without a terminal, capped at 8 s. With the build installed
+  on 2026-09-27, four debug runs in the owner's real HOME showed the terminal
+  probe quitting after 2 to 3 s every time and the fallback taking 5.2 to
+  8.5 s: one run hit the cap and took 21.9 s over two rounds, the others
+  passed in 7.9 to 9.0 s. That matches the agent's ~22 s failures since
+  2026-10-05. Copies of the owner's `~/.claude` never reproduced the early
+  quit; the fallback took 3.3 s in a copy without history and 5 s with it.
+  CodexBar 0.72.0 (upstream, with #4115 and #4155 on its Claude probe), installed
+  2026-10-06, read the panel in all four real runs, in 9.1 to 10.0 s, with no
+  fallback. The 8 s fallback cap is still tight for a busy machine; a fork
+  branch raises it (`fix/claude-direct-usage-timeout`).
 - 2026-10-06: why Android's Find showed no results (#341). The app's
   NavDisplay fills the screen and passes that size on to its entry as a
   minimum height, and Material 3's

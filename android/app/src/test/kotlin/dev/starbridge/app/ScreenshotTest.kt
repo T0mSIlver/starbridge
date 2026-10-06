@@ -239,6 +239,7 @@ class ScreenshotTest(private val dark: Boolean) {
     @Test fun quotasEmpty() = capture("quotas-empty") { QuotasScreen(emptyList(), now) }
 
     @Test fun quotasStale() = capture("quotas-stale") { QuotasScreen(fake.staleWindows, now) }
+    @Test fun quotasFailed() = capture("quotas-failed") { QuotasScreen(fake.failedWindows, now) }
 
     @Test fun devices() = capture("devices") { Phone(null, 0) { DevicesScreen(fake.members, now, deviceActions) } }
 

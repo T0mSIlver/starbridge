@@ -1669,7 +1669,8 @@ class ServerStore(
                 steadyPercent = pace?.expectedUsedPercent?.roundToInt()?.coerceIn(0, 100),
                 windowMinutes = w.windowMinutes,
                 machine = if (named) directory?.members?.get(q.from)?.member?.name ?: q.from else null,
-                takenAt = instant(q.body.takenAt),
+                takenAt = instant(p.updatedAt ?: q.body.takenAt),
+                error = p.error,
             )
         }
     }
