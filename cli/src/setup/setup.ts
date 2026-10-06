@@ -465,7 +465,7 @@ async function permissionStep(sys: Sys) {
     return;
   }
   const on = await prompt.confirm(
-    "Also send Claude Code permission prompts to your devices? The Claude app already shows them for Remote Control sessions.",
+    "Also send permission prompts (Claude Code's, and Pi's through pi-permission-system) to your devices? The Claude app already shows Claude Code's for Remote Control sessions.",
     false,
   );
   if (on) setPermissions(ctx, true);
