@@ -158,7 +158,9 @@ starbridge config permissions on
 ```
 
 Then each prompt also goes to your devices, where you allow or deny it. The prompt stays open at
-the keyboard, and the first answer wins.
+the keyboard, and the first answer wins. Only prompts Claude Code still shows reach your devices:
+in auto mode, its default, it settles most calls itself. When the keyboard answers first, the
+device's card closes once the tool has run, since Claude Code reports the call only then.
 
 Pi's prompts come from pi-permission-system. With the Starbridge Pi package installed, the same
 command offers to add `starbridge` to its `authorizerChain`, which it needs as well. Your devices then allow a call
