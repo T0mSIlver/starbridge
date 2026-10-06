@@ -859,6 +859,9 @@ What the code relies on, with the versions checked.
   must not await it. Remote Control shows a submitted prompt on the phone. A hot reload aborts the
   mod's requests. `/resume` fires `session.end` with reason `resume` and no `session.start`. Mods
   load only from user or managed settings or an installed plugin, not project settings.
+  Starbridge states 2.1.287, the oldest the mod works with, as its minimum, and setup says when
+  `claude --version` is older, since an older one may lack mods or `claude plugin list --json`
+  (#620).
 - **Claude Code sessions**: `~/.claude/sessions/<pid>.json` holds `sessionId`, `name` (the title)
   and, under Remote Control, `bridgeSessionId`; the Remote Control URL is
   `https://claude.ai/code/<bridgeSessionId>`. Records are rewritten in place without truncation,

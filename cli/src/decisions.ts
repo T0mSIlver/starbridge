@@ -78,7 +78,7 @@ const IMAGE_BYTES = 384 * 1024;
 /** Exit code when nobody answered before `--timeout`. */
 export const EXIT_TIMEOUT = 2;
 /** Exit code on Ctrl-C, as a shell reports SIGINT. */
-const EXIT_INTERRUPTED = 130;
+export const EXIT_INTERRUPTED = 130;
 /** The server holds a long-poll at most this long (PROTOCOL.md). */
 const MAX_POLL_SECONDS = 300;
 /** Pause before retrying after a network or server error. */
