@@ -10,7 +10,7 @@ concurrency:
   group: ci-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
   cancel-in-progress: true
 
-# Jobs run on the dev box's self-hosted runners while the repository variable RUNNER is set
+# Jobs run on the maintainer's self-hosted runners while the repository variable RUNNER is set
 # (deploy/setup-runners.sh); delete the variable to go back to GitHub's runners.
 jobs:
   # One job, so the workspace installs once instead of three times.

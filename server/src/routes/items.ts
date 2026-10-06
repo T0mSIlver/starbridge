@@ -152,6 +152,8 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
   const to = item.boxes.map((b) => b.to);
   if (new Set(to).size !== to.length) fail(400, "bad-schema", "one box per recipient");
   const size = item.boxes.reduce((n, b) => n + b.box.length, 0);
+  // What it costs to store: its boxes, and its rows, which a small item would otherwise get free.
+  const charged = size + limits.rowBytes * (1 + item.boxes.length);
   const most = fromDevice
     ? limits.answerBytes
     : item.kind === "run"
@@ -245,23 +247,24 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
     // can still answer, and answering lets its decisions expire.
     const held = db
       .query(
-        `SELECT COUNT(*) FILTER (WHERE kind = 'decision') AS decisions,
-         COUNT(*) FILTER (WHERE kind = 'run') AS runs, COALESCE(SUM(size), 0) AS bytes
-         FROM items WHERE account_id = ?`,
+        `SELECT COALESCE(SUM(bytes), 0) AS bytes, COALESCE(SUM(n) FILTER (WHERE kind = ?), 0) AS n
+         FROM item_totals WHERE account_id = ?`,
       )
-      .get(caller.account) as { decisions: number; runs: number; bytes: number };
-    if (item.kind === "decision" && held.decisions >= limits.decisions)
-      fail(409, "too-many-items", `an account holds at most ${limits.decisions} decisions`);
-    if (item.kind === "run" && held.runs >= limits.runs)
-      fail(409, "too-many-items", `an account holds at most ${limits.runs} runs`);
+      .get(item.kind, caller.account) as { bytes: number; n: number };
+    // The kinds a machine posts at will; the rest each answer or note one of these, or replace.
+    const cap = { decision: limits.decisions, run: limits.runs, permission: limits.permissions }[
+      item.kind as string
+    ];
+    if (cap !== undefined && held.n >= cap)
+      fail(409, "too-many-items", `an account holds at most ${cap} ${item.kind} items`);
     const room = limits.storedBytes - (fromDevice ? 0 : limits.answerReserve);
-    if (held.bytes + size > room)
+    if (held.bytes + charged > room)
       fail(409, "too-many-items", `an account stores at most ${limits.storedBytes} bytes`);
     const iso = now.toISOString();
     const seq = nextSeq(db);
     db.query(
       "INSERT INTO items (seq, account_id, id, kind, from_id, re, received_at, size) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-    ).run(seq, caller.account, item.id, item.kind, me, item.re ?? null, iso, size);
+    ).run(seq, caller.account, item.id, item.kind, me, item.re ?? null, iso, charged);
     const box = db.query("INSERT INTO boxes (account_id, item_id, to_id, box) VALUES (?, ?, ?, ?)");
     for (const b of item.boxes) box.run(caller.account, item.id, b.to, b.box);
     // Marks the referred item answered and moves it past every cursor, so devices listing after
@@ -363,8 +366,9 @@ itemRoutes.get("/answers", requireCaller("machine"), async (c) => {
       );
     holdOpen(c);
     // Nothing yields between the query above and this registration, so no answer slips by.
-    if (await c.var.answers.wait(`${caller.account}/${me}`, seconds, c.req.raw.signal))
-      items = fetch();
+    const woken = await c.var.answers.wait(`${caller.account}/${me}`, seconds, c.req.raw.signal);
+    recheck(c);
+    if (woken) items = fetch();
   }
   return c.json({ ...page(items, from), ...watched(c, caller.account) });
 });
@@ -389,7 +393,8 @@ itemRoutes.post("/quota/ask", requireCaller("paired-device"), async (c) => {
     ).n;
   const end = Date.now() + waitSeconds(c) * 1000;
   if (Date.now() < end) holdOpen(c);
-  while (behind() > 0 && Date.now() < end && !c.req.raw.signal.aborted)
+  while (behind() > 0 && Date.now() < end && !c.req.raw.signal.aborted && !c.var.quotas.closed)
     await c.var.quotas.wait(caller.account, (end - Date.now()) / 1000, c.req.raw.signal);
+  recheck(c);
   return c.json({ askedAt, behind: behind() });
 });

@@ -1,7 +1,7 @@
 # Starbridge for Android
 
 Inbox, Quotas and Settings (with Devices and machines), against a Starbridge server. Kotlin,
-Jetpack Compose, Material 3 Expressive, Hilt and Navigation 3, as vidtheque.
+Jetpack Compose, Material 3 Expressive, Hilt and Navigation 3.
 
 - `protocol/`: packages/protocol in Kotlin (sign, seal, open, the directory
   chain, pairing, recovery words), checked against its test vectors.
@@ -26,8 +26,8 @@ JDK 21 and an Android SDK with platform 37, then:
 ```
 
 Release builds sign with the release key when `STARBRIDGE_KEYSTORE`, `STARBRIDGE_KEYSTORE_PASSWORD`
-and `STARBRIDGE_KEY_ALIAS` are set, or when `~/.config/starbridge/secrets/release.jks` exists,
-and with the debug key otherwise. `-PversionName=1.2.3` sets the version; the release workflow
+and `STARBRIDGE_KEY_ALIAS` are set, as the release workflow does, and with the debug key
+otherwise. The build never looks for the key on disk. `-PversionName=1.2.3` sets the version; the release workflow
 passes the tag's.
 
 Screenshots render on the JVM through Roborazzi: `./gradlew

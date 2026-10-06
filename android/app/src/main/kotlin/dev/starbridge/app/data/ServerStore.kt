@@ -37,6 +37,7 @@ import dev.starbridge.app.protocol.fromB64
 import dev.starbridge.app.protocol.pairingLink
 import dev.starbridge.app.protocol.parsePairingCode
 import dev.starbridge.app.protocol.toB64
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -198,7 +199,8 @@ class ServerStore(
     }
 
     private fun report(e: Exception) {
-        Log.w("Starbridge", "failed", e)
+        // With the exception in the message: Android drops the trace of an UnknownHostException.
+        Log.w("Starbridge", "failed: $e", e)
         if (e is ApiException && e.status == 401 && secrets.session != null) {
             // The keys stay: signing in again binds a new session to this phone.
             persist(newSecrets = secrets.copy(session = null))
@@ -560,6 +562,11 @@ class ServerStore(
                 // Asked too often, or a server without asks: the sync shows what it holds.
             } catch (e: IOException) {
                 // Offline: the sync reports it.
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // Nothing may escape this coroutine: it would end the app (#253).
+                Log.w("Starbridge", "quota ask failed: $e", e)
             }
             run { sync() }
         }
@@ -735,9 +742,27 @@ class ServerStore(
         persist(saved.copy(promptCursor = cursor, prompts = kept))
     }
 
-    override fun refreshPrompts() = run(showBusy = false) {
-        if (phase.value == Phase.Ready) syncPrompts()
+    /**
+     * The inbox's quick read while a prompt shows. After a failure (offline, say) it waits 3 s,
+     * then twice as long after each further one, up to a minute, instead of retrying every 1.5 s.
+     */
+    override fun refreshPrompts() {
+        if (System.currentTimeMillis() < promptsRetryAt) return
+        run(showBusy = false) {
+            if (phase.value != Phase.Ready) return@run
+            try {
+                syncPrompts()
+                promptFailures = 0
+            } catch (e: Exception) {
+                promptFailures++
+                promptsRetryAt = System.currentTimeMillis() + minOf(60_000L, 1_500L shl promptFailures.coerceAtMost(6))
+                throw e
+            }
+        }
     }
+
+    @Volatile private var promptFailures = 0
+    @Volatile private var promptsRetryAt = 0L
 
     override fun refreshDirectory() = run(showBusy = false) {
         if (phase.value == Phase.Ready) syncDirectory()

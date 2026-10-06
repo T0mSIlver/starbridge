@@ -27,6 +27,9 @@ jobs:
   build:
     name: build, unit tests, screenshots
     runs-on: ${{ vars.ANDROID_RUNNER || vars.RUNNER || 'ubuntu-24.04' }}
+    # Builds of pull requests never sign with the release key, even on a runner whose environment sets it.
+    env:
+      STARBRIDGE_KEYSTORE: ""
     steps:
       - uses: actions/checkout@v7
 
