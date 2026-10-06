@@ -277,3 +277,19 @@ sealed interface Comparison {
     data class Done(val message: String) : Comparison
     data class Failed(val message: String) : Comparison
 }
+
+/**
+ * The recovery key as Devices and the notices show it (#348): when it was set and on which
+ * device ("this phone" when here), and a replacement made on another device since this phone
+ * joined, shown once.
+ */
+data class RecoveryUi(val setAt: Instant, val setBy: String, val replaced: Boolean, val notice: RecoveryNotice? = null)
+
+data class RecoveryNotice(val seq: Int, val at: Instant, val by: String)
+
+/** This phone replacing the recovery key: the new key stays in memory, shown, until saved. */
+sealed interface Replacing {
+    data object Idle : Replacing
+    data class Shown(val key: String, val saving: Boolean = false) : Replacing
+    data object Done : Replacing
+}

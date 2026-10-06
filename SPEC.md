@@ -1438,6 +1438,34 @@ so the mod is the first path.
   session, takes only answers to that session's decisions, so it cannot take one that another
   session's mod or `wait` is due; outside an agent's session it still takes any. Checked with Pi 1.0.4 and pi-permission-system 39.1.0: `starbridge ask` ran
   without a dialog while `touch` still asked, and uninstall left no config behind.
+- 2026-10-06. The recovery key can be replaced (#348, owner ruling after #328). Entry 0 fixed it
+  for good, so an owner who thought the key leaked had no fix short of a new account. Two new
+  directory entries replace it: `recovery` proposes a key, signed by a device and by the new key,
+  and `recovery-confirm` makes it current, signed by the current key (PROTOCOL.md, "Replacing the
+  recovery key"). The owner first asked for a second device to confirm when the key is lost; the
+  review of #368 showed that path lets a stolen phone, which can add a device of its own, take
+  the key over, and the owner dropped it: replacing always needs the current key, and an owner
+  who lost it keeps their devices and no key. Clients refuse a chain with an `op` they do not
+  know rather than skip the entry, since skipping one would keep a replaced key or a revoked
+  device trusted; so web, Android, the CLI and machines must all update before anyone replaces a
+  key. There is no Devices history, so the Recovery key row in Devices says when the key was last
+  set and on which device, and every other device shows the change once.
+- 2026-10-06. Recovery revokes every other device, and the recovery key revokes no one (#363,
+  #364, found by the protocol audit). A recovering device holds no pin, so a server could serve
+  it a chain cut short of a revocation, and its `add` made a fork where a stolen, revoked phone
+  was active again. A new `recover` entry adds the device and revokes every other member,
+  machines included (a revoked machine came back the same way, review of #368), so no fork keeps
+  an earlier one; the owner pairs the devices and machines they still have again from the
+  recovered device. A confirmation names the key it confirms, so a stolen device's later
+  proposal cannot take the owner's confirmation. A plain `add` signed by the recovery key still verifies, since older chains
+  hold it, but clients no longer write it. The recovery key could also sign a `revoke`, against
+  PROTOCOL.md; verifiers now refuse it.
+- 2026-10-06. Replacing the recovery key on the web and Android (#348). Devices gains a Recovery
+  key row: when and on which device the key was set, with Replace. Replace asks for the current
+  key, then shows the new key as first run does; like the first device's (#328), it reaches the
+  directory only once the owner ticks the box. Without the current key the page says the key
+  can't be replaced and the devices keep working. Every other device shows the replacement once,
+  as a banner above the inbox, and remembers that it was dismissed.
 - 2026-10-06. Layout breakage fails CI (#305). Every e2e screenshot, at 390 and 1280 px and
   checked again at 320, fails on a page wider than the window, a box that cuts its text without
   an ellipsis, text past its box, anything past the window's edge, text drawn over text

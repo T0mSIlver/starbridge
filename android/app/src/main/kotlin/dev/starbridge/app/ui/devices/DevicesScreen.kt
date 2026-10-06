@@ -51,6 +51,7 @@ import dev.starbridge.app.data.Kind
 import dev.starbridge.app.data.Member
 import dev.starbridge.app.data.Prefs
 import dev.starbridge.app.data.PushSetting
+import dev.starbridge.app.data.RecoveryUi
 import dev.starbridge.app.data.Store
 import dev.starbridge.app.ui.Beacon
 import dev.starbridge.app.ui.Choice
@@ -85,6 +86,10 @@ import androidx.compose.foundation.layout.height
 class DevicesViewModel @Inject constructor(private val store: Store) : ViewModel() {
     val members = store.members
     val approval = store.approval
+    val recovery = store.recovery
+    val replacing = store.replacing
+    val busy = store.busy
+    val recoveryActions = RecoveryActions(store::newRecoveryKey, store::saveRecoveryKey, store::closeRecoveryKey)
     fun refreshDirectory() = store.refreshDirectory()
     val actions = DeviceActions(store::lookUpPairing, store::approvePairing, store::closePairing, store::revoke, store::showCode)
 }
@@ -112,6 +117,8 @@ fun DevicesScreen(
     /** A pairing code read by the scanner; a phone that cannot scan opens Add a device instead. */
     onScan: (String) -> Unit = {},
     pollDirectory: () -> Unit = {},
+    recovery: RecoveryUi? = null,
+    onReplaceRecovery: () -> Unit = {},
 ) {
     // A device or machine revoked elsewhere leaves the list without a restart: no push says so.
     LaunchedEffect(Unit) {
@@ -128,6 +135,7 @@ fun DevicesScreen(
     var revoking by rememberSaveable { mutableStateOf<String?>(null) }
     Page("Devices", modifier, onBack = onBack, titleGap = Spacing.s4) {
         itemsIndexed(rows, key = { _, it -> it.id }) { i, it -> MemberRow(it, it.name in twins, groupShape(i, rows.size, outer = Spacing.s5)) { revoking = it.id } }
+        if (recovery != null) item(key = "recovery") { RecoveryRow(recovery, onReplaceRecovery) }
         item {
             FilledTonalButton(
                 onClick = scan,
@@ -311,3 +319,25 @@ private fun MemberRow(member: Member, twin: Boolean, shape: Shape, onRevoke: () 
 }
 
 
+
+/** The recovery key under the members: when and on which device it was set, with Replace (#348). */
+@Composable
+private fun RecoveryRow(recovery: RecoveryUi, onReplace: () -> Unit) {
+    val scheme = MaterialTheme.colorScheme
+    val h24 = LocalClock24.current
+    Surface(Modifier.fillMaxWidth().padding(top = Spacing.s4 - groupGap), shape = groupShape(0, 1, outer = Spacing.s5), color = scheme.surfaceContainer) {
+        Row(Modifier.padding(Spacing.s4), verticalAlignment = Alignment.CenterVertically) {
+            Symbol(Sym.Key, tint = scheme.onSurface)
+            Spacer(Modifier.width(Spacing.s4))
+            Column(Modifier.weight(1f)) {
+                Text("Recovery key", style = StarbridgeTheme.type.body, color = scheme.onSurface)
+                Text(
+                    "${if (recovery.replaced) "Replaced" else "Set"} ${day(recovery.setAt)}, ${clock(recovery.setAt, h24)} on ${recovery.setBy}",
+                    style = StarbridgeTheme.type.small,
+                    color = scheme.onSurfaceVariant,
+                )
+            }
+            TextButton(onClick = onReplace, colors = ButtonDefaults.textButtonColors(contentColor = scheme.onSurface)) { Text("Replace", style = StarbridgeTheme.type.label) }
+        }
+    }
+}

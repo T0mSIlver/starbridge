@@ -3,7 +3,6 @@
 // first paint. Every read of the directory replays the chain against the pin kept in IndexedDB.
 import {
   activeMembers,
-  addEntry,
   addEntryAsync,
   approverKeys,
   bindMessage,
@@ -15,6 +14,7 @@ import {
   entryHash,
   formatPairingCode,
   fromB64,
+  generateRecoverySeed,
   genesisEntryAsync,
   claimHash as hashClaim,
   type JoinKeys,
@@ -39,11 +39,13 @@ import {
   pairingLink,
   pairingRequest,
   parsePairingCode,
-  RECOVERY,
   RecoveryKeyError,
   type RecoveryKeyReading,
   readRecoveryKey,
   ready,
+  recoverEntry,
+  recoveryConfirmEntry,
+  recoveryEntryAsync,
   recoveryKey,
   recoveryKeyPair,
   recoverySeedFromKey,
@@ -387,11 +389,13 @@ export async function recover(account: string, name: string, typed: string): Pro
         ...(pin ? { pin } : {}),
       });
     } catch (e) {
-      if (e instanceof ProtocolError && e.message === "bad-genesis: recovery key differs")
-        throw new Error("This is a recovery key, but not this account's.");
+      // Another account's key, or this account's from before a replacement (#348).
+      if (e instanceof ProtocolError && e.code === "wrong-recovery-key")
+        throw new Error("This is a recovery key, but not this account's current one.");
       throw e;
     }
-    const entry = addEntry(dir, { id: RECOVERY, signKey: recovery.privateKey }, member, now());
+    // Revokes every other member: recovery means they are lost, or in someone else's hands (#363).
+    const entry = recoverEntry(dir, recovery.privateKey, member, now());
     const next = verifyDirectory([...entries, entry], { account });
     // Pending until the append lands: a failed one must not replace keys that still work (#283).
     await store.put("pending", record, account);
@@ -821,7 +825,7 @@ export function devices(ctx: Ctx): Device[] {
   const addedAt = new Map<string, string>();
   for (const env of ctx.entries) {
     const body = DirectoryEntry.parse(JSON.parse(env.body));
-    if (body.op === "add") addedAt.set(body.member.id, body.at);
+    if (body.op === "add" || body.op === "recover") addedAt.set(body.member.id, body.at);
   }
   return [...ctx.dir.members.values()].map(({ member, active }) => ({
     ...member,
@@ -879,6 +883,126 @@ export async function approvePairing(ctx: Ctx, req: PairingRequest): Promise<Ctx
 
 export function revoke(ctx: Ctx, id: string): Promise<Ctx> {
   return append(ctx, (dir) => revokeEntryAsync(dir, me(ctx), id, now()));
+}
+
+// --- Replacing the recovery key (#348) ---------------------------------------------------
+
+/** The recovery key as Settings and the notices show it; device names, not ids. */
+export interface RecoveryState {
+  /** When the current key was set, on which device, and whether it replaced an earlier one. */
+  set: { at: string; by: string; replaced: boolean };
+  /** A replacement made on another device since this browser joined, to show once. */
+  notice?: { seq: number; at: string; by: string };
+}
+
+export async function recoveryState(ctx: Ctx): Promise<RecoveryState> {
+  const name = (id: string) =>
+    id === ctx.device.id ? "this browser" : (ctx.dir.members.get(id)?.member.name ?? id);
+  const set = ctx.dir.recoverySet;
+  const joined = ctx.entries.findIndex((env) => {
+    const body = DirectoryEntry.parse(JSON.parse(env.body));
+    return (body.op === "add" || body.op === "recover") && body.member.id === ctx.device.id;
+  });
+  const seen = (await store.get("recoverySeen", ctx.account)) ?? -1;
+  const fresh = set.seq > 0 && set.seq > joined && set.seq > seen && set.by !== ctx.device.id;
+  return {
+    set: { at: set.at, by: name(set.by), replaced: set.seq > 0 },
+    ...(fresh ? { notice: { seq: set.seq, at: set.at, by: name(set.by) } } : {}),
+  };
+}
+
+/** Hides the notice of the replacement at `seq` on this browser. */
+export function dismissRecoveryNotice(ctx: Ctx, seq: number): Promise<void> {
+  return store.put("recoverySeen", seq, ctx.account);
+}
+
+/** A new recovery key, shown before anything is posted. */
+export interface NewRecoveryKey {
+  recoveryKey: string;
+  /**
+   * Proposes the key and confirms it with the current one. Safe to call again after a failure:
+   * it picks up where it stopped.
+   */
+  replace: () => Promise<Ctx>;
+  /** Wipes both private keys, when the page closes without saving. */
+  discard: () => void;
+}
+
+/**
+ * Makes a new recovery key to show, once the owner typed the current one: both sign, so neither
+ * a stolen device nor a leaked key replaces it alone. Like the first device's key (#328), the
+ * new one reaches the directory only once the owner says it is saved.
+ */
+export async function prepareRecoveryKey(ctx: Ctx, currentKey: string): Promise<NewRecoveryKey> {
+  await ready;
+  let seed: Uint8Array;
+  try {
+    seed = recoverySeedFromKey(currentKey);
+  } catch (e) {
+    throw e instanceof RecoveryKeyError ? new Error(problemText(e.reading) ?? e.message) : e;
+  }
+  const current = recoveryKeyPair(seed);
+  seed.fill(0);
+  // Against the chain as it is now: another device may have replaced the key since boot.
+  if (toB64(current.publicKey) !== (await refresh(ctx)).dir.recoveryPk) {
+    current.privateKey.fill(0);
+    throw new Error("This isn't the account's current recovery key.");
+  }
+  const fresh = generateRecoverySeed();
+  const next = recoveryKeyPair(fresh);
+  const shown = recoveryKey(fresh);
+  fresh.fill(0);
+  const nextPk = toB64(next.publicKey);
+  // A save in flight still signs with both keys: leaving the page then wipes them when it ends.
+  let saving = false;
+  let dropped = false;
+  const wipe = () => {
+    next.privateKey.fill(0);
+    current.privateKey.fill(0);
+  };
+  const replace = async () => {
+    saving = true;
+    try {
+      const latest = await save();
+      wipe();
+      return latest;
+    } finally {
+      saving = false;
+      if (dropped) wipe();
+    }
+  };
+  const save = async () => {
+    let latest: Ctx;
+    try {
+      latest = await refresh(ctx);
+    } catch (e) {
+      if (e instanceof ApiError && e.code === "revoked") throw removed();
+      throw e;
+    }
+    // A recovery or a revocation dropped this browser, and its proposal with it.
+    if (!latest.dir.members.get(ctx.device.id)?.active) throw removed();
+    // Another device replaced the key since it was typed: the confirmation could never verify.
+    if (latest.dir.recoveryPk !== nextPk && latest.dir.recoveryPk !== toB64(current.publicKey))
+      throw new Error("Another device replaced the recovery key meanwhile. Start again.");
+    if (latest.dir.recoveryPk !== nextPk) {
+      // A retry after the proposal landed confirms it rather than proposing the same key again;
+      // one another proposal replaced meanwhile can never be posted again.
+      if (latest.dir.pendingRecovery?.recoveryPk !== nextPk && latest.dir.recoveryPks.has(nextPk))
+        throw new Error("Another device proposed a new key meanwhile. Start again.");
+      if (latest.dir.pendingRecovery?.recoveryPk !== nextPk)
+        latest = await append(latest, (dir) => recoveryEntryAsync(dir, me(latest), next, now()));
+      latest = await append(latest, async (dir) =>
+        recoveryConfirmEntry(dir, current.privateKey, nextPk, now()),
+      );
+    }
+    return latest;
+  };
+  const discard = () => {
+    if (saving) dropped = true;
+    else wipe();
+  };
+  const removed = () => new Error("This browser was removed from the account.");
+  return { recoveryKey: shown, replace, discard };
 }
 
 /**
