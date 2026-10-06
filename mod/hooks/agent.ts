@@ -60,8 +60,9 @@ export const AGENT_TIMING: AgentTiming = {
 
 /**
  * Where the agent listens, as the CLI's `socketPath` (cli/src/agent/api.ts) works it out:
- * `$STARBRIDGE_AGENT_SOCKET`; for the default config directory `$XDG_RUNTIME_DIR/starbridge/
- * agent.sock` when that is set; else `agent.sock` in the config directory.
+ * `$STARBRIDGE_AGENT_SOCKET`; on Windows (`OS=Windows_NT`) the port file `agent.port` in the
+ * config directory; for the default config directory `$XDG_RUNTIME_DIR/starbridge/agent.sock`
+ * when that is set; else `agent.sock` in the config directory.
  */
 export function socketPath(env: {
   STARBRIDGE_AGENT_SOCKET?: string;
@@ -69,13 +70,32 @@ export function socketPath(env: {
   XDG_CONFIG_HOME?: string;
   XDG_RUNTIME_DIR?: string;
   HOME?: string;
+  USERPROFILE?: string;
+  OS?: string;
 }): string {
   if (env.STARBRIDGE_AGENT_SOCKET) return env.STARBRIDGE_AGENT_SOCKET;
   const dir = configDir(env);
+  if (env.OS === "Windows_NT") return `${dir}/agent.port`;
   const standard = configDir({ ...env, STARBRIDGE_CONFIG_DIR: undefined });
   if (env.XDG_RUNTIME_DIR && dir === standard)
     return `${env.XDG_RUNTIME_DIR}/starbridge/agent.sock`;
   return `${dir}/agent.sock`;
+}
+
+/**
+ * An address ending in `.port` names the file where an agent on loopback TCP wrote its port and
+ * the token every call carries (the CLI's `PortFile`).
+ */
+export const isPortFile = (address: string) => address.endsWith(".port");
+
+/** The port and the `authorization` header in port file `text`; undefined when it is not one. */
+export function portTarget(text: string): { port: number; authorization: string } | undefined {
+  try {
+    const f = JSON.parse(text) as { port?: unknown; token?: unknown };
+    if (Number.isInteger(f.port) && typeof f.token === "string")
+      return { port: f.port as number, authorization: `Bearer ${f.token}` };
+  } catch {}
+  return undefined;
 }
 
 /** The headers every call carries. */

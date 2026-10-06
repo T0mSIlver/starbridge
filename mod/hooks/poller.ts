@@ -65,14 +65,18 @@ interface Lease {
   until: number;
 }
 
-/** `$STARBRIDGE_CONFIG_DIR`, else `$XDG_CONFIG_HOME/starbridge`, else `~/.config/starbridge`, as the CLI. */
+/**
+ * `$STARBRIDGE_CONFIG_DIR`, else `$XDG_CONFIG_HOME/starbridge`, else `~/.config/starbridge`, as
+ * the CLI; Windows sets `USERPROFILE` instead of `HOME`.
+ */
 export function configDir(env: {
   STARBRIDGE_CONFIG_DIR?: string;
   XDG_CONFIG_HOME?: string;
   HOME?: string;
+  USERPROFILE?: string;
 }): string {
   if (env.STARBRIDGE_CONFIG_DIR) return env.STARBRIDGE_CONFIG_DIR;
-  return `${env.XDG_CONFIG_HOME || `${env.HOME}/.config`}/starbridge`;
+  return `${env.XDG_CONFIG_HOME || `${env.HOME || env.USERPROFILE}/.config`}/starbridge`;
 }
 
 /** The CLI's first error line, without the "starbridge: " the status line adds again. */

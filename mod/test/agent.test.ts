@@ -17,6 +17,7 @@ import {
   type Reply,
   socketPath,
 } from "../hooks/agent.ts";
+import { socketFetch } from "../hooks/node.ts";
 import { Poller, type Timing } from "../hooks/poller.ts";
 import { Switch } from "../hooks/switch.ts";
 
@@ -154,6 +155,21 @@ test("the mod finds the socket where the CLI's agent listens", () => {
       env.STARBRIDGE_CONFIG_DIR ?? `${env.XDG_CONFIG_HOME ?? `${env.HOME}/.config`}/starbridge`;
     expect(socketPath(env)).toBe(cliSocketPath(env, dir));
   }
+});
+
+test("on Windows the mod finds the agent's port file where the CLI writes it", () => {
+  const env = { USERPROFILE: "C:/Users/tom", OS: "Windows_NT" };
+  const dir = "C:/Users/tom/.config/starbridge";
+  expect(socketPath(env)).toBe(`${dir}/agent.port`);
+  expect(cliSocketPath(env, dir, "win32").replace(/\\/g, "/")).toBe(`${dir}/agent.port`);
+});
+
+test("the Node fetch of Pi and opencode reaches an agent on loopback TCP", async () => {
+  socket = join(cli.store.dir, "agent.port");
+  await startAgent();
+  const r = await socketFetch(socket, "GET", "/v1/status");
+  expect(r.status).toBe(200);
+  expect(JSON.parse(r.text).socket).toBe(socket);
 });
 
 test("an answer the host refuses stays unconfirmed and comes back", async () => {

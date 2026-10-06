@@ -1,17 +1,35 @@
-/** The agent's user service: a systemd user unit on Linux, a launchd agent on macOS. */
+/**
+ * The agent's user service: a systemd user unit on Linux, a launchd agent on macOS, a Scheduled
+ * Task at logon on Windows.
+ */
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { delimiter, dirname, join } from "node:path";
+import { readPortFile, socketPath } from "../agent/api";
+import { processAlive } from "../platform";
 import { marker, ours } from "./marker";
 import { failure, run, type Sys } from "./sys";
 
 export const UNIT = "starbridge-agent.service";
 export const LABEL = "run.starbridge.agent";
+export const TASK = "starbridge-agent";
 
-export type Kind = "systemd" | "launchd";
+export type Kind = "systemd" | "launchd" | "task";
 
 export function kind(sys: Sys): Kind | undefined {
-  return sys.platform === "linux" ? "systemd" : sys.platform === "darwin" ? "launchd" : undefined;
+  return { linux: "systemd", darwin: "launchd", win32: "task" }[sys.platform as string] as
+    | Kind
+    | undefined;
 }
+
+/** `%LOCALAPPDATA%\starbridge`: the task's XML and the agent's log on Windows. */
+function localDir(sys: Sys) {
+  return join(sys.ctx.env.LOCALAPPDATA || join(sys.home, "AppData", "Local"), "starbridge");
+}
+
+export const agentLog = (sys: Sys) =>
+  kind(sys) === "task"
+    ? join(localDir(sys), "agent.log")
+    : join(sys.home, "Library/Logs/starbridge-agent.log");
 
 /**
  * Where the systemd user manager looks. Not `$XDG_CONFIG_HOME`: a shell often exports it
@@ -25,6 +43,7 @@ export function servicePath(sys: Sys): string | undefined {
   const k = kind(sys);
   if (k === "systemd") return join(unitDir(sys), UNIT);
   if (k === "launchd") return join(sys.home, "Library/LaunchAgents", `${LABEL}.plist`);
+  if (k === "task") return join(localDir(sys), `${TASK}.xml`);
   return undefined;
 }
 
@@ -117,7 +136,7 @@ export function plistText(sys: Sys): string {
   const env = Object.entries(serviceEnv(sys))
     .map(([k, v]) => `    <key>${xml(k)}</key>\n    <string>${xml(v)}</string>`)
     .join("\n");
-  const log = join(sys.home, "Library/Logs/starbridge-agent.log");
+  const log = agentLog(sys);
   return `<?xml version="1.0" encoding="UTF-8"?>
 ${marker("<!--", "-->")}
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -151,6 +170,103 @@ ${env}
 `;
 }
 
+/** A Windows command-line argument: quoted when it has a space; a path holds no quote. */
+const winArg = (s: string) => (/[\s"]/.test(s) ? `"${s.replace(/"/g, '\\"')}"` : s);
+
+/**
+ * The Scheduled Task: at this user's logon, as this user without elevation, so setup needs no
+ * administrator; no time limit, since the default stops a task after 3 days; restarted a minute
+ * after a failure. A console program opens a window, so conhost runs it headless, and the log
+ * goes to a file. A task carries no environment of its own: the agent gets the user's.
+ */
+export function taskXml(sys: Sys): string {
+  const env = sys.ctx.env;
+  const user = env.USERDOMAIN ? `${env.USERDOMAIN}\\${env.USERNAME}` : (env.USERNAME ?? "");
+  const conhost = join(
+    env.SystemRoot || env.SYSTEMROOT || "C:\\Windows",
+    "System32",
+    "conhost.exe",
+  );
+  const args = ["--headless", ...sys.self, "agent", "--log", agentLog(sys)].map(winArg).join(" ");
+  return `<?xml version="1.0" encoding="UTF-16"?>
+${marker("<!--", "-->")}
+<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <RegistrationInfo>
+    <Description>Starbridge agent</Description>
+  </RegistrationInfo>
+  <Triggers>
+    <LogonTrigger>
+      <Enabled>true</Enabled>
+      <UserId>${xml(user)}</UserId>
+    </LogonTrigger>
+  </Triggers>
+  <Principals>
+    <Principal id="Author">
+      <UserId>${xml(user)}</UserId>
+      <LogonType>InteractiveToken</LogonType>
+      <RunLevel>LeastPrivilege</RunLevel>
+    </Principal>
+  </Principals>
+  <Settings>
+    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
+    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
+    <AllowHardTerminate>true</AllowHardTerminate>
+    <StartWhenAvailable>true</StartWhenAvailable>
+    <AllowStartOnDemand>true</AllowStartOnDemand>
+    <Enabled>true</Enabled>
+    <ExecutionTimeLimit>PT0S</ExecutionTimeLimit>
+    <Priority>7</Priority>
+    <RestartOnFailure>
+      <Interval>PT1M</Interval>
+      <Count>999</Count>
+    </RestartOnFailure>
+  </Settings>
+  <Actions Context="Author">
+    <Exec>
+      <Command>${xml(conhost)}</Command>
+      <Arguments>${xml(args)}</Arguments>
+    </Exec>
+  </Actions>
+</Task>
+`;
+}
+
+/**
+ * Windows PowerShell's ScheduledTasks cmdlets, from System32 rather than the PATH. They name
+ * task states in English whatever the system's language, unlike schtasks.
+ */
+const powershell = (sys: Sys, script: string, env: Record<string, string> = {}) =>
+  run(
+    sys,
+    join(
+      sys.ctx.env.SystemRoot || sys.ctx.env.SYSTEMROOT || "C:\\Windows",
+      "System32",
+      "WindowsPowerShell",
+      "v1.0",
+      "powershell.exe",
+    ),
+    ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", script],
+    { timeoutMs: 60_000, env },
+  );
+
+/**
+ * Stops the task and the agent it started: stopping the task ends conhost, which may leave the
+ * agent running, so the agent's own pid, from its port file, ends too.
+ */
+async function stopTask(sys: Sys) {
+  const r = await powershell(
+    sys,
+    `Stop-ScheduledTask -TaskName ${TASK} -ErrorAction SilentlyContinue`,
+  );
+  const f = readPortFile(socketPath(sys.ctx.env, sys.ctx.store.dir, sys.platform));
+  if (f && processAlive(f.pid))
+    try {
+      process.kill(f.pid);
+    } catch {}
+  return r;
+}
+
 const systemctl = (sys: Sys, ...args: string[]) =>
   run(sys, "systemctl", ["--user", ...args], { timeoutMs: 30_000 });
 const launchctl = (sys: Sys, ...args: string[]) =>
@@ -160,6 +276,11 @@ const launchctl = (sys: Sys, ...args: string[]) =>
 export async function unavailable(sys: Sys): Promise<string | undefined> {
   const k = kind(sys);
   if (!k) return `no user service manager on ${sys.platform}`;
+  if (k === "task") {
+    const r = await powershell(sys, "Get-Command Register-ScheduledTask | Out-Null");
+    if (r === null) return "Windows PowerShell is not installed";
+    if (r.code !== 0) return `no Task Scheduler cmdlets (${failure(r)})`;
+  }
   if (k === "systemd") {
     const r = await systemctl(sys, "show-environment");
     if (r === null) return "systemctl is not installed";
@@ -170,10 +291,20 @@ export async function unavailable(sys: Sys): Promise<string | undefined> {
 
 function readText(path: string): string | undefined {
   try {
-    return readFileSync(path, "utf8");
+    const bytes = readFileSync(path);
+    // The task's XML is UTF-16, with its byte order mark.
+    if (bytes[0] === 0xff && bytes[1] === 0xfe) return bytes.toString("utf16le").slice(1);
+    return bytes.toString("utf8");
   } catch {
     return undefined;
   }
+}
+
+/** The installed unit, plist or task XML, or undefined when there is none. */
+export function installedService(sys: Sys): { path: string; text: string } | undefined {
+  const path = servicePath(sys);
+  const text = path ? readText(path) : undefined;
+  return path && text !== undefined ? { path, text } : undefined;
 }
 
 /**
@@ -189,12 +320,27 @@ export async function installService(
   if (before !== undefined && !ours(before))
     throw new Error(`${path} was not written by setup: remove it to install the agent`);
   mkdirSync(dirname(path), { recursive: true });
-  const text = kind(sys) === "systemd" ? unitText(sys) : plistText(sys);
+  const k = kind(sys);
+  const text = k === "systemd" ? unitText(sys) : k === "launchd" ? plistText(sys) : taskXml(sys);
   const changed = readText(path) !== text;
-  if (changed) writeFileSync(path, text);
-  const running = /^(active|running)$/.test((await serviceState(sys)).state);
+  // Task Scheduler reads a file in the encoding its XML declaration names.
+  if (changed)
+    writeFileSync(path, k === "task" ? `\ufeff${text}` : text, k === "task" ? "utf16le" : "utf8");
+  const running = /^(active|running)$/i.test((await serviceState(sys)).state);
   const go = changed || restart || !running;
-  if (kind(sys) === "systemd") {
+  if (k === "task") {
+    const steps = [
+      `Register-ScheduledTask -TaskName ${TASK} -Xml (Get-Content -Raw -LiteralPath $env:STARBRIDGE_TASK_XML) -Force | Out-Null`,
+      ...(go ? ["stop", `Start-ScheduledTask -TaskName ${TASK}`] : []),
+    ];
+    for (const step of steps) {
+      const r =
+        step === "stop"
+          ? await stopTask(sys)
+          : await powershell(sys, step, { STARBRIDGE_TASK_XML: path });
+      if (r?.code !== 0) throw new Error(`${step.split(" ")[0]}: ${failure(r)}`);
+    }
+  } else if (k === "systemd") {
     const steps = [
       ...(changed ? [["daemon-reload"]] : []),
       ["enable", UNIT],
@@ -220,7 +366,15 @@ export async function removeService(sys: Sys): Promise<boolean> {
   const path = servicePath(sys);
   if (!path || !existsSync(path)) return false;
   if (!ours(readText(path))) throw new Error(`${path} was not written by setup`);
-  if (kind(sys) === "systemd") {
+  if (kind(sys) === "task") {
+    await stopTask(sys);
+    const r = await powershell(
+      sys,
+      `Unregister-ScheduledTask -TaskName ${TASK} -Confirm:$false -ErrorAction SilentlyContinue; if (Get-ScheduledTask -TaskName ${TASK} -ErrorAction SilentlyContinue) { exit 1 }`,
+    );
+    if (r?.code !== 0) throw new Error(`Unregister-ScheduledTask: ${failure(r)}`);
+    rmSync(path, { force: true });
+  } else if (kind(sys) === "systemd") {
     await stopUnit(sys, UNIT);
     rmSync(path, { force: true });
     await systemctl(sys, "daemon-reload");
@@ -257,6 +411,13 @@ export async function serviceState(sys: Sys): Promise<ServiceState> {
       state: active?.stdout.trim() || failure(active),
       enabled: enabled?.stdout.trim() === "enabled",
     };
+  }
+  if (kind(sys) === "task") {
+    const r = await powershell(
+      sys,
+      `(Get-ScheduledTask -TaskName ${TASK} -ErrorAction Stop).State`,
+    );
+    return { installed, state: r?.code === 0 ? r.stdout.trim() : "not registered" };
   }
   if (kind(sys) === "launchd") {
     const r = await launchctl(sys, "print", `gui/${sys.uid}/${LABEL}`);

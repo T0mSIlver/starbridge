@@ -4,7 +4,6 @@
  * Every step shows what it found, so a rerun changes only what is missing.
  */
 
-import { readFileSync } from "node:fs";
 import { CLIENT_HEADER, clientHeader, type QuotaSnapshot } from "@starbridge/protocol";
 import type { Status } from "../agent/api";
 import { AgentClient, withAgent } from "../agent/client";
@@ -62,9 +61,9 @@ import {
 } from "./plugins";
 import {
   enableLinger,
+  installedService,
   installService,
   lingering,
-  servicePath,
   unavailable,
   withInstalledPlaces,
 } from "./service";
@@ -107,11 +106,7 @@ async function checkServer(server: string): Promise<void> {
  */
 export async function refresh(sys: Sys): Promise<string[]> {
   const done = refreshFiles(sys);
-  const path = servicePath(sys);
-  let text: string | undefined;
-  try {
-    text = path ? readFileSync(path, "utf8") : undefined;
-  } catch {}
+  const { path, text } = installedService(sys) ?? {};
   if (path && text !== undefined && ours(text))
     try {
       const env = withInstalledPlaces(sys.ctx.env, text);

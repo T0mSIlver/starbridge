@@ -541,3 +541,50 @@ test("opencode files someone else wrote stay, and so does the code a changed ent
   expect(existsSync(join(oc, "starbridge/mod/opencode/starbridge.ts"))).toBe(true);
   expect(existsSync(join(oc, "skills/starbridge"))).toBe(false);
 });
+
+test("on Windows, setup registers a logon task that runs the agent headless, and uninstall removes it", async () => {
+  const m = await machine();
+  await startAgent(m.ctx);
+  const local = join(m.home, "AppData", "Local");
+  Object.assign(m.ctx.env, {
+    SystemRoot: join(import.meta.dir, "fixtures", "fake-windows"),
+    LOCALAPPDATA: local,
+    USERDOMAIN: "PC",
+    USERNAME: "tom",
+  });
+  const sys: Sys = {
+    ...m.sys,
+    platform: "win32",
+    self: ["C:\\Users\\tom\\.local\\bin\\starbridge.exe"],
+  };
+  expect(await setup(sys, { yes: true, readyTimeoutMs: 2_000 })).toBe(0);
+
+  const path = join(local, "starbridge", "starbridge-agent.xml");
+  const bytes = readFileSync(path);
+  expect([bytes[0], bytes[1]]).toEqual([0xff, 0xfe]);
+  const task = bytes.toString("utf16le");
+  expect(task).toContain(`<!-- Written by starbridge ${VERSION};`);
+  expect(task).toContain("<UserId>PC\\tom</UserId>");
+  expect(task).toContain("<ExecutionTimeLimit>PT0S</ExecutionTimeLimit>");
+  expect(task).toContain(
+    `<Arguments>--headless C:\\Users\\tom\\.local\\bin\\starbridge.exe agent --log ${join(local, "starbridge", "agent.log")}</Arguments>`,
+  );
+  const ps = () => m.calls().filter((c) => c.startsWith("powershell"));
+  expect(ps().some((c) => c.startsWith("powershell Register-ScheduledTask"))).toBe(true);
+  expect(ps()).toContain("powershell Start-ScheduledTask -TaskName starbridge-agent");
+
+  // A second setup finds the same task and leaves the running agent alone.
+  const before = ps().length;
+  await setup(sys, { yes: true, readyTimeoutMs: 2_000 });
+  expect(
+    ps()
+      .slice(before)
+      .some((c) => c.startsWith("powershell Start-")),
+  ).toBe(false);
+
+  m.ctx.lines.length = 0;
+  expect(await uninstall(sys, { purge: true })).toBe(0);
+  expect(m.ctx.lines).toContain("Stopped and removed the agent service.");
+  expect(ps().some((c) => c.startsWith("powershell Unregister-ScheduledTask"))).toBe(true);
+  expect(existsSync(path)).toBe(false);
+});

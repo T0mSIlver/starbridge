@@ -551,3 +551,34 @@ test("the socket is never open to other users, even between bind and chmod (#95)
   expect(statSync(socket).mode & 0o777).toBe(0o600);
   expect(process.umask()).toBe(umask);
 });
+
+test("on loopback TCP (Windows), only a call with the port file's token gets through", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "starbridge-port-"));
+  const socket = join(dir, "agent.port");
+  const { agent } = await machine({ socket });
+  expect(statSync(socket).mode & 0o777).toBe(0o600);
+  const file = JSON.parse(readFileSync(socket, "utf8"));
+  expect(file.pid).toBe(process.pid);
+
+  await ask(client(socket), "--project", "p");
+  expect(await server.opened("decision")).toHaveLength(1);
+
+  const status = (headers: Record<string, string>) =>
+    new Promise<number>((resolve, reject) =>
+      request({ host: "127.0.0.1", port: file.port, path: "/v1/status", headers }, (res) => {
+        res.resume();
+        resolve(res.statusCode ?? 0);
+      })
+        .on("error", reject)
+        .end(),
+    );
+  expect(await status({ "starbridge-api": "1" })).toBe(401);
+  expect(await status({ "starbridge-api": "1", authorization: "Bearer wrong" })).toBe(401);
+  expect(await status({ "starbridge-api": "1", authorization: `Bearer ${file.token}` })).toBe(200);
+
+  await agent.stop();
+  expect(existsSync(socket)).toBe(false);
+  // A port file left by an agent that died: its pid runs no more, so nothing is sent.
+  writeFileSync(socket, JSON.stringify({ ...file, pid: 2 ** 22 + 1 }));
+  await expect(new AgentClient(socket).call("GET", "/v1/status")).rejects.toThrow("no agent");
+});

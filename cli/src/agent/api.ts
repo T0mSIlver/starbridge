@@ -1,7 +1,9 @@
 /**
- * The local agent's API: HTTP with JSON bodies over a unix socket, for the CLI and the Claude
- * Code mod on the same machine (PROTOCOL.md, "Local agent API"). Both sides import this file.
+ * The local agent's API: HTTP with JSON bodies over a unix socket, or loopback TCP on Windows
+ * (`PortFile`), for the CLI and the Claude Code mod on the same machine (PROTOCOL.md, "Local
+ * agent API"). Both sides import this file.
  */
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { configDir } from "../config";
 
@@ -18,18 +20,55 @@ export const API_HEADER = "starbridge-api";
 export const MAX_HOLD_SECONDS = 25;
 
 /**
- * Where the agent listens. `$STARBRIDGE_AGENT_SOCKET` wins. For the default config directory,
+ * Where the agent listens. `$STARBRIDGE_AGENT_SOCKET` wins. On Windows, the port file
+ * `agent.port` in the config directory (`PortFile`). Elsewhere, for the default config directory,
  * `$XDG_RUNTIME_DIR/starbridge/agent.sock` when that is set (Linux), else `agent.sock` in the
  * config directory: macOS caps socket paths at 104 bytes, and its config path stays short. Any
  * other config directory (`$STARBRIDGE_CONFIG_DIR`, tests) keeps its socket inside it, so two
  * configurations never share an agent.
  */
-export function socketPath(env: Record<string, string | undefined>, storeDir: string): string {
+export function socketPath(
+  env: Record<string, string | undefined>,
+  storeDir: string,
+  platform: NodeJS.Platform = process.platform,
+): string {
   if (env.STARBRIDGE_AGENT_SOCKET) return env.STARBRIDGE_AGENT_SOCKET;
+  if (platform === "win32") return join(storeDir, "agent.port");
   const standard = configDir({ ...env, STARBRIDGE_CONFIG_DIR: undefined });
   if (env.XDG_RUNTIME_DIR && storeDir === standard)
     return join(env.XDG_RUNTIME_DIR, "starbridge", "agent.sock");
   return join(storeDir, "agent.sock");
+}
+
+/**
+ * Where an agent on loopback TCP listens, in the file its address names (#552). Node and Bun take
+ * a socket path on Windows as a named pipe, which other local users can open, so there the agent
+ * listens on 127.0.0.1 and writes this file into the config directory, which only its user can
+ * read. Every call carries `token`, new at each start, as `authorization: Bearer`; clients check
+ * that `pid` still runs, so a port another process took after a crash never gets a request. An
+ * address ending in `.port` names such a file on any platform.
+ */
+export interface PortFile {
+  port: number;
+  token: string;
+  pid: number;
+}
+
+export const isPortFile = (address: string) => address.endsWith(".port");
+
+/** The port file at `path`, or undefined when it is missing or not one. */
+export function readPortFile(path: string): PortFile | undefined {
+  try {
+    const f = JSON.parse(readFileSync(path, "utf8")) as Partial<PortFile>;
+    if (
+      Number.isInteger(f.port) &&
+      typeof f.token === "string" &&
+      f.token.length >= 32 &&
+      Number.isInteger(f.pid)
+    )
+      return f as PortFile;
+  } catch {}
+  return undefined;
 }
 
 /**

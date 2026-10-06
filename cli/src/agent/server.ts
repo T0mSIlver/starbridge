@@ -1,12 +1,14 @@
 /**
  * `starbridge agent`: one per machine, as a user service. It holds the machine keys and the one
  * connection to the server, and serves the CLI and the Claude Code sessions on this machine over
- * a unix socket (PROTOCOL.md, "Local agent API"). Each feature (decisions, quota uploads, runs,
+ * a unix socket, or loopback TCP on Windows (PROTOCOL.md, "Local agent API"). Each feature (decisions, quota uploads, runs,
  * permission prompts) plugs in as a `Feature`: its routes, the events it hands sessions, the acks
  * it takes and its background loop.
  */
-import { chmodSync, lstatSync, mkdirSync, unlinkSync } from "node:fs";
+import { randomBytes, timingSafeEqual } from "node:crypto";
+import { chmodSync, lstatSync, mkdirSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
+import type { AddressInfo } from "node:net";
 import { dirname } from "node:path";
 import { ProtocolError } from "@starbridge/protocol";
 import { ApiError, Unreachable } from "../api";
@@ -16,8 +18,10 @@ import {
   API,
   API_HEADER,
   type ErrorBody,
+  isPortFile,
   MAX_HOLD_SECONDS,
   MIN_API,
+  readPortFile,
   type SessionEvent,
   type SessionInfo,
   type Status,
@@ -103,6 +107,8 @@ export class Agent implements Hub {
   private loops: Promise<void>[] = [];
   private readonly startedAt: Date;
   private readonly features: Feature[];
+  /** On loopback TCP, what every request must carry (`PortFile`). */
+  private token: string | undefined;
 
   constructor(
     readonly ctx: Ctx,
@@ -166,9 +172,6 @@ export class Agent implements Hub {
     const dir = dirname(this.socket);
     mkdirSync(dir, { recursive: true, mode: 0o700 });
     if (dir === this.ctx.store.dir || dir.endsWith("/starbridge")) chmodSync(dir, 0o700);
-    try {
-      if (lstatSync(this.socket).isSocket()) unlinkSync(this.socket);
-    } catch {}
     const server = createServer((req, res) =>
       this.serve(req, res).catch((e) => {
         // A request must never take the agent down with it.
@@ -180,6 +183,17 @@ export class Agent implements Hub {
     // Held requests last up to MAX_HOLD_SECONDS; Node's default timeouts would cut them.
     server.requestTimeout = 0;
     server.headersTimeout = 10_000;
+    if (isPortFile(this.socket)) await this.listenTcp(server);
+    else await this.listenUnix(server);
+    this.server = server;
+    this.loops = this.features.flatMap((f) => (f.run ? [f.run(this.stopping.signal)] : []));
+    this.log(`starbridge agent ${VERSION} listening on ${this.socket}`);
+  }
+
+  private async listenUnix(server: Server) {
+    try {
+      if (lstatSync(this.socket).isSocket()) unlinkSync(this.socket);
+    } catch {}
     // Bound under a 077 umask: a socket made under the usual one takes other users'
     // connections until the chmod below, and those stay accepted (#95).
     const umask = process.umask(0o077);
@@ -192,9 +206,29 @@ export class Agent implements Hub {
       process.umask(umask);
     }
     chmodSync(this.socket, 0o600);
-    this.server = server;
-    this.loops = this.features.flatMap((f) => (f.run ? [f.run(this.stopping.signal)] : []));
-    this.log(`starbridge agent ${VERSION} listening on ${this.socket}`);
+  }
+
+  /** Listens on a free loopback port, then writes the port file through a temporary file. */
+  private async listenTcp(server: Server) {
+    this.token = randomBytes(32).toString("base64url");
+    await new Promise<void>((resolve, reject) => {
+      server.once("error", reject);
+      server.listen(0, "127.0.0.1", () => resolve());
+    });
+    const { port } = server.address() as AddressInfo;
+    const tmp = `${this.socket}.${process.pid}.tmp`;
+    writeFileSync(tmp, JSON.stringify({ port, token: this.token, pid: process.pid }), {
+      mode: 0o600,
+    });
+    renameSync(tmp, this.socket);
+  }
+
+  /** Whether a request carries this start's token; true on a unix socket. */
+  private authorized(req: IncomingMessage): boolean {
+    if (this.token === undefined) return true;
+    const got = Buffer.from(req.headers.authorization ?? "");
+    const want = Buffer.from(`Bearer ${this.token}`);
+    return got.length === want.length && timingSafeEqual(got, want);
   }
 
   /** Stops the loops, ends held requests and removes the socket. */
@@ -207,8 +241,10 @@ export class Agent implements Hub {
       const closed = new Promise<void>((resolve) => server.close(() => resolve()));
       server.closeAllConnections();
       await closed;
+      // A port file another agent wrote since stays.
+      const mine = !this.token || readPortFile(this.socket)?.token === this.token;
       try {
-        unlinkSync(this.socket);
+        if (mine) unlinkSync(this.socket);
       } catch {}
     }
     await Promise.allSettled(this.loops);
@@ -224,6 +260,7 @@ export class Agent implements Hub {
       res.end(text);
     };
     const fail = (status: number, body: ErrorBody) => send(status, body);
+    if (!this.authorized(req)) return fail(401, { error: "unauthorized" });
     const api = Number(req.headers[API_HEADER]);
     if (!Number.isInteger(api) || api < MIN_API || api > API) {
       const tooOld = Number.isInteger(api) && api > API;

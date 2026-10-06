@@ -297,7 +297,7 @@ provider plugins add providers, not panels.
 
 ## Machines
 
-- **The local agent**, `starbridge agent` (#68), one per machine as a user service (systemd or launchd), owns the
+- **The local agent**, `starbridge agent` (#68), one per machine as a user service (systemd, launchd, or a Scheduled Task on Windows), owns the
   keys and the server connection, uploads quotas, and routes answers, prompts and runs to sessions
   over HTTP on a unix socket (PROTOCOL.md, "Local agent API"). Every CLI command asks the local
   agent first and talks to the server itself when none listens or it answers 426; once it has
@@ -309,6 +309,20 @@ provider plugins add providers, not panels.
 - **The socket** is bound under a 077 umask (#95). There is no peer uid check, since neither Bun
   nor Node exposes `SO_PEERCRED`. The local agent runs only the CodexBar binary its own config names,
   never a path a client sends.
+- **On Windows** (#552) the agent listens on loopback TCP with a per-start token in `agent.port`
+  in the config directory (PROTOCOL.md, "Local agent API"). A named pipe was the other choice:
+  libuv creates one with the default DACL, which lets other users open it for reading, and Bun's
+  named-pipe `listen` has crashed in Claude Code's own use. The profile folder's ACL keeps the
+  token from other users, as the 0600 mode does for the socket. The service is a Scheduled Task
+  at the user's logon, registered from a marked XML file in `%LOCALAPPDATA%\starbridge` with the
+  ScheduledTasks cmdlets: it needs no administrator, unlike a Windows service, and restarts on
+  failure, unlike the `Run` registry key. It runs the agent under `conhost.exe --headless`, since
+  a console program opens a window, with no time limit, since a task stops after 3 days by
+  default, and logs to `agent.log` beside the XML. Stopping the task ends conhost, so setup also
+  ends the agent's pid from `agent.port`. A task carries no environment of its own, so the agent
+  reads the user's: `STARBRIDGE_CONFIG_DIR` and `CODEX_HOME` reach it only as user environment
+  variables. Windows has no SIGTERM: a stopped hook dies without settling its prompt, and the
+  next `Stop` hook settles it.
 - **Answers on the machine** (#260). A machine accepts an answer only from a device the question
   was sealed to, only while it is open, and for an `answerIn` question only a Done, when it asked
   for one (#539). A settled question's

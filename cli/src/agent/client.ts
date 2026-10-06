@@ -1,7 +1,8 @@
 import { request } from "node:http";
 import type { Ctx } from "../context";
+import { processAlive } from "../platform";
 import { VERSION } from "../version";
-import { API, API_HEADER, type ErrorBody, socketPath } from "./api";
+import { API, API_HEADER, type ErrorBody, isPortFile, readPortFile, socketPath } from "./api";
 
 /** No agent listens: the CLI talks to the server itself. */
 export class NoAgent extends Error {}
@@ -56,14 +57,25 @@ export class AgentClient {
       // Before any request exists: one destroyed before its error listener is attached emits
       // "socket hang up" with nobody listening, which crashes the process (#98).
       if (signal?.aborted) return reject(new Interrupted("interrupted"));
+      let target: { socketPath: string } | { host: string; port: number } = {
+        socketPath: this.socket,
+      };
+      let auth: Record<string, string> = {};
+      if (isPortFile(this.socket)) {
+        const f = readPortFile(this.socket);
+        if (!f || !processAlive(f.pid)) return reject(new NoAgent(`no agent on ${this.socket}`));
+        target = { host: "127.0.0.1", port: f.port };
+        auth = { authorization: `Bearer ${f.token}` };
+      }
       const req = request(
         {
-          socketPath: this.socket,
+          ...target,
           // A fresh connection per call: a kept-alive one dies with an agent restart.
           agent: false,
           path,
           method,
           headers: {
+            ...auth,
             [API_HEADER]: String(API),
             "user-agent": this.client,
             ...(text !== undefined

@@ -622,7 +622,16 @@ so the dialog decides, and posts `settled: timeout`.
 one connection to the server, and serves the CLI and the Claude Code sessions on that machine
 over HTTP on a unix socket: `$XDG_RUNTIME_DIR/starbridge/agent.sock` on Linux when that is set,
 else `agent.sock` in the config directory (`$STARBRIDGE_AGENT_SOCKET` overrides). The directory
-is 0700, the socket 0600, and there is no TCP listener. Types: `cli/src/agent/api.ts`.
+is 0700, the socket 0600. Types: `cli/src/agent/api.ts`.
+
+On Windows (#552), Node and Bun read a socket path as a named pipe, which other local users can
+open, so the agent listens on a free port on 127.0.0.1 instead. It writes `agent.port`,
+`{port, token, pid}`, into the config directory, which only its user can read, through a
+temporary file. `token` is 32 random bytes, new at each start; every request carries it as
+`authorization: Bearer <token>`, and the agent answers any other with 401 `{error:
+"unauthorized"}`. A client sends nothing when `pid` no longer runs, so a port another process
+took after a crash never gets a request, and the agent removes the file when it stops. An
+address ending in `.port` names such a file on any platform.
 
 Every request sends `starbridge-api: <n>` and a `user-agent` such as `starbridge-mod/0.2.0`. The
 agent serves revisions `min` to `max` (1 to 1 today) and answers anything else with 426

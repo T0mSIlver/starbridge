@@ -1,5 +1,5 @@
 import type { Register } from "claude-code";
-import { AgentLoop, HEADERS, socketPath } from "./agent.ts";
+import { AgentLoop, HEADERS, isPortFile, portTarget, socketPath } from "./agent.ts";
 import { configDir, Poller } from "./poller.ts";
 import { Switch } from "./switch.ts";
 
@@ -22,16 +22,26 @@ export const register: Register = (on) => {
       XDG_CONFIG_HOME: await $.env.get("XDG_CONFIG_HOME"),
       XDG_RUNTIME_DIR: await $.env.get("XDG_RUNTIME_DIR"),
       HOME: await $.env.get("HOME"),
+      USERPROFILE: await $.env.get("USERPROFILE"),
+      OS: await $.env.get("OS"),
     };
     const dir = configDir(env);
     const socket = socketPath(env);
     const fetch = async (method: string, path: string, body?: unknown) => {
-      const r = await $.http.fetch(`http://agent${path}`, {
-        method,
-        socketPath: socket,
-        headers: body === undefined ? HEADERS : { ...HEADERS, "content-type": "application/json" },
-        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-      });
+      const headers =
+        body === undefined ? HEADERS : { ...HEADERS, "content-type": "application/json" };
+      const init = { method, ...(body === undefined ? {} : { body: JSON.stringify(body) }) };
+      let r: Awaited<ReturnType<typeof $.http.fetch>>;
+      if (isPortFile(socket)) {
+        // Read each call: the agent writes a new port and token each time it starts.
+        const t = portTarget((await $.fs.read(socket)).text);
+        if (!t) throw new Error(`no agent on ${socket}`);
+        r = await $.http.fetch(`http://127.0.0.1:${t.port}${path}`, {
+          ...init,
+          headers: { ...headers, authorization: t.authorization },
+        });
+      } else
+        r = await $.http.fetch(`http://agent${path}`, { ...init, socketPath: socket, headers });
       return { status: r.status, text: r.text };
     };
     const log = (text: string) => $.ui.log(text, { to: "debug" });
