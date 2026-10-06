@@ -10,6 +10,8 @@ import dev.starbridge.app.protocol.QuotaSnapshot
 import dev.starbridge.app.protocol.SealedItem
 import dev.starbridge.app.protocol.Settled
 import dev.starbridge.app.protocol.Run
+import kotlinx.serialization.EncodeDefault
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
@@ -73,6 +75,8 @@ data class SavedPush(val type: String, val id: String, val endpoint: String)
 @Serializable
 data class Saved(
     val server: String,
+    /** The file's format ([FORMAT]); written even at its default, so a later one can tell. */
+    @OptIn(ExperimentalSerializationApi::class) @EncodeDefault val v: Int = FORMAT,
     val account: String? = null,
     /** Another device already set the account up, so this one joins or recovers. */
     val accountExists: Boolean = false,
@@ -123,6 +127,7 @@ data class SavedDigitJoin(val id: String, val request: String, val approverKey: 
 /** Private keys and tokens. */
 @Serializable
 data class Secrets(
+    @OptIn(ExperimentalSerializationApi::class) @EncodeDefault val v: Int = FORMAT,
     val session: String? = null,
     val boxPk: String? = null,
     val boxSk: String? = null,
@@ -139,12 +144,38 @@ data class Secrets(
     val signInVerifier: String? = null,
 )
 
+/**
+ * The format of `state.bin` and `secrets.bin`, written as `v` (#473); a later format raises it
+ * and reads the ones before.
+ */
+const val FORMAT = 1
+
 /** Both files are wrapped by the [Vault], so nothing decrypted sits on the disk in the clear. */
 class Disk(private val dir: File, private val vault: Vault) {
-    private fun <T> read(name: String, serializer: KSerializer<T>): T? {
+    /** Files this app could not read at [load], a newer app's or a damaged one. */
+    val unreadable = mutableListOf<String>()
+
+    private fun <T> read(name: String, serializer: KSerializer<T>, format: (T) -> Int): Result<T?> {
         val file = File(dir, name)
-        if (!file.isFile) return null
-        return runCatching { ProtocolJson.decodeFromString(serializer, vault.unwrap(file.readBytes()).decodeToString()) }.getOrNull()
+        if (!file.isFile) return Result.success(null)
+        return runCatching { ProtocolJson.decodeFromString(serializer, vault.unwrap(file.readBytes()).decodeToString()) }
+            .mapCatching { if (format(it) == FORMAT) it else error("format ${format(it)}") }
+    }
+
+    /**
+     * Both files, read together: they describe one device, so when either cannot be read, both
+     * move aside to `<name>.unreadable-<time>`, kept rather than overwritten, and the app starts
+     * signed out.
+     */
+    fun load(): Pair<Saved?, Secrets> {
+        val saved = read("state.bin", Saved.serializer()) { it.v }
+        val secrets = read("secrets.bin", Secrets.serializer()) { it.v }
+        if (saved.isSuccess && secrets.isSuccess) return saved.getOrNull() to (secrets.getOrNull() ?: Secrets())
+        if (saved.isFailure) unreadable += "state.bin"
+        if (secrets.isFailure) unreadable += "secrets.bin"
+        val at = System.currentTimeMillis()
+        for (name in listOf("state.bin", "secrets.bin")) File(dir, name).takeIf { it.isFile }?.renameTo(File(dir, "$name.unreadable-$at"))
+        return null to Secrets()
     }
 
     private fun <T> write(name: String, serializer: KSerializer<T>, value: T) {
@@ -154,9 +185,11 @@ class Disk(private val dir: File, private val vault: Vault) {
         check(tmp.renameTo(File(dir, name)))
     }
 
-    fun saved(): Saved? = read("state.bin", Saved.serializer())
+    /** The saved state as it is on disk now, or null; moves nothing ([load] does). */
+    fun saved(): Saved? = read("state.bin", Saved.serializer()) { it.v }.getOrNull()
     fun save(saved: Saved) = write("state.bin", Saved.serializer(), saved)
-    fun secrets(): Secrets = read("secrets.bin", Secrets.serializer()) ?: Secrets()
+    /** The secrets as they are on disk now, or none; moves nothing. */
+    fun secrets(): Secrets = read("secrets.bin", Secrets.serializer()) { it.v }.getOrNull() ?: Secrets()
     fun save(secrets: Secrets) = write("secrets.bin", Secrets.serializer(), secrets)
 
     fun wipe() {

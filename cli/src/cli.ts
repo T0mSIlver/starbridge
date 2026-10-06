@@ -5,6 +5,7 @@ import { AgentError, Interrupted, withAgent } from "./agent/client";
 import { answersVia, askVia, quotaVia, waitingVia, waitVia } from "./agent/commands";
 import { runAgent } from "./agent/main";
 import { ApiError, sandboxHint, Unreachable } from "./api";
+import { StateFileError } from "./config";
 import { type Ctx, UsageError } from "./context";
 import { type AskInput, answers, ask, resolveSource, settle, setWaiting, wait } from "./decisions";
 import { hookAskUser, hookPermission, hookQuestion, hookSettle } from "./hook";
@@ -445,7 +446,8 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
       e instanceof ApiError ||
       e instanceof ProtocolError ||
       e instanceof ReleaseError ||
-      e instanceof AgentError
+      e instanceof AgentError ||
+      e instanceof StateFileError
     ) {
       ctx.err(`starbridge: ${e.message}`);
       return 1;

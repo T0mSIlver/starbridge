@@ -36,17 +36,21 @@ class KeystoreVault : Vault {
         return generator.generateKey()
     }
 
+    /** The blob's format: this byte, the IV's length, the IV, then the ciphertext and its tag. */
+    private val format: Byte = 1
+
     override fun wrap(plain: ByteArray): ByteArray {
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.ENCRYPT_MODE, key())
         val iv = cipher.iv
-        return byteArrayOf(iv.size.toByte()) + iv + cipher.doFinal(plain)
+        return byteArrayOf(format, iv.size.toByte()) + iv + cipher.doFinal(plain)
     }
 
     override fun unwrap(wrapped: ByteArray): ByteArray {
-        val ivSize = wrapped[0].toInt()
+        require(wrapped[0] == format) { "a vault blob of format ${wrapped[0]}" }
+        val ivSize = wrapped[1].toInt()
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-        cipher.init(Cipher.DECRYPT_MODE, key(), GCMParameterSpec(128, wrapped, 1, ivSize))
-        return cipher.doFinal(wrapped, 1 + ivSize, wrapped.size - 1 - ivSize)
+        cipher.init(Cipher.DECRYPT_MODE, key(), GCMParameterSpec(128, wrapped, 2, ivSize))
+        return cipher.doFinal(wrapped, 2 + ivSize, wrapped.size - 2 - ivSize)
     }
 }
