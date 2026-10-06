@@ -550,7 +550,8 @@ async function main() {
       .locator("button[data-id]")
       .click();
     await page.getByRole("heading", { name: LAYOUTS }).waitFor({ timeout: 30_000 });
-    // Both images one height, each its own shape (no band), and both buttons on one line.
+    // Each image its own shape (no band), no wider than its button, both centred on one midline;
+    // both buttons on one line.
     const rects = async (sel: string) =>
       page.locator(sel).evaluateAll((els) =>
         els.map((e) => {
@@ -559,7 +560,8 @@ async function main() {
           const shape = img ? img.naturalWidth / img.naturalHeight : 0;
           return {
             top: Math.round(r.top),
-            height: Math.round(r.height),
+            middle: Math.round(r.top + r.height / 2),
+            width: r.width,
             off: r.width / r.height - shape,
           };
         }),
@@ -572,9 +574,8 @@ async function main() {
     const buttons = await rects('fieldset button:not([aria-label^="View"])');
     if (
       images.length !== 2 ||
-      images[0].top !== images[1].top ||
-      images[0].height !== images[1].height ||
-      images.some((r) => Math.abs(r.off) > 0.02) ||
+      Math.abs(images[0].middle - images[1].middle) > 1 ||
+      images.some((r, i) => Math.abs(r.off) > 0.02 || r.width > buttons[i].width + 0.5) ||
       buttons[0].top !== buttons[1].top
     )
       throw new Error(

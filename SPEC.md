@@ -625,10 +625,10 @@ first window, so a provider with a window running out leads.
   an expand badge, since nothing else tells a touch screen they open (#170).
 - **Image rows** (#536). A question's images go two to a row, both at one height and each as wide
   as its shape asks, together filling the row (at most `size.media` tall): no grey bands, no
-  crop, no frame. The owner picked this over framed images in columns and over one large image
-  with thumbnails. With one image per option, two or more, each row's buttons sit under its images
-  in equal halves, in the agent's order, so a narrow phone screenshot keeps a full-size button
-  (rows at most `size.pick` tall). "Reply" sits under them, as under plain options.
+  crop, no frame. With one image per option, two or more, each image sits over its option's
+  button in equal columns, in the agent's order: its own shape, no wider than the button and at
+  most `size.pick` tall, the row's images centred on one midline so the buttons line up. The owner
+  chose both from mockups. "Reply" sits under them, as under plain options.
 - **Signed out.** A browser that holds no device of the account it last signed in to gets the
   landing page at `/`, as does a revoked browser (#209); one with a device gets sign-in.
 - **Restarts go unnoticed** (#250). Clients retry a 502, 503 or refused connection quietly for

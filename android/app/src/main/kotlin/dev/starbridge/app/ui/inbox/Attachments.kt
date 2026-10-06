@@ -97,6 +97,22 @@ fun ImageRow(images: List<Attached>, width: Dp, maxHeight: Dp, onOpen: (Int) -> 
     }
 }
 
+/**
+ * A row of images over their options (#536): each in an equal column of [width], at its own shape,
+ * no wider than its column and at most [maxHeight] tall, the row's images centred on one midline.
+ */
+@Composable
+fun PickImages(images: List<Attached>, width: Dp, maxHeight: Dp, onOpen: (Int) -> Unit) {
+    val column = (width - Spacing.s2) / 2
+    val sizes = images.map { val h = minOf(maxHeight, column * it.height / it.width); DpSize(h * it.width / it.height, h) }
+    val height = sizes.maxOf { it.height }
+    Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+        images.forEachIndexed { i, image ->
+            Box(Modifier.size(column, height), contentAlignment = Alignment.Center) { ImageBox(image, sizes[i], crop = false) { onOpen(i) } }
+        }
+    }
+}
+
 /** One image at [size]: its own shape, or with [crop] filled from the top. */
 @Composable
 private fun ImageBox(image: Attached, size: DpSize, crop: Boolean, onOpen: () -> Unit) {

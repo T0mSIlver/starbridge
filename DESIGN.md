@@ -510,8 +510,9 @@ it has no title. A session's title is words, in the reading face (#563).
   with the expand icon (`s5`) in `fg`. Touch screens show no zoom cursor.
 - A question's images go two to a row at one height, each as wide as its
   shape asks, the row filling the width: `radius.lg` corners, no frame, no
-  fill (`surface2` shows only until an image decodes). Over options, the row's
-  buttons sit under it in equal halves.
+  fill (`surface2` shows only until an image decodes). Over options, each
+  image sits in its button's column, no wider than the button, the row's
+  images centred on one midline.
 - Destructive actions are neutral text buttons on the row; only the confirm
   button in their dialog is red (`bad`).
 - Copy inside the UI is labels and states only, never a sentence explaining

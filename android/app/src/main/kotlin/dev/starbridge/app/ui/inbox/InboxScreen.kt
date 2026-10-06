@@ -565,9 +565,9 @@ fun DecisionSheet(decision: Decision, now: Instant, onAnswer: (String, String?, 
 }
 
 /**
- * "Pick a result": each image over the option it stands for, two to a row; picking one answers. The
- * images of a row share one height, as everywhere ([ImageRow], #536), and the row's buttons sit
- * under them in equal halves, so a narrow phone screenshot keeps a full-size button.
+ * "Pick a result": each image over the option it stands for, two to a row; picking one answers.
+ * Each image keeps its own shape, no wider than its button, and the row's images are centred on
+ * one midline, so the buttons under them line up ([PickImages], #536).
  */
 @Composable
 private fun Picks(decision: Decision, sending: String?, answer: (String?, String?) -> Unit) {
@@ -578,7 +578,7 @@ private fun Picks(decision: Decision, sending: String?, answer: (String?, String
         Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
             decision.images.indices.chunked(2).forEach { row ->
                 Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
-                    ImageRow(row.map { decision.images[it] }, width, Sizes.pick) { viewing = row[it] }
+                    PickImages(row.map { decision.images[it] }, width, Sizes.pick) { viewing = row[it] }
                     Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
                         row.forEach { i ->
                             val option = decision.options[i]

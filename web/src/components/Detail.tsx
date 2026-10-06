@@ -6,7 +6,7 @@ import type { MachineKind } from "@/lib/feed";
 import { AnsweredFirst, answeredFirstText, answerPlace } from "@/lib/outcome";
 import { fullInput } from "@/lib/permissionInput";
 import type { InboxItem, PromptItem, PromptReply, Reply } from "@/lib/types";
-import { ImageButton, ImageRow, Images, Links, rows } from "./Attachments";
+import { ImageButton, Images, Links, rows } from "./Attachments";
 import { Context } from "./Context";
 import s from "./Detail.module.css";
 import { KindTile, MetaRow, SessionLine, slotTime } from "./Feed";
@@ -279,9 +279,9 @@ export function QuestionDetail({
 }
 
 /**
- * "Pick a result": each image over the option it stands for, two to a row; picking one answers. The
- * images of a row share one height, as everywhere (#536), and the row's buttons sit under them in
- * equal halves, so a narrow phone screenshot keeps a full-size button.
+ * "Pick a result": each image over the option it stands for, two to a row; picking one answers.
+ * Each image keeps its own shape, no wider than its button and at most `size.pick` tall, and the
+ * row's images are centred on one midline, so the buttons under them line up (#536).
  */
 function Picks({
   d,
@@ -301,12 +301,17 @@ function Picks({
       <legend className="sr-only">Answer</legend>
       {rows(images.length).map((row) => (
         <div key={row[0]} className={s.pick}>
-          <ImageRow images={row.map((i) => images[i])}>
+          <div className={s.pickColumns}>
             {row.map((i) => (
-              <ImageButton key={i} img={images[i]} onOpen={() => setOpen(i)} />
+              <ImageButton
+                key={i}
+                img={images[i]}
+                className={s.pickImage}
+                onOpen={() => setOpen(i)}
+              />
             ))}
-          </ImageRow>
-          <div className={s.pickButtons}>
+          </div>
+          <div className={s.pickColumns}>
             {row.map((i) => {
               const o = d.options[i];
               const rec = o === d.recommended;

@@ -43,12 +43,12 @@
   text-align: center;
 }
 
-/* Images over their options, two to a row (#536): the images, then their buttons in equal halves. */
+/* Images over their options, two to a row (#536): the images in equal columns, centred on the
+   row's midline, then their buttons in the same columns. */
 .picks {
   display: grid;
   gap: var(--s4);
   padding: 0;
-  --row-max: var(--size-pick);
 }
 
 .pick {
@@ -56,13 +56,21 @@
   gap: var(--s2);
 }
 
-.pickButtons {
+.pickColumns {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: center;
+  justify-items: center;
   gap: var(--s2);
 }
 
-.pickButtons > button {
+/* Its own shape: as wide as its column allows, or narrower when `size.pick` caps its height. */
+.pickImage {
+  width: min(100%, calc(var(--size-pick) * var(--r)));
+}
+
+.pickColumns > button:not(.pickImage) {
+  width: 100%;
   max-width: 100%;
   white-space: nowrap;
   overflow: hidden;

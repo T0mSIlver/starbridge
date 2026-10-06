@@ -48,12 +48,20 @@ export function ImageRow({ images, children }: { images: Image[]; children: Reac
   );
 }
 
-/** One image, opening the viewer. */
-export function ImageButton({ img, onOpen }: { img: Image; onOpen: () => void }) {
+/** One image at its own shape, opening the viewer. */
+export function ImageButton({
+  img,
+  onOpen,
+  className = "",
+}: {
+  img: Image;
+  onOpen: () => void;
+  className?: string;
+}) {
   return (
     <button
       type="button"
-      className={s.image}
+      className={`${s.image} ${className}`}
       style={{ "--r": img.width / img.height } as CSSProperties}
       onClick={onOpen}
       aria-label={img.alt ? `View ${img.alt}` : "View image"}
