@@ -61,6 +61,9 @@ for (const p of ["claude", "codex"])
     fail(`\`codexbar config providers --format json\` lists no ${p}: ${providers.join(", ")}`);
 
 // OpenRouter needs an API key, so without one CodexBar returns its error row.
+// `collect` runs CodexBar with this process's environment: give it the throwaway HOME, no token.
+process.env.HOME = home;
+delete process.env.GITHUB_TOKEN;
 const rows = await collect(bin, ["openrouter"], () => new Date(), console.log);
 const row = rows[0];
 if (rows.length !== 1 || row?.provider !== "openrouter" || !row.error)
