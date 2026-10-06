@@ -1292,6 +1292,16 @@ so the mod is the first path.
   since `codex queue` (0.160) takes the message only as an argument and other local users can
   read process arguments; `wait <id>` prints a delivered answer from local state. The npm bundle
   runs under Node, so the CLI uses no Bun global without a guard; a test runs it there.
+- 2026-10-06. CI runners on dell2 (#392), a host for CI only (6 cores, 13 GB visible). Two
+  runners: `dell2-1` with the label `starbridge-android` alone, so Android builds never queue
+  behind CI jobs, and `dell2-2` with `starbridge-devbox`; jobs spread with no workflow change.
+  Android builds left the dev box when `devbox-1` lost `starbridge-android`.
+  `deploy/setup-runners.sh` installs #380's system units in `ci.slice` on every host. It takes
+  the runners as `RUNNERS="name:labels ..."` (the dev box's three by default), a `RUNNER_TOKEN`
+  for hosts without gh, and `GRADLE_PROPS`, written to the shared Gradle home, which Gradle reads
+  over the project's: dell2 keeps `-Xmx4g` and caps workers at 4. At launch the dell2 runners go
+  with the dev box's (#59): a repo-level runner serves a fork's copy of any workflow, and runner
+  groups that limit runners to chosen workflows exist only for organizations.
 
 - 2026-10-06. A device that joins later reads the questions already waiting (#340), as #158 did
   for quotas. Decisions and permission prompts are sealed and signed to the devices in the
