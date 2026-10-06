@@ -608,7 +608,9 @@ first window, so a provider with a window running out leads.
 - **Update screen** (#497): when the server answers 426 `client-too-old`, the app shows only
   "Update Starbridge", the server's minimum and this phone's release, and one button back to
   where the app came from: Google Play, Obtainium (its launch intent, else the release page), or
-  the latest GitHub release. The updated app starts without it.
+  the latest GitHub release. The updated app starts without it. Answers given meanwhile wait in
+  the outbox for it. Signed out, the refusal shows as a notice instead, so the owner can pick
+  another server.
 
 ## Brand
 

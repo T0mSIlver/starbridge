@@ -90,7 +90,8 @@ class MainActivity : ComponentActivity() {
                     }
                 }
                 val tooOld by store.tooOld.collectAsStateWithLifecycle()
-                if (tooOld != null) {
+                // Signed out, the owner may pick another server instead: the refusal shows as a notice.
+                if (tooOld != null && phase != Phase.SignedOut) {
                     Scaffold { padding -> UpdateRequired(tooOld!!, BuildConfig.VERSION_NAME, installer(), ::openUpdate, Modifier.padding(padding)) }
                 } else if (phase == Phase.Ready) {
                     Main(decisions, store.notice, store::dismissNotice, opening.receiveAsFlow())
@@ -161,7 +162,7 @@ class MainActivity : ComponentActivity() {
             Installer.Obtainium -> OBTAINIUM.firstNotNullOfOrNull { packageManager.getLaunchIntentForPackage(it) }
             Installer.Other -> null
         }
-        if (intent == null || runCatching { startActivity(intent) }.isFailure) openInBrowser(RELEASES)
+        if (intent == null || runCatching { startActivity(intent) }.isFailure) runCatching { openInBrowser(RELEASES) }
     }
 
     private fun openInBrowser(url: String) {

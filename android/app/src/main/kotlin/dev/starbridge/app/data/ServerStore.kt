@@ -1034,6 +1034,7 @@ class ServerStore(
             api().postItem(item)
         } catch (e: ApiException) {
             if (e.error == "already-answered" || e.error == "expired") syncPrompts()
+            if (e is TooOld) describe(e)
             throw e
         }
         val answer = if (allow) "allow:$chosen" else "deny"
@@ -1191,6 +1192,12 @@ class ServerStore(
                 e.status == 401 -> {
                     keep(q, landed = false)
                     throw e
+                }
+                // This release is refused: the answer waits for the updated app to send it.
+                e is TooOld -> {
+                    describe(e)
+                    keep(q, landed = false)
+                    Sent.Queued(q.answer)
                 }
                 e.status >= 500 || e.status == 429 -> {
                     keep(q, landed = e.status != 502 && e.status != 503 && e.status != 429)
