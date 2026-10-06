@@ -224,19 +224,22 @@ test("each session gets its own answers through the agent, once, confirmed", asy
 
 test("an answer that arrives during a /clear waits for the old session", async () => {
   await startAgent();
-  const a = session("s-a");
+  const a = session("s-clear");
   loop(a.host);
-  const da = await ask("Merge #12 now?", "s-a");
+  const da = await ask("Merge #12 now?", "s-clear");
   await until(() => a.s.calls.some((c) => c.startsWith("GET")));
   a.s.afterCall = (path) => {
-    if (path.includes("/events")) a.s.id = "s-new";
+    if (path.includes("/events")) a.s.id = "s-clear-new";
   };
   await server.answer(da, { choice: "Yes" });
   await until(() => a.s.logs.some((l) => l.includes("held back")));
   a.s.afterCall = undefined;
   expect(a.s.submitted).toEqual([]);
+  // The hello under the new id retired the old one: no mod promises it an answer now (#537).
+  await until(() => agent?.seen("s-clear-new", 45_000) ?? false);
+  expect(agent?.seen("s-clear", 45_000)).toBe(false);
   // `/resume` of the old session: it gets the answer then.
-  a.s.id = "s-a";
+  a.s.id = "s-clear";
   await until(() => a.s.submitted.length === 1);
 });
 
