@@ -31,8 +31,8 @@ export default function Privacy() {
         </li>
         <li>
           Hashes of your sign-in sessions, which expire after a year, and of machine tokens. A new
-          machine&apos;s token is also kept as is with its pairing request, for at most its 10
-          minutes, so a reply lost on the way can be sent again.
+          machine&apos;s token is also kept as is with its pairing request for about 10 minutes, so
+          a reply lost on the way can be sent again; a backup taken in that time keeps it too.
         </li>
         <li>
           For each device that gets notifications: the push service, its token or endpoint URL, and
@@ -43,8 +43,8 @@ export default function Privacy() {
           the notices that close an item or say an agent is waiting. Your devices and machines
           encrypt them before upload, and the server cannot read them. It does see the kind of each
           one, its id, who sent it, which devices it went to, which item it answers or closes, its
-          size, when it arrived, was updated or was answered, and whether a quota snapshot asked for
-          a notification.
+          size, when it arrived, was updated or was answered, and whether an item asked for a
+          notification.
         </li>
       </ul>
       <p>The server deletes them on this schedule:</p>
@@ -69,10 +69,11 @@ export default function Privacy() {
       <p>
         The web server (Caddy) keeps no access log. The server, Caddy and the web page log startup,
         errors and failed pushes; these lines can include an account id or a push endpoint, but not
-        IP addresses or your content, except Caddy&apos;s error log, which can hold the address of a
-        request that failed at the proxy. Each keeps five files of 10 MB, so how long a log covers
-        depends on traffic. To enforce rate limits, the server counts requests per IP address in
-        memory; it never writes them to disk, and a restart clears them.
+        IP addresses or your content. Caddy&apos;s error log is the exception: for a request that
+        failed at the proxy, it can hold the request&apos;s IP address, path and headers. Each keeps
+        five files of 10 MB, so how long a log covers depends on traffic. To enforce rate limits,
+        the server counts requests per IP address in memory; it never writes them to disk, and a
+        restart clears them.
       </p>
 
       <h2 className="t-heading">Usage counts</h2>
@@ -102,10 +103,7 @@ export default function Privacy() {
           for pushes relayed for self-hosted servers;
         </li>
         <li>push targets by push service;</li>
-        <li>
-          which releases of the Android app, the web page, the CLI and the Claude Code mod were in
-          use.
-        </li>
+        <li>which releases of the Android app, the web page and the CLI were in use.</li>
       </ul>
 
       <h2 className="t-heading">Who else sees what</h2>
