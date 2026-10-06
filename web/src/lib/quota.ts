@@ -35,7 +35,8 @@ export function status(
     return {
       state: "unknown",
       word: "Window reset",
-      reset: s.absoluteResets ? clock(w.resetsAt, now) : relative(w.resetsAt, now),
+      // Always "12 min ago": a bare clock time would read as the next reset.
+      reset: relative(w.resetsAt, now),
     };
   const reset = w.resetsAt ? when(w.resetsAt, s, now) : "";
   if (!w.pace || w.pace.stage === "unknown")

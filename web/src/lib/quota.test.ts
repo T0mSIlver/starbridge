@@ -34,7 +34,15 @@ test("a window that will run out says when, and its reset without 'in'", () => {
 });
 
 test("a run-out time that passed reads Ran out at its clock time", () => {
-  const s = status(window({ runsOutAt: "2026-10-05T09:40:00Z" }), undefined, rel, now);
+  const s = status(
+    window(
+      { runsOutAt: new Date(2026, 9, 5, 9, 40).toISOString() },
+      new Date(2026, 9, 5, 12).toISOString(),
+    ),
+    undefined,
+    rel,
+    new Date(2026, 9, 5, 10),
+  );
   expect(s.state).toBe("ran-out");
   expect(s.word).toMatch(/^Ran out at \d\d:\d\d/);
 });
@@ -46,15 +54,19 @@ test("a window whose reset passed is over until the next upload, which says when
     reset: "30 min ago",
   });
   const abs = status(window({}, "2026-10-05T09:30:00Z"), undefined, { absoluteResets: true }, now);
-  expect(abs.reset).toMatch(/^\d\d:30/);
+  expect(abs.reset).toBe("30 min ago");
 });
 
 test("a run-out time tomorrow reads 'tomorrow at'", () => {
+  // Local times, so tomorrow is tomorrow in any zone.
   const s = status(
-    window({ runsOutAt: "2026-10-06T07:20:00Z" }, "2026-10-07T12:00:00Z"),
+    window(
+      { runsOutAt: new Date(2026, 9, 6, 7, 20).toISOString() },
+      new Date(2026, 9, 7, 12).toISOString(),
+    ),
     undefined,
     { absoluteResets: true },
-    now,
+    new Date(2026, 9, 5, 10),
   );
   expect(s.word).toMatch(/^Will run out tomorrow at \d/);
 });
