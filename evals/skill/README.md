@@ -1,33 +1,38 @@
 # Skill eval
 
 Checks that agents reach their user through Starbridge the way the `starbridge` skill and the
-SessionStart rule say (issue #121). Real Claude Code and Codex sessions work through nine
+SessionStart rule say (issue #121). Real Claude Code, Codex and Pi sessions work through nine
 scripted situations (`scenarios.ts`), once with the plugin at a git ref and once with this
 checkout's, and a rubric scores the cards they post.
 
 ```bash
-bun evals/skill/run.ts --agent claude --reps 2          # records in results/claude
-bun evals/skill/run.ts --agent codex --reps 2           # records in results/codex
+TMPDIR=/var/tmp bun evals/skill/run.ts --agent claude --reps 2   # claude-sonnet-5-5
+TMPDIR=/var/tmp bun evals/skill/run.ts --agent codex --reps 2    # Codex's default model
+TMPDIR=/var/tmp bun evals/skill/run.ts --agent pi --reps 2       # zai/glm-5.3-flash
 bun evals/skill/grade.ts evals/skill/results/claude evals/skill/results/codex
+bun evals/skill/tokens.ts                                        # tokens each injected piece costs
 bun evals/skill/render.ts --out evals/skill/cards evals/skill/results/claude/after-merge-order-1.json
 ```
 
 `run.ts` gives every run a throwaway home, a throwaway `CLAUDE_CONFIG_DIR`, `CODEX_HOME` or
-`PI_CODING_AGENT_DIR` holding a copy of the login, the real server app on a random port with the CLI paired to it, a
-git project with a bare remote, and a `gh` that prints canned output. Nothing touches your own
-`~/.claude`, `~/.codex` or `~/.pi`. Claude Code loads the plugin with `--plugin-dir`; Codex
-gets the skill in `$CODEX_HOME/skills` and the rule in `$CODEX_HOME/AGENTS.md`; Pi loads the
-Starbridge extension and skill with `-e` and `--skill`. Pi uses the providers in `~/.pi/agent`;
-Anthropic bills a Claude subscription used from Pi as extra usage, so Pi runs on another model. Each
-run's copy of a login may refresh its token on its own; a provider that rotates refresh tokens
-could then sign you out of the original. `TMPDIR` must be outside your home, where an ancestor's
-`AGENTS.md` or `CLAUDE.md` would reach the agent. Situations with a
-follow-up answer the card with its recommended option, in the line the mod submits, and check
-that the agent acts on it.
+`PI_CODING_AGENT_DIR` holding a copy of the login, the real server app on a random port with the
+CLI paired to it, a git project with a bare remote, and a `gh` that prints canned output. Nothing
+touches your own `~/.claude`, `~/.codex` or `~/.pi`. Claude Code loads the plugin with
+`--plugin-dir`; Codex gets the skill in `$CODEX_HOME/skills` and the rule in
+`$CODEX_HOME/AGENTS.md`; Pi loads the Starbridge extension and skill with `-e` and `--skill`,
+and uses the providers in `~/.pi/agent`. Anthropic bills a Claude subscription used from Pi as
+extra usage, so Pi runs on another model. Situations with a follow-up answer the card with its
+recommended option, in the line the mod submits, and check that the agent acts on it.
+
+Each run's copy of a login may refresh its token on its own; a provider that rotates refresh
+tokens could then sign you out of the original. `TMPDIR` must be outside your home, where an
+ancestor's `AGENTS.md` or `CLAUDE.md` would reach the agent. A Codex home is 60 MB, so parallel
+runs can fill a small /tmp.
 
 `grade.ts` scores each run: eleven checks read the record, five ask Claude Sonnet through
-`claude -p` in a throwaway config dir (stored in the record, so grading again is free). `render.ts` shows cards in the real web
-inbox (headless Chromium) and saves a screenshot of each.
+`claude -p` in a throwaway config dir (stored in the record, so grading again is free). A model
+provider's error, such as a rate limit, makes the run a failed run rather than a score.
+`render.ts` shows cards in the real web inbox (headless Chromium) and saves a screenshot of each.
 
 `results/299` holds the records behind the table in SPEC.md's research log entry for #299:
 `main` is the skill and rule before that change, `after` after it.
