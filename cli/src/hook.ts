@@ -226,8 +226,13 @@ export async function hookSettle(
     agentName(opts.agent);
     const hook = parseHook(stdin);
     const sessionId = typeof hook.session_id === "string" ? hook.session_id : "";
-    // Runs after every tool call: nothing waiting means no network and no agent call.
-    if (!sessionId || waitingFor(ctx.store.state(), sessionId).length === 0) return 0;
+    // Runs after a tool call while a prompt is open: nothing waiting for this session means no
+    // network and no agent call. With none open at all, the marker is left over, such as from a
+    // state a new pairing replaced: dropped under the lock.
+    const st = ctx.store.state();
+    if (ctx.store.promptsMarked() && !Object.values(st.permissions ?? {}).some((p) => !p.settled))
+      ctx.store.updateState(() => {});
+    if (!sessionId || waitingFor(st, sessionId).length === 0) return 0;
     // A tool that ran or was denied names its call; the end of a turn or session settles all.
     const inputHash =
       hook.tool_input !== undefined ? inputHashOf(session(ctx).keys, hook.tool_input) : undefined;

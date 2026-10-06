@@ -357,7 +357,10 @@ Codex prompts are not supported.
 
 - **Claude Code** (#57). A `PermissionRequest` command hook (600 s) races the dialog. Its input has
   no `tool_use_id`, so the hook settles a call by the hash of its `tool_input` on `PostToolUse` and
-  `PermissionDenied`, and all of a session's prompts on `Stop` and `SessionEnd`. "This session" and
+  `PermissionDenied`, and all of a session's prompts on `Stop` and `SessionEnd`. `PostToolUse` runs
+  a shell check that starts the CLI only while the CLI marks a prompt open
+  (`<config>/permissions-open`, kept in step with the state): starting it on every tool call cost
+  about 50 ms and 50 MB, prompts on or off (#517). "This session" and
   "always" are offered only for `addRules` and `addDirectories` suggestions whose rules fit in
   full; a `setMode` suggestion changes more than the call, so it stays at the keyboard. A deny with
   no message tells the agent the owner denied it.

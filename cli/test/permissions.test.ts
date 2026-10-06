@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, expect, setDefaultTimeout, test } from "bun:test";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { generateMemberKeys, hashInput, ready } from "@starbridge/protocol";
 import { LiveServer } from "@starbridge/server/test-support";
@@ -7,6 +9,7 @@ import { AgentClient } from "../src/agent/client";
 import { makeAgent } from "../src/agent/main";
 import type { Agent } from "../src/agent/server";
 import { run } from "../src/cli";
+import { PROMPTS_OPEN } from "../src/config";
 import { session } from "../src/context";
 import { poll } from "../src/decisions";
 import {
@@ -300,6 +303,8 @@ test("without an agent, Stop settles every waiting prompt of the session even wh
 test("a keyboard answer settles the prompt: PostToolUse for the same call releases the hook", async () => {
   const ctx = await machine();
   const { out, permission } = await ask(ctx);
+  // The open prompt is marked for the plugin's PostToolUse check (#517).
+  expect(ctx.store.promptsMarked()).toBe(true);
   // Another tool call of the session finishing settles nothing.
   const other = JSON.stringify({ session_id: SESSION, tool_name: "Read", tool_input: { a: 1 } });
   expect(await hookSettle(ctx, other, { agent: "claude-code" })).toBe(0);
@@ -326,6 +331,25 @@ test("a keyboard answer settles the prompt: PostToolUse for the same call releas
   await expect(
     server.answerPermission(permission.id, { behavior: "allow", scope: "once" }),
   ).rejects.toThrow("already-answered");
+  await until(() => !ctx.store.promptsMarked());
+});
+
+test("the plugin's PostToolUse check starts the CLI only while a prompt is open (#517)", () => {
+  const dir = mkdtempSync(join(tmpdir(), "sb-settle-"));
+  const bin = join(dir, "bin");
+  mkdirSync(bin);
+  writeFileSync(join(bin, "starbridge"), `#!/bin/sh\ncat > "${dir}/ran"\n`, { mode: 0o755 });
+  const script = join(import.meta.dir, "../../plugin/hooks/settle.sh");
+  const env = { PATH: `${bin}:/usr/bin:/bin`, HOME: dir, STARBRIDGE_CONFIG_DIR: join(dir, "cfg") };
+  const runHook = () =>
+    Bun.spawnSync(["sh", script], { env, stdin: new TextEncoder().encode('{"session_id":"s"}') });
+  expect(runHook().exitCode).toBe(0);
+  expect(existsSync(join(dir, "ran"))).toBe(false);
+  mkdirSync(join(dir, "cfg"));
+  writeFileSync(join(dir, "cfg", PROMPTS_OPEN), "");
+  expect(runHook().exitCode).toBe(0);
+  // The hook input reaches the CLI.
+  expect(readFileSync(join(dir, "ran"), "utf8")).toBe('{"session_id":"s"}');
 });
 
 test("SIGTERM (Esc or No at the keyboard) reports the prompt settled and prints nothing", async () => {

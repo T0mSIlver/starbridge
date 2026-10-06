@@ -32,6 +32,9 @@ export function configDir(env: Record<string, string | undefined>): string {
   return join(env.XDG_CONFIG_HOME || join(homedir(), ".config"), "starbridge");
 }
 
+/** The file `plugin/hooks/settle.sh` looks for in the config folder before it starts the CLI. */
+export const PROMPTS_OPEN = "permissions-open";
+
 /** This machine's identity. Holds the private keys and the machine token: mode 0600. */
 export interface Machine {
   server: string;
@@ -327,8 +330,24 @@ export class Store {
       const s = this.state();
       fn(s);
       this.write("state.json", s);
+      this.markPromptsOpen(s);
       return s;
     });
+  }
+
+  /**
+   * Keeps `PROMPTS_OPEN` there exactly while a permission prompt is unsettled, so the Claude Code
+   * plugin's `PostToolUse` hook starts `starbridge hook settle` only then (#517).
+   */
+  promptsMarked(): boolean {
+    return existsSync(this.path(PROMPTS_OPEN));
+  }
+
+  private markPromptsOpen(s: State) {
+    const open = Object.values(s.permissions ?? {}).some((p) => !p.settled);
+    const file = this.path(PROMPTS_OPEN);
+    if (open && !existsSync(file)) writeFileSync(file, "", { mode: 0o600 });
+    else if (!open && existsSync(file)) unlinkSync(file);
   }
 }
 
