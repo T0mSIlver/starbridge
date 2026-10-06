@@ -260,8 +260,10 @@ the server started. A machine that sends back `directory=<n>&quotaAsked=<time>` 
 knows gets a reply at once when the directory is longer or a device asked since, and every
 directory append ends its open waits. So the machine's agent re-reads the directory as soon as a
 device joins and posts a fresh snapshot sealed to it, and posts one when a device asks.
-A machine checks that an answer's `decisionId` is one it asked and its `choice`, if any, one of
-the decision's options. An answer carries `choice` or `text`: a decision with options that sets
+A machine checks that an answer's `decisionId` is one it asked, still open and without
+`answerIn`, that its signer is one of the devices the decision was sealed to, and that its
+`choice`, if any, is one of the decision's options. It never delivers an answer to a decision it
+settled, even one it accepted before, since the server could have held it back until then. An answer carries `choice` or `text`: a decision with options that sets
 `replies: true` also takes a typed `text` reply, which clients offer as "Reply" under the
 options; machines from before it leave `replies` out. For permission answers, see below.
 

@@ -11,6 +11,7 @@ import {
   type AskInput,
   ackLines,
   answerLine,
+  deliverable,
   delivery,
   poll,
   postDecision,
@@ -157,7 +158,8 @@ export class Decisions implements Feature {
       const st = this.ctx.store.state();
       if (st.behind) return;
       const asked = st.asked[id];
-      if (a.seen || !st.answers[id] || !asked?.codex || !asked.session) continue;
+      if (a.seen || !st.answers[id] || !asked?.codex || !asked.session || !deliverable(st, id))
+        continue;
       const retry = this.retries.get(id) ?? { tries: 0, at: 0 };
       if (retry.tries >= CODEX_TRIES || retry.at > now) continue;
       const error = await codexQueue(
