@@ -80,6 +80,7 @@ beforeAll(async () => {
         return Response.json({ name: "projects/p/messages/1" });
       }
       if (url.pathname === "/wp/gone") return new Response("", { status: 410 });
+      if (url.pathname.startsWith("/wp/forbidden")) return new Response("", { status: 403 });
       if (url.pathname.startsWith("/slow/")) {
         // Holds the request for 400 ms, or until the server gives up on it.
         await new Promise((r) => {
@@ -291,6 +292,18 @@ test("Web Push direct: the browser decrypts the payload; VAPID signs the request
   expect(req?.headers.get("authorization")).toContain(`k=${vapid.publicKey}`);
   expect(JSON.parse(browser.decrypt(req?.body as Buffer)).box).toBe(d.boxes[0]?.box);
   expect((await s.call("GET", "/v1/push/vapid")).json).toEqual({ publicKey: vapid.publicKey });
+});
+
+test("a Web Push service's 403, another key's subscription, drops it; a distributor's stays (#567)", async () => {
+  const { s, acct, devbox } = await setup(vapidConfig());
+  const browser = browserSubscription("forbidden-browser");
+  const up = browserSubscription("forbidden-ntfy");
+  for (const body of [browser.target, { ...up.target, type: "unifiedpush" as const }])
+    await s.call("POST", "/v1/push/subscriptions", { token: acct.device.token, body });
+  await postDecision(s, acct, devbox, "d1");
+  await s.deps.push.idle();
+  const left = s.deps.db.query("SELECT type FROM push_subscriptions").all();
+  expect(left).toEqual([{ type: "unifiedpush" }]);
 });
 
 test("UnifiedPush goes straight to the distributor, encrypted when it has keys", async () => {
