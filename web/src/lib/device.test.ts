@@ -114,8 +114,8 @@ test("comparing digits survives a failed poll, and a failed approval retries ont
   expect(comparison.digits).toBe(keys.digits);
 
   // The entry lands but the approval's post fails; Approve again reuses the entry.
-  live.failures.push(`/joins/${id}/approve`);
-  await expect(comparison.approve(ctx)).rejects.toThrow("unavailable");
+  live.errors.push(`/joins/${id}/approve`);
+  await expect(comparison.approve(ctx)).rejects.toThrow("internal");
   await comparison.approve(ctx);
 
   const { join } = await call("GET", `/joins/${id}`);

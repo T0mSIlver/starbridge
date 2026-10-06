@@ -40,6 +40,8 @@ export class LiveServer {
    * outage on demand.
    */
   readonly failures: string[] = [];
+  /** The next HTTP requests to these paths fail with 500, which clients do not retry, once each. */
+  readonly errors: string[] = [];
   /** The next HTTP requests to these paths never get a response, once each. */
   readonly stalls: string[] = [];
   /** The kind of each push the server sent, in order: push itself is off. */
@@ -82,6 +84,11 @@ export class LiveServer {
     if (fail >= 0) {
       this.failures.splice(fail, 1);
       return Response.json({ error: "unavailable" }, { status: 503 });
+    }
+    const error = this.errors.indexOf(path);
+    if (error >= 0) {
+      this.errors.splice(error, 1);
+      return Response.json({ error: "internal" }, { status: 500 });
     }
     const stall = this.stalls.indexOf(path);
     if (stall >= 0) {

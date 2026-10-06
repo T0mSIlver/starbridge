@@ -1004,6 +1004,14 @@ so the mod is the first path.
   Each asks first, `--yes` takes the defaults (install), and `--no-plugin` skips all three.
   `status` reports both, and `uninstall` removes the skill folder (only when it holds the
   Starbridge skill) and the Pi package. The docs drop the curl step for Codex.
+- 2026-10-06. A deploy goes unnoticed in the clients (#250). The web page and the Android app retry
+  a 502 or 503, which Caddy sends while the server restarts, and a refused connection, quietly for
+  20 s with a backoff from 250 ms to 4 s, before they show an error. A write retries only on those
+  answers and on a refused connection, which never reached the server; a connection cut after the
+  request left retries reads only, since a write may have landed (the web page cannot tell the
+  two apart, so its writes retry on 502 and 503 only). Long-polls ride on the same calls, so they
+  reconnect without a notice. With #150 Caddy already holds requests during a restart; this
+  covers what slips through, and self-hosted servers without that Caddy setup.
 - 2026-10-06. A lost run says so (#249). The run killed with -9 in the fix check of #59 was lost
   on the phone already: its card had no time and no bar, as #190 decided, but its only line,
   "No news for 12 min 59 s", read as a quiet live run. Both clients now write "Lost, no news for
@@ -1123,6 +1131,11 @@ so the mod is the first path.
   listed in the first 1.5 s after the list shows came with the page and don't fade in, since
   the inbox, prompts and runs load one after another. History's rows fade in only when the
   owner opens it, not when the page loads with it open.
+- 2026-10-06. Why the original mark stays, and the web's lockups (owner, after three rounds of
+  mark concepts on https://claude.ai/artifact/9ddJ2PwPrBc7KmQdeDVqDN). A space elevator's tether
+  must be vertical, which ruled out the tilted R5. On the web the name stands on the mark's
+  baseline in the rail, landing nav, docs header and first-run frame, as the Logo entry below
+  sets for Android.
 - 2026-10-06. Web layout round (owner).
   The inbox's detail pane scales with its width: from a 1000 px pane (side panes narrowed, or a
   wide screen) its content takes 86% of the pane up to 1280 px, attached images show up to
