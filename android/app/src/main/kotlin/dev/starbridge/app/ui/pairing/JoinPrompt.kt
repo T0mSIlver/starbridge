@@ -1,5 +1,7 @@
 package dev.starbridge.app.ui.pairing
 
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -80,7 +82,8 @@ fun JoinPrompt(asks: List<JoinAsk>, comparison: Comparison, actions: JoinActions
             onDismissRequest = {},
             title = { Text("Same digits on ${comparison.ask.name}?") },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(Spacing.s3)) {
+                // Scrolls when a long name and a large font leave the digits no room.
+                Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(Spacing.s3)) {
                     Text("Approve only if ${comparison.ask.name} shows these same digits.", style = StarbridgeTheme.type.body)
                     Text(formatDigits(comparison.digits), style = StarbridgeTheme.type.figure, color = MaterialTheme.colorScheme.onSurface, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
                     comparison.error?.let { Text(it, style = StarbridgeTheme.type.body, color = colors.bad) }

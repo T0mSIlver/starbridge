@@ -1292,6 +1292,19 @@ so the mod is the first path.
   since `codex queue` (0.160) takes the message only as an argument and other local users can
   read process arguments; `wait <id>` prints a delivered answer from local state. The npm bundle
   runs under Node, so the CLI uses no Bun global without a guard; a test runs it there.
+- 2026-10-06. An answer is never lost on Android (#329, #331). The app seals and signs an answer,
+  then keeps it on the phone before posting it, so an answer tapped offline waits there,
+  ciphertext only, until the server takes it. WorkManager sends it once a network is up, the app
+  closed or not, and every sync tries again. It ends answered, answered on another device, or
+  refused, with the server's reason shown and the buttons back. While it waits, the sheet keeps
+  the tapped option filled and the other options locked, as while sending; a snackbar says it goes
+  out when the phone is back online; a notification says "Hold · waiting to send". A tap on a
+  decision this phone answered, or whose answer waits, repeats that outcome instead of failing,
+  so a double tap on a notification button sends once and says "Answered". The server answers
+  `already-answered` to a retry of an answer it took before its reply was lost, and does not say
+  by whom; the app counts it as its own when an earlier attempt may have reached the server (the
+  connection cut after the request left, a 500, or the notification's 9 s limit), and as another
+  device's otherwise.
 - 2026-10-06. Harness integrations audit (#298), each finding reproduced in a throwaway HOME
   with Claude Code 2.1.289, Codex CLI 0.160.0 and Pi 1.0.4 with pi-permission-system 39.1.0.
   Fixed here: an agent passes its variables to the agents it starts, and a `codex exec` run
@@ -1398,6 +1411,9 @@ so the mod is the first path.
   its ports from below 32768 until each server starts, so runners on one machine do not
   collide, and closing outgoing connections, which share the range above, do not block them. `AUDIT=<folder>` shoots every size from
   320 to 1920 px in both themes, plus 200% text at 390, and lists what the checks find.
+- 2026-10-06. Workflows pin every action by commit SHA, with its version in a comment (#361). A
+  moved tag could otherwise run code in the release job before it writes the minisign key.
+  Dependabot proposes the updates in one grouped PR a month.
 
 - 2026-10-06. `ask --default` is gone from the help and the skill (#352): no client shows it, so
   an agent that passed one believed the owner saw it. Like `--default-at`, it is accepted and
@@ -1831,3 +1847,12 @@ goes in git.
   drops the minimum. The screenshots had hidden it, since they drew Find
   in a plain `Box`; Find's shots and `FindScreenTest` now draw it inside
   a screen-filling NavDisplay, as the app does.
+- 2026-10-06: Caddy's connections to the server (#301). By default Caddy
+  keeps 32 idle connections to an upstream and closes the rest. Every
+  long-poll that returns frees one, so at 1000 load-test users Caddy held
+  about 1200 TIME-WAIT sockets toward the server, in the host's port range
+  since Caddy runs on the host network. During a restart storm at 3000 users,
+  the dev box ran out of ports. With `keepalive 25s` and
+  `keepalive_idle_conns_per_host 4096` it held 3 to 120, with p99 unchanged.
+  25 s stays below the server's 30 s idle close, so Caddy never reuses a
+  connection the server is closing.
