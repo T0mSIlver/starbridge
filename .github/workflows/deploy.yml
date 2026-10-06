@@ -18,6 +18,9 @@ jobs:
       group: deploy
       cancel-in-progress: false
     runs-on: ${{ vars.RUNNER || 'ubuntu-latest' }}
+    # Reads main's history to compare the live revision with this run's.
+    permissions:
+      contents: read
     environment:
       name: starbridge.run
       url: https://starbridge.run
@@ -35,5 +38,19 @@ jobs:
           printf '%s\n' "$KNOWN_HOSTS" > "$RUNNER_TEMP/known_hosts"
           ssh -i "$RUNNER_TEMP/key" -o IdentitiesOnly=yes -o UserKnownHostsFile="$RUNNER_TEMP/known_hosts" \
             -o StrictHostKeyChecking=yes deploy@starbridge.run "$REV"
-      - name: Check healthz
-        run: curl -fsS --retry 10 --retry-delay 3 --retry-all-errors https://starbridge.run/healthz
+      # The server names the commit it was built from: this run's, or a later one of main's when
+      # the box refused this older one. Anything else is a deploy that never went live.
+      - name: Check the live revision
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REV: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          got=$(curl -fsS --retry 10 --retry-delay 3 --retry-all-errors -D - -o /dev/null \
+            https://starbridge.run/healthz | tr -d '\r' |
+            awk -F': ' 'tolower($1) == "x-starbridge-revision" { print $2 }')
+          [ -n "$got" ] || { echo "starbridge.run names no revision"; exit 1; }
+          status=$(gh api "repos/$GITHUB_REPOSITORY/compare/$REV...$got" -q .status)
+          case $status in
+            identical | ahead) echo "starbridge.run runs $got" ;;
+            *) echo "starbridge.run runs $got, not $REV or later ($status)"; exit 1 ;;
+          esac

@@ -1676,6 +1676,11 @@ so the mod is the first path.
 - 2026-10-06. The images install pnpm with `npm install -g` at package.json's
   `packageManager` version, not corepack (#430): #418 moved them to node:25-slim, which ships
   no corepack, and every deploy after it failed at `corepack enable`.
+- 2026-10-06. A deploy that does not go live fails (#423 follow-up). Every `FROM` is pinned
+  by digest, so a base image changes only in a Dependabot PR. `REVISION` is written only after
+  `apply.sh` succeeds. The server image carries its commit, which `/healthz` returns in
+  `x-starbridge-revision`, and the deploy workflow fails unless the live server runs that commit
+  or a later one of main's. CI builds the images on pull requests that can change them (#435).
 - 2026-10-06. Demo server for Play reviewers (#423). A reviewer has no GitHub account we can
   give them (GitHub mails a new-device code) and no recovery key we can give them (recovering
   revokes every other member, #363). So `https://demo.starbridge.run` is a self-hosted server
