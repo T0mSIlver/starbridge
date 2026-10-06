@@ -310,6 +310,7 @@ object Sizes {
     val settingsLabel = 220.dp
     val quotaProvider = 200.dp
     val quotaTableFrom = 840.dp
+    val quotaReset = 128.dp
     val track = 10.dp
     val trackDense = 6.dp
     val tick = 2.dp
