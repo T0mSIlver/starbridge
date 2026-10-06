@@ -11,7 +11,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.WideNavigationRailDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.adaptive.currentWindowAdaptiveInfo
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteDefaults
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteItem
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
@@ -43,7 +42,6 @@ import androidx.compose.ui.unit.dp
 import androidx.core.graphics.Insets
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
-import androidx.window.core.layout.WindowSizeClass
 import com.github.takahirom.roborazzi.RoborazziOptions
 import com.github.takahirom.roborazzi.RoborazziTaskType
 import com.github.takahirom.roborazzi.captureScreenRoboImage
@@ -62,6 +60,7 @@ import dev.starbridge.app.ui.SheetHandle
 import dev.starbridge.app.ui.SheetShape
 import dev.starbridge.app.ui.Symbol
 import dev.starbridge.app.ui.Tab
+import dev.starbridge.app.ui.suiteType
 import dev.starbridge.app.ui.devices.AddDeviceScreen
 import dev.starbridge.app.ui.devices.DeviceActions
 import dev.starbridge.app.ui.devices.DevicesScreen
@@ -143,24 +142,6 @@ class LayoutAuditTest(private val shot: String, private val look: Look) {
             "find", "sheet-question", "sheet-reply", "sheet-prompt", "sheet-prompt-input", "sheet-images", "image-viewer",
             "quotas", "quotas-your-order", "quotas-tuned",
             "settings", "devices", "devices-revoke", "add-device", "add-device-found", "add-device-qr", "join-digits",
-        )
-
-        /** What the audit found that is a design question for the owner (#306), not a bug: allowed until decided. */
-        private val KNOWN = listOf(
-            // Controls the design sizes under 48 dp: the sheet's 36 dp handle, 40 dp buttons and
-            // toggles, underlined text links.
-            Regex("""^tap target \d{3}x36 dp: ""$"""),
-            Regex("""^tap target \d+x40 dp: "(More answers|Used|Left|Resets.*|Off|7 days|\d)"$"""),
-            // Allow and Deny: 40 dp, taller as the font grows.
-            Regex("""^tap target \d+x4[0-7] dp: "(Allow|Deny)"$"""),
-            Regex("""^tap target \d+x4[1-4] dp: "Open in (Claude|Codex)"$"""),
-            Regex("""^tap target \d+x(28|35|45) dp: "(Sign out|Back|Use the recovery key|Use starbridge\.run|Can't scan\? Compare digits)"$"""),
-            // A page title beside its trailing text: the title gives way at 2x on a small phone.
-            Regex("""^lines cut off: "(Quotas|Settings|Inbox)" \((4\d|[5-9]\d) sp\)$"""),
-            // A quota's pace beside its reset time: the reset time takes the row at 2x on a small phone.
-            Regex("""^wider than its box: "(On pace|Will run out.*|Headroom unused|Ran out.*|Too early to tell)"$"""),
-            // The rail's badge on the Inbox symbol reaches its label at large font sizes.
-            Regex("""^text over text: "12" and "Inbox"$"""),
         )
 
         private val REFERENCES = setOf(
@@ -278,12 +259,7 @@ class LayoutAuditTest(private val shot: String, private val look: Look) {
             Scaffold { padding -> androidx.compose.foundation.layout.Box(Modifier.fillMaxSize().padding(padding)) { shot.content() } }
             return
         }
-        val width = currentWindowAdaptiveInfo().windowSizeClass
-        val suite = when {
-            width.isWidthAtLeastBreakpoint(WindowSizeClass.WIDTH_DP_EXPANDED_LOWER_BOUND) -> NavigationSuiteType.WideNavigationRailExpanded
-            width.isWidthAtLeastBreakpoint(WindowSizeClass.WIDTH_DP_MEDIUM_LOWER_BOUND) -> NavigationSuiteType.WideNavigationRailCollapsed
-            else -> NavigationSuiteType.None
-        }
+        val suite = suiteType()
         val colors = StarbridgeTheme.colors
         NavigationSuiteScaffold(
             navigationSuiteType = suite,
@@ -339,8 +315,7 @@ class LayoutAuditTest(private val shot: String, private val look: Look) {
         }
         // The worst cases as reference shots, which `verifyRoborazziDebug` holds to.
         if (audit == null && "${this.shot} $look" in REFERENCES) captureScreenRoboImage("screenshots/audit/${this.shot}-$look.png")
-        val unknown = problems.filterNot { p -> KNOWN.any { it.containsMatchIn(p) } }
-        if (audit == null) assertTrue("${this.shot} $look:\n" + unknown.joinToString("\n"), unknown.isEmpty())
+        if (audit == null) assertTrue("${this.shot} $look:\n" + problems.joinToString("\n"), problems.isEmpty())
     }
 
     /** Status and gesture bars, and in landscape the camera cutout on the left, as a Pixel has them. */
@@ -440,18 +415,57 @@ class LayoutAuditTest(private val shot: String, private val look: Look) {
             val small = minOf(a.boundsInRoot.height, b.boundsInRoot.height)
             if (o.width > 2 && o.height > small / 3) out += "text over text: \"${label(a).take(40)}\" and \"${label(b).take(40)}\""
         }
-        val min = 48 * density - 1
-        for (n in nodes(SemanticsMatcher.keyIsDefined(SemanticsActions.OnClick), unmerged = false)) {
-            if (n.boundsInRoot.isEmpty) continue
-            // Material pads a control to its touch target outside the click: the layout node's size.
-            val w = maxOf(n.size.width, n.layoutInfo.width)
-            val h = maxOf(n.size.height, n.layoutInfo.height)
-            if (w < min || h < min) {
+        out += tapTargets()
+        return out.distinct()
+    }
+
+    /**
+     * Tap areas under 48 dp. Compose widens a control's touch area to 48 dp where nothing else is
+     * (`ViewConfiguration.minimumTouchTargetSize`), and Material pads some controls to 48 dp in
+     * layout. So a control's area is its box grown to 48 dp each way, stopped at the window's edge,
+     * at a neighbour's box, and halfway to a neighbour that grows towards it too.
+     */
+    private fun tapTargets(): List<String> {
+        val min = 48 * density
+        // Controls cut by a scrolling list's end are judged where they show in full.
+        val clicks = nodes(SemanticsMatcher.keyIsDefined(SemanticsActions.OnClick), unmerged = false).filter { it.boundsInRoot == it.unclipped() }
+        fun box(n: SemanticsNode): Rect {
+            val u = n.unclipped()
+            val dx = maxOf(0f, n.layoutInfo.width - u.width) / 2
+            val dy = maxOf(0f, n.layoutInfo.height - u.height) / 2
+            return Rect(u.left - dx, u.top - dy, u.right + dx, u.bottom + dy)
+        }
+        fun grow(size: Float) = maxOf(0f, (min - size) / 2)
+        val out = mutableListOf<String>()
+        for (n in clicks) {
+            val b = box(n)
+            var root = n
+            while (root.parent != null) root = root.parent!!
+            val window = Rect(0f, 0f, root.size.width.toFloat(), root.size.height.toFloat())
+            if (b.intersect(window) != b) continue
+            var left = maxOf(window.left, b.left - grow(b.width))
+            var right = minOf(window.right, b.right + grow(b.width))
+            var top = maxOf(window.top, b.top - grow(b.height))
+            var bottom = minOf(window.bottom, b.bottom + grow(b.height))
+            for (m in clicks) {
+                if (m === n || m.root !== n.root || m.isAncestorOf(n) || n.isAncestorOf(m)) continue
+                val o = box(m)
+                if (o.overlaps(b)) continue
+                if (o.left < right && o.right > left) {
+                    if (o.top >= b.bottom) bottom = minOf(bottom, o.top, maxOf((b.bottom + o.top) / 2, o.top - grow(o.height)))
+                    if (o.bottom <= b.top) top = maxOf(top, o.bottom, minOf((b.top + o.bottom) / 2, o.bottom + grow(o.height)))
+                }
+                if (o.top < bottom && o.bottom > top) {
+                    if (o.left >= b.right) right = minOf(right, o.left, maxOf((b.right + o.left) / 2, o.left - grow(o.width)))
+                    if (o.right <= b.left) left = maxOf(left, o.right, minOf((b.left + o.right) / 2, o.right + grow(o.width)))
+                }
+            }
+            if (right - left < min - 1 || bottom - top < min - 1) {
                 val what = label(n).ifBlank { n.config.getOrNull(SemanticsProperties.ContentDescription)?.joinToString().orEmpty() }
-                out += "tap target ${(w / density).toInt()}x${(h / density).toInt()} dp: \"${what.take(50)}\""
+                out += "tap target ${((right - left) / density).toInt()}x${((bottom - top) / density).toInt()} dp: \"${what.take(50)}\""
             }
         }
-        return out.distinct()
+        return out
     }
 
     /** For a person to judge: ellipsized text, and text whose contrast reads under WCAG AA. */
