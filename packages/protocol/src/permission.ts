@@ -3,10 +3,28 @@ import { ProtocolError, sodium, toB64, utf8 } from "./sodium";
 
 /**
  * A permission's `inputHash`: BLAKE2b-256 of the tool input's JSON text as the machine holds it,
- * before redaction. Devices only repeat it; the machine compares it with its own.
+ * before redaction, keyed under `secret` (the machine's signing key). Devices only repeat it; the
+ * machine compares it with its own. Unkeyed, a device holding the redacted input could test
+ * guesses for what was redacted.
  */
-export function hashInput(inputJson: string): string {
-  return toB64(sodium.crypto_generichash(32, utf8(inputJson), null));
+export function hashInput(inputJson: string, secret?: Uint8Array): string {
+  const key = secret ? sodium.crypto_generichash(32, utf8("starbridge input hash"), secret) : null;
+  return toB64(sodium.crypto_generichash(32, utf8(inputJson), key));
+}
+
+/** Control and format characters but newline and tab: bidi overrides, isolates, zero-widths. */
+const INVISIBLE = /[\p{Cc}\p{Cf}\u2028\u2029]/gu;
+
+/**
+ * `text` with each control or format character shown as its escape (`\u202E`), so a permission
+ * reads in the order it runs: a bidi override cannot reorder what the owner allows (#357).
+ */
+export function visible(text: string): string {
+  return text.replace(INVISIBLE, (c) => {
+    if (c === "\n" || c === "\t") return c;
+    const hex = (c.codePointAt(0) ?? 0).toString(16).toUpperCase();
+    return hex.length > 4 ? `\\u{${hex}}` : `\\u${hex.padStart(4, "0")}`;
+  });
 }
 
 /**

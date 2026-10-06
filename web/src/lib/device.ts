@@ -54,9 +54,10 @@ import {
   sealAsync,
   toB64,
   verifyDirectory,
+  visible,
   type Waiting,
 } from "@starbridge/protocol";
-import { ApiError, api, type Stored } from "./api";
+import { ApiError, api, backoff, type Stored } from "./api";
 import { generateDeviceKeys, sealOpener, signer } from "./crypto/keys";
 import * as store from "./store";
 import type {
@@ -85,7 +86,8 @@ export interface Ctx {
 export type Boot =
   /** `known`: this browser holds a device of the account it last signed in to. */
   | { state: "signed-out"; known: boolean }
-  | { state: "first-device"; account: string }
+  /** `unsaved`: the name of a first device whose page closed before its recovery key was saved. */
+  | { state: "first-device"; account: string; unsaved?: string }
   /** The account has devices and this browser is not one of them (or lost its binding). */
   | { state: "join"; account: string; stale: boolean }
   | { state: "revoked"; account: string; name: string }
@@ -133,11 +135,20 @@ function pinTo(account: string, entries: SignedEnvelope[], dir: Directory): Prom
   });
 }
 
-/** Fetches the chain, replays it against the pin, and moves the pin forward. */
+/** A browser with no pin was served a chain that nothing it holds anchors. */
+class Unanchored extends Error {}
+
+/**
+ * Fetches the chain, replays it against the pin, and moves the pin forward. Without a pin, only
+ * a genesis this browser's device signed anchors the chain (a first device cut off before it
+ * pinned): any other the server could have made, listing keys it relayed (#354).
+ */
 async function trusted(account: string): Promise<{ dir: Directory; entries: SignedEnvelope[] }> {
   for (let attempt = 0; ; attempt++) {
     const entries = await api.directory();
     const pin = await store.get("pin", account);
+    if (!pin && !signedGenesis(account, entries[0], await store.get("device", account)))
+      throw new Unanchored("no pin anchors this directory");
     const dir = verifyDirectory(entries, { account, ...(pin ? { pin } : {}) });
     try {
       await pinTo(account, entries, dir);
@@ -150,6 +161,22 @@ async function trusted(account: string): Promise<{ dir: Directory; entries: Sign
   }
 }
 
+/** Whether `entry`, once verified as entry 0, is a genesis this browser's own device signed. */
+function signedGenesis(
+  account: string,
+  entry: SignedEnvelope | undefined,
+  device?: store.DeviceRecord,
+): boolean {
+  if (!device || entry?.signer !== device.id) return false;
+  try {
+    return (
+      verifyDirectory([entry], { account }).members.get(device.id)?.member.signPk === device.signPk
+    );
+  } catch {
+    return false;
+  }
+}
+
 export async function boot(): Promise<Boot> {
   let me: Awaited<ReturnType<typeof api.me>>;
   try {
@@ -158,8 +185,9 @@ export async function boot(): Promise<Boot> {
     if (e instanceof ApiError && e.status === 401) {
       const last = await store.get("current");
       // Its device was revoked: this browser is a visitor again, not a device signing back in.
-      if (last && e.code === "revoked") await store.del("device", last);
-      return { state: "signed-out", known: !!last && !!(await store.get("device", last)) };
+      // The keys stay: only the server says so, and a verified chain decides on sign-in (#371).
+      const known = !!last && e.code !== "revoked" && !!(await store.get("device", last));
+      return { state: "signed-out", known };
     }
     throw e;
   }
@@ -172,31 +200,40 @@ export async function boot(): Promise<Boot> {
     // A browser that pinned a chain never accepts an empty one: that would be a rollback.
     if (await store.get("pin", account))
       return { state: "broken", account, error: "rollback: the server sent an empty directory" };
-    // Keys saved before a genesis that never reached the server.
+    // Keys saved before a genesis that never reached the server: the page closed before the
+    // owner saved the recovery key, so that key was never used (#328). Once the genesis may
+    // have gone out, only the server could make the directory empty: the keys stay (#371).
+    if (device?.posted)
+      return { state: "broken", account, error: "the server sent an empty directory" };
     if (device) await store.del("device", account);
-    return { state: "first-device", account };
+    return { state: "first-device", account, ...(device ? { unsaved: device.name } : {}) };
   }
   let verified: { dir: Directory; entries: SignedEnvelope[] };
   try {
     verified = await trusted(account);
   } catch (e) {
+    // A join or recovery cut off before it pinned starts over (#354).
+    if (e instanceof Unanchored) {
+      await store.del("pending", account);
+      return { state: "join", account, stale: false };
+    }
     return { state: "broken", account, error: e instanceof Error ? e.message : String(e) };
   }
-  if (!device) {
-    // A join a device approved, cut off before its keys became the device: the directory
-    // already lists them, so they are, as they would have been had it finished (#274).
-    const pending = await store.get("pending", account);
-    const held = pending && verified.dir.members.get(pending.id);
-    if (
-      !pending ||
-      !held?.active ||
-      held.member.boxPk !== pending.boxPk ||
-      held.member.signPk !== pending.signPk
-    )
-      return { state: "join", account, stale: false };
+  // A join a device approved, or a recovery whose append landed, cut off before its keys became
+  // the device: the directory already lists them, so they are, as they would have been had it
+  // finished, even over an older device's (#274, #283).
+  const pending = await store.get("pending", account);
+  const held = pending && verified.dir.members.get(pending.id);
+  if (
+    pending &&
+    held?.active &&
+    held.member.boxPk === pending.boxPk &&
+    held.member.signPk === pending.signPk
+  ) {
     await adopt(account, pending);
     device = pending;
   }
+  if (!device) return { state: "join", account, stale: false };
   const entry = verified.dir.members.get(device.id);
   if (!entry || entry.member.boxPk !== device.boxPk || entry.member.signPk !== device.signPk) {
     // Saved before a pairing or recovery that never completed.
@@ -264,7 +301,7 @@ async function newDevice(account: string, name: string) {
   return { record, member };
 }
 
-/** A first device whose keys, genesis entry and recovery words exist, not yet on the server. */
+/** A first device whose keys, genesis entry and recovery key exist, not yet on the server. */
 export interface FirstDevice {
   recoveryKey: string;
   /** Posts the genesis; safe to call again after a failure, with the same keys and entry. */
@@ -273,8 +310,9 @@ export interface FirstDevice {
 
 /**
  * Makes this browser's keys and the account's genesis entry. The recovery seed is dropped once
- * the words exist, so the caller keeps this object until `commit` succeeds and the words are
- * shown; a retry reuses it rather than making new keys.
+ * the key exists, so the key is shown before `commit`, which runs once the owner says it is
+ * saved: a page closed before that posts no genesis, and boot offers a new key (#328). A retry
+ * of `commit` reuses this object rather than making new keys.
  */
 export async function prepareFirstDevice(account: string, name: string): Promise<FirstDevice> {
   await ready;
@@ -297,8 +335,17 @@ export async function prepareFirstDevice(account: string, name: string): Promise
     recovery.privateKey.fill(0);
   }
   const dir = verifyDirectory([entry], { account });
+  // Another tab posted its genesis since this page offered a key: its keys are the account's.
+  if ((await store.get("device", account))?.posted)
+    throw new Error("Another tab set up this account. Reload.");
   await store.put("device", record, account);
   const commit = async () => {
+    // Another tab's boot drops these keys as never used, or its setup replaces them: posting
+    // now would make an account whose device keys no browser holds.
+    const held = await store.get("device", account);
+    if (held?.id !== record.id || held.signPk !== record.signPk)
+      throw new Error("Another tab started the setup over, so this key was never used. Reload.");
+    await store.put("device", { ...record, posted: true }, account);
     try {
       await api.append(entry);
     } catch (e) {
@@ -346,9 +393,17 @@ export async function recover(account: string, name: string, typed: string): Pro
     }
     const entry = addEntry(dir, { id: RECOVERY, signKey: recovery.privateKey }, member, now());
     const next = verifyDirectory([...entries, entry], { account });
-    await store.put("device", record, account);
-    await api.append(entry);
+    // Pending until the append lands: a failed one must not replace keys that still work (#283).
+    await store.put("pending", record, account);
+    try {
+      await api.append(entry);
+    } catch (e) {
+      // It may have landed with its response lost: it did if the directory holds it.
+      const landed = await api.directory().catch(() => []);
+      if (!landed.some((x) => x.sig === entry.sig)) throw e;
+    }
     await pinTo(account, [...entries, entry], next);
+    await adopt(account, record);
   } finally {
     seed.fill(0);
     recovery.privateKey.fill(0);
@@ -441,8 +496,8 @@ async function finishJoin(
   // The approval's length and head, under the code's MAC, pin a directory the server cannot fake.
   const dir = verifyDirectory(entries, { account, pin: { length: body.length, head: body.head } });
   checkJoined(dir, member);
-  await adopt(account, record);
   await pinTo(account, entries, dir);
+  await adopt(account, record);
 }
 
 /** Joining by digits: no code to type; the owner compares 6 digits on both devices. */
@@ -501,8 +556,8 @@ export async function startDigitJoin(account: string, name: string): Promise<Dig
             pin: { length: body.length, head: body.head },
           });
           checkJoined(dir, member);
-          await adopt(account, record);
           await pinTo(account, entries, dir);
+          await adopt(account, record);
           return;
         }
       }
@@ -570,7 +625,8 @@ export async function watchJoins(signal: AbortSignal, onChange: (asks: JoinAsk[]
       onChange(page.joins.flatMap((v) => toAsk(v) ?? []));
     } catch {
       if (signal.aborted) return;
-      await new Promise((r) => setTimeout(r, 5_000));
+      // At most every 5 s, and not before the server's backoff ends (#332).
+      await new Promise((r) => setTimeout(r, Math.max(5_000, backoff.until - Date.now())));
     }
   }
 }
@@ -872,7 +928,7 @@ async function openDecision(
   const reply = sent[body.id];
   // The notice that closed it arrived in the same write, so it carries the same time; a later
   // one, after a device's answer, closed nothing.
-  const closing = closings.get(body.id);
+  const closing = closings.get(`${machine.id}/${body.id}`);
   const settled = closing && closing.at === s.answeredAt ? closing.outcome : undefined;
   return {
     decision: body as Decision,
@@ -930,8 +986,9 @@ export async function loadInbox(ctx: Ctx, inbox: Inbox = { items: [], rejected: 
     if (s.item.kind === "settled") {
       // Only tells how a decision closed: one that fails to open costs that and nothing else.
       try {
-        const { body } = await openAsync(expectKind(s.item, "settled"), me(ctx), ctx.dir);
-        closings.set(body.itemId, { outcome: body.outcome, at: s.receivedAt });
+        const { signer, body } = await openAsync(expectKind(s.item, "settled"), me(ctx), ctx.dir);
+        // Keyed by machine: a notice closes only the machine's own items (#362).
+        closings.set(`${signer.id}/${body.itemId}`, { outcome: body.outcome, at: s.receivedAt });
       } catch {}
       return;
     }
@@ -1009,8 +1066,15 @@ async function openPermission(
     ctx.dir,
   );
   const reply = sent[body.id];
+  const p = body as Permission;
   return {
-    permission: body as Permission,
+    // What the owner reads shows bidi and invisible characters as escapes (#357).
+    permission: {
+      ...p,
+      summary: visible(p.summary),
+      ...(p.description !== undefined ? { description: visible(p.description) } : {}),
+      suggestions: p.suggestions.map((g) => ({ ...g, rule: visible(g.rule) })),
+    },
     machine,
     receivedAt: s.receivedAt,
     ...(s.answeredAt ? { answeredAt: s.answeredAt } : {}),

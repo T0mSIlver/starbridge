@@ -30,7 +30,7 @@ export function QuotaGroup({
         <h2 className={`${comfy ? "t-action" : "t-label"} ${s.head}`}>
           {handle}
           <span className={s.name}>{g.provider}</span>
-          {g.machine && <span className={`t-meta ${s.dim}`}>{g.machine}</span>}
+          {g.machine && <span className={`t-meta ${s.dim} ${s.machine}`}>{g.machine}</span>}
         </h2>
         {g.stale && (
           <p className={`t-meta ${s.stale}`}>

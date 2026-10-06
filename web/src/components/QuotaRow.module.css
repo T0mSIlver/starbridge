@@ -68,6 +68,14 @@
   text-overflow: ellipsis;
 }
 
+/* A long machine name gives way before the provider's name does. */
+.machine {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 1000;
+}
+
 .figure {
   flex-shrink: 0;
   font-weight: 600;

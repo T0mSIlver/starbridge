@@ -85,17 +85,7 @@ function session(id: string, opts: { gated?: boolean; timing?: Timing } = {}) {
 }
 
 async function ask(question: string, sessionId?: string): Promise<string> {
-  const args = [
-    "ask",
-    "--question",
-    question,
-    "--option",
-    "Yes",
-    "--option",
-    "No",
-    "--default",
-    "Yes",
-  ];
+  const args = ["ask", "--question", question, "--option", "Yes", "--option", "No"];
   if (sessionId) args.push("--session", sessionId);
   expect(await run(args, cli)).toBe(0);
   return cli.lines.at(-1) as string;

@@ -1,5 +1,7 @@
 package dev.starbridge.app.ui.quotas
 
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.style.TextOverflow
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.background
@@ -174,8 +176,8 @@ private fun ProviderCard(windows: List<QuotaWindow>, now: Instant, settings: Quo
     Surface(modifier.fillMaxWidth(), shape = shape, color = scheme.surfaceContainer) {
         Column(Modifier.padding(Spacing.s4)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(first.provider, style = StarbridgeTheme.type.subtitle, color = scheme.onSurface, maxLines = 1, modifier = Modifier.weight(1f))
-                first.machine?.let { Text(it, style = StarbridgeTheme.type.meta, color = scheme.onSurfaceVariant, maxLines = 1) }
+                Text(first.provider, style = StarbridgeTheme.type.subtitle, color = scheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                first.machine?.let { Text(it, style = StarbridgeTheme.type.meta, color = scheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis) }
             }
             first.error?.let { error ->
                 Column(Modifier.padding(top = Spacing.s1)) {
@@ -202,13 +204,16 @@ private fun WindowRow(window: QuotaWindow, now: Instant, settings: QuotaSettings
     val h24 = LocalClock24.current
     val card = scheme.surfaceContainer
     Column(modifier, verticalArrangement = Arrangement.spacedBy(Spacing.s3)) {
-        // One 24 dp line: the figure's glyphs are taller than the line they sit on.
-        Row(Modifier.height(24.dp), verticalAlignment = Alignment.CenterVertically) {
+        // One line of body text, 24 dp at the default font size: the figure's glyphs are taller
+        // than the line they sit on.
+        val line = with(LocalDensity.current) { type.body.lineHeight.toDp() }
+        Row(Modifier.height(line), verticalAlignment = Alignment.CenterVertically) {
             Text(
                 window.window,
                 style = type.body,
                 color = scheme.onSurface,
                 maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f),
             )
             Text(
@@ -222,13 +227,14 @@ private fun WindowRow(window: QuotaWindow, now: Instant, settings: QuotaSettings
         }
         Meter(bar, course, StarbridgeTheme.provider(window.provider), settings.showUsed, card)
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(tone.word, style = type.metaStrong, color = tone.color, maxLines = 1, modifier = Modifier.weight(1f))
+            Text(tone.word, style = type.metaStrong, color = tone.color, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
             Spacer(Modifier.width(Spacing.s2))
             Text(
                 window.resetsAt?.let { if (ended) "Reset ${ago(now, it)}" else if (settings.absoluteResets) "Resets ${resetClock(it, now, h24)}" else "Resets in ${span(now, it)}" } ?: "Reset time unknown",
                 style = type.meta,
                 color = scheme.onSurfaceVariant,
                 maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
         }
     }

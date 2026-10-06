@@ -22,7 +22,7 @@ interface Store {
     val busy: StateFlow<Boolean>
     /** The last thing that went wrong, in words for the owner. */
     val notice: StateFlow<String?>
-    /** Answers going out, by decision id: the choice or the text, until the server replies. */
+    /** Answers going out or waiting for a connection, by decision id: the choice or the text, until the server takes them. */
     val sending: StateFlow<Map<String, String>>
 
     /** The URL that starts GitHub sign-in; it ends at starbridge://auth?code=… */

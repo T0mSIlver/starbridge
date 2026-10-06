@@ -73,6 +73,8 @@ CREATE TABLE IF NOT EXISTS pairings (
   sign_pk TEXT NOT NULL,
   claim_hash TEXT NOT NULL,
   created_at INTEGER NOT NULL,
+  -- The poster's address, an IPv6 one as its /48, to cap the unapproved pairings it holds.
+  client TEXT NOT NULL DEFAULT '',
   account_id TEXT,
   approval TEXT,
   -- A machine's bearer token, kept until the pairing expires and is swept, so a lost reply can
@@ -194,6 +196,10 @@ export function openDb(path: string): Database {
     const columns = db.query("PRAGMA table_info(items)").all() as { name: string }[];
     if (!columns.some((col) => col.name === "size"))
       db.run("ALTER TABLE items ADD COLUMN size INTEGER NOT NULL DEFAULT 0");
+    // Databases made before pairings had a client.
+    const pairingColumns = db.query("PRAGMA table_info(pairings)").all() as { name: string }[];
+    if (!pairingColumns.some((col) => col.name === "client"))
+      db.run("ALTER TABLE pairings ADD COLUMN client TEXT NOT NULL DEFAULT ''");
     // Databases made before item_totals, whose sizes counted boxes only: charge the rows too,
     // then count what they hold, once.
     if (!totals) {

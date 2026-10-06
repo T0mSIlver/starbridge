@@ -28,9 +28,19 @@ export interface PermissionWait {
   settled?: "keyboard" | "timeout" | "device";
 }
 
+/**
+ * How long a prompt whose hook hung up mid-hold waits for its next hold before it counts as
+ * answered at the keyboard: the hook died with its agent (a closed terminal, a crash), and an
+ * answer from the devices would reach nobody.
+ */
+export const GONE_MS = 5_000;
+
 const obj = (v: unknown) => (v && typeof v === "object" ? (v as Record<string, unknown>) : {});
 
 export class Permissions implements Feature {
+  /** The holds open on each prompt. */
+  private readonly holds = new Map<string, number>();
+
   constructor(private readonly hub: Hub) {}
 
   private get ctx(): Ctx {
@@ -85,20 +95,14 @@ export class Permissions implements Feature {
             "unknown-permission",
             `${id} is not a prompt this machine asked`,
           );
-        while (true) {
-          const p = this.ctx.store.state().permissions?.[id];
-          const out = outcomeOf(p);
-          // Behind on the directory, the answer may be a revoked device's: it waits.
-          if (out.answer && p && !p.settled && !this.ctx.store.state().behind) {
-            const how = markSettled(this.ctx, id, "device");
-            // Another hold took it in between: the prompt is settled, nothing to hand out.
-            if (!how) return { settled: "device" };
-            this.report(id, how);
-            return { output: hookDecision(p) };
-          }
-          if (out.settled) return { settled: out.settled };
-          if (req.signal.aborted || Date.now() >= end) return {};
-          await this.hub.changed(end - Date.now(), req.signal);
+        this.holds.set(id, (this.holds.get(id) ?? 0) + 1);
+        try {
+          return await this.hold(id, end, req.signal);
+        } finally {
+          const left = (this.holds.get(id) ?? 1) - 1;
+          if (left > 0) this.holds.set(id, left);
+          else this.holds.delete(id);
+          if (req.signal.aborted && Date.now() < end) this.hungUp(id);
         }
       },
     },
@@ -137,6 +141,37 @@ export class Permissions implements Feature {
     });
     if (done.length > 0) this.hub.notify();
     return done;
+  }
+
+  /** One hold on prompt `id`, until an answer, a settle, `end` or the hook hanging up. */
+  private async hold(id: string, end: number, signal: AbortSignal): Promise<PermissionWait> {
+    while (true) {
+      const p = this.ctx.store.state().permissions?.[id];
+      const out = outcomeOf(p);
+      // Behind on the directory, the answer may be a revoked device's: it waits.
+      if (out.answer && p && !p.settled && !this.ctx.store.state().behind) {
+        const how = markSettled(this.ctx, id, "device");
+        // Another hold took it in between: the prompt is settled, nothing to hand out.
+        if (!how) return { settled: "device" };
+        this.report(id, how);
+        return { output: hookDecision(p) };
+      }
+      if (out.settled) return { settled: out.settled };
+      if (signal.aborted || Date.now() >= end) return {};
+      await this.hub.changed(end - Date.now(), signal);
+    }
+  }
+
+  /** The hook hung up mid-hold: unless it holds again soon, it is gone. */
+  private hungUp(id: string) {
+    setTimeout(() => {
+      if (this.holds.has(id)) return;
+      const how = markSettled(this.ctx, id, "keyboard");
+      if (!how) return;
+      this.hub.log(`permission ${id}: its hook hung up; settled at the keyboard`);
+      this.report(id, how);
+      this.hub.notify();
+    }, GONE_MS).unref();
   }
 
   bye(sessionId: string) {

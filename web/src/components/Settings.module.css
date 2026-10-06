@@ -59,9 +59,22 @@
   height: var(--s3);
 }
 
+/* A name too long for the row, such as a machine's host name, breaks rather than widening it:
+   after a dot or a hyphen first (HostName), inside a word only when it has neither. */
 .rowText {
   flex: 1;
   min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* A label keeps room for a few words; a wide control wraps below it, as it must on a phone and
+   beside the section names' column from 900 px. */
+.row {
+  flex-wrap: wrap;
+}
+
+.row .rowText {
+  flex-basis: 10em;
 }
 
 .sub,
@@ -97,21 +110,23 @@
   color: var(--fg2);
 }
 
+/* Never wider than its row: on the narrowest phones a long label wraps inside its segment. */
 .segmented {
   display: inline-flex;
   flex: none;
+  max-width: 100%;
 }
 
 .segment {
   display: inline-flex;
   align-items: center;
-  height: var(--s8);
-  padding: 0 var(--s3);
+  min-height: var(--s8);
+  padding: var(--s1) var(--s3);
   margin-left: -1px;
   border: 1px solid var(--line-strong);
   font-weight: 500;
   color: var(--fg2);
-  white-space: nowrap;
+  text-align: center;
   cursor: pointer;
   transition:
     background var(--t-fast) var(--ease),
@@ -263,6 +278,27 @@
 }
 
 @media (max-width: 599px) {
+  .segment {
+    min-height: var(--size-tap);
+  }
+
+  /* A switch's tap area is size.tap across: a transparent border makes it, the track stays drawn
+     in the padding box, and the negative margin gives the room back to the row. */
+  .switch {
+    box-sizing: content-box;
+    margin: -15px -8px;
+    border: solid transparent;
+    border-width: 15px 8px;
+    /* The track's own 9 px ends: the radius less the border on each axis. */
+    border-radius: 17px / 24px;
+  }
+
+  /* Repeated for the checked state, whose `background` shorthand resets the clip. */
+  .switch,
+  .switch:checked {
+    background-clip: padding-box;
+  }
+
   .page {
     padding: var(--s6) var(--s4) var(--s8);
     gap: var(--s8);
@@ -270,15 +306,6 @@
 
   .title {
     display: none;
-  }
-
-  .row {
-    flex-wrap: wrap;
-  }
-
-  /* A label keeps room for a few words; a wide control wraps below it. */
-  .row .rowText {
-    flex-basis: 10em;
   }
 
   .revokeSpace {
