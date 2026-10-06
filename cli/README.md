@@ -218,7 +218,7 @@ the lines; the hook outputs are pinned in `cli/test/permissions.test.ts`.
 | `run` | Flags `--title`, `--reason`, then `--` and the command. Exits with the command's code: 127 when it cannot start, 128 plus the signal when a signal ends it. |
 | `hook permission` | Flags `--agent claude-code\|pi\|opencode`, `--wait`. Reads the hook's JSON on stdin and prints the output its harness defines, or nothing to leave the prompt to the keyboard. SIGTERM means the keyboard answered. Exits 0. |
 | `hook settle` | Flag `--agent claude-code`. Reads the hook's JSON on stdin. Exits 0. |
-| `hook ask-user` | Reads the hook's JSON on stdin; prints a PreToolUse denial that tells the agent to use `starbridge ask`, or nothing. Exits 0. |
+| `hook ask-user` | Reads the hook's JSON on stdin; prints a PreToolUse output that answers each question with an instruction to use `starbridge ask` (a denial when it cannot read the input), or nothing to let the question through. Exits 0. |
 | `pair` | Prints `Pairing code: <code>` first. |
 
 Codex sessions receive ``Starbridge has the owner's answer to <id>: run `starbridge wait <id>` to read it.``
@@ -226,7 +226,7 @@ as a queued prompt. The plugins set `STARBRIDGE_PI_ANSWERS`, `STARBRIDGE_OPENCOD
 `STARBRIDGE_OPENCODE_TITLE` and `STARBRIDGE_OPENCODE_ANSWERS` for the commands their agents run,
 and read `STARBRIDGE_CONFIG_DIR`, `STARBRIDGE_AGENT_SOCKET` and `STARBRIDGE_NO_AGENT`.
 
-Every other command exits 0 on success and 1 on an error, with the error on stderr after
+The hooks exit 1 only when stdin cannot be read. Every other command exits 0 on success and 1 on an error, with the error on stderr after
 `starbridge: `. Ctrl-C exits 130.
 
 ## Release
