@@ -135,7 +135,7 @@ function tryParse(stdout: string, provider: string | undefined, now: Date): Prov
  * that fails is asked once more before its failure counts: CodexBar's Claude probe drives the
  * `claude` TUI and times out now and then on a busy machine (#397). A run that hung until
  * RUN_TIMEOUT_MS is not asked again. Throws when a run for every provider fails as a whole, so
- * no snapshot replaces the last one.
+ * no snapshot replaces the last one. Errors are logged whole and returned short (`shortError`).
  */
 export async function collect(
   bin: string,
@@ -165,7 +165,22 @@ export async function collect(
       out.push(...rows);
     }
   }
-  return out;
+  // The log above keeps each error whole; devices get it in words for the owner.
+  return out.map((r) => (r.error ? { ...r, error: shortError(r.error) } : r));
+}
+
+/**
+ * A provider's error in words for the owner (#450): an HTTP failure becomes "Mistral's usage API
+ * failed (500)", and a response body that CodexBar quotes, JSON or HTML, is cut off.
+ */
+export function shortError(error: string): string {
+  const named = /^(.+?) API error: HTTP (\d{3})\b/.exec(error);
+  if (named) return `${named[1]}'s usage API failed (${named[2]})`;
+  const status = /\bHTTP (\d{3})\b/.exec(error);
+  if (status) return `The usage API failed (${status[1]})`;
+  const body = error.search(/[{<]/);
+  const head = (body < 0 ? error : error.slice(0, body)).replace(/[\s:;,-]+$/, "");
+  return head ? clip(head, 200) : "CodexBar's error was unreadable";
 }
 
 /**

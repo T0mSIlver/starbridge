@@ -305,12 +305,14 @@ fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> U
                     entry<QuotasKey> {
                         val vm: QuotasViewModel = hiltViewModel()
                         val windows by vm.windows.collectAsStateWithLifecycle()
+                        val failures by vm.failures.collectAsStateWithLifecycle()
                         val settings by vm.settings.collectAsStateWithLifecycle()
                         QuotasScreen(
                             windows,
                             now,
                             settings = settings,
                             refresh = refresh(vm::refresh),
+                            failures = failures,
                         )
                     }
                     entry<SettingsKey> {

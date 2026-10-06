@@ -8,7 +8,7 @@ import s from "./QuotaRow.module.css";
 /**
  * One provider's windows under its name, and the machine that sent them when there are several.
  * When CodexBar failed for it, its last windows stay, and the name says when they were read and
- * why they were not read again.
+ * why they were not read again. A provider with no windows to keep shows only why (#450).
  */
 export function QuotaGroup({
   g,
@@ -34,7 +34,7 @@ export function QuotaGroup({
         </h2>
         {g.stale && (
           <p className={`t-meta ${s.stale}`}>
-            <span>Updated {relative(g.stale.updatedAt, now)}</span>
+            {g.stale.updatedAt && <span>Updated {relative(g.stale.updatedAt, now)}</span>}
             <span>{g.stale.error}</span>
           </p>
         )}

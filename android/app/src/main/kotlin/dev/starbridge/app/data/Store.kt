@@ -9,6 +9,8 @@ interface Store {
     /** Permission prompts of the last week, waiting ones included (#57). */
     val prompts: StateFlow<List<Prompt>>
     val windows: StateFlow<List<QuotaWindow>>
+    /** Providers CodexBar failed for with no windows to keep (#450). */
+    val quotaFailures: StateFlow<List<QuotaFailure>>
     /** Runs the server still holds: the latest update of each, for a day. */
     val runs: StateFlow<List<Run>>
     val members: StateFlow<List<Member>>

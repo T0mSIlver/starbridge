@@ -41,6 +41,7 @@ import androidx.lifecycle.ViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.starbridge.app.data.Pace
 import dev.starbridge.app.data.Prefs
+import dev.starbridge.app.data.QuotaFailure
 import dev.starbridge.app.data.QuotaSettings
 import dev.starbridge.app.data.QuotaWindow
 import dev.starbridge.app.data.Store
@@ -63,6 +64,7 @@ import javax.inject.Inject
 @HiltViewModel
 class QuotasViewModel @Inject constructor(private val store: Store, private val prefs: Prefs) : ViewModel() {
     val windows = store.windows
+    val failures = store.quotaFailures
     val settings = prefs.quota
     fun refresh() = store.refreshQuotas()
 }
@@ -75,9 +77,12 @@ fun QuotasScreen(
     modifier: Modifier = Modifier,
     settings: QuotaSettings = QuotaSettings(),
     refresh: Refresh? = null,
+    failures: List<QuotaFailure> = emptyList(),
 ) {
     val shown = settings.arrange(windows, now)
     val groups = settings.groups(shown)
+    val failed = failures.filter { it.provider !in settings.hidden }
+    val cards = groups.size + failed.size
     val updated = windows.mapNotNull { it.takenAt }.maxOrNull()
     Page(
         "Quotas",
@@ -94,8 +99,8 @@ fun QuotasScreen(
             }
         },
     ) {
-        if (windows.isEmpty()) item { NoQuotas() }
-        else if (shown.isEmpty()) item {
+        if (windows.isEmpty() && failures.isEmpty()) item { NoQuotas() }
+        else if (cards == 0) item {
             Text(
                 "Every provider is hidden",
                 style = StarbridgeTheme.type.body,
@@ -104,7 +109,12 @@ fun QuotasScreen(
             )
         }
         itemsIndexed(groups, key = { _, g -> "${g[0].provider}/${g[0].machine}" }) { i, g ->
-            ProviderCard(g, now, settings, cardShape(i, groups.size), modifier = Modifier.animateItem())
+            val first = g[0]
+            ProviderCard(first.provider, first.machine, first.error, first.takenAt, g, now, settings, cardShape(i, cards), modifier = Modifier.animateItem())
+        }
+        // After the windows: a provider with none to show says only why.
+        itemsIndexed(failed, key = { _, f -> "failed/${f.provider}/${f.machine}" }) { i, f ->
+            ProviderCard(f.provider, f.machine, f.error, null, emptyList(), now, settings, cardShape(groups.size + i, cards), modifier = Modifier.animateItem())
         }
     }
 }
@@ -173,22 +183,31 @@ private fun tone(window: QuotaWindow, now: Instant, absolute: Boolean): Tone {
 /**
  * A provider's name, the machine that sent its windows when there are several, and the windows.
  * When CodexBar failed for it, its last windows stay, and the name says when they were read and
- * why they were not read again.
+ * why they were not read again. A provider with no windows to keep shows only why (#450).
  */
 @Composable
-private fun ProviderCard(windows: List<QuotaWindow>, now: Instant, settings: QuotaSettings, shape: Shape, modifier: Modifier = Modifier) {
+private fun ProviderCard(
+    provider: String,
+    machine: String?,
+    error: String?,
+    takenAt: Instant?,
+    windows: List<QuotaWindow>,
+    now: Instant,
+    settings: QuotaSettings,
+    shape: Shape,
+    modifier: Modifier = Modifier,
+) {
     val scheme = MaterialTheme.colorScheme
-    val first = windows.first()
     Surface(modifier.fillMaxWidth(), shape = shape, color = scheme.surfaceContainer) {
         Column(Modifier.padding(Spacing.s4)) {
             // The machine at the end of the provider's line, or on a line of its own when both don't fit.
             FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, itemVerticalAlignment = Alignment.CenterVertically) {
-                Text(first.provider, style = StarbridgeTheme.type.subtitle, color = scheme.onSurface, modifier = Modifier.padding(end = Spacing.s2))
-                first.machine?.let { Text(it, style = StarbridgeTheme.type.meta, color = scheme.onSurfaceVariant) }
+                Text(provider, style = StarbridgeTheme.type.subtitle, color = scheme.onSurface, modifier = Modifier.padding(end = Spacing.s2))
+                machine?.let { Text(it, style = StarbridgeTheme.type.meta, color = scheme.onSurfaceVariant) }
             }
-            first.error?.let { error ->
+            error?.let { error ->
                 Column(Modifier.padding(top = Spacing.s1)) {
-                    first.takenAt?.let { Text("Updated ${ago(now, it)}", style = StarbridgeTheme.type.meta, color = scheme.onSurfaceVariant) }
+                    takenAt?.let { Text("Updated ${ago(now, it)}", style = StarbridgeTheme.type.meta, color = scheme.onSurfaceVariant) }
                     Text(error, style = StarbridgeTheme.type.meta, color = scheme.onSurfaceVariant)
                 }
             }

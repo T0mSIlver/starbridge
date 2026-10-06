@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { collect, parseUsage, type RunResult } from "../src/codexbar";
+import { collect, parseUsage, type RunResult, shortError } from "../src/codexbar";
 import { snapshot } from "../src/quota";
 
 // The fixtures were recorded on the dev box at 19:09 UTC.
@@ -91,6 +91,29 @@ test("a provider that fails is asked once more before its failure counts", async
   expect(second.map((r) => r.error)).toEqual(["Claude usage probe timed out."]);
   expect(log.at(-1)).toBe("codexbar claude: Claude usage probe timed out.");
   expect(calls).toEqual(["claude", "claude", "claude", "claude"]);
+});
+
+test("devices get a provider's error short; the log keeps it whole", async () => {
+  const raw = 'Mistral API error: HTTP 500: {"detail":"Internal server error"}';
+  const failed: RunResult = {
+    code: 1,
+    stdout: JSON.stringify([{ provider: "mistral", error: { message: raw } }]),
+    stderr: "",
+  };
+  const log: string[] = [];
+  const rows = await collect(
+    "codexbar",
+    ["mistral"],
+    () => NOW,
+    (l) => log.push(l),
+    async () => failed,
+  );
+  expect(rows.map((r) => r.error)).toEqual(["Mistral's usage API failed (500)"]);
+  expect(log.at(-1)).toBe(`codexbar mistral: ${raw}`);
+  expect(shortError("Claude usage probe timed out.")).toBe("Claude usage probe timed out.");
+  expect(shortError("unexpected reply: <html><body>Bad gateway</body></html>")).toBe(
+    "unexpected reply",
+  );
 });
 
 test("a run that hung is not asked again, and a run for every provider that fails posts nothing", async () => {
