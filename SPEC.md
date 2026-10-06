@@ -1881,6 +1881,22 @@ so the mod is the first path.
   (Pi 0.87.1, `core/package-manager.js:618-639,1502-1512`). The mod keeps its own copy of the
   agent API revision: Claude Code installs only `mod/`, so it cannot import the CLI's, and
   `mod/test/agent.test.ts` runs it against the CLI's agent, which answers 426 outside its range.
+- 2026-10-06. 1.0.0 is the compatibility floor (#469, Tom: "reset and delete"). Protocol side:
+  decisions carry no `default`, a recovery is a `recover` entry only (an `add` signed by the
+  recovery key is refused, with a vector for it), and a recovery key is the 28-character key only:
+  the BIP-39 word readers and 32-byte recovery seeds are gone, with `@scure/bip39`. The hosted
+  database is reset at launch, so no account holds words. From 1.0.0 on, a compatibility branch
+  names the minimum client release that lets it go (`// until min cli >= 1.2`).
+- 2026-10-06. Crypto agility is by protocol version only (#478): an algorithm changes with `v: 2`,
+  `starbridge/v2/...` and `/v2` routes, and members re-pair; keys change only by revoke and add;
+  the recovery key's length is its format version. The permission input hash's key is now derived
+  under `starbridge/v1/input-hash`, the one string that lacked the prefix (was `starbridge input
+  hash`); no machine needs the old one after the reset.
+- 2026-10-06. Clients name themselves in `starbridge-client: <name>/<version>` (#468), `name` one
+  of `cli`, `android`, `web`, `mod`. Every client sends its release as MAJOR.MINOR.PATCH, the web
+  too (its package version, stamped at release) rather than a git revision, so one comparison
+  serves the minimum-release table. A request without the header is served: curl and scripts
+  keep working, and a minimum only refuses clients that say they are older.
 - 2026-10-06. The release's npm publish step keeps its `env.NODE_AUTH_TOKEN != ''` gate (#480).
   The audit suspected it never skips; it does skip without `NPM_TOKEN`. See the research log.
 

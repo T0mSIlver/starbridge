@@ -3,12 +3,14 @@ import { ProtocolError, sodium, toB64, utf8 } from "./sodium";
 
 /**
  * A permission's `inputHash`: BLAKE2b-256 of the tool input's JSON text as the machine holds it,
- * before redaction, keyed under `secret` (the machine's signing key). Devices only repeat it; the
- * machine compares it with its own. Unkeyed, a device holding the redacted input could test
+ * before redaction, keyed under BLAKE2b-256 of "starbridge/v1/input-hash" keyed with `secret`
+ * (the machine's signing key). Devices only repeat it; the machine compares it with its own. Unkeyed, a device holding the redacted input could test
  * guesses for what was redacted.
  */
 export function hashInput(inputJson: string, secret?: Uint8Array): string {
-  const key = secret ? sodium.crypto_generichash(32, utf8("starbridge input hash"), secret) : null;
+  const key = secret
+    ? sodium.crypto_generichash(32, utf8("starbridge/v1/input-hash"), secret)
+    : null;
   return toB64(sodium.crypto_generichash(32, utf8(inputJson), key));
 }
 

@@ -9,7 +9,7 @@ import jsQR from "jsqr";
 import { PNG } from "pngjs";
 import { run } from "../src/cli";
 import { session } from "../src/context";
-import { NO_DEFAULT, poll } from "../src/decisions";
+import { poll } from "../src/decisions";
 import { piAllow, piPermissionConfig } from "../src/pi";
 import { configCommand, offerPiChain } from "../src/settings";
 import { FAKE_CODEXBAR, paired, testCtx, until } from "./helpers";
@@ -316,7 +316,7 @@ test("ask ignores --default: the decision waits for the owner", async () => {
   expect(await run(args, ctx)).toBe(0);
   expect(ctx.errors.some((e) => e.includes("--default is ignored"))).toBe(true);
   const [d] = await server.opened("decision");
-  expect(d?.default).toEqual({ action: NO_DEFAULT });
+  expect(d).not.toHaveProperty("default");
 });
 
 test("waiting and working flip a decision's state, and each flip pushes", async () => {

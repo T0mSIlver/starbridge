@@ -288,12 +288,6 @@ export const Decision = z
     recommended: z.string().optional(),
     /** Optional: older machines omit it. */
     agent: AgentName.optional(),
-    /**
-     * Optional, and no client shows it: agents never answer for the owner, so a decision has no
-     * default. Machines keep sending one for clients from before 2026-10-05, which require it;
-     * its `at`, if any, is dropped.
-     */
-    default: z.object({ action: z.string().min(1).max(300) }).optional(),
     source: Source,
     images: z.array(DecisionImage).max(4).optional(),
     links: z.array(DecisionLink).max(4).optional(),
