@@ -729,13 +729,14 @@ test("answers hands each session only its own answers, until it confirms them", 
   expect(await run(["answers", "--session", "s1"], ctx)).toBe(0);
   expect(ctx.lines).toHaveLength(2);
 
-  // s2's answer was stored by s1's poll; s2 takes it without touching the server.
+  // s2's answer was stored by s1's poll; s2 takes it with no poll, only a read of the directory
+  // to check the device still counts (#491).
   const polls = server.log.length;
   expect(await run(["answers", "--session", "s2"], ctx)).toBe(0);
   expect(JSON.parse(ctx.lines[2] as string).line).toBe(
     `Answer to ${theirs} (Name the branch?): multi\nline`,
   );
-  expect(server.log.length).toBe(polls);
+  expect(server.log.slice(polls)).toEqual(["GET /directory"]);
   expect(await run(["answers", "--session", "s3"], ctx)).toBe(0);
   expect(ctx.lines).toHaveLength(3);
 });
