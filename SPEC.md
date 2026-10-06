@@ -1292,6 +1292,13 @@ so the mod is the first path.
   since `codex queue` (0.160) takes the message only as an argument and other local users can
   read process arguments; `wait <id>` prints a delivered answer from local state. The npm bundle
   runs under Node, so the CLI uses no Bun global without a guard; a test runs it there.
+- 2026-10-06. An attached image on Android has no press ripple (#246); a tap still opens the
+  viewer. Dragging a question's sheet by its image stuttered. The image row has no gesture of
+  its own besides the tap, and a Robolectric test shows the sheet follows a drag from the image
+  exactly as one from the text. The one difference: a finger that rests 100 ms before it drags
+  presses the image, so its ripple starts and cancels while the sheet moves. The viewer opening
+  is the tap's feedback. Whether the stutter is gone needs a real phone, as the emulator
+  renders in software.
 
 ## Encryption, with existing libraries
 
