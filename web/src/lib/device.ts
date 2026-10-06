@@ -151,6 +151,16 @@ async function trusted(account: string): Promise<{ dir: Directory; entries: Sign
   }
 }
 
+/** Whether `entry`, once verified as entry 0, is a genesis this browser's own device signed. */
+function signedGenesis(entry: SignedEnvelope | undefined, device?: store.DeviceRecord): boolean {
+  if (!device || entry?.signer !== device.id) return false;
+  try {
+    return verifyDirectory([entry]).members.get(device.id)?.member.signPk === device.signPk;
+  } catch {
+    return false;
+  }
+}
+
 export async function boot(): Promise<Boot> {
   let me: Awaited<ReturnType<typeof api.me>>;
   try {
@@ -177,6 +187,13 @@ export async function boot(): Promise<Boot> {
     // owner saved the recovery key, so that key was never used (#328).
     if (device) await store.del("device", account);
     return { state: "first-device", account, ...(device ? { unsaved: device.name } : {}) };
+  }
+  // Without a pin, only a genesis this browser's device signed anchors the served chain: a
+  // first device cut off before it pinned. A join or recovery cut off before it pinned starts
+  // over, since the server could serve a chain of its own that lists the pending keys (#354).
+  if (!(await store.get("pin", account)) && !signedGenesis(entries[0], device)) {
+    await store.del("pending", account);
+    return { state: "join", account, stale: false };
   }
   let verified: { dir: Directory; entries: SignedEnvelope[] };
   try {
@@ -363,8 +380,8 @@ export async function recover(account: string, name: string, typed: string): Pro
       const landed = await api.directory().catch(() => []);
       if (!landed.some((x) => x.sig === entry.sig)) throw e;
     }
-    await adopt(account, record);
     await pinTo(account, [...entries, entry], next);
+    await adopt(account, record);
   } finally {
     seed.fill(0);
     recovery.privateKey.fill(0);
@@ -457,8 +474,8 @@ async function finishJoin(
   // The approval's length and head, under the code's MAC, pin a directory the server cannot fake.
   const dir = verifyDirectory(entries, { account, pin: { length: body.length, head: body.head } });
   checkJoined(dir, member);
-  await adopt(account, record);
   await pinTo(account, entries, dir);
+  await adopt(account, record);
 }
 
 /** Joining by digits: no code to type; the owner compares 6 digits on both devices. */
@@ -517,8 +534,8 @@ export async function startDigitJoin(account: string, name: string): Promise<Dig
             pin: { length: body.length, head: body.head },
           });
           checkJoined(dir, member);
-          await adopt(account, record);
           await pinTo(account, entries, dir);
+          await adopt(account, record);
           return;
         }
       }
