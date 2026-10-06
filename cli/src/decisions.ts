@@ -391,13 +391,18 @@ export async function settle(ctx: Ctx, opts: { id?: string; outcome?: string }):
     throw new UsageError("--outcome is elsewhere or withdrawn");
   const s = session(ctx);
   // Closed here first: from now on no answer to it is accepted or delivered, even if the post fails.
+  // An answer that already reached the agent closed it, and a withdrawal would contradict it;
+  // checked in the same update, so a delivery in another process cannot slip in between.
+  let delivered = false;
   ctx.store.updateState((st) => {
+    delivered = !!st.answers[id]?.seen;
     const a = st.asked[id];
-    if (a) {
+    if (a && !delivered) {
       a.settled = true;
       forget(a);
     }
   });
+  if (delivered) return 0;
   const dir = await refreshDirectory(ctx, s);
   const to = devices(dir);
   const body = {

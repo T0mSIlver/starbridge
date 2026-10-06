@@ -48,6 +48,11 @@ export interface Config {
   relayUrl?: string;
   /** Serve `POST /v1/relay` for other servers. */
   relayMode: boolean;
+  /**
+   * The demo server for Play reviewers (#423): serves `GET /v1/demo`, which the demo program
+   * (`demo/`) needs before it approves joins unseen. Refused wherever the hosted service runs.
+   */
+  demo: boolean;
   /** Rate limits, caps and retention; tests lower them. */
   limits: Limits;
 }
@@ -67,7 +72,7 @@ function int(v: string | undefined, fallback: number): number {
 export function configFromEnv(env: Env = process.env): Config {
   const port = int(env.PORT, 8080);
   const publicUrl = (env.PUBLIC_URL ?? `http://localhost:${port}`).replace(/\/$/, "");
-  return {
+  const config: Config = {
     port,
     dbPath: env.DB_PATH ?? "./data/starbridge.db",
     publicUrl,
@@ -110,6 +115,29 @@ export function configFromEnv(env: Env = process.env): Config {
         : undefined,
     relayUrl: env.RELAY_URL?.replace(/\/$/, "") || undefined,
     relayMode: flag(env.RELAY_MODE),
+    demo: flag(env.DEMO),
     limits: DEFAULT_LIMITS,
   };
+  if (config.demo) checkDemo(config);
+  return config;
+}
+
+/**
+ * A demo server approves every join, so it must never be the hosted one: prod sets
+ * PUBLIC_URL to starbridge.run, GitHub sign-in and relay mode, and any one of them refuses DEMO.
+ */
+export function checkDemo(config: Config): void {
+  const host = new URL(config.publicUrl).hostname;
+  const problem =
+    (host === "starbridge.run" || host.endsWith(".starbridge.run")) &&
+    host !== "demo.starbridge.run"
+      ? `PUBLIC_URL ${config.publicUrl}`
+      : config.github
+        ? "GitHub sign-in"
+        : config.relayMode
+          ? "RELAY_MODE"
+          : !config.ownerToken
+            ? "no OWNER_TOKEN"
+            : undefined;
+  if (problem) throw new Error(`DEMO=1 is refused with ${problem}`);
 }

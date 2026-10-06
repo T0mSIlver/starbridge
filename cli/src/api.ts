@@ -1,5 +1,9 @@
 import type { SealedItem } from "@starbridge/protocol";
 
+/** What every command and `status` say once the owner revoked this machine. */
+export const REMOVED =
+  "this machine was removed from your Starbridge account: run `starbridge pair --force` to add it again";
+
 export class ApiError extends Error {
   constructor(
     readonly status: number,
@@ -64,12 +68,7 @@ export class Api {
       const e = (json ?? {}) as { error?: string; detail?: string };
       // The server drops a machine's token when the directory revokes the machine.
       if (res.status === 401 && this.token)
-        throw new ApiError(
-          401,
-          e.error ?? res.statusText,
-          e.detail,
-          "this machine was removed from your Starbridge account: run `starbridge pair --force` to add it again",
-        );
+        throw new ApiError(401, e.error ?? res.statusText, e.detail, REMOVED);
       throw new ApiError(res.status, e.error ?? res.statusText, e.detail);
     }
     return { status: res.status, json };
