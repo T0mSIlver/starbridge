@@ -37,8 +37,8 @@ function setSessionCookie(c: Parameters<typeof setCookie>[0], token: string, sec
 /**
  * Where GitHub sends a sign-in back. The app's sign-ins come back to their own path, which the
  * Android app claims as an App Link on starbridge.run: the installed web app's scope covers the
- * page's path, and Chrome would hand it the redirect (#527). GitHub accepts any path under the
- * OAuth app's callback URL.
+ * page's path, and Chrome would hand it the redirect (#527). The OAuth app lists both URLs:
+ * GitHub refused the app's path while only the first was listed (#544).
  */
 function callbackUrl(publicUrl: string, app: boolean): string {
   return `${publicUrl}/v1/auth/github/callback${app ? "/app" : ""}`;

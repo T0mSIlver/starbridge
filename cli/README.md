@@ -9,7 +9,8 @@ ciphertext only.
 
 Linux, macOS or Windows. Pick one.
 
-The install script puts the binary in `~/.local/bin`, then runs `starbridge setup`:
+The install script puts the binary in `~/.local/bin`, then runs `starbridge setup` when it has a
+terminal (`STARBRIDGE_NO_SETUP=1` skips it):
 
 ```bash
 curl -fsSL https://starbridge.run/install.sh | sh
@@ -42,28 +43,32 @@ starbridge setup
 
 ### What setup does
 
-Setup asks before each step, and a rerun repairs only what is missing:
+Setup asks before each step after pairing, and a rerun repairs only what is missing:
 
-1. It pairs the machine with your account.
+1. It pairs the machine with your account (see [Pair](#pair)). It asks for the server only when
+   neither `--server` nor `STARBRIDGE_SERVER` names one.
 2. It finds CodexBar, or installs it (Linux and macOS; CodexBar has no Windows build, so a
    Windows machine uploads no quotas): with Homebrew if you have it, else CodexBar's latest
    release tarball from GitHub, checked against the `.sha256` that release publishes, into
    `~/.local/opt/codexbar`. It installs nothing when the checksum is missing or does not match.
-3. It asks which providers' quotas to upload.
-4. It installs the background service, `starbridge agent`, as a systemd user unit, a launchd
+   Then it asks which providers' quotas to upload.
+3. It installs the background service, `starbridge agent`, as a systemd user unit, a launchd
    agent, or on Windows a Scheduled Task that starts at logon without administrator rights and
    logs to `%LOCALAPPDATA%\starbridge\agent.log`.
-5. It installs Starbridge in each agent it finds: the Claude Code plugin at user scope, the
+4. It installs Starbridge in each agent it finds: the Claude Code plugin at user scope, the
    skill in Codex's skills folder, the Starbridge Pi package, and the skill and plugin in
    opencode's config folder. A later setup updates the Codex and opencode files when the CLI
    carries newer ones. Claude Code, Codex and Pi may then run `starbridge ask`, `waiting`,
    `working`, `wait` and `settle` without a permission prompt; `starbridge run` still asks, since
    the command it wraps can be anything. For Pi, setup adds these rules only when
    pi-permission-system is installed; `starbridge config permissions on` offers them later.
-6. It uploads a first quota snapshot.
+5. It asks whether to send [permission prompts](#permission-prompts) to your devices. The
+   default is no.
+6. It uploads a first quota snapshot, then offers to send a test question to your phone and
+   prints your answer.
 
-`--yes` takes every default. `--no-quota`, `--no-service` and `--no-plugin` skip a step;
-`--no-plugin` skips every agent.
+`--yes` takes every default and sends no test question. `--no-quota` skips step 2, CodexBar
+included; `--no-service` skips step 3; `--no-plugin` skips step 4, for every agent.
 `starbridge status` prints the same checks.
 
 ### Update and uninstall
@@ -116,7 +121,8 @@ starbridge pair
 
 It prints a code, a link and a QR code. Open the link in a browser where you are signed in, scan
 the QR code with your phone, or type the code in Settings → Devices → Add a device, on your phone
-or in the web app. The machine pairs with
+or in the web app, which works from a machine with no browser. The code expires in 10 minutes.
+The machine pairs with
 https://starbridge.run unless you pass `--server https://starbridge.example` or set
 `STARBRIDGE_SERVER`.
 
@@ -136,6 +142,12 @@ starbridge ask --question "Merge #12 now?" \
   into the session.
 - Anywhere else, the agent waits for it with `starbridge wait <id> --timeout 5m`, which exits
   with code 2 when the time runs out.
+
+To check the path to your phone yourself, ask and wait in one command:
+
+```bash
+starbridge ask --question "Does this reach my phone?" --option Yes --option No --wait
+```
 
 When the agent runs out of other work, `starbridge waiting <id>` shows "Waiting for you" on
 every device and notifies you once more. `starbridge working <id>` clears it; the question stays open.
@@ -165,8 +177,8 @@ other commands, such as local inference, say so in their instruction files
 
 The background service runs `codexbar usage --format json` for each provider you picked and uploads a
 snapshot every 5 minutes. A provider that fails is sent as an error and never stops the others.
-Alerts before a window runs out are off until you turn on "Notify" for a provider in each
-device's Settings.
+Alerts before a window runs out are off until you turn them on for a provider in each device's
+Settings: "Notify" on the web, the bell in the Android app.
 
 To upload without the service:
 
@@ -252,17 +264,3 @@ and read `STARBRIDGE_CONFIG_DIR`, `STARBRIDGE_AGENT_SOCKET` and `STARBRIDGE_NO_A
 
 The hooks exit 1 only when stdin cannot be read. Every other command exits 0 on success and 1 on an error, with the error on stderr after
 `starbridge: `. Ctrl-C exits 130.
-
-## Release
-
-One version covers the CLI, the web app, both Claude Code plugins, the mod and the Android app. To release
-1.2.3, run `bun cli/scripts/version.ts 1.2.3` from the repository root, merge it in a PR, and tag
-the merged commit `v1.2.3`; the workflow refuses a tag that disagrees with the stamped files. The
-marketplace installs both plugins from that tag, and setup installs the Pi package at the tag of
-the CLI it runs. A release candidate (`1.2.3-rc.1`) leaves the marketplace on the last release.
-
-`bun run build:bin` builds the standalone binaries (Linux, macOS and Windows, x64 and arm64). A
-`v*` tag runs `.github/workflows/release.yml`, which attaches them, `install.sh`, `install.ps1`
-and the signed
-`SHA256SUMS` to a GitHub Release, commits the formula to `T0mSIlver/homebrew-starbridge` and
-publishes to npm. The signing key lives in the `MINISIGN_SECRET_KEY` Actions secret and, offline, with the maintainer.
