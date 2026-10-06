@@ -1,6 +1,6 @@
 # Prod's stack (deploy/compose.yaml) on the dev box, laid over it by evals/load/stack.sh. It is
 # sized like the Hetzner CX23 that runs prod: every container shares the same two cores, and the
-# memory caps add up to its 4 GB less about 550 MB for the OS (web-b runs only during a deploy).
+# memory caps add up to its 4 GB less about 600 MB for the OS (web-b runs only during a deploy).
 # Prod sets no caps: these split the box's memory where the load test found it goes. Ports move
 # to 1xxxx so nothing collides with the dev box, and the secrets come from fakes made by stack.sh.
 x-cx23: &cx23
@@ -13,8 +13,8 @@ services:
     ports: !override ["127.0.0.1:18080:8080"]
     # The fake GitHub and push services (fake.ts) listen on the host.
     extra_hosts: ["host.docker.internal:host-gateway"]
-    mem_limit: 1792m
-    memswap_limit: 1792m
+    mem_limit: 1280m
+    memswap_limit: 1280m
 
   web-a:
     <<: *cx23
@@ -48,6 +48,7 @@ services:
       - ${LOAD_DIR}/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data
       - caddy-config:/config
-    # Caddy holds a connection each way for every long-poll it proxies.
-    mem_limit: 512m
-    memswap_limit: 512m
+    # Caddy takes about 100 KB for every long-poll it holds, a connection each way: 3000 users
+    # with the page open hold 6000.
+    mem_limit: 1g
+    memswap_limit: 1g

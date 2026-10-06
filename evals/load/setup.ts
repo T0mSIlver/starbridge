@@ -24,9 +24,7 @@ const { values } = parseArgs({
 const FILE = `${LOAD_DIR}/users.jsonl`;
 await ready;
 
-const have = existsSync(FILE)
-  ? readFileSync(FILE, "utf8").split("\n").filter(Boolean).length
-  : 0;
+const have = existsSync(FILE) ? readFileSync(FILE, "utf8").split("\n").filter(Boolean).length : 0;
 const want = Number(values.users);
 let next = have;
 let made = 0;

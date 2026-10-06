@@ -35,7 +35,12 @@ export async function makeUser(n: number, via: Via): Promise<User> {
   async function call(
     method: string,
     path: string,
-    opts: { token?: string; cookie?: string; body?: unknown; headers?: Record<string, string> } = {},
+    opts: {
+      token?: string;
+      cookie?: string;
+      body?: unknown;
+      headers?: Record<string, string>;
+    } = {},
   ) {
     for (;;) {
       const headers: Record<string, string> = { ...opts.headers };
@@ -56,7 +61,11 @@ export async function makeUser(n: number, via: Via): Promise<User> {
         await Bun.sleep(seconds * 1000);
         continue;
       }
-      return { status: res.status, headers: res.headers, json: text ? JSON.parse(text) : undefined };
+      return {
+        status: res.status,
+        headers: res.headers,
+        json: text ? JSON.parse(text) : undefined,
+      };
     }
   }
 
@@ -103,7 +112,10 @@ export async function makeUser(n: number, via: Via): Promise<User> {
     recovery: recoveryKeyPair(generateRecoverySeed()),
     at,
   });
-  must(await call("POST", "/directory", { token: phoneSession, body: { entry: genesis } }), "genesis");
+  must(
+    await call("POST", "/directory", { token: phoneSession, body: { entry: genesis } }),
+    "genesis",
+  );
   const signer = { id: "phone", signKey: phone.keys.sign.privateKey };
 
   // The phone pairs a member: the new member's request, the phone's directory entry and
@@ -118,8 +130,13 @@ export async function makeUser(n: number, via: Via): Promise<User> {
     );
     // 429 `busy` too: the server holds at most 5000 pairings from the last 10 minutes,
     // approved ones included.
-    must(await call("POST", "/pairings", { body: { request, claimHash: claimHash(claim) } }), "pair");
-    const dir = verifyDirectory((await call("GET", "/directory", { token: phoneSession })).json.entries);
+    must(
+      await call("POST", "/pairings", { body: { request, claimHash: claimHash(claim) } }),
+      "pair",
+    );
+    const dir = verifyDirectory(
+      (await call("GET", "/directory", { token: phoneSession })).json.entries,
+    );
     const added = await call("POST", "/directory", {
       token: phoneSession,
       body: { entry: addEntry(dir, signer, member, at) },
@@ -137,7 +154,10 @@ export async function makeUser(n: number, via: Via): Promise<User> {
       code,
     );
     must(
-      await call("POST", `/pairings/${code.rendezvous}/approve`, { token: phoneSession, body: { approval } }),
+      await call("POST", `/pairings/${code.rendezvous}/approve`, {
+        token: phoneSession,
+        body: { approval },
+      }),
       "approve",
     );
     const result = await call("GET", `/pairings/${code.rendezvous}/result`, {

@@ -36,6 +36,8 @@ jobs:
           out=$(check "$BASE_URL/healthz") || failed="$failed- \`$BASE_URL/healthz\`: $out"$'\n'
           out=$(check "$BASE_URL/healthz/backup") ||
             failed="$failed- \`$BASE_URL/healthz/backup\`: no good backup in the last 26 h, or the server is down ($out)"$'\n'
+          out=$(check "$BASE_URL/healthz/disk") ||
+            failed="$failed- \`$BASE_URL/healthz/disk\`: under 2 GB free beside the database, or the server is down ($out)"$'\n'
           {
             echo "failed<<EOF"
             printf '%s' "$failed"

@@ -1,4 +1,4 @@
-import { stat } from "node:fs/promises";
+import { stat, statfs } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { ready } from "@starbridge/protocol";
 import { Hono } from "hono";
@@ -24,6 +24,8 @@ import { Waiters } from "./waiters";
 
 /** /healthz/backup fails past this; deploy/host/backup.sh runs nightly. */
 const BACKUP_MAX_AGE_MS = 26 * 3_600_000;
+/** /healthz/disk fails below this much free space beside the database. */
+const DISK_MIN_FREE = 2 * 1024 ** 3;
 
 export async function createApp(config: Config, fetchFn: typeof fetch = fetch) {
   await ready;
@@ -96,10 +98,32 @@ export async function createApp(config: Config, fetchFn: typeof fetch = fetch) {
     );
     return Date.now() - at < BACKUP_MAX_AGE_MS ? c.text("ok") : c.text("backup stale", 503);
   });
+  // The uptime check calls this too: a filling disk opens an issue before writes fail (#301).
+  app.get("/healthz/disk", async (c) => {
+    const { bavail, bsize } = await statfs(dirname(config.dbPath));
+    const free = bavail * bsize;
+    return free >= DISK_MIN_FREE
+      ? c.text("ok")
+      : c.text(`disk low: ${Math.round(free / 1024 ** 2)} MB free`, 503);
+  });
   app.route("/v1", v1);
   app.notFound((c) => c.json({ error: "not-found" }, 404));
+  let fullLoggedAt = 0;
   app.onError((e, c) => {
     if (e instanceof HTTPException) return e.getResponse();
+    // A full disk refuses writes while reads go on. Clients retry a 503; one line a minute
+    // stands for the stack each refused write would print.
+    if ((e as { code?: unknown }).code === "SQLITE_FULL") {
+      if (Date.now() - fullLoggedAt > 60_000) {
+        fullLoggedAt = Date.now();
+        console.error("disk full: refusing writes");
+      }
+      return c.json(
+        { error: "storage-full", detail: "the server's disk is full; retry later" },
+        503,
+        { "retry-after": "60" },
+      );
+    }
     console.error(e);
     return c.json({ error: "internal" }, 500);
   });

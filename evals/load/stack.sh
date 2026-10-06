@@ -2,6 +2,8 @@
 # Prod's stack on this machine for the load and failure tests (README.md). Usage:
 #   evals/load/stack.sh up        build and start it; Caddy on http://127.0.0.1:18000
 #   evals/load/stack.sh deploy    roll it out again under load, as deploy/host/apply.sh does
+#   evals/load/stack.sh small-disk [MB]  move the server's data to an MB-sized tmpfs (sudo)
+#   evals/load/stack.sh big-disk  back to its volume, unmounting the small disk
 #   evals/load/stack.sh down      stop it and delete its volumes
 #   evals/load/stack.sh compose … any docker compose command on it
 # LOAD_DIR (default ~/work/starbridge/.scratch/load) holds its fake secrets, its Caddyfile and the
@@ -96,6 +98,25 @@ deploy)
   compose up -d --force-recreate --no-deps server
   healthy http://127.0.0.1:18080/healthz server 30
   echo "deployed: $live -> $next, server restarted"
+  ;;
+small-disk)
+  # A size-capped tmpfs: writes past it fail with ENOSPC, as on a full disk. (A loop-mounted
+  # ext4 would be closer, but containers like LXC have no loop devices.)
+  compose stop server
+  mkdir -p "$LOAD_DIR/disk"
+  sudo mount -t tmpfs -o "size=${2:-256}m" tmpfs "$LOAD_DIR/disk"
+  vol=$(docker volume inspect -f '{{.Mountpoint}}' starbridge-load_data)
+  sudo cp -a "$vol/." "$LOAD_DIR/disk/"
+  sudo chown -R 1000:1000 "$LOAD_DIR/disk"
+  LOAD_EXTRA="$here/small-disk.yaml" compose up -d server
+  healthy http://127.0.0.1:18080/healthz server 30
+  df -h "$LOAD_DIR/disk"
+  ;;
+big-disk)
+  compose stop server
+  sudo umount "$LOAD_DIR/disk"
+  compose up -d server
+  healthy http://127.0.0.1:18080/healthz server 30
   ;;
 down) compose down -v ;;
 compose) shift; compose "$@" ;;

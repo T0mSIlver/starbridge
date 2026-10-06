@@ -42,11 +42,12 @@ const { values } = parseArgs({
 });
 
 const WINDOW_MS = 10_000;
+/** One operation's window as a worker sends it. */
+type WorkerOp = { hist: { counts: (number | null)[]; n: number }; errors: Record<string, number> };
 const ramp = values.ramp.split(",").map(Number);
 const stageMs = Number(values.stage) * 1000;
 // Long-polls wait by design: their time is not latency.
 const WAITS = new Set(["answers.wait", "joins.wait"]);
-
 
 // --- Worker: drives the users n % procs == index -------------------------------------------
 
@@ -62,8 +63,8 @@ async function worker(index: number, procs: number) {
   let ops = new Map<string, Op>();
   let delivery = new Hist();
   const op = (name: string) => {
-    let o = ops.get(name);
-    if (!o) ops.set(name, (o = { hist: new Hist(), errors: {} }));
+    const o = ops.get(name) ?? { hist: new Hist(), errors: {} };
+    ops.set(name, o);
     return o;
   };
   // Answers posted (id -> when) and received by machines; decisions posted and seen by pages.
@@ -81,21 +82,29 @@ async function worker(index: number, procs: number) {
     method: string,
     path: string,
     body?: unknown,
+    // biome-ignore lint/suspicious/noExplicitAny: each caller reads the fields it asked for
   ): Promise<{ status: number; json?: any }> {
     const t = performance.now();
     try {
-      const res = await fetch(`http://127.0.0.${1 + (u.n % 4)}:18000${path === "/" ? "" : "/v1"}${path}`, {
-        method,
-        headers: {
-          ...(token ? { authorization: `Bearer ${token}` } : {}),
-          ...(body ? { "content-type": "application/json" } : {}),
+      const res = await fetch(
+        `http://127.0.0.${1 + (u.n % 4)}:18000${path === "/" ? "" : "/v1"}${path}`,
+        {
+          method,
+          headers: {
+            ...(token ? { authorization: `Bearer ${token}` } : {}),
+            ...(body ? { "content-type": "application/json" } : {}),
+          },
+          body: body ? JSON.stringify(body) : undefined,
         },
-        body: body ? JSON.stringify(body) : undefined,
-      });
+      );
       const text = await res.text();
       op(name).hist.add(performance.now() - t);
       if (res.status >= 400) op(name).errors[res.status] = (op(name).errors[res.status] ?? 0) + 1;
-      return { status: res.status, json: text && res.headers.get("content-type")?.includes("json") ? JSON.parse(text) : undefined };
+      return {
+        status: res.status,
+        json:
+          text && res.headers.get("content-type")?.includes("json") ? JSON.parse(text) : undefined,
+      };
     } catch (e) {
       op(name).hist.add(performance.now() - t);
       const code = (e as { code?: string }).code ?? "net";
@@ -128,7 +137,13 @@ async function worker(index: number, procs: number) {
         dirAt = Date.now();
       }
       const q = `wait=${first ? 0 : 60}&directory=${u.directory}${cursor ? `&after=${cursor}` : ""}`;
-      const r = await call(first ? "answers" : "answers.wait", u, u.machine, "GET", `/answers?${q}`);
+      const r = await call(
+        first ? "answers" : "answers.wait",
+        u,
+        u.machine,
+        "GET",
+        `/answers?${q}`,
+      );
       if (r.status !== 200) {
         failures++;
         await pause(Math.min(60_000, 2000 * 2 ** (failures - 1)));
@@ -149,10 +164,19 @@ async function worker(index: number, procs: number) {
   }
 
   async function ask(u: User) {
-    await pause(Math.random() * 3_600_000 / Number(values.decisions));
+    await pause((Math.random() * 3_600_000) / Number(values.decisions));
     while (posting) {
       const d = id("d");
-      const item = { v: 1, kind: "decision", id: d, from: "mac", boxes: [{ to: "phone", box: box(1500) }, { to: "web", box: box(1500) }] };
+      const item = {
+        v: 1,
+        kind: "decision",
+        id: d,
+        from: "mac",
+        boxes: [
+          { to: "phone", box: box(1500) },
+          { to: "web", box: box(1500) },
+        ],
+      };
       if (await post("post.decision", u, u.machine, item)) {
         decisions.set(d, false);
         answerLater(u, d);
@@ -165,7 +189,14 @@ async function worker(index: number, procs: number) {
     await pause(expMs(Number(values.answer) * 1000));
     const [from, token] = Math.random() < 0.5 ? ["phone", u.phone] : ["web", u.web];
     const a = id("a");
-    const item = { v: 1, kind: "answer", id: a, from, re: decision, boxes: [{ to: "mac", box: box(600) }] };
+    const item = {
+      v: 1,
+      kind: "answer",
+      id: a,
+      from,
+      re: decision,
+      boxes: [{ to: "mac", box: box(600) }],
+    };
     // Counted from the first try: what the waiting session sees.
     answers.set(a, Date.now());
     if (!(await post("post.answer", u, token, item))) answers.delete(a);
@@ -175,17 +206,36 @@ async function worker(index: number, procs: number) {
     await pause(Math.random() * 300_000);
     while (posting) {
       const quiet = Math.random() < 0.9 ? { quiet: true } : {};
-      await post("post.quota", u, u.machine, { v: 1, kind: "quota", id: id("q"), from: "mac", ...quiet, boxes: [{ to: "phone", box: box(2000) }, { to: "web", box: box(2000) }] });
+      await post("post.quota", u, u.machine, {
+        v: 1,
+        kind: "quota",
+        id: id("q"),
+        from: "mac",
+        ...quiet,
+        boxes: [
+          { to: "phone", box: box(2000) },
+          { to: "web", box: box(2000) },
+        ],
+      });
       await pause(300_000 * (0.9 + Math.random() * 0.2));
     }
   }
 
   async function runs(u: User) {
-    await pause(Math.random() * 3_600_000 / Number(values.runs));
+    await pause((Math.random() * 3_600_000) / Number(values.runs));
     while (posting) {
       const r = id("r");
       for (let step = 0; step < 6 && posting; step++) {
-        await post("post.run", u, u.machine, { v: 1, kind: "run", id: r, from: "mac", boxes: [{ to: "phone", box: box(1000) }, { to: "web", box: box(1000) }] });
+        await post("post.run", u, u.machine, {
+          v: 1,
+          kind: "run",
+          id: r,
+          from: "mac",
+          boxes: [
+            { to: "phone", box: box(1000) },
+            { to: "web", box: box(1000) },
+          ],
+        });
         await pause(20_000);
       }
       await pause(expMs(3_600_000 / Number(values.runs)));
@@ -214,7 +264,13 @@ async function worker(index: number, procs: number) {
       joins(),
       every(20_000, async () => {
         for (;;) {
-          const r = await call("poll.inbox", u, u.web, "GET", `/items?kind=decision,settled,waiting${after(cursors.inbox)}`);
+          const r = await call(
+            "poll.inbox",
+            u,
+            u.web,
+            "GET",
+            `/items?kind=decision,settled,waiting${after(cursors.inbox)}`,
+          );
           if (r.status !== 200) return;
           for (const s of r.json.items as { item: { id: string } }[])
             if (decisions.get(s.item.id) === false) {
@@ -225,7 +281,13 @@ async function worker(index: number, procs: number) {
           if (r.json.items.length < 100) break;
         }
         await call("poll.prompts", u, u.web, "GET", "/items?kind=permission&open=1");
-        const s = await call("poll.settled", u, u.web, "GET", `/items?kind=settled${after(cursors.settled)}`);
+        const s = await call(
+          "poll.settled",
+          u,
+          u.web,
+          "GET",
+          `/items?kind=settled${after(cursors.settled)}`,
+        );
         if (s.status === 200) cursors.settled = s.json.cursor;
       }),
       every(10_000, async () => {
@@ -246,7 +308,9 @@ async function worker(index: number, procs: number) {
   const started = new Set<number>();
   const t0 = Date.now();
   const startUsers = () => {
-    const stage = values.until ? ramp.length - 1 : Math.min(ramp.length - 1, Math.floor((Date.now() - t0) / stageMs));
+    const stage = values.until
+      ? ramp.length - 1
+      : Math.min(ramp.length - 1, Math.floor((Date.now() - t0) / stageMs));
     const want = ramp[stage] as number;
     for (const u of all) {
       if (u.n >= want || started.has(u.n)) continue;
@@ -290,12 +354,15 @@ async function worker(index: number, procs: number) {
       await pause(25_000);
       stopped = true;
       clearInterval(tick);
-      const lost = [...answers.keys()].filter((a) => !got.has(a)).length;
+      const lostIds = [...answers.keys()].filter((a) => !got.has(a));
+      const lost = lostIds.length;
       const dup = [...got.values()].filter((n) => n > 1).length;
       const unseen = [...decisions.values()].filter((v) => !v).length;
-      const pages = all.filter((u) => started.has(u.n) && (u.n * 0.618) % 1 < Number(values.pages)).length;
+      const pages = all.filter(
+        (u) => started.has(u.n) && (u.n * 0.618) % 1 < Number(values.pages),
+      ).length;
       process.stdout.write(
-        `${JSON.stringify({ final: { answers: answers.size, received: got.size, lost, dup, decisions: decisions.size, decisionsSeen, unseen, pages } })}\n`,
+        `${JSON.stringify({ final: { answers: answers.size, received: got.size, lost, dup, decisions: decisions.size, decisionsSeen, unseen, pages }, lostIds })}\n`,
       );
       process.exit(0);
     }
@@ -307,13 +374,16 @@ async function worker(index: number, procs: number) {
 async function parent() {
   const procs = Number(values.procs);
   const kids = Array.from({ length: procs }, (_, i) =>
-    Bun.spawn([process.execPath, import.meta.path, ...process.argv.slice(2), "--worker", `${i}/${procs}`], {
-      stdin: "pipe",
-      stdout: "pipe",
-      stderr: "inherit",
-      // Bun runs at most 256 fetches at once by default, and long-polls take most of them.
-      env: { ...process.env, BUN_CONFIG_MAX_HTTP_REQUESTS: "65535" },
-    }),
+    Bun.spawn(
+      [process.execPath, import.meta.path, ...process.argv.slice(2), "--worker", `${i}/${procs}`],
+      {
+        stdin: "pipe",
+        stdout: "pipe",
+        stderr: "inherit",
+        // Bun runs at most 256 fetches at once by default, and long-polls take most of them.
+        env: { ...process.env, BUN_CONFIG_MAX_HTTP_REQUESTS: "65535" },
+      },
+    ),
   );
   const containers = await containerIds();
 
@@ -324,11 +394,16 @@ async function parent() {
     log.push(s);
   };
 
-  type Window = { users: number; ops: Map<string, { hist: Hist; errors: Record<string, number> }>; delivery: Hist };
+  type Window = {
+    users: number;
+    ops: Map<string, { hist: Hist; errors: Record<string, number> }>;
+    delivery: Hist;
+  };
   let win: Window = { users: 0, ops: new Map(), delivery: new Hist() };
   let reports = 0;
   let stageWins: Window[] = [];
-  const finals: any[] = [];
+  const finals: Record<string, number>[] = [];
+  const lostIds: string[] = [];
   let resolveFinal: () => void = () => {};
   const allFinal = new Promise<void>((r) => (resolveFinal = r));
 
@@ -337,21 +412,22 @@ async function parent() {
       let buf = "";
       for await (const chunk of kid.stdout) {
         buf += new TextDecoder().decode(chunk);
-        let nl: number;
-        while ((nl = buf.indexOf("\n")) >= 0) {
+        for (let nl = buf.indexOf("\n"); nl >= 0; nl = buf.indexOf("\n")) {
           const line = JSON.parse(buf.slice(0, nl));
           buf = buf.slice(nl + 1);
           if (line.final) {
             finals.push(line.final);
+            lostIds.push(...line.lostIds);
             if (finals.length === procs) resolveFinal();
             continue;
           }
           win.users += line.users;
-          for (const [k, v] of Object.entries(line.ops) as [string, any][]) {
-            let o = win.ops.get(k);
-            if (!o) win.ops.set(k, (o = { hist: new Hist(), errors: {} }));
+          for (const [k, v] of Object.entries(line.ops) as [string, WorkerOp][]) {
+            const o = win.ops.get(k) ?? { hist: new Hist(), errors: {} };
+            win.ops.set(k, o);
             o.hist.merge(v.hist);
-            for (const [code, n] of Object.entries(v.errors as Record<string, number>)) o.errors[code] = (o.errors[code] ?? 0) + n;
+            for (const [code, n] of Object.entries(v.errors))
+              o.errors[code] = (o.errors[code] ?? 0) + n;
           }
           win.delivery.merge(line.delivery);
           if (++reports % procs === 0) {
@@ -371,7 +447,8 @@ async function parent() {
     for (const w of ws)
       for (const [k, o] of w.ops) {
         n += o.hist.n;
-        for (const [c, m] of Object.entries(o.errors)) errors[`${k}:${c}`] = (errors[`${k}:${c}`] ?? 0) + m;
+        for (const [c, m] of Object.entries(o.errors))
+          errors[`${k}:${c}`] = (errors[`${k}:${c}`] ?? 0) + m;
         if (WAITS.has(k)) continue;
         req.merge(o.hist);
         if (!perOp.has(k)) perOp.set(k, new Hist());
@@ -389,7 +466,10 @@ async function parent() {
       while (true) {
         for (const url of ["http://127.0.0.1:18000/", "http://127.0.0.1:18000/healthz"]) {
           const t = performance.now();
-          const ok = await fetch(url).then((r) => r.ok, () => false);
+          const ok = await fetch(url).then(
+            (r) => r.ok,
+            () => false,
+          );
           probe.sent++;
           if (!ok) probe.failed++;
           probe.slowest = Math.max(probe.slowest, performance.now() - t);
@@ -410,7 +490,12 @@ async function parent() {
       Object.assign(containers, await containerIds());
       const mem = await memory(containers);
       const cpu = await cpuUsage(containers);
-      const cpuPct = Object.fromEntries(Object.entries(cpu).map(([k, v]) => [k, ((v - (cpuWas[k] ?? 0)) / 1e4 / (WINDOW_MS / 1000)).toFixed(0)]));
+      const cpuPct = Object.fromEntries(
+        Object.entries(cpu).map(([k, v]) => [
+          k,
+          ((v - (cpuWas[k] ?? 0)) / 1e4 / (WINDOW_MS / 1000)).toFixed(0),
+        ]),
+      );
       cpuWas = cpu;
       peakMem = Math.max(peakMem, mem.server ?? 0);
       const last = stageWins.at(-1);
@@ -441,12 +526,18 @@ async function parent() {
     k.stdin.flush();
   }
   await Promise.race([allFinal, Bun.sleep((Number(values.drain) + 60) * 1000)]);
-  const total = finals.reduce((a, f) => {
-    for (const [k, v] of Object.entries(f)) a[k] = (a[k] ?? 0) + (v as number);
-    return a;
-  }, {} as Record<string, number>);
+  const total = finals.reduce(
+    (a, f) => {
+      for (const [k, v] of Object.entries(f)) a[k] = (a[k] ?? 0) + (v as number);
+      return a;
+    },
+    {} as Record<string, number>,
+  );
   say(`FINAL ${JSON.stringify(total)}`);
-  if (values.until) say(`PROBE ${JSON.stringify({ ...probe, slowest: Math.round(probe.slowest) })}`);
+  // Answers no machine got: check whether the server holds them (README.md, "Lost or late").
+  await Bun.write(`${LOAD_DIR}/lost.txt`, lostIds.join("\n"));
+  if (values.until)
+    say(`PROBE ${JSON.stringify({ ...probe, slowest: Math.round(probe.slowest) })}`);
   if (values.out) await Bun.write(values.out, `${log.join("\n")}\n`);
   for (const k of kids) k.kill();
   process.exit(0);
@@ -491,18 +582,31 @@ async function memory(ids: Record<string, string>): Promise<Record<string, numbe
   return out;
 }
 
+/**
+ * Each container's CPU time and its time spent waiting for a core, in µs. On a shared machine
+ * the wait shows when other processes starve the stack: windows with much of it measure the
+ * machine, not the stack.
+ */
 async function cpuUsage(ids: Record<string, string>): Promise<Record<string, number>> {
   const out: Record<string, number> = {};
   for (const [n, id] of Object.entries(ids)) {
     const stat = await cgroupRead(id, "cpu.stat");
     if (stat) out[n] = Number(/^usage_usec (\d+)/m.exec(stat)?.[1] ?? 0);
+    const pressure = await cgroupRead(id, "cpu.pressure");
+    if (pressure) out[`${n} wait`] = Number(/^some .*total=(\d+)/m.exec(pressure)?.[1] ?? 0);
   }
   return out;
 }
 
 /** Why the server is down, if it is: OOM-killed, or no longer running. */
 async function died(): Promise<string | undefined> {
-  const r = Bun.spawnSync(["docker", "inspect", "-f", "{{.State.Status}} {{.State.OOMKilled}} {{.RestartCount}}", "starbridge-load-server-1"]);
+  const r = Bun.spawnSync([
+    "docker",
+    "inspect",
+    "-f",
+    "{{.State.Status}} {{.State.OOMKilled}} {{.RestartCount}}",
+    "starbridge-load-server-1",
+  ]);
   const [status, oom, restarts] = r.stdout.toString().trim().split(" ");
   if (oom === "true") return "OOM-killed";
   if (status !== "running") return status;
@@ -510,5 +614,6 @@ async function died(): Promise<string | undefined> {
   return undefined;
 }
 
-if (values.worker !== undefined) await worker(...(values.worker.split("/").map(Number) as [number, number]));
+if (values.worker !== undefined)
+  await worker(...(values.worker.split("/").map(Number) as [number, number]));
 else await parent();

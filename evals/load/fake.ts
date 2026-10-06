@@ -8,7 +8,10 @@
 import { parseArgs } from "node:util";
 
 const { values } = parseArgs({
-  options: { host: { type: "string", default: "127.0.0.1" }, port: { type: "string", default: "18099" } },
+  options: {
+    host: { type: "string", default: "127.0.0.1" },
+    port: { type: "string", default: "18099" },
+  },
 });
 const PUSH_MS = 80;
 const counts: Record<string, number> = { token: 0, user: 0, fcm: 0, webpush: 0 };
