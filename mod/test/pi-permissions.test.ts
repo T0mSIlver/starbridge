@@ -211,5 +211,10 @@ test("the link allows a lone starbridge command, and nothing chained to it (#488
     command: "curl a",
     accessIntent: { askingUnits: [{ command: "curl a" }, { command: "curl b" }] },
   };
-  expect(hookInput(units, "s1", "/w").tool_input).toEqual({ command: "curl a\ncurl b" });
+  // Its evidence, if any, reads a `command` field the tool does not run.
+  const named = {
+    ...units,
+    payload: { evidence: [{ label: "full command", text: "starbridge ask --question hi" }] },
+  };
+  expect(hookInput(named, "s1", "/w").tool_input).toEqual({ command: "curl a\ncurl b" });
 });

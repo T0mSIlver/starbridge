@@ -5,6 +5,7 @@ import { dirname, join } from "node:path";
 import {
   allowPiRules,
   dropOldPiRules,
+  oldPiRulesStuck,
   piAllow,
   piBashDenies,
   piPermissionConfig,
@@ -98,4 +99,17 @@ test("a bash surface that denies stops the starbridge commands before the link h
     { "*": "deny", bash: { "*": "ask" } },
   ])
     expect(piBashDenies(home({ permission }).env)).toBe(false);
+});
+
+test("old bash patterns in a config with comments are reported, not left silently", () => {
+  const h = home({});
+  writeFileSync(
+    h.file,
+    '{\n  // mine\n  "permission": {"bash": {"starbridge ask *": "allow"}}\n}\n',
+  );
+  expect(oldPiRulesStuck(h.env)).toBe(true);
+  expect(() => dropOldPiRules(h.env)).toThrow("by hand");
+  writeFileSync(h.file, "{\n  // mine\n}\n");
+  expect(oldPiRulesStuck(h.env)).toBe(false);
+  expect(dropOldPiRules(h.env)).toBe(false);
 });

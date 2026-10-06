@@ -10,6 +10,7 @@ import { permissionsEnabled } from "./permissions";
 import {
   allowPiRules,
   chainPiLink,
+  oldPiRulesStuck,
   PI_LINK,
   piAllow,
   piBashDenies,
@@ -119,6 +120,10 @@ export async function offerPiAllow(ctx: Ctx, prompt: Prompt | undefined, quiet =
       );
     return;
   }
+  if (oldPiRulesStuck(ctx.env))
+    ctx.out(
+      `Pi: take the "starbridge … *" bash patterns out of ${file} by hand: they can let other commands run without a prompt (#488).`,
+    );
   if (state === "unreadable" || !prompt) {
     ctx.out(`Pi: to read the skill and run the starbridge commands without a prompt, ${how}.`);
     return;

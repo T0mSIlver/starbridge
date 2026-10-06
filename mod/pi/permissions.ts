@@ -111,7 +111,8 @@ export function ownCommand(command: string): boolean {
  * The command line the call runs. pi-permission-system gates each command of a line on its own
  * and puts the one that asked in `command`, the line in the "full command" evidence when they
  * differ; an allow runs the whole line, so this is what the devices show and what ownAsk checks.
- * Without the evidence, as for a shell tool under another name, the commands that asked.
+ * For a shell tool under another name the evidence reads the wrong field, so the devices get the
+ * commands that asked.
  */
 export function fullCommand(details: AskDetails): string | undefined {
   const line = typedLine(details);
@@ -121,12 +122,13 @@ export function fullCommand(details: AskDetails): string | undefined {
 }
 
 /**
- * The line as typed, from an ask that carries its evidence: the "full command", or `command`
- * when there is none, since the gate adds it whenever they differ.
+ * The line as typed, from Pi's bash tool when its ask carries evidence (pi-permission-system
+ * 26.0.0 on): the "full command", or `command` when there is none, since the gate adds it
+ * whenever they differ. The evidence reads `input.command`, which only the bash tool's is.
  */
 function typedLine(details: AskDetails): string | undefined {
   const evidence = details.payload?.evidence;
-  if (!Array.isArray(evidence)) return undefined;
+  if (details.toolName !== "bash" || !Array.isArray(evidence)) return undefined;
   const full = evidence.find((e) => e.label === "full command")?.text;
   return typeof full === "string" && full.length > 0 ? full : details.command;
 }

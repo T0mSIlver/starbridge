@@ -118,6 +118,21 @@ export function piRules(env: Ctx["env"]): Record<string, string[]> {
 /** The bash patterns setup added before #488, which removePiEntries and allowPiRules take out. */
 const OLD_BASH = ["ask", "waiting", "working", "wait", "settle"].map((c) => `starbridge ${c} *`);
 
+/**
+ * Whether the pre-#488 bash patterns sit in a config this command cannot rewrite, such as one
+ * with comments, which pi-permission-system reads but `JSON.parse` does not.
+ */
+export function oldPiRulesStuck(env: Ctx["env"]): boolean {
+  const file = piPermissionConfig(env);
+  let text: string;
+  try {
+    text = readFileSync(file, "utf8");
+  } catch {
+    return false;
+  }
+  return readConfig(file) === undefined && OLD_BASH.some((p) => text.includes(`"${p}"`));
+}
+
 /** Takes OLD_BASH out of `permission`, dropping a bash map they leave empty. */
 function dropOldBash(permission: Config): boolean {
   const rules = permission.bash;
@@ -140,6 +155,10 @@ export function dropOldPiRules(env: Ctx["env"]): boolean {
   const file = piPermissionConfig(env);
   if (!existsSync(file)) return false;
   const config = readConfig(file);
+  if (!config && oldPiRulesStuck(env))
+    throw new Error(
+      `${file} is not plain JSON, which this command rewrites: take the "starbridge … *" bash patterns out by hand`,
+    );
   if (!config || !isObject(config.permission)) return false;
   const permission = { ...config.permission };
   if (!dropOldBash(permission)) return false;
