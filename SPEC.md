@@ -254,6 +254,8 @@ provider plugins add providers, not panels.
 - **Pairings** (#309). Each address may hold 20 unapproved pairings (IPv6 counted per /48 on this
   route), on top of 10 a minute; the server-wide cap of 20000 is the disk bound. Mobile carriers
   that hand out /64s from one /48 share 20, a smaller blast radius than the whole server.
+  The server counts them in memory, as every per-address limit, so no address reaches the
+  database, and a restart resets the counts (#575).
 - **Long-polls** identify their caller again after the wait and answer 401 if the session or token
   was revoked meanwhile (#260). A directory append ends every machine's answer long-poll, and the
   reply carries the directory's length (#158). On SIGTERM the server ends every long-poll as if

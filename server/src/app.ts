@@ -18,7 +18,7 @@ import { bindRoutes } from "./routes/bind";
 import { directoryRoutes } from "./routes/directory";
 import { itemRoutes } from "./routes/items";
 import { joinRoutes, sweepJoins } from "./routes/joins";
-import { pairingRoutes, sweepPairings } from "./routes/pairings";
+import { PairingClients, pairingRoutes, sweepPairings } from "./routes/pairings";
 import { pushRoutes } from "./routes/push";
 import { closeDays, diskFull, Usage } from "./usage";
 import { Waiters } from "./waiters";
@@ -40,6 +40,7 @@ export async function createApp(config: Config, fetchFn: typeof fetch = fetch) {
     quotas: new Waiters(),
     quotaAsks: new Map(),
     pairings: new Waiters(),
+    pairingClients: new PairingClients(),
     joins: new Waiters(),
     limiter: new RateLimiter(),
     usage,
@@ -57,6 +58,7 @@ export async function createApp(config: Config, fetchFn: typeof fetch = fetch) {
   };
   const minutely = housekeep(() => {
     sweepPairings(db);
+    deps.pairingClients.sweep(Date.now());
     sweepJoins(db);
   });
   const hourly = housekeep(() => {
