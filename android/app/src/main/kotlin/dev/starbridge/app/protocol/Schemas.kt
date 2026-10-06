@@ -148,6 +148,8 @@ interface ItemBody {
     val id: String
     val re: String? get() = null
     val recipients: List<String>
+    /** The directory head a machine signed into it; devices sign theirs elsewhere. */
+    val dir: DirectoryHead? get() = null
 }
 
 /** `body` is the JSON text exactly as signed; verifiers check the signature before parsing it. */
@@ -298,7 +300,7 @@ data class Decision(
     val answerIn: DecisionLink? = null,
     /** The machine takes a typed reply in place of an option (#201); older machines omit it. */
     val replies: Boolean? = null,
-    val dir: DirectoryHead? = null,
+    override val dir: DirectoryHead? = null,
 ) : ItemBody {
     override val recipients get() = to
 
@@ -391,7 +393,7 @@ data class Permission(
     val suggestions: List<PermissionSuggestion>,
     val expiresAt: String,
     val source: Source,
-    val dir: DirectoryHead? = null,
+    override val dir: DirectoryHead? = null,
 ) : ItemBody {
     override val recipients get() = to
 
@@ -461,7 +463,7 @@ data class Settled(
     val at: String,
     val outcome: String? = null,
     val device: String? = null,
-    val dir: DirectoryHead? = null,
+    override val dir: DirectoryHead? = null,
 ) : ItemBody {
     override val re get() = itemId
     override val recipients get() = to
@@ -492,7 +494,7 @@ data class Waiting(
     val to: List<String>,
     val at: String,
     val state: String,
-    val dir: DirectoryHead? = null,
+    override val dir: DirectoryHead? = null,
 ) : ItemBody {
     override val re get() = decisionId
     override val recipients get() = to
@@ -534,7 +536,7 @@ data class Run(
     val at: String,
     val progress: RunProgress? = null,
     val exit: RunExit? = null,
-    val dir: DirectoryHead? = null,
+    override val dir: DirectoryHead? = null,
 ) : ItemBody {
     override val recipients get() = to
 
@@ -618,7 +620,7 @@ data class QuotaSnapshot(
     val takenAt: String,
     val providers: List<QuotaProvider>,
     val alerts: List<QuotaAlert>,
-    val dir: DirectoryHead? = null,
+    override val dir: DirectoryHead? = null,
 ) : ItemBody {
     override val recipients get() = to
 

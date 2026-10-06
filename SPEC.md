@@ -1574,6 +1574,13 @@ so the mod is the first path.
   included, so a machine the server also keeps behind still passes on what a device told it. The
   head is optional so that older machines' items keep opening; they only add no evidence. Older
   devices drop the field and run without the check, as before.
+- 2026-10-06. How devices hold machines' items (#362, PR 3). The web and the phone keep the
+  longest head each machine signed, in IndexedDB and on disk, and while one counts they show no
+  machine's item, raise no notification and send no answer. The web says why in a banner above
+  every screen; the phone shows it as a notice. Settings, and so revoking, keep working, since a
+  compromised member's false head ends only once the owner revokes it. The phone reads every
+  head on a page before it applies any item, and keeps its cursor while held, so the items come
+  back once the server serves the missing entries.
 
 - 2026-10-06. opencode is the fourth harness (#300; research below, opencode 1.18.31). Its
   plugins get an SDK client bound to the running server, so the Starbridge opencode plugin
@@ -1606,6 +1613,15 @@ so the mod is the first path.
   it carries Codex's skill, so the versions match, and the agent rewrites outdated files when it
   starts. opencode's own `question` tool (on in the TUI, off in `opencode run`) is not
   intercepted, as in Pi; the skill already tells agents to avoid tools that ask the user.
+- 2026-10-06. Fable's review of #362's heads (#391, #395, #396). A device reads the directory
+  once more before it holds: the phone opened pushed items against the chain of its last sync,
+  so any device added elsewhere made every pushed question from an up-to-date machine read as
+  withheld, and vanish. A head a machine passes on from a device the chain does not list now
+  counts, kept in one slot per machine; it is dropped only once the chain lists that device as
+  revoked, since its `add` may be what the server holds back, as when the owner revokes from a
+  new phone. The hold names the machine and that device, and says to revoke the machine first:
+  a compromised machine can name the owner's own phone. Re-sealed items carry the current head,
+  and switching account clears the phone's heads.
 - 2026-10-06. opencode integration audit (#298), reproduced with opencode 1.18.31 on
   glm-5.3-flash in a throwaway HOME. A session's loop started only at its first command, so after
   opencode restarted, a session waiting for its answer never got it (#398). The plugin now starts

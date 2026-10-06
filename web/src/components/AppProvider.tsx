@@ -65,6 +65,11 @@ export type Store = {
   deviceName: (id: string) => string;
   /** The mockups' devices, on /sample only (SampleProvider), where no device is ready. */
   sampleDevices?: Device[];
+  /**
+   * Why no machine's item shows: the server holds back directory entries a machine has seen
+   * (#362). Settings still work, so the owner can revoke.
+   */
+  withheld?: string;
 };
 
 export const StoreContext = createContext<Store | null>(null);
@@ -95,6 +100,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [inbox, setInbox] = useState<Inbox>({ items: [], rejected: [] });
   const [inboxLoaded, setInboxLoaded] = useState(false);
   const [quotas, setQuotas] = useState<Quotas>();
+  const [withheld, setWithheld] = useState<string>();
   const [quotaSettings, setSettingsState] = useState<QuotaSettings>(DEFAULT_SETTINGS);
   const settingsRef = useRef(quotaSettings);
   settingsRef.current = quotaSettings;
@@ -115,13 +121,40 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   inboxRef.current = inbox;
   const ctx = boot.state === "ready" ? boot.ctx : undefined;
 
+  /**
+   * Runs a load of machines' items. While the server holds back directory entries a machine has
+   * seen, every machine's items are hidden and the reason shows instead (#362).
+   */
+  const holding = useCallback(async <T,>(read: () => Promise<T>): Promise<T | undefined> => {
+    const d = await load();
+    try {
+      const got = await read();
+      setWithheld(undefined);
+      return got;
+    } catch (e) {
+      if (!(e instanceof d.Withheld)) throw e;
+      setWithheld(e.message);
+      // Their buttons would still offer answers the hold refuses.
+      const reg = await navigator.serviceWorker?.getRegistration("/").catch(() => undefined);
+      for (const n of (await reg?.getNotifications().catch(() => [])) ?? []) n.close();
+      // From the start once the hold ends: the cursor moved past what is hidden now.
+      setInbox({ items: [], rejected: [] });
+      setPrompts([]);
+      setPromptLog(undefined);
+      setQuotas(undefined);
+      setRuns(undefined);
+      return undefined;
+    }
+  }, []);
+
   const reload = useCallback(async () => {
     try {
       const d = await load();
       const b = await d.boot();
       setBoot(b);
       if (b.state === "ready") {
-        setInbox(await d.loadInbox(b.ctx));
+        const loaded = await holding(() => d.loadInbox(b.ctx));
+        if (loaded) setInbox(loaded);
         setInboxLoaded(true);
         const push = await import("@/lib/push");
         push.registerWorker();
@@ -130,7 +163,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     } catch (e) {
       setBoot({ state: "error", error: e instanceof Error ? e.message : String(e) });
     }
-  }, []);
+  }, [holding]);
 
   useEffect(() => {
     reload();
@@ -158,8 +191,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const fresh = await current();
     if (!fresh) return;
     const d = await load();
-    setInbox(await d.loadInbox(fresh, inboxRef.current));
-  }, [current]);
+    const loaded = await holding(() => d.loadInbox(fresh, inboxRef.current));
+    if (loaded) setInbox(loaded);
+  }, [current, holding]);
 
   /**
    * Reads the open prompts and the settled notices since the last read. A prompt that left the
@@ -169,10 +203,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const fresh = await current();
     if (!fresh) return;
     const d = await load();
-    const [open, notices] = await Promise.all([
-      d.loadPrompts(fresh),
-      d.loadSettled(fresh, settledRef.current.cursor),
-    ]);
+    const read = await holding(() =>
+      Promise.all([d.loadPrompts(fresh), d.loadSettled(fresh, settledRef.current.cursor)]),
+    );
+    if (!read) return;
+    const [open, notices] = read;
     const byKey = settledRef.current.byKey;
     for (const [k, v] of notices.settled) byKey.set(k, v);
     settledRef.current.cursor = notices.cursor;
@@ -191,17 +226,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       };
       return [...open, ...closed].map(withNotice);
     });
-  }, [current]);
+  }, [current, holding]);
 
   const fetchQuotas = useCallback(async () => {
     const fresh = await current();
     if (!fresh) return;
     const d = await load();
-    const next = await d.loadQuotas(fresh);
+    const next = await holding(() => d.loadQuotas(fresh));
+    if (!next) return;
     setQuotas(next);
     await notifyAlerts(next.cards, settingsRef.current);
     return next;
-  }, [current]);
+  }, [current, holding]);
   const refreshQuotas = useCallback(async () => {
     await fetchQuotas();
   }, [fetchQuotas]);
@@ -239,8 +275,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const fresh = await current();
     if (!fresh) return;
     const d = await load();
-    setRuns(await d.loadRuns(fresh));
-  }, [current]);
+    const next = await holding(() => d.loadRuns(fresh));
+    if (next) setRuns(next);
+  }, [current, holding]);
 
   const runLive = !!runs?.items.some((i) => runState(i.run, Date.now()) === "running");
   useEffect(() => {
@@ -330,8 +367,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const fresh = await current();
     if (!fresh) return;
     const d = await load();
-    setPromptLog(await d.loadPromptLog(fresh));
-  }, [current]);
+    const log = await holding(() => d.loadPromptLog(fresh));
+    if (log) setPromptLog(log);
+  }, [current, holding]);
 
   const deviceName = useCallback(
     (id: string) =>
@@ -382,6 +420,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         promptLog,
         loadPromptLog,
         deviceName,
+        withheld,
       }}
     >
       {children}

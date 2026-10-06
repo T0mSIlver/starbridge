@@ -11,6 +11,7 @@ import {
   type Decision,
   type Directory,
   DirectoryEntry,
+  type DirectoryHead,
   entryHash,
   formatPairingCode,
   fromB64,
@@ -27,6 +28,7 @@ import {
   newJoinId,
   newJoinKeyPair,
   newPairingCode,
+  noteHead,
   openAsync,
   openJoinApproval,
   openJoinRequest,
@@ -58,6 +60,7 @@ import {
   verifyDirectory,
   visible,
   type Waiting,
+  withheldBy,
 } from "@starbridge/protocol";
 import { ApiError, api, backoff, type Stored } from "./api";
 import { generateDeviceKeys, sealOpener, signer } from "./crypto/keys";
@@ -1078,6 +1081,56 @@ function expectKind<K extends SealedItem["kind"]>(item: SealedItem, kind: K) {
   return item as SealedItem & { kind: K };
 }
 
+/** The server holds back directory entries a machine has seen: no machine's item counts (#362). */
+export class Withheld extends Error {}
+
+/**
+ * Opens a machine's item and keeps the directory head it signed, the longest per machine and per
+ * device it names as `by` (one slot per machine for a `by` this browser's chain does not list).
+ */
+async function openMachine<K extends SealedItem["kind"]>(
+  ctx: Ctx,
+  item: SealedItem,
+  kind: K,
+): ReturnType<typeof openAsync<K>> {
+  const opened = await openAsync(expectKind(item, kind), me(ctx), ctx.dir);
+  const head = (opened.body as { dir?: DirectoryHead }).dir;
+  if (head)
+    await store.update("heads", ctx.account, (old) => {
+      const heads = { ...old };
+      noteHead(heads, opened.signer.id, head, ctx.entries, ctx.dir);
+      return heads;
+    });
+  return opened;
+}
+
+/**
+ * Throws `Withheld` while a head a machine active in this browser's chain signed is missing
+ * from it. Loaders call it once they kept the heads of what they opened, so the item that shows
+ * the gap holds back the others it came with. It reads the directory once more first: a machine
+ * may only have signed an entry made on another device since this page read it.
+ */
+async function hold(ctx: Ctx): Promise<void> {
+  const heads = (await store.get("heads", ctx.account)) ?? {};
+  if (!withheldBy(heads, ctx.dir, ctx.entries)) return;
+  const fresh = await refresh(ctx);
+  const held = withheldBy(heads, fresh.dir, fresh.entries);
+  if (held) throw new Withheld(heldText(fresh.dir, held));
+}
+
+/**
+ * Names the machine and, for a head it passed on, the device: a compromised machine can name any
+ * device, the owner's own phone included, so the machine is the one to revoke first.
+ */
+export function heldText(dir: Directory, held: { id: string; by?: string }): string {
+  const name = (id: string) => dir.members.get(id)?.member.name ?? id;
+  const machine = name(held.id);
+  const seen = held.by
+    ? `${machine} says ${name(held.by)} has seen changes to your devices that the server is holding back.`
+    : `The server is holding back changes to your devices that ${machine} has seen.`;
+  return `${seen} Nothing from your machines shows until it sends them. If this does not clear, revoke ${machine} first.`;
+}
+
 /** How each item a settled notice closed was closed, by item id, with the time it closed. */
 type Closings = Map<string, { outcome: Settled["outcome"]; at: string }>;
 
@@ -1087,12 +1140,7 @@ async function openDecision(
   sent: store.SentAnswers,
   closings: Closings = new Map(),
 ): Promise<InboxItem> {
-  expectKind(s.item, "decision");
-  const { signer: machine, body } = await openAsync(
-    s.item as SealedItem & { kind: "decision" },
-    me(ctx),
-    ctx.dir,
-  );
+  const { signer: machine, body } = await openMachine(ctx, s.item, "decision");
   const reply = sent[body.id];
   // The notice that closed it arrived in the same write, so it carries the same time; a later
   // one, after a device's answer, closed nothing.
@@ -1112,7 +1160,9 @@ async function openDecision(
 /** Opens a decision a push carried (or named, when it did not fit). */
 export async function openPushedDecision(ctx: Ctx, item: SealedItem): Promise<InboxItem> {
   const sent = (await store.get("answers", ctx.account)) ?? {};
-  return openDecision(ctx, { item, cursor: "", receivedAt: "" }, sent);
+  const opened = await openDecision(ctx, { item, cursor: "", receivedAt: "" }, sent);
+  await hold(ctx);
+  return opened;
 }
 
 /**
@@ -1143,7 +1193,7 @@ export async function loadInbox(ctx: Ctx, inbox: Inbox = { items: [], rejected: 
     if (s.item.kind === "waiting") {
       // Only tells whether the agent waits: one that fails to open costs that and nothing else.
       try {
-        const { signer, body } = await openAsync(expectKind(s.item, "waiting"), me(ctx), ctx.dir);
+        const { signer, body } = await openMachine(ctx, s.item, "waiting");
         const w = body as Waiting;
         const key = `${signer.id}/${w.decisionId}`;
         const had = waits[key];
@@ -1154,7 +1204,7 @@ export async function loadInbox(ctx: Ctx, inbox: Inbox = { items: [], rejected: 
     if (s.item.kind === "settled") {
       // Only tells how a decision closed: one that fails to open costs that and nothing else.
       try {
-        const { signer, body } = await openAsync(expectKind(s.item, "settled"), me(ctx), ctx.dir);
+        const { signer, body } = await openMachine(ctx, s.item, "settled");
         // Keyed by machine: a notice closes only the machine's own items (#362).
         closings.set(`${signer.id}/${body.itemId}`, { outcome: body.outcome, at: s.receivedAt });
       } catch {}
@@ -1188,12 +1238,14 @@ export async function loadInbox(ctx: Ctx, inbox: Inbox = { items: [], rejected: 
     const { waitingSince: _, ...rest } = i;
     return w?.state === "waiting" ? { ...rest, waitingSince: w.at } : rest;
   });
+  await hold(ctx);
   return { items, cursor, rejected, retry, waits } satisfies Inbox;
 }
 
 /** Signs the answer and seals it to the machine that asked, which must still be active. */
 export async function answer(ctx: Ctx, item: InboxItem, reply: Reply): Promise<string> {
   const fresh = await refresh(ctx);
+  await hold(fresh);
   const machine = fresh.dir.members.get(item.machine.id);
   if (!machine?.active) throw new Error(`${item.machine.name} was revoked`);
   const answeredAt = now();
@@ -1228,11 +1280,7 @@ async function openPermission(
   s: Stored,
   sent: Record<string, PromptReply & { answeredAt: string }>,
 ): Promise<PromptItem> {
-  const { signer: machine, body } = await openAsync(
-    expectKind(s.item, "permission"),
-    me(ctx),
-    ctx.dir,
-  );
+  const { signer: machine, body } = await openMachine(ctx, s.item, "permission");
   const reply = sent[body.id];
   const p = body as Permission;
   return {
@@ -1256,18 +1304,20 @@ const stripTime = ({ answeredAt: _, ...reply }: PromptReply & { answeredAt: stri
 /** Opens a permission prompt a push carried (or named). */
 export async function openPushedPermission(ctx: Ctx, item: SealedItem): Promise<PromptItem> {
   const sent = (await store.get("promptAnswers", ctx.account)) ?? {};
-  return openPermission(ctx, { item, cursor: "", receivedAt: "" }, sent);
+  const opened = await openPermission(ctx, { item, cursor: "", receivedAt: "" }, sent);
+  await hold(ctx);
+  return opened;
 }
 
 /** Opens a waiting notice, with the machine that signed it. */
 export async function openWaiting(ctx: Ctx, item: SealedItem) {
-  const { signer, body } = await openAsync(expectKind(item, "waiting"), me(ctx), ctx.dir);
+  const { signer, body } = await openMachine(ctx, item, "waiting");
   return { machine: signer.id, waiting: body as Waiting };
 }
 
 /** Opens a settled notice, with the machine that signed it. */
 export async function openSettled(ctx: Ctx, item: SealedItem) {
-  const { signer, body } = await openAsync(expectKind(item, "settled"), me(ctx), ctx.dir);
+  const { signer, body } = await openMachine(ctx, item, "settled");
   return { machine: signer.id, settled: body as Settled };
 }
 
@@ -1284,7 +1334,10 @@ export async function loadSettled(ctx: Ctx, cursor?: string) {
       } catch {}
     }
     at = page.cursor;
-    if (page.items.length < 100) return { settled: out, cursor: at };
+    if (page.items.length < 100) {
+      await hold(ctx);
+      return { settled: out, cursor: at };
+    }
   }
 }
 
@@ -1313,18 +1366,19 @@ async function readAll<T>(
 /** The prompts waiting now, whose answer window is still open. */
 export async function loadPrompts(ctx: Ctx): Promise<PromptItem[]> {
   const sent = (await store.get("promptAnswers", ctx.account)) ?? {};
-  return readAll("permission", { open: true }, (s) => openPermission(ctx, s, sent));
+  const open = await readAll("permission", { open: true }, (s) => openPermission(ctx, s, sent));
+  await hold(ctx);
+  return open;
 }
 
 /** The last 7 days of prompts, with how each ended (the server keeps a week). */
 export async function loadPromptLog(ctx: Ctx): Promise<PromptItem[]> {
   const sent = (await store.get("promptAnswers", ctx.account)) ?? {};
   const permissions = await readAll("permission", {}, (s) => openPermission(ctx, s, sent));
-  const settled = await readAll("settled", {}, (s) =>
-    openAsync(expectKind(s.item, "settled"), me(ctx), ctx.dir),
-  );
+  const settled = await readAll("settled", {}, (s) => openMachine(ctx, s.item, "settled"));
   // A notice counts only from the machine that asked.
   const byId = new Map(settled.map((x) => [`${x.signer.id}/${x.body.itemId}`, x.body]));
+  await hold(ctx);
   return permissions.map((p) => {
     const st = byId.get(`${p.machine.id}/${p.permission.id}`);
     return st ? { ...p, settled: st as Settled } : p;
@@ -1341,6 +1395,7 @@ export async function answerPermission(
   reply: PromptReply,
 ): Promise<string> {
   const fresh = await refresh(ctx);
+  await hold(fresh);
   const machine = fresh.dir.members.get(item.machine.id);
   if (!machine?.active) throw new Error(`${item.machine.name} was revoked`);
   const answeredAt = now();
@@ -1384,7 +1439,7 @@ export async function loadQuotas(ctx: Ctx): Promise<Quotas> {
   for (const s of stored) {
     let opened: Awaited<ReturnType<typeof openAsync<"quota">>>;
     try {
-      opened = await openAsync(expectKind(s.item, "quota"), me(ctx), ctx.dir);
+      opened = await openMachine(ctx, s.item, "quota");
     } catch (e) {
       out.rejected.push({ id: s.item.id, error: e instanceof Error ? e.message : String(e) });
       continue;
@@ -1414,6 +1469,7 @@ export async function loadQuotas(ctx: Ctx): Promise<Quotas> {
       }
     }
   }
+  await hold(ctx);
   return out;
 }
 
@@ -1432,7 +1488,7 @@ export async function loadRuns(ctx: Ctx): Promise<Runs> {
     const page = await api.items("run", cursor);
     for (const s of page.items) {
       try {
-        const { signer, body } = await openAsync(expectKind(s.item, "run"), me(ctx), ctx.dir);
+        const { signer, body } = await openMachine(ctx, s.item, "run");
         out.items.push({ run: body, machine: signer.name });
       } catch (e) {
         if (e instanceof ProtocolError && e.code === "revoked-signer") continue;
@@ -1442,5 +1498,6 @@ export async function loadRuns(ctx: Ctx): Promise<Runs> {
     cursor = page.cursor;
     if (page.items.length < 100) break;
   }
+  await hold(ctx);
   return out;
 }

@@ -1,6 +1,7 @@
 package dev.starbridge.app.data
 
 import dev.starbridge.app.protocol.Decision
+import dev.starbridge.app.protocol.DirectoryHead
 import dev.starbridge.app.protocol.Member
 import dev.starbridge.app.protocol.Permission
 import dev.starbridge.app.protocol.Pin
@@ -75,6 +76,8 @@ data class Saved(
     /** This device, once it is in the directory. */
     val me: Member? = null,
     val pin: Pin? = null,
+    /** The longest directory head each machine signed into its items (#362). */
+    val heads: Map<String, DirectoryHead> = emptyMap(),
     /** The verified directory chain, so later fetches only ask for what is new. */
     val entries: List<JsonElement> = emptyList(),
     val cursor: String = "",

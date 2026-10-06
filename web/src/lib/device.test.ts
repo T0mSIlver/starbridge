@@ -19,6 +19,7 @@ import {
   publicKeys,
   recoveryKey,
   recoveryKeyPair,
+  revokeEntry,
   seal,
   toB64,
   verifyDirectory,
@@ -393,6 +394,140 @@ test("a join by digits counts the approval only once this browser's owner confir
     join.cancel();
     await store.put("device", record, ctx.account);
     if (pin) await store.put("pin", pin, ctx.account);
+  }
+});
+
+test("a machine's head exposes a revocation the server withholds, and holds every machine's items (#362)", async () => {
+  const at = "2026-10-06T12:00:00Z";
+  const phone = { id: "phone", signKey: live.owner.device.keys.sign.privateKey };
+  const postEntry = async (entry: unknown) => {
+    const r = await realFetch(`${live.url}/v1/directory`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${live.owner.device.token}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ entry }),
+    });
+    expect(r.status).toBe(201);
+  };
+  const machines = ["m_revoked", "m_honest"].map((id) => {
+    const keys = generateMemberKeys();
+    return { keys, member: { id, role: "machine" as const, name: id, ...publicKeys(keys) } };
+  });
+  for (const m of machines) await postEntry(addEntry(await live.directory(), phone, m.member, at));
+  const before = (await device.deviceContext(ctx.account)) as device.Ctx;
+  // The owner revokes one machine from the phone; the server keeps that entry from this browser.
+  await postEntry(revokeEntry(await live.directory(), phone, "m_revoked", at));
+  const full = await live.directory();
+  const [revoked, honest] = machines as [(typeof machines)[0], (typeof machines)[0]];
+  const { id, name, boxPk, signPk } = before.device;
+  const to = [{ id, role: "device" as const, name, boxPk, signPk }];
+  const decision = (m: typeof revoked, dir?: { length: number; head: string }) =>
+    seal(
+      "decision",
+      {
+        v: 1,
+        id: `d_${m.member.id}`,
+        to: [id],
+        createdAt: at,
+        question: "Deploy?",
+        context: "",
+        options: ["Yes", "No"],
+        recommended: "Yes",
+        source: { machine: m.member.name, project: "p", session: "s" },
+        ...(dir ? { dir } : {}),
+      },
+      { id: m.member.id, signKey: m.keys.sign.privateKey },
+      to,
+    );
+  const items = [
+    { item: decision(revoked), cursor: "1", receivedAt: at },
+    {
+      item: decision(honest, { length: full.length, head: full.head }),
+      cursor: "2",
+      receivedAt: at,
+    },
+  ];
+  const served = globalThis.fetch;
+  let withholding = true;
+  globalThis.fetch = (async (input: string, init?: RequestInit) => {
+    if (input.startsWith("/v1/items?kind=decision")) return Response.json({ items, cursor: "2" });
+    const res = await served(input, init);
+    if (input !== "/v1/directory" || !withholding) return res;
+    const { entries } = (await res.json()) as { entries: unknown[] };
+    return Response.json({ entries: entries.slice(0, -1) });
+  }) as typeof fetch;
+  try {
+    const held = (await device.deviceContext(ctx.account)) as device.Ctx;
+    expect(held.dir.members.get("m_revoked")?.active).toBe(true);
+    await expect(device.loadInbox(held)).rejects.toThrow("holding back changes to your devices");
+    // The head is kept: another load, of nothing new, holds too.
+    await expect(device.loadRuns(held)).rejects.toThrow("holding back");
+    // Served in full, the revoked machine's question no longer opens, and the hold ends.
+    withholding = false;
+    const fresh = (await device.deviceContext(ctx.account)) as device.Ctx;
+    const inbox = await device.loadInbox(fresh);
+    expect(inbox.items.map((i) => i.decision.id)).toEqual(["d_m_honest"]);
+  } finally {
+    globalThis.fetch = served;
+  }
+});
+
+test("a head from an entry made elsewhere since the last read refreshes rather than holds (#362)", async () => {
+  const at = "2026-10-06T12:00:00Z";
+  const phone = { id: "phone", signKey: live.owner.device.keys.sign.privateKey };
+  const post = async (entry: unknown) =>
+    realFetch(`${live.url}/v1/directory`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${live.owner.device.token}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ entry }),
+    });
+  const keys = generateMemberKeys();
+  const machine = { id: "m_fresh", role: "machine" as const, name: "fresh", ...publicKeys(keys) };
+  await post(addEntry(await live.directory(), phone, machine, at));
+  const stale = (await device.deviceContext(ctx.account)) as device.Ctx;
+  // The owner adds a device from the phone; the machine reads it and signs the new head.
+  const tablet = {
+    id: "tablet",
+    role: "device" as const,
+    name: "Tablet",
+    ...publicKeys(generateMemberKeys()),
+  };
+  await post(addEntry(await live.directory(), phone, tablet, at));
+  const full = await live.directory();
+  const { id, name, boxPk, signPk } = stale.device;
+  const recipient = [{ id, role: "device" as const, name, boxPk, signPk }];
+  const item = seal(
+    "decision",
+    {
+      v: 1,
+      id: "d_fresh",
+      to: [id],
+      createdAt: at,
+      question: "Deploy?",
+      context: "",
+      options: ["Yes", "No"],
+      recommended: "Yes",
+      source: { machine: "fresh", project: "p", session: "s" },
+      dir: { length: full.length, head: full.head },
+    },
+    { id: machine.id, signKey: keys.sign.privateKey },
+    recipient,
+  );
+  const served = globalThis.fetch;
+  globalThis.fetch = (async (input: string, init?: RequestInit) =>
+    input.startsWith("/v1/items?kind=decision")
+      ? Response.json({ items: [{ item, cursor: "1", receivedAt: at }], cursor: "1" })
+      : served(input, init)) as typeof fetch;
+  try {
+    const inbox = await device.loadInbox(stale);
+    expect(inbox.items.map((i) => i.decision.id)).toContain("d_fresh");
+  } finally {
+    globalThis.fetch = served;
   }
 });
 
