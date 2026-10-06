@@ -4,21 +4,26 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   readlinkSync,
+  rmSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import { LiveServer } from "@starbridge/server/test-support";
 import { makeAgent } from "../src/agent/main";
 import type { Agent } from "../src/agent/server";
+import { REMOVED } from "../src/api";
 import { installTarball, linkIntoLocalBin } from "../src/setup/codexbar";
+import { installOpencode, opencodeState, removeOpencode } from "../src/setup/harnesses";
+import opencodeFiles from "../src/setup/opencode-files.js";
 import { setup } from "../src/setup/setup";
 import { status } from "../src/setup/status";
 import { defaults, failure, type Sys } from "../src/setup/sys";
 import { uninstall } from "../src/setup/uninstall";
-import { paired, type TestCtx, testCtx } from "./helpers";
+import { paired, type TestCtx, testCtx, until } from "./helpers";
 
 setDefaultTimeout(30_000);
 
@@ -144,6 +149,16 @@ test("setup --yes replaces the dev box's manual installs and uploads a first sna
   expect(readFileSync(join(m.home, ".codex/rules/starbridge.rules"), "utf8")).toContain(
     '"starbridge", ["ask"',
   );
+  // opencode gets the skill and the plugin with the code it imports, in the repository's layout.
+  const oc = join(m.home, ".config/opencode");
+  expect(readFileSync(join(oc, "skills/starbridge/SKILL.md"), "utf8")).toBe(skill);
+  expect(readFileSync(join(oc, "plugins/starbridge.ts"), "utf8")).toContain(
+    'from "../starbridge/mod/opencode/starbridge.ts"',
+  );
+  for (const f of ["mod/opencode/starbridge.ts", "mod/hooks/node.ts", "plugin/hooks/rule.md"])
+    expect(readFileSync(join(oc, "starbridge", f), "utf8")).toBe(
+      readFileSync(join(import.meta.dir, "../..", f), "utf8"),
+    );
 
   const [snap] = await server.opened("quota");
   expect(snap?.providers.map((p) => p.provider)).toEqual(["codex", "zai"]);
@@ -208,13 +223,46 @@ test("status reports the agent, the service and the plugins", async () => {
   expect(out).toContain("starbridge-mod@starbridge: 0.2.0");
   expect(out).toContain("Codex skill: installed");
   expect(out).toContain("Pi package: installed");
+  expect(out).toContain("opencode skill and plugin: installed");
   expect(out).not.toContain("Manual install left");
+});
+
+test("status says at once that the owner removed this machine, and how to pair it again", async () => {
+  const m = await machine();
+  await startAgent(m.ctx);
+  await until(async () => {
+    m.ctx.lines.length = 0;
+    await status(m.sys);
+    return m.ctx.lines.join("\n").includes("Server: reachable");
+  });
+  await server.revoke(m.ctx.store.machine()?.id as string);
+  // Within the agent's first backoff, long before its 60 s poll would have ended.
+  await until(async () => {
+    m.ctx.lines.length = 0;
+    await status(m.sys);
+    return m.ctx.lines.join("\n").includes(REMOVED);
+  }, 3_000);
+  expect(m.ctx.lines).toContain(`Server: reachable, but ${REMOVED}`);
 });
 
 test("uninstall removes the service and plugins, asks the devices to revoke, keeps the keys", async () => {
   const m = await machine();
   await startAgent(m.ctx);
+  // pi-permission-system with the owner's own policy, and the link `config permissions on` adds.
+  const pps = join(m.home, ".pi/agent/extensions/pi-permission-system/config.json");
+  mkdirSync(dirname(pps), { recursive: true });
+  const own = { permission: { bash: { "*": "ask" } }, authorizerChain: ["judge", "starbridge"] };
+  writeFileSync(pps, JSON.stringify(own));
   await setup(m.sys, { yes: true, readyTimeoutMs: 2_000 });
+  // The starbridge commands run without a prompt, after the owner's rules: the last match wins.
+  expect(JSON.parse(readFileSync(pps, "utf8")).permission.bash).toEqual({
+    "*": "ask",
+    "starbridge ask *": "allow",
+    "starbridge waiting *": "allow",
+    "starbridge working *": "allow",
+    "starbridge wait *": "allow",
+    "starbridge settle *": "allow",
+  });
   m.ctx.lines.length = 0;
   expect(await uninstall(m.sys, {})).toBe(0);
   expect(existsSync(join(m.units, "starbridge-agent.service"))).toBe(false);
@@ -227,6 +275,12 @@ test("uninstall removes the service and plugins, asks the devices to revoke, kee
   expect(existsSync(join(m.home, ".codex/skills/starbridge"))).toBe(false);
   expect(existsSync(join(m.home, ".codex/rules/starbridge.rules"))).toBe(false);
   expect(m.calls()).toContain("pi remove git:github.com/T0mSIlver/starbridge");
+  expect(readdirSync(join(m.home, ".config/opencode")).sort()).toEqual(["plugins", "skills"]);
+  expect(readdirSync(join(m.home, ".config/opencode/plugins"))).toEqual([]);
+  expect(JSON.parse(readFileSync(pps, "utf8"))).toEqual({
+    permission: { bash: { "*": "ask" } },
+    authorizerChain: ["judge"],
+  });
   const [d] = await server.opened("decision");
   expect(d?.question).toBe("Revoke devbox? It was uninstalled.");
   expect(existsSync(join(m.ctx.store.dir, "machine.json"))).toBe(true);
@@ -335,4 +389,44 @@ test("setup installs no plugin from a marketplace named starbridge that is not t
   expect(m.ctx.lines.join("\n")).toContain(
     "comes from someone/starbridge, not T0mSIlver/starbridge",
   );
+});
+
+test("setup ships every file the opencode plugin imports", () => {
+  const root = join(import.meta.dir, "../..");
+  const need = new Set<string>();
+  const walk = (path: string) => {
+    if (need.has(path)) return;
+    need.add(path);
+    const text = readFileSync(join(root, path), "utf8");
+    for (const [, spec] of text.matchAll(/from "(\.{1,2}\/[^"]+)"/g))
+      walk(relative(root, resolve(dirname(join(root, path)), spec as string)));
+  };
+  walk("mod/opencode/starbridge.ts");
+  expect([...need].sort()).toEqual(Object.keys(opencodeFiles).sort());
+});
+
+test("opencode files someone else wrote stay, and so does the code a changed entry loads", () => {
+  const home = mkdtempSync(join(tmpdir(), "starbridge-oc-"));
+  const sys = { ctx: testCtx({ HOME: home }), home };
+  const oc = join(home, ".config/opencode");
+  mkdirSync(join(oc, "plugins"), { recursive: true });
+  writeFileSync(join(oc, "plugins/starbridge.ts"), "// mine\n");
+  // The skill installs; the foreign entry and the code it would load do not.
+  expect(installOpencode(sys)).toEqual([join(oc, "plugins/starbridge.ts")]);
+  expect(readFileSync(join(oc, "plugins/starbridge.ts"), "utf8")).toBe("// mine\n");
+  expect(existsSync(join(oc, "starbridge"))).toBe(false);
+  expect(existsSync(join(oc, "skills/starbridge/SKILL.md"))).toBe(true);
+  // The agent's update leaves them alone too.
+  expect(opencodeState(sys)).toBe("outdated");
+  installOpencode(sys, true);
+  expect(readFileSync(join(oc, "plugins/starbridge.ts"), "utf8")).toBe("// mine\n");
+
+  // An entry setup wrote and the owner edited keeps its code at uninstall.
+  rmSync(join(oc, "plugins/starbridge.ts"));
+  installOpencode(sys);
+  const entry = readFileSync(join(oc, "plugins/starbridge.ts"), "utf8");
+  writeFileSync(join(oc, "plugins/starbridge.ts"), `${entry}// tweaked\n`);
+  removeOpencode(sys);
+  expect(existsSync(join(oc, "starbridge/mod/opencode/starbridge.ts"))).toBe(true);
+  expect(existsSync(join(oc, "skills/starbridge"))).toBe(false);
 });

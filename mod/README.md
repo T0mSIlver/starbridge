@@ -100,6 +100,26 @@ from the devices and opens pi-permission-system's own dialog. The link defers
 to that dialog at once while `starbridge config permissions` is off, the
 machine is not paired or the server does not answer, and after 570 s.
 
+## opencode
+
+`opencode/starbridge.ts` is the same answer loop as an opencode plugin.
+`starbridge setup` copies it, with the files it imports from `hooks/` and the
+rule, into `~/.config/opencode/starbridge/`, and points
+`~/.config/opencode/plugins/starbridge.ts` at it.
+
+opencode gives commands no session id, so the plugin's `shell.env` hook sets
+`STARBRIDGE_OPENCODE_SESSION` and the session's title for them, and starts that
+session's loop. Each answer goes in with `promptAsync`: an idle session starts
+a turn, a busy one takes it at its next step. `opencode run` gets no loop, so
+`starbridge ask` tells the agent there to `starbridge wait`. The rule goes into
+the system prompt through `experimental.chat.system.transform`.
+
+Each `permission.asked` event runs `starbridge hook permission --agent
+opencode`, which exits at once while `starbridge config permissions` is off.
+opencode's dialog stays up meanwhile: the devices' answer is sent through
+opencode's reply route, and an answer at the keyboard stops the CLI, which
+settles the prompt on the devices.
+
 ## Develop
 
 ```bash

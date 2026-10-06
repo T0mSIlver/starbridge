@@ -67,7 +67,7 @@ export function MetaRow({
   return (
     <div className={`${size === "dense" ? "t-meta" : "t-small"} ${s.meta}`}>
       <Icon name={machineIcon(kind)} size={size === "dense" ? 16 : 17} />
-      <span>
+      <span className={s.machine}>
         <Hit text={machine} />
       </span>
       {repo && (
@@ -91,17 +91,21 @@ export function KindTile({
   type,
   filled,
   size = 32,
+  inline,
 }: {
   type: "prompt" | "question";
   filled: boolean;
   size?: number;
+  /** Before a line of text, as on Android: the glyph alone, centred on the first line. */
+  inline?: boolean;
 }) {
+  const glyph = inline ? size : Math.round(size * 0.56);
   return (
     <span
-      className={`${s.tile} ${filled ? s.tileFilled : s.tileHollow}`}
-      style={{ width: size, height: size }}
+      className={`${s.tile} ${inline ? s.tileInline : ""} ${filled ? s.tileFilled : s.tileHollow}`}
+      style={inline ? undefined : { width: size, height: size }}
     >
-      <Icon name={type === "prompt" ? "term" : "ask"} size={Math.round(size * 0.56)} />
+      <Icon name={type === "prompt" ? "term" : "ask"} size={glyph} />
     </span>
   );
 }
@@ -209,7 +213,6 @@ export function NeedRow({ entry, now, selected, comfy, onSelect, actions }: RowP
         tabIndex={selected ? 0 : -1}
         onClick={onSelect}
       />
-      <KindTile type={type} filled={!!since} size={comfy ? 36 : 32} />
       <div className={s.body}>
         <MetaRow
           machine={entry.machine}
@@ -220,11 +223,14 @@ export function NeedRow({ entry, now, selected, comfy, onSelect, actions }: RowP
           size={comfy ? "comfy" : "dense"}
         />
         {entry.type === "prompt" ? (
-          <PromptBody p={entry.item} comfy={comfy} />
+          <PromptBody p={entry.item} comfy={comfy} filled={!!since} />
         ) : entry.type === "question" ? (
           <>
-            <div className={`${comfy ? "t-action" : "t-label"} ${s.question}`}>
-              <Hit text={entry.item.decision.question} />
+            <div className={`${comfy ? "t-action" : "t-label"} ${s.question} ${s.titled}`}>
+              <KindTile type={type} filled={!!since} size={comfy ? 20 : 18} inline />
+              <span>
+                <Hit text={entry.item.decision.question} />
+              </span>
             </div>
             <Thumbs d={entry.item.decision} width={comfy ? 140 : 112} />
           </>
@@ -235,10 +241,11 @@ export function NeedRow({ entry, now, selected, comfy, onSelect, actions }: RowP
   );
 }
 
-function PromptBody({ p, comfy }: { p: PromptItem; comfy?: boolean }) {
+function PromptBody({ p, comfy, filled }: { p: PromptItem; comfy?: boolean; filled: boolean }) {
   return (
     <>
       <div className={`${comfy ? "t-small" : "t-meta"} ${s.tool}`}>
+        <KindTile type="prompt" filled={filled} size={comfy ? 20 : 18} inline />
         <span className={s.toolName}>
           <Hit text={p.permission.tool} />
         </span>
@@ -379,11 +386,6 @@ export function PastRow({
         tabIndex={selected ? 0 : -1}
         onClick={onSelect}
       />
-      <KindTile
-        type={e.type === "prompt" ? "prompt" : "question"}
-        filled={false}
-        size={comfy ? 36 : 32}
-      />
       <div className={s.pastBody}>
         <MetaRow
           machine={e.machine}
@@ -391,8 +393,16 @@ export function PastRow({
           repo={e.repo}
           time={clockTime(new Date(past.closed))}
         />
-        <div className={`${e.type === "prompt" ? "t-snippet" : "t-small"} ${s.pastText}`}>
-          <Hit text={past.text} />
+        <div className={`${e.type === "prompt" ? "t-snippet" : "t-small"} ${s.titled}`}>
+          <KindTile
+            type={e.type === "prompt" ? "prompt" : "question"}
+            filled={false}
+            size={comfy ? 18 : 16}
+            inline
+          />
+          <span className={s.pastText}>
+            <Hit text={past.text} />
+          </span>
         </div>
         <div className={`t-meta ${s.dim}`}>
           <Hit text={past.outcome} />

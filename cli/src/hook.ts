@@ -7,7 +7,7 @@
  * Neither ever allows anything by itself: on any error, timeout or lost network they print
  * nothing and exit 0, and Claude Code's own dialog decides.
  */
-import { hashInput, type Permission } from "@starbridge/protocol";
+import type { Permission } from "@starbridge/protocol";
 import { MAX_HOLD_SECONDS } from "./agent/api";
 import { type AgentClient, Interrupted, withAgent } from "./agent/client";
 import type { PermissionWait } from "./agent/permissions";
@@ -16,6 +16,7 @@ import { poll } from "./decisions";
 import {
   DEFAULT_WAIT_MS,
   hookDecision,
+  inputHashOf,
   markSettled,
   type PermissionHookInput,
   permissionSource,
@@ -39,18 +40,44 @@ function parseHook(text: string): PermissionHookInput & Record<string, unknown> 
 }
 
 function agentName(text: string | undefined): Permission["agent"] {
-  // Pi asks through the Starbridge Pi extension's link in pi-permission-system (#232).
-  if (text === "claude-code" || text === "pi") return text;
+  // Pi asks through the Starbridge Pi extension's link in pi-permission-system (#232), opencode
+  // through the Starbridge opencode plugin (#300).
+  if (text === "claude-code" || text === "pi" || text === "opencode") return text;
   // Codex's hook races its TUI in ways not probed yet (#57, P3).
-  throw new UsageError(`--agent: claude-code or pi (got ${text ?? "nothing"})`);
+  throw new UsageError(`--agent: claude-code, pi or opencode (got ${text ?? "nothing"})`);
+}
+
+/** How often the hook checks that the agent that ran it is still there. */
+const PARENT_CHECK_MS = 2_000;
+
+/**
+ * `signal`, also aborted once the hook's parent is gone: an agent killed outright leaves it
+ * orphaned, holding a prompt whose answer nobody would apply.
+ */
+export function untilOrphaned(
+  signal: AbortSignal | undefined,
+  ppid: () => number = () => process.ppid,
+): { signal: AbortSignal; stop: () => void } {
+  const parent = ppid();
+  const orphaned = new AbortController();
+  const timer = setInterval(() => {
+    if (ppid() !== parent) orphaned.abort();
+  }, PARENT_CHECK_MS);
+  timer.unref();
+  return {
+    signal: signal ? AbortSignal.any([signal, orphaned.signal]) : orphaned.signal,
+    stop: () => clearInterval(timer),
+  };
 }
 
 /** `starbridge hook permission --agent claude-code [--wait 570s]`, hook JSON on stdin. */
 export async function hookPermission(
-  ctx: Ctx,
+  outer: Ctx,
   stdin: string,
   opts: { agent?: string; wait?: string },
 ): Promise<number> {
+  const watch = untilOrphaned(outer.signal);
+  const ctx = { ...outer, signal: watch.signal };
   try {
     if (!permissionsEnabled(ctx)) return 0;
     const agent = agentName(opts.agent);
@@ -66,6 +93,8 @@ export async function hookPermission(
     if (output !== undefined) ctx.out(JSON.stringify(output));
   } catch (e) {
     ctx.err(`starbridge: permission prompt not sent: ${(e as Error).message}`);
+  } finally {
+    watch.stop();
   }
   return 0;
 }
@@ -90,9 +119,14 @@ async function viaAgent(
   } catch (e) {
     if (!(e instanceof Interrupted)) throw e;
     // The keyboard answered while the prompt was being posted: settle it by its call.
-    const session = encodeURIComponent(ask.source.session);
-    const inputHash = hashInput(JSON.stringify(ask.hook.tool_input ?? {}));
-    await agent.call("POST", `/v1/sessions/${session}/permissions/settle`, { inputHash }, 5_000);
+    const inputHash = inputHashOf(session(ctx).keys, ask.hook.tool_input ?? {});
+    const sessionPath = encodeURIComponent(ask.source.session);
+    await agent.call(
+      "POST",
+      `/v1/sessions/${sessionPath}/permissions/settle`,
+      { inputHash },
+      5_000,
+    );
     return undefined;
   }
   const path = `/v1/permissions/${encodeURIComponent(id)}`;
@@ -190,11 +224,12 @@ export async function hookSettle(
     agentName(opts.agent);
     const hook = parseHook(stdin);
     const sessionId = typeof hook.session_id === "string" ? hook.session_id : "";
+    // Runs after every tool call: nothing waiting means no network and no agent call.
+    if (!sessionId || waitingFor(ctx.store.state(), sessionId).length === 0) return 0;
     // A tool that ran or was denied names its call; the end of a turn or session settles all.
     const inputHash =
-      hook.tool_input !== undefined ? hashInput(JSON.stringify(hook.tool_input)) : undefined;
-    // Runs after every tool call: nothing waiting means no network and no agent call.
-    if (!sessionId || waitingFor(ctx.store.state(), sessionId, inputHash).length === 0) return 0;
+      hook.tool_input !== undefined ? inputHashOf(session(ctx).keys, hook.tool_input) : undefined;
+    if (waitingFor(ctx.store.state(), sessionId, inputHash).length === 0) return 0;
     await withAgent(
       ctx,
       (a) =>

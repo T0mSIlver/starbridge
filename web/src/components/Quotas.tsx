@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useId, useRef } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { relative } from "@/lib/format";
 import {
   arrange,
@@ -23,21 +23,34 @@ import s from "./Quotas.module.css";
 import { useReorder } from "./Reorder";
 
 export function Quotas() {
-  const { quotas, refreshQuotas, quotaSettings: settings, setQuotaSettings } = useApp();
+  const { quotas, refreshQuotas, askQuotas, quotaSettings: settings, setQuotaSettings } = useApp();
   useEffect(() => {
     refreshQuotas().catch(() => {});
   }, [refreshQuotas]);
   const now = new Date(useNow(true, 60_000));
+  const [busy, setBusy] = useState(false);
+  const refresh = () => {
+    if (busy) return;
+    setBusy(true);
+    askQuotas()
+      .catch(() => {})
+      .finally(() => setBusy(false));
+  };
   const cards = arrange(quotas?.cards ?? [], settings, now);
   return (
     <>
-      <PhoneBar title="Quotas" find={false} />
+      <PhoneBar
+        title="Quotas"
+        find={false}
+        view={<Refresh busy={busy} run={refresh} size={22} />}
+      />
       <div className={s.page}>
         <header className={s.head}>
           <h1 className={`t-heading ${s.title}`}>Quotas</h1>
           {quotas?.takenAt && (
             <span className={`t-caption ${s.dim}`}>Updated {relative(quotas.takenAt, now)}</span>
           )}
+          <Refresh busy={busy} run={refresh} size={18} />
         </header>
         {quotas?.rejected.length ? (
           <p className={`t-meta ${s.bad}`} role="status">
@@ -69,6 +82,25 @@ export function Quotas() {
         )}
       </div>
     </>
+  );
+}
+
+/**
+ * Asks every machine to read CodexBar again and loads what they post, as Android's pull to
+ * refresh does; the icon turns until then, up to the 15 s the server holds the ask. The phone
+ * bar's and the header's buttons share one `busy`, so either shows a refresh the other started.
+ */
+function Refresh({ busy, run, size }: { busy: boolean; run: () => void; size: number }) {
+  return (
+    <button
+      type="button"
+      className={`${s.refresh} ${busy ? s.busy : ""}`}
+      aria-label="Refresh quotas"
+      aria-busy={busy}
+      onClick={run}
+    >
+      <Icon name="refresh" size={size} />
+    </button>
   );
 }
 

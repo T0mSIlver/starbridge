@@ -1,7 +1,16 @@
 import { randomBytes } from "node:crypto";
 import { alertsFor, type QuotaAlert, type QuotaSnapshot, seal } from "@starbridge/protocol";
 import { collect, type ProviderQuota } from "./codexbar";
-import { type Ctx, devices, iso, parseDuration, refreshDirectory, session } from "./context";
+import type { LastQuota } from "./config";
+import {
+  type Ctx,
+  devices,
+  iso,
+  parseDuration,
+  refreshDirectory,
+  session,
+  signedHead,
+} from "./context";
 
 export interface QuotaOpts {
   providers: string[];
@@ -17,7 +26,10 @@ export function snapshot(providers: ProviderQuota[], to: string[], now: Date): Q
     to,
     takenAt: iso(now),
     providers,
-    alerts: providers.flatMap((p) => p.windows.flatMap((w) => alertsFor(p.provider, w, now))),
+    // Stale windows raise nothing: their pace is from when they were read.
+    alerts: providers.flatMap((p) =>
+      p.updatedAt ? [] : p.windows.flatMap((w) => alertsFor(p.provider, w, now)),
+    ),
   };
 }
 
@@ -55,23 +67,69 @@ export function raise(
   return { snap: { ...snap, alerts }, raised: kept };
 }
 
+/**
+ * Gives a provider CodexBar failed for its last windows read without an error whose reset has not
+ * passed, marked with when they were read, so a failed round keeps them on screen as stale
+ * instead of dropping them.
+ * Returns the providers and the last windows to keep.
+ */
+export function keepLast(
+  providers: ProviderQuota[],
+  last: Record<string, LastQuota>,
+  now: Date,
+): { providers: ProviderQuota[]; last: Record<string, LastQuota> } {
+  const kept = { ...last };
+  const out = providers.map((p) => {
+    if (!p.error) {
+      if (p.windows.length > 0)
+        kept[p.provider] = {
+          at: iso(now),
+          ...(p.account ? { account: p.account } : {}),
+          windows: p.windows,
+        };
+      return p;
+    }
+    const before = kept[p.provider];
+    if (p.windows.length > 0 || !before) return p;
+    // A window whose reset passed says nothing about the one running now.
+    const windows = before.windows.filter(
+      (w) => !w.resetsAt || Date.parse(w.resetsAt) > now.getTime(),
+    );
+    if (windows.length === 0) {
+      delete kept[p.provider];
+      return p;
+    }
+    return {
+      ...p,
+      ...(before.account && !p.account ? { account: before.account } : {}),
+      windows,
+      updatedAt: before.at,
+    };
+  });
+  return { providers: out, last: kept };
+}
+
 function describe(p: ProviderQuota): string[] {
   if (p.windows.length === 0) return [`${p.provider}: ${p.error ?? "no windows"}`];
-  return p.windows.map((w) => {
-    const pace = w.pace ? ` ${w.pace.stage}` : "";
-    const reset = w.resetsAt ? `, resets ${w.resetsAt}` : "";
-    return `${p.provider} ${w.label}: ${Math.round(w.usedPercent)}% used${reset}${pace}`;
-  });
+  const stale = p.updatedAt ? [`${p.provider}: ${p.error}; windows from ${p.updatedAt}`] : [];
+  return stale.concat(
+    p.windows.map((w) => {
+      const pace = w.pace ? ` ${w.pace.stage}` : "";
+      const reset = w.resetsAt ? `, resets ${w.resetsAt}` : "";
+      return `${p.provider} ${w.label}: ${Math.round(w.usedPercent)}% used${reset}${pace}`;
+    }),
+  );
 }
 
 /** One snapshot: run CodexBar, compute pace and alerts, seal to every device, post. */
 export async function pushOnce(ctx: Ctx, opts: QuotaOpts): Promise<QuotaSnapshot> {
   const s = session(ctx);
   const bin = opts.codexbar ?? ctx.env.STARBRIDGE_CODEXBAR ?? "codexbar";
-  const providers = await collect(bin, opts.providers, ctx.now, ctx.err);
+  const collected = await collect(bin, opts.providers, ctx.now, ctx.err);
   const dir = await refreshDirectory(ctx, s);
   const to = devices(dir);
   const now = ctx.now();
+  const { providers, last } = keepLast(collected, ctx.store.state().quotas ?? {}, now);
   const { snap, raised } = raise(
     snapshot(
       providers,
@@ -81,12 +139,18 @@ export async function pushOnce(ctx: Ctx, opts: QuotaOpts): Promise<QuotaSnapshot
     ctx.store.state().alerts ?? {},
     now,
   );
-  const item = seal("quota", snap, { id: s.machine.id, signKey: s.keys.sign.privateKey }, to);
+  const item = seal(
+    "quota",
+    { ...snap, dir: signedHead(ctx, dir) },
+    { id: s.machine.id, signKey: s.keys.sign.privateKey },
+    to,
+  );
   // Only a snapshot that raises an alert asks for a push.
   await s.api.postItem(snap.alerts.some((a) => a.notify) ? item : { ...item, quiet: true });
   // Recorded once posted, so a failed post raises its alerts again next round.
   ctx.store.updateState((st) => {
     st.alerts = raised;
+    st.quotas = last;
   });
   return snap;
 }

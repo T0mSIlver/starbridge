@@ -54,6 +54,7 @@ class NotificationScreenshotTest(private val dark: Boolean) {
         shadowOf(app).grantPermissions(Manifest.permission.POST_NOTIFICATIONS)
         val notifier = Notifier(app, Prefs(app))
         notifier.prompt(fake.prompts.first())
+        notifier.prompt(fake.longPrompt)
         fake.decisions.filter { it.id == "d2" || it.id == "d1" }.forEach { notifier.decision(it) }
         val posted = shadowOf(app.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).allNotifications
         val column = LinearLayout(context).apply {
