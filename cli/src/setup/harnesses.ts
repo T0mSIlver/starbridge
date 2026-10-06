@@ -10,6 +10,7 @@ import { dirname, join } from "node:path";
 import rule from "../../../plugin/hooks/rule.md" with { type: "text" };
 import skill from "../../../plugin/skills/starbridge/SKILL.md" with { type: "text" };
 import { VERSION } from "../version";
+import { markedSkill, marker, ours, oursSkill } from "./marker";
 import plugin from "./opencode-files.js";
 import { failure, run, type Sys, which } from "./sys";
 
@@ -25,33 +26,44 @@ export function hasCodex(sys: Sys): boolean {
   return which(sys.ctx.env, "codex") !== undefined;
 }
 
-/** Whether Codex has the skill, and whether it is this CLI's version of it. */
-export function codexSkill(sys: Home): "missing" | "current" | "outdated" {
+/** The skill as setup writes it: with its marker. */
+export const SKILL = markedSkill(skill);
+
+function readText(path: string): string | undefined {
   try {
-    return readFileSync(join(codexSkillDir(sys), "SKILL.md"), "utf8") === skill
-      ? "current"
-      : "outdated";
+    return readFileSync(path, "utf8");
   } catch {
-    return "missing";
+    return undefined;
   }
+}
+
+/**
+ * Whether a file setup writes is there, whether it is this CLI's version, or whether it is
+ * someone else's (no marker), which setup leaves alone.
+ */
+export type FileState = "missing" | "current" | "outdated" | "foreign";
+
+function fileState(text: string | undefined, want: string, owned: boolean): FileState {
+  if (text === undefined) return "missing";
+  if (text === want) return "current";
+  return owned ? "outdated" : "foreign";
+}
+
+export function codexSkill(sys: Home): FileState {
+  const text = readText(join(codexSkillDir(sys), "SKILL.md"));
+  return fileState(text, SKILL, oursSkill(text));
 }
 
 export function installCodexSkill(sys: Home) {
   const dir = codexSkillDir(sys);
   mkdirSync(dir, { recursive: true });
-  writeFileSync(join(dir, "SKILL.md"), skill);
+  writeFileSync(join(dir, "SKILL.md"), SKILL);
 }
 
-/** Removes the skill folder, only when it holds the Starbridge skill. */
+/** Removes the skill folder, only when it holds the skill setup wrote. */
 export function removeCodexSkill(sys: Sys): boolean {
   const dir = codexSkillDir(sys);
-  let text: string;
-  try {
-    text = readFileSync(join(dir, "SKILL.md"), "utf8");
-  } catch {
-    return false;
-  }
-  if (!/^name: starbridge$/m.test(text)) return false;
+  if (!oursSkill(readText(join(dir, "SKILL.md")))) return false;
   rmSync(dir, { recursive: true, force: true });
   return true;
 }
@@ -60,7 +72,8 @@ export function removeCodexSkill(sys: Sys): boolean {
  * Codex runs commands in a sandbox with no network. This rule runs the commands that post a
  * question and read its answer outside it, as Claude Code's allow rules let them skip the prompt.
  */
-export const CODEX_RULE = `# Written by starbridge setup: questions to your devices need the network.
+export const CODEX_RULE = `${marker("#")}
+# Questions to your devices need the network.
 prefix_rule(pattern = ["starbridge", ["ask", "waiting", "working", "wait", "settle"]], decision = "allow")
 `;
 
@@ -68,12 +81,9 @@ export function codexRulePath(sys: Home): string {
   return join(sys.ctx.env.CODEX_HOME || join(sys.home, ".codex"), "rules", "starbridge.rules");
 }
 
-export function hasCodexRule(sys: Home): boolean {
-  try {
-    return readFileSync(codexRulePath(sys), "utf8") === CODEX_RULE;
-  } catch {
-    return false;
-  }
+export function codexRule(sys: Home): FileState {
+  const text = readText(codexRulePath(sys));
+  return fileState(text, CODEX_RULE, ours(text));
 }
 
 export function installCodexRule(sys: Home) {
@@ -84,7 +94,7 @@ export function installCodexRule(sys: Home) {
 
 /** Removes the rule file, only when setup wrote it. */
 export function removeCodexRule(sys: Home): boolean {
-  if (!hasCodexRule(sys)) return false;
+  if (!ours(readText(codexRulePath(sys)))) return false;
   rmSync(codexRulePath(sys), { force: true });
   return true;
 }
@@ -148,14 +158,15 @@ export function opencodeDir(sys: Home): string {
 }
 
 /** The file opencode loads as a plugin; the code sits in `starbridge/`, as in this repository. */
-const OPENCODE_ENTRY = `// Written by starbridge setup: answers and permission prompts through Starbridge.
+const OPENCODE_ENTRY = `${marker("//")}
+// Answers and permission prompts through Starbridge.
 export { default } from "../starbridge/mod/opencode/starbridge.ts";
 `;
 
 /** Every file setup writes into opencode's config folder, by path inside it. */
 function opencodeFiles(): Record<string, string> {
   return {
-    "skills/starbridge/SKILL.md": skill,
+    "skills/starbridge/SKILL.md": SKILL,
     "plugins/starbridge.ts": OPENCODE_ENTRY,
     ...Object.fromEntries(
       Object.entries(plugin).map(([path, body]) => [`starbridge/${path}`, body]),
@@ -164,8 +175,14 @@ function opencodeFiles(): Record<string, string> {
   };
 }
 
+/** Every file setup writes into opencode's folder as it is now, to tell whether a write changed one. */
+function opencodeSnapshot(sys: Home): string {
+  const dir = opencodeDir(sys);
+  return JSON.stringify(Object.keys(opencodeFiles()).map((path) => readIn(dir, path) ?? null));
+}
+
 /** Whether opencode has the skill and plugin, and whether they are this CLI's. */
-export function opencodeState(sys: Home): "missing" | "current" | "outdated" {
+export function opencodeState(sys: Home): FileState {
   const dir = opencodeDir(sys);
   const same = Object.entries(opencodeFiles()).map(([path, want]) => {
     try {
@@ -181,17 +198,11 @@ export function opencodeState(sys: Home): "missing" | "current" | "outdated" {
 const SKILL_FILE = "skills/starbridge/SKILL.md";
 const ENTRY_FILE = "plugins/starbridge.ts";
 
-function readIn(dir: string, path: string): string | undefined {
-  try {
-    return readFileSync(join(dir, path), "utf8");
-  } catch {
-    return undefined;
-  }
-}
+const readIn = (dir: string, path: string) => readText(join(dir, path));
 
 /**
  * Writes the skill and the plugin, each only where the file there is Starbridge's or missing:
- * a skill named otherwise, or a `plugins/starbridge.ts` setup did not write, stays as it is.
+ * one without the marker, which setup did not write, stays as it is.
  * With `present`, only the ones still there, so an update never brings back one the owner
  * removed. Returns the files it left alone because they are someone else's.
  */
@@ -199,11 +210,8 @@ export function installOpencode(sys: Home, present = false): string[] {
   const dir = opencodeDir(sys);
   const skillText = readIn(dir, SKILL_FILE);
   const entryText = readIn(dir, ENTRY_FILE);
-  const skillOk = skillText === undefined ? !present : /^name: starbridge$/m.test(skillText);
-  const pluginOk =
-    entryText === undefined
-      ? !present
-      : entryText.startsWith(OPENCODE_ENTRY.split("\n")[0] as string);
+  const skillOk = skillText === undefined ? !present : oursSkill(skillText);
+  const pluginOk = entryText === undefined ? !present : ours(entryText);
   const foreign = [
     ...(skillText !== undefined && !skillOk ? [join(dir, SKILL_FILE)] : []),
     ...(entryText !== undefined && !pluginOk ? [join(dir, ENTRY_FILE)] : []),
@@ -221,21 +229,47 @@ export function removeOpencode(sys: Home): string[] {
   const dir = opencodeDir(sys);
   const done: string[] = [];
   const read = (path: string) => readIn(dir, path);
-  if (/^name: starbridge$/m.test(read(SKILL_FILE) ?? "")) {
+  if (oursSkill(read(SKILL_FILE))) {
     rmSync(join(dir, "skills/starbridge"), { recursive: true, force: true });
     done.push(join(dir, "skills/starbridge"));
   }
-  if (read(ENTRY_FILE) === OPENCODE_ENTRY) {
+  if (ours(read(ENTRY_FILE))) {
     rmSync(join(dir, ENTRY_FILE), { force: true });
     done.push(join(dir, ENTRY_FILE));
   }
-  // An entry the owner changed stays, and so does the code it loads.
+  // An entry the owner wrote stays, and so does the code it loads.
   if (
     read(ENTRY_FILE) === undefined &&
     read("starbridge/mod/opencode/starbridge.ts") !== undefined
   ) {
     rmSync(join(dir, "starbridge"), { recursive: true, force: true });
     done.push(join(dir, "starbridge"));
+  }
+  return done;
+}
+
+/**
+ * Brings the Codex skill and rule and opencode's skill and plugin to this release's version,
+ * where setup wrote them (they carry its marker); it adds nothing. Returns what it did.
+ */
+export function refreshFiles(sys: Home): string[] {
+  const done: string[] = [];
+  const step = (what: string, fn: () => unknown) => {
+    try {
+      fn();
+      done.push(`Updated ${what}.`);
+    } catch (e) {
+      done.push(`Could not update ${what}: ${(e as Error).message}`);
+    }
+  };
+  const skillFile = join(codexSkillDir(sys), "SKILL.md");
+  if (codexSkill(sys) === "outdated") step(skillFile, () => installCodexSkill(sys));
+  if (codexRule(sys) === "outdated") step(codexRulePath(sys), () => installCodexRule(sys));
+  // Files someone else wrote keep it outdated: only a write that changed something counts.
+  if (opencodeState(sys) === "outdated") {
+    const before = opencodeSnapshot(sys);
+    step(`the opencode skill and plugin in ${opencodeDir(sys)}`, () => installOpencode(sys, true));
+    if (opencodeSnapshot(sys) === before && done.at(-1)?.startsWith("Updated")) done.pop();
   }
   return done;
 }
