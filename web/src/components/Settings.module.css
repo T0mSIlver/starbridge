@@ -289,6 +289,11 @@
     margin: -15px -8px;
     border: solid transparent;
     border-width: 15px 8px;
+  }
+
+  /* Repeated for the checked state, whose `background` shorthand resets the clip. */
+  .switch,
+  .switch:checked {
     background-clip: padding-box;
   }
 
