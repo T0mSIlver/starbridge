@@ -31,6 +31,10 @@ export const DEFAULT_LIMITS = {
   itemBytes: 2 * 1024 * 1024,
   /** Sealed box of one answer, in bytes: an answer's text is at most 4000 characters. */
   answerBytes: 32 * 1024,
+  /** Stored permission prompts per account, open or settled; each lives answeredRetention. */
+  permissions: 10_000,
+  /** Bytes charged per stored row (an item, and each of its boxes) on top of its boxes. */
+  rowBytes: 512,
   /** Stored runs per account; each lives runRetention after its last update. */
   runs: 500,
   /** Sealed boxes of one run update, in bytes. */
@@ -44,8 +48,10 @@ export const DEFAULT_LIMITS = {
 
   /** Directory appends per account. */
   directoryAppends: [30, HOUR] as RateWindow,
-  /** Directory entries per account, revoked members included. */
+  /** Directory entries per account past which devices add no members; revocations still pass. */
   directoryEntries: 200,
+  /** Devices the recovery key may still add past directoryEntries. */
+  recoveryAdds: 20,
   /** One directory entry's JSON, in bytes. */
   entryBytes: 8 * 1024,
 

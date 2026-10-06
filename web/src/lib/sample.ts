@@ -93,7 +93,7 @@ export function sample(now = Date.now()) {
             data: shots[v],
             alt: `Hero ${v}`,
           })),
-          links: [{ url: "https://claude.ai/artifact/4Esy3goyohvLThcPVCKaEf" }],
+          links: [{ url: "https://claude.ai/artifact/Xq7pLm2VnR4tBz9KcW1sYd" }],
         },
       ),
       machine: member("MacBook"),

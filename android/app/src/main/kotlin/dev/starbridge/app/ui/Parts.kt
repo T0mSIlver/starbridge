@@ -113,6 +113,8 @@ fun Page(
     gap: Dp = groupGap,
     /** Space under the title; a page that starts with a section name needs less. */
     titleGap: Dp = Spacing.s3,
+    /** Above the title: the Inbox's lockup. */
+    header: (@Composable () -> Unit)? = null,
     content: LazyListScope.() -> Unit,
 ) {
     Refreshable(refresh) {
@@ -121,23 +123,24 @@ fun Page(
             contentPadding = PaddingValues(start = Spacing.s3, end = Spacing.s3, bottom = Spacing.s6),
             verticalArrangement = Arrangement.spacedBy(gap),
         ) {
-            item(key = "page-title") { PageTitle(title, subtitle, trailing, onBack, titleGap - gap) }
+            item(key = "page-title") { PageTitle(title, subtitle, trailing, onBack, titleGap - gap, header) }
             content()
         }
     }
 }
 
 @Composable
-private fun PageTitle(title: String, subtitle: (@Composable () -> Unit)?, trailing: (@Composable () -> Unit)?, onBack: (() -> Unit)?, bottom: Dp) {
+private fun PageTitle(title: String, subtitle: (@Composable () -> Unit)?, trailing: (@Composable () -> Unit)?, onBack: (() -> Unit)?, bottom: Dp, header: (@Composable () -> Unit)?) {
     val scheme = MaterialTheme.colorScheme
     Column {
+        if (header != null) Box(Modifier.padding(start = Spacing.s1, top = Spacing.s4)) { header() }
         if (onBack != null) {
             IconButton(onClick = onBack, modifier = Modifier.padding(vertical = Spacing.s2).offset(x = -Spacing.s2)) {
                 Symbol(Sym.Back, size = 22.dp, tint = scheme.onSurface, contentDescription = "Back")
             }
         }
         Row(
-            Modifier.padding(start = Spacing.s1, top = if (onBack != null) Spacing.s2 else Spacing.s6, bottom = bottom),
+            Modifier.padding(start = Spacing.s1, top = if (onBack != null) Spacing.s2 else if (header != null) Spacing.s4 else Spacing.s6, bottom = bottom),
             verticalAlignment = Alignment.Bottom,
         ) {
             Column(Modifier.weight(1f)) {

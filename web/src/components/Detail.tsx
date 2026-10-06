@@ -4,6 +4,7 @@ import type { DecisionLink } from "@starbridge/protocol";
 import { useEffect, useRef, useState } from "react";
 import type { MachineKind } from "@/lib/feed";
 import { answerPlace } from "@/lib/outcome";
+import { fullInput } from "@/lib/permissionInput";
 import type { InboxItem, PromptItem, PromptReply, Reply } from "@/lib/types";
 import { Images, Links } from "./Attachments";
 import { Context } from "./Context";
@@ -123,6 +124,24 @@ function FreeText({
   );
 }
 
+/**
+ * Whether `ref` has been on screen since `key` changed: inside the scrolling detail pane, the
+ * observer sees the pane's clipping too.
+ */
+function useSeen(ref: React.RefObject<Element | null>, key: string): boolean {
+  const [seen, setSeen] = useState<string>();
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const io = new IntersectionObserver((entries) => {
+      if (entries.some((e) => e.isIntersecting)) setSeen(key);
+    });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [ref, key]);
+  return seen === key;
+}
+
 /** A question: what the agent asked, its state, its words, its options, and its session. */
 export function QuestionDetail({
   item,
@@ -236,9 +255,14 @@ export function PromptDetail({
   const { send, sending, error } = useSend(onAnswer);
   const session = p.suggestions.find((x) => x.scope === "session");
   const project = p.suggestions.find((x) => x.scope === "project");
+  // Allow, by button, key or grant, waits until the input's end has been on screen.
+  const end = useRef<HTMLSpanElement>(null);
+  const seen = useSeen(end, p.id);
+  const allowing = sending || !seen;
   useKeys(keys && !closed, (key) => {
-    if (key === "a") send({ behavior: "allow", scope: "once" });
-    else if (key === "d") send({ behavior: "deny", scope: "once" });
+    if (key === "a") {
+      if (!allowing) send({ behavior: "allow", scope: "once" });
+    } else if (key === "d") send({ behavior: "deny", scope: "once" });
     else return false;
     return true;
   });
@@ -259,7 +283,9 @@ export function PromptDetail({
           <h2 className="t-action">{p.tool}</h2>
         </div>
       </Head>
-      <pre className={`t-command ${s.command}`}>{p.summary}</pre>
+      {/* The whole input, never the capped summary: Allow covers all of it (#274). */}
+      <pre className={`t-command ${s.command}`}>{fullInput(p)}</pre>
+      <span ref={end} aria-hidden="true" />
       {p.description && <p className={`t-reading ${s.context}`}>{p.description}</p>}
       {closed ? (
         <p className={`t-small ${s.closed}`}>{closed}</p>
@@ -269,7 +295,7 @@ export function PromptDetail({
             <button
               type="button"
               className={`t-action ${ui.btn} ${ui.lg} ${ui.rec}`}
-              disabled={sending}
+              disabled={allowing}
               aria-keyshortcuts={keys ? "A" : undefined}
               onClick={() => send({ behavior: "allow", scope: "once" })}
             >
@@ -285,31 +311,22 @@ export function PromptDetail({
               Deny {keys && <Kbd k="D" />}
             </button>
           </div>
-          {(session || project) && (
-            <div className={`t-small ${s.grants}`}>
-              {session && (
-                <button
-                  type="button"
-                  className={s.link}
-                  disabled={sending}
-                  title={session.rule}
-                  onClick={() => send({ behavior: "allow", scope: "session" })}
-                >
-                  {session.label}
-                </button>
-              )}
-              {project && (
-                <button
-                  type="button"
-                  className={s.link}
-                  disabled={sending}
-                  title={project.rule}
-                  onClick={() => send({ behavior: "allow", scope: "project" })}
-                >
-                  {project.label}
-                </button>
-              )}
-            </div>
+          {/* Each wider allow shows the exact rule it adds, not only in a tooltip (#274). */}
+          {[session, project].map(
+            (g) =>
+              g && (
+                <div key={g.scope} className={`t-small ${s.grant}`}>
+                  <button
+                    type="button"
+                    className={s.link}
+                    disabled={allowing}
+                    onClick={() => send({ behavior: "allow", scope: g.scope })}
+                  >
+                    {g.label}
+                  </button>
+                  <code className={`t-snippet ${s.rule}`}>{g.rule}</code>
+                </div>
+              ),
           )}
         </>
       )}
