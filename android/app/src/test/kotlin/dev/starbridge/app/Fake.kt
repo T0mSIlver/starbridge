@@ -144,7 +144,7 @@ class Fake(private val now: Instant) {
         ),
     )
 
-    /** Answered on a page of its own: the sheet's one button opens it. */
+    /** Answered on a page of its own: the link opens it, and Done says it was answered there. */
     val answerIn = Decision(
         id = "d6",
         question = "Which of the three settings layouts should ship?",
@@ -154,6 +154,7 @@ class Fake(private val now: Instant) {
         source = devBox,
         createdAt = ago(6),
         answerIn = Link("https://claude.ai/artifact/Xq7pLm2VnR4tBz9KcW1sYd"),
+        takesDone = true,
     )
 
     /**

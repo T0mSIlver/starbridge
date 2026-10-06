@@ -195,9 +195,22 @@ export function QuestionDetail({
       {closed ? (
         <p className={`t-small ${s.closed}`}>{closed}</p>
       ) : d.answerIn ? (
-        <div className={s.actions}>
-          <AnswerElsewhere page={d.answerIn} />
-        </div>
+        <>
+          <div className={s.actions}>
+            <AnswerElsewhere page={d.answerIn} />
+          </div>
+          {d.done && (
+            // Quiet, as Reply: the page stays the answer, Done only says it was given there.
+            <button
+              type="button"
+              className={`t-small ${s.link} ${s.reply}`}
+              disabled={sending}
+              onClick={() => send({ done: true })}
+            >
+              Done
+            </button>
+          )}
+        </>
       ) : options.length > 0 ? (
         <fieldset className={`${s.actions} ${s.options}`}>
           <legend className="sr-only">Answer</legend>

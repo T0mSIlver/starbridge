@@ -1,6 +1,6 @@
 import type { DecisionLink } from "@starbridge/protocol";
 import { linkLabel } from "./attachments";
-import type { InboxItem, PromptItem } from "./types";
+import type { Decision, InboxItem, PromptItem, Reply } from "./types";
 
 /** Where the owner answers a decision with `answerIn`: "the artifact" for a Claude one. */
 export function answerPlace(link: DecisionLink): string {
@@ -18,11 +18,18 @@ export function closedAt(item: InboxItem): string | undefined {
 export function outcomeText(item: InboxItem): string {
   // Answers are sealed to the asking machine: another device's shows once the machine names it.
   const reply = item.reply ?? item.answeredBy?.reply;
-  if (reply) return "choice" in reply ? reply.choice : reply.text;
+  if (reply) return replyText(reply, item.decision);
   if (item.settled === "withdrawn") return "Withdrawn";
   const page = item.decision.answerIn;
   if (!page) return "Answered";
   return `Answered in ${answerPlace(page)}`;
+}
+
+/** What a reply says: the choice, the text, or for Done where it was answered. */
+export function replyText(reply: Reply, d: Decision): string {
+  if ("choice" in reply) return reply.choice;
+  if ("text" in reply) return reply.text;
+  return d.answerIn ? `Answered in ${answerPlace(d.answerIn)}` : "Answered";
 }
 
 /** Who closed it: this browser, the agent (withdrawn, or for another page), or another device. */
@@ -72,7 +79,8 @@ export class AnsweredFirst extends Error {}
 export function answeredFirstText(item: InboxItem): string {
   const by = item.answeredBy;
   if (!by) return "Already answered on another device.";
-  return `Answered on ${by.device}: ${"choice" in by.reply ? by.reply.choice : by.reply.text}`;
+  if ("done" in by.reply) return `Marked answered on ${by.device}.`;
+  return `Answered on ${by.device}: ${replyText(by.reply, item.decision)}`;
 }
 
 /** Who closed a question, after its answer in History: "on this browser", "by the agent". */

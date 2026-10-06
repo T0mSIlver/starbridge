@@ -14,8 +14,11 @@ import type {
 
 export type { Decision, Permission, QuotaAlert, QuotaWindow, Run, Settled, Source };
 
-/** A tap on an option, or typed text when the decision has none. */
-export type Reply = { choice: string } | { text: string };
+/**
+ * A tap on an option, typed text when the decision has none, or Done when it is answered on its
+ * own page.
+ */
+export type Reply = { choice: string } | { text: string } | { done: true };
 
 /** An opened and verified decision. */
 export type InboxItem = {

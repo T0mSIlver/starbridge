@@ -14,7 +14,7 @@ import {
 import { matches, useFind } from "@/lib/find";
 import { clockTime } from "@/lib/format";
 import { closeItem, linkedItem, openItem, stackItem, useOpened } from "@/lib/opened";
-import { AnsweredFirst, promptOutcome } from "@/lib/outcome";
+import { AnsweredFirst, answerPlace, promptOutcome } from "@/lib/outcome";
 import { fitsRow } from "@/lib/permissionInput";
 import { type Prefs, usePref } from "@/lib/prefs";
 import { afterAnswer, selectedId, step } from "@/lib/selection";
@@ -645,9 +645,32 @@ function RowActions({
       </>
     );
   }
-  if (entry.type !== "question" || entry.item.decision.answerIn) return null;
+  if (entry.type !== "question") return null;
   if (when === "never" || (when === "waiting" && !entry.item.waitingSince)) return null;
   const d = entry.item.decision;
+  if (d.answerIn) {
+    if (!d.done) return null;
+    return (
+      <>
+        <a
+          className={`t-label ${ui.btn} ${ui.rec}`}
+          href={d.answerIn.url}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Answer in {answerPlace(d.answerIn)}
+        </a>
+        <button
+          type="button"
+          className={`t-label ${ui.btn}`}
+          disabled={busy}
+          onClick={run(() => onQuestion(entry.item, { done: true }))}
+        >
+          Done
+        </button>
+      </>
+    );
+  }
   const options = ordered(d);
   if (options.length === 0) return null;
   return (

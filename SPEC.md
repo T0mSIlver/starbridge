@@ -304,7 +304,8 @@ provider plugins add providers, not panels.
   nor Node exposes `SO_PEERCRED`. The local agent runs only the CodexBar binary its own config names,
   never a path a client sends.
 - **Answers on the machine** (#260). A machine accepts an answer only from a device the question
-  was sealed to, only while it is open, and never for an `answerIn` question. A settled question's
+  was sealed to, only while it is open, and for an `answerIn` question only a Done, when it asked
+  for one (#539). A settled question's
   answer is never delivered, since a server could hold an answer back until the agent moved on.
 - **Pairing a machine.** `pair` uses starbridge.run unless `--server` or `STARBRIDGE_SERVER` says
   otherwise (#154). `pair --force` keeps the machine's server and name (#245) and leaves the old
@@ -467,7 +468,7 @@ Codex prompts are not supported.
 
 - Fields: `question`, `context`, `options` (2 to 4, or none for a typed answer), `recommended`,
   `source` (machine, project, session, its title and links, `machineKind`), `agent`, `images`,
-  `links`, `answerIn`, `replies`.
+  `links`, `answerIn`, `done`, `replies`.
 - **The first option is the agent's default** (#191), its proposal with no timer: listed first,
   the one amber button. `recommended` names it when it isn't first.
 - **Typed replies** (#201). Every question with options also takes a typed reply, as a steer to act
@@ -483,7 +484,11 @@ Codex prompts are not supported.
   `owner/repo#123` with the GitHub mark.
 - **`answerIn`** names a page (a Claude artifact whose button messages the agent) where the
   question is answered. It has no options; the schema refuses both. It closes when the agent runs
-  `starbridge settle`.
+  `starbridge settle`, or when the owner taps Done beside the page's link (#539): an agent that
+  forgot to settle left the card in Needs you. Done is an answer that carries no pick, so it closes
+  the card on every device and reaches the agent as `answered on its page; read the answer
+  there`; the page stays the one place the owner answers. Clients show Done only when the
+  machine says it takes one (`done`), since an older CLI would drop it and the agent never hear.
 - **Waiting state** (#122, #191, #202). A `waiting` item says whether the agent is blocked on the
   question. A flip either way pushes, so the phone moves the notification between channels. `ask
   --waiting` posts the question quietly and lets its `waiting` item push, so the first
