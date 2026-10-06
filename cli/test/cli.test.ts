@@ -632,6 +632,19 @@ test("a revoked device's undelivered answer is not handed to its session (#491)"
   expect(ctx.store.state().answers[id]).toBeUndefined();
 });
 
+test("a decision whose answer came from a device revoked since is closed (#515)", async () => {
+  const { ctx, id, cursor } = await revokedAnswer();
+  await poll(ctx, session(ctx), { cursor, seconds: 0, shared: true });
+  expect(ctx.store.state().asked[id]).toMatchObject({ settled: true, revoked: true });
+  // `wait` says so at once instead of timing out; the agent can ask again.
+  expect(await run(["wait", id, "--timeout", "5s"], ctx)).toBe(1);
+  expect(ctx.errors.join("\n")).toContain("removed since");
+  // `settle` posts no notice the server would contradict: it holds the decision answered.
+  const posts = server.log.filter((c) => c === "POST /items").length;
+  expect(await run(["settle", id], ctx)).toBe(0);
+  expect(server.log.filter((c) => c === "POST /items").length).toBe(posts);
+});
+
 test("a poll that brings no answer drops a revoked device's undelivered one (#491)", async () => {
   const { ctx, id, cursor } = await revokedAnswer();
   await poll(ctx, session(ctx), { cursor, seconds: 0, shared: true });

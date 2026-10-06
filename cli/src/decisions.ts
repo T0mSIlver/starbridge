@@ -387,6 +387,8 @@ export async function settle(ctx: Ctx, opts: { id?: string; outcome?: string }):
   if (!id) throw new UsageError("settle needs a decision id");
   const asked = ctx.store.state().asked[id];
   if (!asked) throw new UsageError(`${id} is not a decision this machine asked`);
+  // Closed already, such as by a revoked device's answer the server holds: nothing to tell.
+  if (asked.settled) return 0;
   const outcome = opts.outcome ?? (asked.answerIn ? "elsewhere" : "withdrawn");
   if (outcome !== "elsewhere" && outcome !== "withdrawn")
     throw new UsageError("--outcome is elsewhere or withdrawn");
@@ -712,6 +714,13 @@ function dropRevoked(st: State, dir: Directory): boolean {
   for (const [id, a] of Object.entries(st.answers))
     if (!a.seen && revoked(a.device)) {
       delete st.answers[id];
+      // The server holds it answered, so no device can answer it again: closed (#515).
+      const asked = st.asked[id];
+      if (asked) {
+        asked.settled = true;
+        asked.revoked = true;
+        forget(asked);
+      }
       dropped = true;
     }
   for (const p of Object.values(st.permissions ?? {}))
@@ -912,8 +921,17 @@ export async function wait(
   const target = opts.id;
   if (target && !state.asked[target])
     throw new UsageError(`${target} is not a decision this machine asked`);
-  if (target && (state.asked[target]?.settled || state.asked[target]?.answerIn))
-    throw new UsageError(`${target} is settled or answered on its own page: no answer will come`);
+  const closed = () => {
+    const a = ctx.store.state().asked[target ?? ""];
+    if (a?.revoked)
+      return new UsageError(
+        `${target} was answered from a device removed since, so that answer does not count and no other will come: ask again if you still need it`,
+      );
+    if (a?.settled || a?.answerIn)
+      return new UsageError(
+        `${target} is settled or answered on its own page: no answer will come`,
+      );
+  };
 
   const report = (found: { answer: Answer; question?: string }) => {
     printAnswer(ctx, found.answer, found.question, opts.json);
@@ -921,6 +939,8 @@ export async function wait(
   };
 
   await dropRevokedNow(ctx);
+  const shut = closed();
+  if (shut) throw shut;
   const already = takeAnswer(ctx.store, target, opts.session);
   if (already) return report(already);
   if (target) await markWaiting(ctx, () => postWaiting(ctx, s, target, "waiting"));
@@ -956,6 +976,8 @@ export async function wait(
     }
     const found = takeAnswer(ctx.store, target, opts.session);
     if (found) return report(found);
+    const ended = closed();
+    if (ended) throw ended;
   }
 }
 
