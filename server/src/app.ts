@@ -97,7 +97,11 @@ export async function createApp(config: Config, fetchFn: typeof fetch = fetch) {
       onError: (c) => c.json({ error: "too-large" }, 413),
     }),
   );
-  app.get("/healthz", (c) => c.text("ok"));
+  // The deploy checks that the server it reaches runs the commit it deployed.
+  app.get("/healthz", (c) => {
+    if (config.revision) c.header("x-starbridge-revision", config.revision);
+    return c.text("ok");
+  });
   // deploy/host/backup.sh touches this file beside the database after each good backup. The
   // answer says only whether it is fresh, for the uptime check (.github/workflows/uptime.yml).
   const backupStamp = join(dirname(config.dbPath), "last-backup");

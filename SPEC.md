@@ -1298,6 +1298,11 @@ so the mod is the first path.
   drops the seed. The seed is stored exactly as long as before, and an app killed in between
   shows the same key again. Data cleared before the confirmation leaves the server empty, so
   signing in again starts the setup over instead of offering only "Add this phone".
+- 2026-10-06. Tests clean up their temp dirs (#313): a day of sessions left about 13,000 in the dev
+  box's 4 GB RAM-backed /tmp. Each package's `bun test` preloads `test-tmp.ts`, which points
+  `TMPDIR` at one dir per run and removes it after the last test, failed or not, and on exit or a
+  signal. Android's store tests use JUnit's `TemporaryFolder`. The
+  skill eval removes its homes on exit, after a throw or a signal too, and the judge its scratch dir.
 
 - 2026-10-06. A revoked browser stops showing its data (#343). Any 401 while the page runs sends
   it back through boot, which drops the inbox, prompts, quotas and runs from memory; an unsigned
@@ -1688,6 +1693,11 @@ so the mod is the first path.
 - 2026-10-06. The images install pnpm with `npm install -g` at package.json's
   `packageManager` version, not corepack (#430): #418 moved them to node:25-slim, which ships
   no corepack, and every deploy after it failed at `corepack enable`.
+- 2026-10-06. A deploy that does not go live fails (#423 follow-up). Every `FROM` is pinned
+  by digest, so a base image changes only in a Dependabot PR. `REVISION` is written only after
+  `apply.sh` succeeds. The server image carries its commit, which `/healthz` returns in
+  `x-starbridge-revision`, and the deploy workflow fails unless the live server runs that commit
+  or a later one of main's. CI builds the images on pull requests that can change them (#435).
 - 2026-10-06. Demo server for Play reviewers (#423). A reviewer has no GitHub account we can
   give them (GitHub mails a new-device code) and no recovery key we can give them (recovering
   revokes every other member, #363). So `https://demo.starbridge.run` is a self-hosted server
