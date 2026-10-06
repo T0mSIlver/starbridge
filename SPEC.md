@@ -1292,6 +1292,12 @@ so the mod is the first path.
   since `codex queue` (0.160) takes the message only as an argument and other local users can
   read process arguments; `wait <id>` prints a delivered answer from local state. The npm bundle
   runs under Node, so the CLI uses no Bun global without a guard; a test runs it there.
+
+- 2026-10-06. Android shows nothing from a machine its directory revokes (#344), as the web
+  already did: its questions, prompts, quotas and runs leave the Inbox, and the notifications of
+  its questions and prompts close, whether this phone or another device revoked it. They stay
+  saved, unshown, like every item the phone keeps.
+
 - 2026-10-06. CI runners on dell2 (#392), a host for CI only (6 cores, 13 GB visible). Two
   runners: `dell2-1` with the label `starbridge-android` alone, so Android builds never queue
   behind CI jobs, and `dell2-2` with `starbridge-devbox`; jobs spread with no workflow change.
