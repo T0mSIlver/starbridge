@@ -215,6 +215,13 @@ provider plugins add providers, not panels.
 - **Fresh quotas** (#158, #450). The local agent posts a snapshot once its directory holds a new device.
   `POST /quota/ask` wakes the machines and holds until each posted, up to 25 s, under the 30 s at
   which proxies cut long polls; 6 a minute per account, since each runs CodexBar on every machine.
+- **Schema migrations** (#470). `PRAGMA user_version` counts the migrations a database has run;
+  each runs in one transaction with its version. A server refuses a database newer than it knows,
+  so a rollback past a migration fails at start instead of writing rows the newer schema misreads.
+  Version 1 is the 1.0.0 schema with `IF NOT EXISTS`, so it adopts a database made before versions
+  were counted. A migration changes the schema and never rewrites rows, to stay within the 30 s
+  Caddy holds requests; backfills run in the hourly sweep. `apply.sh` backs the database up just
+  before the new server starts and keeps the last five.
 - **Full disk** (#301). Writes get 503 `storage-full` with `Retry-After`; usage counts and
   housekeeping skip, so a stored item still gets its push.
 - **Usage counts** (#140). `server/src/usage.ts` counts requests the server handles anyway. During
