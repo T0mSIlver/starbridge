@@ -33,8 +33,8 @@ No request fails during a deploy (`SPEC.md`, "Releases, deploys and CI"). The pa
 other, and Caddy sends requests to the first healthy copy. The server restarts in place; Caddy
 holds requests for up to 30 s meanwhile. Each deploy loads the Caddyfile into the running Caddy
 through its admin API on `127.0.0.1:2019`. Caddy's container is recreated, which drops every
-open connection, only when `caddy.Dockerfile` changes: its image is tagged by a hash of that file
-and built only when no image has the tag.
+open connection, only when its definition in `compose.yaml` or `caddy.Dockerfile` changes: its
+image is tagged by a hash of that file and built only when no image has the tag.
 
 ## First setup
 
@@ -44,8 +44,8 @@ and built only when no image has the tag.
 2. From a second terminal, check that `ssh deploy@starbridge.run sudo true` works, then
    `ssh deploy@starbridge.run sudo sh -s < deploy/host/lock-root.sh` turns root login off.
 3. `deploy/push-secrets.sh` copies the secrets from `~/.config/starbridge/secrets` to
-   `/etc/starbridge/secrets` (root, 0700). `deploy/host/server-env.sh` turns them into
-   `/etc/starbridge/server.env` on every deploy.
+   `/etc/starbridge/secrets` (root, 0700); given names, only those. `deploy/host/server-env.sh`
+   and `caddy-auth.sh` turn them into what the containers read on every deploy.
 4. `deploy/deploy.sh`.
 5. `deploy/setup-actions-deploy.sh` for deploys from Actions.
 
@@ -78,8 +78,9 @@ a share link on `stats.starbridge.run`, which it prints. That host serves only t
 (`Caddyfile`); its DNS records point at the box like the main domain's. It asks for a password
 too, user `tom`: the password is in `~/.config/starbridge/secrets/stats-password` and its bcrypt
 hash in `stats-password-hash` beside it. To change it, write a new password there, hash it with
-`caddy hash-password` into `stats-password-hash`, run `deploy/push-secrets.sh stats-password-hash`
-and deploy. Until the hash is on the box the host turns everyone away. To leave your own
+`caddy hash-password --bcrypt-cost 10` into `stats-password-hash` (a higher cost lets anyone
+spend the box's CPU), run `deploy/push-secrets.sh stats-password-hash` and deploy. Until a deploy
+has run with the hash on the box, the host turns everyone away. To leave your own
 visits out, run `localStorage.setItem("umami.disabled", "1")` in the browser's console on
 starbridge.run.
 

@@ -96,10 +96,10 @@ services:
     # Host networking: Caddy sees real client IPv4 and IPv6 addresses, which the server's
     # per-IP rate limits read from X-Forwarded-For.
     network_mode: host
-    # STATS_PASSWORD_HASH, which the Caddyfile reads on each load (host/caddy-env.sh).
-    env_file: /etc/starbridge/caddy.env
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # What the Caddyfile imports from outside the repo: the stats password (host/caddy-auth.sh).
+      - /etc/starbridge/caddy:/etc/caddy/secrets:ro
       - caddy-data:/data
       - caddy-config:/config
     logging: *logging
