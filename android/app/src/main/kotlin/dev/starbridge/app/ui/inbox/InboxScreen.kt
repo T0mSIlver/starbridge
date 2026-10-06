@@ -33,7 +33,6 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
-import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
@@ -408,7 +407,7 @@ private fun answer(decision: Decision, send: (String, String?, String?) -> Unit)
 /**
  * The options as a connected group, the agent's default first and the one amber button. Side by
  * side when there are two short ones, else stacked; the one going out takes the check, and taps
- * are dropped until the server replies. In the sheet ([check]), stacked, the default says "Default".
+ * are dropped until the server replies. In the sheet ([check]), stacked, the default takes a check.
  */
 @Composable
 fun Options(decision: Decision, sending: String?, height: Dp, other: Color, answer: (String?, String?) -> Unit, check: Boolean = false) {
@@ -416,7 +415,6 @@ fun Options(decision: Decision, sending: String?, height: Dp, other: Color, answ
     val ordered = decision.ordered
     val end = height / 2
     val pick = { option: String -> if (sending == null) answer(option, null) }
-    // The sheet stacks them, so "Default" fits beside its label.
     val row = !check && ordered.size <= 2 && ordered.all { it.length <= 18 }
     @Composable
     fun One(i: Int, option: String, modifier: Modifier) {
@@ -441,7 +439,7 @@ fun Options(decision: Decision, sending: String?, height: Dp, other: Color, answ
                 Spacer(Modifier.width(Spacing.s2))
             }
             Text(
-                if (check && recommended) withDefault(option) else AnnotatedString(option),
+                option,
                 style = if (height > 48.dp) StarbridgeTheme.type.action else StarbridgeTheme.type.label,
                 textAlign = TextAlign.Center,
             )
@@ -452,12 +450,6 @@ fun Options(decision: Decision, sending: String?, height: Dp, other: Color, answ
     } else {
         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) { ordered.forEachIndexed { i, o -> One(i, o, Modifier.fillMaxWidth()) } }
     }
-}
-
-/** "Run it now Default": the label, then "Default" at weight 400, as the web's key hints. */
-private fun withDefault(option: String) = buildAnnotatedString {
-    append(option)
-    withStyle(SpanStyle(fontWeight = FontWeight(400))) { append("  Default") }
 }
 
 /**
@@ -521,7 +513,7 @@ private fun Picks(decision: Decision, sending: String?, answer: (String?, String
                         colors = if (recommended) ButtonDefaults.buttonColors(containerColor = colors.accent, contentColor = colors.onAccent)
                         else ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHighest, contentColor = MaterialTheme.colorScheme.onSurface),
                         modifier = Modifier.fillMaxWidth().height(48.dp).semantics { if (recommended) stateDescription = "Default" },
-                    ) { Text(if (recommended) withDefault(option) else AnnotatedString(option), style = StarbridgeTheme.type.action, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                    ) { Text(option, style = StarbridgeTheme.type.action, maxLines = 1, overflow = TextOverflow.Ellipsis) }
                 }
             }
             if (row.size == 1) Spacer(Modifier.weight(1f))
@@ -550,23 +542,21 @@ private fun Reply(id: String, replies: Replies, sending: Boolean, onAnswer: (Str
 @Composable
 private fun FreeText(text: String, onText: (String) -> Unit, sending: Boolean, field: Modifier = Modifier, onAnswer: (String) -> Unit) {
     val send = { if (text.isNotBlank() && !sending) onAnswer(text.trim()) }
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        TextField(
-            value = text,
-            onValueChange = { onText(it.take(4000)) },
-            enabled = !sending,
-            placeholder = { Text("Your answer") },
-            textStyle = StarbridgeTheme.type.body,
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-            keyboardActions = KeyboardActions(onSend = { send() }),
-            colors = fieldColors(),
-            modifier = field.weight(1f),
-        )
-        Spacer(Modifier.width(Spacing.s2))
-        FilledIconButton(onClick = send, enabled = text.isNotBlank() && !sending, modifier = Modifier.size(48.dp)) {
-            Symbol(Sym.Send, contentDescription = "Send")
-        }
-    }
+    // Material's text field, the send button its trailing icon, centred on the field's line (#254).
+    TextField(
+        value = text,
+        onValueChange = { onText(it.take(4000)) },
+        enabled = !sending,
+        placeholder = { Text("Your answer") },
+        trailingIcon = {
+            IconButton(onClick = send, enabled = text.isNotBlank() && !sending) { Symbol(Sym.Send, contentDescription = "Send") }
+        },
+        textStyle = StarbridgeTheme.type.body,
+        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+        keyboardActions = KeyboardActions(onSend = { send() }),
+        colors = fieldColors(),
+        modifier = field.fillMaxWidth(),
+    )
 }
 
 /** Answered on that page, never here: the one button, amber since it is what needs the owner. */
