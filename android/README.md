@@ -4,7 +4,7 @@ Inbox, Quotas and Settings (with Devices and machines), against a Starbridge ser
 Jetpack Compose, Material 3 Expressive, Hilt and Navigation 3.
 
 - `protocol/`: packages/protocol in Kotlin (sign, seal, open, the directory
-  chain, pairing, recovery words), checked against its test vectors.
+  chain, pairing, the recovery key), checked against its test vectors.
 - `data/`: the server API and `ServerStore`, which verifies the directory
   against its pin and every item against the directory before showing it.
   Private keys, the session and the decrypted state are wrapped by an Android

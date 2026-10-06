@@ -410,9 +410,8 @@ export async function prepareFirstDevice(account: string, name: string): Promise
 }
 
 /**
- * Adds this browser with the recovery words, when every device is lost. Entry 0's recovery
- * signature must check against the key the words make, so a server cannot serve a chain of its
- * own here.
+ * Adds this browser with the recovery key, when every device is lost. Entry 0's recovery
+ * signature must check against the key typed, so a server cannot serve a chain of its own here.
  */
 export async function recover(account: string, name: string, typed: string): Promise<void> {
   await ready;

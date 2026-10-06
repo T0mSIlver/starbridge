@@ -43,11 +43,7 @@ function read(): Prefs {
   let value = DEFAULTS;
   try {
     if (raw) {
-      const saved = JSON.parse(raw) as Partial<Prefs> & { groupByMachine?: boolean };
-      // Before #191 the grouping was a switch.
-      if (saved.grouping === undefined && saved.groupByMachine) saved.grouping = "machine";
-      delete saved.groupByMachine;
-      value = { ...DEFAULTS, ...saved };
+      value = { ...DEFAULTS, ...(JSON.parse(raw) as Partial<Prefs>) };
     }
   } catch {}
   cache = { raw, value };

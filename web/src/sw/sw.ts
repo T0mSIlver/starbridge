@@ -230,7 +230,6 @@ async function showPrompt(account: string, item: PromptItem): Promise<void> {
 async function onClick(n: Notification, action: string): Promise<void> {
   const data = n.data as { account?: string; item?: InboxItem; options?: string[] } | undefined;
   const choice = action.startsWith("o") ? data?.options?.[Number(action.slice(1))] : undefined;
-  // A notification from before it carried its account opens the page instead of answering.
   if (data?.item && data.account && choice !== undefined) {
     const reply: Reply = { choice };
     try {
