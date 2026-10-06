@@ -71,16 +71,21 @@ export function AddDevice() {
     });
 
   // A `starbridge pair` link, /pair#<code>, possibly held through sign-in; else the QR code.
+  // Another link opened in this tab changes only the hash: it replaces what the page shows.
   // biome-ignore lint/correctness/useExhaustiveDependencies: runs once, on arrival
   useEffect(() => {
-    holdPairCode();
-    const fromLink = takePairCode();
-    if (!fromLink) {
-      showQr();
-      return;
-    }
-    setCode(fromLink);
-    run(async () => setReq(await (await load()).readPairing(fromLink)));
+    const arrive = () => {
+      holdPairCode();
+      const fromLink = takePairCode();
+      if (!fromLink) return false;
+      setDone(undefined);
+      setCode(fromLink);
+      run(async () => setReq(await (await load()).readPairing(fromLink)));
+      return true;
+    };
+    if (!arrive()) showQr();
+    window.addEventListener("hashchange", arrive);
+    return () => window.removeEventListener("hashchange", arrive);
   }, []);
 
   const reset = (outcome: PairOutcome) => {
@@ -120,7 +125,7 @@ export function AddDevice() {
               </h2>
               <p className={`t-small ${p.dim}`}>
                 {req.role === "machine"
-                  ? `Approve only if you just ran starbridge pair on ${req.name}.`
+                  ? `Approve only if you just ran starbridge setup or pair on ${req.name}.`
                   : `Approve only if ${req.name} scanned or showed this code.`}
               </p>
             </div>
