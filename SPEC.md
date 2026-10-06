@@ -157,9 +157,9 @@ provider plugins add providers, not panels.
   locked, so lock-screen buttons can sign. Signing out revokes the phone unless it is the last
   device.
 - **Versions** (#468, #469, #478). 1.0.0 is the compatibility floor. Later compatibility branches
-  name the minimum client release that retires them (`// until min cli >= 1.2`). An algorithm changes only with a new protocol version
-  (`v: 2`, `starbridge/v2/...`, `/v2` routes) and members re-pair; keys change only by revoke and
-  add.
+  name the minimum client release that retires them (`// until min cli >= 1.2`). An algorithm
+  changes only with a new protocol version (`v: 2`, `starbridge/v2/...`, `/v2` routes) and members
+  re-pair; keys change only by revoke and add.
 - **Old clients** (#468). Every client names its release in `starbridge-client:
   <name>/<version>` (`cli`, `android`, `web`, `mod`; MAJOR.MINOR.PATCH). The server refuses
   releases below `MINIMUM_RELEASES` in `server/src/clients.ts` (empty at launch; a pre-release
