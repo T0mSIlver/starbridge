@@ -32,6 +32,15 @@ starbridge.run {
 			lb_try_interval 250ms
 			health_uri /healthz
 			health_interval 1s
+			# Every open page and machine holds a long-poll, and each that returns frees its
+			# connection at once. Caddy keeps only 32 idle by default and closes the rest, each
+			# close leaving a TIME-WAIT socket on the host's ports (#301). Idle connections are
+			# dropped before the server's own 30 s idle timeout, so Caddy never sends a request on
+			# one the server is closing.
+			transport http {
+				keepalive 25s
+				keepalive_idle_conns_per_host 4096
+			}
 		}
 	}
 	# Umami: only the tracker script and its collect endpoint are public. The rest of /stats

@@ -1,5 +1,6 @@
 package dev.starbridge.app.ui
 
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -277,7 +278,7 @@ fun <T> Choice(choices: List<Pair<T, String>>, selected: T, onSelect: (T) -> Uni
                     checkedContainerColor = MaterialTheme.colorScheme.primary,
                     checkedContentColor = MaterialTheme.colorScheme.onPrimary,
                 ),
-            ) { Text(label, style = StarbridgeTheme.type.action, maxLines = 1) }
+            ) { Text(label, style = StarbridgeTheme.type.action, maxLines = 1, overflow = TextOverflow.Ellipsis) }
         }
     }
 }

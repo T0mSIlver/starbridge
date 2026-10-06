@@ -59,9 +59,21 @@
   height: var(--s3);
 }
 
+/* A name too long for the row, such as a machine's host name, breaks rather than widening it. */
 .rowText {
   flex: 1;
   min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* A label keeps room for a few words; a wide control wraps below it, as it must on a phone and
+   beside the section names' column from 900 px. */
+.row {
+  flex-wrap: wrap;
+}
+
+.row .rowText {
+  flex-basis: 10em;
 }
 
 .sub,
@@ -97,21 +109,23 @@
   color: var(--fg2);
 }
 
+/* Never wider than its row: on the narrowest phones a long label wraps inside its segment. */
 .segmented {
   display: inline-flex;
   flex: none;
+  max-width: 100%;
 }
 
 .segment {
   display: inline-flex;
   align-items: center;
-  height: var(--s8);
-  padding: 0 var(--s3);
+  min-height: var(--s8);
+  padding: var(--s1) var(--s3);
   margin-left: -1px;
   border: 1px solid var(--line-strong);
   font-weight: 500;
   color: var(--fg2);
-  white-space: nowrap;
+  text-align: center;
   cursor: pointer;
   transition:
     background var(--t-fast) var(--ease),
@@ -270,15 +284,6 @@
 
   .title {
     display: none;
-  }
-
-  .row {
-    flex-wrap: wrap;
-  }
-
-  /* A label keeps room for a few words; a wide control wraps below it. */
-  .row .rowText {
-    flex-basis: 10em;
   }
 
   .revokeSpace {

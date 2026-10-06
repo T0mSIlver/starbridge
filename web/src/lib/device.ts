@@ -133,11 +133,20 @@ function pinTo(account: string, entries: SignedEnvelope[], dir: Directory): Prom
   });
 }
 
-/** Fetches the chain, replays it against the pin, and moves the pin forward. */
+/** A browser with no pin was served a chain that nothing it holds anchors. */
+class Unanchored extends Error {}
+
+/**
+ * Fetches the chain, replays it against the pin, and moves the pin forward. Without a pin, only
+ * a genesis this browser's device signed anchors the chain (a first device cut off before it
+ * pinned): any other the server could have made, listing keys it relayed (#354).
+ */
 async function trusted(account: string): Promise<{ dir: Directory; entries: SignedEnvelope[] }> {
   for (let attempt = 0; ; attempt++) {
     const entries = await api.directory();
     const pin = await store.get("pin", account);
+    if (!pin && !signedGenesis(account, entries[0], await store.get("device", account)))
+      throw new Unanchored("no pin anchors this directory");
     const dir = verifyDirectory(entries, { account, ...(pin ? { pin } : {}) });
     try {
       await pinTo(account, entries, dir);
@@ -150,6 +159,22 @@ async function trusted(account: string): Promise<{ dir: Directory; entries: Sign
   }
 }
 
+/** Whether `entry`, once verified as entry 0, is a genesis this browser's own device signed. */
+function signedGenesis(
+  account: string,
+  entry: SignedEnvelope | undefined,
+  device?: store.DeviceRecord,
+): boolean {
+  if (!device || entry?.signer !== device.id) return false;
+  try {
+    return (
+      verifyDirectory([entry], { account }).members.get(device.id)?.member.signPk === device.signPk
+    );
+  } catch {
+    return false;
+  }
+}
+
 export async function boot(): Promise<Boot> {
   let me: Awaited<ReturnType<typeof api.me>>;
   try {
@@ -158,8 +183,9 @@ export async function boot(): Promise<Boot> {
     if (e instanceof ApiError && e.status === 401) {
       const last = await store.get("current");
       // Its device was revoked: this browser is a visitor again, not a device signing back in.
-      if (last && e.code === "revoked") await store.del("device", last);
-      return { state: "signed-out", known: !!last && !!(await store.get("device", last)) };
+      // The keys stay: only the server says so, and a verified chain decides on sign-in (#371).
+      const known = !!last && e.code !== "revoked" && !!(await store.get("device", last));
+      return { state: "signed-out", known };
     }
     throw e;
   }
@@ -173,7 +199,10 @@ export async function boot(): Promise<Boot> {
     if (await store.get("pin", account))
       return { state: "broken", account, error: "rollback: the server sent an empty directory" };
     // Keys saved before a genesis that never reached the server: the page closed before the
-    // owner saved the recovery key, so that key was never used (#328).
+    // owner saved the recovery key, so that key was never used (#328). Once the genesis may
+    // have gone out, only the server could make the directory empty: the keys stay (#371).
+    if (device?.posted)
+      return { state: "broken", account, error: "the server sent an empty directory" };
     if (device) await store.del("device", account);
     return { state: "first-device", account, ...(device ? { unsaved: device.name } : {}) };
   }
@@ -181,6 +210,11 @@ export async function boot(): Promise<Boot> {
   try {
     verified = await trusted(account);
   } catch (e) {
+    // A join or recovery cut off before it pinned starts over (#354).
+    if (e instanceof Unanchored) {
+      await store.del("pending", account);
+      return { state: "join", account, stale: false };
+    }
     return { state: "broken", account, error: e instanceof Error ? e.message : String(e) };
   }
   // A join a device approved, or a recovery whose append landed, cut off before its keys became
@@ -299,6 +333,9 @@ export async function prepareFirstDevice(account: string, name: string): Promise
     recovery.privateKey.fill(0);
   }
   const dir = verifyDirectory([entry], { account });
+  // Another tab posted its genesis since this page offered a key: its keys are the account's.
+  if ((await store.get("device", account))?.posted)
+    throw new Error("Another tab set up this account. Reload.");
   await store.put("device", record, account);
   const commit = async () => {
     // Another tab's boot drops these keys as never used, or its setup replaces them: posting
@@ -306,6 +343,7 @@ export async function prepareFirstDevice(account: string, name: string): Promise
     const held = await store.get("device", account);
     if (held?.id !== record.id || held.signPk !== record.signPk)
       throw new Error("Another tab started the setup over, so this key was never used. Reload.");
+    await store.put("device", { ...record, posted: true }, account);
     try {
       await api.append(entry);
     } catch (e) {
@@ -364,8 +402,8 @@ export async function recover(account: string, name: string, typed: string): Pro
       const landed = await api.directory().catch(() => []);
       if (!landed.some((x) => x.sig === entry.sig)) throw e;
     }
-    await adopt(account, record);
     await pinTo(account, [...entries, entry], next);
+    await adopt(account, record);
   } finally {
     seed.fill(0);
     recovery.privateKey.fill(0);
@@ -458,8 +496,8 @@ async function finishJoin(
   // The approval's length and head, under the code's MAC, pin a directory the server cannot fake.
   const dir = verifyDirectory(entries, { account, pin: { length: body.length, head: body.head } });
   checkJoined(dir, member);
-  await adopt(account, record);
   await pinTo(account, entries, dir);
+  await adopt(account, record);
 }
 
 /** Joining by digits: no code to type; the owner compares 6 digits on both devices. */
@@ -518,8 +556,8 @@ export async function startDigitJoin(account: string, name: string): Promise<Dig
             pin: { length: body.length, head: body.head },
           });
           checkJoined(dir, member);
-          await adopt(account, record);
           await pinTo(account, entries, dir);
+          await adopt(account, record);
           return;
         }
       }
@@ -890,7 +928,7 @@ async function openDecision(
   const reply = sent[body.id];
   // The notice that closed it arrived in the same write, so it carries the same time; a later
   // one, after a device's answer, closed nothing.
-  const closing = closings.get(body.id);
+  const closing = closings.get(`${machine.id}/${body.id}`);
   const settled = closing && closing.at === s.answeredAt ? closing.outcome : undefined;
   return {
     decision: body as Decision,
@@ -948,8 +986,9 @@ export async function loadInbox(ctx: Ctx, inbox: Inbox = { items: [], rejected: 
     if (s.item.kind === "settled") {
       // Only tells how a decision closed: one that fails to open costs that and nothing else.
       try {
-        const { body } = await openAsync(expectKind(s.item, "settled"), me(ctx), ctx.dir);
-        closings.set(body.itemId, { outcome: body.outcome, at: s.receivedAt });
+        const { signer, body } = await openAsync(expectKind(s.item, "settled"), me(ctx), ctx.dir);
+        // Keyed by machine: a notice closes only the machine's own items (#362).
+        closings.set(`${signer.id}/${body.itemId}`, { outcome: body.outcome, at: s.receivedAt });
       } catch {}
       return;
     }
