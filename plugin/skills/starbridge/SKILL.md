@@ -60,9 +60,10 @@ Now: checkouts fail for those 4 minutes, at peak hour.' \
 ```
 
 Quote text in single quotes: in double quotes the shell expands `$` and
-backticks. Context with an apostrophe goes through `--context-file -
-<<'EOF'` instead. Other flags: `--image` (up to 4 PNG or JPEG), `--link` (up
-to 4 HTTPS URLs), `--waiting`, `--answer-in`. Never set `--default`: with no
+backticks. For context with an apostrophe, end the command with
+`--context-file - <<'EOF'`, then the text, then `EOF` alone on a line. Other
+flags: `--image` (up to 4 PNG or JPEG), `--link` (up to 4 HTTPS URLs),
+`--waiting`, `--answer-in`. Never set `--default`: with no
 answer, the card waits. `ask` prints the decision id (`d_Xk3…`) and how the
 answer comes back.
 
