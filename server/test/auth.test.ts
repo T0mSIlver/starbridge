@@ -159,9 +159,13 @@ test("the browser passes the app's sign-in on to the app, untouched", async () =
     `starbridge://auth?code=code-42-${challenge}&state=${challenge}`,
   );
   expect(res.headers.get("set-cookie") ?? "").not.toContain("sb_session");
-  expect((await s.app.request("/v1/auth/github/callback/app?error=access_denied")).status).toBe(
-    400,
+  const denied = await s.app.request(
+    `/v1/auth/github/callback/app?error=access_denied&state=${challenge}`,
   );
+  expect(denied.headers.get("location")).toBe(
+    `starbridge://auth?error=access_denied&state=${challenge}`,
+  );
+  expect((await s.app.request("/v1/auth/github/callback/app?code=code-42")).status).toBe(400);
 });
 
 test("app sign-in needs a challenge", async () => {

@@ -24,13 +24,14 @@ object SignIn {
         data class Code(val code: String, val state: String?) : Redirect
 
         /** The owner turned GitHub down, or GitHub failed. */
-        data object Denied : Redirect
+        data class Denied(val state: String) : Redirect
     }
 
     /**
      * The sign-in a link ends, else null: GitHub's redirect, which this app catches on
      * starbridge.run at /v1/auth/github/callback/app, or the server's, when the browser got
      * GitHub's: https://starbridge.run/app/auth on starbridge.run, starbridge://auth elsewhere.
+     * Each carries the state, the sign-in's challenge, which [ServerStore] checks.
      */
     fun redirect(link: String): Redirect? {
         val uri = runCatching { URI(link) }.getOrNull() ?: return null
@@ -42,9 +43,11 @@ object SignIn {
             part.split('=', limit = 2).takeIf { it.size == 2 && it[1].isNotBlank() }?.let { it[0] to it[1] }
         }?.toMap().orEmpty()
         val code = query["code"]
+        val state = query["state"]
+        // Only a server from before #527 sends a code without the state: its own one-time code.
         return when {
-            code != null && (!gitHub || query["state"] != null) -> Redirect.Code(code, query["state"])
-            gitHub && query["error"] != null -> Redirect.Denied
+            code != null && (state != null || code.startsWith("sbc_")) -> Redirect.Code(code, state)
+            query["error"] != null && state != null -> Redirect.Denied(state)
             else -> null
         }
     }

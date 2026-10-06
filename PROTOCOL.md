@@ -280,7 +280,8 @@ request without the header, or with one the server cannot read, is served.
   scheme. The app keeps a random verifier and sends only its challenge,
   base64url(SHA-256(verifier)), which the server passes to GitHub as `code_challenge` and as the
   state. GitHub binds its code to the challenge, and the app trades code and verifier for the
-  session over HTTPS; the app ignores a redirect whose state is not its challenge. GitHub
+  session over HTTPS; the app ignores a redirect whose state is not its challenge, and one with
+  no state unless it carries a pre-#527 server's own `sbc_` code. GitHub
   redirects to `/v1/auth/github/callback/app`, which the Android app claims as an App Link on
   starbridge.run (`/.well-known/assetlinks.json` binds it to the app's signing keys). When the
   browser gets the redirect instead, the server hands code and state on to `APP_REDIRECT_URI`:
@@ -299,7 +300,7 @@ request without the header, or with one the server cannot read, is served.
 |---|---|---|
 | `GET /auth/github` | anyone | start GitHub sign-in; the app adds `?app=1&challenge=<S256 challenge>` |
 | `GET /auth/github/callback` | anyone | finish it, set the session |
-| `GET /auth/github/callback/app` | anyone | the browser got the app's sign-in: redirect to `<APP_REDIRECT_URI>?code=<code>&state=<state>`; 400 `bad-state` without them |
+| `GET /auth/github/callback/app` | anyone | the browser got the app's sign-in: redirect to `<APP_REDIRECT_URI>?code=<code>&state=<state>`, or GitHub's `error` instead of the code; 400 `bad-state` without them |
 | `POST /auth/app/session` | the app | `{code, verifier}`: GitHub's code → `{session}`; 400 `bad-code` when GitHub refuses the code: unknown, used, expired or not this verifier's |
 | `POST /auth/owner` | anyone | self-hosted: `{token}` against `OWNER_TOKEN`; sets the session and returns `{session}` |
 | `POST /auth/logout` | device | end the session |

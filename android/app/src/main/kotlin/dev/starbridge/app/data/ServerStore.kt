@@ -337,14 +337,14 @@ class ServerStore(
     override fun receiveSignIn(redirect: String) = run {
         if (phase.value != Phase.SignedOut) return@run
         val verifier = secrets.signInVerifier ?: return@run
-        val link = when (val r = SignIn.redirect(redirect)) {
-            null -> return@run
-            SignIn.Redirect.Denied -> throw IllegalStateException("GitHub sign-in didn't finish. Sign in again.")
-            is SignIn.Redirect.Code -> r
-        }
         // The state is the challenge this sign-in sent: a link from another sign-in is not this
         // phone's, and leaves the pending one alone.
-        if (link.state != null && link.state != SignIn.challenge(verifier)) return@run
+        val challenge = SignIn.challenge(verifier)
+        val link = when (val r = SignIn.redirect(redirect)) {
+            is SignIn.Redirect.Code -> r.takeIf { it.state == null || it.state == challenge } ?: return@run
+            is SignIn.Redirect.Denied -> if (r.state == challenge) throw IllegalStateException("GitHub sign-in didn't finish. Sign in again.") else return@run
+            null -> return@run
+        }
         persist(newSecrets = secrets.copy(signInVerifier = null))
         val session = try {
             Api(http, saved.server, null).appSession(link.code, verifier)

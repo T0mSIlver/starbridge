@@ -133,11 +133,12 @@ async function gitHubAccount(c: Context<Env>, code: string, verifier?: string): 
 authRoutes.get("/auth/github/callback", async (c) => {
   const { secureCookies } = c.var.config;
   rateLimit(c, `github:${ipKey(c)}`, c.var.config.limits.githubCallbacks);
-  // Before #527 the cookie also held the app flag and challenge after a dot.
-  const state = (getCookie(c, STATE_COOKIE) ?? "").split(".")[0];
+  // Before #527 the cookie also held the app flag and challenge: an app sign-in started then
+  // cannot finish here.
+  const [state, app] = (getCookie(c, STATE_COOKIE) ?? "").split(".");
   deleteCookie(c, STATE_COOKIE, { path: "/v1/auth/github" });
   const code = c.req.query("code");
-  if (!state || !code || !safeEqual(state, c.req.query("state") ?? ""))
+  if (!state || !code || app === "1" || !safeEqual(state, c.req.query("state") ?? ""))
     fail(400, "bad-state", "sign-in expired or came from elsewhere; start again");
   const token = createSession(c.var.db, await gitHubAccount(c, code), c.var.config.limits.sessions);
   setSessionCookie(c, token, secureCookies);
@@ -146,15 +147,17 @@ authRoutes.get("/auth/github/callback", async (c) => {
 
 /**
  * The browser got the app's sign-in back: the app was not there to catch it, or is too old to.
- * GitHub's code is worthless without the app's verifier, so it goes on to the app as it came.
+ * GitHub's code is worthless without the app's verifier, so it goes on to the app as it came, and
+ * so does GitHub's error, such as the owner turning it down.
  */
 authRoutes.get("/auth/github/callback/app", (c) => {
   const { appRedirectUri } = c.var.config;
-  const code = c.req.query("code") ?? "";
-  const state = c.req.query("state") ?? "";
-  if (!/^[A-Za-z0-9_-]{1,100}$/.test(code) || !CHALLENGE.test(state))
-    fail(400, "bad-state", "sign-in was cancelled or came from elsewhere; start again in the app");
-  return c.redirect(`${appRedirectUri}?code=${code}&state=${state}`);
+  const { code = "", error = "", state = "" } = c.req.query();
+  const word = /^[A-Za-z0-9_-]{1,100}$/;
+  if (!CHALLENGE.test(state) || !(word.test(code) || word.test(error)))
+    fail(400, "bad-state", "sign-in came from elsewhere; start again in the app");
+  const sent = word.test(code) ? `code=${code}` : `error=${error}`;
+  return c.redirect(`${appRedirectUri}?${sent}&state=${state}`);
 });
 
 /** The app trades GitHub's code and the verifier behind its challenge for a session. */
