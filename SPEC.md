@@ -1836,6 +1836,8 @@ so the mod is the first path.
   permission, your phone tells you. Answer with one tap and it gets back to work." It sells the
   pain the owner named: you don't notice that an agent is blocked. The shots below it still show
   the web app beside the phone, so the page keeps saying both clients do the same.
+- 2026-10-06. The release's npm publish step keeps its `env.NODE_AUTH_TOKEN != ''` gate (#480).
+  The audit suspected it never skips; it does skip without `NPM_TOKEN`. See the research log.
 
 ## Encryption, with existing libraries
 
@@ -2448,3 +2450,12 @@ goes in git.
   drops the minimum. The screenshots had hidden it, since they drew Find
   in a plain `Box`; Find's shots and `FindScreenTest` now draw it inside
   a screen-filling NavDisplay, as the app does.
+- 2026-10-06: the npm publish gate in `release.yml` (#480). Two facts make
+  `env.NODE_AUTH_TOKEN` empty in that step's `if` when `NPM_TOKEN` is unset.
+  actions/setup-node v7.0.0 (the pinned `8207627`) exports `NODE_AUTH_TOKEN`
+  only when the caller set it (`src/authutil.ts:49-52`); the
+  `XXXXX-XXXXX-XXXXX-XXXXX` placeholder went in setup-node#1558. And
+  actions/runner merges the step's own `env` into the `env` context
+  (`src/Runner.Worker/StepsRunner.cs:106-129`, main at `67f01c2`) before it
+  evaluates the step's `if` (`:200-221`), so the step's empty value would
+  override a job-level placeholder anyway.
