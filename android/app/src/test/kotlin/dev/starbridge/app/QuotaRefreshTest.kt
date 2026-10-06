@@ -18,6 +18,7 @@ import dev.starbridge.app.protocol.Joins
 import dev.starbridge.app.protocol.Member
 import dev.starbridge.app.protocol.Pairings
 import dev.starbridge.app.protocol.Pin
+import dev.starbridge.app.protocol.ProtocolJson
 import dev.starbridge.app.protocol.QuotaProvider
 import dev.starbridge.app.protocol.QuotaSnapshot
 import dev.starbridge.app.protocol.QuotaWindow
@@ -115,7 +116,7 @@ class QuotaRefreshTest {
             listOf(QuotaProvider("zai", windows = listOf(QuotaWindow("primary", "5h", 20.0, 300, null, null)))),
             emptyList(),
         )
-        val store = readyStore(listOf(SavedQuota("m_box", good))) { path ->
+        val store = readyStore(listOf(SavedQuota("m_box", ProtocolJson.encodeToString(QuotaSnapshot.serializer(), good)))) { path ->
             when (path) {
                 "/v1/quota/ask" -> MockResponse(404, okhttp3.Headers.headersOf(), "")
                 "/v1/quota" -> json(bad)

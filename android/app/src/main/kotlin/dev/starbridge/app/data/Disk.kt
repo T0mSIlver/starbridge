@@ -10,22 +10,31 @@ import dev.starbridge.app.protocol.QuotaSnapshot
 import dev.starbridge.app.protocol.SealedItem
 import dev.starbridge.app.protocol.Settled
 import dev.starbridge.app.protocol.Run
+import dev.starbridge.app.protocol.parseBody
 import kotlinx.serialization.EncodeDefault
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
+import android.util.Log
 import java.io.File
 
-/** Raised when [SavedDecision]'s body gains a field, so open decisions saved without it are read again. */
-const val DECISION_FIELDS = 3
+/**
+ * A body as the machine signed it (#476). The text is the record: what this app reads from it is
+ * parsed again on each start, so a field it learns later is there in what it kept before.
+ */
+private fun <T> parsed(kind: String, text: String): Lazy<T> = lazy {
+    @Suppress("UNCHECKED_CAST")
+    parseBody(kind, text) as T
+}
 
 /** A decision this device opened and verified, and what became of it. */
 @Serializable
 data class SavedDecision(
     /** The machine that signed it, and that an answer goes to. */
     val from: String,
-    val body: Decision,
+    /** The signed body text. */
+    val text: String,
     val answeredAt: String? = null,
     /** Set when this device answered: the choice or the text. */
     val answer: String? = null,
@@ -37,7 +46,9 @@ data class SavedDecision(
     /** The agent's latest waiting state for it, "working" or "waiting", and when it flipped. */
     val waiting: String? = null,
     val waitingAt: String? = null,
-)
+) {
+    val body: Decision by parsed("decision", text)
+}
 
 /**
  * A permission prompt this device opened and verified, and how it ended: [answer] is this
@@ -46,19 +57,28 @@ data class SavedDecision(
 @Serializable
 data class SavedPrompt(
     val from: String,
-    val body: Permission,
+    /** The signed body text. */
+    val text: String,
     val answeredAt: String? = null,
     val answer: String? = null,
-    val settled: Settled? = null,
-)
+    /** The machine's settled notice, as it signed it. */
+    val settledText: String? = null,
+) {
+    val body: Permission by parsed("permission", text)
+    val settled: Settled? by lazy { settledText?.let { parseBody("settled", it) as Settled } }
+}
 
 /** The latest verified snapshot from one machine. */
 @Serializable
-data class SavedQuota(val from: String, val body: QuotaSnapshot)
+data class SavedQuota(val from: String, val text: String) {
+    val body: QuotaSnapshot by parsed("quota", text)
+}
 
 /** The latest verified update of one run. */
 @Serializable
-data class SavedRun(val from: String, val body: Run)
+data class SavedRun(val from: String, val text: String) {
+    val body: Run by parsed("run", text)
+}
 
 /**
  * An answer signed and sealed but not yet taken by the server: offline, say. [answer] is the
@@ -89,11 +109,6 @@ data class Saved(
     val entries: List<JsonElement> = emptyList(),
     val cursor: String = "",
     val decisions: List<SavedDecision> = emptyList(),
-    /**
-     * The decision fields this app kept when it saved [decisions]; below [DECISION_FIELDS], the
-     * open ones are read again from the server, since an older app dropped fields it did not know.
-     */
-    val decisionFields: Int = 0,
     /** Where the last read of permission prompts and settled notices stopped. */
     val promptCursor: String = "",
     val prompts: List<SavedPrompt> = emptyList(),
@@ -149,6 +164,20 @@ data class Secrets(
  * and reads the ones before.
  */
 const val FORMAT = 1
+
+/**
+ * [Saved] without the items whose kept text this app no longer reads, so a body never throws when
+ * a screen reads it; the server still holds each one.
+ */
+fun Saved.readable(): Saved {
+    fun ok(read: () -> Any?) = runCatching { read() }.onFailure { Log.w("Starbridge", "dropped a saved item: ${it.message}") }.isSuccess
+    return copy(
+        decisions = decisions.filter { ok { it.body } },
+        prompts = prompts.filter { ok { it.body; it.settled } },
+        quotas = quotas.filter { ok { it.body } },
+        runs = runs.filter { ok { it.body } },
+    )
+}
 
 /** Both files are wrapped by the [Vault], so nothing decrypted sits on the disk in the clear. */
 class Disk(private val dir: File, private val vault: Vault) {
