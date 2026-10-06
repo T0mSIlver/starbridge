@@ -508,9 +508,9 @@ export function noteHead(
  * lacks, so the server is holding back entries, perhaps the revocation of a device that answers.
  */
 export function behindBy(st: State, dir: Directory, entries: unknown[]): string | undefined {
-  const by = withheldBy(st.heads ?? {}, dir, entries);
-  if (by)
-    return `the server is holding back directory entries ${by.id} has seen (${by.head.length}, this machine has ${dir.length}): no answer counts until it serves them`;
+  const held = withheldBy(st.heads ?? {}, dir, entries);
+  if (held)
+    return `the server is holding back directory entries ${held.id} has seen (${held.head.length}, this machine has ${dir.length}): no answer counts until it serves them`;
   return undefined;
 }
 
@@ -711,7 +711,8 @@ async function reseal(ctx: Ctx, s: Session, known: Directory): Promise<void> {
       }
     });
     const posted = await post(() => ({
-      ...sealWithPictures({ ...body, to: ids }, pictures, signer, to).item,
+      ...sealWithPictures({ ...body, to: ids, dir: signedHead(ctx, dir) }, pictures, signer, to)
+        .item,
       reseal: true,
     }));
     if (posted === "closed")
@@ -729,6 +730,7 @@ async function reseal(ctx: Ctx, s: Session, known: Directory): Promise<void> {
         to: ids,
         at: iso(ctx.now()),
         state: a.waiting.state,
+        dir: signedHead(ctx, dir),
       } satisfies Waiting;
       if (!(await post(() => ({ ...seal("waiting", w, signer, to), quiet: true })))) continue;
     }
@@ -739,7 +741,7 @@ async function reseal(ctx: Ctx, s: Session, known: Directory): Promise<void> {
   }
   for (const p of prompts) {
     if (!lacking(p.sealedTo ?? p.permission.to, dir)) continue;
-    const permission = { ...p.permission, to: ids };
+    const permission = { ...p.permission, to: ids, dir: signedHead(ctx, dir) };
     // As for decisions: answers count from the new devices before the post.
     ctx.store.updateState((st) => {
       const x = st.permissions?.[permission.id];
