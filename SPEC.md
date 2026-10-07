@@ -214,6 +214,11 @@ provider plugins add providers, not panels.
 ## Sign-in
 
 - The hosted server signs in with GitHub; a self-hosted server with `OWNER_TOKEN`.
+- The owner can pause sign-ups (#784), for a launch-day flood or a box near its limits: a GitHub
+  user with no account gets "not taking new accounts right now" on the page and in the app, while
+  every existing account signs in as before. `bun server.js signups pause|resume` writes and
+  removes a file beside the database, which the server reads on each new account, so it takes
+  effect at once and survives restarts and deploys.
 - The page shows only the sign-in methods its server offers (#670): `GET /v1/auth/methods` lists
   them, and without GitHub the landing page's and sign-in page's buttons open the owner token
   form. Until the server answers, the page shows GitHub, the hosted server's, so the landing
