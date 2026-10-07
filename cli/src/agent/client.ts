@@ -192,7 +192,7 @@ export async function withAgent<T>(
   } catch (e) {
     if (e instanceof NoAgent && !agent.answered) {
       // An agent may listen where this client cannot connect: say why, and how to fix it (#714).
-      const why = tooLong(agent.socket);
+      const why = isPortFile(agent.socket) ? undefined : tooLong(agent.socket);
       if (why && existsSync(agent.socket))
         ctx.err(`starbridge: ${why}; going to the server directly`);
       return direct();
