@@ -137,6 +137,18 @@ test("runBytes counts per device, so a run reaches every device", async () => {
   const item = seal("run", body, key(devbox), [phone.member, laptop.member]);
   const r = await s.call("POST", "/v1/items", { token: devbox.token, body: item });
   expect(r.status).toBe(201);
+
+  // Within the total for two devices, but one device's box is over its share (#719).
+  const [a, b] = item.boxes as [{ to: string; box: string }, { to: string; box: string }];
+  const lopsided = {
+    ...item,
+    boxes: [
+      { ...a, box: a.box + "A".repeat(Math.ceil(box / 2)) },
+      { ...b, box: b.box.slice(0, Math.floor(box / 2)) },
+    ],
+  };
+  const big = await s.call("POST", "/v1/items", { token: devbox.token, body: lopsided });
+  expect([big.status, big.json.error]).toEqual([413, "too-large"]);
 });
 
 test("runs are dropped a day after their last update", async () => {

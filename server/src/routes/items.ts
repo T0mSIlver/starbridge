@@ -212,6 +212,9 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
   const tooLarge = () =>
     fail(413, "too-large", `a ${item.kind}'s boxes and blobs hold at most ${most} bytes`);
   if (size > most) tooLarge();
+  // Each device downloads and opens every stored run every 10 s: its own box is what it pays (#719).
+  if (item.kind === "run" && item.boxes.some((b) => b.box.length > limits.runBytes))
+    fail(413, "too-large", `a run's box for each device holds at most ${limits.runBytes} bytes`);
   // A snooze names when the server pushes it again (#571): within 7 days of now.
   let wakeDue: string | null = null;
   if (rule.wake) {
