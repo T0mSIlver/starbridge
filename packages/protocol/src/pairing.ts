@@ -242,3 +242,24 @@ export function verifyBind(
     return false;
   }
 }
+
+/**
+ * The check code a machine prints and the devices show beside it (#795): the first 60 bits of
+ * BLAKE2b-256("starbridge/v1/check" NUL BLAKE2b-256(entry 0's body) signPk), as 12 Crockford
+ * base32 characters in groups of four. A machine paired into a chain the server made has another
+ * entry 0, and a stand-in machine has another key, so the owner who compares the two sees either.
+ */
+export function checkCode(entries: unknown[], signPk: string): string {
+  const body = (entries[0] as { body?: unknown } | undefined)?.body;
+  if (typeof body !== "string") throw new ProtocolError("bad-schema", "the directory is empty");
+  const key = fromB64(signPk);
+  if (key.length !== 32) throw new ProtocolError("bad-encoding", "signPk is not 32 bytes");
+  const root = sodium.crypto_generichash(32, utf8(body), null);
+  const hash = sodium.crypto_generichash(
+    32,
+    concat(utf8("starbridge/v1/check"), new Uint8Array([0]), root, key),
+    null,
+  );
+  const chars = encodeCrockford(hash.subarray(0, 8)).slice(0, 12);
+  return `${chars.slice(0, 4)} ${chars.slice(4, 8)} ${chars.slice(8)}`;
+}

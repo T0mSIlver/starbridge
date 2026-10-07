@@ -8,6 +8,7 @@ import {
   alertsFor,
   approverKeys,
   bindMessage,
+  checkCode,
   claimHash,
   codeFromLink,
   computePace,
@@ -1116,6 +1117,12 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
     secret: code.secret,
     key: toB64(pairingKey(code)),
     claim: { secret: toB64(seed(7)), hash: claimHash(toB64(seed(7))) },
+    check: {
+      note: "checkCode(entries, signPk): directory.json's chain, the dev box's signing key",
+      entries: chain.slice(0, 3),
+      signPk: publicKeys(devbox.keys).signPk,
+      expect: checkCode(chain.slice(0, 3), publicKeys(devbox.keys).signPk),
+    },
     parse: [
       { input: formatPairingCode(code).toLowerCase(), expect: formatPairingCode(code) },
       { input: "0123 4567 89ab cdef ghjk mnpq", expect: "0123-4567-89AB-CDEF-GHJK-MNPQ" },

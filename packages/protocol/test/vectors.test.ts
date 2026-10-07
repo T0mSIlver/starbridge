@@ -6,6 +6,7 @@ import {
   approverKeys,
   BODY_SCHEMAS,
   bindMessage,
+  checkCode,
   claimHash,
   codeFromLink,
   computePace,
@@ -117,6 +118,10 @@ describe("pairing.json", () => {
     expect(code).toEqual({ rendezvous: v.rendezvous, secret: v.secret });
     expect(toB64(pairingKey(code))).toBe(v.key);
     expect(claimHash(v.claim.secret)).toBe(v.claim.hash);
+  });
+  test("check code", () => {
+    expect(checkCode(v.check.entries, v.check.signPk)).toBe(v.check.expect);
+    expect(checkCode(v.check.entries.slice(1), v.check.signPk)).not.toBe(v.check.expect);
   });
   for (const c of v.parse) {
     test(`parse ${c.input}`, () => {
