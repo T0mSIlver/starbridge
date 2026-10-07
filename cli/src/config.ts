@@ -81,6 +81,8 @@ export interface State {
       done?: boolean;
       /** Closed with `settle`, or by `revoked`: no answer will follow. */
       settled?: boolean;
+      /** Settled here, but its settled notice has not reached the server yet (#584). */
+      unposted?: boolean;
       /**
        * Answered by a device the chain revoked since: the machine dropped that answer, and the
        * server takes no other (#515).

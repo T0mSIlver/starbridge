@@ -396,6 +396,14 @@ test("settle --session and --all close a flood at the server's pace (#584)", asy
   expect(await open()).toEqual([]);
   expect(await run(["settle", "--all", "--yes"], ctx)).toBe(0);
   expect(ctx.lines.at(-1)).toBe("No open decision this machine asked.");
+  // A settle whose notice never reached the server is posted again.
+  const failed = ids.s2?.[0] as string;
+  ctx.store.updateState((st) => {
+    (st.asked[failed] as { unposted?: boolean }).unposted = true;
+  });
+  expect(await run(["settle", "--all", "--yes"], ctx)).toBe(0);
+  expect(ctx.lines.at(-1)).toBe("Settled 1 decision.");
+  expect(ctx.store.state().asked[failed]?.unposted).toBeUndefined();
 });
 
 test("Done on an --answer-in decision reaches the agent, and every device hears of it (#539)", async () => {

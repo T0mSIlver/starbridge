@@ -442,7 +442,8 @@ async function settleMany(
 ): Promise<number> {
   const st = ctx.store.state();
   const open = Object.entries(st.asked)
-    .filter(([id, a]) => !a.settled && !a.revoked && !st.answers[id])
+    // A settle whose notice failed is posted again.
+    .filter(([id, a]) => (!a.settled || a.unposted) && !a.revoked && !st.answers[id])
     .filter(([, a]) => opts.all || a.session === opts.session)
     .map(([id]) => id);
   const whose = opts.all ? "this machine asked" : `session ${opts.session} asked`;
@@ -467,7 +468,7 @@ async function settleMany(
         break;
       } catch (e) {
         if (!(e instanceof ApiError && e.retryAfter)) {
-          ctx.err(`starbridge: settled ${done} of ${open.length}; \`settle ${id}\` posts it again`);
+          ctx.err(`starbridge: settled ${done} of ${open.length}; run it again to go on`);
           throw e;
         }
         await ctx.sleep(e.retryAfter * 1000);
@@ -506,6 +507,7 @@ async function settleOne(
     const a = st.asked[id];
     if (a && !delivered) {
       a.settled = true;
+      a.unposted = true;
       forget(a);
     }
   });
@@ -530,6 +532,10 @@ async function settleOne(
       e instanceof ApiError && ["already-answered", "already-settled", ...closed].includes(e.code);
     if (!done) throw e;
   }
+  ctx.store.updateState((st) => {
+    const a = st.asked[id];
+    if (a) delete a.unposted;
+  });
 }
 
 /** What `checkAnswer` reads of a decision this machine asked. */
