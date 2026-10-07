@@ -65,6 +65,7 @@ import dev.starbridge.app.ui.inbox.rememberDrafts
 import dev.starbridge.app.ui.inbox.PromptActions
 import dev.starbridge.app.ui.inbox.DecisionSheet
 import dev.starbridge.app.ui.inbox.PromptSheet
+import dev.starbridge.app.ui.inbox.snoozed
 import dev.starbridge.app.ui.quotas.QuotasScreen
 import dev.starbridge.app.ui.quotas.QuotasViewModel
 import dev.starbridge.app.ui.setup.SetupScreen
@@ -182,7 +183,8 @@ internal fun suiteType(): NavigationSuiteType {
 fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> Unit, opening: Flow<NavKey>) {
     val backStack = rememberNavBackStack(InboxKey)
     val now = now()
-    val openDecisions = decisions.count { it.isOpen }
+    // A snoozed question counts again once it is back (#691).
+    val openDecisions = decisions.count { it.isOpen && !it.snoozed(now) }
     // Shared by a decision's card and its detail, which are separate entries.
     val drafts = rememberDrafts()
     val host = Notices(notice, dismiss)
