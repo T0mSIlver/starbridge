@@ -17,6 +17,8 @@ install -m 755 host/deploy-rev.sh /usr/local/sbin/starbridge-deploy
 host/server-env.sh
 host/umami-env.sh
 host/caddy-auth.sh
+# The denylist's snippet, which the Caddyfile imports (host/switch.sh).
+host/switch.sh --regenerate
 $compose build --pull server web-a
 # Caddy's image changes only when caddy.Dockerfile does: a new image recreates the container,
 # which drops every open connection. Its build is not reproducible (xcaddy fetches and compiles
