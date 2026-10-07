@@ -81,6 +81,11 @@ export const StoreContext = createContext<Store | null>(null);
 const Ctx_ = StoreContext;
 
 const POLL_MS = 20_000;
+/**
+ * Until a push reaches the page, it may have no Web Push at all (refused, unsupported, or a server
+ * that cannot send it), so it polls faster while visible (#664), as Android does (#445).
+ */
+const PUSHLESS_POLL_MS = 5_000;
 /** While a prompt waits, it leaves within a second or two of being settled elsewhere. */
 const PROMPT_POLL_MS = 1_500;
 /**
@@ -104,6 +109,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [boot, setBoot] = useState<Store["boot"]>({ state: "loading" });
   const [inbox, setInbox] = useState<Inbox>({ items: [], rejected: [] });
   const [inboxLoaded, setInboxLoaded] = useState(false);
+  const [pushed, setPushed] = useState(false);
   const [quotas, setQuotas] = useState<Quotas>();
   const [withheld, setWithheld] = useState<string>();
   const [quotaSettings, setSettingsState] = useState<QuotaSettings>(DEFAULT_SETTINGS);
@@ -417,11 +423,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       readInbox();
       readPrompts();
     };
-    const timer = setInterval(tick, POLL_MS);
+    const timer = setInterval(tick, pushed ? POLL_MS : PUSHLESS_POLL_MS);
     refreshPrompts().catch(() => {});
     const onMessage = (e: MessageEvent) => {
       if (e.data?.type === "starbridge:push-error") console.error("push:", e.data.error);
       if (e.data?.type !== "starbridge:push") return;
+      setPushed(true);
       if (["decision", "permission", "waiting"].includes(e.data.kind)) chimeForNew();
       if (e.data.kind === "quota") refreshQuotas().catch(() => {});
       else if (["permission", "settled", "answered"].includes(e.data.kind))
@@ -440,7 +447,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       window.removeEventListener("online", tick);
       navigator.serviceWorker?.removeEventListener("message", onMessage);
     };
-  }, [ctx, refreshInbox, refreshQuotas, refreshPrompts]);
+  }, [ctx, refreshInbox, refreshQuotas, refreshPrompts, pushed]);
 
   // While a prompt waits or just closed, poll fast so a keyboard answer clears it at once.
   const busy = prompts.length > 0;
