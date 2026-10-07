@@ -85,8 +85,8 @@ agent sessions --CLI--> starbridge agent (one per machine) --HTTPS--> server <--
 
 Why this stack: one TypeScript schema serves the server, CLI and mods, and Claude Code mods are
 TypeScript already. Bun gives `bun build --compile` binaries; npm gets a Node 22+ bundle, so the
-CLI uses no Bun global without a guard. SQLite is enough because the server stores ciphertext and
-public keys only. Design tokens are generated from `DESIGN.md` to CSS and Kotlin, so both clients
+CLI uses no Bun global without a guard. SQLite is enough because the server stores ciphertext,
+public keys and the directory's names and times. Design tokens are generated from `DESIGN.md` to CSS and Kotlin, so both clients
 share colours and type.
 
 **CodexBar** (github.com/steipete/CodexBar) is read, never embedded. Its maintainers want
