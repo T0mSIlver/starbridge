@@ -32,8 +32,9 @@ server.
 - **Signed envelope** `{v, kind, signer, body, sig}`: `body` is JSON text kept exactly as signed;
   `sig` is Ed25519 over `"starbridge/v1/<kind>" NUL signer NUL body`. Verifiers check the
   signature before they parse `body`.
-- **Sealed item** `{v, kind, id, from, re?, wakeAt?, quiet?, reseal?, boxes: [{to, box}]}`: a
-  signed envelope sealed with `crypto_box_seal` to each recipient. `kind`, `id`, `from`, `re`,
+- **Sealed item** `{v, kind, id, from, re?, wakeAt?, quiet?, reseal?, blobs?, boxes: [{to, box}]}`:
+  a signed envelope sealed with `crypto_box_seal` to each recipient, and for a decision its
+  images' blobs. `kind`, `id`, `from`, `re`,
   `wakeAt` and `to` are routing hints for the server; clients reject an item whose hints disagree
   with the signed body. `quiet: true` asks the server to store the item without pushing it.
 - Each sealed kind has one signing role (`ITEM_KINDS` in `packages/protocol/src/schemas.ts`).
@@ -56,8 +57,15 @@ server.
 - Every machine-signed body names its `source` (machine, project, session, and optionally the
   session's title and links, and `machineKind`: `server`, `desktop`, `laptop` or `cloud`, for
   its icon). A decision or a permission may name its `agent`, such as `claude-code`, `codex`, `pi` or `opencode`. Clients accept any agent name (lowercase letters, digits and dashes, at most 40), so a newer machine's agent never makes an item unreadable; an agent a client does not know gets no "Open in" link.
-- A decision's images (PNG or JPEG) and links (HTTPS) are part of its signed body, so each box
-  carries every image, and the 2 MB cap in Limits covers them once per device.
+- A decision's links (HTTPS) are part of its signed body. Its images (PNG or JPEG) are sealed once
+  for every device (#685): each is a blob in the item's `blobs`, at the index of its entry in the
+  body's `images`, made of a random 24-byte nonce then `crypto_secretbox` of the image under a
+  random 32-byte key. The body's entry carries that `key` and the blob's `hash`, BLAKE2b-256 of
+  `"starbridge/v1/image"` NUL and the blob's bytes, so the signature covers the image and each
+  box holds a few dozen bytes per image. A client checks the hash, then opens the blob; one that
+  fails either is left out, as a broken image. A push carries no blobs, so the server sends a
+  decision with blobs as its id. A re-seal (`reseal`) may leave `blobs` out: the server keeps
+  those it stored. `vectors/images.json` holds the cases.
   A decision with `answerIn` is answered on that page (a claude.ai artifact whose button wakes
   the agent), never in Starbridge: it has no options, devices show the page and no answer
   field, and it closes when the machine posts `settled` for it. When it also sets `done: true`,
@@ -68,7 +76,7 @@ server.
 
 The protocol version is the `v: 1` in every signed body, the `starbridge/v1/` prefix of every
 signed or hashed string, and the `/v1` of every route. It names the algorithms too: keys are bare
-X25519 and Ed25519, boxes are `crypto_box_seal`, hashes BLAKE2b-256, with no algorithm tag or
+X25519 and Ed25519, boxes are `crypto_box_seal`, image blobs `crypto_secretbox`, hashes BLAKE2b-256, with no algorithm tag or
 suite id. Changing any of them is version 2 (`v: 2`, `starbridge/v2/...`, `/v2` routes), and
 members re-pair; nothing changes an algorithm in place. A member's keys change only by revoking it
 and adding new ones.
@@ -366,8 +374,8 @@ createdAt, expiresAt, version}`; `state` is `open`, `comparing`, `approved` or `
 | Route | Who | What |
 |---|---|---|
 | `POST /items` | the kind's signing role | store a sealed item and push it to each recipient; 409 on a reused id; 409 `too-many-items` and 413 `too-large` past the caps in Limits |
-| `GET /items?kind=<kinds>&after=<cursor>&open=1` | device | items with only the caller's box, and `cursor`; `kinds` is a comma-separated list of machine-signed kinds and `snooze`, the machine-signed ones when left out; `open=1` keeps only unanswered decisions and permissions still in their answer window |
-| `GET /items/:id` | device, machine | one item, the caller's box only; push points here when the item is over the inline limit (3 KB by default) |
+| `GET /items?kind=<kinds>&after=<cursor>&open=1` | device | items with only the caller's box (and a decision's blobs), and `cursor`; `kinds` is a comma-separated list of machine-signed kinds and `snooze`, the machine-signed ones when left out; `open=1` keeps only unanswered decisions and permissions still in their answer window |
+| `GET /items/:id` | device, machine | one item, the caller's box only, with a decision's blobs; push points here when the item is over the inline limit (3 KB by default) |
 | `GET /quota` | device | the latest quota item from each machine |
 | `POST /quota/ask?wait=<s>` | device | ask every machine for a fresh quota snapshot → `{askedAt, behind}`; with `wait`, holds until each active machine that has a snapshot posted a newer one; `behind` counts those that have not |
 
@@ -472,7 +480,7 @@ server whose disk is full answers writes 503 `storage-full` with `Retry-After`; 
 | Stored permission prompts, open or settled | 10000 per account: 409 `too-many-items` |
 | Stored runs | 500 per account: 409 `too-many-items` for a new run; updates still pass |
 | A snooze | until at most 7 days after it is posted (`SNOOZE_MAX_MS`), since an unanswered decision drops after 30: 400 `bad-schema` |
-| Stored items | 256 MB per account, counting each item's boxes plus 512 bytes for the item and for each box, of which machine-signed items may fill all but the last 8 MB: 409 `account-full`; 2 GB on the whole server, past which machine-signed items get 503 `storage-full` with `Retry-After` while answers pass; 2 MB per machine-signed item (all its boxes), 1 MB per quota snapshot, 32 KB per run update for each device it is sealed to, and 32 KB per answer or permission answer: 413 `too-large` |
+| Stored items | 256 MB per account, counting each item's boxes and blobs plus 512 bytes for the item and for each box, of which machine-signed items may fill all but the last 8 MB: 409 `account-full`; 2 GB on the whole server, past which machine-signed items get 503 `storage-full` with `Retry-After` while answers pass; 2 MB per machine-signed item (all its boxes and blobs; only a decision carries blobs, at most 4 of 512 KB), 1 MB per quota snapshot, 32 KB per run update for each device it is sealed to, and 32 KB per answer or permission answer: 413 `too-large` |
 | `POST /directory` | 30 an hour per account |
 | Directory entries | from entry 200 on, a device's `add`: 409 `directory-full`; revocations and confirmations always pass, the recovery key may add 20 more devices, and devices may propose 20 more recovery keys; 8 KB per entry: 413 `too-large` |
 | Sessions | 50 per account; signing in past that ends the oldest, unpaired ones first |

@@ -198,6 +198,23 @@ export const SignedEnvelope = z.object({
 export type SignedEnvelope = z.infer<typeof SignedEnvelope>;
 
 /**
+ * A decision's image travels apart from its boxes, sealed once for every device: `blob` is the
+ * image encrypted with a random key (XSalsa20-Poly1305, `crypto_secretbox`, the nonce first),
+ * stored once beside the boxes. The signed body carries the key and the blob's hash, so each
+ * device's box holds a few dozen bytes per image instead of the image (PROTOCOL.md, Images).
+ */
+export const ImageRef = z.object({
+  /** The blob's secretbox key, 32 bytes. */
+  key: B64.length(43),
+  /** BLAKE2b-256 of "starbridge/v1/image" NUL and the blob's bytes. */
+  hash: B64.length(43),
+});
+export type ImageRef = z.infer<typeof ImageRef>;
+
+/** An image's blob, as base64url, at most: 384 KB of image, its nonce and MAC. */
+export const BLOB_MAX = 512 * 1024 + 64;
+
+/**
  * What the server stores and relays: one sealed box per recipient. `id`, `kind`, `from`, `re` and
  * `to` are routing hints the server can read; clients check them against the signed body inside.
  */
@@ -217,6 +234,11 @@ export const SealedItem = z.object({
   reseal: z.literal(true).optional(),
   /** A `wake` kind's time (ITEM_KINDS): the server pushes every device once then. */
   wakeAt: Time.optional(),
+  /**
+   * A decision's images, each sealed once for every device (`sealImage`), in the order of its
+   * body's `images`: the boxes carry only their keys and hashes.
+   */
+  blobs: z.array(B64.max(BLOB_MAX)).max(4).optional(),
   boxes: z
     .array(z.object({ to: Id, box: B64 }))
     .min(1)
@@ -281,20 +303,23 @@ export const Source = z.object({
 export type Source = z.infer<typeof Source>;
 
 /**
- * A picture the agent attaches to a decision: a mockup, a failing screen, a chart. It travels
- * inside the signed and sealed body like the text, so it costs its size once per box; the CLI
+ * A picture the agent attaches to a decision: a mockup, a failing screen, a chart. Its bytes
+ * travel once, as the item's blob at the same index (`sealImage`); the signed body carries what
+ * opens and checks it, so each device's box costs a few dozen bytes per image (#685). The CLI
  * downscales images to keep a decision within the server's per-item cap (PROTOCOL.md, Limits).
  */
-export const DecisionImage = z.object({
+export const DecisionImage = ImageRef.extend({
   /** PNG or JPEG only: never SVG, which can carry script. */
   type: z.enum(["image/png", "image/jpeg"]),
   width: z.number().int().min(1).max(8192),
   height: z.number().int().min(1).max(8192),
-  data: B64.max(512 * 1024),
   /** What the image shows, for screen readers and the notification. */
   alt: z.string().max(300).optional(),
 });
 export type DecisionImage = z.infer<typeof DecisionImage>;
+
+/** An image as clients show it, once its blob opened: its bytes as base64url in `data`. */
+export type ShownImage = Omit<DecisionImage, "key" | "hash"> & { data: string };
 
 /**
  * A page the owner may open to decide, typically a claude.ai artifact the agent built. HTTPS

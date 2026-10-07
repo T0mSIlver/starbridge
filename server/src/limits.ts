@@ -46,8 +46,8 @@ export const DEFAULT_LIMITS = {
    */
   serverBytes: 2048 * 1024 * 1024,
   /**
-   * Sealed boxes of one decision or quota snapshot, in bytes. Each box carries the decision's
-   * images, so this is what lets a phone screenshot reach three or four devices at full size.
+   * Sealed boxes and blobs of one decision, in bytes. A decision's images are its blobs, stored
+   * once whatever the number of devices (#685), so four phone screenshots fit at full size.
    */
   itemBytes: 2 * 1024 * 1024,
   /**

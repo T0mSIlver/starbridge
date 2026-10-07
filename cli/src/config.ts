@@ -88,10 +88,11 @@ export interface State {
       revoked?: boolean;
       /** The devices it was sealed to, the only ones whose answer counts. */
       to?: string[];
-      /** The decision as signed, without its images, to re-seal it to devices that join. */
-      body?: Omit<Decision, "images">;
-      /** Its image files, read again when it is re-sealed. */
-      images?: (string | { path: string; alt?: string })[];
+      /**
+       * The decision as signed, to re-seal it to devices that join. Its images are refs: the
+       * server keeps their blobs, sealed once for every device (#685).
+       */
+      body?: Decision;
       /** The decision's waiting state as last posted, under the one id it keeps. */
       waiting?: { id: string; state: Waiting["state"] };
       /**

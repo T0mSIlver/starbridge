@@ -188,6 +188,8 @@ data class SealedItem(
     val boxes: List<SealedBox>,
     /** A `wake` kind's time: the server pushes every device once then. */
     val wakeAt: String? = null,
+    /** A decision's images, each sealed once for every device, in its body's order (#685). */
+    val blobs: List<String>? = null,
 ) {
     fun check() {
         schema(v == 1, "v")
@@ -196,6 +198,11 @@ data class SealedItem(
         id(from, "from")
         re?.let { id(it, "re") }
         wakeAt?.let { time(it, "wakeAt") }
+        blobs?.let { schema(it.size <= 4, "blobs") }
+        for (b in blobs.orEmpty()) {
+            schema(b.length <= BLOB_MAX, "blobs")
+            b64(b, "blobs")
+        }
         schema(boxes.size in 1..64, "boxes")
         for (b in boxes) {
             id(b.to, "to")
@@ -254,6 +261,9 @@ data class Source(
     }
 }
 
+/** An image's blob, as base64url, at most (BLOB_MAX in schemas.ts). */
+const val BLOB_MAX = 512 * 1024 + 64
+
 /** PNG or JPEG only: never SVG, which can carry script (DecisionImage in schemas.ts). */
 val IMAGE_TYPES = setOf("image/png", "image/jpeg")
 private val HTTPS_URL_RE = Regex("^https://[\\x21-\\x7e]+$")
@@ -263,14 +273,18 @@ data class DecisionImage(
     val type: String,
     val width: Int,
     val height: Int,
-    val data: String,
+    /** The blob's secretbox key and its hash, which open and check the item's blob (#685). */
+    val key: String,
+    val hash: String,
     val alt: String? = null,
 ) {
     fun check() {
         schema(type in IMAGE_TYPES, "images.type")
         schema(width in 1..8192 && height in 1..8192, "images.size")
-        schema(data.length <= 512 * 1024, "images.data")
-        b64(data, "images.data")
+        schema(key.length == 43, "images.key")
+        b64(key, "images.key")
+        schema(hash.length == 43, "images.hash")
+        b64(hash, "images.hash")
         alt?.let { len(it, 0, 300, "images.alt") }
     }
 }

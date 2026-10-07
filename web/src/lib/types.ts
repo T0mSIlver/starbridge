@@ -1,7 +1,6 @@
 // The web's view of protocol data (packages/protocol). Components import these as types only;
 // the protocol code and libsodium load lazily (lib/device.ts).
 import type {
-  Decision,
   Member,
   Permission,
   PermissionScope,
@@ -9,10 +8,15 @@ import type {
   QuotaWindow,
   Run,
   Settled,
+  ShownImage,
+  Decision as SignedDecision,
   Source,
 } from "@starbridge/protocol";
 
-export type { Decision, Permission, QuotaAlert, QuotaWindow, Run, Settled, Source };
+/** A decision as the web shows it: its images opened from their blobs (#685). */
+export type Decision = Omit<SignedDecision, "images"> & { images?: ShownImage[] };
+
+export type { Permission, QuotaAlert, QuotaWindow, Run, Settled, Source };
 
 /**
  * A tap on an option, typed text when the decision has none, or Done when it is answered on its

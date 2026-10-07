@@ -49,6 +49,8 @@ data class SavedDecision(
     /** The owner's latest snooze of it, from any device (#571): until when, and when it was sent. */
     val snoozedUntil: String? = null,
     val snoozedAt: String? = null,
+    /** Its images opened from their blobs, base64url, in order; null for one that did not open (#685). */
+    val images: List<String?> = emptyList(),
 ) {
     val body: Decision by parsed("decision", text)
 }

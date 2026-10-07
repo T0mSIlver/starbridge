@@ -47,7 +47,7 @@ import {
   toB64,
   verifyDirectory,
 } from "../src/index";
-import { sodium, utf8 } from "../src/sodium";
+import { concat, fromB64, sodium, utf8 } from "../src/sodium";
 
 const seed = (n: number) => new Uint8Array(32).fill(n);
 const ACCOUNT = "acct_tom";
@@ -1431,7 +1431,8 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
     type: "image/png",
     width: 1,
     height: 1,
-    data: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg",
+    key: toB64(seed(44)),
+    hash: toB64(seed(45)),
     alt: "The settings screen, cropped",
   };
   const artifact = { url: "https://claude.ai/public/artifacts/0b3f0e7c", title: "Both mockups" };
@@ -1574,8 +1575,8 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
         valid: false,
       },
       {
-        name: "image data not base64url",
-        body: { ...decisionBody, images: [{ ...pixel, data: "iVBO+w==" }] },
+        name: "image key not 32 bytes",
+        body: { ...decisionBody, images: [{ ...pixel, key: toB64(new Uint8Array(31)) }] },
         valid: false,
       },
       {
@@ -1937,7 +1938,56 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
     ],
   };
 
+  // --- images.json ---
+  // A 1x1 PNG sealed with a fixed key and nonce, so the blob comes out the same on every run.
+  const png = fromB64(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg",
+  );
+  const imageKey = seed(41);
+  const nonce = new Uint8Array(sodium.crypto_secretbox_NONCEBYTES).fill(42);
+  const blobBytes = concat(nonce, sodium.crypto_secretbox_easy(png, nonce, imageKey));
+  const blobHash = (b: Uint8Array) =>
+    toB64(
+      sodium.crypto_generichash(
+        32,
+        concat(utf8("starbridge/v1/image"), new Uint8Array([0]), b),
+        null,
+      ),
+    );
+  const blob = toB64(blobBytes);
+  const ref = { key: toB64(imageKey), hash: blobHash(blobBytes) };
+  const flipped = blobBytes.slice();
+  flipped[30] = (flipped[30] as number) ^ 1;
+  const images = {
+    description:
+      "A decision image's blob: nonce then crypto_secretbox under ref.key; ref.hash is BLAKE2b-256 of 'starbridge/v1/image' NUL and the blob. openImage checks the hash, then opens.",
+    cases: [
+      { name: "opens", blob, ref, plain: toB64(png), expect: "ok" },
+      { name: "a changed blob fails its hash", blob: toB64(flipped), ref, expect: "cannot-open" },
+      {
+        name: "a changed blob under its own hash fails its MAC",
+        blob: toB64(flipped),
+        ref: { ...ref, hash: blobHash(flipped) },
+        expect: "cannot-open",
+      },
+      {
+        name: "another key fails",
+        blob,
+        ref: { ...ref, key: toB64(seed(43)) },
+        expect: "cannot-open",
+      },
+      { name: "a blob that is not base64url fails", blob: "A", ref, expect: "cannot-open" },
+      {
+        name: "a blob shorter than nonce and MAC fails",
+        blob: toB64(nonce),
+        ref: { ...ref, hash: blobHash(nonce) },
+        expect: "cannot-open",
+      },
+    ],
+  };
+
   return {
+    "images.json": images,
     "keys.json": keys,
     "directory.json": directory,
     "envelopes.json": envelopes,

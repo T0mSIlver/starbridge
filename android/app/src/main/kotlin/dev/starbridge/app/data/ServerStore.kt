@@ -1,6 +1,7 @@
 package dev.starbridge.app.data
 
 import android.util.Log
+import dev.starbridge.app.protocol.Images
 import dev.starbridge.app.protocol.RecoveryKeys
 import dev.starbridge.app.protocol.recoverySignSeed
 import dev.starbridge.app.protocol.Directories
@@ -132,6 +133,7 @@ class ServerStore(
     private val wakeWhenOnline: () -> Unit = {},
 ) : Store {
     private val lock = Mutex()
+    private val images = Images(sodium)
     private val loaded = disk.load()
     private var saved = loaded.first?.readable() ?: Saved(defaultServer)
     private var secrets = loaded.second
@@ -874,7 +876,7 @@ class ServerStore(
                     continue
                 }
                 val (from, _, text) = open(listed.item) ?: continue
-                byId[listed.item.id] = SavedDecision(from, text, listed.answeredAt, settled = settledBy(from))
+                byId[listed.item.id] = saved(listed.item, SavedDecision(from, text, listed.answeredAt, settled = settledBy(from)))
             }
             cursor = page.cursor
             if (page.items.size < 100) break
@@ -895,12 +897,16 @@ class ServerStore(
      * [d] with the agent's waiting state from [w], or null when [w] changes nothing: it must come
      * from the machine that asked, and only a later update replaces an earlier one.
      */
+    /** [d] with its images opened from [item]'s blobs, once, as it is kept (#685). */
+    private fun saved(item: SealedItem, d: SavedDecision): SavedDecision =
+        if (d.body.images.isNullOrEmpty()) d else d.copy(images = images.openAll(d.body.images.orEmpty(), item.blobs))
+
     /** Fetches decision [id] and keeps it; null when it does not open. */
     private suspend fun fetchDecision(id: String): SavedDecision? {
         val listed = api().item(id)
         if (directory?.members?.containsKey(listed.item.from) != true) syncDirectory()
         val (from, _, text) = open(listed.item) ?: return null
-        val d = SavedDecision(from, text, listed.answeredAt)
+        val d = saved(listed.item, SavedDecision(from, text, listed.answeredAt))
         persist(saved.copy(decisions = saved.decisions + d))
         return d
     }
@@ -1407,7 +1413,7 @@ class ServerStore(
                 // A machine paired since the last sync is not in the cached chain yet.
                 catchUp(item)
                 val (from, _, text) = open(item) ?: return@withLock
-                val saved1 = SavedDecision(from, text, answeredAt)
+                val saved1 = saved(item, SavedDecision(from, text, answeredAt))
                 persist(saved.copy(decisions = saved.decisions + saved1))
                 if (answeredAt == null) alerts.decision(toUi(saved1))
             }
@@ -1932,7 +1938,7 @@ class ServerStore(
             waiting = d.waiting == "waiting",
             waitingSince = if (d.waiting == "waiting") instant(d.waitingAt) else null,
             snoozedUntil = snoozedUntil(d),
-            images = b.images.orEmpty().map { Image(it.data, it.width, it.height, it.alt) },
+            images = b.images.orEmpty().mapIndexedNotNull { i, it -> d.images.getOrNull(i)?.let { data -> Image(data, it.width, it.height, it.alt) } },
             links = b.links.orEmpty().map { Link(it.url, it.title) },
             answerIn = b.answerIn?.let { Link(it.url, it.title) },
             answer = d.answer,
