@@ -1975,6 +1975,7 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
         ref: { ...ref, key: toB64(seed(43)) },
         expect: "cannot-open",
       },
+      { name: "a blob that is not base64url fails", blob: "A", ref, expect: "cannot-open" },
       {
         name: "a blob shorter than nonce and MAC fails",
         blob: toB64(nonce),

@@ -39,6 +39,15 @@
       "expect": "cannot-open"
     },
     {
+      "name": "a blob that is not base64url fails",
+      "blob": "A",
+      "ref": {
+        "key": "KSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSk",
+        "hash": "E02J-yVSHZsGvWiPNrTuZezGpyFMmUJEvE4lDqG6_8I"
+      },
+      "expect": "cannot-open"
+    },
+    {
       "name": "a blob shorter than nonce and MAC fails",
       "blob": "KioqKioqKioqKioqKioqKioqKioqKioq",
       "ref": {

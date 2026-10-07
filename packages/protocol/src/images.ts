@@ -17,7 +17,12 @@ export function sealImage(bytes: Uint8Array): { blob: string; ref: ImageRef } {
 
 /** The image's bytes, once the blob matches the signed hash and opens under the signed key. */
 export function openImage(blob: string, ref: ImageRef): Uint8Array {
-  const bytes = fromB64(blob);
+  let bytes: Uint8Array;
+  try {
+    bytes = fromB64(blob);
+  } catch {
+    throw new ProtocolError("cannot-open", "image blob is not base64url");
+  }
   if (blobHash(bytes) !== ref.hash) throw new ProtocolError("cannot-open", "image hash differs");
   const n = sodium.crypto_secretbox_NONCEBYTES;
   if (bytes.length < n + sodium.crypto_secretbox_MACBYTES)
