@@ -321,6 +321,37 @@ test("the sweep checks each kept waiting item once, walking past it by rowid (#6
   }
 });
 
+test("past floodUnanswered open decisions, an account keeps them only a week (#584)", async () => {
+  const db = openDb(":memory:");
+  const now = Date.now();
+  const iso = (ago: number) => new Date(now - ago).toISOString();
+  const add = db.query(
+    "INSERT INTO items (seq, account_id, id, kind, from_id, received_at, answered_at) VALUES (?, ?, ?, 'decision', 'm', ?, ?)",
+  );
+  let seq = 0;
+  for (const a of ["flooded", "quiet"]) {
+    db.query("INSERT INTO accounts (id, created_at) VALUES (?, ?)").run(a, iso(0));
+    add.run(++seq, a, `${a}-old`, iso(8 * DAY), null);
+    add.run(++seq, a, `${a}-new`, iso(6 * DAY), null);
+    // Answered ones keep their own week from the answer.
+    add.run(++seq, a, `${a}-answered`, iso(8 * DAY), iso(DAY));
+  }
+  add.run(++seq, "flooded", "flooded-third", iso(0), null);
+  // Three open decisions are past a limit of 2; the quiet account holds 2.
+  await sweepStorage(db, { ...DEFAULT_LIMITS, floodUnanswered: 2 }, now, 1);
+  const ids = (db.query("SELECT id FROM items ORDER BY seq").all() as { id: string }[]).map(
+    (r) => r.id,
+  );
+  expect(ids).toEqual([
+    "flooded-new",
+    "flooded-answered",
+    "quiet-old",
+    "quiet-new",
+    "quiet-answered",
+    "flooded-third",
+  ]);
+});
+
 test("a full directory refuses device-signed adds but takes revocations and recoveries", async () => {
   const { s, acct } = await setup({ directoryEntries: 2, recoveryAdds: 1, recoveryProposals: 1 });
   const device = (id: string) => {

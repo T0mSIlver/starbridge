@@ -240,7 +240,10 @@ provider plugins add providers, not panels.
 - **Bounds** (#65, #260), sized for an orchestrator with 10 sessions asking a few hundred
   questions a day: every route that stores something has a cap or retention, and every write that
   grows it a rate limit. Answered questions and their answers are kept 7 days, unanswered ones and
-  quota snapshots 30. Per account: 10000 questions, 10000 permission prompts, 256 MB, each item
+  quota snapshots 30. An account holding more than 1000 unanswered questions keeps them 7 days
+  (#584): a looping agent fills the 10000 cap in under 2 hours, after which every question is
+  refused until some expire, and 30 days of that is too long, while a person has a few dozen
+  open at most. A snooze in such an account can outlive its question and goes with it. Per account: 10000 questions, 10000 permission prompts, 256 MB, each item
   charged its boxes plus 512 bytes per row: a heavy user, a hundred questions a day with
   screenshots, stores about 80 MB in a week. A full account gets 409 `account-full`, which the
   CLI words as such. The numbers live in `server/src/limits.ts` and
@@ -290,7 +293,8 @@ provider plugins add providers, not panels.
   were counted. A migration changes the schema and never rewrites rows, to stay within the 30 s
   Caddy holds requests; backfills run in the hourly sweep. `apply.sh` backs the database up just
   before a new server that migrates further than the database's `user_version` starts, or when
-  either number can't be read, and keeps the last two (#586).
+  either number can't be read, and keeps the last two (#586) for 7 days at most, as the nightly
+  copies, so deleted data leaves backups within the 2 weeks /privacy promises (#721).
 - **Server-wide cap** (#586). Machines' items stop at 2 GB stored across accounts, with 503
   `storage-full` and a Retry-After of an hour; answers pass, so questions still close and expire.
   The hosted disk (38 GB, about 10 GB of it system and Docker, an alert at 2 GB free) holds the
@@ -393,8 +397,9 @@ provider plugins add providers, not panels.
   opens Add a device with the code looked up, once the phone is in the account; a phone signed in
   but not in the account yet joins with it instead, as another device's "Scan with the new phone"
   code asks. Without the app,
-  or on a self-hosted server, which the APK cannot claim, the link opens the web page as before;
-  where both the installed web app and the app claim it, Android opens the verified app.
+  or on a self-hosted server, which the APK cannot claim, the link opens the web page as before,
+  and a phone signed in to another server than starbridge.run hands a starbridge.run link to the
+  browser, since its own server would know no such code (#722); where both the installed web app and the app claim it, Android opens the verified app.
   A link from another server that this one doesn't know names that server, "This code is from
   starbridge.run, and this phone is signed in to …", instead of "No pairing with this code"
   (#671). Only a failed lookup says it, since a server can answer under several names.
@@ -611,7 +616,11 @@ Codex prompts are not supported.
   --waiting` posts the question quietly and lets its `waiting` item push, so the first
   notification already says waiting.
 - **Settling** (#62, #405). `settle` closes a question as `elsewhere` or `withdrawn`. It never
-  withdraws one whose answer reached the agent, since devices would hold both.
+  withdraws one whose answer reached the agent, since devices would hold both. `settle --session`
+  and `settle --all` close every open question of a session or of the machine (#584), so a
+  flood has a way out; `--all` asks first, with the count. Each is one settled notice, posted at
+  the pace the machine's rate limit allows, waiting out each 429: the server needs no bulk
+  route, and the notices still reach devices one per question.
 - **Snoozing** (#571). The owner can put a question off: "not now, show me this again at 18:00".
   A snooze is not an answer, so #122 holds: for the agent it means what no answer means. Its job
   is less clutter, in the inbox and in the owner's head. Agents are never woken by one; when an
@@ -707,11 +716,14 @@ first window, so a provider with a window running out leads.
   thing, the amber fill. A waiting item's title is weight 500 and its time slot a clock ticking
   from when it started waiting; screen readers hear "Waiting for you, 2 minutes" first. No state
   tag anywhere. Under a grouping, the items under one header are joined.
-- **Snoozed** (#571). Snooze sits beside Reply in a question's detail (web) and sheet (Android),
-  never on a notification: 1 hour, This evening (18:00, offered until 17:00), Tomorrow morning
-  (9:00), or Pick a time, today and the 7 days after it, each half hour from 5 minutes on, in the
-  Clock setting. Phones open the times in place under Snooze; the desktop web opens a menu.
-  Android opens straight on a time instead (#692; the web follows in #699). A
+- **Snoozed** (#571, #692, #699). Snooze sits beside Reply in a question's detail (web) and sheet
+  (Android), never on a notification. Most snoozes are for later the same day, so it opens on
+  today: 1 hour and This evening (18:00, offered until 17:00), then the days as chips (today and
+  the 7 after it) and a time an hour ahead, up to the half hour (9:00 on another day), from 5
+  minutes on, confirmed by "Snooze until 15:00". Android sets the time on a dial; the web types
+  it, to the minute, in the browser's time field, whose 12 or 24 hours follow the browser's
+  language rather than the Clock setting. Phones open the times in place under Snooze; the
+  desktop web opens them in a popover. A
   snoozed question leaves Needs you, the count and the badge, and its notification closes on
   every device; it waits in a collapsed "Snoozed · n" group after them, soonest back first, its
   time slot "Until 18:00", with no amber and no answer buttons even when its agent waits. Opened,
@@ -806,11 +818,8 @@ first window, so a provider with a window running out leads.
   `already-answered`, which the app counts as its own when an earlier attempt may have landed.
 - **Notifications off** (#342): a line heads the Inbox with "Turn on", which opens the app's
   notification settings, since Android stops showing the permission prompt after two refusals.
-- **Snooze straight on a time** (#692). Most snoozes are for later the same day, so Snooze opens
-  on today: 1 hour and This evening, then the days as chips (today and the 7 after it), and the
-  dial set an hour ahead, up to the half hour (9:00 on another day), confirmed by "Snooze until
-  15:00". Picking a day is no longer a step of its own. The owner chose this from mockups over a
-  typed time and a grid of half hours.
+- **Snooze straight on a time** (#692): the times in "Both clients", "Snoozed", with the dial.
+  The owner chose this from mockups over a typed time and a grid of half hours.
 - **Swipe right to snooze** (#692). A question's card swiped right past 40% of its width snoozes
   it for the time set under "Swipe right on a question": 1 hour (the default), 3 hours, tomorrow
   morning, or Ask for a time, which opens the times over the inbox. A snackbar offers Undo, which
