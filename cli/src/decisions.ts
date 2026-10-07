@@ -220,13 +220,22 @@ function checked(decision: unknown): Decision {
   }
 }
 
+/** The most boxes an item holds, so the most devices a decision is ever re-sealed to. */
+const MAX_BOXES = 64;
+
+/**
+ * What the item weighs once re-sealed to as many devices as it can ever reach: its blobs once,
+ * its largest box once per device. A re-seal sends no blobs, but the server counts the ones it
+ * keeps, so a decision that fits only its first devices could never reach a new one (#720).
+ */
 const itemBytes = (item: SealedItem) =>
-  item.boxes.reduce((n, b) => n + b.box.length, 0) +
+  Math.max(MAX_BOXES, item.boxes.length) * Math.max(0, ...item.boxes.map((b) => b.box.length)) +
   (item.blobs ?? []).reduce((n, b) => n + b.length, 0);
 
 /**
  * Signs and seals the decision with its pictures, scaled down until its boxes and blobs fit
- * ITEM_BYTES. Each picture is one blob, base64url, whatever the number of devices (#685).
+ * ITEM_BYTES for every device it may be re-sealed to. Each picture is one blob, base64url,
+ * whatever the number of devices (#685).
  */
 function sealWithPictures(
   base: Decision,
@@ -251,7 +260,7 @@ function sealWithPictures(
     share = Math.floor(share * (ITEM_BYTES / size) * 0.95);
   }
   throw new UsageError(
-    `the images do not fit in one decision for ${to.length} devices: attach fewer images`,
+    "the images do not fit in one decision: attach fewer images, or shorten the context",
   );
 }
 
@@ -1028,6 +1037,13 @@ async function reseal(ctx: Ctx, s: Session, known: Directory): Promise<void> {
     } catch (e) {
       if (e instanceof ApiError && ["already-answered", "not-found"].includes(e.code))
         return "closed";
+      // Asked before #720, it may be too large for this many devices: it cannot ever reach them.
+      if (e instanceof ApiError && e.code === "too-large") {
+        ctx.err(
+          `starbridge: ${sealed?.id ?? ""} is too large to send to the new devices; it stays on the others`,
+        );
+        return "closed";
+      }
       if (e instanceof ApiError && e.status === 429) {
         resealPaused.set(ctx.store, ctx.now().getTime() + (e.retryAfter ?? 60) * 1000);
         return "limited";
