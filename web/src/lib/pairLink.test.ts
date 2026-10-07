@@ -1,6 +1,6 @@
 // A pairing link's code outlives the GitHub sign-in in the tab's storage, and only there.
 import { expect, test } from "bun:test";
-import { hasPairCode, holdPairCode, takePairCode } from "./pairLink";
+import { hasPairCode, holdPairCode, otherServer, takePairCode } from "./pairLink";
 
 function tab(address: string) {
   const url = new URL(address, "https://starbridge.test");
@@ -44,4 +44,10 @@ test("other pages' fragments are left alone", () => {
   holdPairCode(store, 0);
   expect(url.hash).toBe("#top");
   expect(hasPairCode(store, 0)).toBe(false);
+});
+
+test("a link from another server names it; a bare code or this server's link does not (#671)", () => {
+  expect(otherServer("https://starbridge.run/pair#ABCD", "sb.example.com")).toBe("starbridge.run");
+  expect(otherServer("https://sb.example.com/pair#ABCD", "sb.example.com")).toBeUndefined();
+  expect(otherServer("ABCD-EFGH", "sb.example.com")).toBeUndefined();
 });

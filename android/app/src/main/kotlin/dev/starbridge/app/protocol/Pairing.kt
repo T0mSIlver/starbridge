@@ -1,5 +1,6 @@
 package dev.starbridge.app.protocol
 
+import java.net.URI
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -51,6 +52,20 @@ fun pairingLink(server: String, code: PairingCode): String = "${server.trimEnd('
 
 /** A code typed by hand, or read from a scanned pairing link: the part after `#` if any. */
 fun codeFromLink(text: String): PairingCode = parsePairingCode(text.substringAfter('#'))
+
+/**
+ * The host of a pairing link made on a server other than [server], or null for a bare code or a
+ * link to [server] (#671). Asked only once the lookup failed: a server can answer on several
+ * names, and a link under another of them still pairs.
+ */
+fun otherServer(text: String, server: String): String? {
+    val link = runCatching { URI(text.trim()) }.getOrNull() ?: return null
+    if (link.scheme != "https" && link.scheme != "http" || link.host == null) return null
+    val own = runCatching { URI(server.trim()) }.getOrNull()
+    return if (own != null && hostPort(own) == hostPort(link)) null else link.rawAuthority
+}
+
+private fun hostPort(uri: URI) = uri.host?.lowercase() to if (uri.port != -1) uri.port else if (uri.scheme == "https") 443 else 80
 
 @Serializable
 data class PairingMessage(val body: String, val mac: String)

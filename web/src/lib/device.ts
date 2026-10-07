@@ -66,6 +66,7 @@ import {
 } from "@starbridge/protocol";
 import { ApiError, api, backoff, type Stored } from "./api";
 import { generateDeviceKeys, sealOpener, signer } from "./crypto/keys";
+import { otherServer } from "./pairLink";
 import * as store from "./store";
 import type {
   Device,
@@ -878,7 +879,17 @@ export function devices(ctx: Ctx): Device[] {
 export async function readPairing(codeText: string): Promise<PairingRequest> {
   await ready;
   const code = codeFromLink(codeText);
-  const { request } = await api.pairing(code.rendezvous);
+  let request: unknown;
+  try {
+    ({ request } = await api.pairing(code.rendezvous));
+  } catch (e) {
+    const other = e instanceof ApiError && e.status === 404 ? otherServer(codeText) : undefined;
+    if (other)
+      throw new Error(
+        `This code is from ${other}, and this browser is signed in to ${location.host}.`,
+      );
+    throw e;
+  }
   return readRequest(code, request);
 }
 

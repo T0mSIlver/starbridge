@@ -386,6 +386,9 @@ provider plugins add providers, not panels.
   code asks. Without the app,
   or on a self-hosted server, which the APK cannot claim, the link opens the web page as before;
   where both the installed web app and the app claim it, Android opens the verified app.
+  A link from another server that this one doesn't know names that server, "This code is from
+  starbridge.run, and this phone is signed in to …", instead of "No pairing with this code"
+  (#671). Only a failed lookup says it, since a server can answer under several names.
 - **Setup** (`cli/src/setup/`; #68, #239, #245) installs CodexBar's latest release, taking the
   static musl build where the glibc one would not start. Only the repository is pinned, since
   CodexBar ships almost daily (#530): the tarball must match the `.sha256` of the same release,
