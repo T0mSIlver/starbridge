@@ -3,6 +3,11 @@
   "version": "0.1.0-rc.1",
   "description": "Post decisions to your Starbridge devices and upload quota windows from CodexBar",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/T0mSIlver/starbridge.git",
+    "directory": "cli"
+  },
   "type": "module",
   "bin": {
     "starbridge": "dist/starbridge.js"

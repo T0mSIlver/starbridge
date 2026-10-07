@@ -851,8 +851,11 @@ Tokens, type and components: `DESIGN.md`.
   with the release key, six CLI binaries (Linux and macOS, and Windows `.exe`, each x64 and
   arm64, cross-compiled by Bun on Linux), `SHA256SUMS` signed with minisign in CI (public key in
   `cli/minisign.pub`), `install.sh`, and notes from merged PRs. `-rc` tags are prereleases and go
-  to npm under `next`. Non-rc tags commit the formula to `T0mSIlver/homebrew-starbridge`. The npm
-  step skips without `NPM_TOKEN` (#480). versionCode is `2000000 + MAJOR*1000000 + MINOR*10000 +
+  to npm under `next`. Non-rc tags commit the formula to `T0mSIlver/homebrew-starbridge`. npm
+  takes the package through Trusted Publishing: the `npm` job trades its GitHub OIDC token for a
+  publish token, so no npm token exists to leak or expire, and npm adds provenance once the repo is
+  public. npm accepts OIDC only from GitHub's runners, so that job ignores `vars.RUNNER` (#146).
+  versionCode is `2000000 + MAJOR*1000000 + MINOR*10000 +
   PATCH*100` plus the rc number or 99, so release candidates sort first; the 2000000 keeps 0.1.0
   above 1.0.0-rc.1 (1000001), which Play's closed test already had (#551). Play App Signing keeps the release
   key, so Play and GitHub builds share one signature (#148).
