@@ -59,6 +59,8 @@ export const THRESHOLDS = {
   /** One account's posts in the last hour, and bytes stored (its cap is 256 MB). Not in watch.md. */
   accountPostsPerHour: 3000,
   accountBytes: 200 * 1024 ** 2,
+  /** Longest gap between readings that a "for N minutes" threshold still counts as watched. */
+  maxGapMinutes: 7,
   /** Minutes before an alert that still holds wakes the watcher again. */
   remindMinutes: 60,
 };

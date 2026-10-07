@@ -53,6 +53,8 @@ test("sustained thresholds need every reading over the whole span", () => {
   // Readings every 3 minutes: the one taken before the span began covers its start.
   const every3 = [12, 9, 6, 3, 0].map((m) => at(m, 3200));
   expect(keys(high, ok, state(every3))).toEqual(["memory"]);
+  // Readings an hour apart leave the span unwatched.
+  expect(keys(high, ok, state([at(70, 3200), at(0, 3200)]))).toEqual([]);
   // One dip, or too short a span, is not 10 minutes over.
   expect(keys(high, ok, state([at(10, 2900), at(5, 3200), at(0, 3200)]))).toEqual([]);
   expect(keys(high, ok, state([at(5, 3200), at(0, 3200)]))).toEqual([]);
@@ -78,17 +80,19 @@ test("refusals and addresses come with the command that answers them", () => {
       addressesLastMinute: 3,
       busiestLastMinute: 2950,
       busy: { "2001:db8::/64": 2950, "2001:db8:1::/64": 2000 },
-      limited: {},
+      // Named once, though two rules name it.
+      limited: { "2001:db8::/64": 25 },
     },
   });
   const alerts = judge(r, ok, fresh(), NOW);
   // An address under Caddy's cap is not named, and no key holds an address: keys are saved.
-  expect(alerts.map((a) => [a.key, a.response])).toEqual([
-    ["429", "deploy/switch.sh suspend aBad"],
-    ["account-full", "deploy/switch.sh suspend aBad"],
-    ["addresses:2", "deploy/switch.sh block 198.51.100.7"],
-    ["addresses:2", "deploy/switch.sh block 2001:db8::/64"],
+  expect(alerts.map((a) => a.response)).toEqual([
+    "deploy/switch.sh suspend aBad",
+    "deploy/switch.sh suspend aBad",
+    "deploy/switch.sh block 198.51.100.7",
+    "deploy/switch.sh block 2001:db8::/64",
   ]);
+  for (const a of alerts.slice(2)) expect(a.key).toMatch(/^address:[0-9a-f]{2}$/);
 });
 
 test("a failed page, a restart and fast database growth alert", () => {

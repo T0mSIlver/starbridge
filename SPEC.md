@@ -966,8 +966,9 @@ Tokens, type and components: `DESIGN.md`.
   address. Per-address request and 429 counts stay in its memory, like the rate limits, and only
   the host reads them, through the container's own loopback (port 8081, `GET /watch`). The launch watcher (`deploy/watch/`) reads
   those, `ss`, `docker` and `bun server.js top` over SSH every few minutes and names an address
-  only when it holds over 200 connections, makes over 2000 `/v1` requests a minute or is being
-  refused with 429 (the owner's rule): an HTTP/2 client can flood over few connections, and every
+  only when it holds over 200 connections or is being rate-limited (the owner's rule): at
+  Caddy's cap of 3000 `/v1` requests a minute (2900 seen by the server, since Caddy logs no
+  refusal), or refused with 429 by the server: an HTTP/2 client can flood over few connections, and every
   other visitor's address would end up in the on-call session's transcript.
 - **Privacy and terms** (`/privacy`, `/terms`). Each claim follows the code: stored columns in
   `server/src/db.ts`, retention in `server/src/limits.ts`, logs and backups in `deploy/`. A change

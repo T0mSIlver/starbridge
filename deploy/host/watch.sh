@@ -60,6 +60,7 @@ db_bytes=$(stat -c %s "$vol/starbridge.db" "$vol/starbridge.db-wal" 2>/dev/null 
 # Caddy's own; docker-proxy's onward connections to the container go to its address instead.
 to_server=$(ss -Htn state established dst 127.0.0.1:8080 | wc -l)
 # Per address, an IPv6 client counted as its /64, as the rate limits count it.
+# Addresses already blocked (host/switch.sh) are not named again.
 conn_json=$(ss -Htn state established '( sport = :443 )' | python3 -c '
 import collections, ipaddress, json, sys
 n = collections.Counter()
@@ -69,9 +70,16 @@ for line in sys.stdin:
     a = getattr(a, "ipv4_mapped", None) or a
     n[str(a) if a.version == 4 else str(ipaddress.ip_network(f"{a}/64", strict=False))] += 1
 c = int(sys.argv[1])
+try:
+    blocked = [ipaddress.ip_network(l.strip()) for l in open(sys.argv[2]) if l.strip()]
+except OSError:
+    blocked = []
+def free(k):
+    net = ipaddress.ip_network(k)
+    return not any(net.version == b.version and net.subnet_of(b) for b in blocked)
 print(json.dumps({"total": sum(n.values()), "addresses": len(n), "busiest": max(n.values(), default=0),
-                  "named": {k: v for k, v in n.most_common(20) if v > c}}))
-' "$conns")
+                  "named": {k: v for k, v in n.most_common(40) if v > c and free(k)}}))
+' "$conns" /etc/starbridge/caddy/denylist)
 addresses=$($compose exec -T server bun -e "
   const r = await fetch('http://127.0.0.1:8081/watch?over=$over', { signal: AbortSignal.timeout(5000) });
   if (!r.ok) process.exit(1);

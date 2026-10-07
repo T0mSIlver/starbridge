@@ -95,6 +95,14 @@ const MB = 1024 ** 2;
 const GB = 1024 ** 3;
 const SWITCH = "deploy/switch.sh";
 
+/**
+ * The saved key of an address's alert: one byte of its hash, so a new address almost always
+ * wakes the watcher again while the state file on disk tells nothing about who it was.
+ */
+function bucket(address: string): string {
+  return new Bun.CryptoHasher("sha256").update(address).digest("hex").slice(0, 2);
+}
+
 /** Sums the refusal counts whose key ("429 rate-limited POST /v1/items") matches. */
 function refused(r: Reading, test: (status: number, error: string, route: string) => boolean) {
   let n = 0;
@@ -112,7 +120,11 @@ function refused(r: Reading, test: (status: number, error: string, route: string
 function sustained(history: Sample[], now: number, minutes: number, over: (s: Sample) => boolean) {
   const start = now - minutes * 60_000;
   const first = history.findLastIndex((s) => s.at <= start);
-  return first >= 0 && history.slice(first).every(over);
+  if (first < 0) return false;
+  const span = history.slice(first);
+  // Missed runs leave a hole nobody watched: the readings must follow each other closely.
+  const gap = THRESHOLDS.maxGapMinutes * 60_000;
+  return span.every((s, i) => over(s) && (span[i + 1]?.at ?? now) - s.at <= gap);
 }
 
 export function judge(
@@ -236,9 +248,8 @@ export function judge(
   if (c.toServer > t.toServer)
     add("long-polls", `${c.toServer} connections from Caddy to the server (over ${t.toServer})`);
   // Tom's rule: an address is named only while it holds over 200 connections or is being
-  // rate-limited, by Caddy (at its cap) or by the server (429s). The alerts' keys hold the
-  // number of named addresses, never one, since the state file is on disk; a new address
-  // changes the number and wakes the watcher again.
+  // rate-limited, by Caddy (at its cap) or by the server (429s). Caddy logs no refusal, so being
+  // at its cap is the sign it refuses. Blocked addresses are left out by watch.sh.
   const named: [string, string][] = [];
   for (const [a, n] of Object.entries(c.named))
     if (n > t.addressConnections)
@@ -249,8 +260,12 @@ export function judge(
   for (const [a, n] of Object.entries(r.addresses?.limited ?? {}))
     if (n >= t.addressLimited)
       named.push([a, `${a} was refused ${n} times with 429 by the server in the last 2 minutes`]);
-  const distinct = new Set(named.map(([a]) => a)).size;
-  for (const [a, what] of named) add(`addresses:${distinct}`, what, `${SWITCH} block ${a}`);
+  const seen = new Set<string>();
+  for (const [a, what] of named) {
+    if (seen.has(a)) continue;
+    seen.add(a);
+    add(`address:${bucket(a)}`, what, `${SWITCH} block ${a}`);
+  }
 
   const top = r.top;
   if (top && top.signUpsLastHour > t.signUpsPerHour)
