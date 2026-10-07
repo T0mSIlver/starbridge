@@ -53,6 +53,7 @@ import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -260,7 +261,8 @@ fun InboxScreen(
     // A swipe right snoozes for the time set in Settings, with Undo, or opens the times over
     // the inbox (#692).
     var picking by rememberSaveable { mutableStateOf<String?>(null) }
-    var swiped by remember { mutableStateOf<Pair<String, Instant>?>(null) }
+    // Swiped snoozes still on their way to the server, each with the time it asked for.
+    val swiped = remember { mutableStateListOf<Pair<String, Instant>>() }
     val scope = rememberCoroutineScope()
     val h24 = LocalClock24.current
     val swipe by rememberUpdatedState(view.swipe)
@@ -270,18 +272,19 @@ fun InboxScreen(
             if (until == null) picking = id
             else {
                 actions.snooze(id, until)
-                swiped = id to until
+                swiped += id to until
             }
         }
     }
     // Undo once the snooze took: one that failed says why instead.
-    val took = swiped?.let { (id, until) -> decisions.any { it.id == id && it.snoozedUntil == until } } == true
+    val took = swiped.filter { (id, until) -> decisions.any { it.id == id && it.snoozedUntil == until } }
     LaunchedEffect(took) {
-        val (id, until) = swiped?.takeIf { took } ?: return@LaunchedEffect
-        swiped = null
-        scope.launch {
-            val undo = snackbar?.showSnackbar("Snoozed until ${snoozeTime(until, Instant.now(), h24)}", actionLabel = "Undo", duration = SnackbarDuration.Short)
-            if (undo == SnackbarResult.ActionPerformed) actions.snooze(id, Instant.now())
+        took.forEach { (id, until) ->
+            swiped -= id to until
+            scope.launch {
+                val undo = snackbar?.showSnackbar("Snoozed until ${snoozeTime(until, Instant.now(), h24)}", actionLabel = "Undo", duration = SnackbarDuration.Short)
+                if (undo == SnackbarResult.ActionPerformed) actions.snooze(id, Instant.now())
+            }
         }
     }
     val shownRuns = Run.shown(runs, now)
