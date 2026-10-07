@@ -950,6 +950,11 @@ Tokens, type and components: `DESIGN.md`.
   memory, the VPS's first limit (#587). Caddy compresses every
   response and the web app none: Next's gzip ran on its one thread and filled it near 18 landing
   page visitors a second (#593). Nightly SQLite backups, kept 7 days (#586).
+- **Per-address pages and sign-ups** (#787). Caddy takes 600 page requests a minute per address
+  outside `/v1` and `/_next/static`: each is Next rendering, 10 to 17 ms of CPU, and a visit with
+  its link prefetches makes a few dozen. The server makes at most 30 new accounts an hour per
+  address: each account may store 256 MB, so many GitHub accounts behind one script could fill
+  the server's 2 GB, while an office or a carrier's NAT signs up a handful an hour.
 - **Per-address reads** (#582). Caddy counts every `/v1` request per address, 3000 a minute
   (IPv6 per /64): most reads count against no account, so this keeps a looping client or script
   to about 2% of a core. A visible page with a prompt waiting and a run live makes about 200 a

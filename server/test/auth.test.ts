@@ -3,7 +3,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setSignUps } from "../src/signups";
-import { makeServer, signIn, testConfig } from "../test-support/app";
+import { DEFAULT_LIMITS, makeServer, signIn, testConfig } from "../test-support/app";
 
 // A stand-in for GitHub's OAuth endpoints and user API.
 let github: ReturnType<typeof Bun.serve>;
@@ -189,6 +189,17 @@ test("paused sign-ups refuse new GitHub accounts and let existing ones in (#784)
   expect(app.json.error).toBe("signups-paused");
   setSignUps(testConfig({ dbPath }), true);
   expect((await githubSignIn(s, 7)).headers.get("location")).toBe("/");
+});
+
+test("new accounts are capped per address; existing ones still sign in (#787)", async () => {
+  const s = await makeServer({
+    ...githubConfig(),
+    limits: { ...DEFAULT_LIMITS, signUps: [2, 3_600_000] },
+  });
+  for (const user of [101, 102])
+    expect((await githubSignIn(s, user)).headers.get("location")).toBe("/");
+  expect((await githubSignIn(s, 103)).headers.get("location")).toBe("/?signin=limited");
+  expect((await githubSignIn(s, 101)).headers.get("location")).toBe("/");
 });
 
 test("app sign-in needs a challenge", async () => {
