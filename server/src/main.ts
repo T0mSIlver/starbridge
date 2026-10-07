@@ -1,4 +1,5 @@
 import { createApp } from "./app";
+import { setSuspended } from "./auth";
 import { configFromEnv } from "./config";
 import { openDb, SCHEMA_VERSION } from "./db";
 import { formatReport, report } from "./usage";
@@ -19,6 +20,18 @@ if (process.argv[2] === "usage") {
   if (!Number.isInteger(days) || days < 1)
     throw new Error("usage [days]: days is a positive integer");
   console.log(formatReport(report(openDb(config.dbPath), days)));
+  process.exit(0);
+}
+// `suspend ACCOUNT` / `unsuspend ACCOUNT`: the account's machines' writes are refused while its
+// devices work as before (#785). deploy/host/switch.sh runs it and logs each change.
+if (process.argv[2] === "suspend" || process.argv[2] === "unsuspend") {
+  const account = process.argv[3];
+  if (!account) throw new Error(`${process.argv[2]} ACCOUNT`);
+  if (!setSuspended(openDb(config.dbPath), account, process.argv[2] === "suspend")) {
+    console.error(`no account ${account}`);
+    process.exit(1);
+  }
+  console.log(`${account} ${process.argv[2] === "suspend" ? "suspended" : "no longer suspended"}`);
   process.exit(0);
 }
 const { app, deps } = await createApp(config);

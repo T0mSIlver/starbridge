@@ -96,6 +96,25 @@ export function identify(c: Context<Env>): Caller | undefined {
   };
 }
 
+export const ACCOUNT_SUSPENDED =
+  "this account's machines are suspended for abuse of starbridge.run; its phones and browsers still work. Write to abuse@starbridge.run";
+
+function suspended(c: Context<Env>, account: string): boolean {
+  const row = c.var.db.query("SELECT suspended_at FROM accounts WHERE id = ?").get(account) as {
+    suspended_at: string | null;
+  } | null;
+  return !!row?.suspended_at;
+}
+
+/** Suspends an account's machines, or lifts it; false when no such account. */
+export function setSuspended(db: Database, account: string, on: boolean): boolean {
+  return (
+    db
+      .query("UPDATE accounts SET suspended_at = ? WHERE id = ?")
+      .run(on ? new Date().toISOString() : null, account).changes === 1
+  );
+}
+
 /** The caller's session belonged to a device the directory has since revoked. */
 function wasRevoked(c: Context<Env>): boolean {
   const token = bearer(c) ?? getCookie(c, SESSION_COOKIE);
@@ -124,6 +143,15 @@ export function requireCaller(...needs: Need[]): MiddlewareHandler<Env> {
     };
     const ok = needs.some((n) => admits[n]);
     if (!ok) fail(403, "forbidden", `needs ${needs.join(" or ")}`);
+    // A suspended account's machines read and wait as before, so their sessions see the answers
+    // already given; they write nothing. Its devices are untouched, so the owner can still
+    // answer, settle and revoke (#785).
+    if (
+      caller.role === "machine" &&
+      !["GET", "HEAD"].includes(c.req.method) &&
+      suspended(c, caller.account)
+    )
+      fail(403, "account-suspended", ACCOUNT_SUSPENDED);
     c.set("caller", caller);
     c.var.usage.seen(caller, c.var.client);
     await next();

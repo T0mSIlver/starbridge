@@ -965,6 +965,11 @@ Tokens, type and components: `DESIGN.md`.
   is capped per device for that reason, and a question with 8000 characters of context fits up to
   about 140 devices in its 2 MB. Its pictures are stored once whatever the number (#685), and
   shrink only to leave the boxes room.
+- **Suspending an account** (#785). The owner can suspend one account whose machines flood the
+  server (a looping agent, or abuse) without deleting it: its machines' writes get 403
+  `account-suspended`, which the CLI prints with its reason, while they still read and wait, and
+  its phones and browsers work as before, so its owner can still answer, settle and revoke.
+  `bun server.js suspend|unsuspend ACCOUNT`, stored as `accounts.suspended_at` (migration 2).
 - **Privacy and terms** (`/privacy`, `/terms`). Each claim follows the code: stored columns in
   `server/src/db.ts`, retention in `server/src/limits.ts`, logs and backups in `deploy/`. A change
   to what is stored changes the page, and the Play data-safety form. Contact is
