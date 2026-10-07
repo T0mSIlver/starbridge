@@ -456,15 +456,14 @@ async function settleMany(
   const s = session(ctx);
   const dir = await refreshDirectory(ctx, s);
   let done = 0;
-  for (const id of open) {
+  for (const [i, id] of open.entries()) {
     for (;;) {
       if (ctx.signal?.aborted) {
         ctx.err(`starbridge: stopped after settling ${done} of ${open.length}`);
         return 130;
       }
       try {
-        // Gone from the server already: dropped by its retention, so nothing is left to close.
-        await settleOne(ctx, s, dir, id, outcome, ["not-found"]);
+        if (await settleOne(ctx, s, dir, id, outcome, true)) done++;
         break;
       } catch (e) {
         if (!(e instanceof ApiError && e.retryAfter)) {
@@ -474,16 +473,15 @@ async function settleMany(
         await ctx.sleep(e.retryAfter * 1000);
       }
     }
-    done++;
-    if (done % 100 === 0 && done < open.length) ctx.out(`Settled ${done} of ${open.length}…`);
+    if ((i + 1) % 100 === 0 && i + 1 < open.length) ctx.out(`Settled ${done} of ${open.length}…`);
   }
   ctx.out(`Settled ${done} decision${done === 1 ? "" : "s"}.`);
   return 0;
 }
 
 /**
- * Closes decision `id` here, then tells the devices of `dir`. Errors in `closed` (and an answer or a
- * settle the server already holds) mean the decision is closed there too.
+ * Closes decision `id` here, then tells the devices of `dir`; `bulk` for `settleMany`. False
+ * when an answer closed it instead.
  */
 async function settleOne(
   ctx: Ctx,
@@ -491,19 +489,20 @@ async function settleOne(
   dir: Directory,
   id: string,
   outcomeOpt: "elsewhere" | "withdrawn" | undefined,
-  closed: string[] = [],
-): Promise<void> {
+  bulk = false,
+): Promise<boolean> {
   const asked = ctx.store.state().asked[id];
   // Closed by a revoked device's answer the server holds: a notice would contradict it. A
   // decision `settle` closed earlier is posted again, in case that post failed.
-  if (!asked || asked.revoked) return;
+  if (!asked || asked.revoked) return false;
   const outcome = outcomeOpt ?? (asked.answerIn ? "elsewhere" : "withdrawn");
   // Closed here first: from now on no answer to it is accepted or delivered, even if the post fails.
   // An answer that already reached the agent closed it, and a withdrawal would contradict it;
   // checked in the same update, so a delivery in another process cannot slip in between.
+  // A bulk run, which lasts hours, also leaves alone one the owner answered since it started.
   let delivered = false;
   ctx.store.updateState((st) => {
-    delivered = !!st.answers[id]?.seen;
+    delivered = bulk ? !!st.answers[id] : !!st.answers[id]?.seen;
     const a = st.asked[id];
     if (a && !delivered) {
       a.settled = true;
@@ -511,7 +510,7 @@ async function settleOne(
       forget(a);
     }
   });
-  if (delivered) return;
+  if (delivered) return false;
   const to = devices(dir);
   const body = {
     v: 1 as const,
@@ -527,15 +526,27 @@ async function settleOne(
       seal("settled", body, { id: s.machine.id, signKey: s.keys.sign.privateKey }, to),
     );
   } catch (e) {
-    // Answered or settled already: either way it is closed, which is what was asked.
-    const done =
-      e instanceof ApiError && ["already-answered", "already-settled", ...closed].includes(e.code);
-    if (!done) throw e;
+    // Answered or settled already: either way it is closed, which is what was asked. A bulk run
+    // also counts one the server dropped already, and leaves an answer it meets to be delivered.
+    const code = e instanceof ApiError ? e.code : undefined;
+    if (bulk && code === "already-answered") {
+      ctx.store.updateState((st) => {
+        const a = st.asked[id];
+        if (a) {
+          delete a.settled;
+          delete a.unposted;
+        }
+      });
+      return false;
+    }
+    const closed = ["already-answered", "already-settled", ...(bulk ? ["not-found"] : [])];
+    if (!code || !closed.includes(code)) throw e;
   }
   ctx.store.updateState((st) => {
     const a = st.asked[id];
     if (a) delete a.unposted;
   });
+  return true;
 }
 
 /** What `checkAnswer` reads of a decision this machine asked. */
