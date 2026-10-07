@@ -107,7 +107,9 @@ test("a 429 holds every call until its Retry-After, then the call is retried (#6
   const read = api.challenge();
   await write;
   expect(await read).toBe("n");
-  expect(calls).toEqual(["POST", "POST", "GET"]);
+  // The retry and the new call wake together when the hold ends, in either order (#702).
+  expect(calls[0]).toBe("POST");
+  expect(calls.slice(1).sort()).toEqual(["GET", "POST"]);
   expect(during).toBe(0);
   expect(backingOff()).toBe(false);
 });
