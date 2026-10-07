@@ -115,6 +115,20 @@ test("a machine pairs and gets a working token; the device and the machine check
   });
 });
 
+test("30 pairings behind one address each poll their result for over a minute (#716)", async () => {
+  const s = await makeServer();
+  const waiting = [];
+  for (let i = 0; i < 30; i++) waiting.push(await request(s));
+  // Three polls each: a pairing approved after 50 s has polled at 0, 25 and 50 s.
+  for (let round = 0; round < 3; round++)
+    for (const p of waiting) {
+      const r = await s.call("GET", `/v1/pairings/${p.code.rendezvous}/result`, {
+        headers: { "x-claim": p.claim },
+      });
+      expect(r.status).toBe(204);
+    }
+});
+
 test("the result refuses a wrong claim", async () => {
   const s = await makeServer();
   const acct = await setupAccount(s);

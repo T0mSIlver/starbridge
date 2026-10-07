@@ -492,7 +492,7 @@ server whose disk is full answers writes 503 `storage-full` with `Retry-After`; 
 | `GET /auth/challenge` | 20 a minute per account |
 | `POST /pairings` | 30 a minute per address; 50 unapproved pairings per address, an IPv6 client counting as its /48: 429 `too-many-pairings` |
 | `GET /pairings/:rendezvous` | 30 a minute per account |
-| `GET /pairings/:rendezvous/result` | 60 a minute per address |
+| `GET /pairings/:rendezvous/result` | 150 a minute per address: 50 waiting pairings polling every 25 s |
 | Pairing messages | 4 KB each: 400 `bad-schema` |
 | `GET /pairings/:rendezvous/result` and `GET /pairings/:rendezvous?wait=` waiting | 4 per pairing: 429 `too-many-waits` |
 | `POST /joins` | 10 a minute per account; request text 4 KB: 400 `bad-schema` |
