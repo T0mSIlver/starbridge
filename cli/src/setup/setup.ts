@@ -15,7 +15,7 @@ import { type AskInput, ask, EXIT_INTERRUPTED, settle } from "../decisions";
 import { DEFAULT_SERVER, pair } from "../pair";
 import { permissionsEnabled } from "../permissions";
 import { pushOnce } from "../quota";
-import { offerPiChain, rememberMachineKind } from "../settings";
+import { rememberMachineKind } from "../settings";
 import { VERSION } from "../version";
 import {
   AGENT_IDS,
@@ -183,8 +183,6 @@ export async function setup(sys: Sys, opts: SetupOpts): Promise<number> {
       opts,
       switching || JSON.stringify(ctx.store.agentConfig()) !== configBefore,
     );
-  // Off unless asked: the Claude app already answers prompts for Remote Control sessions.
-  if (permissionsEnabled(ctx)) await offerPiChain(ctx, defaults);
   const last = await pathStep(sys);
 
   const upload = machine && quota && quota.providers.length > 0 ? quota : undefined;

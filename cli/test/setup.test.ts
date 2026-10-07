@@ -278,6 +278,7 @@ test("uninstall --agent leaves that agent out of setup, refresh and status until
   const skill = join(m.home, ".codex/skills/starbridge/SKILL.md");
   expect(existsSync(skill)).toBe(true);
 
+  expect(await run(["uninstall", "--agent", "constructor", "--yes"], m.ctx)).not.toBe(0);
   m.ctx.lines.length = 0;
   expect(await run(["uninstall", "--agent", "codex", "--yes"], m.ctx)).toBe(0);
   expect(existsSync(skill)).toBe(false);

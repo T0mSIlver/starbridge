@@ -5,8 +5,9 @@
  */
 import type { Ctx } from "../context";
 import { DEFAULT_SERVER } from "../pair";
+import { permissionsEnabled } from "../permissions";
 import { piPermissionConfig, removePiEntries } from "../pi";
-import { offerPiAllow } from "../settings";
+import { offerPiAllow, offerPiChain } from "../settings";
 import {
   codexRule,
   codexRulePath,
@@ -56,7 +57,7 @@ export type AgentId = keyof typeof AGENTS;
 export const AGENT_IDS = Object.keys(AGENTS) as AgentId[];
 
 export function isAgentId(name: string): name is AgentId {
-  return name in AGENTS;
+  return Object.hasOwn(AGENTS, name);
 }
 
 const NAME_WIDTH = Math.max(...Object.values(AGENTS).map((n) => n.length));
@@ -198,6 +199,8 @@ async function installPi(sys: Sys): Promise<Outcome> {
   const notes: string[] = [];
   const quiet: Ctx = { ...sys.ctx, out: (line) => notes.push(line.replace(/^Pi: /, "")) };
   await offerPiAllow(quiet, defaults, true);
+  // With permission prompts on, pi-permission-system asks Starbridge first.
+  if (permissionsEnabled(sys.ctx)) await offerPiChain(quiet, defaults);
   return { mark: "✓", text: "package installed", notes };
 }
 
