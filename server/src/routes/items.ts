@@ -238,6 +238,8 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
   let machine = "";
   // A waiting flip on a snoozed decision pushes nothing: the owner said not now (#571).
   let snoozed = false;
+  // The images as stored: those posted, or on a re-seal that sends none, those kept.
+  let blobs = item.blobs;
   const seq = db.transaction(() => {
     recheck(c);
     const now = new Date();
@@ -342,7 +344,6 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
       answered_at: string | null;
       blobs: string | null;
     } | null;
-    let blobs = item.blobs;
     let receivedAt = now.toISOString();
     const resealed = item.reseal === true;
     if (resealed && (!RESEALED.includes(item.kind) || !earlier))
@@ -458,7 +459,9 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
     c.var.push.notify(
       caller.account,
       pushTo,
-      (device) => pushPayload(item, device, config.pushInlineLimit),
+      // With the kept blobs, so a device a re-seal adds fetches the images too.
+      (device) =>
+        pushPayload({ ...item, ...(blobs ? { blobs } : {}) }, device, config.pushInlineLimit),
       item.kind === "quota" || item.kind === "run" ? ["fcm", "unifiedpush"] : undefined,
     );
   }

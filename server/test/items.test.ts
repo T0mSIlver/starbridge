@@ -325,6 +325,10 @@ test("a decision's images are stored once for every device, and a re-seal keeps 
   const image = { type: "image/png" as const, width: 10, height: 10, ...ref };
   const d = { ...decision([phone], { images: [image] }), blobs: [blob] };
   expect((await post(devbox, d)).status).toBe(201);
+  const pushes: { to: string[]; payload: (d: string) => string }[] = [];
+  s.deps.push.notify = (_account: string, to: string[], payload: (d: string) => string) => {
+    pushes.push({ to, payload });
+  };
   const again = { ...decision([phone, laptop], { id: d.id, images: [image] }), reseal: true };
   expect((await post(devbox, again)).status).toBe(201);
   const { size } = s.deps.db.query("SELECT size FROM items WHERE id = ?").get(d.id) as {
@@ -339,8 +343,10 @@ test("a decision's images are stored once for every device, and a re-seal keeps 
       { type: "image/png", width: 10, height: 10, data: toB64(bytes) },
     ]);
   }
-  // A push carries the id, so the device fetches the images with the item.
+  // A push carries the id, so the device fetches the images with the item, re-sealed or not.
   expect(JSON.parse(pushPayload(d, phone.id, 4096)).box).toBeUndefined();
+  const toLaptop = pushes.filter((p) => p.to.includes(laptop.id)).map((p) => p.payload(laptop.id));
+  expect(toLaptop.map((p) => JSON.parse(p).box)).toEqual([undefined]);
   const q = { ...quota("q-blobs"), blobs: [blob] };
   expect((await post(devbox, q)).json.error).toBe("bad-schema");
 });
