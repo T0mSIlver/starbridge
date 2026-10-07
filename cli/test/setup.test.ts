@@ -350,11 +350,10 @@ test("status says at once that the owner removed this machine, and how to pair i
 test("uninstall removes the service and plugins, asks the devices to revoke, keeps the keys", async () => {
   const m = await machine();
   await startAgent(m.ctx);
-  // pi-permission-system with the owner's own policy, the link `config permissions on` adds,
-  // and a bash pattern setup added before #488.
+  // pi-permission-system with the owner's own policy and the link `config permissions on` adds.
   const pps = join(m.home, ".pi/agent/extensions/pi-permission-system/config.json");
   mkdirSync(dirname(pps), { recursive: true });
-  const bash = { "*": "ask", "starbridge ask *": "allow" };
+  const bash = { "*": "ask" };
   writeFileSync(
     pps,
     JSON.stringify({ permission: { bash }, authorizerChain: ["judge", "starbridge"] }),
