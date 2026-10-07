@@ -651,9 +651,10 @@ test("on loopback TCP (Windows), only a call that proves the port file's token g
 
 test("an agent that hangs up or exits without stopping removes its port file (#570)", async () => {
   const main = join(import.meta.dir, "../src/main.ts");
-  // An exit that skips the agent's stop, as a fatal error's does.
+  // An exit that skips the agent's stop, as a fatal error's does, once the agent wrote its file.
   const exit = `process.argv = [process.argv[0], "starbridge", "agent", "--no-quota"];
-setTimeout(() => process.exit(1), 1000);
+const { existsSync } = await import("node:fs");
+setInterval(() => existsSync(process.env.STARBRIDGE_AGENT_SOCKET) && process.exit(1), 5);
 await import(${JSON.stringify(main)});`;
   for (const how of ["SIGHUP", "exit"] as const) {
     const dir = mkdtempSync(join(tmpdir(), "starbridge-port-"));
@@ -670,9 +671,13 @@ await import(${JSON.stringify(main)});`;
       stderr: "ignore",
     });
     try {
-      await until(() => existsSync(socket), 10_000);
-      if (how === "SIGHUP") child.kill("SIGHUP");
-      await child.exited;
+      // The exit comes once the file is there; SIGHUP as soon as it is, which the agent must
+      // catch from before it writes the file.
+      if (how === "SIGHUP") {
+        await until(() => existsSync(socket), 10_000);
+        child.kill("SIGHUP");
+      }
+      expect(await child.exited).toBe(how === "SIGHUP" ? 0 : 1);
       expect(existsSync(socket)).toBe(false);
     } finally {
       child.kill("SIGKILL");
