@@ -140,7 +140,6 @@ export class Api {
     signal?: AbortSignal,
     known?: { directory: number; quotaAsked?: string },
   ): Promise<{ items: unknown[]; cursor?: string; directory?: number; quotaAsked?: string }> {
-    // Snoozes too (#571); servers from before them take no `kinds` and send answers only.
     const q = new URLSearchParams({ wait: String(wait), kinds: "answer,permission-answer,snooze" });
     if (after !== undefined) q.set("after", after);
     if (known) q.set("directory", String(known.directory));

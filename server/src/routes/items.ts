@@ -51,8 +51,6 @@ const DEVICE_LISTABLE = [
 ];
 /** Kinds a machine's inbox (`/answers`) holds: what devices sign. */
 const MACHINE_KINDS = ItemKind.options.filter((k) => ITEM_KINDS[k].signer === "device");
-/** What a machine reads when it names no kinds: the kinds there were before snoozes (#571). */
-const MACHINE_DEFAULT: ItemKind[] = ["answer", "permission-answer"];
 
 interface Row {
   seq: number;
@@ -532,7 +530,7 @@ itemRoutes.get("/answers", requireCaller("machine"), async (c) => {
   const me = memberOf(caller);
   const from = after(c.req.query("after"));
   const raw = c.req.query("kinds");
-  const kinds = raw === undefined ? MACHINE_DEFAULT : raw.split(",");
+  const kinds = raw === undefined ? MACHINE_KINDS : raw.split(",");
   if (kinds.some((k) => !(MACHINE_KINDS as string[]).includes(k)))
     fail(400, "bad-request", `kinds is a comma-separated list of ${MACHINE_KINDS.join(", ")}`);
   const fetch = () => list(c.var.db, caller.account, me, kinds, from);

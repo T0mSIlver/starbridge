@@ -131,11 +131,9 @@ test("a snooze reaches every device and the machine, and leaves its decision ope
     { ...z, boxes: z.boxes.filter((b) => b.to === web.id) },
   ]);
   expect((await list(web, "kind=decision&open=1")).map((x) => x.item.id)).toEqual([d.id]);
-  // Machines read it only when they ask for it.
-  expect(await inbox()).toEqual([]);
-  expect((await inbox("&kinds=answer,permission-answer,snooze")).map((x) => x.item.id)).toEqual([
-    z.id,
-  ]);
+  // Machines read it unless they name the kinds they want without it.
+  expect(await inbox("&kinds=answer,permission-answer")).toEqual([]);
+  expect((await inbox()).map((x) => x.item.id)).toEqual([z.id]);
 });
 
 test("every snooze is kept, each returns at its time, and none can be replayed", async () => {

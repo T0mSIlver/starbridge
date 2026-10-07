@@ -413,8 +413,7 @@ with one more than 7 days ahead.
 with `{items, cursor}` when device-signed items addressed to the machine came after `cursor`,
 else holds the request
 until one arrives or `wait` (at most 300) passes and replies `{items: [], cursor}`. `kinds` is a
-comma-separated list of device-signed kinds; left out, it is `answer` and `permission-answer`, so
-a machine from before `snooze` never reads one. The Claude Code
+comma-separated list of device-signed kinds, all of them when left out. The Claude Code
 mod keeps one such request open and re-opens it on every reply; the CLI's `wait` does the same.
 
 Each reply also carries `directory`, the number of entries in the account's directory, and

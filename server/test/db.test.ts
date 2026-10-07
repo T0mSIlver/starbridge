@@ -59,9 +59,11 @@ function schema(db: Database) {
   }));
 }
 
-test("the folded schema is the one migrations 1 to 6 built", () => {
+test("the folded schema is the one migrations 1 to 6 built, without app_codes", () => {
   const old = new Database(":memory:");
   migrate(old, OLD_MIGRATIONS);
+  // Unused since #527, left out of the fold.
+  old.run("DROP TABLE app_codes");
   const db = openDb(":memory:");
   expect(version(db)).toBe(1);
   expect(schema(db).length).toBeGreaterThan(20);
