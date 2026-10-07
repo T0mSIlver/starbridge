@@ -35,7 +35,6 @@ export function configDir(env: Record<string, string | undefined>): string {
 /**
  * The file `plugin/hooks/settle.sh` reads in the config folder before it starts the CLI: written
  * with the state, `open` while a permission prompt is unsettled and unexpired, else empty (#517).
- * Missing, the CLI is older or has not written since: the hook starts it.
  */
 export const PROMPTS_OPEN = "permissions-open";
 
@@ -89,7 +88,7 @@ export interface State {
        */
       revoked?: boolean;
       /** The devices it was sealed to, the only ones whose answer counts. */
-      to?: string[];
+      to: string[];
       /**
        * The decision as signed, to re-seal it to devices that join. Its images are refs: the
        * server keeps their blobs, sealed once for every device (#685).
@@ -312,8 +311,8 @@ export class Store {
       throw new StateFileError(
         p,
         name === "directory.json"
-          ? "is not in this starbridge's format (from before the first release?): remove it, the server's copy is read again"
-          : "is not in this starbridge's format (from before the first release?): move it away, then run `starbridge pair`",
+          ? "is not in this starbridge's format: remove it, the server's copy is read again"
+          : "is not in this starbridge's format: move it away, then run `starbridge pair`",
       );
     const v = (value as { v?: unknown }).v ?? 1;
     if (v !== STATE_VERSION)

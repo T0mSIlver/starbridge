@@ -113,8 +113,7 @@ fun sessionName(s: Source) = when {
 }
 
 /**
- * The agent's app, by the machine's word for it or, from machines that send none, by the
- * session's link. An agent this app does not know gets no "Open in".
+ * The agent's app, by the machine's word for it or, when it sends none, by the session's link. An agent this app does not know gets no "Open in".
  */
 fun agentName(agent: String?, source: Source) = when {
     agent == "codex" -> "Codex"

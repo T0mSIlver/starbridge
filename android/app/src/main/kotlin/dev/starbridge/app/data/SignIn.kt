@@ -20,7 +20,7 @@ object SignIn {
 
     /** What ends a sign-in. */
     sealed interface Redirect {
-        /** The code to trade, and the sign-in's state: its challenge. A server before #527 sends no state. */
+        /** The code to trade, and the sign-in's state: its challenge. */
         data class Code(val code: String, val state: String) : Redirect
 
         /** The owner turned GitHub down, or GitHub failed. */

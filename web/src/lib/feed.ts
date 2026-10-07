@@ -5,7 +5,7 @@ import { shownRuns } from "./runs";
 import { isSnoozed } from "./snooze";
 import type { InboxItem, PromptItem, RunItem, Source } from "./types";
 
-/** What a machine is, for its icon; items from older CLIs have none in `source`. */
+/** What a machine is, for its icon; `source` has none until the machine recorded one. */
 export type MachineKind = "server" | "desktop" | "laptop" | "cloud";
 
 type Base = { id: string; machine: string; kind?: MachineKind; repo: string };

@@ -223,9 +223,10 @@ test("refresh brings what setup wrote to this release and leaves the rest alone"
   const want = readFileSync(unit, "utf8");
   // As an earlier release wrote them, with its markers; the skill, unmarked, is a copy another
   // skill manager put there.
-  writeFileSync(rule, "# Written by starbridge setup: questions need the network.\nold\n");
-  writeFileSync(entry, "// Written by starbridge setup: answers.\nold\n");
-  writeFileSync(unit, "# Written by `starbridge setup`; `starbridge uninstall` removes it.\nold\n");
+  const earlier = "Written by starbridge 0.0.1; `starbridge uninstall` removes it.";
+  writeFileSync(rule, `# ${earlier}\nold\n`);
+  writeFileSync(entry, `// ${earlier}\nold\n`);
+  writeFileSync(unit, `# ${earlier}\nold\n`);
   writeFileSync(skill, "---\nname: starbridge\n---\nmine\n");
   const done = await refresh(m.sys);
   expect(readFileSync(rule, "utf8")).toBe(CODEX_RULE);

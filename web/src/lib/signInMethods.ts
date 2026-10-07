@@ -7,7 +7,7 @@ let asked: Promise<string[] | undefined> | undefined;
 
 /**
  * Whether this server offers GitHub sign-in (#670). True until the server says otherwise, so the
- * landing page's HTML keeps its buttons; a server too old to list its methods keeps them too.
+ * landing page's HTML keeps its buttons; a server that cannot be asked keeps them too.
  */
 export function useGitHubSignIn(): boolean {
   const [github, setGitHub] = useState(true);

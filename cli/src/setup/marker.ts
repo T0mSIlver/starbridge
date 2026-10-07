@@ -1,8 +1,7 @@
 /**
  * The line that marks a file setup writes into another tool (#474): its writer and version, in
  * that file's comment syntax. A file that has it is Starbridge's: setup replaces it when it
- * differs from this release's, and uninstall removes it. Files from before the first release said
- * "Written by starbridge setup" or "Written by `starbridge setup`", which the same test recognises.
+ * differs from this release's, and uninstall removes it.
  */
 import { VERSION } from "../version";
 
@@ -14,7 +13,7 @@ export function marker(open: string, close?: string): string {
 /** Whether `text` carries a marker in its first lines (after a skill's `---` or an XML header). */
 export function ours(text: string | undefined): boolean {
   if (text === undefined) return false;
-  return text.split("\n", 3).some((line) => /^(#|\/\/|<!--) Written by `?starbridge\b/.test(line));
+  return text.split("\n", 3).some((line) => /^(#|\/\/|<!--) Written by starbridge\b/.test(line));
 }
 
 /** A skill with the marker as a YAML comment, first in its front matter. */
