@@ -135,13 +135,22 @@ class FirstDeviceTest {
         val before = disk.saved()!!
         val store = open()
         until { store.phase.value == Phase.Ready }
-        store.signInWithOwnerToken(server, "token")
-        until { !store.busy.value && store.notice.value != null }
+        // The session ended, as before any sign-in the owner makes from the sign-in screen.
+        disk.save(disk.secrets().copy(session = null))
+        val signedOut = open()
+        until { signedOut.phase.value == Phase.SignedOut }
+        assertEquals(true, signedOut.keepsKeys.value)
+        signedOut.signInWithOwnerToken(server, "token")
+        until { !signedOut.busy.value && signedOut.notice.value != null }
         // Refused, not wiped: the keys, the pin and the account stay (#808).
         assertEquals(before.me, disk.saved()!!.me)
         assertEquals(before.pin, disk.saved()!!.pin)
         assertEquals(account, disk.saved()!!.account)
         assertNotNull(disk.secrets().signSk)
+        // Sign-in offers the way out: signing out removes the keys.
+        signedOut.signOut()
+        until { !signedOut.keepsKeys.value }
+        assertEquals(null, disk.saved()?.me)
     }
 
     private fun until(pred: () -> Boolean) {

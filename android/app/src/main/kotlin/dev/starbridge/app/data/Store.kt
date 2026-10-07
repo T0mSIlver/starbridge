@@ -1,5 +1,6 @@
 package dev.starbridge.app.data
 
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
 /** What the screens read and do. [ServerStore] implements it against the server. */
@@ -20,6 +21,8 @@ interface Store {
     val comparison: StateFlow<Comparison>
     val push: StateFlow<PushSetting>
     val server: StateFlow<String>
+    /** Signed out with its keys kept: sign-in offers to sign out, which removes them (#808). */
+    val keepsKeys: StateFlow<Boolean> get() = MutableStateFlow(false)
     /** A setup step or a sync is running. */
     val busy: StateFlow<Boolean>
     /**

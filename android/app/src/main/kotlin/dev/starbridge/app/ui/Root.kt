@@ -146,9 +146,10 @@ fun Setup(phase: Phase, notice: StateFlow<String?>, dismiss: () -> Unit, openUrl
     val vm: SetupViewModel = hiltViewModel()
     val busy by vm.busy.collectAsStateWithLifecycle()
     val server by vm.server.collectAsStateWithLifecycle()
+    val keepsKeys by vm.keepsKeys.collectAsStateWithLifecycle()
     val host = Notices(notice, dismiss)
     Scaffold(snackbarHost = { SnackbarHost(host) }) { padding ->
-        SetupScreen(phase, server, busy, vm.actions, openUrl, Modifier.padding(padding))
+        SetupScreen(phase, server, busy, vm.actions, openUrl, Modifier.padding(padding), keepsKeys)
     }
 }
 
