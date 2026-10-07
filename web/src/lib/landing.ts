@@ -4,7 +4,7 @@ import type { Metadata } from "next";
 export const SESSION_COOKIE = "sb_session";
 
 export const DESCRIPTION =
-  "When a coding agent stops for a question or a permission, your phone tells you. Answer with one tap and it gets back to work. Open source, end-to-end encrypted.";
+  "When a coding agent stops for a question, your phone tells you. Answer with one tap and it gets back to work. Your phone also shows permission prompts and what's left on each AI plan. Open source, end-to-end encrypted.";
 
 /**
  * The page's origin as the visitor typed it, for the absolute URLs link previews need. A reverse

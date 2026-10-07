@@ -43,7 +43,9 @@ The landing page, docs, README and store listing sell questions and runs, each b
 to the reader. The hero: "Know the moment your agent is stuck" (#448). Quotas get one line: users
 don't launch agents from Starbridge, and the power users it targets don't check quotas by hand.
 Alerts are opt-in, so copy never says they are on. Permission prompts are secondary and opt-in.
-Copy says "on each machine that runs agents", never "on each machine" alone.
+Copy says "on each machine that runs agents", never "on each machine" alone. The subtitle under
+the hero leads with questions, then names permission prompts and quotas in one sentence: agents
+stop for all three reasons, but questions are the one Starbridge answers first (#801).
 
 ### Platforms
 
