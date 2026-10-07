@@ -31,6 +31,7 @@ if (process.argv[2] === "top") {
   if (!Number.isInteger(n) || n < 1) throw new Error("top [n] [--json]: n is a positive integer");
   const t = top(openDb(config.dbPath), n);
   console.log(args.includes("--json") ? JSON.stringify(t) : formatTop(t));
+  process.exit(0);
 }
 // `signups pause|resume|status`: new GitHub accounts are refused while paused; existing ones
 // sign in as before (#784). deploy/host/switch.sh runs it and logs each change.
