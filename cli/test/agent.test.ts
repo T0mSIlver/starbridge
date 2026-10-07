@@ -468,12 +468,13 @@ test("the agent queues a Codex session's answer into it, and ask says it will", 
     expect([d?.agent, d?.source.session]).toEqual(["codex", "t1"]);
 
     await server.answer(id, { choice: "Merge" });
-    await until(async () => existsSync(codex.log));
     // The queued message names the decision, never its question or answer: other local users
     // can read a process's arguments. The wait it names prints the answer.
-    expect(readFileSync(codex.log, "utf8")).toBe(
-      `${codex.env.CODEX_HOME} queue --thread t1 --message Starbridge has the owner's answer to ${id}: run \`starbridge wait ${id}\` to read it.\n`,
-    );
+    const queued = `${codex.env.CODEX_HOME} queue --thread t1 --message Starbridge has the owner's answer to ${id}: run \`starbridge wait ${id}\` to read it.\n`;
+    // The fake codex creates its log before it has written the line: wait for the line itself.
+    const log = () => (existsSync(codex.log) ? readFileSync(codex.log, "utf8") : "");
+    await until(() => log() === queued).catch(() => {});
+    expect(log()).toBe(queued);
     expect(await run(["wait", id, "--timeout", "10s"], c)).toBe(0);
     expect(c.lines.at(-1)).toBe(`Answer to ${id} (Merge #12 now?): Merge`);
   } finally {
