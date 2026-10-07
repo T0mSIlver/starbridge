@@ -418,13 +418,13 @@ export function PromptDetail({
         />
         <div className={s.toolHead}>
           <KindTile type="prompt" filled={!closed} size={28} />
-          <h2 className="t-action">{p.tool}</h2>
+          {/* What the agent says the call does, else the tool (#805). */}
+          <h2 className="t-action">{p.description || p.tool}</h2>
         </div>
       </Head>
       {/* The whole input, never the capped summary: Allow covers all of it (#274). */}
       <pre className={`t-command ${s.command}`}>{fullInput(p)}</pre>
       <span ref={end} aria-hidden="true" />
-      {p.description && <p className={`t-reading ${s.context}`}>{p.description}</p>}
       {closed ? (
         <p className={`t-small ${s.closed}`}>{closed}</p>
       ) : (
