@@ -119,6 +119,14 @@ provider plugins add providers, not panels.
   QR code, or through the link `starbridge pair` prints (#66). Both screens confirm the digits
   (#355): otherwise a server in the middle could forge an approval to the joining device. The CLI
   never joins by digits.
+- **A machine's check code** (#795). A pairing code that reaches a browser lets a hostile server
+  approve the machine into a chain it controls, which no device in that chain can expose, so the
+  owner compares: the machine shows three groups of 80 bits of a hash of its two public keys and
+  saves the pairing only once a person types the fourth from the Android app. Not over entry 0,
+  which a fork signed by a revoked device or an old recovery key keeps; not over entry 0 and the
+  keys, which the server could birthday-match; not over the signing key alone, which a stand-in
+  can copy. Typed rather than a yes, so an agent running setup cannot confirm it; the owner
+  chose a confirmation on every setup over a code only shown.
 - **The recovery key** is a random 16-byte seed shown as 28 Crockford base32 characters with a
   12-bit check, in seven groups of four, read in any case, with or without dashes (#199). 128 bits
   is Ed25519's own security level; the seed is random, so it needs no slow key derivation:
