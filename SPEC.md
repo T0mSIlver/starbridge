@@ -439,13 +439,19 @@ provider plugins add providers, not panels.
 - **Setup asks little** (#750). Each question was one more Enter between a new user and their
   first answer, and nearly everyone said yes. Setup installs Starbridge in every agent it finds
   and starts the service without asking, one line per agent with what it installed; for Codex,
-  which loads no rules, it links the rules to paste. It still asks before installing CodexBar, a
+  which loads no rules, it links the rules to paste at the end, with the commands, so nothing
+  mid-output reads as a prompt. Claude Code and Pi, whose installs run for seconds, first print
+  `installing…` (#773). It still asks before installing CodexBar, a
   third-party binary (with #748, only when no other machine sends quotas), which providers to
   send, whether to linger, and whether to send a test decision. Permission prompts stay off and
   unasked; the summary names `starbridge config permissions on`, `starbridge status`,
   `starbridge uninstall --agent <name>` and `starbridge uninstall`. With no terminal every
   question takes its default, so nothing waits on input. A failed install prints its reason and
-  `starbridge setup --agent <name>`, and setup goes on. `uninstall --agent` records the agent,
+  `starbridge setup --agent <name>`, and setup goes on. Every step after pairing needs the
+  server, so setup checks the server and the pairing first (#774): a machine the server no
+  longer lists, revoked or lost with the server's database, is offered to pair again (`[Y/n]`,
+  what `pair --force` does), and an unreachable server stops setup with the command to retry.
+  `uninstall --agent` records the agent,
   and setup and `--refresh` leave it out until `setup --agent` brings it back. An
   agent installed after setup gets nothing in the background: `status` names it, and `setup
   --refresh`, which `update` runs, installs it. The output is plain and lined up, as

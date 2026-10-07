@@ -19,6 +19,7 @@
     "@starbridge/server": "workspace:*",
     "@types/bun": "^1.4.2",
     "@types/libsodium-wrappers": "^0.8.2",
+    "playwright": "1.63.0",
     "starbridge": "workspace:*",
     "typescript": "^7.0.2"
   }

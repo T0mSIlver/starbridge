@@ -32,7 +32,7 @@ import {
 import { markedSkill } from "../src/setup/marker";
 import opencodeFiles from "../src/setup/opencode-files.js";
 import { withInstalledPlaces } from "../src/setup/service";
-import { refresh, setup } from "../src/setup/setup";
+import { probeLines, refresh, setup } from "../src/setup/setup";
 import { status } from "../src/setup/status";
 import { defaults, failure, type Sys } from "../src/setup/sys";
 import { uninstall } from "../src/setup/uninstall";
@@ -108,6 +108,12 @@ test("setup --yes installs the agent, the plugins and the skills, and uploads a 
   });
   expect(await setup(m.sys, { yes: true, readyTimeoutMs: 2_000 })).toBe(0);
   const out = m.ctx.lines.join("\n");
+
+  // A slow agent says it is installing first; what is left to do comes only at the end (#773).
+  expect(out).toContain("  Claude Code  installing…\n✓ Claude Code  plugins installed");
+  const end = out.slice(out.indexOf("Starbridge is set up."));
+  expect(end).toContain("  Paste these rules into Codex's instructions:\n");
+  expect(out.indexOf("Paste these rules")).toBe(out.lastIndexOf("Paste these rules"));
 
   // Providers: the earlier ones that work now; `broken` needs a sign-in and is left out.
   expect(out).toContain("needs sign-in: No available fetch strategy for signedout.");
@@ -247,6 +253,47 @@ test("setup asks for no server: it pairs with the one named, and asks only to sw
   );
   expect(await done).toBe(0);
   expect(ctx.store.machine()?.server).toBe(server.url);
+});
+
+test("a machine the server no longer lists: setup offers to pair again, else stops first (#774)", async () => {
+  for (const yes of [false, true]) {
+    const m = await machine();
+    const before = m.ctx.store.machine()?.id as string;
+    await server.revoke(before);
+    m.sys.prompt = {
+      ...defaults,
+      confirm: async (q) => (q.includes("Pair this machine again") ? yes : false),
+    };
+    // Another server named, and the switch to it declined: pairing again stays on this one.
+    const done = setup(m.sys, { noQuota: true, noService: true, server: "http://127.0.0.1:9" });
+    if (yes) {
+      await until(() => m.ctx.lines.some((l) => l.startsWith("Pairing code: ")));
+      await server.approve(
+        m.ctx.lines
+          .find((l) => l.startsWith("Pairing code: "))
+          ?.replace("Pairing code: ", "") as string,
+      );
+    }
+    expect(await done).toBe(yes ? 0 : 1);
+    const out = m.ctx.lines.join("\n");
+    expect(out).toContain(`✗ ${server.url} no longer lists`);
+    if (yes) expect(m.ctx.store.machine()?.id).not.toBe(before);
+    else {
+      expect(out).toEndWith("  To pair it again later:\n    starbridge setup");
+      expect(out).not.toContain("Agents");
+    }
+  }
+});
+
+test("a server setup cannot reach: setup stops before the other steps (#774)", async () => {
+  const m = await machine();
+  const paired = m.ctx.store.machine();
+  if (paired) m.ctx.store.saveMachine({ ...paired, server: "http://127.0.0.1:9" });
+  expect(await setup(m.sys, { noQuota: true, noService: true })).toBe(1);
+  const out = m.ctx.lines.join("\n");
+  expect(out).toContain("✗ Cannot reach http://127.0.0.1:9 (ConnectionRefused)\n");
+  expect(out).toEndWith("  Retry with:\n    starbridge setup");
+  expect(out).not.toContain("Agents");
 });
 
 test("setup asks before sending quotas that another machine already sends, and Enter skips (#748)", async () => {
@@ -559,6 +606,30 @@ test("an old Claude Code: setup says what failed and to update it (#620)", async
   );
 });
 
+for (const [how, shows] of [
+  ["answered", "✓ You answered Yes"],
+  ["snoozed", "Snoozed until"],
+] as const)
+  test(`the test decision, ${how}, prints what the owner did, not its id`, async () => {
+    const m = await machine();
+    const sys: Sys = {
+      ...m.sys,
+      prompt: {
+        ...m.sys.prompt,
+        confirm: async (q) => q.trim().startsWith("Send a test decision"),
+      },
+    };
+    const done = setup(sys, { noQuota: true, noAgents: true, noService: true });
+    await until(async () => (await server.opened("decision")).length === 1);
+    const id = (await server.opened("decision"))[0]?.id as string;
+    if (how === "answered") await server.answer(id, { choice: "Yes" });
+    else await server.snooze(id, new Date(Date.now() + 3_600_000));
+    expect(await done).toBe(0);
+    const out = m.ctx.lines.join("\n");
+    expect(out).toContain(shows);
+    expect(out).not.toContain(id);
+  });
+
 test("Ctrl-C at the test decision withdraws it from the devices (#613)", async () => {
   const m = await machine();
   const stop = new AbortController();
@@ -571,7 +642,7 @@ test("Ctrl-C at the test decision withdraws it from the devices (#613)", async (
   await until(async () => (await server.opened("decision")).length === 1);
   stop.abort();
   expect(await done).toBe(0);
-  expect(m.ctx.lines).toContain("Skipped.");
+  expect(m.ctx.lines).toContain("– Skipped");
   const [decision] = await server.opened("decision");
   const [settled] = await server.opened("settled");
   expect(settled?.itemId).toBe(decision?.id);
@@ -626,6 +697,23 @@ function fakeCodexbarReleases(latest: string, sums: (v: string, sha: string) => 
 function linuxSys(ctx: TestCtx, home: string): Sys {
   return { ctx, home, platform: "linux", arch: "x64", uid: 1000, prompt: defaults, self: [SELF] };
 }
+
+test("a CodexBar the system cannot start says what it needs, not to sign in (#771)", () => {
+  const detail =
+    "/home/u/.local/bin/codexbar: error while loading shared libraries: libsqlite3.so.0: cannot open shared object file: No such file or directory";
+  const probes = ["claude", "codex"].map((provider) => ({
+    provider,
+    displayName: provider,
+    works: false,
+    detail,
+  }));
+  expect(probeLines({ platform: "linux" } as Sys, probes)).toEqual([
+    "✗ CodexBar cannot start: it needs libsqlite3.so.0",
+    "  On Debian or Ubuntu: sudo apt install libsqlite3-0",
+    "  Then run again:",
+    "    starbridge setup",
+  ]);
+});
 
 test("CodexBar installs only when its release's own checksum matches", async () => {
   const home = mkdtempSync(join(tmpdir(), "starbridge-home-"));

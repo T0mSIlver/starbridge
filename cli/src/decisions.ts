@@ -761,8 +761,12 @@ export function deliveryLine(id: string, d: Delivery): string {
 
 /** The line `wait` prints and the mod submits; the decision skill tells agents to expect it. */
 export function answerLine(a: Answer, question: string | undefined): string {
-  const what = a.choice ?? a.text ?? DONE_LINE;
-  return `Answer to ${a.decisionId}${question ? ` (${question})` : ""}: ${what}`;
+  return answerPrefix(a.decisionId, question) + (a.choice ?? a.text ?? DONE_LINE);
+}
+
+/** `answerLine` up to the answer itself. */
+export function answerPrefix(id: string, question: string | undefined): string {
+  return `Answer to ${id}${question ? ` (${question})` : ""}: `;
 }
 
 /** What a Done says to the agent: the answer is on the page the question named (#539). */
