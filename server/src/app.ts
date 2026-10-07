@@ -23,6 +23,7 @@ import { pushRoutes } from "./routes/push";
 import { wakeSnoozes } from "./snooze";
 import { closeDays, diskFull, Usage } from "./usage";
 import { Waiters } from "./waiters";
+import { Watch, watchRequests } from "./watch";
 
 /** /healthz/backup fails past this; deploy/host/backup.sh runs nightly. */
 const BACKUP_MAX_AGE_MS = 26 * 3_600_000;
@@ -44,6 +45,7 @@ export async function createApp(config: Config, fetchFn: typeof fetch = fetch) {
     pairingClients: new PairingClients(),
     joins: new Waiters(),
     limiter: new RateLimiter(),
+    watch: new Watch(),
     usage,
   };
   deps.push.onSent = (type, result) => usage.record(`push.${type}.${result}`);
@@ -62,6 +64,13 @@ export async function createApp(config: Config, fetchFn: typeof fetch = fetch) {
     deps.pairingClients.sweep(Date.now());
     sweepJoins(db);
   });
+  // Apart from the sweeps, which a full disk stops: the counts must still turn over.
+  const watchMinute = () => {
+    const refused = deps.watch.flush();
+    if (refused) console.log(refused);
+    deps.watch.rotate();
+  };
+  setInterval(watchMinute, 60_000).unref();
   // The sweep deletes in batches and lets requests in between (#585).
   const hourly = () =>
     sweepStorage(db, config.limits)
@@ -91,6 +100,7 @@ export async function createApp(config: Config, fetchFn: typeof fetch = fetch) {
     for (const [k, v] of Object.entries(deps)) c.set(k as keyof Deps, v as never);
     await next();
   });
+  app.use(watchRequests(deps.watch));
   // The web page signs in with a cookie; refuse cross-site writes that would carry it. Browsers
   // send Origin on every cross-origin write, so a write without one comes from a non-browser.
   const origin = new URL(config.publicUrl).origin;

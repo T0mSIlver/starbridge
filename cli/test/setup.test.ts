@@ -32,7 +32,7 @@ import {
 import { markedSkill } from "../src/setup/marker";
 import opencodeFiles from "../src/setup/opencode-files.js";
 import { withInstalledPlaces } from "../src/setup/service";
-import { refresh, setup } from "../src/setup/setup";
+import { probeLines, refresh, setup } from "../src/setup/setup";
 import { status } from "../src/setup/status";
 import { defaults, failure, type Sys } from "../src/setup/sys";
 import { uninstall } from "../src/setup/uninstall";
@@ -692,6 +692,23 @@ function fakeCodexbarReleases(latest: string, sums: (v: string, sha: string) => 
 function linuxSys(ctx: TestCtx, home: string): Sys {
   return { ctx, home, platform: "linux", arch: "x64", uid: 1000, prompt: defaults, self: [SELF] };
 }
+
+test("a CodexBar the system cannot start says what it needs, not to sign in (#771)", () => {
+  const detail =
+    "/home/u/.local/bin/codexbar: error while loading shared libraries: libsqlite3.so.0: cannot open shared object file: No such file or directory";
+  const probes = ["claude", "codex"].map((provider) => ({
+    provider,
+    displayName: provider,
+    works: false,
+    detail,
+  }));
+  expect(probeLines({ platform: "linux" } as Sys, probes)).toEqual([
+    "✗ CodexBar cannot start: it needs libsqlite3.so.0",
+    "  On Debian or Ubuntu: sudo apt install libsqlite3-0",
+    "  Then run again:",
+    "    starbridge setup",
+  ]);
+});
 
 test("CodexBar installs only when its release's own checksum matches", async () => {
   const home = mkdtempSync(join(tmpdir(), "starbridge-home-"));

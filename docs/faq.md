@@ -79,6 +79,19 @@ Windows build, so a Windows machine uploads none. The app runs on Android, and t
 browser; on iOS 16.4 and later, add starbridge.run to the Home Screen from Safari to get
 notifications.
 
+## Why does Starbridge use CodexBar?
+
+An agent stops when it has a question for you, when it needs your permission, or when its quota
+runs out. A quota window that empties mid-task stalls the agent like an unanswered question, so
+Starbridge warns before a window runs out at the current pace, and when one is about to reset
+with quota unused.
+[CodexBar](https://github.com/steipete/CodexBar), by Peter Steinberger, is open source,
+maintained, and already reads more than a dozen providers' plans, so Starbridge reads its output
+instead of writing its own reader; the author contributes to it. It reads plan usage on your
+machine, and Starbridge encrypts the snapshot for your devices like every other item. It is
+optional: setup asks before installing it, `starbridge setup --no-quota` skips it, and questions,
+runs and permission prompts work without it.
+
 ## Do you trust CodexBar's code?
 
 On Linux and macOS, setup installs [CodexBar](https://github.com/steipete/CodexBar) with Homebrew where it is
