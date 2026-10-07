@@ -314,6 +314,33 @@ test("a decision's image is stored once whatever the devices, and a re-seal keep
   for (const by of [laptop, tablet]) expect((await server.images(by))[0]?.[0]).toEqual(img);
 }, 30_000);
 
+test("a decision with four images and a long context still reaches devices that join (#720)", async () => {
+  server.stop();
+  // Forty devices sign in within the minute.
+  const fast: [number, number] = [100, 60_000];
+  server = await LiveServer.start({
+    limits: {
+      ...DEFAULT_LIMITS,
+      challenges: fast,
+      ownerSignIns: fast,
+      directoryAppends: fast,
+      pairingPosts: fast,
+      pairingReads: fast,
+      pairingResults: fast,
+    },
+  });
+  const ctx = await paired(server);
+  const images = [1, 2, 3, 4].flatMap(() => ["--image", noisyPng(2400, 1500)]);
+  const context = "Why: ".padEnd(8000, "x");
+  expect(await run([...ASK.slice(0, 3), "--context", context, ...images], ctx)).toBe(0);
+  const added = [];
+  // Each new device adds an 11 KB box; the images alone had nearly filled the item for one.
+  for (let i = 0; i < 40; i++) added.push(await server.addDevice(`device${i}`));
+  await poll(ctx, session(ctx), { cursor: ctx.store.state().cursor, seconds: 0, shared: true });
+  expect(ctx.errors.filter((e) => /re-send|too large/.test(e))).toEqual([]);
+  for (const by of added) expect((await server.images(by))[0]).toHaveLength(4);
+}, 60_000);
+
 test("ask turns a sideways phone photo upright", async () => {
   const ctx = await paired(server);
   expect(await run([...ASK, "--image", sidewaysJpeg()], ctx)).toBe(0);
@@ -846,6 +873,30 @@ test("open decisions reach a device that joins later, which can answer them", as
   expect(ctx.lines.at(-1)).toBe(`Answer to ${id} (Merge #12 now?): Merge`);
   // Answered or withdrawn, a decision's plaintext leaves the state.
   expect(Object.values(ctx.store.state().asked).map((a) => a.body)).toEqual([undefined, undefined]);
+});
+
+test("a re-seal the server finds too large is not sent again (#720)", async () => {
+  server.stop();
+  // Room for the decision's box for one device, not for two.
+  server = await LiveServer.start({ limits: { ...DEFAULT_LIMITS, itemBytes: 15_000 } });
+  const ctx = await paired(server);
+  const context = "Why: ".padEnd(8000, "x");
+  expect(await run(["ask", "--question", "Q?", "--context", context, "--session", "s"], ctx)).toBe(
+    0,
+  );
+  await server.addDevice("laptop");
+  const s = session(ctx);
+  let posts = 0;
+  const postItem = s.api.postItem.bind(s.api);
+  s.api.postItem = (item) => {
+    posts++;
+    return postItem(item);
+  };
+  const again = () => poll(ctx, s, { cursor: ctx.store.state().cursor, seconds: 0, shared: true });
+  await again();
+  await again();
+  expect(posts).toBe(1);
+  expect(ctx.errors.filter((e) => e.includes("too large"))).toHaveLength(1);
 });
 
 test("re-sealing stops at a 429 and waits its Retry-After, leaving the window to asks (#650)", async () => {
