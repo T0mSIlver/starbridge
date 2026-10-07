@@ -105,16 +105,18 @@ test("item posts past the account's rate get 429 with Retry-After", async () => 
 test("machines' items spend a byte budget a minute, replaced and stored ones only", async () => {
   const probe = await setup();
   const size = quota(probe.devbox, probe.phone).boxes.reduce((n, b) => n + b.box.length, 0);
-  const { s, phone, devbox } = await setup({ postedBytes: [Math.floor(size * 1.5), 60_000] });
+  const { s, phone, devbox } = await setup({ postedBytes: [Math.floor(size * 2.5), 60_000] });
   const first = quota(devbox, phone);
   expect((await post(s, devbox, first)).status).toBe(201);
   // Refused posts spend nothing.
   for (let i = 0; i < 3; i++) expect((await post(s, devbox, first)).status).toBe(409);
   // Snapshots replace each other, so the stored-bytes cap never sees them; the budget does.
   expect((await post(s, devbox, quota(devbox, phone))).status).toBe(201);
+  // Half a snapshot is left: one that does not fit is refused, never let past the budget (#718).
   const r = await post(s, devbox, quota(devbox, phone));
   expect(r.status).toBe(429);
   expect(r.json.detail).toContain("MB");
+  expect((await post(s, devbox, quota(devbox, phone))).status).toBe(429);
 });
 
 test("a looping machine spends its own window first, and the owner's answers always pass", async () => {

@@ -179,8 +179,17 @@ export function ipKey(c: Context<Env>, prefix: 48 | 64 = 64): string {
  * Counts one call under `key`, or `bytes` of a byte budget, or answers 429 `rate-limited` with
  * Retry-After.
  */
-export function rateLimit(c: Context<Env>, key: string, [calls, ms]: RateWindow, bytes?: number) {
-  const wait = c.var.limiter.retryAfter(key, calls, ms, bytes);
+export function rateLimit(
+  c: Context<Env>,
+  key: string,
+  [calls, ms]: RateWindow,
+  bytes?: number,
+  /** Only checks that `bytes` fit what is left, counting nothing: the caller charges later. */
+  peek = false,
+) {
+  const wait = peek
+    ? c.var.limiter.peek(key, calls, ms, bytes)
+    : c.var.limiter.retryAfter(key, calls, ms, bytes);
   if (wait === 0) return;
   const most = bytes === undefined ? `${calls}` : `${calls / 1024 / 1024} MB`;
   throw new HTTPException(429, {

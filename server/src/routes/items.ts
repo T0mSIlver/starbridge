@@ -223,10 +223,10 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
   } else if (item.wakeAt !== undefined)
     fail(400, "bad-schema", `${item.kind} items carry no wakeAt`);
   // Answers are small and the owner's; only machines' items spend the byte budget, so a looping
-  // machine never blocks an answer. A post is refused once the budget is spent, and only a
-  // stored one spends it.
+  // machine never blocks an answer. A post is refused unless it fits what is left, and only a
+  // stored one spends it (#718). Nothing awaits between this check and the charge below.
   const budget = `bytes:${caller.account}`;
-  if (!fromDevice) rateLimit(c, budget, limits.postedBytes, 0);
+  if (!fromDevice) rateLimit(c, budget, limits.postedBytes, size, true);
 
   // Devices the referred item was sealed to, told once a device answers it.
   let answeredDevices: string[] = [];
