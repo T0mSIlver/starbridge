@@ -270,8 +270,6 @@
 /* A long option wraps inside its button. Unwrapped, it widens the page, and a phone's browser
    zooms the whole page out to fit it. */
 .actions > [class] {
-  /* Only a phone's rows carry answers: they share the row's width, as on Android (#805). */
-  flex: 1 1 auto;
   max-width: 100%;
   height: auto;
   min-height: var(--s10);
@@ -300,6 +298,13 @@
   white-space: pre;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* On a phone a row's answers share its width, as on Android (#805). */
+@media (max-width: 599px) {
+  .actions > [class] {
+    flex: 1 1 auto;
+  }
 }
 
 .cmdWhole {
