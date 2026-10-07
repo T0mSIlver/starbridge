@@ -5,6 +5,7 @@
  *
  * - visitor: the page (rendered per request), its scripts, styles and fonts, the four landing
  *   pictures of one theme, `GET /v1/me`, Umami's script and one event;
+ * - `--docs` of visitors then open `/docs` and the FAQ;
  * - `--signin` of visitors start the GitHub sign-in and stop there;
  * - `--signup` of visitors sign in on the phone and the page and pair a machine (accounts.ts),
  *   then try it until the run ends: the machine holds its answers long-poll and the page its
@@ -31,6 +32,8 @@ const { values } = parseArgs({
     stage: { type: "string", default: "120" },
     signin: { type: "string", default: "0.1" },
     signup: { type: "string", default: "0.04" },
+    /** Share of visitors who then read the docs: /docs and the FAQ. */
+    docs: { type: "string", default: "0.3" },
     every: { type: "string", default: "300" },
     /** Bytes of the picture, before base64. */
     image: { type: "string", default: "250000" },
@@ -169,6 +172,9 @@ async function visitor() {
   } catch {
     return record("landing.full", performance.now() - t, "net");
   }
+  if (Math.random() < Number(values.docs))
+    for (const path of ["/docs", "/docs/faq"])
+      await fetch(`${TARGET}${path}`, { headers: h }).then(got).catch(() => {});
   const r = Math.random();
   if (r < Number(values.signup)) return signup(addr);
   if (r < Number(values.signin)) {

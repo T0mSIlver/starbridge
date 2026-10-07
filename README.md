@@ -5,8 +5,9 @@ Know the moment your agent is stuck.
 When a coding agent needs a decision from you, Starbridge puts the question on your phone and in
 your browser. You answer with one tap, and the waiting session carries on with your answer as its
 next prompt. You also follow the runs that affect you, such as a release or heavy work on your
-machine. It also shows what's left on each AI plan, read from CodexBar, with an optional alert
-before a window runs out.
+machine. An agent also stops when its quota runs out, so Starbridge shows what's left on each AI
+plan, read from CodexBar, with an optional alert before a window runs out. CodexBar is optional:
+setup asks before installing it, and `--no-quota` skips it.
 
 Your phone, browsers and machines encrypt everything they send each other, so the server stores
 your content only as ciphertext; it still sees who sent each item, to which
