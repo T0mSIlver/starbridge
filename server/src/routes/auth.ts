@@ -152,14 +152,11 @@ authRoutes.get("/auth/github/callback", async (c) => {
   const { secureCookies } = c.var.config;
   rateLimit(c, `github:${ipKey(c)}`, c.var.config.limits.githubCallbacks);
   const back = (why: "declined" | "expired" | "failed") => c.redirect(`/?signin=${why}`);
-  // Before #527 the cookie also held the app flag and challenge: an app sign-in started then
-  // cannot finish here.
-  const [state, app] = (getCookie(c, STATE_COOKIE) ?? "").split(".");
+  const state = getCookie(c, STATE_COOKIE);
   deleteCookie(c, STATE_COOKIE, { path: "/v1/auth/github" });
   const code = c.req.query("code");
   if (c.req.query("error")) return back("declined");
-  if (!state || !code || app === "1" || !safeEqual(state, c.req.query("state") ?? ""))
-    return back("expired");
+  if (!state || !code || !safeEqual(state, c.req.query("state") ?? "")) return back("expired");
   let account: string;
   try {
     account = await gitHubAccount(c, code);

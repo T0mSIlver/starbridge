@@ -93,9 +93,9 @@ To restore, stop the server, copy a backup over `starbridge.db` in the volume, d
 the nightly `starbridge-YYYYMMDD.db`, each deploy that runs a migration leaves `deploy-<time>.db`, taken while
 the old server still ran, seconds before the new one opened the database; the last two are kept.
 
-A server refuses a database whose schema is newer than its own (`PRAGMA user_version`), so
-rolling back past a release that migrated fails at start: restore that deploy's `deploy-<time>.db`
-along with the rollback.
+A server refuses a database whose schema is newer than its own (`PRAGMA user_version`), and
+`apply.sh` stops such a deploy before it replaces anything, so rolling back past a release that
+migrated fails: restore that deploy's `deploy-<time>.db` along with the rollback.
 
 To restore Umami, stop `umami`, then
 `sudo docker compose -p starbridge -f /opt/starbridge/deploy/compose.yaml exec -T umami-db pg_restore -U umami -d umami --clean < umami-YYYYMMDD.dump`

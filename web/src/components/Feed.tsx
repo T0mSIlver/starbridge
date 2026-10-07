@@ -125,7 +125,7 @@ export function slotTime(at: string, since: string | undefined, now: number): st
 }
 
 /**
- * "Claude" or "Codex", for "Open in": older machines send no agent and run Claude Code. An agent
+ * "Claude" or "Codex", for "Open in": a body without an agent is taken as Claude Code's. An agent
  * this page does not know gets no "Open in".
  */
 export function agentName(agent?: string): string | undefined {

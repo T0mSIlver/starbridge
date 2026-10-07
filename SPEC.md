@@ -165,9 +165,12 @@ provider plugins add providers, not panels.
 - **Android keys** (#9) sit in files wrapped by a Keystore AES key usable while the screen is
   locked, so lock-screen buttons can sign. Signing out revokes the phone unless it is the last
   device.
-- **Versions** (#468, #469, #478, #551). 0.1.0, the first public release, is the compatibility
-  floor, so nothing carries code for clients before it: `ask` refuses `--default` and `--default-at` rather than ignoring them, and
-  clients, setup and the CLI dropped what served earlier releases. Later compatibility branches
+- **Versions** (#468, #469, #478, #551, #737). 0.1.0-rc.2, for which the hosted database was reset
+  before launch, is the compatibility floor, so nothing carries code for a database, stored
+  setting, client or server before it: the schema starts at one migration, `ask` refuses
+  `--default` and `--default-at` rather than ignoring them, and clients, setup and the CLI dropped
+  what served earlier releases. One exception: a CLI state file without `v` still reads as format
+  1, since the owner's machines keep such files through the reset. Later compatibility branches
   name the minimum client release that retires them (`// until min cli >= 1.2`). An algorithm
   changes only with a new protocol version (`v: 2`, `starbridge/v2/...`, `/v2` routes) and members
   re-pair; keys change only by revoke and add.
@@ -196,7 +199,8 @@ provider plugins add providers, not panels.
   device, so when either cannot be read both move to `<name>.unreadable-<time>` and the app starts
   signed out and says so. Quota settings write their defaults, so a later default never changes a
   saved choice. The web writes `v` into its localStorage values and leaves a newer format alone; a
-  damaged one is replaced at the next change, since it holds only display choices. IndexedDB's own
+  damaged one, or one without `v`, is replaced at the next change, since it holds only display
+  choices. IndexedDB's own
   version is the records' format, and sign-out removes every record kind of the account.
 - **Old clients** (#468). Every client names its release in `starbridge-client:
   <name>/<version>` (`cli`, `android`, `web`, `mod`; MAJOR.MINOR.PATCH). The server refuses
@@ -223,7 +227,7 @@ provider plugins add providers, not panels.
   handed it the page's callback when no other app claimed that; where both claim a URL, Chrome
   opens the verified app. The page's sign-ins keep `/v1/auth/github/callback`, which the app does
   not claim, so they stay in the web app.
-- When the browser gets the app's redirect (app missing, verification failed, an older app), the
+- When the browser gets the app's redirect (app missing, verification failed), the
   server passes GitHub's code on to `APP_REDIRECT_URI`: on starbridge.run the App Link
   `https://starbridge.run/app/auth`, whose page has an "Open Starbridge" button to
   `starbridge://auth`. Chrome asks "Continue to Starbridge?" before following a `starbridge://`
@@ -285,15 +289,16 @@ provider plugins add providers, not panels.
   machine's rate window goes to its own asks (#650). A question's images are scaled at `ask` to
   leave room for its box, with its recipient list grown, for the 64 devices an item can reach,
   since a re-seal keeps the stored images and the 2 MB cap counts them (#720). One the server
-  still refuses as too large, asked before that, is not re-sent: the machine says so once.
+  still refuses as too large, as one with a lower cap may, is not re-sent: the machine says so once.
 - **Fresh quotas** (#158, #450). The local agent posts a snapshot once its directory holds a new device.
   `POST /quota/ask` wakes the machines and holds until each posted, up to 25 s, under the 30 s at
   which proxies cut long polls; 6 a minute per account, since each runs CodexBar on every machine.
 - **Schema migrations** (#470). `PRAGMA user_version` counts the migrations a database has run;
   each runs in one transaction with its version. A server refuses a database newer than it knows,
   so a rollback past a migration fails at start instead of writing rows the newer schema misreads.
-  Version 1 is the 0.1.0 schema with `IF NOT EXISTS`, so it adopts a database made before versions
-  were counted. A migration changes the schema and never rewrites rows, to stay within the 30 s
+  Version 1 is the whole schema: the six migrations before launch were folded into it when the
+  hosted database was reset, so `apply.sh` stops a deploy whose database is newer than its server
+  before it replaces anything. A migration changes the schema and never rewrites rows, to stay within the 30 s
   Caddy holds requests; backfills run in the hourly sweep. `apply.sh` backs the database up just
   before a new server that migrates further than the database's `user_version` starts, or when
   either number can't be read, and keeps the last two (#586) for 7 days at most, as the nightly
@@ -473,9 +478,7 @@ provider plugins add providers, not panels.
   the last match wins. Pi gets no bash pattern, since none is safe there (Platform facts): the link
   allows a bash ask itself when the whole typed line, from the ask's "full command" evidence, is
   one of those commands with only words, flags, quoted strings and line-joining backslashes; an ask
-  without evidence, or from a shell tool under another name, goes to the owner. The local agent
-  removes the bash patterns older setups added, except a level other than `allow` the owner set,
-  and reports them when the config has comments it cannot rewrite. `starbridge run` is left out,
+  without evidence, or from a shell tool under another name, goes to the owner. `starbridge run` is left out,
   since the command it wraps is the agent's own. Uninstall removes exactly what setup added.
 - **Docs** (#211) at `/docs` are the repository's Markdown files listed in `web/src/lib/docs.ts`,
   rendered by the web page. Links between them become `/docs` links; other relative links go to
@@ -588,8 +591,8 @@ Codex prompts are not supported.
   no `tool_use_id`, so the hook settles a call by the hash of its `tool_input` on `PostToolUse` and
   `PermissionDenied`, and all of a session's prompts on `Stop` and `SessionEnd`. `PostToolUse` runs
   a shell check that starts the CLI only while the CLI marks an unexpired prompt open
-  (`<config>/permissions-open`, written with the state), or when a state has no mark yet, as from
-  an older CLI: starting it on every tool call cost about 50 ms and 50 MB, prompts on or off
+  (`<config>/permissions-open`, written with the state): starting it on every tool call cost about
+  50 ms and 50 MB, prompts on or off
   (#517). "This session" and "always" are offered only
   for `addRules` and `addDirectories` suggestions whose rules fit in full; a `setMode` suggestion
   changes more than the call, so it stays at the keyboard. A deny with no message tells the agent
@@ -637,7 +640,7 @@ Codex prompts are not supported.
   forgot to settle left the card in Needs you. Done is an answer that carries no pick, so it closes
   the card on every device and reaches the agent as `answered on its page; read the answer
   there`; the page stays the one place the owner answers. Clients show Done only when the
-  machine says it takes one (`done`), since an older CLI would drop it and the agent never hear.
+  machine says it takes one (`done`).
 - **Waiting state** (#122, #191, #202). A `waiting` item says whether the agent is blocked on the
   question. A flip either way pushes, so the phone moves the notification between channels. `ask
   --waiting` posts the question quietly and lets its `waiting` item push, so the first

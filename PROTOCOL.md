@@ -166,10 +166,8 @@ but not yet revoked can sign a false long head and hold every device's items unt
 revokes it, which the owner sees; a machine that passed the head on names it as `by`, so
 revoking the forger ends the hold. The server itself can always hold items back.
 
-The head is optional, and both sides fail safe. A machine from before it signs no head: its items
-open as before and count neither for nor against a hold. A device from before it drops the field
-unread, so it runs without the check, as it did. The head is part of the signed body, so the
-server can neither strip nor change it.
+The head is optional: an item without one opens and counts neither for nor against a hold. The
+head is part of the signed body, so the server can neither strip nor change it.
 
 In the inbox, a device applies a `settled` or `waiting` notice only to items of the machine that
 signed it, so a revoked machine cannot mark another machine's questions closed. A notification can
@@ -306,8 +304,8 @@ request without the header, or with one the server cannot read, is served.
   scheme. The app keeps a random verifier and sends only its challenge,
   base64url(SHA-256(verifier)), which the server passes to GitHub as `code_challenge` and as the
   state. GitHub binds its code to the challenge, and the app trades code and verifier for the
-  session over HTTPS; the app ignores a redirect whose state is not its challenge, and one with
-  no state unless it carries a pre-#527 server's own `sbc_` code. GitHub
+  session over HTTPS; the app ignores a redirect whose state is not its challenge, or with none.
+  GitHub
   redirects to `/v1/auth/github/callback/app`, which the Android app claims as an App Link on
   starbridge.run (`/.well-known/assetlinks.json` binds it to the app's signing keys). When the
   browser gets the redirect instead, the server hands code and state on to `APP_REDIRECT_URI`:
@@ -414,8 +412,7 @@ with one more than 7 days ahead.
 with `{items, cursor}` when device-signed items addressed to the machine came after `cursor`,
 else holds the request
 until one arrives or `wait` (at most 300) passes and replies `{items: [], cursor}`. `kinds` is a
-comma-separated list of device-signed kinds; left out, it is `answer` and `permission-answer`, so
-a machine from before `snooze` never reads one. The Claude Code
+comma-separated list of device-signed kinds, all of them when left out. The Claude Code
 mod keeps one such request open and re-opens it on every reply; the CLI's `wait` does the same.
 
 Each reply also carries `directory`, the number of entries in the account's directory, and
@@ -429,7 +426,7 @@ A machine checks that an answer's `decisionId` is one it asked, still open, and 
 `choice`, if any, is one of the decision's options. It never delivers an answer to a decision it
 settled, even one it accepted before, since the server could have held it back until then. An answer carries one of `choice`, `text` and `done`: a decision with options that sets
 `replies: true` also takes a typed `text` reply, which clients offer as "Reply" under the
-options; machines from before it leave `replies` out. For permission answers, see below.
+options. For permission answers, see below.
 
 ### Push
 

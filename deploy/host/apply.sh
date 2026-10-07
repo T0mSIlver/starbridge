@@ -40,6 +40,26 @@ healthy() {
   return 1
 }
 
+# The schema the new server migrates to, and the one the database is at. A database newer than the
+# server stops the deploy here, before anything is replaced: the server would refuse it at start
+# (server/src/db.ts), and nothing copies or migrates it down. That is a rollback past a migration,
+# or a database from before the schema was folded at launch; either needs the owner.
+mnt=$(docker volume inspect -f '{{.Mountpoint}}' starbridge_data 2>/dev/null) || mnt=
+db=$mnt/starbridge.db
+want= have=
+if [ -n "$mnt" ] && [ -f "$db" ]; then
+  want=$($compose run --rm --no-deps -T server bun server.js schema 2>/dev/null) || want=
+  have=$(sqlite3 -readonly "$db" 'PRAGMA user_version' 2>/dev/null) || have=
+  # sqlite3 runs as root, so hand back any WAL or shared-memory file it made, or the server
+  # could no longer write the database.
+  chown --reference="$db" "$db"-wal "$db"-shm 2>/dev/null || true
+fi
+if [ -n "$want" ] && [ -n "$have" ] && [ "$have" -gt "$want" ] 2>/dev/null; then
+  echo "apply.sh: $db is at schema $have, newer than this server's $want; nothing deployed." >&2
+  echo "Run the release that wrote it, or move the database aside to start empty." >&2
+  exit 1
+fi
+
 # No request fails during a deploy (#150). The page runs as two copies: start the idle one, wait
 # for its health, then stop the live one; Caddy sends requests to the first healthy copy.
 if [ -n "$($compose ps -q --status running web-a)" ]; then
@@ -70,16 +90,6 @@ $compose stop $live
 # database's `user_version` takes one; when either number can't be read, it takes one anyway. The
 # last two are kept, each a full copy of the database on the same disk (#586), for 7 days at most
 # (backup.sh, #721). A new host has no volume yet.
-mnt=$(docker volume inspect -f '{{.Mountpoint}}' starbridge_data 2>/dev/null) || mnt=
-db=$mnt/starbridge.db
-want= have=
-if [ -n "$mnt" ] && [ -f "$db" ]; then
-  want=$($compose run --rm --no-deps -T server bun server.js schema 2>/dev/null) || want=
-  have=$(sqlite3 -readonly "$db" 'PRAGMA user_version' 2>/dev/null) || have=
-  # sqlite3 runs as root, so hand back any WAL or shared-memory file it made, or the server
-  # could no longer write the database.
-  chown --reference="$db" "$db"-wal "$db"-shm 2>/dev/null || true
-fi
 if [ -n "$mnt" ] && [ -f "$db" ] && ! { [ -n "$want" ] && [ "$want" = "$have" ]; }; then
   out=/var/backups/starbridge/deploy-$(date -u +%Y%m%dT%H%M%S).db
   mkdir -p /var/backups/starbridge

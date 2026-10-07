@@ -343,9 +343,10 @@ test("refresh brings what setup wrote to this release and leaves the rest alone"
   const want = readFileSync(unit, "utf8");
   // As an earlier release wrote them, with its markers; the skill, unmarked, is a copy another
   // skill manager put there.
-  writeFileSync(rule, "# Written by starbridge setup: questions need the network.\nold\n");
-  writeFileSync(entry, "// Written by starbridge setup: answers.\nold\n");
-  writeFileSync(unit, "# Written by `starbridge setup`; `starbridge uninstall` removes it.\nold\n");
+  const earlier = "Written by starbridge 0.0.1; `starbridge uninstall` removes it.";
+  writeFileSync(rule, `# ${earlier}\nold\n`);
+  writeFileSync(entry, `// ${earlier}\nold\n`);
+  writeFileSync(unit, `# ${earlier}\nold\n`);
   writeFileSync(skill, "---\nname: starbridge\n---\nmine\n");
   const done = await refresh(m.sys);
   expect(readFileSync(rule, "utf8")).toBe(CODEX_RULE);
@@ -470,11 +471,10 @@ test("status says at once that the owner removed this machine, and how to pair i
 test("uninstall removes the service and plugins, asks the devices to revoke, keeps the keys", async () => {
   const m = await machine();
   await startAgent(m.ctx);
-  // pi-permission-system with the owner's own policy, the link `config permissions on` adds,
-  // and a bash pattern setup added before #488.
+  // pi-permission-system with the owner's own policy and the link `config permissions on` adds.
   const pps = join(m.home, ".pi/agent/extensions/pi-permission-system/config.json");
   mkdirSync(dirname(pps), { recursive: true });
-  const bash = { "*": "ask", "starbridge ask *": "allow" };
+  const bash = { "*": "ask" };
   writeFileSync(
     pps,
     JSON.stringify({ permission: { bash }, authorizerChain: ["judge", "starbridge"] }),

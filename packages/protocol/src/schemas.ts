@@ -292,11 +292,11 @@ export type MachineKind = z.infer<typeof MachineKind>;
 /** The machine, project and session an item comes from. */
 export const Source = z.object({
   machine: z.string().min(1).max(100),
-  /** Optional: older machines omit it. */
+  /** Left out while the machine has none recorded; setup detects one. */
   machineKind: MachineKind.optional(),
   project: z.string().max(200),
   session: z.string().max(200),
-  /** The session's name, as Claude Code shows it. Optional: older machines omit it. */
+  /** The session's name, as Claude Code shows it; left out when it has none. */
   sessionTitle: z.string().max(200).optional(),
   links: z.array(SessionLink).max(3).optional(),
 });
@@ -338,7 +338,7 @@ export type DecisionLink = z.infer<typeof DecisionLink>;
  * A directory its signer vouches for: its length and the hash of its last entry. Devices sign
  * the one they hold into answers, machines the longest they know into every item, and each side
  * refuses the other's items while an active signer has signed a head its own chain lacks.
- * Optional in every body: older clients neither sign nor read it.
+ * Optional in every body: a device that has no verified directory at hand signs none.
  */
 export const DirectoryHead = z.object({
   length: z.number().int().min(1).max(100_000),
@@ -360,7 +360,7 @@ export const Decision = z
     /** 2 to 4 choices, or none for a free-text answer. */
     options: z.array(z.string().min(1).max(100)).max(4),
     recommended: z.string().optional(),
-    /** Optional: older machines omit it. */
+    /** Left out when the machine cannot tell which agent asked. */
     agent: AgentName.optional(),
     source: Source,
     images: z.array(DecisionImage).max(4).optional(),
@@ -374,13 +374,13 @@ export const Decision = z
     answerIn: DecisionLink.optional(),
     /**
      * The machine takes a typed reply in place of one of the options (#201): clients then offer
-     * "Reply" under them. Machines from before it leave it out and accept only a choice.
+     * "Reply" under them. Left out, the machine accepts only a choice.
      */
     replies: z.literal(true).optional(),
     /**
      * With `answerIn`: the machine takes a Done answer, the owner saying they answered on that
-     * page (#539). Clients then offer Done beside the page's link. Machines from before it leave
-     * it out and take no answer to such a decision.
+     * page (#539). Clients then offer Done beside the page's link. Left out, the machine takes no
+     * answer to such a decision.
      */
     done: z.literal(true).optional(),
     dir: DirectoryHead.optional(),

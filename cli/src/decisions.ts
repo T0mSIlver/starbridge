@@ -591,8 +591,7 @@ export function checkAnswer(
         ? `${body.decisionId} is answered on its own page`
         : `${body.decisionId} takes no Done`,
     );
-  // Decisions asked before the machine kept recipients have none, and take no answer.
-  if (!decision.to?.includes(signer.id))
+  if (!decision.to.includes(signer.id))
     throw new ProtocolError("unknown-member", `${body.decisionId} was not sent to ${signer.id}`);
   // A typed reply answers any decision (`replies`); a choice must be one of its options. The
   // schema already holds an answer to exactly one of the two.
@@ -615,7 +614,7 @@ export function acceptSnooze(raw: unknown, s: Session, dir: Directory, st: State
     dir,
   );
   const decision = st.asked[body.decisionId];
-  if (!decision?.to?.includes(signer.id)) return;
+  if (!decision?.to.includes(signer.id)) return;
   const kept = decision.snooze;
   if (kept && Date.parse(kept.at) >= Date.parse(body.at)) return;
   decision.snooze = { until: body.until, at: body.at };
@@ -1046,7 +1045,7 @@ async function reseal(ctx: Ctx, s: Session, known: Directory): Promise<void> {
     } catch (e) {
       if (e instanceof ApiError && ["already-answered", "not-found"].includes(e.code))
         return "closed";
-      // Asked before #720, it may be too large for this many devices: it cannot ever reach them.
+      // Too large for this many devices, as on a server with a lower cap: it can never reach them.
       if (e instanceof ApiError && e.code === "too-large") {
         ctx.err(
           `starbridge: ${sealed?.id ?? ""} is too large to send to the new devices; it stays on the others`,
@@ -1064,7 +1063,7 @@ async function reseal(ctx: Ctx, s: Session, known: Directory): Promise<void> {
     if (!lacking(body.to, dir)) continue;
     ctx.store.updateState((st) => {
       const x = st.asked[id];
-      if (x) x.to = [...new Set([...(x.to ?? []), ...ids])];
+      if (x) x.to = [...new Set([...x.to, ...ids])];
     });
     // Without blobs: the server keeps the images, sealed once for every device (#685).
     const posted = await post(() => ({
