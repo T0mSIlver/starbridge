@@ -135,6 +135,7 @@ async function gitHubAccount(c: Context<Env>, code: string, verifier?: string): 
     id: string;
   } | null;
   if (!existing && signUpsPaused(c.var.config)) fail(403, "signups-paused", SIGNUPS_PAUSED);
+  if (!existing) rateLimit(c, `signup:${ipKey(c)}`, c.var.config.limits.signUps);
   const account = existing?.id ?? newAccountId();
   if (!existing)
     db.query("INSERT INTO accounts (id, github_id, created_at) VALUES (?, ?, ?)").run(
@@ -153,7 +154,8 @@ async function gitHubAccount(c: Context<Env>, code: string, verifier?: string): 
 authRoutes.get("/auth/github/callback", async (c) => {
   const { secureCookies } = c.var.config;
   rateLimit(c, `github:${ipKey(c)}`, c.var.config.limits.githubCallbacks);
-  const back = (why: "declined" | "expired" | "failed" | "paused") => c.redirect(`/?signin=${why}`);
+  const back = (why: "declined" | "expired" | "failed" | "paused" | "limited") =>
+    c.redirect(`/?signin=${why}`);
   const state = getCookie(c, STATE_COOKIE);
   deleteCookie(c, STATE_COOKIE, { path: "/v1/auth/github" });
   const code = c.req.query("code");
@@ -164,6 +166,7 @@ authRoutes.get("/auth/github/callback", async (c) => {
     account = await gitHubAccount(c, code);
   } catch (e) {
     if (e instanceof HTTPException && e.status === 403) return back("paused");
+    if (e instanceof HTTPException && e.status === 429) return back("limited");
     // GitHub refused, or could not be reached.
     if (!(e instanceof HTTPException)) console.error(`GitHub sign-in: ${e}`);
     return back("failed");

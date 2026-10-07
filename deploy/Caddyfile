@@ -125,12 +125,31 @@ starbridge.run {
 	# then stops the other (deploy/host/apply.sh). `first` sends every request to the first healthy
 	# copy, so the two builds never serve at once.
 	handle {
-		reverse_proxy 127.0.0.1:3010 127.0.0.1:3011 {
-			lb_policy first
-			lb_try_duration 30s
-			lb_try_interval 250ms
-			health_uri /
-			health_interval 1s
+		route {
+			# The pages are Next rendering on each request, 10 to 17 ms of CPU each (load test
+			# 2026-10-07), so one address looping on `/` or `/docs` could hold a core (#787). A
+			# visit makes a few page requests and a link prefetch per link in view, so 600 a minute
+			# lets an office's address browse together; files under /_next/static are cached and
+			# cheap, so they don't count.
+			rate_limit {
+				disable_metrics
+				zone page_address {
+					match {
+						not path /_next/static/*
+					}
+					key {http.request.remote.host}
+					ipv6_prefix 64
+					events 600
+					window 1m
+				}
+			}
+			reverse_proxy 127.0.0.1:3010 127.0.0.1:3011 {
+				lb_policy first
+				lb_try_duration 30s
+				lb_try_interval 250ms
+				health_uri /
+				health_interval 1s
+			}
 		}
 	}
 }
