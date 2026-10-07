@@ -43,7 +43,10 @@ The landing page, docs, README and store listing sell questions and runs, each b
 to the reader. The hero: "Know the moment your agent is stuck" (#448). Quotas get one line: users
 don't launch agents from Starbridge, and the power users it targets don't check quotas by hand.
 Alerts are opt-in, so copy never says they are on. Permission prompts are secondary and opt-in.
-Copy says "on each machine that runs agents", never "on each machine" alone.
+Copy says "on each machine that runs agents", never "on each machine" alone. The subtitle under
+the hero sells questions and that every agent on every machine reaches you in one place; the
+feature row below names runs, quotas and permission prompts, since a list in the subtitle repeats
+it (#801). The line under the hero's buttons, with end-to-end encryption, shows on phones too.
 
 ### Platforms
 
@@ -82,8 +85,8 @@ agent sessions --CLI--> starbridge agent (one per machine) --HTTPS--> server <--
 
 Why this stack: one TypeScript schema serves the server, CLI and mods, and Claude Code mods are
 TypeScript already. Bun gives `bun build --compile` binaries; npm gets a Node 22+ bundle, so the
-CLI uses no Bun global without a guard. SQLite is enough because the server stores ciphertext and
-public keys only. Design tokens are generated from `DESIGN.md` to CSS and Kotlin, so both clients
+CLI uses no Bun global without a guard. SQLite is enough because the server stores ciphertext,
+public keys and the directory's names and times. Design tokens are generated from `DESIGN.md` to CSS and Kotlin, so both clients
 share colours and type.
 
 **CodexBar** (github.com/steipete/CodexBar) is read, never embedded. Its maintainers want
@@ -214,6 +217,11 @@ provider plugins add providers, not panels.
 ## Sign-in
 
 - The hosted server signs in with GitHub; a self-hosted server with `OWNER_TOKEN`.
+- The owner can pause sign-ups (#784), for a launch-day flood or a box near its limits: a GitHub
+  user with no account gets "not taking new accounts right now" on the page and in the app, while
+  every existing account signs in as before. `bun server.js signups pause|resume` writes and
+  removes a file beside the database, which the server reads on each new account, so it takes
+  effect at once and survives restarts and deploys.
 - The page shows only the sign-in methods its server offers (#670): `GET /v1/auth/methods` lists
   them, and without GitHub the landing page's and sign-in page's buttons open the owner token
   form. Until the server answers, the page shows GitHub, the hosted server's, so the landing
@@ -945,6 +953,11 @@ Tokens, type and components: `DESIGN.md`.
   memory, the VPS's first limit (#587). Caddy compresses every
   response and the web app none: Next's gzip ran on its one thread and filled it near 18 landing
   page visitors a second (#593). Nightly SQLite backups, kept 7 days (#586).
+- **Per-address pages and sign-ups** (#787). Caddy takes 600 page requests a minute per address
+  outside `/v1` and `/_next/static`: each is Next rendering, 10 to 17 ms of CPU, and a visit with
+  its link prefetches makes a few dozen. The server makes at most 30 new accounts an hour per
+  address: each account may store 256 MB, so many GitHub accounts behind one script could fill
+  the server's 2 GB, while an office or a carrier's NAT signs up a handful an hour.
 - **Per-address reads** (#582). Caddy counts every `/v1` request per address, 3000 a minute
   (IPv6 per /64): most reads count against no account, so this keeps a looping client or script
   to about 2% of a core. A visible page with a prompt waiting and a run live makes about 200 a
@@ -974,6 +987,11 @@ Tokens, type and components: `DESIGN.md`.
   Caddy's cap of 3000 `/v1` requests a minute (2900 seen by the server, since Caddy logs no
   refusal), or refused with 429 by the server: an HTTP/2 client can flood over few connections, and every
   other visitor's address would end up in the on-call session's transcript.
+- **Blocking an address** (#783). The owner can refuse an address or range at Caddy, by a reload
+  that keeps open connections (`deploy/host/switch.sh`), with a 403 that names abuse@. An IPv6
+  address is blocked as its /64, as the rate limits count it, and nothing wider than a /8 (IPv4)
+  or /32 (IPv6) is accepted. The block list is the one place an address is written to disk, until
+  it is unblocked; `/privacy` says so.
 - **Suspending an account** (#785). The owner can suspend one account whose machines flood the
   server (a looping agent, or abuse) without deleting it: its machines' writes get 403
   `account-suspended`, which the CLI prints with its reason, while they still read and wait, and

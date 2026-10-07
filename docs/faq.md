@@ -38,11 +38,18 @@ It can hold items back or drop them.
 The limits:
 
 - The web app is code the server sends on each load, so a compromised server could send a page
-  that uses or reads that browser's keys. The Android app and the CLI are installed code. Where
-  this matters, use the Android app and no browser, or host your own server.
+  that uses or reads that browser's keys, approves permission prompts, or uses a pairing code
+  or recovery key typed into it. The Android app and the CLI are installed code. Where this
+  matters, use the Android app and no browser, type pairing codes only into the app, or host
+  your own server; a self-hosted server still sends pushes through starbridge.run's relay
+  unless it has its own VAPID keys and uses UnifiedPush
+  ([Notifications](../server/README.md#notifications)).
   [PROTOCOL.md](../PROTOCOL.md#the-web-app-trusts-its-server) says what such a page could do.
 - A compromised machine can post anything as itself until you remove it.
 - Whoever holds the recovery key can take over the account.
+- No forward secrecy: whoever later gets a device's or machine's private key and the server's
+  stored items opens the items still stored for it.
+- Approve only a join you started: anyone signed in to your GitHub account can ask to join.
 - No independent security review yet. The audits so far were by AI models and by the author.
 
 [PROTOCOL.md](../PROTOCOL.md) has the formats, pairing, the device list and the
