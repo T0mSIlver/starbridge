@@ -191,15 +191,17 @@ export async function setup(sys: Sys, opts: SetupOpts): Promise<number> {
     } else return cannotGoOn(ctx, pairing.why);
   }
   if (!machine || switching || again) {
-    if (!again) section(ctx, `Pairing with ${host(server)}`);
+    // Pairing again stays on the machine's server: the owner declined any other.
+    const to = again && machine ? trimServer(machine.server) : server;
+    if (!again) section(ctx, `Pairing with ${host(to)}`);
     try {
-      await checkServer(server);
+      await checkServer(to);
     } catch (e) {
       if (!(e instanceof UsageError)) throw e;
       return cannotGoOn(ctx, e.message);
     }
     const code = await pair(ctx, {
-      server,
+      server: to,
       again: "starbridge setup",
       ...(switching || again ? { force: true } : {}),
       ...(opts.name ? { name: opts.name } : {}),
@@ -226,7 +228,8 @@ export async function setup(sys: Sys, opts: SetupOpts): Promise<number> {
     await serviceStep(
       sys,
       opts,
-      switching || JSON.stringify(ctx.store.agentConfig()) !== configBefore,
+      // A running agent may hold the old token, or be backing off from its refusal.
+      switching || again || JSON.stringify(ctx.store.agentConfig()) !== configBefore,
     );
   const last = await pathStep(sys);
 

@@ -258,7 +258,8 @@ test("a machine the server no longer lists: setup offers to pair again, else sto
       ...defaults,
       confirm: async (q) => (q.includes("Pair this machine again") ? yes : false),
     };
-    const done = setup(m.sys, { noQuota: true, noService: true });
+    // Another server named, and the switch to it declined: pairing again stays on this one.
+    const done = setup(m.sys, { noQuota: true, noService: true, server: "http://127.0.0.1:9" });
     if (yes) {
       await until(() => m.ctx.lines.some((l) => l.startsWith("Pairing code: ")));
       await server.approve(
