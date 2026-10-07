@@ -580,12 +580,19 @@ test("Ctrl-C at the test decision withdraws it from the devices (#613)", async (
  */
 function fakeCodexbarReleases(latest: string, sums: (v: string, sha: string) => string | null) {
   const state = { latest };
+  // Built once per version: tar stores mtimes, so a tarball rebuilt for the second request
+  // differs from the one the `.sha256` was computed from whenever a second ticks between them (#756).
+  const built = new Map<string, Uint8Array<ArrayBuffer>>();
   const tarball = (v: string) => {
+    let bytes = built.get(v);
+    if (bytes) return bytes;
     const src = mkdtempSync(join(tmpdir(), "codexbar-src-"));
     writeFileSync(join(src, "CodexBarCLI"), "#!/bin/sh\n", { mode: 0o755 });
     writeFileSync(join(src, "VERSION"), `${v}\n`);
     symlinkSync("CodexBarCLI", join(src, "codexbar"));
-    return new Uint8Array(Bun.spawnSync(["tar", "-czf", "-", "-C", src, "."]).stdout);
+    bytes = new Uint8Array(Bun.spawnSync(["tar", "-czf", "-", "-C", src, "."]).stdout);
+    built.set(v, bytes);
+    return bytes;
   };
   const server = Bun.serve({
     port: 0,
