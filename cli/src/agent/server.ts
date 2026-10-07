@@ -7,7 +7,15 @@
  */
 import { spawnSync } from "node:child_process";
 import { randomBytes, timingSafeEqual } from "node:crypto";
-import { chmodSync, lstatSync, mkdirSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  lstatSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 import { userInfo } from "node:os";
@@ -15,6 +23,7 @@ import { dirname } from "node:path";
 import { ProtocolError } from "@starbridge/protocol";
 import { ApiError, Unreachable } from "../api";
 import { type Ctx, iso, UsageError } from "../context";
+import { processAlive } from "../platform";
 import { VERSION } from "../version";
 import {
   API,
@@ -105,6 +114,16 @@ export function pause(ms: number, signal: AbortSignal): Promise<void> {
   });
 }
 
+/** The pid in the file beside a long socket path, or undefined. */
+function socketOwner(socket: string): number | undefined {
+  try {
+    const pid = Number(readFileSync(`${socket}.pid`, "utf8").trim());
+    return Number.isInteger(pid) && pid > 0 ? pid : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export class Agent implements Hub {
   private server: Server | undefined;
   private readonly stopping = new AbortController();
@@ -171,13 +190,23 @@ export class Agent implements Hub {
    * on it; a socket file nobody listens on is left from a crash and goes.
    */
   async start(): Promise<void> {
+    let unprobed = false;
     try {
       await new AgentClient(this.socket).call("GET", "/v1/status", undefined, 2_000);
       throw new UsageError(`an agent already runs on ${this.socket}`);
     } catch (e) {
       if (!(e instanceof NoAgent || e instanceof AgentError)) throw e;
       if (e instanceof AgentError) throw new UsageError(`an agent already runs on ${this.socket}`);
+      // Nobody listens on an existing socket, or no socket: anything else proves nothing.
+      unprobed = e.code !== "ECONNREFUSED" && e.code !== "ENOENT";
     }
+    // A socket path too long for `connect` cannot be probed (#622), so the agent that listens on
+    // it says so in a pid file beside it; without it a second agent unlinked the socket (#714).
+    // Where the probe could connect, its answer stands, so a stale file with a reused pid does
+    // not block a restart.
+    const owner = unprobed && this.longSocket() ? socketOwner(this.socket) : undefined;
+    if (owner !== undefined && owner !== process.pid && processAlive(owner))
+      throw new UsageError(`an agent already runs on ${this.socket} (pid ${owner})`);
     const dir = dirname(this.socket);
     mkdirSync(dir, { recursive: true, mode: 0o700 });
     if (dir === this.ctx.store.dir || dir.endsWith("/starbridge")) chmodSync(dir, 0o700);
@@ -220,6 +249,13 @@ export class Agent implements Hub {
       process.umask(umask);
     }
     chmodSync(this.socket, 0o600);
+    if (this.longSocket())
+      writeFileSync(`${this.socket}.pid`, String(process.pid), { mode: 0o600 });
+  }
+
+  /** A unix socket path the CLI cannot connect to, though Bun listens on it (#622). */
+  private longSocket(): boolean {
+    return !isPortFile(this.socket) && tooLong(this.socket) !== undefined;
   }
 
   /** Listens on a free loopback port, then writes the port file through a temporary file. */
@@ -279,8 +315,9 @@ export class Agent implements Hub {
       await closed;
       // A port file another agent wrote since stays.
       if (this.token) dropPortFile(this.socket, this.token);
-      else
+      else if (!this.longSocket() || socketOwner(this.socket) === process.pid)
         try {
+          if (this.longSocket()) unlinkSync(`${this.socket}.pid`);
           unlinkSync(this.socket);
         } catch {}
     }

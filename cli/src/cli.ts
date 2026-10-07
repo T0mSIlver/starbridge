@@ -102,9 +102,12 @@ const HELP = `starbridge: post decisions to your devices, report runs, upload qu
       notifies them once more), or back to working on other things.
 
   starbridge settle <decision id> [--outcome elsewhere|withdrawn]
+  starbridge settle --session <id> | --all [--yes] [--outcome elsewhere|withdrawn]
       Close a decision without a Starbridge answer: answered on its --answer-in page
       (elsewhere, the default for those) or no longer needed (withdrawn). Devices move it
-      out of the inbox.
+      out of the inbox. --session closes every open decision that session asked, --all every
+      one this machine asked, after asking (--yes skips the question), at the pace the
+      server allows: a looping agent's thousands take over an hour.
 
   starbridge wait [<decision id>] [--timeout <duration>] [--json] [--no-mark]
       Print the answer, or with no id the next answer to a decision this session asked (any
@@ -304,9 +307,24 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
         const { values, positionals } = parseArgs({
           args: rest,
           allowPositionals: true,
-          options: { outcome: { type: "string" } },
+          options: {
+            outcome: { type: "string" },
+            session: { type: "string" },
+            all: { type: "boolean" },
+            yes: { type: "boolean", short: "y" },
+          },
         });
-        return await settle(ctx, { id: positionals[0], ...values });
+        const { yes, ...v } = values;
+        return await settle(ctx, {
+          id: positionals[0],
+          ...v,
+          confirm: async (q) => {
+            if (yes) return true;
+            if (!process.stdin.isTTY)
+              throw new UsageError("no terminal to ask on: pass --yes to settle them all");
+            return terminalPrompt().confirm(q, false);
+          },
+        });
       }
       case "waiting":
       case "working": {

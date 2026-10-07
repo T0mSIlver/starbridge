@@ -82,6 +82,14 @@ export const DEFAULT_LIMITS = {
   answeredRetention: 7 * DAY,
   /** Unanswered decisions, and quota snapshots no machine has replaced, are dropped after this. */
   staleRetention: 30 * DAY,
+  /**
+   * Unanswered decisions an account may hold before they are kept only floodRetention: a
+   * looping agent fills the decisions cap in under 2 hours, and its account would refuse every
+   * question for 30 days (#584). A person has a few dozen open at most.
+   */
+  floodUnanswered: 1_000,
+  /** How long unanswered decisions are kept in an account past floodUnanswered. */
+  floodRetention: 7 * DAY,
 
   /** Directory appends per account. */
   directoryAppends: [30, HOUR] as RateWindow,

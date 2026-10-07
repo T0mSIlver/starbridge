@@ -77,10 +77,13 @@ private fun isArtifact(uri: Uri) = uri.host == "claude.ai" && ARTIFACT_PATH.cont
  */
 fun browserIntent(url: String): Intent {
     val uri = Uri.parse(url)
-    val view = Intent(Intent.ACTION_VIEW, uri)
+    return if (isArtifact(uri)) inBrowser(uri) else Intent(Intent.ACTION_VIEW, uri)
+}
+
+/** The intent that opens [uri] in a browser, even when an app, this one included, claims its host. */
+fun inBrowser(uri: Uri): Intent = Intent(Intent.ACTION_VIEW, uri).apply {
     // A selector with no host matches browsers only, not apps that claim one domain.
-    if (isArtifact(uri)) view.selector = Intent(Intent.ACTION_VIEW, Uri.parse("https:")).addCategory(Intent.CATEGORY_BROWSABLE)
-    return view
+    selector = Intent(Intent.ACTION_VIEW, Uri.parse("https:")).addCategory(Intent.CATEGORY_BROWSABLE)
 }
 
 /** Opens a link: a claude.ai session in the Claude app when it is installed and takes it, else [browserIntent]. */

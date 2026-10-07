@@ -35,6 +35,7 @@ import dev.starbridge.app.data.Colours
 import dev.starbridge.app.data.Phase
 import dev.starbridge.app.data.Prefs
 import dev.starbridge.app.data.SignIn
+import dev.starbridge.app.data.inBrowser
 import dev.starbridge.app.data.Store
 import androidx.navigation3.runtime.NavKey
 import dev.starbridge.app.ui.DecisionKey
@@ -140,7 +141,10 @@ class MainActivity : ComponentActivity() {
         // code for this phone to join with. Otherwise a machine's or browser's request: Add a device
         // with its code, once this phone is in the account.
         if (data != null && data.scheme == "https" && data.host == "starbridge.run" && data.path == "/pair") {
-            if ((store.phase.value as? Phase.NoDevice)?.accountExists == true) store.joinWithCode(data.toString())
+            // A phone on a self-hosted server would look the code up there and find nothing: the link
+            // opens the web page in the browser, as it does without the app (#722).
+            if (!store.server.value.toUri().host.equals(data.host, ignoreCase = true)) runCatching { startActivity(inBrowser(data)) }
+            else if ((store.phase.value as? Phase.NoDevice)?.accountExists == true) store.joinWithCode(data.toString())
             else opening.trySend(PairLinkKey(data.toString(), System.nanoTime()))
             setIntent(Intent(this, MainActivity::class.java))
         }

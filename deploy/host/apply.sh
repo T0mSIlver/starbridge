@@ -68,8 +68,8 @@ $compose stop $live
 # in the seconds until it stops are not in it. A failed backup stops the deploy before the server
 # is replaced: no migration runs without one. Only a deploy whose server migrates further than the
 # database's `user_version` takes one; when either number can't be read, it takes one anyway. The
-# last two are kept, each a full copy of the database on the same disk (#586). A new host has no
-# volume yet.
+# last two are kept, each a full copy of the database on the same disk (#586), for 7 days at most
+# (backup.sh, #721). A new host has no volume yet.
 mnt=$(docker volume inspect -f '{{.Mountpoint}}' starbridge_data 2>/dev/null) || mnt=
 db=$mnt/starbridge.db
 want= have=

@@ -97,7 +97,7 @@ function useSignInFailure(signedOut: boolean): string | undefined {
     // Read once, so a reload does not say it again.
     url.searchParams.delete("signin");
     window.history.replaceState(window.history.state, "", url);
-    if (v in SIGN_IN_FAILED) setWhy(v);
+    if (Object.hasOwn(SIGN_IN_FAILED, v)) setWhy(v);
   }, []);
   return why;
 }

@@ -170,6 +170,13 @@ test("a snooze is refused when it goes astray, has no time, runs past 7 days or 
   const { wakeAt: _, ...bare } = snooze(d, inHours(1));
   expect((await post(phone, bare)).json.error).toBe("bad-schema");
   expect((await post(phone, snooze(d, inHours(7 * 24 + 1)))).json.error).toBe("bad-schema");
+  // A valid time with 1000 fractional digits would be stored whole, outside the byte budget (#713).
+  const long = snooze(d, inHours(1));
+  long.wakeAt = long.wakeAt?.replace(/Z$|[+-]\d\d:\d\d$/, (end) => `${"0".repeat(1000)}${end}`);
+  expect((await post(phone, long)).json).toMatchObject({
+    error: "bad-schema",
+    detail: "wakeAt is at most 40 characters",
+  });
   expect((await post(phone, { ...answer(d), wakeAt: inHours(1) })).json.error).toBe("bad-schema");
   await post(phone, answer(d));
   const late = await post(web, snooze(d, inHours(1), web));

@@ -403,32 +403,114 @@ export async function setWaiting(
  * page (`elsewhere`), or no longer needed (`withdrawn`). Every device moves it out of the open
  * inbox.
  */
-export async function settle(ctx: Ctx, opts: { id?: string; outcome?: string }): Promise<number> {
-  const id = opts.id;
-  if (!id) throw new UsageError("settle needs a decision id");
+export interface SettleOpts {
+  id?: string;
+  /** Checked here: it comes from the command line. */
+  outcome?: string;
+  /** Every open decision the session asked. */
+  session?: string;
+  /** Every open decision this machine asked, once `confirm` agrees. */
+  all?: boolean;
+  confirm?: (question: string) => Promise<boolean>;
+}
+
+export async function settle(ctx: Ctx, opts: SettleOpts): Promise<number> {
+  const { id, session: sessionId, all } = opts;
+  if ([id, sessionId, all].filter((x) => x).length !== 1)
+    throw new UsageError("settle needs a decision id, --session <id> or --all");
+  if (opts.outcome !== undefined && opts.outcome !== "elsewhere" && opts.outcome !== "withdrawn")
+    throw new UsageError("--outcome is elsewhere or withdrawn");
+  const outcome = opts.outcome as "elsewhere" | "withdrawn" | undefined;
+  if (id) {
+    const asked = ctx.store.state().asked[id];
+    if (!asked) throw new UsageError(`${id} is not a decision this machine asked`);
+    const s = session(ctx);
+    await settleOne(ctx, s, await refreshDirectory(ctx, s), id, outcome);
+    return 0;
+  }
+  return settleMany(ctx, opts, outcome);
+}
+
+/**
+ * `settle --session` and `--all`: a flooded account's way out (#584). Each decision is one
+ * settled item, posted at the pace the server's 429s set: a machine posts 90 a minute.
+ */
+async function settleMany(
+  ctx: Ctx,
+  opts: SettleOpts,
+  outcome: "elsewhere" | "withdrawn" | undefined,
+): Promise<number> {
+  const st = ctx.store.state();
+  const open = Object.entries(st.asked)
+    // A settle whose notice failed is posted again.
+    .filter(([id, a]) => (!a.settled || a.unposted) && !a.revoked && !st.answers[id])
+    .filter(([, a]) => opts.all || a.session === opts.session)
+    .map(([id]) => id);
+  const whose = opts.all ? "this machine asked" : `session ${opts.session} asked`;
+  if (open.length === 0) {
+    ctx.out(`No open decision ${whose}.`);
+    return 0;
+  }
+  if (opts.all && !(await opts.confirm?.(`Settle all ${open.length} open decisions ${whose}?`)))
+    return 1;
+  const s = session(ctx);
+  const dir = await refreshDirectory(ctx, s);
+  let done = 0;
+  for (const [i, id] of open.entries()) {
+    for (;;) {
+      if (ctx.signal?.aborted) {
+        ctx.err(`starbridge: stopped after settling ${done} of ${open.length}`);
+        return 130;
+      }
+      try {
+        if (await settleOne(ctx, s, dir, id, outcome, true)) done++;
+        break;
+      } catch (e) {
+        if (!(e instanceof ApiError && e.retryAfter)) {
+          ctx.err(`starbridge: settled ${done} of ${open.length}; run it again to go on`);
+          throw e;
+        }
+        await ctx.sleep(e.retryAfter * 1000);
+      }
+    }
+    if ((i + 1) % 100 === 0 && i + 1 < open.length) ctx.out(`Settled ${done} of ${open.length}…`);
+  }
+  ctx.out(`Settled ${done} decision${done === 1 ? "" : "s"}.`);
+  return 0;
+}
+
+/**
+ * Closes decision `id` here, then tells the devices of `dir`; `bulk` for `settleMany`. False
+ * when an answer closed it instead.
+ */
+async function settleOne(
+  ctx: Ctx,
+  s: Session,
+  dir: Directory,
+  id: string,
+  outcomeOpt: "elsewhere" | "withdrawn" | undefined,
+  bulk = false,
+): Promise<boolean> {
   const asked = ctx.store.state().asked[id];
-  if (!asked) throw new UsageError(`${id} is not a decision this machine asked`);
   // Closed by a revoked device's answer the server holds: a notice would contradict it. A
   // decision `settle` closed earlier is posted again, in case that post failed.
-  if (asked.revoked) return 0;
-  const outcome = opts.outcome ?? (asked.answerIn ? "elsewhere" : "withdrawn");
-  if (outcome !== "elsewhere" && outcome !== "withdrawn")
-    throw new UsageError("--outcome is elsewhere or withdrawn");
-  const s = session(ctx);
+  if (!asked || asked.revoked) return false;
+  const outcome = outcomeOpt ?? (asked.answerIn ? "elsewhere" : "withdrawn");
   // Closed here first: from now on no answer to it is accepted or delivered, even if the post fails.
   // An answer that already reached the agent closed it, and a withdrawal would contradict it;
   // checked in the same update, so a delivery in another process cannot slip in between.
+  // A bulk run, which lasts hours, also leaves alone one the owner answered since it started.
   let delivered = false;
   ctx.store.updateState((st) => {
-    delivered = !!st.answers[id]?.seen;
+    delivered = bulk ? !!st.answers[id] : !!st.answers[id]?.seen;
     const a = st.asked[id];
     if (a && !delivered) {
       a.settled = true;
+      a.unposted = true;
       forget(a);
     }
   });
-  if (delivered) return 0;
-  const dir = await refreshDirectory(ctx, s);
+  if (delivered) return false;
   const to = devices(dir);
   const body = {
     v: 1 as const,
@@ -444,12 +526,17 @@ export async function settle(ctx: Ctx, opts: { id?: string; outcome?: string }):
       seal("settled", body, { id: s.machine.id, signKey: s.keys.sign.privateKey }, to),
     );
   } catch (e) {
-    // Answered or settled already: either way it is closed, which is what was asked.
-    const closed =
-      e instanceof ApiError && ["already-answered", "already-settled"].includes(e.code);
-    if (!closed) throw e;
+    // Answered or settled already: either way it is closed, which is what was asked. A bulk run
+    // also counts one the server dropped already.
+    const code = e instanceof ApiError ? e.code : undefined;
+    const closed = ["already-answered", "already-settled", ...(bulk ? ["not-found"] : [])];
+    if (!code || !closed.includes(code)) throw e;
   }
-  return 0;
+  ctx.store.updateState((st) => {
+    const a = st.asked[id];
+    if (a) delete a.unposted;
+  });
+  return true;
 }
 
 /** What `checkAnswer` reads of a decision this machine asked. */

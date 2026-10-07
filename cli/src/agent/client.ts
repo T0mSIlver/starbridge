@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import { existsSync } from "node:fs";
 import { request } from "node:http";
 import type { Ctx } from "../context";
 import { processAlive } from "../platform";
@@ -16,7 +17,15 @@ import {
 } from "./api";
 
 /** No agent listens: the CLI talks to the server itself. */
-export class NoAgent extends Error {}
+export class NoAgent extends Error {
+  constructor(
+    message: string,
+    /** The connection error that showed it, when one did. */
+    readonly code?: string,
+  ) {
+    super(message);
+  }
+}
 
 /** The agent refused the call; `status` 426 means the two cannot work together. */
 export class AgentError extends Error {
@@ -164,7 +173,7 @@ export class AgentClient {
       req.on("timeout", () => req.destroy(new Error(`agent: no answer within ${timeoutMs} ms`)));
       req.on("error", (e: NodeJS.ErrnoException) => {
         if (e.code && NOT_LISTENING.has(e.code))
-          reject(new NoAgent(tooLong(this.socket) ?? `no agent on ${this.socket}`));
+          reject(new NoAgent(tooLong(this.socket) ?? `no agent on ${this.socket}`, e.code));
         else if (e.code && DROPPED.has(e.code))
           reject(new AgentLost(`the agent dropped the call: ${e.message}`));
         else reject(e);
@@ -189,7 +198,13 @@ export async function withAgent<T>(
   try {
     return await viaAgent(agent);
   } catch (e) {
-    if (e instanceof NoAgent && !agent.answered) return direct();
+    if (e instanceof NoAgent && !agent.answered) {
+      // An agent may listen where this client cannot connect: say why, and how to fix it (#714).
+      const why = isPortFile(agent.socket) ? undefined : tooLong(agent.socket);
+      if (why && existsSync(agent.socket))
+        ctx.err(`starbridge: ${why}; going to the server directly`);
+      return direct();
+    }
     if (e instanceof NoAgent) throw new Error("the agent stopped in the middle of the command");
     if (e instanceof AgentError && e.status === 426 && !agent.answered) {
       ctx.err(`starbridge: ${e.body.detail ?? e.message}; going to the server directly`);
