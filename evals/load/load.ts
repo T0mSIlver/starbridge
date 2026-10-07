@@ -97,6 +97,8 @@ async function worker(index: number, procs: number) {
     method: string,
     path: string,
     body?: unknown,
+    /** The user's address, which a page load sends with no token. */
+    ip = ipOf.get(token),
     // biome-ignore lint/suspicious/noExplicitAny: each caller reads the fields it asked for
   ): Promise<{ status: number; json?: any }> {
     const t = performance.now();
@@ -104,7 +106,8 @@ async function worker(index: number, procs: number) {
       const res = await fetch(`${TARGET}${path === "/" ? "" : "/v1"}${path}`, {
         method,
         headers: {
-          ...(token ? { authorization: `Bearer ${token}`, "x-sim-ip": ipOf.get(token) ?? "" } : {}),
+          ...(token ? { authorization: `Bearer ${token}` } : {}),
+          ...(ip ? { "x-sim-ip": ip } : {}),
           ...(body ? { "content-type": "application/json" } : {}),
         },
         body: body ? JSON.stringify(body) : undefined,
@@ -309,7 +312,7 @@ async function worker(index: number, procs: number) {
       }),
       // Someone opens or reloads the page now and then: the web copies' share of the load.
       every(300_000, async () => {
-        await call("page", "", "GET", "/");
+        await call("page", "", "GET", "/", undefined, ipOf.get(u.web));
       }),
     ]);
   }
@@ -485,10 +488,12 @@ async function parent() {
   const probe = { sent: 0, failed: 0, slowest: 0 };
   if (values.until)
     (async () => {
-      while (true) {
+      // Each round from an address of its own, so the probe never meets a per-address limit.
+      for (let round = 0; ; round++) {
+        const ip = `10.255.${(round >> 8) & 255}.${round & 255}`;
         for (const url of [`${TARGET}/`, `${TARGET}/healthz`]) {
           const t = performance.now();
-          const ok = await fetch(url).then(
+          const ok = await fetch(url, { headers: { "x-sim-ip": ip } }).then(
             (r) => r.ok,
             () => false,
           );
