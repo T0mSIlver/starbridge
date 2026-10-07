@@ -1,6 +1,7 @@
 import { createApp } from "./app";
 import { configFromEnv } from "./config";
 import { openDb, SCHEMA_VERSION } from "./db";
+import { formatTop, top } from "./top";
 import { formatReport, report } from "./usage";
 import { Waiters } from "./waiters";
 
@@ -21,6 +22,16 @@ if (process.argv[2] === "usage") {
   console.log(formatReport(report(openDb(config.dbPath), days)));
   process.exit(0);
 }
+// `top [n] [--json]` prints the accounts that hold and post the most, and the last hour's sign-ups
+// and pairings, for the launch watcher (deploy/host/watch.sh). Read-only, like `usage`.
+if (process.argv[2] === "top") {
+  const args = process.argv.slice(3);
+  const n = Number(args.find((a) => a !== "--json") ?? 10);
+  if (!Number.isInteger(n) || n < 1) throw new Error("top [n] [--json]: n is a positive integer");
+  const t = top(openDb(config.dbPath), n);
+  console.log(args.includes("--json") ? JSON.stringify(t) : formatTop(t));
+  process.exit(0);
+}
 // Anything else would start a second server beside the running one (deploy/host/switch.sh runs
 // these commands in its container).
 if (process.argv[2] !== undefined) {
@@ -35,6 +46,20 @@ const server = Bun.serve({
   idleTimeout: 30,
   fetch: (req, server) => app.fetch(req, { server }),
 });
+
+// The launch watcher's counts (deploy/host/watch.sh), on the container's own loopback: the
+// watcher reads them through `docker compose exec`, and no other container reaches them.
+if (config.watchPort)
+  Bun.serve({
+    hostname: "127.0.0.1",
+    port: config.watchPort,
+    fetch: (req) => {
+      const url = new URL(req.url);
+      if (url.pathname !== "/watch") return new Response("not found", { status: 404 });
+      const over = Number(url.searchParams.get("over") ?? 2000);
+      return Response.json(deps.watch.addresses(Number.isFinite(over) ? over : 2000));
+    },
+  });
 
 const modes = [
   config.github && "GitHub sign-in",

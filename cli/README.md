@@ -3,7 +3,8 @@
 `starbridge` connects a machine that runs agents to your phone and browsers. Agents use it to ask
 you questions and report runs, and it uploads what each AI plan has left, read from CodexBar. It
 signs everything with this machine's key and encrypts it for your devices, so the server sees
-ciphertext only.
+ciphertext only. CodexBar is optional: setup asks before installing it, `--no-quota` skips it,
+and questions, runs and permission prompts work without it.
 
 ## Install
 

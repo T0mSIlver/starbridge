@@ -1,7 +1,9 @@
 "use client";
 
 import { track } from "@/lib/analytics";
+import { HOSTED } from "@/lib/installCommands";
 import { AGENTS_GUIDE, REPO, SELF_HOST } from "@/lib/links";
+import { usePageOrigin } from "@/lib/pageOrigin";
 import { useGitHubSignIn } from "@/lib/signInMethods";
 import { Analytics } from "./Analytics";
 import { InstallBox } from "./InstallBox";
@@ -98,6 +100,10 @@ function Section({
 export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
   // A server without GitHub signs in with its owner token instead.
   const github = useGitHubSignIn();
+  // A self-hosted page names its own server where starbridge.run's names itself (#772).
+  const origin = usePageOrigin();
+  const hosted = origin === HOSTED;
+  const pageHost = new URL(origin).host;
   return (
     <div className={s.page}>
       <Analytics />
@@ -166,7 +172,8 @@ export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
           </a>
         </div>
         <p className={`t-meta ${s.faint} ${s.wideOnly}`}>
-          Open source, MIT · end-to-end encrypted · self-host or use starbridge.run
+          Open source, MIT · end-to-end encrypted ·{" "}
+          {hosted ? "self-host or use starbridge.run" : "self-hosted"}
         </p>
       </section>
 
@@ -177,7 +184,7 @@ export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
             <i />
             <i />
             <i />
-            <span className="t-caption">starbridge.run</span>
+            <span className="t-caption">{pageHost}</span>
           </div>
           <Shot
             name="web-inbox"
@@ -279,8 +286,8 @@ export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
           <div className={s.app}>
             <h3 className="t-prose">iOS</h3>
             <p className={`t-reading ${s.dim}`}>
-              Add starbridge.run to the Home Screen from Safari to get notifications, on iOS 16.4
-              and later. A native app is planned.
+              Add {pageHost} to the Home Screen from Safari to get notifications, on iOS 16.4 and
+              later. A native app is planned.
             </p>
           </div>
         </div>
