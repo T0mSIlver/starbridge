@@ -55,8 +55,12 @@ jobs:
           issue=$(gh issue list --label codexbar --state open --json number --jq '.[0].number // empty')
           # A failed checkout or install skips the check: the run fails, but no issue is opened.
           if [ "$OUTCOME" = failure ]; then
-            body=$(printf "CodexBar's latest release failed the check, last seen %s:\n\n\`\`\`\n%s\n\`\`\`\n\nUntil it is fixed, \`starbridge update --codexbar <version>\` installs a release that works.\n\nRun: %s\n" \
-              "$now" "$(tail -20 "$RUNNER_TEMP/check.log" 2>/dev/null)" \
+            # CodexBar writes the log, so it goes in as an indented code block: every line, cut
+            # to 300 characters and with carriage returns dropped, starts with four spaces, and no
+            # line of it can end the block and write Markdown into the issue as a fence could.
+            log=$(tail -20 "$RUNNER_TEMP/check.log" 2>/dev/null | tr -d '\r' | cut -c1-300 | sed 's/^/    /')
+            body=$(printf "CodexBar's latest release failed the check, last seen %s:\n\n%s\n\nUntil it is fixed, \`starbridge update --codexbar <version>\` installs a release that works.\n\nRun: %s\n" \
+              "$now" "$log" \
               "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID")
             if [ -z "$issue" ]; then
               gh label create codexbar --color FBCA04 --description "Opened and closed by the codexbar workflow" 2>/dev/null || true
