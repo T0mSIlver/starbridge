@@ -43,32 +43,40 @@ export async function runAgent(ctx: Ctx, opts: AgentOpts): Promise<number> {
     mkdirSync(dirname(file), { recursive: true });
     ctx = { ...ctx, err: (line) => appendFileSync(file, `${line}\n`) };
   }
-  const agent = makeAgent(ctx, opts);
-  await agent.start();
-  // A new binary brings Codex and opencode their files here too, after a brew or npm upgrade;
-  // it also takes Pi's pre-#488 bash allow patterns out.
-  for (const line of refreshFiles({ ctx, home: ctx.env.HOME ?? homedir() })) agent.log(line);
-  try {
-    if (dropOldPiRules(ctx.env))
-      agent.log(
-        `removed the starbridge bash patterns from ${piPermissionConfig(ctx.env)}: the Starbridge link allows the commands now (#488)`,
-      );
-  } catch (e) {
-    agent.log(`could not remove the starbridge bash patterns: ${(e as Error).message}`);
-  }
   // Closing the console window a Windows task runs in sends SIGHUP, and Ctrl-Break SIGBREAK:
-  // both stop the agent as SIGTERM does, so its port file goes with it (#570).
+  // both stop the agent as SIGTERM does, so its port file goes with it (#570). Caught before the
+  // agent writes the file: until then either signal would end it and leave the file behind.
   const hangups = ["SIGHUP", "SIGBREAK"] as const;
-  let hungUp = () => {};
-  const onHangup = () => hungUp();
-  for (const s of hangups) process.on(s, onHangup);
-  await new Promise<void>((resolve) => {
-    hungUp = resolve;
-    if (!ctx.signal || ctx.signal.aborted) return resolve();
-    ctx.signal.addEventListener("abort", () => resolve(), { once: true });
+  let onHangup = () => {};
+  const hungUp = new Promise<void>((resolve) => {
+    onHangup = resolve;
   });
-  agent.log("stopping");
-  await agent.stop();
-  for (const s of hangups) process.off(s, onHangup);
+  for (const s of hangups) process.on(s, onHangup);
+  try {
+    const agent = makeAgent(ctx, opts);
+    await agent.start();
+    // A new binary brings Codex and opencode their files here too, after a brew or npm upgrade;
+    // it also takes Pi's pre-#488 bash allow patterns out.
+    for (const line of refreshFiles({ ctx, home: ctx.env.HOME ?? homedir() })) agent.log(line);
+    try {
+      if (dropOldPiRules(ctx.env))
+        agent.log(
+          `removed the starbridge bash patterns from ${piPermissionConfig(ctx.env)}: the Starbridge link allows the commands now (#488)`,
+        );
+    } catch (e) {
+      agent.log(`could not remove the starbridge bash patterns: ${(e as Error).message}`);
+    }
+    await Promise.race([
+      hungUp,
+      new Promise<void>((resolve) => {
+        if (!ctx.signal || ctx.signal.aborted) return resolve();
+        ctx.signal.addEventListener("abort", () => resolve(), { once: true });
+      }),
+    ]);
+    agent.log("stopping");
+    await agent.stop();
+  } finally {
+    for (const s of hangups) process.off(s, onHangup);
+  }
   return 0;
 }
