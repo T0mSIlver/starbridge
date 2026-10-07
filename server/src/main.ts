@@ -1,6 +1,7 @@
 import { createApp } from "./app";
 import { configFromEnv } from "./config";
 import { openDb, SCHEMA_VERSION } from "./db";
+import { setSignUps, signUpsPaused } from "./signups";
 import { formatTop, top } from "./top";
 import { formatReport, report } from "./usage";
 import { Waiters } from "./waiters";
@@ -30,6 +31,14 @@ if (process.argv[2] === "top") {
   if (!Number.isInteger(n) || n < 1) throw new Error("top [n] [--json]: n is a positive integer");
   const t = top(openDb(config.dbPath), n);
   console.log(args.includes("--json") ? JSON.stringify(t) : formatTop(t));
+}
+// `signups pause|resume|status`: new GitHub accounts are refused while paused; existing ones
+// sign in as before (#784). deploy/host/switch.sh runs it and logs each change.
+if (process.argv[2] === "signups") {
+  const what = process.argv[3] ?? "status";
+  if (what === "pause" || what === "resume") setSignUps(config, what === "resume");
+  else if (what !== "status") throw new Error("signups pause|resume|status");
+  console.log(`sign-ups ${signUpsPaused(config) ? "paused" : "open"}`);
   process.exit(0);
 }
 // Anything else would start a second server beside the running one (deploy/host/switch.sh runs

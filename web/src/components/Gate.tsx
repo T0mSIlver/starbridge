@@ -79,6 +79,8 @@ const SIGN_IN_FAILED: Record<string, string> = {
     "Sign-in could not be matched to this browser: it took over an hour, or started elsewhere.",
   failed: "GitHub didn't answer as expected.",
   off: "This server has no GitHub sign-in. Sign in with its owner token.",
+  paused:
+    "Starbridge is not taking new accounts right now; accounts that exist still sign in. Try again in a few hours.",
 };
 
 /**
