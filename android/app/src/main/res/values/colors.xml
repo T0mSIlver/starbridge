@@ -9,4 +9,7 @@
     <!-- Overridden from Android 12, which has Material You. -->
     <color name="ground_wallpaper">@color/ground</color>
     <color name="accent_wallpaper">@color/accent</color>
+    <!-- A prompt's command in its notification, a terminal in both schemes: DESIGN.md bg and fg dark (#805). -->
+    <color name="command_ground">#0C0C0C</color>
+    <color name="command_fg">#F1F1F1</color>
 </resources>

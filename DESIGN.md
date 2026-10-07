@@ -28,6 +28,8 @@ colors:
     info: "#595959"
     info-soft: "#5959591a"
     scrim: "#00000066"
+    terminal: "#0c0c0c" # a permission prompt's command block, dark in both schemes
+    on-terminal: "#f1f1f1"
   dark:
     bg: "#0c0c0c"
     surface: "#171717"
@@ -50,6 +52,8 @@ colors:
     info: "#a3a3a3"
     info-soft: "#a3a3a31f"
     scrim: "#000000b3"
+    terminal: "#0c0c0c"
+    on-terminal: "#f1f1f1"
 # Each AI lab's colour, keyed by CodexBar's provider id: the `color` of its
 # ProviderBranding in CodexBar's Sources/CodexBarCore/Providers (4685c35).
 # It fills the provider's quota bars and nothing else. The generator keeps
@@ -463,7 +467,9 @@ it has no title. A session's title is words, in the reading face (#563).
   name (and the machine, when several upload), then each window as a row
   that names only the window.
 - A permission prompt and a question look different. A prompt shows a
-  terminal icon, the exact command in mono, Allow and Deny,
+  terminal icon, what the agent says the call does as its title (else the
+  tool), the exact command in mono in a terminal block (`terminal`, dark in
+  both schemes, as the notification draws it), Allow and Deny,
   and how long it has waited. A question shows its text as the title, then
   its options, its default (the first) filled.
 - Allow covers what the owner saw. A prompt's detail shows the whole tool
@@ -490,8 +496,12 @@ it has no title. A session's title is words, in the reading face (#563).
   and History with them: on Android a segmented group (2 dp apart, rounded
   outside as a card and `radius.xs` inside, Material 3 Expressive); on the
   web one box with hairline dividers.
-- On Android, secondary buttons and the command box on a card are tonal:
-  `surface2`, or `surface` on an amber card. Nothing on a card is outlined.
+- On Android, secondary buttons on a card are tonal: `surface2`, or
+  `surface` on an amber card. Nothing on a card is outlined.
+- Answer buttons span the width wherever Starbridge draws them at phone
+  width: the Android app, and the web under 600 px. The web's wider detail
+  sizes them to their labels. A notification's buttons are Android's action
+  row, starting on the text's edge.
 - Every item opens with one meta row of facts Starbridge knows: the machine's
   kind icon and name, the repo, and the time right-aligned. The agent's own
   words come below it. Details end with the session name, truncated in the

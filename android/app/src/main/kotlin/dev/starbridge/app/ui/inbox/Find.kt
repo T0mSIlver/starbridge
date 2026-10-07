@@ -97,7 +97,7 @@ internal fun hitStyle() = SpanStyle(fontWeight = FontWeight.SemiBold, background
 
 /** What Find matches on, as the web's: the machine, the repo, the agent's words and the session. */
 private fun Decision.texts() = listOf(source.machine, source.project, question, context, source.title)
-private fun Prompt.texts() = listOf(source.machine, source.project, tool, summary, source.title)
+private fun Prompt.texts() = listOf(source.machine, source.project, tool, description, summary, source.title)
 
 /**
  * Find (#244): Material 3's search view over the inbox. The open items that
@@ -198,7 +198,7 @@ private fun LazyListScope.results(key: String, name: String, countColor: Color, 
                 clock = !closed && it.waiting,
             ) { open(it) }
             is Prompt -> HistoryRow(
-                it.source, it.summary, true, if (closed) closedHow(it) else it.tool, shape, words,
+                it.source, it.summary, true, if (closed) closedHow(it) else it.headline, shape, words,
                 ground = if (closed) MaterialTheme.colorScheme.surfaceContainer else promptGround(),
                 time = if (closed) "" else waited(it.createdAt, now),
                 clock = !closed,

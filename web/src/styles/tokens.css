@@ -24,6 +24,8 @@
   --info: #a3a3a3;
   --info-soft: #a3a3a31f;
   --scrim: #000000b3;
+  --terminal: #0c0c0c;
+  --on-terminal: #f1f1f1;
   --provider-abacus: #38bdf8;
   --provider-aiand: #e25c2b;
   --provider-aixy: #4c708d;
@@ -194,6 +196,8 @@
     --info: #595959;
     --info-soft: #5959591a;
     --scrim: #00000066;
+    --terminal: #0c0c0c;
+    --on-terminal: #f1f1f1;
     --provider-abacus: #0091c5;
     --provider-aiand: #e25c2b;
     --provider-aixy: #123650;
@@ -307,6 +311,8 @@
   --info: #595959;
   --info-soft: #5959591a;
   --scrim: #00000066;
+  --terminal: #0c0c0c;
+  --on-terminal: #f1f1f1;
   --provider-abacus: #0091c5;
   --provider-aiand: #e25c2b;
   --provider-aixy: #123650;

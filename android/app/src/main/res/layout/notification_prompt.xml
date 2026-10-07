@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A prompt's expanded notification under the system's header and buttons: the agent's
+     description of the call (else the tool), then the command in a terminal block (#805). -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical">
+
+    <TextView
+        android:id="@+id/prompt_title"
+        style="@style/TextAppearance.Compat.Notification.Title"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:ellipsize="end"
+        android:maxLines="2" />
+
+    <TextView
+        android:id="@+id/prompt_note"
+        style="@style/TextAppearance.Compat.Notification"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:visibility="gone" />
+
+    <TextView
+        android:id="@+id/prompt_command"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:background="@drawable/notification_command"
+        android:ellipsize="end"
+        android:fontFamily="@font/google_sans_code"
+        android:lineSpacingExtra="4sp"
+        android:maxLines="8"
+        android:paddingHorizontal="12dp"
+        android:paddingVertical="10dp"
+        android:textColor="@color/command_fg"
+        android:textSize="14sp" />
+</LinearLayout>
