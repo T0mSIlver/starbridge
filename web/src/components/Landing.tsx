@@ -229,7 +229,7 @@ export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
         <h2 className="t-title">Install on each machine that runs agents</h2>
         <p className={`t-small ${s.dim} ${s.wideOnly}`}>
           After Homebrew or npm, run <code className={s.inlineCode}>starbridge setup</code> to pair
-          the machine and install the Claude Code plugin. The scripts run it for you.
+          the machine and install Starbridge in your agents. The scripts run it for you.
         </p>
         <InstallBox counted />
         <p className={`t-meta ${s.faint}`}>

@@ -15,8 +15,9 @@ so setup cannot ask its own questions: ask them yourself, then run it with `--ye
    installing CodexBar if it is missing; installing Starbridge in every agent it finds (Claude
    Code, Codex, Pi, opencode; `--no-agents` skips them); stopping and removing an old
    `starbridge quota push` unit; replacing a copied mod, skill or CLAUDE.md rule; turning on
-   plugin auto-update. If the machine is not paired, ask which server to use (default
-   `https://starbridge.run`).
+   plugin auto-update; adding the CLI's folder to the PATH in your shell profile; on Linux,
+   keeping the agent running after logout (`loginctl enable-linger`). If the machine is not
+   paired, ask which server to use (default `https://starbridge.run`).
 4. Run `starbridge setup --yes` with the flags I gave ($ARGUMENTS) and the answers from step 3,
    in the background. When it is not paired yet, it prints a pairing link and a code: give me
    both at once. I open the link on my phone, or type the code under Devices in the Starbridge
