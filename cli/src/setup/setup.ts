@@ -124,6 +124,16 @@ export async function refresh(sys: Sys): Promise<string[]> {
   return done;
 }
 
+function trimServer(server: string): string {
+  return server.replace(/\/+$/, "");
+}
+
+/** A server as setup names it: its host, or the whole URL when it is not plain https. */
+function host(server: string): string {
+  const s = trimServer(server);
+  return s.startsWith("https://") ? s.slice("https://".length) : s;
+}
+
 function section(ctx: Ctx, title: string) {
   ctx.out("");
   ctx.out(title);
@@ -135,20 +145,33 @@ export async function setup(sys: Sys, opts: SetupOpts): Promise<number> {
 
   section(ctx, "Pairing");
   let machine = ctx.store.machine();
-  if (machine) {
+  // Asks nothing (#749): install.sh passes the server that served it as --server.
+  const server = trimServer(
+    opts.server ?? ctx.env.STARBRIDGE_SERVER ?? machine?.server ?? DEFAULT_SERVER,
+  );
+  const switching =
+    machine !== undefined &&
+    trimServer(machine.server) !== server &&
+    (await prompt.confirm(
+      `This machine is paired with ${host(machine.server)}. Pair it with ${host(server)} instead?`,
+      false,
+    ));
+  if (machine && !switching) {
     ctx.out(`Paired as "${machine.name}" (${machine.id}) on ${machine.server}.`);
   } else {
-    const server =
-      opts.server ??
-      ctx.env.STARBRIDGE_SERVER ??
-      (await prompt.text("Starbridge server:", DEFAULT_SERVER));
+    ctx.out(`Pairing with ${host(server)}`);
     await checkServer(server);
     const code = await pair(ctx, {
       server,
       again: "starbridge setup",
+      ...(switching ? { force: true } : {}),
       ...(opts.name ? { name: opts.name } : {}),
     });
     if (code !== 0) return code;
+    if (switching && machine)
+      ctx.out(
+        `${host(machine.server)} still lists "${machine.name}": revoke it under Devices there.`,
+      );
     machine = ctx.store.machine();
   }
   if (machine)
@@ -166,7 +189,12 @@ export async function setup(sys: Sys, opts: SetupOpts): Promise<number> {
   if (opts.noService) {
     section(ctx, "Agent");
     ctx.out("Skipped (--no-service): commands talk to the server themselves.");
-  } else await serviceStep(sys, opts, JSON.stringify(ctx.store.agentConfig()) !== configBefore);
+  } else
+    await serviceStep(
+      sys,
+      opts,
+      switching || JSON.stringify(ctx.store.agentConfig()) !== configBefore,
+    );
 
   if (opts.noPlugin) {
     section(ctx, "Agents");

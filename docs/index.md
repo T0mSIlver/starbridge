@@ -29,7 +29,8 @@ free server at starbridge.run, or [host your own](../server/README.md).
 
    On Windows, in PowerShell: `irm https://starbridge.run/install.ps1 | iex`.
 
-   The script then runs `starbridge setup`. Homebrew and npm work too; see
+   The script then runs `starbridge setup`. On your own server, take its address instead of
+   starbridge.run: its script pairs with it. Homebrew and npm work too; see
    [The CLI](../cli/README.md#install).
 
 3. **Pair the machine.** Setup prints a code, a link and a QR code. Scan the QR code with your

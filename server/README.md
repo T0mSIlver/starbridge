@@ -70,14 +70,18 @@ them. Its routes are in `PROTOCOL.md`.
    the owner token. With [GitHub sign-in](#sign-in) set up, the app and the web page can use it
    on your server too.
 
-6. Pair each machine that runs agents with your server:
+6. Install the CLI on each machine that runs agents from your server. Its install script carries
+   its `PUBLIC_URL`, so setup pairs the machine with your server:
 
    ```bash
-   starbridge setup --server https://starbridge.example
+   curl -fsSL https://starbridge.example/install.sh | sh
    ```
 
-   Or set `STARBRIDGE_SERVER` before you run `starbridge pair`. Setup ends with a test question:
-   close the app first to check that notifications reach the phone.
+   On Windows: `irm https://starbridge.example/install.ps1 | iex`. Your landing page shows the
+   same commands. A CLI installed another way pairs with
+   `starbridge setup --server https://starbridge.example`, or with `STARBRIDGE_SERVER` set.
+   Setup ends with a test question: close the app first to check that notifications reach the
+   phone.
 
 ## Notifications
 

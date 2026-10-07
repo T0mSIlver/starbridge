@@ -213,6 +213,43 @@ test("a second setup changes nothing", async () => {
   expect(JSON.parse(readFileSync(pi, "utf8")).packages).toEqual([PI_PACKAGE]);
 });
 
+test("setup asks for no server: it pairs with the one named, and asks only to switch (#749)", async () => {
+  const m = await machine();
+  const asked: string[] = [];
+  m.sys.prompt = { ...defaults, confirm: async (q, def) => (asked.push(q), def) };
+  m.ctx.env.STARBRIDGE_SERVER = "https://other.example";
+  const first = await setup(m.sys, { yes: true, noService: true, noQuota: true, noPlugin: true });
+  expect(first).toBe(0);
+  const host = server.url.replace(/^https:\/\//, "");
+  expect(asked[0]).toBe(`This machine is paired with ${host}. Pair it with other.example instead?`);
+  // Enter keeps the pairing.
+  expect(m.ctx.store.machine()?.server).toBe(server.url);
+
+  // The same server, with a trailing slash: no question.
+  asked.length = 0;
+  m.ctx.env.STARBRIDGE_SERVER = `${server.url}/`;
+  await setup(m.sys, { yes: true, noService: true, noQuota: true, noPlugin: true });
+  expect(asked.filter((q) => q.startsWith("This machine is paired"))).toEqual([]);
+
+  // A new machine pairs with the server named, saying so first.
+  const ctx = testCtx({ HOME: m.home, PATH: m.ctx.env.PATH as string });
+  const fresh: Sys = { ...m.sys, ctx, prompt: { ...defaults, text: () => Promise.reject() } };
+  const done = setup(fresh, {
+    yes: true,
+    server: server.url,
+    noService: true,
+    noQuota: true,
+    noPlugin: true,
+  });
+  await until(() => ctx.lines.some((l) => l.startsWith("Pairing code: ")));
+  expect(ctx.lines).toContain(`Pairing with ${host}`);
+  await server.approve(
+    ctx.lines.find((l) => l.startsWith("Pairing code: "))?.replace("Pairing code: ", "") as string,
+  );
+  expect(await done).toBe(0);
+  expect(ctx.store.machine()?.server).toBe(server.url);
+});
+
 test("setup asks before sending quotas that another machine already sends, and Enter skips (#748)", async () => {
   const devbox = await machine();
   await pushOnce(devbox.ctx, { providers: ["codex"], codexbar: join(FAKE_BIN, "codexbar") });

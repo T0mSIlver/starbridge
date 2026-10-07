@@ -46,8 +46,10 @@ starbridge setup
 Setup asks before each step except pairing and the background service, and a rerun repairs only
 what is missing:
 
-1. It pairs the machine with your account (see [Pair](#pair)). It asks for the server only when
-   neither `--server` nor `STARBRIDGE_SERVER` names one.
+1. It pairs the machine with your account (see [Pair](#pair)), with the first server named by
+   `--server`, `STARBRIDGE_SERVER`, the install script (each server's own names that server),
+   or the machine's pairing, else https://starbridge.run. It asks only when the machine is
+   already paired with another server, and Enter keeps that one.
 2. When another machine of your account sent quotas in the last day, it says which and asks
    whether to send them from this one too; Enter says no. Otherwise it finds CodexBar, or
    installs it (Linux and macOS; CodexBar has no Windows build, so a

@@ -50,6 +50,9 @@ const HELP = `starbridge: post decisions to your devices, report runs, upload qu
       Starbridge in each agent found (the Claude Code plugins, the Codex skill, the Pi package;
       --no-plugin skips them), and upload a first quota snapshot. Each step asks first; --yes
       takes every default, which installs CodexBar when it is missing, and the plugins.
+      --server <url>  the server to pair with (default: $STARBRIDGE_SERVER, else this
+                      machine's, else https://starbridge.run); asks before leaving another
+                      server this machine is paired with
       --refresh only brings the files setup wrote into other tools (the service, the Codex skill
       and rule, the opencode skill and plugin) to this version, and restarts the agent.
 
