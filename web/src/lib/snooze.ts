@@ -78,7 +78,7 @@ export function pickTimes(day: Date, now: Date): Date[] {
     const d = new Date(day);
     d.setHours(Math.floor(i / 2), (i % 2) * 30, 0, 0);
     return d;
-  }).filter((d) => d.getTime() - now.getTime() >= SNOOZE_MIN_MS && snoozeAllowed(d, now));
+  }).filter((d) => snoozeTakes(d, now));
 }
 
 /**
@@ -89,4 +89,20 @@ export function snoozeStart(day: Date, now: Date): Date | undefined {
   const times = pickTimes(day, now);
   if (!sameDay(day, now)) return times.find((t) => t.getHours() === MORNING) ?? times[0];
   return times.find((t) => t.getTime() >= now.getTime() + 60 * 60_000) ?? times.at(-1);
+}
+
+/** Whether a snooze may end at `until`: 5 minutes from now on, at most 7 days ahead. */
+export const snoozeTakes = (until: Date, now: Date) =>
+  until.getTime() - now.getTime() >= SNOOZE_MIN_MS && snoozeAllowed(until, now);
+
+/** "15:30", as a time field holds it; empty without a time. */
+export const hhmm = (d: Date | undefined) =>
+  d ? `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}` : "";
+
+/** `day` at a time field's "15:30", in this device's zone. */
+export function onDay(day: Date, time: string): Date {
+  const [h = 0, m = 0] = time.split(":").map(Number);
+  const d = new Date(day);
+  d.setHours(h, m, 0, 0);
+  return d;
 }

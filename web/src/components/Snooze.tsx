@@ -1,14 +1,16 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { clockTime } from "@/lib/format";
 import { usePref } from "@/lib/prefs";
 import {
   dayLabel,
+  hhmm,
+  onDay,
   pickDays,
   pickTimes,
   snoozePresets,
   snoozeStart,
+  snoozeTakes,
   snoozeTime,
 } from "@/lib/snooze";
 import s from "./Snooze.module.css";
@@ -74,8 +76,8 @@ export function SnoozeMenu({
 /**
  * Snooze's times, straight on today (#699, as Android's #692): 1 hour and This evening, each with
  * the time it brings the question back, then the days as chips and the time an hour ahead, with
- * "Snooze until 15:00" to confirm. Half hours in the Clock setting: the browser's own time field
- * writes hours its own way, unlike the rest of the page.
+ * "Snooze until 15:00" to confirm. The time is typed, to the minute, in the browser's own time
+ * field, which phones open as their clock.
  */
 function SnoozeTimes({
   now,
@@ -88,9 +90,9 @@ function SnoozeTimes({
 }) {
   const days = pickDays(now).filter((d) => pickTimes(d, now).length > 0);
   const [day, setDay] = useState(0);
-  const times = pickTimes(days[day] as Date, now);
-  const [time, setTime] = useState(() => snoozeStart(days[0] as Date, now)?.getTime());
-  const chosen = times.find((t) => t.getTime() === time) ?? snoozeStart(days[day] as Date, now);
+  const [time, setTime] = useState(() => hhmm(snoozeStart(days[0] as Date, now)));
+  const until = time ? onDay(days[day] as Date, time) : undefined;
+  const chosen = until && snoozeTakes(until, now) ? until : undefined;
   return (
     <div className={`t-small m-drop ${s.menu}`} role="dialog" aria-label="Snooze until">
       {snoozePresets(now).map((p) => (
@@ -116,7 +118,7 @@ function SnoozeTimes({
               aria-pressed={i === day}
               onClick={() => {
                 setDay(i);
-                setTime(snoozeStart(d, now)?.getTime());
+                setTime(hhmm(snoozeStart(d, now)));
               }}
             >
               {dayLabel(d, now)}
@@ -125,17 +127,13 @@ function SnoozeTimes({
         </fieldset>
         <label className={`t-meta ${s.timeLabel}`}>
           Time
-          <select
+          <input
+            type="time"
+            required
             className={`t-small ${s.time}`}
-            value={chosen?.getTime()}
-            onChange={(e) => setTime(Number(e.target.value))}
-          >
-            {times.map((t) => (
-              <option key={t.getTime()} value={t.getTime()}>
-                {clockTime(t, clock)}
-              </option>
-            ))}
-          </select>
+            value={time}
+            onChange={(e) => setTime(e.target.value)}
+          />
         </label>
         <button type="submit" className={`t-label ${ui.btn} ${ui.fill} ${s.go}`} disabled={!chosen}>
           {chosen ? `Snooze until ${snoozeTime(chosen, now, clock)}` : "Snooze"}
