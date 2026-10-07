@@ -287,6 +287,7 @@ fun Main(decisions: List<Decision>, notice: StateFlow<String?>, dismiss: () -> U
                             notificationsOff = notificationsOff,
                             // Members load with the directory, which always holds this phone.
                             noMachine = members.isNotEmpty() && members.none { it.kind == Kind.Machine },
+                            snackbar = host,
                         )
                     }
                     entry<FindKey> {

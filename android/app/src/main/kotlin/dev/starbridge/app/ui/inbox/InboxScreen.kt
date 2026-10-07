@@ -49,8 +49,11 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -130,6 +133,10 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import kotlinx.coroutines.launch
 import android.os.Build
 import android.widget.Toast
@@ -158,6 +165,8 @@ class DecisionActions(
     val open: (String) -> Unit,
     /** Puts a question off until a time (#571); a time already passed brings it back. */
     val snooze: (id: String, until: Instant) -> Unit = { _, _ -> },
+    /** Opens a question's snooze times over the inbox, for a swiped card (#692); none, no swipe. */
+    val pick: ((String) -> Unit)? = null,
 )
 
 /**
@@ -229,6 +238,8 @@ fun InboxScreen(
     notificationsOff: Boolean = false,
     /** The account has no active machine yet: the empty inbox says how to add one (#610). */
     noMachine: Boolean = false,
+    /** Where a swipe's snooze offers Undo (#692). */
+    snackbar: SnackbarHostState? = null,
 ) {
     // While a prompt is on screen, read prompts every 1.5 s, so one settled elsewhere leaves
     // at once; the clock ticks with it for the 3 s a closed prompt stays.
@@ -244,6 +255,35 @@ fun InboxScreen(
                 delay(PROMPT_POLL_MS)
                 tick = Instant.now()
                 pollPrompts()
+            }
+        }
+    }
+    // A swipe right snoozes for the time set in Settings, with Undo, or opens the times over
+    // the inbox (#692).
+    var picking by rememberSaveable { mutableStateOf<String?>(null) }
+    // Swiped snoozes still on their way to the server, each with the time it asked for.
+    val swiped = remember { mutableStateListOf<Pair<String, Instant>>() }
+    val scope = rememberCoroutineScope()
+    val h24 = LocalClock24.current
+    val swipe by rememberUpdatedState(view.swipe)
+    val swiping = remember(actions) {
+        DecisionActions(actions.answer, actions.open, actions.snooze) { id ->
+            val until = swipe.until(Instant.now())
+            if (until == null) picking = id
+            else {
+                actions.snooze(id, until)
+                swiped += id to until
+            }
+        }
+    }
+    // Undo once the snooze took: one that failed says why instead.
+    val took = swiped.filter { (id, until) -> decisions.any { it.id == id && it.snoozedUntil == until } }
+    LaunchedEffect(took) {
+        took.forEach { (id, until) ->
+            swiped -= id to until
+            scope.launch {
+                val undo = snackbar?.showSnackbar("Snoozed until ${snoozeTime(until, Instant.now(), h24)}", actionLabel = "Undo", duration = SnackbarDuration.Short)
+                if (undo == SnackbarResult.ActionPerformed) actions.snooze(id, Instant.now())
             }
         }
     }
@@ -281,28 +321,34 @@ fun InboxScreen(
             when (view.grouping) {
                 Grouping.Machine -> byMachine(runItems, needs) { it.machine.machine }.forEach { items ->
                     item(key = "machine/${items.first().machine.machine}") { MachineHeader(items.first().machine) }
-                    cards(items, at, actions, replies, promptActions, view.buttons, segmented = true)
+                    cards(items, at, swiping, replies, promptActions, view.buttons, segmented = true)
                 }
                 Grouping.Waiting -> {
                     val (running, rest) = feed.partition { it is Item.RunItem }
                     val (blocking, later) = rest.partition { it.blocks }
-                    cards(running, at, actions, replies, promptActions, view.buttons, segmented = true)
+                    cards(running, at, swiping, replies, promptActions, view.buttons, segmented = true)
                     if (blocking.isNotEmpty()) {
                         // A prompt settled elsewhere stays a moment in place, but no longer counts.
                         val count = blocking.count { it !is Item.PromptItem || it.prompt.waiting(at) }
                         item(key = "group/waiting") { GroupHeader("Waiting on you", count, StarbridgeTheme.colors.accent) }
-                        cards(blocking, at, actions, replies, promptActions, view.buttons, segmented = true)
+                        cards(blocking, at, swiping, replies, promptActions, view.buttons, segmented = true)
                     }
                     if (later.isNotEmpty()) {
                         item(key = "group/later") { GroupHeader("When you can", later.size, MaterialTheme.colorScheme.onSurfaceVariant) }
-                        cards(later, at, actions, replies, promptActions, view.buttons, segmented = true)
+                        cards(later, at, swiping, replies, promptActions, view.buttons, segmented = true)
                     }
                 }
-                Grouping.None -> cards(feed, at, actions, replies, promptActions, view.buttons)
+                Grouping.None -> cards(feed, at, swiping, replies, promptActions, view.buttons)
             }
         }
-        snoozed(snoozed, now, view.snoozedOpen, { onView(view.copy(snoozedOpen = it)) }, actions, replies, view.buttons, segmented = view.grouping != Grouping.None)
-        history(history, view.historyOpen, { onView(view.copy(historyOpen = it)) }, actions, promptActions, segmented = view.grouping != Grouping.None)
+        snoozed(snoozed, now, view.snoozedOpen, { onView(view.copy(snoozedOpen = it)) }, swiping, replies, view.buttons, segmented = view.grouping != Grouping.None)
+        history(history, view.historyOpen, { onView(view.copy(historyOpen = it)) }, swiping, promptActions, segmented = view.grouping != Grouping.None)
+    }
+    picking?.let { id ->
+        // Answered meanwhile, on this phone or another: nothing left to put off.
+        val decision = decisions.find { it.id == id && it.isOpen }
+        if (decision == null) LaunchedEffect(id) { picking = null }
+        else SnoozeSheet(decision, now, { picking = null }) { picking = null; actions.snooze(id, it) }
     }
 }
 
@@ -479,6 +525,16 @@ private const val INSTALL_DOCS = "https://starbridge.run/docs"
  */
 @Composable
 private fun DecisionCard(decision: Decision, now: Instant, actions: DecisionActions, replies: Replies, shape: Shape, buttons: CardButtons, modifier: Modifier = Modifier) {
+    val pick = actions.pick
+    if (pick != null && replies.sending[decision.id] == null) {
+        SwipeToSnooze(shape, { pick(decision.id) }, modifier) { QuestionCard(decision, now, actions, replies, shape, buttons) }
+    } else {
+        QuestionCard(decision, now, actions, replies, shape, buttons, modifier)
+    }
+}
+
+@Composable
+private fun QuestionCard(decision: Decision, now: Instant, actions: DecisionActions, replies: Replies, shape: Shape, buttons: CardButtons, modifier: Modifier = Modifier) {
     val scheme = MaterialTheme.colorScheme
     // Snoozed, nothing is amber, even when its agent waits: the owner said not now (#571).
     val until = decision.snoozedUntil?.takeIf { decision.snoozed(now) }
@@ -612,6 +668,7 @@ fun DecisionSheet(decision: Decision, now: Instant, onAnswer: (String, String?, 
     val h24 = LocalClock24.current
     var replying by rememberSaveable(decision.id) { mutableStateOf(!replies.drafts[decision.id].isNullOrEmpty()) }
     var snoozing by rememberSaveable(decision.id) { mutableStateOf(snoozeOpen) }
+    var tapped by remember(decision.id) { mutableStateOf(false) }
     SheetBody(
         decision.source,
         timeSlot(since, decision.createdAt, now),
@@ -662,10 +719,15 @@ fun DecisionSheet(decision: Decision, now: Instant, onAnswer: (String, String?, 
                 Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s1), verticalAlignment = Alignment.CenterVertically) {
                     if (reply) Quiet("Reply") { replying = true }
                     if (done) Done(sending != null) { send(null, null) }
-                    if (onSnooze != null) Quiet(if (until != null) "Snooze again" else "Snooze", sending == null) { snoozing = !snoozing }
+                    if (onSnooze != null) Quiet(if (until != null) "Snooze again" else "Snooze", sending == null) { snoozing = !snoozing; tapped = snoozing }
                     if (onSnooze != null && until != null) Quiet("Back now", sending == null) { onSnooze(Instant.now()) }
                 }
-                if (onSnooze != null && snoozing) SnoozeTimes(now) { snoozing = false; onSnooze(it) }
+                if (onSnooze != null && snoozing) {
+                    // Opened by a tap, the times scroll up into the sheet: they sit below its fold (#692).
+                    val times = remember { BringIntoViewRequester() }
+                    SnoozeTimes(now, Modifier.bringIntoViewRequester(times)) { snoozing = false; onSnooze(it) }
+                    LaunchedEffect(tapped) { if (tapped) times.bringIntoView() }
+                }
             }
         }
     }
