@@ -306,8 +306,8 @@ request without the header, or with one the server cannot read, is served.
   scheme. The app keeps a random verifier and sends only its challenge,
   base64url(SHA-256(verifier)), which the server passes to GitHub as `code_challenge` and as the
   state. GitHub binds its code to the challenge, and the app trades code and verifier for the
-  session over HTTPS; the app ignores a redirect whose state is not its challenge, and one with
-  no state unless it carries a pre-#527 server's own `sbc_` code. GitHub
+  session over HTTPS; the app ignores a redirect whose state is not its challenge, or with none.
+  GitHub
   redirects to `/v1/auth/github/callback/app`, which the Android app claims as an App Link on
   starbridge.run (`/.well-known/assetlinks.json` binds it to the app's signing keys). When the
   browser gets the redirect instead, the server hands code and state on to `APP_REDIRECT_URI`:

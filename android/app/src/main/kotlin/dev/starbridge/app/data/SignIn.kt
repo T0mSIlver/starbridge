@@ -21,7 +21,7 @@ object SignIn {
     /** What ends a sign-in. */
     sealed interface Redirect {
         /** The code to trade, and the sign-in's state: its challenge. A server before #527 sends no state. */
-        data class Code(val code: String, val state: String?) : Redirect
+        data class Code(val code: String, val state: String) : Redirect
 
         /** The owner turned GitHub down, or GitHub failed. */
         data class Denied(val state: String) : Redirect
@@ -44,9 +44,8 @@ object SignIn {
         }?.toMap().orEmpty()
         val code = query["code"]
         val state = query["state"]
-        // Only a server from before #527 sends a code without the state: its own one-time code.
         return when {
-            code != null && (state != null || code.startsWith("sbc_")) -> Redirect.Code(code, state)
+            code != null && state != null -> Redirect.Code(code, state)
             query["error"] != null && state != null -> Redirect.Denied(state)
             else -> null
         }
