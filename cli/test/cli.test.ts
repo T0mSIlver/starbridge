@@ -299,10 +299,25 @@ function sidewaysJpeg(): string {
   return path;
 }
 
+test("a decision's image is stored once whatever the devices, and a re-seal keeps it (#685)", async () => {
+  const ctx = await paired(server);
+  const shot = noisyPng(1080, 2400);
+  expect(await run([...ASK, "--image", shot], ctx)).toBe(0);
+  const one = server.decisionBytes();
+  const laptop = await server.addDevice("laptop");
+  const tablet = await server.addDevice("tablet");
+  await poll(ctx, session(ctx), { cursor: ctx.store.state().cursor, seconds: 0, shared: true });
+  const three = server.decisionBytes();
+  // Two more boxes of text, not two more copies of the picture.
+  expect(three - one).toBeLessThan(10_000);
+  const [img] = (await server.images())[0] ?? [];
+  for (const by of [laptop, tablet]) expect((await server.images(by))[0]?.[0]).toEqual(img);
+}, 30_000);
+
 test("ask turns a sideways phone photo upright", async () => {
   const ctx = await paired(server);
   expect(await run([...ASK, "--image", sidewaysJpeg()], ctx)).toBe(0);
-  const [img] = (await server.opened("decision"))[0]?.images ?? [];
+  const [img] = (await server.images())[0] ?? [];
   expect(img).toMatchObject({ type: "image/jpeg", width: 20, height: 40 });
   const px = jpeg.decode(fromB64(img?.data ?? ""), { useTArray: true });
   // The top row is red; the bottom row is white.

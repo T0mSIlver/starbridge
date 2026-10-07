@@ -3,6 +3,7 @@ package dev.starbridge.app.protocol
 import com.goterl.lazysodium.LazySodium
 import com.goterl.lazysodium.interfaces.Auth
 import com.goterl.lazysodium.interfaces.Box
+import com.goterl.lazysodium.interfaces.SecretBox
 import com.goterl.lazysodium.interfaces.Sign
 import java.util.Base64
 
@@ -98,6 +99,13 @@ class Sodium(private val ls: LazySodium) {
 
     fun authVerify(tag: ByteArray, message: ByteArray, key: ByteArray): Boolean =
         tag.size == Auth.BYTES && ls.cryptoAuthVerify(tag, message, message.size.toLong(), key)
+
+    /** crypto_secretbox_open_easy; null when [key] does not open it or it was altered. */
+    fun secretboxOpen(sealed: ByteArray, nonce: ByteArray, key: ByteArray): ByteArray? {
+        if (key.size != SecretBox.KEYBYTES || nonce.size != SecretBox.NONCEBYTES || sealed.size < SecretBox.MACBYTES) return null
+        val message = ByteArray(sealed.size - SecretBox.MACBYTES)
+        return if (ls.cryptoSecretBoxOpenEasy(message, sealed, sealed.size.toLong(), nonce, key)) message else null
+    }
 
     fun random(n: Int): ByteArray = ls.randomBytesBuf(n)
 }

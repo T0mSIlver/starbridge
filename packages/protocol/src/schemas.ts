@@ -303,20 +303,23 @@ export const Source = z.object({
 export type Source = z.infer<typeof Source>;
 
 /**
- * A picture the agent attaches to a decision: a mockup, a failing screen, a chart. It travels
- * inside the signed and sealed body like the text, so it costs its size once per box; the CLI
+ * A picture the agent attaches to a decision: a mockup, a failing screen, a chart. Its bytes
+ * travel once, as the item's blob at the same index (`sealImage`); the signed body carries what
+ * opens and checks it, so each device's box costs a few dozen bytes per image (#685). The CLI
  * downscales images to keep a decision within the server's per-item cap (PROTOCOL.md, Limits).
  */
-export const DecisionImage = z.object({
+export const DecisionImage = ImageRef.extend({
   /** PNG or JPEG only: never SVG, which can carry script. */
   type: z.enum(["image/png", "image/jpeg"]),
   width: z.number().int().min(1).max(8192),
   height: z.number().int().min(1).max(8192),
-  data: B64.max(512 * 1024),
   /** What the image shows, for screen readers and the notification. */
   alt: z.string().max(300).optional(),
 });
 export type DecisionImage = z.infer<typeof DecisionImage>;
+
+/** An image as clients show it, once its blob opened: its bytes as base64url in `data`. */
+export type ShownImage = Omit<DecisionImage, "key" | "hash"> & { data: string };
 
 /**
  * A page the owner may open to decide, typically a claude.ai artifact the agent built. HTTPS

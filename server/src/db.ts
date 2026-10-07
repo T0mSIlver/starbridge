@@ -223,7 +223,13 @@ CREATE INDEX items_account_seq ON items (account_id, seq);
 CREATE INDEX usage_events_day_metric ON usage_events (day, metric);
 `;
 
-const MIGRATIONS = [V1, V2, V3, V4, V5];
+/**
+ * A decision's images, each encrypted once for every device (#685): a JSON array of base64url
+ * blobs, beside its boxes.
+ */
+const V6 = "ALTER TABLE items ADD COLUMN blobs TEXT;";
+
+const MIGRATIONS = [V1, V2, V3, V4, V5, V6];
 
 export function openDb(path: string): Database {
   if (path !== ":memory:") mkdirSync(dirname(path), { recursive: true });

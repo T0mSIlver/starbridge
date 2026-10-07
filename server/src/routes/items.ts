@@ -65,6 +65,7 @@ interface Row {
   answered_at: string | null;
   to_id: string;
   box: string;
+  blobs: string | null;
 }
 
 /** An item as a recipient sees it: its own box only, plus what the server knows about it. */
@@ -85,6 +86,7 @@ function stored(r: Row): Stored {
       from: r.from_id,
       ...(r.re ? { re: r.re } : {}),
       ...(r.wake_at ? { wakeAt: r.wake_at } : {}),
+      ...(r.blobs ? { blobs: JSON.parse(r.blobs) as string[] } : {}),
       boxes: [{ to: r.to_id, box: r.box }],
     },
     cursor: String(r.seq),
@@ -93,7 +95,7 @@ function stored(r: Row): Stored {
   };
 }
 
-const SELECT = `SELECT i.seq, i.id, i.kind, i.from_id, i.re, i.wake_at, i.received_at, i.answered_at, b.to_id, b.box
+const SELECT = `SELECT i.seq, i.id, i.kind, i.from_id, i.re, i.wake_at, i.received_at, i.answered_at, b.to_id, b.box, i.blobs
   FROM items i JOIN boxes b ON b.account_id = i.account_id AND b.item_id = i.id`;
 
 function after(raw: string | undefined): number {
@@ -148,7 +150,10 @@ function watched(c: Context<Env>, account: string) {
   return { directory: n, ...(asked ? { quotaAsked: asked } : {}) };
 }
 
-/** What a push carries: the recipient's own box when it fits, else the id to fetch. */
+/**
+ * What a push carries: the recipient's own box when it fits, else the id to fetch. An item with
+ * blobs (a decision's images) goes as its id, so the device fetches the images with it.
+ */
 export function pushPayload(item: SealedItem, to: string, limit: number): string {
   const head = {
     v: 1,
@@ -160,7 +165,9 @@ export function pushPayload(item: SealedItem, to: string, limit: number): string
   };
   const box = item.boxes.find((b) => b.to === to)?.box;
   const full = JSON.stringify({ ...head, box });
-  return box && Buffer.byteLength(full) <= limit ? full : JSON.stringify(head);
+  return box && !item.blobs?.length && Buffer.byteLength(full) <= limit
+    ? full
+    : JSON.stringify(head);
 }
 
 export const itemRoutes = new Hono<Env>();
@@ -186,9 +193,15 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
   if (item.from !== me) fail(403, "forbidden", "from must be the caller");
   const to = item.boxes.map((b) => b.to);
   if (new Set(to).size !== to.length) fail(400, "bad-schema", "one box per recipient");
-  const size = item.boxes.reduce((n, b) => n + b.box.length, 0);
-  // What it costs to store: its boxes, and its rows, which a small item would otherwise get free.
-  const charged = size + limits.rowBytes * (1 + item.boxes.length);
+  if (item.blobs && item.kind !== "decision")
+    fail(400, "bad-schema", `${item.kind} items carry no blobs`);
+  // A decision's images are stored once, so they count once, whatever the number of devices.
+  const blobBytes = (blobs: string[] | undefined) =>
+    (blobs ?? []).reduce((n, b) => n + b.length, 0);
+  const size = item.boxes.reduce((n, b) => n + b.box.length, 0) + blobBytes(item.blobs);
+  // What it costs to store: its boxes and blobs, and its rows, which a small item would
+  // otherwise get free. A re-seal that sends no blobs keeps the stored ones, which count too.
+  let charged = size + limits.rowBytes * (1 + item.boxes.length);
   const most = fromDevice
     ? limits.answerBytes
     : item.kind === "run"
@@ -196,7 +209,9 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
       : item.kind === "quota"
         ? limits.quotaBytes
         : limits.itemBytes;
-  if (size > most) fail(413, "too-large", `a ${item.kind}'s boxes hold at most ${most} bytes`);
+  const tooLarge = () =>
+    fail(413, "too-large", `a ${item.kind}'s boxes and blobs hold at most ${most} bytes`);
+  if (size > most) tooLarge();
   // A snooze names when the server pushes it again (#571): within 7 days of now.
   let wakeDue: string | null = null;
   if (rule.wake) {
@@ -318,14 +333,16 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
     }
     const earlier = db
       .query(
-        "SELECT kind, from_id, received_at, answered_at FROM items WHERE account_id = ? AND id = ?",
+        "SELECT kind, from_id, received_at, answered_at, blobs FROM items WHERE account_id = ? AND id = ?",
       )
       .get(caller.account, item.id) as {
       kind: string;
       from_id: string;
       received_at: string;
       answered_at: string | null;
+      blobs: string | null;
     } | null;
+    let blobs = item.blobs;
     let receivedAt = now.toISOString();
     const resealed = item.reseal === true;
     if (resealed && (!RESEALED.includes(item.kind) || !earlier))
@@ -344,6 +361,13 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
             .all(caller.account, item.id) as { to_id: string }[]
         ).map((r) => r.to_id);
         pushTo = to.filter((id) => !had.includes(id));
+        // The images were sealed once for every device, so a re-seal sends only the boxes.
+        if (!blobs && earlier.blobs) {
+          blobs = JSON.parse(earlier.blobs) as string[];
+          const kept = blobBytes(blobs);
+          if (size + kept > most) tooLarge();
+          charged += kept;
+        }
       }
       db.query("DELETE FROM items WHERE account_id = ? AND id = ?").run(caller.account, item.id);
     }
@@ -375,8 +399,8 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
     const iso = now.toISOString();
     const seq = nextSeq(db);
     db.query(
-      `INSERT INTO items (seq, account_id, id, kind, from_id, re, wake_at, wake_due, received_at, size)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO items (seq, account_id, id, kind, from_id, re, wake_at, wake_due, received_at, size, blobs)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       seq,
       caller.account,
@@ -388,6 +412,7 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
       wakeDue,
       receivedAt,
       charged,
+      blobs ? JSON.stringify(blobs) : null,
     );
     const box = db.query("INSERT INTO boxes (account_id, item_id, to_id, box) VALUES (?, ?, ?, ?)");
     for (const b of item.boxes) box.run(caller.account, item.id, b.to, b.box);

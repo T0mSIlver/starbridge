@@ -9,6 +9,7 @@ import {
   addEntry,
   type Directory,
   open,
+  openImages,
   openPairingRequest,
   pairingApproval,
   parsePairingCode,
@@ -151,6 +152,18 @@ export class LiveServer {
     return items.map((s) => open(s.item as SealedItem & { kind: K }, me, dir).body);
   }
 
+  /** Each decision's images as a device shows them, opened from their blobs (#685). */
+  async images(by: Actor = this.owner.device) {
+    const r = await this.s.call("GET", "/v1/items?kind=decision", { token: by.token });
+    const items = r.json.items as Stored[];
+    const dir = await this.directory();
+    const me = { id: by.id, box: by.keys.box };
+    return items.map((s) => {
+      const item = s.item as SealedItem & { kind: "decision" };
+      return openImages(item, open(item, me, dir).body.images);
+    });
+  }
+
   private async sealAnswer(
     decisionId: string,
     reply: { choice?: string; text?: string; done?: true },
@@ -233,6 +246,15 @@ export class LiveServer {
   /** Pairs a second device, such as a laptop, for answers from someone other than the phone. */
   async addDevice(id: string): Promise<Actor> {
     return pair(this.s, this.owner, id, "device", await signIn(this.s));
+  }
+
+  /** What the account's decisions cost to store, boxes, blobs and rows. */
+  decisionBytes(): number {
+    return (
+      this.s.deps.db
+        .query("SELECT COALESCE(SUM(size), 0) AS n FROM items WHERE kind = 'decision'")
+        .get() as { n: number }
+    ).n;
   }
 
   /** The phone revokes a member. */

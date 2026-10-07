@@ -69,10 +69,10 @@ export interface AskInput {
   answerIn?: string | DecisionLink;
 }
 
-/** What the server stores at most for one decision, all boxes together (PROTOCOL.md, Limits). */
+/** What the server stores at most for one decision, boxes and blobs together (PROTOCOL.md, Limits). */
 export const ITEM_BYTES = 2 * 1024 * 1024;
 
-/** One image's file at most: the schema's 512 KB of base64url (`DecisionImage.data`). */
+/** One image's file at most: its blob is then the 512 KB of base64url `BLOB_MAX` allows. */
 const IMAGE_BYTES = 384 * 1024;
 
 /** Exit code when nobody answered before `--timeout`. */
@@ -220,12 +220,13 @@ function checked(decision: unknown): Decision {
   }
 }
 
-const boxBytes = (item: SealedItem) => item.boxes.reduce((n, b) => n + b.box.length, 0);
+const itemBytes = (item: SealedItem) =>
+  item.boxes.reduce((n, b) => n + b.box.length, 0) +
+  (item.blobs ?? []).reduce((n, b) => n + b.length, 0);
 
 /**
- * Signs and seals the decision with its pictures, scaled down until every box together fits
- * ITEM_BYTES. Each box carries every image as base64url inside the sealed base64url envelope, so
- * a byte of image costs about (4/3)² bytes per device.
+ * Signs and seals the decision with its pictures, scaled down until its boxes and blobs fit
+ * ITEM_BYTES. Each picture is one blob, base64url, whatever the number of devices (#685).
  */
 function sealWithPictures(
   base: Decision,
@@ -236,16 +237,16 @@ function sealWithPictures(
   const sealed = (d: Decision) => seal("decision", d, signer, to);
   if (pictures.length === 0) return { decision: base, item: sealed(base) };
   if (pictures.length > 4) throw new UsageError("--image: at most 4 images");
-  const perBox = boxBytes(sealed(base)) / to.length;
   let share = Math.min(
     IMAGE_BYTES,
-    Math.floor(((ITEM_BYTES / to.length - perBox) * 9) / 16 / pictures.length),
+    Math.floor(((ITEM_BYTES - itemBytes(sealed(base))) * 3) / 4 / pictures.length),
   );
   for (let tries = 0; tries < 5; tries++) {
     if (share < 1024) break;
-    const decision = checked({ ...base, images: pictures.map((p) => fitPicture(p, share)) });
-    const item = sealed(decision);
-    const size = boxBytes(item);
+    const fitted = pictures.map((p) => fitPicture(p, share));
+    const decision = checked({ ...base, images: fitted.map((f) => f.image) });
+    const item = { ...sealed(decision), blobs: fitted.map((f) => f.blob) };
+    const size = itemBytes(item);
     if (size <= ITEM_BYTES) return { decision, item };
     share = Math.floor(share * (ITEM_BYTES / size) * 0.95);
   }
@@ -283,15 +284,13 @@ export async function postDecision(ctx: Ctx, s: Session, input: AskInput): Promi
   const cursor = ctx.store.state().cursor;
   // Asked already waiting, its waiting state pushes instead, so the notification says so.
   await s.api.postItem(input.waiting ? { ...item, quiet: true } : item);
-  const { images: _, ...body } = decision;
   ctx.store.updateState((st) => {
     st.asked[decision.id] = {
       question: decision.question,
       options: decision.options,
       askedAt: decision.createdAt,
       to: decision.to,
-      body,
-      ...(input.images ? { images: input.images } : {}),
+      body: decision,
       ...(cursor !== undefined ? { cursor } : {}),
       ...(decision.source.session && !input.held ? { session: decision.source.session } : {}),
       ...(decision.source.sessionTitle ? { sessionTitle: decision.source.sessionTitle } : {}),
@@ -885,7 +884,6 @@ export async function dropRevokedNow(ctx: Ctx) {
 
 function forget(a: State["asked"][string]) {
   delete a.body;
-  delete a.images;
 }
 
 /** The server drops an unanswered decision after 30 days; one re-sealed later would come back. */
@@ -956,16 +954,9 @@ async function reseal(ctx: Ctx, s: Session, known: Directory): Promise<void> {
       const x = st.asked[id];
       if (x) x.to = [...new Set([...(x.to ?? []), ...ids])];
     });
-    const pictures = (a.images ?? []).flatMap((i) => {
-      try {
-        return [typeof i === "string" ? loadPicture(i) : loadPicture(i.path, i.alt)];
-      } catch {
-        return []; // Moved or deleted since: the re-sealed copy goes without it.
-      }
-    });
+    // Without blobs: the server keeps the images, sealed once for every device (#685).
     const posted = await post(() => ({
-      ...sealWithPictures({ ...body, to: ids, dir: signedHead(ctx, dir) }, pictures, signer, to)
-        .item,
+      ...seal("decision", { ...body, to: ids, dir: signedHead(ctx, dir) }, signer, to),
       reseal: true,
     }));
     if (posted === "closed")

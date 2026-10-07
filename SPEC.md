@@ -244,9 +244,11 @@ provider plugins add providers, not panels.
   refers to); `fromActive` (it goes when its machine is revoked). The hourly sweep builds its
   deletes from that table, and a kind without `keep` fails typecheck, so no kind is stored and
   never dropped. The periods are server limits, so tests and self-hosters set their length.
-- **Sizes** (#170). A question's boxes may hold 2 MB together and one image's base64url 512 KB; the
-  request body limit is 3 MB. Each box carries the whole body, so the cap must fit every device's
-  copy.
+- **Sizes** (#170, #685). A question's boxes and image blobs may hold 2 MB together and one image's
+  blob 512 KB of base64url; the request body limit is 3 MB. Each image is encrypted once with a
+  random key and stored once; only its key and hash go in each device's box, with the text. Tom's
+  first evening of dogfooding stored about 370 KB per question, mostly screenshots sealed once per
+  device; one 110 KB screenshot to 3 devices went from 591 KB stored to 152 KB.
 - **Runs** are one item the machine re-posts under its id; the server keeps the latest, at most
   500 per account, for a day after the last update.
 - **Permission answers** are refused 10 minutes after the prompt arrived, since the server cannot
@@ -566,8 +568,8 @@ Codex prompts are not supported.
   the one amber button. `recommended` names it when it isn't first.
 - **Typed replies** (#201). Every question with options also takes a typed reply, as a steer to act
   on. It goes alone, with no choice.
-- **Images** (#62, #170): at most 4, PNG or JPEG, never SVG. The CLI keeps a file as is up to a
-  3000 px edge, so a phone screenshot reaches six devices unchanged and viewers can zoom into real
+- **Images** (#62, #170, #685): at most 4, PNG or JPEG, never SVG. The CLI keeps a file as is up
+  to a 3000 px edge and 384 KB, so a phone screenshot reaches every device unchanged and viewers can zoom into real
   pixels. Android decodes by the image's real size, drops one larger than declared or 8192 px a
   side, and holds at most 4096² pixels in a decode (#360).
 - **Links** (#171) are what the agent wants the owner to see before answering: a Claude artifact, a
@@ -858,9 +860,10 @@ Tokens, type and components: `DESIGN.md`.
   server. Raising it later is a setting nobody notices; lowering it would strand accounts above
   it. Devices need no cap of their own: the directory holds at most 200 entries, an account's
   pages hold at most 16 join-list long-polls, and Caddy limits each address's requests (#582).
-  Every item is sealed once per device, so its size grows with their number: a run update is
-  capped per device for that reason, and a question with 8000 characters of context fits up to
-  about 140 devices in its 2 MB, pictures shrinking to fit.
+  Every item's text is sealed once per device, so its size grows with their number: a run update
+  is capped per device for that reason, and a question with 8000 characters of context fits up to
+  about 140 devices in its 2 MB. Its pictures are stored once whatever the number (#685), and
+  shrink only to leave the boxes room.
 - **Privacy and terms** (`/privacy`, `/terms`). Each claim follows the code: stored columns in
   `server/src/db.ts`, retention in `server/src/limits.ts`, logs and backups in `deploy/`. A change
   to what is stored changes the page, and the Play data-safety form. Contact is
@@ -955,5 +958,3 @@ What the code relies on, with the versions checked.
   until a ruling (#305).
 - An offline banner on the web (#332).
 - Revoking the old machine in a `pair --force` approval would need a `replaces` field (#287).
-- Sealing an image once with a key in each box would free the per-device size cost; not needed
-  while accounts pair a few devices.

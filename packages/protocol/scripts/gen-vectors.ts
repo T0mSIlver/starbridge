@@ -1431,7 +1431,8 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
     type: "image/png",
     width: 1,
     height: 1,
-    data: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg",
+    key: toB64(seed(44)),
+    hash: toB64(seed(45)),
     alt: "The settings screen, cropped",
   };
   const artifact = { url: "https://claude.ai/public/artifacts/0b3f0e7c", title: "Both mockups" };
@@ -1574,8 +1575,8 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
         valid: false,
       },
       {
-        name: "image data not base64url",
-        body: { ...decisionBody, images: [{ ...pixel, data: "iVBO+w==" }] },
+        name: "image key not 32 bytes",
+        body: { ...decisionBody, images: [{ ...pixel, key: toB64(new Uint8Array(31)) }] },
         valid: false,
       },
       {

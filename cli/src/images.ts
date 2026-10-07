@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { type DecisionImage, toB64 } from "@starbridge/protocol";
+import { type DecisionImage, sealImage } from "@starbridge/protocol";
 import jpeg from "jpeg-js";
 import { PNG } from "pngjs";
 import { UsageError } from "./context";
@@ -161,20 +161,31 @@ function resize(p: Picture, width: number, height: number): Uint8Array {
   return out;
 }
 
-const image = (p: Picture, type: DecisionImage["type"], w: number, h: number, bytes: Uint8Array) =>
-  ({
-    type,
-    width: w,
-    height: h,
-    data: toB64(bytes),
-    ...(p.alt ? { alt: p.alt } : {}),
-  }) satisfies DecisionImage;
+/** A picture ready to send: its blob, sealed once for every device, and its ref to sign. */
+export interface Fitted {
+  image: DecisionImage;
+  blob: string;
+}
+
+function image(
+  p: Picture,
+  type: DecisionImage["type"],
+  w: number,
+  h: number,
+  bytes: Uint8Array,
+): Fitted {
+  const { blob, ref } = sealImage(bytes);
+  return {
+    image: { type, width: w, height: h, ...ref, ...(p.alt ? { alt: p.alt } : {}) },
+    blob,
+  };
+}
 
 /**
  * The picture in at most `maxBytes`: the file itself when it fits and is no larger than a screen
  * shows, else a JPEG scaled down until it fits. Throws when even a small one does not.
  */
-export function fitPicture(p: Picture, maxBytes: number): DecisionImage {
+export function fitPicture(p: Picture, maxBytes: number): Fitted {
   const longest = Math.max(p.width, p.height);
   if (p.file.upright && p.file.bytes.length <= maxBytes && longest <= MAX_EDGE)
     return image(p, p.file.type, p.width, p.height, p.file.bytes);

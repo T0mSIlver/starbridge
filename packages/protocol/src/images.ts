@@ -1,4 +1,4 @@
-import type { ImageRef } from "./schemas";
+import type { DecisionImage, ImageRef, SealedItem, ShownImage } from "./schemas";
 import { concat, fromB64, ProtocolError, sodium, toB64, utf8 } from "./sodium";
 
 const label = concat(utf8("starbridge/v1/image"), new Uint8Array([0]));
@@ -36,4 +36,20 @@ export function openImage(blob: string, ref: ImageRef): Uint8Array {
   } catch {
     throw new ProtocolError("cannot-open", "image does not open");
   }
+}
+
+/**
+ * A decision's images that open from the item's blobs, in order. One whose blob is missing (a
+ * push carries none) or fails to open is left out, as a client leaves out a broken image.
+ */
+export function openImages(item: SealedItem, images: DecisionImage[] | undefined): ShownImage[] {
+  return (images ?? []).flatMap(({ key, hash, ...image }, i) => {
+    const blob = item.blobs?.[i];
+    if (blob === undefined) return [];
+    try {
+      return [{ ...image, data: toB64(openImage(blob, { key, hash })) }];
+    } catch {
+      return [];
+    }
+  });
 }

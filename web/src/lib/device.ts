@@ -30,6 +30,7 @@ import {
   newPairingCode,
   noteHead,
   openAsync,
+  openImages,
   openJoinApproval,
   openJoinRequest,
   openPairingApproval,
@@ -77,6 +78,7 @@ import type {
   QuotaCardData,
   Reply,
   RunItem,
+  Decision as ShownDecision,
 } from "./types";
 
 export { ApiError };
@@ -1160,7 +1162,11 @@ async function openDecision(
       ? notice.outcome
       : undefined;
   return {
-    decision: body as Decision,
+    // Each image opens from its blob, sealed once for every device (#685).
+    decision: {
+      ...body,
+      ...(body.images ? { images: openImages(s.item, body.images) } : {}),
+    } as ShownDecision,
     machine,
     ...(s.answeredAt ? { answeredAt: s.answeredAt } : {}),
     ...(settled ? { settled } : {}),
@@ -1173,7 +1179,7 @@ async function openDecision(
  * Another device's answer the asking machine took, from its settled notice (#330): undefined for
  * any other notice, or one naming this browser.
  */
-function wonBy(ctx: Ctx, notice: Settled, d: Decision): InboxItem["answeredBy"] {
+function wonBy(ctx: Ctx, notice: Settled, d: Omit<Decision, "images">): InboxItem["answeredBy"] {
   const by = notice.outcome === "device" ? notice.device : undefined;
   if (!by || by === ctx.device.id) return undefined;
   // A device's notice with neither choice nor text applied a Done, on a decision that takes one
