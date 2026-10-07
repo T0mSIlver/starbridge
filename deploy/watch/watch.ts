@@ -105,11 +105,14 @@ function refused(r: Reading, test: (status: number, error: string, route: string
   return n;
 }
 
-/** True when every sample in the last `minutes` crosses, and they span the whole time. */
+/**
+ * True when every sample of the last `minutes` crosses, from the last one taken at or before
+ * the span began, so readings every few minutes still cover it.
+ */
 function sustained(history: Sample[], now: number, minutes: number, over: (s: Sample) => boolean) {
-  const span = history.filter((s) => s.at >= now - minutes * 60_000 - 60_000);
-  const oldest = span[0];
-  return oldest !== undefined && now - oldest.at >= minutes * 60_000 && span.every(over);
+  const start = now - minutes * 60_000;
+  const first = history.findLastIndex((s) => s.at <= start);
+  return first >= 0 && history.slice(first).every(over);
 }
 
 export function judge(
@@ -179,7 +182,7 @@ export function judge(
   const accounts = Object.entries(l.refusals.accounts);
   const worst = accounts[0];
   const suspend = worst ? `${SWITCH} suspend ${worst[0]}` : undefined;
-  const fiveXX = refused(r, (s) => s >= 500 && s !== 503);
+  const fiveXX = refused(r, (s, e) => s >= 500 && e !== "storage-full");
   if (fiveXX >= t.serverErrors) add("5xx", `${fiveXX} 5xx answers from the server`);
   const signIn = refused(
     r,
@@ -232,27 +235,22 @@ export function judge(
   const c = r.connections;
   if (c.toServer > t.toServer)
     add("long-polls", `${c.toServer} connections from Caddy to the server (over ${t.toServer})`);
+  // Tom's rule: an address is named only while it holds over 200 connections or is being
+  // rate-limited, by Caddy (at its cap) or by the server (429s). The alerts' keys hold the
+  // number of named addresses, never one, since the state file is on disk; a new address
+  // changes the number and wakes the watcher again.
+  const named: [string, string][] = [];
   for (const [a, n] of Object.entries(c.named))
-    if (n >= t.addressConnections)
-      add(
-        `conns:${a}`,
-        `${a} holds ${n} connections (over ${t.addressConnections})`,
-        `${SWITCH} block ${a}`,
-      );
+    if (n > t.addressConnections)
+      named.push([a, `${a} holds ${n} connections (over ${t.addressConnections})`]);
   for (const [a, n] of Object.entries(r.addresses?.busy ?? {}))
     if (n >= t.addressRequests)
-      add(
-        `busy:${a}`,
-        `${a} made ${n} /v1 requests in a minute (Caddy refuses past 3000)`,
-        `${SWITCH} block ${a}`,
-      );
+      named.push([a, `${a} made ${n} /v1 requests in a minute: Caddy refuses it past 3000`]);
   for (const [a, n] of Object.entries(r.addresses?.limited ?? {}))
-    if (n >= 20)
-      add(
-        `limited:${a}`,
-        `${a} refused ${n} times with 429 in the last 2 minutes`,
-        `${SWITCH} block ${a}`,
-      );
+    if (n >= t.addressLimited)
+      named.push([a, `${a} was refused ${n} times with 429 by the server in the last 2 minutes`]);
+  const distinct = new Set(named.map(([a]) => a)).size;
+  for (const [a, what] of named) add(`addresses:${distinct}`, what, `${SWITCH} block ${a}`);
 
   const top = r.top;
   if (top && top.signUpsLastHour > t.signUpsPerHour)

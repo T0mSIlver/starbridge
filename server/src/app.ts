@@ -63,10 +63,14 @@ export async function createApp(config: Config, fetchFn: typeof fetch = fetch) {
     sweepPairings(db);
     deps.pairingClients.sweep(Date.now());
     sweepJoins(db);
+  });
+  // Apart from the sweeps, which a full disk stops: the counts must still turn over.
+  const watchMinute = () => {
     const refused = deps.watch.flush();
     if (refused) console.log(refused);
     deps.watch.rotate();
-  });
+  };
+  setInterval(watchMinute, 60_000).unref();
   // The sweep deletes in batches and lets requests in between (#585).
   const hourly = () =>
     sweepStorage(db, config.limits)

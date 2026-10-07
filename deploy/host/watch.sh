@@ -4,7 +4,7 @@
 # against the thresholds:
 #   ssh deploy@starbridge.run sudo sh -s -- --since 2026-10-08T13:00:00Z < deploy/host/watch.sh
 # --since   count log lines since then (the previous run); default 5 minutes ago
-# --conns   name an address holding at least this many connections to Caddy now (default 200)
+# --conns   name an address holding over this many connections to Caddy now (default 200)
 # --over    name an address that made at least this many /v1 requests in a minute (default 2000)
 # Addresses are read at this instant from `ss` and the server's memory (port 8081), and only
 # those past a threshold or refused with 429 are named: nothing here is written to disk.
@@ -19,6 +19,8 @@ while [ $# -gt 0 ]; do
   esac
 done
 compose="docker compose -p starbridge -f /opt/starbridge/deploy/compose.yaml"
+# Logs are read up to this instant, which the reading names, so the next run starts there.
+until=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
 # CPU steal over 2 seconds, in percent of all CPU time: /proc/stat's 8th value is steal.
 cpu() { awk '/^cpu /{t=0; for (i=2; i<=NF; i++) t+=$i; print t, $9}' /proc/stat; }
@@ -39,15 +41,15 @@ stats=$(docker stats --no-stream --format '{{json .}}' | jq -sc '
   map({key: .Name, value: {memMB: (.MemUsage | split(" / ")[0] | mb | floor), cpu: (.CPUPerc | rtrimstr("%") | tonumber)}}) | from_entries')
 states=$(docker inspect -f '{{json .}}' $(docker ps -aq) | jq -sc '
   map({key: (.Name | ltrimstr("/")), value: {restarts: .RestartCount, oomKilled: .State.OOMKilled, running: .State.Running, startedAt: .State.StartedAt}}) | from_entries')
-oom=$(journalctl -k -q --since "$since" 2>/dev/null | grep -ciE 'oom-kill|out of memory' || true)
+oom=$(journalctl -k -q --since "$since" --until "$until" 2>/dev/null | grep -ciE 'oom-kill|out of memory' || true)
 
 # The server's log since the last run: its minute lines of refusals summed, and error lines.
-logs=$($compose logs --no-log-prefix --since "$since" server 2>/dev/null || true)
+logs=$($compose logs --no-log-prefix --since "$since" --until "$until" server 2>/dev/null || true)
 count() { printf '%s\n' "$logs" | grep -cE "$1" || true; }
 refusals=$(printf '%s\n' "$logs" | sed -n 's/^refusals //p' | jq -sc '
   {counts: (map(.counts | to_entries[]) | group_by(.key) | map({key: .[0].key, value: (map(.value) | add)}) | from_entries),
    accounts: (map(.accounts | to_entries[]) | group_by(.key) | map({key: .[0].key, value: (map(.value) | add)}) | sort_by(-.value) | .[:5] | from_entries)}')
-caddy_errors=$($compose logs --no-log-prefix --since "$since" caddy 2>/dev/null | grep -c '"logger":"http.log.error' || true)
+caddy_errors=$($compose logs --no-log-prefix --since "$since" --until "$until" caddy 2>/dev/null | grep -c '"logger":"http.log.error' || true)
 
 # The database and its WAL, in the server's volume.
 vol=$(docker volume inspect -f '{{.Mountpoint}}' starbridge_data)
@@ -55,7 +57,8 @@ db_bytes=$(stat -c %s "$vol/starbridge.db" "$vol/starbridge.db-wal" 2>/dev/null 
 
 # Connections at this instant. Caddy runs on the host network, so clients are peers of :443
 # and the server's long-polls are Caddy's connections to 127.0.0.1:8080.
-to_server=$(ss -Htn state established '( dport = :8080 )' | wc -l)
+# Caddy's own; docker-proxy's onward connections to the container go to its address instead.
+to_server=$(ss -Htn state established dst 127.0.0.1:8080 | wc -l)
 # Per address, an IPv6 client counted as its /64, as the rate limits count it.
 conn_json=$(ss -Htn state established '( sport = :443 )' | python3 -c '
 import collections, ipaddress, json, sys
@@ -67,14 +70,14 @@ for line in sys.stdin:
     n[str(a) if a.version == 4 else str(ipaddress.ip_network(f"{a}/64", strict=False))] += 1
 c = int(sys.argv[1])
 print(json.dumps({"total": sum(n.values()), "addresses": len(n), "busiest": max(n.values(), default=0),
-                  "named": {k: v for k, v in n.most_common(20) if v >= c}}))
+                  "named": {k: v for k, v in n.most_common(20) if v > c}}))
 ' "$conns")
 addresses=$(curl -fsS --max-time 5 "http://127.0.0.1:8081/watch?over=$over" 2>/dev/null || echo null)
 
 top=$($compose exec -T server bun server.js top 5 --json 2>/dev/null || echo null)
 
 jq -nc \
-  --arg at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg since "$since" \
+  --arg at "$until" --arg since "$since" \
   --argjson load "[$load1,$load5,$load15]" --argjson steal "$steal" \
   --argjson memTotalMB "$mem_total" --argjson memAvailMB "$mem_avail" --argjson diskFree "$disk_free" \
   --argjson containers "$stats" --argjson states "$states" --argjson oom "$oom" \

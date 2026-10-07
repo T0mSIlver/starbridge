@@ -45,10 +45,15 @@ export const THRESHOLDS = {
   tooLarge: 20,
   /** Per run: 503 storage-full, the server-wide byte cap. */
   storageFull: 1,
-  /** An address holding this many connections to Caddy now. Tom's rule, 2026-10-07. */
+  /** An address holding over this many connections to Caddy now. Tom's rule, 2026-10-07. */
   addressConnections: 200,
-  /** An address making this many /v1 requests a minute: Caddy refuses past 3000. */
-  addressRequests: 2000,
+  /**
+   * An address making this many /v1 requests a minute is at Caddy's cap of 3000, so Caddy is
+   * refusing the rest; the server sees only those it lets through. Tom's rule, 2026-10-07.
+   */
+  addressRequests: 2900,
+  /** An address the server refused this many times with 429 in the last 2 minutes. */
+  addressLimited: 20,
   /** Sign-ups in the last hour. Not in watch.md: the launch week expects a few hundred. */
   signUpsPerHour: 200,
   /** One account's posts in the last hour, and bytes stored (its cap is 256 MB). Not in watch.md. */
