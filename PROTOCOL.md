@@ -378,6 +378,7 @@ createdAt, expiresAt, version}`; `state` is `open`, `comparing`, `approved` or `
 | `GET /items?kind=<kinds>&after=<cursor>&open=1` | device | items with only the caller's box (and a decision's blobs), and `cursor`; `kinds` is a comma-separated list of machine-signed kinds and `snooze`, the machine-signed ones when left out; `open=1` keeps only unanswered decisions and permissions still in their answer window |
 | `GET /items/:id` | device, machine | one item, the caller's box only, with a decision's blobs; push points here when the item is over the inline limit (3 KB by default) |
 | `GET /quota` | device | the latest quota item from each machine |
+| `GET /quota/senders` | device, machine | `{senders: [{id, receivedAt}]}`: each active machine with a quota item, and when its latest arrived; never the item |
 | `POST /quota/ask?wait=<s>` | device | ask every machine for a fresh quota snapshot → `{askedAt, behind}`; with `wait`, holds until each active machine that has a snapshot posted a newer one; `behind` counts those that have not |
 
 Item ids are random, chosen by the sender. A machine re-posts a run under its id as it changes;

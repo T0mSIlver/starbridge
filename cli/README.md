@@ -48,7 +48,9 @@ what is missing:
 
 1. It pairs the machine with your account (see [Pair](#pair)). It asks for the server only when
    neither `--server` nor `STARBRIDGE_SERVER` names one.
-2. It finds CodexBar, or installs it (Linux and macOS; CodexBar has no Windows build, so a
+2. When another machine of your account sent quotas in the last day, it says which and asks
+   whether to send them from this one too; Enter says no. Otherwise it finds CodexBar, or
+   installs it (Linux and macOS; CodexBar has no Windows build, so a
    Windows machine uploads no quotas): with Homebrew if you have it, else CodexBar's latest
    release tarball from GitHub, checked against the `.sha256` that release publishes, into
    `~/.local/opt/codexbar`. It installs nothing when the checksum is missing or does not match.

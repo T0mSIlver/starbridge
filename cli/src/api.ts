@@ -126,6 +126,12 @@ export class Api {
     return (r.json as { entries: unknown[] }).entries;
   }
 
+  /** The active machines that post quota snapshots, and when each posted its latest. */
+  async quotaSenders(): Promise<{ id: string; receivedAt: string }[]> {
+    const r = await this.call("GET", "/quota/senders", { signal: AbortSignal.timeout(15_000) });
+    return (r.json as { senders: { id: string; receivedAt: string }[] }).senders;
+  }
+
   async postItem(item: SealedItem, signal?: AbortSignal): Promise<void> {
     await this.call("POST", "/items", { body: item, ...(signal ? { signal } : {}) });
   }

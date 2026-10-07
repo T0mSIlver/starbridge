@@ -283,6 +283,20 @@ test("GET /quota returns the latest snapshot of each active machine", async () =
   expect((await s.call("GET", "/v1/quota", { token: phone.token })).json.items).toEqual([]);
 });
 
+test("GET /quota/senders names each active machine that posts quotas, without its snapshot", async () => {
+  const senders = async () =>
+    (await s.call("GET", "/v1/quota/senders", { token: devbox.token })).json.senders;
+  expect(await senders()).toEqual([]);
+  await post(devbox, quota("q1"));
+  const [one] = await senders();
+  expect(one).toEqual({ id: devbox.id, receivedAt: expect.any(String) });
+  expect((await s.call("GET", "/v1/quota/senders", { token: phone.token })).status).toBe(200);
+  await revoke(s, acct, "devbox");
+  expect((await s.call("GET", "/v1/quota/senders", { token: phone.token })).json.senders).toEqual(
+    [],
+  );
+});
+
 test("a device revoked while its answer is still uploading cannot answer", async () => {
   const d = decision();
   await post(devbox, d);

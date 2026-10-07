@@ -10,7 +10,7 @@ import { AgentClient, Interrupted, withAgent } from "../agent/client";
 import { askVia, quotaVia } from "../agent/commands";
 import { ApiError } from "../api";
 import type { AgentConfig } from "../config";
-import { type Ctx, UsageError } from "../context";
+import { type Ctx, refreshDirectory, session, UsageError } from "../context";
 import { type AskInput, ask, EXIT_INTERRUPTED, settle } from "../decisions";
 import { DEFAULT_SERVER, pair } from "../pair";
 import { permissionsEnabled } from "../permissions";
@@ -157,7 +157,11 @@ export async function setup(sys: Sys, opts: SetupOpts): Promise<number> {
     );
 
   const configBefore = JSON.stringify(ctx.store.agentConfig());
-  const quota = opts.noQuota ? await skipQuota(sys) : await codexbarStep(sys, opts);
+  const quota = opts.noQuota
+    ? await skipQuota(sys, "Skipped (--no-quota)")
+    : machine && !(await sendQuotasToo(sys, opts))
+      ? await skipQuota(sys, "Skipped", false)
+      : await codexbarStep(sys, opts);
 
   if (opts.noService) {
     section(ctx, "Agent");
@@ -190,12 +194,48 @@ export async function setup(sys: Sys, opts: SetupOpts): Promise<number> {
   return 0;
 }
 
-async function skipQuota(sys: Sys): Promise<undefined> {
-  section(sys.ctx, "CodexBar");
+async function skipQuota(sys: Sys, why: string, heading = true): Promise<undefined> {
+  if (heading) section(sys.ctx, "CodexBar");
   const cfg = sys.ctx.store.agentConfig();
   sys.ctx.store.saveAgentConfig({ ...cfg, quota: { ...cfg.quota, providers: [] } });
-  sys.ctx.out("Skipped (--no-quota): the agent uploads no quotas.");
+  sys.ctx.out(`${why}: the agent uploads no quotas.`);
   return undefined;
+}
+
+/** A machine that sent no quota snapshot for this long no longer counts as sending them. */
+const SENDER_MAX_AGE_MS = 24 * 3600_000;
+
+/**
+ * Whether to send quotas from this machine too, when other machines of the account already do
+ * (#748); Enter says no. Asks nothing when this machine already sends them, `--providers` names
+ * them, or the server cannot say.
+ */
+async function sendQuotasToo(sys: Sys, opts: SetupOpts): Promise<boolean> {
+  const { ctx, prompt } = sys;
+  if (opts.providers || ctx.store.agentConfig().quota?.providers?.length) return true;
+  let names: string[];
+  try {
+    const s = session(ctx);
+    const since = ctx.now().getTime() - SENDER_MAX_AGE_MS;
+    const ids = (await s.api.quotaSenders())
+      .filter((x) => x.id !== s.machine.id && Date.parse(x.receivedAt) >= since)
+      .map((x) => x.id);
+    if (ids.length === 0) return true;
+    const dir = await refreshDirectory(ctx, s);
+    names = ids.flatMap((id) => dir.members.get(id)?.member.name ?? []);
+  } catch {
+    return true;
+  }
+  if (names.length === 0) return true;
+  section(ctx, "Quotas");
+  const who =
+    names.length === 1
+      ? names[0]
+      : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+  return prompt.confirm(
+    `Quotas: ${who} already ${names.length === 1 ? "sends" : "send"} them. Send from this machine too?`,
+    false,
+  );
 }
 
 type Quota = NonNullable<AgentConfig["quota"]> & { providers: string[] };
