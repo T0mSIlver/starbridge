@@ -116,17 +116,17 @@ private fun prettyInput(input: String) = visible(runCatching { pretty.encodeToSt
 @Composable
 fun promptGround(): Color = StarbridgeTheme.colors.accentSoft.compositeOver(MaterialTheme.colorScheme.surface)
 
-/** The exact command, in mono, on [color]. */
+/** The exact command, in mono, in a terminal block, dark in both schemes (#805). */
 @Composable
-private fun Command(text: String, style: TextStyle, color: Color, shape: Shape, padding: PaddingValues, maxLines: Int = Int.MAX_VALUE, modifier: Modifier = Modifier, onCut: (Boolean) -> Unit = {}) {
+private fun Command(text: String, style: TextStyle, shape: Shape, padding: PaddingValues, maxLines: Int = Int.MAX_VALUE, modifier: Modifier = Modifier, onCut: (Boolean) -> Unit = {}) {
     Text(
         text,
         style = style,
-        color = MaterialTheme.colorScheme.onSurface,
+        color = StarbridgeTheme.colors.onTerminal,
         maxLines = maxLines,
         overflow = TextOverflow.Ellipsis,
         onTextLayout = { onCut(it.hasVisualOverflow) },
-        modifier = modifier.fillMaxWidth().background(color, shape).padding(padding),
+        modifier = modifier.fillMaxWidth().background(StarbridgeTheme.colors.terminal, shape).padding(padding),
     )
 }
 
@@ -211,7 +211,7 @@ fun PromptCard(prompt: Prompt, now: Instant, actions: PromptActions, shape: Shap
         Column(Modifier.padding(Spacing.s5), verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
             MetaRow(prompt.source, waited(prompt.createdAt, now), clock = true)
             ToolLine(prompt, StarbridgeTheme.type.action.copy(lineHeight = 22.sp), 20.dp)
-            Command(if (prompt.fitsRow) prompt.fullInput else prompt.summary, StarbridgeTheme.type.code.copy(fontSize = 15.sp, lineHeight = 22.sp), scheme.surfaceContainer, RoundedCornerShape(12.dp), PaddingValues(horizontal = 14.dp, vertical = Spacing.s3), maxLines = 3, onCut = { cut = it })
+            Command(if (prompt.fitsRow) prompt.fullInput else prompt.summary, StarbridgeTheme.type.code.copy(fontSize = 15.sp, lineHeight = 22.sp), RoundedCornerShape(12.dp), PaddingValues(horizontal = 14.dp, vertical = Spacing.s3), maxLines = 3, onCut = { cut = it })
             Box(Modifier.padding(top = Spacing.s1)) {
                 AllowDeny(40.dp, !sent, scheme.surfaceContainer, onAllow = { allow("once") }, onDeny = { send(false, "once", null) }) {
                     Button(
@@ -245,13 +245,16 @@ private fun ScopeText(scope: PromptScope) {
     }
 }
 
-/** The terminal symbol, amber while the prompt waits, and the tool; once ended, how it ended. */
+/**
+ * The terminal symbol, amber while the prompt waits, and what the agent says the call does, else
+ * the tool (#805); once ended, how it ended.
+ */
 @Composable
 private fun ToolLine(prompt: Prompt, style: TextStyle, icon: Dp, waiting: Boolean = true) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Symbol(Sym.Terminal, size = icon, tint = if (waiting) StarbridgeTheme.colors.accent else MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.width(Spacing.s2))
-        Text(prompt.tool, style = style, color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+        Text(prompt.headline, style = style, color = MaterialTheme.colorScheme.onSurface, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
         if (!waiting) Text(prompt.ended.orEmpty(), style = StarbridgeTheme.type.small, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
@@ -290,10 +293,9 @@ fun PromptSheet(prompt: Prompt, now: Instant, actions: PromptActions) {
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Command(
-                prompt.fullInput, StarbridgeTheme.type.code.copy(fontSize = 17.sp, lineHeight = 26.sp), scheme.surfaceContainerHighest, RoundedCornerShape(Spacing.s4), PaddingValues(horizontal = 18.dp, vertical = Spacing.s4),
+                prompt.fullInput, StarbridgeTheme.type.code.copy(fontSize = 17.sp, lineHeight = 26.sp), RoundedCornerShape(Spacing.s4), PaddingValues(horizontal = 18.dp, vertical = Spacing.s4),
                 modifier = Modifier.onGloballyPositioned { if (it.boundsInWindow().bottom >= it.positionInWindow().y + it.size.height - 1) seen = true },
             )
-            prompt.description?.let { Text(it, style = StarbridgeTheme.type.reading.copy(lineHeight = 22.sp), color = scheme.onSurfaceVariant) }
             if (waiting) {
                 AllowDeny(56.dp, !sent, scheme.surfaceContainerHighest, onAllow = { send(true, "once", null) }, onDeny = { if (denying) send(false, "once", note.ifBlank { null }) else denying = true }, allows = !sent && seen)
                 if (denying) {

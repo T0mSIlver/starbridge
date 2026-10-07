@@ -22,6 +22,8 @@ import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.app.RemoteInput
+import android.view.View
+import android.widget.RemoteViews
 import dev.starbridge.app.MainActivity
 import dev.starbridge.app.R
 import dev.starbridge.app.data.Alerts
@@ -372,9 +374,24 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
     /** Whether a notification's Allow sends at once, the lock screen's ([locked]) or the shade's (#390). */
     fun allowSends(p: Prompt, locked: Boolean = false): Boolean = prefs.allowUnseen.value || (!locked && fitsLine(p))
 
+    /**
+     * The expanded prompt under the system's header and buttons: the headline, a [note] when one
+     * says what went wrong, then the command in a terminal block (#805). Only a decorated custom
+     * view can draw a block; the standard templates strip a background colour from text.
+     */
+    private fun expanded(p: Prompt, note: CharSequence? = null) = RemoteViews(context.packageName, R.layout.notification_prompt).apply {
+        setTextViewText(R.id.prompt_title, p.headline)
+        if (note != null) {
+            setTextViewText(R.id.prompt_note, note)
+            setViewVisibility(R.id.prompt_note, View.VISIBLE)
+        }
+        setTextViewText(R.id.prompt_command, if (p.fitsRow) p.fullInput else p.summary)
+    }
+
     private fun promptBase(p: Prompt, actions: List<NotificationCompat.Action> = emptyList(), locked: List<NotificationCompat.Action> = actions): NotificationCompat.Builder {
-        // A prompt always blocks: its ticking header says so, the title is the tool alone (#191).
-        val title = p.tool
+        // A prompt always blocks: its ticking header says so. The title is what the agent says the
+        // call does, else the tool (#191, #805); the lock screen shows the tool alone.
+        val title = p.headline
         val open = openPrompt(p)
         return NotificationCompat.Builder(context, PROMPTS)
             .setSortKey(ORDER_QUESTION)
@@ -386,7 +403,8 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
             .setWhen(p.createdAt.toEpochMilli())
             .setShowWhen(true)
             .setUsesChronometer(true)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(command(p)))
+            .setStyle(NotificationCompat.DecoratedCustomViewStyle())
+            .setCustomBigContentView(expanded(p))
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             // The lock screen shows the tool, the machine and the repo, never the command.
@@ -395,7 +413,7 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
                 NotificationCompat.Builder(context, PROMPTS)
                     .setSmallIcon(R.drawable.ic_notification)
                     .setColor(accent())
-                    .setContentTitle(title)
+                    .setContentTitle(p.tool)
                     .setContentText("Unlock to see the command")
                     .setSubText(header(p.source))
                     .setWhen(p.createdAt.toEpochMilli())
@@ -437,7 +455,7 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
             .build()
         val b = promptBase(prompt, listOf(allow(false), deny), locked = listOf(allow(true), deny))
         // The note goes above the command, so Allow still shows what it covers.
-        if (note != null) b.setContentText(note).setStyle(NotificationCompat.BigTextStyle().bigText(TextUtils.concat(note, "\n", command(prompt)))).setSilent(true)
+        if (note != null) b.setContentText(note).setCustomBigContentView(expanded(prompt, note)).setSilent(true)
         shown[tag] = prompt.id
         @Suppress("MissingPermission")
         manager.notify(tag, b.build())
@@ -451,7 +469,7 @@ class Notifier(private val context: Context, private val prefs: Prefs) : Alerts 
             if (shown[tag] != null && shown[tag] != prompt.id) return
             shown[tag] = prompt.id
             @Suppress("MissingPermission")
-            manager.notify(tag, promptBase(prompt).setContentText(what).setStyle(null).setTimeoutAfter(4_000).setSilent(true).build())
+            manager.notify(tag, promptBase(prompt).setContentText(what).setStyle(null).setCustomBigContentView(null).setTimeoutAfter(4_000).setSilent(true).build())
         }
     }
 

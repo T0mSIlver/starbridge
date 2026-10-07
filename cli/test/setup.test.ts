@@ -376,7 +376,12 @@ test("a failed agent install says why and how to retry, and setup goes on (#750)
       ": fatal: could not read from github.com\n               Retry with:\n                 starbridge setup --agent pi",
   );
   expect(out).toContain("✓ opencode     skill and plugin installed");
-  expect(out).toContain("Starbridge is set up.");
+  // The end says what failed and how to retry, not that all is set up (#770).
+  expect(out).not.toContain("Starbridge is set up.");
+  expect(out).toContain("Setup is done, but one step failed.");
+  expect(out).toContain(
+    `  ✗ Pi           pi install ${PI_PACKAGE}: fatal: could not read from github.com\n  Retry once fixed:\n    starbridge setup`,
+  );
 });
 
 test("refresh brings what setup wrote to this release and leaves the rest alone", async () => {

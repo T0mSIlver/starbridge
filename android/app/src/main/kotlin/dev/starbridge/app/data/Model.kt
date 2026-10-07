@@ -101,6 +101,9 @@ data class Prompt(
 ) {
     fun waiting(now: Instant) = ended == null && now.isBefore(expiresAt)
 
+    /** What the agent says the call does, else the tool: the prompt's title everywhere (#805). */
+    val headline: String get() = description?.takeIf { it.isNotBlank() } ?: tool
+
     /**
      * The input as the owner reads it before allowing, as on the web (#276): a command's full
      * text, then its other fields but the description as indented JSON; any other input as
