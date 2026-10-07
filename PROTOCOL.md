@@ -164,8 +164,8 @@ entries, or serving that device another chain. It reads every answer's head in a
 accepts any, never lets a shorter head replace a longer one, and while refusing delivers nothing it
 accepted earlier either; once it stops refusing, it drops undelivered answers whose device the
 chain now revokes. It keeps the refused answers, since their devices count them sent, and
-checks them again once the server serves the missing entries, or once the machine's chain revokes
-that device.
+checks them again once the server serves the missing entries, or once the recovery key's
+`recover` revokes that device (below).
 
 This bounds the attack rather than ending it. A server that withholds a phone's revocation from a
 machine can relay that phone's answers only until any other device answers that machine (the ones
@@ -178,8 +178,15 @@ While a device active in its chain has signed a head that chain does not hold, a
 posts nothing new: no question, permission prompt, run, quota snapshot or notice (#794). Its
 device list may still hold a device the missing entries revoke, and sealing to it would hand
 that device's keys everything the machine sends. The command fails and says the server is
-holding back entries; the machine posts again once the server serves them, or once its chain
-revokes that device.
+holding back entries; the machine posts again once the server serves them.
+
+A revocation does not end the hold either, unless the recovery key made it (`recover`). A device
+signs no head past its own revocation, so a chain that revokes a device before the head that
+device signed forks from the chain the device saw: the revoked device whose revocation the
+server hides can extend the machine's stale chain and revoke the device that revoked it. So a
+machine keeps counting a head its chain does not hold while a `revoke` entry names its device,
+for answers as for sending. When the owner revoked that device because it signed a false long
+head, `starbridge pair --force` pairs the machine again and forgets the heads it kept.
 
 Devices run the same check on machines (#362). A machine signs its own head into every item it
 posts, `dir: {length, head, by?}`. Before #794 a machine could instead sign a longer head an
@@ -202,7 +209,8 @@ stops posting. A server that
 withholds it from every machine, and drops the revoking device's answers, keeps it hidden, as it
 does from a device that gets items only from the revoked machine. A member that is compromised
 but not yet revoked can sign a false long head and hold every device's items until the owner
-revokes it, which the owner sees, and machines that saw the head post nothing until then. The server itself can always hold items back.
+revokes it, which the owner sees; machines that saw the head post nothing until they are
+paired again. The server itself can always hold items back.
 
 The head is optional: an item without one opens and counts neither for nor against a hold. The
 head is part of the signed body, so the server can neither strip nor change it.
