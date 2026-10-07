@@ -170,6 +170,9 @@ export function pushPayload(item: SealedItem, to: string, limit: number): string
     : JSON.stringify(head);
 }
 
+/** The longest `wakeAt` stored: `2026-10-07T18:00:00.123456789+02:00` is 35 characters. */
+const WAKE_AT_MAX = 40;
+
 export const itemRoutes = new Hono<Env>();
 
 itemRoutes.post("/items", requireCaller("paired"), async (c) => {
@@ -216,6 +219,10 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
   let wakeDue: string | null = null;
   if (rule.wake) {
     if (item.wakeAt === undefined) fail(400, "bad-schema", `a ${item.kind} needs wakeAt`);
+    // Stored as sent, since devices check it against the signed body, and charged nothing: the
+    // schema takes any number of fractional digits (#713). Nanoseconds and an offset fit in 40.
+    if (item.wakeAt.length > WAKE_AT_MAX)
+      fail(400, "bad-schema", `wakeAt is at most ${WAKE_AT_MAX} characters`);
     const due = Date.parse(item.wakeAt);
     if (due > Date.now() + SNOOZE_MAX_MS + CLOCK_SKEW_MS)
       fail(400, "bad-schema", `wakeAt is at most ${SNOOZE_MAX_MS / 86_400_000} days ahead`);
