@@ -35,6 +35,8 @@ data class StarbridgeColors(
     val info: Color,
     val infoSoft: Color,
     val scrim: Color,
+    val terminal: Color,
+    val onTerminal: Color,
 )
 
 val LightColors = StarbridgeColors(
@@ -59,6 +61,8 @@ val LightColors = StarbridgeColors(
     info = Color(0xFF595959),
     infoSoft = Color(0x1A595959),
     scrim = Color(0x66000000),
+    terminal = Color(0xFF0C0C0C),
+    onTerminal = Color(0xFFF1F1F1),
 )
 
 val DarkColors = StarbridgeColors(
@@ -83,6 +87,8 @@ val DarkColors = StarbridgeColors(
     info = Color(0xFFA3A3A3),
     infoSoft = Color(0x1FA3A3A3),
     scrim = Color(0xB3000000),
+    terminal = Color(0xFF0C0C0C),
+    onTerminal = Color(0xFFF1F1F1),
 )
 
 // Each provider's dot, by CodexBar provider id.
