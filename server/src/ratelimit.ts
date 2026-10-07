@@ -25,6 +25,15 @@ export class RateLimiter {
     return w.count <= limit ? 0 : Math.max(1, Math.ceil((w.start + windowMs - t) / 1000));
   }
 
+  /** What `retryAfter` would answer for `cost`, without counting it. */
+  peek(key: string, limit: number, windowMs: number, cost = 1): number {
+    const t = this.now();
+    const w = this.windows.get(key);
+    if (!w || t - w.start >= windowMs)
+      return cost <= limit ? 0 : Math.max(1, Math.ceil(windowMs / 1000));
+    return w.count + cost <= limit ? 0 : Math.max(1, Math.ceil((w.start + windowMs - t) / 1000));
+  }
+
   /** Each window ends by its own length, so a short window's sweep never resets a long one. */
   private sweep(t: number): void {
     for (const [k, w] of this.windows) if (t - w.start >= w.ms) this.windows.delete(k);
