@@ -227,14 +227,14 @@ waits on `GET /pairings/:rendezvous?wait=`, checks the MAC and asks the owner to
 who sees the code can post first, so the device shows the requester's name before approving, as
 with a typed code.
 
-A machine's check code lets the owner see that it joined the owner's own chain (#795):
-`checkCode` is the first 60 bits of `BLAKE2b-256("starbridge/v1/check" NUL BLAKE2b-256(entry 0's
-body) machine's signPk)`, as 12 Crockford base32 characters in three groups of four. The machine
-prints it once paired, and devices show it beside the machine. A hostile server that read the
-code in a browser and approved the machine into a chain of its own gives it another entry 0, and
-a stand-in machine in the owner's chain has another key, so either way the two codes differ.
-The server learns the machine's key only when the pairing starts, so it would have to find an
-entry 0 that matches 60 bits within the code's 10 minutes.
+The account's check code lets the owner see that a machine joined the owner's own chain (#795):
+`checkCode` is the first 80 bits of `BLAKE2b-256("starbridge/v1/check" NUL entry 0's body)`, as
+16 Crockford base32 characters in four groups. The machine prints it once paired, and devices
+show it under Devices. A hostile server that read a pairing code in a browser and approved the
+machine into a chain of its own gives it another entry 0, so the codes differ unless the server
+finds an entry 0 that matches 80 bits of the owner's. The code covers entry 0 alone: one that
+also covered the machine's key would let the server choose both the stand-in's key and its own
+entry 0, and a 2^40 search for any pair that matches would do.
 
 ## Joining by digits
 

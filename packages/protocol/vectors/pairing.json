@@ -10,7 +10,7 @@
     "hash": "_FOHytyfs0IIaAU11_f8nopChGBd35FRarxSpPpvU2w"
   },
   "check": {
-    "note": "checkCode(entries, signPk): directory.json's chain, the dev box's signing key",
+    "note": "checkCode(entries): directory.json's chain",
     "entries": [
       {
         "v": 1,
@@ -35,8 +35,7 @@
         "sig": "T6_iixqRGeKwPabZaPdTSoIX8DoXKFZNRjMm6QNfYY1YKA9-9cQIG7Pl__GfWEFzABbpIAxoKUzzDNcamLg6AA"
       }
     ],
-    "signPk": "EqQVksi3wX1AWeeym2Ho_5bHQV8vgDNI8vAX4Fueodo",
-    "expect": "0F6P FGAT MZ22"
+    "expect": "YE3D DDT5 885X 8806"
   },
   "parse": [
     {
