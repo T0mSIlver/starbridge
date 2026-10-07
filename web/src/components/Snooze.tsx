@@ -89,9 +89,11 @@ function SnoozeTimes({
   onPick: (until: Date) => void;
 }) {
   const days = pickDays(now).filter((d) => pickTimes(d, now).length > 0);
-  const [day, setDay] = useState(0);
-  const [time, setTime] = useState(() => hhmm(snoozeStart(days[0] as Date, now)));
-  const until = time ? onDay(days[day] as Date, time) : undefined;
+  // By date, not index: today leaves the list at 23:25 while the picker may be open.
+  const [dayAt, setDayAt] = useState(() => days[0]?.getTime());
+  const day = days.find((d) => d.getTime() === dayAt) ?? (days[0] as Date);
+  const [time, setTime] = useState(() => hhmm(snoozeStart(day, now)));
+  const until = time ? onDay(day, time) : undefined;
   const chosen = until && snoozeTakes(until, now) ? until : undefined;
   return (
     <div className={`t-small m-drop ${s.menu}`} role="dialog" aria-label="Snooze until">
@@ -110,14 +112,14 @@ function SnoozeTimes({
       >
         <fieldset className={s.days}>
           <legend className="t-meta">Day</legend>
-          {days.map((d, i) => (
+          {days.map((d) => (
             <button
               key={d.getTime()}
               type="button"
               className={`t-meta ${s.day}`}
-              aria-pressed={i === day}
+              aria-pressed={d === day}
               onClick={() => {
-                setDay(i);
+                setDayAt(d.getTime());
                 setTime(hhmm(snoozeStart(d, now)));
               }}
             >
