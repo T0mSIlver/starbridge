@@ -85,6 +85,13 @@ android {
             // Screenshots render clock times in UTC whichever test runs first: a screenshot class
             // setting the zone in its own init lost it once another Robolectric test ran before it.
             it.systemProperty("user.timezone", "UTC")
+            // The tests' temp dirs and Robolectric's go under build/, not /tmp (a tmpfs on dev
+            // machines that thousands of them filled), and go when the run ends. A failed run
+            // leaves them until the next one starts (#687).
+            val tmp = layout.buildDirectory.dir("test-tmp/${it.name}").get().asFile
+            it.systemProperty("java.io.tmpdir", tmp.absolutePath)
+            it.doFirst { tmp.deleteRecursively(); tmp.mkdirs() }
+            it.doLast { tmp.deleteRecursively() }
         }
     }
 }
