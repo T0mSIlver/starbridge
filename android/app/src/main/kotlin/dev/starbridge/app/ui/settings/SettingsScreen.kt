@@ -57,6 +57,7 @@ import androidx.compose.ui.zIndex
 import androidx.lifecycle.ViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.starbridge.app.data.CardButtons
+import dev.starbridge.app.data.SwipeSnooze
 import dev.starbridge.app.data.Clock
 import dev.starbridge.app.data.Colours
 import dev.starbridge.app.data.InboxView
@@ -175,6 +176,12 @@ fun SettingsScreen(
         item { Section("Answer buttons on cards") }
         listOf(CardButtons.Always to "Always", CardButtons.WhenWaiting to "When the agent waits", CardButtons.Never to "Never").forEachIndexed { i, (value, label) ->
             item { RadioRow(i, 3, label, inbox.buttons == value) { actions.inbox(inbox.copy(buttons = value)) } }
+        }
+
+        // A swipe right on a question (#692): at once for a set time, or the times to pick from.
+        item { Section("Swipe right on a question") }
+        listOf(SwipeSnooze.Hour to "Snooze 1 hour", SwipeSnooze.ThreeHours to "Snooze 3 hours", SwipeSnooze.Morning to "Snooze until tomorrow morning", SwipeSnooze.Ask to "Ask for a time").forEachIndexed { i, (value, label) ->
+            item { RadioRow(i, 4, label, inbox.swipe == value) { actions.inbox(inbox.copy(swipe = value)) } }
         }
 
         item { Section("Devices") }

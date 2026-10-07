@@ -51,6 +51,7 @@ import dev.starbridge.app.ui.inbox.DecisionSheet
 import dev.starbridge.app.data.Colours
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.onNodeWithText
@@ -210,7 +211,7 @@ class ScreenshotTest(private val dark: Boolean) {
     }
 
     // Snoozing (#571): the Snoozed group open at the end of the inbox, the sheet's Snooze and its
-    // times, a snoozed question's sheet, and the day and time pickers.
+    // times, straight on today's dial (#692), and a snoozed question's sheet.
     @Test fun inboxSnoozed() = capture("inbox-snoozed", before = { compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasText("Snoozed")) }) {
         Phone(Tab.Inbox, 4) { InboxScreen(fake.decisions + fake.snoozed, now, decisionActions, prompts = fake.prompts, promptActions = promptActions, runs = fake.runs, view = InboxView(snoozedOpen = true)) }
     }
@@ -219,7 +220,7 @@ class ScreenshotTest(private val dark: Boolean) {
         Phone(Tab.Inbox, 4) { InboxScreen(fake.decisions + fake.snoozed, now, decisionActions, prompts = fake.prompts, promptActions = promptActions, runs = fake.runs) }
     }
 
-    @Test fun sheetSnoozeMenu() = capture("sheet-snooze-menu", before = { compose.onNodeWithText("Pick a time").performScrollTo() }) {
+    @Test fun sheetSnoozeMenu() = capture("sheet-snooze-menu", before = { compose.onNodeWithText("Snooze until 15:00").performScrollTo() }) {
         Sheet({ QuotasScreen(fake.windows, now) }) { DecisionSheet(fake.decisions.first { it.id == "d1" }, now, { _, _, _ -> }, Replies(rememberDrafts(), emptyMap()), onSnooze = {}, snoozeOpen = true) }
     }
 
@@ -227,15 +228,14 @@ class ScreenshotTest(private val dark: Boolean) {
         Sheet({ QuotasScreen(fake.windows, now) }) { DecisionSheet(fake.snoozed[1], now, { _, _, _ -> }, Replies(rememberDrafts(), emptyMap()), onSnooze = {}) }
     }
 
-    // Material3's date picker rings the real date and takes no clock, so this picks from a month
-    // already over, where no ring shows whatever day it runs (#688).
-    @Test fun sheetSnoozePickDay() = captureScreen("sheet-snooze-pick-day", before = { compose.onNodeWithText("Pick a time").performScrollTo().performClick() }) {
-        val past = Instant.parse("2026-08-04T14:00:00Z")
-        Sheet({ QuotasScreen(fake.windows, past) }) { DecisionSheet(fake.decisions.first { it.id == "d1" }, past, { _, _, _ -> }, Replies(rememberDrafts(), emptyMap()), onSnooze = {}, snoozeOpen = true) }
-    }
-
-    @Test fun sheetSnoozePickTime() = captureScreen("sheet-snooze-pick-time", before = { compose.onNodeWithText("Pick a time").performScrollTo().performClick(); compose.waitForIdle(); compose.onNodeWithText("Next").performClick() }) {
-        Sheet({ QuotasScreen(fake.windows, now) }) { DecisionSheet(fake.decisions.first { it.id == "d1" }, now, { _, _, _ -> }, Replies(rememberDrafts(), emptyMap()), onSnooze = {}, snoozeOpen = true) }
+    // A question's card held past the swipe's threshold, to the right (#692).
+    @Test fun inboxSwipe() = capture("inbox-swipe", before = {
+        compose.onNodeWithText("Run speech inference", substring = true).performTouchInput {
+            down(centerLeft)
+            repeat(10) { moveBy(androidx.compose.ui.geometry.Offset(width * 0.06f, 0f)) }
+        }
+    }) {
+        Phone(Tab.Inbox, 4) { Inbox() }
     }
 
     @Test fun sheetFreeText() = capture("sheet-free-text") { QuestionSheet(fake.freeText) }
