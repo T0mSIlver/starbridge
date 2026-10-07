@@ -1,6 +1,7 @@
 // A pairing link's code outlives the GitHub sign-in in the tab's storage, and only there.
 import { expect, test } from "bun:test";
-import { hasPairCode, holdPairCode, otherServer, takePairCode } from "./pairLink";
+import { otherServer } from "./otherServer";
+import { hasPairCode, holdPairCode, takePairCode } from "./pairLink";
 
 function tab(address: string) {
   const url = new URL(address, "https://starbridge.test");
