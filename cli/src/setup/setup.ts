@@ -131,6 +131,19 @@ function section(ctx: Ctx, title: string) {
 }
 
 export async function setup(sys: Sys, opts: SetupOpts): Promise<number> {
+  // Each step's ✗ line, which the end repeats with the retry command (#770).
+  const failed: string[] = [];
+  const out = sys.ctx.out;
+  sys = {
+    ...sys,
+    ctx: {
+      ...sys.ctx,
+      out: (line) => {
+        if (line.startsWith("✗ ")) failed.push(line);
+        out(line);
+      },
+    },
+  };
   const { ctx, prompt } = sys;
   recordSelf(sys);
   if (opts.agent) return agentOnly(sys, opts.agent);
@@ -191,7 +204,12 @@ export async function setup(sys: Sys, opts: SetupOpts): Promise<number> {
   if (machine && !opts.yes && (await prompt.confirm("  Send a test decision to your phone?", true)))
     await testDecision(ctx, machine.name);
 
-  section(ctx, "Starbridge is set up.");
+  section(
+    ctx,
+    failed.length === 0
+      ? "Starbridge is set up."
+      : `Setup is done, but ${failed.length === 1 ? "one step" : `${failed.length} steps`} failed.`,
+  );
   for (const line of await otherCopies(sys)) ctx.out(`  ${line}`);
   const one = agents[0] ?? "claude";
   ctx.out("");
@@ -204,6 +222,12 @@ export async function setup(sys: Sys, opts: SetupOpts): Promise<number> {
     ["Remove everything", "starbridge uninstall"],
   ]))
     ctx.out(line);
+  if (failed.length > 0) {
+    ctx.out("");
+    for (const line of failed) out(`  ${line}`);
+    ctx.out("  Retry once fixed:");
+    ctx.out("    starbridge setup");
+  }
   if (last.length > 0) ctx.out("");
   for (const line of last) ctx.out(line);
   return 0;
