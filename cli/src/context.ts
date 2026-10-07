@@ -33,6 +33,9 @@ export function machineKind(ctx: Ctx): { machineKind?: MachineKind } {
 /** A mistake the user can fix: printed without a stack, exit code 1. */
 export class UsageError extends Error {}
 
+/** The server holds back directory entries: nothing is sent until it serves them (#794). */
+export class WithheldError extends UsageError {}
+
 export interface Session {
   machine: Machine;
   keys: MemberKeys;
@@ -125,7 +128,7 @@ function revokes(entries: unknown[], id: string): boolean {
  */
 export function devices(ctx: Ctx, dir: Directory): Member[] {
   const behind = withheld(ctx.store.state(), dir, ctx.store.directory().slice(0, dir.length));
-  if (behind) throw new UsageError(`${behind}. Nothing is sent meanwhile`);
+  if (behind) throw new WithheldError(`${behind}. Nothing is sent meanwhile`);
   const list = activeMembers(dir, "device");
   if (list.length === 0) throw new UsageError("the directory has no active device to send to");
   return list;

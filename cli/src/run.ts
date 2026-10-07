@@ -29,6 +29,7 @@ import {
   session,
   signedHead,
   UsageError,
+  WithheldError,
 } from "./context";
 import { resolveSource } from "./decisions";
 import { killTree, resolveCommand, spawnable } from "./platform";
@@ -256,8 +257,9 @@ export class Reporter {
     this.lastPost = this.ctx.now().getTime();
     this.inflight = this.post(input)
       .catch((e: Error) => {
-        // Not paired, or a bad title: no later update can fare better.
-        if (e instanceof UsageError) this.off = true;
+        // Not paired, or a bad title: no later update can fare better. A withheld directory
+        // entry may come any time.
+        if (e instanceof UsageError && !(e instanceof WithheldError)) this.off = true;
         if (!this.warned || this.off)
           this.ctx.err(
             `starbridge: the run was not reported: ${e.message}${this.ctx.env.CODEX_SANDBOX_NETWORK_DISABLED === "1" ? ". Codex's sandbox has no network: runs reach your devices when Codex runs the command outside it" : ""}`,
