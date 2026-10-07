@@ -48,7 +48,8 @@ export function installScript(script: Script): Response {
       readFileSync(join(process.cwd(), "../cli", script), "utf8"),
       publicOrigin(process.env),
     );
-    served.set(script, text);
+    // `next dev` reads it each time, so an edit to the script shows at once.
+    if (process.env.NODE_ENV === "production") served.set(script, text);
   }
   // Plain text, so a browser shows the script to read before piping it into a shell.
   return new Response(text, { headers: { "Content-Type": "text/plain; charset=utf-8" } });
