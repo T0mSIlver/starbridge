@@ -365,6 +365,14 @@ async function main() {
   const landing = await visitor.goto(ORIGIN);
   const policy = landing?.headers()["content-security-policy"] ?? "";
   if (!policy.includes("'nonce-")) throw new Error(`expected a CSP with a nonce, got: ${policy}`);
+  // The server's HTML is the landing page itself, for link previews and a first paint (#694).
+  const html = (await landing?.text()) ?? "";
+  for (const part of [
+    "Know the moment your agent is stuck",
+    'property="og:image"',
+    policy.split("'nonce-")[1]?.split("'")[0] ?? "-",
+  ])
+    if (!html.includes(part)) throw new Error(`expected the landing page's HTML to hold ${part}`);
   await visitor.getByRole("heading", { name: /Know the moment your agent is stuck/ }).waitFor();
   await shoot(visitor, "landing");
   for (const [path, name] of [
@@ -435,8 +443,12 @@ async function main() {
   if ((await pair.exited) !== 0) throw new Error("pair failed");
   await page.getByRole("status", { name: "Pairing result" }).getByText("devbox joined").waitFor();
   await shoot(page, "pair-joined");
-  await page.goto(`${ORIGIN}/`);
+  const signedIn = await page.goto(`${ORIGIN}/`);
+  if ((await signedIn?.text())?.includes("Know the moment"))
+    throw new Error("a signed-in browser got the landing page's HTML");
   await page.getByText("Nothing needs you").waitFor();
+  if ((await page.title()) !== "Starbridge · Inbox")
+    throw new Error(`expected the Inbox's title, got: ${await page.title()}`);
   if (await page.getByRole("heading", { name: "Add a machine" }).count())
     throw new Error("the inbox still says to add a machine after one joined");
   await page
