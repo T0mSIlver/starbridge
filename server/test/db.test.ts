@@ -4,6 +4,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { migrate, openDb } from "../src/db";
+import { OLD_MIGRATIONS } from "./fixtures/migrations-v1-v6";
 
 const version = (db: Database) =>
   (db.query("PRAGMA user_version").get() as { user_version: number }).user_version;
@@ -35,33 +36,36 @@ test("a server refuses a database newer than its schema", () => {
   expect(() => openDb(path)).toThrow(`schema ${at + 1}, newer`);
 });
 
-test("a database at schema 3, as the hosted one is before #571, gains the snooze columns, the sweep's indexes and the blobs column", () => {
-  const path = join(mkdtempSync(join(tmpdir(), "sb-db-")), "db.sqlite");
-  const old = openDb(path);
-  for (const index of [
-    "items_kind_received",
-    "items_kind_answered",
-    "items_account_seq",
-    "usage_events_day_metric",
-    "items_wake_due",
-  ])
-    old.run(`DROP INDEX ${index}`);
-  old.run("ALTER TABLE items DROP COLUMN wake_due");
-  old.run("ALTER TABLE items DROP COLUMN wake_at");
-  old.run("ALTER TABLE items DROP COLUMN blobs");
-  old.run("PRAGMA user_version = 3");
-  old.close();
-  const db = openDb(path);
-  expect(version(db)).toBe(6);
-  const columns = (db.query("PRAGMA table_info(items)").all() as { name: string }[]).map(
-    (c) => c.name,
-  );
-  expect(columns).toContain("wake_at");
-  expect(columns).toContain("wake_due");
-  expect(columns).toContain("blobs");
-  expect(
-    db.query("SELECT name FROM sqlite_master WHERE name = 'items_account_seq'").get(),
-  ).not.toBeNull();
+/** Every table's and index's definition, comments and whitespace aside, with its columns and indexes. */
+function schema(db: Database) {
+  const rows = db
+    .query("SELECT type, name, tbl_name, sql FROM sqlite_master ORDER BY type, name")
+    .all() as { type: string; name: string; tbl_name: string; sql: string | null }[];
+  // ALTER TABLE leaves a dropped column's comment and puts an added column after the last one's
+  // text, so comments and spacing are not part of the schema.
+  const sql = (s: string | null) =>
+    s
+      ?.replace(/--[^\n]*/g, "")
+      .replace(/\s+/g, " ")
+      .replace(/ ?([(),]) ?/g, "$1")
+      .trim() ?? null;
+  return rows.map((r) => ({
+    ...r,
+    sql: sql(r.sql),
+    ...(r.type === "table" && {
+      columns: db.query(`PRAGMA table_info(${r.name})`).all(),
+      indexes: db.query(`PRAGMA index_list(${r.name})`).all(),
+    }),
+  }));
+}
+
+test("the folded schema is the one migrations 1 to 6 built", () => {
+  const old = new Database(":memory:");
+  migrate(old, OLD_MIGRATIONS);
+  const db = openDb(":memory:");
+  expect(version(db)).toBe(1);
+  expect(schema(db).length).toBeGreaterThan(20);
+  expect(schema(db)).toEqual(schema(old));
 });
 
 test("a write that reads first waits for another connection's write lock", async () => {

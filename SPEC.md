@@ -292,8 +292,9 @@ provider plugins add providers, not panels.
 - **Schema migrations** (#470). `PRAGMA user_version` counts the migrations a database has run;
   each runs in one transaction with its version. A server refuses a database newer than it knows,
   so a rollback past a migration fails at start instead of writing rows the newer schema misreads.
-  Version 1 is the 0.1.0 schema with `IF NOT EXISTS`, so it adopts a database made before versions
-  were counted. A migration changes the schema and never rewrites rows, to stay within the 30 s
+  Version 1 is the whole schema: the six migrations before launch were folded into it when the
+  hosted database was reset, so `apply.sh` stops a deploy whose database is newer than its server
+  before it replaces anything. A migration changes the schema and never rewrites rows, to stay within the 30 s
   Caddy holds requests; backfills run in the hourly sweep. `apply.sh` backs the database up just
   before a new server that migrates further than the database's `user_version` starts, or when
   either number can't be read, and keeps the last two (#586) for 7 days at most, as the nightly
