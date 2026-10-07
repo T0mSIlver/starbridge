@@ -290,7 +290,8 @@ provider plugins add providers, not panels.
   were counted. A migration changes the schema and never rewrites rows, to stay within the 30 s
   Caddy holds requests; backfills run in the hourly sweep. `apply.sh` backs the database up just
   before a new server that migrates further than the database's `user_version` starts, or when
-  either number can't be read, and keeps the last two (#586).
+  either number can't be read, and keeps the last two (#586) for 7 days at most, as the nightly
+  copies, so deleted data leaves backups within the 2 weeks /privacy promises (#721).
 - **Server-wide cap** (#586). Machines' items stop at 2 GB stored across accounts, with 503
   `storage-full` and a Retry-After of an hour; answers pass, so questions still close and expire.
   The hosted disk (38 GB, about 10 GB of it system and Docker, an alert at 2 GB free) holds the
