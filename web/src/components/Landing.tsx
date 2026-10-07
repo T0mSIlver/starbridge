@@ -258,8 +258,7 @@ export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
             <div className={s.app}>
               <h3 className="t-prose">Google Play</h3>
               <p className={`t-reading ${s.dim}`}>
-                In closed testing. Google needs 12 testers for 14 days before the app can be public.
-                Join the group, then opt in.
+                In closed testing, and looking for testers. Join the group, then opt in.
               </p>
               <div className={s.appLinks}>
                 <a
@@ -278,10 +277,10 @@ export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
             </div>
           )}
           <div className={s.app}>
-            <h3 className="t-prose">iPhone</h3>
+            <h3 className="t-prose">iOS</h3>
             <p className={`t-reading ${s.dim}`}>
-              Web app, native app is planned. Add starbridge.run to the Home Screen from Safari to
-              get notifications, on iOS 16.4 and later.
+              Add starbridge.run to the Home Screen from Safari to get notifications, on iOS 16.4
+              and later. A native app is planned.
             </p>
           </div>
         </div>

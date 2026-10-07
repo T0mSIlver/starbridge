@@ -185,6 +185,11 @@ export interface PendingPermission {
 export interface AgentConfig {
   /** Permission prompts go to Starbridge (#57); off unless `starbridge config permissions on`. */
   permissions?: { enabled?: boolean };
+  /**
+   * Agents `uninstall --agent` took Starbridge out of (#750): setup and refresh leave them
+   * alone until `setup --agent` brings one back.
+   */
+  removedAgents?: string[];
   /** What this machine is, for its icon on devices: detected by pair and setup, or set. */
   machineKind?: MachineKind;
   quota?: {

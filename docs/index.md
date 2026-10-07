@@ -29,15 +29,15 @@ free server at starbridge.run, or [host your own](../server/README.md).
 
    On Windows, in PowerShell: `irm https://starbridge.run/install.ps1 | iex`.
 
-   The script then runs `starbridge setup`. Homebrew and npm work too; see
+   The script then runs `starbridge setup`. On your own server, take its address instead of
+   starbridge.run: its script pairs with it. Homebrew and npm work too; see
    [The CLI](../cli/README.md#install).
 
 3. **Pair the machine.** Setup prints a code, a link and a QR code. Scan the QR code with your
    phone, open the link in a browser where you are signed in, or, on a machine with no browser,
    type the code in Settings → Devices → Add a device on your phone. The code expires in 10
-   minutes. Setup then installs the background service, and asks before it uploads your AI plans'
-   quotas, before it installs Starbridge in each agent it finds, and whether to send permission
-   prompts to your devices. The quotas need CodexBar, which setup installs; with no AI plan,
+   minutes. Setup then installs Starbridge in each agent it finds and the background service,
+   and asks before it installs CodexBar, which reads your AI plans' quotas; with no AI plan,
    `--no-quota` skips both.
 
 4. **Answer the test question.** Setup ends with "Send a test decision to your phone?". Say yes,
@@ -60,13 +60,13 @@ free server at starbridge.run, or [host your own](../server/README.md).
    session as its next prompt, and the agent goes on. In Codex (CLI 0.160 or later), the answer reaches
    interactive sessions while the background service runs.
 
-![A question on the Android app, "Which checkout layout should I keep?", with a screenshot of each layout and the buttons Keep A and Keep B](../web/public/landing/android-question-light.webp)
+   ![A question on the Android app, "Which checkout layout should I keep?", with a screenshot of each layout and the buttons Keep A and Keep B](../web/public/landing/android-question-light.webp "A question on the Android app")
 
-Then tell your agents when to reach you. With the plugin, Claude Code asks you for decisions that
-are yours and reports the commands that block you. Pi and opencode get the same rules from their
-Starbridge package and plugin. Codex gets the skill only, so paste the
-[rules for Codex](tell-your-agents.md#rules-for-codex) into its instructions.
-[Agent instructions](tell-your-agents.md) covers each agent and how to add your own rules.
+6. **Tell your agents when to reach you.** With the plugin, Claude Code asks you for decisions
+   that are yours and reports the commands that block you. Pi and opencode get the same rules from
+   their Starbridge package and plugin. Codex gets the skill only, so paste the
+   [rules for Codex](tell-your-agents.md#rules-for-codex) into its instructions.
+   [Agent instructions](tell-your-agents.md) covers each agent and how to add your own rules.
 
 ## Sessions already running
 

@@ -79,9 +79,18 @@ function parse(doc: Doc, source: string): string {
         const titled = t ? ` title="${attr(t)}"` : "";
         return `<a href="${attr(to)}"${titled}${external}>${this.parser.parseInline(tokens)}</a>`;
       },
+      // An image alone in its paragraph with a title is a figure, which a <p> can't hold.
+      paragraph({ tokens }: Tokens.Paragraph) {
+        const [only] = tokens;
+        const inline = this.parser.parseInline(tokens);
+        if (tokens.length === 1 && only?.type === "image" && (only as Tokens.Image).title)
+          return `${inline}\n`;
+        return `<p>${inline}</p>\n`;
+      },
       // An image under web/public, which the site serves from its root. A `-light` one comes with
-      // its `-dark` twin; the stylesheet shows the one for the page's theme (Docs.module.css).
-      image({ href, text }: Tokens.Image) {
+      // its `-dark` twin; the stylesheet shows the one for the page's theme (Docs.module.css). Its
+      // title, if any, is the caption under it.
+      image({ href, title: caption, text }: Tokens.Image) {
         const target = normalize(join(dirname(doc.file), href));
         if (!target.startsWith("web/public/"))
           throw new Error(`${doc.file}: ${href} is not under web/public`);
@@ -89,8 +98,11 @@ function parse(doc: Doc, source: string): string {
         const light = /-light(\.\w+)$/;
         const img = (s: string, scheme?: string) =>
           `<img src="${attr(s)}" alt="${attr(text)}" loading="lazy"${scheme ? ` data-scheme="${scheme}"` : ""}>`;
-        if (!light.test(src)) return img(src);
-        return img(src.replace(light, "-dark$1"), "dark") + img(src, "light");
+        const imgs = light.test(src)
+          ? img(src.replace(light, "-dark$1"), "dark") + img(src, "light")
+          : img(src);
+        if (!caption) return imgs;
+        return `<figure>${imgs}<figcaption>${attr(caption)}</figcaption></figure>`;
       },
     },
   });

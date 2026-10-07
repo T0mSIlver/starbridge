@@ -4,7 +4,8 @@
 #   curl -fsSL https://starbridge.run/install.sh | sh
 #
 # starbridge.run serves this file from the deployed revision of main; each release also
-# carries a copy as an asset.
+# carries a copy as an asset. A self-hosted server serves its own copy, so
+# `curl -fsSL https://my.host/install.sh | sh` sets the machine up with my.host.
 #
 # It accepts the binary only if its hash is in SHA256SUMS and SHA256SUMS carries the release
 # key's minisign signature, for STARBRIDGE_VERSION when that is set. It checks the signature with
@@ -15,6 +16,11 @@
 # STARBRIDGE_NO_SETUP=1         install only
 # STARBRIDGE_RELEASES_URL=<url> a mirror of https://github.com/T0mSIlver/starbridge/releases
 set -eu
+
+# The server setup pairs with: each Starbridge server writes its own address here when it serves
+# this file (web/src/app/install.sh/route.ts). Empty, setup picks starbridge.run.
+# STARBRIDGE_SERVER, when set, wins.
+SERVER=
 
 # The release key. Also in cli/minisign.pub, cli/src/release.ts and the README.
 PUBKEY=RWRT+qMmByDpj/1KhL5yCxdzIkVgZ3NqTrlVIIvhrezr/38FgzBIen0F
@@ -53,7 +59,7 @@ else
 fi
 
 if command -v curl >/dev/null 2>&1; then
-  get() { curl -fsSL --proto '=https,http' -o "$2" "$1"; }
+  get() { curl -fsL --proto '=https,http' -o "$2" "$1"; }
 elif command -v wget >/dev/null 2>&1; then
   get() { wget -q -O "$2" "$1"; }
 else
@@ -133,10 +139,12 @@ case :$PATH: in
 esac
 
 # Run setup from the terminal, since stdin is this script under curl | sh.
+server=$SERVER
+[ -z "${STARBRIDGE_SERVER:-}" ] || server=
 if [ -z "${STARBRIDGE_NO_SETUP:-}" ] && "$DIR/starbridge" --help | grep -q '^  starbridge setup'; then
   if [ -r /dev/tty ] && (: </dev/tty) 2>/dev/null; then
-    "$DIR/starbridge" setup </dev/tty
+    "$DIR/starbridge" setup ${server:+--server "$server"} </dev/tty
   else
-    echo "Next: run starbridge setup"
+    echo "Next: run starbridge setup${server:+ --server $server}"
   fi
 fi

@@ -399,6 +399,12 @@ provider plugins add providers, not panels.
   pairing active, so Devices shows the added time on rows that share a name (#287). `pair` and
   `setup` guess `machineKind` (cloud, laptop with a battery, server with no display, else desktop);
   `config machine-kind` corrects it.
+- **Setup names no server question** (#749). Almost everyone uses starbridge.run, and
+  `Starbridge server: [https://starbridge.run]` did not read as "Enter for the default". Setup
+  takes the first of `--server`, `STARBRIDGE_SERVER`, the server baked into the install script,
+  the machine's pairing, and starbridge.run, and prints `Pairing with <host>`. It asks only when
+  the machine is paired with another server, since it would otherwise switch silently; Enter
+  keeps the pairing.
 - **The pairing link** `https://starbridge.run/pair#CODE`, which `pair` prints and shows as a QR
   code, is also an App Link (#611): setup says to scan it with the camera, and a phone's camera
   hands links to apps, not to a browser that would first ask to become a device itself. The app
@@ -428,9 +434,23 @@ provider plugins add providers, not panels.
   the row. The unit runs the `starbridge` on the PATH when that is the running binary, since that
   path survives brew upgrades. Setup turns on plugin auto-update through `extraKnownMarketplaces`,
   installs the Claude Code plugins only from a marketplace whose source is this repository (#274),
-  and offers, each after asking, Codex's skill, the Pi package and opencode's plugin and skill,
-  from copies the CLI carries so versions match. The local agent rewrites outdated copies when
-  it starts.
+  and Codex's skill and rule, the Pi package and opencode's plugin and skill from copies the CLI
+  carries so versions match. The local agent rewrites outdated copies when it starts.
+- **Setup asks little** (#750). Each question was one more Enter between a new user and their
+  first answer, and nearly everyone said yes. Setup installs Starbridge in every agent it finds
+  and starts the service without asking, one line per agent with what it installed; for Codex,
+  which loads no rules, it links the rules to paste. It still asks before installing CodexBar, a
+  third-party binary (with #748, only when no other machine sends quotas), which providers to
+  send, whether to linger, and whether to send a test decision. Permission prompts stay off and
+  unasked; the summary names `starbridge config permissions on`, `starbridge status`,
+  `starbridge uninstall --agent <name>` and `starbridge uninstall`. With no terminal every
+  question takes its default, so nothing waits on input. A failed install prints its reason and
+  `starbridge setup --agent <name>`, and setup goes on. `uninstall --agent` records the agent,
+  and setup and `--refresh` leave it out until `setup --agent` brings it back. An
+  agent installed after setup gets nothing in the background: `status` names it, and `setup
+  --refresh`, which `update` runs, installs it. The output is plain and lined up, as
+  well-known install scripts print theirs: a blank line before each title, a mark in column 1
+  (✓ done, ✗ failed, – skipped), agent names in one column, commands on their own line.
 - **The CLI's path** (#612). Hooks and plugins start the CLI from an agent whose PATH may lack
   the install folder: on macOS `~/.local/bin` is not on the default PATH, and Claude Code opened
   from the Dock has no shell profile. So setup and `update` record the binary's absolute path in
@@ -472,8 +492,12 @@ provider plugins add providers, not panels.
   only after a release that deprecates it, since the plugins, the Pi extension and agents'
   instructions update apart from the CLI. `--json` always means an output format (`wait --json`); `ask` reads its input with
   `--input <path>`.
-- **Install and update.** `https://starbridge.run/install.sh` is `cli/install.sh`, prerendered by
-  the web page, so each deploy serves its own revision's script. It checks `SHA256SUMS` with
+- **Install and update.** `https://starbridge.run/install.sh` is `cli/install.sh` as the web
+  page serves it, so each deploy serves its own revision's script. Each server writes its
+  `PUBLIC_URL` into its copy, and install.ps1's (#749), so `curl -fsSL https://my.host/install.sh
+  | sh` pairs with my.host, and a self-hosted landing page shows its own commands. The web
+  container reads `PUBLIC_URL` when it runs, so one image serves any server; only a plain
+  http(s) origin goes into the script. It checks `SHA256SUMS` with
   minisign, or OpenSSL 3 when minisign is missing. `starbridge update` replaces script installs
   and points Homebrew and npm installs at their manager. Windows refuses to replace or delete a
   running `.exe` but lets it be renamed, so `update` moves it aside to `starbridge.exe.old` and
@@ -688,6 +712,13 @@ Codex prompts are not supported.
   with the error and when they were read. Kept windows raise no alerts and go once their reset
   passes. A provider with nothing to keep shows only its error. Devices get a short error; the CLI
   logs CodexBar's whole. The run timeout is 120 s.
+- **Another machine already sends them** (#748). Two machines often read the same accounts, so
+  when another active machine of the account posted a snapshot in the last day, setup names it
+  and asks whether to send from this machine too, Enter saying no: `devbox already sends quotas.
+  Send from this machine too? [y/N]` under the Quotas title. The server says which machines post snapshots and
+  when (`GET /v1/quota/senders`), never what they hold. A machine that already sends, or a
+  `--providers` list, skips the question. Telling identical accounts apart across machines waits
+  for a CodexBar account fingerprint.
 - **No snapshot yet** (#661). A snapshot is sealed to the devices active when it is taken, so a
   device that just joined reads none until the next upload, and quota items send no push. The
   agent posts one when it sees a device join; the Quotas screen with nothing to show also asks

@@ -43,35 +43,47 @@ starbridge setup
 
 ### What setup does
 
-Setup asks before each step except pairing and the background service, and a rerun repairs only
-what is missing:
+Setup asks only before installing CodexBar, which providers to send, whether the agent runs
+after you log out, and whether to send a test question. A rerun repairs only what is missing:
 
-1. It pairs the machine with your account (see [Pair](#pair)). It asks for the server only when
-   neither `--server` nor `STARBRIDGE_SERVER` names one.
-2. It finds CodexBar, or installs it (Linux and macOS; CodexBar has no Windows build, so a
-   Windows machine uploads no quotas): with Homebrew if you have it, else CodexBar's latest
-   release tarball from GitHub, checked against the `.sha256` that release publishes, into
-   `~/.local/opt/codexbar`. It installs nothing when the checksum is missing or does not match.
-   Then it asks which providers' quotas to upload.
-3. It installs the background service, `starbridge agent`, as a systemd user unit, a launchd
-   agent, or on Windows a Scheduled Task that starts at logon without administrator rights and
-   logs to `%LOCALAPPDATA%\starbridge\agent.log`.
-4. It installs Starbridge in each agent it finds: the Claude Code plugin at user scope, the
-   skill in Codex's skills folder, the Starbridge Pi package, and the skill and plugin in
-   opencode's config folder. A later setup updates the Codex and opencode files when the CLI
-   carries newer ones. The Claude Code plugin needs Claude Code 2.1.287 or later; setup says
-   when it is older. Claude Code, Codex and Pi may then run `starbridge ask`, `waiting`,
-   `working`, `wait` and `settle` without a permission prompt; `starbridge run` still asks, since
-   the command it wraps can be anything. For Pi, setup adds these rules only when
-   pi-permission-system is installed; `starbridge config permissions on` offers them later.
-5. It asks whether to send [permission prompts](#permission-prompts) to your devices. The
-   default is no.
-6. It uploads a first quota snapshot, then offers to send a test question to your phone and
+1. It pairs the machine with your account (see [Pair](#pair)), with the first server named by
+   `--server`, `STARBRIDGE_SERVER`, the install script (each server's own names that server),
+   or the machine's pairing, else https://starbridge.run. It asks only when the machine is
+   already paired with another server, and Enter keeps that one.
+2. It installs Starbridge in each agent it finds and prints one line per agent: the Claude Code
+   plugin at user scope, the skill and sandbox rule in Codex's folders, the Starbridge Pi
+   package, and the skill and plugin in opencode's config folder. A failed install prints its
+   reason and the command that retries it, and setup goes on. A later setup updates the Codex
+   and opencode files when the CLI carries newer ones. The Claude Code plugin needs Claude Code
+   2.1.287 or later; setup says when it is older. Claude Code, Codex and Pi may then run
+   `starbridge ask`, `waiting`, `working`, `wait` and `settle` without a permission prompt;
+   `starbridge run` still asks, since the command it wraps can be anything. For Pi, setup adds
+   these rules only when pi-permission-system is installed.
+3. When another machine of your account sent quotas in the last day, it says which and asks
+   whether to send them from this one too; Enter says no. Otherwise it finds CodexBar, or asks
+   to install it (Linux and macOS; CodexBar has no Windows build, so a Windows machine uploads
+   no quotas): with Homebrew if you have it, else CodexBar's latest release tarball from
+   GitHub, checked against the `.sha256` that release publishes, into `~/.local/opt/codexbar`.
+   It installs nothing when the checksum is missing or does not match. Then it asks which
+   providers' quotas to upload.
+4. It installs and starts the background service, `starbridge agent`, as a systemd user unit, a
+   launchd agent, or on Windows a Scheduled Task that starts at logon without administrator
+   rights and logs to `%LOCALAPPDATA%\starbridge\agent.log`.
+5. It uploads a first quota snapshot, then offers to send a test question to your phone and
    prints your answer.
 
-`--yes` takes every default and sends no test question. `--no-quota` skips step 2, CodexBar
-included; `--no-service` skips step 3; `--no-plugin` skips step 4, for every agent.
-`starbridge status` prints the same checks.
+[Permission prompts](#permission-prompts) stay in the terminal unless you turn them on with
+`starbridge config permissions on`; setup's last lines say so, with the commands that check and
+remove the setup.
+
+`--yes`, or running with no terminal, takes every default and sends no test question.
+`--no-quota` skips step 3, CodexBar included; `--no-service` skips step 4; `--no-agents` skips
+step 2. `starbridge status` prints the same checks, and names an agent installed since setup,
+which `starbridge setup --refresh` then sets up.
+
+`starbridge uninstall --agent <name>` (`claude`, `codex`, `pi` or `opencode`) removes Starbridge
+from one agent. Setup and `--refresh` then leave that agent alone, until `starbridge setup
+--agent <name>` installs it there again.
 
 ### Update and uninstall
 
