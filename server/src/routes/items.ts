@@ -527,6 +527,19 @@ itemRoutes.get("/quota", requireCaller("paired-device"), (c) => {
   return c.json({ items: rows.map(stored) });
 });
 
+// Which active machines post quota snapshots, and when each posted its latest; never the
+// snapshots. Setup asks it before offering to send from another machine (#748).
+itemRoutes.get("/quota/senders", requireCaller("paired"), (c) => {
+  const senders = c.var.db
+    .query(
+      `SELECT i.from_id AS id, MAX(i.received_at) AS receivedAt FROM items i
+       JOIN members m ON m.account_id = i.account_id AND m.id = i.from_id AND m.active = 1
+       WHERE i.account_id = ? AND i.kind = 'quota' GROUP BY i.from_id ORDER BY i.from_id`,
+    )
+    .all(c.var.caller.account) as { id: string; receivedAt: string }[];
+  return c.json({ senders });
+});
+
 itemRoutes.get("/answers", requireCaller("machine"), async (c) => {
   const caller = c.var.caller;
   const me = memberOf(caller);

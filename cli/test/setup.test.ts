@@ -20,6 +20,7 @@ import { REMOVED } from "../src/api";
 import { run } from "../src/cli";
 import { session } from "../src/context";
 import { poll } from "../src/decisions";
+import { pushOnce } from "../src/quota";
 import { installTarball, updateCodexbar } from "../src/setup/codexbar";
 import {
   CODEX_RULE,
@@ -58,8 +59,8 @@ afterEach(async () => {
  * A paired machine in a throwaway HOME, with fake systemctl, loginctl, claude and codexbar on
  * the PATH.
  */
-async function machine() {
-  const ctx = await paired(server);
+async function machine(name?: string) {
+  const ctx = await paired(server, name);
   const home = mkdtempSync(join(tmpdir(), "starbridge-home-"));
   const log = join(home, "calls.log");
   Object.assign(ctx.env, {
@@ -210,6 +211,28 @@ test("a second setup changes nothing", async () => {
   writeFileSync(pi, JSON.stringify({ packages: ["git:github.com/T0mSIlver/starbridge@v0.9.0"] }));
   await setup(m.sys, { yes: true, readyTimeoutMs: 2_000 });
   expect(JSON.parse(readFileSync(pi, "utf8")).packages).toEqual([PI_PACKAGE]);
+});
+
+test("setup asks before sending quotas that another machine already sends, and Enter skips (#748)", async () => {
+  const devbox = await machine();
+  await pushOnce(devbox.ctx, { providers: ["codex"], codexbar: join(FAKE_BIN, "codexbar") });
+  const mac = await machine("mac");
+  const asked: string[] = [];
+  mac.sys.prompt = {
+    ...defaults,
+    confirm: async (q, def) => (asked.push(q), def),
+  };
+  expect(await setup(mac.sys, { yes: true, noService: true, readyTimeoutMs: 1 })).toBe(0);
+  expect(asked[0]).toBe("Quotas: devbox already sends them. Send from this machine too?");
+  expect(mac.ctx.lines).toContain("Skipped: the agent uploads no quotas.");
+  expect(mac.ctx.store.agentConfig().quota?.providers).toEqual([]);
+  expect(mac.calls().some((c) => c.startsWith("codexbar"))).toBe(false);
+
+  // devbox itself already sends them: no question.
+  devbox.ctx.store.saveAgentConfig({ quota: { providers: ["codex"], interval: "5m" } });
+  devbox.sys.prompt = { ...defaults, confirm: async (q, def) => (asked.push(q), def) };
+  await setup(devbox.sys, { yes: true, noService: true, readyTimeoutMs: 1 });
+  expect(asked.filter((q) => q.startsWith("Quotas:"))).toHaveLength(1);
 });
 
 test("refresh brings what setup wrote to this release and leaves the rest alone", async () => {
