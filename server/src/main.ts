@@ -21,6 +21,12 @@ if (process.argv[2] === "usage") {
   console.log(formatReport(report(openDb(config.dbPath), days)));
   process.exit(0);
 }
+// Anything else would start a second server beside the running one (deploy/host/switch.sh runs
+// these commands in its container).
+if (process.argv[2] !== undefined) {
+  console.error(`unknown command: ${process.argv[2]}`);
+  process.exit(2);
+}
 const { app, deps } = await createApp(config);
 
 const server = Bun.serve({
