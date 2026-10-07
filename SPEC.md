@@ -43,7 +43,10 @@ The landing page, docs, README and store listing sell questions and runs, each b
 to the reader. The hero: "Know the moment your agent is stuck" (#448). Quotas get one line: users
 don't launch agents from Starbridge, and the power users it targets don't check quotas by hand.
 Alerts are opt-in, so copy never says they are on. Permission prompts are secondary and opt-in.
-Copy says "on each machine that runs agents", never "on each machine" alone.
+Copy says "on each machine that runs agents", never "on each machine" alone. The subtitle under
+the hero sells questions and that every agent on every machine reaches you in one place; the
+feature row below names runs, quotas and permission prompts, since a list in the subtitle repeats
+it (#801). The line under the hero's buttons, with end-to-end encryption, shows on phones too.
 
 ### Platforms
 
@@ -975,6 +978,20 @@ Tokens, type and components: `DESIGN.md`.
   is capped per device for that reason, and a question with 8000 characters of context fits up to
   about 140 devices in its 2 MB. Its pictures are stored once whatever the number (#685), and
   shrink only to leave the boxes room.
+- **Watching it** (#782). Caddy keeps no access log, so the server logs one line a minute of its
+  refusals by status, error code and route, with the accounts refused most, and never an
+  address. Per-address request and 429 counts stay in its memory, like the rate limits, and only
+  the host reads them, through the container's own loopback (port 8081, `GET /watch`). The launch watcher (`deploy/watch/`) reads
+  those, `ss`, `docker` and `bun server.js top` over SSH every few minutes and names an address
+  only when it holds over 200 connections or is being rate-limited (the owner's rule): at
+  Caddy's cap of 3000 `/v1` requests a minute (2900 seen by the server, since Caddy logs no
+  refusal), or refused with 429 by the server: an HTTP/2 client can flood over few connections, and every
+  other visitor's address would end up in the on-call session's transcript.
+- **Blocking an address** (#783). The owner can refuse an address or range at Caddy, by a reload
+  that keeps open connections (`deploy/host/switch.sh`), with a 403 that names abuse@. An IPv6
+  address is blocked as its /64, as the rate limits count it, and nothing wider than a /8 (IPv4)
+  or /32 (IPv6) is accepted. The block list is the one place an address is written to disk, until
+  it is unblocked; `/privacy` says so.
 - **Privacy and terms** (`/privacy`, `/terms`). Each claim follows the code: stored columns in
   `server/src/db.ts`, retention in `server/src/limits.ts`, logs and backups in `deploy/`. A change
   to what is stored changes the page, and the Play data-safety form. Contact is

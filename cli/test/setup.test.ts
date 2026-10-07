@@ -32,7 +32,7 @@ import {
 import { markedSkill } from "../src/setup/marker";
 import opencodeFiles from "../src/setup/opencode-files.js";
 import { withInstalledPlaces } from "../src/setup/service";
-import { refresh, setup } from "../src/setup/setup";
+import { probeLines, refresh, setup } from "../src/setup/setup";
 import { status } from "../src/setup/status";
 import { defaults, failure, type Sys } from "../src/setup/sys";
 import { uninstall } from "../src/setup/uninstall";
@@ -376,7 +376,12 @@ test("a failed agent install says why and how to retry, and setup goes on (#750)
       ": fatal: could not read from github.com\n               Retry with:\n                 starbridge setup --agent pi",
   );
   expect(out).toContain("✓ opencode     skill and plugin installed");
-  expect(out).toContain("Starbridge is set up.");
+  // The end says what failed and how to retry, not that all is set up (#770).
+  expect(out).not.toContain("Starbridge is set up.");
+  expect(out).toContain("Setup is done, but one step failed.");
+  expect(out).toContain(
+    `  ✗ Pi           pi install ${PI_PACKAGE}: fatal: could not read from github.com\n  Retry once fixed:\n    starbridge setup`,
+  );
 });
 
 test("refresh brings what setup wrote to this release and leaves the rest alone", async () => {
@@ -692,6 +697,23 @@ function fakeCodexbarReleases(latest: string, sums: (v: string, sha: string) => 
 function linuxSys(ctx: TestCtx, home: string): Sys {
   return { ctx, home, platform: "linux", arch: "x64", uid: 1000, prompt: defaults, self: [SELF] };
 }
+
+test("a CodexBar the system cannot start says what it needs, not to sign in (#771)", () => {
+  const detail =
+    "/home/u/.local/bin/codexbar: error while loading shared libraries: libsqlite3.so.0: cannot open shared object file: No such file or directory";
+  const probes = ["claude", "codex"].map((provider) => ({
+    provider,
+    displayName: provider,
+    works: false,
+    detail,
+  }));
+  expect(probeLines({ platform: "linux" } as Sys, probes)).toEqual([
+    "✗ CodexBar cannot start: it needs libsqlite3.so.0",
+    "  On Debian or Ubuntu: sudo apt install libsqlite3-0",
+    "  Then run again:",
+    "    starbridge setup",
+  ]);
+});
 
 test("CodexBar installs only when its release's own checksum matches", async () => {
   const home = mkdtempSync(join(tmpdir(), "starbridge-home-"));

@@ -43,7 +43,7 @@ What each user does, from the clients' code:
 | machine | run with 6 updates 20 s apart | `--runs` an hour (4) |
 | machine | quota snapshot (2 KB each), 9 in 10 quiet | every 5 min |
 | phone or page | answer (600 B) | `--answer` s after the decision (60) |
-| page (`--pages` of users, all) | inbox, open prompts and settled polls | every 20 s |
+| page (`--pages` of users, all) | inbox, open prompts and settled polls | every `--poll` s (20; 5 until a push arrives) |
 | page | runs poll | every 10 s |
 | page | quota poll | every 60 s |
 | page | `GET /joins?wait=25` long-poll | always one open |
@@ -54,6 +54,7 @@ What each user does, from the clients' code:
 `spike.ts` adds what a front-page post brings on top of `load.ts`'s users: visitors arriving at
 `--rates` per second, one stage each, who load the landing page as a browser does (the page,
 its scripts, styles, fonts and pictures, `/v1/me`, Umami's script and one event). A share
+(`--docs`) then opens `/docs` and the FAQ, a share
 starts the GitHub sign-in (`--signin`) and a share sets Starbridge up through Caddy
 (`--signup`), then tries it: a first question with a picture, more every `--every` s, each
 answered after about 20 s. Each visitor sends its own address in `X-Sim-IP`, which the test
