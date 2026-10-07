@@ -64,6 +64,7 @@ class Showcase(private val now: Instant) {
         createdAt = ago(8),
         agent = "claude-code",
         images = listOf(layout("a"), layout("b")),
+        replies = true,
     )
 
     val answered = Decision(
