@@ -39,6 +39,7 @@ import dev.starbridge.app.protocol.Sodium
 import dev.starbridge.app.protocol.bindMessage
 import dev.starbridge.app.protocol.checkJoined
 import dev.starbridge.app.protocol.codeFromLink
+import dev.starbridge.app.protocol.otherServer
 import dev.starbridge.app.protocol.fromB64
 import dev.starbridge.app.protocol.pairingLink
 import dev.starbridge.app.protocol.parsePairingCode
@@ -63,6 +64,7 @@ import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
 import okhttp3.OkHttpClient
 import java.io.IOException
+import java.net.URI
 import dev.starbridge.app.ui.span
 import java.time.Instant
 import java.time.OffsetDateTime
@@ -1546,7 +1548,14 @@ class ServerStore(
         val request = try {
             api().pairing(parsed.rendezvous)
         } catch (e: IOException) {
-            approval.value = Approval.Failed(if (e is ApiException && e.status == 404) "No pairing with this code, or it expired." else describe(e))
+            val other = if (e is ApiException && e.status == 404) otherServer(code, saved.server) else null
+            approval.value = Approval.Failed(
+                when {
+                    other != null -> "This code is from $other, and this phone is signed in to ${runCatching { URI(saved.server).rawAuthority }.getOrNull() ?: saved.server}."
+                    e is ApiException && e.status == 404 -> "No pairing with this code, or it expired."
+                    else -> describe(e)
+                },
+            )
             return@run
         }
         val body = try {
