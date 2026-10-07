@@ -250,16 +250,17 @@ test("a machine that knows the server holds back a revocation seals nothing new 
   const real = globalThis.fetch;
   serve(known);
   try {
-    answer(laptop, ids[0], "No", { length: full.length, head: full.head });
-    await poll(ctx, session(ctx), { cursor: ctx.store.state().cursor, seconds: 1, shared: true });
+    // Counted from the poll on: it announces and re-seals nothing either.
     let posted = 0;
     const inner = globalThis.fetch;
     globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
       if (String(url).endsWith("/v1/items") && init?.method === "POST") posted++;
       return inner(url, init);
     }) as typeof fetch;
+    answer(laptop, ids[0], "No", { length: full.length, head: full.head });
+    await poll(ctx, session(ctx), { cursor: ctx.store.state().cursor, seconds: 1, shared: true });
     const s = session(ctx);
-    const refused = "nothing is sent until it serves them";
+    const refused = "Nothing is sent meanwhile";
     const at = now();
     const senders: [string, () => Promise<unknown>][] = [
       ["ask", async () => expect(await run(["ask", "--question", "Ship?"], ctx)).toBe(1)],
@@ -328,6 +329,46 @@ test("a machine that knows the server holds back a revocation seals nothing new 
   );
   expect(body.to).toEqual([laptop.id]);
   expect(body.dir).toEqual({ length: chain.length, head: chain.head });
+});
+
+test("the stolen phone cannot lift the hold by revoking the revoker on a fork (#794)", async () => {
+  const { ctx, laptop, ids, answer, serve, known } = await withholding();
+  await laptopAppends(laptop, (dir) =>
+    revokeEntry(dir, { id: laptop.id, signKey: laptop.keys.sign.privateKey }, "phone", now()),
+  );
+  const full = await laptopChain(laptop);
+  // The server, holding the phone's keys, serves the machine its stale chain plus the phone's
+  // revocation of the laptop.
+  const r = await fetch(`${server.url}/v1/directory?from=0`, {
+    headers: { authorization: `Bearer ${laptop.token}` },
+  });
+  const stale = ((await r.json()) as { entries: SignedEnvelope[] }).entries.slice(0, known);
+  const phone = { id: "phone", signKey: server.owner.device.keys.sign.privateKey };
+  const fork = [...stale, revokeEntry(verifyDirectory(stale), phone, laptop.id, now())];
+  const real = globalThis.fetch;
+  try {
+    // First the stale chain, with the laptop's answer naming the full one: the machine holds.
+    serve(known);
+    answer(laptop, ids[0], "No", { length: full.length, head: full.head });
+    await poll(ctx, session(ctx), { cursor: ctx.store.state().cursor, seconds: 1, shared: true });
+    expect(ctx.errors.at(-1)).toContain("holding back directory entries");
+    globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+      const m = /\/v1\/directory\?from=(\d+)/.exec(String(url));
+      if (!m) return real(url, init);
+      return Response.json({ entries: fork.slice(Number(m[1])) });
+    }) as typeof fetch;
+    // The machine took the fork: the laptop is revoked there, the phone active.
+    const dir = await refreshDirectory(ctx, session(ctx));
+    expect(dir.members.get(laptop.id)?.active).toBe(false);
+    expect(await run(["ask", "--question", "Ship?"], ctx)).toBe(1);
+    expect(ctx.errors.join("\n")).toContain("the server may be serving a fork");
+    // The phone's own answer still does not count.
+    answer(server.owner.device, ids[1], "Yes");
+    await poll(ctx, session(ctx), { cursor: ctx.store.state().cursor, seconds: 1, shared: true });
+    expect(ctx.store.state().answers[ids[1]]).toBeUndefined();
+  } finally {
+    globalThis.fetch = real;
+  }
 });
 
 test("replaying a device's older answer does not lift the refusal", async () => {

@@ -717,7 +717,7 @@ export function noteHead(
  */
 export function behindBy(st: State, dir: Directory, entries: unknown[]): string | undefined {
   const held = withheld(st, dir, entries);
-  return held && `${held}: no answer counts until it serves them`;
+  return held && `${held}. No answer counts meanwhile`;
 }
 
 /**
