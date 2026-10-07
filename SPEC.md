@@ -977,6 +977,11 @@ Tokens, type and components: `DESIGN.md`.
   Caddy's cap of 3000 `/v1` requests a minute (2900 seen by the server, since Caddy logs no
   refusal), or refused with 429 by the server: an HTTP/2 client can flood over few connections, and every
   other visitor's address would end up in the on-call session's transcript.
+- **Blocking an address** (#783). The owner can refuse an address or range at Caddy, by a reload
+  that keeps open connections (`deploy/host/switch.sh`), with a 403 that names abuse@. An IPv6
+  address is blocked as its /64, as the rate limits count it, and nothing wider than a /8 (IPv4)
+  or /32 (IPv6) is accepted. The block list is the one place an address is written to disk, until
+  it is unblocked; `/privacy` says so.
 - **Privacy and terms** (`/privacy`, `/terms`). Each claim follows the code: stored columns in
   `server/src/db.ts`, retention in `server/src/limits.ts`, logs and backups in `deploy/`. A change
   to what is stored changes the page, and the Play data-safety form. Contact is

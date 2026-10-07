@@ -21,6 +21,8 @@
 # The server serves the API, the OAuth callback and /healthz*; the web page serves the rest.
 # One origin keeps the SameSite=Lax session cookie and the server's cross-site check working.
 starbridge.run {
+	# Addresses blocked for abuse get a 403 before anything else (deploy/host/switch.sh, #783).
+	import /etc/caddy/secrets/denylist*.caddy
 	encode zstd gzip
 	# Every response's security headers. The page's Content-Security-Policy is not here: Next
 	# sets it with a nonce made per request (web/src/proxy.ts). `defer` replaces any copy an
@@ -196,6 +198,7 @@ stats.starbridge.run {
 
 # The demo server for Play reviewers (#423): its own Compose project (deploy/demo), API only.
 demo.starbridge.run {
+	import /etc/caddy/secrets/denylist*.caddy
 	encode zstd gzip
 	@server path /v1/* /healthz
 	handle @server {

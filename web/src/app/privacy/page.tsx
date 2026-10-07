@@ -74,7 +74,7 @@ export default function Privacy() {
         failed at the proxy, it can hold the request&apos;s IP address, path and headers. Each keeps
         five files of 10 MB, so how long a log covers depends on traffic. To enforce rate limits,
         the server counts requests per IP address in memory; it never writes them to disk, and a
-        restart clears them.
+        restart clears them. Addresses blocked for abuse are kept in a block list until unblocked.
       </p>
 
       <h2 className="t-heading">Usage counts</h2>
