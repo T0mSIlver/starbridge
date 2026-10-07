@@ -711,9 +711,10 @@ first window, so a provider with a window running out leads.
   (Android), never on a notification. Most snoozes are for later the same day, so it opens on
   today: 1 hour and This evening (18:00, offered until 17:00), then the days as chips (today and
   the 7 after it) and a time an hour ahead, up to the half hour (9:00 on another day), from 5
-  minutes on, in the Clock setting, confirmed by "Snooze until 15:00". Android sets the time on a
-  dial; the web, which has none, lists the half hours. Phones open the times in place under
-  Snooze; the desktop web opens them in a popover. A
+  minutes on, confirmed by "Snooze until 15:00". Android sets the time on a dial; the web types
+  it, to the minute, in the browser's time field, whose 12 or 24 hours follow the browser's
+  language rather than the Clock setting. Phones open the times in place under Snooze; the
+  desktop web opens them in a popover. A
   snoozed question leaves Needs you, the count and the badge, and its notification closes on
   every device; it waits in a collapsed "Snoozed · n" group after them, soonest back first, its
   time slot "Until 18:00", with no amber and no answer buttons even when its agent waits. Opened,
