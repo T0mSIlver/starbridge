@@ -871,12 +871,12 @@ internal fun outcome(decision: Decision) = decision.answer ?: decision.theirAnsw
     else -> "Answered"
 }
 
-/** Who closed it: this phone, the agent (withdrawn, or for another page), or another device. */
-internal fun answeredBy(decision: Decision) = when {
-    decision.answer != null -> "this phone"
-    decision.answeredOn != null -> decision.answeredOn
-    decision.settled != null || decision.answerIn != null -> "the agent"
-    else -> "another device"
+/** Who closed it, after its outcome: "on this phone", "on Pixel", "by the agent" (withdrawn, or for another page), "on another device". */
+internal fun closedByPhrase(decision: Decision) = when {
+    decision.answer != null -> "on this phone"
+    decision.answeredOn != null -> "on ${decision.answeredOn}"
+    decision.settled != null || decision.answerIn != null -> "by the agent"
+    else -> "on another device"
 }
 
 /** How it closed. With [arrived], the answer just landed and the check springs in. */
@@ -891,7 +891,7 @@ private fun Outcome(decision: Decision, now: Instant, arrived: Boolean) {
         Text(
             buildAnnotatedString {
                 withStyle(SpanStyle(color = MaterialTheme.colorScheme.onSurface)) { append(outcome(decision)) }
-                append(" · on ${answeredBy(decision)}")
+                append(" · ${closedByPhrase(decision)}")
             },
             style = StarbridgeTheme.type.body,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -1012,7 +1012,7 @@ private fun LazyListScope.history(history: History, open: Boolean, onOpen: (Bool
 }
 
 /** How a History row closed: the answer and who gave it, or how a prompt ended. */
-internal fun closedHow(decision: Decision) = "${outcome(decision)} · on ${answeredBy(decision)}"
+internal fun closedHow(decision: Decision) = "${outcome(decision)} · ${closedByPhrase(decision)}"
 internal fun closedHow(prompt: Prompt) = prompt.ended ?: "Expired"
 
 /**
