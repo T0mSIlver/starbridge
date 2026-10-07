@@ -696,6 +696,11 @@ Codex prompts are not supported.
   redaction. A private key's lines go also when they carry a diff's `+`, `-` or space (#489).
   `inputHash` is keyed under the machine's signing key, so a device holding the redacted input
   cannot test guesses for a short redacted value.
+- **Title and command** (#805). A prompt's title is what the agent says the call does (Claude
+  Code's `description`), else the tool, on every surface; the command shows under it in a dark
+  terminal block. Allow covers the command, never the description: the agent writes the
+  description, so it can mislead. A notification draws the block in its expanded view only, a
+  decorated custom view, since the standard templates strip a background colour from text.
 - History says how and where a prompt was answered ("Denied · on Pixel"), from the machine's
   `settled` notice (#349).
 
