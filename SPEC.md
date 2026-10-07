@@ -210,6 +210,10 @@ provider plugins add providers, not panels.
 ## Sign-in
 
 - The hosted server signs in with GitHub; a self-hosted server with `OWNER_TOKEN`.
+- The page shows only the sign-in methods its server offers (#670): `GET /v1/auth/methods` lists
+  them, and without GitHub the landing page's and sign-in page's buttons open the owner token
+  form. Until the server answers, the page shows GitHub, the hosted server's, so the landing
+  page's HTML keeps its buttons.
 - Android (#34, #527): the app signs in with PKCE, and GitHub binds its code to the app's
   challenge, so only the app holding the verifier can trade the code, whoever catches the
   redirect. Known gap: a hostile app can start its own sign-in, and if GitHub skips the consent

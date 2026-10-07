@@ -2,6 +2,7 @@
 
 import { track } from "@/lib/analytics";
 import { AGENTS_GUIDE, REPO, SELF_HOST } from "@/lib/links";
+import { useGitHubSignIn } from "@/lib/signInMethods";
 import { Analytics } from "./Analytics";
 import { InstallBox } from "./InstallBox";
 import { Icon, Mark } from "./icons";
@@ -95,6 +96,8 @@ function Section({
 
 /** What a visitor without a device on this browser sees at `/` (design v2, direction B). */
 export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
+  // A server without GitHub signs in with its owner token instead.
+  const github = useGitHubSignIn();
   return (
     <div className={s.page}>
       <Analytics />
@@ -110,13 +113,23 @@ export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
           </a>
           <a href={REPO}>GitHub</a>
         </nav>
-        <a
-          href="/v1/auth/github"
-          className={`t-label ${ui.btn} ${ui.fill} ${s.signIn}`}
-          onClick={() => track("sign-in", { via: "header" })}
-        >
-          Sign in
-        </a>
+        {github ? (
+          <a
+            href="/v1/auth/github"
+            className={`t-label ${ui.btn} ${ui.fill} ${s.signIn}`}
+            onClick={() => track("sign-in", { via: "header" })}
+          >
+            Sign in
+          </a>
+        ) : (
+          <button
+            type="button"
+            className={`t-label ${ui.btn} ${ui.fill} ${s.signIn}`}
+            onClick={onOwnerToken}
+          >
+            Sign in
+          </button>
+        )}
       </header>
 
       <section className={s.hero}>
@@ -126,14 +139,24 @@ export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
           with one tap and it gets back to work.
         </p>
         <div className={s.actions}>
-          <a
-            href="/v1/auth/github"
-            className={`t-action ${ui.btn} ${ui.lg} ${ui.fill}`}
-            onClick={() => track("sign-in", { via: "hero" })}
-          >
-            <Icon name="github" size={18} />
-            Sign in with GitHub
-          </a>
+          {github ? (
+            <a
+              href="/v1/auth/github"
+              className={`t-action ${ui.btn} ${ui.lg} ${ui.fill}`}
+              onClick={() => track("sign-in", { via: "hero" })}
+            >
+              <Icon name="github" size={18} />
+              Sign in with GitHub
+            </a>
+          ) : (
+            <button
+              type="button"
+              className={`t-action ${ui.btn} ${ui.lg} ${ui.fill}`}
+              onClick={onOwnerToken}
+            >
+              Sign in
+            </button>
+          )}
           <a href="#install" className={`t-action ${ui.btn} ${ui.lg}`}>
             Install the CLI
           </a>

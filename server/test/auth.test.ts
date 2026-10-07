@@ -194,6 +194,13 @@ test("GitHub sign-in is off without an OAuth app: the page says so, the app gets
   );
 });
 
+test("the server lists its sign-in methods (#670)", async () => {
+  const methods = async (s: Awaited<ReturnType<typeof makeServer>>) =>
+    (await (await s.app.request("/v1/auth/methods")).json()).methods;
+  expect(await methods(await makeServer())).toEqual(["owner"]);
+  expect(await methods(await makeServer(githubConfig()))).toContain("github");
+});
+
 test("owner sign-in refuses a wrong token and is rate-limited", async () => {
   const s = await makeServer();
   expect((await s.call("POST", "/v1/auth/owner", { body: { token: "nope" } })).status).toBe(401);

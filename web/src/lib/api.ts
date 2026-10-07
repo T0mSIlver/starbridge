@@ -227,6 +227,7 @@ export interface Stored {
 
 export const api = {
   me: () => call<Me>("GET", "/me"),
+  signInMethods: async () => (await call<{ methods: string[] }>("GET", "/auth/methods")).methods,
   ownerSignIn: (token: string) =>
     call<{ session: string }>("POST", "/auth/owner", { body: { token } }),
   logout: () => call<void>("POST", "/auth/logout"),
