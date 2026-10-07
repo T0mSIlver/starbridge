@@ -63,7 +63,7 @@ async function ffmpeg(...args: string[]) {
 
 const mb = (path: string) => `${(statSync(path).size / 1e6).toFixed(1)} MB`;
 
-async function image(dir: string) {
+export async function image(dir: string) {
   const browser = await chromium.launch();
   const page = await browser.newPage({ viewport: { width: 1200, height: 400 } });
   await page.goto(`file://${join(import.meta.dir, "question.html")}`);

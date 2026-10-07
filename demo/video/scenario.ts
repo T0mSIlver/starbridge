@@ -8,9 +8,10 @@
  *
  * The phone must be signed in to the stack's account (README.md), on its lock screen.
  */
-import { mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { Agent, EVAL } from "./agents";
+import { image } from "./compose";
 
 const adbPath = process.env.ADB ?? "adb";
 
@@ -68,6 +69,7 @@ if (import.meta.main) {
   const dir = resolve(process.argv[2] ?? "demo-video");
   const out = resolve(process.argv[3] ?? join(dir, "take"));
   mkdirSync(out, { recursive: true });
+  if (!existsSync(join(out, "question.png"))) await image(out);
   let t0 = 0;
   const clock = () => (performance.now() - t0) / 1000;
   const agent = new Agent(EVAL, dir, clock);

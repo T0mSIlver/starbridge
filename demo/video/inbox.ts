@@ -9,14 +9,14 @@
  *
  * Env: WEB, the web app built against the stack's server (default http://127.0.0.1:8641).
  */
-import { mkdirSync, readdirSync, renameSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, renameSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { chromium, type Page } from "playwright";
 import { Agent, EVAL, PRICING } from "./agents";
-import { HOLE } from "./compose";
+import { HOLE, image } from "./compose";
 import { OWNER_TOKEN } from "./stack";
 
-const WEB = process.env.WEB ?? "http://127.0.0.1:8641";
+export const WEB = process.env.WEB ?? "http://127.0.0.1:8641";
 
 /** A pointer drawn in the page, since a recording shows none. */
 const POINTER = `addEventListener("DOMContentLoaded", () => {
@@ -31,7 +31,7 @@ const POINTER = `addEventListener("DOMContentLoaded", () => {
 });`;
 
 /** Moves the pointer to the button, visibly, and clicks it, aiming again if the page moved it. */
-async function press(page: Page, name: string) {
+export async function press(page: Page, name: string) {
   const button = page.getByRole("button", { name, exact: true }).first();
   for (let i = 0; i < 3; i++) {
     const box = await button.boundingBox();
@@ -62,7 +62,7 @@ const pushed = (page: Page) =>
     ),
   );
 
-const context = (dir: string, video?: string) =>
+export const context = (dir: string, video?: string) =>
   chromium.launchPersistentContext(join(dir, "browser"), {
     // The new headless mode: the old one denies notifications, and the inbox then says so.
     channel: "chromium",
@@ -89,6 +89,7 @@ async function signIn(dir: string) {
 
 async function take(dir: string, out: string) {
   mkdirSync(out, { recursive: true });
+  if (!existsSync(join(out, "question.png"))) await image(out);
   const raw = join(out, "video");
   const ctx = await context(dir, raw);
   await ctx.addInitScript(POINTER);

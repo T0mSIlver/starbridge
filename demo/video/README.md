@@ -35,21 +35,20 @@ phone cut adb and an Android phone or emulator with the Starbridge app.
      frame: dark theme (`cmd uimode night yes`), no screen lock (`locksettings clear --old
      <pin>`), a dimmed wallpaper (`cmd wallpaper set-dim-amount 0.85`).
 
-4. **Takes.** Each needs the question's image first. Take the inbox cut on a fresh stack: the
+4. **Takes.** Each renders the question's image first. Take the inbox cut on a fresh stack: the
    inbox keeps earlier takes' runs for a while. The phone take taps fixed points, measured on a
    1080×2400 emulator at density 420; on another phone set `TAP_EXPAND` and `TAP_ANSWER` to "x,y"
    of the notification's arrow and of its first button.
 
    ```bash
-   bun demo/video/compose.ts image .scratch/demo/inbox
    bun demo/video/inbox.ts .scratch/demo/stack .scratch/demo/inbox
-   bun demo/video/compose.ts image .scratch/demo/take
    bun demo/video/scenario.ts .scratch/demo/stack .scratch/demo/take
    ```
 
 5. **Video.** `demo.mp4` (1920×1080, 30 fps, no audio), `demo.gif` (960 px, 12 fps) and
    `poster.png`, in the take's directory. `OFFSET` shifts the recording against the terminals.
-   Headless Chromium crashes when `/tmp` is full; point `TMPDIR` elsewhere then.
+   Headless Chromium crashes, or records only a few seconds, when `/tmp` is full; point `TMPDIR`
+   at a short path elsewhere then (Chromium refuses a socket path over 107 bytes).
 
    ```bash
    bun demo/video/compose.ts video .scratch/demo/inbox
@@ -57,3 +56,23 @@ phone cut adb and an Android phone or emulator with the Starbridge app.
 
 Words live in `agents.ts` (questions, runs, the agents' lines), the image in `question.html`,
 the look in `frame.html`, the layouts in `compose.ts`.
+
+## A take with a person at the phone
+
+`cue.ts` takes the phone cut on any server, the hosted one included, with the owner tapping
+instead of adb. It pairs its own "workstation" in a directory of its own, so the owner's real
+machines and agents stay out of it. With scrcpy on PATH it records the phone; `compose.ts video`
+then works as above.
+
+```bash
+bun demo/video/cue.ts pair .scratch/demo/pixel --server https://starbridge.run
+bun demo/video/cue.ts take .scratch/demo/pixel .scratch/demo/pixel-take
+```
+
+The take waits for Enter, starts recording, asks 3 s later, waits up to 2 minutes for the tap,
+then runs the one-minute eval. A dry run against a local stack answers from the stack's browser
+instead (steps 1 to 3, no phone needed):
+
+```bash
+bun demo/video/cue.ts take .scratch/demo/stack .scratch/demo/dry --dry-run .scratch/demo/stack
+```
