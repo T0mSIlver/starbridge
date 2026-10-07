@@ -244,18 +244,19 @@ export function verifyBind(
 }
 
 /**
- * The account's check code, which a machine prints once paired and devices show under Devices
- * (#795): the first 80 bits of BLAKE2b-256("starbridge/v1/check" NUL entry 0's body), as 16
- * Crockford base32 characters in groups of four. A machine paired into a chain the server made
- * prints another, unless the server finds an entry 0 that matches 80 bits of the owner's.
+ * A machine's check code, which the machine prints once paired and devices show beside it under
+ * Devices (#795): the first 80 bits of BLAKE2b-256("starbridge/v1/check" NUL signPk), as 16
+ * Crockford base32 characters in groups of four. A machine paired into a chain the server
+ * controls is missing from the owner's, or stands there as a stand-in whose key the server would
+ * have to grind to the machine's code.
  */
-export function checkCode(entries: unknown[]): string {
-  const body = (entries[0] as { body?: unknown } | undefined)?.body;
-  if (typeof body !== "string") throw new ProtocolError("bad-schema", "the directory is empty");
+export function checkCode(signPk: string): string {
+  const key = fromB64(signPk);
+  if (key.length !== 32) throw new ProtocolError("bad-encoding", "signPk is not 32 bytes");
   const hash = sodium.crypto_generichash(
     32,
-    concat(utf8("starbridge/v1/check"), new Uint8Array([0]), utf8(body)),
+    concat(utf8("starbridge/v1/check"), new Uint8Array([0]), key),
     null,
   );
-  return (encodeCrockford(hash.subarray(0, 10)).match(/.{4}/g) as string[]).join(" ");
+  return (encodeCrockford(hash.subarray(0, 10)).match(/.{4}/g) as string[]).join("-");
 }
