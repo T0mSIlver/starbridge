@@ -4,6 +4,8 @@ import java.net.URI
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
@@ -125,15 +127,22 @@ class Pairings(private val sodium: Sodium) {
 
     /**
      * A machine's check code (#795), which the machine asks its owner to type the last group of:
-     * the first 80 bits of BLAKE2b-256("starbridge/v1/check" NUL boxPk signPk), as 16 Crockford
-     * base32 characters in groups of four.
+     * the first 80 bits of BLAKE2b-256("starbridge/v1/check" NUL body NUL sig) over the `add`
+     * entry that added member [id], as 16 Crockford base32 characters in groups of four.
      */
-    fun checkCode(boxPk: String, signPk: String): String {
-        val box = fromB64(boxPk)
-        val sign = fromB64(signPk)
-        if (box.size != 32 || sign.size != 32) throw ProtocolException("bad-encoding", "a public key is not 32 bytes")
-        val hash = sodium.hash(concat(utf8("starbridge/v1/check"), byteArrayOf(0), box, sign))
-        return encodeCrockford(hash.copyOf(10)).chunked(4).joinToString("-")
+    fun checkCode(entries: List<JsonElement>, id: String): String {
+        for (raw in entries) {
+            val env = raw as? JsonObject ?: continue
+            val body = (env["body"] as? JsonPrimitive)?.contentOrNull ?: continue
+            val sig = (env["sig"] as? JsonPrimitive)?.contentOrNull ?: continue
+            val parsed = ProtocolJson.parseToJsonElement(body) as? JsonObject ?: continue
+            if ((parsed["op"] as? JsonPrimitive)?.contentOrNull != "add") continue
+            if (((parsed["member"] as? JsonObject)?.get("id") as? JsonPrimitive)?.contentOrNull != id) continue
+            val nul = byteArrayOf(0)
+            val hash = sodium.hash(concat(utf8("starbridge/v1/check"), nul, utf8(body), nul, utf8(sig)))
+            return encodeCrockford(hash.copyOf(10)).chunked(4).joinToString("-")
+        }
+        throw ProtocolException("unknown-member", "no add entry for $id")
     }
 
     /** BLAKE2b-256 of "starbridge/v1/pairing-key", NUL, the 16 secret characters. */

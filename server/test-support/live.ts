@@ -134,7 +134,8 @@ export class LiveServer {
     );
     await this.phone("POST", `/pairings/${code.rendezvous}/approve`, { approval });
     // What the phone shows beside the new member, which a machine asks its owner to confirm.
-    return checkCode(req);
+    const { entries } = (await this.phone("GET", "/directory?from=0")) as { entries: unknown[] };
+    return checkCode(entries, req.id);
   }
 
   /** Items of `kind` as the phone lists them, sealed, with what the server knows of each. */

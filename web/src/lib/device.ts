@@ -873,7 +873,7 @@ export function devices(ctx: Ctx): Device[] {
     addedAt: addedAt.get(member.id) ?? "",
     status: active ? "active" : "revoked",
     self: member.id === ctx.device.id,
-    ...(active && member.role === "machine" ? { check: checkCode(member) } : {}),
+    ...(active && member.role === "machine" ? { check: checkCode(ctx.entries, member.id) } : {}),
   }));
 }
 

@@ -140,7 +140,7 @@ the QR code with your phone, or type the code in Settings → Devices → Add a 
 or in the web app, which works from a machine with no browser. The code expires in 10 minutes.
 
 Once a device approves, the machine prints three groups of its check code and waits for the
-fourth: the Starbridge app shows the machine's full code under Devices. Type it in the terminal,
+fourth: the Starbridge Android app shows the machine's full code under Devices. Type it in the terminal,
 or, where setup runs with no terminal, run `starbridge pair --confirm <last four>`. A code that
 differs means a server read your pairing code and paired the machine into an account it
 controls ([PROTOCOL.md](../PROTOCOL.md#pairing)); the machine then saves nothing.

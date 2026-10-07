@@ -22,7 +22,7 @@ so setup cannot ask its own questions: ask them yourself, then run it with `--ye
    in the background. When it is not paired yet, it prints a pairing link and a code: give me
    both at once. I open the link on my phone, or type the code under Devices in the Starbridge
    app or web page, within 10 minutes. Once approved, setup prints a check code with its last
-   group hidden: ask me for the last four characters the Starbridge app shows beside this
+   group hidden: ask me for the last four characters the Starbridge Android app shows beside this
    machine under Devices, and run `starbridge pair --confirm <what I typed>`. Never fill them
    in yourself.
 5. When setup finishes, give me its result in a few lines: the providers it uploads, whether the

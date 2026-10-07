@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { hostname } from "node:os";
 import { join } from "node:path";
 import { createInterface } from "node:readline";
@@ -115,7 +115,7 @@ export async function pair(
   checkJoined(dir, { id, role: "machine", ...publicKeys(keys) });
   // A hostile server that read the code in a browser could have approved this machine into a
   // chain it controls: only the owner, comparing with the app, can tell (#795).
-  const confirmed = await confirmCheck(ctx, checkCode(publicKeys(keys)), name);
+  const confirmed = await confirmCheck(ctx, checkCode(entries, id), name);
   if (ctx.signal?.aborted) return 130;
   if (!confirmed)
     throw new UsageError(
@@ -182,7 +182,10 @@ const confirmFile = (ctx: Ctx) => join(ctx.store.dir, "pair-confirm");
 
 /** `starbridge pair --confirm <group>`: hands the group typed from the app to the waiting `pair`. */
 export function sendConfirm(ctx: Ctx, group: string): number {
-  writeFileSync(confirmFile(ctx), group, { mode: 0o600 });
+  // A first pairing has written nothing yet, so the directory may not exist.
+  mkdirSync(ctx.store.dir, { recursive: true, mode: 0o700 });
+  rmSync(confirmFile(ctx), { force: true });
+  writeFileSync(confirmFile(ctx), group, { mode: 0o600, flag: "wx" });
   ctx.out("Sent to the waiting `starbridge pair`.");
   return 0;
 }
@@ -201,7 +204,7 @@ async function confirmCheck(ctx: Ctx, code: string, name: string): Promise<boole
   rmSync(file, { force: true });
   ctx.out(`Check code: ${code.slice(0, 14)}-????`);
   ctx.out(
-    `  The Starbridge app shows "${name}" under Devices with its full check code. Type its last four characters${process.stdin.isTTY ? " here" : ""}, or run \`starbridge pair --confirm <last four>\`.`,
+    `  The Starbridge Android app shows "${name}" under Devices with its full check code; a browser shows what the server sends. Type its last four characters${process.stdin.isTTY ? " here" : ""}, or run \`starbridge pair --confirm <last four>\`.`,
   );
   const typed: string[] = [];
   const rl = process.stdin.isTTY

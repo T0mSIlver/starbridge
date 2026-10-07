@@ -2074,7 +2074,7 @@ class ServerStore(
             Member(
                 m.id, m.name, if (machine) Kind.Machine else Kind.Device, instant(added[m.id]) ?: Instant.EPOCH,
                 current = m.id == saved.me?.id,
-                check = if (machine) runCatching { pairings.checkCode(m.boxPk, m.signPk) }.getOrNull() else null,
+                check = if (machine) runCatching { pairings.checkCode(saved.entries, m.id) }.getOrNull() else null,
             )
         }
     }
