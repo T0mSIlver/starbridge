@@ -48,7 +48,7 @@ Besides the web app's trust in its server:
   key and the stored boxes opens every item still stored for that member.
 - **A GitHub session alone can ask to join.** Anyone signed in to the account's GitHub, without
   pairing, can read the directory (names, ids, public keys), post join requests under any name,
-  which push a join card to every device, and cancel open joins ("Joins"). It reads no item. An
+  which push a join card to every device ("Joins"). It reads no item. An
   owner who compares digits and approves a join they did not start lets it in, since with nobody
   in the middle the digits match. Approve only a join you started.
 - **A code a device shows can be claimed first** by whoever sees it ("Pairing"); the owner checks
@@ -345,8 +345,8 @@ request without the header, or with one the server cannot read, is served.
   `starbridge://auth`.
 - **Machines** send `Authorization: Bearer <machine token>`, issued when their pairing is
   approved. The server stores a hash of it and drops it when the directory revokes the machine.
-- A session with no device yet can read the directory and post or cancel joins, but reads and
-  posts no item ("Known limits").
+- A session with no device yet can read the directory and post joins, but reads and posts no
+  item ("Known limits").
 - Pairing requests are unauthenticated and rate-limited per IP.
 - A session gets its device when that session writes the directory's first entry, or a
   recovery-signed `add`, or fetches its own pairing result (a new device signs in first).
