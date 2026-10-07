@@ -18,7 +18,7 @@ function file(config: Config): string {
 }
 
 function isKey(key: string): key is Key {
-  return key === "maxMachines" || (key in DEFAULT_LIMITS && !key.endsWith("Retention"));
+  return key === "maxMachines" || (Object.hasOwn(DEFAULT_LIMITS, key) && !key.endsWith("Retention"));
 }
 
 /** "60/60" is 60 calls per 60 s for a rate window; a cap is a whole number. */

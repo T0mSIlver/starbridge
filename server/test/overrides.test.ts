@@ -64,5 +64,6 @@ test("only rate windows and caps change at runtime, never retention", () => {
   expect(() => parseValue("answeredRetention", "1")).toThrow("not a limit");
   expect(() => parseValue("items", "60")).toThrow("CALLS/SECONDS");
   expect(() => parseValue("nonsense", "1")).toThrow("not a limit");
+  expect(() => parseValue("toString", "1")).toThrow("not a limit");
   expect(() => parseValue("items", "1/0")).toThrow("at least a second");
 });
