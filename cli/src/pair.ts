@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { hostname } from "node:os";
 import { join } from "node:path";
 import { createInterface } from "node:readline";
@@ -184,8 +184,11 @@ const confirmFile = (ctx: Ctx) => join(ctx.store.dir, "pair-confirm");
 export function sendConfirm(ctx: Ctx, group: string): number {
   // A first pairing has written nothing yet, so the directory may not exist.
   mkdirSync(ctx.store.dir, { recursive: true, mode: 0o700 });
-  rmSync(confirmFile(ctx), { force: true });
-  writeFileSync(confirmFile(ctx), group, { mode: 0o600, flag: "wx" });
+  // Whole or not at all: the waiting `pair` reads whatever is there.
+  const tmp = `${confirmFile(ctx)}.${process.pid}`;
+  rmSync(tmp, { force: true });
+  writeFileSync(tmp, group, { mode: 0o600, flag: "wx" });
+  renameSync(tmp, confirmFile(ctx));
   ctx.out("Sent to the waiting `starbridge pair`.");
   return 0;
 }
