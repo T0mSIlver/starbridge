@@ -26,6 +26,9 @@ services:
       dockerfile: web/Dockerfile
     image: starbridge-web
     restart: unless-stopped
+    # Only the public origin from .env, which the install scripts it serves pair with.
+    environment:
+      PUBLIC_URL: ${PUBLIC_URL:?set PUBLIC_URL in server/.env}
     ports:
       - "127.0.0.1:3000:3000"
 

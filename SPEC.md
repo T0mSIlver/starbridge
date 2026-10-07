@@ -394,6 +394,12 @@ provider plugins add providers, not panels.
   pairing active, so Devices shows the added time on rows that share a name (#287). `pair` and
   `setup` guess `machineKind` (cloud, laptop with a battery, server with no display, else desktop);
   `config machine-kind` corrects it.
+- **Setup names no server question** (#749). Almost everyone uses starbridge.run, and
+  `Starbridge server: [https://starbridge.run]` did not read as "Enter for the default". Setup
+  takes the first of `--server`, `STARBRIDGE_SERVER`, the server baked into the install script,
+  the machine's pairing, and starbridge.run, and prints `Pairing with <host>`. It asks only when
+  the machine is paired with another server, since it would otherwise switch silently; Enter
+  keeps the pairing.
 - **The pairing link** `https://starbridge.run/pair#CODE`, which `pair` prints and shows as a QR
   code, is also an App Link (#611): setup says to scan it with the camera, and a phone's camera
   hands links to apps, not to a browser that would first ask to become a device itself. The app
@@ -469,8 +475,12 @@ provider plugins add providers, not panels.
   only after a release that deprecates it, since the plugins, the Pi extension and agents'
   instructions update apart from the CLI. `--json` always means an output format (`wait --json`); `ask` reads its input with
   `--input <path>`.
-- **Install and update.** `https://starbridge.run/install.sh` is `cli/install.sh`, prerendered by
-  the web page, so each deploy serves its own revision's script. It checks `SHA256SUMS` with
+- **Install and update.** `https://starbridge.run/install.sh` is `cli/install.sh` as the web
+  page serves it, so each deploy serves its own revision's script. Each server writes its
+  `PUBLIC_URL` into its copy, and install.ps1's (#749), so `curl -fsSL https://my.host/install.sh
+  | sh` pairs with my.host, and a self-hosted landing page shows its own commands. The web
+  container reads `PUBLIC_URL` when it runs, so one image serves any server; only a plain
+  http(s) origin goes into the script. It checks `SHA256SUMS` with
   minisign, or OpenSSL 3 when minisign is missing. `starbridge update` replaces script installs
   and points Homebrew and npm installs at their manager. Windows refuses to replace or delete a
   running `.exe` but lets it be renamed, so `update` moves it aside to `starbridge.exe.old` and

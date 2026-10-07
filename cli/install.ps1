@@ -3,7 +3,9 @@
 #   irm https://starbridge.run/install.ps1 | iex
 #
 # starbridge.run serves this file from the deployed revision of main; each release also carries
-# a copy as an asset. It is install.sh for Windows PowerShell 5.1 and PowerShell 7.
+# a copy as an asset. A self-hosted server serves its own copy, so
+# `irm https://my.host/install.ps1 | iex` sets the machine up with my.host. It is install.sh for
+# Windows PowerShell 5.1 and PowerShell 7.
 #
 # It accepts the binary only if its hash is in SHA256SUMS and SHA256SUMS carries the release
 # key's minisign signature, for STARBRIDGE_VERSION when that is set. Windows has no Ed25519
@@ -21,6 +23,11 @@
   Set-StrictMode -Off
   $ErrorActionPreference = 'Stop'
   $ProgressPreference = 'SilentlyContinue'
+
+  # The server setup pairs with: each Starbridge server writes its own address here when it
+  # serves this file (web/src/app/install.ps1/route.ts). Empty, setup picks starbridge.run.
+  # STARBRIDGE_SERVER, when set, wins.
+  $Server = ''
 
   # The release key. Also in cli/minisign.pub, cli/install.sh, cli/src/release.ts and the README.
   $PubKey = 'RWRT+qMmByDpj/1KhL5yCxdzIkVgZ3NqTrlVIIvhrezr/38FgzBIen0F'
@@ -131,6 +138,8 @@
   if (-not $env:STARBRIDGE_NO_SETUP -and ((& $exe --help) -match '^  starbridge setup')) {
     # Its own process on this console: run inside this script block, its output would go
     # through a pipe, holding back a question until its line ends.
-    Start-Process -FilePath $exe -ArgumentList 'setup' -NoNewWindow -Wait
+    $SetupArgs = @('setup')
+    if ($Server -and -not $env:STARBRIDGE_SERVER) { $SetupArgs += @('--server', $Server) }
+    Start-Process -FilePath $exe -ArgumentList $SetupArgs -NoNewWindow -Wait
   }
 }

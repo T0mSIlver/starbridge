@@ -19,6 +19,9 @@ const nextConfig: NextConfig = {
   // The docs render per request, for their CSP nonce (proxy.ts), from these Markdown files.
   outputFileTracingIncludes: {
     "/docs/**": ["../docs/*.md", "../cli/README.md", "../server/README.md"],
+    // Served per request, with the server's address written in (lib/installScript.ts).
+    "/install.sh": ["../cli/install.sh"],
+    "/install.ps1": ["../cli/install.ps1"],
   },
   // The protocol package ships TypeScript source.
   transpilePackages: ["@starbridge/protocol"],
