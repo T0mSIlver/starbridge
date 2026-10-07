@@ -9,7 +9,7 @@ code cannot show: the HTTP API and the flows.
 
 A browser runs the page the server sends on each load, so a compromised server can send a page
 that works against the owner. In a member browser, it uses the browser's keys while it is open,
-and where the browser lacks WebCrypto's X25519 and Ed25519, it can read the keys and keep them.
+and where the browser lacks WebCrypto's X25519 and Ed25519, or WebCrypto fails, it can read the keys and keep them.
 With them it opens every item sealed to that browser, signs answers and permission answers, and
 signs directory entries, since any active device may. So it can add a device of its own, which
 every machine then seals new items to, revoke the owner's other devices, or propose a new
@@ -51,11 +51,13 @@ Besides the web app's trust in its server:
   which push a join card to every device ("Joins"). It reads no item. An
   owner who compares digits and approves a join they did not start lets it in, since with nobody
   in the middle the digits match. Approve only a join you started.
+- **Items carry no account id.** Replaying an item into another account would need one member
+  key in two directories, which no client makes: the web makes fresh keys per account, and
+  Android and the CLI hold one account.
+- **Times are the sender's clock.** `createdAt`, `at` and `answeredAt` are what the sender says,
+  and only permission prompts expire: an open question can be answered any time.
 - **A code a device shows can be claimed first** by whoever sees it ("Pairing"); the owner checks
   the requester's name before approving.
-- **The server's word on the account.** The Android app drops its keys and pin when `/me` names
-  another account than the one it was set up with, so a hostile server can unpair it; the owner
-  then joins or recovers, which reveals nothing ("Recovery").
 
 ## Formats
 
@@ -663,6 +665,9 @@ Answering a permission from a phone is a trust decision, so:
   it answers nothing and the agent's own dialog decides.
 - **Opt-in per machine.** Nothing is routed until `starbridge config permissions on` (setup
   asks, default no); while off, the hook exits at once.
+- **One secret, two uses.** The key behind `inputHash` is derived from the machine's Ed25519
+  secret key with BLAKE2b, a PRF, and only that derived key touches the input, so the signing
+  key and the hash key stay apart.
 
 ### On the machine
 
