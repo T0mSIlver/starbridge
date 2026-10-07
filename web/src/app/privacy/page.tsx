@@ -10,7 +10,7 @@ export default function Privacy() {
     <LegalPage title="Privacy">
       <p>
         This covers the hosted service at starbridge.run and the Starbridge Android app. A server
-        you host yourself keeps its data on your own machine. Last updated: 6 October 2026.
+        you host yourself keeps its data on your own machine. Last updated: 7 October 2026.
       </p>
       <p>
         Operator: Tom Vaucourt, an individual in France, running Starbridge as a non-professional.
@@ -40,11 +40,11 @@ export default function Privacy() {
         </li>
         <li>
           Your decisions, answers, quota snapshots, permission prompts and their answers, runs, and
-          the notices that close an item or say an agent is waiting. Your devices and machines
-          encrypt them before upload, and the server cannot read them. It does see the kind of each
-          one, its id, who sent it, which devices it went to, which item it answers or closes, its
-          size, when it arrived, was updated or was answered, and whether an item asked for a
-          notification.
+          the notices that close an item, say an agent is waiting or snooze a decision. Your devices
+          and machines encrypt them before upload, and the server cannot read them. It does see the
+          kind of each one, its id, who sent it, which devices it went to, which item it answers or
+          closes, its size, when it arrived, was updated or was answered, until when a decision is
+          snoozed, and whether an item asked for a notification.
         </li>
       </ul>
       <p>The server deletes them on this schedule:</p>
@@ -53,8 +53,9 @@ export default function Privacy() {
         <li>permission prompts, their answers and settled notices, 7 days after they arrive;</li>
         <li>runs, 1 day after their last update;</li>
         <li>
-          unanswered decisions and quota snapshots, 30 days after they arrive; a machine&apos;s new
-          quota snapshot replaces its last one;
+          unanswered decisions and quota snapshots, 30 days after they arrive, or unanswered
+          decisions 7 days after they arrive once an account holds more than 1000; a machine&apos;s
+          new quota snapshot replaces its last one;
         </li>
         <li>a request to pair a new device or machine, 10 minutes after it is made.</li>
       </ul>
@@ -154,7 +155,7 @@ export default function Privacy() {
         tells visitors apart by a hash of the IP address, the browser and a salt that changes every
         day, so a visit cannot be traced back to you or linked to your visits on other days. A
         browser that sends Do Not Track is not counted. Umami keeps its records for 180 days at
-        most, and the nightly backups keep them for up to 3 weeks more.
+        most, and the nightly backups keep them for up to 2 weeks more.
       </p>
 
       <h2 className="t-heading">Deletion</h2>
@@ -166,7 +167,7 @@ export default function Privacy() {
         email <a href="mailto:privacy@starbridge.run">privacy@starbridge.run</a> with your GitHub
         login. To show the account is yours, you post a code the operator sends you in a public gist
         on that GitHub account. The operator deletes the account within 30 days of that, and backups
-        age out within 3 weeks after.
+        age out within 2 weeks after.
       </p>
 
       <h2 className="t-heading">Your rights</h2>

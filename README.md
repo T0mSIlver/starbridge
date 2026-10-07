@@ -59,7 +59,7 @@ npm install -g starbridge
 ```
 
 The script runs `starbridge setup`, which pairs the machine, installs Starbridge in each agent it
-finds and ends by sending a test question to your phone. After Homebrew or npm, run
+finds and ends by offering to send a test question to your phone. After Homebrew or npm, run
 `starbridge setup` yourself. [Start](https://starbridge.run/docs#start) goes on to your agent's
 first question.
 

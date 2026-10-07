@@ -8,7 +8,7 @@ export default function Terms() {
     <LegalPage title="Terms">
       <p>
         These terms cover the hosted service at starbridge.run and the Starbridge Android app. Last
-        updated: 6 October 2026.
+        updated: 7 October 2026.
       </p>
       <p>
         Operator: Tom Vaucourt, an individual in France, running Starbridge as a non-professional.
@@ -18,12 +18,12 @@ export default function Terms() {
 
       <h2 className="t-heading">The service</h2>
       <p>
-        Starbridge relays encrypted messages between your coding agents and your devices: quota
-        windows, decisions and your answers. It is free to use, and what it does today stays free.
-        Anything that costs money will be announced on this site at least 60 days before, and you
-        are never charged without signing up for it. Each account can store a bounded amount, and
-        the server deletes data on the schedule on the <a href="/privacy">privacy page</a>. The
-        operator can change both.
+        Starbridge relays encrypted messages between your coding agents and your devices: decisions
+        and your answers, permission prompts, runs and quota windows. It is free to use, and what it
+        does today stays free. Anything that costs money will be announced on this site at least 60
+        days before, and you are never charged without signing up for it. Each account can store a
+        bounded amount, and the server deletes data on the schedule on the{" "}
+        <a href="/privacy">privacy page</a>. The operator can change both.
       </p>
 
       <h2 className="t-heading">Your account</h2>

@@ -52,8 +52,9 @@ const HELP = `starbridge: post decisions to your devices, report runs, upload qu
       skill and plugin; --no-agents skips them), find or install CodexBar and pick the
       providers to upload, install the agent as a user service (systemd, launchd or a
       Scheduled Task), and upload a first quota snapshot. It asks only before installing
-      CodexBar, which providers to send, whether the agent runs after logout, and whether to
-      send a test decision; --yes, or no terminal, takes every default.
+      CodexBar, whether to send quotas when another machine already does, which providers to
+      send, whether the agent runs after logout, whether to add the CLI to your PATH, and
+      whether to send a test decision; --yes, or no terminal, takes every default.
       --server <url>  the server to pair with (default: $STARBRIDGE_SERVER, else this
                       machine's, else https://starbridge.run); asks before leaving another
                       server this machine is paired with

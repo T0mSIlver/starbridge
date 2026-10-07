@@ -65,10 +65,10 @@ them. Its routes are in `PROTOCOL.md`.
    }
    ```
 
-5. Sign in. On the web, open your origin and pick "Use your own server" under "Continue with
-   GitHub". In the Android app, pick "Use your own server" and enter your origin. Both ask for
-   the owner token. With [GitHub sign-in](#sign-in) set up, the app and the web page can use it
-   on your server too.
+5. Sign in. On the web, open your origin and pick "Sign in"; with GitHub sign-in set up, pick
+   "Use your own server" at the foot of the page instead. In the Android app, pick "Use your own
+   server" and enter your origin. Both ask for the owner token. With
+   [GitHub sign-in](#sign-in) set up, the app and the web page can use it on your server too.
 
 6. Install the CLI on each machine that runs agents from your server. Its install script carries
    its `PUBLIC_URL`, so setup pairs the machine with your server:
