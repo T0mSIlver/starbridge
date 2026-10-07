@@ -37,12 +37,6 @@ add no browser; or host your own server.
 
 Besides the web app's trust in its server:
 
-- **A machine behind on the directory still seals to every device it lists** (#794). When a
-  device's signed head tells a machine that the server holds back directory entries, the machine
-  refuses answers ("Directory"), but it keeps sealing new questions, permission prompts, runs and
-  quota snapshots to its stale device list. If the withheld entry revokes a stolen phone, the
-  server can hand those items to whoever holds that phone's keys. This needs a hostile server
-  and a stolen device's keys together.
 - **No forward secrecy.** Device and machine keys stay the same while they are members, and the
   server keeps sealed items for up to 30 days ("Limits"). Whoever later gets a member's private
   key and the stored boxes opens every item still stored for that member.
