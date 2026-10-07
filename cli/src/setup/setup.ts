@@ -4,20 +4,31 @@
  * Every step shows what it found, so a rerun changes only what is missing.
  */
 
-import { readFileSync } from "node:fs";
 import { CLIENT_HEADER, clientHeader, type QuotaSnapshot } from "@starbridge/protocol";
 import type { Status } from "../agent/api";
-import { AgentClient, withAgent } from "../agent/client";
+import { AgentClient, Interrupted, withAgent } from "../agent/client";
 import { askVia, quotaVia } from "../agent/commands";
 import { ApiError } from "../api";
 import type { AgentConfig } from "../config";
-import { type Ctx, UsageError } from "../context";
-import { type AskInput, ask } from "../decisions";
+import { type Ctx, refreshDirectory, session, UsageError } from "../context";
+import { type AskInput, ask, EXIT_INTERRUPTED, settle } from "../decisions";
 import { DEFAULT_SERVER, pair } from "../pair";
 import { permissionsEnabled } from "../permissions";
 import { pushOnce } from "../quota";
-import { offerPiAllow, offerPiChain, rememberMachineKind, setPermissions } from "../settings";
+import { rememberMachineKind } from "../settings";
 import { VERSION } from "../version";
+import {
+  AGENT_IDS,
+  AGENTS,
+  type AgentId,
+  agentLine,
+  found,
+  installAgent,
+  installed,
+  removedAgents,
+  setRemoved,
+  UNDER,
+} from "./agents";
 import {
   type Found,
   findCodexbar,
@@ -28,47 +39,20 @@ import {
   probe,
   probeSet,
 } from "./codexbar";
-import {
-  codexRule,
-  codexRulePath,
-  codexSkill,
-  codexSkillDir,
-  hasCodex,
-  hasOpencode,
-  hasPi,
-  installCodexRule,
-  installCodexSkill,
-  installOpencode,
-  installPiPackage,
-  opencodeDir,
-  opencodeState,
-  PI_PACKAGE,
-  piPackage,
-  refreshFiles,
-} from "./harnesses";
+import { refreshFiles } from "./harnesses";
 import { ours } from "./marker";
-import {
-  ALLOW_RULES,
-  addAllowRules,
-  autoUpdate,
-  enableAutoUpdate,
-  foreignMarketplace,
-  hasClaude,
-  installPlugins,
-  missingAllowRules,
-  PLUGINS,
-  pluginState,
-  settingsPath,
-} from "./plugins";
+import { pathStep, recordSelf } from "./path";
 import {
   enableLinger,
+  installedService,
   installService,
+  kind,
   lingering,
-  servicePath,
+  PLACES,
   unavailable,
   withInstalledPlaces,
 } from "./service";
-import type { Sys } from "./sys";
+import { defaults, otherCopies, type Sys } from "./sys";
 
 export interface SetupOpts {
   /** `--yes`: every question takes its default; sys.prompt answers so. */
@@ -78,7 +62,10 @@ export interface SetupOpts {
   providers?: string[];
   noQuota?: boolean;
   noService?: boolean;
-  noPlugin?: boolean;
+  /** `--no-agents`: installs Starbridge in no agent. */
+  noAgents?: boolean;
+  /** `--agent <name>`: only Starbridge in that agent, also one `uninstall --agent` removed. */
+  agent?: AgentId;
   /** How long to wait for the agent to answer after starting it. */
   readyTimeoutMs?: number;
 }
@@ -102,25 +89,40 @@ async function checkServer(server: string): Promise<void> {
 
 /**
  * Brings every file setup wrote into another tool to this release's version (`refreshFiles`),
- * and the agent's service too, which then restarts. `starbridge update` runs it with the new
- * binary (`setup --refresh`). Returns what it did, one line each.
+ * and the agent's service too, which then restarts. It also installs Starbridge in an agent
+ * found since setup, unless `uninstall --agent` removed it (#750). `starbridge update` runs it
+ * with the new binary (`setup --refresh`). Returns what it did, one line each.
  */
 export async function refresh(sys: Sys): Promise<string[]> {
+  recordSelf(sys);
   const done = refreshFiles(sys);
-  const path = servicePath(sys);
-  let text: string | undefined;
-  try {
-    text = path ? readFileSync(path, "utf8") : undefined;
-  } catch {}
+  const removed = removedAgents(sys.ctx);
+  for (const id of AGENT_IDS) {
+    if (removed.includes(id) || !found(sys, id) || (await installed(sys, id))) continue;
+    const r = await installAgent(sys, id);
+    done.push(agentLine(r.mark, id, r.text), ...r.notes.map((n) => `${UNDER}${n}`));
+  }
+  const { path, text } = installedService(sys) ?? {};
   if (path && text !== undefined && ours(text))
     try {
-      const env = withInstalledPlaces(sys.ctx.env, text);
+      // A task names no places: its agent reads the user's environment.
+      const env = kind(sys) === "task" ? sys.ctx.env : withInstalledPlaces(sys.ctx.env, text);
       const { restarted } = await installService({ ...sys, ctx: { ...sys.ctx, env } }, true);
       if (restarted) done.push(`Restarted the agent (${path}).`);
     } catch (e) {
       done.push(`Could not restart the agent: ${(e as Error).message}`);
     }
   return done;
+}
+
+function trimServer(server: string): string {
+  return server.replace(/\/+$/, "");
+}
+
+/** A server as setup names it: its host, or the whole URL when it is not plain https. */
+function host(server: string): string {
+  const s = trimServer(server);
+  return s.startsWith("https://") ? s.slice("https://".length) : s;
 }
 
 function section(ctx: Ctx, title: string) {
@@ -130,96 +132,227 @@ function section(ctx: Ctx, title: string) {
 
 export async function setup(sys: Sys, opts: SetupOpts): Promise<number> {
   const { ctx, prompt } = sys;
+  recordSelf(sys);
+  if (opts.agent) return agentOnly(sys, opts.agent);
 
-  section(ctx, "Pairing");
   let machine = ctx.store.machine();
-  if (machine) {
-    ctx.out(`Paired as "${machine.name}" (${machine.id}) on ${machine.server}.`);
+  // Asks nothing (#749): install.sh passes the server that served it as --server.
+  const server = trimServer(
+    opts.server ?? ctx.env.STARBRIDGE_SERVER ?? machine?.server ?? DEFAULT_SERVER,
+  );
+  const switching =
+    machine !== undefined &&
+    trimServer(machine.server) !== server &&
+    (await prompt.confirm(
+      `This machine is paired with ${host(machine.server)}. Pair it with ${host(server)} instead?`,
+      false,
+    ));
+  if (machine && !switching) {
+    section(ctx, "Pairing");
+    ctx.out(`✓ Paired as ${machine.name} on ${host(machine.server)}`);
   } else {
-    const server =
-      opts.server ??
-      ctx.env.STARBRIDGE_SERVER ??
-      (await prompt.text("Starbridge server:", DEFAULT_SERVER));
+    section(ctx, `Pairing with ${host(server)}`);
     await checkServer(server);
-    const code = await pair(ctx, { server, ...(opts.name ? { name: opts.name } : {}) });
+    const code = await pair(ctx, {
+      server,
+      again: "starbridge setup",
+      ...(switching ? { force: true } : {}),
+      ...(opts.name ? { name: opts.name } : {}),
+    });
     if (code !== 0) return code;
+    if (switching && machine)
+      ctx.out(
+        `  ${host(machine.server)} still lists ${machine.name}: revoke it under Devices there.`,
+      );
     machine = ctx.store.machine();
   }
-  if (machine)
-    ctx.out(
-      `Shown as a ${rememberMachineKind(ctx)} (\`starbridge config machine-kind\` changes it).`,
-    );
+  // `starbridge status` shows it; `config machine-kind` changes it.
+  if (machine) rememberMachineKind(ctx);
+
+  const agents = opts.noAgents ? [] : await agentsStep(sys);
 
   const configBefore = JSON.stringify(ctx.store.agentConfig());
-  const quota = opts.noQuota ? await skipQuota(sys) : await codexbarStep(sys, opts);
+  const quota = await quotaStep(sys, opts, machine !== undefined);
 
   if (opts.noService) {
-    section(ctx, "Agent");
-    ctx.out("Skipped (--no-service): commands talk to the server themselves.");
-  } else await serviceStep(sys, opts, JSON.stringify(ctx.store.agentConfig()) !== configBefore);
+    section(ctx, "Background service");
+    ctx.out("– Skipped (--no-service): commands talk to the server themselves");
+  } else
+    await serviceStep(
+      sys,
+      opts,
+      switching || JSON.stringify(ctx.store.agentConfig()) !== configBefore,
+    );
+  const last = await pathStep(sys);
 
-  if (opts.noPlugin) {
-    section(ctx, "Agents");
-    ctx.out("Skipped (--no-plugin).");
-  } else {
-    await pluginStep(sys);
-    await codexStep(sys);
-    await piStep(sys);
-    await opencodeStep(sys);
-  }
-  await permissionStep(sys);
-
-  section(ctx, "Check");
-  if (machine && quota && quota.providers.length > 0) await firstUpload(ctx, quota);
-  if (machine && !opts.yes && (await prompt.confirm("Send a test decision to your phone?", true)))
+  const upload = machine && quota && quota.providers.length > 0 ? quota : undefined;
+  if (upload || (machine && !opts.yes)) section(ctx, "Test");
+  if (upload) await firstUpload(ctx, upload);
+  if (machine && !opts.yes && (await prompt.confirm("  Send a test decision to your phone?", true)))
     await testDecision(ctx, machine.name);
 
+  section(ctx, "Starbridge is set up.");
+  for (const line of await otherCopies(sys)) ctx.out(`  ${line}`);
+  const one = agents[0] ?? "claude";
   ctx.out("");
-  ctx.out("Setup is done. `starbridge status` shows the same checks at any time.");
+  for (const line of commandTable([
+    ["Check it", "starbridge status"],
+    ...(permissionsEnabled(ctx)
+      ? []
+      : ([["Send permission prompts", "starbridge config permissions on"]] as const)),
+    ["Remove from one agent", `starbridge uninstall --agent ${one}`],
+    ["Remove everything", "starbridge uninstall"],
+  ]))
+    ctx.out(line);
+  if (last.length > 0) ctx.out("");
+  for (const line of last) ctx.out(line);
   return 0;
 }
 
-async function skipQuota(sys: Sys): Promise<undefined> {
-  section(sys.ctx, "CodexBar");
-  const cfg = sys.ctx.store.agentConfig();
-  sys.ctx.store.saveAgentConfig({ ...cfg, quota: { ...cfg.quota, providers: [] } });
-  sys.ctx.out("Skipped (--no-quota): the agent uploads no quotas.");
+/** `  Check it   starbridge status`: labels in one column, commands in the next. */
+function commandTable(rows: readonly (readonly [string, string])[]): string[] {
+  const w = Math.max(...rows.map(([label]) => label.length));
+  return rows.map(([label, cmd]) => `  ${label.padEnd(w)}  ${cmd}`);
+}
+
+/**
+ * Starbridge in every agent found, without asking (#750), one line each; an agent
+ * `uninstall --agent` removed stays out. Returns the agents it is in.
+ */
+async function agentsStep(sys: Sys): Promise<AgentId[]> {
+  const { ctx } = sys;
+  section(ctx, "Agents");
+  const removed = removedAgents(ctx);
+  const done: AgentId[] = [];
+  let any = false;
+  for (const id of AGENT_IDS) {
+    if (!found(sys, id)) continue;
+    any = true;
+    if (removed.includes(id)) {
+      ctx.out(agentLine("–", id, "left out, as `uninstall --agent` asked"));
+      ctx.out(`${UNDER}Bring it back with:`);
+      ctx.out(`${UNDER}  starbridge setup --agent ${id}`);
+      continue;
+    }
+    const r = await installAgent(sys, id);
+    ctx.out(agentLine(r.mark, id, r.text));
+    for (const note of r.notes) ctx.out(`${UNDER}${note}`);
+    if (r.mark === "✓") done.push(id);
+  }
+  if (!any)
+    ctx.out(
+      `– No agent found (${Object.values(AGENTS).join(", ")}): rerun setup after installing one`,
+    );
+  return done;
+}
+
+/** `setup --agent <name>`: Starbridge in that one agent, also when `uninstall --agent` took it out. */
+async function agentOnly(sys: Sys, id: AgentId): Promise<number> {
+  const { ctx } = sys;
+  if (!found(sys, id)) {
+    ctx.out(`✗ ${AGENTS[id]} is not installed here.`);
+    return 1;
+  }
+  setRemoved(ctx, id, false);
+  const r = await installAgent(sys, id);
+  ctx.out(agentLine(r.mark, id, r.text));
+  for (const note of r.notes) ctx.out(`${UNDER}${note}`);
+  return r.mark === "✗" ? 1 : 0;
+}
+
+function skipQuota(sys: Sys, line: string): undefined {
+  const { ctx } = sys;
+  const cfg = ctx.store.agentConfig();
+  ctx.store.saveAgentConfig({ ...cfg, quota: { ...cfg.quota, providers: [] } });
+  ctx.out(`– ${line}`);
   return undefined;
+}
+
+/** A machine that sent no quota snapshot for this long no longer counts as sending them. */
+const SENDER_MAX_AGE_MS = 24 * 3600_000;
+
+/**
+ * The other machines of the account that sent quotas lately (#748), named. None when this
+ * machine already sends them, `--providers` names them, or the server cannot say.
+ */
+async function otherSenders(sys: Sys, opts: SetupOpts): Promise<string[]> {
+  const { ctx } = sys;
+  if (opts.providers || ctx.store.agentConfig().quota?.providers?.length) return [];
+  try {
+    const s = session(ctx);
+    const since = ctx.now().getTime() - SENDER_MAX_AGE_MS;
+    const ids = (await s.api.quotaSenders())
+      .filter((x) => x.id !== s.machine.id && Date.parse(x.receivedAt) >= since)
+      .map((x) => x.id);
+    if (ids.length === 0) return [];
+    const dir = await refreshDirectory(ctx, s);
+    return ids.flatMap((id) => dir.members.get(id)?.member.name ?? []);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * When another machine already sends quotas, asks whether this one should too, Enter saying no
+ * (#748); a yes installs CodexBar without asking again. Otherwise CodexBar's own question.
+ */
+async function quotaStep(sys: Sys, opts: SetupOpts, paired: boolean): Promise<Quota | undefined> {
+  const { ctx, prompt } = sys;
+  section(ctx, "Quotas");
+  if (opts.noQuota) return skipQuota(sys, "Skipped (--no-quota): this machine sends no quotas");
+  const names = paired ? await otherSenders(sys, opts) : [];
+  if (names.length === 0) return codexbarStep(sys, opts, true);
+  const who =
+    names.length === 1
+      ? names[0]
+      : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+  const too = await prompt.confirm(
+    `  ${who} already ${names.length === 1 ? "sends" : "send"} quotas. Send from this machine too?`,
+    false,
+  );
+  return too ? codexbarStep(sys, opts, false) : skipQuota(sys, "Not sent from this machine");
 }
 
 type Quota = NonNullable<AgentConfig["quota"]> & { providers: string[] };
 
-async function codexbarStep(sys: Sys, opts: SetupOpts): Promise<Quota | undefined> {
+async function codexbarStep(
+  sys: Sys,
+  opts: SetupOpts,
+  askInstall: boolean,
+): Promise<Quota | undefined> {
   const { ctx, prompt } = sys;
-  section(ctx, "CodexBar");
   const cfg = ctx.store.agentConfig();
   let found: Found | undefined = findCodexbar(sys, cfg.quota?.codexbar);
+  if (!found && sys.platform === "win32") {
+    ctx.out("– CodexBar, which reads plan quotas, has no Windows build");
+    ctx.out("  Questions and runs work without it.");
+    return undefined;
+  }
   if (!found) {
-    const how = sys.platform === "darwin" ? "the CodexBar app" : "the CodexBar CLI";
+    // A third-party binary: asked, unless the owner just said to send quotas.
+    const what = sys.platform === "darwin" ? "the CodexBar app" : "the CodexBar CLI";
     if (
-      await prompt.confirm(
-        `CodexBar reads your plan quotas and is not installed. Install ${how}?`,
-        true,
-      )
+      !askInstall ||
+      (await prompt.confirm(`  CodexBar reads your plan quotas. Install ${what}?`, true))
     ) {
       try {
         found = await installCodexbar(sys);
       } catch (e) {
-        ctx.out(`Could not install CodexBar: ${(e as Error).message}`);
+        ctx.out(`✗ Could not install CodexBar: ${(e as Error).message}`);
       }
     }
     if (!found) {
-      ctx.out(
-        "No quotas without CodexBar; questions and runs work without it. `starbridge setup` installs it when you rerun it.",
-      );
+      ctx.out("– No quotas without CodexBar; questions and runs work without it");
+      ctx.out("  To install it later:");
+      ctx.out("    starbridge setup");
       return undefined;
     }
   }
-  ctx.out(`CodexBar: ${found.path}`);
-  if (found.inApp && (await prompt.confirm("Link it as ~/.local/bin/codexbar?", true))) {
+  ctx.out(`✓ CodexBar ${found.path}`);
+  if (found.inApp) {
     const link = linkIntoLocalBin(sys, found.path);
     ctx.out(
-      link ? `Linked ${link}.` : "~/.local/bin/codexbar exists and is not a link: left alone.",
+      link ? `  Linked ${link}` : "  ~/.local/bin/codexbar exists and is not a link: left alone",
     );
   }
 
@@ -234,7 +367,7 @@ async function codexbarStep(sys: Sys, opts: SetupOpts): Promise<Quota | undefine
     providers = opts.providers;
     const broken = providers.filter((p) => !works.includes(p));
     if (broken.length > 0)
-      ctx.out(`Uploading ${broken.join(", ")} although CodexBar could not read them now.`);
+      ctx.out(`  Sending ${broken.join(", ")} although CodexBar could not read them now`);
   } else {
     const preselected = prior?.length ? works.filter((p) => prior.includes(p)) : works;
     const known = new Set([...probes.map((p) => p.provider), ...list.map((p) => p.provider)]);
@@ -249,15 +382,15 @@ async function codexbarStep(sys: Sys, opts: SetupOpts): Promise<Quota | undefine
   ctx.store.saveAgentConfig({ ...cfg, quota: q });
   ctx.out(
     providers.length > 0
-      ? `The agent uploads ${providers.join(", ")} every ${q.interval}.`
-      : "The agent uploads no quotas.",
+      ? `✓ Sends ${providers.join(", ")} every ${q.interval}`
+      : "– Sends no quotas",
   );
   return q;
 }
 
 export function probeLines(sys: Sys, probes: Probe[]): string[] {
   if (probes.length === 0)
-    return ["CodexBar has no provider turned on, and no Claude or Codex sign-in was found."];
+    return ["  CodexBar has no provider turned on, and found no Claude or Codex sign-in."];
   const w = Math.max(...probes.map((p) => p.provider.length));
   return probes.flatMap((p) => {
     const lines = [
@@ -278,26 +411,25 @@ async function pickProviders(
 ): Promise<string[]> {
   while (true) {
     const a = await sys.prompt.text(
-      "Providers to upload, comma-separated (none for no quotas):",
+      "  Providers to send, comma-separated (none for no quotas):",
       preselected.length > 0 ? preselected.join(",") : "none",
     );
     if (a.trim().toLowerCase() === "none") return [];
     const picked = [...new Set(a.split(/[\s,]+/).filter(Boolean))];
     const unknown = picked.filter((p) => !known.has(p));
     if (unknown.length === 0) return picked;
-    sys.ctx.out(`Not a CodexBar provider here: ${unknown.join(", ")}`);
+    sys.ctx.out(`  Not a CodexBar provider here: ${unknown.join(", ")}`);
   }
 }
 
 async function serviceStep(sys: Sys, opts: SetupOpts, configChanged: boolean) {
   const { ctx, prompt } = sys;
-  section(ctx, "Agent");
+  section(ctx, "Background service");
   const why = await unavailable(sys);
   if (why) {
-    ctx.out(`Cannot install the agent service: ${why}.`);
-    ctx.out(
-      "Run `starbridge agent` yourself to keep one running; commands talk to the server themselves meanwhile.",
-    );
+    ctx.out(`✗ Cannot install the service: ${why}`);
+    ctx.out("  To keep one running yourself:");
+    ctx.out("    starbridge agent");
     return;
   }
   // After a brew or npm upgrade the agent still runs the old binary.
@@ -307,32 +439,31 @@ async function serviceStep(sys: Sys, opts: SetupOpts, configChanged: boolean) {
   try {
     installed = await installService(sys, configChanged || outdated);
   } catch (e) {
-    ctx.out(`Could not start the agent service: ${(e as Error).message}`);
+    ctx.out(`✗ Could not start the service: ${(e as Error).message}`);
+    ctx.out("  Retry with:");
+    ctx.out("    starbridge setup");
+    ctx.out("  Or keep one running yourself:");
+    ctx.out("    starbridge agent");
     return;
   }
-  ctx.out(
-    installed.restarted
-      ? `Started ${installed.path}.`
-      : `${installed.path} is up to date and running.`,
-  );
+  ctx.out(installed.restarted ? `✓ Started ${installed.path}` : `✓ Runs ${installed.path}`);
+  if (kind(sys) === "task")
+    for (const k of PLACES.filter((k) => ctx.env[k])) {
+      ctx.out(`  The service reads your user environment, not this terminal's. If ${k} is`);
+      ctx.out("  not one of your user variables yet:");
+      ctx.out(`    setx ${k} "${ctx.env[k]}"`);
+    }
   const status = await waitReady(ctx, opts.readyTimeoutMs ?? 20_000);
-  if (!status)
-    ctx.out("The agent did not answer on its socket yet: `starbridge status` shows its state.");
+  if (!status) ctx.out("  The agent did not answer yet: starbridge status shows its state");
   else if (status.machine && !status.server.reachable)
-    ctx.out(
-      `Agent ${status.version} runs, but the server is not reachable: ${status.server.lastError ?? "no answer yet"}.`,
-    );
-  else ctx.out(`Agent ${status.version} runs (pid ${status.pid}).`);
+    ctx.out(`✗ The server is not reachable: ${status.server.lastError ?? "no answer yet"}`);
   if ((await lingering(sys)) === false) {
     if (
-      await prompt.confirm(
-        "Keep the agent running when you are logged out (loginctl enable-linger)?",
-        true,
-      )
+      await prompt.confirm("  Keep it running after you log out (loginctl enable-linger)?", true)
     ) {
       const err = await enableLinger(sys);
-      ctx.out(err ? `loginctl enable-linger failed: ${err}` : "Lingering is on.");
-    } else ctx.out("The agent stops when your last session ends.");
+      ctx.out(err ? `✗ loginctl enable-linger failed: ${err}` : "✓ Runs after logout");
+    } else ctx.out("– Stops when your last login session ends");
   }
 }
 
@@ -362,206 +493,10 @@ async function waitReady(ctx: Ctx, timeoutMs: number): Promise<Status | undefine
   return last;
 }
 
-async function pluginStep(sys: Sys) {
-  const { ctx, prompt } = sys;
-  section(ctx, "Claude Code");
-  if (!hasClaude(sys)) {
-    ctx.out("`claude` is not on the PATH: skipped. Rerun setup after installing Claude Code.");
-    return;
-  }
-  const state = await pluginState(sys);
-  if (!state) {
-    ctx.out("`claude plugin list` failed: skipped.");
-    return;
-  }
-  const foreign = foreignMarketplace(state);
-  if (foreign) {
-    ctx.out(`Skipped: ${foreign}.`);
-    return;
-  }
-  const missing = !state.marketplace || PLUGINS.some((id) => !state.plugins[id]);
-  let installed = !missing;
-  if (!missing) ctx.out(`The ${PLUGINS.join(" and ")} plugins are installed.`);
-  else if (
-    await prompt.confirm(
-      "Install the Starbridge plugins for Claude Code (the skill and the mod)?",
-      true,
-    )
-  ) {
-    try {
-      for (const line of await installPlugins(sys, state)) ctx.out(line);
-      installed = true;
-      ctx.out("Claude Code sessions load them when they next start.");
-    } catch (e) {
-      ctx.out(`Could not install the plugins: ${(e as Error).message}`);
-    }
-  }
-  if (!installed) return;
-  if (
-    autoUpdate(sys) === false &&
-    (await prompt.confirm("Let Claude Code update the Starbridge plugins by itself?", true))
-  )
-    ctx.out(enableAutoUpdate(sys) ? "Auto-update is on." : "Could not turn on auto-update.");
-  if (
-    missingAllowRules(sys).length > 0 &&
-    (await prompt.confirm(
-      "Let Claude Code run `starbridge ask`, `waiting`, `wait` and `settle` without a permission prompt? They post questions to your devices and read your answers.",
-      true,
-    ))
-  ) {
-    ctx.out(
-      addAllowRules(sys)
-        ? `Allowed ${ALLOW_RULES.join(", ")} in ${settingsPath(sys)}.`
-        : `${settingsPath(sys)} is not valid JSON, so it stays as it is; add ${ALLOW_RULES.join(", ")} to permissions.allow there.`,
-    );
-  }
-}
-
-/** The skill in Codex's skills folder, asked first, and updated when this CLI has another. */
-async function codexStep(sys: Sys) {
-  const { ctx, prompt } = sys;
-  if (!hasCodex(sys)) return;
-  section(ctx, "Codex");
-  const dir = codexSkillDir(sys);
-  const state = codexSkill(sys);
-  if (state === "current") ctx.out(`The starbridge skill is in ${dir}.`);
-  else if (state === "foreign")
-    ctx.out(`${dir}/SKILL.md is not the Starbridge skill, so it stays as it is.`);
-  else {
-    const verb = state === "missing" ? "Install" : "Update";
-    if (await prompt.confirm(`${verb} the Starbridge skill for Codex in ${dir}?`, true)) {
-      try {
-        installCodexSkill(sys);
-        ctx.out(`${verb === "Install" ? "Installed" : "Updated"} ${dir}/SKILL.md.`);
-      } catch (e) {
-        ctx.out(`Could not write the skill: ${(e as Error).message}`);
-      }
-    } else ctx.out("Codex sessions won't know the skill: rerun setup to install it.");
-  }
-  const rule = codexRulePath(sys);
-  const ruleState = codexRule(sys);
-  if (ruleState === "current") ctx.out(`The starbridge rule is in ${rule}.`);
-  else if (ruleState === "foreign")
-    ctx.out(`${rule} was not written by setup, so it stays as it is.`);
-  else if (ruleState === "outdated") {
-    try {
-      installCodexRule(sys);
-      ctx.out(`Updated ${rule}.`);
-    } catch (e) {
-      ctx.out(`Could not update the rule: ${(e as Error).message}`);
-    }
-  } else if (
-    await prompt.confirm(
-      "Let `starbridge ask`, `waiting`, `wait` and `settle` run outside Codex's sandbox, which has no network?",
-      true,
-    )
-  ) {
-    try {
-      installCodexRule(sys);
-      ctx.out(`Wrote ${rule}.`);
-    } catch (e) {
-      ctx.out(`Could not write the rule: ${(e as Error).message}`);
-    }
-  } else ctx.out("Codex's sandbox will stop `starbridge ask`: rerun setup to add the rule.");
-}
-
-/** The Starbridge Pi package: the skill, the rules and answers into the session. */
-async function piStep(sys: Sys) {
-  const { ctx } = sys;
-  if (!hasPi(sys)) return;
-  section(ctx, "Pi");
-  await piPackageStep(sys);
-  await offerPiAllow(sys.ctx, sys.prompt);
-}
-
-async function piPackageStep(sys: Sys) {
-  const { ctx, prompt } = sys;
-  const installed = piPackage(sys);
-  if (installed === PI_PACKAGE) {
-    ctx.out("The Starbridge Pi package is installed.");
-    return;
-  }
-  // Installed at another ref, or none: Pi moves the one entry to this CLI's tag.
-  if (installed) {
-    try {
-      await installPiPackage(sys);
-      ctx.out(`Moved the Starbridge Pi package to v${VERSION}.`);
-    } catch (e) {
-      ctx.out(`Could not move the Starbridge Pi package to v${VERSION}: ${(e as Error).message}`);
-    }
-    return;
-  }
-  if (
-    await prompt.confirm(
-      `Install the Starbridge Pi package (the skill, and answers into the session)? This runs \`pi install ${PI_PACKAGE}\`.`,
-      true,
-    )
-  ) {
-    try {
-      await installPiPackage(sys);
-      ctx.out("Installed. Pi sessions load it when they next start.");
-    } catch (e) {
-      ctx.out(`Could not install it: ${(e as Error).message}`);
-    }
-  } else ctx.out(`Skipped: \`pi install ${PI_PACKAGE}\` installs it later.`);
-}
-
-/** The skill and the plugin in opencode's config folder, updated when this CLI has others. */
-async function opencodeStep(sys: Sys) {
-  const { ctx, prompt } = sys;
-  if (!hasOpencode(sys)) return;
-  section(ctx, "opencode");
-  const dir = opencodeDir(sys);
-  const state = opencodeState(sys);
-  if (state === "current") {
-    ctx.out(`The starbridge skill and plugin are in ${dir}.`);
-    return;
-  }
-  const verb = state === "missing" ? "Install" : "Update";
-  if (
-    await prompt.confirm(
-      `${verb} the Starbridge skill and plugin for opencode in ${dir}? The plugin puts answers into the session.`,
-      true,
-    )
-  ) {
-    try {
-      const kept = installOpencode(sys);
-      ctx.out(
-        `${verb === "Install" ? "Installed" : "Updated"}. opencode loads them when it next starts.`,
-      );
-      for (const path of kept) ctx.out(`Kept ${path}: setup did not write it.`);
-    } catch (e) {
-      ctx.out(`Could not write them: ${(e as Error).message}`);
-    }
-  } else ctx.out("opencode sessions won't know Starbridge: rerun setup to install it.");
-}
-
-/** Off unless asked: the Claude app already answers prompts for Remote Control sessions. */
-async function permissionStep(sys: Sys) {
-  const { ctx, prompt } = sys;
-  section(ctx, "Permission prompts");
-  if (permissionsEnabled(ctx)) {
-    ctx.out("Sent to your devices (`starbridge config permissions off` stops it).");
-    await offerPiChain(ctx, prompt);
-    return;
-  }
-  const on = await prompt.confirm(
-    "Also send permission prompts (Claude Code's, opencode's, and Pi's through pi-permission-system) to your devices? The Claude app already shows Claude Code's for Remote Control sessions.",
-    false,
-  );
-  if (on) setPermissions(ctx, true);
-  ctx.out(
-    on
-      ? "Sent to your devices (`starbridge config permissions off` stops it)."
-      : "They stay at the keyboard (`starbridge config permissions on` sends them).",
-  );
-  if (on) await offerPiChain(ctx, prompt);
-}
-
 function summary(snap: QuotaSnapshot): string {
   const windows = snap.providers.reduce((n, p) => n + p.windows.length, 0);
   const failed = snap.providers.filter((p) => p.error).map((p) => p.provider);
-  return `Uploaded a first quota snapshot: ${snap.providers.length} providers, ${windows} windows${failed.length > 0 ? ` (${failed.join(", ")} failed)` : ""}.`;
+  return `✓ Sent a first quota snapshot: ${snap.providers.length} providers, ${windows} windows${failed.length > 0 ? ` (${failed.join(", ")} failed)` : ""}.`;
 }
 
 async function firstUpload(ctx: Ctx, q: Quota) {
@@ -575,7 +510,7 @@ async function firstUpload(ctx: Ctx, q: Quota) {
     ctx.out(summary(snap));
   } catch (e) {
     const why = e instanceof ApiError || e instanceof UsageError ? e.message : (e as Error).message;
-    ctx.out(`The first quota upload failed: ${why}`);
+    ctx.out(`✗ The first quota upload failed: ${why}`);
   }
 }
 
@@ -591,14 +526,35 @@ async function testDecision(ctx: Ctx, name: string) {
   };
   const opts = { wait: true, timeout: "10m" };
   ctx.out("Answer it on your phone or the web page (Ctrl-C skips):");
+  // `ask` prints the decision's id first: kept to withdraw the card on Ctrl-C (#613).
+  let id: string | undefined;
+  const asking: Ctx = {
+    ...ctx,
+    out: (line) => {
+      id ??= line;
+      ctx.out(line);
+    },
+  };
+  let code: number;
   try {
-    const code = await withAgent(
-      ctx,
-      (agent) => askVia(ctx, agent, input, opts),
-      () => ask(ctx, input, opts),
+    code = await withAgent(
+      asking,
+      (agent) => askVia(asking, agent, input, opts),
+      () => ask(asking, input, opts),
     );
-    if (code === 2) ctx.out("No answer within 10 minutes.");
   } catch (e) {
-    ctx.out(`The test decision failed: ${(e as Error).message}`);
+    if (!(e instanceof Interrupted)) {
+      ctx.out(`The test decision failed: ${(e as Error).message}`);
+      return;
+    }
+    code = EXIT_INTERRUPTED;
+  }
+  if (code === 2) ctx.out("No answer within 10 minutes.");
+  if (code !== EXIT_INTERRUPTED || !id) return;
+  try {
+    await settle(ctx, { id, outcome: "withdrawn" });
+    ctx.out("Skipped.");
+  } catch (e) {
+    ctx.out(`Skipped, but the card stays open on your devices: ${(e as Error).message}`);
   }
 }

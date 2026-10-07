@@ -1,5 +1,6 @@
 import { type Context, Hono } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
+import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
 import {
   createSession,
@@ -14,6 +15,8 @@ import { json } from "../http";
 import { ipKey, rateLimit } from "../limits";
 
 const STATE_COOKIE = "sb_oauth";
+/** The page's `signin` when this server has no GitHub sign-in. */
+const SIGNIN_OFF = "off";
 /** RFC 7636: a verifier is 43 to 128 unreserved characters; an S256 challenge is 43. */
 const VERIFIER = /^[A-Za-z0-9._~-]{43,128}$/;
 const CHALLENGE = /^[A-Za-z0-9_-]{43}$/;
@@ -34,11 +37,18 @@ function setSessionCookie(c: Parameters<typeof setCookie>[0], token: string, sec
   });
 }
 
+/** The sign-in methods this server offers, so the page shows only those (#670). */
+authRoutes.get("/auth/methods", (c) => {
+  const { github, ownerToken } = c.var.config;
+  const methods = [...(github ? ["github"] : []), ...(ownerToken ? ["owner"] : [])];
+  return c.json({ methods });
+});
+
 /**
  * Where GitHub sends a sign-in back. The app's sign-ins come back to their own path, which the
  * Android app claims as an App Link on starbridge.run: the installed web app's scope covers the
- * page's path, and Chrome would hand it the redirect (#527). GitHub accepts any path under the
- * OAuth app's callback URL.
+ * page's path, and Chrome would hand it the redirect (#527). The OAuth app lists both URLs:
+ * GitHub refused the app's path while only the first was listed (#544).
  */
 function callbackUrl(publicUrl: string, app: boolean): string {
   return `${publicUrl}/v1/auth/github/callback${app ? "/app" : ""}`;
@@ -51,8 +61,11 @@ function callbackUrl(publicUrl: string, app: boolean): string {
  */
 authRoutes.get("/auth/github", (c) => {
   const { github, publicUrl, secureCookies } = c.var.config;
-  if (!github) fail(404, "not-configured", "GitHub sign-in is off on this server");
   const app = c.req.query("app") === "1";
+  if (!github) {
+    if (app) fail(404, "not-configured", "GitHub sign-in is off on this server");
+    return c.redirect(`/?signin=${SIGNIN_OFF}`);
+  }
   const challenge = c.req.query("challenge") ?? "";
   if (app && !CHALLENGE.test(challenge))
     fail(400, "bad-request", "app sign-in needs challenge, the S256 PKCE challenge");
@@ -72,7 +85,8 @@ authRoutes.get("/auth/github", (c) => {
       secure: secureCookies,
       sameSite: "Lax",
       path: "/v1/auth/github",
-      maxAge: 600,
+      // Long enough to make a GitHub account, or pass 2FA or device verification (#616).
+      maxAge: 3600,
     });
   }
   return c.redirect(url.toString());
@@ -129,18 +143,29 @@ async function gitHubAccount(c: Context<Env>, code: string, verifier?: string): 
   return account;
 }
 
-/** The page's sign-in comes back: the state must match the cookie it started with. */
+/**
+ * The page's sign-in comes back: the state must match the cookie it started with. A sign-in that
+ * fails goes back to the page with why, in `signin`, which the page says in words with a way to
+ * start again (#616): `declined` on GitHub, `expired` (or not matched to this browser), or `failed`.
+ */
 authRoutes.get("/auth/github/callback", async (c) => {
   const { secureCookies } = c.var.config;
   rateLimit(c, `github:${ipKey(c)}`, c.var.config.limits.githubCallbacks);
-  // Before #527 the cookie also held the app flag and challenge: an app sign-in started then
-  // cannot finish here.
-  const [state, app] = (getCookie(c, STATE_COOKIE) ?? "").split(".");
+  const back = (why: "declined" | "expired" | "failed") => c.redirect(`/?signin=${why}`);
+  const state = getCookie(c, STATE_COOKIE);
   deleteCookie(c, STATE_COOKIE, { path: "/v1/auth/github" });
   const code = c.req.query("code");
-  if (!state || !code || app === "1" || !safeEqual(state, c.req.query("state") ?? ""))
-    fail(400, "bad-state", "sign-in expired or came from elsewhere; start again");
-  const token = createSession(c.var.db, await gitHubAccount(c, code), c.var.config.limits.sessions);
+  if (c.req.query("error")) return back("declined");
+  if (!state || !code || !safeEqual(state, c.req.query("state") ?? "")) return back("expired");
+  let account: string;
+  try {
+    account = await gitHubAccount(c, code);
+  } catch (e) {
+    // GitHub refused, or could not be reached.
+    if (!(e instanceof HTTPException)) console.error(`GitHub sign-in: ${e}`);
+    return back("failed");
+  }
+  const token = createSession(c.var.db, account, c.var.config.limits.sessions);
   setSessionCookie(c, token, secureCookies);
   return c.redirect("/");
 });
@@ -175,7 +200,7 @@ authRoutes.post("/auth/app/session", async (c) => {
 authRoutes.post("/auth/owner", async (c) => {
   const { ownerToken, secureCookies } = c.var.config;
   if (!ownerToken) fail(404, "not-configured", "owner sign-in is off on this server");
-  rateLimit(c, `owner:${ipKey(c)}`, [10, 60_000]);
+  rateLimit(c, `owner:${ipKey(c)}`, c.var.config.limits.ownerSignIns);
   const { token } = await json(c, z.object({ token: z.string().max(1000) }));
   if (!safeEqual(token, ownerToken)) fail(401, "unauthenticated", "wrong owner token");
   const db = c.var.db;

@@ -17,15 +17,48 @@ function claudeDir(sys: Sys) {
 
 const claude = (sys: Sys, ...args: string[]) => run(sys, "claude", args, { timeoutMs: 180_000 });
 
-async function listJson<T>(sys: Sys, ...args: string[]): Promise<T[] | undefined> {
+/** The list, or why `claude <args> --json` gave none. */
+async function listJson<T>(sys: Sys, ...args: string[]): Promise<T[] | string> {
   const r = await claude(sys, ...args, "--json");
-  if (r?.code !== 0) return undefined;
+  const why = `\`claude ${args.join(" ")} --json\` failed`;
+  if (r?.code !== 0) return `${why} (${failure(r)})`;
   try {
     const v = JSON.parse(r.stdout) as unknown;
-    return Array.isArray(v) ? (v as T[]) : undefined;
+    return Array.isArray(v) ? (v as T[]) : `${why} (not a list)`;
   } catch {
-    return undefined;
+    return `${why} (not JSON)`;
   }
+}
+
+/**
+ * The oldest Claude Code Starbridge works with: the first that runs its mod (docs/tell-your-agents.md), which
+ * also has the `--json` plugin listings setup reads (#620).
+ */
+export const MIN_CLAUDE = "2.1.287";
+
+/** `claude --version`'s number, such as "2.1.289", or undefined when it gives none. */
+export async function claudeVersion(sys: Sys): Promise<string | undefined> {
+  const r = await claude(sys, "--version");
+  return r?.code === 0 ? /\d+\.\d+\.\d+/.exec(r.stdout)?.[0] : undefined;
+}
+
+const older = (a: string, b: string) => {
+  const [x, y] = [a, b].map((v) => v.split(".").map(Number));
+  for (let i = 0; i < 3; i++)
+    if ((x?.[i] ?? 0) !== (y?.[i] ?? 0)) return (x?.[i] ?? 0) < (y?.[i] ?? 0);
+  return false;
+};
+
+/**
+ * Says so when this Claude Code is older than MIN_CLAUDE, with how to update it; with `unknown`,
+ * also when its version cannot be read.
+ */
+export async function claudeTooOld(sys: Sys, unknown = false): Promise<string | undefined> {
+  const v = await claudeVersion(sys);
+  if (v && older(v, MIN_CLAUDE))
+    return `Claude Code ${v} is older than ${MIN_CLAUDE}, the oldest Starbridge works with: \`claude update\` updates it`;
+  if (!v && unknown) return `Starbridge needs Claude Code ${MIN_CLAUDE} or newer`;
+  return undefined;
 }
 
 export interface PluginState {
@@ -36,8 +69,8 @@ export interface PluginState {
   plugins: Record<string, { enabled: boolean; version?: string } | undefined>;
 }
 
-/** Undefined when `claude` is missing or does not answer. */
-export async function pluginState(sys: Sys): Promise<PluginState | undefined> {
+/** The state, or why `claude` gave none: missing, too old or not answering. */
+export async function pluginState(sys: Sys): Promise<PluginState | string> {
   const markets = await listJson<Market>(sys, "plugin", "marketplace", "list");
   const installed = await listJson<{
     id: string;
@@ -45,7 +78,10 @@ export async function pluginState(sys: Sys): Promise<PluginState | undefined> {
     enabled: boolean;
     version?: string;
   }>(sys, "plugin", "list");
-  if (!markets || !installed) return undefined;
+  if (typeof markets === "string" || typeof installed === "string") {
+    const old = await claudeTooOld(sys, true);
+    return `${typeof markets === "string" ? markets : installed}${old ? `. ${old}` : ""}`;
+  }
   const plugins: PluginState["plugins"] = {};
   for (const id of PLUGINS) {
     const p = installed.find((x) => x.id === id && x.scope === "user");

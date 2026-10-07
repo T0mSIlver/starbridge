@@ -46,17 +46,44 @@ export async function enablePush(): Promise<PushState> {
   if ((await Notification.requestPermission()) !== "granted") return pushState();
   await navigator.serviceWorker.ready;
   const existing = await reg.pushManager.getSubscription();
-  const key = existing ? undefined : keyBytes(await api.vapid());
+  // Without the server's key, an existing subscription is still worth sending.
+  const key = await api.vapid().catch((e) => {
+    if (existing) return undefined;
+    throw e;
+  });
   let sub: PushSubscription;
   try {
-    sub =
-      existing ??
-      (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key }));
+    sub = await current(reg.pushManager, existing, key);
   } catch (e) {
     throw new Error(subscribeFailure(e));
   }
   await send(sub);
   return "on";
+}
+
+/**
+ * The subscription to send: the existing one while the server's key made it, else a new one. A
+ * push service refuses pushes signed with another key than the subscription's, as when a server
+ * moves from the relay to its own VAPID keys (#567).
+ */
+export async function current(
+  pm: Pick<PushManager, "subscribe">,
+  existing: PushSubscription | null,
+  key: string | undefined,
+): Promise<PushSubscription> {
+  if (existing && (!key || sameKey(existing.options.applicationServerKey, keyBytes(key))))
+    return existing;
+  if (!key) throw new Error("the server has no Web Push key");
+  // A browser keeps one subscription per worker, so the old one goes first.
+  await existing?.unsubscribe().catch(() => {});
+  return pm.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(key) });
+}
+
+/** Whether a subscription's key is `key`. A browser that doesn't report it counts as a match. */
+export function sameKey(subscribed: ArrayBuffer | null, key: Uint8Array): boolean {
+  if (!subscribed) return true;
+  const a = new Uint8Array(subscribed);
+  return a.length === key.length && a.every((b, i) => b === key[i]);
 }
 
 /** What to tell the owner when the browser's push service refuses to subscribe. */
@@ -67,10 +94,15 @@ export function subscribeFailure(e: unknown, brave = "brave" in navigator): stri
   return `The browser could not subscribe to push: ${why}. Check that notifications and push messaging are allowed for this site, then try again.`;
 }
 
-/** Sends the current subscription again, so a server that dropped it pushes here once more. */
+/**
+ * Sends the current subscription again, so a server that dropped it pushes here once more, after
+ * a new one if the server's key changed.
+ */
 export async function resubscribe(): Promise<void> {
   if (!supported() || Notification.permission !== "granted") return;
   const reg = await navigator.serviceWorker.getRegistration("/");
-  const sub = await reg?.pushManager.getSubscription();
-  if (sub) await send(sub);
+  const existing = await reg?.pushManager.getSubscription();
+  if (!reg || !existing) return;
+  const key = await api.vapid().catch(() => undefined);
+  await send(await current(reg.pushManager, existing, key));
 }

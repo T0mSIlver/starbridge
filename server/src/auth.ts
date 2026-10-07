@@ -36,12 +36,13 @@ export function safeEqual(a: string, b: string): boolean {
 }
 
 export function fail(
-  status: 400 | 401 | 403 | 404 | 409 | 413 | 429 | 502,
+  status: 400 | 401 | 403 | 404 | 409 | 413 | 429 | 502 | 503,
   error: string,
   detail?: string,
+  headers?: Record<string, string>,
 ): never {
   throw new HTTPException(status, {
-    res: Response.json(detail ? { error, detail } : { error }, { status }),
+    res: Response.json(detail ? { error, detail } : { error }, { status, headers }),
   });
 }
 

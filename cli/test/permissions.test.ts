@@ -351,10 +351,9 @@ test("the plugin's PostToolUse check starts the CLI only while a prompt is open 
   };
   // Nothing asked yet.
   expect(started()).toBe(false);
-  // A state with no mark: an older CLI, which the hook runs as before.
+  // A state with no mark.
   writeFileSync(join(cfg, "state.json"), "{}");
-  expect(started()).toBe(true);
-  expect(readFileSync(join(dir, "ran"), "utf8")).toBe('{"a":1}');
+  expect(started()).toBe(false);
   writeFileSync(join(cfg, PROMPTS_OPEN), "");
   expect(started()).toBe(false);
   writeFileSync(join(cfg, PROMPTS_OPEN), "open");

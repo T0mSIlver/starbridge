@@ -9,12 +9,19 @@ const server = process.env.STARBRIDGE_SERVER ?? "http://localhost:8080";
 const nextConfig: NextConfig = {
   allowedDevOrigins: ["127.0.0.1"],
   poweredByHeader: false,
+  // Caddy compresses every response (deploy/Caddyfile). Next's own gzip runs on its one thread
+  // and cost it about 40 ms of CPU per new visitor, the landing page's scripts and styles, so a
+  // launch spike filled that thread near 18 visitors a second (#593).
+  compress: false,
   // A self-contained server for the deploy image; tracing starts at the monorepo root.
   output: "standalone",
   outputFileTracingRoot: join(import.meta.dirname, ".."),
   // The docs render per request, for their CSP nonce (proxy.ts), from these Markdown files.
   outputFileTracingIncludes: {
     "/docs/**": ["../docs/*.md", "../cli/README.md", "../server/README.md"],
+    // Served per request, with the server's address written in (lib/installScript.ts).
+    "/install.sh": ["../cli/install.sh"],
+    "/install.ps1": ["../cli/install.ps1"],
   },
   // The protocol package ships TypeScript source.
   transpilePackages: ["@starbridge/protocol"],

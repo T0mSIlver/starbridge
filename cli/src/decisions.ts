@@ -69,16 +69,18 @@ export interface AskInput {
   answerIn?: string | DecisionLink;
 }
 
-/** What the server stores at most for one decision, all boxes together (PROTOCOL.md, Limits). */
+/** What the server stores at most for one decision, boxes and blobs together (PROTOCOL.md, Limits). */
 export const ITEM_BYTES = 2 * 1024 * 1024;
 
-/** One image's file at most: the schema's 512 KB of base64url (`DecisionImage.data`). */
+/** One image's file at most: its blob is then the 512 KB of base64url `BLOB_MAX` allows. */
 const IMAGE_BYTES = 384 * 1024;
 
 /** Exit code when nobody answered before `--timeout`. */
 export const EXIT_TIMEOUT = 2;
+/** `wait <id>`'s exit code when the owner snoozed the decision (#571): no answer before then. */
+export const EXIT_SNOOZED = 3;
 /** Exit code on Ctrl-C, as a shell reports SIGINT. */
-const EXIT_INTERRUPTED = 130;
+export const EXIT_INTERRUPTED = 130;
 /** The server holds a long-poll at most this long (PROTOCOL.md). */
 const MAX_POLL_SECONDS = 300;
 /** Pause before retrying after a network or server error. */
@@ -218,12 +220,31 @@ function checked(decision: unknown): Decision {
   }
 }
 
-const boxBytes = (item: SealedItem) => item.boxes.reduce((n, b) => n + b.box.length, 0);
+/** The most boxes an item holds, so the most devices a decision is ever re-sealed to. */
+const MAX_BOXES = 64;
+
+/** What one more recipient adds to a box: a 64-character id, quoted, with its comma, in base64. */
+const RECIPIENT_BYTES = Math.ceil(((64 + 3) * 4) / 3);
 
 /**
- * Signs and seals the decision with its pictures, scaled down until every box together fits
- * ITEM_BYTES. Each box carries every image as base64url inside the sealed base64url envelope, so
- * a byte of image costs about (4/3)² bytes per device.
+ * What the item weighs once re-sealed to as many devices as it can ever reach: its blobs once,
+ * and once per device its largest box, grown by the ids its `to` gains. A re-seal sends no blobs,
+ * but the server counts the ones it keeps, so a decision that fits only its first devices could
+ * never reach a new one (#720).
+ */
+const itemBytes = (item: SealedItem) => {
+  const n = item.boxes.length;
+  const box = Math.max(0, ...item.boxes.map((b) => b.box.length));
+  const grown = box + Math.max(0, MAX_BOXES - n) * RECIPIENT_BYTES;
+  return (
+    Math.max(MAX_BOXES, n) * grown + (item.blobs ?? []).reduce((total, b) => total + b.length, 0)
+  );
+};
+
+/**
+ * Signs and seals the decision with its pictures, scaled down until its boxes and blobs fit
+ * ITEM_BYTES for every device it may be re-sealed to. Each picture is one blob, base64url,
+ * whatever the number of devices (#685).
  */
 function sealWithPictures(
   base: Decision,
@@ -234,21 +255,21 @@ function sealWithPictures(
   const sealed = (d: Decision) => seal("decision", d, signer, to);
   if (pictures.length === 0) return { decision: base, item: sealed(base) };
   if (pictures.length > 4) throw new UsageError("--image: at most 4 images");
-  const perBox = boxBytes(sealed(base)) / to.length;
   let share = Math.min(
     IMAGE_BYTES,
-    Math.floor(((ITEM_BYTES / to.length - perBox) * 9) / 16 / pictures.length),
+    Math.floor(((ITEM_BYTES - itemBytes(sealed(base))) * 3) / 4 / pictures.length),
   );
   for (let tries = 0; tries < 5; tries++) {
     if (share < 1024) break;
-    const decision = checked({ ...base, images: pictures.map((p) => fitPicture(p, share)) });
-    const item = sealed(decision);
-    const size = boxBytes(item);
+    const fitted = pictures.map((p) => fitPicture(p, share));
+    const decision = checked({ ...base, images: fitted.map((f) => f.image) });
+    const item = { ...sealed(decision), blobs: fitted.map((f) => f.blob) };
+    const size = itemBytes(item);
     if (size <= ITEM_BYTES) return { decision, item };
     share = Math.floor(share * (ITEM_BYTES / size) * 0.95);
   }
   throw new UsageError(
-    `the images do not fit in one decision for ${to.length} devices: attach fewer images`,
+    "the images do not fit in one decision: attach fewer images, or shorten the context",
   );
 }
 
@@ -281,17 +302,17 @@ export async function postDecision(ctx: Ctx, s: Session, input: AskInput): Promi
   const cursor = ctx.store.state().cursor;
   // Asked already waiting, its waiting state pushes instead, so the notification says so.
   await s.api.postItem(input.waiting ? { ...item, quiet: true } : item);
-  const { images: _, ...body } = decision;
   ctx.store.updateState((st) => {
     st.asked[decision.id] = {
       question: decision.question,
       options: decision.options,
       askedAt: decision.createdAt,
       to: decision.to,
-      body,
-      ...(input.images ? { images: input.images } : {}),
+      body: decision,
       ...(cursor !== undefined ? { cursor } : {}),
       ...(decision.source.session && !input.held ? { session: decision.source.session } : {}),
+      ...(decision.source.sessionTitle ? { sessionTitle: decision.source.sessionTitle } : {}),
+      project: decision.source.project,
       ...(decision.answerIn ? { answerIn: true } : {}),
       ...(decision.done ? { done: true } : {}),
       ...(input.codex && decision.source.session ? { codex: input.codex } : {}),
@@ -313,7 +334,9 @@ export async function ask(
   const resolved = resolveSource(input, ctx.env, process.cwd());
   const decision = await postDecision(ctx, s, { ...resolved, waiting: input.waiting || opts.wait });
   ctx.out(decision.id);
-  if (!opts.wait) ctx.err(deliveryLine(decision.id, delivery(resolved, false)));
+  // With no agent, nothing tells which sessions run a mod: the poller's lease says only that one
+  // does (#537).
+  if (!opts.wait) ctx.err(deliveryLine(decision.id, delivery(resolved, false, false)));
   if (!opts.wait) return 0;
   return wait(ctx, { id: decision.id, timeout: opts.timeout, json: opts.json }, s);
 }
@@ -375,7 +398,21 @@ export async function setWaiting(
   opts: { id?: string; state: Waiting["state"] },
 ): Promise<number> {
   if (!opts.id) throw new UsageError(`${opts.state} needs a decision id`);
-  await postWaiting(ctx, session(ctx), opts.id, opts.state);
+  const s = session(ctx);
+  await postWaiting(ctx, s, opts.id, opts.state);
+  // Without the agent nothing polls meanwhile: read every page since the question was asked,
+  // so the owner's latest snooze is among them.
+  if (opts.state === "waiting") {
+    let cursor = ctx.store.state().asked[opts.id]?.cursor;
+    for (let page = 0; page < 100; page++) {
+      const next = (await poll(ctx, s, { cursor, seconds: 0, shared: false })).cursor;
+      if (next === cursor) break;
+      cursor = next;
+    }
+  }
+  const until = snoozedUntil(ctx.store.state(), opts.id, ctx.now());
+  if (until && opts.state === "waiting")
+    ctx.out(snoozeLine(opts.id, ctx.store.state().asked[opts.id]?.question, until, ctx.now()));
   return 0;
 }
 
@@ -384,32 +421,114 @@ export async function setWaiting(
  * page (`elsewhere`), or no longer needed (`withdrawn`). Every device moves it out of the open
  * inbox.
  */
-export async function settle(ctx: Ctx, opts: { id?: string; outcome?: string }): Promise<number> {
-  const id = opts.id;
-  if (!id) throw new UsageError("settle needs a decision id");
+export interface SettleOpts {
+  id?: string;
+  /** Checked here: it comes from the command line. */
+  outcome?: string;
+  /** Every open decision the session asked. */
+  session?: string;
+  /** Every open decision this machine asked, once `confirm` agrees. */
+  all?: boolean;
+  confirm?: (question: string) => Promise<boolean>;
+}
+
+export async function settle(ctx: Ctx, opts: SettleOpts): Promise<number> {
+  const { id, session: sessionId, all } = opts;
+  if ([id, sessionId, all].filter((x) => x).length !== 1)
+    throw new UsageError("settle needs a decision id, --session <id> or --all");
+  if (opts.outcome !== undefined && opts.outcome !== "elsewhere" && opts.outcome !== "withdrawn")
+    throw new UsageError("--outcome is elsewhere or withdrawn");
+  const outcome = opts.outcome as "elsewhere" | "withdrawn" | undefined;
+  if (id) {
+    const asked = ctx.store.state().asked[id];
+    if (!asked) throw new UsageError(`${id} is not a decision this machine asked`);
+    const s = session(ctx);
+    await settleOne(ctx, s, await refreshDirectory(ctx, s), id, outcome);
+    return 0;
+  }
+  return settleMany(ctx, opts, outcome);
+}
+
+/**
+ * `settle --session` and `--all`: a flooded account's way out (#584). Each decision is one
+ * settled item, posted at the pace the server's 429s set: a machine posts 90 a minute.
+ */
+async function settleMany(
+  ctx: Ctx,
+  opts: SettleOpts,
+  outcome: "elsewhere" | "withdrawn" | undefined,
+): Promise<number> {
+  const st = ctx.store.state();
+  const open = Object.entries(st.asked)
+    // A settle whose notice failed is posted again.
+    .filter(([id, a]) => (!a.settled || a.unposted) && !a.revoked && !st.answers[id])
+    .filter(([, a]) => opts.all || a.session === opts.session)
+    .map(([id]) => id);
+  const whose = opts.all ? "this machine asked" : `session ${opts.session} asked`;
+  if (open.length === 0) {
+    ctx.out(`No open decision ${whose}.`);
+    return 0;
+  }
+  if (opts.all && !(await opts.confirm?.(`Settle all ${open.length} open decisions ${whose}?`)))
+    return 1;
+  const s = session(ctx);
+  const dir = await refreshDirectory(ctx, s);
+  let done = 0;
+  for (const [i, id] of open.entries()) {
+    for (;;) {
+      if (ctx.signal?.aborted) {
+        ctx.err(`starbridge: stopped after settling ${done} of ${open.length}`);
+        return 130;
+      }
+      try {
+        if (await settleOne(ctx, s, dir, id, outcome, true)) done++;
+        break;
+      } catch (e) {
+        if (!(e instanceof ApiError && e.retryAfter)) {
+          ctx.err(`starbridge: settled ${done} of ${open.length}; run it again to go on`);
+          throw e;
+        }
+        await ctx.sleep(e.retryAfter * 1000);
+      }
+    }
+    if ((i + 1) % 100 === 0 && i + 1 < open.length) ctx.out(`Settled ${done} of ${open.length}…`);
+  }
+  ctx.out(`Settled ${done} decision${done === 1 ? "" : "s"}.`);
+  return 0;
+}
+
+/**
+ * Closes decision `id` here, then tells the devices of `dir`; `bulk` for `settleMany`. False
+ * when an answer closed it instead.
+ */
+async function settleOne(
+  ctx: Ctx,
+  s: Session,
+  dir: Directory,
+  id: string,
+  outcomeOpt: "elsewhere" | "withdrawn" | undefined,
+  bulk = false,
+): Promise<boolean> {
   const asked = ctx.store.state().asked[id];
-  if (!asked) throw new UsageError(`${id} is not a decision this machine asked`);
   // Closed by a revoked device's answer the server holds: a notice would contradict it. A
   // decision `settle` closed earlier is posted again, in case that post failed.
-  if (asked.revoked) return 0;
-  const outcome = opts.outcome ?? (asked.answerIn ? "elsewhere" : "withdrawn");
-  if (outcome !== "elsewhere" && outcome !== "withdrawn")
-    throw new UsageError("--outcome is elsewhere or withdrawn");
-  const s = session(ctx);
+  if (!asked || asked.revoked) return false;
+  const outcome = outcomeOpt ?? (asked.answerIn ? "elsewhere" : "withdrawn");
   // Closed here first: from now on no answer to it is accepted or delivered, even if the post fails.
   // An answer that already reached the agent closed it, and a withdrawal would contradict it;
   // checked in the same update, so a delivery in another process cannot slip in between.
+  // A bulk run, which lasts hours, also leaves alone one the owner answered since it started.
   let delivered = false;
   ctx.store.updateState((st) => {
-    delivered = !!st.answers[id]?.seen;
+    delivered = bulk ? !!st.answers[id] : !!st.answers[id]?.seen;
     const a = st.asked[id];
     if (a && !delivered) {
       a.settled = true;
+      a.unposted = true;
       forget(a);
     }
   });
-  if (delivered) return 0;
-  const dir = await refreshDirectory(ctx, s);
+  if (delivered) return false;
   const to = devices(dir);
   const body = {
     v: 1 as const,
@@ -425,12 +544,17 @@ export async function settle(ctx: Ctx, opts: { id?: string; outcome?: string }):
       seal("settled", body, { id: s.machine.id, signKey: s.keys.sign.privateKey }, to),
     );
   } catch (e) {
-    // Answered or settled already: either way it is closed, which is what was asked.
-    const closed =
-      e instanceof ApiError && ["already-answered", "already-settled"].includes(e.code);
-    if (!closed) throw e;
+    // Answered or settled already: either way it is closed, which is what was asked. A bulk run
+    // also counts one the server dropped already.
+    const code = e instanceof ApiError ? e.code : undefined;
+    const closed = ["already-answered", "already-settled", ...(bulk ? ["not-found"] : [])];
+    if (!code || !closed.includes(code)) throw e;
   }
-  return 0;
+  ctx.store.updateState((st) => {
+    const a = st.asked[id];
+    if (a) delete a.unposted;
+  });
+  return true;
 }
 
 /** What `checkAnswer` reads of a decision this machine asked. */
@@ -467,14 +591,78 @@ export function checkAnswer(
         ? `${body.decisionId} is answered on its own page`
         : `${body.decisionId} takes no Done`,
     );
-  // Decisions asked before the machine kept recipients have none, and take no answer.
-  if (!decision.to?.includes(signer.id))
+  if (!decision.to.includes(signer.id))
     throw new ProtocolError("unknown-member", `${body.decisionId} was not sent to ${signer.id}`);
   // A typed reply answers any decision (`replies`); a choice must be one of its options. The
   // schema already holds an answer to exactly one of the two.
   if (body.choice !== undefined && !decision.options.includes(body.choice))
     throw new ProtocolError("bad-schema", "choice is not one of the options");
   return body;
+}
+
+/**
+ * Keeps the owner's snooze of a decision this machine asked (#571), when a device it was sealed
+ * to signed it and it is newer than the one kept. A snooze is not an answer: it only tells `wait`
+ * and `waiting` that none comes before its time.
+ */
+export function acceptSnooze(raw: unknown, s: Session, dir: Directory, st: State): void {
+  const item = parseWith(SealedItem, raw);
+  if (item.kind !== "snooze") throw new ProtocolError("wrong-kind", item.kind);
+  const { body, signer } = open(
+    item as SealedItem & { kind: "snooze" },
+    { id: s.machine.id, box: s.keys.box },
+    dir,
+  );
+  const decision = st.asked[body.decisionId];
+  if (!decision?.to.includes(signer.id)) return;
+  const kept = decision.snooze;
+  if (kept && Date.parse(kept.at) >= Date.parse(body.at)) return;
+  decision.snooze = { until: body.until, at: body.at };
+}
+
+/** Until when the owner snoozed decision `id`, while that time is still to come and no answer is. */
+export function snoozedUntil(st: State, id: string, now: Date): string | undefined {
+  const a = st.asked[id];
+  const until = a?.snooze?.until;
+  // Held while the directory is behind, as answers are: a newer word may be among the held.
+  if (!until || a.settled || st.answers[id] || st.behind) return undefined;
+  // Back now ends at its own time, read before this machine's clock: the device's may run ahead.
+  if (Date.parse(until) <= Date.parse(a.snooze?.at ?? "")) return undefined;
+  if (Date.parse(until) <= now.getTime()) return undefined;
+  return until;
+}
+
+/** Decision `id`'s snooze, once per snooze: `wait` says it and exits, then waits on. */
+export function takeSnooze(store: Ctx["store"], id: string, now: Date): string | undefined {
+  const st = store.state();
+  if (!snoozedUntil(st, id, now) || st.asked[id]?.snooze?.told) return undefined;
+  let until: string | undefined;
+  store.updateState((st) => {
+    const s = st.asked[id]?.snooze;
+    if (!s || s.told || !snoozedUntil(st, id, now)) return;
+    s.told = true;
+    until = s.until;
+  });
+  return until;
+}
+
+/**
+ * "18:00", "tomorrow 09:00", "Fri 09:00": when a snooze ends, in this machine's zone and 24-hour
+ * time, as an agent reads it.
+ */
+export function snoozeTime(until: Date, now: Date): string {
+  const time = until.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+  const day = (d: Date) => d.toDateString();
+  if (day(until) === day(now)) return time;
+  const tomorrow = new Date(now);
+  tomorrow.setDate(now.getDate() + 1);
+  if (day(until) === day(tomorrow)) return `tomorrow ${time}`;
+  return `${until.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })} ${time}`;
+}
+
+/** The line `wait` and `waiting` print for a snoozed decision; the skill tells agents what it means. */
+export function snoozeLine(id: string, question: string | undefined, until: string, now: Date) {
+  return `Snoozed ${id}${question ? ` (${question})` : ""} until ${snoozeTime(new Date(until), now)}: no answer before then.`;
 }
 
 /**
@@ -503,11 +691,13 @@ export function noteHead(
 ): string | undefined {
   const item = SealedItem.safeParse(raw);
   const kind = item.success ? item.data.kind : undefined;
-  if (!item.success || (kind !== "answer" && kind !== "permission-answer")) return undefined;
-  let opened: ReturnType<typeof open<"answer" | "permission-answer">>;
+  // A snooze is a device's word too, with the head it signed (#571).
+  if (!item.success || (kind !== "answer" && kind !== "permission-answer" && kind !== "snooze"))
+    return undefined;
+  let opened: ReturnType<typeof open<"answer" | "permission-answer" | "snooze">>;
   try {
     opened = open(
-      item.data as SealedItem & { kind: "answer" | "permission-answer" },
+      item.data as SealedItem & { kind: "answer" | "permission-answer" | "snooze" },
       { id: s.machine.id, box: s.keys.box },
       dir,
     );
@@ -540,18 +730,27 @@ export function behindBy(st: State, dir: Directory, entries: unknown[]): string 
 export type Delivery = "prompt" | "wait";
 
 /**
- * With no agent running, Codex gets nothing back; the mod, the Pi extension and the opencode
- * plugin poll by themselves.
+ * A prompt only when something will submit it (#537): for Claude Code, a mod seen polling for
+ * this session (`modSeen`), which an installed plugin alone does not mean; for Pi and opencode,
+ * their extension, which says so itself; for Codex, its reachable app-server. With no agent
+ * running, Codex gets nothing back.
  */
 export function delivery(
   input: Pick<AskInput, "agent" | "extensionAnswers" | "headless">,
   codexReachable: boolean,
+  modSeen: boolean,
 ): Delivery {
-  if (input.agent === "claude-code") return input.headless ? "wait" : "prompt";
+  if (input.agent === "claude-code") return !input.headless && modSeen ? "prompt" : "wait";
   if (input.agent === "pi" || input.agent === "opencode")
     return input.extensionAnswers ? "prompt" : "wait";
   return input.agent === "codex" && codexReachable ? "prompt" : "wait";
 }
+
+/**
+ * How long after its last call the agent still counts a session's mod as there: one events call
+ * held 25 s, and the next one.
+ */
+export const MOD_SEEN_MS = 45_000;
 
 /** What `ask` prints after the id, on stderr, so the asking agent knows what to do next. */
 export function deliveryLine(id: string, d: Delivery): string {
@@ -611,11 +810,23 @@ export async function poll(
     const dir = directory;
     const entries = ctx.store.directory();
     ctx.store.updateState((st) => {
-      const items = [...(st.held ?? []), ...page.items];
+      // Two processes polling from their own cursors fetch the same items: keep one of each.
+      const ids = new Set<unknown>();
+      const items = [...(st.held ?? []), ...page.items].filter((raw) => {
+        const id = (raw as { id?: unknown } | null)?.id;
+        if (id === undefined) return true;
+        if (ids.has(id)) return false;
+        ids.add(id);
+        return true;
+      });
       delete st.held;
       // Every head first: a withheld entry any answer names holds back the whole page.
       const signers = new Map(items.map((raw) => [raw, noteHead(raw, s, dir, entries, st)]));
-      const answers = items.filter((raw) => signers.get(raw) !== undefined);
+      // Snoozes wait with the answers (#571): a device's word, to read once nothing is withheld.
+      const answers = items.filter(
+        (raw) =>
+          signers.get(raw) !== undefined || (raw as { kind?: unknown } | null)?.kind === "snooze",
+      );
       const behind = behindBy(st, dir, entries);
       if (behind) {
         // Kept, not dropped: the device's client counts them sent, and the server takes no other.
@@ -627,7 +838,12 @@ export async function poll(
         dropRevoked(st, dir);
         for (const raw of items) {
           try {
-            // Machines' inboxes hold answers to decisions and to permission prompts (#57).
+            // Machines' inboxes hold answers to decisions and to permission prompts (#57), and
+            // the owner's snoozes (#571).
+            if ((raw as { kind?: unknown } | null)?.kind === "snooze") {
+              acceptSnooze(raw, s, dir, st);
+              continue;
+            }
             if ((raw as { kind?: unknown } | null)?.kind === "permission-answer") {
               const { answer, device } = acceptPermissionAnswer(raw, s, dir, st, Date.now());
               const p = st.permissions?.[answer.permissionId];
@@ -772,7 +988,6 @@ export async function dropRevokedNow(ctx: Ctx) {
 
 function forget(a: State["asked"][string]) {
   delete a.body;
-  delete a.images;
 }
 
 /** The server drops an unanswered decision after 30 days; one re-sealed later would come back. */
@@ -785,9 +1000,16 @@ const RESEAL_MS = 29 * 24 * 3600_000;
  * pushes only the new devices. Revoked devices get nothing, and nothing is re-sealed while the
  * server may be withholding directory entries.
  */
+/**
+ * When each store's re-seal may run again after a 429: until then the machine's rate window is
+ * left to its own asks (#650).
+ */
+const resealPaused = new WeakMap<object, number>();
+
 async function reseal(ctx: Ctx, s: Session, known: Directory): Promise<void> {
   const st = ctx.store.state();
   const now = ctx.now().getTime();
+  if ((resealPaused.get(ctx.store) ?? 0) > now) return;
   // A decision's recipients are those of its body as last posted; `to`, whose answers count, may
   // hold more: a post whose reply was lost could have reached the server.
   const decisions = Object.entries(st.asked).flatMap(([id, a]) =>
@@ -811,7 +1033,8 @@ async function reseal(ctx: Ctx, s: Session, known: Directory): Promise<void> {
   const signer = { id: s.machine.id, signKey: s.keys.sign.privateKey };
   /**
    * Posts a re-sealed item: "posted", "closed" when the server holds it answered or no longer
-   * holds it, or undefined after an error, which the next poll tries again.
+   * holds it, "limited" after a 429, which pauses the re-seal for its Retry-After, or undefined
+   * after another error. The next poll tries the rest again.
    */
   const post = async (item: () => SealedItem) => {
     let sealed: SealedItem | undefined;
@@ -822,6 +1045,17 @@ async function reseal(ctx: Ctx, s: Session, known: Directory): Promise<void> {
     } catch (e) {
       if (e instanceof ApiError && ["already-answered", "not-found"].includes(e.code))
         return "closed";
+      // Too large for this many devices, as on a server with a lower cap: it can never reach them.
+      if (e instanceof ApiError && e.code === "too-large") {
+        ctx.err(
+          `starbridge: ${sealed?.id ?? ""} is too large to send to the new devices; it stays on the others`,
+        );
+        return "closed";
+      }
+      if (e instanceof ApiError && e.status === 429) {
+        resealPaused.set(ctx.store, ctx.now().getTime() + (e.retryAfter ?? 60) * 1000);
+        return "limited";
+      }
       ctx.err(`starbridge: could not re-send ${sealed?.id ?? ""}: ${(e as Error).message}`);
     }
   };
@@ -829,18 +1063,11 @@ async function reseal(ctx: Ctx, s: Session, known: Directory): Promise<void> {
     if (!lacking(body.to, dir)) continue;
     ctx.store.updateState((st) => {
       const x = st.asked[id];
-      if (x) x.to = [...new Set([...(x.to ?? []), ...ids])];
+      if (x) x.to = [...new Set([...x.to, ...ids])];
     });
-    const pictures = (a.images ?? []).flatMap((i) => {
-      try {
-        return [typeof i === "string" ? loadPicture(i) : loadPicture(i.path, i.alt)];
-      } catch {
-        return []; // Moved or deleted since: the re-sealed copy goes without it.
-      }
-    });
+    // Without blobs: the server keeps the images, sealed once for every device (#685).
     const posted = await post(() => ({
-      ...sealWithPictures({ ...body, to: ids, dir: signedHead(ctx, dir) }, pictures, signer, to)
-        .item,
+      ...seal("decision", { ...body, to: ids, dir: signedHead(ctx, dir) }, signer, to),
       reseal: true,
     }));
     if (posted === "closed")
@@ -848,6 +1075,7 @@ async function reseal(ctx: Ctx, s: Session, known: Directory): Promise<void> {
         const x = st.asked[id];
         if (x) forget(x);
       });
+    if (posted === "limited") return;
     if (posted !== "posted") continue;
     // Done once its waiting state went too; else the next poll re-sends both.
     if (a.waiting?.state === "waiting") {
@@ -860,7 +1088,9 @@ async function reseal(ctx: Ctx, s: Session, known: Directory): Promise<void> {
         state: a.waiting.state,
         dir: signedHead(ctx, dir),
       } satisfies Waiting;
-      if (!(await post(() => ({ ...seal("waiting", w, signer, to), quiet: true })))) continue;
+      const sent = await post(() => ({ ...seal("waiting", w, signer, to), quiet: true }));
+      if (sent === "limited") return;
+      if (!sent) continue;
     }
     ctx.store.updateState((st) => {
       const x = st.asked[id];
@@ -879,11 +1109,12 @@ async function reseal(ctx: Ctx, s: Session, known: Directory): Promise<void> {
       x.permission.to = [...new Set([...x.permission.to, ...ids])];
     });
     // Closed: answered or gone on the server, so no device needs it any more.
-    if (
-      (await post(() => ({ ...seal("permission", permission, signer, to), reseal: true }))) ===
-      undefined
-    )
-      continue;
+    const sent = await post(() => ({
+      ...seal("permission", permission, signer, to),
+      reseal: true,
+    }));
+    if (sent === "limited") return;
+    if (sent === undefined) continue;
     ctx.store.updateState((st) => {
       const x = st.permissions?.[permission.id];
       if (x) x.sealedTo = ids;
@@ -930,7 +1161,7 @@ export function takeAnswer(
  */
 export async function wait(
   ctx: Ctx,
-  opts: { id?: string; session?: string; timeout?: string; json?: boolean },
+  opts: { id?: string; session?: string; timeout?: string; json?: boolean; "no-mark"?: boolean },
   s: Session = session(ctx),
   dir?: Directory,
 ): Promise<number> {
@@ -944,13 +1175,22 @@ export async function wait(
     printAnswer(ctx, found.answer, found.question, opts.json);
     return 0;
   };
+  // Snoozed: said once, so a polling agent stops; the next `wait` waits on (#571).
+  const snoozed = () => {
+    const until = target ? takeSnooze(ctx.store, target, ctx.now()) : undefined;
+    if (!until || !target) return undefined;
+    printSnooze(ctx, target, ctx.store.state().asked[target]?.question, until, opts.json);
+    return EXIT_SNOOZED;
+  };
 
   await dropRevokedNow(ctx);
   const shut = closed();
   if (shut) throw shut;
   const already = takeAnswer(ctx.store, target, opts.session);
   if (already) return report(already);
-  if (target) await markWaiting(ctx, () => postWaiting(ctx, s, target, "waiting"));
+  if (target && !opts["no-mark"])
+    await markWaiting(ctx, () => postWaiting(ctx, s, target, "waiting"));
+  // A snooze is told only after a poll: the one cached may be over, or answered since.
 
   let deadline = Number.POSITIVE_INFINITY;
   if (opts.timeout) deadline = ctx.now().getTime() + parseDuration(opts.timeout);
@@ -985,7 +1225,24 @@ export async function wait(
     if (found) return report(found);
     const ended = closed();
     if (ended) throw ended;
+    const off = snoozed();
+    if (off !== undefined) return off;
   }
+}
+
+/** A snooze as `wait` prints it: the line, or `{decisionId, snoozedUntil}` with `--json`. */
+export function printSnooze(
+  ctx: Ctx,
+  id: string,
+  question: string | undefined,
+  until: string,
+  json?: boolean,
+) {
+  ctx.out(
+    json
+      ? JSON.stringify({ decisionId: id, snoozedUntil: until })
+      : snoozeLine(id, question, until, ctx.now()),
+  );
 }
 
 /** Why no answer to decision `id` will come, for `wait`: settled, answered elsewhere, or revoked. */
@@ -1093,4 +1350,154 @@ export function waitSeconds(text: string): number {
   if (!Number.isInteger(seconds) || seconds < 0 || seconds > MAX_CYCLE_SECONDS)
     throw new UsageError(`--wait takes whole seconds from 0 to ${MAX_CYCLE_SECONDS}`);
   return seconds;
+}
+
+/** How long each server poll of `answers --all --follow` holds. */
+const FOLLOW_POLL_SECONDS = 30;
+
+/** One line of `answers --all`: an answer to a decision this machine asked, with who asked. */
+export interface ObservedAnswer {
+  decisionId: string;
+  question: string;
+  choice?: string;
+  text?: string;
+  done?: true;
+  answeredAt: string;
+  session?: string;
+  sessionTitle?: string;
+  project?: string;
+}
+
+/**
+ * Every answer the machine accepted that its session may have, oldest first, from `since` (ms)
+ * on and leaving out the decision ids in `known`. Reads only: nothing is marked seen, so the
+ * session that asked still gets each one.
+ */
+export function observedAnswers(
+  st: State,
+  opts: { since?: number; known?: ReadonlySet<string> } = {},
+): ObservedAnswer[] {
+  if (st.behind) return [];
+  const lines: ObservedAnswer[] = [];
+  for (const [id, { answer }] of Object.entries(st.answers)) {
+    const asked = st.asked[id];
+    if (!asked || !deliverable(st, id) || opts.known?.has(id)) continue;
+    if (opts.since !== undefined && Date.parse(answer.answeredAt) < opts.since) continue;
+    const { session, sessionTitle, project } = asked;
+    lines.push({
+      decisionId: id,
+      question: asked.question,
+      ...(answer.choice !== undefined ? { choice: answer.choice } : {}),
+      ...(answer.text !== undefined ? { text: answer.text } : {}),
+      ...(answer.done ? { done: true as const } : {}),
+      answeredAt: answer.answeredAt,
+      ...(session ? { session } : {}),
+      ...(sessionTitle ? { sessionTitle } : {}),
+      ...(project !== undefined ? { project } : {}),
+    });
+  }
+  return lines.sort((a, b) => a.answeredAt.localeCompare(b.answeredAt));
+}
+
+/** `--since`: a time (`2026-10-06T21:00Z`), or a duration with its unit back from now (`2h`). */
+export function sinceTime(text: string, now: Date): number {
+  if (/^\d+(\.\d+)?\s*[smhd]$/.test(text.trim())) return now.getTime() - parseDuration(text);
+  const t = Date.parse(text);
+  if (Number.isNaN(t)) throw new UsageError(`--since takes a time or a duration, not ${text}`);
+  return t;
+}
+
+/**
+ * `answers --all` with no agent: prints every answer `observedAnswers` holds, then with `follow`
+ * polls the server from a cursor of its own, never the shared one, and prints each new answer
+ * until interrupted. `printed` carries over from an agent that stopped under it.
+ */
+export async function answersAll(
+  ctx: Ctx,
+  opts: { follow?: boolean; since?: number },
+  printed: Set<string> = new Set(),
+): Promise<number> {
+  const flush = () => {
+    for (const a of observedAnswers(ctx.store.state(), { since: opts.since, known: printed })) {
+      printed.add(a.decisionId);
+      ctx.out(JSON.stringify(a));
+    }
+  };
+  const s = session(ctx);
+  let cursor = ctx.store.state().cursor;
+  let directory: Directory | undefined;
+  // Nothing else may have fetched the server's answers yet: one poll that returns at once.
+  try {
+    ({ cursor, directory } = await poll(ctx, s, { cursor, seconds: 0, shared: false }));
+  } catch (e) {
+    if (e instanceof UsageError || e instanceof ProtocolError) throw e;
+    if (!ctx.signal?.aborted)
+      ctx.err(`starbridge: ${(e as Error).message}; printing what this machine has`);
+  }
+  if (ctx.signal?.aborted) return EXIT_INTERRUPTED;
+  flush();
+  if (!opts.follow) return 0;
+  while (!ctx.signal?.aborted) {
+    try {
+      ({ cursor, directory } = await poll(ctx, s, {
+        cursor,
+        // Short holds: another process may release answers this poll never fetches.
+        seconds: FOLLOW_POLL_SECONDS,
+        shared: false,
+        directory,
+      }));
+    } catch (e) {
+      if (e instanceof UsageError || e instanceof ProtocolError) throw e;
+      if (ctx.signal?.aborted) break;
+      ctx.err(`starbridge: ${(e as Error).message}; retrying`);
+      directory = undefined;
+      await ctx.sleep(RETRY_MS);
+      continue;
+    }
+    // The agent or a `wait` may have accepted answers this poll did not fetch.
+    flush();
+  }
+  return EXIT_INTERRUPTED;
+}
+
+/** One line of `decisions --open`: a question this machine asked that is still open. */
+export interface OpenDecision {
+  decisionId: string;
+  question: string;
+  options: string[];
+  askedAt: string;
+  waiting: boolean;
+  session?: string;
+  sessionTitle?: string;
+  project?: string;
+}
+
+/**
+ * The questions this machine asked that have no answer yet, are not settled and the server still
+ * holds (it drops them after 30 days), oldest first. Questions a hook waits on itself are left
+ * out: no session owns them.
+ */
+export function openDecisions(st: State, now: Date): OpenDecision[] {
+  const lines: OpenDecision[] = [];
+  for (const [id, a] of Object.entries(st.asked)) {
+    if (a.settled || a.held || st.answers[id]) continue;
+    if (now.getTime() - Date.parse(a.askedAt) >= RESEAL_MS) continue;
+    lines.push({
+      decisionId: id,
+      question: a.question,
+      options: a.options,
+      askedAt: a.askedAt,
+      waiting: a.waiting?.state === "waiting",
+      ...(a.session ? { session: a.session } : {}),
+      ...(a.sessionTitle ? { sessionTitle: a.sessionTitle } : {}),
+      ...(a.project !== undefined ? { project: a.project } : {}),
+    });
+  }
+  return lines.sort((x, y) => x.askedAt.localeCompare(y.askedAt));
+}
+
+/** `decisions --open`: prints `openDecisions` as JSON lines, from the state file both paths share. */
+export function decisionsOpen(ctx: Ctx): number {
+  for (const d of openDecisions(ctx.store.state(), ctx.now())) ctx.out(JSON.stringify(d));
+  return 0;
 }

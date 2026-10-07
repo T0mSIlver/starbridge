@@ -43,6 +43,40 @@
   text-align: center;
 }
 
+/* Images over their options, two to a row (#536): the images in equal columns, centred on the
+   row's midline, then their buttons in the same columns. */
+.picks {
+  display: grid;
+  gap: var(--s4);
+  padding: 0;
+}
+
+.pick {
+  display: grid;
+  gap: var(--s2);
+}
+
+.pickColumns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: center;
+  justify-items: center;
+  gap: var(--s2);
+}
+
+/* Its own shape: as wide as its column allows, or narrower when `size.pick` caps its height. */
+.pickImage {
+  width: min(100%, calc(var(--size-pick) * var(--r)));
+}
+
+.pickColumns > button:not(.pickImage) {
+  width: 100%;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .toolHead {
   display: flex;
   align-items: center;
@@ -157,6 +191,27 @@
 .reply {
   justify-self: start;
   text-decoration: none;
+}
+
+/* Reply, Done, Snooze and Back now on one line, under the answer. */
+.quiet {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2) var(--s5);
+}
+
+.quiet .reply {
+  min-height: var(--s8);
+}
+
+/* "Snoozed until 18:00" under the question, in `fg2`: no amber while it is put off (#571). */
+.snoozed {
+  display: flex;
+  align-items: center;
+  gap: var(--s1h);
+  margin-top: var(--s2);
+  color: var(--fg2);
 }
 
 @media (max-width: 599px) {

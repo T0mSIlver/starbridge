@@ -1,7 +1,7 @@
 name: release
 
 # A v1.2.3 or v1.2.3-rc.4 tag publishes a GitHub Release with the signed APK and App Bundle, the CLI binaries,
-# install.sh and their checksums, signed with minisign, then updates the Homebrew tap (not for -rc)
+# install.sh, install.ps1 and their checksums, signed with minisign, then updates the Homebrew tap (not for -rc)
 # and npm. Run by hand, it builds the same files as workflow artifacts and releases nothing.
 # Cut a release with `bun cli/scripts/version.ts 1.2.3` in a PR, then tag the merged commit.
 on:
@@ -104,13 +104,14 @@ jobs:
         run: |
           npm pkg set version="$VERSION"
           bun run build:bin
-          cp install.sh dist/
+          cp install.sh install.ps1 dist/
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: cli
           path: |
             cli/dist/starbridge-*
             cli/dist/install.sh
+            cli/dist/install.ps1
 
   release:
     needs: [version, android, cli]
@@ -207,9 +208,14 @@ jobs:
           git diff --cached --quiet || git commit -m "starbridge $VERSION"
           git push
 
+  # Trusted Publishing: npm trusts this workflow's OIDC token, so the job holds no npm token. npm refuses
+  # tokens from self-hosted runners, hence GitHub's runner whatever vars.RUNNER says.
   npm:
     needs: [version, release]
-    runs-on: ${{ vars.RUNNER || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     defaults:
       run:
         working-directory: cli
@@ -223,15 +229,11 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
-          registry-url: https://registry.npmjs.org
       - run: npm pkg set version="${{ needs.version.outputs.version }}"
       - if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
         run: pnpm publish --dry-run --no-git-checks --access public
-      # Skipped until the owner's npm account exists and NPM_TOKEN is set. The runner merges a step's own env
-      # into the env context before it evaluates the step's if, and setup-node v7 exports no NODE_AUTH_TOKEN
-      # of its own, so the test below reads NPM_TOKEN (secrets cannot be read in an if).
-      - if: startsWith(github.ref, 'refs/tags/v') && env.NODE_AUTH_TOKEN != ''
+      # pnpm trades the OIDC token for a publish token itself, and adds provenance once the repo is public.
+      - if: startsWith(github.ref, 'refs/tags/v')
         run: pnpm publish --no-git-checks --access public $(case $VERSION in *-rc.*) echo --tag next ;; esac)
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           VERSION: ${{ needs.version.outputs.version }}

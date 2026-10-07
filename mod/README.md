@@ -44,7 +44,9 @@ answers on its unix socket, each session talks to it with `$.http.fetch`:
 
 The socket is `$STARBRIDGE_AGENT_SOCKET`, else
 `$XDG_RUNTIME_DIR/starbridge/agent.sock` for the default config directory,
-else `agent.sock` in the config directory, as the CLI works it out. A 426 (the
+else `agent.sock` in the config directory, as the CLI works it out; on Windows
+(`OS=Windows_NT`), the port file `agent.port` in the config directory, which
+names the loopback port and the token every call carries (PROTOCOL.md). A 426 (the
 agent speaks another API revision) or a call that cannot connect sends the
 session to the CLI path.
 

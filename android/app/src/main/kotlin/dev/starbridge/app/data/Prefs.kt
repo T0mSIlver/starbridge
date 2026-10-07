@@ -21,6 +21,10 @@ data class InboxView(
     val historyOpen: Boolean = false,
     val buttons: CardButtons = CardButtons.Always,
     val remindOff: Boolean = true,
+    /** Snoozed open (#571); collapsed by default. */
+    val snoozedOpen: Boolean = false,
+    /** What a swipe right on a question does (#692). */
+    val swipe: SwipeSnooze = SwipeSnooze.Hour,
 )
 
 /** The inbox's groups: none, one per machine, or what blocks an agent above what can wait (#191). */
@@ -28,6 +32,9 @@ enum class Grouping { None, Machine, Waiting }
 
 /** When a question's card carries its answer buttons; tapping the card opens the question either way. */
 enum class CardButtons { Always, WhenWaiting, Never }
+
+/** A swipe right on a question's card snoozes it for a set time, or asks for one (#692). */
+enum class SwipeSnooze { Hour, ThreeHours, Morning, Ask }
 
 /** The "Clock" setting: the phone's 12- or 24-hour choice, or one of them. */
 enum class Clock { System, H12, H24 }
@@ -71,12 +78,14 @@ class Prefs @Inject constructor(@ApplicationContext context: Context) {
             prefs.getBoolean(HISTORY_OPEN, false),
             CardButtons.entries.find { it.name == prefs.getString(BUTTONS, null) } ?: CardButtons.Always,
             prefs.getBoolean(REMIND_OFF, true),
+            prefs.getBoolean(SNOOZED_OPEN, false),
+            SwipeSnooze.entries.find { it.name == prefs.getString(SWIPE, null) } ?: SwipeSnooze.Hour,
         ),
     )
     val inbox: StateFlow<InboxView> = _inbox
 
     fun setInbox(value: InboxView) {
-        prefs.edit().putString(GROUPING, value.grouping.name).putBoolean(HISTORY_OPEN, value.historyOpen).putString(BUTTONS, value.buttons.name).putBoolean(REMIND_OFF, value.remindOff).apply()
+        prefs.edit().putString(GROUPING, value.grouping.name).putBoolean(HISTORY_OPEN, value.historyOpen).putString(BUTTONS, value.buttons.name).putBoolean(REMIND_OFF, value.remindOff).putBoolean(SNOOZED_OPEN, value.snoozedOpen).putString(SWIPE, value.swipe.name).apply()
         _inbox.value = value
     }
 
@@ -109,6 +118,8 @@ class Prefs @Inject constructor(@ApplicationContext context: Context) {
         const val BUTTONS = "inbox-card-buttons"
         const val ALLOW_UNSEEN = "allow-unseen"
         const val REMIND_OFF = "inbox-remind-notifications-off"
+        const val SNOOZED_OPEN = "inbox-snoozed-open"
+        const val SWIPE = "inbox-swipe-snooze"
         // Defaults are written too, so changing one later never changes a choice already saved.
         val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
     }

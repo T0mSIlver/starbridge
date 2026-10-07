@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
 import { track } from "@/lib/analytics";
 import { AGENTS_GUIDE, REPO, SELF_HOST } from "@/lib/links";
+import { useGitHubSignIn } from "@/lib/signInMethods";
 import { Analytics } from "./Analytics";
+import { InstallBox } from "./InstallBox";
 import { Icon, Mark } from "./icons";
 import s from "./Landing.module.css";
 import ui from "./ui.module.css";
@@ -52,8 +53,9 @@ function Phone({ name, alt }: { name: string; alt: string }) {
   );
 }
 
-// Turn on once the Play closed test's opt-in link works (Google's review has passed).
-const PLAY_TEST_OPEN = false;
+// On since Google's review of the closed test passed; README.md's Google Play line carries the
+// same two links (#576).
+const PLAY_TEST_OPEN = true;
 
 const OBTAINIUM = `https://apps.obtainium.imranr.dev/redirect?r=obtainium://add/${REPO}`;
 
@@ -67,56 +69,8 @@ const FEATURES = [
   ["Permission prompts", "Allow or deny a command away from the keyboard. Off by default."],
 ] as const;
 
-const INSTALL = [
-  ["Script", "curl -fsSL https://starbridge.run/install.sh | sh"],
-  ["Homebrew", "brew install T0mSIlver/starbridge/starbridge"],
-  ["npm", "npm i -g starbridge"],
-] as const;
-
-function Install() {
-  const [at, setAt] = useState(0);
-  const [copied, setCopied] = useState(false);
-  const [method, cmd] = INSTALL[at] ?? ["", ""];
-  const onCopied = () => track("copy-install", { method });
-  return (
-    <div className={s.install}>
-      <div className={`t-meta ${s.tabs}`} role="tablist" aria-label="Install with">
-        {INSTALL.map(([label], i) => (
-          <button
-            key={label}
-            type="button"
-            role="tab"
-            aria-selected={i === at}
-            className={s.tab}
-            onClick={() => {
-              setAt(i);
-              setCopied(false);
-            }}
-          >
-            {label}
-          </button>
-        ))}
-        <button
-          type="button"
-          className={s.copy}
-          aria-label={copied ? "Copied" : "Copy"}
-          onClick={async () => {
-            try {
-              await navigator.clipboard.writeText(cmd);
-              setCopied(true);
-              onCopied();
-            } catch {}
-          }}
-        >
-          <Icon name={copied ? "check" : "copy"} size={16} />
-        </button>
-      </div>
-      <pre className={`t-code ${s.cmd}`} role="tabpanel" onCopy={onCopied}>
-        {cmd}
-      </pre>
-    </div>
-  );
-}
+/** Docs opened from the landing page; the docs pages count their own views. */
+const openDocs = (page: string) => () => track("open-docs", { page });
 
 function Section({
   title,
@@ -142,6 +96,8 @@ function Section({
 
 /** What a visitor without a device on this browser sees at `/` (design v2, direction B). */
 export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
+  // A server without GitHub signs in with its owner token instead.
+  const github = useGitHubSignIn();
   return (
     <div className={s.page}>
       <Analytics />
@@ -152,12 +108,28 @@ export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
         </a>
         <nav className={s.nav} aria-label="Site">
           <a href="#features">Features</a>
-          <a href="/docs">Docs</a>
+          <a href="/docs" onClick={openDocs("/docs")}>
+            Docs
+          </a>
           <a href={REPO}>GitHub</a>
         </nav>
-        <a href="/v1/auth/github" className={`t-label ${ui.btn} ${ui.fill} ${s.signIn}`}>
-          Sign in
-        </a>
+        {github ? (
+          <a
+            href="/v1/auth/github"
+            className={`t-label ${ui.btn} ${ui.fill} ${s.signIn}`}
+            onClick={() => track("sign-in", { via: "header" })}
+          >
+            Sign in
+          </a>
+        ) : (
+          <button
+            type="button"
+            className={`t-label ${ui.btn} ${ui.fill} ${s.signIn}`}
+            onClick={onOwnerToken}
+          >
+            Sign in
+          </button>
+        )}
       </header>
 
       <section className={s.hero}>
@@ -167,10 +139,24 @@ export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
           with one tap and it gets back to work.
         </p>
         <div className={s.actions}>
-          <a href="/v1/auth/github" className={`t-action ${ui.btn} ${ui.lg} ${ui.fill}`}>
-            <Icon name="github" size={18} />
-            Sign in with GitHub
-          </a>
+          {github ? (
+            <a
+              href="/v1/auth/github"
+              className={`t-action ${ui.btn} ${ui.lg} ${ui.fill}`}
+              onClick={() => track("sign-in", { via: "hero" })}
+            >
+              <Icon name="github" size={18} />
+              Sign in with GitHub
+            </a>
+          ) : (
+            <button
+              type="button"
+              className={`t-action ${ui.btn} ${ui.lg} ${ui.fill}`}
+              onClick={onOwnerToken}
+            >
+              Sign in
+            </button>
+          )}
           <a href="#install" className={`t-action ${ui.btn} ${ui.lg}`}>
             Install the CLI
           </a>
@@ -243,9 +229,9 @@ export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
         <h2 className="t-title">Install on each machine that runs agents</h2>
         <p className={`t-small ${s.dim} ${s.wideOnly}`}>
           After Homebrew or npm, run <code className={s.inlineCode}>starbridge setup</code> to pair
-          the machine and install the Claude Code plugin. The script runs it for you.
+          the machine and install the Claude Code plugin. The scripts run it for you.
         </p>
-        <Install />
+        <InstallBox counted />
         <p className={`t-meta ${s.faint}`}>
           Works best with Claude Code. Codex, Pi and opencode are supported.
         </p>
@@ -272,8 +258,7 @@ export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
             <div className={s.app}>
               <h3 className="t-prose">Google Play</h3>
               <p className={`t-reading ${s.dim}`}>
-                In closed testing. Google needs 12 testers for 14 days before the app can be public.
-                Join the group, then opt in.
+                In closed testing, and looking for testers. Join the group, then opt in.
               </p>
               <div className={s.appLinks}>
                 <a
@@ -292,10 +277,10 @@ export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
             </div>
           )}
           <div className={s.app}>
-            <h3 className="t-prose">iPhone</h3>
+            <h3 className="t-prose">iOS</h3>
             <p className={`t-reading ${s.dim}`}>
-              Web app, native app is planned. Add starbridge.run to the Home Screen from Safari to
-              get notifications, on iOS 16.4 and later.
+              Add starbridge.run to the Home Screen from Safari to get notifications, on iOS 16.4
+              and later. A native app is planned.
             </p>
           </div>
         </div>
@@ -322,11 +307,15 @@ export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
         <div className={s.footCol}>
           <span>Source</span>
           <a href={REPO}>GitHub, MIT licence</a>
-          <a href={SELF_HOST}>Self-host</a>
+          <a href={SELF_HOST} onClick={openDocs(SELF_HOST)}>
+            Self-host
+          </a>
           <button type="button" className={s.textButton} onClick={onOwnerToken}>
             Use your own server
           </button>
-          <a href={AGENTS_GUIDE}>Agent instructions</a>
+          <a href={AGENTS_GUIDE} onClick={openDocs(AGENTS_GUIDE)}>
+            Agent instructions
+          </a>
           <a href={`${REPO}/releases`}>Changelog</a>
         </div>
         <div className={s.footCol}>
@@ -336,8 +325,12 @@ export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
         </div>
         <nav className={s.footInline} aria-label="Links">
           <a href={REPO}>GitHub</a>
-          <a href={SELF_HOST}>Self-host</a>
-          <a href={AGENTS_GUIDE}>Agent instructions</a>
+          <a href={SELF_HOST} onClick={openDocs(SELF_HOST)}>
+            Self-host
+          </a>
+          <a href={AGENTS_GUIDE} onClick={openDocs(AGENTS_GUIDE)}>
+            Agent instructions
+          </a>
           <a href="/privacy">Privacy</a>
           <a href="/terms">Terms</a>
         </nav>

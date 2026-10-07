@@ -10,6 +10,7 @@ import {
   type Past,
   promptOpen,
   running,
+  snoozedEntries,
 } from "@/lib/feed";
 import { matches, useFind } from "@/lib/find";
 import { clockTime } from "@/lib/format";
@@ -21,9 +22,19 @@ import { afterAnswer, selectedId, step } from "@/lib/selection";
 import type { InboxItem, PromptItem } from "@/lib/types";
 import { useApp } from "./AppProvider";
 import { PromptDetail, QuestionDetail } from "./Detail";
-import { HistoryHead, machineIcon, NeedRow, PastRow, RunRow, useNow, waitingSince } from "./Feed";
+import {
+  HistoryHead,
+  machineIcon,
+  NeedRow,
+  PastRow,
+  RunRow,
+  SnoozedHead,
+  useNow,
+  waitingSince,
+} from "./Feed";
 import feed from "./Feed.module.css";
 import s from "./Inbox.module.css";
+import { InstallBox } from "./InstallBox";
 import { Icon } from "./icons";
 import { ordered } from "./options";
 import { PhoneBar } from "./PhoneBar";
@@ -31,6 +42,7 @@ import { PushBanner } from "./PushBanner";
 import { QuotaAside } from "./QuotaAside";
 import { RecoveryBanner } from "./RecoveryBanner";
 import { Resizer } from "./Resizer";
+import { pairedMachines } from "./Shell";
 import ui from "./ui.module.css";
 
 // From here the list and the detail sit side by side (Inbox.module.css).
@@ -56,6 +68,7 @@ const text = (e: Entry) =>
       : [e.item.run.title, e.item.run.reason];
 
 export function Inbox() {
+  const app = useApp();
   const {
     inbox,
     inboxLoaded,
@@ -64,14 +77,21 @@ export function Inbox() {
     promptLog,
     loadPromptLog,
     answer,
+    snooze,
     answerPrompt,
     deviceName,
-  } = useApp();
+  } = app;
   const [grouping, setGrouping] = usePref("grouping");
   const [historyOpen, setHistoryOpen] = usePref("historyOpen");
-  // History's rows fade in when the owner opens it, not when the page loads with it open or the
+  const [snoozedOpen, setSnoozedOpen] = usePref("snoozedOpen");
+  const [clock] = usePref("clock");
+  // A section's rows fade in when the owner opens it, not when the page loads with it open or the
   // list comes back.
   const [historyToggled, setHistoryToggled] = useState(false);
+  const [snoozedToggled, setSnoozedToggled] = useState(false);
+  const snoozedRef = useRef<HTMLDivElement>(null);
+  const historyRef = useRef<HTMLDivElement>(null);
+  const beforeToggle = useGlide([snoozedRef, historyRef], [snoozedOpen, historyOpen]);
   const find = useFind();
   // Find searches History too, so its prompt log loads once a query starts, not per keystroke.
   const finding = find.trim() !== "";
@@ -89,6 +109,8 @@ export function Inbox() {
   const all = [...needsYou(inbox.items, prompts, now), ...running(runs?.items ?? [], now)];
   const needs = all.filter((e) => e.type !== "run" && keep(e));
   const runEntries = all.filter((e) => e.type === "run" && keep(e));
+  const snoozed = snoozedEntries(inbox.items, now).filter(keep);
+  const showSnoozed = snoozedOpen || finding;
   const allPrompts = useMemo(() => {
     const seen = new Map<string, PromptItem>();
     for (const p of [...(promptLog ?? []), ...prompts]) seen.set(p.permission.id, p);
@@ -106,6 +128,7 @@ export function Inbox() {
   const lost = useRef(new Set<string>());
   const ids = [
     ...needs,
+    ...(showSnoozed ? snoozed : []),
     ...past.filter((p) => showPast || lost.current.has(p.entry.id)).map((p) => p.entry),
   ].map((e) => e.id);
   const [picked, setPicked] = useState<string>();
@@ -115,9 +138,11 @@ export function Inbox() {
   const answeredHere = useRef(new Set<string>());
   const firstOpen = needs.find((e) => !answeredHere.current.has(e.id))?.id;
   const selected = wide ? selectedId(ids, picked, firstOpen) : opened;
-  // Opening an item mid-fade unmounts History before its animation ends.
+  // Opening an item mid-fade unmounts Snoozed or History before its animation ends.
   useEffect(() => {
-    if (opened) setHistoryToggled(false);
+    if (!opened) return;
+    setHistoryToggled(false);
+    setSnoozedToggled(false);
   }, [opened]);
   useEffect(() => {
     if (wide && selected && picked !== selected) setPicked(selected);
@@ -166,13 +191,21 @@ export function Inbox() {
     }
     moveOn(item.decision.id);
   };
+  // Put off, it leaves the open list as an answer does; brought back, it stays selected.
+  const snoozeQuestion = async (item: InboxItem, until: Date) => {
+    await snooze(item, until.toISOString());
+    if (until.getTime() <= Date.now()) return;
+    if (!wide) closeItem();
+    const next = afterAnswer(openIds, item.decision.id);
+    setPicked((cur) => (cur === item.decision.id ? next : cur));
+  };
   const answerOne = async (item: PromptItem, reply: Parameters<typeof answerPrompt>[1]) => {
     await answerPrompt(item, reply);
     moveOn(item.permission.id);
   };
 
   const pastOf = new Map(past.map((p) => [p.entry.id, p]));
-  const entryOf = new Map(needs.map((e) => [e.id, e]));
+  const entryOf = new Map([...needs, ...snoozed].map((e) => [e.id, e]));
   // An item opened by a link or a reload is known once the inbox loaded, or the 7-day prompt
   // log for a closed prompt; after one try at the log, an unknown id counts as answered.
   const stillOpen = opened !== undefined && entryOf.has(opened);
@@ -221,12 +254,13 @@ export function Inbox() {
         keys={wide}
         closed={closed}
         onAnswer={(r) => answerQuestion(e.item, r)}
+        onSnooze={(until) => snoozeQuestion(e.item, until)}
       />
     );
   };
 
   const comfy = !wide;
-  const row = (e: Entry) =>
+  const entryRow = (e: Entry, until?: string) =>
     e.type === "run" ? (
       <RunRow key={e.id} item={e.item} now={now} comfy={comfy} />
     ) : (
@@ -237,13 +271,19 @@ export function Inbox() {
         comfy={comfy}
         selected={wide && e.id === selected}
         onSelect={() => (wide ? setPicked(e.id) : openItem(e.id))}
+        until={until}
+        clock={clock}
+        // A snoozed row stays quiet, with no amber default: the owner opens it to answer.
         actions={
-          comfy ? (
+          comfy && !until ? (
             <RowActions entry={e} onPrompt={answerOne} onQuestion={answerQuestion} />
           ) : undefined
         }
       />
     );
+  const row = (e: Entry) => entryRow(e);
+  const snoozedRow = (e: Entry) =>
+    entryRow(e, e.type === "question" ? e.item.snoozedUntil : undefined);
   const sub = (label: React.ReactNode) => <div className={`t-caption ${s.sub}`}>{label}</div>;
   // Under a grouping's header, the group's items share one box (#248).
   const grouped = view !== "none";
@@ -252,8 +292,37 @@ export function Inbox() {
   );
 
   const count = needs.length;
+  // Nothing can reach this inbox until a machine pairs: say how (#610).
+  const noMachine = pairedMachines(app) === 0;
   const waitingOn = needs.filter((e) => waitingSince(e));
   const whenYouCan = needs.filter((e) => !waitingSince(e));
+  // Questions the owner put off (#571), collapsed at the end, out of the count; Find opens it.
+  const snoozedPart = snoozed.length > 0 && (
+    <>
+      {finding ? (
+        sub(`Snoozed · ${snoozed.length}`)
+      ) : (
+        <SnoozedHead
+          open={snoozedOpen}
+          count={snoozed.length}
+          comfy={comfy}
+          onToggle={() => {
+            beforeToggle();
+            setSnoozedOpen(!snoozedOpen);
+            setSnoozedToggled(true);
+          }}
+        />
+      )}
+      {showSnoozed && (
+        <div
+          className={snoozedToggled ? "m-appear" : undefined}
+          onAnimationEnd={() => setSnoozedToggled(false)}
+        >
+          {snoozed.map(snoozedRow)}
+        </div>
+      )}
+    </>
+  );
   const historyPart = (
     <>
       {finding ? (
@@ -264,6 +333,7 @@ export function Inbox() {
           count={closedToday(past, now)}
           comfy={comfy}
           onToggle={() => {
+            beforeToggle();
             setHistoryOpen(!historyOpen);
             setHistoryToggled(true);
           }}
@@ -364,12 +434,29 @@ export function Inbox() {
       {needs.length === 0 &&
         runEntries.length === 0 &&
         (!finding ? (
-          <p className={`t-small ${s.empty}`}>Nothing needs you</p>
-        ) : past.length === 0 ? (
+          noMachine && !wide ? (
+            <NoMachine />
+          ) : (
+            <p className={`t-small ${s.empty}`}>Nothing needs you</p>
+          )
+        ) : past.length === 0 && snoozed.length === 0 ? (
           <p className={`t-small ${s.empty}`}>Nothing matches</p>
         ) : null)}
-      <div className={s.gap} />
-      {grouped ? seg(historyPart) : historyPart}
+      {/* Closed, Snoozed waits just above History at the bottom (#682). Only the first of them
+          down takes the space, so they sit together. */}
+      {snoozedPart && (
+        <div ref={snoozedRef} className={showSnoozed || showPast ? undefined : s.down}>
+          <div className={s.gap} />
+          {grouped ? seg(snoozedPart) : snoozedPart}
+        </div>
+      )}
+      <div
+        ref={historyRef}
+        className={showPast || (snoozedPart && !showSnoozed) ? undefined : s.down}
+      >
+        <div className={s.gap} />
+        {grouped ? seg(historyPart) : historyPart}
+      </div>
     </section>
   );
 
@@ -396,7 +483,7 @@ export function Inbox() {
   return (
     <Panes list={list}>
       <section className={s.detail} aria-label="Selected">
-        {detail(selected)}
+        {detail(selected) ?? (noMachine && <NoMachine />)}
       </section>
     </Panes>
   );
@@ -465,6 +552,44 @@ function Panes({ list, children }: { list: React.ReactNode; children: React.Reac
       <QuotaAside />
     </div>
   );
+}
+
+/**
+ * Snoozed and History glide between the list's bottom and their place under the items (#662,
+ * #682): call the returned function before a toggle, and each element is played back from where
+ * it was to where it lands (FLIP). Reduced motion makes it a jump.
+ */
+function useGlide(els: React.RefObject<HTMLElement | null>[], toggles: boolean[]): () => void {
+  const from = useRef<(number | undefined)[]>(undefined);
+  const toggled = toggles.join();
+  // biome-ignore lint/correctness/useExhaustiveDependencies: runs after each toggle's render.
+  useLayoutEffect(() => {
+    const tops = from.current;
+    from.current = undefined;
+    if (!tops) return;
+    const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const root = getComputedStyle(document.documentElement);
+    // The browser may give the token back in seconds ("0.25s") or milliseconds.
+    const t = root.getPropertyValue("--t-state").trim();
+    const duration = Number.parseFloat(t) * (t.endsWith("ms") ? 1 : 1000) || 250;
+    const easing = root.getPropertyValue("--ease").trim() || "ease-out";
+    els.forEach((ref, i) => {
+      const el = ref.current;
+      const top = tops[i];
+      if (!el || top === undefined) return;
+      // A toggle mid-glide: where it lands is measured without the glide still running.
+      for (const a of el.getAnimations()) a.cancel();
+      const by = top - el.getBoundingClientRect().top;
+      if (Math.abs(by) < 1 || reduce) return;
+      el.animate([{ transform: `translateY(${by}px)` }, { transform: "none" }], {
+        duration,
+        easing,
+      });
+    });
+  }, [toggled]);
+  return () => {
+    from.current = els.map((ref) => ref.current?.getBoundingClientRect().top);
+  };
 }
 
 // Items listed this soon after the list shows came with the page, so they don't fade in.
@@ -760,6 +885,23 @@ function ViewMenu({
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+/** The empty inbox of an account with no machine: what to install, where. */
+function NoMachine() {
+  return (
+    <div className={s.noMachine}>
+      <h2 className="t-heading">Add a machine</h2>
+      <p className={`t-small ${s.noMachineText}`}>
+        Install Starbridge on each machine that runs your agents. Its setup shows a code to approve
+        here; then its agents' questions arrive in this inbox.
+      </p>
+      <InstallBox />
+      <p className={`t-small ${s.noMachineText}`}>
+        What setup does: <a href="/docs">the docs</a>
+      </p>
     </div>
   );
 }

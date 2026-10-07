@@ -1,0 +1,128 @@
+{
+  "agent": "claude",
+  "model": "claude-sonnet-5-5",
+  "arm": "after",
+  "scenario": "later-question",
+  "rep": 3,
+  "turns": [
+    {
+      "commands": [
+        "node scripts/lint.js",
+        "node scripts/lint.js; echo exit $?",
+        "starbridge ask --question 'What should next week’s release be called?' --context 'The name goes in RELEASE.md before Monday; no rush.\nReply with the name you want (type it as a free-text reply).' --option 'I’ll type a name' --waiting",
+        "starbridge ask --question 'What should next week’s release be called?' --context 'The name goes in RELEASE.md before Monday; no rush.\nReply with the name as free text.' --waiting",
+        "starbridge wait d_KtX157QFzmmPrrfI --timeout 5m; echo exit $?"
+      ],
+      "final": "(exit 143) ",
+      "exit": 143,
+      "seconds": 720.131,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_KtX157QFzmmPrrfI --timeout 5m` (again on exit 2).",
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_Z431gvSbFjO8_mA6 --timeout 5m` (again on exit 2)."
+      ]
+    },
+    {
+      "commands": [
+        "starbridge settle d_KtX157QFzmmPrrfI --outcome withdrawn; starbridge ask --question 'What should next week’s release be called?' --context 'The name goes in RELEASE.md before Monday; no rush.\nType the name as a reply to this card.\nNot yet: I’ll leave RELEASE.md untouched until you answer.' --option 'Not decided yet' --option 'Type a name in reply' --waiting",
+        "starbridge wait d_Z431gvSbFjO8_mA6 --timeout 5m; echo exit $?",
+        "starbridge wait d_Z431gvSbFjO8_mA6 --timeout 5m; echo exit $?"
+      ],
+      "final": "(exit 143) ",
+      "exit": 143,
+      "seconds": 720.131,
+      "delivery": [
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_KtX157QFzmmPrrfI --timeout 5m` (again on exit 2).",
+        "Nothing brings the answer into this session: when only the answer is left, run `starbridge wait d_Z431gvSbFjO8_mA6 --timeout 5m` (again on exit 2)."
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "v": 1,
+      "id": "d_KtX157QFzmmPrrfI",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-06T21:59:59Z",
+      "question": "What should next week’s release be called?",
+      "context": "The name goes in RELEASE.md before Monday; no rush.\nReply with the name as free text.",
+      "options": [],
+      "agent": "claude-code",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "20d1a608-973e-4047-b828-260d49271591",
+        "sessionTitle": "proj-ef"
+      },
+      "dir": {
+        "length": 2,
+        "head": "D4u8GyzrQK9PwuaD3caSTCMOy2YtTR91O1BkQy6Ep_4"
+      }
+    }
+  ],
+  "laterDecisions": [
+    {
+      "v": 1,
+      "id": "d_Z431gvSbFjO8_mA6",
+      "to": [
+        "phone"
+      ],
+      "createdAt": "2026-10-06T22:05:06Z",
+      "question": "What should next week’s release be called?",
+      "context": "The name goes in RELEASE.md before Monday; no rush.\nType the name as a reply to this card.\nNot yet: I’ll leave RELEASE.md untouched until you answer.",
+      "options": [
+        "Not decided yet",
+        "Type a name in reply"
+      ],
+      "recommended": "Not decided yet",
+      "agent": "claude-code",
+      "source": {
+        "machine": "devbox",
+        "machineKind": "server",
+        "project": "proj",
+        "session": "20d1a608-973e-4047-b828-260d49271591",
+        "sessionTitle": "proj-ef"
+      },
+      "replies": true,
+      "dir": {
+        "length": 2,
+        "head": "D4u8GyzrQK9PwuaD3caSTCMOy2YtTR91O1BkQy6Ep_4"
+      }
+    }
+  ],
+  "runs": [],
+  "gh": [],
+  "answered": "Answer to d_KtX157QFzmmPrrfI (What should next week’s release be called?): Go ahead",
+  "waiting": [
+    {
+      "v": 1,
+      "id": "w_ZsyHksTxZMWGq2Jv",
+      "decisionId": "d_KtX157QFzmmPrrfI",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-06T21:59:59Z",
+      "state": "waiting",
+      "dir": {
+        "length": 2,
+        "head": "D4u8GyzrQK9PwuaD3caSTCMOy2YtTR91O1BkQy6Ep_4"
+      }
+    },
+    {
+      "v": 1,
+      "id": "w_xzl9VWvsN5VtDUuo",
+      "decisionId": "d_Z431gvSbFjO8_mA6",
+      "to": [
+        "phone"
+      ],
+      "at": "2026-10-06T22:05:06Z",
+      "state": "waiting",
+      "dir": {
+        "length": 2,
+        "head": "D4u8GyzrQK9PwuaD3caSTCMOy2YtTR91O1BkQy6Ep_4"
+      }
+    }
+  ],
+  "permissions": []
+}

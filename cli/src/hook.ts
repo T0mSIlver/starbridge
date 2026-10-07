@@ -227,8 +227,8 @@ export async function hookSettle(
     const hook = parseHook(stdin);
     const sessionId = typeof hook.session_id === "string" ? hook.session_id : "";
     // Runs after a tool call while a prompt is open: nothing waiting for this session means no
-    // network and no agent call. A mark that disagrees with the state (written by an older CLI,
-    // an expired prompt, a state a new pairing replaced) is fixed under the lock.
+    // network and no agent call. A mark that disagrees with the state (an expired prompt, a state
+    // a new pairing replaced) is fixed under the lock.
     const st = ctx.store.state();
     if (ctx.store.promptsMarkStale(st)) ctx.store.updateState(() => {});
     if (!sessionId || waitingFor(st, sessionId).length === 0) return 0;
@@ -391,7 +391,7 @@ export function opencodeAnswer(a: Answer, q: OpencodeQuestion): string[] {
  * of one `question` tool call as a decision, already waiting, and once all are answered prints
  * `{"answers": [[label], ...]}` for opencode's reply route. Nothing else gets those answers: they
  * are `held`, recorded without the session, whose answer loop would submit them as a prompt; so
- * it goes to the server itself, since an agent older than `held` would record the session.
+ * it goes to the server itself.
  * SIGTERM means the terminal answered or dismissed the call: the questions still open are
  * settled as answered elsewhere. Any error prints nothing, and the terminal's dialog decides.
  */

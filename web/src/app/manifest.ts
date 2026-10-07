@@ -1,4 +1,5 @@
 import type { MetadataRoute } from "next";
+import { DESCRIPTION } from "@/lib/landing";
 
 // Install metadata for the web page, the iOS and desktop app (SPEC.md, "Platforms"). The icons
 // and the window colours are DESIGN.md's dark `bg`, like the Android launcher icon; the page's
@@ -16,7 +17,7 @@ export default function manifest(): MetadataRoute.Manifest {
     id: "/",
     name: "Starbridge",
     short_name: "Starbridge",
-    description: "Your AI quota windows and the decisions your agents need from you.",
+    description: DESCRIPTION,
     start_url: "/",
     scope: "/",
     display: "standalone",

@@ -31,6 +31,7 @@ import {
   UsageError,
 } from "./context";
 import { resolveSource } from "./decisions";
+import { killTree, resolveCommand, spawnable } from "./platform";
 
 /** Progress is reported at most this often; a heartbeat comes every RUN_HEARTBEAT_MS. */
 export const PROGRESS_MS = 10_000;
@@ -316,6 +317,14 @@ export async function runCommand(ctx: Ctx, opts: RunOpts): Promise<number> {
   const [bin, ...args] = opts.command;
   if (!bin) throw new UsageError("run needs the command after --: starbridge run ... -- <command>");
 
+  // On Windows `npm` is `npm.cmd`, which spawn finds only by its full name.
+  let start: ReturnType<typeof spawnable>;
+  try {
+    start = spawnable(resolveCommand(ctx.env, bin) ?? bin, args, ctx.env);
+  } catch (e) {
+    throw new UsageError((e as Error).message);
+  }
+
   const source = resolveSource({}, ctx.env, process.cwd());
   const reporter = new Reporter(
     {
@@ -334,7 +343,10 @@ export async function runCommand(ctx: Ctx, opts: RunOpts): Promise<number> {
 
   const stdout = opts.stdout ?? process.stdout;
   const stderr = opts.stderr ?? process.stderr;
-  const child: ChildProcess = spawn(bin, args, { stdio: ["inherit", "pipe", "pipe"] });
+  const child: ChildProcess = spawn(start.file, start.args, {
+    stdio: ["inherit", "pipe", "pipe"],
+    windowsVerbatimArguments: start.windowsVerbatimArguments,
+  });
   reporter.start();
   const update = (p: RunProgress | null) => reporter.update(p);
   pass(child.stdout, stdout, new ProgressParser(), update);
@@ -343,7 +355,7 @@ export async function runCommand(ctx: Ctx, opts: RunOpts): Promise<number> {
   // Ctrl-C at a terminal reaches the command itself; SIGTERM to this process may not.
   let grace: ReturnType<typeof setTimeout> | undefined;
   const onAbort = () => {
-    grace = setTimeout(() => child.kill("SIGTERM"), GRACE_MS);
+    grace = setTimeout(() => killTree(child, "SIGTERM"), GRACE_MS);
   };
   ctx.signal?.addEventListener("abort", onAbort, { once: true });
 

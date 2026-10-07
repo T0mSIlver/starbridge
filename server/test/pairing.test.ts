@@ -13,6 +13,7 @@ import {
   toB64,
   verifyDirectory,
 } from "@starbridge/protocol";
+import { DEFAULT_LIMITS } from "../src/limits";
 import {
   type Account,
   append,
@@ -112,6 +113,20 @@ test("a machine pairs and gets a working token; the device and the machine check
     member: "devbox",
     role: "machine",
   });
+});
+
+test("30 pairings behind one address each poll their result for over a minute (#716)", async () => {
+  const s = await makeServer();
+  const waiting = [];
+  for (let i = 0; i < 30; i++) waiting.push(await request(s));
+  // Three polls each: a pairing approved after 50 s has polled at 0, 25 and 50 s.
+  for (let round = 0; round < 3; round++)
+    for (const p of waiting) {
+      const r = await s.call("GET", `/v1/pairings/${p.code.rendezvous}/result`, {
+        headers: { "x-claim": p.claim },
+      });
+      expect(r.status).toBe(204);
+    }
 });
 
 test("the result refuses a wrong claim", async () => {
@@ -248,9 +263,10 @@ test("an approval naming another account is refused", async () => {
 test("pairing requests are rate-limited per IP", async () => {
   const s = await makeServer();
   const statuses: number[] = [];
-  for (let i = 0; i < 11; i++) statuses.push((await request(s, `m${i}`)).r.status);
-  expect(statuses.slice(0, 10).every((x) => x === 201)).toBe(true);
-  expect(statuses[10]).toBe(429);
+  const [n] = DEFAULT_LIMITS.pairingPosts;
+  for (let i = 0; i <= n; i++) statuses.push((await request(s, `m${i}`)).r.status);
+  expect(statuses.slice(0, n).every((x) => x === 201)).toBe(true);
+  expect(statuses[n]).toBe(429);
 });
 
 test("a second device pairs with its own session, which then belongs to it", async () => {

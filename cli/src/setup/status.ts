@@ -2,21 +2,15 @@
 import type { Status } from "../agent/api";
 import { AgentClient } from "../agent/client";
 import { REMOVED } from "../api";
+import { deliverable } from "../decisions";
 import { VERSION } from "../version";
+import { AGENT_IDS, AGENTS, found as agentFound, installed, removedAgents } from "./agents";
 import { findCodexbar, listProviders, probe } from "./codexbar";
-import {
-  codexSkill,
-  hasCodex,
-  hasOpencode,
-  hasPi,
-  opencodeState,
-  PI_PACKAGE,
-  piPackage,
-} from "./harnesses";
+import { codexSkill, opencodeState, PI_PACKAGE, piPackage } from "./harnesses";
 import { autoUpdate, hasClaude, PLUGINS, pluginState } from "./plugins";
 import { lingering, serviceState } from "./service";
 import { probeLines } from "./setup";
-import type { Sys } from "./sys";
+import { otherCopies, type Sys } from "./sys";
 
 async function agentStatus(sys: Sys): Promise<Status | string> {
   const agent = AgentClient.for(sys.ctx);
@@ -32,6 +26,7 @@ export async function status(sys: Sys): Promise<number> {
   const { ctx } = sys;
   const out = ctx.out;
   out(`starbridge ${VERSION} (${sys.self.join(" ")})`);
+  for (const line of await otherCopies(sys)) out(line);
 
   const machine = ctx.store.machine();
   out(
@@ -39,6 +34,20 @@ export async function status(sys: Sys): Promise<number> {
       ? `Paired: "${machine.name}" (${machine.id}) on ${machine.server}`
       : "Paired: no (run `starbridge setup`)",
   );
+
+  // An answer whose session's `wait` died sits unseen: no session that is not waiting notices
+  // it (#557).
+  const st = ctx.store.state();
+  const unseen = Object.entries(st.answers).filter(
+    ([id, a]) => !a.seen && !st.asked[id]?.held && deliverable(st, id),
+  );
+  if (unseen.length > 0) out(`Answers no session has taken: ${unseen.length}`);
+  for (const [id] of unseen) {
+    const a = st.asked[id];
+    out(
+      `  ${id} (${a?.question ?? ""})${a?.session ? ` from session ${a.session}` : ""}: \`starbridge wait ${id}\` prints it`,
+    );
+  }
 
   const agent = await agentStatus(sys);
   if (typeof agent === "string") out(`Agent: ${agent}`);
@@ -75,45 +84,62 @@ export async function status(sys: Sys): Promise<number> {
 
   const cfg = ctx.store.agentConfig().quota;
   const found = findCodexbar(sys, cfg?.codexbar);
-  out(`CodexBar: ${found?.path ?? "not found (`starbridge setup` installs it)"}`);
+  const missing =
+    sys.platform === "win32"
+      ? "none (no Windows build)"
+      : "not found (`starbridge setup` installs it)";
+  out(`CodexBar: ${found?.path ?? missing}`);
   if (found && cfg?.providers?.length) {
     const list = await listProviders(sys, found.path);
     for (const line of probeLines(sys, await probe(found.path, cfg.providers, list))) out(line);
   }
 
   if (!hasClaude(sys)) out("Claude Code: not on the PATH");
-  else {
-    const p = await pluginState(sys);
-    if (!p) out("Claude Code: `claude plugin list` failed");
-    else {
+  const removed = removedAgents(ctx);
+  for (const id of AGENT_IDS) {
+    if (!agentFound(sys, id)) continue;
+    if (removed.includes(id)) {
+      out(`${AGENTS[id]}: left out (\`starbridge setup --agent ${id}\` brings it back)`);
+      continue;
+    }
+    // Claude Code's state costs two `claude` runs: read once, and its own error shown as is.
+    const claude = id === "claude" ? await pluginState(sys) : undefined;
+    if (typeof claude === "string") {
+      out(`Claude Code: ${claude}`);
+      continue;
+    }
+    const isIn = claude ? PLUGINS.every((pid) => claude.plugins[pid]) : await installed(sys, id);
+    // An agent installed after setup: nothing installs in the background (#750).
+    if (!isIn) {
+      out(`${AGENTS[id]} found, Starbridge not installed: run \`starbridge setup --refresh\``);
+      continue;
+    }
+    if (claude) {
       out(
-        `Claude Code marketplace: ${p.marketplace ? "added" : "not added"}${autoUpdate(sys) ? ", auto-update on" : ""}`,
+        `Claude Code marketplace: ${claude.marketplace ? "added" : "not added"}${autoUpdate(sys) ? ", auto-update on" : ""}`,
       );
-      for (const id of PLUGINS) {
-        const x = p.plugins[id];
+      for (const pid of PLUGINS) {
+        const x = claude.plugins[pid];
         out(
-          `  ${id}: ${x ? `${x.version ?? "installed"}${x.enabled ? "" : ", disabled"}` : "not installed"}`,
+          `  ${pid}: ${x ? `${x.version ?? "installed"}${x.enabled ? "" : ", disabled"}` : "not installed"}`,
         );
       }
+    } else if (id === "codex") {
+      const state = codexSkill(sys);
+      out(
+        `Codex skill: ${state === "current" ? "installed" : state === "outdated" ? "outdated (`starbridge setup --refresh` updates it)" : "another skill named starbridge"}`,
+      );
+    } else if (id === "pi") {
+      const pi = piPackage(sys);
+      out(
+        `Pi package: ${pi === PI_PACKAGE ? "installed" : `${pi} (\`starbridge setup\` moves it to v${VERSION})`}`,
+      );
+    } else {
+      const state = opencodeState(sys);
+      out(
+        `opencode skill and plugin: ${state === "current" ? "installed" : state === "outdated" ? "outdated (`starbridge setup --refresh` updates them)" : "not managed by starbridge (another skill or plugin named starbridge)"}`,
+      );
     }
-  }
-  if (hasCodex(sys)) {
-    const state = codexSkill(sys);
-    out(
-      `Codex skill: ${state === "current" ? "installed" : state === "outdated" ? "outdated (`starbridge setup` updates it)" : state === "foreign" ? "another skill named starbridge" : "not installed"}`,
-    );
-  }
-  if (hasPi(sys)) {
-    const pi = piPackage(sys);
-    out(
-      `Pi package: ${pi === PI_PACKAGE ? "installed" : pi ? `${pi} (\`starbridge setup\` moves it to v${VERSION})` : "not installed"}`,
-    );
-  }
-  if (hasOpencode(sys)) {
-    const state = opencodeState(sys);
-    out(
-      `opencode skill and plugin: ${state === "current" ? "installed" : state === "outdated" ? "outdated (`starbridge setup` updates them)" : "not installed"}`,
-    );
   }
   return 0;
 }

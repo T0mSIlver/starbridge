@@ -128,6 +128,48 @@
   color: var(--fg3);
 }
 
+/* The docs' images are phone screenshots, shown centred at about a phone's width. */
+.text img {
+  display: block;
+  width: min(100%, 300px);
+  height: auto;
+  margin-inline: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+}
+
+.text figure {
+  margin: 0;
+}
+
+.text figcaption {
+  margin-top: var(--s2);
+  text-align: center;
+  color: var(--fg2);
+  font-size: 0.875em;
+}
+
+/* A screenshot with a twin per theme shows the one for the page's colours: the browser's, unless
+   the Colours setting forces one. Dark is the default, as on the landing page. */
+.text img[data-scheme="light"],
+:global(:root[data-theme="light"]) .text img[data-scheme="dark"] {
+  display: none;
+}
+
+:global(:root[data-theme="light"]) .text img[data-scheme="light"] {
+  display: block;
+}
+
+@media (prefers-color-scheme: light) {
+  :global(:root:not([data-theme="dark"])) .text img[data-scheme="light"] {
+    display: block;
+  }
+
+  :global(:root:not([data-theme="dark"])) .text img[data-scheme="dark"] {
+    display: none;
+  }
+}
+
 .text ul,
 .text ol {
   display: grid;

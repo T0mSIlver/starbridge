@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import { dirname, join, normalize } from "node:path";
 import { Marked, type Tokens } from "marked";
 import { REPO } from "./links";
@@ -12,6 +12,7 @@ export const DOCS = [
   { slug: "cli", file: "cli/README.md", title: "The CLI" },
   { slug: "tell-your-agents", file: "docs/tell-your-agents.md", title: "Agent instructions" },
   { slug: "self-host", file: "server/README.md", title: "Self-host" },
+  { slug: "faq", file: "docs/faq.md", title: "FAQ" },
 ] as const;
 
 export type Doc = (typeof DOCS)[number];
@@ -36,9 +37,22 @@ function rewrite(file: string, href: string): string {
 const attr = (s: string) =>
   s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c] ?? c);
 
-/** Reads a doc, as HTML without its first heading. */
+// Each doc's HTML, kept until its file changes: every page renders per request for its CSP nonce
+// (proxy.ts), but the nonce is in the layout, not in a doc's HTML (#588).
+const rendered = new Map<string, { mtime: number; html: string }>();
+
+/** A doc as HTML without its first heading, parsed again only when its file changes. */
 export function renderDoc(doc: Doc): string {
-  const source = readFileSync(join(ROOT, doc.file), "utf8");
+  const path = join(ROOT, doc.file);
+  const mtime = statSync(path).mtimeMs;
+  const hit = rendered.get(doc.file);
+  if (hit?.mtime === mtime) return hit.html;
+  const html = parse(doc, readFileSync(path, "utf8"));
+  rendered.set(doc.file, { mtime, html });
+  return html;
+}
+
+function parse(doc: Doc, source: string): string {
   const body = source.replace(/^# .*\n/, "");
   const ids = new Map<string, number>();
   const marked = new Marked({
@@ -64,6 +78,31 @@ export function renderDoc(doc: Doc): string {
         const external = /^https?:/.test(to) ? ' rel="noreferrer"' : "";
         const titled = t ? ` title="${attr(t)}"` : "";
         return `<a href="${attr(to)}"${titled}${external}>${this.parser.parseInline(tokens)}</a>`;
+      },
+      // An image alone in its paragraph with a title is a figure, which a <p> can't hold.
+      paragraph({ tokens }: Tokens.Paragraph) {
+        const [only] = tokens;
+        const inline = this.parser.parseInline(tokens);
+        if (tokens.length === 1 && only?.type === "image" && (only as Tokens.Image).title)
+          return `${inline}\n`;
+        return `<p>${inline}</p>\n`;
+      },
+      // An image under web/public, which the site serves from its root. A `-light` one comes with
+      // its `-dark` twin; the stylesheet shows the one for the page's theme (Docs.module.css). Its
+      // title, if any, is the caption under it.
+      image({ href, title: caption, text }: Tokens.Image) {
+        const target = normalize(join(dirname(doc.file), href));
+        if (!target.startsWith("web/public/"))
+          throw new Error(`${doc.file}: ${href} is not under web/public`);
+        const src = target.slice("web/public".length);
+        const light = /-light(\.\w+)$/;
+        const img = (s: string, scheme?: string) =>
+          `<img src="${attr(s)}" alt="${attr(text)}" loading="lazy"${scheme ? ` data-scheme="${scheme}"` : ""}>`;
+        const imgs = light.test(src)
+          ? img(src.replace(light, "-dark$1"), "dark") + img(src, "light")
+          : img(src);
+        if (!caption) return imgs;
+        return `<figure>${imgs}<figcaption>${attr(caption)}</figcaption></figure>`;
       },
     },
   });

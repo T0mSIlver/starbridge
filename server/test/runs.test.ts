@@ -2,7 +2,15 @@ import { expect, test } from "bun:test";
 import { type Decision, open, type Run, type SealedItem, seal } from "@starbridge/protocol";
 import { DEFAULT_LIMITS, type Limits } from "../src/limits";
 import { sweepStorage } from "../src/retention";
-import { type Actor, at, directory, makeServer, pair, setupAccount } from "../test-support/app";
+import {
+  type Actor,
+  at,
+  directory,
+  makeServer,
+  pair,
+  setupAccount,
+  signIn,
+} from "../test-support/app";
 
 async function setup(limits: Partial<Limits> = {}) {
   const s = await makeServer({ limits: { ...DEFAULT_LIMITS, ...limits } });
@@ -111,13 +119,45 @@ test("a run update's boxes stay within runBytes", async () => {
   expect(r.json.error).toBe("too-large");
 });
 
+test("runBytes counts per device, so a run reaches every device", async () => {
+  const probe = await setup();
+  const box = run(probe.devbox, probe.phone, "r0").boxes[0]?.box.length ?? 0;
+  const { s, acct, phone, devbox } = await setup({ runBytes: Math.ceil(box * 1.2) });
+  const laptop = await pair(s, acct, "laptop", "device", await signIn(s));
+  const body: Run = {
+    v: 1,
+    id: "r1",
+    to: [phone.id, laptop.id],
+    title: "Mac e2e",
+    reason: "uses your session and keyboard",
+    source: { machine: devbox.id, project: "starbridge", session: "s1" },
+    startedAt: at,
+    at,
+  };
+  const item = seal("run", body, key(devbox), [phone.member, laptop.member]);
+  const r = await s.call("POST", "/v1/items", { token: devbox.token, body: item });
+  expect(r.status).toBe(201);
+
+  // Within the total for two devices, but one device's box is over its share (#719).
+  const [a, b] = item.boxes as [{ to: string; box: string }, { to: string; box: string }];
+  const lopsided = {
+    ...item,
+    boxes: [
+      { ...a, box: a.box + "A".repeat(Math.ceil(box / 2)) },
+      { ...b, box: b.box.slice(0, Math.floor(box / 2)) },
+    ],
+  };
+  const big = await s.call("POST", "/v1/items", { token: devbox.token, body: lopsided });
+  expect([big.status, big.json.error]).toEqual([413, "too-large"]);
+});
+
 test("runs are dropped a day after their last update", async () => {
   const { s, phone, devbox } = await setup();
   await s.call("POST", "/v1/items", { token: devbox.token, body: run(devbox, phone, "r1") });
   const count = async () =>
     (await s.call("GET", "/v1/items?kind=run", { token: phone.token })).json.items.length;
-  sweepStorage(s.deps.db, DEFAULT_LIMITS, Date.now() + 23 * 3_600_000);
+  await sweepStorage(s.deps.db, DEFAULT_LIMITS, Date.now() + 23 * 3_600_000);
   expect(await count()).toBe(1);
-  sweepStorage(s.deps.db, DEFAULT_LIMITS, Date.now() + 25 * 3_600_000);
+  await sweepStorage(s.deps.db, DEFAULT_LIMITS, Date.now() + 25 * 3_600_000);
   expect(await count()).toBe(0);
 });

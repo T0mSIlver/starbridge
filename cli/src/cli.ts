@@ -2,45 +2,76 @@ import { readFileSync } from "node:fs";
 import { parseArgs } from "node:util";
 import { ProtocolError, ready, type SessionLink } from "@starbridge/protocol";
 import { AgentError, Interrupted, withAgent } from "./agent/client";
-import { AgentGone, answersVia, askVia, quotaVia, waitingVia, waitVia } from "./agent/commands";
+import {
+  AgentGone,
+  answersAllVia,
+  answersVia,
+  askVia,
+  quotaVia,
+  waitingVia,
+  waitVia,
+} from "./agent/commands";
 import { runAgent } from "./agent/main";
 import { ApiError, sandboxHint, Unreachable } from "./api";
 import { StateFileError } from "./config";
 import { type Ctx, UsageError } from "./context";
-import { type AskInput, answers, ask, resolveSource, settle, setWaiting, wait } from "./decisions";
+import {
+  type AskInput,
+  answers,
+  answersAll,
+  ask,
+  decisionsOpen,
+  resolveSource,
+  settle,
+  setWaiting,
+  sinceTime,
+  wait,
+} from "./decisions";
 import { hookAskUser, hookPermission, hookQuestion, hookSettle } from "./hook";
 import { pair } from "./pair";
 import { pushOnce, quotaPush } from "./quota";
 import { installKind, ReleaseError } from "./release";
 import { runCommand } from "./run";
 import { configCommand } from "./settings";
+import { AGENT_IDS, type AgentId, isAgentId } from "./setup/agents";
 import { refresh, setup } from "./setup/setup";
 import { status } from "./setup/status";
 import { defaults, makeSys, type Prompt, terminalPrompt } from "./setup/sys";
-import { uninstall } from "./setup/uninstall";
+import { uninstall, uninstallAgent } from "./setup/uninstall";
 import { update } from "./update";
 import { VERSION } from "./version";
 
 const HELP = `starbridge: post decisions to your devices, report runs, upload quota windows
 
   starbridge setup [--yes] [--server <url>] [--name <name>] [--providers <a,b>]
-                   [--no-quota] [--no-service] [--no-plugin]
+                   [--no-quota] [--no-service] [--no-agents]
+  starbridge setup --agent <claude|codex|pi|opencode>
   starbridge setup --refresh
-      Set this machine up, or check and repair it: pair it, find or install CodexBar and pick
-      the providers to upload, install the agent as a user service (systemd or launchd), install
-      Starbridge in each agent found (the Claude Code plugins, the Codex skill, the Pi package;
-      --no-plugin skips them), and upload a first quota snapshot. Each step asks first; --yes
-      takes every default, which installs CodexBar when it is missing, and the plugins.
+      Set this machine up, or check and repair it: pair it, install Starbridge in each agent
+      found (the Claude Code plugins, the Codex skill and rule, the Pi package, the opencode
+      skill and plugin; --no-agents skips them), find or install CodexBar and pick the
+      providers to upload, install the agent as a user service (systemd, launchd or a
+      Scheduled Task), and upload a first quota snapshot. It asks only before installing
+      CodexBar, which providers to send, whether the agent runs after logout, and whether to
+      send a test decision; --yes, or no terminal, takes every default.
+      --server <url>  the server to pair with (default: $STARBRIDGE_SERVER, else this
+                      machine's, else https://starbridge.run); asks before leaving another
+                      server this machine is paired with
+      --agent <name>  only Starbridge in that agent, also one uninstall --agent removed
       --refresh only brings the files setup wrote into other tools (the service, the Codex skill
-      and rule, the opencode skill and plugin) to this version, and restarts the agent.
+      and rule, the opencode skill and plugin) to this version, installs Starbridge in an agent
+      found since, and restarts the agent.
 
   starbridge status
       Print the versions, the pairing, the agent and its service, the server, each provider, the
       Claude Code plugins, the Codex skill, the Pi package and the sessions the agent sees.
 
   starbridge uninstall [--yes] [--purge]
-      Remove the agent service, the Claude Code plugins and this binary, and ask your devices to revoke this
-      machine. Asks before it deletes the keys and state (--purge: without asking). CodexBar stays.
+  starbridge uninstall --agent <claude|codex|pi|opencode>
+      Remove the agent service, Starbridge from every agent and this binary, and ask your
+      devices to revoke this machine. Asks before it deletes the keys and state (--purge:
+      without asking). CodexBar stays. --agent removes Starbridge from that agent only, and
+      setup leaves it out until \`setup --agent\` brings it back.
 
   starbridge pair [--server <url>] [--name <name>] [--force]
       Make this machine's keys and print a pairing code to type on a device.
@@ -83,15 +114,19 @@ const HELP = `starbridge: post decisions to your devices, report runs, upload qu
       notifies them once more), or back to working on other things.
 
   starbridge settle <decision id> [--outcome elsewhere|withdrawn]
+  starbridge settle --session <id> | --all [--yes] [--outcome elsewhere|withdrawn]
       Close a decision without a Starbridge answer: answered on its --answer-in page
       (elsewhere, the default for those) or no longer needed (withdrawn). Devices move it
-      out of the inbox.
+      out of the inbox. --session closes every open decision that session asked, --all every
+      one this machine asked, after asking (--yes skips the question), at the pace the
+      server allows: a looping agent's thousands take over an hour.
 
-  starbridge wait [<decision id>] [--timeout <duration>] [--json]
+  starbridge wait [<decision id>] [--timeout <duration>] [--json] [--no-mark]
       Print the answer, or with no id the next answer to a decision this session asked (any
       decision from this machine, outside an agent's session).
-      With an id, marks the decision waiting first. Waits until --timeout, else forever;
-      exits 2 when --timeout passed.
+      With an id, marks the decision waiting first, which notifies the owner once more;
+      --no-mark collects an answer that is not blocking anything yet without it. Waits until
+      --timeout, else forever; exits 2 when --timeout passed.
 
   starbridge answers --session <id> [--wait <seconds>]
       For the Claude Code mod: print, as JSON lines, the unconfirmed answers to decisions that
@@ -100,6 +135,15 @@ const HELP = `starbridge: post decisions to your devices, report runs, upload qu
   starbridge answers --session <id> --ack <ack>...
       For the Claude Code mod: confirm it submitted these lines (each line's "ack"), so they
       are not printed again.
+
+  starbridge answers --all [--follow] [--since <time or duration>]
+      For an orchestrator: print, as JSON lines, every answer to a decision this machine asked,
+      with its question and the session and project that asked; --follow keeps printing new
+      ones until interrupted. It only reads: each answer still reaches the session that asked.
+
+  starbridge decisions --open
+      Print, as JSON lines, the questions this machine asked that are still open, with the
+      session and project that asked, so an orchestrator does not ask the same thing again.
 
   starbridge run --title <text> --reason <text> -- <command> [<arg>...]
       Run the command, its output passed through unchanged, and show it on every device:
@@ -114,7 +158,7 @@ const HELP = `starbridge: post decisions to your devices, report runs, upload qu
       Run \`codexbar usage --format json\` for each provider (or for every enabled one),
       compute pace and alerts, and post a sealed snapshot every interval.
 
-  starbridge agent [--provider <name>]... [--interval 5m] [--codexbar <path>] [--no-quota]
+  starbridge agent [--provider <name>]... [--interval 5m] [--codexbar <path>] [--no-quota] [--log <file>]
       Run the machine's agent (as a user service): it holds the keys and the server
       connection, uploads quota snapshots every interval, and hands each Claude Code session
       its answers over a unix socket. Flags override agent.json in the config directory.
@@ -157,11 +201,16 @@ const HELP = `starbridge: post decisions to your devices, report runs, upload qu
 Keys and state live in $STARBRIDGE_CONFIG_DIR, else $XDG_CONFIG_HOME/starbridge, else
 ~/.config/starbridge.`;
 
-/** Questions on the terminal; without one, setup needs --yes. */
-function interactive(): Prompt {
-  if (!process.stdin.isTTY)
-    throw new UsageError("no terminal to ask on: pass --yes to take every default");
-  return terminalPrompt();
+/** Questions on the terminal; without one, every question takes its default, as --yes. */
+function noTerminal(): boolean {
+  return !process.stdin.isTTY;
+}
+
+/** `--agent <name>`: one of the agents setup installs Starbridge in. */
+function agentId(name: string): AgentId {
+  if (!isAgentId(name))
+    throw new UsageError(`--agent takes one of ${AGENT_IDS.join(", ")}, not ${name}`);
+  return name;
 }
 
 /** `--session-link remote-control=https://claude.ai/code/session_…`; the schema checks both. */
@@ -275,9 +324,24 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
         const { values, positionals } = parseArgs({
           args: rest,
           allowPositionals: true,
-          options: { outcome: { type: "string" } },
+          options: {
+            outcome: { type: "string" },
+            session: { type: "string" },
+            all: { type: "boolean" },
+            yes: { type: "boolean", short: "y" },
+          },
         });
-        return await settle(ctx, { id: positionals[0], ...values });
+        const { yes, ...v } = values;
+        return await settle(ctx, {
+          id: positionals[0],
+          ...v,
+          confirm: async (q) => {
+            if (yes) return true;
+            if (!process.stdin.isTTY)
+              throw new UsageError("no terminal to ask on: pass --yes to settle them all");
+            return terminalPrompt().confirm(q, false);
+          },
+        });
       }
       case "waiting":
       case "working": {
@@ -285,7 +349,7 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
         const opts = { id: positionals[0], state: command };
         return await withAgent(
           ctx,
-          (agent) => waitingVia(agent, opts),
+          (agent) => waitingVia(agent, opts, ctx),
           () => setWaiting(ctx, opts),
         );
       }
@@ -295,7 +359,11 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
         const { values, positionals } = parseArgs({
           args: rest,
           allowPositionals: true,
-          options: { timeout: { type: "string" }, json: { type: "boolean" } },
+          options: {
+            timeout: { type: "string" },
+            json: { type: "boolean" },
+            "no-mark": { type: "boolean" },
+          },
         });
         const id = positionals[0];
         // Without an id, in an agent's session, only that session's answers: the others are due
@@ -317,8 +385,26 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
             session: { type: "string" },
             wait: { type: "string" },
             ack: { type: "string", multiple: true },
+            all: { type: "boolean" },
+            follow: { type: "boolean" },
+            since: { type: "string" },
           },
         });
+        if (values.all) {
+          if (values.session !== undefined || values.wait !== undefined || values.ack)
+            throw new UsageError("--all takes no --session, --wait or --ack");
+          const opts = {
+            follow: values.follow,
+            ...(values.since !== undefined ? { since: sinceTime(values.since, ctx.now()) } : {}),
+          };
+          return await withAgent(
+            ctx,
+            (agent) => answersAllVia(ctx, agent, opts, (printed) => answersAll(ctx, opts, printed)),
+            () => answersAll(ctx, opts),
+          );
+        }
+        if (values.follow || values.since !== undefined)
+          throw new UsageError("--follow and --since go with --all");
         const target = values.session;
         if (!target) throw new UsageError("answers needs --session");
         if (values.ack && values.wait !== undefined) throw new UsageError("--ack takes no --wait");
@@ -327,6 +413,11 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
           (agent) => answersVia(ctx, agent, target, values),
           () => answers(ctx, values),
         );
+      }
+      case "decisions": {
+        const { values } = parseArgs({ args: rest, options: { open: { type: "boolean" } } });
+        if (!values.open) throw new UsageError("usage: starbridge decisions --open");
+        return decisionsOpen(ctx);
       }
       case "quota": {
         const [sub, ...args] = rest;
@@ -361,17 +452,23 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
             providers: { type: "string" },
             "no-quota": { type: "boolean" },
             "no-service": { type: "boolean" },
+            "no-agents": { type: "boolean" },
+            // The name before #750, kept for scripts.
             "no-plugin": { type: "boolean" },
+            agent: { type: "string" },
             refresh: { type: "boolean" },
           },
         });
+        const agent = v.agent === undefined ? undefined : agentId(v.agent);
         if (v.refresh) {
           for (const line of await refresh(makeSys(ctx, defaults))) ctx.out(line);
           return 0;
         }
-        const sys = makeSys(ctx, v.yes ? defaults : interactive());
+        const yes = v.yes || noTerminal();
+        const sys = makeSys(ctx, yes ? defaults : terminalPrompt());
         return await setup(sys, {
-          ...(v.yes ? { yes: true } : {}),
+          ...(yes ? { yes: true } : {}),
+          ...(agent ? { agent } : {}),
           ...(v.server ? { server: v.server } : {}),
           ...(v.name ? { name: v.name } : {}),
           ...(v.providers !== undefined
@@ -384,7 +481,7 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
             : {}),
           ...(v["no-quota"] ? { noQuota: true } : {}),
           ...(v["no-service"] ? { noService: true } : {}),
-          ...(v["no-plugin"] ? { noPlugin: true } : {}),
+          ...(v["no-agents"] || v["no-plugin"] ? { noAgents: true } : {}),
         });
       }
       case "status":
@@ -393,12 +490,15 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
       case "uninstall": {
         const { values: v } = parseArgs({
           args: rest,
-          options: { yes: { type: "boolean", short: "y" }, purge: { type: "boolean" } },
+          options: {
+            yes: { type: "boolean", short: "y" },
+            purge: { type: "boolean" },
+            agent: { type: "string" },
+          },
         });
-        return await uninstall(makeSys(ctx, v.yes ? defaults : interactive()), {
-          purge: v.purge,
-          install: installKind(),
-        });
+        const sys = makeSys(ctx, v.yes || noTerminal() ? defaults : terminalPrompt());
+        if (v.agent !== undefined) return await uninstallAgent(sys, agentId(v.agent));
+        return await uninstall(sys, { purge: v.purge, install: installKind() });
       }
       case "run": {
         // Everything after `--` is the command, flags included.
@@ -419,9 +519,11 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
             interval: { type: "string" },
             codexbar: { type: "string" },
             "no-quota": { type: "boolean" },
+            log: { type: "string" },
           },
         });
         return await runAgent(ctx, {
+          ...(values.log ? { log: values.log } : {}),
           ...(values.provider ? { providers: values.provider } : {}),
           ...(values.interval ? { interval: values.interval } : {}),
           ...(values.codexbar ? { codexbar: values.codexbar } : {}),

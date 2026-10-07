@@ -1,0 +1,36 @@
+# A self-hosted Starbridge: the server and the web app, for a reverse proxy on the same host
+# (server/README.md, "Set it up"). From the repository root:
+#   docker compose -f server/compose.yaml up -d --build
+# The settings go in server/.env, next to this file.
+name: starbridge
+
+services:
+  server:
+    build:
+      context: ..
+      dockerfile: server/Dockerfile
+    image: starbridge-server
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      TRUST_PROXY: "1"
+    volumes:
+      - data:/data
+    # Only the reverse proxy reaches it.
+    ports:
+      - "127.0.0.1:8080:8080"
+
+  web:
+    build:
+      context: ..
+      dockerfile: web/Dockerfile
+    image: starbridge-web
+    restart: unless-stopped
+    # Only the public origin from .env, which the install scripts it serves pair with.
+    environment:
+      PUBLIC_URL: ${PUBLIC_URL:?set PUBLIC_URL in server/.env}
+    ports:
+      - "127.0.0.1:3000:3000"
+
+volumes:
+  data:

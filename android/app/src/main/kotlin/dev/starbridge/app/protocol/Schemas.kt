@@ -21,7 +21,7 @@ const val RECOVERY = "recovery"
 private val B64_RE = Regex("^[A-Za-z0-9_-]+$")
 private val ID_RE = Regex("^[A-Za-z0-9_-]{1,64}$")
 // zod's iso.datetime({ offset: true }).
-private val TIME_RE = Regex("""^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})$""")
+private val TIME_RE = Regex("""^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$""")
 
 internal fun schema(ok: Boolean, what: String) {
     if (!ok) throw ProtocolException("bad-schema", what)
@@ -124,6 +124,7 @@ val SIGNER_ROLE = mapOf(
     "settled" to "machine",
     "waiting" to "machine",
     "run" to "machine",
+    "snooze" to "device",
 )
 val ITEM_KINDS = SIGNER_ROLE.keys
 val KINDS = setOf("directory") + ITEM_KINDS
@@ -150,6 +151,8 @@ interface ItemBody {
     val recipients: List<String>
     /** The directory head a machine signed into it; devices sign theirs elsewhere. */
     val dir: DirectoryHead? get() = null
+    /** A `wake` kind's time, which the item's `wakeAt` hint repeats (ITEM_KINDS in schemas.ts). */
+    val wakeAt: String? get() = null
 }
 
 /** `body` is the JSON text exactly as signed; verifiers check the signature before parsing it. */
@@ -183,6 +186,10 @@ data class SealedItem(
     val from: String,
     val re: String? = null,
     val boxes: List<SealedBox>,
+    /** A `wake` kind's time: the server pushes every device once then. */
+    val wakeAt: String? = null,
+    /** A decision's images, each sealed once for every device, in its body's order (#685). */
+    val blobs: List<String>? = null,
 ) {
     fun check() {
         schema(v == 1, "v")
@@ -190,6 +197,12 @@ data class SealedItem(
         id(id, "id")
         id(from, "from")
         re?.let { id(it, "re") }
+        wakeAt?.let { time(it, "wakeAt") }
+        blobs?.let { schema(it.size <= 4, "blobs") }
+        for (b in blobs.orEmpty()) {
+            schema(b.length <= BLOB_MAX, "blobs")
+            b64(b, "blobs")
+        }
         schema(boxes.size in 1..64, "boxes")
         for (b in boxes) {
             id(b.to, "to")
@@ -227,7 +240,7 @@ data class Source(
     val session: String,
     val sessionTitle: String? = null,
     val links: List<SessionLink>? = null,
-    /** server, desktop, laptop or cloud; older machines omit it (MachineKind in schemas.ts). */
+    /** server, desktop, laptop or cloud, once the machine recorded one (MachineKind in schemas.ts). */
     val machineKind: String? = null,
 ) {
     fun check() {
@@ -248,6 +261,9 @@ data class Source(
     }
 }
 
+/** An image's blob, as base64url, at most (BLOB_MAX in schemas.ts). */
+const val BLOB_MAX = 512 * 1024 + 64
+
 /** PNG or JPEG only: never SVG, which can carry script (DecisionImage in schemas.ts). */
 val IMAGE_TYPES = setOf("image/png", "image/jpeg")
 private val HTTPS_URL_RE = Regex("^https://[\\x21-\\x7e]+$")
@@ -257,14 +273,18 @@ data class DecisionImage(
     val type: String,
     val width: Int,
     val height: Int,
-    val data: String,
+    /** The blob's secretbox key and its hash, which open and check the item's blob (#685). */
+    val key: String,
+    val hash: String,
     val alt: String? = null,
 ) {
     fun check() {
         schema(type in IMAGE_TYPES, "images.type")
         schema(width in 1..8192 && height in 1..8192, "images.size")
-        schema(data.length <= 512 * 1024, "images.data")
-        b64(data, "images.data")
+        schema(key.length == 43, "images.key")
+        b64(key, "images.key")
+        schema(hash.length == 43, "images.hash")
+        b64(hash, "images.hash")
         alt?.let { len(it, 0, 300, "images.alt") }
     }
 }
@@ -288,16 +308,16 @@ data class Decision(
     val context: String,
     val options: List<String>,
     val recommended: String? = null,
-    /** claude-code, codex, pi, or a newer agent; older machines omit it. */
+    /** claude-code, codex, pi, or a newer agent, when the machine can tell. */
     val agent: String? = null,
     val source: Source,
     val images: List<DecisionImage>? = null,
     val links: List<DecisionLink>? = null,
     /** The page the owner answers on instead of Starbridge (answerIn in schemas.ts). */
     val answerIn: DecisionLink? = null,
-    /** The machine takes a typed reply in place of an option (#201); older machines omit it. */
+    /** The machine takes a typed reply in place of an option (#201). */
     val replies: Boolean? = null,
-    /** With answerIn: the machine takes a Done answer (#539); older machines omit it. */
+    /** With answerIn: the machine takes a Done answer (#539). */
     val done: Boolean? = null,
     override val dir: DirectoryHead? = null,
 ) : ItemBody {
@@ -522,6 +542,40 @@ data class Waiting(
         to.forEach { id(it, "to") }
         time(at, "at")
         schema(state in WAITING_STATES, "state")
+    }
+}
+
+/** SNOOZE_MAX_MS in schemas.ts: the latest a snooze may run. */
+const val SNOOZE_MAX_MS = 7L * 24 * 60 * 60 * 1000
+
+/**
+ * The owner put a decision off until [until] (Snooze in schemas.ts, #571): not an answer. Sealed
+ * to the machine that asked and every active device; the latest [at] wins. [until] at or before
+ * [at] brings it back now.
+ */
+@Serializable
+data class Snooze(
+    val v: Int,
+    override val id: String,
+    val decisionId: String,
+    val to: List<String>,
+    val until: String,
+    val at: String,
+    override val dir: DirectoryHead? = null,
+) : ItemBody {
+    override val re get() = decisionId
+    override val recipients get() = to
+    override val wakeAt get() = until
+
+    fun check() {
+        dir?.check()
+        schema(v == 1, "v")
+        id(id, "id")
+        id(decisionId, "decisionId")
+        schema(to.isNotEmpty(), "to")
+        to.forEach { id(it, "to") }
+        time(until, "until")
+        time(at, "at")
     }
 }
 

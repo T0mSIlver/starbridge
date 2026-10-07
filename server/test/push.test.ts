@@ -5,6 +5,7 @@ import * as ece from "http_ece";
 import webpush from "web-push";
 import { createApp } from "../src/app";
 import type { Config } from "../src/config";
+import { DEFAULT_LIMITS } from "../src/limits";
 import { checkTarget } from "../src/push";
 import { aggregate, dayOf } from "../src/usage";
 import {
@@ -80,6 +81,7 @@ beforeAll(async () => {
         return Response.json({ name: "projects/p/messages/1" });
       }
       if (url.pathname === "/wp/gone") return new Response("", { status: 410 });
+      if (url.pathname.startsWith("/wp/forbidden")) return new Response("", { status: 403 });
       if (url.pathname.startsWith("/slow/")) {
         // Holds the request for 400 ms, or until the server gives up on it.
         await new Promise((r) => {
@@ -293,6 +295,18 @@ test("Web Push direct: the browser decrypts the payload; VAPID signs the request
   expect((await s.call("GET", "/v1/push/vapid")).json).toEqual({ publicKey: vapid.publicKey });
 });
 
+test("a Web Push service's 403, another key's subscription, drops it; a distributor's stays (#567)", async () => {
+  const { s, acct, devbox } = await setup(vapidConfig());
+  const browser = browserSubscription("forbidden-browser");
+  const up = browserSubscription("forbidden-ntfy");
+  for (const body of [browser.target, { ...up.target, type: "unifiedpush" as const }])
+    await s.call("POST", "/v1/push/subscriptions", { token: acct.device.token, body });
+  await postDecision(s, acct, devbox, "d1");
+  await s.deps.push.idle();
+  const left = s.deps.db.query("SELECT type FROM push_subscriptions").all();
+  expect(left).toEqual([{ type: "unifiedpush" }]);
+});
+
 test("UnifiedPush goes straight to the distributor, encrypted when it has keys", async () => {
   const { s, acct, devbox } = await setup({});
   const up = browserSubscription("up");
@@ -373,6 +387,34 @@ test("the relay route is off unless RELAY_MODE, refuses UnifiedPush and private 
   expect(
     (await on.call("POST", "/v1/relay", { body: { ...msg, payload: "x".repeat(5000) } })).status,
   ).toBe(400);
+});
+
+test.each([
+  ["in all", { relaySends: 1 }],
+  ["per address", { relaySendsPerClient: 1 }],
+])("the relay caps Web Pushes in flight %s, then answers 503", async (_, cap) => {
+  const on = await makeServer({
+    ...fcmConfig(),
+    ...vapidConfig(),
+    relayMode: true,
+    limits: { ...DEFAULT_LIMITS, ...cap },
+  });
+  const slow = browserSubscription("x").target;
+  const relay = (path: string) =>
+    on.call("POST", "/v1/relay", {
+      body: { ...slow, endpoint: `${base()}${path}`, payload: "{}" },
+    });
+  const slowPath = `/slow/relay-${Object.keys(cap)[0]}`;
+  const first = relay(slowPath);
+  while (!seen.some((x) => x.path === slowPath)) await Bun.sleep(10);
+  const second = await relay("/wp/relay");
+  expect(second.status).toBe(503);
+  expect(second.headers.get("retry-after")).toBe("5");
+  // FCM goes to Google and never counts, so self-hosters' Android pushes still get through.
+  const fcm = { type: "fcm", endpoint: "tok-ok", payload: "{}" };
+  expect((await on.call("POST", "/v1/relay", { body: fcm })).json).toEqual({ result: "ok" });
+  expect((await first).json).toEqual({ result: "ok" });
+  expect((await relay("/wp/relay")).json).toEqual({ result: "ok" });
 });
 
 test("a relay without credentials of its own does not forward onward", async () => {

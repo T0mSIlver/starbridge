@@ -22,6 +22,9 @@ import { createApp } from "../src/app";
 import type { Config } from "../src/config";
 import { DEFAULT_LIMITS } from "../src/limits";
 
+/** For tests that run a server with tighter limits. */
+export { DEFAULT_LIMITS };
+
 export const at = "2026-10-04T12:00:00Z";
 
 export function testConfig(over: Partial<Config> = {}): Config {

@@ -2,6 +2,7 @@ package dev.starbridge.app
 
 import com.goterl.lazysodium.LazySodiumJava
 import com.goterl.lazysodium.SodiumJava
+import dev.starbridge.app.protocol.Images
 import dev.starbridge.app.protocol.Directories
 import dev.starbridge.app.protocol.Envelopes
 import dev.starbridge.app.protocol.JoinRequestBody
@@ -222,7 +223,7 @@ class ProtocolVectorsTest {
     @Test
     fun schemas() {
         val v = load("schemas.json")
-        for (kind in listOf("decision", "answer", "permission", "permission-answer", "settled", "waiting", "run", "quota")) {
+        for (kind in listOf("decision", "answer", "permission", "permission-answer", "settled", "waiting", "snooze", "run", "quota")) {
             for (case in v.getValue(kind).jsonArray.map { it.jsonObject }) {
                 val body = try {
                     parseBody(kind, case.getValue("body").toString())
@@ -250,6 +251,17 @@ class ProtocolVectorsTest {
         is JsonArray -> actual is JsonArray && actual.size == expected.size && expected.indices.all { reads(expected[it], actual[it]) }
         is JsonObject -> actual is JsonObject && expected.all { (k, e) -> reads(e, actual[k]) }
         else -> expected.jsonPrimitive.content == (actual as? JsonPrimitive)?.content && actual !is JsonNull
+    }
+
+    @Test
+    fun images() {
+        val images = Images(sodium)
+        for (c in load("images.json").getValue("cases").jsonArray.map { it.jsonObject }) {
+            val ref = c.getValue("ref").jsonObject
+            val open = { images.open(c.str("blob"), ref.str("key"), ref.str("hash")) }
+            assertEquals(c.str("name"), c.str("expect"), code { open() })
+            c.opt("plain")?.let { assertEquals(c.str("name"), it.str, toB64(open())) }
+        }
     }
 
     @Test

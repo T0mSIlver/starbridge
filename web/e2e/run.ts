@@ -62,6 +62,18 @@ function step(text: string) {
   console.log(`\n== ${text}`);
 }
 
+/**
+ * Picks an option of a Settings segmented control. Its radio hides inside the segment, which
+ * takes the click. Right after a navigation the click can land before the page subscribes to
+ * the setting, and React holds the radio unchecked until it does, so `check()` would fail;
+ * this waits for the checked state instead (#693).
+ */
+async function choose(page: Page, label: string) {
+  const radio = page.getByLabel(label, { exact: true });
+  await radio.click({ force: true });
+  await radio.and(page.locator(":checked")).waitFor();
+}
+
 /** Starts a process and collects its output; `waitFor` resolves on a matching line. */
 function start(
   name: string,
@@ -189,6 +201,47 @@ async function noWordsAsked(page: Page) {
   const text = await page.locator("body").innerText();
   const found = text.match(/\b(seed|phrase|words?)\b/i);
   if (found) throw new Error(`the page says "${found[0]}"`);
+}
+
+/**
+ * #630: a session name cut into a head and a tail keeps the space at the cut. Each half is a
+ * flex item, whose line would drop it ("Starbridgeorchestrator"). Measures the gap between the
+ * glyphs on either side of the cut; skips a head shown with an ellipsis.
+ */
+async function keepsSessionSpace(page: Page, at: string) {
+  const found = await page.evaluate(() => {
+    const glyph = (node: Node, i: number) => {
+      const r = document.createRange();
+      r.setStart(node, i);
+      r.setEnd(node, i + 1);
+      return r.getBoundingClientRect();
+    };
+    const rows: { name: string; gap: number | null }[] = [];
+    for (const el of document.querySelectorAll("[title]")) {
+      const [head, tail] = [...el.children] as HTMLElement[];
+      const name = el.getAttribute("title") ?? "";
+      if (el.children.length !== 2 || !head || !tail) continue;
+      if (`${head.textContent}${tail.textContent}` !== name) continue;
+      const h = head.firstChild;
+      const t = tail.firstChild;
+      const cut = head.textContent?.length ?? 0;
+      if (!h || !t || !/\s/.test(`${name[cut - 1]}${name[cut]}`)) continue;
+      if (head.scrollWidth > head.clientWidth) {
+        rows.push({ name, gap: null });
+        continue;
+      }
+      const last = (head.textContent ?? "").trimEnd().length - 1;
+      const first = (tail.textContent ?? "").length - (tail.textContent ?? "").trimStart().length;
+      if (last < 0 || first >= (tail.textContent ?? "").length) continue;
+      rows.push({ name, gap: glyph(t, first).left - glyph(h, last).right });
+    }
+    return rows;
+  });
+  const measured = found.filter((r) => r.gap !== null);
+  if (measured.length === 0) throw new Error(`no session name cut at a space to measure at ${at}`);
+  for (const r of measured)
+    if ((r.gap as number) < 2)
+      throw new Error(`"${r.name}" loses the space at its cut at ${at}: ${r.gap} px between words`);
 }
 
 /** What fails the run; contrast is only listed. */
@@ -324,6 +377,14 @@ async function main() {
   const landing = await visitor.goto(ORIGIN);
   const policy = landing?.headers()["content-security-policy"] ?? "";
   if (!policy.includes("'nonce-")) throw new Error(`expected a CSP with a nonce, got: ${policy}`);
+  // The server's HTML is the landing page itself, for link previews and a first paint (#694).
+  const html = (await landing?.text()) ?? "";
+  for (const part of [
+    "Know the moment your agent is stuck",
+    'property="og:image"',
+    policy.split("'nonce-")[1]?.split("'")[0] ?? "-",
+  ])
+    if (!html.includes(part)) throw new Error(`expected the landing page's HTML to hold ${part}`);
   await visitor.getByRole("heading", { name: /Know the moment your agent is stuck/ }).waitFor();
   await shoot(visitor, "landing");
   for (const [path, name] of [
@@ -336,7 +397,14 @@ async function main() {
     await visitor.goto(ORIGIN + path);
     await shoot(visitor, name);
   }
-  for (const path of ["/docs", "/docs/cli", "/docs/tell-your-agents", "/docs/self-host", "/sample"])
+  for (const path of [
+    "/docs",
+    "/docs/cli",
+    "/docs/tell-your-agents",
+    "/docs/self-host",
+    "/docs/faq",
+    "/sample",
+  ])
     await visitor.goto(ORIGIN + path, { waitUntil: "networkidle" });
   await visitor.close();
 
@@ -362,6 +430,8 @@ async function main() {
   await page.getByLabel(/I wrote this key down/).check();
   await page.getByRole("button", { name: "Continue" }).click();
   await page.getByRole("heading", { name: "Inbox" }).waitFor();
+  // No machine yet: the inbox says how to add one (#610).
+  await page.getByRole("heading", { name: "Add a machine" }).waitFor();
   await shoot(page, "inbox-empty");
 
   step("turn on Web Push");
@@ -385,6 +455,19 @@ async function main() {
   if ((await pair.exited) !== 0) throw new Error("pair failed");
   await page.getByRole("status", { name: "Pairing result" }).getByText("devbox joined").waitFor();
   await shoot(page, "pair-joined");
+  const signedIn = await page.goto(`${ORIGIN}/`);
+  if ((await signedIn?.text())?.includes("Know the moment"))
+    throw new Error("a signed-in browser got the landing page's HTML");
+  await page.getByText("Nothing needs you").waitFor();
+  if ((await page.title()) !== "Starbridge · Inbox")
+    throw new Error(`expected the Inbox's title, got: ${await page.title()}`);
+  if (await page.getByRole("heading", { name: "Add a machine" }).count())
+    throw new Error("the inbox still says to add a machine after one joined");
+  await page
+    .getByRole("navigation", { name: "Main" })
+    .getByRole("link", { name: "Settings" })
+    .click();
+  await page.getByRole("link", { name: "Add a device" }).click();
 
   step("refuse a second pairing");
   const other = cli("pair-refused", ["pair", "--name", "stranger"], join(tmp, "stranger"));
@@ -507,6 +590,95 @@ async function main() {
   await long.waitFor(/Answer to d_\S+ .*: Both, following the visitor's system theme/);
   if ((await long.exited) !== 0) throw new Error("ask --wait for the long options failed");
   await page.setViewportSize(DESKTOP);
+
+  step("images over their options share a height, so a phone's option buttons line up (#536)");
+  {
+    const LAYOUTS = "Which layout should the inbox lead with?";
+    const picks = cli(
+      "ask-picks",
+      [
+        "ask",
+        "--question",
+        LAYOUTS,
+        "--option",
+        "Desktop layout",
+        "--option",
+        "Phone layout",
+        "--recommended",
+        "Phone layout",
+        "--image",
+        image("a"),
+        "--image",
+        join(ROOT, "android/app/src/test/resources/fake/phone-inbox.png"),
+        "--project",
+        "starbridge",
+        "--session",
+        "e2e-picks",
+        "--wait",
+      ],
+      machineHome,
+    );
+    await picks.waitFor(/^d_\S+$/m);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page
+      .locator("[data-row]", { hasText: LAYOUTS })
+      .first()
+      .locator("button[data-id]")
+      .click();
+    await page.getByRole("heading", { name: LAYOUTS }).waitFor({ timeout: 30_000 });
+    // Each image its own shape (no band), no wider than its button, both centred on one midline;
+    // both buttons on one line.
+    const rects = async (sel: string) =>
+      page.locator(sel).evaluateAll((els) =>
+        els.map((e) => {
+          const r = e.getBoundingClientRect();
+          const img = e.querySelector("img");
+          const shape = img ? img.naturalWidth / img.naturalHeight : 0;
+          return {
+            top: Math.round(r.top),
+            middle: Math.round(r.top + r.height / 2),
+            width: r.width,
+            off: r.width / r.height - shape,
+          };
+        }),
+      );
+    await page.waitForFunction(() => {
+      const imgs = [...document.querySelectorAll("fieldset img")] as HTMLImageElement[];
+      return imgs.length === 2 && imgs.every((i) => i.complete && i.naturalWidth > 0);
+    });
+    const images = await rects('fieldset button[aria-label^="View"]');
+    const buttons = await rects('fieldset button:not([aria-label^="View"])');
+    if (
+      images.length !== 2 ||
+      Math.abs(images[0].middle - images[1].middle) > 1 ||
+      images.some((r, i) => Math.abs(r.off) > 0.02 || r.width > buttons[i].width + 0.5) ||
+      buttons[0].top !== buttons[1].top
+    )
+      throw new Error(
+        `the picks do not line up: images ${JSON.stringify(images)}, buttons ${JSON.stringify(buttons)}`,
+      );
+    for (const scheme of ["light", "dark"] as const) {
+      await page.emulateMedia({ colorScheme: scheme, reducedMotion: "reduce" });
+      await page.waitForTimeout(150);
+      await fitsLayout(page, `picks ${scheme}`);
+      await page.screenshot({ path: join(SHOTS, `picks-phone-${scheme}.png`) });
+    }
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    // "Reply" is under the picks too; in it, Shift+Enter starts a new line and Enter sends (#562).
+    await page.getByRole("button", { name: "Reply", exact: true }).click();
+    const reply = page.getByRole("textbox", { name: "Your answer" });
+    await reply.pressSequentially("Phone layout");
+    await reply.press("Shift+Enter");
+    await reply.pressSequentially("on narrow screens");
+    if ((await reply.inputValue()) !== "Phone layout\non narrow screens")
+      throw new Error(
+        `Shift+Enter did not start a new line: ${JSON.stringify(await reply.inputValue())}`,
+      );
+    await reply.press("Enter");
+    await picks.waitFor(/Answer to d_\S+ .*: Phone layout/);
+    if ((await picks.exited) !== 0) throw new Error("ask --wait for the picks failed");
+    await page.setViewportSize(DESKTOP);
+  }
 
   step("leave one open decision for the screenshots");
   const open = cli(
@@ -805,6 +977,8 @@ async function main() {
     throw new Error("the decision does not link the artifact it is answered in");
   if ((await pane.locator("fieldset, textarea").count()) > 0)
     throw new Error("a decision answered in an artifact also offers an answer here");
+  // "Settings screen (#88)" is cut as "Settings " and "screen (#88)".
+  await keepsSessionSpace(page, "the artifact decision");
   await shoot(page, "answer-in");
   const settle = cli("settle", ["settle", pointerId as string], machineHome);
   if ((await settle.exited) !== 0) throw new Error("settle failed");
@@ -838,9 +1012,7 @@ async function main() {
     .getByRole("link", { name: "Settings" })
     .click();
   await page.getByRole("heading", { name: "Settings" }).waitFor();
-  // Each radio hides inside its segment, which takes the click.
-  for (const label of ["Left", "Resets 14:20", "5", "High contrast"])
-    await page.getByLabel(label, { exact: true }).check({ force: true });
+  for (const label of ["Left", "Resets 14:20", "5", "High contrast"]) await choose(page, label);
   await shoot(page, "settings");
   await page.getByRole("link", { name: "Quotas" }).click();
   await page.locator("article").first().waitFor();
@@ -888,7 +1060,7 @@ async function main() {
     .getByRole("navigation", { name: "Main" })
     .getByRole("link", { name: "Settings" })
     .click();
-  await page.getByLabel("24-hour", { exact: true }).check({ force: true });
+  await choose(page, "24-hour");
   await shoot(page, "settings-clock");
   await page.getByRole("link", { name: "Quotas" }).click();
   await page.locator("article").first().waitFor();
@@ -902,7 +1074,7 @@ async function main() {
     .getByRole("link", { name: "Settings" })
     .click();
   // 12-hour times are the longest: "Will run out on Oct 12 at 12:02 AM".
-  await page.getByLabel("12-hour", { exact: true }).check({ force: true });
+  await choose(page, "12-hour");
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.getByRole("link", { name: /^Inbox/ }).click();
   const aside = page.getByRole("complementary", { name: "Quota windows" });
@@ -1030,7 +1202,7 @@ async function main() {
       .getByRole("navigation", { name: "Main" })
       .getByRole("link", { name: "Settings" })
       .click();
-    await page.getByLabel(clock, { exact: true }).check({ force: true });
+    await choose(page, clock);
     await page.getByRole("link", { name: "Quotas" }).click();
     const resets = page.locator("article span", { hasText: /^tomorrow \d/ });
     await resets.first().waitFor();
@@ -1364,6 +1536,74 @@ async function main() {
     .locator("..")
     .getByText(/Answered in the artifact · on /)
     .waitFor({ timeout: 30_000 });
+
+  step(
+    "snooze on one browser: it leaves both inboxes, wait says until when, and at its time it comes back with one notification (#571)",
+  );
+  await pageB.getByRole("button", { name: "Turn on notifications" }).click();
+  await pageB.getByRole("button", { name: "Turn on notifications" }).waitFor({ state: "detached" });
+  const snoozeAsk = cli(
+    "snooze-ask",
+    [
+      ...["ask", "--question", "Snooze probe: ship the docs?", "--option", "Ship"],
+      ...["--option", "Hold", "--project", "starbridge", "--session", "e2e"],
+    ],
+    machineHome,
+  );
+  const [snoozeId] = await snoozeAsk.waitFor(/d_[\w-]+/);
+  if ((await snoozeAsk.exited) !== 0) throw new Error("ask for the snooze probe failed");
+  const probe = (p: Page) => p.locator(`button[data-id="${snoozeId}"]`);
+  const probes = async (p: Page) =>
+    ((await p.evaluate(NOTIFICATIONS)) as { title: string; body: string }[]).filter((n) =>
+      n.title.startsWith("Snooze probe"),
+    );
+  for (let i = 0; i < 50 && (await probes(pageB)).length === 0; i++)
+    await pageB.waitForTimeout(200);
+  if ((await probes(pageB)).length !== 1) throw new Error("no notification for the snooze probe");
+  // The second browser snoozes, since the first one's push subscription may be gone by now
+  // (Firefox drops one that got many quiet pushes). Its clock runs 57 minutes behind, so its
+  // "1 hour" ends 3 minutes from now.
+  const SHIFT = 57 * 60_000;
+  await pageB.clock.install({ time: new Date(Date.now() - SHIFT) });
+  await pageB.goto(ORIGIN);
+  await probe(pageB).click({ timeout: 30_000 });
+  await selected(pageB).getByRole("button", { name: "Snooze", exact: true }).click();
+  await pageB.getByRole("button", { name: /^1 hour/ }).click();
+  const snoozedAt = Date.now();
+  // It leaves Needs you on both, for the collapsed Snoozed group, and its notification closes.
+  await probe(pageB).waitFor({ state: "detached", timeout: 10_000 });
+  await pageB.getByRole("button", { name: /^Snoozed\s*1/ }).waitFor();
+  for (let i = 0; i < 50 && (await probes(pageB)).length > 0; i++) await pageB.waitForTimeout(200);
+  if ((await probes(pageB)).length > 0) throw new Error("the snooze left its notification up");
+  await page.goto(ORIGIN);
+  await page.getByRole("button", { name: /^Snoozed\s*1/ }).waitFor({ timeout: 30_000 });
+  if (await probe(page).count()) throw new Error("the snoozed question is still listed open");
+  await shoot(page, "inbox-snoozed");
+  // The agent hears of it when it would block.
+  const snoozeWait = cli(
+    "snooze-wait",
+    ["wait", snoozeId as string, "--timeout", "60s"],
+    machineHome,
+  );
+  await snoozeWait.waitFor(
+    /Snoozed d_\S+ \(Snooze probe: ship the docs\?\) until \S+: no answer before then\./,
+  );
+  if ((await snoozeWait.exited) !== 3) throw new Error("wait on a snoozed question did not exit 3");
+  // At its time the server pushes every device once: one notification, back from snooze.
+  const back = async (p: Page) =>
+    (await probes(p)).filter((n) => n.body.startsWith("Back from snooze")).length;
+  while ((await back(pageB)) < 1) {
+    if (Date.now() - snoozedAt > 5 * 60_000)
+      throw new Error("the snoozed question never came back");
+    await pageB.waitForTimeout(2_000);
+  }
+  await pageB.clock.setSystemTime(new Date());
+  await pageB.waitForTimeout(20_000);
+  if ((await probes(pageB)).length !== 1) throw new Error("the return notified more than once");
+  await page.reload();
+  await probe(page).waitFor({ timeout: 30_000 });
+  await probe(page).click();
+  await selected(page).getByRole("button", { name: /^Ship/ }).click();
 
   step("replace the recovery key with the current one; the second browser says so once (#348)");
   await page.goto(`${ORIGIN}/settings`);

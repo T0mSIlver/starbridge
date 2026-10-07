@@ -17,6 +17,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -48,8 +49,11 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -59,8 +63,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.isShiftPressed
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.foundation.lazy.LazyItemScope
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -105,12 +116,30 @@ import dev.starbridge.app.ui.fieldColors
 import dev.starbridge.app.ui.groupGap
 import dev.starbridge.app.ui.groupShape
 import dev.starbridge.app.ui.theme.Radius
+import dev.starbridge.app.ui.theme.Sizes
 import dev.starbridge.app.ui.theme.Spacing
 import dev.starbridge.app.ui.theme.StarbridgeTheme
 import kotlinx.coroutines.delay
 import java.time.Instant
 import java.time.ZoneId
 import javax.inject.Inject
+import androidx.compose.animation.core.tween
+import androidx.compose.ui.zIndex
+import androidx.compose.ui.draw.clip
+import android.content.ClipData
+import android.content.Intent
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.ui.platform.ClipEntry
+import androidx.compose.ui.platform.LocalClipboard
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
+import kotlinx.coroutines.launch
+import android.os.Build
+import android.widget.Toast
 
 @HiltViewModel
 class InboxViewModel @Inject constructor(private val store: Store, private val prefs: Prefs) : ViewModel() {
@@ -123,13 +152,22 @@ class InboxViewModel @Inject constructor(private val store: Store, private val p
     fun answerPrompt(id: String, allow: Boolean, scope: String, message: String?) = store.answerPrompt(id, allow, scope, message)
     fun refreshPrompts() = store.refreshPrompts()
     fun answer(id: String, choice: String?, text: String?) = store.answer(id, choice, text)
+    fun snooze(id: String, until: Instant) = store.snooze(id, until)
     fun refresh() = store.refresh()
     val recovery = store.recovery
+    val members = store.members
     fun dismissRecovery(seq: Int) = store.dismissRecoveryNotice(seq)
 }
 
 /** What a question can do: be answered with an option or text, or open in its sheet. */
-class DecisionActions(val answer: (id: String, choice: String?, text: String?) -> Unit, val open: (String) -> Unit)
+class DecisionActions(
+    val answer: (id: String, choice: String?, text: String?) -> Unit,
+    val open: (String) -> Unit,
+    /** Puts a question off until a time (#571); a time already passed brings it back. */
+    val snooze: (id: String, until: Instant) -> Unit = { _, _ -> },
+    /** Opens a question's snooze times over the inbox, for a swiped card (#692); none, no swipe. */
+    val pick: ((String) -> Unit)? = null,
+)
 
 /**
  * What a question's card and its sheet share while the owner answers: the reply drafts, by
@@ -198,6 +236,10 @@ fun InboxScreen(
     recovery: RecoveryUi? = null,
     dismissRecovery: (Int) -> Unit = {},
     notificationsOff: Boolean = false,
+    /** The account has no active machine yet: the empty inbox says how to add one (#610). */
+    noMachine: Boolean = false,
+    /** Where a swipe's snooze offers Undo (#692). */
+    snackbar: SnackbarHostState? = null,
 ) {
     // While a prompt is on screen, read prompts every 1.5 s, so one settled elsewhere leaves
     // at once; the clock ticks with it for the 3 s a closed prompt stays.
@@ -216,8 +258,38 @@ fun InboxScreen(
             }
         }
     }
+    // A swipe right snoozes for the time set in Settings, with Undo, or opens the times over
+    // the inbox (#692).
+    var picking by rememberSaveable { mutableStateOf<String?>(null) }
+    // Swiped snoozes still on their way to the server, each with the time it asked for.
+    val swiped = remember { mutableStateListOf<Pair<String, Instant>>() }
+    val scope = rememberCoroutineScope()
+    val h24 = LocalClock24.current
+    val swipe by rememberUpdatedState(view.swipe)
+    val swiping = remember(actions) {
+        DecisionActions(actions.answer, actions.open, actions.snooze) { id ->
+            val until = swipe.until(Instant.now())
+            if (until == null) picking = id
+            else {
+                actions.snooze(id, until)
+                swiped += id to until
+            }
+        }
+    }
+    // Undo once the snooze took: one that failed says why instead.
+    val took = swiped.filter { (id, until) -> decisions.any { it.id == id && it.snoozedUntil == until } }
+    LaunchedEffect(took) {
+        took.forEach { (id, until) ->
+            swiped -= id to until
+            scope.launch {
+                val undo = snackbar?.showSnackbar("Snoozed until ${snoozeTime(until, Instant.now(), h24)}", actionLabel = "Undo", duration = SnackbarDuration.Short)
+                if (undo == SnackbarResult.ActionPerformed) actions.snooze(id, Instant.now())
+            }
+        }
+    }
     val shownRuns = Run.shown(runs, now)
-    val open = openQuestions(decisions)
+    val open = openQuestions(decisions).filterNot { it.snoozed(now) }
+    val snoozed = decisions.filter { it.snoozed(now) }.sortedBy { it.snoozedUntil }
     val runItems = shownRuns.map(Item::RunItem)
     val needs: List<Item> = shown.map(Item::PromptItem) + open.map(Item::Question)
     val feed: List<Item> = runItems + needs
@@ -237,36 +309,46 @@ fun InboxScreen(
         header = { Lockup(24.dp, 22.sp) },
         gap = groupGap,
         margin = Spacing.s4,
+        // Closed, History and Snoozed above it wait at the bottom, out of the way; opened, each
+        // rises under the items (#662, #682).
+        atBottom = atBottom(snoozed.isNotEmpty(), view.snoozedOpen, history.rows.isNotEmpty(), view.historyOpen),
     ) {
         recoveryBanner(recovery, dismissRecovery)
         if (notificationsOff && view.remindOff) item(key = "notifications-off") { NotificationsOff { onView(view.copy(remindOff = false)) } }
         if (feed.isEmpty()) {
-            item(key = "empty") { Empty() }
+            item(key = "empty") { if (noMachine) NoMachine() else Empty() }
         } else {
             when (view.grouping) {
                 Grouping.Machine -> byMachine(runItems, needs) { it.machine.machine }.forEach { items ->
                     item(key = "machine/${items.first().machine.machine}") { MachineHeader(items.first().machine) }
-                    cards(items, at, actions, replies, promptActions, view.buttons, segmented = true)
+                    cards(items, at, swiping, replies, promptActions, view.buttons, segmented = true)
                 }
                 Grouping.Waiting -> {
                     val (running, rest) = feed.partition { it is Item.RunItem }
                     val (blocking, later) = rest.partition { it.blocks }
-                    cards(running, at, actions, replies, promptActions, view.buttons, segmented = true)
+                    cards(running, at, swiping, replies, promptActions, view.buttons, segmented = true)
                     if (blocking.isNotEmpty()) {
                         // A prompt settled elsewhere stays a moment in place, but no longer counts.
                         val count = blocking.count { it !is Item.PromptItem || it.prompt.waiting(at) }
                         item(key = "group/waiting") { GroupHeader("Waiting on you", count, StarbridgeTheme.colors.accent) }
-                        cards(blocking, at, actions, replies, promptActions, view.buttons, segmented = true)
+                        cards(blocking, at, swiping, replies, promptActions, view.buttons, segmented = true)
                     }
                     if (later.isNotEmpty()) {
                         item(key = "group/later") { GroupHeader("When you can", later.size, MaterialTheme.colorScheme.onSurfaceVariant) }
-                        cards(later, at, actions, replies, promptActions, view.buttons, segmented = true)
+                        cards(later, at, swiping, replies, promptActions, view.buttons, segmented = true)
                     }
                 }
-                Grouping.None -> cards(feed, at, actions, replies, promptActions, view.buttons)
+                Grouping.None -> cards(feed, at, swiping, replies, promptActions, view.buttons)
             }
         }
-        history(history, view.historyOpen, { onView(view.copy(historyOpen = it)) }, actions, promptActions, segmented = view.grouping != Grouping.None)
+        snoozed(snoozed, now, view.snoozedOpen, { onView(view.copy(snoozedOpen = it)) }, swiping, replies, view.buttons, segmented = view.grouping != Grouping.None)
+        history(history, view.historyOpen, { onView(view.copy(historyOpen = it)) }, swiping, promptActions, segmented = view.grouping != Grouping.None)
+    }
+    picking?.let { id ->
+        // Answered meanwhile, on this phone or another: nothing left to put off.
+        val decision = decisions.find { it.id == id && it.isOpen }
+        if (decision == null) LaunchedEffect(id) { picking = null }
+        else SnoozeSheet(decision, now, { picking = null }) { picking = null; actions.snooze(id, it) }
     }
 }
 
@@ -388,6 +470,52 @@ private fun Empty() {
     }
 }
 
+/** A new account's empty inbox: the install command to copy or send to the machine. */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun NoMachine() {
+    val context = LocalContext.current
+    val clipboard = LocalClipboard.current
+    val scope = rememberCoroutineScope()
+    Column(Modifier.fillMaxWidth().padding(top = 56.dp, bottom = 40.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(Spacing.s4)) {
+        Box(Modifier.size(160.dp).background(MaterialTheme.colorScheme.surfaceContainerHighest, MaterialShapes.Cookie9Sided.toShape()), contentAlignment = Alignment.Center) {
+            Symbol(Sym.Computer, size = 56.dp, tint = MaterialTheme.colorScheme.onSurface)
+        }
+        Text("Add a machine", style = StarbridgeTheme.type.heading, color = MaterialTheme.colorScheme.onSurface, textAlign = TextAlign.Center, modifier = Modifier.semantics { heading() })
+        Text(
+            "Install Starbridge on each machine that runs your agents. Its setup shows a code to approve here; then its agents’ questions arrive in this inbox.",
+            style = StarbridgeTheme.type.body,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
+        Surface(shape = RoundedCornerShape(Radius.lg), color = MaterialTheme.colorScheme.surfaceContainerHighest, modifier = Modifier.fillMaxWidth()) {
+            Text(INSTALL, style = StarbridgeTheme.type.code, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(Spacing.s4))
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+            FilledTonalButton(onClick = {
+                scope.launch { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("Install command", INSTALL))) }
+                // Android 13 and later confirm a copy themselves.
+                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) Toast.makeText(context, "Copied", Toast.LENGTH_SHORT).show()
+            }, modifier = Modifier.heightIn(min = Sizes.tap)) {
+                Symbol(Sym.Copy, size = 18.dp)
+                Spacer(Modifier.width(Spacing.s2))
+                Text("Copy", style = StarbridgeTheme.type.action)
+            }
+            // To the computer, by mail or a chat, when this phone is not where the terminal is.
+            OutlinedButton(
+                onClick = { runCatching { context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, INSTALL), null)) } },
+                modifier = Modifier.heightIn(min = Sizes.tap),
+            ) { Text("Send", style = StarbridgeTheme.type.action) }
+        }
+        TextButton(onClick = { openLink(context, INSTALL_DOCS) }, modifier = Modifier.heightIn(min = Sizes.tap)) {
+            Text("Windows, Homebrew and npm", style = StarbridgeTheme.type.action)
+        }
+    }
+}
+
+private const val INSTALL = "curl -fsSL https://starbridge.run/install.sh | sh"
+private const val INSTALL_DOCS = "https://starbridge.run/docs"
+
 /**
  * A question in the feed, on the same card as every item (#248): one its agent waits on takes the
  * amber fill, the question at weight 500 and the clock in the time slot; one the agent works
@@ -397,20 +525,37 @@ private fun Empty() {
  */
 @Composable
 private fun DecisionCard(decision: Decision, now: Instant, actions: DecisionActions, replies: Replies, shape: Shape, buttons: CardButtons, modifier: Modifier = Modifier) {
+    val pick = actions.pick
+    if (pick != null && replies.sending[decision.id] == null) {
+        SwipeToSnooze(shape, { pick(decision.id) }, modifier) { QuestionCard(decision, now, actions, replies, shape, buttons) }
+    } else {
+        QuestionCard(decision, now, actions, replies, shape, buttons, modifier)
+    }
+}
+
+@Composable
+private fun QuestionCard(decision: Decision, now: Instant, actions: DecisionActions, replies: Replies, shape: Shape, buttons: CardButtons, modifier: Modifier = Modifier) {
     val scheme = MaterialTheme.colorScheme
-    val waiting = decision.waiting
+    // Snoozed, nothing is amber, even when its agent waits: the owner said not now (#571).
+    val until = decision.snoozedUntil?.takeIf { decision.snoozed(now) }
+    val waiting = decision.waiting && until == null
+    val h24 = LocalClock24.current
     val spec = MaterialTheme.motionScheme.fastEffectsSpec<Color>()
     val ground by animateColorAsState(if (waiting) promptGround() else scheme.surfaceContainer, spec)
     val icon by animateColorAsState(if (waiting) StarbridgeTheme.colors.accent else scheme.onSurfaceVariant, spec)
-    val label = decision.waitingSince?.let { waitingLabel(it, now) }
+    val label = decision.waitingSince?.takeIf { waiting }?.let { waitingLabel(it, now) }
+    val slot = until?.let { "Until ${snoozeTime(it, now, h24)}" } ?: timeSlot(decision.waitingSince?.takeIf { waiting }, decision.createdAt, now)
     Surface(modifier.fillMaxWidth(), shape = shape, color = ground) {
         Column(
             Modifier.clickable(onClickLabel = "Open the question") { actions.open(decision.id) }
-                .semantics { if (waiting) stateDescription = label ?: "Waiting for you" }
+                .semantics {
+                    if (waiting) stateDescription = label ?: "Waiting for you"
+                    else if (until != null) stateDescription = "Snoozed until ${snoozeTime(until, now, h24)}"
+                }
                 .padding(Spacing.s5),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            MetaRow(decision.source, timeSlot(decision.waitingSince, decision.createdAt, now), clock = waiting)
+            MetaRow(decision.source, slot, clock = waiting)
             Row(verticalAlignment = Alignment.Top) {
                 Symbol(Sym.Question, size = 22.dp, tint = icon, modifier = Modifier.padding(top = 1.dp))
                 Spacer(Modifier.width(Spacing.s2))
@@ -418,12 +563,13 @@ private fun DecisionCard(decision: Decision, now: Instant, actions: DecisionActi
             }
             Images(decision.images, maxHeight = 160.dp, crop = true, modifier = Modifier.padding(vertical = Spacing.s1))
             val page = decision.answerIn
-            if (page != null && decision.takesDone && cardButtons(decision, buttons)) {
+            // A snoozed card stays quiet, with no amber default: the owner opens it to answer.
+            if (page != null && until == null && decision.takesDone && cardButtons(decision, buttons)) {
                 Spacer(Modifier.height(Spacing.s1))
                 val send = answer(decision, actions.answer)
                 PageAndDone(page, replies.sending[decision.id] != null, other = if (waiting) scheme.surfaceContainer else scheme.surfaceContainerHighest) { send(null, null) }
             }
-            if (cardOptions(decision, buttons)) {
+            if (until == null && cardOptions(decision, buttons)) {
                 Spacer(Modifier.height(Spacing.s1))
                 Options(decision, replies.sending[decision.id], height = 40.dp, other = if (waiting) scheme.surfaceContainer else scheme.surfaceContainerHighest, answer = answer(decision, actions.answer))
             }
@@ -509,19 +655,35 @@ fun Options(decision: Decision, sending: String?, height: Dp, other: Color, answ
  * is (#191); then its words and code, and the answer. Answered, it shows how it closed.
  */
 @Composable
-fun DecisionSheet(decision: Decision, now: Instant, onAnswer: (String, String?, String?) -> Unit, replies: Replies) {
+fun DecisionSheet(decision: Decision, now: Instant, onAnswer: (String, String?, String?) -> Unit, replies: Replies, onSnooze: ((Instant) -> Unit)? = null, snoozeOpen: Boolean = false) {
     val scheme = MaterialTheme.colorScheme
     val wasOpen = remember(decision.id) { decision.isOpen }
     val send = answer(decision, onAnswer)
     val sending = replies.sending[decision.id]
     val open = decision.isOpen
-    val since = decision.waitingSince?.takeIf { open }
+    val until = decision.snoozedUntil?.takeIf { decision.snoozed(now) }
+    // Snoozed, nothing is amber, even when its agent waits: the owner said not now (#571).
+    val waiting = open && decision.waiting && until == null
+    val since = decision.waitingSince?.takeIf { waiting }
+    val h24 = LocalClock24.current
+    var replying by rememberSaveable(decision.id) { mutableStateOf(!replies.drafts[decision.id].isNullOrEmpty()) }
+    var snoozing by rememberSaveable(decision.id) { mutableStateOf(snoozeOpen) }
+    var tapped by remember(decision.id) { mutableStateOf(false) }
     SheetBody(
         decision.source,
         timeSlot(since, decision.createdAt, now),
         decision.agent,
-        blocked = if (open && decision.waiting) since?.let { waitingLabel(it, now) } ?: "Waiting for you" else null,
-        head = { Text(decision.question, style = StarbridgeTheme.type.question.weight(open && decision.waiting), color = scheme.onSurface) },
+        blocked = if (waiting) since?.let { waitingLabel(it, now) } ?: "Waiting for you" else null,
+        head = {
+            Text(decision.question, style = StarbridgeTheme.type.question.weight(waiting), color = scheme.onSurface)
+            if (until != null) {
+                Row(Modifier.padding(top = Spacing.s3), verticalAlignment = Alignment.CenterVertically) {
+                    Symbol(Sym.Snooze, size = 18.dp, tint = scheme.onSurfaceVariant)
+                    Spacer(Modifier.width(Spacing.s2))
+                    Text("Snoozed until ${snoozeTime(until, now, h24)}", style = StarbridgeTheme.type.small, color = scheme.onSurfaceVariant)
+                }
+            }
+        },
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Context(decision.context)
@@ -532,48 +694,78 @@ fun DecisionSheet(decision: Decision, now: Instant, onAnswer: (String, String?, 
                     Images(decision.images, maxHeight = 360.dp)
                     Outcome(decision, now, arrived = wasOpen)
                 }
-                paired -> Picks(decision, sending, send)
+                paired -> {
+                    Picks(decision, sending, send)
+                    if (replying) Reply(decision.id, replies, sending != null) { send(null, it) }
+                }
                 else -> {
                     Images(decision.images, maxHeight = 360.dp)
                     val page = decision.answerIn
                     when {
-                        page != null -> {
-                            AnswerElsewhere(page)
-                            if (decision.takesDone) Done(sending != null) { send(null, null) }
-                        }
+                        page != null -> AnswerElsewhere(page)
                         decision.options.isEmpty() -> FreeText(replies.drafts[decision.id].orEmpty(), { replies.drafts[decision.id] = it }, sending != null) { send(null, it) }
                         else -> {
                             Options(decision, sending, height = 56.dp, other = scheme.surfaceContainerHighest, answer = send, check = true)
-                            if (decision.replies) Reply(decision.id, replies, sending != null) { send(null, it) }
+                            if (replying) Reply(decision.id, replies, sending != null) { send(null, it) }
                         }
                     }
+                }
+            }
+            val reply = decision.replies && decision.options.isNotEmpty() && decision.answerIn == null && !replying
+            val done = decision.answerIn != null && decision.takesDone
+            if (open && (reply || done || onSnooze != null)) {
+                // Quiet, so the options stay the answer: a typed reply (#201), Done for a page's
+                // answer (#539), and putting it off (#571).
+                Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s1), verticalAlignment = Alignment.CenterVertically) {
+                    if (reply) Quiet("Reply") { replying = true }
+                    if (done) Done(sending != null) { send(null, null) }
+                    if (onSnooze != null) Quiet(if (until != null) "Snooze again" else "Snooze", sending == null) { snoozing = !snoozing; tapped = snoozing }
+                    if (onSnooze != null && until != null) Quiet("Back now", sending == null) { onSnooze(Instant.now()) }
+                }
+                if (onSnooze != null && snoozing) {
+                    // Opened by a tap, the times scroll up into the sheet: they sit below its fold (#692).
+                    val times = remember { BringIntoViewRequester() }
+                    SnoozeTimes(now, Modifier.bringIntoViewRequester(times)) { snoozing = false; onSnooze(it) }
+                    LaunchedEffect(tapped) { if (tapped) times.bringIntoView() }
                 }
             }
         }
     }
 }
 
-/** "Pick a result": each image over the option it stands for; picking one answers. */
+/**
+ * "Pick a result": each image over the option it stands for, two to a row; picking one answers.
+ * Each image keeps its own shape, no wider than its button, and the row's images are centred on
+ * one midline, so the buttons under them line up ([PickImages], #536).
+ */
 @Composable
 private fun Picks(decision: Decision, sending: String?, answer: (String?, String?) -> Unit) {
     val colors = StarbridgeTheme.colors
-    decision.images.zip(decision.options).chunked(2).forEach { row ->
-        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
-            row.forEach { (image, option) ->
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
-                    Images(listOf(image), maxHeight = 240.dp)
-                    val recommended = option == decision.proposal
-                    Button(
-                        onClick = { if (sending == null) answer(option, null) },
-                        colors = if (recommended) ButtonDefaults.buttonColors(containerColor = colors.accent, contentColor = colors.onAccent)
-                        else ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHighest, contentColor = MaterialTheme.colorScheme.onSurface),
-                        modifier = Modifier.fillMaxWidth().height(48.dp).semantics { if (recommended) stateDescription = "Default" },
-                    ) { Text(option, style = StarbridgeTheme.type.action, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+    var viewing by remember { mutableStateOf<Int?>(null) }
+    BoxWithConstraints {
+        val width = maxWidth
+        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            decision.images.indices.chunked(2).forEach { row ->
+                Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+                    PickImages(row.map { decision.images[it] }, width, Sizes.pick) { viewing = row[it] }
+                    Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+                        row.forEach { i ->
+                            val option = decision.options[i]
+                            val recommended = option == decision.proposal
+                            Button(
+                                onClick = { if (sending == null) answer(option, null) },
+                                colors = if (recommended) ButtonDefaults.buttonColors(containerColor = colors.accent, contentColor = colors.onAccent)
+                                else ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHighest, contentColor = MaterialTheme.colorScheme.onSurface),
+                                modifier = Modifier.weight(1f).height(48.dp).semantics { if (recommended) stateDescription = "Default" },
+                            ) { Text(option, style = StarbridgeTheme.type.action, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                        }
+                        if (row.size == 1) Spacer(Modifier.weight(1f))
+                    }
                 }
             }
-            if (row.size == 1) Spacer(Modifier.weight(1f))
         }
     }
+    viewing?.let { ImageViewer(decision.images, it) { viewing = null } }
 }
 
 /**
@@ -582,15 +774,16 @@ private fun Picks(decision: Decision, sending: String?, answer: (String?, String
  */
 @Composable
 private fun Reply(id: String, replies: Replies, sending: Boolean, onAnswer: (String) -> Unit) {
-    var open by rememberSaveable(id) { mutableStateOf(!replies.drafts[id].isNullOrEmpty()) }
-    if (!open) {
-        TextButton(onClick = { open = true }, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurfaceVariant)) {
-            Text("Reply", style = StarbridgeTheme.type.label)
-        }
-    } else {
-        val focus = remember { FocusRequester() }
-        LaunchedEffect(Unit) { if (replies.drafts[id].isNullOrEmpty()) focus.requestFocus() }
-        FreeText(replies.drafts[id].orEmpty(), { replies.drafts[id] = it }, sending, Modifier.focusRequester(focus), onAnswer)
+    val focus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { if (replies.drafts[id].isNullOrEmpty()) focus.requestFocus() }
+    FreeText(replies.drafts[id].orEmpty(), { replies.drafts[id] = it }, sending, Modifier.focusRequester(focus), onAnswer)
+}
+
+/** A quiet text button under a question's answer: Reply, Back now. */
+@Composable
+private fun Quiet(label: String, enabled: Boolean = true, onClick: () -> Unit) {
+    TextButton(onClick = onClick, enabled = enabled, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurfaceVariant)) {
+        Text(label, style = StarbridgeTheme.type.label)
     }
 }
 
@@ -610,7 +803,13 @@ private fun FreeText(text: String, onText: (String) -> Unit, sending: Boolean, f
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
         keyboardActions = KeyboardActions(onSend = { send() }),
         colors = fieldColors(),
-        modifier = field.fillMaxWidth(),
+        // A hardware keyboard's Enter sends and Shift+Enter starts a new line, as on the web (#562).
+        modifier = field.fillMaxWidth().onPreviewKeyEvent {
+            if (it.key == Key.Enter && !it.isShiftPressed) {
+                if (it.type == KeyEventType.KeyDown) send()
+                true
+            } else false
+        },
     )
 }
 
@@ -635,11 +834,7 @@ private fun AnswerElsewhere(page: Link) {
  * answer and Done only says it was given there.
  */
 @Composable
-private fun Done(sending: Boolean, onDone: () -> Unit) {
-    TextButton(onClick = { if (!sending) onDone() }, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurfaceVariant)) {
-        Text("Done", style = StarbridgeTheme.type.label)
-    }
-}
+private fun Done(sending: Boolean, onDone: () -> Unit) = Quiet("Done") { if (!sending) onDone() }
 
 /** On a card: the page's link, amber, joined to a tonal Done (#539). */
 @Composable
@@ -676,12 +871,12 @@ internal fun outcome(decision: Decision) = decision.answer ?: decision.theirAnsw
     else -> "Answered"
 }
 
-/** Who closed it: this phone, the agent (withdrawn, or for another page), or another device. */
-internal fun answeredBy(decision: Decision) = when {
-    decision.answer != null -> "this phone"
-    decision.answeredOn != null -> decision.answeredOn
-    decision.settled != null || decision.answerIn != null -> "the agent"
-    else -> "another device"
+/** Who closed it, after its outcome: "on this phone", "on Pixel", "by the agent" (withdrawn, or for another page), "on another device". */
+internal fun closedByPhrase(decision: Decision) = when {
+    decision.answer != null -> "on this phone"
+    decision.answeredOn != null -> "on ${decision.answeredOn}"
+    decision.settled != null || decision.answerIn != null -> "by the agent"
+    else -> "on another device"
 }
 
 /** How it closed. With [arrived], the answer just landed and the check springs in. */
@@ -696,7 +891,7 @@ private fun Outcome(decision: Decision, now: Instant, arrived: Boolean) {
         Text(
             buildAnnotatedString {
                 withStyle(SpanStyle(color = MaterialTheme.colorScheme.onSurface)) { append(outcome(decision)) }
-                append(" · on ${answeredBy(decision)}")
+                append(" · ${closedByPhrase(decision)}")
             },
             style = StarbridgeTheme.type.body,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -737,6 +932,63 @@ internal class History(decisions: List<Decision>, prompts: List<Prompt>, now: In
     val todayCount = rows.count { it.first.atZone(ZoneId.systemDefault()).toLocalDate() == today }
 }
 
+/**
+ * Snoozed (#571), collapsed and remembered, after what needs the owner: the questions they put
+ * off, the soonest back first, on quiet cards that say when each comes back.
+ */
+private fun LazyListScope.snoozed(decisions: List<Decision>, now: Instant, open: Boolean, onOpen: (Boolean) -> Unit, actions: DecisionActions, replies: Replies, buttons: CardButtons, segmented: Boolean) {
+    if (decisions.isEmpty()) return
+    val joined = segmented && open
+    val count = decisions.size + 1
+    item(key = "snoozed") {
+        SectionHead(Sym.Snooze, "Snoozed", "${decisions.size}", open, onOpen, if (joined) segment(0, count) else cardShape)
+    }
+    if (!open) return
+    itemsIndexed(decisions, key = { _, it -> "s/${it.id}" }) { i, it ->
+        val shape = if (joined) segment(i + 1, count) else cardShape
+        DecisionCard(it, now, actions, replies, shape, buttons, sectionRow().padding(top = if (joined) 0.dp else cardGap - groupGap))
+    }
+}
+
+/**
+ * How many of the closed section heads wait at the bottom (#662, #682): History when closed, and
+ * Snoozed above it when it is closed too, or when there is no History.
+ */
+private fun atBottom(snoozed: Boolean, snoozedOpen: Boolean, history: Boolean, historyOpen: Boolean): Int {
+    if (history && historyOpen) return 0
+    val historyDown = if (history) 1 else 0
+    return historyDown + if (snoozed && !snoozedOpen) 1 else 0
+}
+
+/**
+ * The head of a collapsed, remembered section: Snoozed or History. Moving between the bottom and
+ * its place under the items, it glides as the cards do, over the rows it passes (#662).
+ */
+@Composable
+private fun LazyItemScope.SectionHead(symbol: Sym, title: String, detail: String?, open: Boolean, onOpen: (Boolean) -> Unit, shape: Shape) {
+    val scheme = MaterialTheme.colorScheme
+    Surface(
+        Modifier.animateItem(placementSpec = MaterialTheme.motionScheme.defaultSpatialSpec()).zIndex(1f).fillMaxWidth().padding(top = Spacing.s3).clip(shape).clickable(onClickLabel = if (open) "Hide $title" else "Show $title") { onOpen(!open) },
+        shape = shape,
+        color = scheme.surfaceContainer,
+    ) {
+        Row(Modifier.padding(horizontal = Spacing.s5, vertical = Spacing.s4), verticalAlignment = Alignment.CenterVertically) {
+            Symbol(symbol, size = 20.dp, tint = scheme.onSurface)
+            Spacer(Modifier.width(10.dp))
+            Text(title, style = StarbridgeTheme.type.label.copy(fontSize = 15.sp), color = scheme.onSurface)
+            Spacer(Modifier.width(10.dp))
+            if (detail != null) Text(detail, style = StarbridgeTheme.type.small.copy(fontSize = 15.sp), color = scheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+            else Spacer(Modifier.weight(1f))
+            Symbol(if (open) Sym.ExpandMore else Sym.Chevron, size = 20.dp, tint = scheme.onSurfaceVariant)
+        }
+    }
+}
+
+/** A section's row: it fades in once the head has nearly risen to it, not under it on its way (#662). */
+@Composable
+private fun LazyItemScope.sectionRow(): Modifier =
+    Modifier.animateItem(fadeInSpec = tween(250, delayMillis = 200), placementSpec = MaterialTheme.motionScheme.defaultSpatialSpec())
+
 /** History, collapsed and remembered: one row per answered question or ended prompt. */
 private fun LazyListScope.history(history: History, open: Boolean, onOpen: (Boolean) -> Unit, actions: DecisionActions, promptActions: PromptActions?, segmented: Boolean) {
     // Under a grouping, History's head and rows join as the groups above do.
@@ -744,28 +996,13 @@ private fun LazyListScope.history(history: History, open: Boolean, onOpen: (Bool
     val count = history.rows.size + 1
     if (history.rows.isEmpty()) return
     item(key = "history") {
-        val scheme = MaterialTheme.colorScheme
-        Surface(
-            Modifier.fillMaxWidth().padding(top = Spacing.s3).clickable(onClickLabel = if (open) "Hide History" else "Show History") { onOpen(!open) },
-            shape = if (joined) segment(0, count) else cardShape,
-            color = scheme.surfaceContainer,
-        ) {
-            Row(Modifier.padding(horizontal = Spacing.s5, vertical = Spacing.s4), verticalAlignment = Alignment.CenterVertically) {
-                Symbol(Sym.History, size = 20.dp, tint = scheme.onSurface)
-                Spacer(Modifier.width(10.dp))
-                Text("History", style = StarbridgeTheme.type.label.copy(fontSize = 15.sp), color = scheme.onSurface)
-                Spacer(Modifier.width(10.dp))
-                if (history.todayCount > 0) Text("${history.todayCount} answered today", style = StarbridgeTheme.type.small.copy(fontSize = 15.sp), color = scheme.onSurfaceVariant, modifier = Modifier.weight(1f))
-                else Spacer(Modifier.weight(1f))
-                Symbol(if (open) Sym.ExpandMore else Sym.Chevron, size = 20.dp, tint = scheme.onSurfaceVariant)
-            }
-        }
+        SectionHead(Sym.History, "History", if (history.todayCount > 0) "${history.todayCount} answered today" else null, open, onOpen, if (joined) segment(0, count) else cardShape)
     }
     if (!open) return
     itemsIndexed(history.rows, key = { _, (_, it) -> if (it is Decision) "h/d/${it.id}" else "h/p/${(it as Prompt).id}" }) { i, (at, it) ->
         // Apart, one-line cards round less, as Material scales a corner with its container.
         val shape = if (joined) segment(i + 1, count) else RoundedCornerShape(Spacing.s5)
-        Box(Modifier.padding(top = if (joined) 0.dp else cardGap - groupGap)) {
+        Box(sectionRow().padding(top = if (joined) 0.dp else cardGap - groupGap)) {
             when (it) {
                 is Decision -> HistoryRow(it.source, it.question, false, closedHow(it), shape) { actions.open(it.id) }
                 is Prompt -> HistoryRow(it.source, it.summary, true, closedHow(it), shape) { promptActions?.open?.invoke(it.id) }
@@ -775,7 +1012,7 @@ private fun LazyListScope.history(history: History, open: Boolean, onOpen: (Bool
 }
 
 /** How a History row closed: the answer and who gave it, or how a prompt ended. */
-internal fun closedHow(decision: Decision) = "${outcome(decision)} · on ${answeredBy(decision)}"
+internal fun closedHow(decision: Decision) = "${outcome(decision)} · ${closedByPhrase(decision)}"
 internal fun closedHow(prompt: Prompt) = prompt.ended ?: "Expired"
 
 /**

@@ -94,11 +94,37 @@ export function sample(now = Date.now()) {
           })),
           links: [
             { url: "https://claude.ai/artifact/Xq7pLm2VnR4tBz9KcW1sYd" },
-            { url: "https://github.com/T0mSIlver/starbridge/pull/86" },
+            { url: "https://github.com/acme/web-app/pull/86" },
           ],
         },
       ),
       machine: member("laptop"),
+    },
+    // Put off by the owner (#571): back later today, and tomorrow morning though its agent waits.
+    {
+      decision: decision(
+        "s1",
+        40 * min,
+        workstation("free-plan-pricing"),
+        "Which pricing tier for the free plan?",
+        "Stripe charges the same for both; the difference is the seat limit.",
+        ["3 seats", "5 seats"],
+      ),
+      machine: member("workstation"),
+      snoozedUntil: new Date(now + 3 * 60 * min).toISOString(),
+    },
+    {
+      decision: decision(
+        "s2",
+        55 * min,
+        buildServer("release-0-1-1"),
+        "Publish 0.1.1 to npm?",
+        "The changelog and the tag are ready.",
+        ["Publish", "Wait"],
+      ),
+      machine: member("build server"),
+      waitingSince: at(50 * min),
+      snoozedUntil: new Date(now + 19 * 60 * min).toISOString(),
     },
     {
       decision: decision(

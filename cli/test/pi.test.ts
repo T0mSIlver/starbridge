@@ -4,14 +4,11 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import {
   allowPiRules,
-  dropOldPiRules,
-  oldPiRulesStuck,
   piAllow,
   piBashDenies,
   piPermissionConfig,
   piRules,
   piSkillDir,
-  removePiEntries,
 } from "../src/pi";
 
 function home(config: unknown) {
@@ -64,32 +61,6 @@ test("a plain ask or deny level is left to the owner, and the other surfaces sti
   expect(piAllow(h.env)).toMatchObject({ state: "allowed", plain: ["read"] });
 });
 
-test("the bash patterns setup added before #488 are taken out, and offered no more", () => {
-  const old = Object.fromEntries(
-    ["ask", "waiting", "working", "wait", "settle"].map((c) => [`starbridge ${c} *`, "allow"]),
-  );
-  const config = { permission: { bash: { "*": "ask", ...old } }, authorizerChain: ["starbridge"] };
-  const h = home(config);
-  // Left behind, they keep the hole open, so piAllow says something is missing.
-  expect(piAllow(h.env).state).toBe("missing");
-  allowPiRules(h.env);
-  expect(h.read().permission.bash).toEqual({ "*": "ask" });
-  expect(piAllow(h.env).state).toBe("allowed");
-
-  // The agent takes them out at start; alone in the bash map, the map goes.
-  const started = home(config);
-  expect(dropOldPiRules(started.env)).toBe(true);
-  expect(dropOldPiRules(started.env)).toBe(false);
-  expect(started.read().permission.bash).toEqual({ "*": "ask" });
-  const only = home({ permission: { bash: old } });
-  expect(dropOldPiRules(only.env)).toBe(true);
-  expect(only.read()).toEqual({ permission: {} });
-  // Uninstall does too; a level of the owner's own on the same pattern stays.
-  const left = home({ permission: { bash: { ...old, "starbridge settle *": "deny" } } });
-  expect(removePiEntries(left.env)).toBe(true);
-  expect(left.read().permission.bash).toEqual({ "starbridge settle *": "deny" });
-});
-
 test("a bash surface that denies stops the starbridge commands before the link hears them", () => {
   for (const permission of [{ bash: "deny" }, { bash: { "*": "deny" } }, { "*": "deny" }])
     expect(piBashDenies(home({ permission }).env)).toBe(true);
@@ -99,17 +70,4 @@ test("a bash surface that denies stops the starbridge commands before the link h
     { "*": "deny", bash: { "*": "ask" } },
   ])
     expect(piBashDenies(home({ permission }).env)).toBe(false);
-});
-
-test("old bash patterns in a config with comments are reported, not left silently", () => {
-  const h = home({});
-  writeFileSync(
-    h.file,
-    '{\n  // mine\n  "permission": {"bash": {"starbridge ask *": "allow"}}\n}\n',
-  );
-  expect(oldPiRulesStuck(h.env)).toBe(true);
-  expect(() => dropOldPiRules(h.env)).toThrow("by hand");
-  writeFileSync(h.file, "{\n  // mine\n}\n");
-  expect(oldPiRulesStuck(h.env)).toBe(false);
-  expect(dropOldPiRules(h.env)).toBe(false);
 });

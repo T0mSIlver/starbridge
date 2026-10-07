@@ -2,6 +2,7 @@ export * from "./client";
 export * from "./directory";
 export * from "./envelope";
 export * from "./heads";
+export * from "./images";
 export * from "./join";
 export * from "./keys";
 export * from "./pace";

@@ -1,6 +1,6 @@
 "use client";
 
-import type { DecisionImage } from "@starbridge/protocol";
+import type { ShownImage } from "@starbridge/protocol";
 import { useEffect, useRef, useState } from "react";
 import { imageSrc } from "@/lib/attachments";
 import { Icon } from "./icons";
@@ -9,7 +9,7 @@ import s from "./Viewer.module.css";
 type View = { scale: number; x: number; y: number };
 
 /** The scale that fits the whole image in the box, never above its real pixels. */
-function fit(img: DecisionImage, box: DOMRect): View {
+function fit(img: ShownImage, box: DOMRect): View {
   const scale = Math.min(box.width / img.width, box.height / img.height, 1);
   return {
     scale,
@@ -34,7 +34,7 @@ export function Viewer({
   start,
   onClose,
 }: {
-  images: DecisionImage[];
+  images: ShownImage[];
   start: number;
   onClose: () => void;
 }) {
@@ -42,7 +42,7 @@ export function Viewer({
   const stage = useRef<HTMLDivElement>(null);
   const [at, setAt] = useState(start);
   const [view, setView] = useState<View>();
-  const img = images[at] as DecisionImage;
+  const img = images[at] as ShownImage;
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   const box = () => stage.current?.getBoundingClientRect() as DOMRect;
   const least = () => fit(img, box()).scale;

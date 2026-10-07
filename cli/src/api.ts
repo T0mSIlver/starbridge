@@ -6,6 +6,9 @@ export const REMOVED =
   "this machine was removed from your Starbridge account: run `starbridge pair --force` to add it again";
 
 export class ApiError extends Error {
+  /** With a 429, the seconds the server's Retry-After asks to wait. */
+  retryAfter?: number;
+
   constructor(
     readonly status: number,
     readonly code: string,
@@ -15,6 +18,12 @@ export class ApiError extends Error {
     super(message);
   }
 }
+
+/** What a refused post says when the account or the server has no room left (#586). */
+const FULL: Record<string, string> = {
+  "account-full": "your Starbridge account is full; answer or settle open questions to free room",
+  "storage-full": "the Starbridge server is out of storage; try again in an hour",
+};
 
 /** The server did not answer at all: down, or this machine is offline. */
 export class Unreachable extends Error {}
@@ -80,7 +89,15 @@ export class Api {
       // The server drops a machine's token when the directory revokes the machine.
       if (res.status === 401 && this.token)
         throw new ApiError(401, e.error ?? res.statusText, e.detail, REMOVED);
-      throw new ApiError(res.status, e.error ?? res.statusText, e.detail);
+      const err = new ApiError(
+        res.status,
+        e.error ?? res.statusText,
+        e.detail,
+        ...(e.error && e.error in FULL ? [`${FULL[e.error]} (${e.detail ?? e.error})`] : []),
+      );
+      const wait = Number(res.headers.get("retry-after"));
+      if (res.status === 429 && wait > 0) err.retryAfter = wait;
+      throw err;
     }
     return { status: res.status, json };
   }
@@ -109,6 +126,12 @@ export class Api {
     return (r.json as { entries: unknown[] }).entries;
   }
 
+  /** The active machines that post quota snapshots, and when each posted its latest. */
+  async quotaSenders(): Promise<{ id: string; receivedAt: string }[]> {
+    const r = await this.call("GET", "/quota/senders", { signal: AbortSignal.timeout(15_000) });
+    return (r.json as { senders: { id: string; receivedAt: string }[] }).senders;
+  }
+
   async postItem(item: SealedItem, signal?: AbortSignal): Promise<void> {
     await this.call("POST", "/items", { body: item, ...(signal ? { signal } : {}) });
   }
@@ -123,7 +146,7 @@ export class Api {
     signal?: AbortSignal,
     known?: { directory: number; quotaAsked?: string },
   ): Promise<{ items: unknown[]; cursor?: string; directory?: number; quotaAsked?: string }> {
-    const q = new URLSearchParams({ wait: String(wait) });
+    const q = new URLSearchParams({ wait: String(wait), kinds: "answer,permission-answer,snooze" });
     if (after !== undefined) q.set("after", after);
     if (known) q.set("directory", String(known.directory));
     if (known?.quotaAsked !== undefined) q.set("quotaAsked", known.quotaAsked);

@@ -1,0 +1,60 @@
+{
+  "description": "A decision image's blob: nonce then crypto_secretbox under ref.key; ref.hash is BLAKE2b-256 of 'starbridge/v1/image' NUL and the blob. openImage checks the hash, then opens.",
+  "cases": [
+    {
+      "name": "opens",
+      "blob": "KioqKioqKioqKioqKioqKioqKioqKioq2-i4CSltbUd1UivMr6-VpE_hCF0g_L4VTbct1KWs5mYPK1bbRYMThyJfgtDJc6MCG_MVyU3YXGym9espds4CpunnN0wEQxXI3cpK3vRWI-jYhoQ-krA",
+      "ref": {
+        "key": "KSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSk",
+        "hash": "E02J-yVSHZsGvWiPNrTuZezGpyFMmUJEvE4lDqG6_8I"
+      },
+      "plain": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg",
+      "expect": "ok"
+    },
+    {
+      "name": "a changed blob fails its hash",
+      "blob": "KioqKioqKioqKioqKioqKioqKioqKioq2-i4CSltbEd1UivMr6-VpE_hCF0g_L4VTbct1KWs5mYPK1bbRYMThyJfgtDJc6MCG_MVyU3YXGym9espds4CpunnN0wEQxXI3cpK3vRWI-jYhoQ-krA",
+      "ref": {
+        "key": "KSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSk",
+        "hash": "E02J-yVSHZsGvWiPNrTuZezGpyFMmUJEvE4lDqG6_8I"
+      },
+      "expect": "cannot-open"
+    },
+    {
+      "name": "a changed blob under its own hash fails its MAC",
+      "blob": "KioqKioqKioqKioqKioqKioqKioqKioq2-i4CSltbEd1UivMr6-VpE_hCF0g_L4VTbct1KWs5mYPK1bbRYMThyJfgtDJc6MCG_MVyU3YXGym9espds4CpunnN0wEQxXI3cpK3vRWI-jYhoQ-krA",
+      "ref": {
+        "key": "KSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSk",
+        "hash": "63lbs7DnMdG5p-fwZV0mSrH3uO1uvZPcI473jhH8-Xc"
+      },
+      "expect": "cannot-open"
+    },
+    {
+      "name": "another key fails",
+      "blob": "KioqKioqKioqKioqKioqKioqKioqKioq2-i4CSltbUd1UivMr6-VpE_hCF0g_L4VTbct1KWs5mYPK1bbRYMThyJfgtDJc6MCG_MVyU3YXGym9espds4CpunnN0wEQxXI3cpK3vRWI-jYhoQ-krA",
+      "ref": {
+        "key": "KysrKysrKysrKysrKysrKysrKysrKysrKysrKysrKys",
+        "hash": "E02J-yVSHZsGvWiPNrTuZezGpyFMmUJEvE4lDqG6_8I"
+      },
+      "expect": "cannot-open"
+    },
+    {
+      "name": "a blob that is not base64url fails",
+      "blob": "A",
+      "ref": {
+        "key": "KSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSk",
+        "hash": "E02J-yVSHZsGvWiPNrTuZezGpyFMmUJEvE4lDqG6_8I"
+      },
+      "expect": "cannot-open"
+    },
+    {
+      "name": "a blob shorter than nonce and MAC fails",
+      "blob": "KioqKioqKioqKioqKioqKioqKioqKioq",
+      "ref": {
+        "key": "KSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpKSk",
+        "hash": "GpagtoudNOZspj_jP7MJqaKYkgQHUl-03s4Yrv_ErjU"
+      },
+      "expect": "cannot-open"
+    }
+  ]
+}

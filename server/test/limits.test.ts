@@ -20,6 +20,7 @@ import {
   seal,
   toB64,
 } from "@starbridge/protocol";
+import { openDb } from "../src/db";
 import { DEFAULT_LIMITS, type Limits } from "../src/limits";
 import { RateLimiter } from "../src/ratelimit";
 import { sweepStorage } from "../src/retention";
@@ -101,6 +102,37 @@ test("item posts past the account's rate get 429 with Retry-After", async () => 
   expect(Number(r.headers.get("retry-after"))).toBeGreaterThan(0);
 });
 
+test("machines' items spend a byte budget a minute, replaced and stored ones only", async () => {
+  const probe = await setup();
+  const size = quota(probe.devbox, probe.phone).boxes.reduce((n, b) => n + b.box.length, 0);
+  const { s, phone, devbox } = await setup({ postedBytes: [Math.floor(size * 2.5), 60_000] });
+  const first = quota(devbox, phone);
+  expect((await post(s, devbox, first)).status).toBe(201);
+  // Refused posts spend nothing.
+  for (let i = 0; i < 3; i++) expect((await post(s, devbox, first)).status).toBe(409);
+  // Snapshots replace each other, so the stored-bytes cap never sees them; the budget does.
+  expect((await post(s, devbox, quota(devbox, phone))).status).toBe(201);
+  // Half a snapshot is left: one that does not fit is refused, never let past the budget (#718).
+  const r = await post(s, devbox, quota(devbox, phone));
+  expect(r.status).toBe(429);
+  expect(r.json.detail).toContain("MB");
+  expect((await post(s, devbox, quota(devbox, phone))).status).toBe(429);
+});
+
+test("a looping machine spends its own window first, and the owner's answers always pass", async () => {
+  const { s, acct, phone, devbox } = await setup({ items: [3, 60_000], machineItems: [2, 60_000] });
+  const laptop = await pair(s, acct, "laptop", "machine");
+  const d = decision(devbox, phone);
+  expect((await post(s, devbox, d)).status).toBe(201);
+  expect((await post(s, devbox, decision(devbox, phone))).status).toBe(201);
+  // The machine's own window is full; the account's still has room for the laptop.
+  expect((await post(s, devbox, decision(devbox, phone))).status).toBe(429);
+  expect((await post(s, laptop, decision(laptop, phone))).status).toBe(201);
+  // Now the account's window is full too, but answers count in the device's own.
+  expect((await post(s, laptop, decision(laptop, phone))).status).toBe(429);
+  expect((await post(s, phone, answer(d, phone, devbox))).status).toBe(201);
+});
+
 test("a full account refuses new decisions but still takes answers and replaced quotas", async () => {
   const { s, phone, devbox } = await setup({ decisions: 2 });
   const first = decision(devbox, phone);
@@ -133,6 +165,22 @@ function permission(from: Actor, to: Actor): SealedItem {
   return seal("permission", body, { id: from.id, signKey: from.keys.sign.privateKey }, [to.member]);
 }
 
+test("the server's stored bytes are capped across accounts, answers excepted", async () => {
+  const { s, phone, devbox } = await setup();
+  const d = decision(devbox, phone);
+  expect((await post(s, devbox, d)).status).toBe(201);
+  const a = answer(d, phone, devbox);
+  const { bytes } = s.deps.db.query("SELECT SUM(bytes) AS bytes FROM item_totals").get() as {
+    bytes: number;
+  };
+  s.deps.config.limits = { ...DEFAULT_LIMITS, serverBytes: bytes + 100 };
+  const r = await post(s, devbox, decision(devbox, phone));
+  expect(r.status).toBe(503);
+  expect(r.json.error).toBe("storage-full");
+  expect(r.headers.get("retry-after")).toBe("3600");
+  expect((await post(s, phone, a)).status).toBe(201);
+});
+
 test("permission prompts are capped per account like decisions", async () => {
   const { s, phone, devbox } = await setup({ permissions: 2 });
   expect((await post(s, devbox, permission(devbox, phone))).status).toBe(201);
@@ -156,7 +204,7 @@ test("each stored item is charged its rows as well as its boxes", async () => {
   expect((await post(s, devbox, permission(devbox, phone))).status).toBe(201);
   const r = await post(s, devbox, permission(devbox, phone));
   expect(r.status).toBe(409);
-  expect(r.json.error).toBe("too-many-items");
+  expect(r.json.error).toBe("account-full");
 });
 
 test("stored bytes are capped per account, keeping room for answers, and per item", async () => {
@@ -181,10 +229,10 @@ test("stored bytes are capped per account, keeping room for answers, and per ite
   expect((await post(s, devbox, quota(devbox, phone))).status).toBe(201);
   const r = await post(s, devbox, decision(devbox, phone));
   expect(r.status).toBe(409);
-  expect(r.json.error).toBe("too-many-items");
+  expect(r.json.error).toBe("account-full");
   expect((await post(s, phone, a)).status).toBe(201);
 
-  s.deps.config.limits = { ...DEFAULT_LIMITS, itemBytes: boxes(q) - 1, answerBytes: boxes(a) - 1 };
+  s.deps.config.limits = { ...DEFAULT_LIMITS, quotaBytes: boxes(q) - 1, answerBytes: boxes(a) - 1 };
   const big = await post(s, devbox, quota(devbox, phone));
   expect(big.status).toBe(413);
   expect(big.json.error).toBe("too-large");
@@ -218,21 +266,92 @@ test("the sweep drops answered decisions after a week and the rest after 30 days
     (s.deps.db.query("SELECT COUNT(*) AS n FROM sessions").get() as { n: number }).n;
   expect(sessions()).toBe(2);
 
-  sweepStorage(s.deps.db, DEFAULT_LIMITS);
+  await sweepStorage(s.deps.db, DEFAULT_LIMITS);
   expect(await exists(s, phone, gone.id)).toBe(false); // its machine was revoked
   expect(await exists(s, phone, answered.id)).toBe(true);
   expect(sessions()).toBe(1);
   expect((await s.call("GET", "/v1/me", { token: expired })).status).toBe(401);
 
-  sweepStorage(s.deps.db, DEFAULT_LIMITS, Date.now() + 8 * DAY);
+  // A batch of one: each delete loops until the aged items are gone.
+  await sweepStorage(s.deps.db, DEFAULT_LIMITS, Date.now() + 8 * DAY, 1);
   expect(await exists(s, phone, answered.id)).toBe(false);
   expect(await exists(s, devbox, reply.id)).toBe(false);
   expect(await exists(s, phone, open.id)).toBe(true);
   expect(await exists(s, phone, kept.id)).toBe(true);
 
-  sweepStorage(s.deps.db, DEFAULT_LIMITS, Date.now() + 31 * DAY);
+  await sweepStorage(s.deps.db, DEFAULT_LIMITS, Date.now() + 31 * DAY, 1);
   expect(await exists(s, phone, open.id)).toBe(false);
   expect(await exists(s, phone, kept.id)).toBe(false);
+});
+
+test("the sweep checks each kept waiting item once, walking past it by rowid (#654)", async () => {
+  const db = openDb(":memory:");
+  const now = new Date().toISOString();
+  db.query("INSERT INTO accounts (id, created_at) VALUES ('a', ?)").run(now);
+  const add = db.query(
+    "INSERT INTO items (seq, account_id, id, kind, from_id, re, received_at) VALUES (?, 'a', ?, ?, 'm', ?, ?)",
+  );
+  add.run(1, "d", "decision", null, now);
+  for (let i = 0; i < 5; i++) add.run(10 + i, `kept${i}`, "waiting", "d", now);
+  for (let i = 0; i < 3; i++) add.run(20 + i, `orphan${i}`, "waiting", "gone", now);
+  // Records the sweep's statements, to read how SQLite runs its rowid walks.
+  const walks: string[] = [];
+  const watched = new Proxy(db, {
+    get(target, key) {
+      const value = Reflect.get(target, key, target);
+      if (key !== "query") return typeof value === "function" ? value.bind(target) : value;
+      return (sql: string) => {
+        if (sql.includes("rowid > ?") && sql.startsWith("SELECT")) walks.push(sql);
+        return target.query(sql);
+      };
+    },
+  });
+  await sweepStorage(watched, DEFAULT_LIMITS, Date.now(), 1);
+  const ids = (db.query("SELECT id FROM items ORDER BY rowid").all() as { id: string }[]).map(
+    (r) => r.id,
+  );
+  expect(ids).toEqual(["d", "kept0", "kept1", "kept2", "kept3", "kept4"]);
+  // A walk that went through an index would start each batch over the kept rows.
+  expect(walks.length).toBe(2);
+  for (const sql of walks) {
+    const plan = db
+      .query(`EXPLAIN QUERY PLAN ${sql}`)
+      .all(0, ...Array(sql.split("?").length - 2).fill("")) as {
+      detail: string;
+    }[];
+    expect(plan[0]?.detail).toContain("INTEGER PRIMARY KEY (rowid>?)");
+  }
+});
+
+test("past floodUnanswered open decisions, an account keeps them only a week (#584)", async () => {
+  const db = openDb(":memory:");
+  const now = Date.now();
+  const iso = (ago: number) => new Date(now - ago).toISOString();
+  const add = db.query(
+    "INSERT INTO items (seq, account_id, id, kind, from_id, received_at, answered_at) VALUES (?, ?, ?, 'decision', 'm', ?, ?)",
+  );
+  let seq = 0;
+  for (const a of ["flooded", "quiet"]) {
+    db.query("INSERT INTO accounts (id, created_at) VALUES (?, ?)").run(a, iso(0));
+    add.run(++seq, a, `${a}-old`, iso(8 * DAY), null);
+    add.run(++seq, a, `${a}-new`, iso(6 * DAY), null);
+    // Answered ones keep their own week from the answer.
+    add.run(++seq, a, `${a}-answered`, iso(8 * DAY), iso(DAY));
+  }
+  add.run(++seq, "flooded", "flooded-third", iso(0), null);
+  // Three open decisions are past a limit of 2; the quiet account holds 2.
+  await sweepStorage(db, { ...DEFAULT_LIMITS, floodUnanswered: 2 }, now, 1);
+  const ids = (db.query("SELECT id FROM items ORDER BY seq").all() as { id: string }[]).map(
+    (r) => r.id,
+  );
+  expect(ids).toEqual([
+    "flooded-new",
+    "flooded-answered",
+    "quiet-old",
+    "quiet-new",
+    "quiet-answered",
+    "flooded-third",
+  ]);
 });
 
 test("a full directory refuses device-signed adds but takes revocations and recoveries", async () => {
@@ -352,6 +471,14 @@ test("waiting pairings are capped per client, an IPv6 client counting as its /48
   expect((await request(s, "m", "203.0.113.7")).r.status).toBe(201);
 });
 
+test("a pairing request's address stays in memory, never in the database (#575)", async () => {
+  const s = await makeServer({ trustProxy: true });
+  expect((await request(s, "m", "203.0.113.7")).r.status).toBe(201);
+  const rows = s.deps.db.query("SELECT * FROM pairings").all();
+  expect(rows).toHaveLength(1);
+  expect(JSON.stringify(rows)).not.toContain("203.0.113");
+});
+
 test("approved pairings leave the client's cap, so one address can pair many members", async () => {
   const s = await makeServer({ limits: { ...DEFAULT_LIMITS, pairingsPerClient: 1 } });
   const acct = await setupAccount(s);
@@ -418,10 +545,11 @@ test("the GitHub callback is rate-limited per address", async () => {
     },
   });
   const statuses = [];
-  for (let i = 0; i < 21; i++)
+  const [n] = DEFAULT_LIMITS.githubCallbacks;
+  for (let i = 0; i <= n; i++)
     statuses.push((await s.call("GET", "/v1/auth/github/callback?code=x&state=y")).status);
-  expect(statuses.slice(0, 20).every((st) => st === 400)).toBe(true);
-  expect(statuses[20]).toBe(429);
+  expect(statuses.slice(0, n).every((st) => st === 302)).toBe(true);
+  expect(statuses[n]).toBe(429);
 });
 
 test("a short window's sweep leaves a longer window's count alone", () => {

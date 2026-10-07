@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSy
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { type Answer, fromB64, open, type SealedItem, seal } from "@starbridge/protocol";
-import { LiveServer } from "@starbridge/server/test-support";
+import { DEFAULT_LIMITS, LiveServer } from "@starbridge/server/test-support";
 import jpeg from "jpeg-js";
 import jsQR from "jsqr";
 import { PNG } from "pngjs";
@@ -95,6 +95,21 @@ test("pair prints a link and a QR code that carry the code", async () => {
   expect(await done).toBe(0);
 });
 
+test("pair past the account's machine limit ends at once with the reason (#615)", async () => {
+  server.stop();
+  server = await LiveServer.start({ maxMachines: 1 });
+  await paired(server);
+  const ctx = testCtx();
+  const done = run(["pair", "--server", server.url, "--name", "sixth"], ctx);
+  await until(() => ctx.lines.some((l) => l.startsWith("Pairing code: ")));
+  const code = ctx.lines[0]?.replace("Pairing code: ", "") as string;
+  await expect(server.approve(code)).rejects.toThrow("machine-cap");
+  expect(await done).toBe(1);
+  expect(ctx.errors.join("\n")).toContain(
+    "maximum number of machines (phones and browsers don't count): revoke one",
+  );
+});
+
 test("pair uses the hosted server unless --server or STARBRIDGE_SERVER names another", async () => {
   const real = globalThis.fetch;
   const asked: string[] = [];
@@ -111,6 +126,36 @@ test("pair uses the hosted server unless --server or STARBRIDGE_SERVER names ano
     globalThis.fetch = real;
   }
   expect(asked).toEqual(["https://starbridge.run/v1/pairings", "https://self.example/v1/pairings"]);
+});
+
+test("the last poll waits no longer than the code has left, and a swept pairing reads as expired (#623)", async () => {
+  const real = globalThis.fetch;
+  const polls: string[] = [];
+  const start = Date.now();
+  let posted = false;
+  globalThis.fetch = (async (url: string | URL | Request) => {
+    if (String(url).endsWith("/v1/pairings")) {
+      posted = true;
+      return new Response(null, { status: 201 });
+    }
+    polls.push(String(url));
+    return Response.json(
+      { error: "not-found", detail: "no such pairing, or it expired" },
+      { status: 404 },
+    );
+  }) as unknown as typeof fetch;
+  try {
+    const ctx = testCtx();
+    // Half a second of the 10 minutes is left once the pairing is stored.
+    ctx.now = () => new Date(posted ? start + 599_500 : start);
+    expect(await run(["pair", "--server", "https://self.example"], ctx)).toBe(1);
+    expect(polls.map((u) => new URL(u).searchParams.get("wait"))).toEqual(["1"]);
+    expect(ctx.errors.at(-1)).toBe(
+      "starbridge: the pairing code expired; run `starbridge pair` again",
+    );
+  } finally {
+    globalThis.fetch = real;
+  }
 });
 
 test("pair --force names the old pairing as Devices shows it, not by its id (#287)", async () => {
@@ -254,10 +299,52 @@ function sidewaysJpeg(): string {
   return path;
 }
 
+test("a decision's image is stored once whatever the devices, and a re-seal keeps it (#685)", async () => {
+  const ctx = await paired(server);
+  const shot = noisyPng(1080, 2400);
+  expect(await run([...ASK, "--image", shot], ctx)).toBe(0);
+  const one = server.decisionBytes();
+  const laptop = await server.addDevice("laptop");
+  const tablet = await server.addDevice("tablet");
+  await poll(ctx, session(ctx), { cursor: ctx.store.state().cursor, seconds: 0, shared: true });
+  const three = server.decisionBytes();
+  // Two more boxes of text, not two more copies of the picture.
+  expect(three - one).toBeLessThan(10_000);
+  const [img] = (await server.images())[0] ?? [];
+  for (const by of [laptop, tablet]) expect((await server.images(by))[0]?.[0]).toEqual(img);
+}, 30_000);
+
+test("a decision with four images and a long context still reaches devices that join (#720)", async () => {
+  server.stop();
+  // Forty devices sign in within the minute.
+  const fast: [number, number] = [100, 60_000];
+  server = await LiveServer.start({
+    limits: {
+      ...DEFAULT_LIMITS,
+      challenges: fast,
+      ownerSignIns: fast,
+      directoryAppends: fast,
+      pairingPosts: fast,
+      pairingReads: fast,
+      pairingResults: fast,
+    },
+  });
+  const ctx = await paired(server);
+  const images = [1, 2, 3, 4].flatMap(() => ["--image", noisyPng(2400, 1500)]);
+  const context = "Why: ".padEnd(8000, "x");
+  expect(await run([...ASK.slice(0, 3), "--context", context, ...images], ctx)).toBe(0);
+  const added = [];
+  // Each new device adds an 11 KB box; the images alone had nearly filled the item for one.
+  for (let i = 0; i < 40; i++) added.push(await server.addDevice(`device${i}`));
+  await poll(ctx, session(ctx), { cursor: ctx.store.state().cursor, seconds: 0, shared: true });
+  expect(ctx.errors.filter((e) => /re-send|too large/.test(e))).toEqual([]);
+  for (const by of added) expect((await server.images(by))[0]).toHaveLength(4);
+}, 60_000);
+
 test("ask turns a sideways phone photo upright", async () => {
   const ctx = await paired(server);
   expect(await run([...ASK, "--image", sidewaysJpeg()], ctx)).toBe(0);
-  const [img] = (await server.opened("decision"))[0]?.images ?? [];
+  const [img] = (await server.images())[0] ?? [];
   expect(img).toMatchObject({ type: "image/jpeg", width: 20, height: 40 });
   const px = jpeg.decode(fromB64(img?.data ?? ""), { useTArray: true });
   // The top row is red; the bottom row is white.
@@ -290,6 +377,60 @@ test("ask --answer-in posts a pointer decision, and settle closes it", async () 
   // A second settle finds it closed already, which is fine.
   expect(await run(["settle", id], ctx)).toBe(0);
   expect(await run(["settle", "d_unknown"], ctx)).toBe(1);
+});
+
+test("settle --session and --all close a flood at the server's pace (#584)", async () => {
+  server.stop();
+  // Two posts per half second: the settles meet 429s and wait them out.
+  server = await LiveServer.start({ limits: { ...DEFAULT_LIMITS, machineItems: [2, 500] } });
+  const ctx = await paired(server);
+  const ids: Record<string, string[]> = { s1: [], s2: [] };
+  for (const [s, n] of [
+    ["s1", 4],
+    ["s2", 2],
+  ] as const)
+    for (let i = 0; i < n; i++) {
+      for (;;) {
+        if ((await run([...ASK, "--session", s], ctx)) === 0) break;
+        await Bun.sleep(100);
+      }
+      ids[s]?.push(ctx.lines.at(-1) as string);
+    }
+  const [answered, ...rest] = ids.s1 as string[];
+  await server.answer(answered as string, { choice: "Merge" });
+  expect(await run(["wait", answered as string, "--timeout", "10s"], ctx)).toBe(0);
+
+  let slept = 0;
+  const sleep = ctx.sleep;
+  ctx.sleep = (ms) => {
+    slept++;
+    return sleep(ms);
+  };
+  expect(await run(["settle", "--session", "s1", "--outcome", "withdrawn"], ctx)).toBe(0);
+  expect(ctx.lines.at(-1)).toBe("Settled 3 decisions.");
+  expect(slept).toBeGreaterThan(0);
+  const open = async () =>
+    (await server.listed("decision")).filter((d) => !d.answeredAt).map((d) => d.item.id);
+  expect((await open()).sort()).toEqual([...(ids.s2 as string[])].sort());
+  for (const id of rest) expect(ctx.store.state().asked[id]?.settled).toBe(true);
+
+  // Without a terminal, --all needs --yes.
+  expect(await run(["settle", "--all"], ctx)).toBe(1);
+  expect(ctx.errors.at(-1)).toContain("--yes");
+  expect(await run(["settle", "--all", "--session", "s2"], ctx)).toBe(1);
+  expect(await run(["settle", "--all", "--yes"], ctx)).toBe(0);
+  expect(ctx.lines.at(-1)).toBe("Settled 2 decisions.");
+  expect(await open()).toEqual([]);
+  expect(await run(["settle", "--all", "--yes"], ctx)).toBe(0);
+  expect(ctx.lines.at(-1)).toBe("No open decision this machine asked.");
+  // A settle whose notice never reached the server is posted again.
+  const failed = ids.s2?.[0] as string;
+  ctx.store.updateState((st) => {
+    (st.asked[failed] as { unposted?: boolean }).unposted = true;
+  });
+  expect(await run(["settle", "--all", "--yes"], ctx)).toBe(0);
+  expect(ctx.lines.at(-1)).toBe("Settled 1 decision.");
+  expect(ctx.store.state().asked[failed]?.unposted).toBeUndefined();
 });
 
 test("Done on an --answer-in decision reaches the agent, and every device hears of it (#539)", async () => {
@@ -379,6 +520,106 @@ test("waiting and working flip a decision's state, and each flip pushes", async 
   expect(ctx.errors.at(-1)).toContain("already answered");
 });
 
+test("waiting says when the owner snoozed the question, and wait says it once with exit 3", async () => {
+  const ctx = await paired(server);
+  await run(ASK, ctx);
+  const id = ctx.lines[0] as string;
+  const until = new Date();
+  until.setDate(until.getDate() + 1);
+  until.setHours(18, 0, 0, 0);
+  // Without the agent, `waiting` reads the snooze itself.
+  await server.snooze(id, until);
+  const line = `Snoozed ${id} (Merge #12 now?) until tomorrow 18:00: no answer before then.`;
+  expect(await run(["waiting", id], ctx)).toBe(0);
+  expect(ctx.lines.at(-1)).toBe(line);
+  expect(await run(["wait", id, "--timeout", "5s"], ctx)).toBe(3);
+  expect(ctx.lines.at(-1)).toBe(line);
+  // Told once: the next wait waits on, and an answer still comes.
+  const next = run(["wait", id, "--timeout", "20s"], ctx);
+  await server.answer(id, { choice: "Merge" });
+  expect(await next).toBe(0);
+  expect(ctx.lines.at(-1)).toBe(`Answer to ${id} (Merge #12 now?): Merge`);
+});
+
+test("through the local agent, waiting and wait say the snooze too, and --json prints its time", async () => {
+  const ctx = await paired(server);
+  const agent = makeAgent(ctx, { socket: join(ctx.store.dir, "agent.sock"), noQuota: true });
+  await agent.start();
+  try {
+    await run(ASK, ctx);
+    const id = ctx.lines.at(-1) as string;
+    const back = new Date();
+    back.setDate(back.getDate() + 1);
+    back.setHours(18, 0, 0, 0);
+    await server.snooze(id, back);
+    await until(() => !!ctx.store.state().asked[id]?.snooze);
+    expect(await run(["waiting", id], ctx)).toBe(0);
+    expect(ctx.lines.at(-1)).toBe(
+      `Snoozed ${id} (Merge #12 now?) until tomorrow 18:00: no answer before then.`,
+    );
+    expect(await run(["wait", id, "--json", "--timeout", "5s"], ctx)).toBe(3);
+    expect(JSON.parse(ctx.lines.at(-1) as string)).toEqual({
+      decisionId: id,
+      snoozedUntil: back.toISOString(),
+    });
+    expect(await run(["wait", id, "--timeout", "2s"], ctx)).toBe(2);
+  } finally {
+    await agent.stop();
+  }
+});
+
+test("a snooze waiting read is not told by wait once the owner answered since", async () => {
+  const ctx = await paired(server);
+  await run(ASK, ctx);
+  const id = ctx.lines[0] as string;
+  await server.snooze(id, new Date(Date.now() + 3_600_000));
+  expect(await run(["waiting", id], ctx)).toBe(0);
+  expect(ctx.lines.at(-1)).toStartWith(`Snoozed ${id}`);
+  await server.answer(id, { choice: "Merge" });
+  expect(await run(["wait", id, "--timeout", "10s"], ctx)).toBe(0);
+  expect(ctx.lines.at(-1)).toBe(`Answer to ${id} (Merge #12 now?): Merge`);
+});
+
+test("back now from a device whose clock runs ahead says nothing either", async () => {
+  const ctx = await paired(server);
+  await run(ASK, ctx);
+  const id = ctx.lines[0] as string;
+  const ahead = new Date(Date.now() + 4 * 60_000);
+  await server.snooze(id, ahead, ahead);
+  expect(await run(["waiting", id], ctx)).toBe(0);
+  expect(ctx.lines.at(-1)).toBe(id);
+  expect(await run(["wait", id, "--timeout", "2s"], ctx)).toBe(2);
+});
+
+test("back now: a snooze already over says nothing", async () => {
+  const ctx = await paired(server);
+  await run(ASK, ctx);
+  const id = ctx.lines[0] as string;
+  await server.snooze(id, new Date(Date.now() - 1000));
+  await poll(ctx, session(ctx), {
+    cursor: ctx.store.state().asked[id]?.cursor,
+    seconds: 0,
+    shared: false,
+  });
+  expect(await run(["wait", id, "--timeout", "2s"], ctx)).toBe(2);
+});
+
+test("wait --no-mark collects an answer without marking it waiting, which would notify again (#603)", async () => {
+  const ctx = await paired(server);
+  await run(ASK, ctx);
+  const id = ctx.lines[0] as string;
+  expect(await run(["wait", id, "--no-mark", "--timeout", "1s"], ctx)).toBe(2);
+  expect(await server.opened("waiting")).toEqual([]);
+  expect(server.pushed).toEqual(["decision"]);
+  // Without it, the first wait marks it waiting once; the next pushes nothing more.
+  expect(await run(["wait", id, "--timeout", "1s"], ctx)).toBe(2);
+  expect(await run(["wait", id, "--timeout", "1s"], ctx)).toBe(2);
+  expect(server.pushed).toEqual(["decision", "waiting"]);
+  await server.answer(id, { choice: "Merge" });
+  expect(await run(["wait", id, "--no-mark"], ctx)).toBe(0);
+  expect(ctx.lines.at(-1)).toBe(`Answer to ${id} (Merge #12 now?): Merge`);
+});
+
 test("ask --waiting pushes once, through its waiting state, so the notification says waiting", async () => {
   const ctx = await paired(server);
   await run([...ASK, "--waiting"], ctx);
@@ -402,8 +643,6 @@ test("a decision names its agent and the machine's kind, which config sets", asy
 test("a claude -p session is told to wait, since no mod brings its answer back", async () => {
   const ctx = await paired(server);
   ctx.env.CLAUDECODE = "1";
-  await run(ASK, ctx);
-  expect(ctx.errors.at(-1)).toBe("The answer will come back into this session as a new prompt.");
   ctx.env.CLAUDE_CODE_SESSION_ATTENDED = "0";
   await run(ASK, ctx);
   expect(ctx.errors.at(-1)).toContain("run `starbridge wait");
@@ -413,7 +652,6 @@ test("a claude -p session is told to wait, since no mod brings its answer back",
   await run(ASK, ctx);
   expect(ctx.errors.at(-1)).toContain("run `starbridge wait");
   expect((await server.opened("decision")).map((d) => d.agent)).toEqual([
-    "claude-code",
     "claude-code",
     "claude-code",
   ]);
@@ -635,6 +873,69 @@ test("open decisions reach a device that joins later, which can answer them", as
   expect(ctx.lines.at(-1)).toBe(`Answer to ${id} (Merge #12 now?): Merge`);
   // Answered or withdrawn, a decision's plaintext leaves the state.
   expect(Object.values(ctx.store.state().asked).map((a) => a.body)).toEqual([undefined, undefined]);
+});
+
+test("a re-seal the server finds too large is not sent again (#720)", async () => {
+  server.stop();
+  // Room for the decision's box for one device, not for two.
+  server = await LiveServer.start({ limits: { ...DEFAULT_LIMITS, itemBytes: 15_000 } });
+  const ctx = await paired(server);
+  const context = "Why: ".padEnd(8000, "x");
+  expect(await run(["ask", "--question", "Q?", "--context", context, "--session", "s"], ctx)).toBe(
+    0,
+  );
+  await server.addDevice("laptop");
+  const s = session(ctx);
+  let posts = 0;
+  const postItem = s.api.postItem.bind(s.api);
+  s.api.postItem = (item) => {
+    posts++;
+    return postItem(item);
+  };
+  const again = () => poll(ctx, s, { cursor: ctx.store.state().cursor, seconds: 0, shared: true });
+  await again();
+  await again();
+  expect(posts).toBe(1);
+  expect(ctx.errors.filter((e) => e.includes("too large"))).toHaveLength(1);
+});
+
+test("re-sealing stops at a 429 and waits its Retry-After, leaving the window to asks (#650)", async () => {
+  server.stop();
+  // Three items a minute: two asks and the first re-sealed copy fill it.
+  server = await LiveServer.start({
+    limits: { ...DEFAULT_LIMITS, machineItems: [3, 60_000] },
+  });
+  const ctx = await paired(server);
+  for (const q of ["First?", "Second?"])
+    expect(await run(["ask", "--question", q, "--session", "s"], ctx)).toBe(0);
+  await server.addDevice("laptop");
+  const s = session(ctx);
+  let posts = 0;
+  const postItem = s.api.postItem.bind(s.api);
+  s.api.postItem = (item) => {
+    posts++;
+    return postItem(item);
+  };
+  const again = () => poll(ctx, s, { cursor: ctx.store.state().cursor, seconds: 0, shared: true });
+  await again();
+  // The second copy got the 429: no third try, no error shown.
+  expect(posts).toBe(2);
+  expect(ctx.errors.filter((e) => e.includes("re-send"))).toEqual([]);
+  await again();
+  expect(posts).toBe(2);
+  // Past the Retry-After, the next poll sends the rest.
+  const later = Date.now() + 61_000;
+  ctx.now = () => new Date(later);
+  await again();
+  expect(posts).toBe(3);
+});
+
+test("ask on a full account says so in plain words (#586)", async () => {
+  server.stop();
+  server = await LiveServer.start({ limits: { ...DEFAULT_LIMITS, storedBytes: 1 } });
+  const ctx = await paired(server);
+  expect(await run(["ask", "--question", "First?", "--session", "s"], ctx)).not.toBe(0);
+  expect(ctx.errors.join("\n")).toContain("your Starbridge account is full");
 });
 
 /** A laptop's answer the machine accepted, not yet taken by its session, then the laptop revoked. */

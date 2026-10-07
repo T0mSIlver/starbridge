@@ -1,13 +1,21 @@
-import { afterEach, beforeEach, expect, setDefaultTimeout, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { afterEach, beforeEach, expect, setDefaultTimeout, spyOn, test } from "bun:test";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { createServer, Server as HttpServer, type IncomingMessage, request } from "node:http";
 import { createServer as createNetServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { LiveServer } from "@starbridge/server/test-support";
 import { PNG } from "pngjs";
-import type { SessionEvent, Status } from "../src/agent/api";
-import { AgentClient, AgentError, Interrupted } from "../src/agent/client";
+import { proof, type SessionEvent, type Status } from "../src/agent/api";
+import { AgentClient, AgentError, Interrupted, NoAgent } from "../src/agent/client";
 import { makeAgent } from "../src/agent/main";
 import type { Agent } from "../src/agent/server";
 import { run } from "../src/cli";
@@ -602,4 +610,221 @@ test("the socket is never open to other users, even between bind and chmod (#95)
   expect((bound as number) & 0o077).toBe(0);
   expect(statSync(socket).mode & 0o777).toBe(0o600);
   expect(process.umask()).toBe(umask);
+});
+
+test("on loopback TCP (Windows), only a call that proves the port file's token gets through", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "starbridge-port-"));
+  const socket = join(dir, "agent.port");
+  const { agent } = await machine({ socket });
+  expect(statSync(socket).mode & 0o777).toBe(0o600);
+  const file = JSON.parse(readFileSync(socket, "utf8"));
+  expect(file.pid).toBe(process.pid);
+
+  await ask(client(socket), "--project", "p");
+  expect(await server.opened("decision")).toHaveLength(1);
+
+  const call = (headers: Record<string, string>) =>
+    new Promise<{ status: number; proof: unknown }>((resolve, reject) =>
+      request({ host: "127.0.0.1", port: file.port, path: "/v1/status", headers }, (res) => {
+        res.resume();
+        resolve({ status: res.statusCode ?? 0, proof: res.headers["starbridge-proof"] });
+      })
+        .on("error", reject)
+        .end(),
+    );
+  const nonce = "0".repeat(32);
+  const api = { "starbridge-api": "1", "starbridge-nonce": nonce };
+  expect((await call(api)).status).toBe(401);
+  expect((await call({ ...api, authorization: `Bearer ${file.token}` })).status).toBe(401);
+  expect(
+    await call({ ...api, authorization: `Starbridge ${proof(file.token, "client", nonce)}` }),
+  ).toEqual({ status: 200, proof: proof(file.token, "agent", nonce) });
+
+  await agent.stop();
+  expect(existsSync(socket)).toBe(false);
+
+  // Whatever takes the port after the agent stopped cannot answer for it.
+  const impostor = createServer((_req, res) => res.end("{}"));
+  await new Promise<void>((r) => impostor.listen(file.port, "127.0.0.1", r));
+  writeFileSync(socket, JSON.stringify(file));
+  try {
+    await expect(new AgentClient(socket).call("GET", "/v1/status")).rejects.toThrow("proof");
+  } finally {
+    impostor.close();
+  }
+  // A port file left by an agent that died: its pid runs no more, so nothing is sent.
+  writeFileSync(socket, JSON.stringify({ ...file, pid: 2 ** 22 + 1 }));
+  await expect(new AgentClient(socket).call("GET", "/v1/status")).rejects.toThrow("no agent");
+});
+
+test("an agent that hangs up or exits without stopping removes its port file (#570)", async () => {
+  const main = join(import.meta.dir, "../src/main.ts");
+  // An exit that skips the agent's stop, as a fatal error's does, once the agent wrote its file.
+  const exit = `process.argv = [process.argv[0], "starbridge", "agent", "--no-quota"];
+const { existsSync } = await import("node:fs");
+setInterval(() => existsSync(process.env.STARBRIDGE_AGENT_SOCKET) && process.exit(1), 5);
+await import(${JSON.stringify(main)});`;
+  for (const how of ["SIGHUP", "exit"] as const) {
+    const dir = mkdtempSync(join(tmpdir(), "starbridge-port-"));
+    const socket = join(dir, "agent.port");
+    const argv = how === "exit" ? ["-e", exit] : [main, "agent", "--no-quota"];
+    const child = Bun.spawn([process.execPath, ...argv], {
+      env: {
+        ...process.env,
+        HOME: dir,
+        STARBRIDGE_CONFIG_DIR: dir,
+        STARBRIDGE_AGENT_SOCKET: socket,
+      },
+      stdout: "ignore",
+      stderr: "ignore",
+    });
+    try {
+      // The exit comes once the file is there; SIGHUP as soon as it is, which the agent must
+      // catch from before it writes the file.
+      if (how === "SIGHUP") {
+        await until(() => existsSync(socket), 10_000);
+        child.kill("SIGHUP");
+      }
+      expect(await child.exited).toBe(how === "SIGHUP" ? 0 : 1);
+      expect(existsSync(socket)).toBe(false);
+    } finally {
+      child.kill("SIGKILL");
+    }
+  }
+});
+
+test("answers --all through the agent follows every session's answers and takes none", async () => {
+  const { socket } = await machine();
+  const c = client(socket);
+  const s1 = session(socket, "s1");
+  await s1.hello();
+  const first = await ask(c, "--project", "p", "--session", "s1");
+  await server.answer(first, { choice: "Merge" });
+  await until(async () => (await s1.events()).length === 1);
+
+  const controller = new AbortController();
+  const observer = { ...client(socket), signal: controller.signal };
+  const following = run(["answers", "--all", "--follow"], observer);
+  await until(() => observer.lines.length === 1);
+  expect(JSON.parse(observer.lines[0] as string)).toMatchObject({
+    decisionId: first,
+    question: "Merge #12 now?",
+    choice: "Merge",
+    session: "s1",
+    project: "p",
+  });
+  const second = await ask(c, "--project", "q", "--session", "s2");
+  await server.answer(second, { choice: "Wait" });
+  await until(() => observer.lines.length === 2);
+  expect(JSON.parse(observer.lines[1] as string)).toMatchObject({
+    decisionId: second,
+    project: "q",
+  });
+  controller.abort();
+  expect(await following).toBe(130);
+
+  // Still each session's to take, and nothing went waiting.
+  expect((await s1.events()).map((e) => e.decisionId)).toEqual([first]);
+  expect(await run(["wait", second, "--timeout", "1s"], c)).toBe(0);
+  expect(await server.opened("waiting")).toEqual([]);
+});
+
+test("ask promises a prompt only once the agent has seen this session's mod (#537)", async () => {
+  const { socket } = await machine();
+  const c = client(socket);
+  c.env.CLAUDECODE = "1";
+  const prompt = "The answer will come back into this session as a new prompt.";
+  await ask(c, "--session", "s-mod");
+  expect(c.errors.at(-1)).toContain("run `starbridge wait");
+
+  const s = session(socket, "s-mod");
+  await s.events();
+  await ask(c, "--session", "s-mod");
+  expect(c.errors.at(-1)).toBe(prompt);
+  // Another session's mod is no promise for this one.
+  await ask(c, "--session", "s-other");
+  expect(c.errors.at(-1)).toContain("run `starbridge wait");
+
+  // A /clear: the same process greets under a new id, and the old one has no mod any more.
+  const http = new AgentClient(socket, "starbridge-mod/test");
+  await http.call("POST", "/v1/sessions/s-cleared/hello", { cwd: "/work/x", replaces: "s-mod" });
+  await ask(c, "--session", "s-mod");
+  expect(c.errors.at(-1)).toContain("run `starbridge wait");
+  await ask(c, "--session", "s-cleared");
+  expect(c.errors.at(-1)).toBe(prompt);
+
+  await s.events();
+  await s.bye();
+  await ask(c, "--session", "s-mod");
+  expect(c.errors.at(-1)).toContain("run `starbridge wait");
+});
+
+test("a mod silent for longer than one events cycle no longer counts (#537)", async () => {
+  const { socket, ctx } = await machine();
+  const c = client(socket);
+  c.env.CLAUDECODE = "1";
+  await session(socket, "s-quiet").events();
+  const start = Date.now();
+  ctx.now = () => new Date(start + 46_000);
+  await ask(c, "--session", "s-quiet");
+  expect(c.errors.at(-1)).toContain("run `starbridge wait");
+});
+
+test("through the agent, wait --no-mark leaves the decision as it was (#603)", async () => {
+  const { socket } = await machine();
+  const c = client(socket);
+  const id = await ask(c, "--project", "p");
+  expect(await run(["wait", id, "--no-mark", "--timeout", "1s"], c)).toBe(2);
+  expect(await server.opened("waiting")).toEqual([]);
+  expect(await run(["wait", id, "--timeout", "1s"], c)).toBe(2);
+  expect((await server.opened("waiting")).map((w) => w.state)).toEqual(["waiting"]);
+});
+
+test("a socket path too long for a unix socket: clients fall back and say why (#622)", async () => {
+  const ctx = await paired(server);
+  const socket = join(ctx.store.dir, "x".repeat(120), "agent.sock");
+  const call = new AgentClient(socket).call("GET", "/v1/status");
+  await expect(call).rejects.toBeInstanceOf(NoAgent);
+  await expect(call).rejects.toThrow("too long for a unix socket");
+
+  // Bun's agent listens there and says so in a pid file, which goes when it stops (#714).
+  const first = makeAgent(ctx, { socket, noQuota: true });
+  await first.start();
+  agents.push(first);
+  expect(readFileSync(`${socket}.pid`, "utf8")).toBe(String(process.pid));
+  // Where `connect` refuses the path (Node, macOS), a second agent cannot probe the first: the
+  // pid file stops it from unlinking the live socket.
+  const probe = spyOn(AgentClient.prototype, "call").mockRejectedValueOnce(
+    new NoAgent("too long", "EINVAL"),
+  );
+  // The first agent as another process sees it.
+  const other = Bun.spawn(["sleep", "30"]);
+  writeFileSync(`${socket}.pid`, String(other.pid));
+  try {
+    await expect(makeAgent(ctx, { socket, noQuota: true }).start()).rejects.toThrow("already runs");
+  } finally {
+    probe.mockRestore();
+  }
+  expect(existsSync(socket)).toBe(true);
+  writeFileSync(`${socket}.pid`, String(process.pid));
+  await first.stop();
+  expect(existsSync(socket)).toBe(false);
+  expect(existsSync(`${socket}.pid`)).toBe(false);
+  // The CLI goes to the server itself where it cannot connect, and says why.
+  writeFileSync(socket, "");
+  const env = { ...ctx.env, STARBRIDGE_AGENT_SOCKET: socket };
+  expect(await run([...ASK, "--session", "s1"], { ...ctx, env })).toBe(0);
+  expect(ctx.errors.some((e) => e.includes("too long for a unix socket"))).toBe(true);
+  rmSync(socket);
+
+  // After a crash, a probe that finds no socket proves the agent gone, whatever process has its
+  // pid now.
+  try {
+    writeFileSync(`${socket}.pid`, String(other.pid));
+    const again = makeAgent(ctx, { socket, noQuota: true });
+    await again.start();
+    await again.stop();
+  } finally {
+    other.kill();
+  }
 });

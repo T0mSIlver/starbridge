@@ -1,4 +1,5 @@
 import groovy.json.JsonSlurper
+import java.util.Properties
 
 plugins {
     alias(libs.plugins.android.application)
@@ -9,6 +10,13 @@ plugins {
     alias(libs.plugins.hilt)
 }
 
+// buildSrc/src/main/kotlin/DogfoodSigning.kt: null on every build but the maintainer's dogfood ones.
+val dogfood = dogfoodKey(
+    Properties().apply { rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use(::load) },
+    providers.environmentVariable("CI").orNull,
+    File(System.getProperty("user.home")),
+)
+
 android {
     namespace = "dev.starbridge.app"
     compileSdk = 37
@@ -18,7 +26,7 @@ android {
         minSdk = 31
         targetSdk = 36
         // Release builds pass -PversionName from the tag (v1.2.3 or v1.2.3-rc.4).
-        val release = providers.gradleProperty("versionName").orNull ?: "0.1.0"
+        val release = providers.gradleProperty("versionName").orNull ?: "0.1.0-rc.1"
         versionName = release
         // buildSrc/src/main/kotlin/VersionCode.kt.
         versionCode = versionCodeOf(release)
@@ -28,6 +36,13 @@ android {
     }
 
     signingConfigs {
+        create("dogfood") {
+            val key = dogfood ?: return@create
+            storeFile = key.store
+            storePassword = key.passwordFile.readText().trim()
+            keyAlias = key.alias
+            keyPassword = storePassword
+        }
         create("release") {
             val keystore = releaseKeystore() ?: return@create
             storeFile = keystore.file
@@ -38,6 +53,10 @@ android {
     }
 
     buildTypes {
+        // The debug key unless the maintainer's local.properties asks for the release key (DogfoodSigning.kt).
+        debug {
+            if (dogfood != null) signingConfig = signingConfigs.getByName("dogfood")
+        }
         release {
             isMinifyEnabled = true
             isShrinkResources = true
@@ -66,6 +85,13 @@ android {
             // Screenshots render clock times in UTC whichever test runs first: a screenshot class
             // setting the zone in its own init lost it once another Robolectric test ran before it.
             it.systemProperty("user.timezone", "UTC")
+            // The tests' temp dirs and Robolectric's go under build/, not /tmp (a tmpfs on dev
+            // machines that thousands of them filled), and go when the run ends. A failed run
+            // leaves them until the next one starts (#687).
+            val tmp = layout.buildDirectory.dir("test-tmp/${it.name}").get().asFile
+            it.systemProperty("java.io.tmpdir", tmp.absolutePath)
+            it.doFirst { tmp.deleteRecursively(); tmp.mkdirs() }
+            it.doLast { tmp.deleteRecursively() }
         }
     }
 }

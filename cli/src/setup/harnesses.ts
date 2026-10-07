@@ -181,18 +181,31 @@ function opencodeSnapshot(sys: Home): string {
   return JSON.stringify(Object.keys(opencodeFiles()).map((path) => readIn(dir, path) ?? null));
 }
 
-/** Whether opencode has the skill and plugin, and whether they are this CLI's. */
+/**
+ * Whether opencode has the skill and plugin, and whether they are this CLI's. A skill or plugin
+ * entry without the marker is someone else's, which setup leaves alone, with the code the entry
+ * would load: "foreign" when what is left is current (#541).
+ */
 export function opencodeState(sys: Home): FileState {
   const dir = opencodeDir(sys);
-  const same = Object.entries(opencodeFiles()).map(([path, want]) => {
-    try {
-      return readFileSync(join(dir, path), "utf8") === want;
-    } catch {
-      return undefined;
-    }
-  });
-  if (same.every((s) => s === undefined)) return "missing";
-  return same.every((s) => s === true) ? "current" : "outdated";
+  const foreign = (path: string) => {
+    const text = readIn(dir, path);
+    return text !== undefined && !ours(text);
+  };
+  const skillForeign = foreign(SKILL_FILE);
+  const pluginForeign = foreign(ENTRY_FILE);
+  const same = Object.entries(opencodeFiles())
+    .filter(([path]) => !(path === SKILL_FILE ? skillForeign : pluginForeign))
+    .map(([path, want]) => {
+      try {
+        return readFileSync(join(dir, path), "utf8") === want;
+      } catch {
+        return undefined;
+      }
+    });
+  if (same.every((s) => s === true)) return skillForeign || pluginForeign ? "foreign" : "current";
+  if (same.every((s) => s === undefined) && !skillForeign && !pluginForeign) return "missing";
+  return "outdated";
 }
 
 const SKILL_FILE = "skills/starbridge/SKILL.md";

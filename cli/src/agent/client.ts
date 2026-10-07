@@ -1,10 +1,31 @@
+import { randomBytes } from "node:crypto";
+import { existsSync } from "node:fs";
 import { request } from "node:http";
 import type { Ctx } from "../context";
+import { processAlive } from "../platform";
 import { VERSION } from "../version";
-import { API, API_HEADER, type ErrorBody, socketPath } from "./api";
+import {
+  API,
+  API_HEADER,
+  type ErrorBody,
+  isPortFile,
+  NONCE_HEADER,
+  PROOF_HEADER,
+  proof,
+  readPortFile,
+  socketPath,
+} from "./api";
 
 /** No agent listens: the CLI talks to the server itself. */
-export class NoAgent extends Error {}
+export class NoAgent extends Error {
+  constructor(
+    message: string,
+    /** The connection error that showed it, when one did. */
+    readonly code?: string,
+  ) {
+    super(message);
+  }
+}
 
 /** The agent refused the call; `status` 426 means the two cannot work together. */
 export class AgentError extends Error {
@@ -27,9 +48,22 @@ export class Interrupted extends Error {}
 
 /**
  * A connection error that proves the agent never saw the request, so falling back cannot do
- * anything twice: no socket file, nobody listening on it, or not a socket.
+ * anything twice: no socket file, nobody listening on it, not a socket, or a path too long for a
+ * socket, which no agent can listen on either (#622).
  */
-const NOT_LISTENING = new Set(["ENOENT", "ECONNREFUSED", "ENOTSOCK"]);
+const NOT_LISTENING = new Set(["ENOENT", "ECONNREFUSED", "ENOTSOCK", "EINVAL"]);
+
+/** The longest unix socket path: `sun_path` holds 108 bytes with the NUL on Linux, 104 elsewhere. */
+const MAX_SOCKET_PATH = process.platform === "linux" ? 107 : 103;
+
+/**
+ * Why `socket` cannot be a unix socket for this client, or undefined. Bun's agent listens on a
+ * longer path on Linux, which the mod reaches, but `connect` refuses it with EINVAL (#622).
+ */
+export function tooLong(socket: string): string | undefined {
+  if (Buffer.byteLength(socket) <= MAX_SOCKET_PATH) return undefined;
+  return `the agent's socket path ${socket} is over ${MAX_SOCKET_PATH} bytes, too long for a unix socket: set STARBRIDGE_AGENT_SOCKET to a shorter path, or STARBRIDGE_CONFIG_DIR to a shorter folder`;
+}
 /** A connection the agent closed under the call: it stopped or restarted. */
 const DROPPED = new Set(["ECONNRESET", "EPIPE"]);
 
@@ -64,14 +98,31 @@ export class AgentClient {
       // Before any request exists: one destroyed before its error listener is attached emits
       // "socket hang up" with nobody listening, which crashes the process (#98).
       if (signal?.aborted) return reject(new Interrupted("interrupted"));
+      let target: { socketPath: string } | { host: string; port: number } = {
+        socketPath: this.socket,
+      };
+      let auth: Record<string, string> = {};
+      let expect: string | undefined;
+      if (isPortFile(this.socket)) {
+        const f = readPortFile(this.socket);
+        if (!f || !processAlive(f.pid)) return reject(new NoAgent(`no agent on ${this.socket}`));
+        target = { host: "127.0.0.1", port: f.port };
+        const nonce = randomBytes(16).toString("hex");
+        auth = {
+          [NONCE_HEADER]: nonce,
+          authorization: `Starbridge ${proof(f.token, "client", nonce)}`,
+        };
+        expect = proof(f.token, "agent", nonce);
+      }
       const req = request(
         {
-          socketPath: this.socket,
+          ...target,
           // A fresh connection per call: a kept-alive one dies with an agent restart.
           agent: false,
           path,
           method,
           headers: {
+            ...auth,
             [API_HEADER]: String(API),
             "user-agent": this.client,
             ...(text !== undefined
@@ -81,6 +132,13 @@ export class AgentClient {
           timeout: timeoutMs,
         },
         (res) => {
+          // Whatever took the port of an agent that stopped: nothing it says counts.
+          if (expect !== undefined && res.headers[PROOF_HEADER] !== expect) {
+            res.resume();
+            return reject(
+              new NoAgent(`no agent on ${this.socket}: the port answers without its proof`),
+            );
+          }
           let raw = "";
           res.setEncoding("utf8");
           res.on("data", (d) => {
@@ -114,7 +172,8 @@ export class AgentClient {
       req.on("close", () => signal?.removeEventListener("abort", onAbort));
       req.on("timeout", () => req.destroy(new Error(`agent: no answer within ${timeoutMs} ms`)));
       req.on("error", (e: NodeJS.ErrnoException) => {
-        if (e.code && NOT_LISTENING.has(e.code)) reject(new NoAgent(`no agent on ${this.socket}`));
+        if (e.code && NOT_LISTENING.has(e.code))
+          reject(new NoAgent(tooLong(this.socket) ?? `no agent on ${this.socket}`, e.code));
         else if (e.code && DROPPED.has(e.code))
           reject(new AgentLost(`the agent dropped the call: ${e.message}`));
         else reject(e);
@@ -139,7 +198,13 @@ export async function withAgent<T>(
   try {
     return await viaAgent(agent);
   } catch (e) {
-    if (e instanceof NoAgent && !agent.answered) return direct();
+    if (e instanceof NoAgent && !agent.answered) {
+      // An agent may listen where this client cannot connect: say why, and how to fix it (#714).
+      const why = isPortFile(agent.socket) ? undefined : tooLong(agent.socket);
+      if (why && existsSync(agent.socket))
+        ctx.err(`starbridge: ${why}; going to the server directly`);
+      return direct();
+    }
     if (e instanceof NoAgent) throw new Error("the agent stopped in the middle of the command");
     if (e instanceof AgentError && e.status === 426 && !agent.answered) {
       ctx.err(`starbridge: ${e.body.detail ?? e.message}; going to the server directly`);

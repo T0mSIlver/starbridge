@@ -127,6 +127,12 @@ const PATHS = {
     </>
   ),
   view: <path d="M4 6h16M7 12h10M10 18h4" />,
+  snooze: (
+    <>
+      <circle cx="12" cy="13" r="8" />
+      <path d="M3.5 4.5 6 2.5M20.5 4.5 18 2.5M9.5 10h5l-5 6h5" />
+    </>
+  ),
   history: (
     <>
       <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />

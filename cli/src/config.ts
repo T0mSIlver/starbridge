@@ -35,9 +35,14 @@ export function configDir(env: Record<string, string | undefined>): string {
 /**
  * The file `plugin/hooks/settle.sh` reads in the config folder before it starts the CLI: written
  * with the state, `open` while a permission prompt is unsettled and unexpired, else empty (#517).
- * Missing, the CLI is older or has not written since: the hook starts it.
  */
 export const PROMPTS_OPEN = "permissions-open";
+
+/**
+ * The file in the config folder that holds this CLI's absolute path, one line, for the hooks and
+ * plugins that start it when their PATH lacks it (`plugin/hooks/cli.sh`, the mod; #612).
+ */
+export const CLI_PATH = "cli-path";
 
 /** What `PROMPTS_OPEN` holds for state `s`. */
 export function promptsMark(s: State, now = Date.now()): string {
@@ -75,22 +80,33 @@ export interface State {
       done?: boolean;
       /** Closed with `settle`, or by `revoked`: no answer will follow. */
       settled?: boolean;
+      /** Settled here, but its settled notice has not reached the server yet (#584). */
+      unposted?: boolean;
       /**
        * Answered by a device the chain revoked since: the machine dropped that answer, and the
        * server takes no other (#515).
        */
       revoked?: boolean;
       /** The devices it was sealed to, the only ones whose answer counts. */
-      to?: string[];
-      /** The decision as signed, without its images, to re-seal it to devices that join. */
-      body?: Omit<Decision, "images">;
-      /** Its image files, read again when it is re-sealed. */
-      images?: (string | { path: string; alt?: string })[];
+      to: string[];
+      /**
+       * The decision as signed, to re-seal it to devices that join. Its images are refs: the
+       * server keeps their blobs, sealed once for every device (#685).
+       */
+      body?: Decision;
       /** The decision's waiting state as last posted, under the one id it keeps. */
       waiting?: { id: string; state: Waiting["state"] };
+      /**
+       * The owner's latest snooze (#571): no answer before `until`. `told` once `wait` said so;
+       * a newer snooze is told again.
+       */
+      snooze?: { until: string; at: string; told?: boolean };
       cursor?: string;
       /** The Claude Code session that asked; the mod delivers the answer there only. */
       session?: string;
+      /** The asking session's title and project, for `answers --all` once `body` is gone. */
+      sessionTitle?: string;
+      project?: string;
       /** The Codex session that asked, which the agent queues the answer into. */
       codex?: CodexSession;
       /** Told its answer comes back as a prompt from the Pi extension or the opencode plugin. */
@@ -169,6 +185,11 @@ export interface PendingPermission {
 export interface AgentConfig {
   /** Permission prompts go to Starbridge (#57); off unless `starbridge config permissions on`. */
   permissions?: { enabled?: boolean };
+  /**
+   * Agents `uninstall --agent` took Starbridge out of (#750): setup and refresh leave them
+   * alone until `setup --agent` brings one back.
+   */
+  removedAgents?: string[];
   /** What this machine is, for its icon on devices: detected by pair and setup, or set. */
   machineKind?: MachineKind;
   quota?: {
@@ -295,8 +316,8 @@ export class Store {
       throw new StateFileError(
         p,
         name === "directory.json"
-          ? "is not in this starbridge's format (from before the first release?): remove it, the server's copy is read again"
-          : "is not in this starbridge's format (from before the first release?): move it away, then run `starbridge pair`",
+          ? "is not in this starbridge's format: remove it, the server's copy is read again"
+          : "is not in this starbridge's format: move it away, then run `starbridge pair`",
       );
     const v = (value as { v?: unknown }).v ?? 1;
     if (v !== STATE_VERSION)

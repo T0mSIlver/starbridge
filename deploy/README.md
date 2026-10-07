@@ -33,8 +33,8 @@ No request fails during a deploy (`SPEC.md`, "Releases, deploys and CI"). The pa
 other, and Caddy sends requests to the first healthy copy. The server restarts in place; Caddy
 holds requests for up to 30 s meanwhile. Each deploy loads the Caddyfile into the running Caddy
 through its admin API on `127.0.0.1:2019`. Caddy's container is recreated, which drops every
-open connection, only when `caddy.Dockerfile` changes: its image is tagged by a hash of that file
-and built only when no image has the tag.
+open connection, only when its definition in `compose.yaml` or `caddy.Dockerfile` changes: its
+image is tagged by a hash of that file and built only when no image has the tag.
 
 ## First setup
 
@@ -44,8 +44,8 @@ and built only when no image has the tag.
 2. From a second terminal, check that `ssh deploy@starbridge.run sudo true` works, then
    `ssh deploy@starbridge.run sudo sh -s < deploy/host/lock-root.sh` turns root login off.
 3. `deploy/push-secrets.sh` copies the secrets from `~/.config/starbridge/secrets` to
-   `/etc/starbridge/secrets` (root, 0700). `deploy/host/server-env.sh` turns them into
-   `/etc/starbridge/server.env` on every deploy.
+   `/etc/starbridge/secrets` (root, 0700); given names, only those. `deploy/host/server-env.sh`
+   and `caddy-auth.sh` turn them into what the containers read on every deploy.
 4. `deploy/deploy.sh`.
 5. `deploy/setup-actions-deploy.sh` for deploys from Actions.
 
@@ -55,7 +55,8 @@ and built only when no image has the tag.
 |---|---|
 | Compose project | `sudo docker compose -p starbridge -f /opt/starbridge/deploy/compose.yaml` |
 | Database | volume `starbridge_data`, `/data/starbridge.db` in the container |
-| Backups | `/var/backups/starbridge/starbridge-YYYYMMDD.db` and `umami-YYYYMMDD.dump`, nightly at 03:15 UTC, 14 days; Hetzner backups cover the rest |
+| Backups | `/var/backups/starbridge/starbridge-YYYYMMDD.db` and `umami-YYYYMMDD.dump`, nightly at 03:15 UTC, 7 days; `deploy-*.db`, the last 2 deploys that ran a migration; both are `VACUUM INTO` copies. Hetzner backups cover the rest |
+| Docker prune | `starbridge-docker-prune.timer`, Sundays at 04:30 UTC: images no container uses and build cache, older than 7 days |
 | Analytics | Umami (`umami`, `umami-db`), volume `starbridge_umami-db`; secrets in `/etc/starbridge/umami.env` and `umami-db.env`, made on the first deploy |
 | Analytics limits | Caddy (built with the `rate_limit` module, `caddy.Dockerfile`) takes 30 events a minute per address and 300 in all, 8 KB each; `starbridge-umami-trim.timer` keeps each table to 180 days and a million rows, hourly |
 | Uptime | `.github/workflows/uptime.yml` checks `/healthz`, `/healthz/backup` (503 once the last backup is over 26 h old) and `/healthz/disk` (503 under 2 GB free) hourly and opens an `outage` issue on failure |
@@ -73,7 +74,15 @@ ssh -i ~/.ssh/starbridge_ed25519 -N -L 3001:127.0.0.1:3001 deploy@starbridge.run
 
 then open `http://localhost:3001` and log in as `admin` with the password in
 `~/.config/starbridge/secrets/umami-admin-password`. After the first deploy with Umami, run
-`deploy/umami-setup.sh` once: it sets that password and adds the website. To leave your own
+`deploy/umami-setup.sh` once: it sets that password and adds the website, the launch funnel and
+a share link on `stats.starbridge.run`, which it prints. That host serves only the share page
+(`Caddyfile`); its DNS records point at the box like the main domain's. It asks for a password
+too, user `tom`, then sets a cookie that the page's API calls carry instead (Umami's page replaces
+the browser's saved password with its own header): the password is in `~/.config/starbridge/secrets/stats-password` and its bcrypt
+hash in `stats-password-hash` beside it. To change it, write a new password there, hash it with
+`caddy hash-password --bcrypt-cost 10` into `stats-password-hash` (a higher cost lets anyone
+spend the box's CPU), run `deploy/push-secrets.sh stats-password-hash` and deploy. Until a deploy
+has run with the hash on the box, the host turns everyone away. To leave your own
 visits out, run `localStorage.setItem("umami.disabled", "1")` in the browser's console on
 starbridge.run.
 
@@ -81,12 +90,12 @@ starbridge.run.
 
 To restore, stop the server, copy a backup over `starbridge.db` in the volume, delete
 `starbridge.db-wal` and `starbridge.db-shm`, `chown 1000:1000` it and start the server. Besides
-the nightly `starbridge-YYYYMMDD.db`, each deploy leaves `deploy-<time>.db`, taken while the old
-server still ran, seconds before the new one opened the database; the last five are kept.
+the nightly `starbridge-YYYYMMDD.db`, each deploy that runs a migration leaves `deploy-<time>.db`, taken while
+the old server still ran, seconds before the new one opened the database; the last two are kept.
 
-A server refuses a database whose schema is newer than its own (`PRAGMA user_version`), so
-rolling back past a release that migrated fails at start: restore that deploy's `deploy-<time>.db`
-along with the rollback.
+A server refuses a database whose schema is newer than its own (`PRAGMA user_version`), and
+`apply.sh` stops such a deploy before it replaces anything, so rolling back past a release that
+migrated fails: restore that deploy's `deploy-<time>.db` along with the rollback.
 
 To restore Umami, stop `umami`, then
 `sudo docker compose -p starbridge -f /opt/starbridge/deploy/compose.yaml exec -T umami-db pg_restore -U umami -d umami --clean < umami-YYYYMMDD.dump`

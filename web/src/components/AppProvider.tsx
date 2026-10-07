@@ -4,6 +4,7 @@ import type { Settled } from "@starbridge/protocol";
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { api, backingOff } from "@/lib/api";
 import type { Boot, Ctx, Inbox, Quotas, Runs } from "@/lib/device";
+import { reach, send } from "@/lib/funnel";
 import { newestWins } from "@/lib/newest";
 import { AnsweredFirst } from "@/lib/outcome";
 import {
@@ -49,6 +50,8 @@ export type Store = {
   /** Runs boot again, after sign-in, setup, pairing or recovery. */
   reload: () => Promise<void>;
   answer: (item: InboxItem, reply: Reply) => Promise<void>;
+  /** Puts the question off until `until` (#571), or brings it back now with the current time. */
+  snooze: (item: InboxItem, until: string) => Promise<void>;
   /** Replaces the context after a directory write (approve, revoke). */
   update: (ctx: Ctx) => void;
   refreshQuotas: () => Promise<void>;
@@ -78,6 +81,11 @@ export const StoreContext = createContext<Store | null>(null);
 const Ctx_ = StoreContext;
 
 const POLL_MS = 20_000;
+/**
+ * Until a push reaches the page, it may have no Web Push at all (refused, unsupported, or a server
+ * that cannot send it), so it polls faster while visible (#664), as Android does (#445).
+ */
+const PUSHLESS_POLL_MS = 5_000;
 /** While a prompt waits, it leaves within a second or two of being settled elsewhere. */
 const PROMPT_POLL_MS = 1_500;
 /**
@@ -101,6 +109,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [boot, setBoot] = useState<Store["boot"]>({ state: "loading" });
   const [inbox, setInbox] = useState<Inbox>({ items: [], rejected: [] });
   const [inboxLoaded, setInboxLoaded] = useState(false);
+  const [pushed, setPushed] = useState(false);
   const [quotas, setQuotas] = useState<Quotas>();
   const [withheld, setWithheld] = useState<string>();
   const [quotaSettings, setSettingsState] = useState<QuotaSettings>(DEFAULT_SETTINGS);
@@ -124,6 +133,34 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // Inbox reads overlap (a load, pushes, polls): only the newest to start may land (#547).
   const inboxRead = useRef(newestWins());
   const ctx = boot.state === "ready" ? boot.ctx : undefined;
+
+  // The launch funnel's signed-in steps, in the browser that created the account (#559, #590).
+  useEffect(() => {
+    if (!ctx) return;
+    const active = (role: string) =>
+      [...ctx.dir.members.values()].filter((m) => m.active && m.member.role === role).length;
+    reach(ctx.account, (step) => {
+      if (step === "first-machine") return active("machine") > 0;
+      if (step === "second-device") return active("device") > 1;
+      if (step !== "first-answer") return false;
+      // Answered by a device, not closed by its machine (a timeout, the keyboard).
+      const item = inbox.items
+        .filter((i) => i.answeredAt && !i.settled)
+        .sort((x, y) => (x.answeredAt ?? "").localeCompare(y.answeredAt ?? ""))[0];
+      if (!item) return false;
+      // Another device's answer shows here only once its machine took it: until then, no kind.
+      const reply = item.reply ?? item.answeredBy?.reply;
+      if (!reply) return true;
+      return { kind: "choice" in reply ? "choice" : "text" in reply ? "text" : "done" };
+    });
+  }, [ctx, inbox]);
+
+  // Installed as an app from the landing page or the app, signed in or not (#590).
+  useEffect(() => {
+    const installed = () => send("pwa-install");
+    window.addEventListener("appinstalled", installed);
+    return () => window.removeEventListener("appinstalled", installed);
+  }, []);
 
   /** Bumped by `forget`: a load started before it keeps nothing it read. */
   const generation = useRef(0);
@@ -386,11 +423,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       readInbox();
       readPrompts();
     };
-    const timer = setInterval(tick, POLL_MS);
+    const timer = setInterval(tick, pushed ? POLL_MS : PUSHLESS_POLL_MS);
     refreshPrompts().catch(() => {});
     const onMessage = (e: MessageEvent) => {
       if (e.data?.type === "starbridge:push-error") console.error("push:", e.data.error);
       if (e.data?.type !== "starbridge:push") return;
+      setPushed(true);
       if (["decision", "permission", "waiting"].includes(e.data.kind)) chimeForNew();
       if (e.data.kind === "quota") refreshQuotas().catch(() => {});
       else if (["permission", "settled", "answered"].includes(e.data.kind))
@@ -409,7 +447,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       window.removeEventListener("online", tick);
       navigator.serviceWorker?.removeEventListener("message", onMessage);
     };
-  }, [ctx, refreshInbox, refreshQuotas, refreshPrompts]);
+  }, [ctx, refreshInbox, refreshQuotas, refreshPrompts, pushed]);
 
   // While a prompt waits or just closed, poll fast so a keyboard answer clears it at once.
   const busy = prompts.length > 0;
@@ -459,6 +497,39 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     [ctx],
   );
 
+  const snooze = useCallback(
+    async (item: InboxItem, until: string) => {
+      if (!ctx) return;
+      const d = await load();
+      try {
+        const z = await d.snooze(ctx, item, until);
+        // The server pushes the other devices; this browser closes its own notification.
+        if (Date.parse(z.until) > Date.now()) {
+          const reg = await navigator.serviceWorker?.getRegistration("/").catch(() => undefined);
+          const tag = `d:${item.decision.id}`;
+          for (const n of (await reg?.getNotifications({ tag }).catch(() => [])) ?? []) n.close();
+        }
+        // As an answer: a read in flight must not land without it.
+        inboxRead.current()();
+        setInbox((all) => ({
+          ...all,
+          snoozes: { ...all.snoozes, [item.decision.id]: { until: z.until, at: z.at } },
+          items: all.items.map((i) => {
+            if (i.decision.id !== item.decision.id) return i;
+            const { snoozedUntil: _, ...rest } = i;
+            return Date.parse(z.until) > Date.parse(z.at)
+              ? { ...rest, snoozedUntil: z.until }
+              : rest;
+          }),
+        }));
+      } catch (e) {
+        if (e instanceof d.ApiError && e.status === 401) reload();
+        if (e instanceof d.ApiError && e.code === "already-answered") await refreshInbox();
+        throw e;
+      }
+    },
+    [ctx, reload, refreshInbox],
+  );
   const answer = useCallback(
     async (item: InboxItem, reply: Reply) => {
       if (!ctx) return;
@@ -497,6 +568,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         runs,
         reload,
         answer,
+        snooze,
         update,
         refreshQuotas,
         askQuotas,

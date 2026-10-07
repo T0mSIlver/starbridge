@@ -8,13 +8,15 @@ compose="docker compose -p starbridge -f compose.yaml"
 export REVISION=${REVISION:-$(cat /opt/starbridge/REVISION 2>/dev/null || echo unknown)}
 
 install -m 644 host/starbridge-backup.service host/starbridge-backup.timer \
-  host/starbridge-umami-trim.service host/starbridge-umami-trim.timer /etc/systemd/system/
+  host/starbridge-umami-trim.service host/starbridge-umami-trim.timer \
+  host/starbridge-docker-prune.service host/starbridge-docker-prune.timer /etc/systemd/system/
 systemctl daemon-reload
-systemctl enable --now starbridge-backup.timer starbridge-umami-trim.timer
+systemctl enable --now starbridge-backup.timer starbridge-umami-trim.timer starbridge-docker-prune.timer
 install -m 755 host/deploy-rev.sh /usr/local/sbin/starbridge-deploy
 
 host/server-env.sh
 host/umami-env.sh
+host/caddy-auth.sh
 $compose build --pull server web-a
 # Caddy's image changes only when caddy.Dockerfile does: a new image recreates the container,
 # which drops every open connection. Its build is not reproducible (xcaddy fetches and compiles
@@ -37,6 +39,26 @@ healthy() {
   $compose logs --tail 50 "$2" >&2
   return 1
 }
+
+# The schema the new server migrates to, and the one the database is at. A database newer than the
+# server stops the deploy here, before anything is replaced: the server would refuse it at start
+# (server/src/db.ts), and nothing copies or migrates it down. That is a rollback past a migration,
+# or a database from before the schema was folded at launch; either needs the owner.
+mnt=$(docker volume inspect -f '{{.Mountpoint}}' starbridge_data 2>/dev/null) || mnt=
+db=$mnt/starbridge.db
+want= have=
+if [ -n "$mnt" ] && [ -f "$db" ]; then
+  want=$($compose run --rm --no-deps -T server bun server.js schema 2>/dev/null) || want=
+  have=$(sqlite3 -readonly "$db" 'PRAGMA user_version' 2>/dev/null) || have=
+  # sqlite3 runs as root, so hand back any WAL or shared-memory file it made, or the server
+  # could no longer write the database.
+  chown --reference="$db" "$db"-wal "$db"-shm 2>/dev/null || true
+fi
+if [ -n "$want" ] && [ -n "$have" ] && [ "$have" -gt "$want" ] 2>/dev/null; then
+  echo "apply.sh: $db is at schema $have, newer than this server's $want; nothing deployed." >&2
+  echo "Run the release that wrote it, or move the database aside to start empty." >&2
+  exit 1
+fi
 
 # No request fails during a deploy (#150). The page runs as two copies: start the idle one, wait
 # for its health, then stop the live one; Caddy sends requests to the first healthy copy.
@@ -64,19 +86,22 @@ $compose stop $live
 # A backup before the new server opens the database and runs its migrations (#470), so a bad one
 # rolls back to this deploy's data rather than the night's. The old server still runs, so writes
 # in the seconds until it stops are not in it. A failed backup stops the deploy before the server
-# is replaced: no migration runs without one. The last five are kept. A new host has no volume yet.
-mnt=$(docker volume inspect -f '{{.Mountpoint}}' starbridge_data 2>/dev/null) || mnt=
-db=$mnt/starbridge.db
-if [ -n "$mnt" ] && [ -f "$db" ]; then
+# is replaced: no migration runs without one. Only a deploy whose server migrates further than the
+# database's `user_version` takes one; when either number can't be read, it takes one anyway. The
+# last two are kept, each a full copy of the database on the same disk (#586), for 7 days at most
+# (backup.sh, #721). A new host has no volume yet.
+if [ -n "$mnt" ] && [ -f "$db" ] && ! { [ -n "$want" ] && [ "$want" = "$have" ]; }; then
   out=/var/backups/starbridge/deploy-$(date -u +%Y%m%dT%H%M%S).db
   mkdir -p /var/backups/starbridge
-  (umask 077 && sqlite3 "$db" ".backup '$out.tmp'")
-  # As in backup.sh: sqlite3 runs as root, so hand back any WAL or shared-memory file it made.
+  # VACUUM INTO reads one snapshot while the server writes, and leaves free pages out. It
+  # refuses a file that exists.
+  rm -f "$out.tmp"
+  (umask 077 && sqlite3 "$db" "VACUUM INTO '$out.tmp'")
   chown --reference="$db" "$db"-wal "$db"-shm 2>/dev/null || true
   sqlite3 "$out.tmp" 'PRAGMA integrity_check' | grep -qx ok
   mv "$out.tmp" "$out"
-  ls -t /var/backups/starbridge/deploy-*.db | tail -n +6 | xargs -r rm -f
 fi
+ls -t /var/backups/starbridge/deploy-*.db 2>/dev/null | tail -n +3 | xargs -r rm -f
 
 # The server stays one instance: it holds the long-polls and SQLite. On SIGTERM it ends its
 # long-polls and exits, and Caddy holds requests until the new one answers. --remove-orphans

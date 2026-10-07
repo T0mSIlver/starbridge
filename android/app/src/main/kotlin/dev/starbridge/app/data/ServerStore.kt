@@ -1,6 +1,7 @@
 package dev.starbridge.app.data
 
 import android.util.Log
+import dev.starbridge.app.protocol.Images
 import dev.starbridge.app.protocol.RecoveryKeys
 import dev.starbridge.app.protocol.recoverySignSeed
 import dev.starbridge.app.protocol.Directories
@@ -30,12 +31,15 @@ import dev.starbridge.app.protocol.Run as RunBody
 import dev.starbridge.app.protocol.SealedBox
 import dev.starbridge.app.protocol.SealedItem
 import dev.starbridge.app.protocol.Settled
+import dev.starbridge.app.protocol.SIGNER_ROLE
+import dev.starbridge.app.protocol.Snooze
 import dev.starbridge.app.protocol.Waiting
 import dev.starbridge.app.protocol.SignedEnvelope
 import dev.starbridge.app.protocol.Sodium
 import dev.starbridge.app.protocol.bindMessage
 import dev.starbridge.app.protocol.checkJoined
 import dev.starbridge.app.protocol.codeFromLink
+import dev.starbridge.app.protocol.otherServer
 import dev.starbridge.app.protocol.fromB64
 import dev.starbridge.app.protocol.pairingLink
 import dev.starbridge.app.protocol.parsePairingCode
@@ -55,9 +59,12 @@ import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
+import kotlinx.serialization.json.add
+import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
 import okhttp3.OkHttpClient
 import java.io.IOException
+import java.net.URI
 import dev.starbridge.app.ui.span
 import java.time.Instant
 import java.time.OffsetDateTime
@@ -70,6 +77,8 @@ import dev.starbridge.app.protocol.Member as DirectoryMember
 interface Alerts {
     /** A new question, or one whose agent flipped; a flip back to working is [silent]. */
     fun decision(decision: Decision, silent: Boolean = false)
+    /** A snoozed question whose time came (#571): it notifies again, once. */
+    fun back(decision: Decision) = decision(decision)
     fun cancel(id: String)
     fun prompt(prompt: Prompt)
     fun cancelPrompt(prompt: Prompt)
@@ -126,6 +135,7 @@ class ServerStore(
     private val wakeWhenOnline: () -> Unit = {},
 ) : Store {
     private val lock = Mutex()
+    private val images = Images(sodium)
     private val loaded = disk.load()
     private var saved = loaded.first?.readable() ?: Saved(defaultServer)
     private var secrets = loaded.second
@@ -163,7 +173,8 @@ class ServerStore(
     override val tooOld = MutableStateFlow<String?>(null)
 
     override val notice = MutableStateFlow(
-        disk.unreadable.takeIf { it.isNotEmpty() }?.let { "Could not read ${it.joinToString(" and ")}; this phone's saved files were kept aside. Sign in again." },
+        // The files themselves are kept aside under their own names (Disk); the owner needs only what to do.
+        "This phone's saved sign-in couldn't be read, so you're signed out. Sign in again.".takeIf { disk.unreadable.isNotEmpty() },
     )
     private val headBook = Heads(directories)
     /** The hold notice last shown, so it goes once the hold ends. */
@@ -295,7 +306,7 @@ class ServerStore(
 
     private fun explain(e: Exception): String = when (e) {
         is ApiException -> when (e.error) {
-            "machine-cap" -> "This account already has its maximum number of machines. Revoke one first."
+            "machine-cap" -> "This account already has its maximum number of machines; phones and browsers don't count. Revoke one first."
             "already-answered" -> "Already answered on another device."
             "rate-limited" -> "Too many tries. Wait a minute."
             "taken" -> "Another of your devices is already comparing digits for it."
@@ -352,7 +363,7 @@ class ServerStore(
         // phone's, and leaves the pending one alone.
         val challenge = SignIn.challenge(verifier)
         val link = when (val r = SignIn.redirect(redirect)) {
-            is SignIn.Redirect.Code -> r.takeIf { it.state == null || it.state == challenge } ?: return@run
+            is SignIn.Redirect.Code -> r.takeIf { it.state == challenge } ?: return@run
             is SignIn.Redirect.Denied -> if (r.state == challenge) throw IllegalStateException("GitHub sign-in didn't finish. Sign in again.") else return@run
             null -> return@run
         }
@@ -758,7 +769,8 @@ class ServerStore(
         // Null once a directory read found this phone removed (wipe).
         val dir = directory ?: throw ProtocolException("no-directory", "")
         val opened = envelopes.open(item, me.id, box, dir)
-        keepHead(item.from, (opened.body as? ItemBody)?.dir)
+        // Machines' heads only: a device's snooze vouches for nothing here (#571).
+        if (SIGNER_ROLE[item.kind] == "machine") keepHead(item.from, (opened.body as? ItemBody)?.dir)
         if (withheld() != null) null else Item(item.from, opened.body, opened.bodyText)
     } catch (e: ProtocolException) {
         // Not shown: an item that fails its checks is the server's or a stranger's.
@@ -828,14 +840,20 @@ class ServerStore(
         // Which device's answer each machine took, whenever its notice comes (#330).
         val wins = mutableListOf<Pair<String, Settled>>()
         val waits = mutableListOf<Pair<String, Waiting>>()
+        val snoozes = mutableListOf<Snooze>()
         while (true) {
-            val page = api().items("decision,settled,waiting", cursor)
+            val page = api().items("decision,settled,waiting,snooze", cursor)
             // Held: the cursor stays, so these items are read again once the hold ends.
             if (scan(page.items.map { it.item })) return
             for (listed in page.items) {
                 if (listed.item.kind == "waiting") {
                     val (from, body) = open(listed.item) ?: continue
                     waits += from to body as Waiting
+                    continue
+                }
+                if (listed.item.kind == "snooze") {
+                    val (_, body) = open(listed.item) ?: continue
+                    snoozes += body as Snooze
                     continue
                 }
                 if (listed.item.kind == "settled") {
@@ -860,13 +878,19 @@ class ServerStore(
                     continue
                 }
                 val (from, _, text) = open(listed.item) ?: continue
-                byId[listed.item.id] = SavedDecision(from, text, listed.answeredAt, settled = settledBy(from))
+                byId[listed.item.id] = saved(listed.item, SavedDecision(from, text, listed.answeredAt, settled = settledBy(from)))
             }
             cursor = page.cursor
             if (page.items.size < 100) break
         }
         // An update may list before the decision it is about, so they apply once all are read.
         for ((from, w) in waits) byId[w.decisionId]?.let { d -> wait(d, from, w)?.let { byId[w.decisionId] = it } }
+        for (z in snoozes) byId[z.decisionId]?.let { d ->
+            snoozed(d, z)?.let {
+                byId[z.decisionId] = it
+                if (isSnoozed(it)) alerts.cancel(z.decisionId)
+            }
+        }
         for ((from, n) in wins) byId[n.itemId]?.let { d -> won(d, from, n)?.let { byId[n.itemId] = it } }
         persist(saved.copy(cursor = cursor, decisions = byId.values.sortedBy { it.body.createdAt }.takeLast(500)))
     }
@@ -875,14 +899,36 @@ class ServerStore(
      * [d] with the agent's waiting state from [w], or null when [w] changes nothing: it must come
      * from the machine that asked, and only a later update replaces an earlier one.
      */
+    /** [d] with its images opened from [item]'s blobs, once, as it is kept (#685). */
+    private fun saved(item: SealedItem, d: SavedDecision): SavedDecision =
+        if (d.body.images.isNullOrEmpty()) d else d.copy(images = images.openAll(d.body.images.orEmpty(), item.blobs))
+
     /** Fetches decision [id] and keeps it; null when it does not open. */
     private suspend fun fetchDecision(id: String): SavedDecision? {
         val listed = api().item(id)
         if (directory?.members?.containsKey(listed.item.from) != true) syncDirectory()
         val (from, _, text) = open(listed.item) ?: return null
-        val d = SavedDecision(from, text, listed.answeredAt)
+        val d = saved(listed.item, SavedDecision(from, text, listed.answeredAt))
         persist(saved.copy(decisions = saved.decisions + d))
         return d
+    }
+
+    /** [d] with the owner's snooze [z], or null when an earlier or equal one is kept already. */
+    private fun snoozed(d: SavedDecision, z: Snooze): SavedDecision? {
+        val at = instant(z.at) ?: return null
+        if (d.snoozedAt != null && instant(d.snoozedAt)?.isBefore(at) == false) return null
+        return d.copy(snoozedUntil = z.until, snoozedAt = z.at)
+    }
+
+    /** Whether the owner put [d] off and its time has not come. */
+    private fun isSnoozed(d: SavedDecision, now: Instant = Instant.now()) =
+        d.answeredAt == null && d.answer == null && snoozedUntil(d)?.isAfter(now) == true
+
+    /** Until when [d] is snoozed; none after back now, whose time is its own (#571). */
+    private fun snoozedUntil(d: SavedDecision): Instant? {
+        val until = instant(d.snoozedUntil) ?: return null
+        val at = instant(d.snoozedAt)
+        return until.takeIf { at == null || it.isAfter(at) }
     }
 
     private fun wait(d: SavedDecision, from: String, w: Waiting): SavedDecision? {
@@ -1148,6 +1194,48 @@ class ServerStore(
         }
     }
 
+    override fun snooze(id: String, until: Instant) {
+        run(showBusy = false) {
+            withheld()?.let { notice.value = "Not snoozed: $it"; return@run }
+            val d = saved.decisions.find { it.body.id == id } ?: return@run
+            // Fresh, as the server checks the recipients against its own: a device removed
+            // elsewhere since the last read would make it refuse the snooze.
+            syncDirectory()
+            val dir = directory ?: return@run
+            val machine = dir.members[d.from]?.takeIf { it.active }?.member
+            if (machine == null) {
+                notice.value = "Not snoozed: the machine that asked is no longer in your directory."
+                return@run
+            }
+            // To the machine that asked, so its agent hears when it would block, and to every
+            // active device, this one included, so each one hides it.
+            val to = listOf(machine) + dir.members.values.filter { it.active && it.member.role == "device" }.map { it.member }
+            val at = now()
+            val body = buildJsonObject {
+                put("v", 1)
+                put("id", newId("z_"))
+                put("decisionId", id)
+                putJsonArray("to") { to.forEach { add(it.id) } }
+                put("until", until.toString())
+                put("at", at)
+                putJsonObject("dir") { put("length", dir.length); put("head", dir.head) }
+            }
+            try {
+                api().postItem(envelopes.seal("snooze", body, me.id, signKey, to))
+            } catch (e: ApiException) {
+                // The session ended: report() asks to sign in again.
+                if (e.status == 401) throw e
+                notice.value = if (e.error == "already-answered") "Already answered on another device." else "Not snoozed: ${describe(e)}"
+                return@run
+            } catch (e: IOException) {
+                notice.value = "No connection. Not snoozed."
+                return@run
+            }
+            persist(saved.copy(decisions = saved.decisions.map { if (it.body.id == id) it.copy(snoozedUntil = until.toString(), snoozedAt = at) else it }))
+            if (until.isAfter(Instant.now())) alerts.cancel(id)
+        }
+    }
+
     /**
      * Signs the answer, seals it to the machine that asked, the only recipient the server
      * accepts, and keeps it in [Saved.outbox] before posting it, so an answer tapped offline is
@@ -1327,7 +1415,7 @@ class ServerStore(
                 // A machine paired since the last sync is not in the cached chain yet.
                 catchUp(item)
                 val (from, _, text) = open(item) ?: return@withLock
-                val saved1 = SavedDecision(from, text, answeredAt)
+                val saved1 = saved(item, SavedDecision(from, text, answeredAt))
                 persist(saved.copy(decisions = saved.decisions + saved1))
                 if (answeredAt == null) alerts.decision(toUi(saved1))
             }
@@ -1362,9 +1450,33 @@ class ServerStore(
                 val d = saved.decisions.find { it.body.id == body.decisionId } ?: fetchDecision(body.decisionId) ?: return@withLock
                 val updated = wait(d, from, body) ?: return@withLock
                 persist(saved.copy(decisions = saved.decisions.map { if (it === d) updated else it }))
-                if (d.answeredAt == null && d.answer == null && (d.waiting == "waiting") != (updated.waiting == "waiting")) {
+                if (d.answeredAt == null && d.answer == null && !isSnoozed(d) && (d.waiting == "waiting") != (updated.waiting == "waiting")) {
                     alerts.decision(toUi(updated), silent = updated.waiting != "waiting")
                 }
+            }
+            "snooze" -> {
+                // The owner put a question off (#571): its notification goes until its time, when
+                // the server pushes the snooze once more and the question notifies again, once.
+                val box = p["box"]?.jsonPrimitive?.content
+                val item = if (box != null) {
+                    SealedItem(1, "snooze", id, p.getValue("from").jsonPrimitive.content, p["re"]?.jsonPrimitive?.content, listOf(SealedBox(me.id, box)), p["wakeAt"]?.jsonPrimitive?.content)
+                } else {
+                    api().item(id).item
+                }
+                catchUp(item)
+                val (_, body) = open(item) ?: return@withLock
+                body as Snooze
+                val d = saved.decisions.find { it.body.id == body.decisionId } ?: fetchDecision(body.decisionId) ?: return@withLock
+                // A newer snooze of the question, from any device, stands: an older one's return
+                // shows nothing.
+                val sent = instant(body.at) ?: return@withLock
+                if (instant(d.snoozedAt)?.isAfter(sent) == true) return@withLock
+                val updated = snoozed(d, body) ?: d
+                if (updated !== d) persist(saved.copy(decisions = saved.decisions.map { if (it === d) updated else it }))
+                val until = instant(body.until) ?: return@withLock
+                if (!until.isAfter(instant(body.at) ?: until)) return@withLock // Back now: listed again, quietly.
+                if (Instant.now().isBefore(until.minus(WAKE_SKEW))) alerts.cancel(body.decisionId)
+                else if (updated.answeredAt == null && updated.answer == null) alerts.back(toUi(updated))
             }
             "quota" -> syncQuotas()
             "join" -> {
@@ -1436,7 +1548,14 @@ class ServerStore(
         val request = try {
             api().pairing(parsed.rendezvous)
         } catch (e: IOException) {
-            approval.value = Approval.Failed(if (e is ApiException && e.status == 404) "No pairing with this code, or it expired." else describe(e))
+            val other = if (e is ApiException && e.status == 404) otherServer(code, saved.server) else null
+            approval.value = Approval.Failed(
+                when {
+                    other != null -> "This code is from $other, and this phone is signed in to ${runCatching { URI(saved.server).rawAuthority }.getOrNull() ?: saved.server}."
+                    e is ApiException && e.status == 404 -> "No pairing with this code, or it expired."
+                    else -> describe(e)
+                },
+            )
             return@run
         }
         val body = try {
@@ -1827,7 +1946,8 @@ class ServerStore(
             agent = b.agent,
             waiting = d.waiting == "waiting",
             waitingSince = if (d.waiting == "waiting") instant(d.waitingAt) else null,
-            images = b.images.orEmpty().map { Image(it.data, it.width, it.height, it.alt) },
+            snoozedUntil = snoozedUntil(d),
+            images = b.images.orEmpty().mapIndexedNotNull { i, it -> d.images.getOrNull(i)?.let { data -> Image(data, it.width, it.height, it.alt) } },
             links = b.links.orEmpty().map { Link(it.url, it.title) },
             answerIn = b.answerIn?.let { Link(it.url, it.title) },
             answer = d.answer,
@@ -1954,3 +2074,10 @@ internal fun promptEnded(answer: String?, s: Settled?, answeredAt: String?, mach
 
 /** What a Done reads as, in History and on the device it lost on: where the owner answered. */
 internal fun doneText(page: DecisionLink) = "Answered in ${Link(page.url, page.title).place()}"
+
+/**
+ * How far a snooze's time may be ahead of the phone's clock when its second push comes: the server
+ * sends it at the time, a little late, by its own clock. A snooze runs at least 5 minutes
+ * (SNOOZE_MIN in ui/inbox/Snooze.kt), so its first push never passes for its second (#571).
+ */
+private val WAKE_SKEW: java.time.Duration = java.time.Duration.ofMinutes(2)

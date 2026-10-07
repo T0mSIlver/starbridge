@@ -3,11 +3,11 @@ import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 
 /**
- * The 0.1.0 schema. `IF NOT EXISTS` lets version 1 adopt a database this server made before it
- * counted versions, which already holds exactly these tables.
+ * The schema. The six migrations before launch were folded into this one when the hosted database
+ * was reset, so no database that predates it is served.
  */
 const V1 = `
-CREATE TABLE IF NOT EXISTS accounts (
+CREATE TABLE accounts (
   id TEXT PRIMARY KEY,
   github_id INTEGER UNIQUE,
   owner INTEGER NOT NULL DEFAULT 0,
@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS accounts (
 );
 
 -- Device sign-ins. member_id is set once the device's keys are in the directory.
-CREATE TABLE IF NOT EXISTS sessions (
+CREATE TABLE sessions (
   token_hash TEXT PRIMARY KEY,
   account_id TEXT NOT NULL REFERENCES accounts(id),
   member_id TEXT,
@@ -25,20 +25,12 @@ CREATE TABLE IF NOT EXISTS sessions (
 
 -- Sessions of revoked devices, kept until they would have expired so a revoked browser hears
 -- why it is signed out.
-CREATE TABLE IF NOT EXISTS revoked_sessions (
+CREATE TABLE revoked_sessions (
   token_hash TEXT PRIMARY KEY,
   expires_at TEXT NOT NULL
 );
 
--- App sign-in codes waiting to be traded for a session; challenge is the S256 PKCE challenge.
-CREATE TABLE IF NOT EXISTS app_codes (
-  code_hash TEXT PRIMARY KEY,
-  account_id TEXT NOT NULL REFERENCES accounts(id),
-  challenge TEXT NOT NULL,
-  expires_at INTEGER NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS machine_tokens (
+CREATE TABLE machine_tokens (
   token_hash TEXT PRIMARY KEY,
   account_id TEXT NOT NULL REFERENCES accounts(id),
   member_id TEXT NOT NULL,
@@ -46,7 +38,7 @@ CREATE TABLE IF NOT EXISTS machine_tokens (
 );
 
 -- The signed chain, stored as received.
-CREATE TABLE IF NOT EXISTS directory (
+CREATE TABLE directory (
   account_id TEXT NOT NULL REFERENCES accounts(id),
   seq INTEGER NOT NULL,
   entry TEXT NOT NULL,
@@ -54,7 +46,7 @@ CREATE TABLE IF NOT EXISTS directory (
 );
 
 -- What the server derived from the chain it verified, for routing and access checks only.
-CREATE TABLE IF NOT EXISTS members (
+CREATE TABLE members (
   account_id TEXT NOT NULL REFERENCES accounts(id),
   id TEXT NOT NULL,
   role TEXT NOT NULL,
@@ -67,7 +59,7 @@ CREATE TABLE IF NOT EXISTS members (
   PRIMARY KEY (account_id, id)
 );
 
-CREATE TABLE IF NOT EXISTS pairings (
+CREATE TABLE pairings (
   rendezvous TEXT PRIMARY KEY,
   request TEXT NOT NULL,
   role TEXT NOT NULL,
@@ -76,18 +68,19 @@ CREATE TABLE IF NOT EXISTS pairings (
   sign_pk TEXT NOT NULL,
   claim_hash TEXT NOT NULL,
   created_at INTEGER NOT NULL,
-  -- The poster's address, an IPv6 one as its /48, to cap the unapproved pairings it holds.
-  client TEXT NOT NULL DEFAULT '',
   account_id TEXT,
   approval TEXT,
   -- A machine's bearer token, kept until the pairing expires and is swept, so a lost reply can
   -- be retried.
-  token TEXT
+  token TEXT,
+  -- Why the server refused the pairing's new member, such as machine-cap, so the new machine's
+  -- result poll ends at once with it instead of at the pairing's expiry (#615).
+  refused TEXT
 );
 
 -- Joining by digits: a signed-in session asks to join; a device compares digits and approves.
 -- version orders changes, for long-polls.
-CREATE TABLE IF NOT EXISTS joins (
+CREATE TABLE joins (
   id TEXT PRIMARY KEY,
   account_id TEXT NOT NULL REFERENCES accounts(id),
   session_hash TEXT NOT NULL,
@@ -107,7 +100,7 @@ CREATE TABLE IF NOT EXISTS joins (
 
 -- seq orders changes: it is reassigned when an answer marks a decision answered, so a device
 -- listing after its cursor sees the decision again.
-CREATE TABLE IF NOT EXISTS items (
+CREATE TABLE items (
   seq INTEGER NOT NULL UNIQUE,
   account_id TEXT NOT NULL REFERENCES accounts(id),
   id TEXT NOT NULL,
@@ -118,34 +111,47 @@ CREATE TABLE IF NOT EXISTS items (
   answered_at TEXT,
   -- Bytes counted against the account's storage: its boxes, plus a charge per stored row.
   size INTEGER NOT NULL DEFAULT 0,
+  -- Snoozes (#571): wake_at keeps the item's wakeAt hint as sent, which clients check against its
+  -- body; wake_due is the same time in UTC while its push is still to come.
+  wake_at TEXT,
+  wake_due TEXT,
+  -- A decision's images, each encrypted once for every device (#685): a JSON array of base64url
+  -- blobs, beside its boxes.
+  blobs TEXT,
   PRIMARY KEY (account_id, id)
 );
-CREATE INDEX IF NOT EXISTS items_re ON items (account_id, re);
-CREATE INDEX IF NOT EXISTS items_from ON items (account_id, kind, from_id);
+CREATE INDEX items_re ON items (account_id, re);
+CREATE INDEX items_from ON items (account_id, kind, from_id);
+CREATE INDEX items_wake_due ON items (wake_due) WHERE wake_due IS NOT NULL;
+-- What the hourly sweep scans: items by kind and age. And a device's list with no cursor reads
+-- its own account's items in order, not every account's (#585).
+CREATE INDEX items_kind_received ON items (kind, received_at);
+CREATE INDEX items_kind_answered ON items (kind, answered_at);
+CREATE INDEX items_account_seq ON items (account_id, seq);
 
 -- Each account's item count and stored bytes per kind, kept by the triggers below so a post
 -- checks the account's caps without reading its items.
-CREATE TABLE IF NOT EXISTS item_totals (
+CREATE TABLE item_totals (
   account_id TEXT NOT NULL,
   kind TEXT NOT NULL,
   n INTEGER NOT NULL,
   bytes INTEGER NOT NULL,
   PRIMARY KEY (account_id, kind)
 );
-CREATE TRIGGER IF NOT EXISTS item_totals_add AFTER INSERT ON items BEGIN
+CREATE TRIGGER item_totals_add AFTER INSERT ON items BEGIN
   INSERT INTO item_totals (account_id, kind, n, bytes) VALUES (new.account_id, new.kind, 1, new.size)
   ON CONFLICT (account_id, kind) DO UPDATE SET n = n + 1, bytes = bytes + excluded.bytes;
 END;
-CREATE TRIGGER IF NOT EXISTS item_totals_drop AFTER DELETE ON items BEGIN
+CREATE TRIGGER item_totals_drop AFTER DELETE ON items BEGIN
   UPDATE item_totals SET n = n - 1, bytes = bytes - old.size
   WHERE account_id = old.account_id AND kind = old.kind;
 END;
 
 -- Never decreases, so a cursor never meets a reused seq after pruning.
-CREATE TABLE IF NOT EXISTS item_seq (n INTEGER NOT NULL);
-INSERT INTO item_seq SELECT 0 WHERE NOT EXISTS (SELECT 1 FROM item_seq);
+CREATE TABLE item_seq (n INTEGER NOT NULL);
+INSERT INTO item_seq VALUES (0);
 
-CREATE TABLE IF NOT EXISTS boxes (
+CREATE TABLE boxes (
   account_id TEXT NOT NULL,
   item_id TEXT NOT NULL,
   to_id TEXT NOT NULL,
@@ -154,9 +160,9 @@ CREATE TABLE IF NOT EXISTS boxes (
   FOREIGN KEY (account_id, item_id) REFERENCES items(account_id, id) ON DELETE CASCADE
 );
 -- For the cascade from items, and for an item's recipients.
-CREATE INDEX IF NOT EXISTS boxes_item ON boxes (account_id, item_id, to_id);
+CREATE INDEX boxes_item ON boxes (account_id, item_id, to_id);
 
-CREATE TABLE IF NOT EXISTS push_subscriptions (
+CREATE TABLE push_subscriptions (
   id TEXT PRIMARY KEY,
   account_id TEXT NOT NULL,
   member_id TEXT NOT NULL,
@@ -168,17 +174,19 @@ CREATE TABLE IF NOT EXISTS push_subscriptions (
 );
 
 -- The current day's usage events (server/src/usage.ts), deleted once folded into usage_days.
-CREATE TABLE IF NOT EXISTS usage_events (
+CREATE TABLE usage_events (
   day TEXT NOT NULL,
   metric TEXT NOT NULL,
   subject TEXT,
   value REAL
 );
-CREATE UNIQUE INDEX IF NOT EXISTS usage_events_subject ON usage_events (day, metric, subject)
+CREATE UNIQUE INDEX usage_events_subject ON usage_events (day, metric, subject)
   WHERE subject IS NOT NULL;
+-- The sweep folds and deletes events by day and metric (#585).
+CREATE INDEX usage_events_day_metric ON usage_events (day, metric);
 
 -- Counts and percentiles per day; no account or member ids.
-CREATE TABLE IF NOT EXISTS usage_days (
+CREATE TABLE usage_days (
   day TEXT NOT NULL,
   metric TEXT NOT NULL,
   value REAL NOT NULL,
@@ -194,12 +202,27 @@ CREATE TABLE IF NOT EXISTS usage_days (
  */
 const MIGRATIONS = [V1];
 
+/** The `user_version` this server brings a database to. */
+export const SCHEMA_VERSION = MIGRATIONS.length;
+
 export function openDb(path: string): Database {
   if (path !== ":memory:") mkdirSync(dirname(path), { recursive: true });
   const db = new Database(path, { strict: true });
   db.run("PRAGMA journal_mode = WAL");
   db.run("PRAGMA foreign_keys = ON");
   db.run("PRAGMA busy_timeout = 5000");
+  // Transactions begin IMMEDIATE, taking the write lock first, so they wait under busy_timeout
+  // while another connection writes. A deferred one that reads before it writes gets SQLITE_BUSY
+  // at once in WAL mode (#628).
+  const transaction = db.transaction.bind(db);
+  db.transaction = ((fn) => {
+    const t = transaction(fn);
+    return Object.assign((...args: Parameters<typeof t>) => t.immediate(...args), {
+      deferred: t.deferred,
+      immediate: t.immediate,
+      exclusive: t.exclusive,
+    });
+  }) as Database["transaction"];
   migrate(db, MIGRATIONS);
   return db;
 }

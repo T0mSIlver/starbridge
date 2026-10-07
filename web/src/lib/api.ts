@@ -37,7 +37,7 @@ export function pairingError(e: unknown): string {
     case "unauthenticated":
       return "Sign-in expired. Sign in again.";
     case "machine-cap":
-      return "This account already has its maximum number of machines. Revoke one first.";
+      return "This account already has its maximum number of machines; phones and browsers don't count. Revoke one first.";
     case "rate-limited":
       return "Too many tries. Wait a minute.";
   }
@@ -78,8 +78,13 @@ const offline = () => typeof navigator !== "undefined" && navigator.onLine === f
  * quietly on this backoff for `retryForMs` before the caller hears of it (#250). Each call's first
  * try always goes out, since an answer, a push or a sign-in may be the one that finds the server
  * back; pollers skip their turn while `backingOff()` instead.
+ *
+ * A 429 with `Retry-After`, from Caddy's per-address limit (#582) or the server's, is a backoff
+ * too, for at least that long (#645). The server is up and said when to come back, so `limited`
+ * holds every call's first try as well until then, and the call is retried whatever its method,
+ * since the request was refused before it did anything.
  */
-export const backoff = { failures: 0, until: 0, retryForMs: 20_000 };
+export const backoff = { failures: 0, until: 0, limited: false, retryForMs: 20_000 };
 const wakers = new Set<() => void>();
 
 /** Whether calls are waiting for the server: a poller skips its turn meanwhile. */
@@ -88,6 +93,7 @@ export const backingOff = () => Date.now() < backoff.until;
 function answered() {
   backoff.failures = 0;
   backoff.until = 0;
+  backoff.limited = false;
   for (const wake of wakers) wake();
 }
 
@@ -95,9 +101,25 @@ function unanswered() {
   const now = Date.now();
   // Calls in flight together fail together: count them once.
   if (now < backoff.until) return;
+  backoff.limited = false;
   backoff.failures++;
   const ceiling = Math.min(30_000, 250 * 2 ** (backoff.failures - 1));
   backoff.until = now + ceiling * (0.5 + Math.random() / 2);
+}
+
+function limited(ms: number) {
+  backoff.limited = true;
+  // Jitter spreads open tabs past the limit's window rather than all into its first moment.
+  backoff.until = Math.max(backoff.until, Date.now() + ms * (1 + Math.random() / 4));
+}
+
+/** `Retry-After` in ms, from seconds or an HTTP date; null when absent or unreadable. */
+export function retryAfter(res: Response): number | null {
+  const v = res.headers.get("retry-after")?.trim();
+  if (!v) return null;
+  if (/^\d+$/.test(v)) return Number(v) * 1000;
+  const at = Date.parse(v);
+  return Number.isNaN(at) ? null : Math.max(0, at - Date.now());
 }
 
 globalThis.addEventListener?.("online", answered);
@@ -131,9 +153,18 @@ async function call<T>(
   const started = Date.now();
   let res: Response;
   for (let first = true; ; first = false) {
-    if (!first) {
+    // A retry waits until the backoff ends, which another call's failure may push back meanwhile.
+    while (!first || backoff.limited) {
       const wait = Math.max(0, backoff.until - Date.now());
-      if (Date.now() - started + wait > backoff.retryForMs) throw new Unreachable(offline());
+      if (Date.now() - started + wait > backoff.retryForMs)
+        throw backoff.limited
+          ? new ApiError(429, "rate-limited", "too many requests; retry later")
+          : new Unreachable(offline());
+      if (wait === 0) {
+        // A 429's hold is over; a later outage's deadline must not read as a rate limit.
+        backoff.limited = false;
+        break;
+      }
       await pause(wait, opts.signal);
     }
     try {
@@ -156,9 +187,11 @@ async function call<T>(
       if (method !== "GET") throw new Unreachable(offline());
       continue;
     }
-    if (res.status !== 502 && res.status !== 503) break;
+    const after = res.status === 429 ? retryAfter(res) : null;
+    if (res.status !== 502 && res.status !== 503 && after === null) break;
     await res.body?.cancel();
-    unanswered();
+    if (after === null) unanswered();
+    else limited(after);
   }
   answered();
   const text = await res.text();
@@ -194,6 +227,7 @@ export interface Stored {
 
 export const api = {
   me: () => call<Me>("GET", "/me"),
+  signInMethods: async () => (await call<{ methods: string[] }>("GET", "/auth/methods")).methods,
   ownerSignIn: (token: string) =>
     call<{ session: string }>("POST", "/auth/owner", { body: { token } }),
   logout: () => call<void>("POST", "/auth/logout"),

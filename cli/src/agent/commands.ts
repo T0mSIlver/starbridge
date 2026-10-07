@@ -10,9 +10,13 @@ import {
   closedError,
   type Delivery,
   deliveryLine,
+  EXIT_SNOOZED,
   EXIT_TIMEOUT,
   markWaiting,
+  type ObservedAnswer,
+  printSnooze,
   resolveSource,
+  snoozeLine,
   waitSeconds,
 } from "../decisions";
 import { MAX_HOLD_SECONDS, type SessionEvent } from "./api";
@@ -57,15 +61,22 @@ export async function askVia(
   return waitVia(ctx, agent, { id, timeout: opts.timeout, json: opts.json });
 }
 
-/** `waiting` and `working` through the agent. */
+/** `waiting` and `working` through the agent; `waiting` says when the owner snoozed it. */
 export async function waitingVia(
   agent: AgentClient,
   opts: { id?: string; state: "working" | "waiting" },
+  ctx?: Ctx,
 ): Promise<number> {
   if (!opts.id) throw new UsageError(`${opts.state} needs a decision id`);
-  await agent.call("POST", `/v1/decisions/${encodeURIComponent(opts.id)}/waiting`, {
-    state: opts.state,
-  });
+  const r = await agent.call<{ snoozedUntil?: string }>(
+    "POST",
+    `/v1/decisions/${encodeURIComponent(opts.id)}/waiting`,
+    { state: opts.state },
+  );
+  if (ctx && r.snoozedUntil && opts.state === "waiting")
+    ctx.out(
+      snoozeLine(opts.id, ctx.store.state().asked[opts.id]?.question, r.snoozedUntil, ctx.now()),
+    );
   return 0;
 }
 
@@ -73,7 +84,7 @@ export async function waitingVia(
 export async function waitVia(
   ctx: Ctx,
   agent: AgentClient,
-  opts: { id?: string; session?: string; timeout?: string; json?: boolean },
+  opts: { id?: string; session?: string; timeout?: string; json?: boolean; "no-mark"?: boolean },
 ): Promise<number> {
   let deadline = Number.POSITIVE_INFINITY;
   if (opts.timeout) deadline = ctx.now().getTime() + parseDuration(opts.timeout);
@@ -91,7 +102,7 @@ export async function waitVia(
     let wait = hold;
     for (;;) {
       try {
-        return await agent.call<{ answer?: Answer; question?: string }>(
+        return await agent.call<{ answer?: Answer; question?: string; snoozedUntil?: string }>(
           "POST",
           "/v1/answers/next",
           {
@@ -126,8 +137,17 @@ export async function waitVia(
     if (e) throw e;
   };
   closed();
-  if (!r.answer && id) await markWaiting(ctx, () => waitingVia(agent, { id, state: "waiting" }));
+  if (!r.answer && id && !opts["no-mark"])
+    await markWaiting(ctx, () => waitingVia(agent, { id, state: "waiting" }));
+  // Snoozed: said once, so a polling agent stops; the next `wait` waits on (#571).
+  const snoozed = () => {
+    if (!id || r.answer || !r.snoozedUntil) return undefined;
+    printSnooze(ctx, id, r.question, r.snoozedUntil, opts.json);
+    return EXIT_SNOOZED;
+  };
   while (!r.answer) {
+    const off = snoozed();
+    if (off !== undefined) return off;
     if (ctx.signal?.aborted) return EXIT_INTERRUPTED;
     const left = deadline - ctx.now().getTime();
     if (left <= 0) {
@@ -166,6 +186,58 @@ export async function answersVia(
     ctx.out(JSON.stringify({ decisionId: e.decisionId, ack: e.ack, line: e.line }));
   }
   return 0;
+}
+
+/**
+ * `answers --all` through the agent: every answer it holds, then with `follow` each new one, in
+ * held requests until interrupted. An agent that stops and stays away RESTART_MS leaves the rest
+ * to `direct`, the server path, with the ids already printed.
+ */
+export async function answersAllVia(
+  ctx: Ctx,
+  agent: AgentClient,
+  opts: { follow?: boolean; since?: number },
+  direct: (printed: Set<string>) => Promise<number>,
+): Promise<number> {
+  const printed = new Set<string>();
+  let wait = 0;
+  let lost: number | undefined;
+  for (;;) {
+    if (ctx.signal?.aborted) return EXIT_INTERRUPTED;
+    let r: { answers: ObservedAnswer[] };
+    try {
+      r = await agent.call<{ answers: ObservedAnswer[] }>(
+        "POST",
+        "/v1/answers/all",
+        {
+          ...(opts.since !== undefined ? { since: opts.since } : {}),
+          known: [...printed],
+          wait,
+        },
+        wait * 1000 + SLACK_MS,
+        ctx.signal,
+      );
+    } catch (e) {
+      const restarted = e instanceof AgentLost || (e instanceof NoAgent && agent.answered);
+      if (!opts.follow || !restarted) throw e;
+      const now = ctx.now().getTime();
+      lost ??= now;
+      if (now - lost >= RESTART_MS) {
+        ctx.err("starbridge: the agent stopped and did not come back; following at the server");
+        return direct(printed);
+      }
+      await ctx.sleep(1000);
+      continue;
+    }
+    lost = undefined;
+    for (const a of r.answers) {
+      if (printed.has(a.decisionId)) continue;
+      printed.add(a.decisionId);
+      ctx.out(JSON.stringify(a));
+    }
+    if (!opts.follow) return 0;
+    wait = MAX_HOLD_SECONDS;
+  }
 }
 
 /** One quota snapshot, run and posted by the agent. */

@@ -1,9 +1,11 @@
 import { spawn } from "node:child_process";
-import { accessSync, constants, realpathSync } from "node:fs";
+import { realpathSync } from "node:fs";
 import { homedir } from "node:os";
-import { delimiter, join } from "node:path";
 import { createInterface } from "node:readline/promises";
 import type { Ctx } from "../context";
+import { inBunfs, killTree, resolveCommand, spawnable, which, whichAll } from "../platform";
+
+export { which };
 
 /** What setup, status and uninstall touch outside the config directory, so tests can fake it. */
 export interface Sys {
@@ -68,19 +70,6 @@ export function makeSys(ctx: Ctx, prompt: Prompt): Sys {
   };
 }
 
-/** The first executable `name` on `$PATH`. */
-export function which(env: Record<string, string | undefined>, name: string): string | undefined {
-  for (const dir of (env.PATH ?? "").split(delimiter)) {
-    if (!dir.startsWith("/")) continue;
-    const p = join(dir, name);
-    try {
-      accessSync(p, constants.X_OK);
-      return p;
-    } catch {}
-  }
-  return undefined;
-}
-
 const real = (p: string) => {
   try {
     return realpathSync(p);
@@ -97,7 +86,7 @@ const real = (p: string) => {
 export function selfCommand(env: Record<string, string | undefined>): string[] {
   const script = process.argv[1];
   // npm links the bundle as `bin/starbridge`, with no extension: any script but Bun's own.
-  const scripted = script !== undefined && !script.startsWith("/$bunfs");
+  const scripted = script !== undefined && !inBunfs(script);
   const running = scripted ? [process.execPath, real(script)] : [process.execPath];
   const onPath = which(env, "starbridge");
   if (onPath && real(onPath) === real(running.at(-1) as string)) return [onPath];
@@ -118,13 +107,25 @@ export function run(
   sys: Sys,
   cmd: string,
   args: string[],
-  opts: { timeoutMs?: number; input?: string; inherit?: boolean } = {},
+  opts: {
+    timeoutMs?: number;
+    input?: string;
+    inherit?: boolean;
+    env?: Record<string, string>;
+  } = {},
 ): Promise<RunOut | null> {
-  const bin = cmd.startsWith("/") ? cmd : which(sys.ctx.env, cmd);
+  const bin = resolveCommand(sys.ctx.env, cmd);
   if (!bin) return Promise.resolve(null);
   return new Promise((resolve) => {
-    const child = spawn(bin, args, {
-      env: sys.ctx.env as NodeJS.ProcessEnv,
+    let start: ReturnType<typeof spawnable>;
+    try {
+      start = spawnable(bin, args, sys.ctx.env);
+    } catch (e) {
+      return resolve({ code: null, stdout: "", stderr: (e as Error).message });
+    }
+    const child = spawn(start.file, start.args, {
+      windowsVerbatimArguments: start.windowsVerbatimArguments,
+      env: { ...sys.ctx.env, ...opts.env } as NodeJS.ProcessEnv,
       stdio: [
         opts.input === undefined ? "ignore" : "pipe",
         opts.inherit ? "inherit" : "pipe",
@@ -139,7 +140,7 @@ export function run(
     child.stderr?.on("data", (d) => {
       stderr += d;
     });
-    const timer = setTimeout(() => child.kill("SIGKILL"), opts.timeoutMs ?? 120_000);
+    const timer = setTimeout(() => killTree(child), opts.timeoutMs ?? 120_000);
     child.on("error", (e) => {
       clearTimeout(timer);
       resolve({ code: null, stdout, stderr: e.message });
@@ -164,4 +165,36 @@ export function failure(r: RunOut | null): string {
       .map((l) => l.trim())
       .filter(Boolean);
   return lines(r.stderr)[0] ?? lines(r.stdout).pop() ?? `exited ${r.code ?? "on a signal"}`;
+}
+
+/** How to remove the copy at `target`, a resolved path, by what installed it. */
+function removal(target: string): string {
+  const t = target.replaceAll("\\", "/");
+  if (t.includes("/Cellar/")) return "`brew uninstall starbridge` removes it";
+  if (t.includes("/.bun/")) return "`bun remove -g starbridge` removes it";
+  // npm links the package on Unix, and writes a `.cmd` shim into its prefix folder on Windows.
+  if (t.includes("/node_modules/") || /\/npm\/starbridge(\.cmd)?$/i.test(t))
+    return "`npm rm -g starbridge` removes it";
+  return "delete the file to remove it";
+}
+
+/**
+ * When more than one `starbridge` is on the PATH, such as an npm or Homebrew copy and the
+ * install script's, the lines that list them with their versions and how to remove each: the
+ * other copy goes stale, since `starbridge update` updates only the one it runs from (#621).
+ * Empty with one copy.
+ */
+export async function otherCopies(sys: Sys): Promise<string[]> {
+  const all = whichAll(sys.ctx.env, "starbridge");
+  if (all.length < 2) return [];
+  const self = real(sys.self.at(-1) as string);
+  const lines = [`${all.length} copies of starbridge are on the PATH; a terminal runs the first:`];
+  for (const path of all) {
+    const r = await run(sys, path, ["--version"], { timeoutMs: 10_000 });
+    const version = r?.code === 0 ? r.stdout.trim().replace(/^starbridge /, "") : "version unknown";
+    const target = real(path);
+    lines.push(`  ${path}: ${version}, ${target === self ? "this one" : removal(target)}`);
+  }
+  lines.push("Keep one: `starbridge update` updates only the copy it runs from.");
+  return lines;
 }

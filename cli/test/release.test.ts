@@ -41,8 +41,10 @@ function signer() {
 test("every copy of the release key is the same", () => {
   const pub = readFileSync(join(CLI, "minisign.pub"), "utf8").split("\n")[1];
   const script = /^PUBKEY=(\S+)$/m.exec(readFileSync(join(CLI, "install.sh"), "utf8"))?.[1];
+  const ps = /^ {2}\$PubKey = '(\S+)'$/m.exec(readFileSync(join(CLI, "install.ps1"), "utf8"))?.[1];
   expect(pub).toBe(RELEASE_KEY);
   expect(script).toBe(RELEASE_KEY);
+  expect(ps).toBe(RELEASE_KEY);
   expect(readFileSync(join(CLI, "README.md"), "utf8")).toContain(RELEASE_KEY);
 });
 
@@ -82,10 +84,11 @@ function fakeReleases(
     key?: ReturnType<typeof signer>;
     /** The version the signature names: an older release served under `version`'s tag. */
     signed?: string;
+    asset?: string;
   } = {},
 ) {
   const key = signer();
-  const asset = platformAsset();
+  const asset = opts.asset ?? platformAsset();
   const binary = `#!/bin/sh\necho "starbridge ${version}"\n`;
   const sums = `${createHash("sha256").update(binary).digest("hex")}  ${asset}\n`;
   const files: Record<string, string> = {
@@ -198,6 +201,104 @@ describe.each(verifiers)("install.sh checking with %s", (verifier) => {
   });
 });
 
+/**
+ * install.ps1 under PowerShell 7, with minisign from the PATH in place of the pinned Windows
+ * download. The fake `.exe` is a shell script, so this runs on Linux and macOS only.
+ */
+const pwsh = spawnSync("pwsh", ["-v"]).status === 0 && process.platform !== "win32";
+describe.skipIf(!pwsh || !hasMinisign)("install.ps1", () => {
+  const asset = platformAsset("win32", process.arch);
+  async function installPs(
+    url: string,
+    pubkey: string,
+    version?: string,
+    opts: { minisign?: string; iex?: boolean } = {},
+  ) {
+    const script = join(dir, "install.ps1");
+    writeFileSync(
+      script,
+      readFileSync(join(CLI, "install.ps1"), "utf8").replace(
+        /^ {2}\$PubKey = '\S+'$/m,
+        `  $PubKey = '${pubkey}'`,
+      ),
+    );
+    // As `irm | iex` runs it: in a session whose last native command exited 0.
+    const iex = `cmd /c exit 0 2>$null; $global:LASTEXITCODE = 0; Get-Content -Raw '${script}' | Invoke-Expression`;
+    const args = opts.iex ? ["-Command", iex] : ["-File", script];
+    const p = Bun.spawn(["pwsh", "-NoProfile", "-NonInteractive", ...args], {
+      env: {
+        PATH: process.env.PATH ?? "",
+        HOME: dir,
+        STARBRIDGE_RELEASES_URL: url,
+        STARBRIDGE_INSTALL_DIR: join(dir, "bin"),
+        STARBRIDGE_MINISIGN:
+          opts.minisign ??
+          spawnSync("sh", ["-c", "command -v minisign"], {
+            encoding: "utf8",
+          }).stdout.trim(),
+        STARBRIDGE_NO_SETUP: "1",
+        NO_COLOR: "1",
+        ...(version ? { STARBRIDGE_VERSION: version } : {}),
+      },
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const [out, err, code] = await Promise.all([
+      new Response(p.stdout).text(),
+      new Response(p.stderr).text(),
+      p.exited,
+    ]);
+    // PowerShell wraps an error at the console width.
+    const text = `${out}${err}`.replace(/\s*\n\s*\|\s*/g, " ");
+    return { code, out: text, bin: join(dir, "bin", "starbridge.exe") };
+  }
+
+  test("installs the signed binary, over a copy that stays running", async () => {
+    release = fakeReleases("9.9.9", { asset });
+    mkdirSync(join(dir, "bin"));
+    writeFileSync(join(dir, "bin", "starbridge.exe"), "old");
+    const r = await installPs(release.url, release.pubkey);
+    expect(r.out).toContain(`Installed starbridge 9.9.9 to ${r.bin}`);
+    expect(r.code).toBe(0);
+    expect(readFileSync(r.bin, "utf8")).toContain("starbridge 9.9.9");
+    expect(existsSync(`${r.bin}.old`)).toBe(false);
+  });
+
+  test("refuses a binary that does not match, or a signature by another key", async () => {
+    release = fakeReleases("9.9.9", { asset, tamper: "binary" });
+    let r = await installPs(release.url, release.pubkey);
+    expect(r.out).toContain("does not match its hash in SHA256SUMS");
+    expect(r.code).not.toBe(0);
+    release.server.stop(true);
+    release = fakeReleases("9.9.9", { asset, key: signer() });
+    r = await installPs(release.url, release.pubkey);
+    expect(r.out).toContain("SHA256SUMS does not carry the release signature");
+    expect(existsSync(r.bin)).toBe(false);
+  });
+
+  test("under iex, a minisign that cannot start fails closed", async () => {
+    release = fakeReleases("9.9.9", { asset });
+    const r = await installPs(release.url, release.pubkey, undefined, {
+      minisign: join(dir, "missing-minisign"),
+      iex: true,
+    });
+    expect(r.out).toContain("SHA256SUMS does not carry the release signature");
+    expect(existsSync(r.bin)).toBe(false);
+  });
+
+  test("is plain ASCII, which Windows PowerShell reads right without a BOM", () => {
+    const text = readFileSync(join(CLI, "install.ps1"), "utf8");
+    expect([...text].every((c) => (c.codePointAt(0) ?? 0) < 128)).toBe(true);
+  });
+
+  test("refuses an older signed release served as the version asked for", async () => {
+    release = fakeReleases("9.9.9", { asset, signed: "1.0.0" });
+    const r = await installPs(release.url, release.pubkey, "9.9.9");
+    expect(r.out).toContain('SHA256SUMS is signed for "starbridge v1.0.0", not starbridge v9.9.9');
+    expect(existsSync(r.bin)).toBe(false);
+  });
+});
+
 describe("update", () => {
   function installed() {
     const path = join(dir, "bin", "starbridge");
@@ -208,13 +309,32 @@ describe("update", () => {
   }
   const ctx = () => testCtx({ HOME: dir, PATH: "", STARBRIDGE_RELEASES_URL: release?.url ?? "" });
 
+  test("offline, names what it could not reach and still checks CodexBar (#617)", async () => {
+    const codexbar = join(dir, "codexbar");
+    writeFileSync(codexbar, "#!/bin/sh\n", { mode: 0o755 });
+    const c = testCtx({
+      HOME: dir,
+      PATH: "",
+      STARBRIDGE_RELEASES_URL: "http://127.0.0.1:1",
+      STARBRIDGE_CODEXBAR: codexbar,
+    });
+    expect(await update(c, { kind: "binary", path: installed() })).toBe(1);
+    expect(c.lines[0]).toStartWith(
+      "Could not update starbridge: cannot reach http://127.0.0.1:1/latest (",
+    );
+    expect(c.lines[1]).toStartWith(`CodexBar at ${codexbar} was not installed by starbridge`);
+  });
+
   test("replaces the binary with the newer signed release", async () => {
     release = fakeReleases("99.0.0");
     const path = installed();
     const c = ctx();
     expect(await update(c, { kind: "binary", path }, release.pubkey)).toBe(0);
     // Then what the new binary printed for `setup --refresh` (the fake prints its version).
-    expect(c.lines).toEqual([`Updated starbridge ${VERSION} to 99.0.0.`, "starbridge 99.0.0"]);
+    expect(c.lines).toEqual([
+      `Updated starbridge ${VERSION} to 99.0.0 in ${path}.`,
+      "starbridge 99.0.0",
+    ]);
     expect(spawnSync(path, ["--version"], { encoding: "utf8" }).stdout).toBe("starbridge 99.0.0\n");
   });
 

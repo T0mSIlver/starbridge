@@ -5,14 +5,18 @@ import { useEffect, useRef, useState } from "react";
 import type { MachineKind } from "@/lib/feed";
 import { AnsweredFirst, answeredFirstText, answerPlace } from "@/lib/outcome";
 import { fullInput } from "@/lib/permissionInput";
+import { usePref } from "@/lib/prefs";
+import { isSnoozed, snoozeTime } from "@/lib/snooze";
 import type { InboxItem, PromptItem, PromptReply, Reply } from "@/lib/types";
-import { Images, Links } from "./Attachments";
+import { ImageButton, Images, Links, rows } from "./Attachments";
 import { Context } from "./Context";
 import s from "./Detail.module.css";
 import { KindTile, MetaRow, SessionLine, slotTime } from "./Feed";
 import { Icon } from "./icons";
 import { ordered } from "./options";
+import { SnoozeMenu } from "./Snooze";
 import ui from "./ui.module.css";
+import { Viewer } from "./Viewer";
 
 const kindOf = (source: object) => (source as { machineKind?: MachineKind }).machineKind;
 const agentOf = (d: object) => (d as { agent?: string }).agent;
@@ -117,6 +121,14 @@ function FreeText({
           // biome-ignore lint/a11y/noAutofocus: opened by the Reply button, to type at once
           autoFocus={focus}
           onChange={(e) => setText(e.target.value)}
+          // Enter sends and Shift+Enter starts a new line (#562); an Enter that ends an input
+          // method's composition only commits it.
+          onKeyDown={(e) => {
+            if (e.key !== "Enter" || e.shiftKey || e.nativeEvent.isComposing || e.keyCode === 229)
+              return;
+            e.preventDefault();
+            e.currentTarget.form?.requestSubmit();
+          }}
         />
         <button
           type="submit"
@@ -157,6 +169,7 @@ export function QuestionDetail({
   keys,
   closed,
   onAnswer,
+  onSnooze,
 }: {
   item: InboxItem;
   now: number;
@@ -165,11 +178,21 @@ export function QuestionDetail({
   /** "Server first · on this browser · 11:02", once answered. */
   closed?: string;
   onAnswer: (reply: Reply) => Promise<void>;
+  /** Puts it off until a time (#571); a time already passed brings it back. */
+  onSnooze: (until: Date) => Promise<void>;
 }) {
   const d = item.decision;
   const { send, sending, error, lost } = useSend(onAnswer);
+  const snoozeSend = useSend(onSnooze);
+  const [clock] = usePref("clock");
   const [replying, setReplying] = useState(false);
-  const options = closed || d.answerIn ? [] : ordered(d);
+  // One image per option: each image over the option it stands for, in the agent's order.
+  const paired =
+    !closed && !d.answerIn && (d.images?.length ?? 0) > 1 && d.images?.length === d.options.length;
+  const options = closed || d.answerIn ? [] : paired ? d.options : ordered(d);
+  const snoozed = !closed && isSnoozed(item, now);
+  // While snoozed, nothing is amber, even when its agent waits: the owner said not now.
+  const since = closed || snoozed ? undefined : item.waitingSince;
   useKeys(keys && options.length > 0, (key) => {
     const choice = /^[1-4]$/.test(key) ? options[Number(key) - 1] : undefined;
     if (choice) send({ choice });
@@ -178,39 +201,34 @@ export function QuestionDetail({
 
   return (
     <article className={s.detail} aria-label="Selected item">
-      <Head since={closed ? undefined : item.waitingSince}>
+      <Head since={since}>
         <MetaRow
           machine={d.source.machine}
           kind={kindOf(d.source)}
           repo={d.source.project}
-          time={slotTime(d.createdAt, closed ? undefined : item.waitingSince, now)}
-          waiting={!closed && !!item.waitingSince}
+          time={slotTime(d.createdAt, since, now)}
+          waiting={!!since}
           size="comfy"
         />
         <h2 className="t-heading">{d.question}</h2>
+        {snoozed && (
+          <p className={`t-small ${s.snoozed}`}>
+            <Icon name="snooze" size={16} />
+            Snoozed until {snoozeTime(new Date(item.snoozedUntil as string), new Date(now), clock)}
+          </p>
+        )}
       </Head>
       <Context text={d.context} className={`t-reading ${s.context}`} />
-      <Images d={d} />
+      {!paired && <Images d={d} />}
       <Links d={d} />
       {closed ? (
         <p className={`t-small ${s.closed}`}>{closed}</p>
       ) : d.answerIn ? (
-        <>
-          <div className={s.actions}>
-            <AnswerElsewhere page={d.answerIn} />
-          </div>
-          {d.done && (
-            // Quiet, as Reply: the page stays the answer, Done only says it was given there.
-            <button
-              type="button"
-              className={`t-small ${s.link} ${s.reply}`}
-              disabled={sending}
-              onClick={() => send({ done: true })}
-            >
-              Done
-            </button>
-          )}
-        </>
+        <div className={s.actions}>
+          <AnswerElsewhere page={d.answerIn} />
+        </div>
+      ) : paired ? (
+        <Picks d={d} keys={keys} sending={sending} onPick={(choice) => send({ choice })} />
       ) : options.length > 0 ? (
         <fieldset className={`${s.actions} ${s.options}`}>
           <legend className="sr-only">Answer</legend>
@@ -233,22 +251,53 @@ export function QuestionDetail({
       ) : (
         <FreeText id={d.id} sending={sending} onSend={(t) => send({ text: t })} />
       )}
-      {!closed &&
-        d.replies &&
-        options.length > 0 &&
-        !d.answerIn &&
-        // A typed reply in place of the options (#201): quiet, so the options stay the answer.
-        (replying ? (
-          <FreeText id={d.id} sending={sending} focus onSend={(t) => send({ text: t })} />
-        ) : (
-          <button
-            type="button"
+      {replying && <FreeText id={d.id} sending={sending} focus onSend={(t) => send({ text: t })} />}
+      {!closed && (
+        // Quiet, so the options stay the answer: a typed reply in place of them (#201), Done for
+        // a page's answer (#539), and putting it off (#571).
+        <div className={s.quiet}>
+          {d.replies && options.length > 0 && !replying && (
+            <button
+              type="button"
+              className={`t-small ${s.link} ${s.reply}`}
+              onClick={() => setReplying(true)}
+            >
+              Reply
+            </button>
+          )}
+          {d.answerIn && d.done && (
+            <button
+              type="button"
+              className={`t-small ${s.link} ${s.reply}`}
+              disabled={sending}
+              onClick={() => send({ done: true })}
+            >
+              Done
+            </button>
+          )}
+          <SnoozeMenu
+            label={snoozed ? "Snooze again" : "Snooze"}
             className={`t-small ${s.link} ${s.reply}`}
-            onClick={() => setReplying(true)}
-          >
-            Reply
-          </button>
-        ))}
+            disabled={snoozeSend.sending}
+            onSnooze={(until) => snoozeSend.send(until)}
+          />
+          {snoozed && (
+            <button
+              type="button"
+              className={`t-small ${s.link} ${s.reply}`}
+              disabled={snoozeSend.sending}
+              onClick={() => snoozeSend.send(new Date())}
+            >
+              Back now
+            </button>
+          )}
+        </div>
+      )}
+      {snoozeSend.error && (
+        <p className={ui.error} role="alert">
+          Not snoozed: {snoozeSend.error}
+        </p>
+      )}
       {lost && (
         <p className={ui.error} role="alert">
           {answeredFirstText(item)}
@@ -261,6 +310,68 @@ export function QuestionDetail({
       )}
       <SessionLine source={d.source} agent={agentOf(d)} />
     </article>
+  );
+}
+
+/**
+ * "Pick a result": each image over the option it stands for, two to a row; picking one answers.
+ * Each image keeps its own shape, no wider than its button and at most `size.pick` tall, and the
+ * row's images are centred on one midline, so the buttons under them line up (#536).
+ */
+function Picks({
+  d,
+  keys,
+  sending,
+  onPick,
+}: {
+  d: InboxItem["decision"];
+  keys: boolean;
+  sending: boolean;
+  onPick: (choice: string) => void;
+}) {
+  const images = d.images ?? [];
+  const [open, setOpen] = useState<number>();
+  return (
+    <fieldset className={`${s.actions} ${s.picks}`}>
+      <legend className="sr-only">Answer</legend>
+      {rows(images.length).map((row) => (
+        <div key={row[0]} className={s.pick}>
+          <div className={s.pickColumns}>
+            {row.map((i) => (
+              <ImageButton
+                key={i}
+                img={images[i]}
+                className={s.pickImage}
+                onOpen={() => setOpen(i)}
+              />
+            ))}
+          </div>
+          <div className={s.pickColumns}>
+            {row.map((i) => {
+              const o = d.options[i];
+              const rec = o === d.recommended;
+              return (
+                <button
+                  key={o}
+                  type="button"
+                  className={`t-label ${ui.btn} ${rec ? ui.rec : ""}`}
+                  disabled={sending}
+                  aria-keyshortcuts={keys && i < 4 ? String(i + 1) : undefined}
+                  onClick={() => onPick(o)}
+                >
+                  {o}
+                  {rec && <span className="sr-only"> Default</span>}
+                  {keys && i < 4 && <Kbd k={String(i + 1)} />}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+      {open !== undefined && (
+        <Viewer images={images} start={open} onClose={() => setOpen(undefined)} />
+      )}
+    </fieldset>
   );
 }
 

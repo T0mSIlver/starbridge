@@ -16,19 +16,53 @@ type RateWindow = readonly [calls: number, ms: number];
  * PROTOCOL.md lists them; keep the two in step.
  */
 export const DEFAULT_LIMITS = {
-  /** Item posts per account: a machine running many agents posts a few hundred decisions a day. */
+  /**
+   * Item posts per account from its machines: a machine running many agents posts a few
+   * hundred decisions a day. Each machine also has its own window, so one looping agent leaves
+   * the other machines room, and devices have theirs, so the owner's answers always pass (#583).
+   */
   items: [120, MINUTE] as RateWindow,
+  /**
+   * Item posts per machine, within the account's items. A live run posts 6 a minute, so ten
+   * runs at once and the machine's own questions fit (#583). It counts before the account's
+   * window, so a looping machine's refused posts never spend the other machines' share.
+   */
+  machineItems: [90, MINUTE] as RateWindow,
+  /** Item posts per device (answers, settles), apart from the machines' window. */
+  deviceItems: [60, MINUTE] as RateWindow,
   /** Stored decisions per account, open or answered. */
   decisions: 10_000,
-  /** Sealed boxes stored per account, in bytes. */
-  storedBytes: 128 * 1024 * 1024,
+  /**
+   * Sealed boxes stored per account, in bytes. A heavy user, a hundred questions a day with
+   * screenshots, stores about 80 MB in the 7 days answered ones are kept (#586).
+   */
+  storedBytes: 256 * 1024 * 1024,
   /** Stored bytes only answers may use, so a full account can still answer. */
   answerReserve: 8 * 1024 * 1024,
   /**
-   * Sealed boxes of one decision or quota snapshot, in bytes. Each box carries the decision's
-   * images, so this is what lets a phone screenshot reach three or four devices at full size.
+   * Stored bytes of every account together, past which machines' items get 503 `storage-full`
+   * while answers still pass. The hosted disk holds the live database and 9 backup copies of
+   * it (deploy/host), so this keeps all 10 under the disk alert (#586).
+   */
+  serverBytes: 2048 * 1024 * 1024,
+  /**
+   * Sealed boxes and blobs of one decision, in bytes. A decision's images are its blobs, stored
+   * once whatever the number of devices (#685), so four phone screenshots fit at full size.
    */
   itemBytes: 2 * 1024 * 1024,
+  /**
+   * Sealed boxes of one quota snapshot, in bytes. A real one is about 8 KB per device (six
+   * providers with three windows each), and pages count as devices, so this leaves room for
+   * over a hundred (#581).
+   */
+  quotaBytes: 1024 * 1024,
+  /**
+   * Bytes of boxes an account's machines may post a minute, counting items that replace
+   * earlier ones (quota snapshots, runs), which the stored-bytes cap never sees: eight 2 MB
+   * questions a minute is more than an agent asks, and it keeps one looping uploader from
+   * writing 4 MB a second into the database. Answers never count (#581).
+   */
+  postedBytes: [16 * 1024 * 1024, MINUTE] as RateWindow,
   /** Sealed box of one answer, in bytes: an answer's text is at most 4000 characters. */
   answerBytes: 32 * 1024,
   /** Stored permission prompts per account, open or settled; each lives answeredRetention. */
@@ -37,7 +71,10 @@ export const DEFAULT_LIMITS = {
   rowBytes: 512,
   /** Stored runs per account; each lives runRetention after its last update. */
   runs: 500,
-  /** Sealed boxes of one run update, in bytes. */
+  /**
+   * Sealed boxes of one run update, in bytes for each device it is sealed to. Each box holds the
+   * whole update, recipients included, so a fixed total stopped runs past about 23 devices (#658).
+   */
   runBytes: 32 * 1024,
   /** Runs are dropped this long after their last update. */
   runRetention: DAY,
@@ -45,6 +82,14 @@ export const DEFAULT_LIMITS = {
   answeredRetention: 7 * DAY,
   /** Unanswered decisions, and quota snapshots no machine has replaced, are dropped after this. */
   staleRetention: 30 * DAY,
+  /**
+   * Unanswered decisions an account may hold before they are kept only floodRetention: a
+   * looping agent fills the decisions cap in under 2 hours, and its account would refuse every
+   * question for 30 days (#584). A person has a few dozen open at most.
+   */
+  floodUnanswered: 1_000,
+  /** How long unanswered decisions are kept in an account past floodUnanswered. */
+  floodRetention: 7 * DAY,
 
   /** Directory appends per account. */
   directoryAppends: [30, HOUR] as RateWindow,
@@ -62,22 +107,51 @@ export const DEFAULT_LIMITS = {
 
   /** Sessions per account; signing in past this ends the oldest, unpaired ones first. */
   sessions: 50,
-  /** GitHub sign-ins finished per address. */
-  githubCallbacks: [20, MINUTE] as RateWindow,
+  /**
+   * GitHub sign-ins finished per address. An office or a carrier's NAT shares one IPv4 address,
+   * and a launch brings many people at once; one a second is far below what the server held in
+   * the load test (#619).
+   */
+  githubCallbacks: [60, MINUTE] as RateWindow,
+  /** Owner-token sign-ins per address, so the token cannot be guessed fast. */
+  ownerSignIns: [10, MINUTE] as RateWindow,
+  /** Sign-in challenges per account, which a device signs to bind a new session. */
+  challenges: [20, MINUTE] as RateWindow,
+
+  /** Pairing requests posted per address: a person's setup posts one per machine or page (#619). */
+  pairingPosts: [30, MINUTE] as RateWindow,
+  /** Pairing requests read per account, by the device approving the pairing. */
+  pairingReads: [30, MINUTE] as RateWindow,
+  /**
+   * Pairing results read per address, by the member that posted the request. Each waiting
+   * pairing long-polls every 25 s, 2.4 times a minute, and an address may have 50 waiting
+   * (pairingsPerClient), so a crowd behind one NAT never runs out (#716).
+   */
+  pairingResults: [150, MINUTE] as RateWindow,
 
   /**
-   * Pairings stored on the whole server, about 4 KB each: the disk bound. Filling it takes a
-   * thousand addresses at pairingsPerClient.
+   * Pairings stored on the whole server, about 4 KB each: the disk bound. Filling it takes 400
+   * addresses at pairingsPerClient.
    */
   pendingPairings: 20_000,
   /**
    * Unapproved pairings per address, an IPv6 client counting as its /48. Approved ones do not
-   * count, so an office behind one NAT pairs as many members as it likes, 20 waiting at a time.
+   * count, so an office behind one NAT pairs as many members as it likes, 50 waiting at a time.
    */
-  pairingsPerClient: 20,
+  pairingsPerClient: 50,
+
+  /**
+   * Relayed Web Pushes in flight on the whole server (RELAY_MODE), and per address. Each may
+   * take pushTimeoutMs, so a slow or hostile push service cannot pile up open requests; past
+   * either the relay answers 503. FCM, which goes to Google, does not count (#577).
+   */
+  relaySends: 16,
+  relaySendsPerClient: 4,
 
   /** Push subscription writes per account. */
   pushSubscribes: [30, MINUTE] as RateWindow,
+  /** Pushes relayed for other servers per address, on a server in relay mode. */
+  relayPosts: [120, MINUTE] as RateWindow,
 
   /** Asks for fresh quota snapshots per account; each makes every machine run CodexBar. */
   quotaAsks: [6, MINUTE] as RateWindow,
@@ -113,13 +187,26 @@ export function ipKey(c: Context<Env>, prefix: 48 | 64 = 64): string {
     .join(":")}::/${prefix}`;
 }
 
-/** Counts one call under `key`, or answers 429 `rate-limited` with Retry-After. */
-export function rateLimit(c: Context<Env>, key: string, [calls, ms]: RateWindow) {
-  const wait = c.var.limiter.retryAfter(key, calls, ms);
+/**
+ * Counts one call under `key`, or `bytes` of a byte budget, or answers 429 `rate-limited` with
+ * Retry-After.
+ */
+export function rateLimit(
+  c: Context<Env>,
+  key: string,
+  [calls, ms]: RateWindow,
+  bytes?: number,
+  /** Only checks that `bytes` fit what is left, counting nothing: the caller charges later. */
+  peek = false,
+) {
+  const wait = peek
+    ? c.var.limiter.peek(key, calls, ms, bytes)
+    : c.var.limiter.retryAfter(key, calls, ms, bytes);
   if (wait === 0) return;
+  const most = bytes === undefined ? `${calls}` : `${calls / 1024 / 1024} MB`;
   throw new HTTPException(429, {
     res: Response.json(
-      { error: "rate-limited", detail: `at most ${calls} per ${ms / 1000} s; retry later` },
+      { error: "rate-limited", detail: `at most ${most} per ${ms / 1000} s; retry later` },
       { status: 429, headers: { "retry-after": String(wait) } },
     ),
   });

@@ -5,9 +5,11 @@
  */
 import {
   type Answer,
+  type Snooze,
   addEntry,
   type Directory,
   open,
+  openImages,
   openPairingRequest,
   pairingApproval,
   parsePairingCode,
@@ -53,8 +55,8 @@ export class LiveServer {
     private readonly http: ReturnType<typeof Bun.serve>,
   ) {}
 
-  static async start(): Promise<LiveServer> {
-    const s = await makeServer();
+  static async start(over: Parameters<typeof makeServer>[0] = {}): Promise<LiveServer> {
+    const s = await makeServer(over);
     const owner = await setupAccount(s, "phone");
     let live: LiveServer | undefined;
     const http = Bun.serve({
@@ -150,6 +152,18 @@ export class LiveServer {
     return items.map((s) => open(s.item as SealedItem & { kind: K }, me, dir).body);
   }
 
+  /** Each decision's images as a device shows them, opened from their blobs (#685). */
+  async images(by: Actor = this.owner.device) {
+    const r = await this.s.call("GET", "/v1/items?kind=decision", { token: by.token });
+    const items = r.json.items as Stored[];
+    const dir = await this.directory();
+    const me = { id: by.id, box: by.keys.box };
+    return items.map((s) => {
+      const item = s.item as SealedItem & { kind: "decision" };
+      return openImages(item, open(item, me, dir).body.images);
+    });
+  }
+
   private async sealAnswer(
     decisionId: string,
     reply: { choice?: string; text?: string; done?: true },
@@ -175,6 +189,27 @@ export class LiveServer {
   /** The phone answers a decision through `POST /items`. */
   async answer(decisionId: string, reply: { choice?: string; text?: string; done?: true }) {
     await this.phone("POST", "/items", await this.sealAnswer(decisionId, reply));
+  }
+
+  /** The phone snoozes a decision until `until` (#571), sealed to its machine and the phone. */
+  async snooze(decisionId: string, until: Date, at = new Date()) {
+    const { item } = (await this.phone("GET", `/items/${decisionId}`)) as Stored;
+    const machine = (await this.directory()).members.get(item.from);
+    if (!machine) throw new Error(`no member ${item.from}`);
+    const phone = this.owner.device.member;
+    const body: Snooze = {
+      v: 1,
+      id: `z_${crypto.randomUUID()}`,
+      decisionId,
+      to: [machine.member.id, phone.id],
+      until: until.toISOString(),
+      at: at.toISOString(),
+    };
+    const sealed = seal("snooze", body, { id: "phone", signKey: this.owner.device.keys.sign.privateKey }, [
+      machine.member,
+      phone,
+    ]);
+    await this.phone("POST", "/items", sealed);
   }
 
   /**
@@ -211,6 +246,15 @@ export class LiveServer {
   /** Pairs a second device, such as a laptop, for answers from someone other than the phone. */
   async addDevice(id: string): Promise<Actor> {
     return pair(this.s, this.owner, id, "device", await signIn(this.s));
+  }
+
+  /** What the account's decisions cost to store, boxes, blobs and rows. */
+  decisionBytes(): number {
+    return (
+      this.s.deps.db
+        .query("SELECT COALESCE(SUM(size), 0) AS n FROM items WHERE kind = 'decision'")
+        .get() as { n: number }
+    ).n;
   }
 
   /** The phone revokes a member. */
@@ -271,8 +315,8 @@ export class LiveServer {
     const account = this.owner.id;
     db.transaction(() => {
       db.query(
-        "INSERT INTO items (seq, account_id, id, kind, from_id, re, received_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-      ).run(nextSeq(db), account, item.id, item.kind, item.from, item.re ?? null, new Date().toISOString());
+        "INSERT INTO items (seq, account_id, id, kind, from_id, re, wake_at, received_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+      ).run(nextSeq(db), account, item.id, item.kind, item.from, item.re ?? null, item.wakeAt ?? null, new Date().toISOString());
       for (const b of item.boxes)
         db.query("INSERT INTO boxes (account_id, item_id, to_id, box) VALUES (?, ?, ?, ?)").run(
           account,

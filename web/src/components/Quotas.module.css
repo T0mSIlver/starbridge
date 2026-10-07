@@ -35,6 +35,8 @@
 }
 
 .empty {
+  max-width: 36rem;
+  margin-inline: auto;
   padding: var(--s8) var(--s4);
   color: var(--fg2);
   text-align: center;

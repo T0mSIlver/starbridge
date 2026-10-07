@@ -1,6 +1,7 @@
+import { appendFileSync, mkdirSync } from "node:fs";
 import { homedir } from "node:os";
+import { dirname } from "node:path";
 import { type Ctx, parseDuration } from "../context";
-import { dropOldPiRules, piPermissionConfig } from "../pi";
 import { refreshFiles } from "../setup/harnesses";
 import { socketPath } from "./api";
 import { Decisions } from "./decisions";
@@ -15,6 +16,8 @@ export interface AgentOpts {
   codexbar?: string;
   noQuota?: boolean;
   socket?: string;
+  /** Appends the log to this file instead of stderr, which a Windows task has nowhere to show. */
+  log?: string;
 }
 
 /** Builds the agent with every feature, from `agent.json` and the flags. Not started. */
@@ -34,24 +37,36 @@ export function makeAgent(ctx: Ctx, opts: AgentOpts = {}): Agent {
 
 /** `starbridge agent`: serves until Ctrl-C or SIGTERM. */
 export async function runAgent(ctx: Ctx, opts: AgentOpts): Promise<number> {
-  const agent = makeAgent(ctx, opts);
-  await agent.start();
-  // A new binary brings Codex and opencode their files here too, after a brew or npm upgrade;
-  // it also takes Pi's pre-#488 bash allow patterns out.
-  for (const line of refreshFiles({ ctx, home: ctx.env.HOME ?? homedir() })) agent.log(line);
-  try {
-    if (dropOldPiRules(ctx.env))
-      agent.log(
-        `removed the starbridge bash patterns from ${piPermissionConfig(ctx.env)}: the Starbridge link allows the commands now (#488)`,
-      );
-  } catch (e) {
-    agent.log(`could not remove the starbridge bash patterns: ${(e as Error).message}`);
+  if (opts.log) {
+    const file = opts.log;
+    mkdirSync(dirname(file), { recursive: true });
+    ctx = { ...ctx, err: (line) => appendFileSync(file, `${line}\n`) };
   }
-  await new Promise<void>((resolve) => {
-    if (!ctx.signal || ctx.signal.aborted) return resolve();
-    ctx.signal.addEventListener("abort", () => resolve(), { once: true });
+  // Closing the console window a Windows task runs in sends SIGHUP, and Ctrl-Break SIGBREAK:
+  // both stop the agent as SIGTERM does, so its port file goes with it (#570). Caught before the
+  // agent writes the file: until then either signal would end it and leave the file behind.
+  const hangups = ["SIGHUP", "SIGBREAK"] as const;
+  let onHangup = () => {};
+  const hungUp = new Promise<void>((resolve) => {
+    onHangup = resolve;
   });
-  agent.log("stopping");
-  await agent.stop();
+  for (const s of hangups) process.on(s, onHangup);
+  try {
+    const agent = makeAgent(ctx, opts);
+    await agent.start();
+    // A new binary brings Codex and opencode their files here too, after a brew or npm upgrade.
+    for (const line of refreshFiles({ ctx, home: ctx.env.HOME ?? homedir() })) agent.log(line);
+    await Promise.race([
+      hungUp,
+      new Promise<void>((resolve) => {
+        if (!ctx.signal || ctx.signal.aborted) return resolve();
+        ctx.signal.addEventListener("abort", () => resolve(), { once: true });
+      }),
+    ]);
+    agent.log("stopping");
+    await agent.stop();
+  } finally {
+    for (const s of hangups) process.off(s, onHangup);
+  }
   return 0;
 }

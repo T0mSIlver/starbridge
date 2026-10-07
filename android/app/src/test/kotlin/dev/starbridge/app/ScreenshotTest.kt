@@ -1,5 +1,6 @@
 package dev.starbridge.app
 
+import dev.starbridge.app.ui.Refresh
 import dev.starbridge.app.ui.devices.RecoveryKeyScreen
 import dev.starbridge.app.ui.devices.RecoveryActions
 import dev.starbridge.app.data.Replacing
@@ -50,6 +51,8 @@ import dev.starbridge.app.ui.inbox.DecisionSheet
 import dev.starbridge.app.data.Colours
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performTextInput
@@ -110,6 +113,19 @@ class ScreenshotTest(private val dark: Boolean) {
         compose.onRoot().captureRoboImage("screenshots/$name-${if (dark) "dark" else "light"}.png")
     }
 
+    /** The whole screen, popups and dialogs included, which [capture]'s root leaves out. */
+    @OptIn(com.github.takahirom.roborazzi.ExperimentalRoborazziApi::class)
+    private fun captureScreen(name: String, before: () -> Unit = {}, content: @Composable () -> Unit) {
+        compose.setContent {
+            StarbridgeTheme(darkTheme = dark) {
+                Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) { content() }
+            }
+        }
+        before()
+        compose.waitForIdle()
+        com.github.takahirom.roborazzi.captureScreenRoboImage("screenshots/$name-${if (dark) "dark" else "light"}.png")
+    }
+
     private val promptActions = PromptActions({ _, _, _, _ -> })
     @Composable
     private fun Inbox(view: InboxView = InboxView()) {
@@ -151,6 +167,9 @@ class ScreenshotTest(private val dark: Boolean) {
 
     @Test fun inboxEmpty() = capture("inbox-empty") { Phone(Tab.Inbox, 0) { InboxScreen(fake.decisions.filterNot { it.isOpen }, now, decisionActions, promptActions = promptActions) } }
 
+    // A new account before its first machine (#610).
+    @Test fun inboxNoMachine() = capture("inbox-no-machine") { Phone(Tab.Inbox, 0) { InboxScreen(emptyList(), now, decisionActions, noMachine = true) } }
+
     // Runs as they end, and text at 200%.
     @Test fun inboxEnded() = capture("inbox-ended") { Phone(Tab.Inbox, 0) { InboxScreen(emptyList(), now, decisionActions, runs = fake.endedRuns) } }
 
@@ -164,7 +183,8 @@ class ScreenshotTest(private val dark: Boolean) {
     // Sheets open over whatever page is up; the mockups show them over Quotas.
     @Composable
     private fun QuestionSheet(d: Decision) {
-        Sheet({ QuotasScreen(fake.windows, now) }) { DecisionSheet(d, now, { _, _, _ -> }, Replies(rememberDrafts(), emptyMap())) }
+        // As the app shows it: Snooze beside Reply on an open question (#571).
+        Sheet({ QuotasScreen(fake.windows, now) }) { DecisionSheet(d, now, { _, _, _ -> }, Replies(rememberDrafts(), emptyMap()), onSnooze = {}) }
     }
 
     @Test fun sheetQuestion() = capture("sheet-question") { QuestionSheet(fake.decisions.first { it.id == "d1" }) }
@@ -176,6 +196,8 @@ class ScreenshotTest(private val dark: Boolean) {
 
     @Test fun sheetPick() = capture("sheet-pick") { QuestionSheet(showcase.pick) }
 
+    @Test fun sheetPickShapes() = capture("sheet-pick-shapes") { QuestionSheet(fake.layouts) }
+
     @Test fun sheetScreenshot() = capture("sheet-screenshot") { QuestionSheet(fake.screenshot) }
 
     // Full screen, opened from the sheet's image (#170).
@@ -186,6 +208,34 @@ class ScreenshotTest(private val dark: Boolean) {
     // A question answered on its own page: the link and Done on its card (#539).
     @Test fun inboxAnswerIn() = capture("inbox-answer-in") {
         Phone(Tab.Inbox, 2) { InboxScreen(listOf(fake.answerIn, fake.answerIn.copy(id = "d6w", waiting = true, waitingSince = now.minusSeconds(95))), now, decisionActions) }
+    }
+
+    // Snoozing (#571): the Snoozed group open at the end of the inbox, the sheet's Snooze and its
+    // times, straight on today's dial (#692), and a snoozed question's sheet.
+    @Test fun inboxSnoozed() = capture("inbox-snoozed", before = { compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasText("Snoozed")) }) {
+        Phone(Tab.Inbox, 4) { InboxScreen(fake.decisions + fake.snoozed, now, decisionActions, prompts = fake.prompts, promptActions = promptActions, runs = fake.runs, view = InboxView(snoozedOpen = true)) }
+    }
+
+    @Test fun inboxSnoozedClosed() = capture("inbox-snoozed-closed", before = { compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasText("Snoozed")) }) {
+        Phone(Tab.Inbox, 4) { InboxScreen(fake.decisions + fake.snoozed, now, decisionActions, prompts = fake.prompts, promptActions = promptActions, runs = fake.runs) }
+    }
+
+    @Test fun sheetSnoozeMenu() = capture("sheet-snooze-menu", before = { compose.onNodeWithText("Snooze until 15:00").performScrollTo() }) {
+        Sheet({ QuotasScreen(fake.windows, now) }) { DecisionSheet(fake.decisions.first { it.id == "d1" }, now, { _, _, _ -> }, Replies(rememberDrafts(), emptyMap()), onSnooze = {}, snoozeOpen = true) }
+    }
+
+    @Test fun sheetSnoozed() = capture("sheet-snoozed") {
+        Sheet({ QuotasScreen(fake.windows, now) }) { DecisionSheet(fake.snoozed[1], now, { _, _, _ -> }, Replies(rememberDrafts(), emptyMap()), onSnooze = {}) }
+    }
+
+    // A question's card held past the swipe's threshold, to the right (#692).
+    @Test fun inboxSwipe() = capture("inbox-swipe", before = {
+        compose.onNodeWithText("Run speech inference", substring = true).performTouchInput {
+            down(centerLeft)
+            repeat(10) { moveBy(androidx.compose.ui.geometry.Offset(width * 0.06f, 0f)) }
+        }
+    }) {
+        Phone(Tab.Inbox, 4) { Inbox() }
     }
 
     @Test fun sheetFreeText() = capture("sheet-free-text") { QuestionSheet(fake.freeText) }
@@ -245,6 +295,11 @@ class ScreenshotTest(private val dark: Boolean) {
     private fun notifications() = compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasText("Delivered through"))
 
     @Test fun quotasEmpty() = capture("quotas-empty") { QuotasScreen(emptyList(), now) }
+
+    // A device that just joined (#661): the ask in flight, nothing came back, and no machine at all.
+    @Test fun quotasLoading() = capture("quotas-loading") { QuotasScreen(emptyList(), now, refresh = Refresh(busy = true) {}, machines = listOf("devbox")) }
+    @Test fun quotasNone() = capture("quotas-none") { QuotasScreen(emptyList(), now, machines = listOf("devbox", "laptop")) }
+    @Test fun quotasNoMachine() = capture("quotas-no-machine") { QuotasScreen(emptyList(), now, machines = emptyList()) }
 
     @Test fun quotasStale() = capture("quotas-stale") { QuotasScreen(fake.staleWindows, now) }
     @Test fun quotasFailed() = capture("quotas-failed") { QuotasScreen(fake.failedWindows, now, failures = fake.failures) }

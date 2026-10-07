@@ -2,6 +2,14 @@
 	servers {
 		# The Hetzner firewall lets in TCP only, so don't advertise HTTP/3.
 		protocols h1 h2
+		# A client has 10 s for its TLS handshake and then 10 s to send an HTTP/1.1 request's
+		# headers; HTTP/2 streams are not bounded by it. Each open connection costs Caddy about
+		# 140 KB, and memory runs out first on the VPS (SPEC.md, "Capacity"), so a slow sender
+		# must not hold one for nothing (#587). Bodies keep no timeout: a 2 MB question over a
+		# slow phone link may take a while, and long-polls are responses, not reads.
+		timeouts {
+			read_header 10s
+		}
 	}
 	# The idle copy of the page fails its health check every second, by design. The rate limiter
 	# logs each refused client's address; the privacy page promises none is kept.
@@ -27,19 +35,50 @@ starbridge.run {
 	# A deploy restarts the server (#150): while it is down, Caddy holds each request and retries
 	# it for up to 30 s, so clients see a pause instead of a 502.
 	handle @server {
-		reverse_proxy 127.0.0.1:8080 {
-			lb_try_duration 30s
-			lb_try_interval 250ms
-			health_uri /healthz
-			health_interval 1s
-			# Every open page and machine holds a long-poll, and each that returns frees its
-			# connection at once. Caddy keeps only 32 idle by default and closes the rest, each
-			# close leaving a TIME-WAIT socket on the host's ports (#301). Idle connections are
-			# dropped before the server's own 30 s idle timeout, so Caddy never sends a request on
-			# one the server is closing.
-			transport http {
-				keepalive 25s
-				keepalive_idle_conns_per_host 4096
+		route {
+			# Anyone can ask the relay to push (POST /v1/relay), so its pushes are bounded in all,
+			# not only per address as the server counts them: five addresses at the server's own
+			# 120 a minute. The budget is shared, so a few addresses can use it up and the relay
+			# fails closed. The server also caps Web Pushes in flight (relaySends).
+			rate_limit {
+				disable_metrics
+				zone relay_all {
+					match {
+						path /v1/relay
+					}
+					key relay
+					events 600
+					window 1m
+				}
+				# Most reads count against no account, so a looping client or script could hold a
+				# core. A visible web page with a prompt waiting and a run live makes about 200
+				# requests a minute, a heavy user with the phone and five busy machines about 600;
+				# 3000 lets five such users share an office's address, and holds one address to
+				# about 2% of a core (#582).
+				zone v1_address {
+					match {
+						path /v1/*
+					}
+					key {http.request.remote.host}
+					ipv6_prefix 64
+					events 3000
+					window 1m
+				}
+			}
+			reverse_proxy 127.0.0.1:8080 {
+				lb_try_duration 30s
+				lb_try_interval 250ms
+				health_uri /healthz
+				health_interval 1s
+				# Every open page and machine holds a long-poll, and each that returns frees its
+				# connection at once. Caddy keeps only 32 idle by default and closes the rest, each
+				# close leaving a TIME-WAIT socket on the host's ports (#301). Idle connections are
+				# dropped before the server's own 30 s idle timeout, so Caddy never sends a request on
+				# one the server is closing.
+				transport http {
+					keepalive 25s
+					keepalive_idle_conns_per_host 4096
+				}
 			}
 		}
 	}
@@ -91,6 +130,67 @@ starbridge.run {
 			health_uri /
 			health_interval 1s
 		}
+	}
+}
+
+# Umami's share page, for reading the launch funnel on a phone (#559; deploy/umami-setup.sh makes
+# the link). Umami's own page assets would clash with the web page's under starbridge.run, hence a
+# host of its own. Only what the share page reads passes, and only GET: the login page and its
+# API, and every write, stay behind the SSH tunnel. The website id is WEBSITE_ID in
+# web/src/lib/analytics.ts.
+# The stats host's password, user tom, and a cookie that stands for it on the API. Umami's page
+# sends its own Authorization header (Bearer) on every API call, which replaces the browser's saved
+# password, so Basic auth can guard only the pages; they set the cookie the API calls then carry.
+# Called with the bcrypt hash and the cookie's value from /etc/caddy/secrets/stats-auth
+# (deploy/host/caddy-auth.sh).
+(stats_gate) {
+	@pages not path /api/*
+	basic_auth @pages {
+		tom {args[0]}
+	}
+	header @pages Set-Cookie "stats_key={args[1]}; Path=/api/; Secure; HttpOnly; SameSite=Strict; Max-Age=31536000"
+	@locked {
+		path /api/*
+		not header Cookie *stats_key={args[1]}*
+	}
+	respond @locked 401
+}
+
+stats.starbridge.run {
+	encode zstd gzip
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+		Referrer-Policy no-referrer
+		X-Robots-Tag noindex
+		defer
+	}
+	@share {
+		method GET HEAD
+		path /share/* /_next/static/* /images/* /intl/* /datamaps.world.json /favicon.ico /api/config /api/share/* /api/websites/f3741d82-c450-47d3-8845-646cddbe392f /api/websites/f3741d82-c450-47d3-8845-646cddbe392f/*
+		# One visit's records (city, device, pages), which the share token would also open.
+		not path_regexp (?i)^/api/websites/[^/]+/sessions/[0-9a-f-]{36}
+	}
+	# `route` keeps the order as written: the limit, then the password, then the share page.
+	route {
+		# Each request checks the password's bcrypt hash, about 60 ms of CPU: the limit keeps one
+		# address from spending the box's. The share page makes about 30 requests per view.
+		rate_limit {
+			disable_metrics
+			zone stats_viewer {
+				key {http.request.remote.host}
+				ipv6_prefix 64
+				events 300
+				window 1m
+			}
+		}
+		# The share link alone would open it; the password keeps it to the owner (stats_gate above).
+		import /etc/caddy/secrets/stats-auth
+		# Umami would read the password as a failed login of its own.
+		reverse_proxy @share 127.0.0.1:3001 {
+			header_up -Authorization
+		}
+		respond 404
 	}
 }
 

@@ -1,7 +1,7 @@
 # Skill eval
 
 Checks that agents reach their user through Starbridge the way the `starbridge` skill and the
-SessionStart rule say. Real Claude Code, Codex, Pi and opencode sessions work through nine
+SessionStart rule say. Real Claude Code, Codex, Pi and opencode sessions work through the
 scripted situations (`scenarios.ts`), once with the plugin at a git ref and once with this
 checkout's, and a rubric scores the cards they post.
 
@@ -36,10 +36,23 @@ ChatGPT plan. `TMPDIR` must be outside your home, where an
 ancestor's `AGENTS.md` or `CLAUDE.md` would reach the agent. A Codex home is 60 MB, so parallel
 runs can fill a small /tmp.
 
-`grade.ts` scores each run: eleven checks read the record, five ask Claude Sonnet through
+`grade.ts` scores each run: twelve checks read the record, five ask Claude Sonnet through
 `claude -p` in a throwaway config dir (stored in the record, so grading again is free). A model
 provider's error, such as a rate limit, makes the run a failed run rather than a score.
 `render.ts` shows cards in the real web inbox (headless Chromium) and saves a screenshot of each.
 
 `results/299` holds the records behind #299's entry in SPEC.md, "Platform facts", one folder per
 text the agents ran: `main`, `rev3`, `heredoc` and `final`.
+
+`results/624` holds round 2, on what changed since: option order, Done, the delivery line,
+`wait --no-mark` and opencode's question and edit prompts. Its cases run in sessions that live
+across the answer (`live` in `scenarios.ts`): Claude Code in tmux with the mod and `starbridge
+agent`, opencode under `opencode serve` with its plugin.
+
+```bash
+TMPDIR=/var/tmp bun evals/skill/run.ts --agent claude --arms after --reps 3 \
+  --only merge-order,option-order,design-pick,later-question,done-on-page,delivery-prompt,delivery-wait
+TMPDIR=/var/tmp bun evals/skill/run.ts --agent opencode --arms after --reps 3 \
+  --only merge-order,option-order,design-pick,later-question,done-on-page,delivery-prompt,oc-question,oc-edit
+bun evals/skill/grade.ts --no-judge evals/skill/results/624/claude
+```

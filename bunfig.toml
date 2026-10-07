@@ -1,0 +1,3 @@
+# `bun test <path>` from the repository root: the same preload as each package's (#604).
+[test]
+preload = ["./test-tmp.ts"]

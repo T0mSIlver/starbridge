@@ -3,10 +3,15 @@ import {
   type Answer,
   type Decision,
   open,
+  openImages,
   type QuotaSnapshot,
   type SealedItem,
   seal,
+  sealImage,
+  toB64,
 } from "@starbridge/protocol";
+import { DEFAULT_LIMITS } from "../src/limits";
+import { pushPayload } from "../src/routes/items";
 import {
   type Account,
   type Actor,
@@ -278,6 +283,20 @@ test("GET /quota returns the latest snapshot of each active machine", async () =
   expect((await s.call("GET", "/v1/quota", { token: phone.token })).json.items).toEqual([]);
 });
 
+test("GET /quota/senders names each active machine that posts quotas, without its snapshot", async () => {
+  const senders = async () =>
+    (await s.call("GET", "/v1/quota/senders", { token: devbox.token })).json.senders;
+  expect(await senders()).toEqual([]);
+  await post(devbox, quota("q1"));
+  const [one] = await senders();
+  expect(one).toEqual({ id: devbox.id, receivedAt: expect.any(String) });
+  expect((await s.call("GET", "/v1/quota/senders", { token: phone.token })).status).toBe(200);
+  await revoke(s, acct, "devbox");
+  expect((await s.call("GET", "/v1/quota/senders", { token: phone.token })).json.senders).toEqual(
+    [],
+  );
+});
+
 test("a device revoked while its answer is still uploading cannot answer", async () => {
   const d = decision();
   await post(devbox, d);
@@ -312,4 +331,36 @@ test("a device revoked while its answer is still uploading cannot answer", async
   } finally {
     server.stop(true);
   }
+});
+
+test("a decision's images are stored once for every device, and a re-seal keeps them (#685)", async () => {
+  const bytes = new Uint8Array(30_000).map((_, i) => i % 251);
+  const { blob, ref } = sealImage(bytes);
+  const image = { type: "image/png" as const, width: 10, height: 10, ...ref };
+  const d = { ...decision([phone], { images: [image] }), blobs: [blob] };
+  expect((await post(devbox, d)).status).toBe(201);
+  const pushes: { to: string[]; payload: (d: string) => string }[] = [];
+  s.deps.push.notify = (_account: string, to: string[], payload: (d: string) => string) => {
+    pushes.push({ to, payload });
+  };
+  const again = { ...decision([phone, laptop], { id: d.id, images: [image] }), reseal: true };
+  expect((await post(devbox, again)).status).toBe(201);
+  const { size } = s.deps.db.query("SELECT size FROM items WHERE id = ?").get(d.id) as {
+    size: number;
+  };
+  const boxes = again.boxes.reduce((n, b) => n + b.box.length, 0);
+  expect(size).toBe(boxes + blob.length + DEFAULT_LIMITS.rowBytes * 3);
+  for (const who of [phone, laptop]) {
+    const [{ item }] = (await s.call("GET", "/v1/items", { token: who.token })).json.items;
+    const { body } = open(item, { id: who.id, box: who.keys.box }, await directory(s, phone.token));
+    expect(openImages(item, (body as Decision).images)).toEqual([
+      { type: "image/png", width: 10, height: 10, data: toB64(bytes) },
+    ]);
+  }
+  // A push carries the id, so the device fetches the images with the item, re-sealed or not.
+  expect(JSON.parse(pushPayload(d, phone.id, 4096)).box).toBeUndefined();
+  const toLaptop = pushes.filter((p) => p.to.includes(laptop.id)).map((p) => p.payload(laptop.id));
+  expect(toLaptop.map((p) => JSON.parse(p).box)).toEqual([undefined]);
+  const q = { ...quota("q-blobs"), blobs: [blob] };
+  expect((await post(devbox, q)).json.error).toBe("bad-schema");
 });
