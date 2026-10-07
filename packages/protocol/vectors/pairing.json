@@ -10,12 +10,33 @@
     "hash": "_FOHytyfs0IIaAU11_f8nopChGBd35FRarxSpPpvU2w"
   },
   "check": {
-    "note": "checkCode({boxPk, signPk}): the dev box's keys",
-    "keys": {
-      "boxPk": "deJw3ylSxXuoNnuoYYwXj5_lDbJ5nTBOdOkY2YVoYUY",
-      "signPk": "EqQVksi3wX1AWeeym2Ho_5bHQV8vgDNI8vAX4Fueodo"
-    },
-    "expect": "NGG6-XG4J-WCFJ-N7HS"
+    "note": "checkCode(entries, id): directory.json's chain, the dev box's add entry",
+    "entries": [
+      {
+        "v": 1,
+        "kind": "directory",
+        "signer": "phone",
+        "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":0,\"prev\":null,\"at\":\"2026-10-04T09:00:00Z\",\"op\":\"add\",\"member\":{\"id\":\"phone\",\"role\":\"device\",\"name\":\"Pixel\",\"boxPk\":\"GxtY3VDqFLYNoXt5DNAnVNlwybq4ZOuzwPMBb-UdP1c\",\"signPk\":\"1i8Bah79Hk_feT60LNhEceG6nwzwTRKHtcxx9hYofLg\"},\"recoveryPk\":\"JznWHYgiTwfyW3QHRuQQMAeZO0KtraqUwaucN6lQ0Yw\"}",
+        "sig": "0bkmgoHejRg8_DlnAWttqsPItFv9ts7Wv21VhCM4rfGmjeVJsgDIzCb7Nn5rv_-W6ywod1mTMyadSpqcpmPXAw",
+        "recoverySig": "WDZttnKRb24KcAwZHe_NbWzH2mozlK0zBGiqqp3mfBrahWgTAA0SAzwz3CPW1QHwpsaqrOiy0nD8TefuaQvTCQ"
+      },
+      {
+        "v": 1,
+        "kind": "directory",
+        "signer": "phone",
+        "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":1,\"prev\":\"rhZ06D9_KVi0e8KXZKkuBUMKp3W9wWE9_s1SpRhXAWY\",\"at\":\"2026-10-04T09:05:00Z\",\"op\":\"add\",\"member\":{\"id\":\"browser\",\"role\":\"device\",\"name\":\"Firefox on the Mac\",\"boxPk\":\"YDRufJEaX2uhVBKRdMr-dbKUrDu9VUljL0jOxiZvhBA\",\"signPk\":\"NLTZBDFWy23PC-sKKUm3VZyUDSvLbb6MU6mzAnjjp0Y\"}}",
+        "sig": "R2d1lLoI2W_pyEkfiSQU42PGrAJCMM0Qq6lmLD5S20V_YkcHDELCvj0NJSm3xu4L1abQSOX-PhqvHvGMkePQAw"
+      },
+      {
+        "v": 1,
+        "kind": "directory",
+        "signer": "phone",
+        "body": "{\"v\":1,\"account\":\"acct_tom\",\"seq\":2,\"prev\":\"rTTik4GnjcINcEVUpmjq5GtpJCe4z43mVjFz0UPJ_aM\",\"at\":\"2026-10-04T09:10:00Z\",\"op\":\"add\",\"member\":{\"id\":\"devbox\",\"role\":\"machine\",\"name\":\"dev box\",\"boxPk\":\"deJw3ylSxXuoNnuoYYwXj5_lDbJ5nTBOdOkY2YVoYUY\",\"signPk\":\"EqQVksi3wX1AWeeym2Ho_5bHQV8vgDNI8vAX4Fueodo\"}}",
+        "sig": "T6_iixqRGeKwPabZaPdTSoIX8DoXKFZNRjMm6QNfYY1YKA9-9cQIG7Pl__GfWEFzABbpIAxoKUzzDNcamLg6AA"
+      }
+    ],
+    "id": "devbox",
+    "expect": "TKWZ-QPK4-X5ZR-AWZ3"
   },
   "parse": [
     {

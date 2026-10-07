@@ -246,19 +246,23 @@ export function verifyBind(
 /**
  * A machine's check code, which the machine asks the owner to confirm against the code a device
  * shows beside it under Devices (#795): the first 80 bits of BLAKE2b-256("starbridge/v1/check"
- * NUL boxPk signPk), as 16 Crockford base32 characters in groups of four. A machine paired into
- * a chain the server controls is missing from the owner's, or stands there as a stand-in with a
- * key of the server's, whose code the server would have to grind to the machine's.
+ * NUL body) over the body of the `add` entry that added member `id` to `entries`, as 16
+ * Crockford base32 characters in groups of four. That body holds the machine's keys and, through
+ * `prev`, the whole chain before it, so a stand-in with copied keys or a chain the server forked
+ * gives another code.
  */
-export function checkCode(keys: { boxPk: string; signPk: string }): string {
-  const box = fromB64(keys.boxPk);
-  const sign = fromB64(keys.signPk);
-  if (box.length !== 32 || sign.length !== 32)
-    throw new ProtocolError("bad-encoding", "a public key is not 32 bytes");
-  const hash = sodium.crypto_generichash(
-    32,
-    concat(utf8("starbridge/v1/check"), new Uint8Array([0]), box, sign),
-    null,
-  );
-  return (encodeCrockford(hash.subarray(0, 10)).match(/.{4}/g) as string[]).join("-");
+export function checkCode(entries: unknown[], id: string): string {
+  for (const e of entries) {
+    const body = (e as { body?: unknown } | null)?.body;
+    if (typeof body !== "string") continue;
+    const parsed = JSON.parse(body) as { op?: unknown; member?: { id?: unknown } };
+    if (parsed.op !== "add" || parsed.member?.id !== id) continue;
+    const hash = sodium.crypto_generichash(
+      32,
+      concat(utf8("starbridge/v1/check"), new Uint8Array([0]), utf8(body)),
+      null,
+    );
+    return (encodeCrockford(hash.subarray(0, 10)).match(/.{4}/g) as string[]).join("-");
+  }
+  throw new ProtocolError("unknown-member", `no add entry for ${id}`);
 }

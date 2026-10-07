@@ -228,22 +228,24 @@ who sees the code can post first, so the device shows the requester's name befor
 with a typed code.
 
 A machine's check code lets the owner see that the machine joined the owner's own chain (#795).
-`checkCode` is the first 80 bits of `BLAKE2b-256("starbridge/v1/check" NUL boxPk signPk)` over
-the machine's two public keys, as 16 Crockford base32 characters in four groups. Once approved,
-the machine shows the first three groups and saves the pairing only once the owner types the
-last group from the Android app, which shows each active machine's code under Devices, computed
-from the chain it verified. A person has to answer: with no terminal, the machine saves
-nothing. A hostile server that read the pairing code in
-a browser can approve the machine into a chain it controls, even one that reuses the owner's
-entry 0 and forks after it with a revoked device's key or an old recovery key. The owner's devices
-then list either no such machine or a stand-in with a key of the server's, so the codes differ.
-Both keys count, since a pairing request proves no private key: a stand-in may copy the
-machine's signing key beside a box key of the server's. To make the codes match, the server
-would have to find keys whose code matches 80 bits of the machine's, which it learns only from
-the machine's request. The web page shows the codes too, but a hostile server writes that page.
+`checkCode` is the first 80 bits of `BLAKE2b-256("starbridge/v1/check" NUL body)` over the body
+of the `add` entry that added the machine, as 16 Crockford base32 characters in four groups.
+That body holds the machine's keys and name, and through `prev` the whole chain before it. Once
+approved, the machine shows the first three groups and saves the pairing only once a person types
+the last group from the Android app, which shows each active machine's code under Devices,
+computed from the chain it verified. With no terminal, the group comes from
+`starbridge pair --confirm`.
 
-The code proves nothing about a device that itself paired or joined through a browser, which a
-hostile server could have put in a chain of its own too.
+A hostile server that read the pairing code in a browser can approve the machine into a chain it
+controls, even one that reuses the owner's entries and forks after them with a revoked device's
+key or an old recovery key, and put a stand-in in the owner's chain, even one with the machine's
+own public keys, since a pairing request proves no private key. The stand-in's `add` entry and
+the machine's differ in their `prev` or their contents, so the codes differ unless the server
+finds an entry whose code matches 80 bits of one the owner's device wrote. Two limits: a member
+browser lets a hostile page write both entries and search for a pair that matches, about 2^40
+tries; and the code proves nothing to a device that itself paired or joined through a browser,
+which the server could have put in a chain of its own. The web page shows the codes too, but a
+hostile server writes that page.
 
 ## Joining by digits
 

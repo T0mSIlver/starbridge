@@ -1118,9 +1118,10 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
     key: toB64(pairingKey(code)),
     claim: { secret: toB64(seed(7)), hash: claimHash(toB64(seed(7))) },
     check: {
-      note: "checkCode({boxPk, signPk}): the dev box's keys",
-      keys: publicKeys(devbox.keys),
-      expect: checkCode(publicKeys(devbox.keys)),
+      note: "checkCode(entries, id): directory.json's chain, the dev box's add entry",
+      entries: chain.slice(0, 3),
+      id: devbox.member.id,
+      expect: checkCode(chain.slice(0, 3), devbox.member.id),
     },
     parse: [
       { input: formatPairingCode(code).toLowerCase(), expect: formatPairingCode(code) },

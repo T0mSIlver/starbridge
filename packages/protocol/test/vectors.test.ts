@@ -120,11 +120,12 @@ describe("pairing.json", () => {
     expect(claimHash(v.claim.secret)).toBe(v.claim.hash);
   });
   test("check code", () => {
-    expect(checkCode(v.check.keys)).toBe(v.check.expect);
-    // Either key alone changes it: a stand-in may copy the machine's other one.
-    const other = toB64(new Uint8Array(32).fill(1));
-    expect(checkCode({ ...v.check.keys, boxPk: other })).not.toBe(v.check.expect);
-    expect(checkCode({ ...v.check.keys, signPk: other })).not.toBe(v.check.expect);
+    expect(checkCode(v.check.entries, v.check.id)).toBe(v.check.expect);
+    // Another add entry gives another code: a stand-in, or the same keys added on a fork.
+    expect(checkCode(v.check.entries, "browser")).not.toBe(v.check.expect);
+    expect(errorCode(() => checkCode(v.check.entries.slice(0, 2), v.check.id))).toBe(
+      "unknown-member",
+    );
   });
   for (const c of v.parse) {
     test(`parse ${c.input}`, () => {
