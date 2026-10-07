@@ -50,7 +50,8 @@ export async function socketFetch(socket: string, method: string, path: string, 
     try {
       t = portTarget(readFileSync(socket, "utf8"));
     } catch {}
-    if (!t) throw new Error(`no agent on ${socket}`);
+    // An agent that died left its port file: whoever holds the port now gets nothing (#570).
+    if (!t || !processAlive(t.pid)) throw new Error(`no agent on ${socket}`);
     target = { host: "127.0.0.1", port: t.port };
     const signed = await signCall(t.token);
     auth = signed.headers;
@@ -88,6 +89,16 @@ export async function socketFetch(socket: string, method: string, path: string, 
     req.on("error", reject);
     req.end(payload);
   });
+}
+
+/** Whether process `pid` runs, as the CLI's `processAlive`: one of another user's still does. */
+export function processAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (e) {
+    return (e as NodeJS.ErrnoException).code === "EPERM";
+  }
 }
 
 /** Runs `argv`; never rejects, as the mod's `$.process.run`. */

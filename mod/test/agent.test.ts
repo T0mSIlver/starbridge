@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, setDefaultTimeout, test } from "bun:test";
 import { readFileSync, statSync, writeFileSync } from "node:fs";
-import { request } from "node:http";
+import { createServer, request } from "node:http";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { LiveServer } from "@starbridge/server/test-support";
@@ -14,6 +14,7 @@ import {
   AgentLoop,
   type AgentTiming,
   HEADERS,
+  pidRuns,
   type Reply,
   socketPath,
 } from "../hooks/agent.ts";
@@ -170,6 +171,50 @@ test("the Node fetch of Pi and opencode reaches an agent on loopback TCP", async
   const r = await socketFetch(socket, "GET", "/v1/status");
   expect(r.status).toBe(200);
   expect(JSON.parse(r.text).socket).toBe(socket);
+});
+
+test("Pi and opencode send nothing to the port of an agent that died (#570)", async () => {
+  socket = join(cli.store.dir, "agent.port");
+  await startAgent();
+  const file = JSON.parse(readFileSync(socket, "utf8"));
+  await agent?.stop();
+  agent = undefined;
+  // Whoever took the dead agent's port, with its port file left behind.
+  const got: string[] = [];
+  const squatter = createServer((req, res) => {
+    got.push(`${req.method} ${req.url}`);
+    res.end("{}");
+  });
+  await new Promise<void>((r) => squatter.listen(file.port, "127.0.0.1", r));
+  stops.push(() => new Promise<void>((r) => squatter.close(() => r())));
+  writeFileSync(socket, JSON.stringify({ ...file, pid: 2 ** 22 + 1 }));
+  await expect(
+    socketFetch(socket, "POST", "/v1/sessions/s/ack", { acks: ["d_1"] }),
+  ).rejects.toThrow("no agent");
+  expect(got).toEqual([]);
+});
+
+test("the Claude Code mod tells a running pid from a dead one (#570)", async () => {
+  const csv = (pid: number) => `"bun.exe","${pid}","Console","1","81,220 K"\r\n`;
+  const windows =
+    (stdout: string, exitCode = 0) =>
+    async () => ({ exitCode, stdout });
+  expect(await pidRuns(4242, true, windows(csv(4242)))).toBe(true);
+  // No match prints a message in the system's language; another pid sharing digits is not it.
+  expect(await pidRuns(4242, true, windows("INFO: No tasks are running.\r\n"))).toBe(false);
+  expect(await pidRuns(424, true, windows(csv(4242)))).toBe(false);
+  expect(await pidRuns(4242, true, windows(csv(4242), 1))).toBe(false);
+  expect(
+    await pidRuns(4242, true, async () => {
+      throw new Error("tasklist: not found");
+    }),
+  ).toBe(false);
+  const ps = async (argv: string[]) => {
+    const p = Bun.spawnSync(argv);
+    return { exitCode: p.exitCode, stdout: p.stdout.toString() };
+  };
+  expect(await pidRuns(process.pid, false, ps)).toBe(true);
+  expect(await pidRuns(2 ** 22 + 1, false, ps)).toBe(false);
 });
 
 test("an answer the host refuses stays unconfirmed and comes back", async () => {

@@ -5,7 +5,7 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { userInfo } from "node:os";
 import { delimiter, dirname, join } from "node:path";
-import { type Status, socketPath } from "../agent/api";
+import { dropPortFile, readPortFile, type Status, socketPath } from "../agent/api";
 import { AgentClient } from "../agent/client";
 import { processAlive } from "../platform";
 import { marker, ours } from "./marker";
@@ -268,8 +268,9 @@ async function stopTask(sys: Sys) {
   // The pid as the agent itself reports it, through a call that proves who answers: a stale
   // port file's pid may be anyone's by now.
   let pid: number | undefined;
+  const socket = socketPath(sys.ctx.env, sys.ctx.store.dir, sys.platform);
+  const token = readPortFile(socket)?.token;
   try {
-    const socket = socketPath(sys.ctx.env, sys.ctx.store.dir, sys.platform);
     pid = (await new AgentClient(socket).call<Status>("GET", "/v1/status", undefined, 5_000)).pid;
   } catch {}
   const r = await powershell(
@@ -280,6 +281,8 @@ async function stopTask(sys: Sys) {
     try {
       process.kill(pid);
     } catch {}
+  // A kill on Windows ends the agent before it can remove its port file (#570).
+  if (pid !== undefined && token) dropPortFile(socket, token);
   return r;
 }
 

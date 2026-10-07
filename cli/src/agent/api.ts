@@ -4,7 +4,7 @@
  * agent API"). Both sides import this file.
  */
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { readFileSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 import { configDir } from "../config";
 
@@ -82,6 +82,16 @@ export function readPortFile(path: string): PortFile | undefined {
       return f as PortFile;
   } catch {}
   return undefined;
+}
+
+/**
+ * Removes the port file at `path` while it still holds `token`, so the agent that wrote it, or
+ * whatever stops that agent, never removes one a newer agent wrote since.
+ */
+export function dropPortFile(path: string, token: string): void {
+  try {
+    if (readPortFile(path)?.token === token) unlinkSync(path);
+  } catch {}
 }
 
 /**

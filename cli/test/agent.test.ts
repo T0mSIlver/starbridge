@@ -649,6 +649,37 @@ test("on loopback TCP (Windows), only a call that proves the port file's token g
   await expect(new AgentClient(socket).call("GET", "/v1/status")).rejects.toThrow("no agent");
 });
 
+test("an agent that hangs up or exits without stopping removes its port file (#570)", async () => {
+  const main = join(import.meta.dir, "../src/main.ts");
+  // An exit that skips the agent's stop, as a fatal error's does.
+  const exit = `process.argv = [process.argv[0], "starbridge", "agent", "--no-quota"];
+setTimeout(() => process.exit(1), 1000);
+await import(${JSON.stringify(main)});`;
+  for (const how of ["SIGHUP", "exit"] as const) {
+    const dir = mkdtempSync(join(tmpdir(), "starbridge-port-"));
+    const socket = join(dir, "agent.port");
+    const argv = how === "exit" ? ["-e", exit] : [main, "agent", "--no-quota"];
+    const child = Bun.spawn([process.execPath, ...argv], {
+      env: {
+        ...process.env,
+        HOME: dir,
+        STARBRIDGE_CONFIG_DIR: dir,
+        STARBRIDGE_AGENT_SOCKET: socket,
+      },
+      stdout: "ignore",
+      stderr: "ignore",
+    });
+    try {
+      await until(() => existsSync(socket), 10_000);
+      if (how === "SIGHUP") child.kill("SIGHUP");
+      await child.exited;
+      expect(existsSync(socket)).toBe(false);
+    } finally {
+      child.kill("SIGKILL");
+    }
+  }
+});
+
 test("answers --all through the agent follows every session's answers and takes none", async () => {
   const { socket } = await machine();
   const c = client(socket);

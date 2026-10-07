@@ -4,6 +4,7 @@ import {
   HEADERS,
   isPortFile,
   PROOF_HEADER,
+  pidRuns,
   portTarget,
   signCall,
   socketPath,
@@ -43,7 +44,12 @@ export const register: Register = (on) => {
       if (isPortFile(socket)) {
         // Read each call: the agent writes a new port and token each time it starts.
         const t = portTarget((await $.fs.read(socket)).text);
-        if (!t) throw new Error(`no agent on ${socket}`);
+        const runs =
+          t &&
+          (await pidRuns(t.pid, env.OS === "Windows_NT", (argv) =>
+            $.process.run(argv, { timeoutMs: 10_000 }),
+          ));
+        if (!t || !runs) throw new Error(`no agent on ${socket}`);
         const signed = await signCall(t.token);
         r = await $.http.fetch(`http://127.0.0.1:${t.port}${path}`, {
           ...init,
