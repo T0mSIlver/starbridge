@@ -90,6 +90,26 @@ up)
   compose up -d server web-a umami umami-db caddy
   healthy http://127.0.0.1:18000/healthz server
   healthy http://127.0.0.1:18000/ web-a
+  # The website the landing page reports to (web/src/lib/analytics.ts), or Umami refuses every
+  # event with a 400. A fresh Umami still has its default login.
+  site=$(sed -n 's/^export const WEBSITE_ID = "\(.*\)";$/\1/p' "$repo/web/src/lib/analytics.ts")
+  for _ in $(seq 60); do
+    compose exec -T -e SITE="$site" umami node -e '
+const url = "http://localhost:3000/api";
+const json = { "content-type": "application/json" };
+(async () => {
+  const { token } = await (await fetch(`${url}/auth/login`, { method: "POST", headers: json,
+    body: JSON.stringify({ username: "admin", password: "umami" }) })).json();
+  const auth = { ...json, authorization: `Bearer ${token}` };
+  // An unknown website reads as 200 and null.
+  const had = await fetch(`${url}/websites/${process.env.SITE}`, { headers: auth });
+  if (had.ok && (await had.json())) return;
+  const r = await fetch(`${url}/websites`, { method: "POST", headers: auth,
+    body: JSON.stringify({ id: process.env.SITE, name: "starbridge.run", domain: "starbridge.run" }) });
+  if (!r.ok) throw new Error(`umami: ${r.status}`);
+})().catch((e) => { console.error(String(e)); process.exit(1); });' 2>/dev/null && break
+    sleep 1
+  done
   echo "stack up: http://127.0.0.1:18000 (server 18080, web 13010/13011, Caddy admin 12019)"
   ;;
 deploy)
