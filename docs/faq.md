@@ -81,9 +81,10 @@ notifications.
 
 ## Why does Starbridge use CodexBar?
 
-An agent stops when it needs a decision only you can make, or when its plan runs out, and a
-window that empties mid-task stalls it like an unanswered question. Starbridge warns before a
-window runs out at the current pace, and when one is about to reset with capacity unused.
+An agent stops when it has a question for you, when it needs your permission, or when its quota
+runs out. A quota window that empties mid-task stalls the agent like an unanswered question, so
+Starbridge warns before a window runs out at the current pace, and when one is about to reset
+with quota unused.
 [CodexBar](https://github.com/steipete/CodexBar), by Peter Steinberger, is open source,
 maintained, and already reads more than a dozen providers' plans, so Starbridge reads its output
 instead of writing its own reader; the author contributes to it. It reads plan usage on your
