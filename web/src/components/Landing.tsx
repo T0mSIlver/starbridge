@@ -142,7 +142,7 @@ export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
         <h1 className={`t-hero ${s.headline}`}>Know the moment your agent is stuck</h1>
         <p className={`t-lead ${s.dim} ${s.lead}`}>
           When a coding agent stops for a question, your phone tells you. Answer with one tap and it
-          gets back to work. Your phone also shows permission prompts and what's left on each AI
+          gets back to work. Your phone can also show permission prompts and what's left on each AI
           plan.
         </p>
         <div className={s.actions}>
