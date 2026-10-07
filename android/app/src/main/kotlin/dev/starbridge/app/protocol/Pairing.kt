@@ -123,6 +123,19 @@ class Pairings(private val sodium: Sodium) {
 
     fun claimHash(secret: String): String = toB64(sodium.hash(utf8(secret)))
 
+    /**
+     * A machine's check code (#795), which the machine asks its owner to type the last group of:
+     * the first 80 bits of BLAKE2b-256("starbridge/v1/check" NUL boxPk signPk), as 16 Crockford
+     * base32 characters in groups of four.
+     */
+    fun checkCode(boxPk: String, signPk: String): String {
+        val box = fromB64(boxPk)
+        val sign = fromB64(signPk)
+        if (box.size != 32 || sign.size != 32) throw ProtocolException("bad-encoding", "a public key is not 32 bytes")
+        val hash = sodium.hash(concat(utf8("starbridge/v1/check"), byteArrayOf(0), box, sign))
+        return encodeCrockford(hash.copyOf(10)).chunked(4).joinToString("-")
+    }
+
     /** BLAKE2b-256 of "starbridge/v1/pairing-key", NUL, the 16 secret characters. */
     fun key(code: PairingCode): ByteArray = sodium.hash(concat(utf8("starbridge/v1/pairing-key"), byteArrayOf(0), utf8(code.secret)))
 

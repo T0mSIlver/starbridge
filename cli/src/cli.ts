@@ -28,7 +28,7 @@ import {
   wait,
 } from "./decisions";
 import { hookAskUser, hookPermission, hookQuestion, hookSettle } from "./hook";
-import { pair } from "./pair";
+import { pair, sendConfirm } from "./pair";
 import { pushOnce, quotaPush } from "./quota";
 import { installKind, ReleaseError } from "./release";
 import { runCommand } from "./run";
@@ -75,7 +75,10 @@ const HELP = `starbridge: post decisions to your devices, report runs, upload qu
       setup leaves it out until \`setup --agent\` brings it back.
 
   starbridge pair [--server <url>] [--name <name>] [--force]
-      Make this machine's keys and print a pairing code to type on a device.
+      Make this machine's keys and print a pairing code to type on a device. Once a device
+      approves, type the last group of the check code that the Starbridge app shows.
+  starbridge pair --confirm <last four>
+      Hand that group to a waiting \`pair\` or \`setup\` that has no terminal.
       --server <url>          a self-hosted server (default: $STARBRIDGE_SERVER, else
                               https://starbridge.run)
 
@@ -261,8 +264,10 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
             server: { type: "string" },
             name: { type: "string" },
             force: { type: "boolean" },
+            confirm: { type: "string" },
           },
         });
+        if (values.confirm !== undefined) return sendConfirm(ctx, values.confirm);
         return await pair(ctx, values);
       }
       case "ask": {

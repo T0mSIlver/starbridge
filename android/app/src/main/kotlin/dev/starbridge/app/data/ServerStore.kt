@@ -2070,7 +2070,12 @@ class ServerStore(
             }.getOrNull()
         }.toMap()
         return dir.members.values.filter { it.active }.map { (m) ->
-            Member(m.id, m.name, if (m.role == "machine") Kind.Machine else Kind.Device, instant(added[m.id]) ?: Instant.EPOCH, current = m.id == saved.me?.id)
+            val machine = m.role == "machine"
+            Member(
+                m.id, m.name, if (machine) Kind.Machine else Kind.Device, instant(added[m.id]) ?: Instant.EPOCH,
+                current = m.id == saved.me?.id,
+                check = if (machine) runCatching { pairings.checkCode(m.boxPk, m.signPk) }.getOrNull() else null,
+            )
         }
     }
 }

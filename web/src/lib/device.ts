@@ -6,6 +6,7 @@ import {
   addEntryAsync,
   approverKeys,
   bindMessage,
+  checkCode,
   checkJoined,
   codeFromLink,
   type Decision,
@@ -872,6 +873,7 @@ export function devices(ctx: Ctx): Device[] {
     addedAt: addedAt.get(member.id) ?? "",
     status: active ? "active" : "revoked",
     self: member.id === ctx.device.id,
+    ...(active && member.role === "machine" ? { check: checkCode(member) } : {}),
   }));
 }
 

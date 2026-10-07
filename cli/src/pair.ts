@@ -1,6 +1,10 @@
 import { randomBytes } from "node:crypto";
+import { readFileSync, rmSync, writeFileSync } from "node:fs";
 import { hostname } from "node:os";
+import { join } from "node:path";
+import { createInterface } from "node:readline";
 import {
+  checkCode,
   checkJoined,
   claimHash,
   formatPairingCode,
@@ -109,6 +113,14 @@ export async function pair(
   const pin = { length: approval.length, head: approval.head };
   const dir = verifyDirectory(entries, { account: approval.account, pin });
   checkJoined(dir, { id, role: "machine", ...publicKeys(keys) });
+  // A hostile server that read the code in a browser could have approved this machine into a
+  // chain it controls: only the owner, comparing with the app, can tell (#795).
+  const confirmed = await confirmCheck(ctx, checkCode(publicKeys(keys)), name);
+  if (ctx.signal?.aborted) return 130;
+  if (!confirmed)
+    throw new UsageError(
+      `the check code was not confirmed, so this machine is not paired. If Devices lists "${name}" from this attempt, revoke it there, then run \`${opts.again ?? "starbridge pair"}\` again`,
+    );
 
   const token = result.token;
   ctx.store.locked(() => {
@@ -158,5 +170,66 @@ function addedAt(entries: unknown[], id: string): string | undefined {
         // A sandbox or container often runs in UTC while Devices shows the viewer's zone.
         timeZoneName: "short",
       });
+  }
+}
+
+/** How long the owner has to confirm the check code, and how many wrong tries. */
+const CONFIRM_MS = 10 * 60_000;
+const CONFIRM_TRIES = 3;
+
+/** Where `starbridge pair --confirm` leaves the last group for the waiting `pair`. */
+const confirmFile = (ctx: Ctx) => join(ctx.store.dir, "pair-confirm");
+
+/** `starbridge pair --confirm <group>`: hands the group typed from the app to the waiting `pair`. */
+export function sendConfirm(ctx: Ctx, group: string): number {
+  writeFileSync(confirmFile(ctx), group, { mode: 0o600 });
+  ctx.out("Sent to the waiting `starbridge pair`.");
+  return 0;
+}
+
+/** Crockford base32 as typed: case, spaces and hyphens aside, O as 0, I and L as 1. */
+const normal = (text: string) =>
+  text.toUpperCase().replace(/[\s-]/g, "").replace(/O/g, "0").replace(/[IL]/g, "1");
+
+/**
+ * Shows the first three groups of `code` and waits for the owner to type the fourth from the
+ * app, on this terminal or with `starbridge pair --confirm`. Nothing confirms it otherwise: an
+ * agent running setup has no terminal and does not see the last group.
+ */
+async function confirmCheck(ctx: Ctx, code: string, name: string): Promise<boolean> {
+  const file = confirmFile(ctx);
+  rmSync(file, { force: true });
+  ctx.out(`Check code: ${code.slice(0, 14)}-????`);
+  ctx.out(
+    `  The Starbridge app shows "${name}" under Devices with its full check code. Type its last four characters${process.stdin.isTTY ? " here" : ""}, or run \`starbridge pair --confirm <last four>\`.`,
+  );
+  const typed: string[] = [];
+  const rl = process.stdin.isTTY
+    ? createInterface({ input: process.stdin }).on("line", (l) => typed.push(l))
+    : undefined;
+  try {
+    const until = ctx.now().getTime() + CONFIRM_MS;
+    for (let tries = 0; tries < CONFIRM_TRIES; ) {
+      if (ctx.signal?.aborted || ctx.now().getTime() > until) return false;
+      let answer = typed.shift();
+      if (answer === undefined) {
+        try {
+          answer = readFileSync(file, "utf8");
+          rmSync(file, { force: true });
+        } catch {
+          await ctx.sleep(500);
+          continue;
+        }
+      }
+      if (normal(answer) === normal(code.slice(15))) return true;
+      tries++;
+      ctx.err(
+        `starbridge: that is not the code's last group (${CONFIRM_TRIES - tries} tries left)`,
+      );
+    }
+    return false;
+  } finally {
+    rl?.close();
+    rmSync(file, { force: true });
   }
 }

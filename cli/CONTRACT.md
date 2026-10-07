@@ -20,7 +20,7 @@ the lines; the hook outputs are pinned in `cli/test/permissions.test.ts`.
 | `hook permission` | Flags `--agent claude-code\|pi\|opencode`, `--wait`. Reads the hook's JSON on stdin and prints the output its harness defines, or nothing to leave the prompt to the keyboard. SIGTERM means the keyboard answered. Exits 0. |
 | `hook settle` | Flag `--agent claude-code`. Reads the hook's JSON on stdin. Exits 0. |
 | `hook ask-user` | Reads the hook's JSON on stdin; prints a PreToolUse output that answers each question with an instruction to use `starbridge ask` (a denial when it cannot read the input), or nothing to let the question through. Exits 0. |
-| `pair` | Prints `Pairing code: <code>` first. |
+| `pair` | Prints `Pairing code: <code>` first; once approved, `Check code: <three groups>-????`, and waits for the fourth group on the terminal or from `pair --confirm <group>`. |
 
 Codex sessions receive ``Starbridge has the owner's answer to <id>: run `starbridge wait <id>` to read it.``
 as a queued prompt. The plugins set `STARBRIDGE_PI_ANSWERS`, `STARBRIDGE_OPENCODE_SESSION`,

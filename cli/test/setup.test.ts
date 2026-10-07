@@ -37,7 +37,7 @@ import { status } from "../src/setup/status";
 import { defaults, failure, type Sys } from "../src/setup/sys";
 import { uninstall } from "../src/setup/uninstall";
 import { VERSION } from "../src/version";
-import { paired, type TestCtx, testCtx, until } from "./helpers";
+import { approveAndConfirm, paired, type TestCtx, testCtx, until } from "./helpers";
 
 setDefaultTimeout(30_000);
 
@@ -248,9 +248,7 @@ test("setup asks for no server: it pairs with the one named, and asks only to sw
   });
   await until(() => ctx.lines.some((l) => l.startsWith("Pairing code: ")));
   expect(ctx.lines).toContain(`Pairing with ${host}`);
-  await server.approve(
-    ctx.lines.find((l) => l.startsWith("Pairing code: "))?.replace("Pairing code: ", "") as string,
-  );
+  await approveAndConfirm(server, ctx);
   expect(await done).toBe(0);
   expect(ctx.store.machine()?.server).toBe(server.url);
 });
@@ -268,11 +266,7 @@ test("a machine the server no longer lists: setup offers to pair again, else sto
     const done = setup(m.sys, { noQuota: true, noService: true, server: "http://127.0.0.1:9" });
     if (yes) {
       await until(() => m.ctx.lines.some((l) => l.startsWith("Pairing code: ")));
-      await server.approve(
-        m.ctx.lines
-          .find((l) => l.startsWith("Pairing code: "))
-          ?.replace("Pairing code: ", "") as string,
-      );
+      await approveAndConfirm(server, m.ctx);
     }
     expect(await done).toBe(yes ? 0 : 1);
     const out = m.ctx.lines.join("\n");

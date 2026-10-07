@@ -7,6 +7,7 @@ import {
   type Answer,
   type Snooze,
   addEntry,
+  checkCode,
   type Directory,
   open,
   openImages,
@@ -132,6 +133,8 @@ export class LiveServer {
       code,
     );
     await this.phone("POST", `/pairings/${code.rendezvous}/approve`, { approval });
+    // What the phone shows beside the new member, which a machine asks its owner to confirm.
+    return checkCode(req);
   }
 
   /** Items of `kind` as the phone lists them, sealed, with what the server knows of each. */

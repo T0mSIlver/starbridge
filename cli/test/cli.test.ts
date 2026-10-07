@@ -11,9 +11,10 @@ import { makeAgent } from "../src/agent/main";
 import { run } from "../src/cli";
 import { session } from "../src/context";
 import { DONE_LINE, poll } from "../src/decisions";
+import { sendConfirm } from "../src/pair";
 import { piAllow, piPermissionConfig } from "../src/pi";
 import { configCommand, offerPiChain } from "../src/settings";
-import { FAKE_CODEXBAR, paired, testCtx, until } from "./helpers";
+import { approveAndConfirm, FAKE_CODEXBAR, paired, testCtx, until } from "./helpers";
 
 let server: LiveServer;
 beforeEach(async () => {
@@ -91,8 +92,26 @@ test("pair prints a link and a QR code that carry the code", async () => {
   const link = `${server.url}/pair#${code}`;
   expect(ctx.lines.at(-2)).toBe(`  Or open  ${link}`);
   expect(scan(ctx.lines.slice(2, -2))).toBe(link);
-  await server.approve(code);
+  await approveAndConfirm(server, ctx);
   expect(await done).toBe(0);
+});
+
+test("pair saves nothing until the owner types the check code's last group (#795)", async () => {
+  const ctx = testCtx();
+  const done = run(["pair", "--server", server.url, "--name", "devbox"], ctx);
+  // A stand-in's code, as the owner's phone would show it: three wrong tries end the pairing.
+  await approveAndConfirm(server, ctx, "ZZZZ");
+  for (const group of ["ZZZZ", "ZZZZ"]) {
+    await until(() => ctx.errors.some((e) => e.includes("not the code's last group")));
+    ctx.errors.length = 0;
+    sendConfirm({ ...ctx, out: () => {} }, group);
+  }
+  expect(await done).toBe(1);
+  expect(ctx.errors.at(-1)).toContain("not confirmed");
+  expect(ctx.store.machine()).toBeUndefined();
+  expect(ctx.lines.find((l) => l.startsWith("Check code: "))).toMatch(
+    /^Check code: [0-9A-Z]{4}-[0-9A-Z]{4}-[0-9A-Z]{4}-\?\?\?\?$/,
+  );
 });
 
 test("pair past the account's machine limit ends at once with the reason (#615)", async () => {
@@ -162,7 +181,7 @@ test("pair --force names the old pairing as Devices shows it, not by its id (#28
   const ctx = await paired(server);
   const done = run(["pair", "--force"], ctx);
   await until(() => ctx.lines.some((l) => l.startsWith("Pairing code: ")));
-  await server.approve(ctx.lines[0]?.replace("Pairing code: ", "") as string);
+  await approveAndConfirm(server, ctx);
   expect(await done).toBe(0);
   expect(ctx.lines.at(-1)).toMatch(
     /^Devices still lists the old pairing as the earlier "devbox", added [A-Z][a-z]{2} \d+, \d\d:\d\d( [AP]M)? \S+\. Revoke it there\.$/,

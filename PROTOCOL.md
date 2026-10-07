@@ -25,13 +25,16 @@ A machine's pairing code passes through the page as well, when the owner opens t
 `/pair#<code>` link in a browser or types its code into one (#795). Whoever holds the code can
 make the approval's MAC, so the page can approve the machine into a chain the server made, which
 lists the machine, and pair a stand-in machine of the same name into the owner's real account.
-The server then relays between the two and reads everything the real machine sends. This also
-works in a browser that was never a member.
+The server would then relay between the two and read everything the real machine sends. The
+machine's check code stops this: the machine saves the pairing only once the owner types the
+last group of the code the Android app shows beside it, which differs for a machine the server
+paired elsewhere ("Pairing"). Compared against the web page instead, it proves nothing, since
+the server writes that page.
 
 So the checks in this file protect an account against a hostile server only while no browser is
-a member and neither the recovery key nor a pairing code reaches a browser. Where that matters,
-set up the account on the Android app, type pairing codes and the recovery key only there, and
-add no browser; or host your own server.
+a member, the recovery key never reaches a browser, and machines' check codes are compared on
+the Android app. Where that matters, set up the account on the Android app, type the recovery key
+only there, and add no browser; or host your own server.
 
 ## Known limits
 

@@ -136,6 +136,9 @@ class ProtocolVectorsTest {
         assertEquals(v.str("key"), toB64(pairings.key(code)))
         val claim = v.getValue("claim").jsonObject
         assertEquals(claim.str("hash"), pairings.claimHash(claim.str("secret")))
+        val check = v.getValue("check").jsonObject
+        val machine = check.getValue("keys").jsonObject
+        assertEquals(check.str("expect"), pairings.checkCode(machine.str("boxPk"), machine.str("signPk")))
 
         for (case in v.getValue("parse").jsonArray.map { it.jsonObject }) {
             val got = try {
