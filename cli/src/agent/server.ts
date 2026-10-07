@@ -19,6 +19,7 @@ import { VERSION } from "../version";
 import {
   API,
   API_HEADER,
+  dropPortFile,
   type ErrorBody,
   isPortFile,
   MAX_HOLD_SECONDS,
@@ -26,7 +27,6 @@ import {
   NONCE_HEADER,
   PROOF_HEADER,
   proof,
-  readPortFile,
   type SessionEvent,
   type SessionInfo,
   type Status,
@@ -116,6 +116,8 @@ export class Agent implements Hub {
   private readonly features: Feature[];
   /** On loopback TCP, what every request must carry (`PortFile`). */
   private token: string | undefined;
+  /** Removes the port file when the process exits without `stop`: a crash or `process.exit`. */
+  private onExit: (() => void) | undefined;
 
   constructor(
     readonly ctx: Ctx,
@@ -246,6 +248,9 @@ export class Agent implements Hub {
         );
     }
     renameSync(tmp, this.socket);
+    const token = this.token;
+    this.onExit = () => dropPortFile(this.socket, token);
+    process.once("exit", this.onExit);
   }
 
   /**
@@ -273,11 +278,13 @@ export class Agent implements Hub {
       server.closeAllConnections();
       await closed;
       // A port file another agent wrote since stays.
-      const mine = !this.token || readPortFile(this.socket)?.token === this.token;
-      try {
-        if (mine) unlinkSync(this.socket);
-      } catch {}
+      if (this.token) dropPortFile(this.socket, this.token);
+      else
+        try {
+          unlinkSync(this.socket);
+        } catch {}
     }
+    if (this.onExit) process.off("exit", this.onExit);
     await Promise.allSettled(this.loops);
   }
 

@@ -56,11 +56,19 @@ export async function runAgent(ctx: Ctx, opts: AgentOpts): Promise<number> {
   } catch (e) {
     agent.log(`could not remove the starbridge bash patterns: ${(e as Error).message}`);
   }
+  // Closing the console window a Windows task runs in sends SIGHUP, and Ctrl-Break SIGBREAK:
+  // both stop the agent as SIGTERM does, so its port file goes with it (#570).
+  const hangups = ["SIGHUP", "SIGBREAK"] as const;
+  let hungUp = () => {};
+  const onHangup = () => hungUp();
+  for (const s of hangups) process.on(s, onHangup);
   await new Promise<void>((resolve) => {
+    hungUp = resolve;
     if (!ctx.signal || ctx.signal.aborted) return resolve();
     ctx.signal.addEventListener("abort", () => resolve(), { once: true });
   });
   agent.log("stopping");
   await agent.stop();
+  for (const s of hangups) process.off(s, onHangup);
   return 0;
 }

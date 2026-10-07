@@ -352,8 +352,13 @@ provider plugins add providers, not panels.
   libuv creates one with the default DACL, which lets other users open it for reading, and Bun's
   named-pipe `listen` has crashed in Claude Code's own use. The token never crosses the wire:
   each call and each answer proves it over a fresh nonce, so a process that takes the port of a
-  stopped agent can neither use what it hears nor answer. Windows never runs the agent's
-  shutdown, since stopping a task terminates it, so a stale `agent.port` is the usual case.
+  stopped agent can neither use what it hears nor answer. A client still sends its call before
+  it sees the answer's proof, and a dead agent's port shows in `netstat` to every local user, so
+  the CLI, the mod and the Pi and opencode extensions send nothing while the file's `pid` runs no
+  more (#570). Windows never runs the agent's shutdown when the task is stopped, since that
+  terminates it, so the agent also removes the file on SIGHUP (its console closing), SIGBREAK and
+  any exit, and setup removes it after ending the agent; a stale `agent.port` stays possible
+  after a hard kill, which the `pid` check covers.
   `icacls` gives the file to its user only, as the 0600 mode does the socket. The service is a Scheduled Task
   at the user's logon, registered from a marked XML file in `%LOCALAPPDATA%\starbridge` with the
   ScheduledTasks cmdlets: it needs no administrator, unlike a Windows service, and restarts on

@@ -674,8 +674,8 @@ with 401 `{error: "unauthorized"}`, and every answer to a proven request carries
 `starbridge-proof: <sha256hex("<token>:agent:<nonce>")>`. A client takes an answer without that
 proof as no agent: whatever took the port after the agent stopped learns nothing it can use and
 cannot answer for it. (SHA-256 rather than HMAC, since the mod's host has no HMAC; the fixed
-shape leaves a length extension nothing to forge.) The CLI also sends nothing while `pid` runs no
-more. An address ending in `.port` names such a file on any platform.
+shape leaves a length extension nothing to forge.) A client sends nothing while `pid` runs no
+more (#570): the CLI, the mod and the Pi and opencode extensions all check it before each call. An address ending in `.port` names such a file on any platform.
 
 Every request sends `starbridge-api: <n>` and a `user-agent` such as `starbridge-mod/0.2.0`. The
 agent serves revisions `min` to `max` (1 to 1 today) and answers anything else with 426

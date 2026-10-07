@@ -88,14 +88,47 @@ export function socketPath(env: {
  */
 export const isPortFile = (address: string) => address.endsWith(".port");
 
-/** The port and the token in port file `text`; undefined when it is not one. */
-export function portTarget(text: string): { port: number; token: string } | undefined {
+/**
+ * The port, the token and the agent's pid in port file `text`; undefined when it is not one, as
+ * the CLI's `readPortFile` reads it.
+ */
+export function portTarget(text: string): { port: number; token: string; pid: number } | undefined {
   try {
-    const f = JSON.parse(text) as { port?: unknown; token?: unknown };
-    if (Number.isInteger(f.port) && typeof f.token === "string")
-      return { port: f.port as number, token: f.token };
+    const f = JSON.parse(text) as { port?: unknown; token?: unknown; pid?: unknown };
+    if (
+      Number.isInteger(f.port) &&
+      typeof f.token === "string" &&
+      f.token.length >= 32 &&
+      Number.isInteger(f.pid)
+    )
+      return { port: f.port as number, token: f.token, pid: f.pid as number };
   } catch {}
   return undefined;
+}
+
+/**
+ * Whether process `pid` runs, for a host that can run commands but not signal a process:
+ * `tasklist` on Windows, `ps` elsewhere. A call sends nothing to a port whose agent's pid runs no
+ * more, as the CLI does (#570): a dead agent's port shows in `netstat` to every local user, and
+ * whoever takes it would get the call's body before failing its proof. A check that cannot run
+ * counts as not running, so the mod falls back to the CLI.
+ */
+export async function pidRuns(
+  pid: number,
+  windows: boolean,
+  run: (argv: string[]) => Promise<{ exitCode: number | null; stdout: string }>,
+): Promise<boolean> {
+  try {
+    if (windows) {
+      // One CSV row per match, `"image","pid",…`; with none, a message in the system's language.
+      const r = await run(["tasklist", "/FI", `PID eq ${pid}`, "/FO", "CSV", "/NH"]);
+      return r.exitCode === 0 && new RegExp(`^"[^"]*","${pid}",`, "m").test(r.stdout);
+    }
+    const r = await run(["ps", "-p", String(pid), "-o", "pid="]);
+    return r.exitCode === 0 && r.stdout.trim() === String(pid);
+  } catch {
+    return false;
+  }
 }
 
 const hex = (bytes: Uint8Array) => [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
