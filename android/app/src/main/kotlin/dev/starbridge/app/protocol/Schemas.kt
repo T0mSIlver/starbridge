@@ -240,7 +240,7 @@ data class Source(
     val session: String,
     val sessionTitle: String? = null,
     val links: List<SessionLink>? = null,
-    /** server, desktop, laptop or cloud; older machines omit it (MachineKind in schemas.ts). */
+    /** server, desktop, laptop or cloud, once the machine recorded one (MachineKind in schemas.ts). */
     val machineKind: String? = null,
 ) {
     fun check() {
@@ -308,16 +308,16 @@ data class Decision(
     val context: String,
     val options: List<String>,
     val recommended: String? = null,
-    /** claude-code, codex, pi, or a newer agent; older machines omit it. */
+    /** claude-code, codex, pi, or a newer agent, when the machine can tell. */
     val agent: String? = null,
     val source: Source,
     val images: List<DecisionImage>? = null,
     val links: List<DecisionLink>? = null,
     /** The page the owner answers on instead of Starbridge (answerIn in schemas.ts). */
     val answerIn: DecisionLink? = null,
-    /** The machine takes a typed reply in place of an option (#201); older machines omit it. */
+    /** The machine takes a typed reply in place of an option (#201). */
     val replies: Boolean? = null,
-    /** With answerIn: the machine takes a Done answer (#539); older machines omit it. */
+    /** With answerIn: the machine takes a Done answer (#539). */
     val done: Boolean? = null,
     override val dir: DirectoryHead? = null,
 ) : ItemBody {

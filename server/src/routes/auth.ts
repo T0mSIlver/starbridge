@@ -13,6 +13,7 @@ import {
 import type { Env } from "../env";
 import { json } from "../http";
 import { ipKey, rateLimit } from "../limits";
+import { SIGNUPS_PAUSED, signUpsPaused } from "../signups";
 
 const STATE_COOKIE = "sb_oauth";
 /** The page's `signin` when this server has no GitHub sign-in. */
@@ -133,6 +134,8 @@ async function gitHubAccount(c: Context<Env>, code: string, verifier?: string): 
   const existing = db.query("SELECT id FROM accounts WHERE github_id = ?").get(user.id) as {
     id: string;
   } | null;
+  if (!existing && signUpsPaused(c.var.config)) fail(403, "signups-paused", SIGNUPS_PAUSED);
+  if (!existing) rateLimit(c, `signup:${ipKey(c)}`, c.var.config.limits.signUps);
   const account = existing?.id ?? newAccountId();
   if (!existing)
     db.query("INSERT INTO accounts (id, github_id, created_at) VALUES (?, ?, ?)").run(
@@ -151,19 +154,19 @@ async function gitHubAccount(c: Context<Env>, code: string, verifier?: string): 
 authRoutes.get("/auth/github/callback", async (c) => {
   const { secureCookies } = c.var.config;
   rateLimit(c, `github:${ipKey(c)}`, c.var.config.limits.githubCallbacks);
-  const back = (why: "declined" | "expired" | "failed") => c.redirect(`/?signin=${why}`);
-  // Before #527 the cookie also held the app flag and challenge: an app sign-in started then
-  // cannot finish here.
-  const [state, app] = (getCookie(c, STATE_COOKIE) ?? "").split(".");
+  const back = (why: "declined" | "expired" | "failed" | "paused" | "limited") =>
+    c.redirect(`/?signin=${why}`);
+  const state = getCookie(c, STATE_COOKIE);
   deleteCookie(c, STATE_COOKIE, { path: "/v1/auth/github" });
   const code = c.req.query("code");
   if (c.req.query("error")) return back("declined");
-  if (!state || !code || app === "1" || !safeEqual(state, c.req.query("state") ?? ""))
-    return back("expired");
+  if (!state || !code || !safeEqual(state, c.req.query("state") ?? "")) return back("expired");
   let account: string;
   try {
     account = await gitHubAccount(c, code);
   } catch (e) {
+    if (e instanceof HTTPException && e.status === 403) return back("paused");
+    if (e instanceof HTTPException && e.status === 429) return back("limited");
     // GitHub refused, or could not be reached.
     if (!(e instanceof HTTPException)) console.error(`GitHub sign-in: ${e}`);
     return back("failed");

@@ -2,11 +2,13 @@
 
 Know the moment your agent is stuck.
 
-When a coding agent needs a decision from you, Starbridge puts the question on your phone and in
-your browser. You answer with one tap, and the waiting session carries on with your answer as its
-next prompt. You also follow the runs that affect you, such as a release or heavy work on your
-machine. It also shows what's left on each AI plan, read from CodexBar, with an optional alert
-before a window runs out.
+When a coding agent stops for a question, Starbridge puts it on your phone and in your browser.
+You answer with one tap, and the waiting session carries on with your answer as its next prompt.
+Claude Code, Codex, Pi and opencode on every machine reach you in one place. An agent also stops
+when its quota runs out, so Starbridge shows what's left on each AI plan, read from CodexBar, with
+an optional alert before a window runs out. CodexBar is optional: setup asks before installing it,
+and `--no-quota` skips it. You also follow the runs that affect you, such as an eval on a rented
+GPU or a release, and can answer permission prompts from your phone once you turn them on.
 
 Your phone, browsers and machines encrypt everything they send each other, so the server stores
 your content only as ciphertext; it still sees who sent each item, to which
@@ -59,7 +61,7 @@ npm install -g starbridge
 ```
 
 The script runs `starbridge setup`, which pairs the machine, installs Starbridge in each agent it
-finds and ends by sending a test question to your phone. After Homebrew or npm, run
+finds and ends by offering to send a test question to your phone. After Homebrew or npm, run
 `starbridge setup` yourself. [Start](https://starbridge.run/docs#start) goes on to your agent's
 first question.
 

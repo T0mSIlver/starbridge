@@ -65,9 +65,24 @@ importers:
       '@types/libsodium-wrappers':
         specifier: ^0.8.2
         version: 0.8.2
+      playwright:
+        specifier: 1.63.0
+        version: 1.63.0
       starbridge:
         specifier: workspace:*
         version: link:../cli
+      typescript:
+        specifier: ^7.0.2
+        version: 7.0.2
+
+  deploy/watch:
+    devDependencies:
+      '@biomejs/biome':
+        specifier: ^2.5.15
+        version: 2.5.15
+      '@types/bun':
+        specifier: ^1.4.2
+        version: 1.4.2
       typescript:
         specifier: ^7.0.2
         version: 7.0.2

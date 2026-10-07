@@ -1,44 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState } from "react";
 import { track } from "@/lib/analytics";
+import { installCommands } from "@/lib/installCommands";
+import { usePageOrigin } from "@/lib/pageOrigin";
 import s from "./InstallBox.module.css";
 import { Icon } from "./icons";
-
-/**
- * Each platform's ways to install: label, command, and the method the copy event reports, kept
- * as first named. npm is the same package on both. The scripts come from the page's own origin,
- * which writes its address into them, so a self-hosted page's command pairs with it (#749).
- */
-const install = (origin: string) =>
-  [
-    {
-      platform: "macOS / Linux",
-      methods: [
-        ["Script", `curl -fsSL ${origin}/install.sh | sh`, "Script"],
-        ["Homebrew", "brew install T0mSIlver/starbridge/starbridge", "Homebrew"],
-        ["npm", "npm i -g starbridge", "npm"],
-      ],
-    },
-    {
-      platform: "Windows",
-      methods: [
-        ["PowerShell", `irm ${origin}/install.ps1 | iex`, "Windows"],
-        ["npm", "npm i -g starbridge", "npm"],
-      ],
-    },
-  ] as const;
-
-const unchanging = () => () => {};
-
-/** The hosted origin until the page runs in a browser, which knows its own. */
-function usePageOrigin(): string {
-  return useSyncExternalStore(
-    unchanging,
-    () => location.origin,
-    () => "https://starbridge.run",
-  );
-}
 
 /**
  * The install commands by platform and method, with a copy button. `counted`: copies go to
@@ -52,7 +19,7 @@ export function InstallBox({ counted = false }: { counted?: boolean }) {
   // The check shows for 2 s after a copy; another copy restarts it.
   const reset = useRef<ReturnType<typeof setTimeout>>(undefined);
   useEffect(() => () => clearTimeout(reset.current), []);
-  const INSTALL = install(usePageOrigin());
+  const INSTALL = installCommands(usePageOrigin());
   const platform = INSTALL[at] ?? INSTALL[0];
   const [, cmd, method] = platform.methods[way] ?? platform.methods[0];
   const onCopied = () => {

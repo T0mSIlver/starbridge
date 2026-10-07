@@ -2,7 +2,6 @@ import { appendFileSync, mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname } from "node:path";
 import { type Ctx, parseDuration } from "../context";
-import { dropOldPiRules, piPermissionConfig } from "../pi";
 import { refreshFiles } from "../setup/harnesses";
 import { socketPath } from "./api";
 import { Decisions } from "./decisions";
@@ -55,17 +54,8 @@ export async function runAgent(ctx: Ctx, opts: AgentOpts): Promise<number> {
   try {
     const agent = makeAgent(ctx, opts);
     await agent.start();
-    // A new binary brings Codex and opencode their files here too, after a brew or npm upgrade;
-    // it also takes Pi's pre-#488 bash allow patterns out.
+    // A new binary brings Codex and opencode their files here too, after a brew or npm upgrade.
     for (const line of refreshFiles({ ctx, home: ctx.env.HOME ?? homedir() })) agent.log(line);
-    try {
-      if (dropOldPiRules(ctx.env))
-        agent.log(
-          `removed the starbridge bash patterns from ${piPermissionConfig(ctx.env)}: the Starbridge link allows the commands now (#488)`,
-        );
-    } catch (e) {
-      agent.log(`could not remove the starbridge bash patterns: ${(e as Error).message}`);
-    }
     await Promise.race([
       hungUp,
       new Promise<void>((resolve) => {

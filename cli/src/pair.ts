@@ -70,12 +70,13 @@ export async function pair(
   }
 
   const link = pairingLink(server, code);
+  // The first line is part of the CLI's contract (CONTRACT.md); the link sits alone on its line
+  // so it does not wrap in an 80-column terminal.
   ctx.out(`Pairing code: ${formatPairingCode(code)}`);
-  ctx.out(`Scan this with the Starbridge app or your phone's camera, or open ${link}`);
+  ctx.out("  Scan this with your phone's camera or the Starbridge app:");
   for (const line of terminalQr(link)) ctx.out(line);
-  ctx.out(
-    "Or type the code under Devices in the Starbridge app or web page. It expires in 10 minutes.",
-  );
+  ctx.out(`  Or open  ${link}`);
+  ctx.out("  Or type the code under Devices in the app or web page. It expires in 10 minutes.");
 
   let result: { approval: unknown; token?: string } | undefined;
   while (!result) {
@@ -127,7 +128,8 @@ export async function pair(
     s.asked = {};
     s.answers = {};
   });
-  ctx.out(`Paired "${name}" (${id}). Keys are in ${ctx.store.dir}.`);
+  // `starbridge status` shows the machine's id.
+  ctx.out(`✓ Paired as ${name}`);
   if (previous && dir.members.get(previous.id)?.active) {
     // Named as Devices shows it: the id appears in no client (#287).
     const at = addedAt(entries, previous.id);

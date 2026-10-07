@@ -43,7 +43,10 @@ The landing page, docs, README and store listing sell questions and runs, each b
 to the reader. The hero: "Know the moment your agent is stuck" (#448). Quotas get one line: users
 don't launch agents from Starbridge, and the power users it targets don't check quotas by hand.
 Alerts are opt-in, so copy never says they are on. Permission prompts are secondary and opt-in.
-Copy says "on each machine that runs agents", never "on each machine" alone.
+Copy says "on each machine that runs agents", never "on each machine" alone. The subtitle under
+the hero sells questions and that every agent on every machine reaches you in one place; the
+feature row below names runs, quotas and permission prompts, since a list in the subtitle repeats
+it (#801). The line under the hero's buttons, with end-to-end encryption, shows on phones too.
 
 ### Platforms
 
@@ -82,8 +85,8 @@ agent sessions --CLI--> starbridge agent (one per machine) --HTTPS--> server <--
 
 Why this stack: one TypeScript schema serves the server, CLI and mods, and Claude Code mods are
 TypeScript already. Bun gives `bun build --compile` binaries; npm gets a Node 22+ bundle, so the
-CLI uses no Bun global without a guard. SQLite is enough because the server stores ciphertext and
-public keys only. Design tokens are generated from `DESIGN.md` to CSS and Kotlin, so both clients
+CLI uses no Bun global without a guard. SQLite is enough because the server stores ciphertext,
+public keys and the directory's names and times. Design tokens are generated from `DESIGN.md` to CSS and Kotlin, so both clients
 share colours and type.
 
 **CodexBar** (github.com/steipete/CodexBar) is read, never embedded. Its maintainers want
@@ -165,9 +168,12 @@ provider plugins add providers, not panels.
 - **Android keys** (#9) sit in files wrapped by a Keystore AES key usable while the screen is
   locked, so lock-screen buttons can sign. Signing out revokes the phone unless it is the last
   device.
-- **Versions** (#468, #469, #478, #551). 0.1.0, the first public release, is the compatibility
-  floor, so nothing carries code for clients before it: `ask` refuses `--default` and `--default-at` rather than ignoring them, and
-  clients, setup and the CLI dropped what served earlier releases. Later compatibility branches
+- **Versions** (#468, #469, #478, #551, #737). 0.1.0-rc.2, for which the hosted database was reset
+  before launch, is the compatibility floor, so nothing carries code for a database, stored
+  setting, client or server before it: the schema starts at one migration, `ask` refuses
+  `--default` and `--default-at` rather than ignoring them, and clients, setup and the CLI dropped
+  what served earlier releases. One exception: a CLI state file without `v` still reads as format
+  1, since the owner's machines keep such files through the reset. Later compatibility branches
   name the minimum client release that retires them (`// until min cli >= 1.2`). An algorithm
   changes only with a new protocol version (`v: 2`, `starbridge/v2/...`, `/v2` routes) and members
   re-pair; keys change only by revoke and add.
@@ -196,7 +202,8 @@ provider plugins add providers, not panels.
   device, so when either cannot be read both move to `<name>.unreadable-<time>` and the app starts
   signed out and says so. Quota settings write their defaults, so a later default never changes a
   saved choice. The web writes `v` into its localStorage values and leaves a newer format alone; a
-  damaged one is replaced at the next change, since it holds only display choices. IndexedDB's own
+  damaged one, or one without `v`, is replaced at the next change, since it holds only display
+  choices. IndexedDB's own
   version is the records' format, and sign-out removes every record kind of the account.
 - **Old clients** (#468). Every client names its release in `starbridge-client:
   <name>/<version>` (`cli`, `android`, `web`, `mod`; MAJOR.MINOR.PATCH). The server refuses
@@ -210,6 +217,11 @@ provider plugins add providers, not panels.
 ## Sign-in
 
 - The hosted server signs in with GitHub; a self-hosted server with `OWNER_TOKEN`.
+- The owner can pause sign-ups (#784), for a launch-day flood or a box near its limits: a GitHub
+  user with no account gets "not taking new accounts right now" on the page and in the app, while
+  every existing account signs in as before. `bun server.js signups pause|resume` writes and
+  removes a file beside the database, which the server reads on each new account, so it takes
+  effect at once and survives restarts and deploys.
 - The page shows only the sign-in methods its server offers (#670): `GET /v1/auth/methods` lists
   them, and without GitHub the landing page's and sign-in page's buttons open the owner token
   form. Until the server answers, the page shows GitHub, the hosted server's, so the landing
@@ -223,7 +235,7 @@ provider plugins add providers, not panels.
   handed it the page's callback when no other app claimed that; where both claim a URL, Chrome
   opens the verified app. The page's sign-ins keep `/v1/auth/github/callback`, which the app does
   not claim, so they stay in the web app.
-- When the browser gets the app's redirect (app missing, verification failed, an older app), the
+- When the browser gets the app's redirect (app missing, verification failed), the
   server passes GitHub's code on to `APP_REDIRECT_URI`: on starbridge.run the App Link
   `https://starbridge.run/app/auth`, whose page has an "Open Starbridge" button to
   `starbridge://auth`. Chrome asks "Continue to Starbridge?" before following a `starbridge://`
@@ -285,15 +297,16 @@ provider plugins add providers, not panels.
   machine's rate window goes to its own asks (#650). A question's images are scaled at `ask` to
   leave room for its box, with its recipient list grown, for the 64 devices an item can reach,
   since a re-seal keeps the stored images and the 2 MB cap counts them (#720). One the server
-  still refuses as too large, asked before that, is not re-sent: the machine says so once.
+  still refuses as too large, as one with a lower cap may, is not re-sent: the machine says so once.
 - **Fresh quotas** (#158, #450). The local agent posts a snapshot once its directory holds a new device.
   `POST /quota/ask` wakes the machines and holds until each posted, up to 25 s, under the 30 s at
   which proxies cut long polls; 6 a minute per account, since each runs CodexBar on every machine.
 - **Schema migrations** (#470). `PRAGMA user_version` counts the migrations a database has run;
   each runs in one transaction with its version. A server refuses a database newer than it knows,
   so a rollback past a migration fails at start instead of writing rows the newer schema misreads.
-  Version 1 is the 0.1.0 schema with `IF NOT EXISTS`, so it adopts a database made before versions
-  were counted. A migration changes the schema and never rewrites rows, to stay within the 30 s
+  Version 1 is the whole schema: the six migrations before launch were folded into it when the
+  hosted database was reset, so `apply.sh` stops a deploy whose database is newer than its server
+  before it replaces anything. A migration changes the schema and never rewrites rows, to stay within the 30 s
   Caddy holds requests; backfills run in the hourly sweep. `apply.sh` backs the database up just
   before a new server that migrates further than the database's `user_version` starts, or when
   either number can't be read, and keeps the last two (#586) for 7 days at most, as the nightly
@@ -434,13 +447,19 @@ provider plugins add providers, not panels.
 - **Setup asks little** (#750). Each question was one more Enter between a new user and their
   first answer, and nearly everyone said yes. Setup installs Starbridge in every agent it finds
   and starts the service without asking, one line per agent with what it installed; for Codex,
-  which loads no rules, it links the rules to paste. It still asks before installing CodexBar, a
+  which loads no rules, it links the rules to paste at the end, with the commands, so nothing
+  mid-output reads as a prompt. Claude Code and Pi, whose installs run for seconds, first print
+  `installing…` (#773). It still asks before installing CodexBar, a
   third-party binary (with #748, only when no other machine sends quotas), which providers to
   send, whether to linger, and whether to send a test decision. Permission prompts stay off and
   unasked; the summary names `starbridge config permissions on`, `starbridge status`,
   `starbridge uninstall --agent <name>` and `starbridge uninstall`. With no terminal every
   question takes its default, so nothing waits on input. A failed install prints its reason and
-  `starbridge setup --agent <name>`, and setup goes on. `uninstall --agent` records the agent,
+  `starbridge setup --agent <name>`, and setup goes on. Every step after pairing needs the
+  server, so setup checks the server and the pairing first (#774): a machine the server no
+  longer lists, revoked or lost with the server's database, is offered to pair again (`[Y/n]`,
+  what `pair --force` does), and an unreachable server stops setup with the command to retry.
+  `uninstall --agent` records the agent,
   and setup and `--refresh` leave it out until `setup --agent` brings it back. An
   agent installed after setup gets nothing in the background: `status` names it, and `setup
   --refresh`, which `update` runs, installs it. The output is plain and lined up, as
@@ -473,9 +492,7 @@ provider plugins add providers, not panels.
   the last match wins. Pi gets no bash pattern, since none is safe there (Platform facts): the link
   allows a bash ask itself when the whole typed line, from the ask's "full command" evidence, is
   one of those commands with only words, flags, quoted strings and line-joining backslashes; an ask
-  without evidence, or from a shell tool under another name, goes to the owner. The local agent
-  removes the bash patterns older setups added, except a level other than `allow` the owner set,
-  and reports them when the config has comments it cannot rewrite. `starbridge run` is left out,
+  without evidence, or from a shell tool under another name, goes to the owner. `starbridge run` is left out,
   since the command it wraps is the agent's own. Uninstall removes exactly what setup added.
 - **Docs** (#211) at `/docs` are the repository's Markdown files listed in `web/src/lib/docs.ts`,
   rendered by the web page. Links between them become `/docs` links; other relative links go to
@@ -588,8 +605,8 @@ Codex prompts are not supported.
   no `tool_use_id`, so the hook settles a call by the hash of its `tool_input` on `PostToolUse` and
   `PermissionDenied`, and all of a session's prompts on `Stop` and `SessionEnd`. `PostToolUse` runs
   a shell check that starts the CLI only while the CLI marks an unexpired prompt open
-  (`<config>/permissions-open`, written with the state), or when a state has no mark yet, as from
-  an older CLI: starting it on every tool call cost about 50 ms and 50 MB, prompts on or off
+  (`<config>/permissions-open`, written with the state): starting it on every tool call cost about
+  50 ms and 50 MB, prompts on or off
   (#517). "This session" and "always" are offered only
   for `addRules` and `addDirectories` suggestions whose rules fit in full; a `setMode` suggestion
   changes more than the call, so it stays at the keyboard. A deny with no message tells the agent
@@ -637,7 +654,7 @@ Codex prompts are not supported.
   forgot to settle left the card in Needs you. Done is an answer that carries no pick, so it closes
   the card on every device and reaches the agent as `answered on its page; read the answer
   there`; the page stays the one place the owner answers. Clients show Done only when the
-  machine says it takes one (`done`), since an older CLI would drop it and the agent never hear.
+  machine says it takes one (`done`).
 - **Waiting state** (#122, #191, #202). A `waiting` item says whether the agent is blocked on the
   question. A flip either way pushes, so the phone moves the notification between channels. `ask
   --waiting` posts the question quietly and lets its `waiting` item push, so the first
@@ -941,6 +958,11 @@ Tokens, type and components: `DESIGN.md`.
   memory, the VPS's first limit (#587). Caddy compresses every
   response and the web app none: Next's gzip ran on its one thread and filled it near 18 landing
   page visitors a second (#593). Nightly SQLite backups, kept 7 days (#586).
+- **Per-address pages and sign-ups** (#787). Caddy takes 600 page requests a minute per address
+  outside `/v1` and `/_next/static`: each is Next rendering, 10 to 17 ms of CPU, and a visit with
+  its link prefetches makes a few dozen. The server makes at most 30 new accounts an hour per
+  address: each account may store 256 MB, so many GitHub accounts behind one script could fill
+  the server's 2 GB, while an office or a carrier's NAT signs up a handful an hour.
 - **Per-address reads** (#582). Caddy counts every `/v1` request per address, 3000 a minute
   (IPv6 per /64): most reads count against no account, so this keeps a looping client or script
   to about 2% of a core. A visible page with a prompt waiting and a run live makes about 200 a
@@ -961,6 +983,20 @@ Tokens, type and components: `DESIGN.md`.
   is capped per device for that reason, and a question with 8000 characters of context fits up to
   about 140 devices in its 2 MB. Its pictures are stored once whatever the number (#685), and
   shrink only to leave the boxes room.
+- **Watching it** (#782). Caddy keeps no access log, so the server logs one line a minute of its
+  refusals by status, error code and route, with the accounts refused most, and never an
+  address. Per-address request and 429 counts stay in its memory, like the rate limits, and only
+  the host reads them, through the container's own loopback (port 8081, `GET /watch`). The launch watcher (`deploy/watch/`) reads
+  those, `ss`, `docker` and `bun server.js top` over SSH every few minutes and names an address
+  only when it holds over 200 connections or is being rate-limited (the owner's rule): at
+  Caddy's cap of 3000 `/v1` requests a minute (2900 seen by the server, since Caddy logs no
+  refusal), or refused with 429 by the server: an HTTP/2 client can flood over few connections, and every
+  other visitor's address would end up in the on-call session's transcript.
+- **Blocking an address** (#783). The owner can refuse an address or range at Caddy, by a reload
+  that keeps open connections (`deploy/host/switch.sh`), with a 403 that names abuse@. An IPv6
+  address is blocked as its /64, as the rate limits count it, and nothing wider than a /8 (IPv4)
+  or /32 (IPv6) is accepted. The block list is the one place an address is written to disk, until
+  it is unblocked; `/privacy` says so.
 - **Privacy and terms** (`/privacy`, `/terms`). Each claim follows the code: stored columns in
   `server/src/db.ts`, retention in `server/src/limits.ts`, logs and backups in `deploy/`. A change
   to what is stored changes the page, and the Play data-safety form. Contact is

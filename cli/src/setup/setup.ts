@@ -8,10 +8,10 @@ import { CLIENT_HEADER, clientHeader, type QuotaSnapshot } from "@starbridge/pro
 import type { Status } from "../agent/api";
 import { AgentClient, Interrupted, withAgent } from "../agent/client";
 import { askVia, quotaVia } from "../agent/commands";
-import { ApiError } from "../api";
+import { ApiError, REMOVED, Unreachable } from "../api";
 import type { AgentConfig } from "../config";
 import { type Ctx, refreshDirectory, session, UsageError } from "../context";
-import { type AskInput, ask, EXIT_INTERRUPTED, settle } from "../decisions";
+import { type AskInput, answerPrefix, ask, EXIT_INTERRUPTED, settle } from "../decisions";
 import { DEFAULT_SERVER, pair } from "../pair";
 import { permissionsEnabled } from "../permissions";
 import { pushOnce } from "../quota";
@@ -25,6 +25,7 @@ import {
   found,
   installAgent,
   installed,
+  progressLine,
   removedAgents,
   setRemoved,
   UNDER,
@@ -100,7 +101,10 @@ export async function refresh(sys: Sys): Promise<string[]> {
   for (const id of AGENT_IDS) {
     if (removed.includes(id) || !found(sys, id) || (await installed(sys, id))) continue;
     const r = await installAgent(sys, id);
-    done.push(agentLine(r.mark, id, r.text), ...r.notes.map((n) => `${UNDER}${n}`));
+    done.push(
+      agentLine(r.mark, id, r.text),
+      ...[...r.notes, ...(r.next ?? [])].map((n) => `${UNDER}${n}`),
+    );
   }
   const { path, text } = installedService(sys) ?? {};
   if (path && text !== undefined && ours(text))
@@ -130,7 +134,48 @@ function section(ctx: Ctx, title: string) {
   ctx.out(title);
 }
 
+/**
+ * Whether the server still lists this machine: "removed" when it revoked the machine or no
+ * longer knows its token, as after the server lost its database.
+ */
+async function checkPairing(ctx: Ctx): Promise<"paired" | "removed" | { why: string }> {
+  const s = session(ctx);
+  try {
+    await refreshDirectory(ctx, s, AbortSignal.timeout(15_000));
+    return "paired";
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 401) return "removed";
+    if (e instanceof UsageError && e.message === REMOVED) return "removed";
+    if (e instanceof Unreachable) return { why: e.message };
+    if ((e as Error).name === "TimeoutError")
+      return { why: `cannot reach ${trimServer(s.machine.server)}: no answer in 15 s` };
+    if (e instanceof ApiError) return { why: e.message };
+    throw e;
+  }
+}
+
+/** Every later step needs the server: setup stops, saying why and what to run. */
+function cannotGoOn(ctx: Ctx, why: string): number {
+  ctx.out(`✗ ${why[0]?.toUpperCase()}${why.slice(1)}`);
+  ctx.out("  Retry with:");
+  ctx.out("    starbridge setup");
+  return 1;
+}
+
 export async function setup(sys: Sys, opts: SetupOpts): Promise<number> {
+  // Each step's ✗ line, which the end repeats with the retry command (#770).
+  const failed: string[] = [];
+  const out = sys.ctx.out;
+  sys = {
+    ...sys,
+    ctx: {
+      ...sys.ctx,
+      out: (line) => {
+        if (line.startsWith("✗ ")) failed.push(line);
+        out(line);
+      },
+    },
+  };
   const { ctx, prompt } = sys;
   recordSelf(sys);
   if (opts.agent) return agentOnly(sys, opts.agent);
@@ -147,16 +192,36 @@ export async function setup(sys: Sys, opts: SetupOpts): Promise<number> {
       `This machine is paired with ${host(machine.server)}. Pair it with ${host(server)} instead?`,
       false,
     ));
+  // The later steps need the server and the pairing, so setup checks both first (#774).
+  let again = false;
   if (machine && !switching) {
     section(ctx, "Pairing");
-    ctx.out(`✓ Paired as ${machine.name} on ${host(machine.server)}`);
-  } else {
-    section(ctx, `Pairing with ${host(server)}`);
-    await checkServer(server);
+    const pairing = await checkPairing(ctx);
+    if (pairing === "paired") ctx.out(`✓ Paired as ${machine.name} on ${host(machine.server)}`);
+    else if (pairing === "removed") {
+      ctx.out(`✗ ${host(machine.server)} no longer lists ${machine.name}`);
+      again = await prompt.confirm("  Pair this machine again?", true);
+      if (!again) {
+        ctx.out("  To pair it again later:");
+        ctx.out("    starbridge setup");
+        return 1;
+      }
+    } else return cannotGoOn(ctx, pairing.why);
+  }
+  if (!machine || switching || again) {
+    // Pairing again stays on the machine's server: the owner declined any other.
+    const to = again && machine ? trimServer(machine.server) : server;
+    if (!again) section(ctx, `Pairing with ${host(to)}`);
+    try {
+      await checkServer(to);
+    } catch (e) {
+      if (!(e instanceof UsageError)) throw e;
+      return cannotGoOn(ctx, e.message);
+    }
     const code = await pair(ctx, {
-      server,
+      server: to,
       again: "starbridge setup",
-      ...(switching ? { force: true } : {}),
+      ...(switching || again ? { force: true } : {}),
       ...(opts.name ? { name: opts.name } : {}),
     });
     if (code !== 0) return code;
@@ -169,7 +234,7 @@ export async function setup(sys: Sys, opts: SetupOpts): Promise<number> {
   // `starbridge status` shows it; `config machine-kind` changes it.
   if (machine) rememberMachineKind(ctx);
 
-  const agents = opts.noAgents ? [] : await agentsStep(sys);
+  const { done: agents, next } = opts.noAgents ? { done: [], next: [] } : await agentsStep(sys);
 
   const configBefore = JSON.stringify(ctx.store.agentConfig());
   const quota = await quotaStep(sys, opts, machine !== undefined);
@@ -181,7 +246,8 @@ export async function setup(sys: Sys, opts: SetupOpts): Promise<number> {
     await serviceStep(
       sys,
       opts,
-      switching || JSON.stringify(ctx.store.agentConfig()) !== configBefore,
+      // A running agent may hold the old token, or be backing off from its refusal.
+      switching || again || JSON.stringify(ctx.store.agentConfig()) !== configBefore,
     );
   const last = await pathStep(sys);
 
@@ -191,7 +257,12 @@ export async function setup(sys: Sys, opts: SetupOpts): Promise<number> {
   if (machine && !opts.yes && (await prompt.confirm("  Send a test decision to your phone?", true)))
     await testDecision(ctx, machine.name);
 
-  section(ctx, "Starbridge is set up.");
+  section(
+    ctx,
+    failed.length === 0
+      ? "Starbridge is set up."
+      : `Setup is done, but ${failed.length === 1 ? "one step" : `${failed.length} steps`} failed.`,
+  );
   for (const line of await otherCopies(sys)) ctx.out(`  ${line}`);
   const one = agents[0] ?? "claude";
   ctx.out("");
@@ -204,6 +275,14 @@ export async function setup(sys: Sys, opts: SetupOpts): Promise<number> {
     ["Remove everything", "starbridge uninstall"],
   ]))
     ctx.out(line);
+  if (next.length > 0) ctx.out("");
+  for (const line of next) ctx.out(`  ${line}`);
+  if (failed.length > 0) {
+    ctx.out("");
+    for (const line of failed) out(`  ${line}`);
+    ctx.out("  Retry once fixed:");
+    ctx.out("    starbridge setup");
+  }
   if (last.length > 0) ctx.out("");
   for (const line of last) ctx.out(line);
   return 0;
@@ -217,13 +296,14 @@ function commandTable(rows: readonly (readonly [string, string])[]): string[] {
 
 /**
  * Starbridge in every agent found, without asking (#750), one line each; an agent
- * `uninstall --agent` removed stays out. Returns the agents it is in.
+ * `uninstall --agent` removed stays out. Returns the agents it is in, and what is left to do.
  */
-async function agentsStep(sys: Sys): Promise<AgentId[]> {
+async function agentsStep(sys: Sys): Promise<{ done: AgentId[]; next: string[] }> {
   const { ctx } = sys;
   section(ctx, "Agents");
   const removed = removedAgents(ctx);
   const done: AgentId[] = [];
+  const next: string[] = [];
   let any = false;
   for (const id of AGENT_IDS) {
     if (!found(sys, id)) continue;
@@ -234,16 +314,19 @@ async function agentsStep(sys: Sys): Promise<AgentId[]> {
       ctx.out(`${UNDER}  starbridge setup --agent ${id}`);
       continue;
     }
+    const progress = progressLine(id);
+    if (progress) ctx.out(progress);
     const r = await installAgent(sys, id);
     ctx.out(agentLine(r.mark, id, r.text));
     for (const note of r.notes) ctx.out(`${UNDER}${note}`);
+    next.push(...(r.next ?? []));
     if (r.mark === "✓") done.push(id);
   }
   if (!any)
     ctx.out(
       `– No agent found (${Object.values(AGENTS).join(", ")}): rerun setup after installing one`,
     );
-  return done;
+  return { done, next };
 }
 
 /** `setup --agent <name>`: Starbridge in that one agent, also when `uninstall --agent` took it out. */
@@ -254,9 +337,11 @@ async function agentOnly(sys: Sys, id: AgentId): Promise<number> {
     return 1;
   }
   setRemoved(ctx, id, false);
+  const progress = progressLine(id);
+  if (progress) ctx.out(progress);
   const r = await installAgent(sys, id);
   ctx.out(agentLine(r.mark, id, r.text));
-  for (const note of r.notes) ctx.out(`${UNDER}${note}`);
+  for (const note of [...r.notes, ...(r.next ?? [])]) ctx.out(`${UNDER}${note}`);
   return r.mark === "✗" ? 1 : 0;
 }
 
@@ -391,6 +476,19 @@ async function codexbarStep(
 export function probeLines(sys: Sys, probes: Probe[]): string[] {
   if (probes.length === 0)
     return ["  CodexBar has no provider turned on, and found no Claude or Codex sign-in."];
+  // A CodexBar the system cannot start fails every provider the same way, which no sign-in fixes.
+  const lib = probes
+    .map((p) => /error while loading shared libraries: ([^:\s]+):/.exec(p.detail)?.[1])
+    .find((l) => l !== undefined);
+  if (lib && probes.every((p) => !p.works))
+    return [
+      `✗ CodexBar cannot start: it needs ${lib}`,
+      lib.startsWith("libsqlite3.")
+        ? "  On Debian or Ubuntu: sudo apt install libsqlite3-0"
+        : `  Install the package that provides ${lib}`,
+      "  Then run again:",
+      "    starbridge setup",
+    ];
   const w = Math.max(...probes.map((p) => p.provider.length));
   return probes.flatMap((p) => {
     const lines = [
@@ -525,14 +623,24 @@ async function testDecision(ctx: Ctx, name: string) {
     session: "",
   };
   const opts = { wait: true, timeout: "10m" };
-  ctx.out("Answer it on your phone or the web page (Ctrl-C skips):");
-  // `ask` prints the decision's id first: kept to withdraw the card on Ctrl-C (#613).
+  ctx.out("  Sent. Answer it on your phone or the web page (Ctrl-C skips)…");
+  // `ask` prints the decision's id first, kept to withdraw the card on Ctrl-C (#613), then the
+  // answer line agents read; the owner sees neither, only what they answered.
   let id: string | undefined;
   const asking: Ctx = {
     ...ctx,
     out: (line) => {
-      id ??= line;
-      ctx.out(line);
+      if (id === undefined) {
+        id = line;
+        return;
+      }
+      const prefix = answerPrefix(id, input.question);
+      // Other lines, such as a snooze's, name the decision the agents' way: `<id> (<question>)`.
+      ctx.out(
+        line.startsWith(prefix)
+          ? `✓ You answered ${line.slice(prefix.length)}`
+          : line.replace(` ${id} (${input.question})`, ""),
+      );
     },
   };
   let code: number;
@@ -544,17 +652,17 @@ async function testDecision(ctx: Ctx, name: string) {
     );
   } catch (e) {
     if (!(e instanceof Interrupted)) {
-      ctx.out(`The test decision failed: ${(e as Error).message}`);
+      ctx.out(`✗ The test decision failed: ${(e as Error).message}`);
       return;
     }
     code = EXIT_INTERRUPTED;
   }
-  if (code === 2) ctx.out("No answer within 10 minutes.");
+  if (code === 2) ctx.out("✗ No answer within 10 minutes");
   if (code !== EXIT_INTERRUPTED || !id) return;
   try {
     await settle(ctx, { id, outcome: "withdrawn" });
-    ctx.out("Skipped.");
+    ctx.out("– Skipped");
   } catch (e) {
-    ctx.out(`Skipped, but the card stays open on your devices: ${(e as Error).message}`);
+    ctx.out(`– Skipped, but the card stays open on your devices: ${(e as Error).message}`);
   }
 }

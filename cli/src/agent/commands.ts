@@ -20,7 +20,7 @@ import {
   waitSeconds,
 } from "../decisions";
 import { MAX_HOLD_SECONDS, type SessionEvent } from "./api";
-import { type AgentClient, AgentError, AgentLost, Interrupted, NoAgent } from "./client";
+import { type AgentClient, AgentLost, Interrupted, NoAgent } from "./client";
 
 /** Exit code on Ctrl-C, as a shell reports SIGINT. */
 const EXIT_INTERRUPTED = 130;
@@ -218,8 +218,6 @@ export async function answersAllVia(
         ctx.signal,
       );
     } catch (e) {
-      // An agent from before this route: the server path does the same.
-      if (e instanceof AgentError && e.status === 404 && !agent.answered) return direct(printed);
       const restarted = e instanceof AgentLost || (e instanceof NoAgent && agent.answered);
       if (!opts.follow || !restarted) throw e;
       const now = ctx.now().getTime();

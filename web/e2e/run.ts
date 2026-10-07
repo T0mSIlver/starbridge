@@ -64,14 +64,23 @@ function step(text: string) {
 
 /**
  * Picks an option of a Settings segmented control. Its radio hides inside the segment, which
- * takes the click. Right after a navigation the click can land before the page subscribes to
- * the setting, and React holds the radio unchecked until it does, so `check()` would fail;
- * this waits for the checked state instead (#693).
+ * takes the click. Right after a navigation the click now and then leaves the radio as it was
+ * (#693, #758), so this clicks again until the radio is checked. It waits for the checked state
+ * in the DOM, since the radio is never visible.
  */
 async function choose(page: Page, label: string) {
   const radio = page.getByLabel(label, { exact: true });
-  await radio.click({ force: true });
-  await radio.and(page.locator(":checked")).waitFor();
+  const checked = radio.and(page.locator(":checked"));
+  for (let tries = 1; ; tries++) {
+    await radio.click({ force: true });
+    try {
+      await checked.waitFor({ state: "attached", timeout: 3_000 });
+      return;
+    } catch (e) {
+      if (tries === 5) throw e;
+      console.log(`choose: ${label} not checked after click ${tries}, clicking again`);
+    }
+  }
 }
 
 /** Starts a process and collects its output; `waitFor` resolves on a matching line. */
@@ -451,7 +460,7 @@ async function main() {
   await page.getByLabel("Pair a machine or device").fill(code);
   await page.getByRole("button", { name: "Check code" }).click();
   await page.getByRole("button", { name: "Approve" }).click();
-  await pair.waitFor(/Paired "devbox"/);
+  await pair.waitFor(/✓ Paired as devbox/);
   if ((await pair.exited) !== 0) throw new Error("pair failed");
   await page.getByRole("status", { name: "Pairing result" }).getByText("devbox joined").waitFor();
   await shoot(page, "pair-joined");
@@ -1708,7 +1717,7 @@ async function main() {
   await page.getByText("Let laptop post decisions and quotas?").waitFor({ timeout: 30_000 });
   await shoot(page, "pair-request");
   await page.getByRole("button", { name: "Approve" }).click();
-  await linked.waitFor(/Paired "laptop"/);
+  await linked.waitFor(/✓ Paired as laptop/);
   if ((await linked.exited) !== 0) throw new Error("pair by link failed");
 
   step("sign in again: the session binds to the existing device without pairing");
