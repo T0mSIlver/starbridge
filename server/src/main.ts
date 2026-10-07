@@ -41,9 +41,11 @@ const server = Bun.serve({
   fetch: (req, server) => app.fetch(req, { server }),
 });
 
-// The launch watcher's counts (deploy/host/watch.sh), on a port only the host reaches.
+// The launch watcher's counts (deploy/host/watch.sh), on the container's own loopback: the
+// watcher reads them through `docker compose exec`, and no other container reaches them.
 if (config.watchPort)
   Bun.serve({
+    hostname: "127.0.0.1",
     port: config.watchPort,
     fetch: (req) => {
       const url = new URL(req.url);

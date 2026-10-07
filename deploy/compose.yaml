@@ -12,15 +12,15 @@ services:
     restart: unless-stopped
     # Built by deploy/host/server-env.sh from the secrets in /etc/starbridge/secrets.
     env_file: /etc/starbridge/server.env
-    # The launch watcher's counts, which name addresses (deploy/host/watch.sh): host only.
+    # The launch watcher's counts, which name addresses, on the container's loopback only
+    # (deploy/host/watch.sh).
     environment:
       WATCH_PORT: "8081"
     volumes:
       - data:/data
-    # Only Caddy reaches the server; only the host reaches the watch port.
+    # Only Caddy reaches the server.
     ports:
       - "127.0.0.1:8080:8080"
-      - "127.0.0.1:8081:8081"
     logging: &logging
       driver: json-file
       options: { max-size: 10m, max-file: "5" }

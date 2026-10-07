@@ -6,7 +6,7 @@
 # --since   count log lines since then (the previous run); default 5 minutes ago
 # --conns   name an address holding over this many connections to Caddy now (default 200)
 # --over    name an address that made at least this many /v1 requests in a minute (default 2000)
-# Addresses are read at this instant from `ss` and the server's memory (port 8081), and only
+# Addresses are read at this instant from `ss` and the server's memory (its loopback port 8081), and only
 # those past a threshold or refused with 429 are named: nothing here is written to disk.
 set -eu
 since=$(date -u -d '-5 min' +%Y-%m-%dT%H:%M:%SZ) conns=200 over=2000
@@ -72,7 +72,10 @@ c = int(sys.argv[1])
 print(json.dumps({"total": sum(n.values()), "addresses": len(n), "busiest": max(n.values(), default=0),
                   "named": {k: v for k, v in n.most_common(20) if v > c}}))
 ' "$conns")
-addresses=$(curl -fsS --max-time 5 "http://127.0.0.1:8081/watch?over=$over" 2>/dev/null || echo null)
+addresses=$($compose exec -T server bun -e "
+  const r = await fetch('http://127.0.0.1:8081/watch?over=$over', { signal: AbortSignal.timeout(5000) });
+  if (!r.ok) process.exit(1);
+  console.log(await r.text());" 2>/dev/null || echo null)
 
 top=$($compose exec -T server bun server.js top 5 --json 2>/dev/null || echo null)
 

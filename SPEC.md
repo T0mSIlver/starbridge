@@ -964,7 +964,7 @@ Tokens, type and components: `DESIGN.md`.
 - **Watching it** (#782). Caddy keeps no access log, so the server logs one line a minute of its
   refusals by status, error code and route, with the accounts refused most, and never an
   address. Per-address request and 429 counts stay in its memory, like the rate limits, and only
-  the host reads them (port 8081, `GET /watch`). The launch watcher (`deploy/watch/`) reads
+  the host reads them, through the container's own loopback (port 8081, `GET /watch`). The launch watcher (`deploy/watch/`) reads
   those, `ss`, `docker` and `bun server.js top` over SSH every few minutes and names an address
   only when it holds over 200 connections, makes over 2000 `/v1` requests a minute or is being
   refused with 429 (the owner's rule): an HTTP/2 client can flood over few connections, and every
