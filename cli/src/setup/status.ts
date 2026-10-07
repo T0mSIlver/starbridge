@@ -4,16 +4,9 @@ import { AgentClient } from "../agent/client";
 import { REMOVED } from "../api";
 import { deliverable } from "../decisions";
 import { VERSION } from "../version";
+import { AGENT_IDS, AGENTS, found as agentFound, installed, removedAgents } from "./agents";
 import { findCodexbar, listProviders, probe } from "./codexbar";
-import {
-  codexSkill,
-  hasCodex,
-  hasOpencode,
-  hasPi,
-  opencodeState,
-  PI_PACKAGE,
-  piPackage,
-} from "./harnesses";
+import { codexSkill, opencodeState, PI_PACKAGE, piPackage } from "./harnesses";
 import { autoUpdate, hasClaude, PLUGINS, pluginState } from "./plugins";
 import { lingering, serviceState } from "./service";
 import { probeLines } from "./setup";
@@ -102,38 +95,48 @@ export async function status(sys: Sys): Promise<number> {
   }
 
   if (!hasClaude(sys)) out("Claude Code: not on the PATH");
-  else {
-    const p = await pluginState(sys);
-    if (typeof p === "string") out(`Claude Code: ${p}`);
-    else {
-      out(
-        `Claude Code marketplace: ${p.marketplace ? "added" : "not added"}${autoUpdate(sys) ? ", auto-update on" : ""}`,
-      );
-      for (const id of PLUGINS) {
-        const x = p.plugins[id];
-        out(
-          `  ${id}: ${x ? `${x.version ?? "installed"}${x.enabled ? "" : ", disabled"}` : "not installed"}`,
-        );
-      }
+  const removed = removedAgents(ctx);
+  for (const id of AGENT_IDS) {
+    if (!agentFound(sys, id)) continue;
+    if (removed.includes(id)) {
+      out(`${AGENTS[id]}: left out (\`starbridge setup --agent ${id}\` brings it back)`);
+      continue;
     }
-  }
-  if (hasCodex(sys)) {
-    const state = codexSkill(sys);
-    out(
-      `Codex skill: ${state === "current" ? "installed" : state === "outdated" ? "outdated (`starbridge setup` updates it)" : state === "foreign" ? "another skill named starbridge" : "not installed"}`,
-    );
-  }
-  if (hasPi(sys)) {
-    const pi = piPackage(sys);
-    out(
-      `Pi package: ${pi === PI_PACKAGE ? "installed" : pi ? `${pi} (\`starbridge setup\` moves it to v${VERSION})` : "not installed"}`,
-    );
-  }
-  if (hasOpencode(sys)) {
-    const state = opencodeState(sys);
-    out(
-      `opencode skill and plugin: ${state === "current" ? "installed" : state === "outdated" ? "outdated (`starbridge setup` updates them)" : state === "foreign" ? "not managed by starbridge (another skill or plugin named starbridge)" : "not installed"}`,
-    );
+    // An agent installed after setup: nothing installs in the background (#750).
+    if (!(await installed(sys, id))) {
+      out(`${AGENTS[id]} found, Starbridge not installed: run \`starbridge setup --refresh\``);
+      continue;
+    }
+    if (id === "claude") {
+      const p = await pluginState(sys);
+      if (typeof p === "string") out(`Claude Code: ${p}`);
+      else {
+        out(
+          `Claude Code marketplace: ${p.marketplace ? "added" : "not added"}${autoUpdate(sys) ? ", auto-update on" : ""}`,
+        );
+        for (const pid of PLUGINS) {
+          const x = p.plugins[pid];
+          out(
+            `  ${pid}: ${x ? `${x.version ?? "installed"}${x.enabled ? "" : ", disabled"}` : "not installed"}`,
+          );
+        }
+      }
+    } else if (id === "codex") {
+      const state = codexSkill(sys);
+      out(
+        `Codex skill: ${state === "current" ? "installed" : state === "outdated" ? "outdated (`starbridge setup --refresh` updates it)" : "another skill named starbridge"}`,
+      );
+    } else if (id === "pi") {
+      const pi = piPackage(sys);
+      out(
+        `Pi package: ${pi === PI_PACKAGE ? "installed" : `${pi} (\`starbridge setup\` moves it to v${VERSION})`}`,
+      );
+    } else {
+      const state = opencodeState(sys);
+      out(
+        `opencode skill and plugin: ${state === "current" ? "installed" : state === "outdated" ? "outdated (`starbridge setup --refresh` updates them)" : "not managed by starbridge (another skill or plugin named starbridge)"}`,
+      );
+    }
   }
   return 0;
 }

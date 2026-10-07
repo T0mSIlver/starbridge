@@ -1,5 +1,5 @@
 /**
- * `starbridge uninstall`: removes the service and the plugins, asks the owner's devices to
+ * `starbridge uninstall`: removes the service and Starbridge from every agent, asks the owner's devices to
  * revoke the machine, and asks before it deletes the keys. CodexBar stays.
  */
 import { existsSync, realpathSync, rmSync } from "node:fs";
@@ -7,21 +7,18 @@ import { join } from "node:path";
 import { withAgent } from "../agent/client";
 import { askVia } from "../agent/commands";
 import { type AskInput, ask } from "../decisions";
-import { piPermissionConfig, removePiEntries } from "../pi";
 import type { InstallKind } from "../release";
 import { removeBinary } from "../update";
-import { findCodexbar } from "./codexbar";
 import {
-  codexRulePath,
-  codexSkillDir,
-  hasPi,
-  piPackage,
-  removeCodexRule,
-  removeCodexSkill,
-  removeOpencode,
-  removePiPackage,
-} from "./harnesses";
-import { hasClaude, pluginState, removeAllowRules, removePlugins, settingsPath } from "./plugins";
+  AGENT_IDS,
+  AGENTS,
+  type AgentId,
+  found,
+  removeAgent,
+  removedAgents,
+  setRemoved,
+} from "./agents";
+import { findCodexbar } from "./codexbar";
 import { removeService } from "./service";
 import type { Sys } from "./sys";
 
@@ -72,33 +69,9 @@ export async function uninstall(sys: Sys, opts: UninstallOpts): Promise<number> 
     ctx.out(`Could not stop the agent service, so it stays: ${(e as Error).message}`);
   }
 
-  if (hasClaude(sys)) {
-    const state = await pluginState(sys);
-    if (typeof state !== "string")
-      for (const line of await removePlugins(sys, state)) ctx.out(line);
-    else ctx.out(`${state}. Remove the Starbridge plugins with \`claude plugin uninstall\`.`);
-    if (removeAllowRules(sys))
-      ctx.out(`Removed the starbridge allow rules from ${settingsPath(sys)}.`);
-  }
-
-  if (removeCodexSkill(sys)) ctx.out(`Removed ${codexSkillDir(sys)}.`);
-  if (removeCodexRule(sys)) ctx.out(`Removed ${codexRulePath(sys)}.`);
-  for (const path of removeOpencode(sys)) ctx.out(`Removed ${path}.`);
-  const piSource = hasPi(sys) ? piPackage(sys) : undefined;
-  if (piSource)
-    try {
-      await removePiPackage(sys, piSource);
-      ctx.out("Removed the Starbridge Pi package.");
-    } catch (e) {
-      ctx.out(`Could not remove the Pi package: ${(e as Error).message}`);
-    }
-
-  const piConfig = piPermissionConfig(ctx.env);
-  try {
-    if (removePiEntries(ctx.env)) ctx.out(`Removed Starbridge's entries from ${piConfig}.`);
-  } catch (e) {
-    ctx.out(`Could not remove Starbridge's entries from ${piConfig}: ${(e as Error).message}`);
-  }
+  for (const id of AGENT_IDS) for (const line of await removeAgent(sys, id)) ctx.out(line);
+  // A later setup installs Starbridge in every agent again.
+  for (const id of removedAgents(ctx)) setRemoved(ctx, id, false);
 
   const dir = ctx.store.dir;
   if (!stopped && existsSync(dir)) {
@@ -127,4 +100,22 @@ export async function uninstall(sys: Sys, opts: UninstallOpts): Promise<number> 
   // The binary goes last, and only once nothing runs it any more.
   if (opts.install && stopped) removeBinary(ctx, opts.install);
   return stopped ? 0 : 1;
+}
+
+/**
+ * `uninstall --agent <name>`: Starbridge out of that agent only (#750). Setup and refresh leave
+ * it out until `setup --agent <name>` brings it back.
+ */
+export async function uninstallAgent(sys: Sys, id: AgentId): Promise<number> {
+  const { ctx } = sys;
+  const done = await removeAgent(sys, id);
+  setRemoved(ctx, id, true);
+  for (const line of done) ctx.out(line);
+  if (done.length === 0)
+    ctx.out(
+      `Starbridge was not in ${AGENTS[id]}${found(sys, id) ? "" : ", which is not installed"}.`,
+    );
+  ctx.out(`Setup leaves ${AGENTS[id]} out from now on. To bring it back:`);
+  ctx.out(`  starbridge setup --agent ${id}`);
+  return done.some((l) => l.startsWith("Could not")) ? 1 : 0;
 }

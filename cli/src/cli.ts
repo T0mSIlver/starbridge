@@ -33,36 +33,45 @@ import { pushOnce, quotaPush } from "./quota";
 import { installKind, ReleaseError } from "./release";
 import { runCommand } from "./run";
 import { configCommand } from "./settings";
+import { AGENT_IDS, type AgentId, isAgentId } from "./setup/agents";
 import { refresh, setup } from "./setup/setup";
 import { status } from "./setup/status";
 import { defaults, makeSys, type Prompt, terminalPrompt } from "./setup/sys";
-import { uninstall } from "./setup/uninstall";
+import { uninstall, uninstallAgent } from "./setup/uninstall";
 import { update } from "./update";
 import { VERSION } from "./version";
 
 const HELP = `starbridge: post decisions to your devices, report runs, upload quota windows
 
   starbridge setup [--yes] [--server <url>] [--name <name>] [--providers <a,b>]
-                   [--no-quota] [--no-service] [--no-plugin]
+                   [--no-quota] [--no-service] [--no-agents]
+  starbridge setup --agent <claude|codex|pi|opencode>
   starbridge setup --refresh
-      Set this machine up, or check and repair it: pair it, find or install CodexBar and pick
-      the providers to upload, install the agent as a user service (systemd or launchd), install
-      Starbridge in each agent found (the Claude Code plugins, the Codex skill, the Pi package;
-      --no-plugin skips them), and upload a first quota snapshot. Each step asks first; --yes
-      takes every default, which installs CodexBar when it is missing, and the plugins.
+      Set this machine up, or check and repair it: pair it, install Starbridge in each agent
+      found (the Claude Code plugins, the Codex skill and rule, the Pi package, the opencode
+      skill and plugin; --no-agents skips them), find or install CodexBar and pick the
+      providers to upload, install the agent as a user service (systemd, launchd or a
+      Scheduled Task), and upload a first quota snapshot. It asks only before installing
+      CodexBar, which providers to send, whether the agent runs after logout, and whether to
+      send a test decision; --yes, or no terminal, takes every default.
       --server <url>  the server to pair with (default: $STARBRIDGE_SERVER, else this
                       machine's, else https://starbridge.run); asks before leaving another
                       server this machine is paired with
+      --agent <name>  only Starbridge in that agent, also one uninstall --agent removed
       --refresh only brings the files setup wrote into other tools (the service, the Codex skill
-      and rule, the opencode skill and plugin) to this version, and restarts the agent.
+      and rule, the opencode skill and plugin) to this version, installs Starbridge in an agent
+      found since, and restarts the agent.
 
   starbridge status
       Print the versions, the pairing, the agent and its service, the server, each provider, the
       Claude Code plugins, the Codex skill, the Pi package and the sessions the agent sees.
 
   starbridge uninstall [--yes] [--purge]
-      Remove the agent service, the Claude Code plugins and this binary, and ask your devices to revoke this
-      machine. Asks before it deletes the keys and state (--purge: without asking). CodexBar stays.
+  starbridge uninstall --agent <claude|codex|pi|opencode>
+      Remove the agent service, Starbridge from every agent and this binary, and ask your
+      devices to revoke this machine. Asks before it deletes the keys and state (--purge:
+      without asking). CodexBar stays. --agent removes Starbridge from that agent only, and
+      setup leaves it out until \`setup --agent\` brings it back.
 
   starbridge pair [--server <url>] [--name <name>] [--force]
       Make this machine's keys and print a pairing code to type on a device.
@@ -192,11 +201,16 @@ const HELP = `starbridge: post decisions to your devices, report runs, upload qu
 Keys and state live in $STARBRIDGE_CONFIG_DIR, else $XDG_CONFIG_HOME/starbridge, else
 ~/.config/starbridge.`;
 
-/** Questions on the terminal; without one, setup needs --yes. */
-function interactive(): Prompt {
-  if (!process.stdin.isTTY)
-    throw new UsageError("no terminal to ask on: pass --yes to take every default");
-  return terminalPrompt();
+/** Questions on the terminal; without one, every question takes its default, as --yes. */
+function noTerminal(): boolean {
+  return !process.stdin.isTTY;
+}
+
+/** `--agent <name>`: one of the agents setup installs Starbridge in. */
+function agentId(name: string): AgentId {
+  if (!isAgentId(name))
+    throw new UsageError(`--agent takes one of ${AGENT_IDS.join(", ")}, not ${name}`);
+  return name;
 }
 
 /** `--session-link remote-control=https://claude.ai/code/session_…`; the schema checks both. */
@@ -438,17 +452,23 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
             providers: { type: "string" },
             "no-quota": { type: "boolean" },
             "no-service": { type: "boolean" },
+            "no-agents": { type: "boolean" },
+            // The name before #750, kept for scripts.
             "no-plugin": { type: "boolean" },
+            agent: { type: "string" },
             refresh: { type: "boolean" },
           },
         });
+        const agent = v.agent === undefined ? undefined : agentId(v.agent);
         if (v.refresh) {
           for (const line of await refresh(makeSys(ctx, defaults))) ctx.out(line);
           return 0;
         }
-        const sys = makeSys(ctx, v.yes ? defaults : interactive());
+        const yes = v.yes || noTerminal();
+        const sys = makeSys(ctx, yes ? defaults : terminalPrompt());
         return await setup(sys, {
-          ...(v.yes ? { yes: true } : {}),
+          ...(yes ? { yes: true } : {}),
+          ...(agent ? { agent } : {}),
           ...(v.server ? { server: v.server } : {}),
           ...(v.name ? { name: v.name } : {}),
           ...(v.providers !== undefined
@@ -461,7 +481,7 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
             : {}),
           ...(v["no-quota"] ? { noQuota: true } : {}),
           ...(v["no-service"] ? { noService: true } : {}),
-          ...(v["no-plugin"] ? { noPlugin: true } : {}),
+          ...(v["no-agents"] || v["no-plugin"] ? { noAgents: true } : {}),
         });
       }
       case "status":
@@ -470,12 +490,15 @@ export async function run(argv: string[], ctx: Ctx): Promise<number> {
       case "uninstall": {
         const { values: v } = parseArgs({
           args: rest,
-          options: { yes: { type: "boolean", short: "y" }, purge: { type: "boolean" } },
+          options: {
+            yes: { type: "boolean", short: "y" },
+            purge: { type: "boolean" },
+            agent: { type: "string" },
+          },
         });
-        return await uninstall(makeSys(ctx, v.yes ? defaults : interactive()), {
-          purge: v.purge,
-          install: installKind(),
-        });
+        const sys = makeSys(ctx, v.yes || noTerminal() ? defaults : terminalPrompt());
+        if (v.agent !== undefined) return await uninstallAgent(sys, agentId(v.agent));
+        return await uninstall(sys, { purge: v.purge, install: installKind() });
       }
       case "run": {
         // Everything after `--` is the command, flags included.

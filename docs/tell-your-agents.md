@@ -54,8 +54,9 @@ or dismissing it there closes it on your devices. A question with more than 4
 options lists them and takes a typed reply; to pick several where the agent
 allows it, reply with their names.
 
-`starbridge setup` offers to install Starbridge in each agent it finds, and
-asks before each one:
+`starbridge setup` installs Starbridge in each agent it finds, and prints one
+line per agent; `starbridge uninstall --agent <name>` removes it from one, and
+setup then leaves that agent alone until `starbridge setup --agent <name>`:
 
 - Claude Code: the Starbridge plugin, which brings the rules above, the skill
   and the hooks, and allow rules so that `starbridge ask`, `waiting`,
@@ -67,8 +68,8 @@ asks before each one:
 - Codex: the skill, in `~/.codex/skills/starbridge` (or under `$CODEX_HOME`),
   so it knows how to write a question. Codex doesn't load plugins, so it runs
   the same `starbridge` commands without the rules: add
-  [the rules for Codex](#rules-for-codex). A later setup offers to update the
-  skill when the CLI carries a newer one. Codex runs commands in a sandbox with no network, so setup also writes
+  [the rules for Codex](#rules-for-codex), which setup links to. A later setup
+  updates the skill when the CLI carries a newer one. Codex runs commands in a sandbox with no network, so setup also writes
   `~/.codex/rules/starbridge.rules`, which runs `starbridge ask`, `waiting`,
   `working`, `wait` and `settle` outside it.
 - Pi: the Starbridge Pi package (`pi install

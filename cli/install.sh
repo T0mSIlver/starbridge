@@ -59,7 +59,7 @@ else
 fi
 
 if command -v curl >/dev/null 2>&1; then
-  get() { curl -fsSL --proto '=https,http' -o "$2" "$1"; }
+  get() { curl -fsL --proto '=https,http' -o "$2" "$1"; }
 elif command -v wget >/dev/null 2>&1; then
   get() { wget -q -O "$2" "$1"; }
 else
