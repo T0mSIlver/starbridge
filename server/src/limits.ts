@@ -122,8 +122,12 @@ export const DEFAULT_LIMITS = {
   pairingPosts: [30, MINUTE] as RateWindow,
   /** Pairing requests read per account, by the device approving the pairing. */
   pairingReads: [30, MINUTE] as RateWindow,
-  /** Pairing results read per address, by the member that posted the request. */
-  pairingResults: [60, MINUTE] as RateWindow,
+  /**
+   * Pairing results read per address, by the member that posted the request. Each waiting
+   * pairing long-polls every 25 s, 2.4 times a minute, and an address may have 50 waiting
+   * (pairingsPerClient), so a crowd behind one NAT never runs out (#716).
+   */
+  pairingResults: [150, MINUTE] as RateWindow,
 
   /**
    * Pairings stored on the whole server, about 4 KB each: the disk bound. Filling it takes 400
