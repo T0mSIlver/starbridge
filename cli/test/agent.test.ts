@@ -773,4 +773,28 @@ test("a socket path too long for a unix socket: clients fall back and say why (#
   const call = new AgentClient(socket).call("GET", "/v1/status");
   await expect(call).rejects.toBeInstanceOf(NoAgent);
   await expect(call).rejects.toThrow("too long for a unix socket");
+
+  // Bun's agent listens there and says so in a pid file, which goes when it stops (#714).
+  const first = makeAgent(ctx, { socket, noQuota: true });
+  await first.start();
+  expect(readFileSync(`${socket}.pid`, "utf8")).toBe(String(process.pid));
+  await first.stop();
+  expect(existsSync(socket)).toBe(false);
+  expect(existsSync(`${socket}.pid`)).toBe(false);
+
+  // Where `connect` refuses the path, a second agent cannot probe the first: the pid file of a
+  // live agent stops it from unlinking the socket.
+  writeFileSync(socket, "");
+  const other = Bun.spawn(["sleep", "30"]);
+  try {
+    writeFileSync(`${socket}.pid`, String(other.pid));
+    await expect(makeAgent(ctx, { socket, noQuota: true }).start()).rejects.toThrow("already runs");
+    expect(existsSync(socket)).toBe(true);
+    // The CLI goes to the server itself, and says why.
+    const env = { ...ctx.env, STARBRIDGE_AGENT_SOCKET: socket };
+    expect(await run([...ASK, "--session", "s1"], { ...ctx, env })).toBe(0);
+    expect(ctx.errors.some((e) => e.includes("too long for a unix socket"))).toBe(true);
+  } finally {
+    other.kill();
+  }
 });
