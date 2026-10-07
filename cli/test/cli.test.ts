@@ -352,6 +352,60 @@ test("ask --answer-in posts a pointer decision, and settle closes it", async () 
   expect(await run(["settle", "d_unknown"], ctx)).toBe(1);
 });
 
+test("settle --session and --all close a flood at the server's pace (#584)", async () => {
+  server.stop();
+  // Two posts per half second: the settles meet 429s and wait them out.
+  server = await LiveServer.start({ limits: { ...DEFAULT_LIMITS, machineItems: [2, 500] } });
+  const ctx = await paired(server);
+  const ids: Record<string, string[]> = { s1: [], s2: [] };
+  for (const [s, n] of [
+    ["s1", 4],
+    ["s2", 2],
+  ] as const)
+    for (let i = 0; i < n; i++) {
+      for (;;) {
+        if ((await run([...ASK, "--session", s], ctx)) === 0) break;
+        await Bun.sleep(100);
+      }
+      ids[s]?.push(ctx.lines.at(-1) as string);
+    }
+  const [answered, ...rest] = ids.s1 as string[];
+  await server.answer(answered as string, { choice: "Merge" });
+  expect(await run(["wait", answered as string, "--timeout", "10s"], ctx)).toBe(0);
+
+  let slept = 0;
+  const sleep = ctx.sleep;
+  ctx.sleep = (ms) => {
+    slept++;
+    return sleep(ms);
+  };
+  expect(await run(["settle", "--session", "s1", "--outcome", "withdrawn"], ctx)).toBe(0);
+  expect(ctx.lines.at(-1)).toBe("Settled 3 decisions.");
+  expect(slept).toBeGreaterThan(0);
+  const open = async () =>
+    (await server.listed("decision")).filter((d) => !d.answeredAt).map((d) => d.item.id);
+  expect((await open()).sort()).toEqual([...(ids.s2 as string[])].sort());
+  for (const id of rest) expect(ctx.store.state().asked[id]?.settled).toBe(true);
+
+  // Without a terminal, --all needs --yes.
+  expect(await run(["settle", "--all"], ctx)).toBe(1);
+  expect(ctx.errors.at(-1)).toContain("--yes");
+  expect(await run(["settle", "--all", "--session", "s2"], ctx)).toBe(1);
+  expect(await run(["settle", "--all", "--yes"], ctx)).toBe(0);
+  expect(ctx.lines.at(-1)).toBe("Settled 2 decisions.");
+  expect(await open()).toEqual([]);
+  expect(await run(["settle", "--all", "--yes"], ctx)).toBe(0);
+  expect(ctx.lines.at(-1)).toBe("No open decision this machine asked.");
+  // A settle whose notice never reached the server is posted again.
+  const failed = ids.s2?.[0] as string;
+  ctx.store.updateState((st) => {
+    (st.asked[failed] as { unposted?: boolean }).unposted = true;
+  });
+  expect(await run(["settle", "--all", "--yes"], ctx)).toBe(0);
+  expect(ctx.lines.at(-1)).toBe("Settled 1 decision.");
+  expect(ctx.store.state().asked[failed]?.unposted).toBeUndefined();
+});
+
 test("Done on an --answer-in decision reaches the agent, and every device hears of it (#539)", async () => {
   const ctx = await paired(server);
   const page = "https://claude.ai/artifact/Xq7pLm2VnR4tBz9KcW1sYd";
