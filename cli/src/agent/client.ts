@@ -17,7 +17,15 @@ import {
 } from "./api";
 
 /** No agent listens: the CLI talks to the server itself. */
-export class NoAgent extends Error {}
+export class NoAgent extends Error {
+  constructor(
+    message: string,
+    /** The connection error that showed it, when one did. */
+    readonly code?: string,
+  ) {
+    super(message);
+  }
+}
 
 /** The agent refused the call; `status` 426 means the two cannot work together. */
 export class AgentError extends Error {
@@ -165,7 +173,7 @@ export class AgentClient {
       req.on("timeout", () => req.destroy(new Error(`agent: no answer within ${timeoutMs} ms`)));
       req.on("error", (e: NodeJS.ErrnoException) => {
         if (e.code && NOT_LISTENING.has(e.code))
-          reject(new NoAgent(tooLong(this.socket) ?? `no agent on ${this.socket}`));
+          reject(new NoAgent(tooLong(this.socket) ?? `no agent on ${this.socket}`, e.code));
         else if (e.code && DROPPED.has(e.code))
           reject(new AgentLost(`the agent dropped the call: ${e.message}`));
         else reject(e);

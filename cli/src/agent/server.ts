@@ -190,16 +190,21 @@ export class Agent implements Hub {
    * on it; a socket file nobody listens on is left from a crash and goes.
    */
   async start(): Promise<void> {
+    let unprobed = false;
     try {
       await new AgentClient(this.socket).call("GET", "/v1/status", undefined, 2_000);
       throw new UsageError(`an agent already runs on ${this.socket}`);
     } catch (e) {
       if (!(e instanceof NoAgent || e instanceof AgentError)) throw e;
       if (e instanceof AgentError) throw new UsageError(`an agent already runs on ${this.socket}`);
+      // Nobody listens on an existing socket, or no socket: anything else proves nothing.
+      unprobed = e.code !== "ECONNREFUSED" && e.code !== "ENOENT";
     }
     // A socket path too long for `connect` cannot be probed (#622), so the agent that listens on
     // it says so in a pid file beside it; without it a second agent unlinked the socket (#714).
-    const owner = this.longSocket() ? socketOwner(this.socket) : undefined;
+    // Where the probe could connect, its answer stands, so a stale file with a reused pid does
+    // not block a restart.
+    const owner = unprobed && this.longSocket() ? socketOwner(this.socket) : undefined;
     if (owner !== undefined && owner !== process.pid && processAlive(owner))
       throw new UsageError(`an agent already runs on ${this.socket} (pid ${owner})`);
     const dir = dirname(this.socket);
