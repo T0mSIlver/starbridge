@@ -102,24 +102,27 @@ export async function status(sys: Sys): Promise<number> {
       out(`${AGENTS[id]}: left out (\`starbridge setup --agent ${id}\` brings it back)`);
       continue;
     }
+    // Claude Code's state costs two `claude` runs: read once, and its own error shown as is.
+    const claude = id === "claude" ? await pluginState(sys) : undefined;
+    if (typeof claude === "string") {
+      out(`Claude Code: ${claude}`);
+      continue;
+    }
+    const isIn = claude ? PLUGINS.every((pid) => claude.plugins[pid]) : await installed(sys, id);
     // An agent installed after setup: nothing installs in the background (#750).
-    if (!(await installed(sys, id))) {
+    if (!isIn) {
       out(`${AGENTS[id]} found, Starbridge not installed: run \`starbridge setup --refresh\``);
       continue;
     }
-    if (id === "claude") {
-      const p = await pluginState(sys);
-      if (typeof p === "string") out(`Claude Code: ${p}`);
-      else {
+    if (claude) {
+      out(
+        `Claude Code marketplace: ${claude.marketplace ? "added" : "not added"}${autoUpdate(sys) ? ", auto-update on" : ""}`,
+      );
+      for (const pid of PLUGINS) {
+        const x = claude.plugins[pid];
         out(
-          `Claude Code marketplace: ${p.marketplace ? "added" : "not added"}${autoUpdate(sys) ? ", auto-update on" : ""}`,
+          `  ${pid}: ${x ? `${x.version ?? "installed"}${x.enabled ? "" : ", disabled"}` : "not installed"}`,
         );
-        for (const pid of PLUGINS) {
-          const x = p.plugins[pid];
-          out(
-            `  ${pid}: ${x ? `${x.version ?? "installed"}${x.enabled ? "" : ", disabled"}` : "not installed"}`,
-          );
-        }
       }
     } else if (id === "codex") {
       const state = codexSkill(sys);
