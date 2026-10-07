@@ -527,18 +527,8 @@ async function settleOne(
     );
   } catch (e) {
     // Answered or settled already: either way it is closed, which is what was asked. A bulk run
-    // also counts one the server dropped already, and leaves an answer it meets to be delivered.
+    // also counts one the server dropped already.
     const code = e instanceof ApiError ? e.code : undefined;
-    if (bulk && code === "already-answered") {
-      ctx.store.updateState((st) => {
-        const a = st.asked[id];
-        if (a) {
-          delete a.settled;
-          delete a.unposted;
-        }
-      });
-      return false;
-    }
     const closed = ["already-answered", "already-settled", ...(bulk ? ["not-found"] : [])];
     if (!code || !closed.includes(code)) throw e;
   }
