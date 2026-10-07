@@ -1,5 +1,6 @@
 #!/bin/sh
-# Copies the live SQLite file with `.backup`, dumps Umami's Postgres, and keeps 7 days of both:
+# Copies the live SQLite file with `.backup`, dumps Umami's Postgres, and keeps 7 days of each,
+# apply.sh's deploy copies included:
 # 10 copies of the database (live, 7 nightly, 2 per deploy) must fit the disk (#586).
 set -eu
 dir=/var/backups/starbridge
@@ -23,4 +24,6 @@ $compose exec -T umami-db pg_restore -l < "$umami.tmp" >/dev/null
 mv "$umami.tmp" "$umami"
 # The server answers /healthz/backup from this file's age.
 touch "$(dirname "$db")/last-backup"
-find "$dir" -maxdepth 1 \( \( -name 'starbridge-*.db' -o -name 'umami-*.dump' \) -mtime +6 -o -name '*.tmp' -mtime +0 \) -delete
+# Deploy copies (apply.sh) age out with the nightly ones: with Hetzner's own 7 days of backups,
+# deleted data leaves every copy within the 2 weeks /privacy promises (#721).
+find "$dir" -maxdepth 1 \( \( -name 'starbridge-*.db' -o -name 'deploy-*.db' -o -name 'umami-*.dump' \) -mtime +6 -o -name '*.tmp' -mtime +0 \) -delete
