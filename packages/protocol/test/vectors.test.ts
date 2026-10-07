@@ -120,7 +120,11 @@ describe("pairing.json", () => {
     expect(claimHash(v.claim.secret)).toBe(v.claim.hash);
   });
   test("check code", () => {
-    expect(checkCode(v.check.signPk)).toBe(v.check.expect);
+    expect(checkCode(v.check.keys)).toBe(v.check.expect);
+    // Either key alone changes it: a stand-in may copy the machine's other one.
+    const other = toB64(new Uint8Array(32).fill(1));
+    expect(checkCode({ ...v.check.keys, boxPk: other })).not.toBe(v.check.expect);
+    expect(checkCode({ ...v.check.keys, signPk: other })).not.toBe(v.check.expect);
   });
   for (const c of v.parse) {
     test(`parse ${c.input}`, () => {

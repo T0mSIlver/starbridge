@@ -10,9 +10,12 @@
     "hash": "_FOHytyfs0IIaAU11_f8nopChGBd35FRarxSpPpvU2w"
   },
   "check": {
-    "note": "checkCode(signPk): the dev box's signing key",
-    "signPk": "EqQVksi3wX1AWeeym2Ho_5bHQV8vgDNI8vAX4Fueodo",
-    "expect": "QEK0-78NT-DYM8-6G6G"
+    "note": "checkCode({boxPk, signPk}): the dev box's keys",
+    "keys": {
+      "boxPk": "deJw3ylSxXuoNnuoYYwXj5_lDbJ5nTBOdOkY2YVoYUY",
+      "signPk": "EqQVksi3wX1AWeeym2Ho_5bHQV8vgDNI8vAX4Fueodo"
+    },
+    "expect": "NGG6-XG4J-WCFJ-N7HS"
   },
   "parse": [
     {

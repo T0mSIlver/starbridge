@@ -228,14 +228,19 @@ who sees the code can post first, so the device shows the requester's name befor
 with a typed code.
 
 A machine's check code lets the owner see that the machine joined the owner's own chain (#795).
-`checkCode` is the first 80 bits of `BLAKE2b-256("starbridge/v1/check" NUL signPk)` over the
-machine's signing key, as 16 Crockford base32 characters in four groups. Once approved, the
-machine prints its code and saves the pairing only after the owner confirms that a device shows
-the same code beside that machine under Devices. A hostile server that read the pairing code in
+`checkCode` is the first 80 bits of `BLAKE2b-256("starbridge/v1/check" NUL boxPk signPk)` over
+the machine's two public keys, as 16 Crockford base32 characters in four groups. Once approved,
+the machine shows the first three groups and saves the pairing only once the owner types the
+last group from the Android app, which shows each active machine's code under Devices, computed
+from the chain it verified. A person has to answer: with no terminal, the machine saves
+nothing. A hostile server that read the pairing code in
 a browser can approve the machine into a chain it controls, even one that reuses the owner's
 entry 0 and forks after it with a revoked device's key or an old recovery key. The owner's devices
-then list either no such machine or a stand-in with another key, so the codes differ; to make
-them match, the server would have to find a key whose code matches 80 bits of the machine's.
+then list either no such machine or a stand-in with a key of the server's, so the codes differ.
+Both keys count, since a pairing request proves no private key: a stand-in may copy the
+machine's signing key beside a box key of the server's. To make the codes match, the server
+would have to find keys whose code matches 80 bits of the machine's, which it learns only from
+the machine's request. The web page shows the codes too, but a hostile server writes that page.
 
 The code proves nothing about a device that itself paired or joined through a browser, which a
 hostile server could have put in a chain of its own too.
