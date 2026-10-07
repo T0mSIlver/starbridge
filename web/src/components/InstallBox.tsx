@@ -1,21 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState } from "react";
 import { track } from "@/lib/analytics";
-import { HOSTED, installCommands } from "@/lib/installCommands";
+import { installCommands } from "@/lib/installCommands";
+import { usePageOrigin } from "@/lib/pageOrigin";
 import s from "./InstallBox.module.css";
 import { Icon } from "./icons";
-
-const unchanging = () => () => {};
-
-/** The hosted origin until the page runs in a browser, which knows its own. */
-function usePageOrigin(): string {
-  return useSyncExternalStore(
-    unchanging,
-    () => location.origin,
-    () => HOSTED,
-  );
-}
 
 /**
  * The install commands by platform and method, with a copy button. `counted`: copies go to
