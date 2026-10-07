@@ -282,7 +282,10 @@ provider plugins add providers, not panels.
   re-sealed while the machine finds the directory behind. A re-post that fails is tried again on
   the next poll, prompts included: a prompt keeps the devices that hold it apart from those whose
   answers count. Re-sealing stops at its first 429 and waits its Retry-After, so the rest of the
-  machine's rate window goes to its own asks (#650).
+  machine's rate window goes to its own asks (#650). A question's images are scaled at `ask` to
+  leave room for its box, with its recipient list grown, for the 64 devices an item can reach,
+  since a re-seal keeps the stored images and the 2 MB cap counts them (#720). One the server
+  still refuses as too large, asked before that, is not re-sent: the machine says so once.
 - **Fresh quotas** (#158, #450). The local agent posts a snapshot once its directory holds a new device.
   `POST /quota/ask` wakes the machines and holds until each posted, up to 25 s, under the 30 s at
   which proxies cut long polls; 6 a minute per account, since each runs CodexBar on every machine.

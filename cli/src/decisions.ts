@@ -223,14 +223,23 @@ function checked(decision: unknown): Decision {
 /** The most boxes an item holds, so the most devices a decision is ever re-sealed to. */
 const MAX_BOXES = 64;
 
+/** What one more recipient adds to a box: a 64-character id, quoted, with its comma, in base64. */
+const RECIPIENT_BYTES = Math.ceil(((64 + 3) * 4) / 3);
+
 /**
  * What the item weighs once re-sealed to as many devices as it can ever reach: its blobs once,
- * its largest box once per device. A re-seal sends no blobs, but the server counts the ones it
- * keeps, so a decision that fits only its first devices could never reach a new one (#720).
+ * and once per device its largest box, grown by the ids its `to` gains. A re-seal sends no blobs,
+ * but the server counts the ones it keeps, so a decision that fits only its first devices could
+ * never reach a new one (#720).
  */
-const itemBytes = (item: SealedItem) =>
-  Math.max(MAX_BOXES, item.boxes.length) * Math.max(0, ...item.boxes.map((b) => b.box.length)) +
-  (item.blobs ?? []).reduce((n, b) => n + b.length, 0);
+const itemBytes = (item: SealedItem) => {
+  const n = item.boxes.length;
+  const box = Math.max(0, ...item.boxes.map((b) => b.box.length));
+  const grown = box + Math.max(0, MAX_BOXES - n) * RECIPIENT_BYTES;
+  return (
+    Math.max(MAX_BOXES, n) * grown + (item.blobs ?? []).reduce((total, b) => total + b.length, 0)
+  );
+};
 
 /**
  * Signs and seals the decision with its pictures, scaled down until its boxes and blobs fit
