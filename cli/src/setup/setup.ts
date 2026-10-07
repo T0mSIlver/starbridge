@@ -142,8 +142,9 @@ async function checkPairing(ctx: Ctx): Promise<"paired" | "removed" | { why: str
   } catch (e) {
     if (e instanceof ApiError && e.status === 401) return "removed";
     if (e instanceof UsageError && e.message === REMOVED) return "removed";
-    if (e instanceof Unreachable || (e as Error).name === "TimeoutError")
-      return { why: `cannot reach ${trimServer(s.machine.server)}: ${(e as Error).message}` };
+    if (e instanceof Unreachable) return { why: e.message };
+    if ((e as Error).name === "TimeoutError")
+      return { why: `cannot reach ${trimServer(s.machine.server)}: no answer in 15 s` };
     if (e instanceof ApiError) return { why: e.message };
     throw e;
   }

@@ -285,7 +285,7 @@ test("a server setup cannot reach: setup stops before the other steps (#774)", a
   if (paired) m.ctx.store.saveMachine({ ...paired, server: "http://127.0.0.1:9" });
   expect(await setup(m.sys, { noQuota: true, noService: true })).toBe(1);
   const out = m.ctx.lines.join("\n");
-  expect(out).toContain("✗ Cannot reach http://127.0.0.1:9");
+  expect(out).toContain("✗ Cannot reach http://127.0.0.1:9 (ConnectionRefused)\n");
   expect(out).toEndWith("  Retry with:\n    starbridge setup");
   expect(out).not.toContain("Agents");
 });
