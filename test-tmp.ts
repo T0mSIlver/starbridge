@@ -16,7 +16,11 @@ const alive = (pid: number) => {
 };
 for (const name of readdirSync(tmpdir())) {
   const pid = /^starbridge-test-(\d+)-/.exec(name)?.[1];
-  if (pid && !alive(Number(pid))) rmSync(join(tmpdir(), name), { recursive: true, force: true });
+  try {
+    if (pid && !alive(Number(pid))) rmSync(join(tmpdir(), name), { recursive: true, force: true });
+  } catch {
+    // Another user's dir: theirs to remove.
+  }
 }
 
 const root = mkdtempSync(join(tmpdir(), `starbridge-test-${process.pid}-`));
