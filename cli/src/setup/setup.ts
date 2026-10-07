@@ -391,6 +391,19 @@ async function codexbarStep(
 export function probeLines(sys: Sys, probes: Probe[]): string[] {
   if (probes.length === 0)
     return ["  CodexBar has no provider turned on, and found no Claude or Codex sign-in."];
+  // A CodexBar the system cannot start fails every provider the same way, which no sign-in fixes.
+  const lib = probes
+    .map((p) => /error while loading shared libraries: ([^:\s]+):/.exec(p.detail)?.[1])
+    .find((l) => l !== undefined);
+  if (lib && probes.every((p) => !p.works))
+    return [
+      `✗ CodexBar cannot start: it needs ${lib}`,
+      lib.startsWith("libsqlite3.")
+        ? "  On Debian or Ubuntu: sudo apt install libsqlite3-0"
+        : `  Install the package that provides ${lib}`,
+      "  Then run again:",
+      "    starbridge setup",
+    ];
   const w = Math.max(...probes.map((p) => p.provider.length));
   return probes.flatMap((p) => {
     const lines = [
