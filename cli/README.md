@@ -50,7 +50,9 @@ what is missing:
    `--server`, `STARBRIDGE_SERVER`, the install script (each server's own names that server),
    or the machine's pairing, else https://starbridge.run. It asks only when the machine is
    already paired with another server, and Enter keeps that one.
-2. It finds CodexBar, or installs it (Linux and macOS; CodexBar has no Windows build, so a
+2. When another machine of your account sent quotas in the last day, it says which and asks
+   whether to send them from this one too; Enter says no. Otherwise it finds CodexBar, or
+   installs it (Linux and macOS; CodexBar has no Windows build, so a
    Windows machine uploads no quotas): with Homebrew if you have it, else CodexBar's latest
    release tarball from GitHub, checked against the `.sha256` that release publishes, into
    `~/.local/opt/codexbar`. It installs nothing when the checksum is missing or does not match.

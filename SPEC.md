@@ -695,6 +695,13 @@ Codex prompts are not supported.
   with the error and when they were read. Kept windows raise no alerts and go once their reset
   passes. A provider with nothing to keep shows only its error. Devices get a short error; the CLI
   logs CodexBar's whole. The run timeout is 120 s.
+- **Another machine already sends them** (#748). Two machines often read the same accounts, so
+  when another active machine of the account posted a snapshot in the last day, setup names it
+  and asks whether to send from this machine too, Enter saying no: `Quotas: devbox already sends
+  them. Send from this machine too? [y/N]`. The server says which machines post snapshots and
+  when (`GET /v1/quota/senders`), never what they hold. A machine that already sends, or a
+  `--providers` list, skips the question. Telling identical accounts apart across machines waits
+  for a CodexBar account fingerprint.
 - **No snapshot yet** (#661). A snapshot is sealed to the devices active when it is taken, so a
   device that just joined reads none until the next upload, and quota items send no push. The
   agent posts one when it sees a device join; the Quotas screen with nothing to show also asks
