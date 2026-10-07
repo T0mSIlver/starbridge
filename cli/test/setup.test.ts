@@ -109,6 +109,12 @@ test("setup --yes installs the agent, the plugins and the skills, and uploads a 
   expect(await setup(m.sys, { yes: true, readyTimeoutMs: 2_000 })).toBe(0);
   const out = m.ctx.lines.join("\n");
 
+  // A slow agent says it is installing first; what is left to do comes only at the end (#773).
+  expect(out).toContain("  Claude Code  installing…\n✓ Claude Code  plugins installed");
+  const end = out.slice(out.indexOf("Starbridge is set up."));
+  expect(end).toContain("  Paste these rules into Codex's instructions:\n");
+  expect(out.indexOf("Paste these rules")).toBe(out.lastIndexOf("Paste these rules"));
+
   // Providers: the earlier ones that work now; `broken` needs a sign-in and is left out.
   expect(out).toContain("needs sign-in: No available fetch strategy for signedout.");
   expect(out).toContain("needs sign-in: Error: provider not configured");

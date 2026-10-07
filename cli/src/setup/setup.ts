@@ -25,6 +25,7 @@ import {
   found,
   installAgent,
   installed,
+  progressLine,
   removedAgents,
   setRemoved,
   UNDER,
@@ -100,7 +101,10 @@ export async function refresh(sys: Sys): Promise<string[]> {
   for (const id of AGENT_IDS) {
     if (removed.includes(id) || !found(sys, id) || (await installed(sys, id))) continue;
     const r = await installAgent(sys, id);
-    done.push(agentLine(r.mark, id, r.text), ...r.notes.map((n) => `${UNDER}${n}`));
+    done.push(
+      agentLine(r.mark, id, r.text),
+      ...[...r.notes, ...(r.next ?? [])].map((n) => `${UNDER}${n}`),
+    );
   }
   const { path, text } = installedService(sys) ?? {};
   if (path && text !== undefined && ours(text))
@@ -169,7 +173,7 @@ export async function setup(sys: Sys, opts: SetupOpts): Promise<number> {
   // `starbridge status` shows it; `config machine-kind` changes it.
   if (machine) rememberMachineKind(ctx);
 
-  const agents = opts.noAgents ? [] : await agentsStep(sys);
+  const { done: agents, next } = opts.noAgents ? { done: [], next: [] } : await agentsStep(sys);
 
   const configBefore = JSON.stringify(ctx.store.agentConfig());
   const quota = await quotaStep(sys, opts, machine !== undefined);
@@ -204,6 +208,8 @@ export async function setup(sys: Sys, opts: SetupOpts): Promise<number> {
     ["Remove everything", "starbridge uninstall"],
   ]))
     ctx.out(line);
+  if (next.length > 0) ctx.out("");
+  for (const line of next) ctx.out(`  ${line}`);
   if (last.length > 0) ctx.out("");
   for (const line of last) ctx.out(line);
   return 0;
@@ -217,13 +223,14 @@ function commandTable(rows: readonly (readonly [string, string])[]): string[] {
 
 /**
  * Starbridge in every agent found, without asking (#750), one line each; an agent
- * `uninstall --agent` removed stays out. Returns the agents it is in.
+ * `uninstall --agent` removed stays out. Returns the agents it is in, and what is left to do.
  */
-async function agentsStep(sys: Sys): Promise<AgentId[]> {
+async function agentsStep(sys: Sys): Promise<{ done: AgentId[]; next: string[] }> {
   const { ctx } = sys;
   section(ctx, "Agents");
   const removed = removedAgents(ctx);
   const done: AgentId[] = [];
+  const next: string[] = [];
   let any = false;
   for (const id of AGENT_IDS) {
     if (!found(sys, id)) continue;
@@ -234,16 +241,19 @@ async function agentsStep(sys: Sys): Promise<AgentId[]> {
       ctx.out(`${UNDER}  starbridge setup --agent ${id}`);
       continue;
     }
+    const progress = progressLine(id);
+    if (progress) ctx.out(progress);
     const r = await installAgent(sys, id);
     ctx.out(agentLine(r.mark, id, r.text));
     for (const note of r.notes) ctx.out(`${UNDER}${note}`);
+    next.push(...(r.next ?? []));
     if (r.mark === "✓") done.push(id);
   }
   if (!any)
     ctx.out(
       `– No agent found (${Object.values(AGENTS).join(", ")}): rerun setup after installing one`,
     );
-  return done;
+  return { done, next };
 }
 
 /** `setup --agent <name>`: Starbridge in that one agent, also when `uninstall --agent` took it out. */
@@ -254,9 +264,11 @@ async function agentOnly(sys: Sys, id: AgentId): Promise<number> {
     return 1;
   }
   setRemoved(ctx, id, false);
+  const progress = progressLine(id);
+  if (progress) ctx.out(progress);
   const r = await installAgent(sys, id);
   ctx.out(agentLine(r.mark, id, r.text));
-  for (const note of r.notes) ctx.out(`${UNDER}${note}`);
+  for (const note of [...r.notes, ...(r.next ?? [])]) ctx.out(`${UNDER}${note}`);
   return r.mark === "✗" ? 1 : 0;
 }
 
