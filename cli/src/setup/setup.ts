@@ -223,9 +223,8 @@ function commandTable(rows: readonly (readonly [string, string])[]): string[] {
 
 /**
  * Starbridge in every agent found, without asking (#750), one line each; an agent
- * `uninstall --agent` removed stays out. Returns the agents it is in.
+ * `uninstall --agent` removed stays out. Returns the agents it is in, and what is left to do.
  */
-/** Starbridge in every agent found. Returns the agents it is in, and what is left to do. */
 async function agentsStep(sys: Sys): Promise<{ done: AgentId[]; next: string[] }> {
   const { ctx } = sys;
   section(ctx, "Agents");

@@ -439,7 +439,9 @@ provider plugins add providers, not panels.
 - **Setup asks little** (#750). Each question was one more Enter between a new user and their
   first answer, and nearly everyone said yes. Setup installs Starbridge in every agent it finds
   and starts the service without asking, one line per agent with what it installed; for Codex,
-  which loads no rules, it links the rules to paste. It still asks before installing CodexBar, a
+  which loads no rules, it links the rules to paste at the end, with the commands, so nothing
+  mid-output reads as a prompt. Claude Code and Pi, whose installs run for seconds, first print
+  `installing…` (#773). It still asks before installing CodexBar, a
   third-party binary (with #748, only when no other machine sends quotas), which providers to
   send, whether to linger, and whether to send a test decision. Permission prompts stay off and
   unasked; the summary names `starbridge config permissions on`, `starbridge status`,
