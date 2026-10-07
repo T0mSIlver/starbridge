@@ -945,6 +945,13 @@ Tokens, type and components: `DESIGN.md`.
   memory, the VPS's first limit (#587). Caddy compresses every
   response and the web app none: Next's gzip ran on its one thread and filled it near 18 landing
   page visitors a second (#593). Nightly SQLite backups, kept 7 days (#586).
+- **Ready for Cloudflare's proxy** (#799). starbridge.run's DNS is on Cloudflare in DNS-only
+  mode; its proxy is the emergency answer to a flood from many addresses, which no per-address
+  rule stops. So that turning it on changes nothing else: Caddy takes the client's address from
+  `CF-Connecting-IP` only on requests from Cloudflare's published ranges, and every rate limit,
+  the block list, the server's per-address limits (through `X-Forwarded-For`, which Caddy sets to
+  that address alone) and Umami use it; and long-polls return within 90 s, under the proxy's
+  100 s cut. Clients already treat a cut long-poll, or Cloudflare's 524, as a reconnect.
 - **Per-address reads** (#582). Caddy counts every `/v1` request per address, 3000 a minute
   (IPv6 per /64): most reads count against no account, so this keeps a looping client or script
   to about 2% of a core. A visible page with a prompt waiting and a run live makes about 200 a

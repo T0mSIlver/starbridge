@@ -10,6 +10,14 @@
 		timeouts {
 			read_header 10s
 		}
+		# Cloudflare's proxy may sit in front (#799; the planning repo's launch/abuse.md turns it
+		# on). Only a request from Cloudflare's published ranges may name its client in
+		# CF-Connecting-IP; from anywhere else the header is ignored. Everything below keys on
+		# that client address, `{client_ip}`, which is the connection's own while
+		# the proxy is off. Refresh from https://www.cloudflare.com/ips-v4 and /ips-v6 (last
+		# 2026-10-07).
+		trusted_proxies static 173.245.48.0/20 103.21.244.0/22 103.22.200.0/22 103.31.4.0/22 141.101.64.0/18 108.162.192.0/18 190.93.240.0/20 188.114.96.0/20 197.234.240.0/22 198.41.128.0/17 162.158.0.0/15 104.16.0.0/13 104.24.0.0/14 172.64.0.0/13 131.0.72.0/22 2400:cb00::/32 2606:4700::/32 2803:f800::/32 2405:b500::/32 2405:8100::/32 2a06:98c0::/29 2c0f:f248::/32
+		client_ip_headers CF-Connecting-IP
 	}
 	# The idle copy of the page fails its health check every second, by design. The rate limiter
 	# logs each refused client's address; the privacy page promises none is kept.
@@ -59,13 +67,16 @@ starbridge.run {
 					match {
 						path /v1/*
 					}
-					key {http.request.remote.host}
+					key {client_ip}
 					ipv6_prefix 64
 					events 3000
 					window 1m
 				}
 			}
 			reverse_proxy 127.0.0.1:8080 {
+				# The server's per-address limits read the last X-Forwarded-For entry; behind a
+				# proxy Caddy would append the proxy's address, so it gets the client's alone.
+				header_up X-Forwarded-For {client_ip}
 				lb_try_duration 30s
 				lb_try_interval 250ms
 				health_uri /healthz
@@ -101,7 +112,7 @@ starbridge.run {
 					match {
 						path /stats/api/send
 					}
-					key {http.request.remote.host}
+					key {client_ip}
 					ipv6_prefix 64
 					events 30
 					window 1m
@@ -116,7 +127,15 @@ starbridge.run {
 				}
 			}
 			uri strip_prefix /stats
-			reverse_proxy 127.0.0.1:3001
+			# Umami looks up a visitor's place from the first of several client headers it finds,
+			# CF-Connecting-IP among them: only Caddy's view of the client reaches it.
+			reverse_proxy 127.0.0.1:3001 {
+				header_up -CF-Connecting-IP
+				header_up -True-Client-IP
+				header_up -X-Client-IP
+				header_up -X-Real-IP
+				header_up X-Forwarded-For {client_ip}
+			}
 		}
 	}
 	# Two copies of the page, web-a and web-b; a deploy starts the idle one, waits for its health,
@@ -178,7 +197,7 @@ stats.starbridge.run {
 		rate_limit {
 			disable_metrics
 			zone stats_viewer {
-				key {http.request.remote.host}
+				key {client_ip}
 				ipv6_prefix 64
 				events 300
 				window 1m

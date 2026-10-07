@@ -12,6 +12,10 @@ services:
     restart: unless-stopped
     # Built by deploy/host/server-env.sh from the secrets in /etc/starbridge/secrets.
     env_file: /etc/starbridge/server.env
+    # Cloudflare's free proxy, the emergency switch in front of the box, ends a request at
+    # 100 s: long-polls return within 90 (#799).
+    environment:
+      MAX_WAIT_SECONDS: "90"
     volumes:
       - data:/data
     # Only Caddy reaches the server.
