@@ -99,11 +99,13 @@ export function identify(c: Context<Env>): Caller | undefined {
 export const ACCOUNT_SUSPENDED =
   "this account's machines are suspended for abuse of starbridge.run; its phones and browsers still work. Write to abuse@starbridge.run";
 
-function suspended(c: Context<Env>, account: string): boolean {
-  const row = c.var.db.query("SELECT suspended_at FROM accounts WHERE id = ?").get(account) as {
-    suspended_at: string | null;
-  } | null;
-  return !!row?.suspended_at;
+/** A machine of a suspended account may read, never write. */
+function refuseSuspended(c: Context<Env>, caller: Caller): void {
+  if (caller.role !== "machine" || ["GET", "HEAD"].includes(c.req.method)) return;
+  const row = c.var.db
+    .query("SELECT suspended_at FROM accounts WHERE id = ?")
+    .get(caller.account) as { suspended_at: string | null } | null;
+  if (row?.suspended_at) fail(403, "account-suspended", ACCOUNT_SUSPENDED);
 }
 
 /** Suspends an account's machines, or lifts it; false when no such account. */
@@ -146,12 +148,7 @@ export function requireCaller(...needs: Need[]): MiddlewareHandler<Env> {
     // A suspended account's machines read and wait as before, so their sessions see the answers
     // already given; they write nothing. Its devices are untouched, so the owner can still
     // answer, settle and revoke (#785).
-    if (
-      caller.role === "machine" &&
-      !["GET", "HEAD"].includes(c.req.method) &&
-      suspended(c, caller.account)
-    )
-      fail(403, "account-suspended", ACCOUNT_SUSPENDED);
+    refuseSuspended(c, caller);
     c.set("caller", caller);
     c.var.usage.seen(caller, c.var.client);
     await next();
@@ -168,6 +165,8 @@ export function recheck(c: Context<Env>): void {
   const was = c.var.caller;
   if (!now || now.role !== was.role || now.account !== was.account || now.member !== was.member)
     fail(401, "unauthenticated", "credentials changed during the request");
+  // A suspension that landed while the body arrived still counts.
+  refuseSuspended(c, now);
 }
 
 /** The member id of a caller admitted as paired. */
