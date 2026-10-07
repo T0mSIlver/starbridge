@@ -115,11 +115,23 @@ export async function installed(sys: Sys, id: AgentId): Promise<boolean> {
   }
 }
 
+/**
+ * `  Claude Code  installing…`, before an agent whose install runs other programs for seconds,
+ * so the pause does not read as a prompt (#773).
+ */
+export function progressLine(id: AgentId): string | undefined {
+  return id === "claude" || id === "pi"
+    ? `  ${AGENTS[id].padEnd(NAME_WIDTH)}  installing…`
+    : undefined;
+}
+
 export interface Outcome {
   mark: Mark;
   text: string;
   /** Lines under the agent's, aligned with its text. */
   notes: string[];
+  /** What is left for the user to do, which setup prints at its end (#773). */
+  next?: string[];
 }
 
 /** Installs Starbridge in one agent, or brings it up to date. Never throws. */
@@ -185,12 +197,12 @@ function installCodex(sys: Sys): Outcome {
   if (rule === "foreign") notes.push(`${codexRulePath(sys)} is not setup's: left alone.`);
   else if (rule !== "current") installCodexRule(sys);
   const server = sys.ctx.store.machine()?.server.replace(/\/+$/, "") ?? DEFAULT_SERVER;
-  notes.push(
-    "Paste these rules into its instructions:",
+  const next = [
+    "Paste these rules into Codex's instructions:",
     `  ${server}/docs/tell-your-agents#rules-for-codex`,
-  );
-  if (skill === "foreign" && rule === "foreign") return { mark: "–", text: "skipped", notes };
-  return { mark: "✓", text: "skill and sandbox rule installed", notes };
+  ];
+  if (skill === "foreign" && rule === "foreign") return { mark: "–", text: "skipped", notes, next };
+  return { mark: "✓", text: "skill and sandbox rule installed", notes, next };
 }
 
 async function installPi(sys: Sys): Promise<Outcome> {
