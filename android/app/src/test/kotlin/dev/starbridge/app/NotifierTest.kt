@@ -39,11 +39,14 @@ class NotifierTest {
     private fun posted(): Notification = shadowOf(context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).allNotifications.single()
 
     @Test
-    fun aPromptShowsOnlyItsCommandAndKeepsItsButtonsOnTheLockScreen() {
+    fun aPromptLeadsWithItsDescriptionAndTheLockScreenKeepsOnlyTheTool() {
         val p = fake.prompts.first()
         notifier.prompt(p)
         val n = posted()
-        assertEquals(p.summary, n.extras.getCharSequence(Notification.EXTRA_BIG_TEXT).toString())
+        // The agent's description titles the prompt; the lock screen shows the tool alone (#805).
+        assertEquals(p.description, n.extras.getCharSequence(Notification.EXTRA_TITLE).toString())
+        assertEquals(p.summary, n.extras.getCharSequence(Notification.EXTRA_TEXT).toString())
+        assertEquals(p.tool, n.publicVersion.extras.getCharSequence(Notification.EXTRA_TITLE).toString())
         assertFalse(n.allowSystemGeneratedContextualActions)
         assertEquals(listOf("Allow", "Deny"), n.publicVersion.actions.map { it.title.toString() })
         assertEquals(p.id, shadowOf(n.contentIntent).savedIntent.getStringExtra(MainActivity.EXTRA_PROMPT))
