@@ -8,7 +8,7 @@ import { CLIENT_HEADER, clientHeader, type QuotaSnapshot } from "@starbridge/pro
 import type { Status } from "../agent/api";
 import { AgentClient, Interrupted, withAgent } from "../agent/client";
 import { askVia, quotaVia } from "../agent/commands";
-import { ApiError } from "../api";
+import { ApiError, REMOVED, Unreachable } from "../api";
 import type { AgentConfig } from "../config";
 import { type Ctx, refreshDirectory, session, UsageError } from "../context";
 import { type AskInput, ask, EXIT_INTERRUPTED, settle } from "../decisions";
@@ -130,6 +130,33 @@ function section(ctx: Ctx, title: string) {
   ctx.out(title);
 }
 
+/**
+ * Whether the server still lists this machine: "removed" when it revoked the machine or no
+ * longer knows its token, as after the server lost its database.
+ */
+async function checkPairing(ctx: Ctx): Promise<"paired" | "removed" | { why: string }> {
+  const s = session(ctx);
+  try {
+    await refreshDirectory(ctx, s, AbortSignal.timeout(15_000));
+    return "paired";
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 401) return "removed";
+    if (e instanceof UsageError && e.message === REMOVED) return "removed";
+    if (e instanceof Unreachable || (e as Error).name === "TimeoutError")
+      return { why: `cannot reach ${trimServer(s.machine.server)}: ${(e as Error).message}` };
+    if (e instanceof ApiError) return { why: e.message };
+    throw e;
+  }
+}
+
+/** Every later step needs the server: setup stops, saying why and what to run. */
+function cannotGoOn(ctx: Ctx, why: string): number {
+  ctx.out(`✗ ${why[0]?.toUpperCase()}${why.slice(1)}`);
+  ctx.out("  Retry with:");
+  ctx.out("    starbridge setup");
+  return 1;
+}
+
 export async function setup(sys: Sys, opts: SetupOpts): Promise<number> {
   const { ctx, prompt } = sys;
   recordSelf(sys);
@@ -147,16 +174,34 @@ export async function setup(sys: Sys, opts: SetupOpts): Promise<number> {
       `This machine is paired with ${host(machine.server)}. Pair it with ${host(server)} instead?`,
       false,
     ));
+  // The later steps need the server and the pairing, so setup checks both first (#774).
+  let again = false;
   if (machine && !switching) {
     section(ctx, "Pairing");
-    ctx.out(`✓ Paired as ${machine.name} on ${host(machine.server)}`);
-  } else {
-    section(ctx, `Pairing with ${host(server)}`);
-    await checkServer(server);
+    const pairing = await checkPairing(ctx);
+    if (pairing === "paired") ctx.out(`✓ Paired as ${machine.name} on ${host(machine.server)}`);
+    else if (pairing === "removed") {
+      ctx.out(`✗ ${host(machine.server)} no longer lists ${machine.name}`);
+      again = await prompt.confirm("  Pair this machine again?", true);
+      if (!again) {
+        ctx.out("  To pair it again later:");
+        ctx.out("    starbridge setup");
+        return 1;
+      }
+    } else return cannotGoOn(ctx, pairing.why);
+  }
+  if (!machine || switching || again) {
+    if (!again) section(ctx, `Pairing with ${host(server)}`);
+    try {
+      await checkServer(server);
+    } catch (e) {
+      if (!(e instanceof UsageError)) throw e;
+      return cannotGoOn(ctx, e.message);
+    }
     const code = await pair(ctx, {
       server,
       again: "starbridge setup",
-      ...(switching ? { force: true } : {}),
+      ...(switching || again ? { force: true } : {}),
       ...(opts.name ? { name: opts.name } : {}),
     });
     if (code !== 0) return code;

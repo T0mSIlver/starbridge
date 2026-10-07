@@ -249,6 +249,46 @@ test("setup asks for no server: it pairs with the one named, and asks only to sw
   expect(ctx.store.machine()?.server).toBe(server.url);
 });
 
+test("a machine the server no longer lists: setup offers to pair again, else stops first (#774)", async () => {
+  for (const yes of [false, true]) {
+    const m = await machine();
+    const before = m.ctx.store.machine()?.id as string;
+    await server.revoke(before);
+    m.sys.prompt = {
+      ...defaults,
+      confirm: async (q) => (q.includes("Pair this machine again") ? yes : false),
+    };
+    const done = setup(m.sys, { noQuota: true, noService: true });
+    if (yes) {
+      await until(() => m.ctx.lines.some((l) => l.startsWith("Pairing code: ")));
+      await server.approve(
+        m.ctx.lines
+          .find((l) => l.startsWith("Pairing code: "))
+          ?.replace("Pairing code: ", "") as string,
+      );
+    }
+    expect(await done).toBe(yes ? 0 : 1);
+    const out = m.ctx.lines.join("\n");
+    expect(out).toContain(`✗ ${server.url} no longer lists`);
+    if (yes) expect(m.ctx.store.machine()?.id).not.toBe(before);
+    else {
+      expect(out).toEndWith("  To pair it again later:\n    starbridge setup");
+      expect(out).not.toContain("Agents");
+    }
+  }
+});
+
+test("a server setup cannot reach: setup stops before the other steps (#774)", async () => {
+  const m = await machine();
+  const paired = m.ctx.store.machine();
+  if (paired) m.ctx.store.saveMachine({ ...paired, server: "http://127.0.0.1:9" });
+  expect(await setup(m.sys, { noQuota: true, noService: true })).toBe(1);
+  const out = m.ctx.lines.join("\n");
+  expect(out).toContain("✗ Cannot reach http://127.0.0.1:9");
+  expect(out).toEndWith("  Retry with:\n    starbridge setup");
+  expect(out).not.toContain("Agents");
+});
+
 test("setup asks before sending quotas that another machine already sends, and Enter skips (#748)", async () => {
   const devbox = await machine();
   await pushOnce(devbox.ctx, { providers: ["codex"], codexbar: join(FAKE_BIN, "codexbar") });

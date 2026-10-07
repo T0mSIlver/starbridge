@@ -445,7 +445,11 @@ provider plugins add providers, not panels.
   unasked; the summary names `starbridge config permissions on`, `starbridge status`,
   `starbridge uninstall --agent <name>` and `starbridge uninstall`. With no terminal every
   question takes its default, so nothing waits on input. A failed install prints its reason and
-  `starbridge setup --agent <name>`, and setup goes on. `uninstall --agent` records the agent,
+  `starbridge setup --agent <name>`, and setup goes on. Every step after pairing needs the
+  server, so setup checks the server and the pairing first (#774): a machine the server no
+  longer lists, revoked or lost with the server's database, is offered to pair again (`[Y/n]`,
+  what `pair --force` does), and an unreachable server stops setup with the command to retry.
+  `uninstall --agent` records the agent,
   and setup and `--refresh` leave it out until `setup --agent` brings it back. An
   agent installed after setup gets nothing in the background: `status` names it, and `setup
   --refresh`, which `update` runs, installs it. The output is plain and lined up, as
