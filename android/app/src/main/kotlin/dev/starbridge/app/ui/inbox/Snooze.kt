@@ -23,6 +23,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TimePicker
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.foundation.layout.Spacer
@@ -49,6 +50,7 @@ import androidx.compose.material3.Button
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -161,7 +163,7 @@ private fun dayLabel(day: LocalDate, today: LocalDate, locale: Locale = Locale.g
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SnoozeTimes(now: Instant, onSnooze: (Instant) -> Unit) {
+fun SnoozeTimes(now: Instant, modifier: Modifier = Modifier, onSnooze: (Instant) -> Unit) {
     val zone = ZoneId.systemDefault()
     val h24 = LocalClock24.current
     val scheme = MaterialTheme.colorScheme
@@ -171,7 +173,7 @@ fun SnoozeTimes(now: Instant, onSnooze: (Instant) -> Unit) {
     val dial = rememberTimePickerState(initialHour = start.hour, initialMinute = start.minute, is24Hour = h24)
     val presets = snoozePresets(now, zone).filter { (name, _) -> name != "Tomorrow morning" }
     val until = day.atTime(dial.hour, dial.minute).atZone(zone).toInstant()
-    Column(verticalArrangement = Arrangement.spacedBy(Spacing.s4), modifier = Modifier.semantics { contentDescription = "Snooze until" }) {
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.s4), modifier = modifier.semantics { contentDescription = "Snooze until" }) {
         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
             presets.forEachIndexed { i, (name, at) ->
                 Row(i, presets.size, { onSnooze(at) }) {
@@ -229,6 +231,15 @@ private const val SWIPE_ARMS = 0.4f
 fun SwipeToSnooze(shape: Shape, onSwipe: () -> Unit, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
     val state = rememberSwipeToDismissBoxState(positionalThreshold = { it * SWIPE_ARMS })
     val scope = rememberCoroutineScope()
+    // One lambda for the card's life: Material re-runs a new one while the card still sits
+    // swiped, which would snooze twice.
+    val swiped by rememberUpdatedState(onSwipe)
+    val dismiss: (SwipeToDismissBoxValue) -> Unit = remember(state) {
+        {
+            swiped()
+            scope.launch { state.reset() }
+        }
+    }
     val haptics = LocalHapticFeedback.current
     var width by remember { mutableStateOf(0) }
     // From the offset, the threshold's own measure: the target value lags a slow drag.
@@ -258,10 +269,7 @@ fun SwipeToSnooze(shape: Shape, onSwipe: () -> Unit, modifier: Modifier = Modifi
         modifier = modifier.onSizeChanged { width = it.width }.semantics {
             customActions = listOf(CustomAccessibilityAction("Snooze") { onSwipe(); true })
         },
-        onDismiss = {
-            onSwipe()
-            scope.launch { state.reset() }
-        },
+        onDismiss = dismiss,
     ) { content() }
 }
 
@@ -282,11 +290,12 @@ fun SnoozeSheet(decision: Decision, now: Instant, onDismiss: () -> Unit, onSnooz
         dragHandle = { SheetHandle(ground.color) },
     ) {
         Column(
-            Modifier.padding(horizontal = Spacing.s5).padding(bottom = Spacing.s5),
+            // The dial is tall: on a short screen the sheet scrolls to its Snooze button.
+            Modifier.verticalScroll(rememberScrollState()).padding(horizontal = Spacing.s5).padding(bottom = Spacing.s5),
             verticalArrangement = Arrangement.spacedBy(Spacing.s4),
         ) {
             Text(decision.question, style = StarbridgeTheme.type.subtitle, color = MaterialTheme.colorScheme.onSurface)
-            SnoozeTimes(now, onSnooze)
+            SnoozeTimes(now, onSnooze = onSnooze)
         }
     }
 }

@@ -49,6 +49,8 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
@@ -258,21 +260,28 @@ fun InboxScreen(
     // A swipe right snoozes for the time set in Settings, with Undo, or opens the times over
     // the inbox (#692).
     var picking by rememberSaveable { mutableStateOf<String?>(null) }
+    var swiped by remember { mutableStateOf<Pair<String, Instant>?>(null) }
     val scope = rememberCoroutineScope()
     val h24 = LocalClock24.current
     val swipe by rememberUpdatedState(view.swipe)
-    val swiping = remember(actions, snackbar) {
+    val swiping = remember(actions) {
         DecisionActions(actions.answer, actions.open, actions.snooze) { id ->
-            val now = Instant.now()
-            val until = swipe.until(now)
+            val until = swipe.until(Instant.now())
             if (until == null) picking = id
             else {
                 actions.snooze(id, until)
-                scope.launch {
-                    val undo = snackbar?.showSnackbar("Snoozed until ${snoozeTime(until, now, h24)}", actionLabel = "Undo", duration = SnackbarDuration.Short)
-                    if (undo == SnackbarResult.ActionPerformed) actions.snooze(id, Instant.now())
-                }
+                swiped = id to until
             }
+        }
+    }
+    // Undo once the snooze took: one that failed says why instead.
+    val took = swiped?.let { (id, until) -> decisions.any { it.id == id && it.snoozedUntil == until } } == true
+    LaunchedEffect(took) {
+        val (id, until) = swiped?.takeIf { took } ?: return@LaunchedEffect
+        swiped = null
+        scope.launch {
+            val undo = snackbar?.showSnackbar("Snoozed until ${snoozeTime(until, Instant.now(), h24)}", actionLabel = "Undo", duration = SnackbarDuration.Short)
+            if (undo == SnackbarResult.ActionPerformed) actions.snooze(id, Instant.now())
         }
     }
     val shownRuns = Run.shown(runs, now)
@@ -656,6 +665,7 @@ fun DecisionSheet(decision: Decision, now: Instant, onAnswer: (String, String?, 
     val h24 = LocalClock24.current
     var replying by rememberSaveable(decision.id) { mutableStateOf(!replies.drafts[decision.id].isNullOrEmpty()) }
     var snoozing by rememberSaveable(decision.id) { mutableStateOf(snoozeOpen) }
+    var tapped by remember(decision.id) { mutableStateOf(false) }
     SheetBody(
         decision.source,
         timeSlot(since, decision.createdAt, now),
@@ -706,10 +716,15 @@ fun DecisionSheet(decision: Decision, now: Instant, onAnswer: (String, String?, 
                 Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s1), verticalAlignment = Alignment.CenterVertically) {
                     if (reply) Quiet("Reply") { replying = true }
                     if (done) Done(sending != null) { send(null, null) }
-                    if (onSnooze != null) Quiet(if (until != null) "Snooze again" else "Snooze", sending == null) { snoozing = !snoozing }
+                    if (onSnooze != null) Quiet(if (until != null) "Snooze again" else "Snooze", sending == null) { snoozing = !snoozing; tapped = snoozing }
                     if (onSnooze != null && until != null) Quiet("Back now", sending == null) { onSnooze(Instant.now()) }
                 }
-                if (onSnooze != null && snoozing) SnoozeTimes(now) { snoozing = false; onSnooze(it) }
+                if (onSnooze != null && snoozing) {
+                    // Opened by a tap, the times scroll up into the sheet: they sit below its fold (#692).
+                    val times = remember { BringIntoViewRequester() }
+                    SnoozeTimes(now, Modifier.bringIntoViewRequester(times)) { snoozing = false; onSnooze(it) }
+                    LaunchedEffect(tapped) { if (tapped) times.bringIntoView() }
+                }
             }
         }
     }
