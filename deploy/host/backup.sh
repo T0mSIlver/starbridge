@@ -6,7 +6,9 @@ dir=/var/backups/starbridge
 db=$(docker volume inspect -f '{{.Mountpoint}}' starbridge_data)/starbridge.db
 out=$dir/starbridge-$(date -u +%Y%m%d).db
 umask 077
-# VACUUM INTO reads one snapshot while the server writes, and leaves free pages out (#586).
+# VACUUM INTO reads one snapshot while the server writes, and leaves free pages out (#586). It
+# refuses a file that exists, such as an interrupted run's.
+rm -f "$out.tmp"
 sqlite3 "$db" "VACUUM INTO '$out.tmp'"
 # sqlite3 runs as root: hand back any WAL or shared-memory file it created, or the server
 # could no longer write the database.

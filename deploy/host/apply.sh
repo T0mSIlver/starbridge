@@ -76,18 +76,22 @@ want= have=
 if [ -n "$mnt" ] && [ -f "$db" ]; then
   want=$($compose run --rm --no-deps -T server bun server.js schema 2>/dev/null) || want=
   have=$(sqlite3 -readonly "$db" 'PRAGMA user_version' 2>/dev/null) || have=
+  # sqlite3 runs as root, so hand back any WAL or shared-memory file it made, or the server
+  # could no longer write the database.
+  chown --reference="$db" "$db"-wal "$db"-shm 2>/dev/null || true
 fi
 if [ -n "$mnt" ] && [ -f "$db" ] && ! { [ -n "$want" ] && [ "$want" = "$have" ]; }; then
   out=/var/backups/starbridge/deploy-$(date -u +%Y%m%dT%H%M%S).db
   mkdir -p /var/backups/starbridge
-  # VACUUM INTO reads one snapshot while the server writes, and leaves free pages out.
+  # VACUUM INTO reads one snapshot while the server writes, and leaves free pages out. It
+  # refuses a file that exists.
+  rm -f "$out.tmp"
   (umask 077 && sqlite3 "$db" "VACUUM INTO '$out.tmp'")
-  # As in backup.sh: sqlite3 runs as root, so hand back any WAL or shared-memory file it made.
   chown --reference="$db" "$db"-wal "$db"-shm 2>/dev/null || true
   sqlite3 "$out.tmp" 'PRAGMA integrity_check' | grep -qx ok
   mv "$out.tmp" "$out"
-  ls -t /var/backups/starbridge/deploy-*.db | tail -n +3 | xargs -r rm -f
 fi
+ls -t /var/backups/starbridge/deploy-*.db 2>/dev/null | tail -n +3 | xargs -r rm -f
 
 # The server stays one instance: it holds the long-polls and SQLite. On SIGTERM it ends its
 # long-polls and exits, and Caddy holds requests until the new one answers. --remove-orphans
