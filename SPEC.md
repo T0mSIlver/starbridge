@@ -396,8 +396,9 @@ provider plugins add providers, not panels.
   opens Add a device with the code looked up, once the phone is in the account; a phone signed in
   but not in the account yet joins with it instead, as another device's "Scan with the new phone"
   code asks. Without the app,
-  or on a self-hosted server, which the APK cannot claim, the link opens the web page as before;
-  where both the installed web app and the app claim it, Android opens the verified app.
+  or on a self-hosted server, which the APK cannot claim, the link opens the web page as before,
+  and a phone signed in to another server than starbridge.run hands a starbridge.run link to the
+  browser, since its own server would know no such code (#722); where both the installed web app and the app claim it, Android opens the verified app.
   A link from another server that this one doesn't know names that server, "This code is from
   starbridge.run, and this phone is signed in to …", instead of "No pairing with this code"
   (#671). Only a failed lookup says it, since a server can answer under several names.
