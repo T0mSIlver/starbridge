@@ -142,8 +142,7 @@ export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
         <h1 className={`t-hero ${s.headline}`}>Know the moment your agent is stuck</h1>
         <p className={`t-lead ${s.dim} ${s.lead}`}>
           When a coding agent stops for a question, your phone tells you. Answer with one tap and it
-          gets back to work. Your phone can also show permission prompts and what's left on each AI
-          plan.
+          gets back to work. Every agent on every machine reaches you in one place.
         </p>
         <div className={s.actions}>
           {github ? (
@@ -172,7 +171,7 @@ export function Landing({ onOwnerToken }: { onOwnerToken: () => void }) {
             Get the app
           </a>
         </div>
-        <p className={`t-meta ${s.faint} ${s.wideOnly}`}>
+        <p className={`t-meta ${s.faint}`}>
           Open source, MIT · end-to-end encrypted ·{" "}
           {hosted ? "self-host or use starbridge.run" : "self-hosted"}
         </p>

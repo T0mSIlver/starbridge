@@ -44,8 +44,9 @@ to the reader. The hero: "Know the moment your agent is stuck" (#448). Quotas ge
 don't launch agents from Starbridge, and the power users it targets don't check quotas by hand.
 Alerts are opt-in, so copy never says they are on. Permission prompts are secondary and opt-in.
 Copy says "on each machine that runs agents", never "on each machine" alone. The subtitle under
-the hero leads with questions, then names permission prompts and quotas in one sentence: agents
-stop for all three reasons, but questions are the one Starbridge answers first (#801).
+the hero sells questions and that every agent on every machine reaches you in one place; the
+feature row below names runs, quotas and permission prompts, since a list in the subtitle repeats
+it (#801). The line under the hero's buttons, with end-to-end encryption, shows on phones too.
 
 ### Platforms
 
