@@ -227,8 +227,11 @@ class ScreenshotTest(private val dark: Boolean) {
         Sheet({ QuotasScreen(fake.windows, now) }) { DecisionSheet(fake.snoozed[1], now, { _, _, _ -> }, Replies(rememberDrafts(), emptyMap()), onSnooze = {}) }
     }
 
+    // Material3's date picker rings the real date and takes no clock, so this picks from a month
+    // already over, where no ring shows whatever day it runs (#688).
     @Test fun sheetSnoozePickDay() = captureScreen("sheet-snooze-pick-day", before = { compose.onNodeWithText("Pick a time").performScrollTo().performClick() }) {
-        Sheet({ QuotasScreen(fake.windows, now) }) { DecisionSheet(fake.decisions.first { it.id == "d1" }, now, { _, _, _ -> }, Replies(rememberDrafts(), emptyMap()), onSnooze = {}, snoozeOpen = true) }
+        val past = Instant.parse("2026-08-04T14:00:00Z")
+        Sheet({ QuotasScreen(fake.windows, past) }) { DecisionSheet(fake.decisions.first { it.id == "d1" }, past, { _, _, _ -> }, Replies(rememberDrafts(), emptyMap()), onSnooze = {}, snoozeOpen = true) }
     }
 
     @Test fun sheetSnoozePickTime() = captureScreen("sheet-snooze-pick-time", before = { compose.onNodeWithText("Pick a time").performScrollTo().performClick(); compose.waitForIdle(); compose.onNodeWithText("Next").performClick() }) {
