@@ -75,7 +75,7 @@ with its agent's command, such as `claude --continue`; the
 
 The CLI runs on Linux, macOS and Windows, x64 and arm64. Quotas need CodexBar, which has no
 Windows build, so a Windows machine uploads none. The app runs on Android, and the web app in any
-browser; on iPhone, add starbridge.run to the Home Screen in Safari (iOS 16.4 or later) to get
+browser; on iOS 16.4 and later, add starbridge.run to the Home Screen from Safari to get
 notifications.
 
 ## Do you trust CodexBar's code?
