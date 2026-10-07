@@ -537,7 +537,12 @@ async function testDecision(ctx: Ctx, name: string) {
         return;
       }
       const prefix = answerPrefix(id, input.question);
-      ctx.out(line.startsWith(prefix) ? `✓ You answered ${line.slice(prefix.length)}` : line);
+      // Other lines, such as a snooze's, name the decision the agents' way: `<id> (<question>)`.
+      ctx.out(
+        line.startsWith(prefix)
+          ? `✓ You answered ${line.slice(prefix.length)}`
+          : line.replace(` ${id} (${input.question})`, ""),
+      );
     },
   };
   let code: number;
