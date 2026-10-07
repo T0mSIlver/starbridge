@@ -122,6 +122,8 @@ log) cat "$log" 2>/dev/null || true ;;
   ;;
 "") sed -n '2,14p' "$0" >&2; exit 2 ;;
 signups | suspend | unsuspend | limits)
+  # Holds the lock for its log line, which an unblock's scrub of the log would otherwise lose.
+  lock
   out=$($compose exec -T server bun server.js "$@")
   echo "$out"
   note "$*"
