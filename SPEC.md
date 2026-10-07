@@ -240,7 +240,10 @@ provider plugins add providers, not panels.
 - **Bounds** (#65, #260), sized for an orchestrator with 10 sessions asking a few hundred
   questions a day: every route that stores something has a cap or retention, and every write that
   grows it a rate limit. Answered questions and their answers are kept 7 days, unanswered ones and
-  quota snapshots 30. Per account: 10000 questions, 10000 permission prompts, 256 MB, each item
+  quota snapshots 30. An account holding more than 1000 unanswered questions keeps them 7 days
+  (#584): a looping agent fills the 10000 cap in under 2 hours, after which every question is
+  refused until some expire, and 30 days of that is too long, while a person has a few dozen
+  open at most. A snooze in such an account can outlive its question and goes with it. Per account: 10000 questions, 10000 permission prompts, 256 MB, each item
   charged its boxes plus 512 bytes per row: a heavy user, a hundred questions a day with
   screenshots, stores about 80 MB in a week. A full account gets 409 `account-full`, which the
   CLI words as such. The numbers live in `server/src/limits.ts` and
@@ -606,7 +609,11 @@ Codex prompts are not supported.
   --waiting` posts the question quietly and lets its `waiting` item push, so the first
   notification already says waiting.
 - **Settling** (#62, #405). `settle` closes a question as `elsewhere` or `withdrawn`. It never
-  withdraws one whose answer reached the agent, since devices would hold both.
+  withdraws one whose answer reached the agent, since devices would hold both. `settle --session`
+  and `settle --all` close every open question of a session or of the machine (#584), so a
+  flood has a way out; `--all` asks first, with the count. Each is one settled notice, posted at
+  the pace the machine's rate limit allows, waiting out each 429: the server needs no bulk
+  route, and the notices still reach devices one per question.
 - **Snoozing** (#571). The owner can put a question off: "not now, show me this again at 18:00".
   A snooze is not an answer, so #122 holds: for the agent it means what no answer means. Its job
   is less clutter, in the inbox and in the owner's head. Agents are never woken by one; when an

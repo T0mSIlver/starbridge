@@ -478,6 +478,7 @@ server whose disk is full answers writes 503 `storage-full` with `Retry-After`; 
 |---|---|
 | `POST /items` | from machines: 90 a minute per machine and 120 per account, and 16 MB of machines' boxes a minute per account, items that replace earlier ones included; from devices: 60 a minute per device |
 | Stored decisions, open or answered | 10000 per account: 409 `too-many-items` |
+| Unanswered decisions kept 30 days | 1000 per account: past that, they are dropped 7 days after they arrived |
 | Stored permission prompts, open or settled | 10000 per account: 409 `too-many-items` |
 | Stored runs | 500 per account: 409 `too-many-items` for a new run; updates still pass |
 | A snooze | until at most 7 days after it is posted (`SNOOZE_MAX_MS`), since an unanswered decision drops after 30: 400 `bad-schema` |
@@ -509,7 +510,7 @@ through the operator.
 Answers skip the decision count and may use the last 8 MB, so a full account can still answer. An hourly sweep drops answered
 decisions and their answers 7 days after the answer, permissions, permission answers and settled
 notices 7 days after they arrived, runs a day after their last update, a decision's waiting state and snooze with its decision, unanswered decisions and quota snapshots 30
-days after they arrived, quota snapshots of revoked machines, and expired sessions. Each kind's
+days after they arrived (unanswered decisions 7 in an account holding more than 1000 of them), quota snapshots of revoked machines, and expired sessions. Each kind's
 period is its `keep` in `ITEM_KINDS`, which every new kind must name. Clients that want a longer
 history keep their own copy.
 

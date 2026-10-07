@@ -82,6 +82,21 @@ export async function sweepStorage(
   const withRe = kinds("withRe");
   const fromActive = kinds("fromActive");
   if (aged.length > 0) await deleteItems(db, aged.join(" OR "), params, batch);
+  // A flooded account's unanswered decisions go after floodRetention instead (#584).
+  const flooded = db
+    .query(
+      `SELECT account_id AS a FROM items WHERE kind = 'decision' AND answered_at IS NULL
+       GROUP BY account_id HAVING COUNT(*) > ?`,
+    )
+    .all(limits.floodUnanswered) as { a: string }[];
+  const floodBefore = new Date(now - limits.floodRetention).toISOString();
+  for (const { a } of flooded)
+    await deleteItems(
+      db,
+      "kind = 'decision' AND answered_at IS NULL AND received_at < ? AND account_id = ?",
+      [floodBefore, a],
+      batch,
+    );
   await deleteOrphans(
     db,
     `+kind IN (${marks(fromActive)}) AND NOT EXISTS (SELECT 1 FROM members m
