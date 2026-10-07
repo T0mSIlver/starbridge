@@ -29,6 +29,7 @@ export function parseValue(key: string, raw: string): number | [number, number] 
   if (!m)
     throw new Error(`${key} takes ${window ? "CALLS/SECONDS, such as 60/60" : "a whole number"}`);
   const n = Number(m[1]);
+  if (window && Number(m[2]) === 0) throw new Error(`${key}: a window lasts at least a second`);
   return window ? [n, Number(m[2]) * 1000] : n;
 }
 
@@ -38,7 +39,9 @@ function show(key: string, v: number | readonly [number, number]): string {
 
 export function readOverrides(config: Config): Overrides {
   if (config.dbPath === ":memory:" || !existsSync(file(config))) return {};
-  const raw = JSON.parse(readFileSync(file(config), "utf8")) as Record<string, unknown>;
+  const raw = JSON.parse(readFileSync(file(config), "utf8")) as unknown;
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw))
+    throw new Error("limits.json is not an object");
   const out: Overrides = {};
   const whole = (x: unknown) => Number.isInteger(x) && (x as number) >= 0;
   for (const [k, v] of Object.entries(raw)) {

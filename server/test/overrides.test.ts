@@ -46,8 +46,10 @@ test("runtime limits apply to the running server and go back to its own when uns
   expect((await post()).status).toBe(429);
 
   // A broken file keeps the limits as they were.
-  writeFileSync(join(dbPath, "../limits.json"), "{");
-  expect(applyOverrides(config, base, "same")).toBe("same");
+  for (const broken of ["{", "[]", "42", '{"items":[1,0]}']) {
+    writeFileSync(join(dbPath, "../limits.json"), broken);
+    expect(applyOverrides(config, base, "same")).toBe("same");
+  }
   expect(config.limits.machineItems).toEqual([1, 60_000]);
 
   writeOverrides(config, {});
@@ -62,4 +64,5 @@ test("only rate windows and caps change at runtime, never retention", () => {
   expect(() => parseValue("answeredRetention", "1")).toThrow("not a limit");
   expect(() => parseValue("items", "60")).toThrow("CALLS/SECONDS");
   expect(() => parseValue("nonsense", "1")).toThrow("not a limit");
+  expect(() => parseValue("items", "1/0")).toThrow("at least a second");
 });

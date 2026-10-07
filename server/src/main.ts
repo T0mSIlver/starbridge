@@ -27,7 +27,8 @@ if (process.argv[2] === "usage") {
 // deploy/host/switch.sh runs it and logs each change.
 if (process.argv[2] === "limits") {
   const [what = "show", key, value] = process.argv.slice(3);
-  const over = readOverrides(config);
+  // A reset needs no readable file: it is how a broken one goes.
+  const over = what === "reset" ? {} : readOverrides(config);
   if (what === "set" && key && value)
     writeOverrides(config, { ...over, [key]: parseValue(key, value) });
   else if (what === "unset" && key) {
