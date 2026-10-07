@@ -554,6 +554,30 @@ test("an old Claude Code: setup says what failed and to update it (#620)", async
   );
 });
 
+for (const [how, shows] of [
+  ["answered", "✓ You answered Yes"],
+  ["snoozed", "Snoozed until"],
+] as const)
+  test(`the test decision, ${how}, prints what the owner did, not its id`, async () => {
+    const m = await machine();
+    const sys: Sys = {
+      ...m.sys,
+      prompt: {
+        ...m.sys.prompt,
+        confirm: async (q) => q.trim().startsWith("Send a test decision"),
+      },
+    };
+    const done = setup(sys, { noQuota: true, noAgents: true, noService: true });
+    await until(async () => (await server.opened("decision")).length === 1);
+    const id = (await server.opened("decision"))[0]?.id as string;
+    if (how === "answered") await server.answer(id, { choice: "Yes" });
+    else await server.snooze(id, new Date(Date.now() + 3_600_000));
+    expect(await done).toBe(0);
+    const out = m.ctx.lines.join("\n");
+    expect(out).toContain(shows);
+    expect(out).not.toContain(id);
+  });
+
 test("Ctrl-C at the test decision withdraws it from the devices (#613)", async () => {
   const m = await machine();
   const stop = new AbortController();
@@ -566,7 +590,7 @@ test("Ctrl-C at the test decision withdraws it from the devices (#613)", async (
   await until(async () => (await server.opened("decision")).length === 1);
   stop.abort();
   expect(await done).toBe(0);
-  expect(m.ctx.lines).toContain("Skipped.");
+  expect(m.ctx.lines).toContain("– Skipped");
   const [decision] = await server.opened("decision");
   const [settled] = await server.opened("settled");
   expect(settled?.itemId).toBe(decision?.id);
