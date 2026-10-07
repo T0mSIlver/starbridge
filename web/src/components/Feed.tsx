@@ -288,7 +288,7 @@ function PromptBody({ p, comfy, filled }: { p: PromptItem; comfy?: boolean; fill
 
 const label = (e: Entry) =>
   e.type === "prompt"
-    ? `${e.item.permission.tool}: ${e.item.permission.summary}`
+    ? `${e.item.permission.description || e.item.permission.tool}: ${e.item.permission.summary}`
     : e.type === "question"
       ? e.item.decision.question
       : e.item.run.title;
