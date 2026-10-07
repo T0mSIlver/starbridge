@@ -193,12 +193,19 @@
   width: var(--s4);
 }
 
-/* Narrow: the page scrolls, above the bottom bar on phones. The list fills the screen, so a
-   closed History sits at its bottom. */
+/* Narrow: the page scrolls, above the bottom bar on phones. The list fills the screen below
+   what the shell shows above it, such as its error notice, so a closed History sits at its
+   bottom (#672). The shell's padding keeps the bottom bar's height. */
+:global(main):has(> .single) {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+}
+
 .single {
   display: flex;
   flex-direction: column;
-  min-height: calc(100dvh - var(--size-bar-web) - env(safe-area-inset-bottom));
+  flex: 1;
 }
 
 .single .list {
@@ -221,10 +228,10 @@
   }
 
   .single {
+    width: 100%;
     max-width: var(--size-content);
     margin: 0 auto;
     border-inline: 1px solid var(--line);
-    min-height: 100dvh;
   }
 }
 
