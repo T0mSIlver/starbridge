@@ -86,11 +86,11 @@ function scan(lines: string[]): string | undefined {
 test("pair prints a link and a QR code that carry the code", async () => {
   const ctx = testCtx();
   const done = run(["pair", "--server", `${server.url}/`, "--name", "devbox"], ctx);
-  await until(() => ctx.lines.some((l) => l.startsWith("Or type the code")));
+  await until(() => ctx.lines.some((l) => l.includes("Or type the code")));
   const code = ctx.lines[0]?.replace("Pairing code: ", "") as string;
   const link = `${server.url}/pair#${code}`;
-  expect(ctx.lines[1]).toEndWith(link);
-  expect(scan(ctx.lines.slice(2, -1))).toBe(link);
+  expect(ctx.lines.at(-2)).toBe(`  Or open  ${link}`);
+  expect(scan(ctx.lines.slice(2, -2))).toBe(link);
   await server.approve(code);
   expect(await done).toBe(0);
 });

@@ -11,7 +11,7 @@ import { askVia, quotaVia } from "../agent/commands";
 import { ApiError } from "../api";
 import type { AgentConfig } from "../config";
 import { type Ctx, refreshDirectory, session, UsageError } from "../context";
-import { type AskInput, ask, EXIT_INTERRUPTED, settle } from "../decisions";
+import { type AskInput, answerPrefix, ask, EXIT_INTERRUPTED, settle } from "../decisions";
 import { DEFAULT_SERVER, pair } from "../pair";
 import { permissionsEnabled } from "../permissions";
 import { pushOnce } from "../quota";
@@ -525,14 +525,19 @@ async function testDecision(ctx: Ctx, name: string) {
     session: "",
   };
   const opts = { wait: true, timeout: "10m" };
-  ctx.out("Answer it on your phone or the web page (Ctrl-C skips):");
-  // `ask` prints the decision's id first: kept to withdraw the card on Ctrl-C (#613).
+  ctx.out("  Sent. Answer it on your phone or the web page (Ctrl-C skips)…");
+  // `ask` prints the decision's id first, kept to withdraw the card on Ctrl-C (#613), then the
+  // answer line agents read; the owner sees neither, only what they answered.
   let id: string | undefined;
   const asking: Ctx = {
     ...ctx,
     out: (line) => {
-      id ??= line;
-      ctx.out(line);
+      if (id === undefined) {
+        id = line;
+        return;
+      }
+      const prefix = answerPrefix(id, input.question);
+      ctx.out(line.startsWith(prefix) ? `✓ You answered ${line.slice(prefix.length)}` : line);
     },
   };
   let code: number;
@@ -544,17 +549,17 @@ async function testDecision(ctx: Ctx, name: string) {
     );
   } catch (e) {
     if (!(e instanceof Interrupted)) {
-      ctx.out(`The test decision failed: ${(e as Error).message}`);
+      ctx.out(`✗ The test decision failed: ${(e as Error).message}`);
       return;
     }
     code = EXIT_INTERRUPTED;
   }
-  if (code === 2) ctx.out("No answer within 10 minutes.");
+  if (code === 2) ctx.out("✗ No answer within 10 minutes");
   if (code !== EXIT_INTERRUPTED || !id) return;
   try {
     await settle(ctx, { id, outcome: "withdrawn" });
-    ctx.out("Skipped.");
+    ctx.out("– Skipped");
   } catch (e) {
-    ctx.out(`Skipped, but the card stays open on your devices: ${(e as Error).message}`);
+    ctx.out(`– Skipped, but the card stays open on your devices: ${(e as Error).message}`);
   }
 }
