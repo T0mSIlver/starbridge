@@ -2,8 +2,9 @@
 
 ## How is it different from ntfy, Pushover or a webhook?
 
-Those carry a message one way, so you still walk to the terminal to answer. Starbridge carries
-the answer back: your tap goes into the waiting session as its next prompt. A permission answer
+Those deliver a notification. ntfy's action buttons can send a request back, but nothing puts
+it into the waiting session, so you still walk to the terminal to answer. Starbridge carries the
+answer back: your tap goes into the waiting session as its next prompt. A permission answer
 is signed by your device and bound to one call by a hash of its input, so it can't approve a
 different command. ntfy can still deliver the notifications, through UnifiedPush on a
 [self-hosted server](../server/README.md#notifications).
@@ -31,7 +32,7 @@ a revocation unseen.
 
 What it does see: your GitHub numeric id, device and machine ids, public keys, the names you
 give devices and machines, and each item's kind, id, sender, recipients, the item it answers,
-size and times, plus push tokens.
+size and times, when a snoozed question comes back, plus push tokens.
 It can hold items back or drop them.
 
 The limits:
@@ -97,7 +98,8 @@ browsers. Self-hosting is free, under the MIT licence.
 
 The server deletes answered questions and their answers 7 days after the answer, permission
 prompts 7 days after they arrive, runs a day after their last update, and unanswered questions
-and quota snapshots after 30 days. Backups keep deleted data for up to 3 weeks. The
+and quota snapshots after 30 days, or unanswered questions after 7 days once an account holds
+more than 1000. Backups keep deleted data for up to 2 weeks. The
 [privacy page](https://starbridge.run/privacy) says how to delete your account.
 
 ## Why GitHub sign-in?

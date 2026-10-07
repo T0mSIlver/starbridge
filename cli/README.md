@@ -44,7 +44,8 @@ starbridge setup
 ### What setup does
 
 Setup asks only before installing CodexBar, which providers to send, whether the agent runs
-after you log out, and whether to send a test question. A rerun repairs only what is missing:
+after you log out, whether to add the CLI to your PATH, and whether to send a test
+question; steps 1 and 3 say when it asks more. A rerun repairs only what is missing:
 
 1. It pairs the machine with your account (see [Pair](#pair)), with the first server named by
    `--server`, `STARBRIDGE_SERVER`, the install script (each server's own names that server),
@@ -101,8 +102,8 @@ app is left to them (`brew upgrade codexbar`). When a CodexBar release breaks, i
 a quota error on your devices; `starbridge update --codexbar 0.71.1` installs that release
 instead, until a later `starbridge update` moves it to the latest again.
 
-`starbridge uninstall` removes the agent service, the plugin and the binary, and asks your
-devices to revoke the machine. It deletes the keys only when you say so, or with `--purge`.
+`starbridge uninstall` removes the agent service, Starbridge from every agent and the binary,
+and asks your devices to revoke the machine. It deletes the keys only when you say so, or with `--purge`.
 
 ### Check a download
 
@@ -221,8 +222,8 @@ starbridge quota push --provider claude --provider codex
 
 ### Permission prompts
 
-Permission prompts from Claude Code, opencode and Pi stay at the keyboard until you turn them on,
-in setup or with:
+Permission prompts from Claude Code, opencode and Pi stay at the keyboard until you turn them on
+with:
 
 ```bash
 starbridge config permissions on
