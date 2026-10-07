@@ -94,7 +94,7 @@ export function sample(now = Date.now()) {
           })),
           links: [
             { url: "https://claude.ai/artifact/Xq7pLm2VnR4tBz9KcW1sYd" },
-            { url: "https://github.com/T0mSIlver/starbridge/pull/86" },
+            { url: "https://github.com/acme/web-app/pull/86" },
           ],
         },
       ),
