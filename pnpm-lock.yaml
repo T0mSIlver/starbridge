@@ -75,6 +75,18 @@ importers:
         specifier: ^7.0.2
         version: 7.0.2
 
+  deploy/watch:
+    devDependencies:
+      '@biomejs/biome':
+        specifier: ^2.5.15
+        version: 2.5.15
+      '@types/bun':
+        specifier: ^1.4.2
+        version: 1.4.2
+      typescript:
+        specifier: ^7.0.2
+        version: 7.0.2
+
   mod:
     devDependencies:
       '@biomejs/biome':
