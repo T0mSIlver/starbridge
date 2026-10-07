@@ -10,6 +10,7 @@ import { clientVersion } from "./clients";
 import type { Config } from "./config";
 import { openDb } from "./db";
 import type { Deps, Env } from "./env";
+import { applyOverrides } from "./overrides";
 import { Push } from "./push";
 import { RateLimiter } from "./ratelimit";
 import { sweepStorage } from "./retention";
@@ -70,6 +71,12 @@ export async function createApp(config: Config, fetchFn: typeof fetch = fetch) {
         if (!diskFull(e)) throw e;
       });
   setInterval(minutely, 60_000).unref();
+  // The owner's runtime limits (`bun server.js limits`, #786), read again every minute.
+  const base = { limits: config.limits, maxMachines: config.maxMachines };
+  let overrides = applyOverrides(config, base, "no overrides: the server's own limits");
+  setInterval(() => {
+    overrides = applyOverrides(config, base, overrides);
+  }, 60_000).unref();
   // Snoozed decisions come back within this much of their time (#571).
   const snoozes = housekeep(() => wakeSnoozes(db, deps.push, config.pushInlineLimit));
   setInterval(snoozes, 15_000).unref();

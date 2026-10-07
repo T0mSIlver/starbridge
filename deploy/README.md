@@ -61,6 +61,7 @@ image is tagged by a hash of that file and built only when no image has the tag.
 | Analytics limits | Caddy (built with the `rate_limit` module, `caddy.Dockerfile`) takes 30 events a minute per address and 300 in all, 8 KB each; `starbridge-umami-trim.timer` keeps each table to 180 days and a million rows, hourly |
 | Uptime | `.github/workflows/uptime.yml` checks `/healthz`, `/healthz/backup` (503 once the last backup is over 26 h old) and `/healthz/disk` (503 under 2 GB free) hourly and opens an `outage` issue on failure |
 | FCM check | `sudo /opt/starbridge/deploy/host/check-fcm.sh` mints a token with the service account |
+| Limits at runtime | `deploy/switch.sh limits set items 60/60` (calls per seconds for a rate window, a whole number for a cap, `maxMachines` for the machine cap), `limits unset items`, `limits reset`, `limits show` (#786). The server applies a change within a minute; the names are those in `server/src/limits.ts`, retention periods excepted |
 | Usage counts | `sudo docker compose -p starbridge -f /opt/starbridge/deploy/compose.yaml exec server bun server.js usage 14` prints the last 14 days (`server/src/usage.ts`) |
 
 ## Analytics

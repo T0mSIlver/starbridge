@@ -1,6 +1,7 @@
 import { createApp } from "./app";
 import { configFromEnv } from "./config";
 import { openDb, SCHEMA_VERSION } from "./db";
+import { describe, parseValue, readOverrides, writeOverrides } from "./overrides";
 import { formatReport, report } from "./usage";
 import { Waiters } from "./waiters";
 
@@ -19,6 +20,23 @@ if (process.argv[2] === "usage") {
   if (!Number.isInteger(days) || days < 1)
     throw new Error("usage [days]: days is a positive integer");
   console.log(formatReport(report(openDb(config.dbPath), days)));
+  process.exit(0);
+}
+// `limits [show]`, `limits set KEY VALUE`, `limits unset KEY`, `limits reset`: the owner's
+// runtime limits, which the running server applies within a minute (#786).
+// deploy/host/switch.sh runs it and logs each change.
+if (process.argv[2] === "limits") {
+  const [what = "show", key, value] = process.argv.slice(3);
+  const over = readOverrides(config);
+  if (what === "set" && key && value)
+    writeOverrides(config, { ...over, [key]: parseValue(key, value) });
+  else if (what === "unset" && key) {
+    const { [key as keyof typeof over]: _, ...rest } = over;
+    writeOverrides(config, rest);
+  } else if (what === "reset") writeOverrides(config, {});
+  else if (what !== "show") throw new Error("limits [show] | set KEY VALUE | unset KEY | reset");
+  console.log(describe(readOverrides(config)));
+  if (what !== "show") console.log("the server applies it within a minute");
   process.exit(0);
 }
 const { app, deps } = await createApp(config);

@@ -965,6 +965,11 @@ Tokens, type and components: `DESIGN.md`.
   is capped per device for that reason, and a question with 8000 characters of context fits up to
   about 140 devices in its 2 MB. Its pictures are stored once whatever the number (#685), and
   shrink only to leave the boxes room.
+- **Limits at runtime** (#786). The owner can tighten or loosen a rate window or a cap without a
+  deploy (`bun server.js limits set items 60/60`, `set maxMachines 4`, `unset`, `reset`): the
+  overrides sit in `limits.json` beside the database, which the server reads every minute, so they
+  survive restarts and deploys until unset. Retention periods are left out, since shortening one
+  deletes data at the next sweep. A file that does not parse keeps the limits as they were.
 - **Privacy and terms** (`/privacy`, `/terms`). Each claim follows the code: stored columns in
   `server/src/db.ts`, retention in `server/src/limits.ts`, logs and backups in `deploy/`. A change
   to what is stored changes the page, and the Play data-safety form. Contact is
