@@ -62,6 +62,18 @@ function step(text: string) {
   console.log(`\n== ${text}`);
 }
 
+/**
+ * Picks an option of a Settings segmented control. Its radio hides inside the segment, which
+ * takes the click. Right after a navigation the click can land before the page subscribes to
+ * the setting, and React holds the radio unchecked until it does, so `check()` would fail;
+ * this waits for the checked state instead (#693).
+ */
+async function choose(page: Page, label: string) {
+  const radio = page.getByLabel(label, { exact: true });
+  await radio.click({ force: true });
+  await radio.and(page.locator(":checked")).waitFor();
+}
+
 /** Starts a process and collects its output; `waitFor` resolves on a matching line. */
 function start(
   name: string,
@@ -1000,9 +1012,7 @@ async function main() {
     .getByRole("link", { name: "Settings" })
     .click();
   await page.getByRole("heading", { name: "Settings" }).waitFor();
-  // Each radio hides inside its segment, which takes the click.
-  for (const label of ["Left", "Resets 14:20", "5", "High contrast"])
-    await page.getByLabel(label, { exact: true }).check({ force: true });
+  for (const label of ["Left", "Resets 14:20", "5", "High contrast"]) await choose(page, label);
   await shoot(page, "settings");
   await page.getByRole("link", { name: "Quotas" }).click();
   await page.locator("article").first().waitFor();
@@ -1050,7 +1060,7 @@ async function main() {
     .getByRole("navigation", { name: "Main" })
     .getByRole("link", { name: "Settings" })
     .click();
-  await page.getByLabel("24-hour", { exact: true }).check({ force: true });
+  await choose(page, "24-hour");
   await shoot(page, "settings-clock");
   await page.getByRole("link", { name: "Quotas" }).click();
   await page.locator("article").first().waitFor();
@@ -1064,7 +1074,7 @@ async function main() {
     .getByRole("link", { name: "Settings" })
     .click();
   // 12-hour times are the longest: "Will run out on Oct 12 at 12:02 AM".
-  await page.getByLabel("12-hour", { exact: true }).check({ force: true });
+  await choose(page, "12-hour");
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.getByRole("link", { name: /^Inbox/ }).click();
   const aside = page.getByRole("complementary", { name: "Quota windows" });
@@ -1192,7 +1202,7 @@ async function main() {
       .getByRole("navigation", { name: "Main" })
       .getByRole("link", { name: "Settings" })
       .click();
-    await page.getByLabel(clock, { exact: true }).check({ force: true });
+    await choose(page, clock);
     await page.getByRole("link", { name: "Quotas" }).click();
     const resets = page.locator("article span", { hasText: /^tomorrow \d/ });
     await resets.first().waitFor();
