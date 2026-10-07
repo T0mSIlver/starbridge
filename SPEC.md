@@ -124,7 +124,8 @@ provider plugins add providers, not panels.
   owner compares: the machine shows three groups of 80 bits of a hash of its `add` entry and
   saves the pairing only once a person types the fourth from the Android app. The entry, not the
   keys: a pairing request proves no private key, so a stand-in can copy the machine's keys, and
-  a fork can keep the owner's entry 0; the entry's `prev` ties it to the chain. Typed rather than
+  a fork can keep the owner's entry 0; the entry's `prev` ties it to the chain, and its
+  signature, which the server cannot predict, stops a search for two entries that match. Typed rather than
   a yes, so an agent running setup cannot confirm it; the owner chose a confirmation on every
   setup over a code only shown.
 - **The recovery key** is a random 16-byte seed shown as 28 Crockford base32 characters with a
