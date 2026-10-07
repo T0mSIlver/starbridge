@@ -2,14 +2,14 @@ import {
   activeMembers,
   type Directory,
   type DirectoryHead,
-  headToSign,
   type MachineKind,
   type Member,
   type MemberKeys,
   verifyDirectory,
+  withheldBy,
 } from "@starbridge/protocol";
 import { Api, REMOVED } from "./api";
-import { decodeKeys, type Machine, type Store } from "./config";
+import { decodeKeys, type Machine, type State, type Store } from "./config";
 
 /** Everything a command touches outside its arguments, so tests can run commands in-process. */
 export interface Ctx {
@@ -84,14 +84,31 @@ export async function refreshDirectory(
 }
 
 /**
- * The head this machine signs into its items: the longest it knows, its own or one a device
- * signed that its chain lacks, so the devices it posts to see what the server holds back (#362).
+ * The head this machine signs into its items, so a device served a shorter chain sees what the
+ * server holds back from it (#362). A machine that knows of a longer one posts nothing (#794).
  */
-export function signedHead(ctx: Ctx, dir: Directory): DirectoryHead {
-  return headToSign(ctx.store.state().heads ?? {}, dir, ctx.store.directory());
+export function signedHead(dir: Directory): DirectoryHead {
+  return { length: dir.length, head: dir.head };
 }
 
-export function devices(dir: Directory): Member[] {
+/**
+ * Whether a device active in `dir` signed a head the machine's chain `entries` lacks: the server
+ * is holding back entries, perhaps the revocation of a device in `dir`. Says which, or undefined.
+ */
+export function withheld(st: State, dir: Directory, entries: unknown[]): string | undefined {
+  const held = withheldBy(st.heads ?? {}, dir, entries);
+  if (held)
+    return `the server is holding back directory entries ${held.id} has seen (${held.head.length}, this machine has ${dir.length})`;
+  return undefined;
+}
+
+/**
+ * The devices a new item is sealed to. None while the server is known to hold back entries of
+ * `dir`, since one of them may revoke a device in it (#794).
+ */
+export function devices(ctx: Ctx, dir: Directory): Member[] {
+  const behind = withheld(ctx.store.state(), dir, ctx.store.directory());
+  if (behind) throw new UsageError(`${behind}: nothing is sent until it serves them`);
   const list = activeMembers(dir, "device");
   if (list.length === 0) throw new UsageError("the directory has no active device to send to");
   return list;

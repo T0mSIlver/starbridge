@@ -92,7 +92,7 @@ export function buildRun(
 /** Seals a run update to every active device and posts it; the agent and the CLI share this. */
 export async function postRun(ctx: Ctx, s: Session, input: RunInput): Promise<Run> {
   const dir = await refreshDirectory(ctx, s);
-  const to = devices(dir);
+  const to = devices(ctx, dir);
   const run = {
     ...buildRun(
       input,
@@ -100,7 +100,7 @@ export async function postRun(ctx: Ctx, s: Session, input: RunInput): Promise<Ru
       to.map((d) => d.id),
       machineKind(ctx),
     ),
-    dir: signedHead(ctx, dir),
+    dir: signedHead(dir),
   };
   const signer = { id: s.machine.id, signKey: s.keys.sign.privateKey };
   await s.api.postItem(seal("run", run, signer, to));
