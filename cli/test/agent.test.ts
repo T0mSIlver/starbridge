@@ -1,5 +1,13 @@
-import { afterEach, beforeEach, expect, setDefaultTimeout, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { afterEach, beforeEach, expect, setDefaultTimeout, spyOn, test } from "bun:test";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { createServer, Server as HttpServer, type IncomingMessage, request } from "node:http";
 import { createServer as createNetServer } from "node:net";
 import { tmpdir } from "node:os";
@@ -778,4 +786,45 @@ test("a socket path too long for a unix socket: clients fall back and say why (#
   const call = new AgentClient(socket).call("GET", "/v1/status");
   await expect(call).rejects.toBeInstanceOf(NoAgent);
   await expect(call).rejects.toThrow("too long for a unix socket");
+
+  // Bun's agent listens there and says so in a pid file, which goes when it stops (#714).
+  const first = makeAgent(ctx, { socket, noQuota: true });
+  await first.start();
+  agents.push(first);
+  expect(readFileSync(`${socket}.pid`, "utf8")).toBe(String(process.pid));
+  // Where `connect` refuses the path (Node, macOS), a second agent cannot probe the first: the
+  // pid file stops it from unlinking the live socket.
+  const probe = spyOn(AgentClient.prototype, "call").mockRejectedValueOnce(
+    new NoAgent("too long", "EINVAL"),
+  );
+  // The first agent as another process sees it.
+  const other = Bun.spawn(["sleep", "30"]);
+  writeFileSync(`${socket}.pid`, String(other.pid));
+  try {
+    await expect(makeAgent(ctx, { socket, noQuota: true }).start()).rejects.toThrow("already runs");
+  } finally {
+    probe.mockRestore();
+  }
+  expect(existsSync(socket)).toBe(true);
+  writeFileSync(`${socket}.pid`, String(process.pid));
+  await first.stop();
+  expect(existsSync(socket)).toBe(false);
+  expect(existsSync(`${socket}.pid`)).toBe(false);
+  // The CLI goes to the server itself where it cannot connect, and says why.
+  writeFileSync(socket, "");
+  const env = { ...ctx.env, STARBRIDGE_AGENT_SOCKET: socket };
+  expect(await run([...ASK, "--session", "s1"], { ...ctx, env })).toBe(0);
+  expect(ctx.errors.some((e) => e.includes("too long for a unix socket"))).toBe(true);
+  rmSync(socket);
+
+  // After a crash, a probe that finds no socket proves the agent gone, whatever process has its
+  // pid now.
+  try {
+    writeFileSync(`${socket}.pid`, String(other.pid));
+    const again = makeAgent(ctx, { socket, noQuota: true });
+    await again.start();
+    await again.stop();
+  } finally {
+    other.kill();
+  }
 });
