@@ -31,9 +31,9 @@ them. Its routes are in `PROTOCOL.md`.
    RELAY_URL=https://starbridge.run
    ```
 
-   `RELAY_URL` sends Android and browser notifications through starbridge.run, which sees only
-   ciphertext and ids. To keep every notification on your own servers, leave it out and follow
-   [Without the relay](#without-the-relay). [Environment](#environment) lists the other settings.
+   `RELAY_URL` sends Android and browser notifications through starbridge.run, which sees what
+   [Notifications](#notifications) lists. To keep every notification on your own servers, leave
+   it out and follow [Without the relay](#without-the-relay). [Environment](#environment) lists the other settings.
 
 3. Build and start the server, on `127.0.0.1:8080`, and the web app, on `127.0.0.1:3000`:
 
@@ -86,8 +86,15 @@ them. Its routes are in `PROTOCOL.md`.
 ## Notifications
 
 Android notifications go through Firebase, whose credentials belong to the app's project. With
-`RELAY_URL`, your server sends them through the hosted relay, which sees only ciphertext and ids.
-Web Push goes through the relay too, unless you set your own VAPID keys.
+`RELAY_URL`, your server sends them through starbridge.run's relay; Web Push goes through it too,
+unless you set your own VAPID keys. So a self-hosted server still sends its pushes through
+starbridge.run unless it uses UnifiedPush for Android and its own VAPID keys for browsers.
+
+For each push, the relay sees the phone's FCM token or the browser's push endpoint and the
+payload: the item's kind, its id, the sender's id, the id of the item it answers, when a snoozed
+question comes back, and the item sealed to that device, which it cannot open. That is the same
+activity timeline your server sees, tied to a push address. It stores none of it, and counts
+relayed pushes only by type and result.
 
 Without the relay or UnifiedPush, the Android app gets no pushes: while it is open it checks for
 new items every 10 seconds, and nothing reaches the phone while it is closed. The web page still

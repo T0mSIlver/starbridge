@@ -55,6 +55,11 @@ export interface Config {
    * (`demo/`) needs before it approves joins unseen. Refused wherever the hosted service runs.
    */
   demo: boolean;
+  /**
+   * A second port serving `GET /watch`, the launch watcher's counts (server/src/watch.ts). Off
+   * unless set: it names addresses, so only the host may reach it (deploy/compose.yaml).
+   */
+  watchPort?: number;
   /** The commit this server was built from, which /healthz names. */
   revision?: string;
   /** Rate limits, caps and retention; tests lower them. */
@@ -122,6 +127,7 @@ export function configFromEnv(env: Env = process.env): Config {
     relayUrl: env.RELAY_URL?.replace(/\/$/, "") || undefined,
     relayMode: flag(env.RELAY_MODE),
     demo: flag(env.DEMO),
+    watchPort: env.WATCH_PORT ? int(env.WATCH_PORT, 0) : undefined,
     revision: env.STARBRIDGE_REVISION || undefined,
     limits: DEFAULT_LIMITS,
     minimumReleases: MINIMUM_RELEASES,

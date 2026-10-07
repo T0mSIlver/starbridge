@@ -8,6 +8,7 @@ import type { RateLimiter } from "./ratelimit";
 import type { PairingClients } from "./routes/pairings";
 import type { Usage } from "./usage";
 import type { Waiters } from "./waiters";
+import type { Watch } from "./watch";
 
 export interface Deps {
   config: Config;
@@ -25,6 +26,7 @@ export interface Deps {
   /** Wakes join long-polls; keyed by "join:<id>" and "account:<account>". */
   joins: Waiters;
   limiter: RateLimiter;
+  watch: Watch;
   usage: Usage;
 }
 

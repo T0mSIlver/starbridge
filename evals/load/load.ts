@@ -5,7 +5,7 @@
  *   10 minutes, posts a decision now and then, a run with its updates, and a quota snapshot every
  *   5 minutes;
  * - the phone or the web page answers each decision after a while;
- * - a share of the users keep the web page open: its 20 s inbox and prompt polls, 10 s run poll,
+ * - a share of the users keep the web page open: its inbox and prompt polls (`--poll`, 20 s), 10 s run poll,
  *   60 s quota poll and the join list long-poll (25 s).
  *
  * The users come from setup.ts. `--ramp 300,1000,3000` runs each count for `--stage` seconds,
@@ -25,6 +25,8 @@ const { values } = parseArgs({
     procs: { type: "string", default: "4" },
     /** Share of users with the web page open. */
     pages: { type: "string", default: "1" },
+    /** Seconds between a page's inbox and prompt polls: 20 once a push arrived, 5 until then. */
+    poll: { type: "string", default: "20" },
     /** Decisions per user per hour; runs per user per hour. */
     decisions: { type: "string", default: "6" },
     runs: { type: "string", default: "4" },
@@ -277,7 +279,7 @@ async function worker(index: number, procs: number) {
     };
     await Promise.all([
       joins(),
-      every(20_000, async () => {
+      every(Number(values.poll) * 1000, async () => {
         for (;;) {
           const r = await call(
             "poll.inbox",
