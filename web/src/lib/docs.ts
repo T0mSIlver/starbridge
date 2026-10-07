@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import { dirname, join, normalize } from "node:path";
 import { Marked, type Tokens } from "marked";
 import { REPO } from "./links";
@@ -37,9 +37,22 @@ function rewrite(file: string, href: string): string {
 const attr = (s: string) =>
   s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c] ?? c);
 
-/** Reads a doc, as HTML without its first heading. */
+// Each doc's HTML, kept until its file changes: every page renders per request for its CSP nonce
+// (proxy.ts), but the nonce is in the layout, not in a doc's HTML (#588).
+const rendered = new Map<string, { mtime: number; html: string }>();
+
+/** A doc as HTML without its first heading, parsed again only when its file changes. */
 export function renderDoc(doc: Doc): string {
-  const source = readFileSync(join(ROOT, doc.file), "utf8");
+  const path = join(ROOT, doc.file);
+  const mtime = statSync(path).mtimeMs;
+  const hit = rendered.get(doc.file);
+  if (hit?.mtime === mtime) return hit.html;
+  const html = parse(doc, readFileSync(path, "utf8"));
+  rendered.set(doc.file, { mtime, html });
+  return html;
+}
+
+function parse(doc: Doc, source: string): string {
   const body = source.replace(/^# .*\n/, "");
   const ids = new Map<string, number>();
   const marked = new Marked({
