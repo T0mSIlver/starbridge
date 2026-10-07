@@ -37,6 +37,13 @@ function setSessionCookie(c: Parameters<typeof setCookie>[0], token: string, sec
   });
 }
 
+/** The sign-in methods this server offers, so the page shows only those (#670). */
+authRoutes.get("/auth/methods", (c) => {
+  const { github, ownerToken } = c.var.config;
+  const methods = [...(github ? ["github"] : []), ...(ownerToken ? ["owner"] : [])];
+  return c.json({ methods });
+});
+
 /**
  * Where GitHub sends a sign-in back. The app's sign-ins come back to their own path, which the
  * Android app claims as an App Link on starbridge.run: the installed web app's scope covers the

@@ -6,6 +6,7 @@ import { outdated } from "@/lib/api";
 import type { FirstDevice as PreparedDevice, RecoveryEntry } from "@/lib/device";
 import { firstSignIn, reach, send } from "@/lib/funnel";
 import { hasPairCode, holdPairCode } from "@/lib/pairLink";
+import { useGitHubSignIn } from "@/lib/signInMethods";
 import { useApp } from "./AppProvider";
 import { Icon } from "./icons";
 import { Landing } from "./Landing";
@@ -114,8 +115,10 @@ export function SignIn({
   failed?: string;
 }) {
   const { reload } = useApp();
-  const off = failed === "off";
-  const [own, setOwn] = useState(ownServer || off);
+  const github = useGitHubSignIn();
+  const off = failed === "off" || !github;
+  const [ownChosen, setOwn] = useState(ownServer);
+  const own = ownChosen || off;
   const [token, setToken] = useState("");
   const { busy, error, run } = useAction();
   useEffect(() => {
