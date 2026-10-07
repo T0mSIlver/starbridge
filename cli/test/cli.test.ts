@@ -825,6 +825,14 @@ test("re-sealing stops at a 429 and waits its Retry-After, leaving the window to
   expect(posts).toBe(3);
 });
 
+test("ask on a full account says so in plain words (#586)", async () => {
+  server.stop();
+  server = await LiveServer.start({ limits: { ...DEFAULT_LIMITS, storedBytes: 1 } });
+  const ctx = await paired(server);
+  expect(await run(["ask", "--question", "First?", "--session", "s"], ctx)).not.toBe(0);
+  expect(ctx.errors.join("\n")).toContain("your Starbridge account is full");
+});
+
 /** A laptop's answer the machine accepted, not yet taken by its session, then the laptop revoked. */
 async function revokedAnswer() {
   const ctx = await paired(server);

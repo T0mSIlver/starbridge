@@ -231,6 +231,9 @@ const V6 = "ALTER TABLE items ADD COLUMN blobs TEXT;";
 
 const MIGRATIONS = [V1, V2, V3, V4, V5, V6];
 
+/** The `user_version` this server brings a database to. */
+export const SCHEMA_VERSION = MIGRATIONS.length;
+
 export function openDb(path: string): Database {
   if (path !== ":memory:") mkdirSync(dirname(path), { recursive: true });
   const db = new Database(path, { strict: true });

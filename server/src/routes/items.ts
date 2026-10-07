@@ -396,7 +396,21 @@ itemRoutes.post("/items", requireCaller("paired"), async (c) => {
       fail(409, "too-many-items", `an account holds at most ${cap} ${item.kind} items`);
     const room = limits.storedBytes - (fromDevice ? 0 : limits.answerReserve);
     if (held.bytes + charged > room)
-      fail(409, "too-many-items", `an account stores at most ${limits.storedBytes} bytes`);
+      fail(
+        409,
+        "account-full",
+        `this account stores at most ${limits.storedBytes / 1024 / 1024} MB; answered questions are dropped ${limits.answeredRetention / 86_400_000} days after their answer`,
+      );
+    if (!fromDevice) {
+      const { bytes } = db
+        .query("SELECT COALESCE(SUM(bytes), 0) AS bytes FROM item_totals")
+        .get() as { bytes: number };
+      // Answers pass, so decisions still close and expire. The hourly sweep is what frees room.
+      if (bytes + charged > limits.serverBytes)
+        fail(503, "storage-full", "the server's storage is full; retry later", {
+          "retry-after": "3600",
+        });
+    }
     const iso = now.toISOString();
     const seq = nextSeq(db);
     db.query(

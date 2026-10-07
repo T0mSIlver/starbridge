@@ -1,9 +1,15 @@
 import { createApp } from "./app";
 import { configFromEnv } from "./config";
-import { openDb } from "./db";
+import { openDb, SCHEMA_VERSION } from "./db";
 import { formatReport, report } from "./usage";
 import { Waiters } from "./waiters";
 
+// `schema` prints the schema version this server migrates to, so a deploy backs the database up
+// only when it will run a migration (#586).
+if (process.argv[2] === "schema") {
+  console.log(SCHEMA_VERSION);
+  process.exit(0);
+}
 const config = configFromEnv();
 
 // `usage [days]` prints the daily usage counts and exits. It runs on the server's host, so only
