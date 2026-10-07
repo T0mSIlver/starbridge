@@ -696,7 +696,7 @@ fun DecisionSheet(decision: Decision, now: Instant, onAnswer: (String, String?, 
                 }
                 paired -> {
                     Picks(decision, sending, send)
-                    if (decision.replies) Reply(decision.id, replies, sending != null) { send(null, it) }
+                    if (replying) Reply(decision.id, replies, sending != null) { send(null, it) }
                 }
                 else -> {
                     Images(decision.images, maxHeight = 360.dp)
@@ -711,7 +711,7 @@ fun DecisionSheet(decision: Decision, now: Instant, onAnswer: (String, String?, 
                     }
                 }
             }
-            val reply = decision.replies && decision.options.isNotEmpty() && decision.answerIn == null && !paired && !replying
+            val reply = decision.replies && decision.options.isNotEmpty() && decision.answerIn == null && !replying
             val done = decision.answerIn != null && decision.takesDone
             if (open && (reply || done || onSnooze != null)) {
                 // Quiet, so the options stay the answer: a typed reply (#201), Done for a page's
