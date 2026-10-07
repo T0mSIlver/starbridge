@@ -1,0 +1,10 @@
+[Unit]
+Description=Drop Docker images and build cache older than 7 days
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+# Images any container uses, running or stopped, are kept, and volumes are never touched.
+ExecStart=/usr/bin/docker image prune -af --filter until=168h
+ExecStart=/usr/bin/docker builder prune -af --filter until=168h
