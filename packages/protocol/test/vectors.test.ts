@@ -15,6 +15,7 @@ import {
   joinerKeys,
   joinRequest,
   open,
+  openImage,
   openJoinApproval,
   openPairingApproval,
   openPairingRequest,
@@ -27,6 +28,7 @@ import {
   recoveryKeyPair,
   recoverySeedFromKey,
   type SealedItem,
+  sealImage,
   toB64,
   verify,
   verifyBind,
@@ -51,6 +53,7 @@ beforeAll(() => ready);
 const V = {
   directory: await load("directory.json"),
   envelopes: await load("envelopes.json"),
+  images: await load("images.json"),
   keys: await load("keys.json"),
   pairing: await load("pairing.json"),
   join: await load("join.json"),
@@ -275,6 +278,22 @@ function reads(expected: unknown, actual: unknown): boolean {
     );
   return expected === actual;
 }
+
+test("images.json", () => {
+  for (const c of V.images.cases) {
+    expect([c.name, errorCode(() => openImage(c.blob, c.ref))]).toEqual([c.name, c.expect]);
+    if (c.plain) expect(toB64(openImage(c.blob, c.ref))).toBe(c.plain);
+  }
+});
+
+test("a sealed image opens with its ref, and each seal draws a new key", () => {
+  const bytes = new Uint8Array([1, 2, 3]);
+  const a = sealImage(bytes);
+  const b = sealImage(bytes);
+  expect(openImage(a.blob, a.ref)).toEqual(bytes);
+  expect(a.ref.key).not.toBe(b.ref.key);
+  expect(errorCode(() => openImage(a.blob, b.ref))).toBe("cannot-open");
+});
 
 test("the recovery key reads back to its seed and signing key", () => {
   const { recovery } = V.keys;

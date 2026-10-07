@@ -198,6 +198,23 @@ export const SignedEnvelope = z.object({
 export type SignedEnvelope = z.infer<typeof SignedEnvelope>;
 
 /**
+ * A decision's image travels apart from its boxes, sealed once for every device: `blob` is the
+ * image encrypted with a random key (XSalsa20-Poly1305, `crypto_secretbox`, the nonce first),
+ * stored once beside the boxes. The signed body carries the key and the blob's hash, so each
+ * device's box holds a few dozen bytes per image instead of the image (PROTOCOL.md, Images).
+ */
+export const ImageRef = z.object({
+  /** The blob's secretbox key, 32 bytes. */
+  key: B64.length(43),
+  /** BLAKE2b-256 of "starbridge/v1/image" NUL and the blob's bytes. */
+  hash: B64.length(43),
+});
+export type ImageRef = z.infer<typeof ImageRef>;
+
+/** An image's blob, as base64url, at most: 384 KB of image, its nonce and MAC. */
+export const BLOB_MAX = 512 * 1024 + 64;
+
+/**
  * What the server stores and relays: one sealed box per recipient. `id`, `kind`, `from`, `re` and
  * `to` are routing hints the server can read; clients check them against the signed body inside.
  */
@@ -217,6 +234,11 @@ export const SealedItem = z.object({
   reseal: z.literal(true).optional(),
   /** A `wake` kind's time (ITEM_KINDS): the server pushes every device once then. */
   wakeAt: Time.optional(),
+  /**
+   * A decision's images, each sealed once for every device (`sealImage`), in the order of its
+   * body's `images`: the boxes carry only their keys and hashes.
+   */
+  blobs: z.array(B64.max(BLOB_MAX)).max(4).optional(),
   boxes: z
     .array(z.object({ to: Id, box: B64 }))
     .min(1)
