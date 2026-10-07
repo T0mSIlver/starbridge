@@ -1,5 +1,9 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { makeServer, signIn } from "../test-support/app";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { setSignUps } from "../src/signups";
+import { DEFAULT_LIMITS, makeServer, signIn, testConfig } from "../test-support/app";
 
 // A stand-in for GitHub's OAuth endpoints and user API.
 let github: ReturnType<typeof Bun.serve>;
@@ -166,6 +170,36 @@ test("the browser passes the app's sign-in on to the app, untouched", async () =
     `starbridge://auth?error=access_denied&state=${challenge}`,
   );
   expect((await s.app.request("/v1/auth/github/callback/app?code=code-42")).status).toBe(400);
+});
+
+test("paused sign-ups refuse new GitHub accounts and let existing ones in (#784)", async () => {
+  const dbPath = join(mkdtempSync(join(tmpdir(), "sb-signups-")), "sb.db");
+  const s = await makeServer({ ...githubConfig(), dbPath });
+  expect((await githubSignIn(s, 42)).headers.get("location")).toBe("/");
+  setSignUps(testConfig({ dbPath }), false);
+  expect((await githubSignIn(s, 42)).headers.get("location")).toBe("/");
+  const refused = await githubSignIn(s, 7);
+  expect(refused.headers.get("location")).toBe("/?signin=paused");
+  expect(refused.headers.get("set-cookie") ?? "").not.toContain("sb_session=sbs_");
+  const { verifier, challenge } = pkce();
+  const app = await s.call("POST", "/v1/auth/app/session", {
+    body: { code: `code-8-${challenge}`, verifier },
+  });
+  expect(app.status).toBe(403);
+  expect(app.json.error).toBe("signups-paused");
+  setSignUps(testConfig({ dbPath }), true);
+  expect((await githubSignIn(s, 7)).headers.get("location")).toBe("/");
+});
+
+test("new accounts are capped per address; existing ones still sign in (#787)", async () => {
+  const s = await makeServer({
+    ...githubConfig(),
+    limits: { ...DEFAULT_LIMITS, signUps: [2, 3_600_000] },
+  });
+  for (const user of [101, 102])
+    expect((await githubSignIn(s, user)).headers.get("location")).toBe("/");
+  expect((await githubSignIn(s, 103)).headers.get("location")).toBe("/?signin=limited");
+  expect((await githubSignIn(s, 101)).headers.get("location")).toBe("/");
 });
 
 test("app sign-in needs a challenge", async () => {

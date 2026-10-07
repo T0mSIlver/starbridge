@@ -21,10 +21,41 @@ when the owner types it in to recover or to replace it. A page that sees it can 
 account, which revokes every other member, and replace the key with one of its own. That works
 in a browser that was never a member.
 
+A machine's pairing code passes through the page as well, when the owner opens the machine's
+`/pair#<code>` link in a browser or types its code into one (#795). Whoever holds the code can
+make the approval's MAC, so the page can approve the machine into a chain the server made, which
+lists the machine, and pair a stand-in machine of the same name into the owner's real account.
+The server then relays between the two and reads everything the real machine sends. This also
+works in a browser that was never a member.
+
 So the checks in this file protect an account against a hostile server only while no browser is
-a member and the recovery key never reaches a browser. Where that matters, set up the account on
-the Android app, never type the recovery key into a browser, and add no browser; or host your own
-server.
+a member and neither the recovery key nor a pairing code reaches a browser. Where that matters,
+set up the account on the Android app, type pairing codes and the recovery key only there, and
+add no browser; or host your own server.
+
+## Known limits
+
+Besides the web app's trust in its server:
+
+- **A machine behind on the directory still seals to every device it lists** (#794). When a
+  device's signed head tells a machine that the server holds back directory entries, the machine
+  refuses answers ("Directory"), but it keeps sealing new questions, permission prompts, runs and
+  quota snapshots to its stale device list. If the withheld entry revokes a stolen phone, the
+  server can hand those items to whoever holds that phone's keys. This needs a hostile server
+  and a stolen device's keys together.
+- **No forward secrecy.** Device and machine keys stay the same while they are members, and the
+  server keeps sealed items for up to 30 days ("Limits"). Whoever later gets a member's private
+  key and the stored boxes opens every item still stored for that member.
+- **A GitHub session alone can ask to join.** Anyone signed in to the account's GitHub, without
+  pairing, can read the directory (names, ids, public keys), post join requests under any name,
+  which push a join card to every device ("Joins"). It reads no item. An
+  owner who compares digits and approves a join they did not start lets it in, since with nobody
+  in the middle the digits match. Approve only a join you started.
+- **A code a device shows can be claimed first** by whoever sees it ("Pairing"); the owner checks
+  the requester's name before approving.
+- **The server's word on the account.** The Android app drops its keys and pin when `/me` names
+  another account than the one it was set up with, so a hostile server can unpair it; the owner
+  then joins or recovers, which reveals nothing ("Recovery").
 
 ## Formats
 
@@ -314,6 +345,8 @@ request without the header, or with one the server cannot read, is served.
   `starbridge://auth`.
 - **Machines** send `Authorization: Bearer <machine token>`, issued when their pairing is
   approved. The server stores a hash of it and drops it when the directory revokes the machine.
+- A session with no device yet can read the directory and post joins, but reads and posts no
+  item ("Known limits").
 - Pairing requests are unauthenticated and rate-limited per IP.
 - A session gets its device when that session writes the directory's first entry, or a
   recovery-signed `add`, or fetches its own pairing result (a new device signs in first).
@@ -324,9 +357,9 @@ request without the header, or with one the server cannot read, is served.
 |---|---|---|
 | `GET /auth/methods` | anyone | `{methods}`: the sign-in methods this server offers, `github` and `owner` |
 | `GET /auth/github` | anyone | start GitHub sign-in; the app adds `?app=1&challenge=<S256 challenge>`; without GitHub on the server, the page goes to `/?signin=off` and the app gets 404 `not-configured` |
-| `GET /auth/github/callback` | anyone | finish it, set the session, redirect to `/`; on failure redirect to `/?signin=declined`, `expired` (state missing or not this browser's, kept an hour) or `failed` |
+| `GET /auth/github/callback` | anyone | finish it, set the session, redirect to `/`; on failure redirect to `/?signin=declined`, `expired` (state missing or not this browser's, kept an hour), `paused` (sign-ups paused and no account yet), `limited` (too many new accounts from the address) or `failed` |
 | `GET /auth/github/callback/app` | anyone | the browser got the app's sign-in: redirect to `<APP_REDIRECT_URI>?code=<code>&state=<state>`, or GitHub's `error` instead of the code; 400 `bad-state` without them |
-| `POST /auth/app/session` | the app | `{code, verifier}`: GitHub's code → `{session}`; 400 `bad-code` when GitHub refuses the code: unknown, used, expired or not this verifier's |
+| `POST /auth/app/session` | the app | `{code, verifier}`: GitHub's code → `{session}`; 400 `bad-code` when GitHub refuses the code: unknown, used, expired or not this verifier's; 403 `signups-paused` while sign-ups are paused and the GitHub user has no account |
 | `POST /auth/owner` | anyone | self-hosted: `{token}` against `OWNER_TOKEN`; sets the session and returns `{session}` |
 | `POST /auth/logout` | device | end the session |
 | `GET /auth/challenge` | device | `{nonce, expiresInSeconds}`: one nonce per session, single use, 5 minutes; asking again returns the outstanding one |
@@ -486,6 +519,7 @@ server whose disk is full answers writes 503 `storage-full` with `Retry-After`; 
 | Directory entries | from entry 200 on, a device's `add`: 409 `directory-full`; revocations and confirmations always pass, the recovery key may add 20 more devices, and devices may propose 20 more recovery keys; 8 KB per entry: 413 `too-large` |
 | Sessions | 50 per account; signing in past that ends the oldest, unpaired ones first |
 | `GET /auth/github/callback` and `POST /auth/app/session` | 60 a minute per address, together |
+| New accounts | 30 an hour per address, an IPv6 client counting as its /64: the page goes to `/?signin=limited`, the app gets 429 `rate-limited`; sign-ins of existing accounts don't count |
 | `POST /auth/owner` | 10 a minute per address |
 | `GET /auth/challenge` | 20 a minute per account |
 | `POST /pairings` | 30 a minute per address; 50 unapproved pairings per address, an IPv6 client counting as its /48: 429 `too-many-pairings` |

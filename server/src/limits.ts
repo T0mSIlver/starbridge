@@ -113,6 +113,12 @@ export const DEFAULT_LIMITS = {
    * the load test (#619).
    */
   githubCallbacks: [60, MINUTE] as RateWindow,
+  /**
+   * New accounts per address, an IPv6 client counting as its /64. Each GitHub account makes at
+   * most one, but a script with many GitHub accounts behind one address could fill the server's
+   * storage at 256 MB each; a launch's office or carrier NAT signs up a handful an hour (#787).
+   */
+  signUps: [30, HOUR] as RateWindow,
   /** Owner-token sign-ins per address, so the token cannot be guessed fast. */
   ownerSignIns: [10, MINUTE] as RateWindow,
   /** Sign-in challenges per account, which a device signs to bind a new session. */

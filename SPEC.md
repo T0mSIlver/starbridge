@@ -43,7 +43,10 @@ The landing page, docs, README and store listing sell questions and runs, each b
 to the reader. The hero: "Know the moment your agent is stuck" (#448). Quotas get one line: users
 don't launch agents from Starbridge, and the power users it targets don't check quotas by hand.
 Alerts are opt-in, so copy never says they are on. Permission prompts are secondary and opt-in.
-Copy says "on each machine that runs agents", never "on each machine" alone.
+Copy says "on each machine that runs agents", never "on each machine" alone. The subtitle under
+the hero sells questions and that every agent on every machine reaches you in one place; the
+feature row below names runs, quotas and permission prompts, since a list in the subtitle repeats
+it (#801). The line under the hero's buttons, with end-to-end encryption, shows on phones too.
 
 ### Platforms
 
@@ -82,8 +85,8 @@ agent sessions --CLI--> starbridge agent (one per machine) --HTTPS--> server <--
 
 Why this stack: one TypeScript schema serves the server, CLI and mods, and Claude Code mods are
 TypeScript already. Bun gives `bun build --compile` binaries; npm gets a Node 22+ bundle, so the
-CLI uses no Bun global without a guard. SQLite is enough because the server stores ciphertext and
-public keys only. Design tokens are generated from `DESIGN.md` to CSS and Kotlin, so both clients
+CLI uses no Bun global without a guard. SQLite is enough because the server stores ciphertext,
+public keys and the directory's names and times. Design tokens are generated from `DESIGN.md` to CSS and Kotlin, so both clients
 share colours and type.
 
 **CodexBar** (github.com/steipete/CodexBar) is read, never embedded. Its maintainers want
@@ -214,6 +217,11 @@ provider plugins add providers, not panels.
 ## Sign-in
 
 - The hosted server signs in with GitHub; a self-hosted server with `OWNER_TOKEN`.
+- The owner can pause sign-ups (#784), for a launch-day flood or a box near its limits: a GitHub
+  user with no account gets "not taking new accounts right now" on the page and in the app, while
+  every existing account signs in as before. `bun server.js signups pause|resume` writes and
+  removes a file beside the database, which the server reads on each new account, so it takes
+  effect at once and survives restarts and deploys.
 - The page shows only the sign-in methods its server offers (#670): `GET /v1/auth/methods` lists
   them, and without GitHub the landing page's and sign-in page's buttons open the owner token
   form. Until the server answers, the page shows GitHub, the hosted server's, so the landing
@@ -688,6 +696,11 @@ Codex prompts are not supported.
   redaction. A private key's lines go also when they carry a diff's `+`, `-` or space (#489).
   `inputHash` is keyed under the machine's signing key, so a device holding the redacted input
   cannot test guesses for a short redacted value.
+- **Title and command** (#805). A prompt's title is what the agent says the call does (Claude
+  Code's `description`), else the tool, on every surface; the command shows under it in a dark
+  terminal block. Allow covers the command, never the description: the agent writes the
+  description, so it can mislead. A notification draws the block in its expanded view only, a
+  decorated custom view, since the standard templates strip a background colour from text.
 - History says how and where a prompt was answered ("Denied · on Pixel"), from the machine's
   `settled` notice (#349).
 
@@ -945,6 +958,11 @@ Tokens, type and components: `DESIGN.md`.
   memory, the VPS's first limit (#587). Caddy compresses every
   response and the web app none: Next's gzip ran on its one thread and filled it near 18 landing
   page visitors a second (#593). Nightly SQLite backups, kept 7 days (#586).
+- **Per-address pages and sign-ups** (#787). Caddy takes 600 page requests a minute per address
+  outside `/v1` and `/_next/static`: each is Next rendering, 10 to 17 ms of CPU, and a visit with
+  its link prefetches makes a few dozen. The server makes at most 30 new accounts an hour per
+  address: each account may store 256 MB, so many GitHub accounts behind one script could fill
+  the server's 2 GB, while an office or a carrier's NAT signs up a handful an hour.
 - **Ready for Cloudflare's proxy** (#799). starbridge.run's DNS is on Cloudflare in DNS-only
   mode; its proxy is the emergency answer to a flood from many addresses, which no per-address
   rule stops. So that turning it on changes nothing else: Caddy takes the client's address from
@@ -972,6 +990,20 @@ Tokens, type and components: `DESIGN.md`.
   is capped per device for that reason, and a question with 8000 characters of context fits up to
   about 140 devices in its 2 MB. Its pictures are stored once whatever the number (#685), and
   shrink only to leave the boxes room.
+- **Watching it** (#782). Caddy keeps no access log, so the server logs one line a minute of its
+  refusals by status, error code and route, with the accounts refused most, and never an
+  address. Per-address request and 429 counts stay in its memory, like the rate limits, and only
+  the host reads them, through the container's own loopback (port 8081, `GET /watch`). The launch watcher (`deploy/watch/`) reads
+  those, `ss`, `docker` and `bun server.js top` over SSH every few minutes and names an address
+  only when it holds over 200 connections or is being rate-limited (the owner's rule): at
+  Caddy's cap of 3000 `/v1` requests a minute (2900 seen by the server, since Caddy logs no
+  refusal), or refused with 429 by the server: an HTTP/2 client can flood over few connections, and every
+  other visitor's address would end up in the on-call session's transcript.
+- **Blocking an address** (#783). The owner can refuse an address or range at Caddy, by a reload
+  that keeps open connections (`deploy/host/switch.sh`), with a 403 that names abuse@. An IPv6
+  address is blocked as its /64, as the rate limits count it, and nothing wider than a /8 (IPv4)
+  or /32 (IPv6) is accepted. The block list is the one place an address is written to disk, until
+  it is unblocked; `/privacy` says so.
 - **Privacy and terms** (`/privacy`, `/terms`). Each claim follows the code: stored columns in
   `server/src/db.ts`, retention in `server/src/limits.ts`, logs and backups in `deploy/`. A change
   to what is stored changes the page, and the Play data-safety form. Contact is
