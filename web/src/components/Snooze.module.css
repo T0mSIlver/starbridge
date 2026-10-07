@@ -1,4 +1,4 @@
-/* Snooze's menu of times (#571), drawn as the inbox's View menu. */
+/* Snooze's times (#571, #699), drawn as the inbox's View menu. */
 
 .snooze {
   position: relative;
@@ -91,10 +91,6 @@
   border-radius: var(--radius-dense);
   background: var(--surface);
   color: var(--fg);
-}
-
-.go {
-  justify-self: end;
 }
 
 /* Phones open the times in place, under the quiet buttons, as Android does: a popover would run

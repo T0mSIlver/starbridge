@@ -7,12 +7,10 @@ import type { InboxItem } from "./types";
 /** The latest a snooze may run: an unanswered question drops 30 days after it came. */
 export const SNOOZE_MAX_MS = 7 * 24 * 60 * 60_000;
 
-/** "This evening" is 18:00, offered until 17:00; "Tomorrow morning" is 9:00. */
+/** "This evening" is 18:00, offered until 17:00; another day's time starts at 9:00. */
 const EVENING = 18;
 const EVENING_UNTIL = 17;
 const MORNING = 9;
-/** Before this hour, "Tomorrow morning" is this morning: at 1:00 the owner means in 8 hours. */
-const NIGHT_ENDS = 5;
 
 export type SnoozePreset = { label: string; until: Date };
 
@@ -23,13 +21,11 @@ const at = (day: Date, hour: number, plusDays = 0) => {
   return d;
 };
 
-/** 1 hour, This evening (until 17:00), Tomorrow morning: the menu's fixed times. */
+/** 1 hour, then This evening until 17:00: the fixed times above the days (#699). */
 export function snoozePresets(now: Date): SnoozePreset[] {
-  const hour = now.getHours();
   return [
     { label: "1 hour", until: new Date(now.getTime() + 60 * 60_000) },
-    ...(hour < EVENING_UNTIL ? [{ label: "This evening", until: at(now, EVENING) }] : []),
-    { label: "Tomorrow morning", until: at(now, MORNING, hour < NIGHT_ENDS ? 0 : 1) },
+    ...(now.getHours() < EVENING_UNTIL ? [{ label: "This evening", until: at(now, EVENING) }] : []),
   ];
 }
 
@@ -46,14 +42,11 @@ export function isSnoozed(item: InboxItem, now: number): boolean {
 
 const sameDay = (a: Date, b: Date) => a.toDateString() === b.toDateString();
 
-/**
- * "18:00", "tomorrow 09:00", "Fri 09:00": when a snooze ends, short enough for a time slot.
- * `named` leaves out "tomorrow" for the menu, whose "Tomorrow morning" says it already.
- */
-export function snoozeTime(until: Date, now: Date, clock?: Prefs["clock"], named = false): string {
+/** "18:00", "tomorrow 09:00", "Fri 09:00": when a snooze ends, short enough for a time slot. */
+export function snoozeTime(until: Date, now: Date, clock?: Prefs["clock"]): string {
   const time = clockTime(until, clock);
   if (sameDay(until, now)) return time;
-  if (sameDay(until, at(now, 0, 1))) return named ? time : `tomorrow ${time}`;
+  if (sameDay(until, at(now, 0, 1))) return `tomorrow ${time}`;
   const day = until.toLocaleDateString(undefined, {
     weekday: "short",
     // A week ahead is the same weekday as today: the date tells them apart.
@@ -64,12 +57,12 @@ export function snoozeTime(until: Date, now: Date, clock?: Prefs["clock"], named
   return `${day} ${time}`;
 }
 
-/** Pick a time's days: today and the 7 after it, each at midnight in this device's zone. */
+/** The days a snooze can end on: today and the 7 after it, each at midnight in this device's zone. */
 export function pickDays(now: Date): Date[] {
   return Array.from({ length: 8 }, (_, i) => at(now, 0, i));
 }
 
-/** "Today", "Tomorrow", "Thu 8": a day on Pick a time's chips. */
+/** "Today", "Tomorrow", "Thu 8": a day's chip. */
 export function dayLabel(day: Date, now: Date): string {
   if (sameDay(day, now)) return "Today";
   if (sameDay(day, at(now, 0, 1))) return "Tomorrow";
@@ -85,5 +78,31 @@ export function pickTimes(day: Date, now: Date): Date[] {
     const d = new Date(day);
     d.setHours(Math.floor(i / 2), (i % 2) * 30, 0, 0);
     return d;
-  }).filter((d) => d.getTime() - now.getTime() >= SNOOZE_MIN_MS && snoozeAllowed(d, now));
+  }).filter((d) => snoozeTakes(d, now));
+}
+
+/**
+ * The time a day's chip starts on (#699, as Android's #692): today an hour ahead, up to the half
+ * hour; another day 9:00. Late in the evening, today's last half hour that a snooze may take.
+ */
+export function snoozeStart(day: Date, now: Date): Date | undefined {
+  const times = pickTimes(day, now);
+  if (!sameDay(day, now)) return times.find((t) => t.getHours() === MORNING) ?? times[0];
+  return times.find((t) => t.getTime() >= now.getTime() + 60 * 60_000) ?? times.at(-1);
+}
+
+/** Whether a snooze may end at `until`: 5 minutes from now on, at most 7 days ahead. */
+export const snoozeTakes = (until: Date, now: Date) =>
+  until.getTime() - now.getTime() >= SNOOZE_MIN_MS && snoozeAllowed(until, now);
+
+/** "15:30", as a time field holds it; empty without a time. */
+export const hhmm = (d: Date | undefined) =>
+  d ? `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}` : "";
+
+/** `day` at a time field's "15:30", in this device's zone. */
+export function onDay(day: Date, time: string): Date {
+  const [h = 0, m = 0] = time.split(":").map(Number);
+  const d = new Date(day);
+  d.setHours(h, m, 0, 0);
+  return d;
 }

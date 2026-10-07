@@ -714,11 +714,14 @@ first window, so a provider with a window running out leads.
   thing, the amber fill. A waiting item's title is weight 500 and its time slot a clock ticking
   from when it started waiting; screen readers hear "Waiting for you, 2 minutes" first. No state
   tag anywhere. Under a grouping, the items under one header are joined.
-- **Snoozed** (#571). Snooze sits beside Reply in a question's detail (web) and sheet (Android),
-  never on a notification: 1 hour, This evening (18:00, offered until 17:00), Tomorrow morning
-  (9:00), or Pick a time, today and the 7 days after it, each half hour from 5 minutes on, in the
-  Clock setting. Phones open the times in place under Snooze; the desktop web opens a menu.
-  Android opens straight on a time instead (#692; the web follows in #699). A
+- **Snoozed** (#571, #692, #699). Snooze sits beside Reply in a question's detail (web) and sheet
+  (Android), never on a notification. Most snoozes are for later the same day, so it opens on
+  today: 1 hour and This evening (18:00, offered until 17:00), then the days as chips (today and
+  the 7 after it) and a time an hour ahead, up to the half hour (9:00 on another day), from 5
+  minutes on, confirmed by "Snooze until 15:00". Android sets the time on a dial; the web types
+  it, to the minute, in the browser's time field, whose 12 or 24 hours follow the browser's
+  language rather than the Clock setting. Phones open the times in place under Snooze; the
+  desktop web opens them in a popover. A
   snoozed question leaves Needs you, the count and the badge, and its notification closes on
   every device; it waits in a collapsed "Snoozed · n" group after them, soonest back first, its
   time slot "Until 18:00", with no amber and no answer buttons even when its agent waits. Opened,
@@ -813,11 +816,8 @@ first window, so a provider with a window running out leads.
   `already-answered`, which the app counts as its own when an earlier attempt may have landed.
 - **Notifications off** (#342): a line heads the Inbox with "Turn on", which opens the app's
   notification settings, since Android stops showing the permission prompt after two refusals.
-- **Snooze straight on a time** (#692). Most snoozes are for later the same day, so Snooze opens
-  on today: 1 hour and This evening, then the days as chips (today and the 7 after it), and the
-  dial set an hour ahead, up to the half hour (9:00 on another day), confirmed by "Snooze until
-  15:00". Picking a day is no longer a step of its own. The owner chose this from mockups over a
-  typed time and a grid of half hours.
+- **Snooze straight on a time** (#692): the times in "Both clients", "Snoozed", with the dial.
+  The owner chose this from mockups over a typed time and a grid of half hours.
 - **Swipe right to snooze** (#692). A question's card swiped right past 40% of its width snoozes
   it for the time set under "Swipe right on a question": 1 hour (the default), 3 hours, tomorrow
   morning, or Ask for a time, which opens the times over the inbox. A snackbar offers Undo, which

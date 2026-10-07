@@ -1,27 +1,23 @@
 import { expect, test } from "bun:test";
 import { needsYou, snoozedEntries } from "./feed";
-import { pickDays, pickTimes, snoozePresets, snoozeTime } from "./snooze";
+import { pickDays, pickTimes, snoozePresets, snoozeStart, snoozeTime } from "./snooze";
 import type { InboxItem } from "./types";
 
 const at = (d: number, h: number, m = 0) => new Date(2026, 9, d, h, m);
 
-test("the presets: an hour, this evening until 17:00, then the next morning", () => {
+test("the presets: an hour, then this evening until 17:00", () => {
   const names = (now: Date) => snoozePresets(now).map((p) => [p.label, p.until.getTime()]);
   expect(names(at(6, 14, 20))).toEqual([
     ["1 hour", at(6, 15, 20).getTime()],
     ["This evening", at(6, 18).getTime()],
-    ["Tomorrow morning", at(7, 9).getTime()],
   ]);
-  expect(names(at(6, 17)).map(([l]) => l)).toEqual(["1 hour", "Tomorrow morning"]);
-  // In the small hours, "tomorrow morning" is the one about to come.
-  expect(names(at(7, 1)).at(-1)).toEqual(["Tomorrow morning", at(7, 9).getTime()]);
+  expect(names(at(6, 17)).map(([l]) => l)).toEqual(["1 hour"]);
 });
 
 test("a snooze's end reads as a time today, tomorrow, a weekday, or a date a week out", () => {
   const now = at(6, 14);
   expect(snoozeTime(at(6, 18), now, "24")).toBe("18:00");
   expect(snoozeTime(at(7, 9), now, "24")).toBe("tomorrow 09:00");
-  expect(snoozeTime(at(7, 9), now, "24", true)).toBe("09:00");
   expect(snoozeTime(at(9, 9), now, "24")).toMatch(/^Fri 09:00$/);
   expect(snoozeTime(at(13, 9), now, "24")).toMatch(/13/);
 });
@@ -35,6 +31,14 @@ test("Pick a time offers today and 7 days, each half hour from 5 minutes on, up 
   expect(today[0]).toEqual(at(6, 15));
   const last = pickTimes(days[7] as Date, now);
   expect(last.at(-1)).toEqual(at(13, 14));
+});
+
+test("the time starts an hour ahead, up to the half hour, today, and at 9:00 on another day", () => {
+  expect(snoozeStart(at(6, 0), at(6, 14, 20))).toEqual(at(6, 15, 30));
+  expect(snoozeStart(at(6, 0), at(6, 14, 30))).toEqual(at(6, 15, 30));
+  expect(snoozeStart(at(8, 0), at(6, 14, 20))).toEqual(at(8, 9));
+  // Late in the evening, today's last half hour.
+  expect(snoozeStart(at(6, 0), at(6, 23, 10))).toEqual(at(6, 23, 30));
 });
 
 const question = (id: string, extra: Partial<InboxItem> = {}): InboxItem =>

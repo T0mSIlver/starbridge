@@ -1558,7 +1558,7 @@ async function main() {
   await pageB.goto(ORIGIN);
   await probe(pageB).click({ timeout: 30_000 });
   await selected(pageB).getByRole("button", { name: "Snooze", exact: true }).click();
-  await pageB.getByRole("menuitem", { name: /^1 hour/ }).click();
+  await pageB.getByRole("button", { name: /^1 hour/ }).click();
   const snoozedAt = Date.now();
   // It leaves Needs you on both, for the collapsed Snoozed group, and its notification closes.
   await probe(pageB).waitFor({ state: "detached", timeout: 10_000 });

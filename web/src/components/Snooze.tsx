@@ -1,15 +1,24 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { clockTime } from "@/lib/format";
 import { usePref } from "@/lib/prefs";
-import { dayLabel, pickDays, pickTimes, snoozePresets, snoozeTime } from "@/lib/snooze";
+import {
+  dayLabel,
+  hhmm,
+  onDay,
+  pickDays,
+  pickTimes,
+  snoozePresets,
+  snoozeStart,
+  snoozeTakes,
+  snoozeTime,
+} from "@/lib/snooze";
 import s from "./Snooze.module.css";
 import ui from "./ui.module.css";
 
 /**
- * "Snooze" and its times (#571): 1 hour, This evening, Tomorrow morning, or a picked time up to 7
- * days ahead. Quiet, as Reply: putting a question off is never the default.
+ * "Snooze" and its times (#571, #699), up to 7 days ahead. Quiet, as Reply: putting a question off
+ * is never the default.
  */
 export function SnoozeMenu({
   label,
@@ -25,7 +34,6 @@ export function SnoozeMenu({
 }) {
   const [clock] = usePref("clock");
   const [open, setOpen] = useState(false);
-  const [picking, setPicking] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!open) return;
@@ -54,54 +62,24 @@ export function SnoozeMenu({
         type="button"
         className={className}
         disabled={disabled}
-        aria-haspopup="menu"
+        aria-haspopup="dialog"
         aria-expanded={open}
-        onClick={() => {
-          setPicking(false);
-          setOpen(!open);
-        }}
+        onClick={() => setOpen(!open)}
       >
         {label}
       </button>
-      {open && (
-        <div className={`t-small m-drop ${s.menu}`} role="menu" aria-label="Snooze until">
-          {snoozePresets(now).map((p) => (
-            <button
-              key={p.label}
-              type="button"
-              role="menuitem"
-              className={s.item}
-              onClick={() => pick(p.until)}
-            >
-              {p.label}
-              <span className={`t-meta ${s.when}`}>
-                {snoozeTime(p.until, now, clock, p.label === "Tomorrow morning")}
-              </span>
-            </button>
-          ))}
-          {picking ? (
-            <PickTime now={now} clock={clock} onPick={pick} />
-          ) : (
-            <button
-              type="button"
-              role="menuitem"
-              className={s.item}
-              onClick={() => setPicking(true)}
-            >
-              Pick a time
-            </button>
-          )}
-        </div>
-      )}
+      {open && <SnoozeTimes now={now} clock={clock} onPick={pick} />}
     </div>
   );
 }
 
 /**
- * Pick a time (#571): a day out of the next 8, then a half hour of it, in the Clock setting.
- * The browser's own date and time field writes dates and hours its own way, unlike the menu.
+ * Snooze's times, straight on today (#699, as Android's #692): 1 hour and This evening, each with
+ * the time it brings the question back, then the days as chips and the time an hour ahead, with
+ * "Snooze until 15:00" to confirm. The time is typed, to the minute, in the browser's own time
+ * field, which phones open as their clock.
  */
-function PickTime({
+function SnoozeTimes({
   now,
   clock,
   onPick,
@@ -111,57 +89,58 @@ function PickTime({
   onPick: (until: Date) => void;
 }) {
   const days = pickDays(now).filter((d) => pickTimes(d, now).length > 0);
-  const [day, setDay] = useState(0);
-  const times = pickTimes(days[day] as Date, now);
-  // An hour from now today, else the morning: the presets' rhythm.
-  const first = (list: Date[], i: number) =>
-    (i === 0
-      ? list.find((t) => t.getTime() >= now.getTime() + 60 * 60_000)
-      : list.find((t) => t.getHours() === 9)) ?? list[0];
-  const [time, setTime] = useState(() => first(times, 0)?.getTime());
-  const chosen = times.find((t) => t.getTime() === time) ?? first(times, day);
+  // By date, not index: today leaves the list at 23:25 while the picker may be open.
+  const [dayAt, setDayAt] = useState(() => days[0]?.getTime());
+  const day = days.find((d) => d.getTime() === dayAt) ?? (days[0] as Date);
+  const [time, setTime] = useState(() => hhmm(snoozeStart(day, now)));
+  const until = time ? onDay(day, time) : undefined;
+  const chosen = until && snoozeTakes(until, now) ? until : undefined;
   return (
-    <form
-      className={s.pick}
-      onSubmit={(e) => {
-        e.preventDefault();
-        if (chosen) onPick(chosen);
-      }}
-    >
-      <fieldset className={s.days}>
-        <legend className="t-meta">Day</legend>
-        {days.map((d, i) => (
-          <button
-            key={d.getTime()}
-            type="button"
-            className={`t-meta ${s.day}`}
-            aria-pressed={i === day}
-            onClick={() => {
-              setDay(i);
-              setTime(first(pickTimes(d, now), i)?.getTime());
-            }}
-          >
-            {dayLabel(d, now)}
-          </button>
-        ))}
-      </fieldset>
-      <label className={`t-meta ${s.timeLabel}`}>
-        Time
-        <select
-          className={`t-small ${s.time}`}
-          value={chosen?.getTime()}
-          onChange={(e) => setTime(Number(e.target.value))}
-        >
-          {times.map((t) => (
-            <option key={t.getTime()} value={t.getTime()}>
-              {clockTime(t, clock)}
-            </option>
+    <div className={`t-small m-drop ${s.menu}`} role="dialog" aria-label="Snooze until">
+      {snoozePresets(now).map((p) => (
+        <button key={p.label} type="button" className={s.item} onClick={() => onPick(p.until)}>
+          {p.label}
+          <span className={`t-meta ${s.when}`}>{snoozeTime(p.until, now, clock)}</span>
+        </button>
+      ))}
+      <form
+        className={s.pick}
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (chosen) onPick(chosen);
+        }}
+      >
+        <fieldset className={s.days}>
+          <legend className="t-meta">Day</legend>
+          {days.map((d) => (
+            <button
+              key={d.getTime()}
+              type="button"
+              className={`t-meta ${s.day}`}
+              aria-pressed={d === day}
+              onClick={() => {
+                setDayAt(d.getTime());
+                setTime(hhmm(snoozeStart(d, now)));
+              }}
+            >
+              {dayLabel(d, now)}
+            </button>
           ))}
-        </select>
-      </label>
-      <button type="submit" className={`t-meta ${ui.btn} ${ui.sm} ${s.go}`} disabled={!chosen}>
-        Snooze
-      </button>
-    </form>
+        </fieldset>
+        <label className={`t-meta ${s.timeLabel}`}>
+          Time
+          <input
+            type="time"
+            required
+            className={`t-small ${s.time}`}
+            value={time}
+            onChange={(e) => setTime(e.target.value)}
+          />
+        </label>
+        <button type="submit" className={`t-label ${ui.btn} ${ui.fill} ${s.go}`} disabled={!chosen}>
+          {chosen ? `Snooze until ${snoozeTime(chosen, now, clock)}` : "Snooze"}
+        </button>
+      </form>
+    </div>
   );
 }
