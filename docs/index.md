@@ -36,9 +36,8 @@ free server at starbridge.run, or [host your own](../server/README.md).
 3. **Pair the machine.** Setup prints a code, a link and a QR code. Scan the QR code with your
    phone, open the link in a browser where you are signed in, or, on a machine with no browser,
    type the code in Settings → Devices → Add a device on your phone. The code expires in 10
-   minutes. Setup then installs the background service, and asks before it uploads your AI plans'
-   quotas, before it installs Starbridge in each agent it finds, and whether to send permission
-   prompts to your devices. The quotas need CodexBar, which setup installs; with no AI plan,
+   minutes. Setup then installs Starbridge in each agent it finds and the background service,
+   and asks before it installs CodexBar, which reads your AI plans' quotas; with no AI plan,
    `--no-quota` skips both.
 
 4. **Answer the test question.** Setup ends with "Send a test decision to your phone?". Say yes,

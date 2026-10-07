@@ -160,7 +160,7 @@ test("setup --yes installs the agent, the plugins and the skills, and uploads a 
 
   const [snap] = await server.opened("quota");
   expect(snap?.providers.map((p) => p.provider)).toEqual(["codex", "zai"]);
-  expect(out).toContain("Uploaded a first quota snapshot: 2 providers");
+  expect(out).toContain("✓ Sent a first quota snapshot: 2 providers");
   // --yes sends no test decision: nobody is there to answer it.
   expect(await server.opened("decision")).toEqual([]);
 });
@@ -179,9 +179,9 @@ test("a second setup changes nothing", async () => {
   ).toEqual([]);
   expect(readFileSync(join(m.units, "starbridge-agent.service"), "utf8")).toBe(unit);
   expect(m.ctx.store.agentConfig().quota?.providers).toEqual(["codex", "zai"]);
-  expect(m.ctx.lines.join("\n")).toContain("plugins are installed");
+  expect(m.ctx.lines).toContain("✓ Claude Code  plugins installed, 5 starbridge commands allowed");
 
-  // A Codex skill from an older CLI is offered as an update.
+  // A Codex skill from an older CLI is updated without a question, whatever the answers (#750).
   writeFileSync(
     join(m.home, ".codex/skills/starbridge/SKILL.md"),
     "---\n# Written by starbridge 0.9.0; `starbridge uninstall` removes it.\nname: starbridge\n---\nold\n",
@@ -200,11 +200,10 @@ test("a second setup changes nothing", async () => {
     },
     { readyTimeoutMs: 2_000 },
   );
-  expect(asked).toContain(
-    `Update the Starbridge skill for Codex in ${join(m.home, ".codex/skills/starbridge")}?`,
+  expect(asked.filter((q) => /Starbridge|skill|plugin/.test(q))).toEqual([]);
+  expect(readFileSync(join(m.home, ".codex/skills/starbridge/SKILL.md"), "utf8")).not.toContain(
+    "\nold\n",
   );
-  // Declined: nothing written.
-  expect(readFileSync(join(m.home, ".codex/skills/starbridge/SKILL.md"), "utf8")).toContain("old");
 
   // A Pi package at another release moves to this CLI's tag.
   const pi = join(m.home, ".pi/agent/settings.json");
@@ -218,7 +217,7 @@ test("setup asks for no server: it pairs with the one named, and asks only to sw
   const asked: string[] = [];
   m.sys.prompt = { ...defaults, confirm: async (q, def) => (asked.push(q), def) };
   m.ctx.env.STARBRIDGE_SERVER = "https://other.example";
-  const first = await setup(m.sys, { yes: true, noService: true, noQuota: true, noPlugin: true });
+  const first = await setup(m.sys, { yes: true, noService: true, noQuota: true, noAgents: true });
   expect(first).toBe(0);
   const host = server.url.replace(/^https:\/\//, "");
   expect(asked[0]).toBe(`This machine is paired with ${host}. Pair it with other.example instead?`);
@@ -228,7 +227,7 @@ test("setup asks for no server: it pairs with the one named, and asks only to sw
   // The same server, with a trailing slash: no question.
   asked.length = 0;
   m.ctx.env.STARBRIDGE_SERVER = `${server.url}/`;
-  await setup(m.sys, { yes: true, noService: true, noQuota: true, noPlugin: true });
+  await setup(m.sys, { yes: true, noService: true, noQuota: true, noAgents: true });
   expect(asked.filter((q) => q.startsWith("This machine is paired"))).toEqual([]);
 
   // A new machine pairs with the server named, saying so first.
@@ -239,7 +238,7 @@ test("setup asks for no server: it pairs with the one named, and asks only to sw
     server: server.url,
     noService: true,
     noQuota: true,
-    noPlugin: true,
+    noAgents: true,
   });
   await until(() => ctx.lines.some((l) => l.startsWith("Pairing code: ")));
   expect(ctx.lines).toContain(`Pairing with ${host}`);
@@ -260,8 +259,8 @@ test("setup asks before sending quotas that another machine already sends, and E
     confirm: async (q, def) => (asked.push(q), def),
   };
   expect(await setup(mac.sys, { yes: true, noService: true, readyTimeoutMs: 1 })).toBe(0);
-  expect(asked[0]).toBe("Quotas: devbox already sends them. Send from this machine too?");
-  expect(mac.ctx.lines).toContain("Skipped: the agent uploads no quotas.");
+  expect(asked[0]).toBe("  devbox already sends quotas. Send from this machine too?");
+  expect(mac.ctx.lines).toContain("– Not sent from this machine");
   expect(mac.ctx.store.agentConfig().quota?.providers).toEqual([]);
   expect(mac.calls().some((c) => c.startsWith("codexbar"))).toBe(false);
 
@@ -269,7 +268,68 @@ test("setup asks before sending quotas that another machine already sends, and E
   devbox.ctx.store.saveAgentConfig({ quota: { providers: ["codex"], interval: "5m" } });
   devbox.sys.prompt = { ...defaults, confirm: async (q, def) => (asked.push(q), def) };
   await setup(devbox.sys, { yes: true, noService: true, readyTimeoutMs: 1 });
-  expect(asked.filter((q) => q.startsWith("Quotas:"))).toHaveLength(1);
+  expect(asked.filter((q) => q.includes("already sends quotas"))).toHaveLength(1);
+});
+
+test("uninstall --agent leaves that agent out of setup, refresh and status until setup --agent (#750)", async () => {
+  const m = await machine();
+  const opts = { yes: true, noQuota: true, noService: true } as const;
+  await setup(m.sys, opts);
+  const skill = join(m.home, ".codex/skills/starbridge/SKILL.md");
+  expect(existsSync(skill)).toBe(true);
+
+  expect(await run(["uninstall", "--agent", "constructor", "--yes"], m.ctx)).not.toBe(0);
+  m.ctx.lines.length = 0;
+  expect(await run(["uninstall", "--agent", "codex", "--yes"], m.ctx)).toBe(0);
+  expect(existsSync(skill)).toBe(false);
+  expect(m.ctx.lines).toContain("  starbridge setup --agent codex");
+
+  m.ctx.lines.length = 0;
+  await setup(m.sys, opts);
+  await refresh(m.sys);
+  expect(existsSync(skill)).toBe(false);
+  expect(m.ctx.lines).toContain("– Codex        left out, as `uninstall --agent` asked");
+  m.ctx.lines.length = 0;
+  await status(m.sys);
+  expect(m.ctx.lines).toContain(
+    "Codex: left out (`starbridge setup --agent codex` brings it back)",
+  );
+
+  expect(await setup(m.sys, { agent: "codex" })).toBe(0);
+  expect(existsSync(skill)).toBe(true);
+  expect(m.ctx.store.agentConfig().removedAgents).toBeUndefined();
+});
+
+test("an agent installed after setup: status says so, and refresh installs it (#750)", async () => {
+  const m = await machine();
+  rmSync(join(m.home, ".codex"), { recursive: true, force: true });
+  await status(m.sys);
+  expect(m.ctx.lines).toContain(
+    "Codex found, Starbridge not installed: run `starbridge setup --refresh`",
+  );
+  const done = await refresh(m.sys);
+  expect(done).toContain("✓ Codex        skill and sandbox rule installed");
+  expect(existsSync(join(m.home, ".codex/skills/starbridge/SKILL.md"))).toBe(true);
+});
+
+test("a failed agent install says why and how to retry, and setup goes on (#750)", async () => {
+  const m = await machine();
+  m.ctx.env.PATH = `${join(m.home, "bin")}:${m.ctx.env.PATH}`;
+  mkdirSync(join(m.home, "bin"));
+  writeFileSync(
+    join(m.home, "bin/pi"),
+    "#!/bin/sh\necho 'fatal: could not read from github.com' >&2\nexit 1\n",
+    { mode: 0o755 },
+  );
+  expect(await setup(m.sys, { yes: true, noQuota: true, noService: true })).toBe(0);
+  const out = m.ctx.lines.join("\n");
+  expect(out).toContain(
+    "✗ Pi           pi install " +
+      PI_PACKAGE +
+      ": fatal: could not read from github.com\n               Retry with:\n                 starbridge setup --agent pi",
+  );
+  expect(out).toContain("✓ opencode     skill and plugin installed");
+  expect(out).toContain("Starbridge is set up.");
 });
 
 test("refresh brings what setup wrote to this release and leaves the rest alone", async () => {
@@ -461,7 +521,7 @@ test("setup without a user systemd keeps going and says how to run the agent", a
       mode: 0o755,
     },
   );
-  expect(await setup(m.sys, { yes: true, noPlugin: true, readyTimeoutMs: 500 })).toBe(0);
+  expect(await setup(m.sys, { yes: true, noAgents: true, readyTimeoutMs: 500 })).toBe(0);
   const out = m.ctx.lines.join("\n");
   expect(out).toContain("no systemd user manager (Failed to connect to bus)");
   expect(existsSync(join(m.units, "starbridge-agent.service"))).toBe(false);
@@ -478,11 +538,11 @@ test("a failed service start says how to run the agent and that setup retries (#
     '#!/bin/sh\n[ "$2" = enable ] && { echo "Access denied" >&2; exit 1; }\nexit 0\n',
     { mode: 0o755 },
   );
-  expect(await setup(m.sys, { yes: true, noPlugin: true, readyTimeoutMs: 500 })).toBe(0);
+  expect(await setup(m.sys, { yes: true, noAgents: true, readyTimeoutMs: 500 })).toBe(0);
   const out = m.ctx.lines.join("\n");
-  expect(out).toContain("Could not start the agent service");
-  expect(out).toContain("Run `starbridge agent` yourself");
-  expect(out).toContain("`starbridge setup` again");
+  expect(out).toContain(
+    "✗ Could not start the service: systemctl --user enable starbridge-agent.service: Access denied\n  Retry with:\n    starbridge setup\n  Or keep one running yourself:\n    starbridge agent",
+  );
 });
 
 test("an old Claude Code: setup says what failed and to update it (#620)", async () => {
@@ -490,7 +550,7 @@ test("an old Claude Code: setup says what failed and to update it (#620)", async
   Object.assign(m.ctx.env, { FAKE_CLAUDE_VERSION: "2.1.200", FAKE_NO_JSON: "1" });
   expect(await setup(m.sys, { yes: true, noQuota: true, noService: true })).toBe(0);
   expect(m.ctx.lines.join("\n")).toContain(
-    "`claude plugin marketplace list --json` failed (error: unknown option '--json'). Claude Code 2.1.200 is older than 2.1.287, the oldest Starbridge works with: `claude update` updates it. Skipped",
+    "✗ Claude Code  `claude plugin marketplace list --json` failed (error: unknown option '--json'). Claude Code 2.1.200 is older than 2.1.287, the oldest Starbridge works with: `claude update` updates it\n               Retry with:\n                 starbridge setup --agent claude",
   );
 });
 
@@ -500,9 +560,9 @@ test("Ctrl-C at the test decision withdraws it from the devices (#613)", async (
   m.ctx.signal = stop.signal;
   const sys: Sys = {
     ...m.sys,
-    prompt: { ...m.sys.prompt, confirm: async (q) => q.startsWith("Send a test decision") },
+    prompt: { ...m.sys.prompt, confirm: async (q) => q.trim().startsWith("Send a test decision") },
   };
-  const done = setup(sys, { noQuota: true, noPlugin: true, noService: true });
+  const done = setup(sys, { noQuota: true, noAgents: true, noService: true });
   await until(async () => (await server.opened("decision")).length === 1);
   stop.abort();
   expect(await done).toBe(0);

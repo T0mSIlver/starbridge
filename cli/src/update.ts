@@ -144,11 +144,13 @@ async function updateSelf(ctx: Ctx, install: InstallKind, pubkey: string) {
   chmodSync(next, 0o755);
   replaceBinary(next, install.path);
   ctx.out(`Updated starbridge ${VERSION} to ${latest} in ${install.path}.`);
-  // The new binary brings the files setup wrote to its version, and restarts the agent.
+  // The new binary brings the files setup wrote to its version, and restarts the agent. It may
+  // also install Starbridge in an agent found since setup (#750): `pi install` alone may take 5
+  // minutes.
   const r = spawnSync(install.path, ["setup", "--refresh"], {
     env: ctx.env as NodeJS.ProcessEnv,
     encoding: "utf8",
-    timeout: 120_000,
+    timeout: 600_000,
   });
   for (const line of `${r.stdout ?? ""}`.split("\n").filter(Boolean)) ctx.out(line);
   if (r.status !== 0) {
