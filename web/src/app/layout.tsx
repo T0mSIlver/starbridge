@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { headers } from "next/headers";
+import { DESCRIPTION } from "@/lib/landing";
 import { THEME_SCRIPT, ZOD_SCRIPT } from "@/lib/themeScript";
 import { mono, sans } from "@/styles/fonts";
 import "@/styles/tokens.css";
@@ -10,7 +11,7 @@ export const metadata: Metadata = {
   // The app name first: an installed desktop app's window shows a title that starts with it
   // as is, where Chrome would prefix "Starbridge - " to "Quotas · Starbridge".
   title: { default: "Starbridge", template: "Starbridge · %s" },
-  description: "Your AI quota windows and the decisions your agents need from you.",
+  description: DESCRIPTION,
   // iOS runs the page from the Home Screen without Safari's bars. The "default" status bar
   // keeps the clock readable in both schemes, where "black-translucent" draws white text.
   appleWebApp: { capable: true, title: "Starbridge", statusBarStyle: "default" },

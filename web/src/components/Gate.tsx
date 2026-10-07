@@ -1,6 +1,6 @@
 "use client";
 
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { outdated } from "@/lib/api";
 import type { FirstDevice as PreparedDevice, RecoveryEntry } from "@/lib/device";
@@ -505,8 +505,12 @@ function Outdated() {
   );
 }
 
-/** Shows the screen for where this browser stands, and the app once it is a ready device. */
-export function Gate({ children }: { children: React.ReactNode }) {
+/**
+ * Shows the screen for where this browser stands, and the app once it is a ready device.
+ * `visitor`: the request carried no session cookie, so the server's HTML at `/` is already the
+ * landing page (#694).
+ */
+export function Gate({ visitor, children }: { visitor: boolean; children: React.ReactNode }) {
   const { boot } = useApp();
   const old = useSyncExternalStore(
     outdated.subscribe,
@@ -517,15 +521,32 @@ export function Gate({ children }: { children: React.ReactNode }) {
   const failed = useSignInFailure(boot.state === "signed-out");
   const router = useRouter();
   const path = usePathname();
+  // Back from a failed GitHub sign-in, the page says why instead (proxy.ts serves no landing).
+  const signInReturn = useSearchParams().has("signin");
+  // Visitors land on the landing page; a browser with a device signs in to its Inbox.
+  const landing =
+    path === "/" &&
+    !ownServer &&
+    !failed &&
+    (boot.state === "loading"
+      ? visitor && !signInReturn
+      : boot.state === "signed-out" && !boot.known);
+  // The server titled a visitor's page for the landing page: once something else shows there,
+  // such as the Inbox after signing in, the tab says what it is.
+  const retitle = visitor && path === "/" && !landing && boot.state !== "loading";
+  useEffect(() => {
+    if (retitle) document.title = "Starbridge · Inbox";
+  }, [retitle]);
   // A pairing link opened before sign-in or setup: keep its code, and go back to it after.
   useEffect(() => holdPairCode(), []);
   useEffect(() => {
     if (boot.state === "ready" && path !== "/pair" && hasPairCode()) router.replace("/pair");
   }, [boot.state, path, router]);
   if (old) return <Outdated />;
+  if (landing) return <Landing onOwnerToken={() => setOwnServer(true)} />;
   switch (boot.state) {
     case "loading":
-      // Plain ground until boot knows the screen: the landing page, sign-in or the app.
+      // Plain ground until boot knows the screen: sign-in or the app.
       return null;
     case "error":
       return (
@@ -537,9 +558,6 @@ export function Gate({ children }: { children: React.ReactNode }) {
         />
       );
     case "signed-out":
-      // Visitors land on the landing page; a browser with a device signs in to its Inbox.
-      if (path === "/" && !boot.known && !ownServer && !failed)
-        return <Landing onOwnerToken={() => setOwnServer(true)} />;
       return <SignIn ownServer={ownServer} refused={boot.refused} failed={failed} />;
     case "first-device":
       return <FirstDevice account={boot.account} unsaved={boot.unsaved} />;
