@@ -243,7 +243,14 @@ test("progress printed while a post is in flight goes out after the progress gap
   const posts: RunInput[] = [];
   let release: (() => void) | undefined;
   const reporter = new Reporter(
-    { id: "r_1", title: "t", reason: "r", startedAt: "2026-10-05T10:00:00Z", project: "p", session: "" },
+    {
+      id: "r_1",
+      title: "t",
+      reason: "r",
+      startedAt: "2026-10-05T10:00:00Z",
+      project: "p",
+      session: "",
+    },
     async (input) => {
       posts.push(input);
       if (posts.length === 2) await new Promise<void>((r) => (release = r));
