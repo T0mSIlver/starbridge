@@ -45,12 +45,20 @@ export const PROMPTS_OPEN = "permissions-open";
  */
 export const CLI_PATH = "cli-path";
 
+/** Claude Code's timeout for the picker's hook (plugin/hooks/hooks.json, #848). */
+export const PICKER_MAX_MS = 86_400_000;
+
 /** What `PROMPTS_OPEN` holds for state `s`. */
 export function promptsMark(s: State, now = Date.now()): string {
   const open =
     Object.values(s.permissions ?? {}).some(
       (p) => !p.settled && Date.parse(p.permission.expiresAt) > now,
-    ) || Object.entries(s.asked).some(([id, a]) => a.picker && !a.settled && !s.answers[id]);
+    ) ||
+    // A picker's hook ends within its day-long timeout; one that died unsettled stops counting.
+    Object.entries(s.asked).some(
+      ([id, a]) =>
+        a.picker && !a.settled && !s.answers[id] && Date.parse(a.askedAt) > now - PICKER_MAX_MS,
+    );
   return open ? "open" : "";
 }
 

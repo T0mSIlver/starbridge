@@ -709,3 +709,15 @@ test("bidi and invisible characters reach devices as escapes (#357)", () => {
     "stays at the keyboard",
   );
 });
+
+test("a picker card whose hook died unsettled stops holding the open mark after a day", () => {
+  const asked = {
+    question: "Which color?",
+    options: [],
+    askedAt: new Date(0).toISOString(),
+    to: [],
+  };
+  const st = { asked: { d_1: { ...asked, picker: SESSION } }, answers: {} };
+  expect(promptsMark(st, Date.parse(asked.askedAt) + 1000)).toBe("open");
+  expect(promptsMark(st, Date.parse(asked.askedAt) + 86_400_001)).toBe("");
+});
