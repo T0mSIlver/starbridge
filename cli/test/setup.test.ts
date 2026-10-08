@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, expect, setDefaultTimeout, test } from "bun:test";
+import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
   existsSync,
@@ -14,6 +15,8 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { LiveServer } from "@starbridge/server/test-support";
+import { type Status, socketPath } from "../src/agent/api";
+import { AgentClient } from "../src/agent/client";
 import { makeAgent } from "../src/agent/main";
 import type { Agent } from "../src/agent/server";
 import { REMOVED } from "../src/api";
@@ -31,7 +34,12 @@ import {
 } from "../src/setup/harnesses";
 import { markedSkill } from "../src/setup/marker";
 import opencodeFiles from "../src/setup/opencode-files.js";
-import { withInstalledPlaces } from "../src/setup/service";
+import {
+  installService,
+  removeService,
+  serviceState,
+  withInstalledPlaces,
+} from "../src/setup/service";
 import { probeLines, refresh, setup } from "../src/setup/setup";
 import { status } from "../src/setup/status";
 import { defaults, failure, type Sys } from "../src/setup/sys";
@@ -973,3 +981,73 @@ test("on Windows, setup registers a logon task that runs the agent headless, and
   expect(ps().some((c) => c.startsWith("powershell Unregister-ScheduledTask"))).toBe(true);
   expect(existsSync(path)).toBe(false);
 });
+
+test("on macOS, setup loads a launchd agent that runs the agent, and uninstall unloads it", async () => {
+  const m = await machine();
+  await startAgent(m.ctx);
+  const sys: Sys = { ...m.sys, platform: "darwin", arch: "arm64", uid: 501 };
+  expect(await setup(sys, { yes: true, readyTimeoutMs: 2_000 })).toBe(0);
+
+  const path = join(m.home, "Library/LaunchAgents/run.starbridge.agent.plist");
+  const plist = readFileSync(path, "utf8");
+  expect(plist).toContain(`<!-- Written by starbridge ${VERSION};`);
+  expect(plist).toContain(`<string>${SELF}</string>\n    <string>agent</string>`);
+  expect(plist).toContain(
+    `<key>StandardOutPath</key>\n  <string>${join(m.home, "Library/Logs/starbridge-agent.log")}</string>`,
+  );
+  const lc = () => m.calls().filter((c) => c.startsWith("launchctl"));
+  expect(lc()).toContain(`launchctl bootstrap gui/501 ${path}`);
+
+  // A second setup finds the same plist and leaves the running agent alone.
+  const before = lc().length;
+  await setup(sys, { yes: true, readyTimeoutMs: 2_000 });
+  expect(
+    lc()
+      .slice(before)
+      .some((c) => c.startsWith("launchctl bootstrap")),
+  ).toBe(false);
+
+  m.ctx.lines.length = 0;
+  expect(await uninstall(sys, { purge: true })).toBe(0);
+  expect(m.ctx.lines).toContain("Stopped and removed the agent service.");
+  expect(lc()).toContain("launchctl bootout gui/501/run.starbridge.agent");
+  expect(existsSync(path)).toBe(false);
+});
+
+// The real launchd, on GitHub's macOS runners only: its label is the one an installed agent uses.
+test.if(process.platform === "darwin" && process.env.RUNNER_ENVIRONMENT === "github-hosted")(
+  "on a Mac, launchd starts the agent from the plist setup writes, and stops it",
+  async () => {
+    const ctx = await paired(server);
+    const home = mkdtempSync(join(tmpdir(), "starbridge-home-"));
+    Object.assign(ctx.env, { HOME: home, STARBRIDGE_CONFIG_DIR: ctx.store.dir });
+    const sys: Sys = {
+      ctx,
+      home,
+      platform: "darwin",
+      arch: process.arch,
+      uid: process.getuid?.() ?? 0,
+      prompt: defaults,
+      self: [process.execPath, join(import.meta.dir, "../src/main.ts")],
+    };
+    const { path } = await installService(sys, false);
+    try {
+      expect(spawnSync("plutil", ["-lint", path]).status).toBe(0);
+      const client = new AgentClient(socketPath(ctx.env, ctx.store.dir));
+      let pid: number | undefined;
+      await until(async () => {
+        pid = await client
+          .call<Status>("GET", "/v1/status", undefined, 1_000)
+          .then((s) => s.pid)
+          .catch(() => undefined);
+        return pid !== undefined;
+      }, 20_000);
+      expect(pid).not.toBe(process.pid);
+      expect((await serviceState(sys)).state).toBe("running");
+    } finally {
+      expect(await removeService(sys)).toBe(true);
+    }
+    expect((await serviceState(sys)).state).toBe("not loaded");
+    expect(existsSync(path)).toBe(false);
+  },
+);
