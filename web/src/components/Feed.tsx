@@ -269,7 +269,7 @@ function PromptBody({ p, comfy, filled }: { p: PromptItem; comfy?: boolean; fill
       <div className={`${comfy ? "t-small" : "t-meta"} ${s.tool}`}>
         <KindTile type="prompt" filled={filled} size={comfy ? 20 : 18} inline />
         <span className={s.toolName}>
-          <Hit text={p.permission.tool} />
+          <Hit text={p.permission.description || p.permission.tool} />
         </span>
       </div>
       {/* A phone's row carries Allow when the input fits it: then it shows the input whole. */}
@@ -288,7 +288,7 @@ function PromptBody({ p, comfy, filled }: { p: PromptItem; comfy?: boolean; fill
 
 const label = (e: Entry) =>
   e.type === "prompt"
-    ? `${e.item.permission.tool}: ${e.item.permission.summary}`
+    ? `${e.item.permission.description || e.item.permission.tool}: ${e.item.permission.summary}`
     : e.type === "question"
       ? e.item.decision.question
       : e.item.run.title;

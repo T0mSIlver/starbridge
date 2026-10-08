@@ -3,7 +3,7 @@ import { expect, test } from "bun:test";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { migrate, openDb } from "../src/db";
+import { MIGRATIONS, migrate, openDb } from "../src/db";
 import { OLD_MIGRATIONS } from "./fixtures/migrations-v1-v6";
 
 const version = (db: Database) =>
@@ -64,10 +64,26 @@ test("the folded schema is the one migrations 1 to 6 built, without app_codes", 
   migrate(old, OLD_MIGRATIONS);
   // Unused since #527, left out of the fold.
   old.run("DROP TABLE app_codes");
-  const db = openDb(":memory:");
+  const db = new Database(":memory:");
+  migrate(db, MIGRATIONS.slice(0, 1));
   expect(version(db)).toBe(1);
   expect(schema(db).length).toBeGreaterThan(20);
   expect(schema(db)).toEqual(schema(old));
+});
+
+test("V2 adds suspended_at to the accounts of a V1 database, none suspended (#785)", () => {
+  const path = join(mkdtempSync(join(tmpdir(), "sb-db-")), "db.sqlite");
+  const v1 = new Database(path);
+  migrate(v1, MIGRATIONS.slice(0, 1));
+  v1.run(
+    "INSERT INTO accounts (id, github_id, created_at) VALUES ('a1', 1, '2026-10-08T00:00:00Z')",
+  );
+  v1.close();
+  const db = openDb(path);
+  expect(version(db)).toBe(2);
+  expect(db.query("SELECT id, suspended_at FROM accounts").all()).toEqual([
+    { id: "a1", suspended_at: null },
+  ]);
 });
 
 test("a write that reads first waits for another connection's write lock", async () => {

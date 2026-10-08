@@ -62,7 +62,12 @@ function useWide(): boolean {
 
 const text = (e: Entry) =>
   e.type === "prompt"
-    ? [e.item.permission.tool, e.item.permission.summary, e.item.permission.source.sessionTitle]
+    ? [
+        e.item.permission.tool,
+        e.item.permission.description,
+        e.item.permission.summary,
+        e.item.permission.source.sessionTitle,
+      ]
     : e.type === "question"
       ? [e.item.decision.question, e.item.decision.context, e.item.decision.source.sessionTitle]
       : [e.item.run.title, e.item.run.reason];

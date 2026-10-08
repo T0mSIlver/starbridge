@@ -417,7 +417,7 @@ export async function postPermission(
   signal?: AbortSignal,
 ): Promise<string> {
   const dir = await refreshDirectory(ctx, s, signal);
-  const to = devices(dir);
+  const to = devices(ctx, dir);
   const { permission, updates } = buildPermission(hook, {
     ...opts,
     machine: s.machine.name,
@@ -428,7 +428,7 @@ export async function postPermission(
   });
   const item = seal(
     "permission",
-    { ...permission, dir: signedHead(ctx, dir) },
+    { ...permission, dir: signedHead(dir) },
     { id: s.machine.id, signKey: s.keys.sign.privateKey },
     to,
   );
@@ -556,7 +556,7 @@ export async function postSettled(
   signal?: AbortSignal,
 ): Promise<void> {
   const dir = await refreshDirectory(ctx, s, signal);
-  const to = devices(dir);
+  const to = devices(ctx, dir);
   const body: Settled = {
     v: 1,
     id: `st_${randomBytes(12).toString("base64url")}`,
@@ -565,7 +565,7 @@ export async function postSettled(
     outcome: how.outcome,
     ...(how.device ? { device: how.device, behavior: how.behavior } : {}),
     at: iso(ctx.now()),
-    dir: signedHead(ctx, dir),
+    dir: signedHead(dir),
   };
   await s.api.postItem(
     seal("settled", body, { id: s.machine.id, signKey: s.keys.sign.privateKey }, to),

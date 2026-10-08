@@ -293,11 +293,18 @@
 .cmd {
   padding: var(--s1h) var(--s2h);
   border-radius: var(--radius-dense);
-  background: var(--bg);
-  border: 1px solid var(--line);
+  background: var(--terminal);
+  color: var(--on-terminal);
   white-space: pre;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* On a phone a row's answers share its width, as on Android (#805). */
+@media (max-width: 599px) {
+  .actions > [class] {
+    flex: 1 1 auto;
+  }
 }
 
 .cmdWhole {

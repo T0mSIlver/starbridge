@@ -705,6 +705,11 @@ Codex prompts are not supported.
   redaction. A private key's lines go also when they carry a diff's `+`, `-` or space (#489).
   `inputHash` is keyed under the machine's signing key, so a device holding the redacted input
   cannot test guesses for a short redacted value.
+- **Title and command** (#805). A prompt's title is what the agent says the call does (Claude
+  Code's `description`), else the tool, on every surface; the command shows under it in a dark
+  terminal block. Allow covers the command, never the description: the agent writes the
+  description, so it can mislead. A notification draws the block in its expanded view only, a
+  decorated custom view, since the standard templates strip a background colour from text.
 - History says how and where a prompt was answered ("Denied · on Pixel"), from the machine's
   `settled` notice (#349).
 
@@ -962,6 +967,18 @@ Tokens, type and components: `DESIGN.md`.
   memory, the VPS's first limit (#587). Caddy compresses every
   response and the web app none: Next's gzip ran on its one thread and filled it near 18 landing
   page visitors a second (#593). Nightly SQLite backups, kept 7 days (#586).
+- **Per-address pages and sign-ups** (#787). Caddy takes 600 page requests a minute per address
+  outside `/v1` and `/_next/static`: each is Next rendering, 10 to 17 ms of CPU, and a visit with
+  its link prefetches makes a few dozen. The server makes at most 30 new accounts an hour per
+  address: each account may store 256 MB, so many GitHub accounts behind one script could fill
+  the server's 2 GB, while an office or a carrier's NAT signs up a handful an hour.
+- **Ready for Cloudflare's proxy** (#799). starbridge.run's DNS is on Cloudflare in DNS-only
+  mode; its proxy is the emergency answer to a flood from many addresses, which no per-address
+  rule stops. So that turning it on changes nothing else: Caddy takes the client's address from
+  `CF-Connecting-IP` only on requests from Cloudflare's published ranges, and every rate limit,
+  the block list, the server's per-address limits (through `X-Forwarded-For`, which Caddy sets to
+  that address alone) and Umami use it; and long-polls return within 90 s, under the proxy's
+  100 s cut. Clients already treat a cut long-poll, or Cloudflare's 524, as a reconnect.
 - **Per-address reads** (#582). Caddy counts every `/v1` request per address, 3000 a minute
   (IPv6 per /64): most reads count against no account, so this keeps a looping client or script
   to about 2% of a core. A visible page with a prompt waiting and a run live makes about 200 a
@@ -996,6 +1013,11 @@ Tokens, type and components: `DESIGN.md`.
   address is blocked as its /64, as the rate limits count it, and nothing wider than a /8 (IPv4)
   or /32 (IPv6) is accepted. The block list is the one place an address is written to disk, until
   it is unblocked; `/privacy` says so.
+- **Suspending an account** (#785). The owner can suspend one account whose machines flood the
+  server (a looping agent, or abuse) without deleting it: its machines' writes get 403
+  `account-suspended`, which the CLI prints with its reason, while they still read and wait, and
+  its phones and browsers work as before, so its owner can still answer, settle and revoke.
+  `bun server.js suspend|unsuspend ACCOUNT`, stored as `accounts.suspended_at` (migration 2).
 - **Privacy and terms** (`/privacy`, `/terms`). Each claim follows the code: stored columns in
   `server/src/db.ts`, retention in `server/src/limits.ts`, logs and backups in `deploy/`. A change
   to what is stored changes the page, and the Play data-safety form. Contact is
