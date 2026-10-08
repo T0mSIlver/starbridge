@@ -857,10 +857,14 @@ internal fun outcome(decision: Decision) = decision.answer ?: decision.theirAnsw
     else -> "Answered"
 }
 
-/** Who closed it, after its outcome: "on this phone", "on Pixel", "by the agent" (withdrawn, or for another page), "on another device". */
+/**
+ * Who closed it, after its outcome: "on this phone", "on Pixel", "at the keyboard" (the agent's own
+ * picker, #865), "by the agent" (withdrawn, or for another page), "on another device".
+ */
 internal fun closedByPhrase(decision: Decision) = when {
     decision.answer != null -> "on this phone"
     decision.answeredOn != null -> "on ${decision.answeredOn}"
+    decision.settled == "elsewhere" && decision.answerIn == null -> "at the keyboard"
     decision.settled != null || decision.answerIn != null -> "by the agent"
     else -> "on another device"
 }
