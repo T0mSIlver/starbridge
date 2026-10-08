@@ -742,6 +742,8 @@ Codex prompts are not supported.
   dismissed run out locally until a newer update, so a server without the route still hides it
   on that phone.
 - Android shows a notification per run, a Live Update on Android 16; dismissing a run closes it.
+  Its progress ("34 of 120", "40%") leads the title: at the end, a long title's ellipsis hid it,
+  and the collapsed notification shows no text line under a progress bar (#826).
   The web polls every 2 s while a run is live and the page is visible, else every 10 s.
 
 ### Quotas
