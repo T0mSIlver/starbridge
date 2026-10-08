@@ -603,10 +603,22 @@ line, the safe side: at worst a prompt repeats an answer the agent already read.
 
 ### The harness's own ask tool
 
-- Claude Code (#121, #200): a `PreToolUse` hook on `AskUserQuestion` allows the call with
-  `updatedInput.answers` that say to ask through `starbridge ask`. A deny would show as a red hook
-  error. It lets the question through when the machine is unpaired or the server does not answer
-  within 3 s.
+- Claude Code (#848): the picker races the devices, as permission prompts do. The question shows
+  in Claude Code's own picker (terminal, desktop app, the Claude app through Remote Control) and
+  on the devices at once; the first answer wins and the other side is settled `elsewhere`. Until
+  #848 a `PreToolUse` hook answered the call with "ask through `starbridge ask`" (#121, #200), so a
+  quick question at the desk still went only to the phone. The picker is a permission dialog, so
+  the plugin's `PermissionRequest` hook takes it whatever the permissions setting: one waiting
+  card per question, held from the session's answer loop, and once each has a device's answer it
+  allows the call with those answers, which closes the picker (a multi-select answer
+  comma-joined, as Claude Code's own). An answer in the picker sends the hook nothing, so
+  `PostToolUse` on `AskUserQuestion` settles the cards; Esc sends SIGTERM, as does Claude Code's
+  hook timeout, so the hook has its own entry with a day's timeout and withdraws its cards 10
+  minutes before it, when no answer could reach the picker any more. The generic
+  `PermissionRequest` entry excludes `AskUserQuestion` by its matcher. The `PreToolUse` entry
+  stays one release and the new CLI's `hook ask-user` prints nothing, so a newer plugin over an
+  older CLI still redirects, and a newer CLI under an older plugin races through the generic
+  entry, withdrawing its cards after 570 s.
 - opencode (#345): each `question` call becomes one Starbridge question per question, already
   waiting, and the answers go back into the call through `POST /question/{id}/reply`. The first
   answer, on a device or at the keyboard, wins; the other side is settled `elsewhere`. A question

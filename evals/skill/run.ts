@@ -129,7 +129,7 @@ exit 0
 
 interface Turn {
   commands: string[];
-  /** Each `AskUserQuestion` call, and whether a hook turned it away (else its dialog showed). */
+  /** Each `AskUserQuestion` call, and whether a hook turned it away (plugins before #848). */
   askUser?: { denied: boolean }[];
   final: string;
   tokens?: number;
