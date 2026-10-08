@@ -174,7 +174,8 @@ provider plugins add providers, not panels.
   that forged a long head: `starbridge pair --force` on a machine; on a device, revoking from it
   forgets that member's heads, since that device knows its own revocation is real, and any other
   device's hold names who revoked the member and offers "I revoked it: stop waiting". Only the
-  owner can tell their revocation from a forged one.
+  owner can tell their revocation from a forged one. Tom chose this over a button on every
+  device, or none, on 2026-10-08 (#813).
 - **Browser keys** (#8, #116, #274, #283, #354). Non-extractable WebCrypto keys in IndexedDB,
   read back once after writing, with raw libsodium keys where they don't return (WebKit reads an
   X25519 `CryptoKey` back as null). A join or recovery keeps its keys under `pending` until the
