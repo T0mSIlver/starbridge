@@ -35,20 +35,40 @@ test("a visible page used in the last minute says present, beats, and says absen
   expect(sent).toEqual([true, true, false, true, false]);
 });
 
-test("a failed beat is tried again at the next check", async () => {
-  let fail = true;
-  const sent: boolean[] = [];
+test("a failed beat is tried again a beat later, and an idle tab leaves a busy sibling's word", async () => {
+  let now = 0;
+  let tries = 0;
   const b = new Beacon(
-    async (p) => {
-      if (fail) throw new Error("offline");
-      sent.push(p);
+    async () => {
+      tries++;
+      throw new Error("not-found");
     },
     () => true,
-    () => 0,
+    () => now,
   );
   b.input();
   await b.tick();
-  fail = false;
+  now = 10_000;
   await b.tick();
+  expect(tries).toBe(1);
+  now = 30_000;
+  b.input();
+  await b.tick();
+  expect(tries).toBe(2);
+
+  now = 0;
+  const sent: boolean[] = [];
+  const idle = new Beacon(
+    async (p) => {
+      sent.push(p);
+    },
+    () => true,
+    () => now,
+    () => true,
+  );
+  idle.input();
+  await idle.tick();
+  now = 61_000;
+  await idle.tick();
   expect(sent).toEqual([true]);
 });
