@@ -21,7 +21,7 @@ import { run } from "../src/cli";
 import { session } from "../src/context";
 import { poll } from "../src/decisions";
 import { pushOnce } from "../src/quota";
-import { installTarball, KEYS, PIN, updateCodexbar } from "../src/setup/codexbar";
+import { compareCodexbar, installTarball, KEYS, PIN, updateCodexbar } from "../src/setup/codexbar";
 import {
   CODEX_RULE,
   installOpencode,
@@ -739,6 +739,12 @@ test("CodexBar installs only when its release's own checksum matches", async () 
 test("the pinned CodexBar has a checksum for every build setup installs (#568)", () => {
   expect(Object.keys(PIN.sha256).sort()).toEqual([...KEYS].sort());
   for (const sha of Object.values(PIN.sha256)) expect(sha).toMatch(/^[0-9a-f]{64}$/);
+});
+
+test("CodexBar versions order numerically, a pre-release before its release", () => {
+  const ordered = ["0.9.0", "0.73.0", "0.74.0-beta.2", "0.74.0-beta.10", "0.74.0", "v1.0.0"];
+  for (let i = 1; i < ordered.length; i++)
+    expect(compareCodexbar(ordered[i] as string, ordered[i - 1] as string)).toBe(1);
 });
 
 test("update moves setup's CodexBar to the pinned release, or the one named (#568)", async () => {

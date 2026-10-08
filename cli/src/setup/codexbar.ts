@@ -187,7 +187,7 @@ export function compareCodexbar(a: string, b: string): number {
   if (x.pre === y.pre) return 0;
   if (x.pre === undefined) return 1;
   if (y.pre === undefined) return -1;
-  return x.pre < y.pre ? -1 : 1;
+  return Math.sign(x.pre.localeCompare(y.pre, "en", { numeric: true }));
 }
 
 const size = (bytes: number) =>
