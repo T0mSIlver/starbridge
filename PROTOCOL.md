@@ -532,6 +532,14 @@ set in `RELAY_URL` (starbridge.run runs with `RELAY_MODE=1`), which pushes with 
 own credentials; the payload is already ciphertext or an id. UnifiedPush always goes direct.
 `gone` from a push service drops the subscription.
 
+### Presence and settings
+
+| Route | Who | What |
+|---|---|---|
+| `PUT /presence` | device, machine | `{present}`: whether the owner sits at this screen ("Held pushes") → 204 |
+| `GET /settings` | device | the account's settings, `{pushHold}`: seconds a push waits while the owner is present, 30 unless set |
+| `PUT /settings` | device | `{pushHold}`, 0 to 300 → the settings as stored |
+
 ### Limits
 
 These bound what one account, or one address, can make the server store or do. A rate limit
@@ -565,6 +573,8 @@ server whose disk is full answers writes 503 `storage-full` with `Retry-After`; 
 | `GET /joins` waiting | 16 per account; `GET /joins/:id` waiting: 4 per join: 429 `too-many-waits` |
 | `GET /answers` waiting | 32 per machine: 429 `too-many-waits` |
 | `POST /quota/ask` | 6 a minute per account |
+| `PUT /presence` | 10 a minute per device or machine |
+| `PUT /settings` | 30 a minute per account |
 | `POST /push/subscriptions` | 30 a minute per account, on top of the subscription caps |
 | `POST /relay`, on a relay server | 120 a minute per address |
 
@@ -623,6 +633,32 @@ nothing.
   it asks for it in `GET /answers?kinds=`.
 - On the machine, `starbridge waiting <id>` and `starbridge wait <id>` say when the decision is
   snoozed (`wait` exits 3, once per snooze); nothing wakes the agent.
+
+## Held pushes
+
+A question that shows in the agent's own picker and on the owner's screen needs no push to the
+phone as well (#848). So while the owner sits at a screen, the push of an item that asks for them
+waits a little, and goes only if nothing answered it meanwhile.
+
+- **Presence.** A machine or a device sends `PUT /presence {present: true}` every 30 s
+  (`PRESENCE_BEAT_MS`) while the owner sits at its screen, and `{present: false}` once they no
+  longer do. It decides that where it reads it, and sends only the bit: a machine, its screen
+  unlocked with input in the last minute (`isPresent`); a web page, visible with an input event on
+  it in the last minute; the Android app, in front and touched in the last minute. The server
+  keeps each source's bit in memory, trusts a `true` for 75 s (`PRESENCE_VALID_MS`), and counts
+  the account present while any source is. A restart forgets it: push at once.
+- **What waits.** A machine's `decision`, `permission` or `waiting` item that asks for a push,
+  posted while the account is present and its `pushHold` is not 0. Its push goes at once to the
+  devices that are themselves present, and waits `pushHold` seconds for the others. A re-seal's
+  new devices wait the same way; those that already waited keep their time.
+- **When the hold ends**, within a few seconds, the server pushes the item to the
+  devices it held it from, if it is still open: a permission unanswered, a decision, or a
+  `waiting` item's decision, unanswered and not snoozed. The hold is stored with the item, so a
+  restart delays it by no more than the restart.
+- **Closed during the hold**, an item never pushes the devices it held it from, nor the
+  `answered` push or the settled notice that closes it: they never heard of it. A snooze posted
+  during the hold skips them too, and a snoozed item's hold ends without a push.
+- **Devices** list a held item at once, as any other: only its push waits.
 
 ## Runs
 

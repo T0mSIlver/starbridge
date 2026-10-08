@@ -10,7 +10,7 @@ export default function Privacy() {
     <LegalPage title="Privacy">
       <p>
         This covers the hosted service at starbridge.run and the Starbridge Android app. A server
-        you host yourself keeps its data on your own machine. Last updated: 7 October 2026.
+        you host yourself keeps its data on your own machine. Last updated: 8 October 2026.
       </p>
       <p>
         Operator: Tom Vaucourt, an individual in France, running Starbridge as a non-professional.
@@ -38,13 +38,15 @@ export default function Privacy() {
           For each device that gets notifications: the push service, its token or endpoint URL, and
           the keys that encrypt pushes to it.
         </li>
+        <li>How long notifications wait while you are at a screen, if you change it.</li>
         <li>
           Your decisions, answers, quota snapshots, permission prompts and their answers, runs, and
           the notices that close an item, say an agent is waiting or snooze a decision. Your devices
           and machines encrypt them before upload, and the server cannot read them. It does see the
           kind of each one, its id, who sent it, which devices it went to, which item it answers or
           closes, its size, when it arrived, was updated or was answered, until when a decision is
-          snoozed, and whether an item asked for a notification.
+          snoozed, whether an item asked for a notification, and until when its notification waits
+          while you are at a screen.
         </li>
       </ul>
       <p>The server deletes them on this schedule:</p>
@@ -64,6 +66,15 @@ export default function Privacy() {
         nightly copy of the database is kept on the server for 7 days, and Hetzner keeps its own
         backups of the server, with those copies, for 7 more, so deleted data can remain in backups
         for up to 2 weeks.
+      </p>
+
+      <h2 className="t-heading">Whether you are at a screen</h2>
+      <p>
+        While a Starbridge page or the app is in front and in use, or a machine where you turned
+        this on has had keyboard or mouse input in the last minute, it tells the server so every 30
+        seconds: yes or no, never what you did. The server uses it to hold notifications for a few
+        seconds while you are at a screen. It keeps the last answer from each device or machine in
+        memory for 75 seconds, never writes it to disk, and a restart clears it.
       </p>
 
       <h2 className="t-heading">Logs</h2>

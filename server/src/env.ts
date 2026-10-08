@@ -3,6 +3,7 @@ import type { ClientVersion } from "@starbridge/protocol";
 import type { Server } from "bun";
 import type { Caller } from "./auth";
 import type { Config } from "./config";
+import type { Presence } from "./presence";
 import type { Push } from "./push";
 import type { RateLimiter } from "./ratelimit";
 import type { PairingClients } from "./routes/pairings";
@@ -26,6 +27,8 @@ export interface Deps {
   /** Wakes join long-polls; keyed by "join:<id>" and "account:<account>". */
   joins: Waiters;
   limiter: RateLimiter;
+  /** Who of each account sits at a screen (#848), in memory only. */
+  presence: Presence;
   watch: Watch;
   usage: Usage;
 }
