@@ -12,13 +12,18 @@ const toolShell = (command: string) => [
   `source /home/dev/.claude/shell-snapshots/snapshot-zsh-1.sh 2>/dev/null || true && ${evalForm(command)} < /dev/null && pwd -P >| /tmp/claude-272f-cwd`,
 ];
 
-test("the tool's shell runs the command; another command, or the hook itself, does not", () => {
+test("only a shell running the eval form is the call; a program handed the command as data is not", () => {
   const shell = { pid: 9, ppid: 2, argv: toolShell(COMMAND) };
   expect(runs(shell, COMMAND)).toBe(true);
   expect(runs(shell, "sleep 3")).toBe(false);
   expect(runs({ pid: 9, ppid: 2, argv: ["sh", "-c", "cli.sh hook permission"] }, COMMAND)).toBe(
     false,
   );
+  // A background job handed the command as data, even in its eval form.
+  expect(runs({ pid: 9, ppid: 2, argv: ["rg", COMMAND, "logs"] }, COMMAND)).toBe(false);
+  expect(runs({ pid: 9, ppid: 2, argv: ["rg", evalForm(COMMAND)] }, COMMAND)).toBe(false);
+  // `ps` gives the arguments as one string.
+  expect(runs({ pid: 9, ppid: 2, argv: [toolShell(COMMAND).join(" ")] }, COMMAND)).toBe(true);
 });
 
 test("Claude Code is the hook's nearest ancestor that is not a shell", () => {

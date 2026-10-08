@@ -19,17 +19,25 @@ export interface Proc {
 export const RUN_CHECK_MS = 500;
 
 /** Shells that stand between Claude Code and the hook: `sh -c <hook>`, then `sh cli.sh`. */
-const SHELLS = new Set(["sh", "dash", "bash", "zsh", "ash", "busybox"]);
+const SHELLS = new Set(["sh", "dash", "bash", "zsh", "ash", "ksh", "fish", "busybox"]);
 
 /** The command as Claude Code's Bash tool hands it to the shell: `eval '…'`, quotes escaped. */
 export function evalForm(command: string): string {
   return `eval '${command.replaceAll("'", `'"'"'`)}'`;
 }
 
-/** Whether `p` is the shell running `command`: the eval form, or the command as one argument. */
+/** The program's own name, from the first argument: `sh` for `/bin/sh -c …`. */
+function program(p: Proc): string {
+  return (p.argv[0] ?? "").split(/\s/)[0]?.split("/").pop() ?? "";
+}
+
+/**
+ * Whether `p` is a shell running `command` in its eval form. Another program handed the command
+ * as data (`rg 'git status' logs` from a background job) is not the call.
+ */
 export function runs(p: Proc, command: string): boolean {
   const quoted = evalForm(command);
-  return p.argv.some((a) => a === command || a.includes(quoted));
+  return SHELLS.has(program(p)) && p.argv.some((a) => a.includes(quoted));
 }
 
 /** Whether `pid` descends from `root`, by the parents in `byPid`. */
@@ -92,8 +100,7 @@ export function agentPid(procs: Proc[], from = process.ppid): number | undefined
   for (let pid = from, hops = 0; hops < 4; hops++) {
     const p = byPid.get(pid);
     if (!p) return undefined;
-    const exe = (p.argv[0] ?? "").split(/\s/)[0]?.split("/").pop() ?? "";
-    if (!SHELLS.has(exe)) return pid;
+    if (!SHELLS.has(program(p))) return pid;
     pid = p.ppid;
   }
   return undefined;
