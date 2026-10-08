@@ -1018,6 +1018,11 @@ Tokens, type and components: `DESIGN.md`.
   `account-suspended`, which the CLI prints with its reason, while they still read and wait, and
   its phones and browsers work as before, so its owner can still answer, settle and revoke.
   `bun server.js suspend|unsuspend ACCOUNT`, stored as `accounts.suspended_at` (migration 2).
+- **Limits at runtime** (#786). The owner can tighten or loosen a rate window or a cap without a
+  deploy (`bun server.js limits set items 60/60`, `set maxMachines 4`, `unset`, `reset`): the
+  overrides sit in `limits.json` beside the database, which the server reads every minute, so they
+  survive restarts and deploys until unset. Retention periods are left out, since shortening one
+  deletes data at the next sweep. A file that does not parse keeps the limits as they were.
 - **Privacy and terms** (`/privacy`, `/terms`). Each claim follows the code: stored columns in
   `server/src/db.ts`, retention in `server/src/limits.ts`, logs and backups in `deploy/`. A change
   to what is stored changes the page, and the Play data-safety form. Contact is

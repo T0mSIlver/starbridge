@@ -15,7 +15,7 @@ function command(...args: string[]) {
 
 // A command that falls through would start a second server, or fail as unknown after it printed.
 test("each server command prints and exits 0; an unknown one exits 2", () => {
-  for (const args of [["schema"], ["usage", "1"], ["signups", "status"]])
+  for (const args of [["schema"], ["usage", "1"], ["signups", "status"], ["limits", "show"]])
     expect(command(...args).code).toBe(0);
   const top = command("top", "3", "--json");
   expect(top.code).toBe(0);

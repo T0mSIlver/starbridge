@@ -21,6 +21,8 @@ export class RateLimiter {
       this.windows.set(key, { start: t, count: cost, ms: windowMs });
       return cost <= limit ? 0 : Math.max(1, Math.ceil(windowMs / 1000));
     }
+    // A window the owner lengthened at runtime (#786) lives as long as its new length.
+    w.ms = windowMs;
     w.count += cost;
     return w.count <= limit ? 0 : Math.max(1, Math.ceil((w.start + windowMs - t) / 1000));
   }
