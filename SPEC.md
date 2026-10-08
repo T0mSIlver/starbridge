@@ -366,6 +366,18 @@ provider plugins add providers, not panels.
   pushes were failing anyway.
 - An Android app in front syncs every 10 s until a push has reached it (#445), since a server
   without a relay or UnifiedPush pushes nothing and cannot tell.
+- **Held pushes** (#848). A question that shows in the agent's picker and on the owner's screen
+  needed no buzz on the phone too: a quick back and forth at the desk did that. So while any of
+  the owner's machines or devices says they sit at its screen, the push of a question, a
+  permission prompt or a waiting flip waits the account's hold time (30 s by default, off to
+  2 minutes in Settings) for every device not itself in use, and goes only if nothing answered it
+  meanwhile. Only the push waits, never the item: every device lists it at once. With no presence
+  signal, which is every older client, pushes go at once as before. The server reads presence as
+  one bit per source, in memory, since the hold is all it is for: no idle time, lock state or
+  reason, nothing on disk, and a restart means push now. Presence counts per person, so a Mac in
+  use holds a question from a headless dev box. The hold is one account setting, since the server
+  applies it and it is about the person, not a device. PROTOCOL.md, "Held pushes", has the
+  timings.
 
 ## Machines
 
