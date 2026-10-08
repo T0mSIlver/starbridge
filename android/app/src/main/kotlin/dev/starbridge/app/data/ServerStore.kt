@@ -178,6 +178,8 @@ class ServerStore(
     @Volatile private var inFront = false
     private var presenceJob: Job? = null
     private val beacon = Beacon({ present -> if (phase.value == Phase.Ready) api().presence(present) })
+    /** The beacon's one lock: touches and checks come from different threads. */
+    private val beaconLock = Mutex()
 
     override val notice = MutableStateFlow(
         // The files themselves are kept aside under their own names (Disk); the owner needs only what to do.
@@ -1698,7 +1700,7 @@ class ServerStore(
         // In front, it checks whether it still counts; sent behind, it says absent once.
         presenceJob = scope.launch {
             while (true) {
-                beacon.tick(inFront)
+                beaconLock.withLock { beacon.tick(inFront) }
                 if (!inFront) break
                 delay(Beacon.CHECK_MS)
             }
@@ -1724,7 +1726,7 @@ class ServerStore(
     }
 
     override fun touched() {
-        if (beacon.input(inFront)) scope.launch { beacon.tick(inFront) }
+        scope.launch { beaconLock.withLock { if (beacon.input(inFront)) beacon.tick(inFront) } }
     }
 
     override fun loadPushHold() {

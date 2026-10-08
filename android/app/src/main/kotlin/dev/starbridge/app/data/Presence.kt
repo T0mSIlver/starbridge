@@ -1,6 +1,8 @@
 package dev.starbridge.app.data
 
 /**
+ * Not thread-safe: the caller runs every call on one lock.
+ *
  * Presence (#848): while the app is in front and was touched in the last minute, the owner is
  * using this phone, so the server holds the other devices' pushes. Only that bit reaches the
  * server, never what was touched. The timings are packages/protocol's (`presence.ts`).
@@ -27,9 +29,10 @@ class Beacon(
         val at = now()
         val last = sent
         if (present && (last?.first != true || at - last.second >= BEAT_MS)) {
+            // A failed beat is tried again a beat later, not at every check: a server without
+            // the route refuses it every time.
             sent = true to at
-            // Tried again at the next check.
-            runCatching { send(true) }.onFailure { sent = null }
+            runCatching { send(true) }
         } else if (!present && last?.first == true) {
             sent = false to at
             runCatching { send(false) }

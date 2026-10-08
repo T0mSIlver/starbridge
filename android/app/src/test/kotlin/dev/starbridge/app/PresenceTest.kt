@@ -34,15 +34,19 @@ class PresenceTest {
     }
 
     @Test
-    fun aFailedBeatIsTriedAgain() = runBlocking {
-        var fail = true
-        val sent = mutableListOf<Boolean>()
-        val b = Beacon({ if (fail) error("offline") else sent += it }, { 0L })
+    fun aFailedBeatIsTriedAgainABeatLater() = runBlocking {
+        var now = 0L
+        var tries = 0
+        val b = Beacon({ tries++; error("not found") }, { now })
         b.input(inFront = true)
         b.tick(inFront = true)
-        fail = false
+        now = 10_000
+        b.input(inFront = true)
         b.tick(inFront = true)
-        assertEquals(listOf(true), sent)
+        assertEquals(1, tries)
+        now = 30_000
+        b.tick(inFront = true)
+        assertEquals(2, tries)
     }
 
     @Test
