@@ -53,7 +53,7 @@ export interface AskInput {
   codex?: CodexSession;
   /** A Pi or opencode session whose Starbridge extension or plugin submits answers into it. */
   extensionAnswers?: boolean;
-  /** A `claude -p` session: the mod runs only in interactive ones, so nothing submits answers. */
+  /** A `claude -p` session: the mod starts no loop there, so nothing submits answers. */
   headless?: boolean;
   /** For a hook that waits for the answer itself (`hook question`): no session gets it. */
   held?: boolean;
