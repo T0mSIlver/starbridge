@@ -49,8 +49,9 @@ numbers.
 | Idle memory: every process's working set, page loaded | 350 MB | 304 MB |
 | Download: the largest DMG | 140 MB | 133 MB |
 
-What keeps them: the main process is one 15 KB file, the window shows at once on the page's
-background colour, and closing it only hides it.
+What keeps them: the main process is one 15 KB file, the updater (most of the code) loads 5 s
+after start from its own file, the window shows at once on the page's background colour, and
+closing it only hides it.
 `STARBRIDGE_TIMING=1` prints the marks (`timing {...}`) from any build.
 
 ## The keychain
