@@ -33,6 +33,17 @@
         ]
       }
     ],
+    "PostToolUseFailure": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/hooks/settle.sh\"",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
     "PermissionDenied": [
       {
         "hooks": [
