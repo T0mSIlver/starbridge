@@ -8,7 +8,7 @@
 import { readdirSync } from "node:fs";
 import { join } from "node:path";
 
-const FILE_LIMIT_MS = 180_000;
+const FILE_LIMIT_MS = 120_000;
 
 const files = readdirSync(join(import.meta.dir, "../test"))
   .filter((f) => f.endsWith(".test.ts"))
