@@ -19,9 +19,21 @@ import { AgentClient, AgentError, Interrupted, NoAgent } from "../src/agent/clie
 import { makeAgent } from "../src/agent/main";
 import type { Agent } from "../src/agent/server";
 import { run } from "../src/cli";
-import { FAKE_CODEXBAR, paired, type TestCtx, testCtx, until } from "./helpers";
+import {
+  agentAddress,
+  FAKE_CODEXBAR,
+  fakeCommand,
+  listenAt,
+  paired,
+  type TestCtx,
+  testCtx,
+  until,
+} from "./helpers";
 
 setDefaultTimeout(30_000);
+
+// Windows has no unix sockets for the agent: it listens on loopback TCP behind a port file.
+const WINDOWS = process.platform === "win32";
 
 let server: LiveServer;
 let agents: Agent[];
@@ -36,11 +48,11 @@ afterEach(async () => {
 
 const ASK = ["ask", "--question", "Merge #12 now?", "--option", "Merge", "--option", "Wait"];
 
-/** The paired machine with its agent running on a socket in its config directory. */
+/** The paired machine with its agent running where it listens for its config directory. */
 async function machine(opts: Parameters<typeof makeAgent>[1] = {}) {
   const ctx = await paired(server);
   ctx.env.STARBRIDGE_CODEXBAR = FAKE_CODEXBAR;
-  const socket = join(ctx.store.dir, "agent.sock");
+  const socket = agentAddress(ctx.store.dir);
   const agent = makeAgent(ctx, { socket, ...opts });
   await agent.start();
   agents.push(agent);
@@ -260,20 +272,36 @@ test("a wait whose agent stopped still ends at its timeout (#548)", async () => 
 
 test("the socket is the user's only, and a second agent refuses to start", async () => {
   const { ctx, socket } = await machine();
-  expect(statSync(socket).mode & 0o777).toBe(0o600);
-  expect(statSync(ctx.store.dir).mode & 0o777).toBe(0o700);
+  // Windows keeps no POSIX modes: the agent narrows the port file's ACL with icacls instead.
+  if (!WINDOWS) {
+    expect(statSync(socket).mode & 0o777).toBe(0o600);
+    expect(statSync(ctx.store.dir).mode & 0o777).toBe(0o700);
+  }
   await expect(makeAgent(ctx, { socket }).start()).rejects.toThrow("already runs");
 });
 
 test("a client of another API revision gets 426 with what to update", async () => {
   const { socket } = await machine();
+  // On TCP, the call proves the port file's token, or the agent refuses it before its revision.
+  const nonce = "0".repeat(32);
+  const port = socket.endsWith(".port") ? JSON.parse(readFileSync(socket, "utf8")) : undefined;
+  const target = port
+    ? {
+        host: "127.0.0.1",
+        port: port.port,
+        headers: {
+          "starbridge-nonce": nonce,
+          authorization: `Starbridge ${proof(port.token, "client", nonce)}`,
+        },
+      }
+    : { socketPath: socket, headers: {} };
   const raw = (api: string | undefined) =>
     new Promise<{ status: number; body: { error: string; detail: string } }>((resolve) => {
       const req = request(
         {
-          socketPath: socket,
+          ...target,
           path: "/v1/status",
-          headers: api ? { "starbridge-api": api } : {},
+          headers: { ...target.headers, ...(api ? { "starbridge-api": api } : {}) },
         },
         (res: IncomingMessage) => {
           let b = "";
@@ -295,10 +323,10 @@ test("a client of another API revision gets 426 with what to update", async () =
 
 test("the CLI goes to the server itself when no agent runs, or when the agent cannot serve it", async () => {
   const ctx = await paired(server);
-  // A socket file left by a crashed agent: nobody listens.
-  const stale = join(ctx.store.dir, "agent.sock");
+  // A socket or port file left by a crashed agent: nobody listens.
+  const stale = agentAddress(ctx.store.dir);
   const dead = createServer();
-  await new Promise<void>((r) => dead.listen(stale, r));
+  await listenAt(dead, stale);
   await new Promise<void>((r) => dead.close(() => r()));
   expect(await run([...ASK, "--session", "s1"], ctx)).toBe(0);
 
@@ -307,7 +335,7 @@ test("the CLI goes to the server itself when no agent runs, or when the agent ca
     res.writeHead(426, { "content-type": "application/json" });
     res.end(JSON.stringify({ error: "agent-too-old", detail: "update the agent" }));
   });
-  await new Promise<void>((r) => old.listen(stale, r));
+  await listenAt(old, stale);
   try {
     expect(await run([...ASK, "--session", "s1"], ctx)).toBe(0);
     expect(ctx.errors).toContain("starbridge: update the agent; going to the server directly");
@@ -327,13 +355,17 @@ test("the agent refuses bad requests with the CLI's own messages", async () => {
   expect(c.errors.at(-1)).toContain("--answer-in takes no --option");
   expect(await run(["wait", "d_nosuch"], c)).toBe(1);
   expect(c.errors.at(-1)).toContain("not a decision this machine asked");
-  await expect(new AgentClient(socket).call("GET", "/v1/sessions/a%20b/events")).rejects.toThrow(
-    AgentError,
-  );
+  // Bun 1.4.2 on Windows crashes or hangs in a later test of this file once the agent has
+  // refused this call (#897), though not the calls above, so Windows skips it.
+  if (!WINDOWS)
+    await expect(new AgentClient(socket).call("GET", "/v1/sessions/a%20b/events")).rejects.toThrow(
+      AgentError,
+    );
   expect(await server.opened("decision")).toEqual([]);
 });
 
-test("the agent uploads quotas on its timer", async () => {
+// Windows uploads no quotas: CodexBar has no build there (SPEC.md, Platforms).
+test.skipIf(WINDOWS)("the agent uploads quotas on its timer", async () => {
   const { agent } = await machine({ providers: ["claude", "codex"], interval: "1s" });
   await until(async () => (await server.opened("quota")).length >= 1, 10_000);
   const [snap] = await server.opened("quota");
@@ -352,20 +384,24 @@ async function asDevice(token: string, method: string, path: string) {
   return (await r.json()) as { items: unknown[]; behind?: number };
 }
 
-test("the agent posts a snapshot as soon as a device joins, and when one asks", async () => {
-  await machine({ providers: ["claude"], interval: "1h" });
-  await until(async () => (await server.opened("quota")).length >= 1, 10_000);
-  const tablet = await server.addDevice("tablet");
-  // Sealed before the tablet joined, the first snapshot has no box for it; the hourly timer
-  // would leave it with nothing.
-  await until(async () => (await asDevice(tablet.token, "GET", "/quota")).items.length === 1);
+// Windows uploads no quotas: CodexBar has no build there (SPEC.md, Platforms).
+test.skipIf(WINDOWS)(
+  "the agent posts a snapshot as soon as a device joins, and when one asks",
+  async () => {
+    await machine({ providers: ["claude"], interval: "1h" });
+    await until(async () => (await server.opened("quota")).length >= 1, 10_000);
+    const tablet = await server.addDevice("tablet");
+    // Sealed before the tablet joined, the first snapshot has no box for it; the hourly timer
+    // would leave it with nothing.
+    await until(async () => (await asDevice(tablet.token, "GET", "/quota")).items.length === 1);
 
-  const [before] = await server.opened("quota");
-  const asked = await asDevice(server.owner.device.token, "POST", "/quota/ask?wait=10");
-  expect(asked.behind).toBe(0);
-  const [after] = await server.opened("quota");
-  expect(after?.id).not.toBe(before?.id);
-});
+    const [before] = await server.opened("quota");
+    const asked = await asDevice(server.owner.device.token, "POST", "/quota/ask?wait=10");
+    expect(asked.behind).toBe(0);
+    const [after] = await server.opened("quota");
+    expect(after?.id).not.toBe(before?.id);
+  },
+);
 
 test("a malformed path gets 400 and the agent keeps serving", async () => {
   const { socket } = await machine();
@@ -391,7 +427,7 @@ test("Ctrl-C cuts a wait held at the agent at once", async () => {
 
 test("once the agent posted the decision, a 426 on the wait never posts it again", async () => {
   const ctx = await paired(server);
-  const socket = join(ctx.store.dir, "agent.sock");
+  const socket = agentAddress(ctx.store.dir);
   // The agent posts, then a newer agent from an upgrade answers the wait.
   const fake = createServer((req, res) => {
     const posted = req.url === "/v1/decisions";
@@ -400,7 +436,7 @@ test("once the agent posted the decision, a 426 on the wait never posts it again
       JSON.stringify(posted ? { id: "d_fake" } : { error: "client-too-old", detail: "update it" }),
     );
   });
-  await new Promise<void>((r) => fake.listen(socket, r));
+  await listenAt(fake, socket);
   try {
     expect(await run([...ASK, "--wait"], ctx)).toBe(1);
     expect(ctx.lines).toEqual(["d_fake"]);
@@ -430,7 +466,10 @@ test("a call whose signal already aborted is interrupted without opening a reque
   }
 });
 
-/** A Codex home whose daemon socket listens, and a `codex` that logs its arguments. */
+/**
+ * A Codex home whose daemon socket listens, and a `codex` that logs its arguments. Bun on
+ * Windows cannot listen on a unix socket's path, so the tests that need one skip there.
+ */
 async function codexHome(fail = false) {
   const home = mkdtempSync(join(tmpdir(), "starbridge-codex-"));
   mkdirSync(join(home, "app-server-control"));
@@ -441,10 +480,9 @@ async function codexHome(fail = false) {
   const bin = join(home, "bin");
   mkdirSync(bin);
   const log = join(home, "queue.log");
-  writeFileSync(
+  fakeCommand(
     join(bin, "codex"),
-    `#!/bin/sh\necho "$CODEX_HOME $*" >> ${log}\n${fail ? "echo 'no active session' >&2; exit 1" : ""}\n`,
-    { mode: 0o755 },
+    `#!/bin/sh\necho "$CODEX_HOME $*" >> "${log}"\n${fail ? "echo 'no active session' >&2; exit 1" : ""}\n`,
   );
   // Started from a Claude Code shell, Codex inherits its variables too: Codex still asks.
   const env = {
@@ -457,51 +495,57 @@ async function codexHome(fail = false) {
   return { env, log, close: () => new Promise<void>((r) => daemon.close(() => r())) };
 }
 
-test("the agent queues a Codex session's answer into it, and ask says it will", async () => {
-  const { socket } = await machine();
-  const codex = await codexHome();
-  const c = testCtx({ STARBRIDGE_AGENT_SOCKET: socket, ...codex.env });
-  try {
-    const id = await ask(c, "--project", "p");
-    expect(c.errors.at(-1)).toBe("The answer will come back into this session as a new prompt.");
-    const [d] = await server.opened("decision");
-    expect([d?.agent, d?.source.session]).toEqual(["codex", "t1"]);
+test.skipIf(WINDOWS)(
+  "the agent queues a Codex session's answer into it, and ask says it will",
+  async () => {
+    const { socket } = await machine();
+    const codex = await codexHome();
+    const c = testCtx({ STARBRIDGE_AGENT_SOCKET: socket, ...codex.env });
+    try {
+      const id = await ask(c, "--project", "p");
+      expect(c.errors.at(-1)).toBe("The answer will come back into this session as a new prompt.");
+      const [d] = await server.opened("decision");
+      expect([d?.agent, d?.source.session]).toEqual(["codex", "t1"]);
 
-    await server.answer(id, { choice: "Merge" });
-    // The queued message names the decision, never its question or answer: other local users
-    // can read a process's arguments. The wait it names prints the answer.
-    const queued = `${codex.env.CODEX_HOME} queue --thread t1 --message Starbridge has the owner's answer to ${id}: run \`starbridge wait ${id}\` to read it.\n`;
-    // The fake codex creates its log before it has written the line: wait for the line itself.
-    const log = () => (existsSync(codex.log) ? readFileSync(codex.log, "utf8") : "");
-    await until(() => log() === queued).catch(() => {});
-    expect(log()).toBe(queued);
-    expect(await run(["wait", id, "--timeout", "10s"], c)).toBe(0);
-    expect(c.lines.at(-1)).toBe(`Answer to ${id} (Merge #12 now?): Merge`);
-  } finally {
-    await codex.close();
-  }
-});
+      await server.answer(id, { choice: "Merge" });
+      // The queued message names the decision, never its question or answer: other local users
+      // can read a process's arguments. The wait it names prints the answer.
+      const queued = `${codex.env.CODEX_HOME} queue --thread t1 --message Starbridge has the owner's answer to ${id}: run \`starbridge wait ${id}\` to read it.\n`;
+      // The fake codex creates its log before it has written the line: wait for the line itself.
+      const log = () => (existsSync(codex.log) ? readFileSync(codex.log, "utf8") : "");
+      await until(() => log() === queued).catch(() => {});
+      expect(log()).toBe(queued);
+      expect(await run(["wait", id, "--timeout", "10s"], c)).toBe(0);
+      expect(c.lines.at(-1)).toBe(`Answer to ${id} (Merge #12 now?): Merge`);
+    } finally {
+      await codex.close();
+    }
+  },
+);
 
-test("a Codex session the agent cannot reach is told to wait, and its wait gets the answer", async () => {
-  const { socket } = await machine();
-  const codex = await codexHome(true);
-  const c = testCtx({ STARBRIDGE_AGENT_SOCKET: socket, ...codex.env });
-  try {
-    const id = await ask(c, "--project", "p");
-    await codex.close();
-    const asked = testCtx({ STARBRIDGE_AGENT_SOCKET: socket, ...codex.env });
-    await ask(asked, "--project", "p");
-    expect(asked.errors.at(-1)).toContain("run `starbridge wait");
+test.skipIf(WINDOWS)(
+  "a Codex session the agent cannot reach is told to wait, and its wait gets the answer",
+  async () => {
+    const { socket } = await machine();
+    const codex = await codexHome(true);
+    const c = testCtx({ STARBRIDGE_AGENT_SOCKET: socket, ...codex.env });
+    try {
+      const id = await ask(c, "--project", "p");
+      await codex.close();
+      const asked = testCtx({ STARBRIDGE_AGENT_SOCKET: socket, ...codex.env });
+      await ask(asked, "--project", "p");
+      expect(asked.errors.at(-1)).toContain("run `starbridge wait");
 
-    // The queue fails, so the answer stays for the session's wait.
-    await server.answer(id, { choice: "Wait" });
-    await until(async () => existsSync(codex.log));
-    expect(await run(["wait", id, "--timeout", "10s"], c)).toBe(0);
-    expect(c.lines.at(-1)).toBe(`Answer to ${id} (Merge #12 now?): Wait`);
-  } finally {
-    await codex.close().catch(() => {});
-  }
-});
+      // The queue fails, so the answer stays for the session's wait.
+      await server.answer(id, { choice: "Wait" });
+      await until(async () => existsSync(codex.log));
+      expect(await run(["wait", id, "--timeout", "10s"], c)).toBe(0);
+      expect(c.lines.at(-1)).toBe(`Answer to ${id} (Merge #12 now?): Wait`);
+    } finally {
+      await codex.close().catch(() => {});
+    }
+  },
+);
 
 test("a Pi session with the extension gets its answer as an event, titled from its file", async () => {
   const { socket } = await machine();
@@ -581,43 +625,47 @@ test("an opencode session with the plugin gets its answer as an event, titled by
   expect([asked[id]?.extensionAnswers, asked[waits]?.extensionAnswers]).toEqual([true, undefined]);
 });
 
-test("the socket is never open to other users, even between bind and chmod (#95)", async () => {
-  const ctx = await paired(server);
-  ctx.env.STARBRIDGE_CODEXBAR = FAKE_CODEXBAR;
-  const socket = join(ctx.store.dir, "agent.sock");
-  // The mode the socket has the moment it can take connections, before start() returns.
-  let bound: number | undefined;
-  const listen = HttpServer.prototype.listen;
-  HttpServer.prototype.listen = function (this: HttpServer, ...args: unknown[]) {
-    const done = args.pop() as () => void;
-    return listen.call(this, ...(args as []), () => {
-      try {
-        bound = statSync(socket).mode & 0o777;
-      } finally {
-        done();
-      }
-    });
-  } as typeof listen;
-  const umask = process.umask(0o002);
-  try {
-    const agent = makeAgent(ctx, { socket });
-    await agent.start();
-    agents.push(agent);
-  } finally {
-    HttpServer.prototype.listen = listen;
-    process.umask(umask);
-  }
-  expect(bound).toBeDefined();
-  expect((bound as number) & 0o077).toBe(0);
-  expect(statSync(socket).mode & 0o777).toBe(0o600);
-  expect(process.umask()).toBe(umask);
-});
+// Unix sockets only: on Windows the agent listens on loopback TCP.
+test.skipIf(WINDOWS)(
+  "the socket is never open to other users, even between bind and chmod (#95)",
+  async () => {
+    const ctx = await paired(server);
+    ctx.env.STARBRIDGE_CODEXBAR = FAKE_CODEXBAR;
+    const socket = join(ctx.store.dir, "agent.sock");
+    // The mode the socket has the moment it can take connections, before start() returns.
+    let bound: number | undefined;
+    const listen = HttpServer.prototype.listen;
+    HttpServer.prototype.listen = function (this: HttpServer, ...args: unknown[]) {
+      const done = args.pop() as () => void;
+      return listen.call(this, ...(args as []), () => {
+        try {
+          bound = statSync(socket).mode & 0o777;
+        } finally {
+          done();
+        }
+      });
+    } as typeof listen;
+    const umask = process.umask(0o002);
+    try {
+      const agent = makeAgent(ctx, { socket });
+      await agent.start();
+      agents.push(agent);
+    } finally {
+      HttpServer.prototype.listen = listen;
+      process.umask(umask);
+    }
+    expect(bound).toBeDefined();
+    expect((bound as number) & 0o077).toBe(0);
+    expect(statSync(socket).mode & 0o777).toBe(0o600);
+    expect(process.umask()).toBe(umask);
+  },
+);
 
 test("on loopback TCP (Windows), only a call that proves the port file's token gets through", async () => {
   const dir = mkdtempSync(join(tmpdir(), "starbridge-port-"));
   const socket = join(dir, "agent.port");
   const { agent } = await machine({ socket });
-  expect(statSync(socket).mode & 0o777).toBe(0o600);
+  if (!WINDOWS) expect(statSync(socket).mode & 0o777).toBe(0o600);
   const file = JSON.parse(readFileSync(socket, "utf8"));
   expect(file.pid).toBe(process.pid);
 
@@ -665,7 +713,8 @@ test("an agent that hangs up or exits without stopping removes its port file (#5
 const { existsSync } = await import("node:fs");
 setInterval(() => existsSync(process.env.STARBRIDGE_AGENT_SOCKET) && process.exit(1), 5);
 await import(${JSON.stringify(main)});`;
-  for (const how of ["SIGHUP", "exit"] as const) {
+  // Windows has no SIGHUP.
+  for (const how of WINDOWS ? (["exit"] as const) : (["SIGHUP", "exit"] as const)) {
     const dir = mkdtempSync(join(tmpdir(), "starbridge-port-"));
     const socket = join(dir, "agent.port");
     const argv = how === "exit" ? ["-e", exit] : [main, "agent", "--no-quota"];
@@ -781,51 +830,57 @@ test("through the agent, wait --no-mark leaves the decision as it was (#603)", a
   expect((await server.opened("waiting")).map((w) => w.state)).toEqual(["waiting"]);
 });
 
-test("a socket path too long for a unix socket: clients fall back and say why (#622)", async () => {
-  const ctx = await paired(server);
-  const socket = join(ctx.store.dir, "x".repeat(120), "agent.sock");
-  const call = new AgentClient(socket).call("GET", "/v1/status");
-  await expect(call).rejects.toBeInstanceOf(NoAgent);
-  await expect(call).rejects.toThrow("too long for a unix socket");
+// Unix sockets only: on Windows the agent listens on loopback TCP.
+test.skipIf(WINDOWS)(
+  "a socket path too long for a unix socket: clients fall back and say why (#622)",
+  async () => {
+    const ctx = await paired(server);
+    const socket = join(ctx.store.dir, "x".repeat(120), "agent.sock");
+    const call = new AgentClient(socket).call("GET", "/v1/status");
+    await expect(call).rejects.toBeInstanceOf(NoAgent);
+    await expect(call).rejects.toThrow("too long for a unix socket");
 
-  // Bun's agent listens there and says so in a pid file, which goes when it stops (#714).
-  const first = makeAgent(ctx, { socket, noQuota: true });
-  await first.start();
-  agents.push(first);
-  expect(readFileSync(`${socket}.pid`, "utf8")).toBe(String(process.pid));
-  // Where `connect` refuses the path (Node, macOS), a second agent cannot probe the first: the
-  // pid file stops it from unlinking the live socket.
-  const probe = spyOn(AgentClient.prototype, "call").mockRejectedValueOnce(
-    new NoAgent("too long", "EINVAL"),
-  );
-  // The first agent as another process sees it.
-  const other = Bun.spawn(["sleep", "30"]);
-  writeFileSync(`${socket}.pid`, String(other.pid));
-  try {
-    await expect(makeAgent(ctx, { socket, noQuota: true }).start()).rejects.toThrow("already runs");
-  } finally {
-    probe.mockRestore();
-  }
-  expect(existsSync(socket)).toBe(true);
-  writeFileSync(`${socket}.pid`, String(process.pid));
-  await first.stop();
-  expect(existsSync(socket)).toBe(false);
-  expect(existsSync(`${socket}.pid`)).toBe(false);
-  // The CLI goes to the server itself where it cannot connect, and says why.
-  writeFileSync(socket, "");
-  const env = { ...ctx.env, STARBRIDGE_AGENT_SOCKET: socket };
-  expect(await run([...ASK, "--session", "s1"], { ...ctx, env })).toBe(0);
-  expect(ctx.errors.some((e) => e.includes("too long for a unix socket"))).toBe(true);
-  rmSync(socket);
-
-  // After a crash, a probe that finds no socket proves the agent gone, whatever process has its
-  // pid now.
-  try {
+    // Bun's agent listens there and says so in a pid file, which goes when it stops (#714).
+    const first = makeAgent(ctx, { socket, noQuota: true });
+    await first.start();
+    agents.push(first);
+    expect(readFileSync(`${socket}.pid`, "utf8")).toBe(String(process.pid));
+    // Where `connect` refuses the path (Node, macOS), a second agent cannot probe the first: the
+    // pid file stops it from unlinking the live socket.
+    const probe = spyOn(AgentClient.prototype, "call").mockRejectedValueOnce(
+      new NoAgent("too long", "EINVAL"),
+    );
+    // The first agent as another process sees it.
+    const other = Bun.spawn(["sleep", "30"]);
     writeFileSync(`${socket}.pid`, String(other.pid));
-    const again = makeAgent(ctx, { socket, noQuota: true });
-    await again.start();
-    await again.stop();
-  } finally {
-    other.kill();
-  }
-});
+    try {
+      await expect(makeAgent(ctx, { socket, noQuota: true }).start()).rejects.toThrow(
+        "already runs",
+      );
+    } finally {
+      probe.mockRestore();
+    }
+    expect(existsSync(socket)).toBe(true);
+    writeFileSync(`${socket}.pid`, String(process.pid));
+    await first.stop();
+    expect(existsSync(socket)).toBe(false);
+    expect(existsSync(`${socket}.pid`)).toBe(false);
+    // The CLI goes to the server itself where it cannot connect, and says why.
+    writeFileSync(socket, "");
+    const env = { ...ctx.env, STARBRIDGE_AGENT_SOCKET: socket };
+    expect(await run([...ASK, "--session", "s1"], { ...ctx, env })).toBe(0);
+    expect(ctx.errors.some((e) => e.includes("too long for a unix socket"))).toBe(true);
+    rmSync(socket);
+
+    // After a crash, a probe that finds no socket proves the agent gone, whatever process has its
+    // pid now.
+    try {
+      writeFileSync(`${socket}.pid`, String(other.pid));
+      const again = makeAgent(ctx, { socket, noQuota: true });
+      await again.start();
+      await again.stop();
+    } finally {
+      other.kill();
+    }
+  },
+);

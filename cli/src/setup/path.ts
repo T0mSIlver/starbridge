@@ -9,8 +9,9 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { basename, delimiter, dirname, join } from "node:path";
+import { delimiter, dirname, join } from "node:path";
 import { CLI_PATH } from "../config";
+import { pathFor } from "../platform";
 import type { Sys } from "./sys";
 
 /**
@@ -47,18 +48,21 @@ function script(path: string): boolean {
 /** The folder of the installed binary when the PATH does not hold it. */
 function missingDir(sys: Sys): string | undefined {
   if (sys.self.length !== 1) return undefined;
+  const { dirname } = pathFor(sys.platform);
   const dir = dirname(sys.self[0] as string);
   // Windows paths ignore case.
   const norm = (p: string) => {
     const bare = p.replace(/[/\\]+$/, "");
     return sys.platform === "win32" ? bare.toLowerCase() : bare;
   };
+  // The PATH is this process's, in its host's spelling.
   const path = (sys.ctx.env.PATH ?? "").split(delimiter).map(norm);
   return path.includes(norm(dir)) ? undefined : dir;
 }
 
 /** The startup file of the owner's shell, and the line there that puts `dir` on the PATH. */
 export function shellProfile(sys: Sys, dir: string): { file: string; line: string } {
+  const { basename, join } = pathFor(sys.platform);
   const shell = basename(sys.ctx.env.SHELL ?? "");
   const shown = dir.startsWith(`${sys.home}/`) ? `$HOME${dir.slice(sys.home.length)}` : dir;
   const exported = `export PATH="${shown}:$PATH"`;
@@ -94,6 +98,7 @@ export async function pathStep(sys: Sys): Promise<string[]> {
     ];
   }
   const { file, line } = shellProfile(sys, dir);
+  const { dirname } = pathFor(sys.platform);
   const shown = file.startsWith(`${sys.home}/`) ? `~${file.slice(sys.home.length)}` : file;
   const text = existsSync(file) ? readFileSync(file, "utf8") : "";
   const rest = dir.startsWith(`${sys.home}/`) ? dir.slice(sys.home.length) : undefined;

@@ -244,11 +244,10 @@ jobs:
           docker image rm -f starbridge-server:$TAG starbridge-web:$TAG starbridge-demo:$TAG starbridge-caddy:$TAG >/dev/null 2>&1 || true
           docker builder prune -f --keep-storage 3GB >/dev/null || true
 
-  # The CLI on Windows (#552): its platform tests and a built binary must pass. The rest of the
-  # suite runs too but cannot fail the job until it passes there. Bun on Windows can wedge in a
-  # test past its own timeout, so each file runs alone and a hung one is killed and named (#834).
-  # GitHub's Windows runners need a public repository or paid minutes, so a private repository
-  # skips the job.
+  # The CLI on Windows (#552): a built binary and the whole suite must pass (#884). Bun on Windows
+  # can wedge in a test past its own timeout, so each file runs alone and a hung one is killed and
+  # named (#834). GitHub's Windows runners need a public repository or paid minutes, so a private
+  # repository skips the job.
   windows:
     name: CLI on Windows
     if: ${{ !github.event.repository.private }}
@@ -264,14 +263,12 @@ jobs:
         with:
           bun-version: 1.4.2
       - run: pnpm install --frozen-lockfile
-      - run: bun test test/platform.test.ts
       - name: Build and start the binary
         run: |
           bun build src/main.ts --compile --target=bun-windows-x64 --outfile dist/starbridge.exe
           ./dist/starbridge.exe --version
           ./dist/starbridge.exe --help
       - name: The whole CLI suite
-        continue-on-error: true
         timeout-minutes: 12
         run: bun scripts/test-each.ts
 

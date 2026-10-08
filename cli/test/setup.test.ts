@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, setDefaultTimeout, test } from "bun:test
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
+  copyFileSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -12,7 +13,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, relative, resolve } from "node:path";
+import { delimiter, dirname, join, relative, resolve, sep } from "node:path";
 import { gzipSync } from "node:zlib";
 import { LiveServer } from "@starbridge/server/test-support";
 import { type Status, socketPath } from "../src/agent/api";
@@ -46,11 +47,24 @@ import { status } from "../src/setup/status";
 import { defaults, failure, type Sys } from "../src/setup/sys";
 import { uninstall } from "../src/setup/uninstall";
 import { VERSION } from "../src/version";
-import { approveAndConfirm, paired, type TestCtx, testCtx, until } from "./helpers";
+import {
+  approveAndConfirm,
+  bareEnv,
+  compiledFake,
+  FAKE_BIN,
+  fakeCommand,
+  paired,
+  SYSTEM_PATH,
+  type TestCtx,
+  testCtx,
+  until,
+} from "./helpers";
 
 setDefaultTimeout(30_000);
 
-const FAKE_BIN = join(import.meta.dir, "fixtures", "fake-bin");
+const WINDOWS = process.platform === "win32";
+/** The fake codexbar as setup finds it on the PATH. */
+const FAKE_CODEXBAR_BIN = join(FAKE_BIN, WINDOWS ? "codexbar.cmd" : "codexbar");
 const SELF = "/opt/starbridge/bin/starbridge";
 
 let server: LiveServer;
@@ -72,15 +86,18 @@ async function machine(name?: string) {
   const ctx = await paired(server, name);
   const home = mkdtempSync(join(tmpdir(), "starbridge-home-"));
   const log = join(home, "calls.log");
-  Object.assign(ctx.env, {
-    HOME: home,
-    // The fake claude runs bun, which CI does not keep in /usr/bin.
-    // SELF's folder too, so setup's PATH step has nothing to add.
-    PATH: `${FAKE_BIN}:${dirname(SELF)}:${dirname(process.execPath)}:/usr/bin:/bin`,
-    USER: "dev",
-    FAKE_LOG: log,
-    FAKE_STATE: join(home, "fake-state"),
-  });
+  Object.assign(
+    ctx.env,
+    bareEnv({
+      HOME: home,
+      // The fake claude runs bun, which CI does not keep in /usr/bin.
+      // SELF's folder too, so setup's PATH step has nothing to add.
+      PATH: [FAKE_BIN, dirname(SELF), dirname(process.execPath), SYSTEM_PATH].join(delimiter),
+      USER: "dev",
+      FAKE_LOG: log,
+      FAKE_STATE: join(home, "fake-state"),
+    }),
+  );
   const units = join(home, ".config/systemd/user");
   mkdirSync(units, { recursive: true });
   const settings = join(home, ".claude/settings.json");
@@ -129,7 +146,7 @@ test("setup --yes installs the agent, the plugins and the skills, and uploads a 
   expect(out).toContain("needs sign-in: Error: provider not configured");
   expect(m.ctx.store.agentConfig().quota).toEqual({
     providers: ["codex", "zai"],
-    codexbar: join(FAKE_BIN, "codexbar"),
+    codexbar: FAKE_CODEXBAR_BIN,
     interval: "5m",
   });
 
@@ -319,7 +336,7 @@ test("a server setup cannot reach: setup stops before the other steps (#774)", a
 
 test("setup asks before sending quotas that another machine already sends, and Enter skips (#748)", async () => {
   const devbox = await machine();
-  await pushOnce(devbox.ctx, { providers: ["codex"], codexbar: join(FAKE_BIN, "codexbar") });
+  await pushOnce(devbox.ctx, { providers: ["codex"], codexbar: FAKE_CODEXBAR_BIN });
   const mac = await machine("mac");
   const asked: string[] = [];
   mac.sys.prompt = {
@@ -382,12 +399,11 @@ test("an agent installed after setup: status says so, and refresh installs it (#
 
 test("a failed agent install says why and how to retry, and setup goes on (#750)", async () => {
   const m = await machine();
-  m.ctx.env.PATH = `${join(m.home, "bin")}:${m.ctx.env.PATH}`;
+  m.ctx.env.PATH = [join(m.home, "bin"), m.ctx.env.PATH].join(delimiter);
   mkdirSync(join(m.home, "bin"));
-  writeFileSync(
-    join(m.home, "bin/pi"),
+  fakeCommand(
+    join(m.home, "bin", "pi"),
     "#!/bin/sh\necho 'fatal: could not read from github.com' >&2\nexit 1\n",
-    { mode: 0o755 },
   );
   expect(await setup(m.sys, { yes: true, noQuota: true, noService: true })).toBe(0);
   const out = m.ctx.lines.join("\n");
@@ -520,19 +536,19 @@ test("status lists the answers no session has taken, until a wait prints them (#
 
 test("status lists every starbridge on the PATH, and how to remove the others (#621)", async () => {
   const m = await machine();
-  const dirs = ["a", "b"].map((d) => join(m.home, d));
-  for (const [i, d] of dirs.entries()) {
-    mkdirSync(d);
-    writeFileSync(join(d, "starbridge"), `#!/bin/sh\necho "starbridge 0.${i + 1}.0"\n`, {
-      mode: 0o755,
-    });
-  }
-  m.ctx.env.PATH = `${dirs.join(":")}:${m.ctx.env.PATH}`;
-  await status({ ...m.sys, self: [join(dirs[0] as string, "starbridge")] });
+  const copies = ["a", "b"].map((d, i) => {
+    mkdirSync(join(m.home, d));
+    return fakeCommand(
+      join(m.home, d, "starbridge"),
+      `#!/bin/sh\necho "starbridge 0.${i + 1}.0"\n`,
+    );
+  });
+  m.ctx.env.PATH = [...copies.map((c) => dirname(c)), m.ctx.env.PATH].join(delimiter);
+  await status({ ...m.sys, self: [copies[0] as string] });
   expect(m.ctx.lines.slice(1, 5)).toEqual([
     "2 copies of starbridge are on the PATH; a terminal runs the first:",
-    `  ${dirs[0]}/starbridge: 0.1.0, this one`,
-    `  ${dirs[1]}/starbridge: 0.2.0, delete the file to remove it`,
+    `  ${copies[0]}: 0.1.0, this one`,
+    `  ${copies[1]}: 0.2.0, delete the file to remove it`,
     "Keep one: `starbridge update` updates only the copy it runs from.",
   ]);
 });
@@ -599,14 +615,11 @@ test("uninstall removes the service and plugins, asks the devices to revoke, kee
 
 test("setup without a user systemd keeps going and says how to run the agent", async () => {
   const m = await machine();
-  m.ctx.env.PATH = `${join(m.home, "bin")}:${m.ctx.env.PATH}`;
+  m.ctx.env.PATH = [join(m.home, "bin"), m.ctx.env.PATH].join(delimiter);
   mkdirSync(join(m.home, "bin"));
-  writeFileSync(
-    join(m.home, "bin/systemctl"),
+  fakeCommand(
+    join(m.home, "bin", "systemctl"),
     "#!/bin/sh\necho 'Failed to connect to bus' >&2\nexit 1\n",
-    {
-      mode: 0o755,
-    },
   );
   expect(await setup(m.sys, { yes: true, noAgents: true, readyTimeoutMs: 500 })).toBe(0);
   const out = m.ctx.lines.join("\n");
@@ -618,12 +631,11 @@ test("setup without a user systemd keeps going and says how to run the agent", a
 
 test("a failed service start says how to run the agent and that setup retries (#614)", async () => {
   const m = await machine();
-  m.ctx.env.PATH = `${join(m.home, "bin")}:${m.ctx.env.PATH}`;
+  m.ctx.env.PATH = [join(m.home, "bin"), m.ctx.env.PATH].join(delimiter);
   mkdirSync(join(m.home, "bin"));
-  writeFileSync(
-    join(m.home, "bin/systemctl"),
+  fakeCommand(
+    join(m.home, "bin", "systemctl"),
     '#!/bin/sh\n[ "$2" = enable ] && { echo "Access denied" >&2; exit 1; }\nexit 0\n',
-    { mode: 0o755 },
   );
   expect(await setup(m.sys, { yes: true, noAgents: true, readyTimeoutMs: 500 })).toBe(0);
   const out = m.ctx.lines.join("\n");
@@ -760,7 +772,7 @@ function fakeCodexbarReleases(latest: string, sums: (v: string, sha: string) => 
     },
   });
   const env = {
-    PATH: "/usr/bin:/bin",
+    PATH: SYSTEM_PATH,
     STARBRIDGE_CODEXBAR_RELEASES: `${server.url.href}rel`,
   };
   return { server, env, state };
@@ -803,109 +815,114 @@ test("CodexBar installs only when its release's own checksum matches", async () 
   }
 });
 
-test("update moves setup's CodexBar to the latest release, or the one named", async () => {
-  const home = mkdtempSync(join(tmpdir(), "starbridge-home-"));
-  const fake = fakeCodexbarReleases(
-    "9.9.9",
-    // 10.0.0 is a release whose tarballs are still uploading.
-    (v, sha) => (v === "10.0.0" ? null : `${sha}  CodexBarCLI-v${v}-linux-x86_64.tar.gz\n`),
-  );
-  try {
-    const ctx = testCtx(fake.env);
-    const sys = linuxSys(ctx, home);
-    // linux-musl-x86_64 where the host has no glibc libcurl, such as a Mac.
-    const key = tarballKey(sys) as string;
-    const path = await installTarball(sys, key, "9.9.8");
-    expect(path).toBe(join(home, ".local/opt/codexbar/codexbar"));
-    ctx.lines.length = 0;
-    const codes = [
-      await updateCodexbar(sys, undefined),
-      await updateCodexbar(sys, undefined),
-      await updateCodexbar(sys, undefined, "v9.9.7"),
-    ];
-    expect(ctx.lines).toEqual([
-      `Downloading CodexBar 9.9.9 (${key}), 1 kB`,
-      `Installed CodexBar 9.9.9 to ${join(home, ".local/opt/codexbar")}, linked as ${join(home, ".local/bin/codexbar")}.`,
-      "CodexBar 9.9.9 is up to date.",
-      `Downloading CodexBar 9.9.7 (${key}), 1 kB`,
-      `Installed CodexBar 9.9.7 to ${join(home, ".local/opt/codexbar")}, linked as ${join(home, ".local/bin/codexbar")}.`,
-    ]);
-    expect(codes).toEqual([0, 0, 0]);
-    expect(readlinkSync(join(home, ".local/bin/codexbar"))).toBe(path);
-    fake.state.latest = "10.0.0";
-    expect(await updateCodexbar(sys, undefined)).toBe(0);
-    expect(ctx.lines.at(-1)).toBe(
-      "CodexBar 10.0.0's build for this machine is not published yet: kept 9.9.7.",
+// CodexBar has no Windows build, so setup never installs it there.
+test.skipIf(WINDOWS)(
+  "update moves setup's CodexBar to the latest release, or the one named",
+  async () => {
+    const home = mkdtempSync(join(tmpdir(), "starbridge-home-"));
+    const fake = fakeCodexbarReleases(
+      "9.9.9",
+      // 10.0.0 is a release whose tarballs are still uploading.
+      (v, sha) => (v === "10.0.0" ? null : `${sha}  CodexBarCLI-v${v}-linux-x86_64.tar.gz\n`),
     );
+    try {
+      const ctx = testCtx(fake.env);
+      const sys = linuxSys(ctx, home);
+      // linux-musl-x86_64 where the host has no glibc libcurl, such as a Mac.
+      const key = tarballKey(sys) as string;
+      const path = await installTarball(sys, key, "9.9.8");
+      expect(path).toBe(join(home, ".local/opt/codexbar/codexbar"));
+      ctx.lines.length = 0;
+      const codes = [
+        await updateCodexbar(sys, undefined),
+        await updateCodexbar(sys, undefined),
+        await updateCodexbar(sys, undefined, "v9.9.7"),
+      ];
+      expect(ctx.lines).toEqual([
+        `Downloading CodexBar 9.9.9 (${key}), 1 kB`,
+        `Installed CodexBar 9.9.9 to ${join(home, ".local/opt/codexbar")}, linked as ${join(home, ".local/bin/codexbar")}.`,
+        "CodexBar 9.9.9 is up to date.",
+        `Downloading CodexBar 9.9.7 (${key}), 1 kB`,
+        `Installed CodexBar 9.9.7 to ${join(home, ".local/opt/codexbar")}, linked as ${join(home, ".local/bin/codexbar")}.`,
+      ]);
+      expect(codes).toEqual([0, 0, 0]);
+      expect(readlinkSync(join(home, ".local/bin/codexbar"))).toBe(path);
+      fake.state.latest = "10.0.0";
+      expect(await updateCodexbar(sys, undefined)).toBe(0);
+      expect(ctx.lines.at(-1)).toBe(
+        "CodexBar 10.0.0's build for this machine is not published yet: kept 9.9.7.",
+      );
 
-    const brew = join(home, "brew/codexbar");
-    mkdirSync(dirname(brew));
-    writeFileSync(brew, "#!/bin/sh\n", { mode: 0o755 });
-    expect(await updateCodexbar(sys, brew)).toBe(0);
-    expect(ctx.lines.at(-1)).toContain(`CodexBar at ${brew} was not installed by starbridge`);
-  } finally {
-    fake.server.stop();
-  }
-});
+      const brew = join(home, "brew/codexbar");
+      mkdirSync(dirname(brew));
+      writeFileSync(brew, "#!/bin/sh\n", { mode: 0o755 });
+      expect(await updateCodexbar(sys, brew)).toBe(0);
+      expect(ctx.lines.at(-1)).toContain(`CodexBar at ${brew} was not installed by starbridge`);
+    } finally {
+      fake.server.stop();
+    }
+  },
+);
 
-test("a CodexBar download says how far it got; GitHub's limit is named (#618)", async () => {
-  const home = mkdtempSync(join(tmpdir(), "starbridge-home-"));
-  const fake = fakeCodexbarReleases("9.9.9", (v, sha) => `${sha}  CodexBarCLI-v${v}.tar.gz\n`);
-  const limited = Bun.serve({ port: 0, fetch: () => new Response("slow down", { status: 429 }) });
-  try {
-    const ctx = testCtx(fake.env);
-    let t = 0;
-    ctx.now = () => {
-      t += 6_000;
-      return new Date(t);
-    };
-    await installTarball(linuxSys(ctx, home), "linux-x86_64", "9.9.9");
-    expect(ctx.lines).toEqual([
-      "Downloading CodexBar 9.9.9 (linux-x86_64), 1 kB",
-      "  1 kB of 1 kB",
-    ]);
-    // A download cut short leaves nothing behind, and says which file.
-    const cut = Bun.serve({
-      port: 0,
-      fetch: (req) =>
-        req.url.endsWith(".sha256")
-          ? new Response(`${"0".repeat(64)}\n`)
-          : new Response(
-              new ReadableStream({
-                pull(c) {
-                  c.enqueue(new Uint8Array(1024));
-                  c.error(new Error("connection reset"));
-                },
-              }),
-            ),
-    });
-    const cutCtx = testCtx({ STARBRIDGE_CODEXBAR_RELEASES: cut.url.href.replace(/\/$/, "") });
-    await expect(installTarball(linuxSys(cutCtx, home), "linux-x86_64", "9.9.8")).rejects.toThrow(
-      "downloading CodexBarCLI-v9.9.8-linux-x86_64.tar.gz:",
-    );
-    cut.stop();
-    expect(readdirSync(join(home, ".local/opt"))).toEqual(["codexbar"]);
-    const offline = testCtx({ STARBRIDGE_CODEXBAR_RELEASES: limited.url.href });
-    await expect(updateCodexbar(linuxSys(offline, home), undefined)).resolves.toBe(1);
-    expect(offline.lines.join("\n")).toContain("GitHub is limiting requests from this address");
-  } finally {
-    fake.server.stop();
-    limited.stop();
-  }
-});
+// CodexBar has no Windows build, so setup never installs it there.
+test.skipIf(WINDOWS)(
+  "a CodexBar download says how far it got; GitHub's limit is named (#618)",
+  async () => {
+    const home = mkdtempSync(join(tmpdir(), "starbridge-home-"));
+    const fake = fakeCodexbarReleases("9.9.9", (v, sha) => `${sha}  CodexBarCLI-v${v}.tar.gz\n`);
+    const limited = Bun.serve({ port: 0, fetch: () => new Response("slow down", { status: 429 }) });
+    try {
+      const ctx = testCtx(fake.env);
+      let t = 0;
+      ctx.now = () => {
+        t += 6_000;
+        return new Date(t);
+      };
+      await installTarball(linuxSys(ctx, home), "linux-x86_64", "9.9.9");
+      expect(ctx.lines).toEqual([
+        "Downloading CodexBar 9.9.9 (linux-x86_64), 1 kB",
+        "  1 kB of 1 kB",
+      ]);
+      // A download cut short leaves nothing behind, and says which file.
+      const cut = Bun.serve({
+        port: 0,
+        fetch: (req) =>
+          req.url.endsWith(".sha256")
+            ? new Response(`${"0".repeat(64)}\n`)
+            : new Response(
+                new ReadableStream({
+                  pull(c) {
+                    c.enqueue(new Uint8Array(1024));
+                    c.error(new Error("connection reset"));
+                  },
+                }),
+              ),
+      });
+      const cutCtx = testCtx({ STARBRIDGE_CODEXBAR_RELEASES: cut.url.href.replace(/\/$/, "") });
+      await expect(installTarball(linuxSys(cutCtx, home), "linux-x86_64", "9.9.8")).rejects.toThrow(
+        "downloading CodexBarCLI-v9.9.8-linux-x86_64.tar.gz:",
+      );
+      cut.stop();
+      expect(readdirSync(join(home, ".local/opt"))).toEqual(["codexbar"]);
+      const offline = testCtx({ STARBRIDGE_CODEXBAR_RELEASES: limited.url.href });
+      await expect(updateCodexbar(linuxSys(offline, home), undefined)).resolves.toBe(1);
+      expect(offline.lines.join("\n")).toContain("GitHub is limiting requests from this address");
+    } finally {
+      fake.server.stop();
+      limited.stop();
+    }
+  },
+);
 
 test("uninstall keeps the keys when systemd cannot stop the agent", async () => {
   const m = await machine();
   await startAgent(m.ctx);
   await setup(m.sys, { yes: true, readyTimeoutMs: 2_000 });
-  m.ctx.env.PATH = `${join(m.home, "bin")}:${m.ctx.env.PATH}`;
+  m.ctx.env.PATH = [join(m.home, "bin"), m.ctx.env.PATH].join(delimiter);
   mkdirSync(join(m.home, "bin"));
-  writeFileSync(
-    join(m.home, "bin/systemctl"),
+  fakeCommand(
+    join(m.home, "bin", "systemctl"),
     "#!/bin/sh\necho 'Failed to connect to bus' >&2\nexit 1\n",
-    {
-      mode: 0o755,
-    },
   );
   expect(await uninstall(m.sys, { purge: true })).toBe(1);
   expect(m.ctx.lines.join("\n")).toContain("Could not stop the agent service, so it stays");
@@ -948,7 +965,11 @@ test("setup ships every file the opencode plugin imports", () => {
     need.add(path);
     const text = readFileSync(join(root, path), "utf8");
     for (const [, spec] of text.matchAll(/from "(\.{1,2}\/[^"]+)"/g))
-      walk(relative(root, resolve(dirname(join(root, path)), spec as string)));
+      walk(
+        relative(root, resolve(dirname(join(root, path)), spec as string))
+          .split(sep)
+          .join("/"),
+      );
   };
   walk("mod/opencode/starbridge.ts");
   expect([...need].sort()).toEqual(Object.keys(opencodeFiles).sort());
@@ -994,8 +1015,13 @@ test("on Windows, setup registers a logon task that runs the agent headless, and
   const m = await machine();
   await startAgent(m.ctx);
   const local = join(m.home, "AppData", "Local");
+  const root = join(m.home, "Windows");
+  const ps = join(root, "System32", "WindowsPowerShell", "v1.0");
+  mkdirSync(ps, { recursive: true });
+  const fake = readFileSync(join(import.meta.dir, "fixtures", "fake-powershell.ts"), "utf8");
+  copyFileSync(compiledFake(fake), join(ps, "powershell.exe"));
   Object.assign(m.ctx.env, {
-    SystemRoot: join(import.meta.dir, "fixtures", "fake-windows"),
+    SystemRoot: root,
     LOCALAPPDATA: local,
     USERDOMAIN: "PC",
     USERNAME: "tom",
@@ -1017,15 +1043,15 @@ test("on Windows, setup registers a logon task that runs the agent headless, and
   expect(task).toContain(
     `<Arguments>--headless C:\\Users\\tom\\.local\\bin\\starbridge.exe agent --log ${join(local, "starbridge", "agent.log")}</Arguments>`,
   );
-  const ps = () => m.calls().filter((c) => c.startsWith("powershell"));
-  expect(ps().some((c) => c.startsWith("powershell Register-ScheduledTask"))).toBe(true);
-  expect(ps()).toContain("powershell Start-ScheduledTask -TaskName starbridge-agent");
+  const calls = () => m.calls().filter((c) => c.startsWith("powershell"));
+  expect(calls().some((c) => c.startsWith("powershell Register-ScheduledTask"))).toBe(true);
+  expect(calls()).toContain("powershell Start-ScheduledTask -TaskName starbridge-agent");
 
   // A second setup finds the same task and leaves the running agent alone.
-  const before = ps().length;
+  const before = calls().length;
   await setup(sys, { yes: true, readyTimeoutMs: 2_000 });
   expect(
-    ps()
+    calls()
       .slice(before)
       .some((c) => c.startsWith("powershell Start-")),
   ).toBe(false);
@@ -1033,7 +1059,7 @@ test("on Windows, setup registers a logon task that runs the agent headless, and
   m.ctx.lines.length = 0;
   expect(await uninstall(sys, { purge: true })).toBe(0);
   expect(m.ctx.lines).toContain("Stopped and removed the agent service.");
-  expect(ps().some((c) => c.startsWith("powershell Unregister-ScheduledTask"))).toBe(true);
+  expect(calls().some((c) => c.startsWith("powershell Unregister-ScheduledTask"))).toBe(true);
   expect(existsSync(path)).toBe(false);
 });
 
