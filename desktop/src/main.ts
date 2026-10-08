@@ -268,7 +268,11 @@ function showWindow(): void {
   if (timing && win.webContents.getURL())
     win.webContents
       .executeJavaScript("new Promise((r) => requestAnimationFrame(() => r(1)))")
-      .then(() => mark("opened", { ms: Math.round(performance.now() - from) }))
+      .then(() => {
+        mark("opened", { ms: Math.round(performance.now() - from) });
+        // Hidden again, so the next launch of test/perf.ts measures a warm open too.
+        setTimeout(() => win?.hide(), 300);
+      })
       .catch(() => {});
 }
 

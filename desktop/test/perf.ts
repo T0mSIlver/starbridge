@@ -48,6 +48,8 @@ const env = { ...process.env, STARBRIDGE_TIMING: "1", STARBRIDGE_SERVER: origin 
 /** Launches the app and returns its marks as they come, and a way to stop it. */
 function launch(dir: string) {
   const child = spawn(command, args(dir), { env, stdio: ["ignore", "pipe", "inherit"] });
+  // Listened for at once: a second instance hands over and quits before anyone asks.
+  const exited = new Promise<void>((done) => child.once("exit", () => done()));
   const marks: Mark[] = [];
   const waiters: { name: string; done: (m: Mark) => void }[] = [];
   createInterface({ input: child.stdout }).on("line", (line) => {
@@ -67,11 +69,10 @@ function launch(dir: string) {
         },
       });
     });
-  const stop = () =>
-    new Promise<void>((done) => {
-      child.once("exit", () => done());
-      child.kill();
-    });
+  const stop = () => {
+    if (child.exitCode === null && child.signalCode === null) child.kill();
+    return exited;
+  };
   return { marks, next, stop };
 }
 
