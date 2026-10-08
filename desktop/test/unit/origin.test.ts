@@ -19,7 +19,7 @@ const SB = "https://starbridge.run";
 
 test.each([
   ["https://starbridge.run/pair", true],
-  ["https://github.com/login/oauth/authorize?x=1", true],
+  ["https://github.com/login/oauth/authorize?x=1", false],
   ["https://starbridge.run.evil.com/", false],
   ["https://gist.github.com/x", false],
   ["http://starbridge.run/", false],

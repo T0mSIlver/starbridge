@@ -1045,8 +1045,13 @@ a browser; the app adds a menu bar count and notifications, so a web release nee
   and the main process answers only the window's top frame on that origin. It carries data, never
   code or a URL to open: the page sends the Needs-you count and the items to notify; the app sends
   back a notification's answer and the item to open. Every field is checked on arrival, since the
-  page comes from a server. Inside the window stay the server's pages and GitHub's sign-in; any
-  other link opens in the browser, and new windows never open.
+  page comes from a server. Only the server's pages stay inside the window; any other link opens
+  in the browser, and new windows never open.
+- **Sign-in** goes through the owner's browser, as on Android: the browser is signed in to GitHub
+  and holds the owner's passkeys, which the app's window cannot use (Electron sees only passkeys
+  it made itself). Sign in with GitHub opens the browser with a PKCE challenge; the code comes back
+  on `starbridge://auth`, and the app trades it with its verifier for the session, which becomes
+  the page's session cookie. Owner-token sign-in stays in the page.
 - **Notifications.** One per item in Needs you, as on the phone: a question's options are its
   buttons, and a question that takes typed answers has Reply. An answer goes through the page, as
   if tapped there; when it fails, an "Answer not sent" notification says why. An item notifies

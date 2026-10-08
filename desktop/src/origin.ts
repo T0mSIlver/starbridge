@@ -18,13 +18,9 @@ export function serverOrigin(input: string): string | null {
   return url.origin;
 }
 
-/** GitHub's sign-in pages, which the window shows between the server's own. */
-const SIGN_IN = "https://github.com";
-
-/** Whether the window may show `url`: the server's pages and GitHub's sign-in. */
+/** Whether the window may show `url`: the server's pages only; GitHub signs in in the browser. */
 export function staysInWindow(url: string, origin: string): boolean {
-  const o = originOf(url);
-  return o === origin || o === SIGN_IN;
+  return originOf(url) === origin;
 }
 
 /** Whether a link the window will not show may open in the owner's browser. */

@@ -10,6 +10,7 @@ import {
   Notification,
   nativeImage,
   nativeTheme,
+  net,
   session,
   shell,
   Tray,
@@ -19,6 +20,7 @@ import { type Answer, type Entry, parseAnswered, parseState } from "./bridge";
 import { Notifier, type Shown } from "./notifier";
 import { linkPage, opensOutside, serverOrigin, staysInWindow } from "./origin";
 import { readSettings, type Settings, writeSettings } from "./settings";
+import { browserSignIn, newSignIn, type SignIn, signInReturn, startsSignIn } from "./signin";
 import { mark, timing } from "./timing";
 
 mark("main");
@@ -39,6 +41,8 @@ let tray: Tray | null = null;
 let needs = 0;
 let notifier: Notifier;
 let quitting = false;
+/** The GitHub sign-in sent to the browser, until its link comes back. */
+let signIn: SignIn | null = null;
 /** Links that arrived before the window existed. */
 const early: string[] = [];
 /** Answers handed to the page, until it says they went out. */
@@ -195,6 +199,12 @@ function guard(contents: WebContents): void {
     return { action: "deny" };
   });
   const leave = (e: { preventDefault(): void; url: string }) => {
+    if (contents === win?.webContents && startsSignIn(e.url, origin)) {
+      e.preventDefault();
+      signIn = newSignIn();
+      shell.openExternal(browserSignIn(origin, signIn));
+      return;
+    }
     if (staysInWindow(e.url, origin) && contents === win?.webContents) return;
     e.preventDefault();
     if (opensOutside(e.url)) shell.openExternal(e.url);
@@ -365,6 +375,13 @@ function openLink(link: string): void {
     early.push(link);
     return;
   }
+  const back = signInReturn(link, signIn);
+  if (back && signIn) {
+    const { verifier } = signIn;
+    signIn = null;
+    finishSignIn(back, verifier);
+    return;
+  }
   const page = linkPage(link, origin);
   if (!page) return;
   if ("refused" in page) {
@@ -372,6 +389,50 @@ function openLink(link: string): void {
     return;
   }
   win.loadURL(page.url);
+  showWindow();
+}
+
+/**
+ * Trades GitHub's code and the verifier for a session, which becomes the page's session cookie,
+ * as the server would have set it. A failure lands on the page's sign-in, which says why.
+ */
+async function finishSignIn(
+  back: { code: string } | { error: string },
+  verifier: string,
+): Promise<void> {
+  let why = "declined";
+  if ("code" in back) {
+    try {
+      const res = await net.fetch(`${origin}/v1/auth/app/session`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "starbridge-client": `desktop/${app.getVersion()}`,
+        },
+        body: JSON.stringify({ code: back.code, verifier }),
+      });
+      const { session: token } = (await res.json()) as { session?: unknown };
+      if (res.ok && typeof token === "string") {
+        await session.fromPartition("persist:starbridge").cookies.set({
+          url: origin,
+          name: "sb_session",
+          value: token,
+          httpOnly: true,
+          secure: origin.startsWith("https:"),
+          sameSite: "lax",
+          path: "/",
+          expirationDate: Date.now() / 1000 + 365 * 86_400,
+        });
+        win?.loadURL(origin);
+        showWindow();
+        return;
+      }
+      why = res.status === 403 ? "paused" : res.status === 429 ? "limited" : "failed";
+    } catch {
+      why = "failed";
+    }
+  }
+  win?.loadURL(`${origin}/?signin=${why}`);
   showWindow();
 }
 
