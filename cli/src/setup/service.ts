@@ -172,8 +172,12 @@ ${env}
 `;
 }
 
-/** A Windows command-line argument: quoted when it has a space; a path holds no quote. */
-const winArg = (s: string) => (/[\s"]/.test(s) ? `"${s.replace(/"/g, '\\"')}"` : s);
+/**
+ * A Windows command-line argument, quoted when it has a space or a quote. Inside quotes, the
+ * backslashes before a quote or before the closing quote are doubled, as the C runtime reads them.
+ */
+const winArg = (s: string) =>
+  /[\s"]/.test(s) ? `"${s.replace(/(\\*)"/g, '$1$1\\"').replace(/(\\+)$/, "$1$1")}"` : s;
 
 /**
  * The Scheduled Task: at this user's logon, as this user without elevation, so setup needs no

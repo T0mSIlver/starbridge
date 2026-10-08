@@ -82,7 +82,9 @@ export function parsePairingCode(text: string): PairingCode {
  * with the code filled in; the fragment never reaches the server.
  */
 export function pairingLink(server: string, code: PairingCode): string {
-  return `${server.replace(/\/+$/, "")}/pair#${formatPairingCode(code)}`;
+  let end = server.length;
+  while (end > 0 && server[end - 1] === "/") end--;
+  return `${server.slice(0, end)}/pair#${formatPairingCode(code)}`;
 }
 
 /** A code typed by hand, or read from a scanned pairing link: the part after `#` if any. */
