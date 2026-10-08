@@ -1,7 +1,8 @@
 /**
  * The one Starbridge version, stamped into every place that carries it.
  *
- *   bun cli/scripts/version.ts <version>          stamp it, for the release commit the tag points at
+ *   bun cli/scripts/version.ts <version>          stamp it, for the release commit the tag points at,
+ *                                                 and pin CodexBar's latest release (codexbar-pin.ts)
  *   bun cli/scripts/version.ts --check [version]  fail unless every place says it (default: the CLI's)
  *
  * A release candidate moves every version but leaves the marketplace on the last release, so
@@ -9,6 +10,7 @@
  */
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { pinCodexbar } from "./codexbar-pin";
 
 const ROOT = join(import.meta.dir, "..", "..");
 const NUMBER = /^\d+\.\d+\.\d+(-rc\.\d+)?$/;
@@ -77,4 +79,6 @@ if (import.meta.main) {
     process.exit(64);
   }
   stamp(first);
+  const pin = await pinCodexbar();
+  console.log(`Pinned CodexBar ${pin.version}: check that no open \`codexbar\` issue names it.`);
 }

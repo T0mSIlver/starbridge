@@ -21,7 +21,7 @@ import { run } from "../src/cli";
 import { session } from "../src/context";
 import { poll } from "../src/decisions";
 import { pushOnce } from "../src/quota";
-import { installTarball, updateCodexbar } from "../src/setup/codexbar";
+import { installTarball, KEYS, PIN, updateCodexbar } from "../src/setup/codexbar";
 import {
   CODEX_RULE,
   installOpencode,
@@ -691,7 +691,12 @@ function fakeCodexbarReleases(latest: string, sums: (v: string, sha: string) => 
     PATH: "/usr/bin:/bin",
     STARBRIDGE_CODEXBAR_RELEASES: `${server.url.href}rel`,
   };
-  return { server, env, state };
+  /** A pin of `version` with its tarball's SHA-256. */
+  const pin = (version: string) => ({
+    version,
+    sha256: { "linux-x86_64": createHash("sha256").update(tarball(version)).digest("hex") },
+  });
+  return { server, env, state, pin };
 }
 
 function linuxSys(ctx: TestCtx, home: string): Sys {
@@ -731,35 +736,53 @@ test("CodexBar installs only when its release's own checksum matches", async () 
   }
 });
 
-test("update moves setup's CodexBar to the latest release, or the one named", async () => {
+test("the pinned CodexBar has a checksum for every build setup installs (#568)", () => {
+  expect(Object.keys(PIN.sha256).sort()).toEqual([...KEYS].sort());
+  for (const sha of Object.values(PIN.sha256)) expect(sha).toMatch(/^[0-9a-f]{64}$/);
+});
+
+test("update moves setup's CodexBar to the pinned release, or the one named (#568)", async () => {
   const home = mkdtempSync(join(tmpdir(), "starbridge-home-"));
-  const fake = fakeCodexbarReleases(
-    "9.9.9",
-    // 10.0.0 is a release whose tarballs are still uploading.
-    (v, sha) => (v === "10.0.0" ? null : `${sha}  CodexBarCLI-v${v}-linux-x86_64.tar.gz\n`),
+  // The pinned 9.9.9 publishes no `.sha256`: only the pin's checksum can install it.
+  const fake = fakeCodexbarReleases("10.0.0", (v, sha) =>
+    v === "9.9.9" ? null : `${sha}  CodexBarCLI-v${v}-linux-x86_64.tar.gz\n`,
   );
+  const pin = fake.pin("9.9.9");
+  const dest = join(home, ".local/opt/codexbar");
+  const installed = (v: string) =>
+    `Installed CodexBar ${v} to ${dest}, linked as ${join(home, ".local/bin/codexbar")}.`;
   try {
     const ctx = testCtx(fake.env);
     const sys = linuxSys(ctx, home);
     const path = await installTarball(sys, "linux-x86_64", "9.9.8");
-    expect(path).toBe(join(home, ".local/opt/codexbar/codexbar"));
+    expect(path).toBe(join(dest, "codexbar"));
     ctx.lines.length = 0;
-    expect(await updateCodexbar(sys, undefined)).toBe(0);
-    expect(await updateCodexbar(sys, undefined)).toBe(0);
-    expect(await updateCodexbar(sys, undefined, "v9.9.7")).toBe(0);
+    expect(await updateCodexbar(sys, undefined, undefined, pin)).toBe(0);
+    expect(await updateCodexbar(sys, undefined, undefined, pin)).toBe(0);
+    expect(await updateCodexbar(sys, undefined, "v9.9.7", pin)).toBe(0);
+    expect(await updateCodexbar(sys, undefined, undefined, pin)).toBe(0);
+    // A newer release, named for a fix the pin lacks, stays until the pin passes it.
+    expect(await updateCodexbar(sys, undefined, "10.0.0", pin)).toBe(0);
+    expect(await updateCodexbar(sys, undefined, undefined, pin)).toBe(0);
     expect(ctx.lines).toEqual([
       "Downloading CodexBar 9.9.9 (linux-x86_64), 1 kB",
-      `Installed CodexBar 9.9.9 to ${join(home, ".local/opt/codexbar")}, linked as ${join(home, ".local/bin/codexbar")}.`,
+      installed("9.9.9"),
       "CodexBar 9.9.9 is up to date.",
       "Downloading CodexBar 9.9.7 (linux-x86_64), 1 kB",
-      `Installed CodexBar 9.9.7 to ${join(home, ".local/opt/codexbar")}, linked as ${join(home, ".local/bin/codexbar")}.`,
+      installed("9.9.7"),
+      "Downloading CodexBar 9.9.9 (linux-x86_64), 1 kB",
+      installed("9.9.9"),
+      "Downloading CodexBar 10.0.0 (linux-x86_64), 1 kB",
+      installed("10.0.0"),
+      "CodexBar 10.0.0 is newer than the 9.9.9 this release installs: kept.",
     ]);
     expect(readlinkSync(join(home, ".local/bin/codexbar"))).toBe(path);
-    fake.state.latest = "10.0.0";
-    expect(await updateCodexbar(sys, undefined)).toBe(0);
-    expect(ctx.lines.at(-1)).toBe(
-      "CodexBar 10.0.0's build for this machine is not published yet: kept 9.9.7.",
-    );
+
+    // A tarball that is not the pinned one installs nothing, whatever its release says.
+    const changed = { version: "10.0.1", sha256: { "linux-x86_64": "0".repeat(64) } };
+    expect(await updateCodexbar(sys, undefined, undefined, changed)).toBe(1);
+    expect(ctx.lines.at(-1)).toContain("expected 0000");
+    expect(readFileSync(join(dest, "VERSION"), "utf8")).toBe("10.0.0\n");
 
     const brew = join(home, "brew/codexbar");
     mkdirSync(dirname(brew));
@@ -809,7 +832,9 @@ test("a CodexBar download says how far it got; GitHub's limit is named (#618)", 
     cut.stop();
     expect(readdirSync(join(home, ".local/opt"))).toEqual(["codexbar"]);
     const offline = testCtx({ STARBRIDGE_CODEXBAR_RELEASES: limited.url.href });
-    await expect(updateCodexbar(linuxSys(offline, home), undefined)).resolves.toBe(1);
+    await expect(
+      updateCodexbar(linuxSys(offline, home), undefined, undefined, fake.pin("10.0.0")),
+    ).resolves.toBe(1);
     expect(offline.lines.join("\n")).toContain("GitHub is limiting requests from this address");
   } finally {
     fake.server.stop();
