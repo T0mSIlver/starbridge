@@ -22,19 +22,21 @@ async function setup(limits: Partial<Limits> = {}) {
 
 const key = (a: Actor) => ({ id: a.id, signKey: a.keys.sign.privateKey });
 
-function run(from: Actor, to: Actor, id: string, update: Partial<Run> = {}): SealedItem {
-  const body: Run = {
+function runBody(from: Actor, to: Actor[], id: string): Run {
+  return {
     v: 1,
     id,
-    to: [to.id],
+    to: to.map((a) => a.id),
     title: "Mac e2e",
     reason: "uses your session and keyboard",
     source: { machine: from.id, project: "starbridge", session: "s1" },
     startedAt: at,
     at,
-    ...update,
   };
-  return seal("run", body, key(from), [to.member]);
+}
+
+function run(from: Actor, to: Actor, id: string, update: Partial<Run> = {}): SealedItem {
+  return seal("run", { ...runBody(from, [to], id), ...update }, key(from), [to.member]);
 }
 
 test("a run re-posted under its id replaces the earlier post and passes every cursor", async () => {
@@ -160,4 +162,49 @@ test("runs are dropped a day after their last update", async () => {
   expect(await count()).toBe(1);
   await sweepStorage(s.deps.db, DEFAULT_LIMITS, Date.now() + 25 * 3_600_000);
   expect(await count()).toBe(0);
+});
+
+test("a device dismisses a run for every device; the machine's next post brings it back", async () => {
+  const { s, acct, phone, devbox } = await setup();
+  const tablet = await pair(s, acct, "tablet", "device", await signIn(s));
+  const both = (id: string, update: Partial<Run> = {}) =>
+    seal("run", { ...runBody(devbox, [phone, tablet], id), ...update }, key(devbox), [
+      phone.member,
+      tablet.member,
+    ]);
+  const post = (item: SealedItem) =>
+    s.call("POST", "/v1/items", { token: devbox.token, body: item });
+  const listed = async (a: Actor) =>
+    (await s.call("GET", "/v1/items?kind=run", { token: a.token })).json.items.map(
+      (i: { item: SealedItem }) => i.item.id,
+    );
+  expect((await post(both("r1"))).status).toBe(201);
+
+  expect((await s.call("DELETE", "/v1/items/r1", { token: devbox.token })).status).toBe(403);
+  expect((await s.call("DELETE", "/v1/items/r1", { token: tablet.token })).status).toBe(204);
+  expect(await listed(phone)).toEqual([]);
+  expect((await s.call("DELETE", "/v1/items/r1", { token: phone.token })).status).toBe(404);
+
+  expect((await post(both("r1", { at: "2026-10-04T12:01:00Z" }))).status).toBe(201);
+  expect(await listed(phone)).toEqual(["r1"]);
+});
+
+test("dismissing takes only runs sealed to the caller", async () => {
+  const { s, phone, devbox } = await setup();
+  const decision: Decision = {
+    v: 1,
+    id: "d1",
+    to: [phone.id],
+    createdAt: at,
+    question: "Ship it?",
+    context: "",
+    options: [],
+    source: { machine: devbox.id, project: "starbridge", session: "s1" },
+  };
+  await s.call("POST", "/v1/items", {
+    token: devbox.token,
+    body: seal("decision", decision, key(devbox), [phone.member]),
+  });
+  expect((await s.call("DELETE", "/v1/items/d1", { token: phone.token })).status).toBe(404);
+  expect((await s.call("GET", "/v1/items/d1", { token: phone.token })).status).toBe(200);
 });

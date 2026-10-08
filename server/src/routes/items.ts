@@ -502,6 +502,22 @@ itemRoutes.get("/items", requireCaller("paired-device"), (c) => {
   return c.json(page(items, from));
 });
 
+// A device drops a run it no longer wants to see (#827), for every device. Only runs: every other
+// kind closes through an answer or a settled notice. A machine that posts the run again brings it
+// back, as a run that still runs should.
+itemRoutes.delete("/items/:id", requireCaller("paired-device"), (c) => {
+  const caller = c.var.caller;
+  const gone = c.var.db
+    .query(
+      `DELETE FROM items WHERE account_id = ? AND id = ? AND kind = 'run'
+         AND EXISTS (SELECT 1 FROM boxes b WHERE b.account_id = items.account_id
+           AND b.item_id = items.id AND b.to_id = ?)`,
+    )
+    .run(caller.account, c.req.param("id"), memberOf(caller));
+  if (gone.changes === 0) fail(404, "not-found");
+  return c.body(null, 204);
+});
+
 itemRoutes.get("/items/:id", requireCaller("paired"), (c) => {
   const caller = c.var.caller;
   const row = c.var.db
