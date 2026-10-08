@@ -688,7 +688,12 @@ function fakeCodexbarReleases(latest: string, sums: (v: string, sha: string) => 
     writeFileSync(join(src, "CodexBarCLI"), "#!/bin/sh\n", { mode: 0o755 });
     writeFileSync(join(src, "VERSION"), `${v}\n`);
     symlinkSync("CodexBarCLI", join(src, "codexbar"));
-    bytes = new Uint8Array(Bun.spawnSync(["tar", "-czf", "-", "-C", src, "."]).stdout);
+    // COPYFILE_DISABLE: macOS's tar would add each file's extended attributes as `._` files.
+    bytes = new Uint8Array(
+      Bun.spawnSync(["tar", "-czf", "-", "-C", src, "."], {
+        env: { ...process.env, COPYFILE_DISABLE: "1" },
+      }).stdout,
+    );
     built.set(v, bytes);
     return bytes;
   };
@@ -766,9 +771,11 @@ test("update moves setup's CodexBar to the latest release, or the one named", as
     const path = await installTarball(sys, "linux-x86_64", "9.9.8");
     expect(path).toBe(join(home, ".local/opt/codexbar/codexbar"));
     ctx.lines.length = 0;
-    expect(await updateCodexbar(sys, undefined)).toBe(0);
-    expect(await updateCodexbar(sys, undefined)).toBe(0);
-    expect(await updateCodexbar(sys, undefined, "v9.9.7")).toBe(0);
+    const codes = [
+      await updateCodexbar(sys, undefined),
+      await updateCodexbar(sys, undefined),
+      await updateCodexbar(sys, undefined, "v9.9.7"),
+    ];
     expect(ctx.lines).toEqual([
       "Downloading CodexBar 9.9.9 (linux-x86_64), 1 kB",
       `Installed CodexBar 9.9.9 to ${join(home, ".local/opt/codexbar")}, linked as ${join(home, ".local/bin/codexbar")}.`,
@@ -776,6 +783,7 @@ test("update moves setup's CodexBar to the latest release, or the one named", as
       "Downloading CodexBar 9.9.7 (linux-x86_64), 1 kB",
       `Installed CodexBar 9.9.7 to ${join(home, ".local/opt/codexbar")}, linked as ${join(home, ".local/bin/codexbar")}.`,
     ]);
+    expect(codes).toEqual([0, 0, 0]);
     expect(readlinkSync(join(home, ".local/bin/codexbar"))).toBe(path);
     fake.state.latest = "10.0.0";
     expect(await updateCodexbar(sys, undefined)).toBe(0);
@@ -1020,7 +1028,11 @@ test.if(process.platform === "darwin" && process.env.RUNNER_ENVIRONMENT === "git
   async () => {
     const ctx = await paired(server);
     const home = mkdtempSync(join(tmpdir(), "starbridge-home-"));
-    Object.assign(ctx.env, { HOME: home, STARBRIDGE_CONFIG_DIR: ctx.store.dir });
+    Object.assign(ctx.env, {
+      HOME: home,
+      PATH: "/usr/bin:/bin",
+      STARBRIDGE_CONFIG_DIR: ctx.store.dir,
+    });
     const sys: Sys = {
       ctx,
       home,
