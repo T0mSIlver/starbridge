@@ -142,7 +142,7 @@ export async function offerPiAllow(ctx: Ctx, prompt: Prompt | undefined, quiet =
 }
 
 const USAGE =
-  "usage: starbridge config [permissions on|off] [machine-kind server|desktop|laptop|cloud]";
+  "usage: starbridge config [permissions on|off] [presence on|off] [machine-kind server|desktop|laptop|cloud]";
 
 /**
  * `starbridge config [<key> <value>]`: sets one setting, then prints them all. Turning permission
@@ -160,6 +160,10 @@ export async function configCommand(ctx: Ctx, args: string[], prompt?: Prompt): 
       // pi-permission-system is often installed after setup, which then had no rules to add.
       await offerPiAllow(ctx, prompt, true);
     }
+  } else if (key === "presence") {
+    if (value !== "on" && value !== "off") throw new UsageError(USAGE);
+    const config = ctx.store.agentConfig();
+    ctx.store.saveAgentConfig({ ...config, presence: { enabled: value === "on" } });
   } else if (key === "machine-kind") {
     const kind = MachineKind.safeParse(value);
     if (!kind.success) throw new UsageError(USAGE);
@@ -168,6 +172,7 @@ export async function configCommand(ctx: Ctx, args: string[], prompt?: Prompt): 
     throw new UsageError(USAGE);
   }
   ctx.out(`permissions   ${permissionsEnabled(ctx) ? "on" : "off"}`);
+  ctx.out(`presence      ${ctx.store.agentConfig().presence?.enabled ? "on" : "off"}`);
   ctx.out(`machine-kind  ${ctx.store.agentConfig().machineKind ?? "not set"}`);
   return 0;
 }

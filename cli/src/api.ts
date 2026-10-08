@@ -132,6 +132,11 @@ export class Api {
     return (r.json as { senders: { id: string; receivedAt: string }[] }).senders;
   }
 
+  /** Whether the owner sits at this machine's screen (#848): the one bit the server hears. */
+  async presence(present: boolean, signal?: AbortSignal): Promise<void> {
+    await this.call("PUT", "/presence", { body: { present }, ...(signal ? { signal } : {}) });
+  }
+
   async postItem(item: SealedItem, signal?: AbortSignal): Promise<void> {
     await this.call("POST", "/items", { body: item, ...(signal ? { signal } : {}) });
   }

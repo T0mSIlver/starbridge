@@ -422,6 +422,16 @@ provider plugins add providers, not panels.
   reads the user's: `STARBRIDGE_CONFIG_DIR` and `CODEX_HOME` reach it only as user environment
   variables. Windows has no SIGTERM: a stopped hook dies without settling its prompt, and the
   next `Stop` hook settles it.
+- **Presence** (#848), opt-in per machine with `starbridge config presence on`, since a machine
+  reports when its owner is at it: every 10 s the agent reads the screen's lock and the time
+  since its last input, the number the OS keeps for its screensaver, and sends the server only
+  "present" (unlocked, input in the last minute) or not, again every 30 s while present. macOS
+  reads `ioreg` (`CGSSessionScreenIsLocked`, `HIDIdleTime`); Windows keeps one PowerShell
+  running, since each start costs about a second of CPU, for `GetLastInputInfo` and whether the
+  lock screen (`LogonUI`) runs in its session; Linux takes logind's active graphical session and
+  its `LockedHint`, and GNOME's idle monitor or `xprintidle`, since logind's `IdleHint` flips only
+  after the desktop's idle delay, minutes. A headless box finds no graphical session and sends
+  nothing. Nothing reads what is typed.
 - **Answers on the machine** (#260). A machine accepts an answer only from a device the question
   was sealed to, only while it is open, and for an `answerIn` question only a Done, when it asked
   for one (#539). A settled question's
@@ -482,8 +492,9 @@ provider plugins add providers, not panels.
   mid-output reads as a prompt. Claude Code and Pi, whose installs run for seconds, first print
   `installing…` (#773). It still asks before installing CodexBar, a
   third-party binary (with #748, only when no other machine sends quotas), which providers to
-  send, whether to linger, and whether to send a test decision. Permission prompts stay off and
-  unasked; the summary names `starbridge config permissions on`, `starbridge status`,
+  send, whether to linger, and whether to send a test decision. Permission prompts and presence
+  stay off and unasked; the summary names `starbridge config permissions on`, on a desktop or
+  laptop `starbridge config presence on`, `starbridge status`,
   `starbridge uninstall --agent <name>` and `starbridge uninstall`. With no terminal every
   question takes its default, so nothing waits on input. A failed install prints its reason and
   `starbridge setup --agent <name>`, and setup goes on. Every step after pairing needs the
