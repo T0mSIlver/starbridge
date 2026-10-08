@@ -24,7 +24,12 @@ To try a checkout in one session: `claude --plugin-dir mod`.
 
 ## How it works
 
-The mod holds no keys. Each interactive session picks one of two paths, and
+The mod runs in each session a person keeps open: the terminal, the desktop
+app's Code tab and IDEs, which run Claude Code through the SDK. It skips
+`claude -p` and Agent SDK scripts, told apart by `CLAUDE_CODE_ENTRYPOINT`
+(`sdk-cli`, `sdk-ts`, `sdk-py`), whose runs end with their last turn.
+
+The mod holds no keys. Each session picks one of two paths, and
 switches when the agent starts or stops.
 
 ### Through the agent
@@ -55,7 +60,7 @@ session to the CLI path.
 With no agent, or with `STARBRIDGE_NO_AGENT=1`, the mod runs the CLI and checks
 for the agent every 30 s.
 
-- Every interactive session runs the mod, but only one per machine polls: the
+- Every session runs the mod, but only one per machine polls: the
   session holding the lease in `~/.config/starbridge/mod-poller.json`. It runs
   `starbridge answers --session <id> --wait 25` back to back, which stays
   under the 30 s limit on calls from a mod.

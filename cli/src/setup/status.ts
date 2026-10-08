@@ -71,6 +71,16 @@ export async function status(sys: Sys): Promise<number> {
       out(
         `  ${x.id}${x.title ? ` "${x.title}"` : ""}${x.client ? ` ${x.client}` : ""}, last seen ${x.lastSeenAt}`,
       );
+    // Run from a Claude Code session whose mod never called: its answers wait for `wait` (#863).
+    const own = ctx.env.CLAUDECODE === "1" ? ctx.env.CLAUDE_CODE_SESSION_ID : undefined;
+    if (
+      own &&
+      ctx.env.CLAUDE_CODE_SESSION_ATTENDED !== "0" &&
+      !agent.sessions.some((x) => x.id === own)
+    )
+      out(
+        `  Not this session (${own}): no Starbridge mod runs in it, so answers come back only through \`starbridge wait\``,
+      );
   }
 
   const svc = await serviceState(sys);

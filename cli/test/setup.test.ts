@@ -459,6 +459,20 @@ test("status reports the agent, the service and the plugins", async () => {
   expect(out).toContain("opencode skill and plugin: installed");
 });
 
+test("status names the Claude Code session it runs in when that session's mod never called (#863)", async () => {
+  const m = await machine();
+  await startAgent(m.ctx);
+  Object.assign(m.ctx.env, { CLAUDECODE: "1", CLAUDE_CODE_SESSION_ID: "s-1" });
+  await status(m.sys);
+  expect(m.ctx.lines.join("\n")).toContain("Not this session (s-1): no Starbridge mod runs in it");
+
+  // A `claude -p` run has no mod by design.
+  m.ctx.lines.length = 0;
+  m.ctx.env.CLAUDE_CODE_SESSION_ATTENDED = "0";
+  await status(m.sys);
+  expect(m.ctx.lines.join("\n")).not.toContain("Not this session");
+});
+
 test("status lists the answers no session has taken, until a wait prints them (#557)", async () => {
   const m = await machine();
   const ask = ["ask", "--question", "Merge #12?", "--option", "Merge", "--option", "Wait"];

@@ -557,8 +557,8 @@ line, the safe side: at worst a prompt repeats an answer the agent already read.
 
 | Harness | Delivery |
 |---|---|
-| Claude Code, interactive | The mod (`mod/`) long-polls the local agent's socket in 25 s cycles and submits each answer with `$.prompt.submit` |
-| `claude -p` | `wait`, since mods run only in interactive sessions (#321) |
+| Claude Code: terminal, desktop app's Code tab, IDEs | The mod (`mod/`) long-polls the local agent's socket in 25 s cycles and submits each answer with `$.prompt.submit` |
+| `claude -p`, Agent SDK scripts | `wait`: the run ends with its last turn, so the mod starts no loop there (#321) |
 | Codex TUI | The local agent runs `codex queue --thread <id>`; the message only says to run `starbridge wait <id>`, since other local users can read process arguments (#274). Retried each minute, 30 times |
 | `codex exec` | `wait`: nothing runs a queued message once exec returns. The thread's rollout tells exec apart (#245) |
 | Pi TUI and RPC | The Pi extension (`mod/pi`) calls `pi.sendUserMessage(text, { deliverAs: "followUp" })` (#232) |
@@ -571,6 +571,13 @@ line, the safe side: at worst a prompt repeats an answer the agent already read.
   re-reads the session id before submitting, so an answer that arrives during `/clear` waits for
   the session that asked; `/resume` keeps polling under the resumed id. Without a local agent the mod
   falls back to polling through the CLI, and both paths share the set of submitted lines.
+- **Which sessions run the mod's loop** (#863). Claude Code tells a mod whether a person is at
+  the prompt, and says no both for `claude -p` and for sessions a host such as Claude desktop's
+  Code tab or an IDE runs through the SDK. The mod tells them apart by `CLAUDE_CODE_ENTRYPOINT`:
+  it starts its loop in an interactive session, or one whose entry point is set and is not
+  `sdk-cli` (`claude -p`), `sdk-ts` or `sdk-py` (Agent SDK scripts). A loop in a run that ends
+  early costs nothing, since `ask` still prints the `wait` line for an unattended session.
+  `starbridge status` run from a session whose mod never called says so.
 - **Which harness asked** (#319, #320). Harnesses pass their variables to processes they start, so
   `ask` takes Codex, Pi or opencode over Claude Code when both are set, unless Claude Code runs as `claude
   -p`, the only way Codex and Pi start it. A Codex sub-agent asks under its root thread, since
